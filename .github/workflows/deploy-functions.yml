@@ -1,0 +1,41 @@
+name: Deploy Edge Functions
+
+on:
+  workflow_dispatch:
+    inputs:
+      function_name:
+        description: 'Edge function to deploy (or "all" for everything in supabase/functions/)'
+        required: true
+        default: 'all'
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/**'
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.function_name || 'changed' }} to Supabase
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: ${{ secrets.SUPABASE_ACCESS_TOKEN != '' }}
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Deploy
+        run: |
+          if [ "${{ inputs.function_name }}" = "all" ] || [ -z "${{ inputs.function_name }}" ]; then
+            for dir in supabase/functions/*/; do
+              name=$(basename "$dir")
+              echo "Deploying $name…"
+              supabase functions deploy "$name" --project-ref "$SUPABASE_PROJECT_REF"
+            done
+          else
+            supabase functions deploy "${{ inputs.function_name }}" --project-ref "$SUPABASE_PROJECT_REF"
+          fi

@@ -1,0 +1,8 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+  # kds + pos were merged into the merchant app (`apps/admin`) as the
+  # /kitchen and /counter surfaces. Parked (not deleted — repo has no git)
+  # until the merged app is verified live, then the folders can be removed.
+  - "!apps/kds"
+  - "!apps/pos"

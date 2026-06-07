@@ -1,0 +1,70 @@
+{
+  "nav": {
+    "home": "Home",
+    "active": "Active",
+    "history": "History",
+    "earnings": "Earnings",
+    "profile": "Profile"
+  },
+  "login": {
+    "title": "Welcome back",
+    "subtitle": "Sign in to start accepting deliveries",
+    "otpSubtitle": "Enter the 6-digit code we sent to {phone}",
+    "fullName": "Full name",
+    "fullNamePlaceholder": "First time? Enter your name",
+    "phone": "Phone number",
+    "phonePlaceholder": "(555) 234-5678",
+    "otpCode": "6-digit code",
+    "continue": "Continue with OTP",
+    "verify": "Verify",
+    "changeNumber": "Change number",
+    "byContinuing": "By continuing you agree to our Terms & Privacy"
+  },
+  "home": {
+    "online": "Online",
+    "offline": "Offline",
+    "goOnline": "Go online",
+    "goOffline": "Go offline",
+    "readyToReceive": "Ready to receive orders",
+    "currentlyOffline": "You're offline — go online to start earning",
+    "statusOnline": "You're online",
+    "statusOffline": "You're offline",
+    "subOffline": "Go online to start earning",
+    "today": "Today",
+    "week": "This week",
+    "deliveries": "Deliveries",
+    "rating": "Rating",
+    "lastDispatch": "Recent activity",
+    "tips": "Tips for higher earnings",
+    "tip1": "Stay in busy neighborhoods like Williamsburg & Bushwick during lunch",
+    "tip2": "Accept dispatches within 10 seconds for bonus points",
+    "tip3": "Maintain 4.5+ rating to unlock Gold tier"
+  },
+  "dispatch": {
+    "newOrder": "New delivery request",
+    "from": "Pickup",
+    "to": "Drop-off",
+    "accept": "Accept",
+    "reject": "Reject",
+    "expiresIn": "Expires in {seconds}s",
+    "distance": "{km} km away",
+    "duration": "{min} min trip"
+  },
+  "active": {
+    "title": "Active delivery",
+    "headToPickup": "Head to pickup",
+    "atPickup": "I'm at the restaurant",
+    "pickedUp": "Picked up — start delivery",
+    "atCustomer": "I've arrived",
+    "delivered": "Mark as delivered",
+    "callCustomer": "Call customer",
+    "navigate": "Navigate",
+    "noActive": "No active delivery",
+    "noActiveDescription": "When you accept a dispatch it'll appear here"
+  },
+  "common": {
+    "back": "Back",
+    "close": "Close",
+    "loading": "Loading..."
+  }
+}

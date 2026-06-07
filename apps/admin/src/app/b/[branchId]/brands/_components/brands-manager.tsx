@@ -1,0 +1,416 @@
+'use client';
+
+import * as React from 'react';
+import { useRouter } from 'next/navigation';
+import { Palette, Plus, Save, Star } from 'lucide-react';
+import { getBrowserClient } from '@favornoms/database/client';
+import { Badge, Button, Card, IconButton } from '@favornoms/ui';
+
+interface Brand {
+  id: string;
+  slug: string;
+  name: string;
+  theme: Record<string, unknown>;
+  logo_url: string | null;
+  is_default: boolean;
+  created_at: string;
+}
+
+interface BranchRow {
+  id: string;
+  name: string;
+  brand_id: string | null;
+  is_active: boolean;
+}
+
+interface Props {
+  restaurantId: string;
+  restaurantName: string;
+  loyaltyScope: 'branch' | 'brand';
+  currentBranchId: string;
+  brands: Brand[];
+  branches: BranchRow[];
+}
+
+const slugify = (s: string) =>
+  s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 64);
+
+export function BrandsManager({
+  restaurantId,
+  restaurantName,
+  loyaltyScope: initialScope,
+  brands: initialBrands,
+  branches,
+}: Props) {
+  const router = useRouter();
+  const [brands, setBrands] = React.useState(initialBrands);
+  const [scope, setScope] = React.useState(initialScope);
+  const [scopeSaving, setScopeSaving] = React.useState(false);
+  const [editing, setEditing] = React.useState<Brand | null>(null);
+  const [creating, setCreating] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const refresh = async () => {
+    const supabase = getBrowserClient();
+    const { data } = await supabase
+      .from('brands')
+      .select('id, slug, name, theme, logo_url, is_default, created_at')
+      .eq('restaurant_id', restaurantId)
+      .order('is_default', { ascending: false })
+      .order('created_at', { ascending: true });
+    if (data) setBrands(data as Brand[]);
+  };
+
+  const saveScope = async (next: 'branch' | 'brand') => {
+    setScopeSaving(true);
+    setError(null);
+    const supabase = getBrowserClient();
+    const { error: upErr } = await supabase
+      .from('restaurants')
+      .update({ loyalty_scope: next })
+      .eq('id', restaurantId);
+    setScopeSaving(false);
+    if (upErr) {
+      setError(upErr.message);
+      return;
+    }
+    setScope(next);
+    router.refresh();
+  };
+
+  const branchCountByBrand = React.useMemo(() => {
+    const map = new Map<string, number>();
+    for (const b of branches) {
+      const key = b.brand_id ?? '_unassigned';
+      map.set(key, (map.get(key) ?? 0) + 1);
+    }
+    return map;
+  }, [branches]);
+
+  return (
+    <div className="container max-w-5xl py-8">
+      <header className="mb-6 flex flex-wrap items-start justify-between gap-3 px-2 pl-16 lg:px-0">
+        <div>
+          <h1 className="font-display text-3xl font-bold">Brands</h1>
+          <p className="mt-1 text-muted-foreground">
+            Run multiple concepts under {restaurantName}. Each brand has its own theme and can power one or many branches.
+          </p>
+        </div>
+        <Button variant="gradient" leftIcon={<Plus className="h-4 w-4" />} onClick={() => setCreating(true)}>
+          New brand
+        </Button>
+      </header>
+
+      <Card className="mb-6 p-5">
+        <h2 className="font-display text-lg font-semibold">Loyalty pool</h2>
+        <p className="text-sm text-muted-foreground">
+          Choose whether loyalty points are scoped per branch (default) or shared across all branches.
+        </p>
+        <div className="mt-3 flex gap-2">
+          {(['branch', 'brand'] as const).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              disabled={scopeSaving}
+              onClick={() => saveScope(mode)}
+              className={`flex-1 rounded-xl border px-4 py-3 text-left transition ${
+                scope === mode ? 'border-primary bg-primary/5' : 'border-border bg-card'
+              }`}
+            >
+              <p className="font-medium capitalize">{mode}</p>
+              <p className="text-xs text-muted-foreground">
+                {mode === 'branch'
+                  ? 'Points are earned and redeemed within a single branch.'
+                  : 'Points pool across all branches of this restaurant.'}
+              </p>
+            </button>
+          ))}
+        </div>
+      </Card>
+
+      {error && <p className="mb-3 rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p>}
+
+      <div className="space-y-3 px-2 lg:px-0">
+        {brands.map((brand) => {
+          const branchCount = branchCountByBrand.get(brand.id) ?? 0;
+          const primaryColor = (brand.theme?.primaryColor as string) ?? '#FF6B35';
+          const accentColor = (brand.theme?.accentColor as string) ?? '#F7B538';
+          return (
+            <Card key={brand.id} className="overflow-hidden">
+              <div className="flex items-center gap-4 p-4">
+                <div
+                  className="h-14 w-14 shrink-0 rounded-2xl"
+                  style={{ background: `linear-gradient(135deg, ${primaryColor}, ${accentColor})` }}
+                  aria-hidden
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-display text-lg font-semibold">{brand.name}</h3>
+                    {brand.is_default && (
+                      <Badge variant="muted" className="gap-1">
+                        <Star className="h-3 w-3" /> Default
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {brand.slug} · {branchCount} branch{branchCount === 1 ? '' : 'es'}
+                  </p>
+                </div>
+                <IconButton label="Edit" onClick={() => setEditing(brand)}>
+                  <Palette className="h-4 w-4" />
+                </IconButton>
+              </div>
+            </Card>
+          );
+        })}
+        {brands.length === 0 && (
+          <Card className="p-6 text-center text-sm text-muted-foreground">
+            No brands yet. Create your first brand to unlock multi-brand theming.
+          </Card>
+        )}
+      </div>
+
+      {(editing || creating) && (
+        <BrandEditor
+          restaurantId={restaurantId}
+          brand={editing}
+          branches={branches}
+          onClose={() => {
+            setEditing(null);
+            setCreating(false);
+          }}
+          onSaved={() => {
+            setEditing(null);
+            setCreating(false);
+            void refresh();
+            router.refresh();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function BrandEditor({
+  restaurantId,
+  brand,
+  branches,
+  onClose,
+  onSaved,
+}: {
+  restaurantId: string;
+  brand: Brand | null;
+  branches: BranchRow[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [name, setName] = React.useState(brand?.name ?? '');
+  const [slug, setSlug] = React.useState(brand?.slug ?? '');
+  const [primaryColor, setPrimaryColor] = React.useState(
+    (brand?.theme?.primaryColor as string) ?? '#FF6B35',
+  );
+  const [accentColor, setAccentColor] = React.useState(
+    (brand?.theme?.accentColor as string) ?? '#F7B538',
+  );
+  const [logoUrl, setLogoUrl] = React.useState(brand?.logo_url ?? '');
+  const [isDefault, setIsDefault] = React.useState(brand?.is_default ?? false);
+  const [linkedBranchIds, setLinkedBranchIds] = React.useState<Set<string>>(() => {
+    if (!brand) return new Set();
+    return new Set(branches.filter((b) => b.brand_id === brand.id).map((b) => b.id));
+  });
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!brand && !slug && name) setSlug(slugify(name));
+  }, [name, brand, slug]);
+
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const supabase = getBrowserClient();
+      const payload = {
+        restaurant_id: restaurantId,
+        name,
+        slug: slug || slugify(name),
+        theme: { ...(brand?.theme ?? {}), primaryColor, accentColor, brandName: name },
+        logo_url: logoUrl || null,
+        is_default: isDefault,
+      };
+      let brandId: string;
+      if (brand) {
+        const { error: upErr } = await supabase
+          .from('brands')
+          .update(payload)
+          .eq('id', brand.id);
+        if (upErr) throw new Error(upErr.message);
+        brandId = brand.id;
+      } else {
+        const { data: created, error: insErr } = await supabase
+          .from('brands')
+          .insert(payload)
+          .select('id')
+          .single();
+        if (insErr || !created) throw new Error(insErr?.message ?? 'failed_to_create');
+        brandId = created.id;
+      }
+
+      // Reconcile branch linkage
+      const want = new Set(linkedBranchIds);
+      const linkUpdates: Array<PromiseLike<unknown>> = [];
+      for (const b of branches) {
+        const isLinked = b.brand_id === brandId;
+        const shouldBeLinked = want.has(b.id);
+        if (isLinked && !shouldBeLinked) {
+          linkUpdates.push(
+            supabase.from('branches').update({ brand_id: null }).eq('id', b.id) as unknown as PromiseLike<unknown>,
+          );
+        } else if (!isLinked && shouldBeLinked) {
+          linkUpdates.push(
+            supabase.from('branches').update({ brand_id: brandId }).eq('id', b.id) as unknown as PromiseLike<unknown>,
+          );
+        }
+      }
+      await Promise.all(linkUpdates);
+      onSaved();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-6"
+      onClick={onClose}
+    >
+      <Card
+        className="w-full max-w-2xl space-y-4 overflow-y-auto p-6 sm:max-h-[85vh]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="font-display text-xl font-semibold">{brand ? 'Edit brand' : 'New brand'}</h2>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Brand name">
+            <input value={name} onChange={(e) => setName(e.target.value)} className="input" />
+          </Field>
+          <Field label="Slug">
+            <input
+              value={slug}
+              onChange={(e) => setSlug(slugify(e.target.value))}
+              className="input"
+              placeholder="my-brand"
+            />
+          </Field>
+          <Field label="Primary color">
+            <input
+              type="color"
+              value={primaryColor}
+              onChange={(e) => setPrimaryColor(e.target.value)}
+              className="h-12 w-full rounded-xl border border-border bg-background"
+            />
+          </Field>
+          <Field label="Accent color">
+            <input
+              type="color"
+              value={accentColor}
+              onChange={(e) => setAccentColor(e.target.value)}
+              className="h-12 w-full rounded-xl border border-border bg-background"
+            />
+          </Field>
+          <div className="sm:col-span-2">
+            <Field label="Logo URL (optional)">
+              <input
+                value={logoUrl}
+                onChange={(e) => setLogoUrl(e.target.value)}
+                className="input"
+                placeholder="https://…"
+              />
+            </Field>
+          </div>
+        </div>
+
+        <div
+          className="rounded-2xl p-6 text-white"
+          style={{ background: `linear-gradient(135deg, ${primaryColor}, ${accentColor})` }}
+        >
+          <p className="text-xs uppercase tracking-wider text-white/80">Preview</p>
+          <p className="mt-1 font-display text-2xl font-bold">{name || 'Brand name'}</p>
+        </div>
+
+        <Card className="bg-muted/30 p-4">
+          <p className="text-sm font-medium">Linked branches</p>
+          <p className="mb-2 text-xs text-muted-foreground">
+            Choose which branches use this brand&apos;s theme.
+          </p>
+          <div className="space-y-1">
+            {branches.map((b) => (
+              <label key={b.id} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={linkedBranchIds.has(b.id)}
+                  onChange={(e) => {
+                    const next = new Set(linkedBranchIds);
+                    if (e.target.checked) next.add(b.id);
+                    else next.delete(b.id);
+                    setLinkedBranchIds(next);
+                  }}
+                />
+                {b.name}
+                {!b.is_active && <Badge variant="muted">Hidden</Badge>}
+              </label>
+            ))}
+          </div>
+        </Card>
+
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={isDefault} onChange={(e) => setIsDefault(e.target.checked)} />
+          Set as default brand for this restaurant
+        </label>
+
+        {error && <p className="rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p>}
+
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button
+            variant="gradient"
+            onClick={save}
+            loading={saving}
+            disabled={!name}
+            leftIcon={<Save className="h-4 w-4" />}
+          >
+            Save
+          </Button>
+        </div>
+
+        <style jsx>{`
+          .input {
+            width: 100%;
+            height: 48px;
+            padding: 0 1rem;
+            font-size: 16px;
+            border-radius: 0.875rem;
+            border: 1px solid hsl(var(--border));
+            background: hsl(var(--background));
+          }
+          .input:focus-visible {
+            outline: none;
+            border-color: hsl(var(--primary));
+            box-shadow: 0 0 0 3px hsl(var(--primary) / 0.18);
+          }
+        `}</style>
+      </Card>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-sm font-medium">{label}</span>
+      {children}
+    </label>
+  );
+}

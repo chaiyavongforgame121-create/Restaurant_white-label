@@ -1,0 +1,169 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* ============================================================
+   * Favornoms Design Tokens
+   * Appetite-stimulating palette: warm orange → red → gold
+   * All overridable per-branch (white-label) via JS-injected
+   * `style="--primary: ...;"` on the root element.
+   * ============================================================ */
+
+  :root {
+    /* Brand — warm appetite palette (HSL channels) */
+    --primary-50: 24 100% 96%;
+    --primary-100: 24 100% 91%;
+    --primary-200: 24 96% 81%;
+    --primary-300: 24 94% 70%;
+    --primary-400: 18 92% 60%;
+    --primary-500: 16 100% 60%;   /* #FF6B35 */
+    --primary-600: 14 88% 52%;
+    --primary-700: 12 80% 44%;
+    --primary-800: 10 76% 36%;
+    --primary-900: 8 72% 28%;
+
+    --primary: 16 100% 60%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 8 78% 45%;        /* #C73E1D-ish */
+    --secondary-foreground: 0 0% 100%;
+
+    --accent: 41 92% 59%;          /* #F7B538 */
+    --accent-foreground: 24 60% 18%;
+
+    /* Surfaces */
+    --background: 36 50% 98%;      /* warm cream */
+    --foreground: 20 30% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 20 30% 12%;
+
+    --muted: 30 25% 95%;
+    --muted-foreground: 24 12% 42%;
+
+    --border: 24 20% 90%;
+    --ring: 16 100% 60%;
+
+    --success: 142 70% 42%;
+    --warning: 38 92% 50%;
+    --danger: 0 78% 55%;
+
+    --radius: 1rem;
+
+    /* Fonts (overridable per brand) */
+    --font-sans: 'Inter';
+    --font-display: 'Playfair Display';
+    --font-thai: 'Noto Sans Thai';
+  }
+
+  .dark {
+    --primary: 18 95% 62%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 8 75% 50%;
+    --accent: 41 88% 58%;
+    --accent-foreground: 20 30% 10%;
+
+    --background: 20 18% 8%;       /* rich warm charcoal */
+    --foreground: 36 30% 96%;
+
+    --card: 22 16% 12%;
+    --card-foreground: 36 30% 96%;
+
+    --muted: 22 14% 18%;
+    --muted-foreground: 30 12% 65%;
+
+    --border: 22 12% 22%;
+    --ring: 18 95% 62%;
+  }
+
+  * {
+    @apply border-border;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-background font-sans text-foreground antialiased;
+    overscroll-behavior-y: contain;
+    font-feature-settings: 'cv11', 'ss01', 'ss03';
+  }
+
+  /* Prevent iOS auto-zoom on focus */
+  input,
+  textarea,
+  select {
+    font-size: max(16px, 1rem);
+  }
+
+  ::selection {
+    @apply bg-primary/30 text-primary-900;
+  }
+
+  /* Reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  .glass {
+    @apply border border-white/20 bg-white/70 backdrop-blur-xl backdrop-saturate-150 dark:border-white/10 dark:bg-card/60;
+  }
+
+  .text-gradient {
+    @apply bg-gradient-warm bg-clip-text text-transparent;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide {
+    scrollbar-width: none;
+  }
+
+  .skeleton {
+    @apply animate-shimmer rounded-md bg-muted;
+    background-image: linear-gradient(
+      90deg,
+      hsl(var(--muted)) 0px,
+      hsl(var(--muted-foreground) / 0.1) 40px,
+      hsl(var(--muted)) 80px
+    );
+    background-size: 1000px 100%;
+  }
+
+  .focus-ring {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background;
+  }
+
+  .pb-safe {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+  .pt-safe {
+    padding-top: max(0.75rem, env(safe-area-inset-top));
+  }
+}
+
+@layer utilities {
+  .h-dynamic-screen {
+    height: 100vh;
+    height: 100dvh;
+  }
+  .min-h-dynamic-screen {
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+}

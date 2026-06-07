@@ -1,0 +1,108 @@
+{
+  "nav": {
+    "menu": "Menu",
+    "cart": "Cart",
+    "orders": "Orders",
+    "account": "Account"
+  },
+  "channel": {
+    "delivery": "Delivery",
+    "pickup": "Pickup",
+    "dineIn": "Dine-in"
+  },
+  "menu": {
+    "title": "Menu",
+    "search": "Search dishes...",
+    "categories": "Categories",
+    "addToCart": "Add",
+    "inCart": "In cart",
+    "recommended": "Chef's recommendations",
+    "popular": "Popular today",
+    "viewMore": "View more",
+    "rating": "{rating} ({count} reviews)",
+    "minutes": "{n} min",
+    "calories": "{n} kcal",
+    "noResults": "No dishes match your search",
+    "filters": "Filters"
+  },
+  "cart": {
+    "title": "Your cart",
+    "empty": "Your cart is empty",
+    "emptyDescription": "Add a few delicious dishes to get started",
+    "browseMenu": "Browse menu",
+    "subtotal": "Subtotal",
+    "deliveryFee": "Delivery fee",
+    "serviceFee": "Service fee",
+    "total": "Total",
+    "checkout": "Proceed to checkout",
+    "itemCount": "{count, plural, =1 {# item} other {# items}}",
+    "notes": "Special instructions (optional)",
+    "notesPlaceholder": "Allergies, spice level, extra sauce..."
+  },
+  "checkout": {
+    "title": "Checkout",
+    "deliveryAddress": "Delivery address",
+    "contactInfo": "Contact information",
+    "paymentMethod": "Payment method",
+    "name": "Full name",
+    "phone": "Phone number",
+    "address": "Address",
+    "addressPlaceholder": "123 Main St, Apt 4B",
+    "addNote": "Add delivery note",
+    "promoCode": "Have a promo code?",
+    "placeOrder": "Place order — {amount}",
+    "estimatedDelivery": "Estimated arrival: {time}",
+    "payment": {
+      "card": "Credit / Debit card",
+      "cash": "Cash on delivery"
+    }
+  },
+  "tracking": {
+    "title": "Tracking order",
+    "orderNumber": "Order {number}",
+    "statuses": {
+      "confirmed": "Order confirmed",
+      "preparing": "Kitchen is preparing",
+      "ready": "Ready for pickup",
+      "out_for_delivery": "On the way",
+      "completed": "Delivered"
+    },
+    "driverAssigned": "{name} is bringing your order",
+    "callDriver": "Call driver",
+    "rateOrder": "Rate order"
+  },
+  "common": {
+    "back": "Back",
+    "close": "Close",
+    "save": "Save",
+    "cancel": "Cancel",
+    "continue": "Continue",
+    "loading": "Loading...",
+    "languageLabel": "Language",
+    "themeLight": "Light mode",
+    "themeDark": "Dark mode",
+    "installApp": "Install app"
+  },
+  "landing": {
+    "tagline": "Order from your favorite restaurant",
+    "ctaOrder": "Order now",
+    "ctaView": "Explore menu",
+    "openNow": "Open now",
+    "deliveryIn": "Delivery in {min} min",
+    "trustedBy": "Trusted by 5,000+ happy customers",
+    "features": {
+      "fast": {
+        "title": "Lightning fast delivery",
+        "description": "Hot meals at your door within 30 minutes"
+      },
+      "fresh": {
+        "title": "Always fresh",
+        "description": "Ingredients sourced and prepared daily"
+      },
+      "rewards": {
+        "title": "Loyalty rewards",
+        "description": "Earn points on every order, redeem delicious treats"
+      }
+    }
+  }
+}

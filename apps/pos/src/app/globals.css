@@ -1,0 +1,11 @@
+@import '@favornoms/ui/globals.css';
+
+:root {
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Inter', system-ui, sans-serif;
+  --font-thai: 'Noto Sans Thai', 'Inter', sans-serif;
+}
+html, body { height: 100%; overscroll-behavior: none; }
+
+/* POS — one-tap, no popups, tablet-sized targets */
+button { min-height: 48px; }

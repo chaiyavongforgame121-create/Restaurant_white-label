@@ -1,0 +1,19 @@
+{
+  "kds": {
+    "title": "{branch} · KDS",
+    "active": "{count} active · live updates",
+    "stationLabel": "station \"{station}\"",
+    "sectionNew": "New",
+    "sectionMaking": "In the kitchen",
+    "sectionReady": "Ready for pickup",
+    "allClear": "All clear, chef.",
+    "newOrdersHint": "New orders will appear here in real time.",
+    "noStationOrders": "No orders for the \"{station}\" station.",
+    "startCooking": "Start cooking",
+    "markReady": "Mark ready",
+    "bump": "Bump",
+    "toggleSound": "Toggle sound",
+    "fullscreen": "Fullscreen",
+    "all": "All"
+  }
+}

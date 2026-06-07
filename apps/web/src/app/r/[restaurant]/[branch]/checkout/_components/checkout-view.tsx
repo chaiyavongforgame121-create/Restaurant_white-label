@@ -1,0 +1,643 @@
+'use client';
+
+import * as React from 'react';
+import { useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
+import { Banknote, ChevronLeft, CreditCard, MapPin, Tag } from 'lucide-react';
+import { useTranslations } from 'next-intl';
+import { formatCurrency } from '@favornoms/shared';
+import { getBrowserClient } from '@favornoms/database/client';
+import { getMyLoyalty, placeOrder } from '@favornoms/database/queries';
+import { Badge, Button, Card, IconButton } from '@favornoms/ui';
+import { useCart } from '@/store/cart';
+
+type PaymentMethod = 'card' | 'cash';
+
+interface SavedAddress {
+  id: string;
+  label: string | null;
+  address_line1: string;
+  address_line2: string | null;
+  is_default: boolean;
+  delivery_notes: string | null;
+}
+
+interface Props {
+  branchId: string;
+  base: string;
+}
+
+export function CheckoutView({ branchId, base }: Props) {
+  const t = useTranslations();
+  const router = useRouter();
+
+  const subtotal = useCart((s) => s.subtotal());
+  const lines = useCart((s) => s.lines);
+  const notes = useCart((s) => s.notes);
+  const clear = useCart((s) => s.clear);
+  const channel = useCart((s) => s.channel);
+
+  const [name, setName] = React.useState('');
+  const [phone, setPhone] = React.useState('');
+  const [email, setEmail] = React.useState('');
+  const [address, setAddress] = React.useState('');
+  const [dineInTable, setDineInTable] = React.useState('');
+  const [savedAddresses, setSavedAddresses] = React.useState<SavedAddress[]>([]);
+  const [selectedAddressId, setSelectedAddressId] = React.useState<string | 'new' | null>(null);
+  const [method, setMethod] = React.useState<PaymentMethod>('card');
+  const [submitting, setSubmitting] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [pointsBalance, setPointsBalance] = React.useState(0);
+  const [redeemPoints, setRedeemPoints] = React.useState(0);
+  const [tipPercent, setTipPercent] = React.useState<0 | 5 | 10 | 15>(0);
+  const [customTip, setCustomTip] = React.useState('');
+  const [promoCode, setPromoCode] = React.useState('');
+  const [scheduleMode, setScheduleMode] = React.useState<'asap' | 'later'>('asap');
+  const [scheduledFor, setScheduledFor] = React.useState<string>(() => {
+    // Default: 1 hour from now, rounded to next 15 min
+    const d = new Date(Date.now() + 60 * 60_000);
+    d.setMinutes(Math.ceil(d.getMinutes() / 15) * 15, 0, 0);
+    // datetime-local needs local YYYY-MM-DDTHH:mm
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  });
+  const [promoState, setPromoState] = React.useState<
+    | { status: 'idle' }
+    | { status: 'validating' }
+    | { status: 'applied'; amount_off: number; free_delivery: boolean; promo_id: string }
+    | { status: 'error'; message: string }
+  >({ status: 'idle' });
+  const [giftCardCode, setGiftCardCode] = React.useState('');
+  const [giftCardState, setGiftCardState] = React.useState<
+    | { status: 'idle' }
+    | { status: 'checking' }
+    | { status: 'valid'; balance: number }
+    | { status: 'error'; message: string }
+  >({ status: 'idle' });
+
+  const deliveryFeeBase = channel === 'delivery' ? 3.99 : 0;
+  const deliveryFee = promoState.status === 'applied' && promoState.free_delivery ? 0 : deliveryFeeBase;
+  const serviceFee = Math.round(subtotal * 0.05 * 100) / 100;
+  const maxRedeem = Math.min(pointsBalance, Math.floor(subtotal * 0.5));
+  const appliedRedeem = Math.min(redeemPoints, maxRedeem);
+  const tipAmount = customTip
+    ? Math.max(0, Math.round((Number(customTip) || 0) * 100) / 100)
+    : Math.round((subtotal * tipPercent)) / 100;
+  const promoDiscount = promoState.status === 'applied' ? promoState.amount_off : 0;
+  const giftCardCredit = giftCardState.status === 'valid' ? Math.min(giftCardState.balance, subtotal) : 0;
+  const total = Math.max(
+    0,
+    subtotal + deliveryFee + serviceFee + tipAmount - appliedRedeem - promoDiscount - giftCardCredit,
+  );
+
+  const checkGiftCard = async () => {
+    if (!giftCardCode.trim()) return;
+    setGiftCardState({ status: 'checking' });
+    const supabase = getBrowserClient();
+    const { data, error } = await supabase.rpc('check_gift_card', { p_code: giftCardCode.trim() });
+    if (error) {
+      setGiftCardState({ status: 'error', message: error.message });
+      return;
+    }
+    const r = data as { valid?: boolean; reason?: string; balance?: number };
+    if (!r?.valid) {
+      setGiftCardState({ status: 'error', message: r?.reason ?? 'invalid' });
+      return;
+    }
+    setGiftCardState({ status: 'valid', balance: Number(r.balance ?? 0) });
+  };
+
+  React.useEffect(() => {
+    const supabase = getBrowserClient();
+    void getMyLoyalty(supabase, branchId).then((row) => {
+      if (row) setPointsBalance(row.points_balance);
+    });
+    void (async () => {
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) return;
+      const { data: customer } = await supabase
+        .from('customers')
+        .select('id, full_name, phone, email')
+        .eq('user_id', user.user.id)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!customer) return;
+      if (customer.full_name) setName(customer.full_name);
+      if (customer.phone) setPhone(customer.phone);
+      if (customer.email) setEmail(customer.email);
+      const { data: addrs } = await supabase
+        .from('customer_addresses')
+        .select('id, label, address_line1, address_line2, is_default, delivery_notes')
+        .eq('customer_id', customer.id)
+        .order('is_default', { ascending: false });
+      if (addrs && addrs.length > 0) {
+        setSavedAddresses(addrs as SavedAddress[]);
+        const def = addrs.find((a) => a.is_default) ?? addrs[0];
+        if (def) {
+          setSelectedAddressId(def.id);
+          setAddress([def.address_line1, def.address_line2].filter(Boolean).join(', '));
+        }
+      }
+    })();
+  }, [branchId]);
+
+  // Wait for Zustand persist rehydration before redirecting an "empty" cart —
+  // otherwise we bounce away on first mount before localStorage loads.
+  const [hydrated, setHydrated] = React.useState(false);
+  React.useEffect(() => {
+    const persist = useCart.persist;
+    if (!persist || persist.hasHydrated()) {
+      setHydrated(true);
+      return;
+    }
+    const unsub = persist.onFinishHydration(() => setHydrated(true));
+    void persist.rehydrate();
+    return unsub;
+  }, []);
+
+  React.useEffect(() => {
+    if (hydrated && lines.length === 0) router.replace(`${base}/cart`);
+  }, [hydrated, lines.length, router, base]);
+
+  if (!hydrated) return null;
+  if (lines.length === 0) return null;
+
+  const applyPromo = async () => {
+    if (!promoCode.trim()) return;
+    setPromoState({ status: 'validating' });
+    const supabase = getBrowserClient();
+    const { data, error } = await supabase.rpc('validate_promo_code', {
+      p_branch_id: branchId,
+      p_code: promoCode.trim(),
+      p_subtotal: subtotal,
+    });
+    if (error) {
+      setPromoState({ status: 'error', message: error.message });
+      return;
+    }
+    const r = data as {
+      valid: boolean;
+      error?: string;
+      amount_off?: number;
+      free_delivery?: boolean;
+      promo_id?: string;
+    };
+    if (!r.valid) {
+      setPromoState({ status: 'error', message: r.error ?? 'invalid' });
+      return;
+    }
+    setPromoState({
+      status: 'applied',
+      amount_off: Number(r.amount_off ?? 0),
+      free_delivery: !!r.free_delivery,
+      promo_id: r.promo_id ?? '',
+    });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    try {
+      const supabase = getBrowserClient();
+      // Persist email on the customer row so receipts/notifications can reach them.
+      if (email.trim()) {
+        const { data: user } = await supabase.auth.getUser();
+        if (user.user) {
+          await supabase
+            .from('customers')
+            .update({ email: email.trim().toLowerCase() })
+            .eq('user_id', user.user.id);
+        }
+      }
+
+      const result = await placeOrder(supabase, {
+        branch_id: branchId,
+        channel,
+        customer_name: name,
+        customer_phone: phone,
+        customer_notes:
+          channel === 'dine_in' && dineInTable.trim()
+            ? `Table ${dineInTable.trim()}${notes ? ` — ${notes}` : ''}`
+            : notes || undefined,
+        delivery_address:
+          channel === 'delivery'
+            ? { line1: address }
+            : undefined,
+        saved_address_id:
+          selectedAddressId && selectedAddressId !== 'new' ? selectedAddressId : undefined,
+        payment_method: method,
+        redeem_points: appliedRedeem || undefined,
+        tip_amount: tipAmount || undefined,
+        promo_code: promoState.status === 'applied' ? promoCode.trim() : undefined,
+        scheduled_for:
+          scheduleMode === 'later' && scheduledFor
+            ? new Date(scheduledFor).toISOString()
+            : undefined,
+        gift_card_code: giftCardState.status === 'valid' ? giftCardCode.trim() : undefined,
+        items: lines
+          .filter((l) => !l.comboId)
+          .map((l) => ({
+            menu_item_id: l.menuItemId,
+            quantity: l.quantity,
+            notes: l.notes,
+            modifier_option_ids: l.modifiers?.map((m) => m.option_id),
+          })),
+        combos: lines
+          .filter((l) => l.comboId)
+          .map((l) => ({
+            combo_id: l.comboId!,
+            quantity: l.quantity,
+            notes: l.notes,
+          })),
+      });
+
+      // Save the address if it was a new entry and customer is signed in
+      if (channel === 'delivery' && selectedAddressId === 'new' && address) {
+        const { data: user } = await supabase.auth.getUser();
+        if (user.user) {
+          const { data: customer } = await supabase
+            .from('customers')
+            .select('id')
+            .eq('user_id', user.user.id)
+            .order('updated_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (customer) {
+            await supabase.from('customer_addresses').insert({
+              customer_id: customer.id,
+              address_line1: address,
+              is_default: savedAddresses.length === 0,
+            });
+          }
+        }
+      }
+      clear();
+      router.push(`${base}/orders/${result.order_number}`);
+    } catch (err) {
+      setError((err as Error).message);
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="container max-w-2xl pt-4">
+      <header className="mb-5 flex items-center gap-3">
+        <IconButton label={t('common.back')} onClick={() => router.back()}>
+          <ChevronLeft className="h-5 w-5" />
+        </IconButton>
+        <h1 className="font-display text-2xl font-bold">{t('checkout.title')}</h1>
+      </header>
+
+      <form className="space-y-5" onSubmit={handleSubmit}>
+        <Card className="p-5">
+          <h2 className="font-display text-lg font-semibold">When?</h2>
+          <div className="mt-3 flex rounded-full bg-muted p-1 text-sm font-semibold">
+            <button
+              type="button"
+              onClick={() => setScheduleMode('asap')}
+              className={`focus-ring flex-1 rounded-full py-2 transition-colors ${
+                scheduleMode === 'asap' ? 'bg-card text-foreground shadow-soft' : 'text-muted-foreground'
+              }`}
+            >
+              ASAP
+            </button>
+            <button
+              type="button"
+              onClick={() => setScheduleMode('later')}
+              className={`focus-ring flex-1 rounded-full py-2 transition-colors ${
+                scheduleMode === 'later' ? 'bg-card text-foreground shadow-soft' : 'text-muted-foreground'
+              }`}
+            >
+              Schedule for later
+            </button>
+          </div>
+          {scheduleMode === 'later' && (
+            <label className="mt-3 block">
+              <span className="mb-1 block text-sm font-medium">Pickup / delivery time</span>
+              <input
+                type="datetime-local"
+                value={scheduledFor}
+                min={new Date(Date.now() + 15 * 60_000).toISOString().slice(0, 16)}
+                onChange={(e) => setScheduledFor(e.target.value)}
+                className="input"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                We&apos;ll start preparing your order so it&apos;s ready right around this time.
+              </p>
+            </label>
+          )}
+        </Card>
+
+        <Card className="p-5">
+          <h2 className="font-display text-lg font-semibold">{t('checkout.contactInfo')}</h2>
+          <div className="mt-3 grid gap-3">
+            <Field label={t('checkout.name')}>
+              <input value={name} onChange={(e) => setName(e.target.value)} required autoComplete="name" className="input" />
+            </Field>
+            <Field label={t('checkout.phone')}>
+              <input value={phone} onChange={(e) => setPhone(e.target.value)} required type="tel" inputMode="tel" autoComplete="tel" placeholder="(555) 234-5678" className="input" />
+            </Field>
+            <div className="sm:col-span-2">
+              <Field label="Email (for receipt)">
+                <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" inputMode="email" autoComplete="email" placeholder="you@example.com" className="input" />
+              </Field>
+            </div>
+          </div>
+        </Card>
+
+        {channel === 'delivery' && (
+          <Card className="p-5">
+            <h2 className="font-display text-lg font-semibold">{t('checkout.deliveryAddress')}</h2>
+            {savedAddresses.length > 0 && (
+              <div className="mt-3 space-y-2">
+                {savedAddresses.map((a) => (
+                  <label
+                    key={a.id}
+                    className={`flex cursor-pointer items-start gap-2 rounded-xl border p-3 transition ${
+                      selectedAddressId === a.id ? 'border-primary bg-primary/5' : 'border-border bg-card'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="address"
+                      checked={selectedAddressId === a.id}
+                      onChange={() => {
+                        setSelectedAddressId(a.id);
+                        setAddress([a.address_line1, a.address_line2].filter(Boolean).join(', '));
+                      }}
+                      className="mt-1"
+                    />
+                    <div className="flex-1">
+                      <p className="flex items-center gap-2 font-medium">
+                        <MapPin className="h-4 w-4 text-muted-foreground" />
+                        {a.label ?? 'Address'}
+                        {a.is_default && <Badge variant="muted">Default</Badge>}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {[a.address_line1, a.address_line2].filter(Boolean).join(', ')}
+                      </p>
+                    </div>
+                  </label>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedAddressId('new');
+                    setAddress('');
+                  }}
+                  className={`w-full rounded-xl border border-dashed px-3 py-2 text-sm font-medium ${
+                    selectedAddressId === 'new'
+                      ? 'border-primary text-primary'
+                      : 'border-border text-muted-foreground'
+                  }`}
+                >
+                  + Use a new address
+                </button>
+              </div>
+            )}
+            {(savedAddresses.length === 0 || selectedAddressId === 'new') && (
+              <Field label={t('checkout.address')}>
+                <input value={address} onChange={(e) => setAddress(e.target.value)} required placeholder={t('checkout.addressPlaceholder')} className="input" />
+              </Field>
+            )}
+          </Card>
+        )}
+
+        {channel === 'dine_in' && (
+          <Card className="p-5">
+            <h2 className="font-display text-lg font-semibold">Dine-in</h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Enter your table number so we can bring your food over.
+            </p>
+            <input
+              value={dineInTable}
+              onChange={(e) => setDineInTable(e.target.value)}
+              placeholder="Table number"
+              inputMode="numeric"
+              className="input mt-3"
+            />
+          </Card>
+        )}
+
+        <Card className="p-5">
+          <h2 className="font-display text-lg font-semibold">{t('checkout.paymentMethod')}</h2>
+          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <PaymentChoice icon={<CreditCard className="h-5 w-5" />} label={t('checkout.payment.card')} active={method === 'card'} onClick={() => setMethod('card')} />
+            <PaymentChoice icon={<Banknote className="h-5 w-5" />} label={t('checkout.payment.cash')} active={method === 'cash'} onClick={() => setMethod('cash')} />
+          </div>
+        </Card>
+
+        <Card className="p-5">
+          <h2 className="font-display text-lg font-semibold flex items-center gap-2">
+            <Tag className="h-4 w-4" /> Promo code
+          </h2>
+          {promoState.status === 'applied' ? (
+            <div className="mt-3 flex items-center justify-between rounded-xl bg-success/10 px-3 py-2">
+              <span className="text-sm text-success font-medium">
+                {promoCode} — saved {formatCurrency(promoState.amount_off)}{promoState.free_delivery ? ' + free delivery' : ''}
+              </span>
+              <button
+                type="button"
+                onClick={() => { setPromoCode(''); setPromoState({ status: 'idle' }); }}
+                className="text-xs text-muted-foreground underline"
+              >
+                Remove
+              </button>
+            </div>
+          ) : (
+            <div className="mt-3 flex gap-2">
+              <input
+                value={promoCode}
+                onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                placeholder="WELCOME10"
+                className="input flex-1"
+              />
+              <Button type="button" variant="ghost" onClick={applyPromo} loading={promoState.status === 'validating'}>
+                Apply
+              </Button>
+            </div>
+          )}
+          {promoState.status === 'error' && (
+            <p className="mt-2 text-xs text-destructive">{promoState.message}</p>
+          )}
+        </Card>
+
+        <Card className="p-5">
+          <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
+            🎁 Gift card
+          </h2>
+          {giftCardState.status === 'valid' ? (
+            <div className="mt-3 flex items-center justify-between rounded-xl bg-success/10 px-3 py-2">
+              <span className="text-sm font-medium text-success">
+                {giftCardCode} — applies {formatCurrency(giftCardCredit)} (balance {formatCurrency(giftCardState.balance)})
+              </span>
+              <button
+                type="button"
+                onClick={() => { setGiftCardCode(''); setGiftCardState({ status: 'idle' }); }}
+                className="text-xs text-muted-foreground underline"
+              >
+                Remove
+              </button>
+            </div>
+          ) : (
+            <div className="mt-3 flex gap-2">
+              <input
+                value={giftCardCode}
+                onChange={(e) => setGiftCardCode(e.target.value.toUpperCase())}
+                placeholder="Gift card code"
+                className="input flex-1"
+              />
+              <Button type="button" variant="ghost" onClick={checkGiftCard} loading={giftCardState.status === 'checking'}>
+                Apply
+              </Button>
+            </div>
+          )}
+          {giftCardState.status === 'error' && (
+            <p className="mt-2 text-xs text-destructive">{giftCardState.message}</p>
+          )}
+        </Card>
+
+        <Card className="p-5">
+          <h2 className="font-display text-lg font-semibold">Add a tip</h2>
+          <p className="text-xs text-muted-foreground">100% goes to your driver / kitchen team.</p>
+          <div className="mt-3 grid grid-cols-4 gap-2">
+            {([0, 5, 10, 15] as const).map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => { setTipPercent(p); setCustomTip(''); }}
+                className={`rounded-xl border px-3 py-2 text-sm font-medium ${
+                  tipPercent === p && !customTip
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border bg-card'
+                }`}
+              >
+                {p === 0 ? 'None' : `${p}%`}
+              </button>
+            ))}
+          </div>
+          <input
+            value={customTip}
+            onChange={(e) => { setCustomTip(e.target.value.replace(/[^0-9.]/g, '')); setTipPercent(0); }}
+            placeholder="Custom amount in USD"
+            inputMode="decimal"
+            className="input mt-3"
+          />
+        </Card>
+
+        {pointsBalance > 0 && maxRedeem > 0 && (
+          <Card className="p-5">
+            <div className="flex items-baseline justify-between">
+              <h2 className="font-display text-lg font-semibold">Loyalty points</h2>
+              <span className="text-sm text-muted-foreground">
+                Balance: <strong>{pointsBalance.toLocaleString()}</strong>
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Redeem up to {maxRedeem.toLocaleString()} pts (50% of subtotal) — 100 pts = $1 off.
+            </p>
+            <div className="mt-3 flex items-center gap-3">
+              <input
+                type="range"
+                min={0}
+                max={maxRedeem}
+                step={10}
+                value={appliedRedeem}
+                onChange={(e) => setRedeemPoints(Number(e.target.value))}
+                className="h-2 flex-1 accent-primary"
+                aria-label="Redeem points"
+              />
+              <span className="w-20 text-right font-display text-base font-bold text-primary tabular-nums">
+                -{formatCurrency(appliedRedeem / 100)}
+              </span>
+            </div>
+          </Card>
+        )}
+
+        <Card className="p-5">
+          <dl className="space-y-2 text-sm">
+            <Row label={t('cart.subtotal')} value={formatCurrency(subtotal)} />
+            <Row label={t('cart.deliveryFee')} value={formatCurrency(deliveryFee)} />
+            <Row label={t('cart.serviceFee')} value={formatCurrency(serviceFee)} />
+            {tipAmount > 0 && <Row label="Tip" value={formatCurrency(tipAmount)} />}
+            {promoDiscount > 0 && <Row label={`Promo (${promoCode})`} value={`-${formatCurrency(promoDiscount)}`} />}
+            {appliedRedeem > 0 && <Row label="Loyalty discount" value={`-${formatCurrency(appliedRedeem)}`} />}
+            <div className="my-2 h-px bg-border" />
+            <Row label={t('cart.total')} value={formatCurrency(total)} bold />
+          </dl>
+        </Card>
+
+        {error && (
+          <Card className="border-danger/30 bg-danger/5 p-4 text-sm text-danger">
+            <strong>Couldn&apos;t place order:</strong> {error}
+          </Card>
+        )}
+
+        <motion.div
+          initial={{ y: 40, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.05 }}
+          className="sticky bottom-16 lg:bottom-0 lg:pb-4"
+        >
+          <Button variant="gradient" size="xl" fullWidth type="submit" loading={submitting}>
+            {t('checkout.placeOrder', { amount: formatCurrency(total) })}
+          </Button>
+        </motion.div>
+      </form>
+
+      <style jsx global>{`
+        .input {
+          width: 100%;
+          height: 48px;
+          padding: 0 1rem;
+          font-size: 16px;
+          border-radius: 0.875rem;
+          border: 1px solid hsl(var(--border));
+          background: hsl(var(--background));
+          outline: none;
+          transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        .input:focus-visible {
+          border-color: hsl(var(--primary));
+          box-shadow: 0 0 0 3px hsl(var(--primary) / 0.18);
+        }
+      `}</style>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-sm font-medium">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function PaymentChoice({ icon, label, active, onClick }: { icon: React.ReactNode; label: string; active: boolean; onClick: () => void }) {
+  return (
+    <motion.button
+      type="button"
+      whileTap={{ scale: 0.97 }}
+      onClick={onClick}
+      className={`focus-ring flex min-h-touch items-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold transition-all ${
+        active ? 'border-primary bg-primary/10 text-primary shadow-soft' : 'border-border bg-card text-foreground hover:border-primary/40'
+      }`}
+    >
+      {icon}
+      {label}
+    </motion.button>
+  );
+}
+
+function Row({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
+  return (
+    <div className={`flex items-center justify-between ${bold ? 'text-base font-bold' : ''}`}>
+      <dt>{label}</dt>
+      <dd className={bold ? 'font-display text-xl text-primary' : ''}>{value}</dd>
+    </div>
+  );
+}

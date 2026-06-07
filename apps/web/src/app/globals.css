@@ -1,0 +1,21 @@
+@import '@favornoms/ui/globals.css';
+
+/* Font preload via Next.js, but provide system fallback */
+:root {
+  --font-sans:
+    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-display:
+    'Playfair Display', 'Georgia', serif;
+  --font-thai:
+    'Noto Sans Thai', 'Inter', sans-serif;
+}
+
+/* App-specific overrides */
+html,
+body {
+  height: 100%;
+}
+
+#__next {
+  isolation: isolate;
+}

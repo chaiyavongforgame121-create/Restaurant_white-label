@@ -1,0 +1,44 @@
+{
+  "common": {
+    "loading": "Loading…",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "search": "Search…",
+    "back": "Back",
+    "all": "All"
+  },
+  "pos": {
+    "title": "Take new order",
+    "subtitle": "POS · {branch}",
+    "menuEmpty": "No items match",
+    "addToOrder": "Tap items to add",
+    "order": "Order",
+    "clear": "Clear",
+    "channelDineIn": "Dine-in",
+    "channelPickup": "Pickup",
+    "channelDelivery": "Delivery",
+    "total": "Total",
+    "charge": "Charge {amount}",
+    "payment": "Take payment",
+    "cash": "Cash",
+    "card": "Card",
+    "orderSent": "✓ Order {orderNumber} sent to kitchen",
+    "printerReady": "Printer ready",
+    "pairPrinter": "Pair printer",
+    "browserPrint": "Browser print"
+  },
+  "login": {
+    "title": "Favornoms POS",
+    "subtitle": "Sign in with your work email to start a shift",
+    "email": "Work email",
+    "sendLink": "Send sign-in link",
+    "checkInbox": "Check your inbox",
+    "linkSentTo": "We sent a sign-in link to {email}. Open it on this device.",
+    "invitedHint": "You need to be invited by your manager before signing in."
+  },
+  "access": {
+    "denied": "Access denied",
+    "noPosAccess": "Your account doesn't have POS access for {branch}. Ask your manager to invite you as cashier or manager.",
+    "signOut": "Sign out and try another account"
+  }
+}

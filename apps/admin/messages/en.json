@@ -1,0 +1,60 @@
+{
+  "common": {
+    "loading": "Loading…",
+    "cancel": "Cancel",
+    "save": "Save",
+    "back": "Back"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "orders": "Orders",
+    "menu": "Menu",
+    "staff": "Staff",
+    "drivers": "Drivers",
+    "customers": "Customers",
+    "reports": "Reports",
+    "activity": "Activity log",
+    "branch": "Branch settings",
+    "settings": "Preferences"
+  },
+  "section": {
+    "operate": "Operate",
+    "people": "People",
+    "insights": "Insights",
+    "setup": "Setup"
+  },
+  "login": {
+    "title": "Favornoms Admin",
+    "subtitle": "Sign in to manage your restaurant",
+    "email": "Email",
+    "sendLink": "Send sign-in link",
+    "checkInbox": "Check your inbox",
+    "linkSentTo": "We sent a sign-in link to {email}."
+  },
+  "access": {
+    "denied": "No admin access",
+    "noOwnerAccess": "Your account isn't an owner or manager of {branch}.",
+    "signOut": "Sign out"
+  },
+  "staff": {
+    "title": "Staff",
+    "count": "{count, plural, one {# member} other {# members}}",
+    "branch": "Branch",
+    "allBranches": "All branches",
+    "noStaff": "No staff yet",
+    "noStaffDescription": "Invite cashiers, kitchen staff and managers to share access to the dashboard, POS and KDS.",
+    "invite": "Invite staff",
+    "inviteFirst": "Invite first member",
+    "inviteTitle": "Invite staff member",
+    "role": "Role",
+    "scope": "Scope",
+    "thisBranch": "This branch only",
+    "thisBranchDescription": "Access limited to this location",
+    "allBranchesDescription": "Full restaurant access (managers)",
+    "send": "Send invite",
+    "manager": "Manager",
+    "cashier": "Cashier (POS)",
+    "kitchen": "Kitchen (KDS)",
+    "staffRole": "Staff"
+  }
+}
