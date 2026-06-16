@@ -11,6 +11,7 @@ import { getBrowserClient } from '@favornoms/database/client';
 import { listCategories, listMenuItems } from '@favornoms/database/queries';
 import { Badge, Button, Card, IconButton, Sheet } from '@favornoms/ui';
 import { MenuReorder } from './menu-reorder';
+import { ItemModifierEditor } from './item-modifier-editor';
 
 interface Props {
   branchId: string;
@@ -192,6 +193,7 @@ export function MenuManager({ branchId, categories: initCategories, items: initI
           branchId={branchId}
           categories={categories}
           item={editing}
+          onCategoryCreated={(cat) => setCategories((cur) => [...cur, cat])}
           onSaved={() => {
             setEditing(null);
             setCreating(false);
@@ -203,13 +205,17 @@ export function MenuManager({ branchId, categories: initCategories, items: initI
   );
 }
 
+const CATEGORY_EMOJIS = ['🍔', '🍕', '🥗', '🍟', '🥤', '🍰', '🍣', '🌮', '🍜', '☕', '🍦', '🍗', '🥪', '🍳'];
+const COMMON_ALLERGENS = ['Peanuts', 'Tree nuts', 'Milk', 'Eggs', 'Fish', 'Shellfish', 'Soy', 'Wheat / Gluten', 'Sesame'];
+
 function ItemEditor({
-  branchId, categories, item, onSaved,
+  branchId, categories, item, onSaved, onCategoryCreated,
 }: {
   branchId: string;
   categories: MenuCategory[];
   item: MenuItem | null;
   onSaved: () => void;
+  onCategoryCreated: (cat: MenuCategory) => void;
 }) {
   const [name, setName] = React.useState(item?.name ?? '');
   const [description, setDescription] = React.useState(item?.description ?? '');
@@ -223,6 +229,50 @@ function ItemEditor({
   const [lowStockThreshold, setLowStockThreshold] = React.useState('5');
   const [uploading, setUploading] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
+  const [allergens, setAllergens] = React.useState<string[]>(item?.allergens ?? []);
+  const [allergenDraft, setAllergenDraft] = React.useState('');
+  const [showNewCat, setShowNewCat] = React.useState(false);
+  const [newCatName, setNewCatName] = React.useState('');
+  const [newCatEmoji, setNewCatEmoji] = React.useState('🍽️');
+  const [creatingCat, setCreatingCat] = React.useState(false);
+
+  const addAllergen = (raw: string) => {
+    const v = raw.trim();
+    if (!v) return;
+    setAllergens((cur) => (cur.some((a) => a.toLowerCase() === v.toLowerCase()) ? cur : [...cur, v]));
+    setAllergenDraft('');
+  };
+  const removeAllergen = (a: string) => setAllergens((cur) => cur.filter((x) => x !== a));
+
+  const createCategory = async () => {
+    const nm = newCatName.trim();
+    if (!nm) return;
+    setCreatingCat(true);
+    const supabase = getBrowserClient();
+    const maxOrder = categories.reduce((m, c) => Math.max(m, c.displayOrder ?? 0), -1);
+    const { data, error } = await supabase
+      .from('menu_categories')
+      .insert({ branch_id: branchId, name: nm, icon_emoji: newCatEmoji || null, display_order: maxOrder + 1, is_active: true })
+      .select('id, branch_id, name, display_order, icon_emoji')
+      .single();
+    setCreatingCat(false);
+    if (error || !data) {
+      alert(error?.message ?? 'Could not create category');
+      return;
+    }
+    const cat: MenuCategory = {
+      id: data.id,
+      branchId: data.branch_id,
+      name: data.name,
+      displayOrder: data.display_order ?? 0,
+      iconEmoji: data.icon_emoji ?? undefined,
+    };
+    onCategoryCreated(cat);
+    setCategoryId(cat.id);
+    setShowNewCat(false);
+    setNewCatName('');
+    setNewCatEmoji('🍽️');
+  };
 
   // Load track_stock + stock_quantity for existing items
   React.useEffect(() => {
@@ -275,7 +325,9 @@ function ItemEditor({
         is_new: isNew,
         track_stock: trackStock,
         stock_quantity: trackStock ? Number(stockQuantity) : null,
-        low_stock_threshold: trackStock ? Number(lowStockThreshold) : null,
+        // low_stock_threshold is NOT NULL (default 5) — never send null, or inserts fail.
+        low_stock_threshold: trackStock ? Number(lowStockThreshold) : 5,
+        allergens,
       };
       const { error: dbErr } = item
         ? await supabase.from('menu_items').update(payload).eq('id', item.id)
@@ -312,13 +364,61 @@ function ItemEditor({
         />
       </Field>
       <Field label="Category">
-        <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="input">
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.iconEmoji} {c.name}
-            </option>
-          ))}
-        </select>
+        <div className="flex items-center gap-2">
+          <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="input flex-1">
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.iconEmoji} {c.name}
+              </option>
+            ))}
+          </select>
+          <Button type="button" variant="ghost" size="md" onClick={() => setShowNewCat((s) => !s)}>
+            {showNewCat ? 'Cancel' : '+ New'}
+          </Button>
+        </div>
+        {showNewCat && (
+          <div className="mt-2 space-y-2 rounded-xl border border-border bg-muted/20 p-3">
+            <div className="flex items-center gap-2">
+              <input
+                value={newCatEmoji}
+                onChange={(e) => setNewCatEmoji(e.target.value)}
+                aria-label="Category icon"
+                maxLength={4}
+                className="focus-ring h-12 w-16 shrink-0 rounded-xl border border-border bg-background text-center text-2xl"
+              />
+              <input
+                value={newCatName}
+                onChange={(e) => setNewCatName(e.target.value)}
+                placeholder="Category name (e.g. Desserts)"
+                className="focus-ring h-12 min-w-0 flex-1 rounded-xl border border-border bg-background px-3 text-base"
+              />
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {CATEGORY_EMOJIS.map((em) => (
+                <button
+                  key={em}
+                  type="button"
+                  onClick={() => setNewCatEmoji(em)}
+                  className={`h-9 w-9 rounded-lg border text-lg ${
+                    newCatEmoji === em ? 'border-primary bg-primary/10' : 'border-border'
+                  }`}
+                >
+                  {em}
+                </button>
+              ))}
+            </div>
+            <Button
+              type="button"
+              variant="soft"
+              size="md"
+              onClick={createCategory}
+              loading={creatingCat}
+              disabled={!newCatName.trim()}
+            >
+              Create category
+            </Button>
+          </div>
+        )}
       </Field>
       <Field label="Price (USD)">
         <input
@@ -339,6 +439,63 @@ function ItemEditor({
           rows={3}
           className="input min-h-[80px] resize-none"
         />
+      </Field>
+
+      <Field label="Allergens / Concerns">
+        <div className="space-y-2">
+          {allergens.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {allergens.map((a) => (
+                <span
+                  key={a}
+                  className="inline-flex items-center gap-1 rounded-full bg-warning/15 px-2.5 py-1 text-xs font-medium text-warning"
+                >
+                  {a}
+                  <button
+                    type="button"
+                    onClick={() => removeAllergen(a)}
+                    aria-label={`Remove ${a}`}
+                    className="text-warning/70 hover:text-danger"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-2">
+            <input
+              value={allergenDraft}
+              onChange={(e) => setAllergenDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ',') {
+                  e.preventDefault();
+                  addAllergen(allergenDraft);
+                }
+              }}
+              placeholder="Type an allergen, press Enter (e.g. Peanuts)"
+              className="input flex-1"
+            />
+            <Button type="button" variant="ghost" size="md" onClick={() => addAllergen(allergenDraft)} disabled={!allergenDraft.trim()}>
+              Add
+            </Button>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {COMMON_ALLERGENS.filter((a) => !allergens.some((x) => x.toLowerCase() === a.toLowerCase())).map((a) => (
+              <button
+                key={a}
+                type="button"
+                onClick={() => addAllergen(a)}
+                className="rounded-full border border-border bg-card px-2.5 py-1 text-xs text-muted-foreground hover:border-primary/40"
+              >
+                + {a}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Shown to customers on the item page so allergy-sensitive diners can check before ordering.
+          </p>
+        </div>
       </Field>
       <Field label="Image">
         <div className="space-y-2">
@@ -395,6 +552,17 @@ function ItemEditor({
           New
         </label>
       </div>
+      <div className="rounded-xl border border-border bg-muted/20 p-3">
+        {item ? (
+          <ItemModifierEditor branchId={branchId} itemId={item.id} />
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">Options (Size, Add-ons…)</span> — save this
+            item first, then reopen it to add option groups.
+          </p>
+        )}
+      </div>
+
       <Button
         type="submit"
         variant="gradient"

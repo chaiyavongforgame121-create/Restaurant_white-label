@@ -18,29 +18,32 @@ export function OrderRowActions({ orderId, orderTotal, orderStatus }: Props) {
   const [refundOpen, setRefundOpen] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [cancelOpen, setCancelOpen] = React.useState(false);
+  const [notesOpen, setNotesOpen] = React.useState(false);
+  const [notesDraft, setNotesDraft] = React.useState('');
+  const [invoiceMsg, setInvoiceMsg] = React.useState<string | null>(null);
 
-  const canRefund = !['canceled', 'refunded'].includes(orderStatus);
-  const canCancel = !['canceled', 'refunded', 'completed', 'delivered'].includes(orderStatus);
+  // Use canonical order_status values ('cancelled' two L's, 'completed' — there is no
+  // 'canceled'/'delivered' for orders) so terminal-state orders don't offer dead actions.
+  const canRefund = !['cancelled', 'refunded'].includes(orderStatus);
+  const canCancel = !['cancelled', 'refunded', 'completed'].includes(orderStatus);
   const canEdit = ['pending', 'confirmed'].includes(orderStatus);
 
-  const editNotes = async () => {
-    const next = window.prompt('Update internal notes for this order:', '');
-    if (next === null) return;
+  const saveNotes = async () => {
     setBusy(true);
     setError(null);
     const supabase = getBrowserClient();
     const { error: rpcErr } = await supabase.rpc('admin_edit_order_notes', {
       p_order_id: orderId,
-      p_notes: next,
+      p_notes: notesDraft,
     });
     setBusy(false);
     if (rpcErr) { setError(rpcErr.message); return; }
-    setOpen(false);
+    setNotesOpen(false);
     router.refresh();
   };
 
-  const cancel = async () => {
-    if (!confirm('Cancel this order?')) return;
+  const doCancel = async () => {
     setBusy(true);
     setError(null);
     const supabase = getBrowserClient();
@@ -50,7 +53,7 @@ export function OrderRowActions({ orderId, orderTotal, orderStatus }: Props) {
     });
     setBusy(false);
     if (rpcErr) { setError(rpcErr.message); return; }
-    setOpen(false);
+    setCancelOpen(false);
     router.refresh();
   };
 
@@ -64,8 +67,8 @@ export function OrderRowActions({ orderId, orderTotal, orderStatus }: Props) {
     setBusy(false);
     if (rpcErr) { setError(rpcErr.message); return; }
     const inv = data as { invoice_number?: string } | null;
-    alert(`Issued invoice ${inv?.invoice_number ?? '(unknown)'}`);
     setOpen(false);
+    setInvoiceMsg(`Issued invoice ${inv?.invoice_number ?? '(unknown)'}`);
     router.refresh();
   };
 
@@ -94,7 +97,7 @@ export function OrderRowActions({ orderId, orderTotal, orderStatus }: Props) {
               {canCancel && (
                 <button
                   type="button"
-                  onClick={cancel}
+                  onClick={() => { setOpen(false); setError(null); setCancelOpen(true); }}
                   disabled={busy}
                   className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-destructive hover:bg-destructive/10"
                 >
@@ -104,7 +107,7 @@ export function OrderRowActions({ orderId, orderTotal, orderStatus }: Props) {
               {canEdit && (
                 <button
                   type="button"
-                  onClick={editNotes}
+                  onClick={() => { setOpen(false); setError(null); setNotesDraft(''); setNotesOpen(true); }}
                   disabled={busy}
                   className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted"
                 >
@@ -131,6 +134,61 @@ export function OrderRowActions({ orderId, orderTotal, orderStatus }: Props) {
           onClose={() => setRefundOpen(false)}
           onRefunded={() => { setRefundOpen(false); setOpen(false); router.refresh(); }}
         />
+      )}
+
+      {cancelOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => !busy && setCancelOpen(false)}
+        >
+          <Card className="w-full max-w-sm space-y-3 p-5" onClick={(e) => e.stopPropagation()}>
+            <h2 className="font-display text-lg font-semibold">Cancel this order?</h2>
+            <p className="text-sm text-muted-foreground">
+              This cancels the order and restores stock. It can&apos;t be undone.
+            </p>
+            {error && <p className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setCancelOpen(false)}>Keep order</Button>
+              <Button variant="danger" onClick={doCancel} loading={busy}>Yes, cancel</Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {notesOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => !busy && setNotesOpen(false)}
+        >
+          <Card className="w-full max-w-md space-y-3 p-5" onClick={(e) => e.stopPropagation()}>
+            <h2 className="font-display text-lg font-semibold">Internal notes</h2>
+            <textarea
+              value={notesDraft}
+              onChange={(e) => setNotesDraft(e.target.value)}
+              rows={3}
+              autoFocus
+              placeholder="Update internal notes for this order…"
+              className="focus-ring w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
+            />
+            {error && <p className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setNotesOpen(false)}>Cancel</Button>
+              <Button variant="gradient" onClick={saveNotes} loading={busy}>Save notes</Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {invoiceMsg && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setInvoiceMsg(null)}
+        >
+          <Card className="w-full max-w-sm space-y-3 p-5 text-center" onClick={(e) => e.stopPropagation()}>
+            <p className="text-sm font-medium text-success">{invoiceMsg}</p>
+            <Button variant="gradient" fullWidth onClick={() => setInvoiceMsg(null)}>Done</Button>
+          </Card>
+        </div>
       )}
     </>
   );

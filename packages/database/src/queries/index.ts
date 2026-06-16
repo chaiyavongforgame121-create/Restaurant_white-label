@@ -9,3 +9,6 @@ export * from './loyalty';
 export * from './reservations';
 export * from './stripe';
 export * from './plan';
+export * from './addresses';
+export * from './delivery';
+export * from './chat';

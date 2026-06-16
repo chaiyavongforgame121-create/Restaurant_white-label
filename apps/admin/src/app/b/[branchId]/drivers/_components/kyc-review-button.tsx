@@ -14,11 +14,9 @@ interface Doc {
 }
 
 const DOC_TYPES = [
-  { key: 'national_id', label: 'National ID' },
-  { key: 'license_front', label: 'License (front)' },
-  { key: 'license_back', label: 'License (back)' },
+  { key: 'license', label: 'Driver license' },
   { key: 'vehicle_reg', label: 'Vehicle reg.' },
-  { key: 'selfie', label: 'Selfie' },
+  { key: 'selfie', label: 'Selfie with license' },
 ] as const;
 
 export function KycReviewButton({

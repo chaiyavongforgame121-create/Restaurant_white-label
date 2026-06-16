@@ -5,7 +5,7 @@ const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  transpilePackages: ['@favornoms/ui', '@favornoms/shared', '@favornoms/database'],
+  transpilePackages: ['@favornoms/ui', '@favornoms/shared', '@favornoms/database', '@favornoms/maps'],
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'images.unsplash.com' },

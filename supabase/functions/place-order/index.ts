@@ -1,4 +1,14 @@
-// place-order v8 — US pivot + modifiers + combos + happy-hour + schedules + gift cards.
+// place-order v9 — US pivot + modifiers + combos + happy-hour + schedules + gift cards
+//                  + distance-based delivery fees (Mapbox location backbone, Phase 1).
+//   v9   (2026-06-11): when delivery_address has lat/lng (direct or saved address),
+//        calls quote_delivery() for the authoritative distance fee + heuristic ETA,
+//        rejects out-of-radius addresses (409 delivery_out_of_range), and populates
+//        deliveries.pickup_location/delivery_location/dropoff_lat/lng/distance_km/
+//        estimated_duration_min. No coords → legacy flat fee (graceful fallback).
+//   v9.1 (2026-06-11): scheduled orders beyond prep_time+15min are inserted with
+//        held=true (hidden from the kitchen) and released by pg_cron at
+//        scheduled_for − prep_time (private.release_scheduled_orders).
+//   v8.1 (2026-06-11): modifiers column is NOT NULL '[]'::jsonb — send [] not null.
 //   • Computes US sales tax from branches.sales_tax_rate.
 //   • Drops PromptPay payment_method, US uses card | cash.
 //   • Reads delivery_fee from branch settings (defaults to $3.99).
@@ -19,7 +29,7 @@ interface PlaceOrderRequest {
   channel: 'dine_in' | 'pickup' | 'delivery' | 'qr_ordering';
   customer_name?: string;
   customer_phone?: string;
-  delivery_address?: { line1: string; line2?: string; city?: string; state?: string; postal_code?: string; notes?: string };
+  delivery_address?: { line1: string; line2?: string; city?: string; state?: string; postal_code?: string; notes?: string; lat?: number; lng?: number };
   saved_address_id?: string;
   customer_notes?: string;
   payment_method: 'card' | 'cash';
@@ -62,7 +72,7 @@ Deno.serve(async (req: Request) => {
   const { data: openCheck } = await admin.rpc('is_branch_open', { p_branch_id: payload.branch_id });
   if (openCheck === false) return json(409, { error: 'branch_closed' });
 
-  const { data: branch, error: bErr } = await admin.from('branches').select('id, restaurant_id, is_active, settings, sales_tax_rate').eq('id', payload.branch_id).single();
+  const { data: branch, error: bErr } = await admin.from('branches').select('id, restaurant_id, is_active, settings, sales_tax_rate, geo_lat, geo_lng').eq('id', payload.branch_id).single();
   if (bErr || !branch || !branch.is_active) return json(404, { error: 'branch_not_found_or_inactive' });
 
   const menuItemIds = payload.items.map((i) => i.menu_item_id);
@@ -188,7 +198,35 @@ Deno.serve(async (req: Request) => {
   let deliveryAddress = payload.delivery_address ?? null;
   if (payload.saved_address_id && customerId) {
     const { data: a } = await admin.from('customer_addresses').select('*').eq('id', payload.saved_address_id).eq('customer_id', customerId).maybeSingle();
-    if (a) deliveryAddress = { line1: a.address_line1, line2: a.address_line2, city: a.district, state: a.province, postal_code: a.postal_code, notes: a.delivery_notes } as never;
+    if (a) deliveryAddress = { line1: a.address_line1, line2: a.address_line2, city: a.city ?? a.district, state: a.state ?? a.province, postal_code: a.postal_code, notes: a.delivery_notes, lat: a.lat ?? undefined, lng: a.lng ?? undefined } as never;
+  }
+
+  // Distance-based delivery quote (server-authoritative — same RPC the checkout
+  // UI previews with). Falls back to the legacy flat fee when no coordinates.
+  let tripDistanceKm: number | null = null;
+  let tripEtaMin: number | null = null;
+  let dropoffLat: number | null = null;
+  let dropoffLng: number | null = null;
+  if (payload.channel === 'delivery') {
+    const addr = deliveryAddress as { lat?: number; lng?: number } | null;
+    const lat = typeof addr?.lat === 'number' && Number.isFinite(addr.lat) ? addr.lat : null;
+    const lng = typeof addr?.lng === 'number' && Number.isFinite(addr.lng) ? addr.lng : null;
+    if (lat != null && lng != null) {
+      const { data: q } = await admin.rpc('quote_delivery', { p_branch_id: payload.branch_id, p_lat: lat, p_lng: lng });
+      const quote = q as { deliverable?: boolean; reason?: string; distance_km?: number; fee?: number; eta_min?: number; radius_km?: number } | null;
+      if (quote?.deliverable) {
+        deliveryFee = Number(quote.fee ?? deliveryFee);
+        tripDistanceKm = Number.isFinite(Number(quote.distance_km)) ? Number(quote.distance_km) : null;
+        tripEtaMin = Number.isFinite(Number(quote.eta_min)) ? Number(quote.eta_min) : null;
+        dropoffLat = lat;
+        dropoffLng = lng;
+      } else if (quote?.reason === 'out_of_range') {
+        return json(409, { error: 'delivery_out_of_range', distance_km: quote.distance_km, radius_km: quote.radius_km });
+      }
+      // branch_unavailable / invalid_coordinates → keep the legacy flat fee.
+    } else {
+      console.warn('delivery_no_coords:legacy_flat_fee', { branch_id: payload.branch_id });
+    }
   }
 
   if (payload.promo_code) {
@@ -246,6 +284,12 @@ Deno.serve(async (req: Request) => {
     scheduledFor = new Date(t).toISOString();
   }
 
+  // Hold far-future scheduled orders out of the kitchen. Released by the
+  // pg_cron job private.release_scheduled_orders() at scheduled_for − prep_time.
+  const prepTimeMin = Number(settings.prep_time_min ?? 15);
+  const held = scheduledFor != null &&
+    new Date(scheduledFor).getTime() - Date.now() > (prepTimeMin + 15) * 60_000;
+
   const { data: order, error: oErr } = await admin.from('orders').insert({
     order_number: orderNumber, branch_id: payload.branch_id, customer_id: customerId,
     customer_name: payload.customer_name, customer_phone: payload.customer_phone,
@@ -255,7 +299,8 @@ Deno.serve(async (req: Request) => {
     total, delivery_address: deliveryAddress, customer_notes: payload.customer_notes,
     table_id: payload.table_id ?? null, source: 'web',
     scheduled_for: scheduledFor,
-    status_history: [{ status: 'pending', at: new Date().toISOString(), scheduled_for: scheduledFor }],
+    held,
+    status_history: [{ status: 'pending', at: new Date().toISOString(), scheduled_for: scheduledFor, held }],
   }).select('id, order_number').single();
   if (oErr || !order) return json(500, { error: 'order_insert_failed', detail: oErr?.message });
 
@@ -276,9 +321,8 @@ Deno.serve(async (req: Request) => {
       item_image_url: c.it.image_url,
       unit_price: c.it.price,
       quantity: c.line.quantity,
-      modifiers: c.lineMods.length > 0
-        ? c.lineMods.map((m) => ({ group_id: m.group_id, option_id: m.id, name: m.name, price_delta: m.price_delta }))
-        : null,
+      // order_items.modifiers is NOT NULL (default '[]'::jsonb) — never send null.
+      modifiers: c.lineMods.map((m) => ({ group_id: m.group_id, option_id: m.id, name: m.name, price_delta: m.price_delta })),
       modifier_total: r2(c.modDelta * c.line.quantity),
       subtotal: c.lineSubtotal,
       notes: c.line.notes,
@@ -292,7 +336,7 @@ Deno.serve(async (req: Request) => {
       item_image_url: c.combo.image_url,
       unit_price: c.combo.total_price,
       quantity: c.qty,
-      modifiers: null,
+      modifiers: [],
       modifier_total: 0,
       subtotal: c.lineSubtotal,
       notes: c.notes,
@@ -315,7 +359,26 @@ Deno.serve(async (req: Request) => {
   }
 
   const { data: payment } = await admin.from('payments').insert({ order_id: order.id, branch_id: payload.branch_id, amount: total, method: payload.payment_method, status: 'pending', gateway: payload.payment_method === 'cash' ? null : 'stripe', gateway_metadata: { pending: true } }).select('id').single();
-  if (payload.channel === 'delivery') await admin.from('deliveries').insert({ order_id: order.id, branch_id: payload.branch_id, status: 'pending' });
+  if (payload.channel === 'delivery') {
+    // EWKT strings — PostGIS parses them into geography on insert.
+    const pickupEwkt = branch.geo_lat != null && branch.geo_lng != null
+      ? `SRID=4326;POINT(${branch.geo_lng} ${branch.geo_lat})`
+      : null;
+    const dropoffEwkt = dropoffLat != null && dropoffLng != null
+      ? `SRID=4326;POINT(${dropoffLng} ${dropoffLat})`
+      : null;
+    await admin.from('deliveries').insert({
+      order_id: order.id,
+      branch_id: payload.branch_id,
+      status: 'pending',
+      delivery_fee: deliveryFee,
+      ...(pickupEwkt ? { pickup_location: pickupEwkt } : {}),
+      ...(dropoffEwkt ? { delivery_location: dropoffEwkt } : {}),
+      ...(dropoffLat != null && dropoffLng != null ? { dropoff_lat: dropoffLat, dropoff_lng: dropoffLng } : {}),
+      ...(tripDistanceKm != null ? { distance_km: tripDistanceKm } : {}),
+      ...(tripEtaMin != null ? { estimated_duration_min: tripEtaMin } : {}),
+    });
+  }
 
-  return json(201, { order_id: order.id, order_number: order.order_number, total, subtotal, tax_amount: taxAmount, discount_amount: loyaltyDollarsOff + promoDiscount, payment_id: payment?.id ?? null, payment_method: payload.payment_method });
+  return json(201, { order_id: order.id, order_number: order.order_number, total, subtotal, tax_amount: taxAmount, discount_amount: loyaltyDollarsOff + promoDiscount, eta_min: tripEtaMin, payment_id: payment?.id ?? null, payment_method: payload.payment_method });
 });

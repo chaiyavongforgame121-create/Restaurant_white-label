@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Battery, CalendarDays, ChevronRight, Coffee, MapPin, Power, Star, Store, Wallet, Zap } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -16,11 +17,46 @@ import { DispatchSheet } from '@/components/dispatch-sheet';
 
 export function HomeView() {
   const t = useTranslations('home');
+  const router = useRouter();
   const { driver } = useDriverSession();
   const status = useDriver((s) => s.status);
   const toggle = useDriver((s) => s.toggle);
   const setStatus = useDriver((s) => s.setStatus);
   const { offered, active, accept, reject } = useDelivery();
+
+  // Real today / week earnings for the hero stat tiles (was hardcoded $0).
+  const [earnings, setEarnings] = React.useState<{ today: number; week: number } | null>(null);
+  React.useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const supabase = getBrowserClient();
+      const [d1, d7] = await Promise.all([
+        supabase.rpc('get_my_driver_stats', { p_days: 1 }),
+        supabase.rpc('get_my_driver_stats', { p_days: 7 }),
+      ]);
+      if (cancelled) return;
+      const today = (d1.data as { total_earnings_usd?: number } | null)?.total_earnings_usd ?? 0;
+      const week = (d7.data as { total_earnings_usd?: number } | null)?.total_earnings_usd ?? 0;
+      setEarnings({ today, week });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const [toggling, setToggling] = React.useState(false);
+  const [onlineError, setOnlineError] = React.useState(false);
+
+  // Server is the source of truth for online state on load — the persisted store
+  // is only a cache and can disagree after reopening on another device or a
+  // server-side offline. Reconcile once on mount.
+  const reconciledRef = React.useRef(false);
+  React.useEffect(() => {
+    if (reconciledRef.current) return;
+    reconciledRef.current = true;
+    if (driver.is_online && status === 'offline') setStatus('online');
+    else if (!driver.is_online && status === 'online') setStatus('offline');
+  }, [driver.is_online, status, setStatus]);
 
   // Reflect "on delivery" into local store so the location ping keeps running
   React.useEffect(() => {
@@ -35,14 +71,28 @@ export function HomeView() {
   }, [offeredId]);
 
   const isOnline = status === 'online' || status === 'on_delivery';
+  const onDelivery = status === 'on_delivery';
   const approvedCount = driver.approvals?.filter((a) => a.status === 'approved').length ?? 0;
 
   const handleToggle = async () => {
-    const next = isOnline ? 'offline' : 'online';
-    toggle();
+    // Never flip is_online while a delivery is in flight — that would silently take the
+    // driver offline for future offers (the reflect effect masks it locally).
+    if (toggling || onDelivery) return;
+    const prev = status;
+    const goOnline = !isOnline;
+    setToggling(true);
+    setOnlineError(false);
+    toggle(); // optimistic
     if ('vibrate' in navigator) navigator.vibrate(40);
     const supabase = getBrowserClient();
-    await setDriverOnline(supabase, driver.id, next === 'online');
+    const { error } = await setDriverOnline(supabase, driver.id, goOnline);
+    setToggling(false);
+    if (error) {
+      // Roll back the optimistic flip so the UI doesn't lie about being online
+      // (a stale "online" means dispatch never offers and the driver waits forever).
+      setStatus(prev);
+      setOnlineError(true);
+    }
   };
 
   return (
@@ -81,25 +131,31 @@ export function HomeView() {
           <div className="mt-10 flex justify-center">
             <PowerButton
               online={isOnline}
+              disabled={onDelivery}
               onClick={handleToggle}
-              label={isOnline ? t('goOffline') : t('goOnline')}
+              label={onDelivery ? t('online') : isOnline ? t('goOffline') : t('goOnline')}
             />
           </div>
 
           <div className="mt-14 flex justify-center">
             <StatusPill online={isOnline} label={isOnline ? t('online') : t('offline')} />
           </div>
+          {onlineError && (
+            <p className="mx-auto mt-3 inline-block rounded-full bg-danger/90 px-4 py-1.5 text-sm font-medium text-white">
+              Couldn&apos;t update your status — check your connection and try again.
+            </p>
+          )}
         </div>
       </section>
 
       {/* Stats — floats on top of the hero's rounded base */}
       <section className="relative z-10 -mt-8 px-4">
         <Card className="grid grid-cols-3 divide-x divide-border/70 bg-card p-1 shadow-warm">
-          <Stat icon={<Wallet className="h-4 w-4" />} label={t('today')} value={formatCurrency(0)} />
+          <Stat icon={<Wallet className="h-4 w-4" />} label={t('today')} value={formatCurrency(earnings?.today ?? 0)} />
           <Stat
             icon={<CalendarDays className="h-4 w-4" />}
             label={t('week')}
-            value={formatCurrency(0)}
+            value={formatCurrency(earnings?.week ?? 0)}
           />
           <Stat
             icon={<Star className="h-4 w-4 fill-accent text-accent" />}
@@ -178,9 +234,20 @@ export function HomeView() {
         {offered && (
           <DispatchSheet
             offer={offered}
-            timeoutSeconds={45}
+            timeoutSeconds={
+              // Server truth (dispatch v2 offer_expires_at); the pg_cron sweep
+              // enforces it even if the app is closed. 45s fallback for legacy offers.
+              offered.offerExpiresAt
+                ? Math.max(5, Math.round((new Date(offered.offerExpiresAt).getTime() - Date.now()) / 1000))
+                : 45
+            }
             onAccept={() => {
-              void accept();
+              void (async () => {
+                const ok = await accept();
+                // Hand the driver straight to the active run instead of stranding
+                // them on the home screen to hunt for the Active-tab badge.
+                if (ok) router.push('/app/active');
+              })();
             }}
             onReject={() => {
               void reject('declined');
@@ -199,16 +266,19 @@ function PowerButton({
   online,
   onClick,
   label,
+  disabled,
 }: {
   online: boolean;
   onClick: () => void;
   label: string;
+  disabled?: boolean;
 }) {
   return (
     <motion.button
-      whileTap={{ scale: 0.94 }}
+      whileTap={disabled ? undefined : { scale: 0.94 }}
       onClick={onClick}
-      className="focus-ring relative grid h-44 w-44 place-items-center rounded-full"
+      disabled={disabled}
+      className="focus-ring relative grid h-44 w-44 place-items-center rounded-full disabled:cursor-not-allowed disabled:opacity-80"
       aria-label={label}
     >
       <span

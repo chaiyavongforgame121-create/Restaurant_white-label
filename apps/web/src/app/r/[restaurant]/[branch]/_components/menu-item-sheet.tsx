@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
-import { Clock, Flame, Star } from 'lucide-react';
+import { AlertTriangle, Clock, Flame, Star } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { formatCurrency, type MenuItem } from '@favornoms/shared';
 import { Button, DietaryBadge, QuantityStepper, Sheet } from '@favornoms/ui';
@@ -257,6 +257,16 @@ export function MenuItemSheet({ item, onClose }: Props) {
             {view.dietaryTags.map((tag) => (
               <DietaryBadge key={tag} tag={tag} />
             ))}
+          </div>
+        )}
+
+        {view.allergens && view.allergens.length > 0 && (
+          <div className="mt-3 flex items-start gap-2 rounded-2xl border border-warning/40 bg-warning/10 px-3 py-2.5">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+            <p className="text-sm text-warning">
+              <span className="font-semibold">Allergen info — contains:</span>{' '}
+              {view.allergens.join(', ')}
+            </p>
           </div>
         )}
 

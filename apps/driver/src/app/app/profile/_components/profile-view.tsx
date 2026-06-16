@@ -11,11 +11,9 @@ import { getBrowserClient } from '@favornoms/database/client';
 import { useDriverSession } from '@/components/driver-session';
 
 const DOC_TYPES = [
-  { key: 'national_id', label: 'National ID card' },
-  { key: 'license_front', label: 'Driver license — front' },
-  { key: 'license_back', label: 'Driver license — back' },
+  { key: 'license', label: 'Driver license' },
   { key: 'vehicle_reg', label: 'Vehicle registration' },
-  { key: 'selfie', label: 'Selfie with ID' },
+  { key: 'selfie', label: 'Selfie with Driver license' },
 ] as const;
 
 type DocKey = (typeof DOC_TYPES)[number]['key'];
@@ -131,7 +129,7 @@ export function ProfileView() {
                   ? 'Your documents are verified. You can receive dispatches.'
                   : isRejected
                     ? 'KYC was rejected — please re-upload and contact support.'
-                    : 'Upload all five documents to start receiving dispatches.'}
+                    : 'Upload your documents to start receiving dispatches.'}
               </p>
             </div>
           </header>

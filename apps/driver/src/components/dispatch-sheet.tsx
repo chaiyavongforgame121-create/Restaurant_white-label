@@ -24,6 +24,10 @@ export function DispatchSheet({
 }: DispatchSheetProps) {
   const t = useTranslations('dispatch');
   const [remaining, setRemaining] = React.useState(timeoutSeconds);
+  const [busy, setBusy] = React.useState(false);
+  // Mirror busy in a ref so the countdown closure can see an in-flight accept/reject and
+  // suppress the timeout — otherwise a tap at ~0s races a reject('timeout') on the same offer.
+  const busyRef = React.useRef(false);
   const onTimeoutRef = React.useRef(onTimeout);
   onTimeoutRef.current = onTimeout;
 
@@ -33,7 +37,7 @@ export function DispatchSheet({
       setRemaining((r) => {
         if (r <= 1) {
           clearInterval(id);
-          onTimeoutRef.current();
+          if (!busyRef.current) onTimeoutRef.current();
           return 0;
         }
         return r - 1;
@@ -133,25 +137,41 @@ export function DispatchSheet({
                 {offer.customerNotes}
               </p>
             )}
+            {offer.dropoffNotes && (
+              <p className="mt-2 rounded-lg bg-card/60 px-3 py-2 text-xs text-muted-foreground">
+                <span className="font-semibold text-foreground">📍 Delivery note: </span>
+                {offer.dropoffNotes}
+              </p>
+            )}
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3 border-t border-border/60 bg-card px-5 pb-safe pt-4">
           <motion.button
             whileTap={{ scale: 0.96 }}
-            onClick={onReject}
-            className="focus-ring inline-flex h-16 items-center justify-center gap-2 rounded-2xl border-2 border-border bg-card text-base font-semibold text-foreground transition-colors hover:bg-muted"
+            disabled={busy}
+            onClick={() => {
+              if (busy) return;
+              busyRef.current = true;
+              setBusy(true);
+              onReject();
+            }}
+            className="focus-ring inline-flex h-16 items-center justify-center gap-2 rounded-2xl border-2 border-border bg-card text-base font-semibold text-foreground transition-colors hover:bg-muted disabled:opacity-50"
           >
             <X className="h-5 w-5" />
             {t('reject')}
           </motion.button>
           <motion.button
             whileTap={{ scale: 0.96 }}
+            disabled={busy}
             onClick={() => {
+              if (busy) return;
+              busyRef.current = true;
+              setBusy(true);
               if ('vibrate' in navigator) navigator.vibrate([60, 30, 60]);
               onAccept();
             }}
-            className="focus-ring relative inline-flex h-16 items-center justify-center gap-2 overflow-hidden rounded-2xl bg-gradient-warm text-base font-semibold text-white shadow-warm"
+            className="focus-ring relative inline-flex h-16 items-center justify-center gap-2 overflow-hidden rounded-2xl bg-gradient-warm text-base font-semibold text-white shadow-warm disabled:opacity-60"
           >
             <span className="absolute inset-0 bg-gradient-warm bg-[length:200%_200%] animate-gradient" />
             <span className="relative inline-flex items-center gap-2">

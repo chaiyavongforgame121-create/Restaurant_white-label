@@ -1,0 +1,94 @@
+// Per-branch delivery configuration, stored in branches.settings (jsonb).
+// The SQL function public.quote_delivery() mirrors these defaults and formulas —
+// keep both sides in sync (see supabase migration `delivery_quote_backbone`).
+
+export interface DeliverySettings {
+  /** Base fee added to every delivery (USD). */
+  deliveryBaseFee: number;
+  /** Per-kilometer fee on top of the base (USD/km). */
+  deliveryPerKmFee: number;
+  /** Fee floor after base+distance (USD). */
+  deliveryMinFee: number;
+  /** Fee ceiling after base+distance (USD). */
+  deliveryMaxFee: number;
+  /** Max straight-line delivery radius from the branch (km). */
+  deliveryRadiusKm: number;
+  /** Kitchen prep time baseline (minutes). */
+  prepTimeMin: number;
+  /** Extra prep buffer while "busy mode" is on (minutes). */
+  busyExtraPrepMin: number;
+  /** Manual surge multiplier applied to the clamped fee (1 = off). */
+  deliverySurgeMultiplier: number;
+  /** Seconds a dispatch offer stays valid before re-offer. */
+  offerTtlSeconds: number;
+  /** Driver pay: flat per delivery (USD). */
+  driverBasePay: number;
+  /** Driver pay: per trip kilometer (USD/km). */
+  driverPerKmPay: number;
+  /** Legacy flat fee fallback used when an order has no coordinates. */
+  legacyFlatFee: number;
+}
+
+export const DELIVERY_SETTING_DEFAULTS: DeliverySettings = {
+  deliveryBaseFee: 2.49,
+  deliveryPerKmFee: 1.25,
+  deliveryMinFee: 2.99,
+  deliveryMaxFee: 9.99,
+  deliveryRadiusKm: 8,
+  prepTimeMin: 15,
+  busyExtraPrepMin: 0,
+  deliverySurgeMultiplier: 1,
+  offerTtlSeconds: 75,
+  driverBasePay: 2.0,
+  driverPerKmPay: 0.8,
+  legacyFlatFee: 3.99,
+};
+
+/** Average city driving speed used for the heuristic ETA (km/h). */
+export const CITY_SPEED_KMH = 24;
+
+function num(v: unknown, fallback: number): number {
+  const n = typeof v === 'string' ? Number(v) : (v as number);
+  return typeof n === 'number' && Number.isFinite(n) ? n : fallback;
+}
+
+/** Parse branches.settings jsonb into typed delivery settings with defaults. */
+export function parseDeliverySettings(settings: Record<string, unknown> | null | undefined): DeliverySettings {
+  const s = settings ?? {};
+  const d = DELIVERY_SETTING_DEFAULTS;
+  return {
+    deliveryBaseFee: num(s.delivery_base_fee, d.deliveryBaseFee),
+    deliveryPerKmFee: num(s.delivery_per_km_fee, d.deliveryPerKmFee),
+    deliveryMinFee: num(s.delivery_min_fee, d.deliveryMinFee),
+    deliveryMaxFee: num(s.delivery_max_fee, d.deliveryMaxFee),
+    deliveryRadiusKm: num(s.delivery_radius_km, d.deliveryRadiusKm),
+    prepTimeMin: num(s.prep_time_min, d.prepTimeMin),
+    busyExtraPrepMin: num(s.busy_extra_prep_min, d.busyExtraPrepMin),
+    deliverySurgeMultiplier: Math.max(1, num(s.delivery_surge_multiplier, d.deliverySurgeMultiplier)),
+    offerTtlSeconds: num(s.offer_ttl_seconds, d.offerTtlSeconds),
+    driverBasePay: num(s.driver_base_pay, d.driverBasePay),
+    driverPerKmPay: num(s.driver_per_km_pay, d.driverPerKmPay),
+    legacyFlatFee: num(s.delivery_fee, d.legacyFlatFee),
+  };
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+/** clamp(base + km×perKm, min, max) × surge — identical to quote_delivery() in SQL. */
+export function computeDeliveryFee(settings: DeliverySettings, distanceKm: number): number {
+  let fee = settings.deliveryBaseFee + distanceKm * settings.deliveryPerKmFee;
+  fee = Math.max(fee, settings.deliveryMinFee);
+  fee = Math.min(fee, settings.deliveryMaxFee);
+  return round2(fee * settings.deliverySurgeMultiplier);
+}
+
+/** prep + busy buffer + travel at CITY_SPEED_KMH — identical to quote_delivery() in SQL. */
+export function heuristicEtaMin(settings: DeliverySettings, distanceKm: number): number {
+  return settings.prepTimeMin + settings.busyExtraPrepMin + Math.ceil((distanceKm / CITY_SPEED_KMH) * 60);
+}
+
+export function isWithinDeliveryRadius(settings: DeliverySettings, distanceKm: number): boolean {
+  return distanceKm <= settings.deliveryRadiusKm;
+}

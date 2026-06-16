@@ -13,3 +13,4 @@ export * from './components/empty-state';
 export * from './components/connection-banner';
 export * from './components/theme-provider';
 export * from './components/language-switcher';
+export * from './components/chat-thread';

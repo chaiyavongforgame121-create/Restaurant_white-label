@@ -6,7 +6,16 @@ export interface PlaceOrderInput {
   channel: 'dine_in' | 'pickup' | 'delivery' | 'qr_ordering';
   customer_name: string;
   customer_phone: string;
-  delivery_address?: Record<string, string>;
+  delivery_address?: {
+    line1: string;
+    line2?: string;
+    city?: string;
+    state?: string;
+    postal_code?: string;
+    notes?: string;
+    lat?: number;
+    lng?: number;
+  };
   saved_address_id?: string;
   customer_notes?: string;
   payment_method: 'card' | 'cash';
@@ -80,7 +89,8 @@ export async function getOrderByNumber(
        delivery_fee, service_fee, customer_name, customer_phone,
        delivery_address, customer_notes, created_at, confirmed_at, completed_at,
        order_items(id, item_name, item_image_url, unit_price, quantity, subtotal),
-       deliveries(id, status, driver_id, distance_km, estimated_duration_min, assigned_at, picked_up_at, delivered_at)`,
+       deliveries(id, status, driver_id, distance_km, estimated_duration_min, assigned_at, accepted_at, picked_up_at, delivered_at,
+         driver_lat, driver_lng, driver_location_updated_at, current_eta_min, arriving_at, dropoff_lat, dropoff_lng)`,
     )
     .eq('branch_id', branchId)
     .eq('order_number', orderNumber)

@@ -31,7 +31,7 @@ export async function resolveTenantBySlug(
   const { data: branchRow, error: bErr } = await supabase
     .from('branches')
     .select(
-      'id, restaurant_id, slug, name, address, timezone, theme_override, settings, is_active, custom_domain, brand_id, created_at, updated_at',
+      'id, restaurant_id, slug, name, address, timezone, theme_override, settings, is_active, custom_domain, brand_id, geo_lat, geo_lng, created_at, updated_at',
     )
     .eq('restaurant_id', restaurantRow.id)
     .eq('slug', branchSlug)
@@ -70,7 +70,7 @@ export async function resolveTenantBySlug(
     slug: b.slug,
     name: b.name,
     address: b.address ?? '',
-    geoLocation: { lat: 0, lng: 0 },
+    geoLocation: { lat: b.geo_lat ?? 0, lng: b.geo_lng ?? 0 },
     themeOverride: (b.theme_override ?? {}) as Partial<TenantTheme>,
     settings: parseSettings(b.settings),
     isActive: b.is_active,

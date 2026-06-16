@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Badge, Button, Card } from '@favornoms/ui';
 
@@ -17,6 +17,7 @@ interface HappyHour {
   start_time: string;
   end_time: string;
   is_active: boolean;
+  display_order: number;
 }
 
 interface MenuItem { id: string; name: string }
@@ -40,8 +41,9 @@ export function HappyHoursManager({ branchId, initialHours, menuItems, categorie
     const supabase = getBrowserClient();
     const { data } = await supabase
       .from('happy_hours')
-      .select('id, name, applies_to_item_ids, applies_to_category_ids, discount_type, discount_value, days_of_week, start_time, end_time, is_active')
+      .select('id, name, applies_to_item_ids, applies_to_category_ids, discount_type, discount_value, days_of_week, start_time, end_time, is_active, display_order')
       .eq('branch_id', branchId)
+      .order('display_order')
       .order('start_time');
     setHours((data ?? []) as HappyHour[]);
     router.refresh();
@@ -60,6 +62,8 @@ export function HappyHoursManager({ branchId, initialHours, menuItems, categorie
       start_time: '15:00',
       end_time: '18:00',
       is_active: true,
+      // New ones go to the bottom of the list.
+      display_order: hours.reduce((m, h) => Math.max(m, h.display_order ?? 0), -1) + 1,
     });
     if (insErr) {
       setError(insErr.message);
@@ -83,6 +87,32 @@ export function HappyHoursManager({ branchId, initialHours, menuItems, categorie
     const supabase = getBrowserClient();
     await supabase.from('happy_hours').delete().eq('id', id);
     refetch();
+  };
+
+  // Reorder by swapping display_order with the neighbour (controls both this list and the
+  // order the sections appear on the customer menu).
+  const move = async (index: number, dir: -1 | 1) => {
+    const target = index + dir;
+    if (target < 0 || target >= hours.length) return;
+    const current = hours[index]!;
+    const neighbor = hours[target]!;
+    const newCurrent = { ...current, display_order: neighbor.display_order };
+    const newNeighbor = { ...neighbor, display_order: current.display_order };
+    setHours((curr) => {
+      const next = [...curr];
+      next[index] = newNeighbor;
+      next[target] = newCurrent;
+      return next;
+    });
+    const supabase = getBrowserClient();
+    const [{ error: e1 }, { error: e2 }] = await Promise.all([
+      supabase.from('happy_hours').update({ display_order: newCurrent.display_order }).eq('id', current.id),
+      supabase.from('happy_hours').update({ display_order: newNeighbor.display_order }).eq('id', neighbor.id),
+    ]);
+    if (e1 || e2) {
+      setError((e1 ?? e2)!.message);
+      refetch();
+    }
   };
 
   const toggleDay = (h: HappyHour, day: number) => {
@@ -114,7 +144,7 @@ export function HappyHoursManager({ branchId, initialHours, menuItems, categorie
         <Card className="p-10 text-center text-muted-foreground">No happy hours yet.</Card>
       ) : (
         <ul className="space-y-3 px-2 lg:px-0">
-          {hours.map((h) => {
+          {hours.map((h, index) => {
             const appliedItems = menuItems.filter((m) => h.applies_to_item_ids.includes(m.id));
             const appliedCats = categories.filter((c) => h.applies_to_category_ids.includes(c.id));
             const appliesToAll = h.applies_to_item_ids.length === 0 && h.applies_to_category_ids.length === 0;
@@ -207,14 +237,36 @@ export function HappyHoursManager({ branchId, initialHours, menuItems, categorie
                         <ScopePicker h={h} menuItems={menuItems} categories={categories} onChange={update} />
                       </div>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => remove(h.id)}
-                      leftIcon={<Trash2 className="h-4 w-4" />}
-                    >
-                      Delete
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <div className="flex flex-col overflow-hidden rounded-lg border border-border">
+                        <button
+                          type="button"
+                          aria-label="Move up"
+                          disabled={index === 0}
+                          onClick={() => move(index, -1)}
+                          className="focus-ring grid h-6 w-8 place-items-center hover:bg-muted disabled:cursor-not-allowed disabled:opacity-30"
+                        >
+                          <ChevronUp className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="Move down"
+                          disabled={index === hours.length - 1}
+                          onClick={() => move(index, 1)}
+                          className="focus-ring grid h-6 w-8 place-items-center border-t border-border hover:bg-muted disabled:cursor-not-allowed disabled:opacity-30"
+                        >
+                          <ChevronDown className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => remove(h.id)}
+                        leftIcon={<Trash2 className="h-4 w-4" />}
+                      >
+                        Delete
+                      </Button>
+                    </div>
                   </div>
                 </Card>
               </li>

@@ -6,6 +6,8 @@ import { Save } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Badge, Button, Card } from '@favornoms/ui';
 import { ClosuresManager } from './closures-manager';
+import { DeliverySettingsCard } from './delivery-settings-card';
+import { HoursEditor } from './hours-editor';
 
 interface Branch {
   id: string;
@@ -156,16 +158,24 @@ export function BranchSettings({ branch }: { branch: Branch }) {
           </div>
         </Card>
 
+        <HoursEditor branchId={branch.id} />
+
         <ClosuresManager branchId={branch.id} />
 
+        <DeliverySettingsCard branchId={branch.id} settings={branch.settings} />
+
         <Card className="p-5">
-          <h2 className="font-display text-lg font-semibold">Operating settings</h2>
-          <pre className="mt-3 overflow-x-auto rounded-xl bg-muted p-3 text-xs">
-            {JSON.stringify(branch.settings, null, 2)}
-          </pre>
-          <p className="mt-2 text-xs text-muted-foreground">
-            Detailed editor for driver dispatch params, delivery radius, service fee % coming soon.
-          </p>
+          <details>
+            <summary className="cursor-pointer font-display text-lg font-semibold">
+              Advanced: raw settings JSON
+            </summary>
+            <pre className="mt-3 overflow-x-auto rounded-xl bg-muted p-3 text-xs">
+              {JSON.stringify(branch.settings, null, 2)}
+            </pre>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Read-only snapshot of branches.settings — edit via the cards above.
+            </p>
+          </details>
         </Card>
 
         {error && (

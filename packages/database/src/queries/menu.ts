@@ -37,7 +37,7 @@ export async function listMenuItems(
       `
       id, branch_id, category_id, name, name_translations,
       description, description_translations, price, image_url,
-      is_recommended, is_new, dietary_tags, rating, review_count,
+      is_recommended, is_new, dietary_tags, allergens, rating, review_count,
       prep_time_minutes, calories, display_order
     `,
     )
@@ -60,7 +60,7 @@ export async function getMenuItem(
       `
       id, branch_id, category_id, name, name_translations,
       description, description_translations, price, image_url,
-      is_recommended, is_new, dietary_tags, rating, review_count,
+      is_recommended, is_new, dietary_tags, allergens, rating, review_count,
       prep_time_minutes, calories, display_order
     `,
     )
@@ -99,6 +99,7 @@ function mapItem(row: Partial<RowItem>): MenuItem {
     isRecommended: row.is_recommended ?? false,
     isNew: row.is_new ?? false,
     dietaryTags: ((row.dietary_tags ?? []) as string[]) as DietaryTag[],
+    allergens: (row.allergens ?? []) as string[],
     rating: row.rating != null ? Number(row.rating) : undefined,
     reviewCount: row.review_count ?? 0,
     prepTimeMinutes: row.prep_time_minutes ?? undefined,

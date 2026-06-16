@@ -153,3 +153,15 @@ loyalty); driver app has dev-only test-sign-in backdoors to remove before prod.
 - [x] 7. Final report (delivered to user)
 
 _Last updated: 2026-06-07 — session 1 complete. 4 bugs fixed live + verified; 5 gaps flagged._
+
+---
+
+## 2026-06-11 — Delivery-first build-out (separate session)
+
+Gaps #2 (place-order deploy), #3 (distance fee / ETA / live map via Mapbox), #4
+(scheduled release cron) from the list above are now **BUILT + DEPLOYED**, plus
+offer-TTL dispatch hardening, in-app chat, opening hours/pause/surge, and a live
+ops map. Gap #1 (online card payment) remains user-deferred; #5 (notification
+secrets) remains config. See **docs/DELIVERY-BUILD.md** for the full record.
+Also fixed live: place-order v8 source crashed on `order_items.modifiers` NOT NULL
+(every order would have failed once v8 deployed — caught by post-deploy smoke).

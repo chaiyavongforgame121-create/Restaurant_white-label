@@ -5,6 +5,10 @@ import { getServerClient } from '@favornoms/database/server';
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
+  // Dev/test only: hard-404 in production unless explicitly enabled.
+  if (process.env.NODE_ENV === 'production' && process.env.ENABLE_TEST_AUTH !== '1') {
+    return new NextResponse(null, { status: 404 });
+  }
   const { searchParams } = new URL(req.url);
   const email = searchParams.get('email');
   const password = searchParams.get('password');

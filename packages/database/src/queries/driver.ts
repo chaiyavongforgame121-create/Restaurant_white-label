@@ -75,7 +75,7 @@ export async function getActiveDelivery(
       `*, order:orders(id, order_number, customer_name, customer_phone,
         delivery_address, customer_notes, subtotal, total,
         order_items(id, item_name, quantity, unit_price)),
-       branch:branches(id, name, address, geo_location)`,
+       branch:branches(id, name, address, geo_location, geo_lat, geo_lng)`,
     )
     .eq('driver_id', driverId)
     .in('status', ['assigned', 'picked_up', 'in_transit'])
@@ -112,18 +112,67 @@ export async function rejectDispatch(
 }
 
 /**
- * Advance a delivery through its stages. Called by driver active page when
- * they tap "I've arrived" / "Picked up" / "Mark delivered".
+ * Driver cancels the delivery. Pre-pickup → released back to dispatch with a
+ * 10-min driver cooldown; post-pickup → marked failed + staff alerted.
+ */
+export async function cancelDelivery(
+  supabase: FavornomsClient,
+  deliveryId: string,
+  reason: string,
+) {
+  return supabase.rpc('driver_cancel_delivery', {
+    p_delivery_id: deliveryId,
+    p_reason: reason,
+  } as never);
+}
+
+/** Driver can't complete the dropoff (customer unreachable, wrong address…). */
+export async function failDelivery(
+  supabase: FavornomsClient,
+  deliveryId: string,
+  reason: string,
+  photoUrl?: string | null,
+) {
+  return supabase.rpc('fail_delivery', {
+    p_delivery_id: deliveryId,
+    p_reason: reason,
+    p_photo_url: photoUrl ?? null,
+  } as never);
+}
+
+// New RPCs (progress_delivery, mark_delivery_arriving) aren't in the generated
+// Database types yet — call them through a thin typed escape hatch.
+type UntypedRpc = (
+  fn: string,
+  args?: Record<string, unknown>,
+) => Promise<{ data: unknown; error: { message: string } | null }>;
+
+/**
+ * Advance a delivery through its stages (driver taps "Picked up" / "Mark delivered").
+ * Goes through the guarded `progress_delivery` RPC, which validates the state machine
+ * server-side (assigned → picked_up → in_transit → delivered, no skips) and stamps the
+ * picked_up_at / delivered_at timestamps. Replaces the old unguarded table UPDATE.
  */
 export async function progressDelivery(
   supabase: FavornomsClient,
   deliveryId: string,
   toStatus: DeliveryStatus,
 ) {
-  const patch: Partial<Database['public']['Tables']['deliveries']['Update']> = {
-    status: toStatus,
-  };
-  if (toStatus === 'picked_up') patch.picked_up_at = new Date().toISOString();
-  if (toStatus === 'delivered') patch.delivered_at = new Date().toISOString();
-  return supabase.from('deliveries').update(patch).eq('id', deliveryId);
+  return (supabase as unknown as { rpc: UntypedRpc }).rpc('progress_delivery', {
+    p_delivery_id: deliveryId,
+    p_next: toStatus,
+  });
+}
+
+/**
+ * Persist the driver's "I've arrived at the customer" tap — sets arriving_at, which fans out
+ * the customer "arriving now" push + map badge even when GPS geofencing didn't fire. Idempotent.
+ */
+export async function markDeliveryArriving(
+  supabase: FavornomsClient,
+  deliveryId: string,
+) {
+  return (supabase as unknown as { rpc: UntypedRpc }).rpc('mark_delivery_arriving', {
+    p_delivery_id: deliveryId,
+  });
 }

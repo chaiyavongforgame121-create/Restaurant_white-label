@@ -23,5 +23,11 @@ export default async function OrderDetailPage({ params }: Props) {
     order_items: order.order_items ?? [],
     deliveries: Array.isArray(order.deliveries) ? order.deliveries : order.deliveries ? [order.deliveries] : [],
   };
-  return <OrderTracking initialOrder={normalized as never} branchId={tenant.branch.id} />;
+  return (
+    <OrderTracking
+      initialOrder={normalized as never}
+      branchId={tenant.branch.id}
+      branchLocation={tenant.branch.geoLocation}
+    />
+  );
 }

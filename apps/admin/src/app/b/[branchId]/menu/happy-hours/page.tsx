@@ -13,8 +13,9 @@ export default async function HappyHoursPage({ params }: Props) {
   const [{ data: hours }, { data: items }, { data: categories }] = await Promise.all([
     supabase
       .from('happy_hours')
-      .select('id, name, applies_to_item_ids, applies_to_category_ids, discount_type, discount_value, days_of_week, start_time, end_time, is_active')
+      .select('id, name, applies_to_item_ids, applies_to_category_ids, discount_type, discount_value, days_of_week, start_time, end_time, is_active, display_order')
       .eq('branch_id', branchId)
+      .order('display_order')
       .order('start_time'),
     supabase.from('menu_items').select('id, name').eq('branch_id', branchId).eq('is_active', true).order('name'),
     supabase.from('menu_categories').select('id, name').eq('branch_id', branchId).order('display_order'),

@@ -8,6 +8,7 @@ import {
 import { getBrowserClient } from '@favornoms/database/client';
 import { useRouter, usePathname } from 'next/navigation';
 import { Badge, Button, IconButton } from '@favornoms/ui';
+import { OpsToggles } from './ops-toggles';
 
 interface OrderItem {
   id: string;
@@ -25,7 +26,12 @@ interface Order {
   created_at: string;
   customer_name?: string | null;
   customer_notes?: string | null;
+  /** Scheduled order on hold — released by cron at scheduled_for − prep_time. */
+  held?: boolean;
+  scheduled_for?: string | null;
   order_items: OrderItem[];
+  /** Delivery channel: the rider's dispatch status, shown on the ready card. */
+  deliveries?: { status: string; driver_id: string | null; accepted_at: string | null }[];
 }
 
 interface Props {
@@ -93,8 +99,24 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
             if (!['pending', 'confirmed', 'preparing', 'ready'].includes(updated.status)) {
               return curr.filter((o) => o.id !== updated.id);
             }
-            return curr.map((o) => (o.id === updated.id ? { ...o, ...updated } : o));
+            // Preserve the joined deliveries we already have (the orders payload omits it).
+            return curr.map((o) => (o.id === updated.id ? { ...o, ...updated, deliveries: o.deliveries } : o));
           });
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'deliveries', filter: `branch_id=eq.${branchId}` },
+        (payload) => {
+          const d = payload.new as { order_id?: string; status?: string; driver_id?: string | null; accepted_at?: string | null };
+          if (!d?.order_id) return;
+          setOrders((curr) =>
+            curr.map((o) =>
+              o.id === d.order_id
+                ? { ...o, deliveries: [{ status: d.status ?? 'pending', driver_id: d.driver_id ?? null, accepted_at: d.accepted_at ?? null }] }
+                : o,
+            ),
+          );
         },
       )
       .subscribe();
@@ -136,10 +158,12 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
     }
   };
 
-  // Group by status for visual section dividers
+  // Group by status for visual section dividers. Held (scheduled) orders sit in
+  // their own lane until the release cron flips held=false.
   const sections = {
-    incoming: filteredOrders.filter((o) => o.status === 'pending'),
-    new: filteredOrders.filter((o) => o.status === 'confirmed'),
+    scheduled: filteredOrders.filter((o) => o.held),
+    incoming: filteredOrders.filter((o) => o.status === 'pending' && !o.held),
+    new: filteredOrders.filter((o) => o.status === 'confirmed' && !o.held),
     making: filteredOrders.filter((o) => o.status === 'preparing'),
     ready: filteredOrders.filter((o) => o.status === 'ready'),
   };
@@ -167,6 +191,7 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <OpsToggles branchId={branchId} />
           {stations.length > 0 && (
             <StationFilter stations={stations} active={activeStation} />
           )}
@@ -180,6 +205,38 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
       </header>
 
       <main className="flex-1 space-y-6 overflow-y-auto p-6">
+        {sections.scheduled.length > 0 && (
+          <section>
+            <div className="mb-3">
+              <h2 className="inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1 text-sm font-bold text-muted-foreground">
+                ⏰ Scheduled · auto-releases before due time
+                <span className="rounded-full bg-card px-2 text-xs">{sections.scheduled.length}</span>
+              </h2>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {sections.scheduled.map((o) => (
+                <div key={o.id} className="rounded-2xl border border-dashed border-border bg-muted/30 p-4">
+                  <div className="flex items-center justify-between">
+                    <p className="font-display text-base font-bold">{o.order_number}</p>
+                    <span className="text-xs font-semibold text-muted-foreground">
+                      {o.scheduled_for
+                        ? new Date(o.scheduled_for).toLocaleString([], {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })
+                        : ''}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {o.order_items.map((it) => `${it.quantity}× ${it.item_name}`).join(' · ')}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
         <Section title="Incoming — tap to accept" tone="warning" orders={sections.incoming} now={now} onUpdate={updateStatus(branchId, setOrders)} branchId={branchId} />
         <Section title="Accepted" tone="primary" orders={sections.new} now={now} onUpdate={updateStatus(branchId, setOrders)} branchId={branchId} />
         <Section title="In the kitchen" tone="accent" orders={sections.making} now={now} onUpdate={updateStatus(branchId, setOrders)} branchId={branchId} />
@@ -234,10 +291,25 @@ function StationFilter({ stations, active }: { stations: string[]; active: strin
 function updateStatus(branchId: string, setOrders: React.Dispatch<React.SetStateAction<Order[]>>) {
   return async (orderId: string, nextStatus: string) => {
     const supabase = getBrowserClient();
+    let prevStatus: string | null = null;
     setOrders((curr) =>
-      curr.map((o) => (o.id === orderId ? { ...o, status: nextStatus } : o)),
+      curr.map((o) => {
+        if (o.id === orderId) {
+          prevStatus = o.status;
+          return { ...o, status: nextStatus };
+        }
+        return o;
+      }),
     );
-    await supabase.from('orders').update({ status: nextStatus }).eq('id', orderId).eq('branch_id', branchId);
+    const { error } = await supabase
+      .from('orders')
+      .update({ status: nextStatus })
+      .eq('id', orderId)
+      .eq('branch_id', branchId);
+    // Roll the optimistic lane change back on failure so the board never lies.
+    if (error && prevStatus !== null) {
+      setOrders((curr) => curr.map((o) => (o.id === orderId ? { ...o, status: prevStatus as string } : o)));
+    }
   };
 }
 
@@ -300,6 +372,16 @@ function OrderCard({
     preparing: 'Mark ready',
     ready: 'Bump',
   };
+  const isDelivery = order.channel === 'delivery';
+  const delivery = order.deliveries?.[0];
+  const driverLabel =
+    !delivery || delivery.status === 'pending' || delivery.status === 'dispatching'
+      ? 'Finding a driver…'
+      : delivery.status === 'assigned'
+        ? delivery.accepted_at
+          ? 'Driver assigned ✓'
+          : 'Driver offered…'
+        : 'Driver on the way';
 
   return (
     <motion.div
@@ -337,7 +419,7 @@ function OrderCard({
           </p>
         )}
       </div>
-      {order.channel === 'delivery' && <DispatchButton orderId={order.id} />}
+      {isDelivery && order.status === 'ready' && <DispatchButton orderId={order.id} />}
       {order.status === 'pending' && (
         <Button
           variant="ghost"
@@ -372,15 +454,23 @@ function OrderCard({
           Recall to kitchen
         </Button>
       )}
-      <Button
-        variant={order.status === 'ready' ? 'gradient' : 'primary'}
-        size="lg"
-        fullWidth
-        className="rounded-none"
-        onClick={() => onUpdate(order.id, next[order.status]!)}
-      >
-        {nextLabel[order.status]} →
-      </Button>
+      {isDelivery && order.status === 'ready' ? (
+        // Delivery completion is driven by the driver (picked_up → out_for_delivery → delivered),
+        // not a kitchen bump — so 'ready' is the last kitchen step. Show the rider's status here.
+        <div className="flex items-center justify-center gap-2 border-t border-border/60 bg-success/5 px-4 py-3 text-sm font-semibold text-success">
+          <Bike className="h-4 w-4" /> {driverLabel}
+        </div>
+      ) : (
+        <Button
+          variant={order.status === 'ready' ? 'gradient' : 'primary'}
+          size="lg"
+          fullWidth
+          className="rounded-none"
+          onClick={() => onUpdate(order.id, next[order.status]!)}
+        >
+          {nextLabel[order.status]} →
+        </Button>
+      )}
     </motion.div>
   );
 }
@@ -431,30 +521,16 @@ function Item86LongPress({
 }) {
   const timer = React.useRef<number | null>(null);
   const triggered = React.useRef(false);
+  const [confirming, setConfirming] = React.useState(false);
+  const [busy, setBusy] = React.useState(false);
+  const [msg, setMsg] = React.useState<string | null>(null);
 
   const begin = () => {
     triggered.current = false;
-    timer.current = window.setTimeout(async () => {
+    timer.current = window.setTimeout(() => {
       triggered.current = true;
-      if (typeof window === 'undefined') return;
-      const ok = window.confirm(`86 "${itemName}" — mark as unavailable across the menu?`);
-      if (!ok) return;
-      const supabase = getBrowserClient();
-      const { data: row } = await supabase
-        .from('menu_items')
-        .select('id')
-        .eq('branch_id', branchId)
-        .ilike('name', itemName)
-        .maybeSingle();
-      if (!row) {
-        window.alert('Could not find that item in the menu — it may already be 86\'d.');
-        return;
-      }
-      const { error } = await supabase.rpc('toggle_item_availability', {
-        p_item_id: row.id,
-        p_active: false,
-      });
-      if (error) window.alert(`Failed: ${error.message}`);
+      setMsg(null);
+      setConfirming(true);
     }, 700);
   };
   const cancel = () => {
@@ -462,20 +538,84 @@ function Item86LongPress({
     timer.current = null;
   };
 
+  const confirm86 = async () => {
+    setBusy(true);
+    setMsg(null);
+    const supabase = getBrowserClient();
+    const { data: row } = await supabase
+      .from('menu_items')
+      .select('id')
+      .eq('branch_id', branchId)
+      .ilike('name', itemName)
+      .maybeSingle();
+    if (!row) {
+      setBusy(false);
+      setMsg("Couldn't find that item in the menu — it may already be 86'd.");
+      return;
+    }
+    const { error } = await supabase.rpc('toggle_item_availability', {
+      p_item_id: row.id,
+      p_active: false,
+    });
+    setBusy(false);
+    if (error) {
+      setMsg(`Failed: ${error.message}`);
+      return;
+    }
+    setConfirming(false);
+  };
+
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      onMouseDown={begin}
-      onMouseUp={cancel}
-      onMouseLeave={cancel}
-      onTouchStart={begin}
-      onTouchEnd={cancel}
-      onTouchCancel={cancel}
-      className="select-none rounded-md transition-colors active:bg-muted/40"
-      title="Long-press to 86 this item"
-    >
-      {children}
-    </div>
+    <>
+      <div
+        role="button"
+        tabIndex={0}
+        onMouseDown={begin}
+        onMouseUp={cancel}
+        onMouseLeave={cancel}
+        onTouchStart={begin}
+        onTouchEnd={cancel}
+        onTouchCancel={cancel}
+        className="select-none rounded-md transition-colors active:bg-muted/40"
+        title="Long-press to 86 this item"
+      >
+        {children}
+      </div>
+      {confirming && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => !busy && setConfirming(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl bg-card p-5 shadow-warm"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="font-display text-lg font-semibold">{`86 "${itemName}"?`}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Mark it unavailable across the menu until you turn it back on.
+            </p>
+            {msg && <p className="mt-2 text-sm text-danger">{msg}</p>}
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setConfirming(false)}
+                className="focus-ring flex-1 rounded-xl border border-border px-4 py-2.5 text-sm font-semibold"
+              >
+                Keep available
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={confirm86}
+                className="focus-ring flex-1 rounded-xl bg-danger px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {busy ? 'Working…' : '86 it'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

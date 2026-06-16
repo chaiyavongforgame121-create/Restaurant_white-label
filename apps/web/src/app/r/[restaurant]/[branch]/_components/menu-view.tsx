@@ -41,6 +41,19 @@ interface ComboRow {
   items: Array<{ menu_item_id: string; item_name: string; quantity: number; list_price: number }>;
 }
 
+interface HappyHourSection {
+  id: string;
+  name: string;
+  discountType: 'percent' | 'fixed';
+  discountValue: number;
+  daysOfWeek: number[];
+  startTime: string; // 'HH:MM:SS'
+  endTime: string;
+  isLive: boolean;
+  appliesToAll: boolean;
+  items: MenuItem[];
+}
+
 interface MenuViewProps {
   branch: Branch;
   categories: MenuCategory[];
@@ -48,9 +61,10 @@ interface MenuViewProps {
   isOpen?: boolean;
   reviews?: BranchReviews | null;
   combos?: ComboRow[];
+  happyHours?: HappyHourSection[];
 }
 
-export function MenuView({ branch, categories, items, isOpen = true, reviews, combos = [] }: MenuViewProps) {
+export function MenuView({ branch, categories, items, isOpen = true, reviews, combos = [], happyHours = [] }: MenuViewProps) {
   const t = useTranslations();
   const locale = useLocale() as Locale;
   const [search, setSearch] = React.useState('');
@@ -154,6 +168,10 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
 
       {combos.length > 0 && (
         <CombosRow combos={combos} branchId={branch.id} />
+      )}
+
+      {happyHours.length > 0 && (
+        <HappyHourSections happyHours={happyHours} onOpen={setActiveItem} />
       )}
 
       <section className="container mt-6 space-y-6 lg:mt-8">
@@ -681,6 +699,117 @@ function CombosRow({ combos, branchId }: { combos: ComboRow[]; branchId: string 
         })}
       </div>
     </section>
+  );
+}
+
+/* -------------------- Happy hour sections -------------------- */
+
+const DOW_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function formatTime(t: string): string {
+  const [hStr, mStr] = t.split(':');
+  let h = Number(hStr);
+  const m = mStr ?? '00';
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12;
+  if (h === 0) h = 12;
+  return `${h}:${m} ${ampm}`;
+}
+
+function formatWindow(days: number[], start: string, end: string): string {
+  const dayPart =
+    days.length >= 7
+      ? 'Daily'
+      : days
+          .slice()
+          .sort((a, b) => a - b)
+          .map((d) => DOW_LABELS[d])
+          .join(', ');
+  return `${dayPart} · ${formatTime(start)}–${formatTime(end)}`;
+}
+
+function HappyHourSections({
+  happyHours,
+  onOpen,
+}: {
+  happyHours: HappyHourSection[];
+  onOpen: (i: MenuItem) => void;
+}) {
+  return (
+    <section className="container mt-6 space-y-4">
+      {happyHours.map((hh) => (
+        <HappyHourCard key={hh.id} hh={hh} onOpen={onOpen} />
+      ))}
+    </section>
+  );
+}
+
+function HappyHourCard({ hh, onOpen }: { hh: HappyHourSection; onOpen: (i: MenuItem) => void }) {
+  const discountText =
+    hh.discountType === 'percent' ? `${hh.discountValue}% off` : `${formatCurrency(hh.discountValue)} off`;
+  const windowText = formatWindow(hh.daysOfWeek, hh.startTime, hh.endTime);
+
+  return (
+    <div className="rounded-3xl border border-primary/30 bg-primary/5 p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xl" aria-hidden>
+          🎉
+        </span>
+        <h2 className="font-display text-xl font-bold leading-tight">{hh.name}</h2>
+        <Badge variant="solid">{discountText}</Badge>
+        {hh.isLive ? (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-success px-2.5 py-0.5 text-xs font-bold text-white">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="absolute inset-0 animate-pulse-ring rounded-full bg-white" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-white" />
+            </span>
+            Live now
+          </span>
+        ) : (
+          <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-semibold text-muted-foreground">
+            {windowText}
+          </span>
+        )}
+      </div>
+      {hh.isLive && <p className="mt-1 text-xs text-muted-foreground">{windowText}</p>}
+
+      {hh.appliesToAll ? (
+        <p className="mt-3 text-sm font-medium">
+          {discountText} on everything on the menu{hh.isLive ? ' right now' : ' during this window'} 🍽️
+        </p>
+      ) : (
+        <div className="-mx-1 mt-3 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {hh.items.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => onOpen(item)}
+              className="focus-ring inline-block w-40 shrink-0 snap-start overflow-hidden rounded-2xl border border-border bg-card text-left shadow-soft transition-shadow hover:shadow-warm"
+            >
+              <div
+                className={`aspect-square w-full bg-cover bg-center ${item.imageUrl ? '' : 'bg-gradient-sunset'}`}
+                style={item.imageUrl ? { backgroundImage: `url(${item.imageUrl})` } : undefined}
+                role="img"
+                aria-label={item.name}
+              />
+              <div className="p-2.5">
+                <p className="line-clamp-1 text-sm font-semibold leading-tight">{item.name}</p>
+                <div className="mt-1 flex items-baseline gap-1.5">
+                  {item.listPrice && item.listPrice > item.price ? (
+                    <span className="text-[11px] text-muted-foreground line-through">
+                      {formatCurrency(item.listPrice)}
+                    </span>
+                  ) : null}
+                  <span className="font-display text-sm font-bold text-primary">
+                    {formatCurrency(item.price)}
+                  </span>
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

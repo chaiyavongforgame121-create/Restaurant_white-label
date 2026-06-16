@@ -39,6 +39,7 @@ export function Sidebar({ branchId, branchName, branches = [], tier }: Props) {
   const core: NavItem[] = [
     { href: `${base}/dashboard`, label: 'Dashboard', icon: LayoutDashboard },
     { href: `${base}/orders`, label: 'Orders', icon: Receipt },
+    { href: `${base}/deliveries`, label: 'Live deliveries', icon: Bike },
     { href: `${base}/menu`, label: 'Menu', icon: ChefHat },
     { href: `/kitchen/${branchId}`, label: 'Kitchen display', icon: Monitor },
     { href: `/counter/${branchId}`, label: 'Counter', icon: Store },

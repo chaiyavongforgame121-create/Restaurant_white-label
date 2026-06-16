@@ -7,20 +7,20 @@ import { Banknote, ChevronLeft, CreditCard, MapPin, Tag } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { formatCurrency } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
-import { getMyLoyalty, placeOrder } from '@favornoms/database/queries';
+import {
+  getMyLoyalty,
+  listCustomerAddresses,
+  placeOrder,
+  quoteDelivery,
+  upsertCustomerAddress,
+  type DeliveryQuote,
+  type SavedAddress,
+} from '@favornoms/database/queries';
+import { AddressAutofillInput } from '@favornoms/maps';
 import { Badge, Button, Card, IconButton } from '@favornoms/ui';
 import { useCart } from '@/store/cart';
 
 type PaymentMethod = 'card' | 'cash';
-
-interface SavedAddress {
-  id: string;
-  label: string | null;
-  address_line1: string;
-  address_line2: string | null;
-  is_default: boolean;
-  delivery_notes: string | null;
-}
 
 interface Props {
   branchId: string;
@@ -44,6 +44,20 @@ export function CheckoutView({ branchId, base }: Props) {
   const [dineInTable, setDineInTable] = React.useState('');
   const [savedAddresses, setSavedAddresses] = React.useState<SavedAddress[]>([]);
   const [selectedAddressId, setSelectedAddressId] = React.useState<string | 'new' | null>(null);
+  const [addressCoords, setAddressCoords] = React.useState<{ lat: number; lng: number } | null>(null);
+  const [addressMeta, setAddressMeta] = React.useState<{
+    line2?: string;
+    city?: string;
+    state?: string;
+    postal_code?: string;
+  } | null>(null);
+  const [customerId, setCustomerId] = React.useState<string | null>(null);
+  const [quote, setQuote] = React.useState<DeliveryQuote | null>(null);
+  const [quoting, setQuoting] = React.useState(false);
+  const [addressNotes, setAddressNotes] = React.useState('');
+  // The exact line1 Mapbox last resolved — guards against the autofill's own
+  // input event clearing the coordinates immediately after onResolved sets them.
+  const resolvedAddressRef = React.useRef<string | null>(null);
   const [method, setMethod] = React.useState<PaymentMethod>('card');
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -75,8 +89,16 @@ export function CheckoutView({ branchId, base }: Props) {
     | { status: 'error'; message: string }
   >({ status: 'idle' });
 
-  const deliveryFeeBase = channel === 'delivery' ? 3.99 : 0;
+  // Distance-based quote when the address has coordinates (server-authoritative —
+  // place-order runs the same quote_delivery formula); legacy flat fee otherwise.
+  const deliveryFeeBase = channel !== 'delivery' ? 0 : quote?.deliverable ? quote.fee : 3.99;
+  const outOfRange =
+    channel === 'delivery' && quote != null && !quote.deliverable && quote.reason === 'out_of_range';
   const deliveryFee = promoState.status === 'applied' && promoState.free_delivery ? 0 : deliveryFeeBase;
+  // Coordinates are required only while ENTERING a new address (the autofill is on screen and
+  // actionable). A previously-saved address that happens to lack coords must not trap checkout —
+  // it falls back to the flat delivery fee.
+  const enteringNewAddress = savedAddresses.length === 0 || selectedAddressId === 'new';
   const serviceFee = Math.round(subtotal * 0.05 * 100) / 100;
   const maxRedeem = Math.min(pointsBalance, Math.floor(subtotal * 0.5));
   const appliedRedeem = Math.min(redeemPoints, maxRedeem);
@@ -123,24 +145,46 @@ export function CheckoutView({ branchId, base }: Props) {
         .limit(1)
         .maybeSingle();
       if (!customer) return;
+      setCustomerId(customer.id);
       if (customer.full_name) setName(customer.full_name);
       if (customer.phone) setPhone(customer.phone);
       if (customer.email) setEmail(customer.email);
-      const { data: addrs } = await supabase
-        .from('customer_addresses')
-        .select('id, label, address_line1, address_line2, is_default, delivery_notes')
-        .eq('customer_id', customer.id)
-        .order('is_default', { ascending: false });
-      if (addrs && addrs.length > 0) {
-        setSavedAddresses(addrs as SavedAddress[]);
+      const addrs = await listCustomerAddresses(supabase, customer.id);
+      if (addrs.length > 0) {
+        setSavedAddresses(addrs);
         const def = addrs.find((a) => a.is_default) ?? addrs[0];
         if (def) {
           setSelectedAddressId(def.id);
           setAddress([def.address_line1, def.address_line2].filter(Boolean).join(', '));
+          setAddressCoords(def.lat != null && def.lng != null ? { lat: def.lat, lng: def.lng } : null);
         }
       }
     })();
   }, [branchId]);
+
+  // Live delivery quote whenever we know the dropoff coordinates.
+  React.useEffect(() => {
+    if (channel !== 'delivery' || !addressCoords) {
+      setQuote(null);
+      setQuoting(false);
+      return;
+    }
+    let cancelled = false;
+    setQuoting(true);
+    const timer = setTimeout(() => {
+      const supabase = getBrowserClient();
+      void quoteDelivery(supabase, branchId, addressCoords.lat, addressCoords.lng).then((q) => {
+        if (!cancelled) {
+          setQuote(q);
+          setQuoting(false);
+        }
+      });
+    }, 350);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [channel, addressCoords, branchId]);
 
   // Wait for Zustand persist rehydration before redirecting an "empty" cart —
   // otherwise we bounce away on first mount before localStorage loads.
@@ -198,6 +242,10 @@ export function CheckoutView({ branchId, base }: Props) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    if (outOfRange) {
+      setError('This address is outside the delivery area.');
+      return;
+    }
     setSubmitting(true);
     try {
       const supabase = getBrowserClient();
@@ -223,7 +271,16 @@ export function CheckoutView({ branchId, base }: Props) {
             : notes || undefined,
         delivery_address:
           channel === 'delivery'
-            ? { line1: address }
+            ? {
+                line1: address,
+                line2: addressMeta?.line2,
+                city: addressMeta?.city,
+                state: addressMeta?.state,
+                postal_code: addressMeta?.postal_code,
+                notes: addressNotes.trim() || undefined,
+                lat: addressCoords?.lat,
+                lng: addressCoords?.lng,
+              }
             : undefined,
         saved_address_id:
           selectedAddressId && selectedAddressId !== 'new' ? selectedAddressId : undefined,
@@ -253,30 +310,32 @@ export function CheckoutView({ branchId, base }: Props) {
           })),
       });
 
-      // Save the address if it was a new entry and customer is signed in
-      if (channel === 'delivery' && selectedAddressId === 'new' && address) {
-        const { data: user } = await supabase.auth.getUser();
-        if (user.user) {
-          const { data: customer } = await supabase
-            .from('customers')
-            .select('id')
-            .eq('user_id', user.user.id)
-            .order('updated_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          if (customer) {
-            await supabase.from('customer_addresses').insert({
-              customer_id: customer.id,
-              address_line1: address,
-              is_default: savedAddresses.length === 0,
-            });
-          }
-        }
+      // Save the address (with coordinates) if it was a new entry and the
+      // customer is signed in. Best-effort — the order already went through.
+      if (channel === 'delivery' && selectedAddressId === 'new' && address && customerId) {
+        await upsertCustomerAddress(supabase, {
+          customer_id: customerId,
+          line1: address,
+          line2: addressMeta?.line2 ?? null,
+          city: addressMeta?.city ?? null,
+          state: addressMeta?.state ?? null,
+          postal_code: addressMeta?.postal_code ?? null,
+          lat: addressCoords?.lat ?? null,
+          lng: addressCoords?.lng ?? null,
+          is_default: savedAddresses.length === 0,
+        }).catch(() => undefined);
       }
       clear();
       router.push(`${base}/orders/${result.order_number}`);
     } catch (err) {
-      setError((err as Error).message);
+      const msg = (err as Error).message;
+      setError(
+        msg.includes('branch_closed')
+          ? 'This restaurant is currently closed. Please try again during opening hours.'
+          : msg.includes('delivery_out_of_range')
+            ? 'Sorry, this address is outside the delivery area.'
+            : msg,
+      );
       setSubmitting(false);
     }
   };
@@ -366,6 +425,10 @@ export function CheckoutView({ branchId, base }: Props) {
                       onChange={() => {
                         setSelectedAddressId(a.id);
                         setAddress([a.address_line1, a.address_line2].filter(Boolean).join(', '));
+                        setAddressCoords(
+                          a.lat != null && a.lng != null ? { lat: a.lat, lng: a.lng } : null,
+                        );
+                        setAddressMeta(null);
                       }}
                       className="mt-1"
                     />
@@ -376,7 +439,7 @@ export function CheckoutView({ branchId, base }: Props) {
                         {a.is_default && <Badge variant="muted">Default</Badge>}
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        {[a.address_line1, a.address_line2].filter(Boolean).join(', ')}
+                        {[a.address_line1, a.address_line2, a.city, a.state].filter(Boolean).join(', ')}
                       </p>
                     </div>
                   </label>
@@ -386,6 +449,9 @@ export function CheckoutView({ branchId, base }: Props) {
                   onClick={() => {
                     setSelectedAddressId('new');
                     setAddress('');
+                    resolvedAddressRef.current = null;
+                    setAddressCoords(null);
+                    setAddressMeta(null);
                   }}
                   className={`w-full rounded-xl border border-dashed px-3 py-2 text-sm font-medium ${
                     selectedAddressId === 'new'
@@ -397,11 +463,76 @@ export function CheckoutView({ branchId, base }: Props) {
                 </button>
               </div>
             )}
-            {(savedAddresses.length === 0 || selectedAddressId === 'new') && (
+            {enteringNewAddress && (
               <Field label={t('checkout.address')}>
-                <input value={address} onChange={(e) => setAddress(e.target.value)} required placeholder={t('checkout.addressPlaceholder')} className="input" />
+                <AddressAutofillInput
+                  value={address}
+                  onChange={(text) => {
+                    setAddress(text);
+                    // Mapbox fills the input to the resolved line1 (firing onChange
+                    // right after onResolved). Only invalidate the pin when the text
+                    // actually diverges from the resolved address — otherwise the
+                    // autofill's own input event would wipe the coords we just set.
+                    if (text !== resolvedAddressRef.current) {
+                      resolvedAddressRef.current = null;
+                      setAddressCoords(null);
+                      setAddressMeta(null);
+                    }
+                  }}
+                  onResolved={(a) => {
+                    resolvedAddressRef.current = a.line1;
+                    setAddressCoords({ lat: a.lat, lng: a.lng });
+                    setAddressMeta({
+                      line2: a.line2,
+                      city: a.city,
+                      state: a.state,
+                      postal_code: a.postal_code,
+                    });
+                  }}
+                  required
+                  placeholder={t('checkout.addressPlaceholder')}
+                  inputClassName="input"
+                  aria-label={t('checkout.address')}
+                />
               </Field>
             )}
+            {quoting && (
+              <p className="mt-2 text-xs text-muted-foreground">Calculating delivery…</p>
+            )}
+            {!quoting && quote?.deliverable && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                {quote.distance_km.toFixed(1)} km away · delivery {formatCurrency(quote.fee)} · ready in ~
+                {quote.eta_min} min
+              </p>
+            )}
+            {outOfRange && (
+              <p className="mt-2 text-sm font-medium text-danger">
+                Sorry, this address is outside the delivery area
+                {!quote.deliverable && quote.radius_km ? ` (max ${quote.radius_km} km)` : ''}.
+              </p>
+            )}
+            {enteringNewAddress && !addressCoords && !quoting && address.trim().length > 3 && (
+              <p className="mt-2 text-xs font-medium text-warning">
+                Select your address from the suggestions to confirm delivery and see the exact fee.
+              </p>
+            )}
+
+            <div className="mt-4">
+              <label className="mb-1 block text-sm font-medium">
+                Delivery instructions <span className="font-normal text-muted-foreground">(optional)</span>
+              </label>
+              <textarea
+                value={addressNotes}
+                onChange={(e) => setAddressNotes(e.target.value)}
+                placeholder="e.g. Front gate code 1234 · Room 203 · leave at the door"
+                rows={2}
+                maxLength={300}
+                className="focus-ring w-full resize-none rounded-2xl border border-border bg-background px-4 py-3 text-base placeholder:text-muted-foreground"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Anything that helps the driver find you — useful when the map isn&apos;t exact.
+              </p>
+            </div>
           </Card>
         )}
 
@@ -559,7 +690,16 @@ export function CheckoutView({ branchId, base }: Props) {
         <Card className="p-5">
           <dl className="space-y-2 text-sm">
             <Row label={t('cart.subtotal')} value={formatCurrency(subtotal)} />
-            <Row label={t('cart.deliveryFee')} value={formatCurrency(deliveryFee)} />
+            <Row
+              label={t('cart.deliveryFee')}
+              value={
+                channel === 'delivery' && quoting
+                  ? 'Calculating…'
+                  : channel === 'delivery' && enteringNewAddress && !addressCoords
+                    ? '—'
+                    : formatCurrency(deliveryFee)
+              }
+            />
             <Row label={t('cart.serviceFee')} value={formatCurrency(serviceFee)} />
             {tipAmount > 0 && <Row label="Tip" value={formatCurrency(tipAmount)} />}
             {promoDiscount > 0 && <Row label={`Promo (${promoCode})`} value={`-${formatCurrency(promoDiscount)}`} />}
@@ -581,7 +721,18 @@ export function CheckoutView({ branchId, base }: Props) {
           transition={{ delay: 0.05 }}
           className="sticky bottom-16 lg:bottom-0 lg:pb-4"
         >
-          <Button variant="gradient" size="xl" fullWidth type="submit" loading={submitting}>
+          <Button
+            variant="gradient"
+            size="xl"
+            fullWidth
+            type="submit"
+            loading={submitting}
+            disabled={
+              outOfRange ||
+              (channel === 'delivery' && quoting) ||
+              (channel === 'delivery' && enteringNewAddress && !addressCoords)
+            }
+          >
             {t('checkout.placeOrder', { amount: formatCurrency(total) })}
           </Button>
         </motion.div>

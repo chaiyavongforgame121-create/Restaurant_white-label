@@ -3,6 +3,7 @@ import { formatCurrency } from '@favornoms/shared';
 import { Badge, Card } from '@favornoms/ui';
 import { OrderRowActions } from './_components/order-row-actions';
 import { OrderFilters } from './_components/order-filters';
+import { DeliveryIssues, type DeliveryIssue } from './_components/delivery-issues';
 
 interface Props {
   params: Promise<{ branchId: string }>;
@@ -38,12 +39,40 @@ export default async function OrdersPage({ params, searchParams }: Props) {
 
   const { data: orders } = await query.order('created_at', { ascending: false }).limit(100);
 
+  // Failed deliveries that need staff attention (re-dispatch or refund).
+  const { data: failedRows } = await supabase
+    .from('deliveries')
+    .select('id, order_id, failed_reason, failed_photo_url, orders!inner(order_number, customer_name, customer_phone)')
+    .eq('branch_id', branchId)
+    .eq('status', 'failed')
+    .limit(20);
+  const issues: DeliveryIssue[] = (failedRows ?? []).map((d) => {
+    const o = (Array.isArray(d.orders) ? d.orders[0] : d.orders) as {
+      order_number: string;
+      customer_name: string | null;
+      customer_phone: string | null;
+    };
+    return {
+      id: d.id,
+      order_id: d.order_id,
+      failed_reason: d.failed_reason,
+      failed_photo_url: d.failed_photo_url,
+      order_number: o?.order_number ?? '—',
+      customer_name: o?.customer_name ?? null,
+      customer_phone: o?.customer_phone ?? null,
+    };
+  });
+
   return (
     <div className="container max-w-6xl py-8">
       <header className="mb-6 px-2 pl-16 lg:px-0">
         <h1 className="font-display text-3xl font-bold">Orders</h1>
         <p className="mt-1 text-muted-foreground">{orders?.length ?? 0} matching</p>
       </header>
+
+      <div className="px-2 lg:px-0">
+        <DeliveryIssues issues={issues} />
+      </div>
 
       <div className="mb-4 px-2 lg:px-0">
         <OrderFilters defaultQ={q ?? ''} defaultStatus={status ?? 'all'} defaultChannel={channel ?? 'all'} />

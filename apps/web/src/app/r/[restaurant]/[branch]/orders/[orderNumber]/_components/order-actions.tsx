@@ -27,12 +27,14 @@ export function OrderActions({ orderId, branchId, orderStatus, hasRating, hasDri
   const [foodStars, setFoodStars] = React.useState(5);
   const [deliveryStars, setDeliveryStars] = React.useState(5);
   const [comment, setComment] = React.useState('');
+  const [confirmCancel, setConfirmCancel] = React.useState(false);
+  const [editing, setEditing] = React.useState(false);
+  const [notesDraft, setNotesDraft] = React.useState('');
 
   const canReport = ['completed', 'delivered', 'out_for_delivery', 'ready'].includes(orderStatus);
   if (!canCancel && !canRate && !canReport && !done) return null;
 
-  const cancel = async () => {
-    if (!confirm('Cancel this order?')) return;
+  const doCancel = async () => {
     setBusy(true);
     setError(null);
     const supabase = getBrowserClient();
@@ -41,20 +43,20 @@ export function OrderActions({ orderId, branchId, orderStatus, hasRating, hasDri
       p_reason: 'Customer requested',
     });
     setBusy(false);
+    setConfirmCancel(false);
     if (rpcErr) setError(rpcErr.message);
   };
 
-  const editNotes = async () => {
-    const next = window.prompt('Add or update special instructions for this order:', '');
-    if (next === null) return;
+  const saveNotes = async () => {
     setBusy(true);
     setError(null);
     const supabase = getBrowserClient();
     const { error: rpcErr } = await supabase.rpc('edit_pending_order', {
       p_order_id: orderId,
-      p_customer_notes: next,
+      p_customer_notes: notesDraft,
     });
     setBusy(false);
+    setEditing(false);
     if (rpcErr) setError(rpcErr.message);
   };
 
@@ -85,13 +87,12 @@ export function OrderActions({ orderId, branchId, orderStatus, hasRating, hasDri
 
   return (
     <Card className="space-y-3 p-5">
-      {canCancel && (
+      {canCancel && !editing && !confirmCancel && (
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <Button
             variant="outline"
             fullWidth
-            onClick={editNotes}
-            loading={busy}
+            onClick={() => { setNotesDraft(''); setEditing(true); }}
             leftIcon={<Pencil className="h-4 w-4" />}
           >
             Edit instructions
@@ -99,12 +100,45 @@ export function OrderActions({ orderId, branchId, orderStatus, hasRating, hasDri
           <Button
             variant="ghost"
             fullWidth
-            onClick={cancel}
-            loading={busy}
+            onClick={() => setConfirmCancel(true)}
             leftIcon={<XCircle className="h-4 w-4" />}
           >
             Cancel order
           </Button>
+        </div>
+      )}
+      {canCancel && editing && (
+        <div className="space-y-2">
+          <textarea
+            value={notesDraft}
+            onChange={(e) => setNotesDraft(e.target.value)}
+            placeholder="Add or update special instructions for this order…"
+            className="input min-h-20 py-3"
+            maxLength={500}
+            autoFocus
+          />
+          <div className="flex gap-2">
+            <Button variant="ghost" fullWidth onClick={() => setEditing(false)}>
+              Cancel
+            </Button>
+            <Button variant="gradient" fullWidth onClick={saveNotes} loading={busy}>
+              Save instructions
+            </Button>
+          </div>
+        </div>
+      )}
+      {canCancel && confirmCancel && (
+        <div className="space-y-2 rounded-2xl border border-danger/30 bg-danger/5 p-3">
+          <p className="text-sm font-semibold">Cancel this order?</p>
+          <p className="text-xs text-muted-foreground">This can&apos;t be undone.</p>
+          <div className="flex gap-2">
+            <Button variant="outline" fullWidth onClick={() => setConfirmCancel(false)}>
+              Keep order
+            </Button>
+            <Button variant="danger" fullWidth onClick={doCancel} loading={busy}>
+              Yes, cancel
+            </Button>
+          </div>
         </div>
       )}
       {canRate && !done && (

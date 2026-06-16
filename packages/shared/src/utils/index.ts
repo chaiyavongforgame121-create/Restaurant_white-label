@@ -82,3 +82,5 @@ export function formatUSPhone(input: string): string {
 export function computeSalesTax(subtotal: number, taxRate: number): number {
   return Math.round(subtotal * taxRate * 100) / 100;
 }
+
+export * from './delivery-settings';

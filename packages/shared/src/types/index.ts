@@ -74,6 +74,8 @@ export interface MenuItem {
   isRecommended?: boolean;
   isNew?: boolean;
   dietaryTags?: DietaryTag[];
+  /** Free-form allergen / ingredient concerns the merchant flags (e.g. "Peanuts", "Shellfish"). */
+  allergens?: string[];
   rating?: number;
   reviewCount?: number;
   prepTimeMinutes?: number;

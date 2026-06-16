@@ -1,13 +1,15 @@
 'use client';
 
 import * as React from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Bike, ChefHat, CheckCircle2, ChevronLeft, MapPin, Phone, Receipt } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { formatCurrency } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
+import { DeliveryMap, fetchRoute, hasMapboxToken, type LatLng } from '@favornoms/maps';
 import { Badge, Button, Card, IconButton } from '@favornoms/ui';
+import { DeliveryChat } from './delivery-chat';
 import { OrderActions } from './order-actions';
 
 const steps = [
@@ -34,17 +36,26 @@ type OrderRow = {
     driver_id: string | null;
     distance_km: number | null;
     estimated_duration_min: number | null;
+    accepted_at?: string | null;
+    driver_lat?: number | null;
+    driver_lng?: number | null;
+    current_eta_min?: number | null;
+    arriving_at?: string | null;
+    dropoff_lat?: number | null;
+    dropoff_lng?: number | null;
   }>;
 };
 
 interface Props {
   initialOrder: OrderRow;
   branchId: string;
+  branchLocation?: { lat: number; lng: number } | null;
 }
 
-export function OrderTracking({ initialOrder, branchId }: Props) {
+export function OrderTracking({ initialOrder, branchId, branchLocation }: Props) {
   const t = useTranslations('tracking');
   const router = useRouter();
+  const pathname = usePathname();
   const [order, setOrder] = React.useState<OrderRow>(initialOrder);
 
   // Realtime subscribe
@@ -77,13 +88,30 @@ export function OrderTracking({ initialOrder, branchId }: Props) {
 
   // Find current step by status
   const statusIndex = React.useMemo(() => {
-    const idx = steps.findIndex((s) => s.key === order.status);
+    // 'delivered' is a terminal delivery status with no distinct step — map it to the final
+    // 'completed' step so a just-delivered order doesn't snap the bar back to step 1.
+    const key = order.status === 'delivered' ? 'completed' : order.status;
+    const idx = steps.findIndex((s) => s.key === key);
     // 'pending' (pre-confirm) shows step 0 grey, fall back to 0
     return Math.max(idx, 0);
   }, [order.status]);
 
   const Icon = steps[statusIndex]?.icon ?? CheckCircle2;
   const delivery = order.deliveries[0];
+
+  // Live map only once the driver has actually taken the job and while in flight.
+  const liveDelivery =
+    order.channel === 'delivery' &&
+    delivery &&
+    ((delivery.status === 'assigned' && delivery.accepted_at) ||
+      delivery.status === 'picked_up' ||
+      delivery.status === 'in_transit')
+      ? delivery
+      : null;
+  const showMap =
+    !!liveDelivery && !!branchLocation && (branchLocation.lat !== 0 || branchLocation.lng !== 0) && hasMapboxToken();
+  const etaMin = delivery?.current_eta_min ?? delivery?.estimated_duration_min ?? null;
+  const arriving = !!delivery?.arriving_at;
 
   return (
     <div className="container max-w-xl pt-4">
@@ -103,28 +131,32 @@ export function OrderTracking({ initialOrder, branchId }: Props) {
       </header>
 
       <Card className="overflow-hidden p-0">
-        <div className="relative bg-gradient-warm p-6 text-white">
-          <div className="absolute inset-0 bg-noise opacity-30" />
-          <div className="relative flex items-center gap-4">
-            <motion.div
-              key={statusIndex}
-              initial={{ scale: 0.6, rotate: -15, opacity: 0 }}
-              animate={{ scale: 1, rotate: 0, opacity: 1 }}
-              transition={{ type: 'spring', stiffness: 320, damping: 18 }}
-              className="grid h-16 w-16 place-items-center rounded-2xl bg-white/20 backdrop-blur"
-            >
-              <Icon className="h-8 w-8" />
-            </motion.div>
-            <div>
-              <p className="text-sm uppercase tracking-wider text-white/80">
-                {t('statuses.' + (steps[statusIndex]?.key ?? 'confirmed') as never)}
-              </p>
-              <h2 className="mt-1 font-display text-2xl font-bold leading-tight">
-                {order.order_items.map((i) => `${i.quantity}× ${i.item_name}`).join(', ')}
-              </h2>
+        {showMap && liveDelivery && branchLocation ? (
+          <TrackingMap branch={branchLocation} delivery={liveDelivery} arriving={arriving} />
+        ) : (
+          <div className="relative bg-gradient-warm p-6 text-white">
+            <div className="absolute inset-0 bg-noise opacity-30" />
+            <div className="relative flex items-center gap-4">
+              <motion.div
+                key={statusIndex}
+                initial={{ scale: 0.6, rotate: -15, opacity: 0 }}
+                animate={{ scale: 1, rotate: 0, opacity: 1 }}
+                transition={{ type: 'spring', stiffness: 320, damping: 18 }}
+                className="grid h-16 w-16 place-items-center rounded-2xl bg-white/20 backdrop-blur"
+              >
+                <Icon className="h-8 w-8" />
+              </motion.div>
+              <div>
+                <p className="text-sm uppercase tracking-wider text-white/80">
+                  {t('statuses.' + (steps[statusIndex]?.key ?? 'confirmed') as never)}
+                </p>
+                <h2 className="mt-1 font-display text-2xl font-bold leading-tight">
+                  {order.order_items.map((i) => `${i.quantity}× ${i.item_name}`).join(', ')}
+                </h2>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         <div className="px-5 pb-5 pt-6">
           <ol className="relative grid grid-cols-5 gap-2">
@@ -172,16 +204,19 @@ export function OrderTracking({ initialOrder, branchId }: Props) {
                   <Bike className="h-6 w-6" />
                 </div>
                 <div>
-                  <p className="font-display text-base font-semibold">Your driver is on the way</p>
+                  <p className="font-display text-base font-semibold">
+                    {arriving ? 'Your driver is almost there!' : 'Your driver is on the way'}
+                  </p>
                   <p className="text-xs text-muted-foreground">
-                    {delivery.distance_km && `${delivery.distance_km} km · `}
-                    {delivery.estimated_duration_min && `${delivery.estimated_duration_min} min ETA`}
+                    {delivery.distance_km != null && `${delivery.distance_km} km · `}
+                    {etaMin != null && `${etaMin} min ETA`}
                   </p>
                 </div>
               </div>
-              <Button variant="soft" size="md" leftIcon={<Phone className="h-4 w-4" />}>
-                {t('callDriver')}
-              </Button>
+              <div className="flex shrink-0 items-center gap-2">
+                <DeliveryChat deliveryId={delivery.id} deliveryStatus={delivery.status} />
+                <CallDriverButton deliveryId={delivery.id} label={t('callDriver')} />
+              </div>
             </motion.div>
           )}
 
@@ -200,7 +235,7 @@ export function OrderTracking({ initialOrder, branchId }: Props) {
               ))}
             </ul>
             <a
-              href={`./${order.order_number}/receipt`}
+              href={`${pathname}/receipt`}
               className="focus-ring mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-primary underline"
             >
               <Receipt className="h-3.5 w-3.5" />
@@ -220,6 +255,85 @@ export function OrderTracking({ initialOrder, branchId }: Props) {
         />
       </div>
     </div>
+  );
+}
+
+function TrackingMap({
+  branch,
+  delivery,
+  arriving,
+}: {
+  branch: LatLng;
+  delivery: OrderRow['deliveries'][number];
+  arriving: boolean;
+}) {
+  const dropoff =
+    delivery.dropoff_lat != null && delivery.dropoff_lng != null
+      ? { lat: delivery.dropoff_lat, lng: delivery.dropoff_lng }
+      : null;
+  const driver =
+    delivery.driver_lat != null && delivery.driver_lng != null
+      ? { lat: delivery.driver_lat, lng: delivery.driver_lng }
+      : null;
+  const [route, setRoute] = React.useState<[number, number][] | null>(null);
+
+  // One Directions call per tracking session (cost control) — the trip path
+  // branch → dropoff. Live position rides on realtime, not on this API.
+  React.useEffect(() => {
+    if (!dropoff) return;
+    let cancelled = false;
+    void fetchRoute(branch, dropoff).then((r) => {
+      if (!cancelled) setRoute(r);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div className="relative h-60">
+      <DeliveryMap
+        branch={branch}
+        dropoff={dropoff}
+        driver={driver}
+        routeCoordinates={route}
+        className="h-full w-full"
+      />
+      {arriving && (
+        <span className="absolute left-3 top-3 z-10 rounded-full bg-success px-3 py-1.5 text-xs font-bold text-white shadow-lg">
+          🛵 Arriving now
+        </span>
+      )}
+    </div>
+  );
+}
+
+function CallDriverButton({ deliveryId, label }: { deliveryId: string; label: string }) {
+  const [loading, setLoading] = React.useState(false);
+  const [unavailable, setUnavailable] = React.useState(false);
+
+  const call = async () => {
+    setLoading(true);
+    const supabase = getBrowserClient();
+    // Driver phone is gated server-side: only this order's customer, only in flight.
+    const { data } = await supabase.rpc('get_delivery_driver_contact', {
+      p_delivery_id: deliveryId,
+    } as never);
+    setLoading(false);
+    const phone = data as unknown as string | null;
+    if (phone) {
+      window.location.href = `tel:${phone}`;
+    } else {
+      setUnavailable(true);
+    }
+  };
+
+  if (unavailable) return null;
+  return (
+    <Button variant="soft" size="md" leftIcon={<Phone className="h-4 w-4" />} onClick={call} loading={loading}>
+      {label}
+    </Button>
   );
 }
 

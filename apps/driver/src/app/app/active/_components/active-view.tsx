@@ -7,9 +7,11 @@ import { Bike, CheckCircle2, Coffee, MapPin, Navigation, Package, Phone } from '
 import { useTranslations } from 'next-intl';
 import { formatCurrency } from '@favornoms/shared';
 import { Button, Card, EmptyState } from '@favornoms/ui';
+import { DeliveryMap, fetchRoute, hasMapboxToken } from '@favornoms/maps';
 import { getBrowserClient } from '@favornoms/database/client';
 import { useDelivery, type ActiveDeliveryUI } from '@/components/delivery-provider';
-import type { DeliveryStatus } from '@favornoms/database/queries';
+import { cancelDelivery, failDelivery, type DeliveryStatus } from '@favornoms/database/queries';
+import { DriverDeliveryChat } from './delivery-chat';
 
 type StageKey = 'heading_to_pickup' | 'at_pickup' | 'picked_up' | 'in_transit' | 'at_customer';
 
@@ -81,7 +83,47 @@ function softStageFromStatus(active: ActiveDeliveryUI, soft: StageKey): StageKey
 
 export function ActiveDeliveryView() {
   const t = useTranslations('active');
-  const { active, progress } = useDelivery();
+  const { active, progress, markArriving } = useDelivery();
+  const [advancing, setAdvancing] = React.useState(false);
+  const [driverPos, setDriverPos] = React.useState<{ lat: number; lng: number } | null>(null);
+  const [geoDenied, setGeoDenied] = React.useState(false);
+  const [route, setRoute] = React.useState<[number, number][] | null>(null);
+  const [completed, setCompleted] = React.useState<{ earnings: number; orderNumber: string } | null>(null);
+  const [advanceError, setAdvanceError] = React.useState<string | null>(null);
+
+  // Watch GPS for the live route map (separate from DriverLocationPing's DB push) +
+  // surface a permission-denied state so the driver isn't silently invisible.
+  React.useEffect(() => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) return;
+    const id = navigator.geolocation.watchPosition(
+      (pos) => {
+        setDriverPos({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setGeoDenied(false);
+      },
+      (err) => {
+        if (err.code === err.PERMISSION_DENIED) setGeoDenied(true);
+      },
+      { enableHighAccuracy: true, maximumAge: 15_000, timeout: 15_000 },
+    );
+    return () => navigator.geolocation.clearWatch(id);
+  }, []);
+
+  // One Directions call for the branch → dropoff route line on the map.
+  React.useEffect(() => {
+    const bLat = active?.branchLat, bLng = active?.branchLng;
+    const dLat = active?.dropoffLat, dLng = active?.dropoffLng;
+    if (bLat == null || bLng == null || dLat == null || dLng == null) {
+      setRoute(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchRoute({ lat: bLat, lng: bLng }, { lat: dLat, lng: dLng }).then((r) => {
+      if (!cancelled) setRoute(r);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [active?.branchLat, active?.branchLng, active?.dropoffLat, active?.dropoffLng]);
 
   // Local soft stage for transitions that don't map to a DB status change
   // (e.g. "I'm at the restaurant" is a UI-only step; only "Picked up" changes the row).
@@ -101,6 +143,36 @@ export function ActiveDeliveryView() {
   }, [active]);
 
   if (!active) {
+    // Just finished a delivery → celebrate + show credited earnings + hand to the next run.
+    if (completed) {
+      return (
+        <div className="grid min-h-[70vh] place-items-center px-6">
+          <motion.div
+            initial={{ scale: 0.85, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: 'spring', stiffness: 260, damping: 18 }}
+            className="w-full max-w-sm text-center"
+          >
+            <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-success text-white shadow-warm">
+              <CheckCircle2 className="h-10 w-10" />
+            </div>
+            <h1 className="mt-5 font-display text-2xl font-bold">Delivery complete! 🎉</h1>
+            <p className="mt-1 text-sm text-muted-foreground">{completed.orderNumber}</p>
+            <div className="mt-5 rounded-2xl bg-muted/50 px-5 py-4">
+              <p className="text-xs uppercase tracking-wider text-muted-foreground">Earnings added</p>
+              <p className="font-display text-3xl font-bold text-primary">
+                {formatCurrency(completed.earnings)}
+              </p>
+            </div>
+            <Link href="/app/home" className="mt-6 block">
+              <Button variant="gradient" size="xl" fullWidth onClick={() => setCompleted(null)}>
+                Find next order
+              </Button>
+            </Link>
+          </motion.div>
+        </div>
+      );
+    }
     return (
       <div className="px-4 pt-6">
         <EmptyState
@@ -123,57 +195,81 @@ export function ActiveDeliveryView() {
   const meta = stageMeta[stage];
   const StageIcon = meta.icon;
 
-  const handleAdvance = () => {
+  const handleAdvance = async () => {
+    if (advancing) return; // guard against double-fire
     if ('vibrate' in navigator) navigator.vibrate(40);
-    if (meta.transition) {
-      void progress(meta.transition);
-    } else if (meta.nextStage) {
-      setSoftStage(meta.nextStage);
+    setAdvancing(true);
+    setAdvanceError(null);
+    try {
+      if (meta.transition === 'delivered') {
+        const snap = active;
+        // Throws if the guarded RPC rejects — so we never show a false completion.
+        await progress('delivered');
+        // Show the actually-credited earnings (incl. any peak bonus applied on the
+        // delivered transition), falling back to the offered amount.
+        let earnings = snap.driverEarnings;
+        try {
+          const supabase = getBrowserClient();
+          const { data } = await supabase
+            .from('deliveries')
+            .select('driver_earnings')
+            .eq('id', snap.id)
+            .maybeSingle();
+          if (data?.driver_earnings != null) earnings = Number(data.driver_earnings);
+        } catch {
+          /* keep the snapshot earnings */
+        }
+        setCompleted({ earnings, orderNumber: snap.orderNumber });
+      } else if (meta.transition) {
+        await progress(meta.transition);
+      } else if (meta.nextStage) {
+        // Soft UI-only step. If it's "arrived at the customer", also persist arriving_at
+        // so the customer gets the "arriving now" push + map badge.
+        if (meta.nextStage === 'at_customer') await markArriving();
+        setSoftStage(meta.nextStage);
+      }
+    } catch {
+      // Server rejected the step (already resynced by progress()). Surface it instead
+      // of optimistically advancing or faking a completion.
+      setAdvanceError("Couldn't update this delivery — please try again.");
+    } finally {
+      setAdvancing(false);
     }
   };
 
   const isHeading = stage === 'heading_to_pickup' || stage === 'at_pickup';
   const isInTransit = stage === 'picked_up' || stage === 'in_transit' || stage === 'at_customer';
 
+  const branchLL =
+    active.branchLat != null && active.branchLng != null
+      ? { lat: active.branchLat, lng: active.branchLng }
+      : null;
+  const dropoffLL =
+    active.dropoffLat != null && active.dropoffLng != null
+      ? { lat: active.dropoffLat, lng: active.dropoffLng }
+      : null;
+  const showMap = hasMapboxToken() && !!branchLL;
+
   return (
     <div className="relative">
       <section className="relative h-[42vh] overflow-hidden bg-muted">
-        <div className="absolute inset-0 bg-gradient-to-b from-primary/10 via-transparent to-card/80" />
-        <svg viewBox="0 0 400 400" className="absolute inset-0 h-full w-full">
-          <defs>
-            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="hsl(var(--border))" strokeWidth="0.5" />
-            </pattern>
-            <linearGradient id="route" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor="hsl(var(--primary))" />
-              <stop offset="100%" stopColor="hsl(var(--accent))" />
-            </linearGradient>
-          </defs>
-          <rect width="400" height="400" fill="url(#grid)" />
-          <motion.path
-            d="M 80 320 C 160 240, 240 280, 340 80"
-            fill="none"
-            stroke="url(#route)"
-            strokeWidth="5"
-            strokeLinecap="round"
-            strokeDasharray="10 8"
-            initial={{ pathLength: 0 }}
-            animate={{ pathLength: 1 }}
-            transition={{ duration: 1.6, ease: 'easeInOut' }}
+        {showMap && branchLL ? (
+          <DeliveryMap
+            branch={branchLL}
+            dropoff={dropoffLL}
+            driver={driverPos}
+            routeCoordinates={route}
+            className="h-full w-full"
           />
-          <circle cx="80" cy="320" r="12" fill="hsl(var(--primary))" />
-          <circle cx="340" cy="80" r="12" fill="hsl(var(--accent))" />
-          <motion.circle
-            r="14"
-            fill="white"
-            stroke="hsl(var(--primary))"
-            strokeWidth="4"
-            animate={{ cx: [80, 200, 340], cy: [320, 220, 80] }}
-            transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
-          />
-        </svg>
+        ) : (
+          <div className="grid h-full place-items-center bg-gradient-to-b from-primary/10 to-card/80 text-center text-sm text-muted-foreground">
+            <p className="px-6">
+              {hasMapboxToken() ? 'Live map unavailable for this order.' : 'Map unavailable'}
+            </p>
+          </div>
+        )}
 
-        <div className="absolute left-4 right-4 top-4 flex items-center justify-between">
+        <div className="pointer-events-none absolute left-4 right-4 top-4 flex items-center justify-between [&>*]:pointer-events-auto">
           <span className="rounded-full bg-card/90 px-3 py-1.5 text-xs font-semibold backdrop-blur">
             {active.distanceKm.toFixed(1)} km · {active.estimatedDurationMin} min
           </span>
@@ -181,6 +277,16 @@ export function ActiveDeliveryView() {
             className="focus-ring inline-flex h-11 items-center gap-1.5 rounded-full bg-card/90 px-4 text-sm font-semibold backdrop-blur"
             aria-label={t('navigate')}
             onClick={() => {
+              // Prefer exact coordinates (Phase 1 geocoding); fall back to text.
+              const lat = isHeading ? active.branchLat : active.dropoffLat;
+              const lng = isHeading ? active.branchLng : active.dropoffLng;
+              if (lat != null && lng != null) {
+                window.open(
+                  `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`,
+                  '_blank',
+                );
+                return;
+              }
               const target = isHeading
                 ? encodeURIComponent(active.branchAddress)
                 : encodeURIComponent(active.customerAddress);
@@ -216,6 +322,12 @@ export function ActiveDeliveryView() {
           </motion.div>
 
           <div className="space-y-4 p-5">
+            {geoDenied && (
+              <div className="rounded-2xl border border-warning/40 bg-warning/10 px-4 py-2.5 text-xs font-medium text-warning">
+                📍 Location is off. Turn it on so the customer can track you and you keep receiving
+                offers.
+              </div>
+            )}
             <Step
               done={isInTransit}
               icon={<Coffee className="h-5 w-5" />}
@@ -231,6 +343,12 @@ export function ActiveDeliveryView() {
               secondary={active.customerAddress}
             />
 
+            {active.dropoffNotes && (
+              <div className="rounded-2xl border border-primary/30 bg-primary/5 px-4 py-2.5 text-sm">
+                <span className="font-semibold">📍 Delivery note:</span> {active.dropoffNotes}
+              </div>
+            )}
+
             <div className="flex items-center justify-between rounded-2xl bg-muted/40 px-4 py-3">
               <div>
                 <p className="text-xs text-muted-foreground">Earning</p>
@@ -238,24 +356,170 @@ export function ActiveDeliveryView() {
                   {formatCurrency(active.driverEarnings)}
                 </p>
               </div>
-              {active.customerPhone && (
-                <a href={`tel:${active.customerPhone}`}>
-                  <Button variant="soft" leftIcon={<Phone className="h-4 w-4" />} size="md">
-                    {t('callCustomer')}
-                  </Button>
-                </a>
-              )}
+              <div className="flex items-center gap-2">
+                <DriverDeliveryChat deliveryId={active.id} deliveryStatus={active.status} />
+                {active.customerPhone && (
+                  <a href={`tel:${active.customerPhone}`}>
+                    <Button variant="soft" leftIcon={<Phone className="h-4 w-4" />} size="md">
+                      {t('callCustomer')}
+                    </Button>
+                  </a>
+                )}
+              </div>
             </div>
 
             {stage === 'at_customer' && (
               <PodUploader deliveryId={active.id} />
             )}
-            <Button variant="gradient" size="xl" fullWidth onClick={handleAdvance}>
+            <Button
+              variant="gradient"
+              size="xl"
+              fullWidth
+              onClick={handleAdvance}
+              loading={advancing}
+              disabled={advancing}
+            >
               {t(meta.ctaKey as never)}
             </Button>
+            {advanceError && (
+              <p className="text-center text-xs font-medium text-danger">{advanceError}</p>
+            )}
+
+            <DeliveryIssuePanel active={active} />
           </div>
         </Card>
       </section>
+    </div>
+  );
+}
+
+const PRE_PICKUP_REASONS = ['Vehicle problem', 'Personal emergency', 'Wait at restaurant too long', 'Other'];
+const AT_DOOR_REASONS = ['Customer unreachable', "Can't find the address", 'Customer refused the order', 'Other'];
+
+function DeliveryIssuePanel({ active }: { active: ActiveDeliveryUI }) {
+  const [open, setOpen] = React.useState(false);
+  const [reason, setReason] = React.useState<string | null>(null);
+  const [photoUrl, setPhotoUrl] = React.useState<string | null>(null);
+  const [uploading, setUploading] = React.useState(false);
+  const [submitting, setSubmitting] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const fileRef = React.useRef<HTMLInputElement>(null);
+
+  // Pre-pickup: releases the job back to dispatch (with a driver cooldown).
+  // After pickup: marks the delivery failed and alerts branch staff.
+  const prePickup = active.status === 'assigned';
+  const reasons = prePickup ? PRE_PICKUP_REASONS : AT_DOOR_REASONS;
+
+  const uploadPhoto = async (file: File) => {
+    setUploading(true);
+    try {
+      const supabase = getBrowserClient();
+      const path = `failed/${active.id}/${Date.now()}.jpg`;
+      const { error: upErr } = await supabase.storage
+        .from('branch-assets')
+        .upload(path, file, { contentType: file.type, upsert: false });
+      if (upErr) throw upErr;
+      const { data: pub } = supabase.storage.from('branch-assets').getPublicUrl(path);
+      setPhotoUrl(pub.publicUrl);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const submit = async () => {
+    if (!reason) return;
+    setSubmitting(true);
+    setError(null);
+    const supabase = getBrowserClient();
+    const { error: err } = prePickup
+      ? await cancelDelivery(supabase, active.id, reason)
+      : await failDelivery(supabase, active.id, reason, photoUrl);
+    setSubmitting(false);
+    if (err) {
+      setError(err.message);
+      return;
+    }
+    // Realtime on deliveries clears the active job via the provider.
+    setOpen(false);
+  };
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="focus-ring w-full text-center text-xs font-medium text-muted-foreground underline"
+      >
+        Having a problem with this delivery?
+      </button>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-danger/30 bg-danger/5 p-4">
+      <p className="text-sm font-semibold">
+        {prePickup ? 'Cancel this delivery?' : "Can't complete the drop-off?"}
+      </p>
+      <p className="mt-0.5 text-xs text-muted-foreground">
+        {prePickup
+          ? 'The job goes back to dispatch and you get a short cooldown.'
+          : 'The restaurant will be alerted to sort out the order.'}
+      </p>
+      <div className="mt-3 space-y-1.5">
+        {reasons.map((r) => (
+          <label key={r} className="flex items-center gap-2 text-sm">
+            <input type="radio" name="issue-reason" checked={reason === r} onChange={() => setReason(r)} />
+            {r}
+          </label>
+        ))}
+      </div>
+      {!prePickup && (
+        <div className="mt-3">
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void uploadPhoto(f);
+            }}
+          />
+          {photoUrl ? (
+            <p className="flex items-center gap-1.5 text-xs text-success">
+              <CheckCircle2 className="h-3.5 w-3.5" /> Photo attached
+            </p>
+          ) : (
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+              className="focus-ring text-xs font-medium text-primary underline"
+            >
+              📸 {uploading ? 'Uploading…' : 'Attach a photo (recommended)'}
+            </button>
+          )}
+        </div>
+      )}
+      {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
+      <div className="mt-3 flex gap-2">
+        <Button variant="outline" size="md" fullWidth onClick={() => setOpen(false)}>
+          Keep delivering
+        </Button>
+        <Button
+          variant="danger"
+          size="md"
+          fullWidth
+          onClick={submit}
+          loading={submitting}
+          disabled={!reason}
+        >
+          {prePickup ? 'Cancel delivery' : 'Mark as failed'}
+        </Button>
+      </div>
     </div>
   );
 }

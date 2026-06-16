@@ -202,6 +202,16 @@ function renderEmailHtml(template: string, vars: Record<string, unknown>): strin
       hero = `Your driver is heading your way with <strong>${orderNum}</strong>.`;
       lede = `Track them in real time from the order page.`;
       break;
+    case 'driver_assigned':
+      pillEmoji = '🤝'; pillText = 'Driver assigned';
+      hero = `A driver has taken your order <strong>${orderNum}</strong>.`;
+      lede = `They're heading to ${branchName} to pick it up — track them live from the order page.`;
+      break;
+    case 'order_arriving':
+      pillEmoji = '📍'; pillText = 'Arriving now';
+      hero = `Your driver is arriving with <strong>${orderNum}</strong>!`;
+      lede = `They're less than a few hundred meters away — time to meet them.`;
+      break;
     case 'order_delivered':
       pillEmoji = '🎉'; pillText = 'Delivered';
       hero = `Order <strong>${orderNum}</strong> delivered. Enjoy!`;
@@ -336,7 +346,14 @@ function renderTitle(template: string, vars: Record<string, unknown>) {
     order_ready_pickup: 'Order ready for pickup',
     order_out_for_delivery: 'On the way',
     order_delivered: 'Delivered',
+    driver_assigned: 'Driver assigned',
+    order_arriving: 'Arriving now',
     new_dispatch: 'New delivery offer',
+    new_message: (vars.sender as string) === 'driver' ? 'Message from your driver' : 'Message from the customer',
+    delivery_failed_at_door: 'Delivery failed at the door',
+    delivery_returned: 'Delivery cancelled after pickup',
+    order_released: 'Scheduled order due',
+    dispatch_failed: 'No driver found',
     low_stock: 'Low stock alert',
     promo: (vars.title as string) ?? 'New promotion',
   };
@@ -345,6 +362,10 @@ function renderTitle(template: string, vars: Record<string, unknown>) {
 
 function renderUrl(template: string, vars: Record<string, unknown>) {
   if (template.startsWith('order_') && vars.order_id) return `/orders/${vars.order_id}`;
+  if (template === 'driver_assigned' && vars.order_id) return `/orders/${vars.order_id}`;
+  if (template === 'new_message') {
+    return (vars.sender as string) === 'driver' && vars.order_id ? `/orders/${vars.order_id}` : '/app/active';
+  }
   if (template === 'new_dispatch') return '/app';
   if (template === 'promo' && vars.url) return vars.url as string;
   return '/';
@@ -356,6 +377,13 @@ function renderTemplate(template: string, vars: Record<string, unknown>) {
     order_ready_pickup: `Order ${vars.order_number} is ready for pickup at ${vars.branch_name}.`,
     order_out_for_delivery: `Order ${vars.order_number} is on the way!`,
     order_delivered: `Order ${vars.order_number} delivered. Enjoy!`,
+    driver_assigned: `A driver has taken your order ${vars.order_number}${vars.eta_minutes ? ` — about ${vars.eta_minutes} min away` : ''}.`,
+    order_arriving: `Your driver is arriving with order ${vars.order_number} — time to meet them!`,
+    new_message: `${(vars.sender as string) === 'driver' ? 'Driver' : 'Customer'}: ${vars.preview ?? 'New message'}`,
+    delivery_failed_at_door: `Delivery for order failed: ${vars.reason ?? 'unknown reason'}. Open Orders to resolve.`,
+    delivery_returned: `Driver cancelled after pickup: ${vars.reason ?? 'unknown reason'}. The order needs attention.`,
+    order_released: `Scheduled order ${vars.order_number} is due — start preparing.`,
+    dispatch_failed: `No driver found for a delivery — open Orders to re-dispatch.`,
     new_dispatch: `New delivery offer: ${Number(vars.distance_km ?? 0).toFixed(1)} mi · $${Number(vars.earnings ?? 0).toFixed(2)}. Open the Driver app.`,
     low_stock: `Low stock: ${vars.name} — ${vars.remaining} left (threshold ${vars.threshold}).`,
     promo: (vars.body as string) ?? '',
