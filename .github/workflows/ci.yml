@@ -25,9 +25,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Version comes from package.json "packageManager" (pnpm@9.15.0) — don't also pin it
+      # here or pnpm/action-setup errors with ERR_PNPM_BAD_PM_VERSION (multiple versions).
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - uses: actions/setup-node@v4
         with:
