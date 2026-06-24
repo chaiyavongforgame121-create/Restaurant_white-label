@@ -11,6 +11,8 @@ export interface ResolvedTenant {
   theme: TenantTheme;
   /** Per-restaurant storefront appearance (menu layout + card style), shared by all branches. */
   storefront: StorefrontSettings;
+  /** Brand logo (from the branch's brand), shown on the storefront. */
+  logoUrl: string | null;
 }
 
 /**
@@ -47,6 +49,7 @@ export async function resolveTenantBySlug(
   // Resolve theme base: brand (if attached) > restaurant.brand_settings.
   let brandTheme: TenantTheme = (r.brand_settings ?? {}) as TenantTheme;
   let brandName: string | undefined;
+  let brandLogo: string | null = null;
   if (b.brand_id) {
     const { data: brandRow } = await supabase
       .from('brands')
@@ -56,6 +59,7 @@ export async function resolveTenantBySlug(
     if (brandRow) {
       brandTheme = (brandRow.theme ?? brandTheme) as TenantTheme;
       brandName = brandRow.name;
+      brandLogo = brandRow.logo_url ?? null;
     }
   }
 
@@ -84,7 +88,7 @@ export async function resolveTenantBySlug(
     ...(brandName ? { brandName } : {}),
   };
 
-  return { restaurant, branch, theme, storefront: parseStorefront(r.storefront) };
+  return { restaurant, branch, theme, storefront: parseStorefront(r.storefront), logoUrl: brandLogo };
 }
 
 function parseSettings(raw: unknown): Branch['settings'] {

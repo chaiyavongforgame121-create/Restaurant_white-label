@@ -9,10 +9,10 @@ import {
   MENU_LAYOUT_LABELS,
   parseStorefront,
   serializeStorefront,
-  type MenuCardStyle,
-  type MenuLayout,
+  type StorefrontSettings,
 } from '@favornoms/shared';
 import { Badge, Button, Card, IconButton } from '@favornoms/ui';
+import { ImageUpload } from '@/components/image-upload';
 
 interface Brand {
   id: string;
@@ -92,7 +92,7 @@ export function BrandsManager({
     router.refresh();
   };
 
-  const saveStorefront = async (next: { menuLayout: MenuLayout; menuCardStyle: MenuCardStyle }) => {
+  const saveStorefront = async (next: StorefrontSettings) => {
     setStore(next);
     setStoreSaving(true);
     setError(null);
@@ -205,6 +205,17 @@ export function BrandsManager({
                 </button>
               ))}
             </div>
+          </div>
+          <div>
+            <p className="mb-1.5 text-sm font-medium">Hero image</p>
+            <ImageUpload
+              restaurantId={restaurantId}
+              folder="hero"
+              value={store.heroUrl}
+              onChange={(url) => saveStorefront({ ...store, heroUrl: url })}
+              aspect="aspect-video"
+              label="Upload hero image"
+            />
           </div>
         </div>
       </Card>
@@ -565,12 +576,14 @@ function BrandEditor({
             />
           </Field>
           <div className="sm:col-span-2">
-            <Field label="Logo URL (optional)">
-              <input
-                value={logoUrl}
-                onChange={(e) => setLogoUrl(e.target.value)}
-                className="input"
-                placeholder="https://…"
+            <Field label="Logo (optional)">
+              <ImageUpload
+                restaurantId={restaurantId}
+                folder="logo"
+                value={logoUrl || null}
+                onChange={(url) => setLogoUrl(url ?? '')}
+                aspect="aspect-[3/1]"
+                label="Upload logo"
               />
             </Field>
           </div>

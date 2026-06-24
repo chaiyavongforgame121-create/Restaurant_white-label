@@ -12,11 +12,14 @@ export interface StorefrontSettings {
   menuLayout: MenuLayout;
   /** Menu card rendering: 'standard' = photo on top, 'compact' = photo on the left. */
   menuCardStyle: MenuCardStyle;
+  /** Optional hero/banner image shown at the top of the storefront. */
+  heroUrl: string | null;
 }
 
 export const STOREFRONT_DEFAULTS: StorefrontSettings = {
   menuLayout: 'grid4',
   menuCardStyle: 'standard',
+  heroUrl: null,
 };
 
 const MENU_LAYOUTS: readonly MenuLayout[] = ['list', 'grid2', 'grid3', 'grid4'];
@@ -27,15 +30,17 @@ export function parseStorefront(raw: unknown): StorefrontSettings {
   const s = (raw ?? {}) as Record<string, unknown>;
   const layout = s.menu_layout as MenuLayout;
   const card = s.menu_card_style as MenuCardStyle;
+  const hero = typeof s.hero_url === 'string' && s.hero_url.length > 0 ? (s.hero_url as string) : null;
   return {
     menuLayout: MENU_LAYOUTS.includes(layout) ? layout : STOREFRONT_DEFAULTS.menuLayout,
     menuCardStyle: MENU_CARD_STYLES.includes(card) ? card : STOREFRONT_DEFAULTS.menuCardStyle,
+    heroUrl: hero,
   };
 }
 
 /** Serialize typed settings back to the jsonb shape stored on restaurants.storefront. */
-export function serializeStorefront(s: StorefrontSettings): Record<string, string> {
-  return { menu_layout: s.menuLayout, menu_card_style: s.menuCardStyle };
+export function serializeStorefront(s: StorefrontSettings): Record<string, string | null> {
+  return { menu_layout: s.menuLayout, menu_card_style: s.menuCardStyle, hero_url: s.heroUrl };
 }
 
 export const MENU_LAYOUT_LABELS: Record<MenuLayout, string> = {

@@ -118,6 +118,8 @@ export default async function MenuPage({ params }: Props) {
       happyHours={happyHours}
       menuLayout={tenant.storefront.menuLayout}
       menuCardStyle={tenant.storefront.menuCardStyle}
+      logoUrl={tenant.logoUrl}
+      heroUrl={tenant.storefront.heroUrl}
     />
   );
 }

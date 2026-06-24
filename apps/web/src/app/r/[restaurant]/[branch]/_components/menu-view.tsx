@@ -66,9 +66,11 @@ interface MenuViewProps {
   happyHours?: HappyHourSection[];
   menuLayout?: MenuLayout;
   menuCardStyle?: MenuCardStyle;
+  logoUrl?: string | null;
+  heroUrl?: string | null;
 }
 
-export function MenuView({ branch, categories, items, isOpen = true, reviews, combos = [], happyHours = [], menuLayout = 'grid4', menuCardStyle = 'standard' }: MenuViewProps) {
+export function MenuView({ branch, categories, items, isOpen = true, reviews, combos = [], happyHours = [], menuLayout = 'grid4', menuCardStyle = 'standard', logoUrl, heroUrl }: MenuViewProps) {
   const t = useTranslations();
   const locale = useLocale() as Locale;
   const [search, setSearch] = React.useState('');
@@ -156,7 +158,7 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
 
   return (
     <div>
-      <Hero title={heroTitle} subtitle={heroSubtitle} address={branch.address} />
+      <Hero title={heroTitle} subtitle={heroSubtitle} address={branch.address} logoUrl={logoUrl} heroUrl={heroUrl} />
 
       {!isOpen && (
         <div className="container mt-4">
@@ -230,7 +232,19 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
 
 /* -------------------- Hero -------------------- */
 
-function Hero({ title, subtitle, address }: { title: string; subtitle: string; address: string }) {
+function Hero({
+  title,
+  subtitle,
+  address,
+  logoUrl,
+  heroUrl,
+}: {
+  title: string;
+  subtitle: string;
+  address: string;
+  logoUrl?: string | null;
+  heroUrl?: string | null;
+}) {
   const t = useTranslations('landing');
   return (
     <section className="relative overflow-hidden">
@@ -239,6 +253,11 @@ function Hero({ title, subtitle, address }: { title: string; subtitle: string; a
       <div className="container relative pt-6 pb-8 lg:pt-12 lg:pb-16">
         <div className="grid items-center gap-8 lg:grid-cols-2">
           <div>
+            {logoUrl ? (
+              <div className="relative mb-4 h-12 w-44">
+                <Image src={logoUrl} alt={title} fill className="object-contain object-left" sizes="176px" />
+              </div>
+            ) : null}
             <div className="inline-flex items-center gap-2 rounded-full border border-success/30 bg-success/15 px-3 py-1 text-xs font-semibold text-success">
               <span className="relative flex h-2 w-2">
                 <span className="absolute inset-0 animate-pulse-ring rounded-full bg-success" />
@@ -265,16 +284,16 @@ function Hero({ title, subtitle, address }: { title: string; subtitle: string; a
             className="relative mx-auto hidden aspect-square w-full max-w-md overflow-hidden rounded-3xl shadow-warm lg:block"
           >
             <Image
-              src="https://images.unsplash.com/photo-1565299585323-38d6b0865b47?auto=format&fit=crop&w=900&h=900&q=80"
-              alt="Thai feast"
+              src={heroUrl || 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?auto=format&fit=crop&w=900&h=900&q=80'}
+              alt={title}
               fill
               priority
               sizes="(max-width: 1024px) 0, 50vw"
               className="object-cover"
             />
             <div className="absolute inset-x-4 bottom-4 rounded-2xl border border-white/30 bg-white/85 px-4 py-3 backdrop-blur-md">
-              <p className="text-xs font-medium text-muted-foreground">Today&apos;s special</p>
-              <p className="font-display text-lg font-semibold">Coastal Smash Burger · $14.95</p>
+              <p className="text-xs font-medium text-muted-foreground">Now serving</p>
+              <p className="font-display text-lg font-semibold">{title}</p>
             </div>
           </div>
         </div>
