@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Battery, CalendarDays, ChevronRight, Coffee, MapPin, Power, Star, Store, Wallet, Zap } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { formatCurrency } from '@favornoms/shared';
+import { formatCurrency, kmToMi } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
 import { setDriverOnline } from '@favornoms/database/queries';
 import { Card, cn } from '@favornoms/ui';
@@ -221,7 +221,7 @@ export function HomeView() {
               <p className="font-semibold">{active ? active.branchName : '—'}</p>
               <p className="text-sm text-muted-foreground">
                 {active
-                  ? `${active.itemsSummary} · ${active.distanceKm.toFixed(1)} km · ${formatCurrency(active.driverEarnings)}`
+                  ? `${active.itemsSummary} · ${kmToMi(active.distanceKm).toFixed(1)} mi · ${formatCurrency(active.driverEarnings)}`
                   : 'No deliveries yet'}
               </p>
             </div>

@@ -5,8 +5,11 @@ import { useRouter } from 'next/navigation';
 import { Bike, Save } from 'lucide-react';
 import {
   DELIVERY_SETTING_DEFAULTS,
+  KM_PER_MILE,
   computeDeliveryFee,
   heuristicEtaMin,
+  kmToMi,
+  miToKm,
   parseDeliverySettings,
 } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
@@ -44,18 +47,20 @@ const FIELDS: Array<{
   step?: string;
   group: 'fees' | 'timing' | 'dispatch' | 'pay';
   fallback: number;
+  /** Field is shown/entered in miles ('dist') or $/mile ('rate'); stored as km / $-per-km. */
+  convert?: 'dist' | 'rate';
 }> = [
   { key: 'delivery_base_fee', label: 'Base fee ($)', group: 'fees', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.deliveryBaseFee },
-  { key: 'delivery_per_km_fee', label: 'Per km ($)', group: 'fees', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.deliveryPerKmFee },
+  { key: 'delivery_per_km_fee', label: 'Per mile ($)', group: 'fees', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.deliveryPerKmFee, convert: 'rate' },
   { key: 'delivery_min_fee', label: 'Minimum fee ($)', group: 'fees', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.deliveryMinFee },
   { key: 'delivery_max_fee', label: 'Maximum fee ($)', group: 'fees', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.deliveryMaxFee },
-  { key: 'delivery_radius_km', label: 'Delivery radius (km)', hint: 'Orders beyond this distance are rejected at checkout', group: 'timing', step: '0.5', fallback: DELIVERY_SETTING_DEFAULTS.deliveryRadiusKm },
+  { key: 'delivery_radius_km', label: 'Delivery radius (mi)', hint: 'Orders beyond this distance are rejected at checkout', group: 'timing', step: '0.5', fallback: DELIVERY_SETTING_DEFAULTS.deliveryRadiusKm, convert: 'dist' },
   { key: 'prep_time_min', label: 'Prep time (min)', hint: 'Baseline kitchen time used in customer ETAs', group: 'timing', step: '1', fallback: DELIVERY_SETTING_DEFAULTS.prepTimeMin },
-  { key: 'driver_search_radius_km', label: 'Driver search radius (km)', hint: 'How far from the branch to look for drivers', group: 'dispatch', step: '0.5', fallback: 3 },
+  { key: 'driver_search_radius_km', label: 'Driver search radius (mi)', hint: 'How far from the branch to look for drivers', group: 'dispatch', step: '0.5', fallback: 3, convert: 'dist' },
   { key: 'driver_max_attempts', label: 'Max dispatch attempts', hint: 'Staff get alerted after this many failed rounds', group: 'dispatch', step: '1', fallback: 3 },
   { key: 'offer_ttl_seconds', label: 'Offer timeout (sec)', hint: 'How long a driver has to accept an offer', group: 'dispatch', step: '5', fallback: DELIVERY_SETTING_DEFAULTS.offerTtlSeconds },
   { key: 'driver_base_pay', label: 'Driver base pay ($)', group: 'pay', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.driverBasePay },
-  { key: 'driver_per_km_pay', label: 'Driver per km ($)', group: 'pay', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.driverPerKmPay },
+  { key: 'driver_per_km_pay', label: 'Driver per mile ($)', group: 'pay', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.driverPerKmPay, convert: 'rate' },
 ];
 
 const GROUP_TITLES: Record<string, string> = {
@@ -65,6 +70,22 @@ const GROUP_TITLES: Record<string, string> = {
   pay: 'Driver pay',
 };
 
+// US market shows/enters distances in MILES and rates in $/mile, but everything is
+// stored in km / $-per-km so the SQL quote_delivery() and find_dispatch_candidates
+// formulas stay unchanged. A "$ per mile" value is stored as its $-per-km equivalent
+// (÷ KM_PER_MILE) so base + perKm×distanceKm == base + perMile×distanceMi.
+function toDisplayUnit(convert: 'dist' | 'rate' | undefined, km: number): number {
+  if (convert === 'dist') return kmToMi(km);
+  if (convert === 'rate') return km * KM_PER_MILE;
+  return km;
+}
+function toStoredUnit(convert: 'dist' | 'rate' | undefined, display: number): number {
+  if (convert === 'dist') return miToKm(display);
+  if (convert === 'rate') return display / KM_PER_MILE;
+  return display;
+}
+const round2disp = (n: number) => Math.round(n * 100) / 100;
+
 export function DeliverySettingsCard({ branchId, settings }: Props) {
   const router = useRouter();
   const [values, setValues] = React.useState<Record<NumericKey, string>>(() => {
@@ -72,7 +93,8 @@ export function DeliverySettingsCard({ branchId, settings }: Props) {
     for (const f of FIELDS) {
       const raw = settings?.[f.key];
       const n = typeof raw === 'string' ? Number(raw) : (raw as number | undefined);
-      out[f.key] = typeof n === 'number' && Number.isFinite(n) ? String(n) : String(f.fallback);
+      const storedKm = typeof n === 'number' && Number.isFinite(n) ? n : f.fallback;
+      out[f.key] = String(round2disp(toDisplayUnit(f.convert, storedKm)));
     }
     return out;
   });
@@ -92,16 +114,23 @@ export function DeliverySettingsCard({ branchId, settings }: Props) {
   // Live preview using the exact formula place-order/quote_delivery applies.
   const preview = React.useMemo(() => {
     const numeric: Record<string, number> = {};
-    for (const f of FIELDS) numeric[f.key] = Number(values[f.key]) || f.fallback;
+    for (const f of FIELDS) {
+      const dv = Number(values[f.key]);
+      const display = Number.isFinite(dv) ? dv : toDisplayUnit(f.convert, f.fallback);
+      numeric[f.key] = toStoredUnit(f.convert, display); // back to km for the shared formula
+    }
     numeric.delivery_surge_multiplier = surge;
     numeric.busy_extra_prep_min = Number(busyExtra) || 0;
     const parsed = parseDeliverySettings(numeric);
-    return [1, 3, 5].map((km) => ({
-      km,
-      fee: computeDeliveryFee(parsed, km),
-      eta: heuristicEtaMin(parsed, km),
-      inRange: km <= parsed.deliveryRadiusKm,
-    }));
+    return [1, 3, 5].map((mi) => {
+      const km = miToKm(mi);
+      return {
+        mi,
+        fee: computeDeliveryFee(parsed, km),
+        eta: heuristicEtaMin(parsed, km),
+        inRange: km <= parsed.deliveryRadiusKm,
+      };
+    });
   }, [values, surge, busyExtra]);
 
   const save = async () => {
@@ -111,7 +140,8 @@ export function DeliverySettingsCard({ branchId, settings }: Props) {
     const patch: Record<string, number | boolean> = {};
     for (const f of FIELDS) {
       const n = Number(values[f.key]);
-      patch[f.key] = Number.isFinite(n) && n >= 0 ? n : f.fallback;
+      const display = Number.isFinite(n) && n >= 0 ? n : toDisplayUnit(f.convert, f.fallback);
+      patch[f.key] = toStoredUnit(f.convert, display); // store km / $-per-km equivalent
     }
     patch.orders_paused = paused;
     patch.busy_extra_prep_min = Math.max(0, Number(busyExtra) || 0);
@@ -136,7 +166,7 @@ export function DeliverySettingsCard({ branchId, settings }: Props) {
         <Bike className="h-5 w-5 text-primary" /> Delivery
       </h2>
       <p className="text-sm text-muted-foreground">
-        Distance-based pricing, delivery radius, and dispatch behavior for this branch.
+        Distance-based pricing, delivery radius, and dispatch behavior for this branch. Distances and per-distance rates are in miles.
       </p>
 
       {(['fees', 'timing', 'dispatch', 'pay'] as const).map((group) => (
@@ -225,8 +255,8 @@ export function DeliverySettingsCard({ branchId, settings }: Props) {
         </p>
         <div className="mt-2 grid grid-cols-3 gap-2 text-center text-sm">
           {preview.map((p) => (
-            <div key={p.km} className="rounded-lg bg-card p-2">
-              <p className="text-xs text-muted-foreground">{p.km} km</p>
+            <div key={p.mi} className="rounded-lg bg-card p-2">
+              <p className="text-xs text-muted-foreground">{p.mi} mi</p>
               {p.inRange ? (
                 <>
                   <p className="font-display text-base font-bold text-primary">${p.fee.toFixed(2)}</p>

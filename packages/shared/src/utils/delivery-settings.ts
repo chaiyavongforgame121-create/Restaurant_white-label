@@ -47,6 +47,17 @@ export const DELIVERY_SETTING_DEFAULTS: DeliverySettings = {
 /** Average city driving speed used for the heuristic ETA (km/h). */
 export const CITY_SPEED_KMH = 24;
 
+// US market presents distance in MILES. Internal math + storage stay metric (km)
+// so the SQL quote_delivery()/find_dispatch_candidates formulas don't change — the
+// admin UI converts on the way in/out, and customer/driver screens convert on
+// display. A per-km value that equals an admin's per-mile input is stored by
+// dividing by KM_PER_MILE (so base + perKm×distanceKm == base + perMile×distanceMi).
+export const KM_PER_MILE = 1.609344;
+/** km → miles (for display). */
+export const kmToMi = (km: number): number => km / KM_PER_MILE;
+/** miles → km (for storage and the server-side fee/ETA formulas). */
+export const miToKm = (mi: number): number => mi * KM_PER_MILE;
+
 function num(v: unknown, fallback: number): number {
   const n = typeof v === 'string' ? Number(v) : (v as number);
   return typeof n === 'number' && Number.isFinite(n) ? n : fallback;

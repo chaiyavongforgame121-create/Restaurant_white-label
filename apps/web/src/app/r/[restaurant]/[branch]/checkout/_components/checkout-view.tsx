@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Banknote, ChevronLeft, CreditCard, LocateFixed, Map as MapIcon, MapPin, ShoppingBag, Tag } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { formatCurrency } from '@favornoms/shared';
+import { formatCurrency, kmToMi } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
 import {
   getMyLoyalty,
@@ -718,14 +718,14 @@ export function CheckoutView({ branchId, base }: Props) {
             )}
             {!quoting && quote?.deliverable && (
               <p className="mt-2 text-xs text-muted-foreground">
-                {quote.distance_km.toFixed(1)} km away · delivery {formatCurrency(quote.fee)} · ready in ~
+                {kmToMi(quote.distance_km).toFixed(1)} mi away · delivery {formatCurrency(quote.fee)} · ready in ~
                 {quote.eta_min} min
               </p>
             )}
             {outOfRange && (
               <p className="mt-2 text-sm font-medium text-danger">
                 Sorry, this address is outside the delivery area
-                {!quote.deliverable && quote.radius_km ? ` (max ${quote.radius_km} km)` : ''}.
+                {!quote.deliverable && quote.radius_km ? ` (max ${kmToMi(quote.radius_km).toFixed(1)} mi)` : ''}.
               </p>
             )}
             {enteringNewAddress && !addressCoords && !quoting && address.trim().length > 3 && (

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Bike, CheckCircle2, Coffee, MapPin, Navigation, Package, Phone } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { formatCurrency } from '@favornoms/shared';
+import { formatCurrency, kmToMi } from '@favornoms/shared';
 import { Button, Card, EmptyState } from '@favornoms/ui';
 import { DeliveryMap, fetchRoute, hasMapboxToken } from '@favornoms/maps';
 import { getBrowserClient } from '@favornoms/database/client';
@@ -271,7 +271,7 @@ export function ActiveDeliveryView() {
 
         <div className="pointer-events-none absolute left-4 right-4 top-4 flex items-center justify-between [&>*]:pointer-events-auto">
           <span className="rounded-full bg-card/90 px-3 py-1.5 text-xs font-semibold backdrop-blur">
-            {active.distanceKm.toFixed(1)} km · {active.estimatedDurationMin} min
+            {kmToMi(active.distanceKm).toFixed(1)} mi · {active.estimatedDurationMin} min
           </span>
           <button
             className="focus-ring inline-flex h-11 items-center gap-1.5 rounded-full bg-card/90 px-4 text-sm font-semibold backdrop-blur"

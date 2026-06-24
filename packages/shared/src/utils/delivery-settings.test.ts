@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   DELIVERY_SETTING_DEFAULTS,
+  KM_PER_MILE,
   computeDeliveryFee,
   heuristicEtaMin,
   isWithinDeliveryRadius,
+  kmToMi,
+  miToKm,
   parseDeliverySettings,
 } from './delivery-settings';
 
@@ -79,5 +82,31 @@ describe('isWithinDeliveryRadius', () => {
     expect(isWithinDeliveryRadius(d, 4.99)).toBe(true);
     expect(isWithinDeliveryRadius(d, 5)).toBe(true);
     expect(isWithinDeliveryRadius(d, 5.01)).toBe(false);
+  });
+});
+
+describe('miles ↔ km conversion (US display layer)', () => {
+  it('uses the exact 1 mile = 1.609344 km factor', () => {
+    expect(miToKm(1)).toBe(KM_PER_MILE);
+    expect(kmToMi(KM_PER_MILE)).toBe(1);
+  });
+
+  it('round-trips without drift', () => {
+    expect(kmToMi(miToKm(5))).toBeCloseTo(5, 10);
+    expect(miToKm(kmToMi(8))).toBeCloseTo(8, 10);
+  });
+
+  it('storing $/mile as its $/km equivalent yields the right per-mile fee', () => {
+    // Admin enters $2.00/mile → the card stores $2.00 / KM_PER_MILE per km, so the
+    // unchanged km-based formula bills the same as a true per-mile rate would.
+    const settings = {
+      ...DELIVERY_SETTING_DEFAULTS,
+      deliveryBaseFee: 0,
+      deliveryPerKmFee: 2 / KM_PER_MILE,
+      deliveryMinFee: 0,
+      deliveryMaxFee: 999,
+    };
+    // A 3-mile trip should cost 3 × $2.00 = $6.00.
+    expect(computeDeliveryFee(settings, miToKm(3))).toBe(6);
   });
 });

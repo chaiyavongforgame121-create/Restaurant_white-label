@@ -4,7 +4,7 @@ import * as React from 'react';
 import { motion } from 'framer-motion';
 import { Bike, Check, MapPin, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { formatCurrency } from '@favornoms/shared';
+import { formatCurrency, kmToMi } from '@favornoms/shared';
 import type { ActiveDeliveryUI } from './delivery-provider';
 
 interface DispatchSheetProps {
@@ -76,7 +76,7 @@ export function DispatchSheet({
               <div>
                 <p className="text-xs uppercase tracking-wider text-white/80">{t('newOrder')}</p>
                 <p className="font-display text-xl font-bold leading-tight">
-                  {formatCurrency(offer.driverEarnings)} · {offer.distanceKm.toFixed(1)} km
+                  {formatCurrency(offer.driverEarnings)} · {kmToMi(offer.distanceKm).toFixed(1)} mi
                 </p>
               </div>
             </div>
@@ -121,7 +121,7 @@ export function DispatchSheet({
           />
 
           <div className="grid grid-cols-3 divide-x divide-border rounded-2xl bg-muted/40 p-3">
-            <Metric label="Distance" value={`${offer.distanceKm.toFixed(1)} km`} />
+            <Metric label="Distance" value={`${kmToMi(offer.distanceKm).toFixed(1)} mi`} />
             <Metric label="ETA" value={`${offer.estimatedDurationMin} min`} />
             <Metric label="Earning" value={formatCurrency(offer.driverEarnings)} highlight />
           </div>

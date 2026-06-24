@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Bike, ChefHat, CheckCircle2, ChevronLeft, MapPin, Phone, Receipt } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { formatCurrency } from '@favornoms/shared';
+import { formatCurrency, kmToMi } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
 import { DeliveryMap, fetchRoute, hasMapboxToken, type LatLng } from '@favornoms/maps';
 import { Badge, Button, Card, IconButton } from '@favornoms/ui';
@@ -208,7 +208,7 @@ export function OrderTracking({ initialOrder, branchId, branchLocation }: Props)
                     {arriving ? 'Your driver is almost there!' : 'Your driver is on the way'}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {delivery.distance_km != null && `${delivery.distance_km} km · `}
+                    {delivery.distance_km != null && `${kmToMi(delivery.distance_km).toFixed(1)} mi · `}
                     {etaMin != null && `${etaMin} min ETA`}
                   </p>
                 </div>
