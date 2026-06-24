@@ -70,22 +70,19 @@ export function AddressesView({ base, branchId }: { base: string; branchId: stri
       return;
     }
     const supabase = getBrowserClient();
+    // One customer identity per restaurant (shared across branches); resolve/create it.
     void supabase
-      .from('customers')
-      .select('id')
-      .eq('user_id', user.id)
-      .order('updated_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
+      .rpc('get_or_create_my_customer', { p_branch_id: branchId })
       .then(({ data }) => {
-        if (data) {
-          setCustomerId(data.id);
-          void refresh(data.id);
+        const cid = data as string | null;
+        if (cid) {
+          setCustomerId(cid);
+          void refresh(cid);
         } else {
           setBusy(false);
         }
       });
-  }, [user, refresh]);
+  }, [user, refresh, branchId]);
 
   React.useEffect(() => {
     const supabase = getBrowserClient();

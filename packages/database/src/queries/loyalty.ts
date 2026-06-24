@@ -39,25 +39,14 @@ export async function listMyLoyaltyTransactions(
   branchId: string,
   limit = 20,
 ): Promise<LoyaltyTxRow[]> {
-  const { data: userData } = await supabase.auth.getUser();
-  if (!userData.user) return [];
-  const { data: customer } = await supabase
-    .from('customers')
-    .select('id')
-    .eq('user_id', userData.user.id)
-    .order('updated_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (!customer) return [];
-
-  const { data } = await supabase
-    .from('loyalty_transactions')
-    .select('*')
-    .eq('branch_id', branchId)
-    .eq('customer_id', customer.id)
-    .order('created_at', { ascending: false })
-    .limit(limit);
-  return data ?? [];
+  // Scope-aware (brand vs branch) + restaurant-level customer resolution lives in the
+  // RPC, so history follows the restaurant's loyalty_scope instead of one branch.
+  const { data, error } = await supabase.rpc('list_my_loyalty_transactions', {
+    p_branch_id: branchId,
+    p_limit: limit,
+  });
+  if (error) return [];
+  return (data ?? []) as LoyaltyTxRow[];
 }
 
 export async function redeemLoyaltyPoints(

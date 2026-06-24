@@ -628,6 +628,7 @@ export type Database = {
           marketing_consent: boolean
           phone: string | null
           preferred_language: string
+          restaurant_id: string
           total_orders: number
           total_spent: number
           updated_at: string
@@ -645,6 +646,7 @@ export type Database = {
           marketing_consent?: boolean
           phone?: string | null
           preferred_language?: string
+          restaurant_id: string
           total_orders?: number
           total_spent?: number
           updated_at?: string
@@ -662,6 +664,7 @@ export type Database = {
           marketing_consent?: boolean
           phone?: string | null
           preferred_language?: string
+          restaurant_id?: string
           total_orders?: number
           total_spent?: number
           updated_at?: string
@@ -673,6 +676,13 @@ export type Database = {
             columns: ["branch_id"]
             isOneToOne: false
             referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customers_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
             referencedColumns: ["id"]
           },
         ]
@@ -1346,6 +1356,7 @@ export type Database = {
           days_of_week: number[]
           discount_type: string
           discount_value: number
+          display_order: number
           end_time: string
           id: string
           is_active: boolean
@@ -1360,6 +1371,7 @@ export type Database = {
           days_of_week?: number[]
           discount_type: string
           discount_value: number
+          display_order?: number
           end_time: string
           id?: string
           is_active?: boolean
@@ -1374,6 +1386,7 @@ export type Database = {
           days_of_week?: number[]
           discount_type?: string
           discount_value?: number
+          display_order?: number
           end_time?: string
           id?: string
           is_active?: boolean
@@ -1989,7 +2002,7 @@ export type Database = {
           id: string
           item_image_url: string | null
           item_name: string
-          menu_item_id: string
+          menu_item_id: string | null
           modifier_total: number
           modifiers: Json
           notes: string | null
@@ -2006,7 +2019,7 @@ export type Database = {
           id?: string
           item_image_url?: string | null
           item_name: string
-          menu_item_id: string
+          menu_item_id?: string | null
           modifier_total?: number
           modifiers?: Json
           notes?: string | null
@@ -2023,7 +2036,7 @@ export type Database = {
           id?: string
           item_image_url?: string | null
           item_name?: string
-          menu_item_id?: string
+          menu_item_id?: string | null
           modifier_total?: number
           modifiers?: Json
           notes?: string | null
@@ -3757,6 +3770,21 @@ export type Database = {
           menu_item_id: string
         }[]
       }
+      get_happy_hours_for_menu: {
+        Args: { p_branch_id: string }
+        Returns: {
+          applies_to_category_ids: string[]
+          applies_to_item_ids: string[]
+          days_of_week: number[]
+          discount_type: string
+          discount_value: number
+          end_time: string
+          id: string
+          is_live: boolean
+          name: string
+          start_time: string
+        }[]
+      }
       get_loyalty_balance: {
         Args: { p_branch_id: string }
         Returns: {
@@ -3776,6 +3804,10 @@ export type Database = {
           menu_item_id: string
           order_count: number
         }[]
+      }
+      get_or_create_my_customer: {
+        Args: { p_branch_id: string }
+        Returns: string
       }
       get_or_create_my_referral_code: { Args: never; Returns: string }
       get_sales_tax_report: {
@@ -3865,12 +3897,46 @@ export type Database = {
         Args: { p_branch_id: string; p_menu_item_id: string }
         Returns: boolean
       }
+      list_my_loyalty_transactions: {
+        Args: { p_branch_id: string; p_limit?: number }
+        Returns: {
+          balance_after: number
+          branch_id: string | null
+          created_at: string
+          customer_id: string
+          description: string | null
+          expires_at: string | null
+          id: string
+          points: number
+          reference_id: string | null
+          reference_type: string | null
+          restaurant_id: string | null
+          type: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "loyalty_transactions"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      mark_delivery_arriving: {
+        Args: { p_delivery_id: string }
+        Returns: undefined
+      }
       mark_messages_read: {
         Args: { p_delivery_id: string }
         Returns: undefined
       }
       notify_waitlist_party: { Args: { p_id: string }; Returns: undefined }
       platform_ops_summary: { Args: never; Returns: Json }
+      progress_delivery: {
+        Args: {
+          p_delivery_id: string
+          p_next: Database["public"]["Enums"]["delivery_status"]
+        }
+        Returns: undefined
+      }
       quote_delivery: {
         Args: { p_branch_id: string; p_lat: number; p_lng: number }
         Returns: Json
@@ -3937,6 +4003,10 @@ export type Database = {
           match_level: string
           restaurant_slug: string
         }[]
+      }
+      set_branch_hours: {
+        Args: { p_branch_id: string; p_windows: Json }
+        Returns: undefined
       }
       set_driver_kyc_status: {
         Args: {

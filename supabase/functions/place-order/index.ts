@@ -190,8 +190,23 @@ Deno.serve(async (req: Request) => {
     const userClient = createClient(url, anonKey, { global: { headers: { Authorization: authHeader } }, auth: { persistSession: false } });
     const { data: { user } } = await userClient.auth.getUser();
     if (user) {
-      const { data: c } = await admin.from('customers').select('id').eq('user_id', user.id).eq('branch_id', payload.branch_id).maybeSingle();
+      // Customer identity is per RESTAURANT (shared across its branches), so resolve
+      // by (user, restaurant) and lazily create the row on first order at any branch.
+      const { data: c } = await admin.from('customers').select('id').eq('user_id', user.id).eq('restaurant_id', branch.restaurant_id).maybeSingle();
       customerId = c?.id ?? null;
+      if (!customerId) {
+        const { data: created } = await admin.from('customers')
+          .insert({ restaurant_id: branch.restaurant_id, branch_id: payload.branch_id, user_id: user.id, phone: payload.customer_phone, full_name: payload.customer_name ?? null, preferred_language: 'en' })
+          .select('id').single();
+        if (created) {
+          customerId = created.id;
+        } else {
+          // A row with this (restaurant, phone) already exists (e.g. created by staff) — adopt it.
+          const { data: existing } = await admin.from('customers').select('id')
+            .eq('restaurant_id', branch.restaurant_id).eq('phone', payload.customer_phone).maybeSingle();
+          customerId = existing?.id ?? null;
+        }
+      }
     }
   }
 

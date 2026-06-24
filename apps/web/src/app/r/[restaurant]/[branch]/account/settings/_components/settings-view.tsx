@@ -27,14 +27,20 @@ export function SettingsView({ base, branchId }: { base: string; branchId: strin
       return;
     }
     const supabase = getBrowserClient();
+    // One customer identity per restaurant (shared across branches); resolve/create it.
     void supabase
-      .from('customers')
-      .select('id, full_name, phone, email, marketing_consent')
-      .eq('user_id', user.id)
-      .order('updated_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-      .then(({ data }) => {
+      .rpc('get_or_create_my_customer', { p_branch_id: branchId })
+      .then(async ({ data: cid }) => {
+        const customerIdResolved = cid as string | null;
+        if (!customerIdResolved) {
+          setLoadingData(false);
+          return;
+        }
+        const { data } = await supabase
+          .from('customers')
+          .select('id, full_name, phone, email, marketing_consent')
+          .eq('id', customerIdResolved)
+          .maybeSingle();
         if (data) {
           setCustomerId(data.id);
           setFullName(data.full_name ?? '');
@@ -44,7 +50,7 @@ export function SettingsView({ base, branchId }: { base: string; branchId: strin
         }
         setLoadingData(false);
       });
-  }, [user]);
+  }, [user, branchId]);
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
