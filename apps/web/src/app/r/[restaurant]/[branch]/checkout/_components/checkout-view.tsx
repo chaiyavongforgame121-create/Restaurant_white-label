@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Banknote, ChevronLeft, CreditCard, MapPin, Tag } from 'lucide-react';
+import { Banknote, ChevronLeft, CreditCard, LocateFixed, Map as MapIcon, MapPin, ShoppingBag, Tag } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { formatCurrency } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
@@ -16,8 +16,17 @@ import {
   type DeliveryQuote,
   type SavedAddress,
 } from '@favornoms/database/queries';
-import { AddressAutofillInput } from '@favornoms/maps';
-import { Badge, Button, Card, IconButton } from '@favornoms/ui';
+import {
+  AddressAutofillInput,
+  GeolocationError,
+  getCurrentPosition,
+  LocationPicker,
+  reverseGeocode,
+  type GeolocationFailure,
+  type ResolvedAddress,
+} from '@favornoms/maps';
+import { Badge, Button, Card, IconButton, Sheet } from '@favornoms/ui';
+import { pickerLabels } from '@/lib/picker-labels';
 import { useCart } from '@/store/cart';
 
 type PaymentMethod = 'card' | 'cash';
@@ -61,6 +70,25 @@ export function CheckoutView({ branchId, base }: Props) {
   const [method, setMethod] = React.useState<PaymentMethod>('card');
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  // Map picker + geolocation
+  const [pickerOpen, setPickerOpen] = React.useState(false);
+  const [branchCenter, setBranchCenter] = React.useState<{ lat: number; lng: number } | null>(null);
+  const [locatingQuick, setLocatingQuick] = React.useState(false);
+  const [geoError, setGeoError] = React.useState<string | null>(null);
+  // Per-field validation messages (cleared as the user edits the field).
+  const [fieldErrors, setFieldErrors] = React.useState<Record<string, string>>({});
+  const nameRef = React.useRef<HTMLInputElement | null>(null);
+  const phoneRef = React.useRef<HTMLInputElement | null>(null);
+  const emailRef = React.useRef<HTMLInputElement | null>(null);
+  const addressSectionRef = React.useRef<HTMLDivElement | null>(null);
+  const tableRef = React.useRef<HTMLInputElement | null>(null);
+  const clearFieldError = (key: string) =>
+    setFieldErrors((cur) => {
+      if (!cur[key]) return cur;
+      const next = { ...cur };
+      delete next[key];
+      return next;
+    });
   const [pointsBalance, setPointsBalance] = React.useState(0);
   const [redeemPoints, setRedeemPoints] = React.useState(0);
   const [tipPercent, setTipPercent] = React.useState<0 | 5 | 10 | 15>(0);
@@ -162,6 +190,81 @@ export function CheckoutView({ branchId, base }: Props) {
     })();
   }, [branchId]);
 
+  // The restaurant's own coordinates make a sensible default centre for the map
+  // picker when the customer hasn't entered an address yet.
+  React.useEffect(() => {
+    if (channel !== 'delivery') return;
+    const supabase = getBrowserClient();
+    void supabase
+      .from('branches')
+      .select('geo_lat, geo_lng')
+      .eq('id', branchId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.geo_lat != null && data?.geo_lng != null) {
+          setBranchCenter({ lat: Number(data.geo_lat), lng: Number(data.geo_lng) });
+        }
+      });
+  }, [branchId, channel]);
+
+  // Shared by the map picker and the "use current location" button: drop a
+  // resolved address into the same state the autofill feeds, and treat it as a
+  // freshly-entered ("new") address so it's saved and quoted like any other.
+  const applyResolvedAddress = React.useCallback((a: ResolvedAddress) => {
+    const line1 = [a.line1, a.line2].filter(Boolean).join(', ');
+    resolvedAddressRef.current = line1;
+    setAddress(line1);
+    setAddressCoords({ lat: a.lat, lng: a.lng });
+    setAddressMeta({ line2: a.line2, city: a.city, state: a.state, postal_code: a.postal_code });
+    setSelectedAddressId('new');
+    setGeoError(null);
+    clearFieldError('address');
+  }, []);
+
+  const geoFailureMessage = React.useCallback(
+    (reason: GeolocationFailure): string => {
+      switch (reason) {
+        case 'insecure_context':
+          return t('checkout.geo.insecure');
+        case 'unsupported':
+          return t('checkout.geo.unsupported');
+        case 'denied':
+          return t('checkout.geo.denied');
+        case 'timeout':
+          return t('checkout.geo.timeout');
+        default:
+          return t('checkout.geo.unavailable');
+      }
+    },
+    [t],
+  );
+
+  // One-tap "use current location" on the checkout itself (the picker has its
+  // own button too). Geolocate, reverse-geocode, then fill the address.
+  const handleQuickCurrentLocation = async () => {
+    setGeoError(null);
+    setLocatingQuick(true);
+    try {
+      const pos = await getCurrentPosition();
+      const resolved = await reverseGeocode(pos);
+      // reverseGeocode only returns null when Mapbox is unconfigured; fall back to
+      // a coordinate label so the address field is non-empty and the order isn't
+      // blocked by the "address required" check.
+      applyResolvedAddress(
+        resolved ?? {
+          line1: `${pos.lat.toFixed(5)}, ${pos.lng.toFixed(5)}`,
+          lat: pos.lat,
+          lng: pos.lng,
+        },
+      );
+    } catch (e) {
+      const reason: GeolocationFailure = e instanceof GeolocationError ? e.reason : 'unavailable';
+      setGeoError(geoFailureMessage(reason));
+    } finally {
+      setLocatingQuick(false);
+    }
+  };
+
   // Live delivery quote whenever we know the dropoff coordinates.
   React.useEffect(() => {
     if (channel !== 'delivery' || !addressCoords) {
@@ -200,12 +303,21 @@ export function CheckoutView({ branchId, base }: Props) {
     return unsub;
   }, []);
 
-  React.useEffect(() => {
-    if (hydrated && lines.length === 0) router.replace(`${base}/cart`);
-  }, [hydrated, lines.length, router, base]);
-
   if (!hydrated) return null;
-  if (lines.length === 0) return null;
+  if (lines.length === 0) {
+    return (
+      <div className="container max-w-2xl pt-12 text-center">
+        <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-primary/10 text-primary">
+          <ShoppingBag className="h-7 w-7" />
+        </div>
+        <h1 className="mt-4 font-display text-2xl font-bold">Your cart is empty</h1>
+        <p className="mt-1 text-muted-foreground">Add a few items from the menu to check out.</p>
+        <Button variant="gradient" size="lg" className="mt-5" onClick={() => router.push(base)}>
+          Browse the menu
+        </Button>
+      </div>
+    );
+  }
 
   const applyPromo = async () => {
     if (!promoCode.trim()) return;
@@ -242,6 +354,40 @@ export function CheckoutView({ branchId, base }: Props) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    // Validate every field up front, then focus the first problem.
+    const errs: Record<string, string> = {};
+    if (!name.trim()) errs.name = t('checkout.errors.nameRequired');
+    const phoneDigits = phone.replace(/\D/g, '');
+    if (!phone.trim()) errs.phone = t('checkout.errors.phoneRequired');
+    else if (phoneDigits.length < 10) errs.phone = t('checkout.errors.phoneInvalid');
+    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()))
+      errs.email = t('checkout.errors.emailInvalid');
+    if (channel === 'delivery') {
+      if (!address.trim()) errs.address = t('checkout.errors.addressRequired');
+      else if (enteringNewAddress && !addressCoords)
+        errs.address = t('checkout.errors.addressUnconfirmed');
+    }
+    if (channel === 'dine_in' && !dineInTable.trim()) errs.table = t('checkout.errors.tableRequired');
+    if (Object.keys(errs).length > 0) {
+      setFieldErrors(errs);
+      const firstEl = errs.name
+        ? nameRef.current
+        : errs.phone
+          ? phoneRef.current
+          : errs.email
+            ? emailRef.current
+            : errs.address
+              ? addressSectionRef.current
+              : errs.table
+                ? tableRef.current
+                : null;
+      firstEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (firstEl && firstEl instanceof HTMLInputElement) firstEl.focus({ preventScroll: true });
+      return;
+    }
+    setFieldErrors({});
+
     if (outOfRange) {
       setError('This address is outside the delivery area.');
       return;
@@ -322,6 +468,7 @@ export function CheckoutView({ branchId, base }: Props) {
           postal_code: addressMeta?.postal_code ?? null,
           lat: addressCoords?.lat ?? null,
           lng: addressCoords?.lng ?? null,
+          notes: addressNotes.trim() || null,
           is_default: savedAddresses.length === 0,
         }).catch(() => undefined);
       }
@@ -393,14 +540,50 @@ export function CheckoutView({ branchId, base }: Props) {
           <h2 className="font-display text-lg font-semibold">{t('checkout.contactInfo')}</h2>
           <div className="mt-3 grid gap-3">
             <Field label={t('checkout.name')}>
-              <input value={name} onChange={(e) => setName(e.target.value)} required autoComplete="name" className="input" />
+              <input
+                ref={nameRef}
+                value={name}
+                onChange={(e) => { setName(e.target.value); clearFieldError('name'); }}
+                required
+                autoComplete="name"
+                placeholder={t('checkout.namePlaceholder')}
+                aria-invalid={!!fieldErrors.name}
+                className="input"
+                style={fieldErrors.name ? { borderColor: 'hsl(var(--danger))' } : undefined}
+              />
+              {fieldErrors.name && <p className="mt-1 text-xs text-danger">{fieldErrors.name}</p>}
             </Field>
             <Field label={t('checkout.phone')}>
-              <input value={phone} onChange={(e) => setPhone(e.target.value)} required type="tel" inputMode="tel" autoComplete="tel" placeholder="(555) 234-5678" className="input" />
+              <input
+                ref={phoneRef}
+                value={phone}
+                onChange={(e) => { setPhone(e.target.value); clearFieldError('phone'); }}
+                required
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                placeholder={t('checkout.phonePlaceholder')}
+                aria-invalid={!!fieldErrors.phone}
+                className="input"
+                style={fieldErrors.phone ? { borderColor: 'hsl(var(--danger))' } : undefined}
+              />
+              {fieldErrors.phone && <p className="mt-1 text-xs text-danger">{fieldErrors.phone}</p>}
             </Field>
             <div className="sm:col-span-2">
-              <Field label="Email (for receipt)">
-                <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" inputMode="email" autoComplete="email" placeholder="you@example.com" className="input" />
+              <Field label={t('checkout.emailLabel')}>
+                <input
+                  ref={emailRef}
+                  value={email}
+                  onChange={(e) => { setEmail(e.target.value); clearFieldError('email'); }}
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  placeholder={t('checkout.emailPlaceholder')}
+                  aria-invalid={!!fieldErrors.email}
+                  className="input"
+                  style={fieldErrors.email ? { borderColor: 'hsl(var(--danger))' } : undefined}
+                />
+                {fieldErrors.email && <p className="mt-1 text-xs text-danger">{fieldErrors.email}</p>}
               </Field>
             </div>
           </div>
@@ -464,37 +647,71 @@ export function CheckoutView({ branchId, base }: Props) {
               </div>
             )}
             {enteringNewAddress && (
-              <Field label={t('checkout.address')}>
-                <AddressAutofillInput
-                  value={address}
-                  onChange={(text) => {
-                    setAddress(text);
-                    // Mapbox fills the input to the resolved line1 (firing onChange
-                    // right after onResolved). Only invalidate the pin when the text
-                    // actually diverges from the resolved address — otherwise the
-                    // autofill's own input event would wipe the coords we just set.
-                    if (text !== resolvedAddressRef.current) {
-                      resolvedAddressRef.current = null;
-                      setAddressCoords(null);
-                      setAddressMeta(null);
-                    }
-                  }}
-                  onResolved={(a) => {
-                    resolvedAddressRef.current = a.line1;
-                    setAddressCoords({ lat: a.lat, lng: a.lng });
-                    setAddressMeta({
-                      line2: a.line2,
-                      city: a.city,
-                      state: a.state,
-                      postal_code: a.postal_code,
-                    });
-                  }}
-                  required
-                  placeholder={t('checkout.addressPlaceholder')}
-                  inputClassName="input"
-                  aria-label={t('checkout.address')}
-                />
-              </Field>
+              <div ref={addressSectionRef}>
+                <Field label={t('checkout.address')}>
+                  <AddressAutofillInput
+                    value={address}
+                    onChange={(text) => {
+                      setAddress(text);
+                      clearFieldError('address');
+                      // Mapbox fills the input to the resolved line1 (firing onChange
+                      // right after onResolved). Only invalidate the pin when the text
+                      // actually diverges from the resolved address — otherwise the
+                      // autofill's own input event would wipe the coords we just set.
+                      if (text !== resolvedAddressRef.current) {
+                        resolvedAddressRef.current = null;
+                        setAddressCoords(null);
+                        setAddressMeta(null);
+                      }
+                    }}
+                    onResolved={(a) => {
+                      resolvedAddressRef.current = a.line1;
+                      setAddressCoords({ lat: a.lat, lng: a.lng });
+                      setAddressMeta({
+                        line2: a.line2,
+                        city: a.city,
+                        state: a.state,
+                        postal_code: a.postal_code,
+                      });
+                      clearFieldError('address');
+                    }}
+                    required
+                    placeholder={t('checkout.addressPlaceholder')}
+                    inputClassName="input"
+                    aria-label={t('checkout.address')}
+                  />
+                </Field>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="md"
+                    leftIcon={<MapIcon className="h-4 w-4" />}
+                    onClick={() => setPickerOpen(true)}
+                  >
+                    {t('checkout.setOnMap')}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="md"
+                    leftIcon={<LocateFixed className="h-4 w-4" />}
+                    loading={locatingQuick}
+                    onClick={handleQuickCurrentLocation}
+                  >
+                    {t('checkout.useCurrentLocation')}
+                  </Button>
+                </div>
+                {geoError && <p className="mt-2 text-xs text-warning">{geoError}</p>}
+                {fieldErrors.address && (
+                  <p className="mt-2 text-xs font-medium text-danger">{fieldErrors.address}</p>
+                )}
+                {addressCoords && resolvedAddressRef.current && (
+                  <p className="mt-2 flex items-center gap-1 text-xs font-medium text-success">
+                    <MapPin className="h-3.5 w-3.5" /> Location pinned
+                  </p>
+                )}
+              </div>
             )}
             {quoting && (
               <p className="mt-2 text-xs text-muted-foreground">Calculating delivery…</p>
@@ -543,12 +760,16 @@ export function CheckoutView({ branchId, base }: Props) {
               Enter your table number so we can bring your food over.
             </p>
             <input
+              ref={tableRef}
               value={dineInTable}
-              onChange={(e) => setDineInTable(e.target.value)}
+              onChange={(e) => { setDineInTable(e.target.value); clearFieldError('table'); }}
               placeholder="Table number"
               inputMode="numeric"
+              aria-invalid={!!fieldErrors.table}
               className="input mt-3"
+              style={fieldErrors.table ? { borderColor: 'hsl(var(--danger))' } : undefined}
             />
+            {fieldErrors.table && <p className="mt-1 text-xs text-danger">{fieldErrors.table}</p>}
           </Card>
         )}
 
@@ -737,6 +958,24 @@ export function CheckoutView({ branchId, base }: Props) {
           </Button>
         </motion.div>
       </form>
+
+      <Sheet
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        side="bottom"
+        title={t('checkout.picker.title')}
+      >
+        <LocationPicker
+          className="h-[70vh]"
+          initial={addressCoords}
+          fallbackCenter={branchCenter}
+          onConfirm={(a) => {
+            applyResolvedAddress(a);
+            setPickerOpen(false);
+          }}
+          labels={pickerLabels(t)}
+        />
+      </Sheet>
 
       <style jsx global>{`
         .input {

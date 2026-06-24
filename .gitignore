@@ -38,3 +38,6 @@ coverage/
 # Supabase
 supabase/.branches/
 supabase/.temp/
+
+# Tooling / agent working dirs
+_sp_skills/

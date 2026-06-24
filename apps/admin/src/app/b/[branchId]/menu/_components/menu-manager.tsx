@@ -11,7 +11,7 @@ import { getBrowserClient } from '@favornoms/database/client';
 import { listCategories, listMenuItems } from '@favornoms/database/queries';
 import { Badge, Button, Card, IconButton, Sheet } from '@favornoms/ui';
 import { MenuReorder } from './menu-reorder';
-import { ItemModifierEditor } from './item-modifier-editor';
+import { ItemModifierEditor, type ItemModifierEditorHandle } from './item-modifier-editor';
 
 interface Props {
   branchId: string;
@@ -235,6 +235,7 @@ function ItemEditor({
   const [newCatName, setNewCatName] = React.useState('');
   const [newCatEmoji, setNewCatEmoji] = React.useState('🍽️');
   const [creatingCat, setCreatingCat] = React.useState(false);
+  const modifierRef = React.useRef<ItemModifierEditorHandle>(null);
 
   const addAllergen = (raw: string) => {
     const v = raw.trim();
@@ -311,6 +312,15 @@ function ItemEditor({
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Catch half-built option groups before we create anything, so a blank or
+    // optionless group never reaches the DB (and the customer menu).
+    if (!item) {
+      const draftError = modifierRef.current?.validateDraft();
+      if (draftError) {
+        alert(draftError);
+        return;
+      }
+    }
     setSaving(true);
     try {
       const supabase = getBrowserClient();
@@ -329,21 +339,37 @@ function ItemEditor({
         low_stock_threshold: trackStock ? Number(lowStockThreshold) : 5,
         allergens,
       };
-      const { error: dbErr } = item
+      // Insert needs the new id back so we can attach any option groups the user
+      // built inline (draft mode); update keeps its original no-select shape.
+      const res = item
         ? await supabase.from('menu_items').update(payload).eq('id', item.id)
-        : await supabase.from('menu_items').insert(payload);
-      if (dbErr) {
+        : await supabase.from('menu_items').insert(payload).select('id').single();
+      if (res.error) {
         const { describePlanError } = await import('@favornoms/database/queries');
-        const planErr = describePlanError(dbErr);
+        const planErr = describePlanError(res.error);
         if (planErr) {
           alert(
             `You've reached your plan's limit (${planErr.current} of ${planErr.limit} items). ` +
               `Upgrade your subscription in Preferences → Plan to add more.`,
           );
         } else {
-          alert(dbErr.message);
+          alert(res.error.message);
         }
         return;
+      }
+      // New item: persist the draft option groups now that it has an id.
+      if (!item) {
+        const newId = (res.data as { id: string } | null)?.id;
+        if (newId) {
+          const persistRes = await modifierRef.current?.persistDraft(newId);
+          if (persistRes?.error) {
+            alert(
+              `The item was saved and any option groups that succeeded were kept, ` +
+                `but one couldn't be saved: ${persistRes.error}\n` +
+                `Reopen the item to finish its options.`,
+            );
+          }
+        }
       }
       onSaved();
     } catch (err) {
@@ -553,14 +579,7 @@ function ItemEditor({
         </label>
       </div>
       <div className="rounded-xl border border-border bg-muted/20 p-3">
-        {item ? (
-          <ItemModifierEditor branchId={branchId} itemId={item.id} />
-        ) : (
-          <p className="text-xs text-muted-foreground">
-            <span className="font-medium text-foreground">Options (Size, Add-ons…)</span> — save this
-            item first, then reopen it to add option groups.
-          </p>
-        )}
+        <ItemModifierEditor ref={modifierRef} branchId={branchId} itemId={item?.id ?? null} />
       </div>
 
       <Button

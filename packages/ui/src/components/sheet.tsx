@@ -16,6 +16,11 @@ interface SheetProps {
   hideCloseButton?: boolean;
 }
 
+// Stack of currently-open sheets so Escape only dismisses the topmost one
+// (otherwise a sheet opened over another — e.g. a map picker over a form — would
+// close both on a single Escape).
+const openSheetStack: symbol[] = [];
+
 export function Sheet({
   open,
   onClose,
@@ -25,6 +30,9 @@ export function Sheet({
   className,
   hideCloseButton,
 }: SheetProps) {
+  const idRef = React.useRef<symbol | null>(null);
+  if (idRef.current === null) idRef.current = Symbol('sheet');
+
   React.useEffect(() => {
     if (!open) return;
     const original = document.body.style.overflow;
@@ -34,9 +42,25 @@ export function Sheet({
     };
   }, [open]);
 
+  // Register in the open-sheet stack. Deps are [open] only (NOT onClose) so a
+  // parent re-render that recreates onClose can't reorder the stack.
   React.useEffect(() => {
     if (!open) return;
-    const handler = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const id = idRef.current!;
+    openSheetStack.push(id);
+    return () => {
+      const i = openSheetStack.lastIndexOf(id);
+      if (i >= 0) openSheetStack.splice(i, 1);
+    };
+  }, [open]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (openSheetStack[openSheetStack.length - 1] !== idRef.current) return; // topmost only
+      onClose();
+    };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [open, onClose]);

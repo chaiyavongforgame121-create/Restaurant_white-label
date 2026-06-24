@@ -15,6 +15,12 @@
 //     v2 does NOT overwrite distance_km (v1 used to clobber it with the
 //     driver→branch distance, which now lives only in dispatch_history).
 //   • Trims dispatch_history to the last 10 entries.
+// v2.1 (2026-06-23):
+//   • Only EXPLICIT rejects exclude a driver from re-offers for a delivery; an
+//     expired offer no longer does (so a lone/few-driver branch keeps re-offering
+//     the same rider until accept/reject/maxAttempts).
+//   • POST { reset: true } clears dispatch_attempts + dispatch_history so the
+//     kitchen can re-dispatch an exhausted order from scratch.
 // v1 history: single-shot nearest-driver assign; source committed 2026-06-11
 //   after living only on the remote.
 
@@ -37,12 +43,19 @@ function trimHistory(history: unknown, keep: number): HistoryEntry[] {
   return arr.length > keep ? arr.slice(arr.length - keep) : arr;
 }
 
-function triedDriverIds(history: unknown): string[] {
+// Only drivers who EXPLICITLY declined are excluded from re-offers for this
+// delivery. NOT excluded: a server-side expiry (type:'offer_expired') OR a
+// client-side countdown timeout (type:'rejected' but reason:'timeout') — in both
+// cases the driver simply didn't respond in time, so they stay eligible. This
+// makes single-/few-driver branches work: the lone rider keeps getting re-offered
+// until they accept, deliberately decline, or maxAttempts is hit.
+function rejectedDriverIds(history: unknown): string[] {
   const arr = Array.isArray(history) ? (history as HistoryEntry[]) : [];
   const ids = new Set<string>();
   for (const e of arr) {
-    const id = e?.driver_id;
-    if (typeof id === 'string') ids.add(id);
+    if (e?.type === 'rejected' && e?.reason !== 'timeout' && typeof e?.driver_id === 'string') {
+      ids.add(e.driver_id as string);
+    }
   }
   return [...ids];
 }
@@ -70,8 +83,34 @@ Deno.serve(async (req) => {
     .eq('id', deliveryId)
     .single();
   if (dErr || !delivery) return json(404, { error: 'delivery_not_found' });
-  if (delivery.status !== 'pending' && delivery.status !== 'dispatching') {
-    return json(409, { error: 'delivery_not_dispatchable', status: delivery.status });
+
+  let status = delivery.status as string;
+  let attempts = Number(delivery.dispatch_attempts ?? 0);
+  let history0: unknown = delivery.dispatch_history;
+
+  // Manual "re-dispatch from scratch" (kitchen): clear the attempt counter and
+  // history so an exhausted order can be offered again — including to drivers who
+  // previously rejected. Never touches a job already accepted / in flight.
+  if (body.reset && !['picked_up', 'in_transit', 'delivered', 'cancelled'].includes(status)) {
+    await admin
+      .from('deliveries')
+      .update({
+        dispatch_attempts: 0,
+        dispatch_history: [],
+        status: 'dispatching',
+        driver_id: null,
+        offered_at: null,
+        offer_expires_at: null,
+        accepted_at: null,
+      })
+      .eq('id', delivery.id);
+    status = 'dispatching';
+    attempts = 0;
+    history0 = [];
+  }
+
+  if (status !== 'pending' && status !== 'dispatching') {
+    return json(409, { error: 'delivery_not_dispatchable', status });
   }
 
   const { data: branch } = await admin
@@ -87,7 +126,7 @@ Deno.serve(async (req) => {
   const driverPerKmPay = Number(settings.driver_per_km_pay ?? 0.8);
 
   // Exhausted? Alert branch staff and stop.
-  if ((delivery.dispatch_attempts ?? 0) >= maxAttempts) {
+  if (attempts >= maxAttempts) {
     await admin.from('notifications_outbox').insert({
       branch_id: delivery.branch_id,
       recipient_type: 'staff',
@@ -99,21 +138,21 @@ Deno.serve(async (req) => {
     return json(503, { error: 'max_attempts_reached' });
   }
 
-  const exclude = triedDriverIds(delivery.dispatch_history);
+  const exclude = rejectedDriverIds(history0);
   const { data: candidates } = await admin.rpc('find_dispatch_candidates', {
     p_branch_id: delivery.branch_id,
     p_radius_km: radiusKm,
     p_exclude: exclude,
   }) as unknown as { data: Array<{ driver_id: string; distance_km: number; score: number }> | null };
 
-  const history = trimHistory(delivery.dispatch_history, 9);
+  const history = trimHistory(history0, 9);
 
   if (!Array.isArray(candidates) || candidates.length === 0) {
     history.push({ attempted_at: new Date().toISOString(), result: 'no_drivers', excluded: exclude.length });
     await admin
       .from('deliveries')
       .update({
-        dispatch_attempts: (delivery.dispatch_attempts ?? 0) + 1,
+        dispatch_attempts: attempts + 1,
         dispatch_history: history,
         status: 'dispatching',
       })
@@ -143,7 +182,7 @@ Deno.serve(async (req) => {
       offered_at: now.toISOString(),
       offer_expires_at: expiresAt.toISOString(),
       driver_earnings: earnings,
-      dispatch_attempts: (delivery.dispatch_attempts ?? 0) + 1,
+      dispatch_attempts: attempts + 1,
       dispatch_history: history,
     })
     .eq('id', delivery.id)

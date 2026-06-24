@@ -39,10 +39,6 @@ export function CartView({ branchId }: { branchId: string }) {
 
   if (!hydrated) return <div className="container max-w-2xl pt-4 text-sm text-muted-foreground">Loading…</div>;
 
-  const deliveryFee = lines.length > 0 ? 40 : 0;
-  const serviceFee = lines.length > 0 ? Math.round(subtotal * 0.05) : 0;
-  const total = subtotal + deliveryFee + serviceFee;
-
   return (
     <div className="container max-w-2xl pt-4">
       <header className="mb-5 flex items-center gap-3">
@@ -176,12 +172,9 @@ export function CartView({ branchId }: { branchId: string }) {
 
           <Card className="p-4">
             <dl className="space-y-2 text-sm">
-              <Row label={t('cart.subtotal')} value={formatCurrency(subtotal)} />
-              <Row label={t('cart.deliveryFee')} value={formatCurrency(deliveryFee)} />
-              <Row label={t('cart.serviceFee')} value={formatCurrency(serviceFee)} />
-              <div className="my-2 h-px bg-border" />
-              <Row label={t('cart.total')} value={formatCurrency(total)} bold />
+              <Row label={t('cart.subtotal')} value={formatCurrency(subtotal)} bold />
             </dl>
+            <p className="mt-2 text-xs text-muted-foreground">{t('cart.feesAtCheckout')}</p>
           </Card>
         </div>
       )}
@@ -197,7 +190,7 @@ export function CartView({ branchId }: { branchId: string }) {
           >
             <Link href={`${base}/checkout`}>
               <Button variant="gradient" size="xl" fullWidth>
-                {t('cart.checkout')} · {formatCurrency(total)}
+                {t('cart.checkout')} · {formatCurrency(subtotal)}
               </Button>
             </Link>
           </motion.div>

@@ -3,20 +3,116 @@
 import * as React from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  Bike, ChefHat, Coffee, Maximize2, ShoppingBag, Store, Undo2, Volume2, VolumeX,
+  AlertTriangle, ArrowRight, Armchair, Bike, CalendarClock, Check, ChefHat, Clock,
+  Flame, Layers, Loader2, Maximize2, Minimize2, MoreVertical, RotateCcw, ShoppingBag, Undo2,
+  Volume2, VolumeX, X,
 } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
-import { useRouter, usePathname } from 'next/navigation';
-import { Badge, Button, IconButton } from '@favornoms/ui';
 import { OpsToggles } from './ops-toggles';
+
+/* ──────────────────────────────────────────────────────────────────────────
+   "Sunset" theme — warm, light, gradient. Kept local to the kitchen surface so
+   it never fights the global app theme. (Validated with the user 2026-06-17.)
+   ──────────────────────────────────────────────────────────────────────── */
+const SUN = {
+  page: '#FCF3EA',
+  header: 'linear-gradient(120deg,#FF8A1E,#FF5C5C)',
+  panel: 'rgba(255,255,255,.55)',
+  card: '#FFFFFF',
+  cardBorder: 'rgba(170,100,55,.13)',
+  line: 'rgba(170,100,55,.10)',
+  text: '#3E2A1E',
+  muted: '#9C8470',
+  faint: '#B8A593',
+  qty: '#FF5E2C',
+  accent: '#FF6B2C',
+  accentBg: 'rgba(255,107,44,.14)',
+  accentTx: '#BE4A12',
+};
+
+const LANES = [
+  { key: 'new', title: 'NEW', grad: 'linear-gradient(120deg,#FFE3A8,#FFCB6A)', tone: '#9A6206' },
+  { key: 'cooking', title: 'COOKING', grad: 'linear-gradient(120deg,#FFC39A,#FF9166)', tone: '#A83C12' },
+  { key: 'ready', title: 'READY', grad: 'linear-gradient(120deg,#A9EDC9,#5FD89B)', tone: '#13794C' },
+] as const;
+
+const CHAN: Record<string, { Icon: typeof Bike; bg: string; c: string; label: string }> = {
+  dine_in: { Icon: Armchair, bg: '#FFE3D6', c: '#C2491F', label: 'Dine-in' },
+  pickup: { Icon: ShoppingBag, bg: '#FCEBC6', c: '#9A6A0A', label: 'Pickup' },
+  delivery: { Icon: Bike, bg: '#E3ECFF', c: '#2E5FB0', label: 'Delivery' },
+  qr_ordering: { Icon: Armchair, bg: '#FFE3D6', c: '#C2491F', label: 'QR table' },
+};
+
+// What the primary button does, keyed by the order's CURRENT status.
+const ACTION: Record<string, { next: string; label: string; Icon: typeof Flame; grad: string; tx: string }> = {
+  pending: { next: 'confirmed', label: 'Accept order', Icon: Check, grad: 'linear-gradient(135deg,#FF9326,#FF5C5C)', tx: '#fff' },
+  confirmed: { next: 'preparing', label: 'Start cooking', Icon: Flame, grad: 'linear-gradient(135deg,#FF9326,#FF5C5C)', tx: '#fff' },
+  preparing: { next: 'ready', label: 'Mark ready', Icon: Check, grad: 'linear-gradient(135deg,#34D98C,#12A268)', tx: '#fff' },
+  ready: { next: 'completed', label: 'Bump', Icon: ArrowRight, grad: '#F3E9E0', tx: '#5A4636' },
+};
+const NEXT_LABEL: Record<string, string> = { confirmed: 'Accepted', preparing: 'Cooking', ready: 'Ready', completed: 'Bumped' };
+
+type Tier = { tier: string; spine: string; pill: string; pc: string; pulse: boolean; ring: boolean };
+const TIERS: Record<string, Omit<Tier, 'tier'>> = {
+  fresh: { spine: '#E3D8CE', pill: '#F1ECE6', pc: '#9A8676', pulse: false, ring: false },
+  work: { spine: 'linear-gradient(180deg,#FBC85A,#F5A623)', pill: '#FCEFCF', pc: '#9A6A0A', pulse: false, ring: false },
+  warn: { spine: 'linear-gradient(180deg,#F7A641,#F2802E)', pill: '#FBE1BC', pc: '#A85F00', pulse: false, ring: false },
+  late: { spine: 'linear-gradient(180deg,#FB7185,#EF5350)', pill: '#FBD7D4', pc: '#BE362E', pulse: true, ring: false },
+  crit: { spine: 'linear-gradient(180deg,#FF6B6B,#E5484D)', pill: 'linear-gradient(135deg,#FF6B6B,#E5484D)', pc: '#fff', pulse: true, ring: true },
+};
+
+function agingTier(sec: number, lane: string): Tier {
+  let t: string;
+  if (lane === 'ready') t = sec < 180 ? 'fresh' : sec < 300 ? 'warn' : 'late';
+  else t = sec < 300 ? 'fresh' : sec < 600 ? 'work' : sec < 900 ? 'warn' : sec < 1200 ? 'late' : 'crit';
+  return { tier: t, ...TIERS[t]! };
+}
+
+// created_at is timestamptz (ISO) — never seconds. An absurd value (negative skew
+// or > 12h, e.g. stale seed rows) means bad data, so clamp it to "fresh" rather
+// than render "23889m". No ×1000 normalisation — that would corrupt real stamps.
+function safeElapsedSec(fromMs: number, now: number): number {
+  if (!Number.isFinite(fromMs)) return 0;
+  const raw = Math.floor((now - fromMs) / 1000);
+  return raw < 0 || raw > 12 * 3600 ? 0 : raw;
+}
+function fmtTimer(sec: number): string {
+  if (sec < 3600) return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+  return `${Math.floor(sec / 3600)}h ${Math.floor((sec % 3600) / 60)}m`;
+}
+
+function parseMods(m: unknown): { label: string; remove: boolean }[] {
+  let arr: unknown[] = [];
+  if (Array.isArray(m)) arr = m;
+  else if (m && typeof m === 'object') arr = Object.values(m as Record<string, unknown>);
+  const out: { label: string; remove: boolean }[] = [];
+  for (const it of arr) {
+    if (it == null) continue;
+    if (typeof it === 'string') { out.push({ label: it, remove: /^(no|without|no-)\b/i.test(it) }); continue; }
+    if (typeof it === 'object') {
+      const o = it as Record<string, unknown>;
+      const name = (o.name ?? o.label ?? o.option_name ?? o.title ?? o.value) as string | undefined;
+      if (!name) continue;
+      const price = Number(o.price ?? o.price_delta ?? o.extra_price ?? 0);
+      const label = price > 0 ? `${name} (+$${price.toFixed(2)})` : String(name);
+      out.push({ label, remove: /^(no|without|no-)\b/i.test(String(name)) });
+    }
+  }
+  return out;
+}
+
+const ALLERGY_RE = /allerg|peanut|\bnut\b|gluten|shellfish|dairy|lactose|sesame|\bsoy\b|vegan|coeliac|celiac/i;
+
+/* ──────────────────────────────────────────────────────────────────────── */
 
 interface OrderItem {
   id: string;
   item_name: string;
   quantity: number;
   notes?: string | null;
-  prep_status: string;
+  prep_status?: string | null;
   station?: string | null;
+  modifiers?: unknown;
 }
 interface Order {
   id: string;
@@ -26,11 +122,12 @@ interface Order {
   created_at: string;
   customer_name?: string | null;
   customer_notes?: string | null;
-  /** Scheduled order on hold — released by cron at scheduled_for − prep_time. */
+  kitchen_notes?: string | null;
   held?: boolean;
   scheduled_for?: string | null;
+  table_id?: string | null;
+  tables?: { table_number: string; display_name: string | null } | null;
   order_items: OrderItem[];
-  /** Delivery channel: the rider's dispatch status, shown on the ready card. */
   deliveries?: { status: string; driver_id: string | null; accepted_at: string | null }[];
 }
 
@@ -42,580 +139,604 @@ interface Props {
   activeStation: string | null;
 }
 
-const channelIcon = {
-  dine_in: Store,
-  pickup: ShoppingBag,
-  delivery: Bike,
-  qr_ordering: Coffee,
-} as const;
+const ACTIVE_STATUSES = ['pending', 'confirmed', 'preparing', 'ready'];
 
 export function KitchenView({ branchId, branchName, initialOrders, stations, activeStation }: Props) {
   const [orders, setOrders] = React.useState<Order[]>(initialOrders);
+  const [station, setStation] = React.useState<string | null>(activeStation);
   const [soundOn, setSoundOn] = React.useState(true);
   const [now, setNow] = React.useState(() => Date.now());
+  const [paused, setPaused] = React.useState(false);
+  const [isFs, setIsFs] = React.useState(false);
+  const [scheduledOpen, setScheduledOpen] = React.useState(false);
+  const [batchOpen, setBatchOpen] = React.useState(false);
+  const [toast, setToast] = React.useState<{ text: string; onUndo: (() => void) | null } | null>(null);
+
   const prevCountRef = React.useRef(initialOrders.length);
+  const mountNowRef = React.useRef(Date.now());
+  const readyAtRef = React.useRef<Record<string, number>>({});
+  const toastTimer = React.useRef<number | null>(null);
 
-  // Filter orders to those that have items on this station (or all if no station)
-  const filteredOrders = React.useMemo(() => {
-    if (!activeStation) return orders;
-    return orders
-      .map((o) => ({
-        ...o,
-        order_items: o.order_items.filter((it) => it.station === activeStation),
-      }))
-      .filter((o) => o.order_items.length > 0);
-  }, [orders, activeStation]);
+  const supa = React.useCallback(() => getBrowserClient(), []);
 
-  // Refresh "elapsed" every 5s
+  /* tick every second so mm:ss is smooth and aging recolours live */
   React.useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 5000);
-    return () => clearInterval(id);
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
   }, []);
 
-  // Realtime subscribe — orders + order_items
+  /* fullscreen state mirror */
+  React.useEffect(() => {
+    const h = () => setIsFs(Boolean(document.fullscreenElement));
+    document.addEventListener('fullscreenchange', h);
+    return () => document.removeEventListener('fullscreenchange', h);
+  }, []);
+
+  /* realtime: orders INSERT/UPDATE + deliveries */
   React.useEffect(() => {
     const supabase = getBrowserClient();
     const channel = supabase
       .channel(`kitchen-branch:${branchId}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'orders', filter: `branch_id=eq.${branchId}` },
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders', filter: `branch_id=eq.${branchId}` },
         async (payload) => {
           const row = payload.new as Order;
-          // Fetch its items
           const { data: items } = await supabase
             .from('order_items')
-            .select('id, item_name, quantity, notes, prep_status, station')
+            .select('id, item_name, quantity, notes, prep_status, station, modifiers')
             .eq('order_id', row.id);
-          setOrders((curr) => [...curr, { ...row, order_items: items ?? [] }]);
-        },
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'orders', filter: `branch_id=eq.${branchId}` },
+          let tables: Order['tables'] = null;
+          if (row.table_id) {
+            const { data: t } = await supabase
+              .from('tables').select('table_number, display_name').eq('id', row.table_id).maybeSingle();
+            tables = (t as Order['tables']) ?? null;
+          }
+          setOrders((curr) => (curr.some((o) => o.id === row.id) ? curr : [...curr, { ...row, order_items: items ?? [], tables }]));
+        })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders', filter: `branch_id=eq.${branchId}` },
         (payload) => {
           const updated = payload.new as Order;
           setOrders((curr) => {
-            if (!['pending', 'confirmed', 'preparing', 'ready'].includes(updated.status)) {
-              return curr.filter((o) => o.id !== updated.id);
-            }
-            // Preserve the joined deliveries we already have (the orders payload omits it).
-            return curr.map((o) => (o.id === updated.id ? { ...o, ...updated, deliveries: o.deliveries } : o));
+            if (!ACTIVE_STATUSES.includes(updated.status)) return curr.filter((o) => o.id !== updated.id);
+            return curr.map((o) => (o.id === updated.id ? { ...o, ...updated, tables: o.tables ?? updated.tables, order_items: o.order_items, deliveries: o.deliveries } : o));
           });
-        },
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'deliveries', filter: `branch_id=eq.${branchId}` },
+        })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'deliveries', filter: `branch_id=eq.${branchId}` },
         (payload) => {
           const d = payload.new as { order_id?: string; status?: string; driver_id?: string | null; accepted_at?: string | null };
           if (!d?.order_id) return;
-          setOrders((curr) =>
-            curr.map((o) =>
-              o.id === d.order_id
-                ? { ...o, deliveries: [{ status: d.status ?? 'pending', driver_id: d.driver_id ?? null, accepted_at: d.accepted_at ?? null }] }
-                : o,
-            ),
-          );
-        },
-      )
+          setOrders((curr) => curr.map((o) => (o.id === d.order_id
+            ? { ...o, deliveries: [{ status: d.status ?? 'pending', driver_id: d.driver_id ?? null, accepted_at: d.accepted_at ?? null }] }
+            : o)));
+        })
       .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [branchId]);
 
-  // Audio alert when new order arrives
+  /* new-order beep — gated to the active station, with an aging escalation tone */
   React.useEffect(() => {
-    if (!soundOn) return;
-    if (orders.length > prevCountRef.current) {
-      // Beep with WebAudio (no asset file needed)
-      try {
-        const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.frequency.value = 880;
-        gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + 0.01);
-        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.4);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.4);
-      } catch {
-        // ignore — autoplay may be blocked until user interacts
-      }
-    }
+    if (orders.length > prevCountRef.current && soundOn) beep(880);
     prevCountRef.current = orders.length;
   }, [orders.length, soundOn]);
 
-  const goFullscreen = async () => {
-    try {
-      await document.documentElement.requestFullscreen();
-    } catch {
-      // ignore
-    }
+  /* keyboard: m = mute, f = fullscreen, Esc = close overlays */
+  React.useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
+      if (e.key === 'm' || e.key === 'M') setSoundOn((s) => !s);
+      else if (e.key === 'f' || e.key === 'F') void toggleFs();
+      else if (e.key === 'Escape') { setScheduledOpen(false); setBatchOpen(false); }
+    };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, []);
+
+  const setStationFilter = (s: string | null) => {
+    setStation(s);
+    const url = new URL(window.location.href);
+    if (s) url.searchParams.set('station', s); else url.searchParams.delete('station');
+    window.history.replaceState(null, '', url.toString());
   };
 
-  // Group by status for visual section dividers. Held (scheduled) orders sit in
-  // their own lane until the release cron flips held=false.
-  const sections = {
-    scheduled: filteredOrders.filter((o) => o.held),
-    incoming: filteredOrders.filter((o) => o.status === 'pending' && !o.held),
-    new: filteredOrders.filter((o) => o.status === 'confirmed' && !o.held),
-    making: filteredOrders.filter((o) => o.status === 'preparing'),
-    ready: filteredOrders.filter((o) => o.status === 'ready'),
+  const toggleFs = async () => {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await document.documentElement.requestFullscreen();
+    } catch { /* ignore */ }
   };
+
+  const showToast = (text: string, onUndo: (() => void) | null) => {
+    setToast({ text, onUndo });
+    if (toastTimer.current) window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setToast(null), 6000);
+  };
+
+  /* advance an order one step, with optimistic update, rollback, and an undo toast */
+  const advance = async (order: Order) => {
+    const action = ACTION[order.status];
+    if (!action) return;
+    const prevStatus = order.status;
+    const prevReady = readyAtRef.current[order.id];
+    const snapshot = order;
+    if (action.next === 'ready') readyAtRef.current[order.id] = Date.now();
+
+    setOrders((curr) => curr.map((o) => (o.id === order.id ? { ...o, status: action.next } : o)));
+
+    const { error } = await supa().from('orders').update({ status: action.next }).eq('id', order.id).eq('branch_id', branchId);
+    if (error) {
+      setOrders((curr) => curr.map((o) => (o.id === order.id ? { ...o, status: prevStatus } : o)));
+      if (action.next === 'ready') { if (prevReady != null) readyAtRef.current[order.id] = prevReady; else delete readyAtRef.current[order.id]; }
+      showToast(`Couldn't update #${order.order_number.slice(-4)} — ${error.message}`, null);
+      return;
+    }
+    showToast(`#${order.order_number.slice(-4)} → ${NEXT_LABEL[action.next] ?? action.next}`, async () => {
+      setToast(null);
+      setOrders((curr) => (curr.some((o) => o.id === snapshot.id)
+        ? curr.map((o) => (o.id === snapshot.id ? { ...o, status: prevStatus } : o))
+        : [...curr, { ...snapshot, status: prevStatus }]));
+      if (action.next === 'ready') { if (prevReady != null) readyAtRef.current[snapshot.id] = prevReady; else delete readyAtRef.current[snapshot.id]; }
+      await supa().from('orders').update({ status: prevStatus }).eq('id', snapshot.id).eq('branch_id', branchId);
+    });
+  };
+
+  const reject = async (order: Order) => {
+    const { error } = await supa().rpc('cancel_order', { p_order_id: order.id, p_reason: 'Rejected by kitchen' });
+    if (!error) { setOrders((curr) => curr.filter((o) => o.id !== order.id)); showToast(`#${order.order_number.slice(-4)} rejected`, null); }
+    else showToast(`Reject failed — ${error.message}`, null);
+  };
+
+  const recall = async (order: Order) => {
+    setOrders((curr) => curr.map((o) => (o.id === order.id ? { ...o, status: 'preparing' } : o)));
+    delete readyAtRef.current[order.id];
+    await supa().rpc('recall_order', { p_order_id: order.id });
+    showToast(`#${order.order_number.slice(-4)} recalled to kitchen`, null);
+  };
+
+  const eightySix = async (itemName: string) => {
+    const supabase = supa();
+    const { data: row } = await supabase.from('menu_items').select('id').eq('branch_id', branchId).ilike('name', itemName).maybeSingle();
+    if (!row) { showToast(`Couldn't find "${itemName}" — may already be 86'd`, null); return; }
+    const { error } = await supabase.rpc('toggle_item_availability', { p_item_id: row.id, p_active: false });
+    if (error) { showToast(`86 failed — ${error.message}`, null); return; }
+    showToast(`86'd ${itemName}`, async () => {
+      setToast(null);
+      await supabase.rpc('toggle_item_availability', { p_item_id: row.id, p_active: true });
+    });
+  };
+
+  const dispatchDriver = async (orderId: string, reset = false) => {
+    const { error } = await supa().functions.invoke('dispatch-driver', { body: { order_id: orderId, reset } });
+    if (error) throw error;
+  };
+
+  /* derive lanes (client-side station filter + FIFO) */
+  const matchesStation = React.useCallback(
+    (o: Order) => !station || o.order_items.some((it) => it.station === station),
+    [station],
+  );
+  const visible = orders.filter((o) => !o.held && ACTIVE_STATUSES.includes(o.status) && matchesStation(o));
+  const scheduled = orders.filter((o) => o.held);
+  const byLane: Record<string, Order[]> = {
+    new: visible.filter((o) => o.status === 'pending' || o.status === 'confirmed'),
+    cooking: visible.filter((o) => o.status === 'preparing'),
+    ready: visible.filter((o) => o.status === 'ready'),
+  };
+  const fifo = (a: Order, b: Order) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+  for (const k of Object.keys(byLane)) byLane[k]!.sort(fifo);
+
+  /* station counts + "drowning" (any item on a station is Late/Critical) */
+  const stationStat: Record<string, { count: number; drown: boolean }> = {};
+  for (const s of stations) stationStat[s] = { count: 0, drown: false };
+  for (const o of orders) {
+    if (o.held || !ACTIVE_STATUSES.includes(o.status)) continue;
+    const lane = o.status === 'preparing' ? 'cooking' : o.status === 'ready' ? 'ready' : 'new';
+    const from = lane === 'ready' ? (readyAtRef.current[o.id] ?? mountNowRef.current) : new Date(o.created_at).getTime();
+    const tier = agingTier(safeElapsedSec(from, now), lane).tier;
+    for (const it of o.order_items) {
+      if (it.station && stationStat[it.station]) {
+        stationStat[it.station]!.count += 1;
+        if (tier === 'late' || tier === 'crit') stationStat[it.station]!.drown = true;
+      }
+    }
+  }
+
+  /* batch groups across COOKING (optionally station-filtered) */
+  const batchGroups = React.useMemo(() => {
+    const map = new Map<string, { name: string; qty: number; sources: string[] }>();
+    for (const o of byLane.cooking ?? []) {
+      for (const it of o.order_items) {
+        if (station && it.station !== station) continue;
+        const sig = `${it.item_name}|${parseMods(it.modifiers).map((m) => m.label).sort().join(',')}`;
+        const g = map.get(sig) ?? { name: it.item_name, qty: 0, sources: [] };
+        g.qty += it.quantity;
+        g.sources.push(`#${o.order_number.slice(-4)} ×${it.quantity}`);
+        map.set(sig, g);
+      }
+    }
+    return [...map.values()].sort((a, b) => b.qty - a.qty);
+  }, [byLane.cooking, station]);
 
   return (
-    <div className="flex min-h-dynamic-screen flex-col">
-      <header className="flex items-center justify-between border-b border-border/60 px-6 py-4">
-        <div className="flex items-center gap-4">
-          <div className="grid h-12 w-12 place-items-center rounded-xl bg-gradient-warm text-white shadow-warm">
-            <ChefHat className="h-6 w-6" />
-          </div>
-          <div>
-            <h1 className="font-display text-2xl font-bold">
-              {branchName} · Kitchen
-              {activeStation && (
-                <span className="ml-2 rounded-full bg-primary px-2 py-0.5 align-middle text-xs font-semibold text-primary-foreground">
-                  {activeStation}
-                </span>
-              )}
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              {filteredOrders.length} active · live updates
-              {activeStation ? ` · station "${activeStation}"` : ''}
-            </p>
-          </div>
+    <div className="flex min-h-dynamic-screen flex-col" style={{ background: SUN.page, color: SUN.text }}>
+      {/* header */}
+      <header className="flex items-center gap-3 px-4 py-3 text-white" style={{ background: SUN.header }}>
+        <span className="grid h-9 w-9 place-items-center rounded-[10px]" style={{ background: 'rgba(255,255,255,.24)' }}>
+          <ChefHat className="h-5 w-5" />
+        </span>
+        <div className="leading-tight">
+          <h1 className="text-[15px] font-semibold">{branchName} · Kitchen</h1>
+          <p className="text-[11px] tracking-wide" style={{ opacity: 0.85 }}>
+            {visible.length} active · live{station ? ` · ${station}` : ''}
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <OpsToggles branchId={branchId} />
-          {stations.length > 0 && (
-            <StationFilter stations={stations} active={activeStation} />
+        <div className="ml-auto flex items-center gap-1.5">
+          {scheduled.length > 0 && (
+            <button onClick={() => setScheduledOpen(true)} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium" style={{ background: 'rgba(255,255,255,.24)' }}>
+              <CalendarClock className="h-4 w-4" />{scheduled.length} scheduled
+            </button>
           )}
-          <IconButton label="Toggle sound" onClick={() => setSoundOn((s) => !s)}>
-            {soundOn ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
-          </IconButton>
-          <IconButton label="Fullscreen" onClick={goFullscreen}>
-            <Maximize2 className="h-5 w-5" />
-          </IconButton>
+          <OpsToggles branchId={branchId} onPaused={setPaused} />
+          <HBtn onClick={() => setSoundOn((s) => !s)} label={soundOn ? 'Mute' : 'Unmute'}>
+            {soundOn ? <Volume2 className="h-[18px] w-[18px]" /> : <VolumeX className="h-[18px] w-[18px]" />}
+          </HBtn>
+          <HBtn onClick={toggleFs} label="Fullscreen">{isFs ? <Minimize2 className="h-[18px] w-[18px]" /> : <Maximize2 className="h-[18px] w-[18px]" />}</HBtn>
         </div>
       </header>
 
-      <main className="flex-1 space-y-6 overflow-y-auto p-6">
-        {sections.scheduled.length > 0 && (
-          <section>
-            <div className="mb-3">
-              <h2 className="inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1 text-sm font-bold text-muted-foreground">
-                ⏰ Scheduled · auto-releases before due time
-                <span className="rounded-full bg-card px-2 text-xs">{sections.scheduled.length}</span>
-              </h2>
-            </div>
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {sections.scheduled.map((o) => (
-                <div key={o.id} className="rounded-2xl border border-dashed border-border bg-muted/30 p-4">
-                  <div className="flex items-center justify-between">
-                    <p className="font-display text-base font-bold">{o.order_number}</p>
-                    <span className="text-xs font-semibold text-muted-foreground">
-                      {o.scheduled_for
-                        ? new Date(o.scheduled_for).toLocaleString([], {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })
-                        : ''}
-                    </span>
+      {paused && (
+        <div className="flex items-center gap-2 px-4 py-1.5 text-xs font-medium text-white" style={{ background: 'linear-gradient(120deg,#FF6B6B,#E5484D)' }}>
+          <AlertTriangle className="h-4 w-4" /> Orders paused — customers cannot order while this is on.
+        </div>
+      )}
+
+      {/* station bar */}
+      <div className="flex items-center gap-2 overflow-x-auto px-4 py-2.5" style={{ borderBottom: `1px solid ${SUN.line}` }}>
+        <StationPill label="All" count={visible.length} active={!station} onClick={() => setStationFilter(null)} />
+        {stations.map((s) => (
+          <StationPill key={s} label={s} count={stationStat[s]?.count ?? 0} drown={stationStat[s]?.drown} active={station === s} onClick={() => setStationFilter(s)} />
+        ))}
+        <button onClick={() => setBatchOpen((b) => !b)} className="ml-auto flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium" style={batchOpen ? { background: SUN.accentBg, color: SUN.accentTx, border: `1px solid ${SUN.accent}` } : { color: SUN.muted, border: `1px solid ${SUN.cardBorder}` }}>
+          <Layers className="h-4 w-4" /> Batch view
+        </button>
+      </div>
+
+      {batchOpen && (
+        <div className="px-4 py-2.5" style={{ background: SUN.panel, borderBottom: `1px solid ${SUN.line}` }}>
+          {batchGroups.length === 0 ? (
+            <p className="text-xs" style={{ color: SUN.muted }}>Nothing cooking to batch right now.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {batchGroups.map((g, i) => (
+                <div key={i} className="flex items-center gap-2.5 rounded-xl px-3 py-2" style={{ background: SUN.card, border: `1px solid ${SUN.cardBorder}` }}>
+                  <span className="text-2xl font-semibold tabular-nums" style={{ color: SUN.qty }}>{g.qty}×</span>
+                  <div className="leading-tight">
+                    <div className="text-sm font-medium" style={{ color: SUN.text }}>{g.name}</div>
+                    <div className="text-[11px]" style={{ color: SUN.faint }}>{g.sources.join(' · ')}</div>
                   </div>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {o.order_items.map((it) => `${it.quantity}× ${it.item_name}`).join(' · ')}
-                  </p>
                 </div>
               ))}
             </div>
-          </section>
-        )}
-        <Section title="Incoming — tap to accept" tone="warning" orders={sections.incoming} now={now} onUpdate={updateStatus(branchId, setOrders)} branchId={branchId} />
-        <Section title="Accepted" tone="primary" orders={sections.new} now={now} onUpdate={updateStatus(branchId, setOrders)} branchId={branchId} />
-        <Section title="In the kitchen" tone="accent" orders={sections.making} now={now} onUpdate={updateStatus(branchId, setOrders)} branchId={branchId} />
-        <Section title="Ready for pickup" tone="success" orders={sections.ready} now={now} onUpdate={updateStatus(branchId, setOrders)} branchId={branchId} />
+          )}
+        </div>
+      )}
 
-        {filteredOrders.length === 0 && (
-          <div className="grid place-items-center py-24 text-center">
-            <div>
-              <ChefHat className="mx-auto h-12 w-12 text-muted-foreground" />
-              <p className="mt-3 font-display text-2xl font-semibold">All clear, chef.</p>
-              <p className="text-muted-foreground">
-                {activeStation
-                  ? `No orders for the "${activeStation}" station.`
-                  : 'New orders will appear here in real time.'}
-              </p>
-            </div>
-          </div>
-        )}
+      {/* board */}
+      <main className="grid min-h-0 flex-1 gap-2.5 p-3" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+        {LANES.map((lane) => (
+          <Column key={lane.key} lane={lane} count={byLane[lane.key]!.length}>
+            <AnimatePresence initial={false}>
+              {byLane[lane.key]!.length === 0 ? (
+                <div className="m-auto px-2 py-6 text-center text-xs" style={{ color: SUN.faint }}>All clear, chef.</div>
+              ) : (
+                byLane[lane.key]!.map((order) => (
+                  <OrderCard
+                    key={order.id}
+                    order={order}
+                    lane={lane.key}
+                    now={now}
+                    station={station}
+                    readyAt={readyAtRef.current[order.id] ?? mountNowRef.current}
+                    onAdvance={() => advance(order)}
+                    onReject={() => reject(order)}
+                    onRecall={() => recall(order)}
+                    on86={eightySix}
+                    onDispatch={(reset) => dispatchDriver(order.id, reset)}
+                  />
+                ))
+              )}
+            </AnimatePresence>
+          </Column>
+        ))}
       </main>
+
+      <AnimatePresence>{toast && <UndoToast text={toast.text} onUndo={toast.onUndo} onClose={() => setToast(null)} />}</AnimatePresence>
+      <AnimatePresence>{scheduledOpen && <ScheduledDrawer orders={scheduled} now={now} onClose={() => setScheduledOpen(false)} />}</AnimatePresence>
     </div>
   );
 }
 
-function StationFilter({ stations, active }: { stations: string[]; active: string | null }) {
-  const router = useRouter();
-  const pathname = usePathname();
+/* ── building blocks ─────────────────────────────────────────────────────── */
+
+function HBtn({ children, onClick, label }: { children: React.ReactNode; onClick: () => void; label: string }) {
   return (
-    <div className="hidden flex-wrap items-center gap-1 rounded-full border border-border/60 bg-card p-1 lg:flex">
-      <button
-        onClick={() => router.replace(pathname)}
-        className={`focus-ring rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
-          !active ? 'bg-primary text-primary-foreground' : 'text-foreground hover:bg-muted'
-        }`}
-      >
-        All
-      </button>
-      {stations.map((s) => (
-        <button
-          key={s}
-          onClick={() => router.replace(`${pathname}?station=${encodeURIComponent(s)}`)}
-          className={`focus-ring rounded-full px-3 py-1 text-xs font-semibold capitalize transition-colors ${
-            active === s ? 'bg-primary text-primary-foreground' : 'text-foreground hover:bg-muted'
-          }`}
-        >
-          {s}
-        </button>
-      ))}
+    <button onClick={onClick} aria-label={label} className="grid h-9 w-9 place-items-center rounded-lg" style={{ background: 'rgba(255,255,255,.22)', color: '#fff' }}>
+      {children}
+    </button>
+  );
+}
+
+function StationPill({ label, count, drown, active, onClick }: { label: string; count: number; drown?: boolean; active: boolean; onClick: () => void }) {
+  const style: React.CSSProperties = active
+    ? { background: SUN.accentBg, borderColor: SUN.accent, color: SUN.accentTx }
+    : drown
+      ? { background: '#FBE3E1', borderColor: '#F0A8A4', color: '#C0382F' }
+      : { background: SUN.card, borderColor: SUN.cardBorder, color: SUN.muted };
+  return (
+    <button onClick={onClick} className="flex shrink-0 items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium capitalize" style={{ border: '1px solid', ...style }}>
+      {label}
+      <span className="rounded-full px-1.5 text-[11px] tabular-nums" style={{ background: drown && !active ? 'rgba(229,72,77,.2)' : 'rgba(0,0,0,.08)' }}>{count}</span>
+    </button>
+  );
+}
+
+function Column({ lane, count, children }: { lane: (typeof LANES)[number]; count: number; children: React.ReactNode }) {
+  return (
+    <div className="flex min-h-0 flex-col rounded-xl" style={{ background: SUN.panel, border: `1px solid ${SUN.line}` }}>
+      <div className="flex items-center gap-2 rounded-t-xl px-3 py-2.5 text-xs font-semibold tracking-wider" style={{ background: lane.grad, color: lane.tone }}>
+        {lane.title}
+        <span className="ml-auto rounded-full px-2 tabular-nums" style={{ background: 'rgba(0,0,0,.08)', color: lane.tone }}>{count}</span>
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto p-2.5">{children}</div>
     </div>
   );
 }
 
-function updateStatus(branchId: string, setOrders: React.Dispatch<React.SetStateAction<Order[]>>) {
-  return async (orderId: string, nextStatus: string) => {
-    const supabase = getBrowserClient();
-    let prevStatus: string | null = null;
-    setOrders((curr) =>
-      curr.map((o) => {
-        if (o.id === orderId) {
-          prevStatus = o.status;
-          return { ...o, status: nextStatus };
-        }
-        return o;
-      }),
-    );
-    const { error } = await supabase
-      .from('orders')
-      .update({ status: nextStatus })
-      .eq('id', orderId)
-      .eq('branch_id', branchId);
-    // Roll the optimistic lane change back on failure so the board never lies.
-    if (error && prevStatus !== null) {
-      setOrders((curr) => curr.map((o) => (o.id === orderId ? { ...o, status: prevStatus as string } : o)));
-    }
-  };
-}
-
-function Section({
-  title, tone, orders, now, onUpdate, branchId,
-}: {
-  title: string;
-  tone: 'primary' | 'accent' | 'success' | 'warning';
-  orders: Order[];
-  now: number;
-  onUpdate: (orderId: string, nextStatus: string) => void;
-  branchId: string;
-}) {
-  if (orders.length === 0) return null;
-  const toneCls = tone === 'primary' ? 'bg-primary/15 text-primary' : tone === 'accent' ? 'bg-accent/20 text-accent-foreground' : tone === 'warning' ? 'bg-warning/15 text-warning' : 'bg-success/15 text-success';
-  return (
-    <section>
-      <div className="mb-3 flex items-center gap-2">
-        <h2 className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-bold ${toneCls}`}>
-          {title}
-          <span className="rounded-full bg-white/30 px-2 text-xs">{orders.length}</span>
-        </h2>
-      </div>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-        <AnimatePresence>
-          {orders.map((order) => (
-            <OrderCard key={order.id} order={order} now={now} onUpdate={onUpdate} branchId={branchId} />
-          ))}
-        </AnimatePresence>
-      </div>
-    </section>
-  );
-}
+// Stop the "Searching for a rider…" spinner after this long and surface a retry
+// instead — a fruitless search shouldn't spin forever.
+const SEARCH_TIMEOUT_SEC = 120;
 
 function OrderCard({
-  order, now, onUpdate, branchId,
+  order, lane, now, station, readyAt, onAdvance, onReject, onRecall, on86, onDispatch,
 }: {
-  order: Order;
-  now: number;
-  onUpdate: (orderId: string, nextStatus: string) => void;
-  branchId: string;
+  order: Order; lane: string; now: number; station: string | null; readyAt: number;
+  onAdvance: () => void; onReject: () => void; onRecall: () => void; on86: (name: string) => void; onDispatch: (reset?: boolean) => void | Promise<void>;
 }) {
-  const elapsedMin = Math.floor((now - new Date(order.created_at).getTime()) / 60000);
-  // Color-code by elapsed time
-  const elapsedColor =
-    elapsedMin >= 15 ? 'border-danger/60 bg-danger/5' :
-    elapsedMin >= 8 ? 'border-warning/60 bg-warning/5' :
-    'border-border/60 bg-card';
+  const [menuOpen, setMenuOpen] = React.useState(false);
+  const [dispatching, setDispatching] = React.useState(false);
+  const [dispatchError, setDispatchError] = React.useState(false);
+  const fromMs = lane === 'ready' ? readyAt : new Date(order.created_at).getTime();
+  const sec = safeElapsedSec(fromMs, now);
+  const tg = agingTier(sec, lane);
 
-  const ChannelIcon = (channelIcon as Record<string, typeof Bike>)[order.channel] ?? ShoppingBag;
-  const next: Record<string, string> = {
-    pending: 'confirmed',
-    confirmed: 'preparing',
-    preparing: 'ready',
-    ready: 'completed',
-  };
-  const nextLabel: Record<string, string> = {
-    pending: 'Accept order',
-    confirmed: 'Start cooking',
-    preparing: 'Mark ready',
-    ready: 'Bump',
-  };
+  const chan = CHAN[order.channel] ?? CHAN.pickup!;
+  const ChanIcon = chan.Icon;
+  const tableLabel = order.tables ? (order.tables.display_name || `Table ${order.tables.table_number}`) : null;
+  const chipText = order.channel === 'dine_in' || order.channel === 'qr_ordering'
+    ? (tableLabel ?? chan.label) : chan.label;
+
+  const items = station ? order.order_items.filter((it) => it.station === station) : order.order_items;
+  const totalLines = order.order_items.length;
+  const doneLines = order.order_items.filter((it) => it.prep_status === 'ready').length;
+
+  const noteRaw = [order.customer_notes, order.kitchen_notes].filter(Boolean).join(' · ');
+  const isAllergy = noteRaw ? ALLERGY_RE.test(noteRaw) : false;
+
+  const action = ACTION[order.status];
   const isDelivery = order.channel === 'delivery';
   const delivery = order.deliveries?.[0];
-  const driverLabel =
-    !delivery || delivery.status === 'pending' || delivery.status === 'dispatching'
-      ? 'Finding a driver…'
-      : delivery.status === 'assigned'
-        ? delivery.accepted_at
-          ? 'Driver assigned ✓'
-          : 'Driver offered…'
-        : 'Driver on the way';
+  const driverAssigned = delivery && delivery.status !== 'pending' && delivery.status !== 'dispatching';
+  const driverLabel = !delivery || delivery.status === 'pending' || delivery.status === 'dispatching'
+    ? 'Finding a rider…'
+    : delivery.status === 'assigned'
+      ? (delivery.accepted_at ? 'Rider assigned ✓' : 'Rider offered…')
+      : 'Rider on the way';
+
+  // Show a "searching" indicator the instant the button is pressed (optimistic)
+  // and for as long as the delivery sits in pending/dispatching, so the kitchen
+  // sees a rider is actively being found instead of a static, unchanged button.
+  const searching =
+    dispatching || (!!delivery && (delivery.status === 'pending' || delivery.status === 'dispatching'));
+  // A passive/cron search that's gone nowhere for SEARCH_TIMEOUT_SEC stops spinning
+  // and shows a retry. A fresh manual dispatch click (local `dispatching`) keeps
+  // spinning until it resolves, regardless of the order's age.
+  const searchTimedOut = !dispatching && searching && sec >= SEARCH_TIMEOUT_SEC;
+  React.useEffect(() => {
+    if (delivery) setDispatching(false); // the realtime row now drives the searching state
+  }, [delivery]);
+  const handleDispatch = async (reset = false) => {
+    setDispatchError(false);
+    setDispatching(true);
+    try {
+      await onDispatch(reset);
+    } catch {
+      setDispatching(false); // dispatch failed — surface it so they can retry
+      setDispatchError(true);
+    }
+  };
 
   return (
     <motion.div
-      layout
-      initial={{ opacity: 0, scale: 0.95, y: 12 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.9 }}
-      transition={{ duration: 0.25 }}
-      className={`flex flex-col rounded-2xl border-2 ${elapsedColor} overflow-hidden shadow-soft`}
+      layout layoutId={order.id}
+      initial={{ opacity: 0, y: 10, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      transition={{ duration: 0.25, ease: 'easeOut' }}
+      className="relative rounded-2xl"
+      style={{ background: SUN.card, border: `1px solid ${SUN.cardBorder}`, padding: '11px 12px 12px 16px', boxShadow: tg.ring ? '0 0 0 2px rgba(229,72,77,.5)' : undefined }}
     >
-      <div className="flex items-center justify-between border-b border-border/60 bg-gradient-to-r from-muted/40 to-transparent px-4 py-3">
-        <div className="flex items-center gap-2">
-          <ChannelIcon className="h-5 w-5 text-muted-foreground" />
-          <span className="font-display text-xl font-bold">{order.order_number.slice(-4)}</span>
+      <span className="absolute left-0 top-0 bottom-0 w-[5px] rounded-l-2xl" style={{ background: tg.spine }} />
+
+      <div className="flex items-center gap-2">
+        <span className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium uppercase tracking-wide" style={{ background: chan.bg, color: chan.c }}>
+          <ChanIcon className="h-3.5 w-3.5" />{chipText}
+        </span>
+        <span className="flex items-center gap-[3px]">
+          {Array.from({ length: totalLines }).map((_, i) => (
+            <span key={i} className="h-[7px] w-[7px] rounded-full" style={{ background: i < doneLines ? '#23C16B' : 'rgba(0,0,0,.14)' }} />
+          ))}
+        </span>
+        <span className={`ml-auto rounded-lg px-2 py-0.5 text-[17px] font-medium tabular-nums ${tg.pulse ? 'animate-pulse' : ''}`} style={{ background: tg.pill, color: tg.pc }}>
+          {fmtTimer(sec)}
+        </span>
+        <div className="relative">
+          <button aria-label="More actions" onClick={() => setMenuOpen((m) => !m)} className="grid h-7 w-7 place-items-center rounded-lg" style={{ color: SUN.faint }}>
+            <MoreVertical className="h-4 w-4" />
+          </button>
+          {menuOpen && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+              <div className="absolute right-0 top-8 z-20 w-52 overflow-hidden rounded-xl py-1 text-left text-sm" style={{ background: SUN.card, border: `1px solid ${SUN.cardBorder}`, boxShadow: '0 8px 24px rgba(0,0,0,.14)' }}>
+                {order.status === 'pending' && (
+                  <MenuRow onClick={() => { setMenuOpen(false); onReject(); }} danger><X className="h-4 w-4" />Reject order</MenuRow>
+                )}
+                {order.status === 'ready' && (
+                  <MenuRow onClick={() => { setMenuOpen(false); onRecall(); }}><RotateCcw className="h-4 w-4" />Recall to kitchen</MenuRow>
+                )}
+                {isDelivery && order.status === 'ready' && (
+                  <MenuRow onClick={() => { setMenuOpen(false); void handleDispatch(true); }}><Bike className="h-4 w-4" />Re-dispatch (start over)</MenuRow>
+                )}
+                <div className="px-3 pb-1 pt-1.5 text-[11px] font-medium uppercase tracking-wide" style={{ color: SUN.faint }}>86 an item</div>
+                {order.order_items.map((it) => (
+                  <MenuRow key={it.id} onClick={() => { setMenuOpen(false); on86(it.item_name); }}>
+                    <Flame className="h-4 w-4" />{it.item_name}
+                  </MenuRow>
+                ))}
+              </div>
+            </>
+          )}
         </div>
-        <Badge variant={elapsedMin >= 15 ? 'danger' : elapsedMin >= 8 ? 'warning' : 'muted'}>
-          {elapsedMin}m
-        </Badge>
       </div>
-      <div className="flex-1 space-y-1.5 px-4 py-3 text-base">
-        {order.order_items.map((item) => (
-          <Item86LongPress key={item.id} branchId={branchId} itemName={item.item_name}>
-            <div className="flex items-baseline gap-2">
-              <span className="font-display text-2xl font-bold text-primary">{item.quantity}×</span>
-              <div className="flex-1">
-                <p className="font-semibold">{item.item_name}</p>
-                {item.notes && <p className="text-xs italic text-muted-foreground">{item.notes}</p>}
+
+      <div className="mt-0.5 text-[11px]" style={{ color: SUN.faint }}>#{order.order_number.slice(-4)}</div>
+
+      <div className="mt-1">
+        {items.map((it) => {
+          const mods = parseMods(it.modifiers);
+          return (
+            <div key={it.id} className="mt-1.5 flex items-baseline gap-2.5">
+              <span className="text-[21px] font-medium leading-none tabular-nums" style={{ color: SUN.qty }}>{it.quantity}×</span>
+              <div>
+                <div className="text-[15px] font-medium leading-tight" style={{ color: SUN.text }}>{it.item_name}</div>
+                {(mods.length > 0 || it.notes) && (
+                  <div className="mt-0.5">
+                    {mods.map((m, i) => (
+                      <span key={i} className="mr-1 mt-0.5 inline-block rounded-md px-2 py-px text-xs" style={m.remove ? { background: '#FBD9D6', color: '#C0382F' } : { background: '#FCEBCE', color: '#9A6A0A' }}>· {m.label}</span>
+                    ))}
+                    {it.notes && <span className="mr-1 mt-0.5 inline-block rounded-md px-2 py-px text-xs" style={{ background: '#F1ECE6', color: SUN.muted }}>· {it.notes}</span>}
+                  </div>
+                )}
               </div>
             </div>
-          </Item86LongPress>
-        ))}
-        {order.customer_notes && (
-          <p className="mt-2 rounded-lg bg-warning/10 px-2 py-1 text-xs text-warning">
-            📝 {order.customer_notes}
-          </p>
-        )}
+          );
+        })}
       </div>
-      {isDelivery && order.status === 'ready' && <DispatchButton orderId={order.id} />}
-      {order.status === 'pending' && (
-        <Button
-          variant="ghost"
-          size="md"
-          className="rounded-none border-t border-border/60 text-danger"
-          onClick={async () => {
-            // Use cancel_order RPC (restores stock for track_stock items + logs the
-            // reason) instead of a raw status write. Only flip the UI on success.
-            const supabase = getBrowserClient();
-            const { error } = await supabase.rpc('cancel_order', {
-              p_order_id: order.id,
-              p_reason: 'Rejected by kitchen',
-            });
-            if (!error) onUpdate(order.id, 'cancelled');
-          }}
-        >
-          Reject
-        </Button>
-      )}
-      {order.status === 'ready' && (
-        <Button
-          variant="ghost"
-          size="md"
-          className="rounded-none border-t border-border/60"
-          onClick={async () => {
-            const supabase = getBrowserClient();
-            await supabase.rpc('recall_order', { p_order_id: order.id });
-            onUpdate(order.id, 'preparing');
-          }}
-          leftIcon={<Undo2 className="h-4 w-4" />}
-        >
-          Recall to kitchen
-        </Button>
-      )}
-      {isDelivery && order.status === 'ready' ? (
-        // Delivery completion is driven by the driver (picked_up → out_for_delivery → delivered),
-        // not a kitchen bump — so 'ready' is the last kitchen step. Show the rider's status here.
-        <div className="flex items-center justify-center gap-2 border-t border-border/60 bg-success/5 px-4 py-3 text-sm font-semibold text-success">
-          <Bike className="h-4 w-4" /> {driverLabel}
+
+      {noteRaw && (
+        <div className="mt-2 flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium" style={isAllergy ? { background: '#FBD9D6', color: '#B43A33' } : { background: '#FBF0D2', color: '#9A6A0A' }}>
+          {isAllergy ? <AlertTriangle className="h-4 w-4 shrink-0" /> : <Clock className="h-4 w-4 shrink-0" />}
+          {isAllergy ? `Allergy / note: ${noteRaw}` : noteRaw}
         </div>
+      )}
+
+      {isDelivery && order.status === 'ready' ? (
+        driverAssigned ? (
+          <div className="mt-2.5 flex items-center justify-center gap-2 rounded-[10px] px-3 py-2.5 text-sm font-medium" style={{ background: '#E7EEFB', color: '#2E5FB0' }}>
+            <Bike className="h-4 w-4" /> {driverLabel}
+          </div>
+        ) : dispatchError || searchTimedOut ? (
+          <button onClick={() => handleDispatch(true)} className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-[10px] py-2.5 text-sm font-medium active:scale-[.985]" style={{ background: '#FBE3E1', color: '#C0382F' }}>
+            <AlertTriangle className="h-4 w-4" /> No rider found — tap to retry
+          </button>
+        ) : searching ? (
+          <div className="mt-2.5 flex items-center justify-center gap-2 rounded-[10px] px-3 py-2.5 text-sm font-medium" style={{ background: '#E7EEFB', color: '#2E5FB0' }}>
+            <Loader2 className="h-4 w-4 animate-spin" /> Searching for a rider…
+          </div>
+        ) : (
+          <button onClick={() => handleDispatch(false)} className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-[10px] py-2.5 text-sm font-medium active:scale-[.985]" style={{ background: '#E3ECFF', color: '#2E5FB0' }}>
+            <Bike className="h-4 w-4" /> Find a rider
+          </button>
+        )
+      ) : action ? (
+        <button onClick={onAdvance} className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-[10px] py-2.5 text-sm font-medium active:scale-[.985]" style={{ background: action.grad, color: action.tx }}>
+          <action.Icon className="h-4 w-4" />{action.label}
+        </button>
+      ) : null}
+    </motion.div>
+  );
+}
+
+function MenuRow({ children, onClick, danger }: { children: React.ReactNode; onClick: () => void; danger?: boolean }) {
+  return (
+    <button onClick={onClick} className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-black/5" style={{ color: danger ? '#C0382F' : SUN.text }}>
+      {children}
+    </button>
+  );
+}
+
+function UndoToast({ text, onUndo, onClose }: { text: string; onUndo: (() => void) | null; onClose: () => void }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20, x: '-50%' }} animate={{ opacity: 1, y: 0, x: '-50%' }} exit={{ opacity: 0, y: 20, x: '-50%' }}
+      className="fixed bottom-5 left-1/2 z-40 flex items-center gap-3.5 rounded-xl px-3.5 py-2.5 text-sm"
+      style={{ background: SUN.card, border: `1px solid ${SUN.cardBorder}`, color: SUN.text, boxShadow: '0 8px 24px rgba(0,0,0,.16)' }}
+    >
+      <span>{text}</span>
+      {onUndo ? (
+        <button onClick={onUndo} className="flex items-center gap-1 font-medium" style={{ color: SUN.accent }}><Undo2 className="h-4 w-4" />Undo</button>
       ) : (
-        <Button
-          variant={order.status === 'ready' ? 'gradient' : 'primary'}
-          size="lg"
-          fullWidth
-          className="rounded-none"
-          onClick={() => onUpdate(order.id, next[order.status]!)}
-        >
-          {nextLabel[order.status]} →
-        </Button>
+        <button onClick={onClose} aria-label="Dismiss" style={{ color: SUN.faint }}><X className="h-4 w-4" /></button>
       )}
     </motion.div>
   );
 }
 
-// Dispatch a delivery order to an online rider via the `dispatch-driver` edge
-// function. Inline, non-blocking status — no alert(), since this runs on an
-// always-on kitchen display.
-function DispatchButton({ orderId }: { orderId: string }) {
-  const [state, setState] = React.useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
-  const label =
-    state === 'sending' ? 'Finding a driver…'
-      : state === 'sent' ? 'Driver requested ✓'
-      : state === 'error' ? 'Retry — dispatch failed'
-      : 'Find driver';
-  const dispatch = async () => {
-    setState('sending');
-    const supabase = getBrowserClient();
-    const { error } = await supabase.functions.invoke('dispatch-driver', {
-      body: { order_id: orderId },
-    });
-    setState(error ? 'error' : 'sent');
-    window.setTimeout(() => setState('idle'), 4000);
-  };
+function ScheduledDrawer({ orders, now, onClose }: { orders: Order[]; now: number; onClose: () => void }) {
   return (
-    <Button
-      variant="ghost"
-      size="md"
-      disabled={state === 'sending'}
-      className={`rounded-none border-t border-border/60 ${state === 'error' ? 'text-danger' : 'text-primary'}`}
-      leftIcon={<Bike className="h-4 w-4" />}
-      onClick={dispatch}
-    >
-      {label}
-    </Button>
+    <motion.div className="fixed inset-0 z-40 flex justify-end" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} style={{ background: 'rgba(0,0,0,.35)' }}>
+      <motion.div
+        initial={{ x: 360 }} animate={{ x: 0 }} exit={{ x: 360 }} transition={{ ease: 'easeOut', duration: 0.3 }}
+        onClick={(e) => e.stopPropagation()} className="flex h-full w-[340px] flex-col" style={{ background: SUN.page }}
+      >
+        <div className="flex items-center gap-2 px-4 py-3 text-white" style={{ background: SUN.header }}>
+          <CalendarClock className="h-5 w-5" /><h2 className="text-[15px] font-semibold">Scheduled · {orders.length}</h2>
+          <button onClick={onClose} aria-label="Close" className="ml-auto"><X className="h-5 w-5" /></button>
+        </div>
+        <div className="flex-1 space-y-2.5 overflow-y-auto p-3">
+          {orders.map((o) => {
+            const due = o.scheduled_for ? new Date(o.scheduled_for).getTime() : 0;
+            const mins = due ? Math.round((due - now) / 60000) : null;
+            return (
+              <div key={o.id} className="rounded-2xl p-3" style={{ background: SUN.card, border: `1px solid ${SUN.cardBorder}` }}>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px]" style={{ color: SUN.faint }}>#{o.order_number.slice(-4)}</span>
+                  {mins != null && (
+                    <span className="rounded-lg px-2 py-0.5 text-xs font-medium" style={mins <= 10 ? { background: '#FBE1BC', color: '#A85F00' } : { background: '#F1ECE6', color: SUN.muted }}>
+                      Releases in {mins}m
+                    </span>
+                  )}
+                </div>
+                <div className="mt-1 text-sm" style={{ color: SUN.text }}>
+                  {o.order_items.map((it) => `${it.quantity}× ${it.item_name}`).join(' · ')}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
-// Long-press (700ms) on an item line opens the 86 confirmation, then calls
-// `toggle_item_availability` to mark the item out of stock for the branch.
-function Item86LongPress({
-  branchId,
-  itemName,
-  children,
-}: {
-  branchId: string;
-  itemName: string;
-  children: React.ReactNode;
-}) {
-  const timer = React.useRef<number | null>(null);
-  const triggered = React.useRef(false);
-  const [confirming, setConfirming] = React.useState(false);
-  const [busy, setBusy] = React.useState(false);
-  const [msg, setMsg] = React.useState<string | null>(null);
-
-  const begin = () => {
-    triggered.current = false;
-    timer.current = window.setTimeout(() => {
-      triggered.current = true;
-      setMsg(null);
-      setConfirming(true);
-    }, 700);
-  };
-  const cancel = () => {
-    if (timer.current != null) window.clearTimeout(timer.current);
-    timer.current = null;
-  };
-
-  const confirm86 = async () => {
-    setBusy(true);
-    setMsg(null);
-    const supabase = getBrowserClient();
-    const { data: row } = await supabase
-      .from('menu_items')
-      .select('id')
-      .eq('branch_id', branchId)
-      .ilike('name', itemName)
-      .maybeSingle();
-    if (!row) {
-      setBusy(false);
-      setMsg("Couldn't find that item in the menu — it may already be 86'd.");
-      return;
-    }
-    const { error } = await supabase.rpc('toggle_item_availability', {
-      p_item_id: row.id,
-      p_active: false,
-    });
-    setBusy(false);
-    if (error) {
-      setMsg(`Failed: ${error.message}`);
-      return;
-    }
-    setConfirming(false);
-  };
-
-  return (
-    <>
-      <div
-        role="button"
-        tabIndex={0}
-        onMouseDown={begin}
-        onMouseUp={cancel}
-        onMouseLeave={cancel}
-        onTouchStart={begin}
-        onTouchEnd={cancel}
-        onTouchCancel={cancel}
-        className="select-none rounded-md transition-colors active:bg-muted/40"
-        title="Long-press to 86 this item"
-      >
-        {children}
-      </div>
-      {confirming && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          onClick={() => !busy && setConfirming(false)}
-        >
-          <div
-            className="w-full max-w-sm rounded-2xl bg-card p-5 shadow-warm"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <p className="font-display text-lg font-semibold">{`86 "${itemName}"?`}</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Mark it unavailable across the menu until you turn it back on.
-            </p>
-            {msg && <p className="mt-2 text-sm text-danger">{msg}</p>}
-            <div className="mt-4 flex gap-2">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => setConfirming(false)}
-                className="focus-ring flex-1 rounded-xl border border-border px-4 py-2.5 text-sm font-semibold"
-              >
-                Keep available
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={confirm86}
-                className="focus-ring flex-1 rounded-xl bg-danger px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
-              >
-                {busy ? 'Working…' : '86 it'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
-  );
+function beep(freq: number) {
+  try {
+    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const ctx = new Ctx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.4);
+    osc.start(); osc.stop(ctx.currentTime + 0.4);
+  } catch { /* autoplay may be blocked until first interaction */ }
 }

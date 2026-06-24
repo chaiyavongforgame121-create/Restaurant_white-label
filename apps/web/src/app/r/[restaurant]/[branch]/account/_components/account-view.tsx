@@ -4,7 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  Award, ChevronRight, Heart, LogOut, MapPin, Receipt, Settings,
+  Award, ChevronRight, LogOut, MapPin, Receipt, Settings,
   Sparkles,
 } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
@@ -95,8 +95,7 @@ export function AccountView({
 
       <ul className="space-y-2">
         <Row icon={Receipt} label="Order history" href={`${base}/orders`} />
-        <Row icon={Heart} label="Favorite dishes" meta="0 saved" />
-        <Row icon={MapPin} label="Delivery addresses" meta="Add address" />
+        <Row icon={MapPin} label="Delivery addresses" meta="Manage saved addresses" href={`${base}/account/addresses`} />
         <Row
           icon={Award}
           label="Loyalty & rewards"
@@ -105,8 +104,9 @@ export function AccountView({
               ? `${loyalty.tier.replace(/^./, (c) => c.toUpperCase())} · ${loyalty.points_balance.toLocaleString()} pts`
               : 'Bronze · 0 pts'
           }
+          href={`${base}/account/loyalty`}
         />
-        <Row icon={Settings} label="Settings & preferences" />
+        <Row icon={Settings} label="Settings & preferences" href={`${base}/account/settings`} />
       </ul>
 
       {user && (

@@ -22,7 +22,7 @@ export default async function KitchenPage({ params, searchParams }: Props) {
   const { data: orders } = await supabase
     .from('orders')
     .select(
-      'id, order_number, status, channel, created_at, customer_name, customer_notes, held, scheduled_for, order_items(id, item_name, quantity, notes, prep_status, station), deliveries(status, driver_id, accepted_at)',
+      'id, order_number, status, channel, created_at, customer_name, customer_notes, kitchen_notes, held, scheduled_for, table_id, tables(table_number, display_name), order_items(id, item_name, quantity, notes, prep_status, station, modifiers), deliveries(status, driver_id, accepted_at)',
     )
     .eq('branch_id', branchId)
     .in('status', ['pending', 'confirmed', 'preparing', 'ready'])

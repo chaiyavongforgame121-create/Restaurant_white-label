@@ -70,3 +70,12 @@ export async function upsertCustomerAddress(
   if (error) throw new Error(`upsert_address_failed:${error.message}`);
   return (data as string | null) ?? null;
 }
+
+/** Delete a saved address. RLS scopes the delete to the owning customer. */
+export async function deleteCustomerAddress(
+  supabase: FavornomsClient,
+  addressId: string,
+): Promise<void> {
+  const { error } = await supabase.from('customer_addresses').delete().eq('id', addressId);
+  if (error) throw new Error(`delete_address_failed:${error.message}`);
+}

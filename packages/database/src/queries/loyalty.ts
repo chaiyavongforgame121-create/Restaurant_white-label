@@ -45,6 +45,8 @@ export async function listMyLoyaltyTransactions(
     .from('customers')
     .select('id')
     .eq('user_id', userData.user.id)
+    .order('updated_at', { ascending: false })
+    .limit(1)
     .maybeSingle();
   if (!customer) return [];
 

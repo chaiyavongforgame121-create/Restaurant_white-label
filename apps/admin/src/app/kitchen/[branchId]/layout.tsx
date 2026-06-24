@@ -25,6 +25,8 @@ export default async function KitchenLayout({ params, children }: Props) {
     );
   }
 
-  // Force the dark, fullscreen kitchen aesthetic regardless of the app theme.
-  return <div className="dark min-h-dynamic-screen bg-background text-foreground">{children}</div>;
+  // Force the light, warm "Sunset" kitchen aesthetic regardless of the app theme.
+  // The board paints its own full-height surface; this cream backstop matches it
+  // so any overscroll/safe-area shows the same warm tone (never the dark app shell).
+  return <div className="min-h-dynamic-screen" style={{ background: '#FCF3EA' }}>{children}</div>;
 }

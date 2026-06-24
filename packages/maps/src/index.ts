@@ -9,3 +9,15 @@ export {
   type AddressAutofillInputProps,
   type ResolvedAddress,
 } from './address-autofill';
+export { reverseGeocode, forwardGeocode, type GeoSuggestion } from './reverse-geocode';
+export {
+  getCurrentPosition,
+  isGeolocationAvailable,
+  GeolocationError,
+  type GeolocationFailure,
+} from './geolocation';
+export {
+  LocationPicker,
+  type LocationPickerProps,
+  type LocationPickerLabels,
+} from './location-picker';

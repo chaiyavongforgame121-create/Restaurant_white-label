@@ -35,13 +35,48 @@ const GROUP_SELECT = `display_order, modifier_groups!inner(
   modifier_options(id, name, price_delta, is_default, is_active, display_order)
 )`;
 
-export function ItemModifierEditor({ branchId, itemId }: { branchId: string; itemId: string }) {
+// Imperative handle the parent item form uses to validate + flush draft option
+// groups once a brand-new menu item has been inserted and finally has an id to
+// link against.
+export interface ItemModifierEditorHandle {
+  /** Returns a user-facing message if the draft is half-filled, else null. */
+  validateDraft: () => string | null;
+  persistDraft: (newItemId: string) => Promise<{ error?: string }>;
+}
+
+// Drop the noise a draft can accumulate before it reaches the DB: trim names,
+// remove blank-named options, and drop groups that are completely empty (a user
+// clicked "Add group" then moved on). Anything that survives is real data.
+function cleanDraftGroups(groups: MGroup[]): MGroup[] {
+  return groups
+    .map((g) => ({
+      ...g,
+      name: g.name.trim(),
+      options: g.options
+        .filter((o) => String(o.name).trim())
+        .map((o) => ({ ...o, name: String(o.name).trim() })),
+    }))
+    .filter((g) => g.name || g.options.length > 0);
+}
+
+// `itemId` is null while creating a new item. In that "draft" mode every edit
+// stays in local React state (temp ids) and nothing touches the DB until the
+// parent saves the item and calls persistDraft(); for an existing item we keep
+// the original write-through behaviour so each tweak persists immediately.
+export const ItemModifierEditor = React.forwardRef<
+  ItemModifierEditorHandle,
+  { branchId: string; itemId: string | null }
+>(function ItemModifierEditor({ branchId, itemId }, ref) {
+  const isDraft = !itemId;
   const [groups, setGroups] = React.useState<MGroup[]>([]);
-  const [loading, setLoading] = React.useState(true);
+  const [loading, setLoading] = React.useState(!isDraft);
   const [error, setError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
+  const tmpCounter = React.useRef(0);
+  const newTmpId = () => `tmp_${tmpCounter.current++}`;
 
   const fetchGroups = React.useCallback(async () => {
+    if (!itemId) return;
     const supabase = getBrowserClient();
     const { data } = await supabase
       .from('menu_item_modifiers')
@@ -72,10 +107,91 @@ export function ItemModifierEditor({ branchId, itemId }: { branchId: string; ite
   }, [itemId]);
 
   React.useEffect(() => {
-    void fetchGroups();
-  }, [fetchGroups]);
+    if (itemId) void fetchGroups();
+  }, [itemId, fetchGroups]);
+
+  // Block save while a group is half-built so we never ship a blank-named group
+  // or an optionless one — a Required group with no options dead-ends the cart,
+  // and unnamed controls are broken/inaccessible on the customer menu.
+  const validateDraft = React.useCallback((): string | null => {
+    for (const g of groups) {
+      const gname = g.name.trim();
+      const named = g.options.filter((o) => String(o.name).trim());
+      const blanks = g.options.filter((o) => !String(o.name).trim());
+      // A completely empty group (no name, no options) is silently dropped later.
+      if (!gname && g.options.length === 0) continue;
+      if (!gname) return 'Give every option group a name (e.g. Size) before saving.';
+      if (named.length === 0) return `Add at least one option to the "${gname}" group, or remove the group.`;
+      if (blanks.length > 0) return `Name every option in "${gname}", or remove the blank ones.`;
+    }
+    return null;
+  }, [groups]);
+
+  // Flush all locally-built groups/options to the DB for a freshly-created item.
+  // Order per group: insert the group, then its options, then the item link LAST,
+  // so a mid-way failure leaves an unlinked (invisible, harmless) group rather
+  // than a linked group with no options that would dead-end the customer cart.
+  const persistDraft = React.useCallback(
+    async (newItemId: string): Promise<{ error?: string }> => {
+      const supabase = getBrowserClient();
+      const clean = cleanDraftGroups(groups);
+      for (const [gi, g] of clean.entries()) {
+        const { data: gRow, error: ge } = await supabase
+          .from('modifier_groups')
+          .insert({
+            branch_id: branchId,
+            name: g.name,
+            selection_type: g.selection_type,
+            is_required: g.is_required,
+            min_select: g.min_select,
+            max_select: g.max_select,
+            display_order: gi,
+          })
+          .select('id')
+          .single();
+        if (ge || !gRow) return { error: ge?.message ?? 'Could not save option group' };
+        if (g.options.length) {
+          const { error: oe } = await supabase.from('modifier_options').insert(
+            g.options.map((o, oi) => ({
+              group_id: gRow.id,
+              name: o.name,
+              price_delta: Number(o.price_delta) || 0,
+              is_default: o.is_default,
+              is_active: o.is_active,
+              display_order: oi,
+            })),
+          );
+          if (oe) return { error: oe.message };
+        }
+        const { error: le } = await supabase
+          .from('menu_item_modifiers')
+          .insert({ menu_item_id: newItemId, modifier_group_id: gRow.id, display_order: gi });
+        if (le) return { error: le.message };
+      }
+      return {};
+    },
+    [groups, branchId],
+  );
+
+  React.useImperativeHandle(ref, () => ({ validateDraft, persistDraft }), [validateDraft, persistDraft]);
 
   const addGroup = async () => {
+    if (isDraft) {
+      setGroups((cur) => [
+        ...cur,
+        {
+          id: newTmpId(),
+          name: '',
+          selection_type: 'single',
+          is_required: false,
+          min_select: 0,
+          max_select: 1,
+          display_order: cur.length,
+          options: [],
+        },
+      ]);
+      return;
+    }
     setBusy(true);
     setError(null);
     const supabase = getBrowserClient();
@@ -110,6 +226,7 @@ export function ItemModifierEditor({ branchId, itemId }: { branchId: string; ite
 
   const updateGroup = async (id: string, patch: Partial<MGroup>) => {
     setGroups((cur) => cur.map((g) => (g.id === id ? { ...g, ...patch } : g)));
+    if (isDraft) return;
     const supabase = getBrowserClient();
     const { error: e } = await supabase.from('modifier_groups').update(patch).eq('id', id);
     if (e) setError(e.message);
@@ -117,6 +234,10 @@ export function ItemModifierEditor({ branchId, itemId }: { branchId: string; ite
 
   const removeGroup = async (id: string) => {
     if (!confirm('Remove this option group from this item?')) return;
+    if (isDraft) {
+      setGroups((cur) => cur.filter((g) => g.id !== id));
+      return;
+    }
     const supabase = getBrowserClient();
     await supabase
       .from('menu_item_modifiers')
@@ -132,6 +253,29 @@ export function ItemModifierEditor({ branchId, itemId }: { branchId: string; ite
   };
 
   const addOption = async (groupId: string) => {
+    if (isDraft) {
+      setGroups((cur) =>
+        cur.map((g) =>
+          g.id === groupId
+            ? {
+                ...g,
+                options: [
+                  ...g.options,
+                  {
+                    id: newTmpId(),
+                    name: '',
+                    price_delta: 0,
+                    is_default: false,
+                    is_active: true,
+                    display_order: g.options.length,
+                  },
+                ],
+              }
+            : g,
+        ),
+      );
+      return;
+    }
     const supabase = getBrowserClient();
     const grp = groups.find((g) => g.id === groupId);
     const { error: e } = await supabase.from('modifier_options').insert({
@@ -157,6 +301,7 @@ export function ItemModifierEditor({ branchId, itemId }: { branchId: string; ite
           : g,
       ),
     );
+    if (isDraft) return;
     const supabase = getBrowserClient();
     const { error: e } = await supabase.from('modifier_options').update(patch).eq('id', optId);
     if (e) setError(e.message);
@@ -174,6 +319,7 @@ export function ItemModifierEditor({ branchId, itemId }: { branchId: string; ite
             : g,
         ),
       );
+      if (isDraft) return;
       const supabase = getBrowserClient();
       await supabase.from('modifier_options').update({ is_default: true }).eq('id', optId);
       const others = group.options.filter((o) => o.id !== optId && o.is_default).map((o) => o.id);
@@ -183,7 +329,15 @@ export function ItemModifierEditor({ branchId, itemId }: { branchId: string; ite
     }
   };
 
-  const removeOption = async (optId: string) => {
+  const removeOption = async (groupId: string, optId: string) => {
+    if (isDraft) {
+      setGroups((cur) =>
+        cur.map((g) =>
+          g.id === groupId ? { ...g, options: g.options.filter((o) => o.id !== optId) } : g,
+        ),
+      );
+      return;
+    }
     const supabase = getBrowserClient();
     await supabase.from('modifier_options').delete().eq('id', optId);
     await fetchGroups();
@@ -234,7 +388,7 @@ export function ItemModifierEditor({ branchId, itemId }: { branchId: string; ite
               onRemoveGroup={() => removeGroup(group.id)}
               onOptionChange={(optId, patch) => updateOption(group.id, optId, patch)}
               onToggleDefault={(optId) => toggleDefault(group, optId)}
-              onRemoveOption={(optId) => removeOption(optId)}
+              onRemoveOption={(optId) => removeOption(group.id, optId)}
               onAddOption={() => addOption(group.id)}
             />
           ))}
@@ -242,7 +396,7 @@ export function ItemModifierEditor({ branchId, itemId }: { branchId: string; ite
       )}
     </div>
   );
-}
+});
 
 function ModifierGroupCard({
   group: g,
