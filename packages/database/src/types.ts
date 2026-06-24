@@ -3694,6 +3694,17 @@ export type Database = {
         Returns: string
       }
       clock_out: { Args: { p_shift_id?: string }; Returns: string }
+      create_branch: {
+        Args: {
+          p_address?: string
+          p_brand_id?: string
+          p_name: string
+          p_restaurant_id: string
+          p_slug: string
+          p_timezone?: string
+        }
+        Returns: Json
+      }
       create_restaurant_with_branch: {
         Args: {
           p_branch_address?: string

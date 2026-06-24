@@ -62,6 +62,7 @@ export function BrandsManager({
   const [store, setStore] = React.useState(() => parseStorefront(storefront));
   const [storeSaving, setStoreSaving] = React.useState(false);
   const [storeSaved, setStoreSaved] = React.useState(false);
+  const [addingBranch, setAddingBranch] = React.useState(false);
 
   const refresh = async () => {
     const supabase = getBrowserClient();
@@ -208,6 +209,32 @@ export function BrandsManager({
         </div>
       </Card>
 
+      <Card className="mb-6 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-display text-lg font-semibold">Branches</h2>
+            <p className="text-sm text-muted-foreground">
+              Locations under {restaurantName}. Each gets its own storefront URL + QR code.
+            </p>
+          </div>
+          <Button variant="gradient" leftIcon={<Plus className="h-4 w-4" />} onClick={() => setAddingBranch(true)}>
+            Add branch
+          </Button>
+        </div>
+        <div className="mt-3 space-y-2">
+          {branches.map((b) => (
+            <div key={b.id} className="flex items-center justify-between rounded-xl border border-border px-3 py-2 text-sm">
+              <span className="font-medium">{b.name}</span>
+              {!b.is_active && <Badge variant="muted">Hidden</Badge>}
+            </div>
+          ))}
+          {branches.length === 0 && <p className="text-sm text-muted-foreground">No branches yet.</p>}
+        </div>
+        <p className="mt-3 text-xs text-muted-foreground">
+          After creating a branch, set its delivery location, hours, and menu in that branch&apos;s settings.
+        </p>
+      </Card>
+
       {error && <p className="mb-3 rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p>}
 
       <div className="space-y-3 px-2 lg:px-0">
@@ -267,6 +294,143 @@ export function BrandsManager({
           }}
         />
       )}
+
+      {addingBranch && (
+        <BranchCreator
+          restaurantId={restaurantId}
+          brands={brands}
+          onClose={() => setAddingBranch(false)}
+          onSaved={() => {
+            setAddingBranch(false);
+            router.refresh();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+const US_TIMEZONES: Array<{ tz: string; label: string }> = [
+  { tz: 'America/New_York', label: 'Eastern (New York)' },
+  { tz: 'America/Chicago', label: 'Central (Chicago)' },
+  { tz: 'America/Denver', label: 'Mountain (Denver)' },
+  { tz: 'America/Phoenix', label: 'Mountain — no DST (Phoenix)' },
+  { tz: 'America/Los_Angeles', label: 'Pacific (Los Angeles)' },
+  { tz: 'America/Anchorage', label: 'Alaska (Anchorage)' },
+  { tz: 'Pacific/Honolulu', label: 'Hawaii (Honolulu)' },
+];
+
+function BranchCreator({
+  restaurantId,
+  brands,
+  onClose,
+  onSaved,
+}: {
+  restaurantId: string;
+  brands: Brand[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [name, setName] = React.useState('');
+  const [slug, setSlug] = React.useState('');
+  const [address, setAddress] = React.useState('');
+  const [timezone, setTimezone] = React.useState('America/New_York');
+  const [brandId, setBrandId] = React.useState('');
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!slug && name) setSlug(slugify(name));
+  }, [name, slug]);
+
+  const create = async () => {
+    setSaving(true);
+    setError(null);
+    const supabase = getBrowserClient();
+    const { error: rpcErr } = await supabase.rpc('create_branch', {
+      p_restaurant_id: restaurantId,
+      p_name: name,
+      p_slug: slug || slugify(name),
+      p_address: address || undefined,
+      p_timezone: timezone,
+      p_brand_id: brandId || undefined,
+    });
+    setSaving(false);
+    if (rpcErr) {
+      const { describePlanError } = await import('@favornoms/database/queries');
+      const planErr = describePlanError(rpcErr);
+      setError(
+        planErr
+          ? `Your current plan only allows ${planErr.limit} ${planErr.key}. Please upgrade before adding more.`
+          : rpcErr.message,
+      );
+      return;
+    }
+    onSaved();
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-6"
+      onClick={onClose}
+    >
+      <Card className="w-full max-w-lg space-y-4 overflow-y-auto p-6 sm:max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
+        <h2 className="font-display text-xl font-semibold">Add branch</h2>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Branch name">
+            <input value={name} onChange={(e) => setName(e.target.value)} className="input" placeholder="Downtown" autoFocus />
+          </Field>
+          <Field label="URL slug">
+            <input value={slug} onChange={(e) => setSlug(slugify(e.target.value))} className="input" placeholder="downtown" />
+          </Field>
+          <div className="sm:col-span-2">
+            <Field label="Address (optional)">
+              <input value={address} onChange={(e) => setAddress(e.target.value)} className="input" />
+            </Field>
+          </div>
+          <Field label="Timezone">
+            <select value={timezone} onChange={(e) => setTimezone(e.target.value)} className="input">
+              {US_TIMEZONES.map((z) => (
+                <option key={z.tz} value={z.tz}>{z.label}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Brand (optional)">
+            <select value={brandId} onChange={(e) => setBrandId(e.target.value)} className="input">
+              <option value="">— None —</option>
+              {brands.map((b) => (
+                <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
+            </select>
+          </Field>
+        </div>
+
+        {error && <p className="rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p>}
+
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button variant="gradient" onClick={create} loading={saving} disabled={!name} leftIcon={<Plus className="h-4 w-4" />}>
+            Create branch
+          </Button>
+        </div>
+
+        <style jsx>{`
+          .input {
+            width: 100%;
+            height: 48px;
+            padding: 0 1rem;
+            font-size: 16px;
+            border-radius: 0.875rem;
+            border: 1px solid hsl(var(--border));
+            background: hsl(var(--background));
+          }
+          .input:focus-visible {
+            outline: none;
+            border-color: hsl(var(--primary));
+            box-shadow: 0 0 0 3px hsl(var(--primary) / 0.18);
+          }
+        `}</style>
+      </Card>
     </div>
   );
 }
