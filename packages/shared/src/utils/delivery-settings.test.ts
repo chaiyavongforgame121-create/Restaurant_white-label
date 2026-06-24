@@ -42,9 +42,9 @@ describe('parseDeliverySettings', () => {
 describe('computeDeliveryFee — mirrors SQL quote_delivery()', () => {
   const d = DELIVERY_SETTING_DEFAULTS;
 
-  it('matches the live SQL sim: 2.21 km → $5.25', () => {
-    // Verified against quote_delivery() on the live DB 2026-06-11.
-    expect(computeDeliveryFee(d, 2.21)).toBe(5.25);
+  it('matches the SQL quote_delivery() formula: 2.21 km → $5.24', () => {
+    // base 2.49 + 2.21 km × ($2.00/mi ÷ 1.609344) = 5.236… → 5.24.
+    expect(computeDeliveryFee(d, 2.21)).toBe(5.24);
   });
 
   it('applies the min-fee floor for very short trips', () => {
@@ -59,8 +59,8 @@ describe('computeDeliveryFee — mirrors SQL quote_delivery()', () => {
 
   it('multiplies surge after the clamp', () => {
     const surged = { ...d, deliverySurgeMultiplier: 1.5 };
-    // clamp(2.49 + 2.5, 2.99, 9.99) = 4.99 → ×1.5 = 7.485 → 7.49 (can exceed max)
-    expect(computeDeliveryFee(surged, 2)).toBe(7.49);
+    // clamp(2.49 + 2×$2.00/mi-per-km, 2.99, 9.99) = 4.975… → ×1.5 = 7.46 (can exceed max)
+    expect(computeDeliveryFee(surged, 2)).toBe(7.46);
   });
 });
 

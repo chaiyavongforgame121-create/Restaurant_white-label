@@ -36,6 +36,9 @@ function json(s: number, b: unknown) {
   return new Response(JSON.stringify(b), { status: s, headers: { ...CORS, 'Content-Type': 'application/json' } });
 }
 
+// US market: distances/rates are stored in km / $-per-km but default to round miles.
+const KM_PER_MILE = 1.609344;
+
 type HistoryEntry = Record<string, unknown>;
 
 function trimHistory(history: unknown, keep: number): HistoryEntry[] {
@@ -119,11 +122,11 @@ Deno.serve(async (req) => {
     .eq('id', delivery.branch_id)
     .single();
   const settings = (branch?.settings ?? {}) as Record<string, number>;
-  const radiusKm = Number(settings.driver_search_radius_km ?? 3);
+  const radiusKm = Number(settings.driver_search_radius_km ?? 3 * KM_PER_MILE); // 3 miles
   const maxAttempts = Number(settings.driver_max_attempts ?? 3);
   const offerTtlSeconds = Number(settings.offer_ttl_seconds ?? 75);
   const driverBasePay = Number(settings.driver_base_pay ?? 2.0);
-  const driverPerKmPay = Number(settings.driver_per_km_pay ?? 0.8);
+  const driverPerKmPay = Number(settings.driver_per_km_pay ?? 1 / KM_PER_MILE); // $1.00 / mile
 
   // Exhausted? Alert branch staff and stop.
   if (attempts >= maxAttempts) {

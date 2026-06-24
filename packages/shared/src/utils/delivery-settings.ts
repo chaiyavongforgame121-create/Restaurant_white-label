@@ -29,24 +29,6 @@ export interface DeliverySettings {
   legacyFlatFee: number;
 }
 
-export const DELIVERY_SETTING_DEFAULTS: DeliverySettings = {
-  deliveryBaseFee: 2.49,
-  deliveryPerKmFee: 1.25,
-  deliveryMinFee: 2.99,
-  deliveryMaxFee: 9.99,
-  deliveryRadiusKm: 8,
-  prepTimeMin: 15,
-  busyExtraPrepMin: 0,
-  deliverySurgeMultiplier: 1,
-  offerTtlSeconds: 75,
-  driverBasePay: 2.0,
-  driverPerKmPay: 0.8,
-  legacyFlatFee: 3.99,
-};
-
-/** Average city driving speed used for the heuristic ETA (km/h). */
-export const CITY_SPEED_KMH = 24;
-
 // US market presents distance in MILES. Internal math + storage stay metric (km)
 // so the SQL quote_delivery()/find_dispatch_candidates formulas don't change — the
 // admin UI converts on the way in/out, and customer/driver screens convert on
@@ -57,6 +39,27 @@ export const KM_PER_MILE = 1.609344;
 export const kmToMi = (km: number): number => km / KM_PER_MILE;
 /** miles → km (for storage and the server-side fee/ETA formulas). */
 export const miToKm = (mi: number): number => mi * KM_PER_MILE;
+
+// Defaults are stored in km / $-per-km but chosen to read as round MILES in the
+// admin UI: 5 mi radius, $2.00/mi customer fee, $1.00/mi driver pay. quote_delivery()
+// in SQL mirrors the per-km / radius numbers — keep both sides in sync.
+export const DELIVERY_SETTING_DEFAULTS: DeliverySettings = {
+  deliveryBaseFee: 2.49,
+  deliveryPerKmFee: 2 / KM_PER_MILE, // $2.00 / mile
+  deliveryMinFee: 2.99,
+  deliveryMaxFee: 9.99,
+  deliveryRadiusKm: 5 * KM_PER_MILE, // 5 miles
+  prepTimeMin: 15,
+  busyExtraPrepMin: 0,
+  deliverySurgeMultiplier: 1,
+  offerTtlSeconds: 75,
+  driverBasePay: 2.0,
+  driverPerKmPay: 1 / KM_PER_MILE, // $1.00 / mile
+  legacyFlatFee: 3.99,
+};
+
+/** Average city driving speed used for the heuristic ETA (km/h). */
+export const CITY_SPEED_KMH = 24;
 
 function num(v: unknown, fallback: number): number {
   const n = typeof v === 'string' ? Number(v) : (v as number);
