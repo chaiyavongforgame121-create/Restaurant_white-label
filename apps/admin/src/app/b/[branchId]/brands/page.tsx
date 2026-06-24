@@ -29,7 +29,7 @@ export default async function BrandsPage({ params }: Props) {
       .order('created_at', { ascending: true }),
     supabase
       .from('restaurants')
-      .select('id, name, loyalty_scope')
+      .select('id, name, loyalty_scope, storefront')
       .eq('id', branch.restaurant_id)
       .maybeSingle(),
   ]);
@@ -42,6 +42,7 @@ export default async function BrandsPage({ params }: Props) {
       currentBranchId={branchId}
       brands={(brandsRes.data ?? []) as never}
       branches={(branchesRes.data ?? []) as never}
+      storefront={(restaurantRes.data?.storefront ?? {}) as Record<string, unknown>}
     />
   );
 }

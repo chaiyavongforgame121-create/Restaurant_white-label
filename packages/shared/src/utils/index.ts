@@ -84,3 +84,4 @@ export function computeSalesTax(subtotal: number, taxRate: number): number {
 }
 
 export * from './delivery-settings';
+export * from './storefront';

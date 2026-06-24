@@ -116,6 +116,8 @@ export default async function MenuPage({ params }: Props) {
       reviews={reviews}
       combos={combos}
       happyHours={happyHours}
+      menuLayout={tenant.storefront.menuLayout}
+      menuCardStyle={tenant.storefront.menuCardStyle}
     />
   );
 }

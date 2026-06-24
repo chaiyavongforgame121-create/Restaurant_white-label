@@ -2778,6 +2778,7 @@ export type Database = {
           name: string
           owner_user_id: string
           slug: string
+          storefront: Json
           updated_at: string
         }
         Insert: {
@@ -2790,6 +2791,7 @@ export type Database = {
           name: string
           owner_user_id: string
           slug: string
+          storefront?: Json
           updated_at?: string
         }
         Update: {
@@ -2802,6 +2804,7 @@ export type Database = {
           name?: string
           owner_user_id?: string
           slug?: string
+          storefront?: Json
           updated_at?: string
         }
         Relationships: [

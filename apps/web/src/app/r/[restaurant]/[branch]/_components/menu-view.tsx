@@ -11,8 +11,10 @@ import {
   formatCurrency,
   pickLocalized,
   type Branch,
+  type MenuCardStyle,
   type MenuCategory,
   type MenuItem,
+  type MenuLayout,
 } from '@favornoms/shared';
 import {
   Badge,
@@ -62,9 +64,11 @@ interface MenuViewProps {
   reviews?: BranchReviews | null;
   combos?: ComboRow[];
   happyHours?: HappyHourSection[];
+  menuLayout?: MenuLayout;
+  menuCardStyle?: MenuCardStyle;
 }
 
-export function MenuView({ branch, categories, items, isOpen = true, reviews, combos = [], happyHours = [] }: MenuViewProps) {
+export function MenuView({ branch, categories, items, isOpen = true, reviews, combos = [], happyHours = [], menuLayout = 'grid4', menuCardStyle = 'standard' }: MenuViewProps) {
   const t = useTranslations();
   const locale = useLocale() as Locale;
   const [search, setSearch] = React.useState('');
@@ -206,7 +210,7 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
           counts={counts}
         />
 
-        <MenuGrid items={filtered} onOpen={setActiveItem} />
+        <MenuGrid items={filtered} onOpen={setActiveItem} layout={menuLayout} cardStyle={menuCardStyle} />
 
         {filtered.length === 0 && (
           <EmptyState
@@ -445,11 +449,36 @@ function CategoryTabs({
 
 /* -------------------- Menu grid -------------------- */
 
-function MenuGrid({ items, onOpen }: { items: MenuItem[]; onOpen: (i: MenuItem) => void }) {
+// Desktop column count per layout; scales down on small screens. Literal class
+// strings so Tailwind's JIT keeps them. 'list' = single full-width column.
+const MENU_GRID_CLASS: Record<MenuLayout, string> = {
+  list: 'grid-cols-1',
+  grid2: 'grid-cols-1 sm:grid-cols-2',
+  grid3: 'grid-cols-2 sm:grid-cols-2 lg:grid-cols-3',
+  grid4: 'grid-cols-2 sm:grid-cols-3 xl:grid-cols-4',
+};
+
+function MenuGrid({
+  items,
+  onOpen,
+  layout,
+  cardStyle,
+}: {
+  items: MenuItem[];
+  onOpen: (i: MenuItem) => void;
+  layout: MenuLayout;
+  cardStyle: MenuCardStyle;
+}) {
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+    <div className={`grid gap-4 ${MENU_GRID_CLASS[layout]}`}>
       {items.map((item, idx) => (
-        <MenuCard key={item.id} item={item} index={idx} onOpen={() => onOpen(item)} />
+        <MenuCard
+          key={item.id}
+          item={item}
+          index={idx}
+          onOpen={() => onOpen(item)}
+          compact={cardStyle === 'compact'}
+        />
       ))}
     </div>
   );
@@ -458,15 +487,61 @@ function MenuGrid({ items, onOpen }: { items: MenuItem[]; onOpen: (i: MenuItem) 
 function MenuCard({
   item,
   onOpen,
+  compact = false,
 }: {
   item: MenuItem;
   index: number;
   onOpen: () => void;
+  compact?: boolean;
 }) {
   const t = useTranslations('menu');
   const add = useCart((s) => s.add);
   const lines = useCart((s) => s.lines);
   const inCartQty = lines.find((l) => l.menuItemId === item.id)?.quantity ?? 0;
+
+  if (compact) {
+    return (
+      <article className="group">
+        <Card className="flex items-stretch gap-3 overflow-hidden border-border/40 p-2 transition-shadow hover:shadow-warm">
+          <button
+            onClick={onOpen}
+            className="focus-ring relative h-24 w-24 shrink-0 overflow-hidden rounded-xl text-left"
+            aria-label={`Open ${item.name}`}
+          >
+            {item.imageUrl ? (
+              <Image src={item.imageUrl} alt={item.name} fill sizes="96px" className="object-cover" />
+            ) : (
+              <div className="absolute inset-0 bg-gradient-sunset" aria-hidden />
+            )}
+          </button>
+          <div className="flex min-w-0 flex-1 flex-col py-1">
+            <button onClick={onOpen} className="focus-ring text-left">
+              <h3 className="line-clamp-1 font-display text-base font-semibold leading-tight">{item.name}</h3>
+              {item.description && (
+                <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{item.description}</p>
+              )}
+            </button>
+            <div className="mt-auto flex items-center justify-between pt-1">
+              <div className="flex items-baseline gap-1.5">
+                {item.listPrice && item.listPrice > item.price ? (
+                  <span className="text-xs text-muted-foreground line-through">{formatCurrency(item.listPrice)}</span>
+                ) : null}
+                <span className="font-display text-lg font-semibold text-primary">{formatCurrency(item.price)}</span>
+              </div>
+              <Button
+                size="sm"
+                variant={inCartQty > 0 ? 'soft' : 'gradient'}
+                onClick={() => add(item)}
+                aria-label={`Add ${item.name}`}
+              >
+                {inCartQty > 0 ? `${inCartQty} ${t('inCart')}` : `+ ${t('addToCart')}`}
+              </Button>
+            </div>
+          </div>
+        </Card>
+      </article>
+    );
+  }
 
   return (
     <article className="group transition-transform hover:-translate-y-1">

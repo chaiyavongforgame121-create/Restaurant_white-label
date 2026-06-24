@@ -1,4 +1,4 @@
-import type { Branch, Restaurant, TenantTheme } from '@favornoms/shared';
+import { parseStorefront, type Branch, type Restaurant, type StorefrontSettings, type TenantTheme } from '@favornoms/shared';
 import type { Database } from '../types';
 import type { FavornomsClient } from '../client-type';
 
@@ -9,6 +9,8 @@ export interface ResolvedTenant {
   restaurant: Restaurant;
   branch: Branch;
   theme: TenantTheme;
+  /** Per-restaurant storefront appearance (menu layout + card style), shared by all branches. */
+  storefront: StorefrontSettings;
 }
 
 /**
@@ -23,7 +25,7 @@ export async function resolveTenantBySlug(
   // Two-step query — simpler typing than nested join with !inner.
   const { data: restaurantRow, error: rErr } = await supabase
     .from('restaurants')
-    .select('id, slug, name, brand_settings, owner_user_id, created_at, updated_at')
+    .select('id, slug, name, brand_settings, owner_user_id, created_at, updated_at, storefront')
     .eq('slug', restaurantSlug)
     .maybeSingle();
   if (rErr || !restaurantRow) return null;
@@ -82,7 +84,7 @@ export async function resolveTenantBySlug(
     ...(brandName ? { brandName } : {}),
   };
 
-  return { restaurant, branch, theme };
+  return { restaurant, branch, theme, storefront: parseStorefront(r.storefront) };
 }
 
 function parseSettings(raw: unknown): Branch['settings'] {

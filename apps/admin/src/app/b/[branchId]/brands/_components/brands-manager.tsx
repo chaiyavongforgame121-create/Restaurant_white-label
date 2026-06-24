@@ -4,6 +4,14 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { Palette, Plus, Save, Star } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
+import {
+  MENU_CARD_STYLE_LABELS,
+  MENU_LAYOUT_LABELS,
+  parseStorefront,
+  serializeStorefront,
+  type MenuCardStyle,
+  type MenuLayout,
+} from '@favornoms/shared';
 import { Badge, Button, Card, IconButton } from '@favornoms/ui';
 
 interface Brand {
@@ -30,6 +38,7 @@ interface Props {
   currentBranchId: string;
   brands: Brand[];
   branches: BranchRow[];
+  storefront: Record<string, unknown>;
 }
 
 const slugify = (s: string) =>
@@ -41,6 +50,7 @@ export function BrandsManager({
   loyaltyScope: initialScope,
   brands: initialBrands,
   branches,
+  storefront,
 }: Props) {
   const router = useRouter();
   const [brands, setBrands] = React.useState(initialBrands);
@@ -49,6 +59,9 @@ export function BrandsManager({
   const [editing, setEditing] = React.useState<Brand | null>(null);
   const [creating, setCreating] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [store, setStore] = React.useState(() => parseStorefront(storefront));
+  const [storeSaving, setStoreSaving] = React.useState(false);
+  const [storeSaved, setStoreSaved] = React.useState(false);
 
   const refresh = async () => {
     const supabase = getBrowserClient();
@@ -75,6 +88,25 @@ export function BrandsManager({
       return;
     }
     setScope(next);
+    router.refresh();
+  };
+
+  const saveStorefront = async (next: { menuLayout: MenuLayout; menuCardStyle: MenuCardStyle }) => {
+    setStore(next);
+    setStoreSaving(true);
+    setError(null);
+    const supabase = getBrowserClient();
+    const { error: upErr } = await supabase
+      .from('restaurants')
+      .update({ storefront: serializeStorefront(next) })
+      .eq('id', restaurantId);
+    setStoreSaving(false);
+    if (upErr) {
+      setError(upErr.message);
+      return;
+    }
+    setStoreSaved(true);
+    setTimeout(() => setStoreSaved(false), 2000);
     router.refresh();
   };
 
@@ -125,6 +157,54 @@ export function BrandsManager({
               </p>
             </button>
           ))}
+        </div>
+      </Card>
+
+      <Card className="mb-6 p-5">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="font-display text-lg font-semibold">Storefront appearance</h2>
+          {storeSaved && <span className="text-sm text-success">Saved ✓</span>}
+        </div>
+        <p className="text-sm text-muted-foreground">
+          How the menu looks to customers. Applies to every branch of this restaurant.
+        </p>
+        <div className="mt-4 space-y-4">
+          <div>
+            <p className="mb-1.5 text-sm font-medium">Menu layout</p>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {(['list', 'grid2', 'grid3', 'grid4'] as const).map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  disabled={storeSaving}
+                  onClick={() => saveStorefront({ ...store, menuLayout: opt })}
+                  className={`rounded-xl border px-3 py-2 text-sm transition ${
+                    store.menuLayout === opt ? 'border-primary bg-primary/5 font-medium' : 'border-border bg-card'
+                  }`}
+                >
+                  {MENU_LAYOUT_LABELS[opt]}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="mb-1.5 text-sm font-medium">Card style</p>
+            <div className="grid grid-cols-2 gap-2">
+              {(['standard', 'compact'] as const).map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  disabled={storeSaving}
+                  onClick={() => saveStorefront({ ...store, menuCardStyle: opt })}
+                  className={`rounded-xl border px-3 py-2 text-sm transition ${
+                    store.menuCardStyle === opt ? 'border-primary bg-primary/5 font-medium' : 'border-border bg-card'
+                  }`}
+                >
+                  {MENU_CARD_STYLE_LABELS[opt]}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </Card>
 
