@@ -18,14 +18,18 @@ export function CartView({ branchId }: { branchId: string }) {
   const params = useParams<{ restaurant: string; branch: string }>();
   const base = `/r/${params.restaurant}/${params.branch}`;
 
-  const [hydrated, setHydrated] = React.useState(() => useCart.persist.hasHydrated());
+  // useCart.persist can be undefined during SSR — start false and confirm hydration
+  // in the effect (client-only), matching checkout-view / app-shell. Reading
+  // useCart.persist.hasHydrated() directly in the initializer crashed SSR.
+  const [hydrated, setHydrated] = React.useState(false);
   React.useEffect(() => {
-    if (useCart.persist.hasHydrated()) {
+    const persist = useCart.persist;
+    if (!persist || persist.hasHydrated()) {
       setHydrated(true);
       return;
     }
-    const unsub = useCart.persist.onFinishHydration(() => setHydrated(true));
-    void useCart.persist.rehydrate();
+    const unsub = persist.onFinishHydration(() => setHydrated(true));
+    void persist.rehydrate();
     return unsub;
   }, []);
 

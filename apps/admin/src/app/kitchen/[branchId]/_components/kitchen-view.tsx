@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   AlertTriangle, ArrowRight, Armchair, Bike, CalendarClock, Check, ChefHat, Clock,
   Flame, Layers, Loader2, Maximize2, Minimize2, MoreVertical, RotateCcw, ShoppingBag, Undo2,
-  Volume2, VolumeX, X,
+  UserRound, Volume2, VolumeX, X,
 } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { OpsToggles } from './ops-toggles';
@@ -35,6 +35,16 @@ const LANES = [
   { key: 'cooking', title: 'COOKING', grad: 'linear-gradient(120deg,#FFC39A,#FF9166)', tone: '#A83C12' },
   { key: 'ready', title: 'READY', grad: 'linear-gradient(120deg,#A9EDC9,#5FD89B)', tone: '#13794C' },
 ] as const;
+
+// Whole-card "standout" skins — every card carries a bold, lane-coloured
+// background (not flat white) so the board reads at a glance, and escalates to a
+// red tint the moment an order ages into Late/Critical.
+const LANE_SKIN: Record<string, { bg: string; border: string }> = {
+  new: { bg: 'linear-gradient(135deg,#FFF3D4,#FFE1A0)', border: '#F1C05B' },
+  cooking: { bg: 'linear-gradient(135deg,#FFE8D8,#FFCBA6)', border: '#F09E63' },
+  ready: { bg: 'linear-gradient(135deg,#DCF6E8,#B6EACB)', border: '#6FCB98' },
+};
+const URGENT_SKIN = { bg: 'linear-gradient(135deg,#FFDAD5,#FFB8B0)', border: '#ED847B' };
 
 const CHAN: Record<string, { Icon: typeof Bike; bg: string; c: string; label: string }> = {
   dine_in: { Icon: Armchair, bg: '#FFE3D6', c: '#C2491F', label: 'Dine-in' },
@@ -128,7 +138,16 @@ interface Order {
   table_id?: string | null;
   tables?: { table_number: string; display_name: string | null } | null;
   order_items: OrderItem[];
-  deliveries?: { status: string; driver_id: string | null; accepted_at: string | null }[];
+  deliveries?: { id: string; status: string; driver_id: string | null; accepted_at: string | null }[];
+}
+
+export interface DriverLite {
+  id: string;
+  full_name: string;
+  phone: string | null;
+  vehicle_type: string;
+  is_online: boolean;
+  cooldown_until: string | null;
 }
 
 interface Props {
@@ -137,11 +156,12 @@ interface Props {
   initialOrders: Order[];
   stations: string[];
   activeStation: string | null;
+  drivers: DriverLite[];
 }
 
 const ACTIVE_STATUSES = ['pending', 'confirmed', 'preparing', 'ready'];
 
-export function KitchenView({ branchId, branchName, initialOrders, stations, activeStation }: Props) {
+export function KitchenView({ branchId, branchName, initialOrders, stations, activeStation, drivers }: Props) {
   const [orders, setOrders] = React.useState<Order[]>(initialOrders);
   const [station, setStation] = React.useState<string | null>(activeStation);
   const [soundOn, setSoundOn] = React.useState(true);
@@ -202,10 +222,10 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
         })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'deliveries', filter: `branch_id=eq.${branchId}` },
         (payload) => {
-          const d = payload.new as { order_id?: string; status?: string; driver_id?: string | null; accepted_at?: string | null };
+          const d = payload.new as { id?: string; order_id?: string; status?: string; driver_id?: string | null; accepted_at?: string | null };
           if (!d?.order_id) return;
           setOrders((curr) => curr.map((o) => (o.id === d.order_id
-            ? { ...o, deliveries: [{ status: d.status ?? 'pending', driver_id: d.driver_id ?? null, accepted_at: d.accepted_at ?? null }] }
+            ? { ...o, deliveries: [{ id: d.id ?? o.deliveries?.[0]?.id ?? '', status: d.status ?? 'pending', driver_id: d.driver_id ?? null, accepted_at: d.accepted_at ?? null }] }
             : o)));
         })
       .subscribe();
@@ -308,6 +328,21 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
     if (error) throw error;
   };
 
+  // Manually offer a delivery to a SPECIFIC rider (staff override of auto-dispatch).
+  // Goes through the staff_assign_driver RPC — a normal offer the rider still
+  // accepts/rejects, but targeted rather than auto-scored.
+  const assignDriver = async (deliveryId: string, driverId: string) => {
+    const { error } = await (supa() as unknown as {
+      rpc: (fn: string, args: Record<string, unknown>) => Promise<{ error: { message: string } | null }>;
+    }).rpc('staff_assign_driver', { p_delivery_id: deliveryId, p_driver_id: driverId });
+    if (error) {
+      showToast(`Couldn't assign rider — ${error.message}`, null);
+      throw error;
+    }
+    const d = drivers.find((x) => x.id === driverId);
+    showToast(`Offered to ${d?.full_name ?? 'rider'}`, null);
+  };
+
   /* derive lanes (client-side station filter + FIFO) */
   const matchesStation = React.useCallback(
     (o: Order) => !station || o.order_items.some((it) => it.station === station),
@@ -320,8 +355,9 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
     cooking: visible.filter((o) => o.status === 'preparing'),
     ready: visible.filter((o) => o.status === 'ready'),
   };
-  const fifo = (a: Order, b: Order) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-  for (const k of Object.keys(byLane)) byLane[k]!.sort(fifo);
+  // Newest order first (requested): the freshest tickets sit at the top of each lane.
+  const newestFirst = (a: Order, b: Order) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  for (const k of Object.keys(byLane)) byLane[k]!.sort(newestFirst);
 
   /* station counts + "drowning" (any item on a station is Late/Critical) */
   const stationStat: Record<string, { count: number; drown: boolean }> = {};
@@ -440,6 +476,8 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
                     onRecall={() => recall(order)}
                     on86={eightySix}
                     onDispatch={(reset) => dispatchDriver(order.id, reset)}
+                    drivers={drivers}
+                    onAssign={assignDriver}
                   />
                 ))
               )}
@@ -495,10 +533,11 @@ function Column({ lane, count, children }: { lane: (typeof LANES)[number]; count
 const SEARCH_TIMEOUT_SEC = 120;
 
 function OrderCard({
-  order, lane, now, station, readyAt, onAdvance, onReject, onRecall, on86, onDispatch,
+  order, lane, now, station, readyAt, onAdvance, onReject, onRecall, on86, onDispatch, drivers, onAssign,
 }: {
   order: Order; lane: string; now: number; station: string | null; readyAt: number;
   onAdvance: () => void; onReject: () => void; onRecall: () => void; on86: (name: string) => void; onDispatch: (reset?: boolean) => void | Promise<void>;
+  drivers: DriverLite[]; onAssign: (deliveryId: string, driverId: string) => void | Promise<void>;
 }) {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [dispatching, setDispatching] = React.useState(false);
@@ -523,7 +562,18 @@ function OrderCard({
   const action = ACTION[order.status];
   const isDelivery = order.channel === 'delivery';
   const delivery = order.deliveries?.[0];
+  const deliveryId = delivery?.id;
   const driverAssigned = delivery && delivery.status !== 'pending' && delivery.status !== 'dispatching';
+  // Staff can hand the job to a specific rider until it's actually accepted / in flight.
+  const canManualAssign =
+    isDelivery && order.status === 'ready' && !!deliveryId &&
+    (!delivery || ['pending', 'dispatching', 'assigned'].includes(delivery.status)) &&
+    !delivery?.accepted_at;
+  // The delivery-ready card uses dispatch/assign controls, not a status advance —
+  // so the whole card is tap-to-advance everywhere EXCEPT there.
+  const cardClickable = !!action && !(isDelivery && order.status === 'ready');
+  const urgent = tg.tier === 'late' || tg.tier === 'crit';
+  const skin = urgent ? URGENT_SKIN : (LANE_SKIN[lane] ?? LANE_SKIN.new!);
   const driverLabel = !delivery || delivery.status === 'pending' || delivery.status === 'dispatching'
     ? 'Finding a rider…'
     : delivery.status === 'assigned'
@@ -560,8 +610,13 @@ function OrderCard({
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
       transition={{ duration: 0.25, ease: 'easeOut' }}
-      className="relative rounded-2xl"
-      style={{ background: SUN.card, border: `1px solid ${SUN.cardBorder}`, padding: '11px 12px 12px 16px', boxShadow: tg.ring ? '0 0 0 2px rgba(229,72,77,.5)' : undefined }}
+      onClick={cardClickable ? onAdvance : undefined}
+      whileTap={cardClickable ? { scale: 0.99 } : undefined}
+      role={cardClickable ? 'button' : undefined}
+      tabIndex={cardClickable ? 0 : undefined}
+      onKeyDown={cardClickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onAdvance(); } } : undefined}
+      className={`relative rounded-2xl ${cardClickable ? 'cursor-pointer' : ''}`}
+      style={{ background: skin.bg, border: `1px solid ${skin.border}`, padding: '11px 12px 12px 16px', boxShadow: tg.ring ? '0 0 0 2px rgba(229,72,77,.5)' : undefined }}
     >
       <span className="absolute left-0 top-0 bottom-0 w-[5px] rounded-l-2xl" style={{ background: tg.spine }} />
 
@@ -577,7 +632,7 @@ function OrderCard({
         <span className={`ml-auto rounded-lg px-2 py-0.5 text-[17px] font-medium tabular-nums ${tg.pulse ? 'animate-pulse' : ''}`} style={{ background: tg.pill, color: tg.pc }}>
           {fmtTimer(sec)}
         </span>
-        <div className="relative">
+        <div className="relative" onClick={(e) => e.stopPropagation()}>
           <button aria-label="More actions" onClick={() => setMenuOpen((m) => !m)} className="grid h-7 w-7 place-items-center rounded-lg" style={{ color: SUN.faint }}>
             <MoreVertical className="h-4 w-4" />
           </button>
@@ -638,25 +693,30 @@ function OrderCard({
       )}
 
       {isDelivery && order.status === 'ready' ? (
-        driverAssigned ? (
-          <div className="mt-2.5 flex items-center justify-center gap-2 rounded-[10px] px-3 py-2.5 text-sm font-medium" style={{ background: '#E7EEFB', color: '#2E5FB0' }}>
-            <Bike className="h-4 w-4" /> {driverLabel}
-          </div>
-        ) : dispatchError || searchTimedOut ? (
-          <button onClick={() => handleDispatch(true)} className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-[10px] py-2.5 text-sm font-medium active:scale-[.985]" style={{ background: '#FBE3E1', color: '#C0382F' }}>
-            <AlertTriangle className="h-4 w-4" /> No rider found — tap to retry
-          </button>
-        ) : searching ? (
-          <div className="mt-2.5 flex items-center justify-center gap-2 rounded-[10px] px-3 py-2.5 text-sm font-medium" style={{ background: '#E7EEFB', color: '#2E5FB0' }}>
-            <Loader2 className="h-4 w-4 animate-spin" /> Searching for a rider…
-          </div>
-        ) : (
-          <button onClick={() => handleDispatch(false)} className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-[10px] py-2.5 text-sm font-medium active:scale-[.985]" style={{ background: '#E3ECFF', color: '#2E5FB0' }}>
-            <Bike className="h-4 w-4" /> Find a rider
-          </button>
-        )
+        <div onClick={(e) => e.stopPropagation()}>
+          {driverAssigned ? (
+            <div className="mt-2.5 flex items-center justify-center gap-2 rounded-[10px] px-3 py-2.5 text-sm font-medium" style={{ background: '#E7EEFB', color: '#2E5FB0' }}>
+              <Bike className="h-4 w-4" /> {driverLabel}
+            </div>
+          ) : dispatchError || searchTimedOut ? (
+            <button onClick={() => handleDispatch(true)} className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-[10px] py-2.5 text-sm font-medium active:scale-[.985]" style={{ background: '#FBE3E1', color: '#C0382F' }}>
+              <AlertTriangle className="h-4 w-4" /> No rider found — tap to retry
+            </button>
+          ) : searching ? (
+            <div className="mt-2.5 flex items-center justify-center gap-2 rounded-[10px] px-3 py-2.5 text-sm font-medium" style={{ background: '#E7EEFB', color: '#2E5FB0' }}>
+              <Loader2 className="h-4 w-4 animate-spin" /> Searching for a rider…
+            </div>
+          ) : (
+            <button onClick={() => handleDispatch(false)} className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-[10px] py-2.5 text-sm font-medium active:scale-[.985]" style={{ background: '#E3ECFF', color: '#2E5FB0' }}>
+              <Bike className="h-4 w-4" /> Find a rider
+            </button>
+          )}
+          {canManualAssign && drivers.length > 0 && (
+            <AssignPicker drivers={drivers} onAssign={(driverId) => onAssign(deliveryId!, driverId)} />
+          )}
+        </div>
       ) : action ? (
-        <button onClick={onAdvance} className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-[10px] py-2.5 text-sm font-medium active:scale-[.985]" style={{ background: action.grad, color: action.tx }}>
+        <button onClick={(e) => { e.stopPropagation(); onAdvance(); }} className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-[10px] py-2.5 text-sm font-medium active:scale-[.985]" style={{ background: action.grad, color: action.tx }}>
           <action.Icon className="h-4 w-4" />{action.label}
         </button>
       ) : null}
@@ -669,6 +729,57 @@ function MenuRow({ children, onClick, danger }: { children: React.ReactNode; onC
     <button onClick={onClick} className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-black/5" style={{ color: danger ? '#C0382F' : SUN.text }}>
       {children}
     </button>
+  );
+}
+
+/* Manual "assign a specific rider" picker (staff override of auto-dispatch).
+   Online riders float to the top; picking one sends them a targeted offer. */
+function AssignPicker({ drivers, onAssign }: { drivers: DriverLite[]; onAssign: (driverId: string) => void | Promise<void> }) {
+  const [open, setOpen] = React.useState(false);
+  const [busy, setBusy] = React.useState<string | null>(null);
+  const ordered = React.useMemo(
+    () => [...drivers].sort((a, b) => Number(b.is_online) - Number(a.is_online) || a.full_name.localeCompare(b.full_name)),
+    [drivers],
+  );
+  const pick = async (id: string) => {
+    setBusy(id);
+    try { await onAssign(id); setOpen(false); } catch { /* caller surfaces the error */ } finally { setBusy(null); }
+  };
+  return (
+    <div className="relative mt-2">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center justify-center gap-2 rounded-[10px] py-2 text-sm font-medium active:scale-[.985]"
+        style={{ background: '#FFFFFF', border: `1px solid ${SUN.cardBorder}`, color: SUN.accentTx }}
+      >
+        <UserRound className="h-4 w-4" /> Assign to a rider
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 right-0 top-11 z-20 max-h-56 overflow-y-auto rounded-xl py-1" style={{ background: SUN.card, border: `1px solid ${SUN.cardBorder}`, boxShadow: '0 8px 24px rgba(0,0,0,.14)' }}>
+            {ordered.length === 0 ? (
+              <div className="px-3 py-2 text-xs" style={{ color: SUN.faint }}>No approved riders for this branch.</div>
+            ) : (
+              ordered.map((d) => (
+                <button
+                  key={d.id}
+                  disabled={busy !== null}
+                  onClick={() => void pick(d.id)}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-black/5 disabled:opacity-60"
+                >
+                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: d.is_online ? '#23C16B' : '#CFC2B4' }} />
+                  <span className="flex-1 truncate" style={{ color: SUN.text }}>{d.full_name}</span>
+                  {busy === d.id
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" style={{ color: SUN.faint }} />
+                    : <span className="text-[11px] capitalize" style={{ color: SUN.faint }}>{d.is_online ? d.vehicle_type : 'offline'}</span>}
+                </button>
+              ))
+            )}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 

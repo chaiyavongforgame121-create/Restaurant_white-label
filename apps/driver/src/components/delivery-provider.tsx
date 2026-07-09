@@ -37,6 +37,10 @@ export interface ActiveDeliveryUI {
   acceptedAt: string | null;
   /** Server-side offer deadline (dispatch v2) — drives the countdown. */
   offerExpiresAt: string | null;
+  /** Proof-of-pickup photo URL — required before the job can advance to picked_up. */
+  pickupPhotoUrl: string | null;
+  /** Proof-of-delivery photo URL — required before the job can be marked delivered. */
+  podPhotoUrl: string | null;
   branchLat: number | null;
   branchLng: number | null;
   dropoffLat: number | null;
@@ -97,6 +101,8 @@ function mapDeliveryToUI(row: Record<string, unknown>): ActiveDeliveryUI {
     assignedAt: (row.assigned_at as string | null) ?? null,
     acceptedAt: (row.accepted_at as string | null) ?? null,
     offerExpiresAt: (row.offer_expires_at as string | null) ?? null,
+    pickupPhotoUrl: (row.pickup_photo_url as string | null) ?? null,
+    podPhotoUrl: (row.pod_photo_url as string | null) ?? null,
     branchLat: branch?.geo_lat ?? null,
     branchLng: branch?.geo_lng ?? null,
     dropoffLat: (row.dropoff_lat as number | null) ?? null,

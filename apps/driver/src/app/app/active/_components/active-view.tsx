@@ -90,6 +90,16 @@ export function ActiveDeliveryView() {
   const [route, setRoute] = React.useState<[number, number][] | null>(null);
   const [completed, setCompleted] = React.useState<{ earnings: number; orderNumber: string } | null>(null);
   const [advanceError, setAdvanceError] = React.useState<string | null>(null);
+  // Local echoes of the just-uploaded proof photos for instant CTA-unlock
+  // (the provider also picks them up from the server on its next realtime resync).
+  const [pickupPhotoUrl, setPickupPhotoUrl] = React.useState<string | null>(null);
+  const [podPhotoUrl, setPodPhotoUrl] = React.useState<string | null>(null);
+
+  // Reset the local echoes when the active job changes.
+  React.useEffect(() => {
+    setPickupPhotoUrl(null);
+    setPodPhotoUrl(null);
+  }, [active?.id]);
 
   // Watch GPS for the live route map (separate from DriverLocationPing's DB push) +
   // surface a permission-denied state so the driver isn't silently invisible.
@@ -134,10 +144,13 @@ export function ActiveDeliveryView() {
       setSoftStage('heading_to_pickup');
       return;
     }
-    // Sync soft stage with server-side status on mount/refresh
+    // Sync soft stage with server-side status on mount/refresh. Preserve the local
+    // "arrived" sub-steps (at_pickup / at_customer) so a realtime resync — e.g. the
+    // one markArriving() triggers — doesn't yank the driver back a step.
     if (active.status === 'picked_up') setSoftStage('picked_up');
-    else if (active.status === 'in_transit') setSoftStage('in_transit');
-    else if (active.status === 'assigned') {
+    else if (active.status === 'in_transit') {
+      setSoftStage((prev) => (prev === 'at_customer' ? 'at_customer' : 'in_transit'));
+    } else if (active.status === 'assigned') {
       setSoftStage((prev) => (prev === 'at_pickup' ? 'at_pickup' : 'heading_to_pickup'));
     }
   }, [active]);
@@ -195,8 +208,28 @@ export function ActiveDeliveryView() {
   const meta = stageMeta[stage];
   const StageIcon = meta.icon;
 
+  // Proof of pickup is mandatory: at the restaurant the driver must snap a photo
+  // before "Picked up" unlocks. Trust either the fresh local upload or the server row.
+  const hasPickupPhoto = !!pickupPhotoUrl || !!active.pickupPhotoUrl;
+  const needsPickupPhoto = stage === 'at_pickup' && !hasPickupPhoto;
+  // Proof of delivery is mandatory: at the customer the driver must snap a photo
+  // before "Mark as delivered" unlocks.
+  const hasPodPhoto = !!podPhotoUrl || !!active.podPhotoUrl;
+  const needsPodPhoto = stage === 'at_customer' && !hasPodPhoto;
+
   const handleAdvance = async () => {
     if (advancing) return; // guard against double-fire
+    // Belt-and-braces: the CTA is already disabled, but never advance to picked_up
+    // without the pickup photo, nor finish without the delivery photo
+    // (progress_delivery also enforces both server-side).
+    if (meta.transition === 'picked_up' && !hasPickupPhoto) {
+      setAdvanceError('Take a pickup photo before you continue.');
+      return;
+    }
+    if (meta.transition === 'delivered' && !hasPodPhoto) {
+      setAdvanceError('Take a delivery photo before you finish.');
+      return;
+    }
     if ('vibrate' in navigator) navigator.vibrate(40);
     setAdvancing(true);
     setAdvanceError(null);
@@ -273,28 +306,11 @@ export function ActiveDeliveryView() {
           <span className="rounded-full bg-card/90 px-3 py-1.5 text-xs font-semibold backdrop-blur">
             {kmToMi(active.distanceKm).toFixed(1)} mi · {active.estimatedDurationMin} min
           </span>
-          <button
-            className="focus-ring inline-flex h-11 items-center gap-1.5 rounded-full bg-card/90 px-4 text-sm font-semibold backdrop-blur"
-            aria-label={t('navigate')}
-            onClick={() => {
-              // Prefer exact coordinates (Phase 1 geocoding); fall back to text.
-              const lat = isHeading ? active.branchLat : active.dropoffLat;
-              const lng = isHeading ? active.branchLng : active.dropoffLng;
-              if (lat != null && lng != null) {
-                window.open(
-                  `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`,
-                  '_blank',
-                );
-                return;
-              }
-              const target = isHeading
-                ? encodeURIComponent(active.branchAddress)
-                : encodeURIComponent(active.customerAddress);
-              if (target) window.open(`https://maps.google.com/?q=${target}`, '_blank');
-            }}
-          >
-            <Navigation className="h-4 w-4" /> {t('navigate')}
-          </button>
+          <NavigateMenu
+            lat={isHeading ? active.branchLat : active.dropoffLat}
+            lng={isHeading ? active.branchLng : active.dropoffLng}
+            address={isHeading ? active.branchAddress : active.customerAddress}
+          />
         </div>
       </section>
 
@@ -368,8 +384,19 @@ export function ActiveDeliveryView() {
               </div>
             </div>
 
+            {stage === 'at_pickup' && (
+              <PickupPhotoUploader
+                deliveryId={active.id}
+                uploadedUrl={pickupPhotoUrl ?? active.pickupPhotoUrl}
+                onUploaded={setPickupPhotoUrl}
+              />
+            )}
             {stage === 'at_customer' && (
-              <PodUploader deliveryId={active.id} />
+              <PodUploader
+                deliveryId={active.id}
+                uploadedUrl={podPhotoUrl ?? active.podPhotoUrl}
+                onUploaded={setPodPhotoUrl}
+              />
             )}
             <Button
               variant="gradient"
@@ -377,10 +404,20 @@ export function ActiveDeliveryView() {
               fullWidth
               onClick={handleAdvance}
               loading={advancing}
-              disabled={advancing}
+              disabled={advancing || needsPickupPhoto || needsPodPhoto}
             >
               {t(meta.ctaKey as never)}
             </Button>
+            {needsPickupPhoto && (
+              <p className="text-center text-xs text-muted-foreground">
+                📸 Upload a pickup photo to continue.
+              </p>
+            )}
+            {needsPodPhoto && (
+              <p className="text-center text-xs text-muted-foreground">
+                📸 Upload a delivery photo to finish.
+              </p>
+            )}
             {advanceError && (
               <p className="text-center text-xs font-medium text-danger">{advanceError}</p>
             )}
@@ -524,9 +561,162 @@ function DeliveryIssuePanel({ active }: { active: ActiveDeliveryUI }) {
   );
 }
 
-function PodUploader({ deliveryId }: { deliveryId: string }) {
+// Platform-aware "Navigate" — hands off to the driver's map app of choice and
+// launches turn-by-turn where the platform supports it (Android: google.navigation
+// deep link → nav starts immediately; iOS: Apple Maps; Waze everywhere).
+function NavigateMenu({ lat, lng, address }: { lat: number | null; lng: number | null; address: string }) {
+  const t = useTranslations('active');
+  const [open, setOpen] = React.useState(false);
+  const dest = lat != null && lng != null ? `${lat},${lng}` : null;
+  const q = encodeURIComponent(address || '');
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
+  const isIOS = /iPhone|iPad|iPod/i.test(ua);
+  const isAndroid = /Android/i.test(ua);
+
+  const go = (kind: 'google' | 'waze' | 'apple') => {
+    setOpen(false);
+    if (kind === 'waze') {
+      window.open(dest ? `https://waze.com/ul?ll=${dest}&navigate=yes` : `https://waze.com/ul?q=${q}&navigate=yes`, '_blank');
+      return;
+    }
+    if (kind === 'apple') {
+      window.open(dest ? `https://maps.apple.com/?daddr=${dest}&dirflg=d` : `https://maps.apple.com/?daddr=${q}&dirflg=d`, '_blank');
+      return;
+    }
+    // Google: on Android, google.navigation: starts turn-by-turn straight away.
+    if (isAndroid && dest) {
+      window.location.href = `google.navigation:q=${dest}&mode=d`;
+      return;
+    }
+    window.open(
+      dest ? `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving` : `https://maps.google.com/?q=${q}`,
+      '_blank',
+    );
+  };
+
+  return (
+    <div className="relative">
+      <button
+        className="focus-ring inline-flex h-11 items-center gap-1.5 rounded-full bg-card/90 px-4 text-sm font-semibold backdrop-blur"
+        aria-label={t('navigate')}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <Navigation className="h-4 w-4" /> {t('navigate')}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-12 z-50 w-44 overflow-hidden rounded-2xl border border-border bg-card shadow-warm" role="menu">
+            <NavRow onClick={() => go('google')}>🗺️ Google Maps</NavRow>
+            <NavRow onClick={() => go('waze')}>🚗 Waze</NavRow>
+            {isIOS && <NavRow onClick={() => go('apple')}>🍎 Apple Maps</NavRow>}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function NavRow({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onClick}
+      className="flex w-full items-center gap-2 border-b border-border/60 px-4 py-3 text-left text-sm font-medium last:border-b-0 hover:bg-muted/60"
+    >
+      {children}
+    </button>
+  );
+}
+
+function PickupPhotoUploader({
+  deliveryId,
+  uploadedUrl,
+  onUploaded,
+}: {
+  deliveryId: string;
+  uploadedUrl: string | null;
+  onUploaded: (url: string) => void;
+}) {
   const [uploading, setUploading] = React.useState(false);
-  const [uploaded, setUploaded] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  const upload = async (file: File) => {
+    setUploading(true);
+    setError(null);
+    try {
+      const supabase = getBrowserClient();
+      const path = `pickup/${deliveryId}/${Date.now()}.jpg`;
+      const { error: upErr } = await supabase.storage
+        .from('branch-assets')
+        .upload(path, file, { contentType: file.type, upsert: false });
+      if (upErr) throw upErr;
+      const { data: pub } = supabase.storage.from('branch-assets').getPublicUrl(path);
+      const { error: updErr } = await supabase
+        .from('deliveries')
+        // pickup_photo_url/_at aren't in the generated types yet — escape hatch.
+        .update({ pickup_photo_url: pub.publicUrl, pickup_photo_uploaded_at: new Date().toISOString() } as never)
+        .eq('id', deliveryId);
+      if (updErr) throw updErr;
+      onUploaded(pub.publicUrl);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="rounded-2xl border border-dashed border-primary/40 bg-primary/5 p-3">
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) void upload(f);
+        }}
+      />
+      {uploadedUrl ? (
+        <div className="flex items-center gap-2 text-sm text-success">
+          <CheckCircle2 className="h-4 w-4" /> Pickup photo uploaded
+        </div>
+      ) : (
+        <>
+          <p className="mb-2 text-xs font-medium">
+            📸 Required — snap a photo of the order at the restaurant before you continue.
+          </p>
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            disabled={uploading}
+            className="focus-ring flex w-full items-center justify-center gap-2 rounded-xl bg-card px-4 py-2 text-sm font-semibold"
+          >
+            {uploading ? 'Uploading…' : 'Take pickup photo'}
+          </button>
+        </>
+      )}
+      {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
+    </div>
+  );
+}
+
+function PodUploader({
+  deliveryId,
+  uploadedUrl,
+  onUploaded,
+}: {
+  deliveryId: string;
+  uploadedUrl: string | null;
+  onUploaded: (url: string) => void;
+}) {
+  const [uploading, setUploading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
 
@@ -546,7 +736,7 @@ function PodUploader({ deliveryId }: { deliveryId: string }) {
         .update({ pod_photo_url: pub.publicUrl, pod_uploaded_at: new Date().toISOString() })
         .eq('id', deliveryId);
       if (updErr) throw updErr;
-      setUploaded(pub.publicUrl);
+      onUploaded(pub.publicUrl);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -555,7 +745,7 @@ function PodUploader({ deliveryId }: { deliveryId: string }) {
   };
 
   return (
-    <div className="rounded-2xl border border-dashed border-border bg-muted/40 p-3">
+    <div className="rounded-2xl border border-dashed border-primary/40 bg-primary/5 p-3">
       <input
         ref={inputRef}
         type="file"
@@ -564,22 +754,27 @@ function PodUploader({ deliveryId }: { deliveryId: string }) {
         className="hidden"
         onChange={(e) => {
           const f = e.target.files?.[0];
-          if (f) upload(f);
+          if (f) void upload(f);
         }}
       />
-      {uploaded ? (
+      {uploadedUrl ? (
         <div className="flex items-center gap-2 text-sm text-success">
           <CheckCircle2 className="h-4 w-4" /> Delivery photo uploaded
         </div>
       ) : (
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          disabled={uploading}
-          className="focus-ring flex w-full items-center justify-center gap-2 rounded-xl bg-card px-4 py-2 text-sm font-semibold"
-        >
-          📸 {uploading ? 'Uploading…' : 'Snap a delivery photo (proof of delivery)'}
-        </button>
+        <>
+          <p className="mb-2 text-xs font-medium">
+            📸 Required — snap a photo of the delivered order before you finish.
+          </p>
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            disabled={uploading}
+            className="focus-ring flex w-full items-center justify-center gap-2 rounded-xl bg-card px-4 py-2 text-sm font-semibold"
+          >
+            {uploading ? 'Uploading…' : 'Take delivery photo'}
+          </button>
+        </>
       )}
       {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
     </div>
