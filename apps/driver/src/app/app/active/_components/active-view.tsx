@@ -10,7 +10,12 @@ import { Button, Card, EmptyState } from '@favornoms/ui';
 import { DeliveryMap, fetchRoute, hasMapboxToken } from '@favornoms/maps';
 import { getBrowserClient } from '@favornoms/database/client';
 import { useDelivery, type ActiveDeliveryUI } from '@/components/delivery-provider';
-import { cancelDelivery, failDelivery, type DeliveryStatus } from '@favornoms/database/queries';
+import {
+  cancelDelivery,
+  failDelivery,
+  progressDelivery,
+  type DeliveryStatus,
+} from '@favornoms/database/queries';
 import { DriverDeliveryChat } from './delivery-chat';
 
 type StageKey = 'heading_to_pickup' | 'at_pickup' | 'picked_up' | 'in_transit' | 'at_customer';
@@ -94,11 +99,15 @@ export function ActiveDeliveryView() {
   // (the provider also picks them up from the server on its next realtime resync).
   const [pickupPhotoUrl, setPickupPhotoUrl] = React.useState<string | null>(null);
   const [podPhotoUrl, setPodPhotoUrl] = React.useState<string | null>(null);
+  // Batched job (งานพ่วง): the second order needs its OWN pickup photo — one photo
+  // per bag is the wrong-bag safeguard.
+  const [matePickupPhotoUrl, setMatePickupPhotoUrl] = React.useState<string | null>(null);
 
   // Reset the local echoes when the active job changes.
   React.useEffect(() => {
     setPickupPhotoUrl(null);
     setPodPhotoUrl(null);
+    setMatePickupPhotoUrl(null);
   }, [active?.id]);
 
   // Watch GPS for the live route map (separate from DriverLocationPing's DB push) +
@@ -216,6 +225,12 @@ export function ActiveDeliveryView() {
   // before "Mark as delivered" unlocks.
   const hasPodPhoto = !!podPhotoUrl || !!active.podPhotoUrl;
   const needsPodPhoto = stage === 'at_customer' && !hasPodPhoto;
+  // Batched job: the second leg (still 'assigned') is picked up at the same counter —
+  // its photo + picked_up transition happen together with the first leg's.
+  const mate = active.batchMate;
+  const matePendingPickup = !!mate && mate.status === 'assigned';
+  const hasMatePickupPhoto = !!matePickupPhotoUrl || !!mate?.pickupPhotoUrl;
+  const needsMatePickupPhoto = stage === 'at_pickup' && matePendingPickup && !hasMatePickupPhoto;
 
   const handleAdvance = async () => {
     if (advancing) return; // guard against double-fire
@@ -224,6 +239,10 @@ export function ActiveDeliveryView() {
     // (progress_delivery also enforces both server-side).
     if (meta.transition === 'picked_up' && !hasPickupPhoto) {
       setAdvanceError('Take a pickup photo before you continue.');
+      return;
+    }
+    if (meta.transition === 'picked_up' && needsMatePickupPhoto) {
+      setAdvanceError('Take a pickup photo for BOTH orders before you continue.');
       return;
     }
     if (meta.transition === 'delivered' && !hasPodPhoto) {
@@ -253,6 +272,14 @@ export function ActiveDeliveryView() {
           /* keep the snapshot earnings */
         }
         setCompleted({ earnings, orderNumber: snap.orderNumber });
+      } else if (meta.transition === 'picked_up' && mate && matePendingPickup) {
+        // Batched job: both bags leave the counter together — mark the second leg
+        // picked up first (its own photo already gates this server-side), then the
+        // active leg via the provider (which also resyncs state).
+        const supabase = getBrowserClient();
+        const { error: mateErr } = await progressDelivery(supabase, mate.id, 'picked_up');
+        if (mateErr) throw new Error(mateErr.message);
+        await progress('picked_up');
       } else if (meta.transition) {
         await progress(meta.transition);
       } else if (meta.nextStage) {
@@ -329,6 +356,7 @@ export function ActiveDeliveryView() {
               <div>
                 <p className="text-xs uppercase tracking-wider text-white/80">
                   {active.orderNumber}
+                  {active.batchSeq != null && ` · stop ${active.batchSeq} of 2`}
                 </p>
                 <h2 className="font-display text-xl font-bold leading-tight">
                   {t(meta.titleKey as never)}
@@ -354,10 +382,19 @@ export function ActiveDeliveryView() {
             <Step
               done={stage === 'at_customer'}
               icon={<MapPin className="h-5 w-5" />}
-              title="Drop-off"
+              title={mate ? 'Drop-off · stop 1' : 'Drop-off'}
               primary={active.customerName}
               secondary={active.customerAddress}
             />
+            {mate && (
+              <Step
+                done={false}
+                icon={<MapPin className="h-5 w-5" />}
+                title="Drop-off · stop 2 (after this one)"
+                primary={mate.customerName}
+                secondary={mate.customerAddress}
+              />
+            )}
 
             {active.dropoffNotes && (
               <div className="rounded-2xl border border-primary/30 bg-primary/5 px-4 py-2.5 text-sm">
@@ -367,9 +404,11 @@ export function ActiveDeliveryView() {
 
             <div className="flex items-center justify-between rounded-2xl bg-muted/40 px-4 py-3">
               <div>
-                <p className="text-xs text-muted-foreground">Earning</p>
+                <p className="text-xs text-muted-foreground">
+                  {mate ? 'Earning (2 orders)' : 'Earning'}
+                </p>
                 <p className="font-display text-xl font-bold text-primary">
-                  {formatCurrency(active.driverEarnings)}
+                  {formatCurrency(active.driverEarnings + (mate?.driverEarnings ?? 0))}
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -385,11 +424,30 @@ export function ActiveDeliveryView() {
             </div>
 
             {stage === 'at_pickup' && (
-              <PickupPhotoUploader
-                deliveryId={active.id}
-                uploadedUrl={pickupPhotoUrl ?? active.pickupPhotoUrl}
-                onUploaded={setPickupPhotoUrl}
-              />
+              <>
+                {mate && matePendingPickup && (
+                  <p className="text-xs font-semibold text-muted-foreground">
+                    📦 Order 1 · {active.orderNumber}
+                  </p>
+                )}
+                <PickupPhotoUploader
+                  deliveryId={active.id}
+                  uploadedUrl={pickupPhotoUrl ?? active.pickupPhotoUrl}
+                  onUploaded={setPickupPhotoUrl}
+                />
+                {mate && matePendingPickup && (
+                  <>
+                    <p className="text-xs font-semibold text-muted-foreground">
+                      📦 Order 2 · {mate.orderNumber} — photograph this bag separately
+                    </p>
+                    <PickupPhotoUploader
+                      deliveryId={mate.id}
+                      uploadedUrl={matePickupPhotoUrl ?? mate.pickupPhotoUrl}
+                      onUploaded={setMatePickupPhotoUrl}
+                    />
+                  </>
+                )}
+              </>
             )}
             {stage === 'at_customer' && (
               <PodUploader
@@ -404,13 +462,17 @@ export function ActiveDeliveryView() {
               fullWidth
               onClick={handleAdvance}
               loading={advancing}
-              disabled={advancing || needsPickupPhoto || needsPodPhoto}
+              disabled={advancing || needsPickupPhoto || needsPodPhoto || needsMatePickupPhoto}
             >
               {t(meta.ctaKey as never)}
             </Button>
-            {needsPickupPhoto && (
+            {(needsPickupPhoto || needsMatePickupPhoto) && (
               <p className="text-center text-xs text-muted-foreground">
-                📸 Upload a pickup photo to continue.
+                {needsMatePickupPhoto && !needsPickupPhoto
+                  ? '📸 Upload a pickup photo for order 2 to continue.'
+                  : mate
+                    ? '📸 Upload a pickup photo for each order to continue.'
+                    : '📸 Upload a pickup photo to continue.'}
               </p>
             )}
             {needsPodPhoto && (

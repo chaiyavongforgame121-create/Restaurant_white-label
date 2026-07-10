@@ -692,6 +692,8 @@ export type Database = {
           accepted_at: string | null
           arriving_at: string | null
           assigned_at: string | null
+          batch_id: string | null
+          batch_seq: number | null
           branch_id: string
           created_at: string
           current_eta_min: number | null
@@ -732,6 +734,8 @@ export type Database = {
           accepted_at?: string | null
           arriving_at?: string | null
           assigned_at?: string | null
+          batch_id?: string | null
+          batch_seq?: number | null
           branch_id: string
           created_at?: string
           current_eta_min?: number | null
@@ -772,6 +776,8 @@ export type Database = {
           accepted_at?: string | null
           arriving_at?: string | null
           assigned_at?: string | null
+          batch_id?: string | null
+          batch_seq?: number | null
           branch_id?: string
           created_at?: string
           current_eta_min?: number | null
@@ -3961,6 +3967,7 @@ export type Database = {
         }
         Returns: Json
       }
+      claim_batch_sibling: { Args: { p_delivery_id: string }; Returns: Json }
       clock_in: {
         Args: { p_branch_id: string; p_shift_role?: string }
         Returns: string
@@ -4367,6 +4374,17 @@ export type Database = {
       staff_assign_driver: {
         Args: { p_delivery_id: string; p_driver_id: string }
         Returns: undefined
+      }
+      stamp_batch_offer: {
+        Args: {
+          p_batch_id: string
+          p_driver_id: string
+          p_expires_at: string
+          p_history_entry: Json
+          p_offered_at: string
+          p_rows: Json
+        }
+        Returns: number
       }
       sweep_abandoned_carts: { Args: never; Returns: number }
       tier_for_lifetime_points: { Args: { p_points: number }; Returns: string }

@@ -74,23 +74,45 @@ export async function getActiveDelivery(
   // read orders.tip_amount / total and reverse-engineer the restaurant's tip cut.
   // net_tip / tip_visible_total live on the deliveries row (`*`) and are safe: net_tip
   // is the driver's own cut, tip_visible_total is null unless platform tips.mode=transparent.
+  // Batched jobs: batch_seq orders the legs (1 delivers first), so the queue is
+  // served seq1 → seq2; the other live leg rides along as `batch_mate`.
   const { data } = await supabase
     .from('deliveries')
     .select(`*, branch:branches(id, name, address, geo_location, geo_lat, geo_lng)`)
     .eq('driver_id', driverId)
     .in('status', ['assigned', 'picked_up', 'in_transit'])
+    .order('batch_seq', { ascending: true, nullsFirst: false })
     .order('assigned_at', { ascending: false })
     .limit(1)
     .maybeSingle();
   if (!data) return null;
+  const row = data as { id: string; batch_id: string | null };
   const { data: order } = await supabase.rpc('get_driver_order', {
-    p_delivery_id: (data as { id: string }).id,
+    p_delivery_id: row.id,
   });
   // Non-atomic gap: the delivery can be reassigned/expired between the select and
   // the RPC. A null order means it's no longer this driver's — treat as no active
   // delivery rather than dereferencing null downstream. The next realtime tick refetches.
   if (!order) return null;
-  return { ...data, order };
+
+  let batchMate: Record<string, unknown> | null = null;
+  if (row.batch_id) {
+    const { data: mate } = await supabase
+      .from('deliveries')
+      .select(`*, branch:branches(id, name, address, geo_location, geo_lat, geo_lng)`)
+      .eq('batch_id', row.batch_id)
+      .eq('driver_id', driverId)
+      .neq('id', row.id)
+      .in('status', ['assigned', 'picked_up', 'in_transit'])
+      .maybeSingle();
+    if (mate) {
+      const { data: mateOrder } = await supabase.rpc('get_driver_order', {
+        p_delivery_id: (mate as { id: string }).id,
+      });
+      if (mateOrder) batchMate = { ...(mate as Record<string, unknown>), order: mateOrder };
+    }
+  }
+  return { ...data, order, batch_mate: batchMate };
 }
 
 /** Driver accepts the dispatch offer. Single round-trip RPC for atomicity. */

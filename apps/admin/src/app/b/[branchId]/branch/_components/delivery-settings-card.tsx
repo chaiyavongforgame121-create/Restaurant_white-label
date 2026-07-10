@@ -37,6 +37,7 @@ type NumericKey =
   | 'driver_search_radius_km'
   | 'driver_max_attempts'
   | 'offer_ttl_seconds'
+  | 'batch_max_dropoff_mi'
   | 'driver_base_pay'
   | 'driver_per_km_pay';
 
@@ -59,6 +60,9 @@ const FIELDS: Array<{
   { key: 'driver_search_radius_km', label: 'Driver search radius (mi)', hint: 'How far from the branch to look for drivers', group: 'dispatch', step: '0.5', fallback: 3 * KM_PER_MILE, convert: 'dist' },
   { key: 'driver_max_attempts', label: 'Max dispatch attempts', hint: 'Staff get alerted after this many failed rounds', group: 'dispatch', step: '1', fallback: 3 },
   { key: 'offer_ttl_seconds', label: 'Offer timeout (sec)', hint: 'How long a driver has to accept an offer', group: 'dispatch', step: '5', fallback: DELIVERY_SETTING_DEFAULTS.offerTtlSeconds },
+  // Stored directly in miles (unlike the km-stored keys above) — the SQL pairing fn
+  // claim_batch_sibling reads settings->>'batch_max_dropoff_mi' as miles.
+  { key: 'batch_max_dropoff_mi', label: 'Stacked-order dropoff radius (mi)', hint: 'Pair two ready orders into one trip when their dropoffs are within this distance (needs stacking enabled below)', group: 'dispatch', step: '0.25', fallback: 1.5 },
   { key: 'driver_base_pay', label: 'Driver base pay ($)', group: 'pay', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.driverBasePay },
   { key: 'driver_per_km_pay', label: 'Driver per mile ($)', group: 'pay', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.driverPerKmPay, convert: 'rate' },
 ];
@@ -99,6 +103,7 @@ export function DeliverySettingsCard({ branchId, settings }: Props) {
     return out;
   });
   const [paused, setPaused] = React.useState<boolean>(Boolean(settings?.orders_paused));
+  const [batching, setBatching] = React.useState<boolean>(Boolean(settings?.batch_enabled));
   const [busyExtra, setBusyExtra] = React.useState<string>(() => {
     const n = Number(settings?.busy_extra_prep_min);
     return Number.isFinite(n) && n > 0 ? String(n) : '0';
@@ -144,6 +149,7 @@ export function DeliverySettingsCard({ branchId, settings }: Props) {
       patch[f.key] = toStoredUnit(f.convert, display); // store km / $-per-km equivalent
     }
     patch.orders_paused = paused;
+    patch.batch_enabled = batching;
     patch.busy_extra_prep_min = Math.max(0, Number(busyExtra) || 0);
     patch.delivery_surge_multiplier = Math.min(2, Math.max(1, surge));
     // Merge into the existing jsonb — other settings keys stay untouched.
@@ -210,6 +216,21 @@ export function DeliverySettingsCard({ branchId, settings }: Props) {
               type="checkbox"
               checked={paused}
               onChange={(e) => setPaused(e.target.checked)}
+              className="h-5 w-5 accent-primary"
+            />
+          </label>
+          <label className="flex items-center justify-between gap-3">
+            <span>
+              <span className="block text-sm font-medium">Stack same-route orders (งานพ่วง)</span>
+              <span className="block text-xs text-muted-foreground">
+                When two orders are ready together and their dropoffs are close, offer both to one
+                driver as a single trip. Each order still pays the driver in full.
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              checked={batching}
+              onChange={(e) => setBatching(e.target.checked)}
               className="h-5 w-5 accent-primary"
             />
           </label>
