@@ -8,7 +8,11 @@ import { Battery, CalendarDays, ChevronRight, Coffee, MapPin, Power, Star, Store
 import { useTranslations } from 'next-intl';
 import { formatCurrency, kmToMi } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
-import { setDriverOnline } from '@favornoms/database/queries';
+import {
+  setDriverAllBranchesOnline,
+  setDriverBranchOnline,
+  getDriverBranchAvailability,
+} from '@favornoms/database/queries';
 import { Card, cn } from '@favornoms/ui';
 import { useDriver } from '@/store/driver';
 import { useDriverSession } from '@/components/driver-session';
@@ -18,7 +22,7 @@ import { DispatchSheet } from '@/components/dispatch-sheet';
 export function HomeView() {
   const t = useTranslations('home');
   const router = useRouter();
-  const { driver } = useDriverSession();
+  const { driver, refresh: refreshDriver } = useDriverSession();
   const status = useDriver((s) => s.status);
   const toggle = useDriver((s) => s.toggle);
   const setStatus = useDriver((s) => s.setStatus);
@@ -47,6 +51,18 @@ export function HomeView() {
   const [toggling, setToggling] = React.useState(false);
   const [onlineError, setOnlineError] = React.useState(false);
 
+  // Penalty cooldown (D3): while cooldown_until is in the future the driver can't go
+  // online. Tick every second so the countdown updates live.
+  const cooldownUntilMs = driver.cooldown_until ? new Date(driver.cooldown_until).getTime() : 0;
+  const [nowMs, setNowMs] = React.useState(() => Date.now());
+  const inCooldown = cooldownUntilMs > nowMs;
+  const cooldownRemainingSec = inCooldown ? Math.ceil((cooldownUntilMs - nowMs) / 1000) : 0;
+  React.useEffect(() => {
+    if (!inCooldown) return;
+    const t = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, [inCooldown]);
+
   // Server is the source of truth for online state on load — the persisted store
   // is only a cache and can disagree after reopening on another device or a
   // server-side offline. Reconcile once on mount.
@@ -64,6 +80,13 @@ export function HomeView() {
     if (!active && status === 'on_delivery') setStatus('online');
   }, [active, status, setStatus]);
 
+  // Reflect the penalty cooldown into the store status (yields to on_delivery).
+  React.useEffect(() => {
+    if (status === 'on_delivery') return;
+    if (inCooldown && status !== 'cooldown') setStatus('cooldown');
+    else if (!inCooldown && status === 'cooldown') setStatus(driver.is_online ? 'online' : 'offline');
+  }, [inCooldown, status, setStatus, driver.is_online]);
+
   // Vibrate when a new offer arrives
   const offeredId = offered?.id;
   React.useEffect(() => {
@@ -75,9 +98,8 @@ export function HomeView() {
   const approvedCount = driver.approvals?.filter((a) => a.status === 'approved').length ?? 0;
 
   const handleToggle = async () => {
-    // Never flip is_online while a delivery is in flight — that would silently take the
-    // driver offline for future offers (the reflect effect masks it locally).
-    if (toggling || onDelivery) return;
+    // Never flip while a delivery is in flight or under a penalty cooldown.
+    if (toggling || onDelivery || inCooldown) return;
     const prev = status;
     const goOnline = !isOnline;
     setToggling(true);
@@ -85,14 +107,18 @@ export function HomeView() {
     toggle(); // optimistic
     if ('vibrate' in navigator) navigator.vibrate(40);
     const supabase = getBrowserClient();
-    const { error } = await setDriverOnline(supabase, driver.id, goOnline);
+    // The big Power button is the master switch: online/offline for ALL approved
+    // branches at once. Per-restaurant granularity lives in the toggles below.
+    const { error } = await setDriverAllBranchesOnline(supabase, goOnline);
     setToggling(false);
     if (error) {
       // Roll back the optimistic flip so the UI doesn't lie about being online
       // (a stale "online" means dispatch never offers and the driver waits forever).
       setStatus(prev);
       setOnlineError(true);
+      return;
     }
+    void refreshDriver(); // re-derive is_online mirror + re-sync the per-branch list
   };
 
   return (
@@ -131,9 +157,17 @@ export function HomeView() {
           <div className="mt-10 flex justify-center">
             <PowerButton
               online={isOnline}
-              disabled={onDelivery}
+              disabled={onDelivery || inCooldown}
               onClick={handleToggle}
-              label={onDelivery ? t('online') : isOnline ? t('goOffline') : t('goOnline')}
+              label={
+                onDelivery
+                  ? t('online')
+                  : inCooldown
+                    ? `Paused · ${formatCountdown(cooldownRemainingSec)}`
+                    : isOnline
+                      ? t('goOffline')
+                      : t('goOnline')
+              }
             />
           </div>
 
@@ -143,6 +177,11 @@ export function HomeView() {
           {onlineError && (
             <p className="mx-auto mt-3 inline-block rounded-full bg-danger/90 px-4 py-1.5 text-sm font-medium text-white">
               Couldn&apos;t update your status — check your connection and try again.
+            </p>
+          )}
+          {inCooldown && (
+            <p className="mx-auto mt-3 inline-block rounded-full bg-white/15 px-4 py-1.5 text-sm font-medium text-white ring-1 ring-white/25">
+              Too many declined offers &mdash; you can go back online in {formatCountdown(cooldownRemainingSec)}.
             </p>
           )}
         </div>
@@ -164,6 +203,9 @@ export function HomeView() {
           />
         </Card>
       </section>
+
+      {/* Per-branch online toggles (multi-homing) */}
+      <BranchAvailabilitySection inCooldown={inCooldown} />
 
       {/* Apply to restaurants */}
       <section className="mt-6 px-4">
@@ -410,5 +452,111 @@ function Tile({ label, value }: { label: string; value: string }) {
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className="mt-1 font-display text-lg font-bold">{value}</p>
     </div>
+  );
+}
+
+function formatCountdown(totalSec: number): string {
+  const s = Math.max(0, totalSec);
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${m}:${String(r).padStart(2, '0')}`;
+}
+
+// Per-branch online toggles ("Where you're online"). A driver only receives a
+// branch's offers when that branch is toggled on (find_dispatch_candidates gates on
+// driver_branch_availability). Disabled while under a penalty cooldown.
+function BranchAvailabilitySection({ inCooldown }: { inCooldown: boolean }) {
+  const { driver } = useDriverSession();
+  const branchOnline = useDriver((s) => s.branchOnline);
+  const setBranchOnlineLocal = useDriver((s) => s.setBranchOnline);
+  const setBranchAvailability = useDriver((s) => s.setBranchAvailability);
+  const [busy, setBusy] = React.useState<string | null>(null);
+  const [err, setErr] = React.useState<string | null>(null);
+
+  const approved = React.useMemo(
+    () => (driver.approvals ?? []).filter((a) => a.status === 'approved'),
+    [driver.approvals],
+  );
+
+  // Re-sync from the server on mount and whenever the master mirror changes
+  // (e.g. after the big Power button flips all branches at once).
+  React.useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const supabase = getBrowserClient();
+      const rows = await getDriverBranchAvailability(supabase, driver.id);
+      if (cancelled) return;
+      const map: Record<string, boolean> = {};
+      for (const r of rows) map[r.branch_id] = r.is_online;
+      setBranchAvailability(map);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [driver.id, driver.is_online, setBranchAvailability]);
+
+  if (approved.length === 0) return null;
+
+  const toggle = async (branchId: string, next: boolean) => {
+    if (inCooldown) return;
+    setBusy(branchId);
+    setErr(null);
+    setBranchOnlineLocal(branchId, next); // optimistic
+    const supabase = getBrowserClient();
+    const { error } = await setDriverBranchOnline(supabase, branchId, next);
+    setBusy(null);
+    if (error) {
+      setBranchOnlineLocal(branchId, !next); // rollback
+      setErr(
+        error.message?.includes('cooldown')
+          ? "You're in a cooldown after too many missed offers. Try again shortly."
+          : "Couldn't update — check your connection and try again.",
+      );
+    }
+  };
+
+  return (
+    <section className="mt-6 px-4">
+      <Card className="p-5">
+        <h2 className="font-display text-lg font-semibold">Where you&apos;re online</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Toggle each restaurant you want to receive orders from.
+        </p>
+        <ul className="mt-3 divide-y divide-border/60">
+          {approved.map((a) => {
+            const on = branchOnline[a.branch_id] ?? false;
+            return (
+              <li key={a.branch_id} className="flex items-center gap-3 py-3">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+                  <Store className="h-4 w-4" />
+                </span>
+                <span className="min-w-0 flex-1 truncate font-medium">
+                  {a.branch?.name ?? 'Restaurant'}
+                </span>
+                <button
+                  type="button"
+                  disabled={busy === a.branch_id || inCooldown}
+                  onClick={() => void toggle(a.branch_id, !on)}
+                  className={cn(
+                    'relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-60',
+                    on ? 'bg-success' : 'bg-muted',
+                  )}
+                  aria-pressed={on}
+                  aria-label={`Toggle ${a.branch?.name ?? 'restaurant'}`}
+                >
+                  <span
+                    className={cn(
+                      'absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform',
+                      on ? 'translate-x-[22px]' : 'translate-x-0.5',
+                    )}
+                  />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+        {err && <p className="mt-2 text-sm text-danger">{err}</p>}
+      </Card>
+    </section>
   );
 }

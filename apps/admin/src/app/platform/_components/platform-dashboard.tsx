@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Activity, Building2, ChefHat, Pause, Play, Users } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Badge, Button, Card } from '@favornoms/ui';
+import { PlatformNav } from './platform-nav';
 
 interface Restaurant {
   id: string;
@@ -67,10 +68,11 @@ export function PlatformDashboard({
 
   return (
     <div className="container max-w-6xl py-8">
-      <header className="mb-6">
+      <header className="mb-2">
         <h1 className="font-display text-3xl font-bold">Platform admin</h1>
         <p className="mt-1 text-muted-foreground">Cross-tenant operations dashboard.</p>
       </header>
+      <PlatformNav />
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatCard label="Restaurants" value={summary.restaurants ?? 0} icon={ChefHat} />

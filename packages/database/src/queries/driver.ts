@@ -6,8 +6,20 @@ export type DeliveryRow = Database['public']['Tables']['deliveries']['Row'];
 export type DeliveryStatus = Database['public']['Enums']['delivery_status'];
 export type DriverApprovalStatus = Database['public']['Enums']['driver_approval_status'];
 
+export interface DriverApproval {
+  status: DriverApprovalStatus;
+  branch_id: string;
+  branch: { id: string; name: string } | null;
+}
+
 export interface DriverWithApproval extends DriverRow {
-  approvals: { status: DriverApprovalStatus; branch_id: string }[];
+  approvals: DriverApproval[];
+}
+
+export interface BranchAvailability {
+  branch_id: string;
+  is_online: boolean;
+  mode: 'manual' | 'scheduled';
 }
 
 /** Fetch the drivers row that belongs to the currently-signed-in user. */
@@ -21,25 +33,13 @@ export async function getMyDriver(
   const { data, error } = await supabase
     .from('drivers')
     .select(
-      `*, approvals:driver_approvals(status, branch_id)`,
+      `*, approvals:driver_approvals(status, branch_id, branch:branches(id, name))`,
     )
     .eq('user_id', userId)
     .maybeSingle();
 
   if (error || !data) return null;
   return data as unknown as DriverWithApproval;
-}
-
-/** Update is_online flag. Call when driver toggles power button. */
-export async function setDriverOnline(
-  supabase: FavornomsClient,
-  driverId: string,
-  isOnline: boolean,
-) {
-  return supabase
-    .from('drivers')
-    .update({ is_online: isOnline, location_updated_at: new Date().toISOString() })
-    .eq('id', driverId);
 }
 
 /**
@@ -69,20 +69,28 @@ export async function getActiveDelivery(
   supabase: FavornomsClient,
   driverId: string,
 ) {
+  // The order is fetched via the SECURITY DEFINER RPC get_driver_order (curated,
+  // non-financial columns only) — NOT a direct orders embed — so a driver can never
+  // read orders.tip_amount / total and reverse-engineer the restaurant's tip cut.
+  // net_tip / tip_visible_total live on the deliveries row (`*`) and are safe: net_tip
+  // is the driver's own cut, tip_visible_total is null unless platform tips.mode=transparent.
   const { data } = await supabase
     .from('deliveries')
-    .select(
-      `*, order:orders(id, order_number, customer_name, customer_phone,
-        delivery_address, customer_notes, subtotal, total,
-        order_items(id, item_name, quantity, unit_price)),
-       branch:branches(id, name, address, geo_location, geo_lat, geo_lng)`,
-    )
+    .select(`*, branch:branches(id, name, address, geo_location, geo_lat, geo_lng)`)
     .eq('driver_id', driverId)
     .in('status', ['assigned', 'picked_up', 'in_transit'])
     .order('assigned_at', { ascending: false })
     .limit(1)
     .maybeSingle();
-  return data;
+  if (!data) return null;
+  const { data: order } = await supabase.rpc('get_driver_order', {
+    p_delivery_id: (data as { id: string }).id,
+  });
+  // Non-atomic gap: the delivery can be reassigned/expired between the select and
+  // the RPC. A null order means it's no longer this driver's — treat as no active
+  // delivery rather than dereferencing null downstream. The next realtime tick refetches.
+  if (!order) return null;
+  return { ...data, order };
 }
 
 /** Driver accepts the dispatch offer. Single round-trip RPC for atomicity. */
@@ -175,4 +183,38 @@ export async function markDeliveryArriving(
   return (supabase as unknown as { rpc: UntypedRpc }).rpc('mark_delivery_arriving', {
     p_delivery_id: deliveryId,
   });
+}
+
+// ---- Per-branch availability (D1 multi-homing) ----------------------------
+
+/** Read the driver's per-branch online state. RLS restricts to their own rows. */
+export async function getDriverBranchAvailability(
+  supabase: FavornomsClient,
+  driverId: string,
+): Promise<BranchAvailability[]> {
+  const { data } = await supabase
+    .from('driver_branch_availability')
+    .select('branch_id, is_online, mode')
+    .eq('driver_id', driverId);
+  return (data ?? []) as BranchAvailability[];
+}
+
+/** Toggle online/offline for ONE approved branch (guarded RPC — refuses under cooldown). */
+export async function setDriverBranchOnline(
+  supabase: FavornomsClient,
+  branchId: string,
+  online: boolean,
+) {
+  return supabase.rpc('driver_set_branch_online', {
+    p_branch_id: branchId,
+    p_online: online,
+  });
+}
+
+/** Master toggle (the big Power button): online/offline for ALL approved branches. */
+export async function setDriverAllBranchesOnline(
+  supabase: FavornomsClient,
+  online: boolean,
+) {
+  return supabase.rpc('driver_set_all_branches_online', { p_online: online });
 }

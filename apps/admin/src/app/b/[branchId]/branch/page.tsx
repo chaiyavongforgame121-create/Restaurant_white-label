@@ -9,9 +9,19 @@ export default async function BranchPage({ params }: Props) {
   const supabase = await getServerClient();
   const { data: branch } = await supabase
     .from('branches')
-    .select('id, name, address, timezone, theme_override, settings, is_active, custom_domain, sales_tax_rate')
+    .select('id, restaurant_id, name, address, timezone, theme_override, settings, is_active, custom_domain, sales_tax_rate')
     .eq('id', branchId)
     .maybeSingle();
   if (!branch) notFound();
-  return <BranchSettings branch={branch as never} />;
+  const { data: restaurant } = await supabase
+    .from('restaurants')
+    .select('storefront')
+    .eq('id', branch.restaurant_id)
+    .maybeSingle();
+  return (
+    <BranchSettings
+      branch={branch as never}
+      restaurantStorefront={(restaurant?.storefront ?? null) as Record<string, unknown> | null}
+    />
+  );
 }

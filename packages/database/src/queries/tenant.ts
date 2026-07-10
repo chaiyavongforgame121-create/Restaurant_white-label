@@ -1,4 +1,12 @@
-import { parseStorefront, type Branch, type Restaurant, type StorefrontSettings, type TenantTheme } from '@favornoms/shared';
+import {
+  mergeStorefrontOverride,
+  parseStorefront,
+  parseStorefrontOverride,
+  type Branch,
+  type Restaurant,
+  type StorefrontSettings,
+  type TenantTheme,
+} from '@favornoms/shared';
 import type { Database } from '../types';
 import type { FavornomsClient } from '../client-type';
 
@@ -88,7 +96,16 @@ export async function resolveTenantBySlug(
     ...(brandName ? { brandName } : {}),
   };
 
-  return { restaurant, branch, theme, storefront: parseStorefront(r.storefront), logoUrl: brandLogo };
+  // Effective storefront = branch override (branches.settings.storefront_override)
+  // over the restaurant-level value, per key. Read off the RAW b.settings jsonb —
+  // parseSettings() drops unknown keys, so it must not be sourced from branch.settings.
+  const restaurantStorefront = parseStorefront(r.storefront);
+  const branchOverride = parseStorefrontOverride(
+    (b.settings as Record<string, unknown> | null)?.storefront_override,
+  );
+  const storefront = mergeStorefrontOverride(restaurantStorefront, branchOverride);
+
+  return { restaurant, branch, theme, storefront, logoUrl: brandLogo };
 }
 
 function parseSettings(raw: unknown): Branch['settings'] {

@@ -714,15 +714,19 @@ export type Database = {
           failed_photo_url: string | null
           failed_reason: string | null
           id: string
+          net_tip: number | null
           offer_expires_at: string | null
           offered_at: string | null
           order_id: string
           picked_up_at: string | null
           pickup_location: unknown
+          pickup_photo_uploaded_at: string | null
+          pickup_photo_url: string | null
           pod_photo_url: string | null
           pod_uploaded_at: string | null
           status: Database["public"]["Enums"]["delivery_status"]
           surge_multiplier: number
+          tip_visible_total: number | null
         }
         Insert: {
           accepted_at?: string | null
@@ -750,15 +754,19 @@ export type Database = {
           failed_photo_url?: string | null
           failed_reason?: string | null
           id?: string
+          net_tip?: number | null
           offer_expires_at?: string | null
           offered_at?: string | null
           order_id: string
           picked_up_at?: string | null
           pickup_location?: unknown
+          pickup_photo_uploaded_at?: string | null
+          pickup_photo_url?: string | null
           pod_photo_url?: string | null
           pod_uploaded_at?: string | null
           status?: Database["public"]["Enums"]["delivery_status"]
           surge_multiplier?: number
+          tip_visible_total?: number | null
         }
         Update: {
           accepted_at?: string | null
@@ -786,15 +794,19 @@ export type Database = {
           failed_photo_url?: string | null
           failed_reason?: string | null
           id?: string
+          net_tip?: number | null
           offer_expires_at?: string | null
           offered_at?: string | null
           order_id?: string
           picked_up_at?: string | null
           pickup_location?: unknown
+          pickup_photo_uploaded_at?: string | null
+          pickup_photo_url?: string | null
           pod_photo_url?: string | null
           pod_uploaded_at?: string | null
           status?: Database["public"]["Enums"]["delivery_status"]
           surge_multiplier?: number
+          tip_visible_total?: number | null
         }
         Relationships: [
           {
@@ -909,6 +921,173 @@ export type Database = {
             columns: ["reviewed_by"]
             isOneToOne: false
             referencedRelation: "staff_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      driver_branch_availability: {
+        Row: {
+          branch_id: string
+          driver_id: string
+          is_online: boolean
+          mode: string
+          updated_at: string
+        }
+        Insert: {
+          branch_id: string
+          driver_id: string
+          is_online?: boolean
+          mode?: string
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string
+          driver_id?: string
+          is_online?: boolean
+          mode?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "driver_branch_availability_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_branch_availability_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      driver_earnings_ledger: {
+        Row: {
+          base_pay: number
+          branch_id: string
+          created_at: string
+          delivered_at: string
+          delivery_id: string
+          distance_pay: number
+          driver_id: string
+          id: string
+          order_id: string
+          paid_at: string | null
+          paid_by: string | null
+          paid_reference: string | null
+          payout_period_end: string
+          payout_period_start: string
+          status: string
+          tip_net: number
+          total: number | null
+        }
+        Insert: {
+          base_pay?: number
+          branch_id: string
+          created_at?: string
+          delivered_at?: string
+          delivery_id: string
+          distance_pay?: number
+          driver_id: string
+          id?: string
+          order_id: string
+          paid_at?: string | null
+          paid_by?: string | null
+          paid_reference?: string | null
+          payout_period_end: string
+          payout_period_start: string
+          status?: string
+          tip_net?: number
+          total?: number | null
+        }
+        Update: {
+          base_pay?: number
+          branch_id?: string
+          created_at?: string
+          delivered_at?: string
+          delivery_id?: string
+          distance_pay?: number
+          driver_id?: string
+          id?: string
+          order_id?: string
+          paid_at?: string | null
+          paid_by?: string | null
+          paid_reference?: string | null
+          payout_period_end?: string
+          payout_period_start?: string
+          status?: string
+          tip_net?: number
+          total?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "driver_earnings_ledger_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_earnings_ledger_delivery_id_fkey"
+            columns: ["delivery_id"]
+            isOneToOne: true
+            referencedRelation: "deliveries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_earnings_ledger_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_earnings_ledger_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      driver_penalty_events: {
+        Row: {
+          created_at: string
+          delivery_id: string | null
+          driver_id: string
+          id: string
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          delivery_id?: string | null
+          driver_id: string
+          id?: string
+          type: string
+        }
+        Update: {
+          created_at?: string
+          delivery_id?: string | null
+          driver_id?: string
+          id?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "driver_penalty_events_delivery_id_fkey"
+            columns: ["delivery_id"]
+            isOneToOne: false
+            referencedRelation: "deliveries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_penalty_events_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
             referencedColumns: ["id"]
           },
         ]
@@ -2150,6 +2329,57 @@ export type Database = {
           },
         ]
       }
+      order_tip_splits: {
+        Row: {
+          branch_id: string
+          channel: Database["public"]["Enums"]["order_channel"]
+          created_at: string
+          driver_cut: number
+          house_cut: number
+          id: string
+          order_id: string
+          staff_cut: number
+          tip_amount: number
+        }
+        Insert: {
+          branch_id: string
+          channel: Database["public"]["Enums"]["order_channel"]
+          created_at?: string
+          driver_cut?: number
+          house_cut?: number
+          id?: string
+          order_id: string
+          staff_cut?: number
+          tip_amount?: number
+        }
+        Update: {
+          branch_id?: string
+          channel?: Database["public"]["Enums"]["order_channel"]
+          created_at?: string
+          driver_cut?: number
+          house_cut?: number
+          id?: string
+          order_id?: string
+          staff_cut?: number
+          tip_amount?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_tip_splits_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_tip_splits_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: true
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       orders: {
         Row: {
           branch_id: string
@@ -2404,6 +2634,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      platform_settings: {
+        Row: {
+          defaults: Json
+          features: Json
+          id: number
+          penalty: Json
+          tips: Json
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          defaults?: Json
+          features?: Json
+          id?: number
+          penalty?: Json
+          tips?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          defaults?: Json
+          features?: Json
+          id?: number
+          penalty?: Json
+          tips?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
       }
       promo_redemptions: {
         Row: {
@@ -2779,6 +3039,7 @@ export type Database = {
           owner_user_id: string
           slug: string
           storefront: Json
+          stripe_customer_id: string | null
           updated_at: string
         }
         Insert: {
@@ -2792,6 +3053,7 @@ export type Database = {
           owner_user_id: string
           slug: string
           storefront?: Json
+          stripe_customer_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -2805,6 +3067,7 @@ export type Database = {
           owner_user_id?: string
           slug?: string
           storefront?: Json
+          stripe_customer_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -2995,6 +3258,7 @@ export type Database = {
           limits: Json
           monthly_price: number
           name: string
+          stripe_price_id: string | null
         }
         Insert: {
           code: string
@@ -3004,6 +3268,7 @@ export type Database = {
           limits?: Json
           monthly_price: number
           name: string
+          stripe_price_id?: string | null
         }
         Update: {
           code?: string
@@ -3013,6 +3278,7 @@ export type Database = {
           limits?: Json
           monthly_price?: number
           name?: string
+          stripe_price_id?: string | null
         }
         Relationships: []
       }
@@ -3031,6 +3297,8 @@ export type Database = {
           plan_code: string | null
           restaurant_id: string
           status: Database["public"]["Enums"]["subscription_status"]
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
           tier: Database["public"]["Enums"]["subscription_tier"]
           trial_ends_at: string | null
           unit_price: number
@@ -3050,6 +3318,8 @@ export type Database = {
           plan_code?: string | null
           restaurant_id: string
           status?: Database["public"]["Enums"]["subscription_status"]
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
           tier?: Database["public"]["Enums"]["subscription_tier"]
           trial_ends_at?: string | null
           unit_price: number
@@ -3069,6 +3339,8 @@ export type Database = {
           plan_code?: string | null
           restaurant_id?: string
           status?: Database["public"]["Enums"]["subscription_status"]
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
           tier?: Database["public"]["Enums"]["subscription_tier"]
           trial_ends_at?: string | null
           unit_price?: number
@@ -3727,6 +3999,14 @@ export type Database = {
         Args: { p_delivery_id: string; p_reason?: string }
         Returns: undefined
       }
+      driver_set_all_branches_online: {
+        Args: { p_online: boolean }
+        Returns: Json
+      }
+      driver_set_branch_online: {
+        Args: { p_branch_id: string; p_online: boolean }
+        Returns: Json
+      }
       duplicate_menu_category: {
         Args: { p_category_id: string }
         Returns: string
@@ -3759,6 +4039,22 @@ export type Database = {
         }[]
       }
       forecast_orders: { Args: { p_branch_id: string }; Returns: Json }
+      get_branch_payout_summary: {
+        Args: { p_branch_id: string; p_weeks?: number }
+        Returns: {
+          accrued_total: number
+          base_total: number
+          delivery_count: number
+          distance_total: number
+          driver_id: string
+          driver_name: string
+          grand_total: number
+          paid_total: number
+          payout_period_end: string
+          payout_period_start: string
+          tip_total: number
+        }[]
+      }
       get_branch_reports: {
         Args: { p_branch_id: string; p_days?: number }
         Returns: Json
@@ -3775,6 +4071,7 @@ export type Database = {
         Args: { p_delivery_id: string }
         Returns: string
       }
+      get_driver_order: { Args: { p_delivery_id: string }; Returns: Json }
       get_effective_prices: {
         Args: { p_branch_id: string }
         Returns: {
@@ -3824,6 +4121,7 @@ export type Database = {
         Returns: string
       }
       get_or_create_my_referral_code: { Args: never; Returns: string }
+      get_platform_settings: { Args: never; Returns: Json }
       get_sales_tax_report: {
         Args: { p_branch_id: string; p_from: string; p_to: string }
         Returns: Json
@@ -3938,11 +4236,21 @@ export type Database = {
         Args: { p_delivery_id: string }
         Returns: undefined
       }
+      mark_driver_payout_paid: {
+        Args: {
+          p_branch_id: string
+          p_driver_id: string
+          p_period_start: string
+          p_reference?: string
+        }
+        Returns: Json
+      }
       mark_messages_read: {
         Args: { p_delivery_id: string }
         Returns: undefined
       }
       notify_waitlist_party: { Args: { p_id: string }; Returns: undefined }
+      platform_financial_summary: { Args: never; Returns: Json }
       platform_ops_summary: { Args: never; Returns: Json }
       progress_delivery: {
         Args: {
@@ -4052,6 +4360,14 @@ export type Database = {
         Args: { p_restaurant_id: string; p_suspended: boolean }
         Returns: undefined
       }
+      set_subscription_plan_active: {
+        Args: { p_active: boolean; p_code: string }
+        Returns: undefined
+      }
+      staff_assign_driver: {
+        Args: { p_delivery_id: string; p_driver_id: string }
+        Returns: undefined
+      }
       sweep_abandoned_carts: { Args: never; Returns: number }
       tier_for_lifetime_points: { Args: { p_points: number }; Returns: string }
       tip_pool_distribution: {
@@ -4068,6 +4384,7 @@ export type Database = {
         Args: { p_active: boolean; p_item_id: string }
         Returns: undefined
       }
+      update_platform_settings: { Args: { p_patch: Json }; Returns: Json }
       upgrade_plan: {
         Args: { p_plan_code: string; p_restaurant_id: string }
         Returns: Json
@@ -4088,6 +4405,16 @@ export type Database = {
           p_state: string
         }
         Returns: string
+      }
+      upsert_subscription_plan: {
+        Args: {
+          p_code: string
+          p_is_active?: boolean
+          p_limits: Json
+          p_monthly_price: number
+          p_name: string
+        }
+        Returns: undefined
       }
       validate_promo_code: {
         Args: { p_branch_id: string; p_code: string; p_subtotal: number }

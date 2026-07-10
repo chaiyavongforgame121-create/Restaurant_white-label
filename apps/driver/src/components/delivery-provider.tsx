@@ -23,6 +23,10 @@ export interface ActiveDeliveryUI {
   distanceKm: number;
   estimatedDurationMin: number;
   driverEarnings: number;
+  /** Driver's net share of the order tip (deliveries.net_tip), stamped by dispatch-driver. Safe in any tips.mode. */
+  netTip: number | null;
+  /** Full order tip — present ONLY when platform tips.mode = 'transparent' (deliveries.tip_visible_total); null when hidden. */
+  tipFullVisible: number | null;
   branchName: string;
   branchAddress: string;
   customerName: string;
@@ -90,6 +94,8 @@ function mapDeliveryToUI(row: Record<string, unknown>): ActiveDeliveryUI {
     distanceKm: (row.distance_km as number) ?? 0,
     estimatedDurationMin: (row.estimated_duration_min as number) ?? 0,
     driverEarnings: (row.driver_earnings as number) ?? 0,
+    netTip: (row.net_tip as number | null) ?? null,
+    tipFullVisible: (row.tip_visible_total as number | null) ?? null,
     branchName: branch?.name ?? 'Restaurant',
     branchAddress: branch?.address ?? '',
     customerName: order.customer_name,
@@ -111,7 +117,7 @@ function mapDeliveryToUI(row: Record<string, unknown>): ActiveDeliveryUI {
 }
 
 export function DeliveryProvider({ children }: { children: React.ReactNode }) {
-  const { driver } = useDriverSession();
+  const { driver, refresh: refreshDriver } = useDriverSession();
   const driverId = driver.id;
 
   const [offered, setOffered] = React.useState<ActiveDeliveryUI | null>(null);
@@ -183,8 +189,11 @@ export function DeliveryProvider({ children }: { children: React.ReactNode }) {
       const supabase = getBrowserClient();
       await rejectDispatchQuery(supabase, offered.id, driverId, reason);
       setOffered(null);
+      // A reject/timeout may have just stamped a penalty cooldown — re-read the
+      // driver so Home reflects it (countdown + disabled toggles) immediately.
+      void refreshDriver();
     },
-    [offered, driverId],
+    [offered, driverId, refreshDriver],
   );
 
   const progress = React.useCallback(

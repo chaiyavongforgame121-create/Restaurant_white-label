@@ -19,6 +19,7 @@ export default function EarningsPage() {
   const { driver } = useDriverSession();
   const [withdrawals, setWithdrawals] = React.useState<Withdrawal[]>([]);
   const [estimatedEarnings, setEstimatedEarnings] = React.useState(0);
+  const [totals, setTotals] = React.useState({ accrued: 0, paid: 0, base: 0, distance: 0, tip: 0 });
   const [composing, setComposing] = React.useState(false);
   const [amount, setAmount] = React.useState('');
   const [bankName, setBankName] = React.useState('');
@@ -37,13 +38,25 @@ export default function EarningsPage() {
       .limit(20);
     setWithdrawals((w ?? []) as Withdrawal[]);
 
-    const { data: deliveries } = await supabase
-      .from('deliveries')
-      .select('driver_earnings')
-      .eq('driver_id', driver.id)
-      .eq('status', 'delivered');
-    const total = (deliveries ?? []).reduce((s, d) => s + Number(d.driver_earnings ?? 0), 0);
-    setEstimatedEarnings(total);
+    // The settlement ledger is the source of truth for what the driver is owed / was paid.
+    const { data: ledger } = await supabase
+      .from('driver_earnings_ledger')
+      .select('base_pay, distance_pay, tip_net, total, status')
+      .eq('driver_id', driver.id);
+    const t = (ledger ?? []).reduce(
+      (a, r) => {
+        const total = Number(r.total ?? 0);
+        if (r.status === 'paid') a.paid += total;
+        else a.accrued += total;
+        a.base += Number(r.base_pay ?? 0);
+        a.distance += Number(r.distance_pay ?? 0);
+        a.tip += Number(r.tip_net ?? 0);
+        return a;
+      },
+      { accrued: 0, paid: 0, base: 0, distance: 0, tip: 0 },
+    );
+    setTotals(t);
+    setEstimatedEarnings(t.accrued + t.paid);
   }, [driver.id]);
 
   React.useEffect(() => {
@@ -79,9 +92,27 @@ export default function EarningsPage() {
           <TrendingUp className="h-6 w-6" />
           <div>
             <p className="text-xs uppercase tracking-wider text-white/80">Lifetime earnings</p>
-            <p className="font-display text-3xl font-bold">${estimatedEarnings.toLocaleString()}</p>
+            <p className="font-display text-3xl font-bold">${estimatedEarnings.toFixed(2)}</p>
           </div>
         </div>
+      </Card>
+
+      <div className="mb-5 grid grid-cols-2 gap-3">
+        <Card className="p-4">
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Unpaid</p>
+          <p className="font-display text-2xl font-bold">${totals.accrued.toFixed(2)}</p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">awaiting weekly payout</p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Paid</p>
+          <p className="font-display text-2xl font-bold">${totals.paid.toFixed(2)}</p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">settled by restaurants</p>
+        </Card>
+      </div>
+      <Card className="mb-5 grid grid-cols-3 divide-x divide-border p-4 text-center">
+        <div><p className="text-[11px] uppercase text-muted-foreground">Base</p><p className="font-semibold">${totals.base.toFixed(2)}</p></div>
+        <div><p className="text-[11px] uppercase text-muted-foreground">Distance</p><p className="font-semibold">${totals.distance.toFixed(2)}</p></div>
+        <div><p className="text-[11px] uppercase text-muted-foreground">Tips</p><p className="font-semibold">${totals.tip.toFixed(2)}</p></div>
       </Card>
 
       <div className="mb-5">

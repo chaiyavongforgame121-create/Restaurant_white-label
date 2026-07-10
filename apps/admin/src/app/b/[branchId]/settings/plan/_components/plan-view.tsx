@@ -34,20 +34,65 @@ export function PlanView({ branchId, restaurantId, plans, status }: Props) {
 
   const upgrade = async (code: string) => {
     if (status?.plan === code) return;
-    if (!window.confirm(`Upgrade to ${code}? (Stripe billing not yet wired — this only switches the in-app plan record.)`)) return;
     setBusyCode(code);
     setError(null);
     try {
       const supabase = getBrowserClient();
-      const { error: rpcErr } = await supabase.rpc('upgrade_plan', {
-        p_restaurant_id: restaurantId,
-        p_plan_code: code,
-      });
-      if (rpcErr) {
-        setError(rpcErr.message);
+
+      // Free plan = downgrade/cancel. No Stripe price → keep the in-app RPC path.
+      if (code === 'free') {
+        if (!window.confirm('Downgrade to Free? To stop billing, also cancel in "Manage billing".')) {
+          return;
+        }
+        const { error: rpcErr } = await supabase.rpc('upgrade_plan', {
+          p_restaurant_id: restaurantId,
+          p_plan_code: code,
+        });
+        if (rpcErr) setError(rpcErr.message);
+        else router.refresh();
         return;
       }
-      router.refresh();
+
+      // Paid plan → hosted Stripe Checkout (subscription mode). Webhook syncs the record.
+      const base = `${window.location.origin}${window.location.pathname}`;
+      const { data, error: fnErr } = await supabase.functions.invoke('stripe-create-checkout-session', {
+        body: {
+          restaurant_id: restaurantId,
+          plan_code: code,
+          success_url: `${base}?checkout=success`,
+          cancel_url: `${base}?checkout=cancelled`,
+        },
+      });
+      if (fnErr || !data?.url) {
+        setError(
+          (data && (data.error as string)) ||
+            fnErr?.message ||
+            'Could not start checkout. Make sure Stripe is configured and this plan has a Stripe price.',
+        );
+        return;
+      }
+      window.location.href = data.url as string;
+    } finally {
+      setBusyCode(null);
+    }
+  };
+
+  const manageBilling = async () => {
+    setBusyCode('__portal__');
+    setError(null);
+    try {
+      const supabase = getBrowserClient();
+      const { data, error: fnErr } = await supabase.functions.invoke('stripe-billing-portal', {
+        body: {
+          restaurant_id: restaurantId,
+          return_url: `${window.location.origin}${window.location.pathname}`,
+        },
+      });
+      if (fnErr || !data?.url) {
+        setError((data && (data.error as string)) || fnErr?.message || 'Could not open billing portal.');
+        return;
+      }
+      window.location.href = data.url as string;
     } finally {
       setBusyCode(null);
     }
@@ -74,6 +119,15 @@ export function PlanView({ branchId, restaurantId, plans, status }: Props) {
               <Usage label="Active items" current={status.items.current} limit={status.items.limit} />
               <Usage label="Orders / mo" current={status.orders_per_month.current} limit={status.orders_per_month.limit} />
             </div>
+            {status.plan !== 'free' && (
+              <Button
+                variant="outline"
+                onClick={manageBilling}
+                loading={busyCode === '__portal__'}
+              >
+                Manage billing
+              </Button>
+            )}
           </div>
         </Card>
       )}
@@ -124,9 +178,9 @@ export function PlanView({ branchId, restaurantId, plans, status }: Props) {
       </div>
 
       <p className="mt-8 text-xs text-muted-foreground">
-        Stripe billing integration is on the roadmap. For now, upgrades take effect immediately in
-        the app; you&apos;ll need to handle the customer-side charge separately until Stripe Billing
-        is wired up.
+        Paid plans are billed monthly through Stripe. Choosing a plan opens secure Stripe Checkout;
+        your subscription status updates automatically once payment succeeds. Use &quot;Manage
+        billing&quot; to update your card, view invoices, or cancel.
       </p>
     </div>
   );

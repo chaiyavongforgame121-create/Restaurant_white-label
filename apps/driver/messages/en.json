@@ -48,7 +48,8 @@
     "reject": "Reject",
     "expiresIn": "Expires in {seconds}s",
     "distance": "{km} km away",
-    "duration": "{min} min trip"
+    "duration": "{min} min trip",
+    "tip": "Tip"
   },
   "active": {
     "title": "Active delivery",
