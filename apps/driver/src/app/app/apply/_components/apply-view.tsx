@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, Store } from 'lucide-react';
+import { ChevronLeft, ShieldAlert, Store } from 'lucide-react';
 import { Badge, Button, Card } from '@favornoms/ui';
 import { getBrowserClient } from '@favornoms/database/client';
 import { useDriverSession } from '@/components/driver-session';
@@ -13,12 +13,22 @@ interface BranchRow {
   restaurant: { name: string } | null;
 }
 
+// KYC docs a driver must upload before they may apply to a restaurant
+// (mirrors DOC_TYPES in profile-view). A verified driver already has them.
+const REQUIRED_DOCS = ['license', 'vehicle_reg', 'selfie'] as const;
+
 export function ApplyView() {
   const router = useRouter();
   const { driver, refresh } = useDriverSession();
   const [branches, setBranches] = React.useState<BranchRow[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [applying, setApplying] = React.useState<string | null>(null);
+
+  const kycVerified = (driver.kyc_status ?? 'pending') === 'verified';
+  // null = still checking; true = all docs uploaded (or verified); false = missing docs.
+  const [docsComplete, setDocsComplete] = React.useState<boolean | null>(kycVerified ? true : null);
+  const [notice, setNotice] = React.useState(false);
+  const noticeTimer = React.useRef<number | null>(null);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -38,6 +48,41 @@ export function ApplyView() {
       cancelled = true;
     };
   }, []);
+
+  // Are the required KYC documents all uploaded? (same check the profile page uses)
+  React.useEffect(() => {
+    if (kycVerified) return; // verified => docs already done
+    let cancelled = false;
+    const supabase = getBrowserClient();
+    void supabase.storage
+      .from('driver-kyc')
+      .list(driver.id, { limit: 50 })
+      .then(({ data }) => {
+        if (cancelled) return;
+        const uploaded = new Set((data ?? []).map((f) => f.name.split('.')[0]));
+        setDocsComplete(REQUIRED_DOCS.every((k) => uploaded.has(k)));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [driver.id, kycVerified]);
+
+  React.useEffect(() => () => {
+    if (noticeTimer.current) window.clearTimeout(noticeTimer.current);
+  }, []);
+
+  // Gate: can't apply until documents are uploaded. Tapping Apply warns, then
+  // sends the driver to the profile page to upload.
+  const handleApply = (branchId: string) => {
+    if (docsComplete !== true) {
+      setNotice(true);
+      if ('vibrate' in navigator) navigator.vibrate([20, 40, 20]);
+      if (noticeTimer.current) window.clearTimeout(noticeTimer.current);
+      noticeTimer.current = window.setTimeout(() => router.push('/app/profile'), 1100);
+      return;
+    }
+    void apply(branchId);
+  };
 
   const statusFor = (branchId: string): string | null =>
     driver.approvals?.find((a) => a.branch_id === branchId)?.status ?? null;
@@ -79,6 +124,22 @@ export function ApplyView() {
         </div>
       </header>
 
+      {docsComplete === false && (
+        <button
+          type="button"
+          onClick={() => router.push('/app/profile')}
+          className="focus-ring mx-4 mt-4 flex w-[calc(100%-2rem)] items-start gap-3 rounded-2xl border border-warning/40 bg-warning/10 px-4 py-3 text-left text-warning"
+        >
+          <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0" />
+          <span className="flex-1 text-sm">
+            <span className="block font-semibold">Documents required to apply</span>
+            <span className="block text-xs">
+              Upload your driver license, vehicle registration and selfie first. Tap to upload.
+            </span>
+          </span>
+        </button>
+      )}
+
       <div className="mt-5 space-y-3 px-4">
         {loading ? (
           <p className="px-1 text-sm text-muted-foreground">Loading…</p>
@@ -109,9 +170,9 @@ export function ApplyView() {
                 ) : (
                   <Button
                     size="sm"
-                    variant="gradient"
+                    variant={docsComplete === true ? 'gradient' : 'soft'}
                     loading={applying === b.id}
-                    onClick={() => apply(b.id)}
+                    onClick={() => handleApply(b.id)}
                   >
                     Apply
                   </Button>
@@ -121,6 +182,12 @@ export function ApplyView() {
           })
         )}
       </div>
+
+      {notice && (
+        <div className="fixed inset-x-4 bottom-24 z-50 rounded-2xl bg-warning px-4 py-3 text-center text-sm font-semibold text-white shadow-warm">
+          📄 Upload all required documents first — taking you to your documents…
+        </div>
+      )}
     </div>
   );
 }

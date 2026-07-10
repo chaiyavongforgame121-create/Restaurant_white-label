@@ -4,62 +4,101 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Bike, ChevronLeft, Sparkles } from 'lucide-react';
-import { useTranslations } from 'next-intl';
 import { getBrowserClient } from '@favornoms/database/client';
-import { sendPhoneOtp, verifyPhoneOtp } from '@favornoms/database/queries';
 import { Button } from '@favornoms/ui';
 
-// Normalize US numbers: (555) 234-5678 → +15552345678
-function normalizePhone(raw: string) {
-  const trimmed = raw.trim();
-  if (trimmed.startsWith('+')) return `+${trimmed.replace(/\D/g, '')}`;
-  const digits = trimmed.replace(/\D/g, '');
-  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
-  if (digits.length === 10) return `+1${digits}`;
-  return `+${digits}`;
+// OTP-less phone auth (no SMS): the `driver-auth` edge function turns a phone into a
+// session. Enter phone -> existing driver logs straight in; a new phone collects a
+// short profile, then the account is created and signed in.
+
+interface AuthResult {
+  status: 'login' | 'signup' | 'needs_profile' | 'invalid_phone' | 'error';
+  access_token?: string;
+  refresh_token?: string;
+  error?: string;
 }
 
+const VEHICLE_TYPES = [
+  { value: 'motorcycle', label: 'Motorcycle' },
+  { value: 'car', label: 'Car' },
+  { value: 'bicycle', label: 'Bicycle' },
+  { value: 'scooter', label: 'Scooter' },
+];
+
 export function LoginView() {
-  const t = useTranslations('login');
   const router = useRouter();
 
-  const [stage, setStage] = React.useState<'phone' | 'otp'>('phone');
+  const [stage, setStage] = React.useState<'phone' | 'profile'>('phone');
   const [phone, setPhone] = React.useState('');
-  const [fullName, setFullName] = React.useState('');
-  const [otp, setOtp] = React.useState('');
+  const [firstName, setFirstName] = React.useState('');
+  const [lastName, setLastName] = React.useState('');
+  const [vehicleType, setVehicleType] = React.useState('motorcycle');
+  const [vehiclePlate, setVehiclePlate] = React.useState('');
+  const [email, setEmail] = React.useState('');
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+
+  const applySession = async (data: AuthResult) => {
+    const supabase = getBrowserClient();
+    await supabase.auth.setSession({
+      access_token: data.access_token!,
+      refresh_token: data.refresh_token!,
+    });
+    router.replace('/app/home');
+    router.refresh();
+  };
+
+  const callAuth = async (body: Record<string, unknown>): Promise<AuthResult | null> => {
+    const supabase = getBrowserClient();
+    const { data, error: fnErr } = await supabase.functions.invoke('driver-auth', { body });
+    if (fnErr) {
+      setError('Something went wrong. Please try again.');
+      return null;
+    }
+    return data as AuthResult;
+  };
 
   const submitPhone = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
-    const supabase = getBrowserClient();
-    const { error } = await sendPhoneOtp(supabase, normalizePhone(phone), {
-      signup_type: 'driver',
-      full_name: fullName.trim() || undefined,
-    });
+    const res = await callAuth({ phone });
     setSubmitting(false);
-    if (error) {
-      setError(error.message);
+    if (!res) return;
+    if (res.status === 'login') return applySession(res);
+    if (res.status === 'needs_profile') {
+      setStage('profile');
       return;
     }
-    setStage('otp');
+    if (res.status === 'invalid_phone') {
+      setError('That phone number doesn’t look right. Please check and try again.');
+      return;
+    }
+    setError('Couldn’t continue. Please try again.');
   };
 
-  const submitOtp = async (e: React.FormEvent) => {
+  const submitProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    setSubmitting(true);
-    const supabase = getBrowserClient();
-    const { error } = await verifyPhoneOtp(supabase, normalizePhone(phone), otp);
-    if (error) {
-      setSubmitting(false);
-      setError(error.message);
+    const full_name = `${firstName.trim()} ${lastName.trim()}`.trim();
+    if (!full_name) {
+      setError('Please enter your name.');
       return;
     }
-    router.replace('/app/home');
-    router.refresh();
+    setSubmitting(true);
+    const res = await callAuth({
+      phone,
+      profile: {
+        full_name,
+        vehicle_type: vehicleType,
+        vehicle_plate: vehiclePlate.trim() || undefined,
+        email: email.trim() || undefined,
+      },
+    });
+    setSubmitting(false);
+    if (!res) return;
+    if (res.status === 'signup' || res.status === 'login') return applySession(res);
+    setError('Couldn’t create your account. Please try again.');
   };
 
   return (
@@ -81,7 +120,7 @@ export function LoginView() {
           transition={{ delay: 0.15, duration: 0.5 }}
           className="mt-6 text-center font-display text-4xl font-bold leading-tight"
         >
-          {t('title')}
+          {stage === 'phone' ? 'Welcome' : 'Almost there'}
         </motion.h1>
         <motion.p
           initial={{ opacity: 0, y: 12 }}
@@ -89,7 +128,9 @@ export function LoginView() {
           transition={{ delay: 0.25, duration: 0.5 }}
           className="mt-2 max-w-xs text-center text-white/85"
         >
-          {stage === 'phone' ? t('subtitle') : t('otpSubtitle', { phone })}
+          {stage === 'phone'
+            ? 'Sign in or sign up with your phone number to start accepting deliveries.'
+            : 'Tell us a bit about you to finish creating your rider account.'}
         </motion.p>
 
         <motion.div
@@ -107,17 +148,7 @@ export function LoginView() {
         {stage === 'phone' ? (
           <form className="space-y-4" onSubmit={submitPhone}>
             <label className="block">
-              <span className="mb-2 block text-sm font-medium">{t('fullName')}</span>
-              <input
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                autoComplete="name"
-                placeholder={t('fullNamePlaceholder')}
-                className="focus-ring w-full rounded-2xl border border-border bg-background px-4 py-4 text-base placeholder:text-muted-foreground"
-              />
-            </label>
-            <label className="block">
-              <span className="mb-2 block text-sm font-medium">{t('phone')}</span>
+              <span className="mb-2 block text-sm font-medium">Phone number</span>
               <input
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
@@ -125,56 +156,96 @@ export function LoginView() {
                 inputMode="tel"
                 autoComplete="tel"
                 required
-                placeholder={t('phonePlaceholder')}
+                placeholder="(555) 234-5678"
                 className="focus-ring w-full rounded-2xl border border-border bg-background px-4 py-4 text-lg font-medium tracking-wide placeholder:font-normal placeholder:text-muted-foreground"
               />
             </label>
             {error && <p className="text-sm font-medium text-danger">{error}</p>}
             <Button type="submit" variant="gradient" size="xl" fullWidth loading={submitting}>
-              {t('continue')}
+              Continue
             </Button>
             <p className="text-center text-xs leading-relaxed text-muted-foreground">
-              {t('byContinuing')}
+              By continuing you agree to our Terms &amp; Privacy.
             </p>
           </form>
         ) : (
-          <form className="space-y-4" onSubmit={submitOtp}>
+          <form className="space-y-4" onSubmit={submitProfile}>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block">
+                <span className="mb-2 block text-sm font-medium">First name</span>
+                <input
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  autoComplete="given-name"
+                  required
+                  placeholder="Alex"
+                  className="focus-ring w-full rounded-2xl border border-border bg-background px-4 py-3.5 text-base placeholder:text-muted-foreground"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm font-medium">Last name</span>
+                <input
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  autoComplete="family-name"
+                  required
+                  placeholder="Morgan"
+                  className="focus-ring w-full rounded-2xl border border-border bg-background px-4 py-3.5 text-base placeholder:text-muted-foreground"
+                />
+              </label>
+            </div>
             <label className="block">
-              <span className="mb-2 block text-sm font-medium">{t('otpCode')}</span>
+              <span className="mb-2 block text-sm font-medium">Vehicle</span>
+              <select
+                value={vehicleType}
+                onChange={(e) => setVehicleType(e.target.value)}
+                className="focus-ring w-full rounded-2xl border border-border bg-background px-4 py-3.5 text-base"
+              >
+                {VEHICLE_TYPES.map((v) => (
+                  <option key={v.value} value={v.value}>
+                    {v.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm font-medium">
+                License plate <span className="text-muted-foreground">(optional)</span>
+              </span>
               <input
-                value={otp}
-                onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                type="text"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                required
-                maxLength={6}
-                placeholder="000000"
-                className="focus-ring w-full rounded-2xl border border-border bg-background px-4 py-4 text-center text-2xl font-bold tracking-[0.5em]"
+                value={vehiclePlate}
+                onChange={(e) => setVehiclePlate(e.target.value)}
+                placeholder="ABC-1234"
+                className="focus-ring w-full rounded-2xl border border-border bg-background px-4 py-3.5 text-base uppercase placeholder:normal-case placeholder:text-muted-foreground"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm font-medium">
+                Email <span className="text-muted-foreground">(optional)</span>
+              </span>
+              <input
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                type="email"
+                autoComplete="email"
+                placeholder="you@example.com"
+                className="focus-ring w-full rounded-2xl border border-border bg-background px-4 py-3.5 text-base placeholder:text-muted-foreground"
               />
             </label>
             {error && <p className="text-sm font-medium text-danger">{error}</p>}
-            <Button
-              type="submit"
-              variant="gradient"
-              size="xl"
-              fullWidth
-              loading={submitting}
-              disabled={otp.length !== 6}
-            >
-              {t('verify')}
+            <Button type="submit" variant="gradient" size="xl" fullWidth loading={submitting}>
+              Create account
             </Button>
             <button
               type="button"
               onClick={() => {
                 setStage('phone');
-                setOtp('');
                 setError(null);
               }}
               className="focus-ring inline-flex w-full items-center justify-center gap-1 py-2 text-sm font-medium text-primary"
             >
               <ChevronLeft className="h-4 w-4" />
-              {t('changeNumber')}
+              Use a different number
             </button>
           </form>
         )}
