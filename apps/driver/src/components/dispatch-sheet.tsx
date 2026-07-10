@@ -74,9 +74,12 @@ export function DispatchSheet({
                 <Bike className="h-7 w-7" />
               </div>
               <div>
-                <p className="text-xs uppercase tracking-wider text-white/80">{t('newOrder')}</p>
+                <p className="text-xs uppercase tracking-wider text-white/80">
+                  {offer.batchMate ? 'Stacked · 2 orders' : t('newOrder')}
+                </p>
                 <p className="font-display text-xl font-bold leading-tight">
-                  {formatCurrency(offer.driverEarnings)} · {kmToMi(offer.distanceKm).toFixed(1)} mi
+                  {formatCurrency(offer.driverEarnings + (offer.batchMate?.driverEarnings ?? 0))} ·{' '}
+                  {kmToMi(offer.distanceKm).toFixed(1)} mi
                 </p>
               </div>
             </div>
@@ -115,32 +118,56 @@ export function DispatchSheet({
           <Step
             color="accent"
             icon={<MapPin className="h-5 w-5" />}
-            title={t('to')}
+            title={offer.batchMate ? `${t('to')} · stop 1` : t('to')}
             primary={offer.customerName}
             secondary={offer.customerAddress}
           />
+          {offer.batchMate && (
+            <>
+              <div className="ml-6 h-6 w-0.5 rounded-full bg-border" />
+              <Step
+                color="accent"
+                icon={<MapPin className="h-5 w-5" />}
+                title={`${t('to')} · stop 2`}
+                primary={offer.batchMate.customerName}
+                secondary={offer.batchMate.customerAddress}
+              />
+            </>
+          )}
 
           <div className="grid grid-cols-3 divide-x divide-border rounded-2xl bg-muted/40 p-3">
             <Metric label="Distance" value={`${kmToMi(offer.distanceKm).toFixed(1)} mi`} />
             <Metric label="ETA" value={`${offer.estimatedDurationMin} min`} />
-            <Metric label="Base" value={formatCurrency(offer.driverEarnings)} highlight />
+            <Metric
+              label={offer.batchMate ? 'Base ×2' : 'Base'}
+              value={formatCurrency(offer.driverEarnings + (offer.batchMate?.driverEarnings ?? 0))}
+              highlight
+            />
           </div>
 
-          {offer.netTip != null && offer.netTip > 0 && (
-            <div className="flex items-center justify-between rounded-2xl bg-primary/10 px-4 py-3">
-              <span className="text-sm font-medium text-foreground">
-                {t('tip')}{' '}
-                <span className="text-muted-foreground">
-                  {offer.tipFullVisible != null
-                    ? `(your share of ${formatCurrency(offer.tipFullVisible)})`
-                    : '(all yours)'}
+          {(() => {
+            const tipTotal = (offer.netTip ?? 0) + (offer.batchMate?.netTip ?? 0);
+            const fullTotal =
+              offer.tipFullVisible != null || offer.batchMate?.tipFullVisible != null
+                ? (offer.tipFullVisible ?? 0) + (offer.batchMate?.tipFullVisible ?? 0)
+                : null;
+            if (tipTotal <= 0) return null;
+            return (
+              <div className="flex items-center justify-between rounded-2xl bg-primary/10 px-4 py-3">
+                <span className="text-sm font-medium text-foreground">
+                  {t('tip')}{' '}
+                  <span className="text-muted-foreground">
+                    {fullTotal != null
+                      ? `(your share of ${formatCurrency(fullTotal)})`
+                      : '(all yours)'}
+                  </span>
                 </span>
-              </span>
-              <span className="font-display text-lg font-bold text-primary">
-                +{formatCurrency(offer.netTip)}
-              </span>
-            </div>
-          )}
+                <span className="font-display text-lg font-bold text-primary">
+                  +{formatCurrency(tipTotal)}
+                </span>
+              </div>
+            );
+          })()}
 
           <div className="rounded-2xl bg-muted/40 p-4 text-sm">
             <p className="text-xs uppercase tracking-wider text-muted-foreground">
@@ -160,6 +187,15 @@ export function DispatchSheet({
               </p>
             )}
           </div>
+
+          {offer.batchMate && (
+            <div className="rounded-2xl bg-muted/40 p-4 text-sm">
+              <p className="text-xs uppercase tracking-wider text-muted-foreground">
+                {offer.batchMate.orderNumber} · stop 2
+              </p>
+              <p className="mt-1 font-medium">{offer.batchMate.itemsSummary}</p>
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-3 border-t border-border/60 bg-card px-5 pb-safe pt-4">

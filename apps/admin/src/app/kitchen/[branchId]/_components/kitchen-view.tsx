@@ -138,7 +138,7 @@ interface Order {
   table_id?: string | null;
   tables?: { table_number: string; display_name: string | null } | null;
   order_items: OrderItem[];
-  deliveries?: { id: string; status: string; driver_id: string | null; accepted_at: string | null }[];
+  deliveries?: { id: string; status: string; driver_id: string | null; accepted_at: string | null; batch_id?: string | null; batch_seq?: number | null }[];
 }
 
 export interface DriverLite {
@@ -222,10 +222,10 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
         })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'deliveries', filter: `branch_id=eq.${branchId}` },
         (payload) => {
-          const d = payload.new as { id?: string; order_id?: string; status?: string; driver_id?: string | null; accepted_at?: string | null };
+          const d = payload.new as { id?: string; order_id?: string; status?: string; driver_id?: string | null; accepted_at?: string | null; batch_id?: string | null; batch_seq?: number | null };
           if (!d?.order_id) return;
           setOrders((curr) => curr.map((o) => (o.id === d.order_id
-            ? { ...o, deliveries: [{ id: d.id ?? o.deliveries?.[0]?.id ?? '', status: d.status ?? 'pending', driver_id: d.driver_id ?? null, accepted_at: d.accepted_at ?? null }] }
+            ? { ...o, deliveries: [{ id: d.id ?? o.deliveries?.[0]?.id ?? '', status: d.status ?? 'pending', driver_id: d.driver_id ?? null, accepted_at: d.accepted_at ?? null, batch_id: d.batch_id ?? null, batch_seq: d.batch_seq ?? null }] }
             : o)));
         })
       .subscribe();
@@ -661,7 +661,14 @@ function OrderCard({
         </div>
       </div>
 
-      <div className="mt-0.5 text-[11px]" style={{ color: SUN.faint }}>#{order.order_number.slice(-4)}</div>
+      <div className="mt-0.5 text-[11px]" style={{ color: SUN.faint }}>
+        #{order.order_number.slice(-4)}
+        {delivery?.batch_id && (
+          <span className="ml-1.5 inline-flex items-center rounded-md px-1.5 py-px font-semibold" style={{ background: '#E7EEFB', color: '#2E5FB0' }}>
+            🔗 Stacked · stop {delivery.batch_seq ?? '?'} — pack both bags for one rider
+          </span>
+        )}
+      </div>
 
       <div className="mt-1">
         {items.map((it) => {

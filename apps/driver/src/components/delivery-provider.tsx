@@ -27,6 +27,12 @@ export interface ActiveDeliveryUI {
   netTip: number | null;
   /** Full order tip — present ONLY when platform tips.mode = 'transparent' (deliveries.tip_visible_total); null when hidden. */
   tipFullVisible: number | null;
+  /** Stacked-order group (งานพ่วง): non-null when this job is one leg of a 2-order batch. */
+  batchId: string | null;
+  /** Drop-off order within the batch (1 = deliver first). */
+  batchSeq: number | null;
+  /** The other live leg of the batch (null once it's delivered/cancelled — the job then behaves like a single). */
+  batchMate: ActiveDeliveryUI | null;
   branchName: string;
   branchAddress: string;
   customerName: string;
@@ -96,6 +102,12 @@ function mapDeliveryToUI(row: Record<string, unknown>): ActiveDeliveryUI {
     driverEarnings: (row.driver_earnings as number) ?? 0,
     netTip: (row.net_tip as number | null) ?? null,
     tipFullVisible: (row.tip_visible_total as number | null) ?? null,
+    batchId: (row.batch_id as string | null) ?? null,
+    batchSeq: (row.batch_seq as number | null) ?? null,
+    // One level deep only: the mate row never carries its own batch_mate.
+    batchMate: row.batch_mate
+      ? mapDeliveryToUI(row.batch_mate as Record<string, unknown>)
+      : null,
     branchName: branch?.name ?? 'Restaurant',
     branchAddress: branch?.address ?? '',
     customerName: order.customer_name,

@@ -43,6 +43,8 @@ type OrderRow = {
     arriving_at?: string | null;
     dropoff_lat?: number | null;
     dropoff_lng?: number | null;
+    /** Stacked order (งานพ่วง): 2 = the driver makes one other drop-off first. */
+    batch_seq?: number | null;
   }>;
 };
 
@@ -205,11 +207,22 @@ export function OrderTracking({ initialOrder, branchId, branchLocation }: Props)
                 </div>
                 <div>
                   <p className="font-display text-base font-semibold">
-                    {arriving ? 'Your driver is almost there!' : 'Your driver is on the way'}
+                    {arriving
+                      ? 'Your driver is almost there!'
+                      : // Stop-2 of a stacked trip: honest while the driver is still on the
+                        // first drop (assigned/picked_up). Once THIS leg is in_transit the
+                        // driver is genuinely heading here — back to the normal copy.
+                        delivery.batch_seq === 2 && ['assigned', 'picked_up'].includes(delivery.status)
+                        ? 'Your driver is finishing one nearby delivery first'
+                        : 'Your driver is on the way'}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {delivery.distance_km != null && `${kmToMi(delivery.distance_km).toFixed(1)} mi · `}
                     {etaMin != null && `${etaMin} min ETA`}
+                    {delivery.batch_seq === 2 &&
+                      !arriving &&
+                      ['assigned', 'picked_up'].includes(delivery.status) &&
+                      ' · includes their other stop'}
                   </p>
                 </div>
               </div>
