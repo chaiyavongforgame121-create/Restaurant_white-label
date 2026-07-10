@@ -3,13 +3,17 @@
 import * as React from 'react';
 import { CalendarCheck, Clock } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
-import { Badge, Button, Card, EmptyState } from '@favornoms/ui';
+import { Badge, Card, EmptyState } from '@favornoms/ui';
 import { useDriverSession } from '@/components/driver-session';
 
+// driver_schedules stores each shift as start_at/end_at (timestamptz) — NOT a
+// tstzrange. The apply_driver_schedules cron reads the same columns to auto-online
+// the driver for that branch during the window.
 interface ScheduleRow {
   id: string;
   branch_id: string;
-  scheduled_period: { lower: string; upper: string } | string;
+  start_at: string;
+  end_at: string;
   status: string;
   notes: string | null;
 }
@@ -24,9 +28,10 @@ export default function SchedulePage() {
       const supabase = getBrowserClient();
       const { data } = await supabase
         .from('driver_schedules')
-        .select('id, branch_id, scheduled_period, status, notes')
+        .select('id, branch_id, start_at, end_at, status, notes')
         .eq('driver_id', driver.id)
-        .order('id', { ascending: false })
+        .gte('end_at', new Date().toISOString())
+        .order('start_at', { ascending: true })
         .limit(20);
       setList((data ?? []) as ScheduleRow[]);
       setLoading(false);
@@ -37,7 +42,9 @@ export default function SchedulePage() {
     <div className="container max-w-xl py-6">
       <header className="mb-5 px-1">
         <h1 className="font-display text-2xl font-bold">My schedule</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Upcoming shifts you&apos;ve signed up for.</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Upcoming shifts — you go online automatically at each restaurant during its window.
+        </p>
       </header>
 
       {loading ? (
@@ -50,37 +57,22 @@ export default function SchedulePage() {
         />
       ) : (
         <ul className="space-y-3">
-          {list.map((s) => {
-            const period = typeof s.scheduled_period === 'string'
-              ? parseTstzRange(s.scheduled_period)
-              : { lower: s.scheduled_period.lower, upper: s.scheduled_period.upper };
-            return (
-              <li key={s.id}>
-                <Card className="flex items-center gap-3 p-4">
-                  <Clock className="h-5 w-5 text-muted-foreground" />
-                  <div className="flex-1">
-                    <p className="font-medium">
-                      {new Date(period.lower).toLocaleString()}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      ends {new Date(period.upper).toLocaleString()}
-                    </p>
-                  </div>
-                  <Badge variant={s.status === 'confirmed' ? 'success' : 'muted'}>
-                    {s.status}
-                  </Badge>
-                </Card>
-              </li>
-            );
-          })}
+          {list.map((s) => (
+            <li key={s.id}>
+              <Card className="flex items-center gap-3 p-4">
+                <Clock className="h-5 w-5 text-muted-foreground" />
+                <div className="flex-1">
+                  <p className="font-medium">{new Date(s.start_at).toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">
+                    ends {new Date(s.end_at).toLocaleString()}
+                  </p>
+                </div>
+                <Badge variant={s.status === 'confirmed' ? 'success' : 'muted'}>{s.status}</Badge>
+              </Card>
+            </li>
+          ))}
         </ul>
       )}
     </div>
   );
-}
-
-function parseTstzRange(s: string): { lower: string; upper: string } {
-  // e.g. ["2026-05-26 09:00:00+00","2026-05-26 17:00:00+00")
-  const match = s.match(/\[?"?([^",)]+)"?,"?([^",)]+)"?\)?/);
-  return { lower: match?.[1] ?? '', upper: match?.[2] ?? '' };
 }

@@ -63,6 +63,23 @@ function rejectedDriverIds(history: unknown): string[] {
   return [...ids];
 }
 
+// D2 — percent (0-100) of the order tip the driver keeps on a delivery order.
+// SYNC POINT: R1 stores tip_config.delivery.distribution.driver as a PERCENT and the
+// SQL trigger orders_on_complete_record_tip_split() (and staff_assign_driver) compute
+// round(tip * pct / 100, 2). This Deno edge fn cannot import @favornoms/shared, so the
+// convention is replicated here — keep both sides in lockstep. Unconfigured (key absent
+// OR explicit null/'') => whole tip to the driver, matching the SQL coalesce(...,100).
+function driverTipPct(tipConfig: unknown): number {
+  const cfg = (tipConfig ?? {}) as Record<string, unknown>;
+  const delivery = (cfg.delivery ?? {}) as Record<string, unknown>;
+  const dist = (delivery.distribution ?? {}) as Record<string, unknown>;
+  const raw = dist.driver;
+  if (raw === null || raw === undefined || raw === '') return 100;
+  const pct = Number(raw);
+  if (!Number.isFinite(pct)) return 100;
+  return Math.min(100, Math.max(0, pct));
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: CORS });
   if (req.method !== 'POST') return json(405, { error: 'method_not_allowed' });
@@ -166,6 +183,34 @@ Deno.serve(async (req) => {
   const chosen = candidates[0];
   const tripKm = Number(delivery.distance_km ?? 0);
   const earnings = Math.round((driverBasePay + driverPerKmPay * tripKm) * 100) / 100;
+
+  // D2 — net tip the driver will receive on this delivery.
+  const { data: order } = await admin
+    .from('orders')
+    .select('tip_amount')
+    .eq('id', delivery.order_id)
+    .maybeSingle();
+  // platform_settings is a single row (id=1); service role bypasses RLS.
+  // private.platform_json('tips') is in the private schema and NOT reachable via
+  // admin.rpc(), so read public.platform_settings.tips directly.
+  const { data: platform } = await admin
+    .from('platform_settings')
+    .select('tips')
+    .eq('id', 1)
+    .maybeSingle();
+  const tipMode =
+    (platform?.tips as { mode?: string } | null)?.mode === 'transparent' ? 'transparent' : 'hidden';
+  const tipAmount = Math.max(0, Number(order?.tip_amount ?? 0));
+  const tipPct = driverTipPct(
+    (branch?.settings as Record<string, unknown> | undefined)?.tip_config,
+  );
+  // Integer-cent math so net_tip (offer time) matches the SQL numeric rounding of
+  // order_tip_splits.driver_cut (completion time): round(tip * pct / 100, 2).
+  const netTip = Math.round((Math.round(tipAmount * 100) * tipPct) / 100) / 100;
+  // Full tip surfaces to the driver ONLY in transparent mode; NULL in hidden mode
+  // so the restaurant's cut can never be reverse-engineered.
+  const tipVisibleTotal = tipMode === 'transparent' ? Math.round(tipAmount * 100) / 100 : null;
+
   const now = new Date();
   const expiresAt = new Date(now.getTime() + offerTtlSeconds * 1000);
 
@@ -185,6 +230,8 @@ Deno.serve(async (req) => {
       offered_at: now.toISOString(),
       offer_expires_at: expiresAt.toISOString(),
       driver_earnings: earnings,
+      net_tip: netTip,
+      tip_visible_total: tipVisibleTotal,
       dispatch_attempts: attempts + 1,
       dispatch_history: history,
     })
@@ -203,6 +250,7 @@ Deno.serve(async (req) => {
       order_id: delivery.order_id,
       distance_km: chosen.distance_km,
       earnings,
+      net_tip: netTip,
       expires_in_seconds: offerTtlSeconds,
     },
   });
@@ -212,6 +260,7 @@ Deno.serve(async (req) => {
     driver_id: chosen.driver_id,
     driver_distance_km: chosen.distance_km,
     earnings,
+    net_tip: netTip,
     offer_expires_at: expiresAt.toISOString(),
     status: 'offered',
   });

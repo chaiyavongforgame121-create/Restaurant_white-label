@@ -5,7 +5,14 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Banknote, ChevronLeft, CreditCard, LocateFixed, Map as MapIcon, MapPin, ShoppingBag, Tag } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { formatCurrency, kmToMi } from '@favornoms/shared';
+import {
+  formatCurrency,
+  kmToMi,
+  parseTipConfig,
+  tipPresetsForChannel,
+  TIP_CONFIG_DEFAULTS,
+  type TipConfig,
+} from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
 import {
   getMyLoyalty,
@@ -91,8 +98,9 @@ export function CheckoutView({ branchId, base }: Props) {
     });
   const [pointsBalance, setPointsBalance] = React.useState(0);
   const [redeemPoints, setRedeemPoints] = React.useState(0);
-  const [tipPercent, setTipPercent] = React.useState<0 | 5 | 10 | 15>(0);
+  const [tipPercent, setTipPercent] = React.useState<number>(0);
   const [customTip, setCustomTip] = React.useState('');
+  const [tipConfig, setTipConfig] = React.useState<TipConfig>(TIP_CONFIG_DEFAULTS);
   const [promoCode, setPromoCode] = React.useState('');
   const [scheduleMode, setScheduleMode] = React.useState<'asap' | 'later'>('asap');
   const [scheduledFor, setScheduledFor] = React.useState<string>(() => {
@@ -133,6 +141,8 @@ export function CheckoutView({ branchId, base }: Props) {
   const tipAmount = customTip
     ? Math.max(0, Math.round((Number(customTip) || 0) * 100) / 100)
     : Math.round((subtotal * tipPercent)) / 100;
+  const tipPresets = tipPresetsForChannel(tipConfig, channel);
+  const tipWorkerPct = (tipConfig[channel] ?? tipConfig.dine_in).workerPct;
   const promoDiscount = promoState.status === 'applied' ? promoState.amount_off : 0;
   const giftCardCredit = giftCardState.status === 'valid' ? Math.min(giftCardState.balance, subtotal) : 0;
   const total = Math.max(
@@ -188,6 +198,21 @@ export function CheckoutView({ branchId, base }: Props) {
         }
       }
     })();
+  }, [branchId]);
+
+  // Tip presets + driver/house/staff split are configured per branch (jsonb
+  // tip_config). place-order + the completion trigger record the authoritative
+  // split on the server; this only drives the presets and the disclosure copy.
+  React.useEffect(() => {
+    const supabase = getBrowserClient();
+    void supabase
+      .from('branches')
+      .select('settings')
+      .eq('id', branchId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.settings) setTipConfig(parseTipConfig(data.settings as Record<string, unknown>));
+      });
   }, [branchId]);
 
   // The restaurant's own coordinates make a sensible default centre for the map
@@ -853,9 +878,15 @@ export function CheckoutView({ branchId, base }: Props) {
 
         <Card className="p-5">
           <h2 className="font-display text-lg font-semibold">Add a tip</h2>
-          <p className="text-xs text-muted-foreground">100% goes to your driver / kitchen team.</p>
-          <div className="mt-3 grid grid-cols-4 gap-2">
-            {([0, 5, 10, 15] as const).map((p) => (
+          <p className="text-xs text-muted-foreground">
+            {tipWorkerPct}% goes to your {channel === 'delivery' ? 'driver' : 'kitchen & staff team'}
+            {tipWorkerPct < 100 ? ' (the rest supports the restaurant).' : '.'}
+          </p>
+          <div
+            className="mt-3 grid gap-2"
+            style={{ gridTemplateColumns: `repeat(${Math.min(Math.max(tipPresets.length, 1), 5)}, minmax(0, 1fr))` }}
+          >
+            {tipPresets.map((p) => (
               <button
                 key={p}
                 type="button"

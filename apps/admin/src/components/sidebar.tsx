@@ -7,7 +7,7 @@ import { motion } from 'framer-motion';
 import {
   BarChart3, Bike, Building2, CalendarClock, ChefHat, ChevronDown, ClipboardList, Cog,
   LayoutDashboard, Megaphone, Menu as MenuIcon, Monitor, Network, Package, Palette,
-  QrCode, Receipt, Store, Tag, Timer, UserRound, Users, X,
+  QrCode, Receipt, Store, Tag, Timer, UserRound, Users, Wallet, X,
 } from 'lucide-react';
 import { cn } from '@favornoms/ui';
 import { ThemeToggle } from './theme-toggle';
@@ -70,6 +70,7 @@ export function Sidebar({ branchId, branchName, branches = [], tier }: Props) {
       items: [
         { href: `${base}/staff`, label: 'Staff', icon: Users },
         { href: `${base}/drivers`, label: 'Drivers', icon: Bike },
+        { href: `${base}/payouts`, label: 'Driver payouts', icon: Wallet },
         { href: `${base}/customers`, label: 'Customers', icon: UserRound },
         { href: `${base}/marketing`, label: 'Marketing', icon: Megaphone, minTier: 'pro' },
         { href: `${base}/promos`, label: 'Promos', icon: Tag, minTier: 'pro' },

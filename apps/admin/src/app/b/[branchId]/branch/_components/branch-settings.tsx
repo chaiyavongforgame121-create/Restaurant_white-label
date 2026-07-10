@@ -8,6 +8,8 @@ import { Badge, Button, Card } from '@favornoms/ui';
 import { ClosuresManager } from './closures-manager';
 import { DeliverySettingsCard } from './delivery-settings-card';
 import { HoursEditor } from './hours-editor';
+import { TipSettingsCard } from './tip-settings-card';
+import { StorefrontOverrideCard } from './storefront-override-card';
 
 interface Branch {
   id: string;
@@ -21,7 +23,13 @@ interface Branch {
   sales_tax_rate: number | null;
 }
 
-export function BranchSettings({ branch }: { branch: Branch }) {
+export function BranchSettings({
+  branch,
+  restaurantStorefront,
+}: {
+  branch: Branch;
+  restaurantStorefront: Record<string, unknown> | null;
+}) {
   const router = useRouter();
   const [name, setName] = React.useState(branch.name);
   const [address, setAddress] = React.useState(branch.address ?? '');
@@ -163,6 +171,14 @@ export function BranchSettings({ branch }: { branch: Branch }) {
         <ClosuresManager branchId={branch.id} />
 
         <DeliverySettingsCard branchId={branch.id} settings={branch.settings} />
+
+        <TipSettingsCard branchId={branch.id} settings={branch.settings} />
+
+        <StorefrontOverrideCard
+          branchId={branch.id}
+          settings={branch.settings}
+          restaurantStorefront={restaurantStorefront}
+        />
 
         <Card className="p-5">
           <details>

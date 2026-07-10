@@ -123,8 +123,24 @@ export function DispatchSheet({
           <div className="grid grid-cols-3 divide-x divide-border rounded-2xl bg-muted/40 p-3">
             <Metric label="Distance" value={`${kmToMi(offer.distanceKm).toFixed(1)} mi`} />
             <Metric label="ETA" value={`${offer.estimatedDurationMin} min`} />
-            <Metric label="Earning" value={formatCurrency(offer.driverEarnings)} highlight />
+            <Metric label="Base" value={formatCurrency(offer.driverEarnings)} highlight />
           </div>
+
+          {offer.netTip != null && offer.netTip > 0 && (
+            <div className="flex items-center justify-between rounded-2xl bg-primary/10 px-4 py-3">
+              <span className="text-sm font-medium text-foreground">
+                {t('tip')}{' '}
+                <span className="text-muted-foreground">
+                  {offer.tipFullVisible != null
+                    ? `(your share of ${formatCurrency(offer.tipFullVisible)})`
+                    : '(all yours)'}
+                </span>
+              </span>
+              <span className="font-display text-lg font-bold text-primary">
+                +{formatCurrency(offer.netTip)}
+              </span>
+            </div>
+          )}
 
           <div className="rounded-2xl bg-muted/40 p-4 text-sm">
             <p className="text-xs uppercase tracking-wider text-muted-foreground">
