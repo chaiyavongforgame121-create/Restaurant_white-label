@@ -13,6 +13,7 @@ import { StorefrontOverrideCard } from './storefront-override-card';
 
 interface Branch {
   id: string;
+  restaurant_id: string;
   name: string;
   address: string | null;
   timezone: string;
@@ -176,6 +177,7 @@ export function BranchSettings({
 
         <StorefrontOverrideCard
           branchId={branch.id}
+          restaurantId={branch.restaurant_id}
           settings={branch.settings}
           restaurantStorefront={restaurantStorefront}
         />

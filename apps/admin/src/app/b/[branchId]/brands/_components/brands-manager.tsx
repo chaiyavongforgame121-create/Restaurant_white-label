@@ -207,6 +207,28 @@ export function BrandsManager({
             </div>
           </div>
           <div>
+            <p className="mb-1.5 text-sm font-medium">Hero headline</p>
+            <input
+              value={store.heroTitle}
+              onChange={(e) => setStore({ ...store, heroTitle: e.target.value })}
+              onBlur={(e) => saveStorefront({ ...store, heroTitle: e.target.value })}
+              placeholder="Welcome — order something delicious"
+              className="h-11 w-full rounded-xl border border-border bg-background px-3 text-base outline-none focus-visible:border-primary"
+            />
+            <p className="mt-1 text-xs text-muted-foreground">Leave empty to use the default headline.</p>
+          </div>
+          <div>
+            <p className="mb-1.5 text-sm font-medium">Hero tagline</p>
+            <input
+              value={store.heroSubtitle}
+              onChange={(e) => setStore({ ...store, heroSubtitle: e.target.value })}
+              onBlur={(e) => saveStorefront({ ...store, heroSubtitle: e.target.value })}
+              placeholder="Now serving from your city"
+              className="h-11 w-full rounded-xl border border-border bg-background px-3 text-base outline-none focus-visible:border-primary"
+            />
+            <p className="mt-1 text-xs text-muted-foreground">Leave empty to show &ldquo;Now serving from {`{branch}`}&rdquo;.</p>
+          </div>
+          <div>
             <p className="mb-1.5 text-sm font-medium">Hero image</p>
             <ImageUpload
               restaurantId={restaurantId}

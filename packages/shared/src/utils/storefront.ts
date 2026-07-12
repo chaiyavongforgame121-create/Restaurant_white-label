@@ -7,19 +7,25 @@ export type MenuLayout = 'list' | 'grid2' | 'grid3' | 'grid4';
 export type MenuCardStyle = 'standard' | 'compact';
 
 export interface StorefrontSettings {
-  /** Menu item grid density. The number is the desktop column count; it scales down on
-   *  smaller screens. 'list' is a single full-width column. */
+  /** Menu item grid density. The number is the column count shown at every screen
+   *  width (WYSIWYG). 'list' is a single full-width column. */
   menuLayout: MenuLayout;
   /** Menu card rendering: 'standard' = photo on top, 'compact' = photo on the left. */
   menuCardStyle: MenuCardStyle;
   /** Optional hero/banner image shown at the top of the storefront. */
   heroUrl: string | null;
+  /** Headline shown in the storefront hero. Empty = use the built-in default. */
+  heroTitle: string;
+  /** Tagline under the headline. Empty = "Now serving from {branch}". */
+  heroSubtitle: string;
 }
 
 export const STOREFRONT_DEFAULTS: StorefrontSettings = {
   menuLayout: 'grid4',
   menuCardStyle: 'standard',
   heroUrl: null,
+  heroTitle: '',
+  heroSubtitle: '',
 };
 
 const MENU_LAYOUTS: readonly MenuLayout[] = ['list', 'grid2', 'grid3', 'grid4'];
@@ -35,12 +41,20 @@ export function parseStorefront(raw: unknown): StorefrontSettings {
     menuLayout: MENU_LAYOUTS.includes(layout) ? layout : STOREFRONT_DEFAULTS.menuLayout,
     menuCardStyle: MENU_CARD_STYLES.includes(card) ? card : STOREFRONT_DEFAULTS.menuCardStyle,
     heroUrl: hero,
+    heroTitle: typeof s.hero_title === 'string' ? s.hero_title : '',
+    heroSubtitle: typeof s.hero_subtitle === 'string' ? s.hero_subtitle : '',
   };
 }
 
 /** Serialize typed settings back to the jsonb shape stored on restaurants.storefront. */
 export function serializeStorefront(s: StorefrontSettings): Record<string, string | null> {
-  return { menu_layout: s.menuLayout, menu_card_style: s.menuCardStyle, hero_url: s.heroUrl };
+  return {
+    menu_layout: s.menuLayout,
+    menu_card_style: s.menuCardStyle,
+    hero_url: s.heroUrl,
+    hero_title: s.heroTitle,
+    hero_subtitle: s.heroSubtitle,
+  };
 }
 
 export const MENU_LAYOUT_LABELS: Record<MenuLayout, string> = {
@@ -64,12 +78,16 @@ export interface StorefrontOverride {
   menuLayout: MenuLayout | null;
   menuCardStyle: MenuCardStyle | null;
   heroUrl: string | null;
+  heroTitle: string | null;
+  heroSubtitle: string | null;
 }
 
 export const STOREFRONT_OVERRIDE_EMPTY: StorefrontOverride = {
   menuLayout: null,
   menuCardStyle: null,
   heroUrl: null,
+  heroTitle: null,
+  heroSubtitle: null,
 };
 
 /** Parse branches.settings.storefront_override jsonb. Unlike parseStorefront,
@@ -84,6 +102,12 @@ export function parseStorefrontOverride(raw: unknown): StorefrontOverride {
     menuLayout: MENU_LAYOUTS.includes(layout) ? layout : null,
     menuCardStyle: MENU_CARD_STYLES.includes(card) ? card : null,
     heroUrl: hero,
+    heroTitle:
+      typeof s.hero_title === 'string' && s.hero_title.length > 0 ? (s.hero_title as string) : null,
+    heroSubtitle:
+      typeof s.hero_subtitle === 'string' && s.hero_subtitle.length > 0
+        ? (s.hero_subtitle as string)
+        : null,
   };
 }
 
@@ -95,6 +119,8 @@ export function serializeStorefrontOverride(o: StorefrontOverride): Record<strin
   if (o.menuLayout) out.menu_layout = o.menuLayout;
   if (o.menuCardStyle) out.menu_card_style = o.menuCardStyle;
   if (o.heroUrl) out.hero_url = o.heroUrl;
+  if (o.heroTitle) out.hero_title = o.heroTitle;
+  if (o.heroSubtitle) out.hero_subtitle = o.heroSubtitle;
   return out;
 }
 
@@ -109,5 +135,7 @@ export function mergeStorefrontOverride(
     menuLayout: override.menuLayout ?? base.menuLayout,
     menuCardStyle: override.menuCardStyle ?? base.menuCardStyle,
     heroUrl: override.heroUrl ?? base.heroUrl,
+    heroTitle: override.heroTitle ?? base.heroTitle,
+    heroSubtitle: override.heroSubtitle ?? base.heroSubtitle,
   };
 }

@@ -8,25 +8,40 @@ import { Battery, CalendarDays, ChevronRight, Coffee, MapPin, Power, Star, Store
 import { useTranslations } from 'next-intl';
 import { formatCurrency, kmToMi } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
-import {
-  setDriverAllBranchesOnline,
-  setDriverBranchOnline,
-  getDriverBranchAvailability,
-} from '@favornoms/database/queries';
+import { setDriverAllBranchesOnline, setDriverBranchOnline } from '@favornoms/database/queries';
 import { Card, cn } from '@favornoms/ui';
 import { useDriver } from '@/store/driver';
 import { useDriverSession } from '@/components/driver-session';
 import { useDelivery } from '@/components/delivery-provider';
 import { DispatchSheet } from '@/components/dispatch-sheet';
+import { AvailabilitySheet } from './availability-sheet';
 
 export function HomeView() {
   const t = useTranslations('home');
   const router = useRouter();
   const { driver, refresh: refreshDriver } = useDriverSession();
   const status = useDriver((s) => s.status);
-  const toggle = useDriver((s) => s.toggle);
   const setStatus = useDriver((s) => s.setStatus);
+  const scope = useDriver((s) => s.scope);
+  const setScope = useDriver((s) => s.setScope);
+  const [sheetOpen, setSheetOpen] = React.useState(false);
   const { offered, active, accept, reject } = useDelivery();
+
+  const approved = React.useMemo(
+    () => (driver.approvals ?? []).filter((a) => a.status === 'approved'),
+    [driver.approvals],
+  );
+  const approvedIds = React.useMemo(() => approved.map((a) => a.branch_id), [approved]);
+  // Short label of the restaurants the driver is (or will be) online for.
+  const scopeNames = (scope.length ? approved.filter((a) => scope.includes(a.branch_id)) : approved).map(
+    (a) => a.branch?.name ?? 'Restaurant',
+  );
+  const scopeLabel =
+    scopeNames.length === 0
+      ? ''
+      : scopeNames.length === 1
+        ? scopeNames[0]
+        : `${scopeNames[0]} +${scopeNames.length - 1}`;
 
   // Real today / week earnings for the hero stat tiles (was hardcoded $0).
   const [earnings, setEarnings] = React.useState<{ today: number; week: number } | null>(null);
@@ -95,30 +110,67 @@ export function HomeView() {
 
   const isOnline = status === 'online' || status === 'on_delivery';
   const onDelivery = status === 'on_delivery';
-  const approvedCount = driver.approvals?.filter((a) => a.status === 'approved').length ?? 0;
+  const approvedCount = approved.length;
 
-  const handleToggle = async () => {
-    // Never flip while a delivery is in flight or under a penalty cooldown.
-    if (toggling || onDelivery || inCooldown) return;
+  // Going online applies to a chosen SET of restaurants (the "scope"): each branch
+  // is set individually so an unselected one can't dispatch to this driver. Tapping
+  // the button reuses the remembered scope (all approved on first use); the setup
+  // sheet lets the driver change which restaurants + set hours.
+  const goOnlineFor = async (ids: string[]): Promise<boolean> => {
+    if (inCooldown) {
+      setOnlineError(true);
+      return false;
+    }
+    const wanted = ids.filter((id) => approvedIds.includes(id));
+    const target = new Set(wanted.length ? wanted : approvedIds);
     const prev = status;
-    const goOnline = !isOnline;
     setToggling(true);
     setOnlineError(false);
-    toggle(); // optimistic
+    setStatus('online'); // optimistic
     if ('vibrate' in navigator) navigator.vibrate(40);
     const supabase = getBrowserClient();
-    // The big Power button is the master switch: online/offline for ALL approved
-    // branches at once. Per-restaurant granularity lives in the toggles below.
-    const { error } = await setDriverAllBranchesOnline(supabase, goOnline);
+    const results = await Promise.all(
+      approved.map((a) => setDriverBranchOnline(supabase, a.branch_id, target.has(a.branch_id))),
+    );
+    setToggling(false);
+    if (results.some((r) => r.error)) {
+      setStatus(prev); // roll back so the UI doesn't lie about being online
+      setOnlineError(true);
+      return false;
+    }
+    setScope([...target]);
+    void refreshDriver(); // re-derive is_online mirror
+    return true;
+  };
+
+  const goOffline = async () => {
+    const prev = status;
+    setToggling(true);
+    setOnlineError(false);
+    setStatus('offline'); // optimistic
+    if ('vibrate' in navigator) navigator.vibrate(40);
+    const supabase = getBrowserClient();
+    const { error } = await setDriverAllBranchesOnline(supabase, false);
     setToggling(false);
     if (error) {
-      // Roll back the optimistic flip so the UI doesn't lie about being online
-      // (a stale "online" means dispatch never offers and the driver waits forever).
       setStatus(prev);
       setOnlineError(true);
       return;
     }
-    void refreshDriver(); // re-derive is_online mirror + re-sync the per-branch list
+    void refreshDriver();
+  };
+
+  const handleToggle = () => {
+    // Never flip while a delivery is in flight or under a penalty cooldown.
+    if (toggling || onDelivery || inCooldown) return;
+    if (isOnline) void goOffline();
+    else void goOnlineFor(scope);
+  };
+
+  // Applied from the setup sheet's "Online now" tab.
+  const applyFromSheet = async (ids: string[]) => {
+    const ok = await goOnlineFor(ids);
+    if (ok) setSheetOpen(false);
   };
 
   return (
@@ -154,7 +206,7 @@ export function HomeView() {
             {isOnline ? t('readyToReceive') : t('subOffline')}
           </p>
 
-          <div className="mt-10 flex justify-center">
+          <div className="mt-8 flex justify-center">
             <PowerButton
               online={isOnline}
               disabled={onDelivery || inCooldown}
@@ -171,7 +223,10 @@ export function HomeView() {
             />
           </div>
 
-          <div className="mt-14 flex justify-center">
+          <p className="mt-10 text-xs text-white/70">
+            {isOnline ? (scopeLabel ? `Online for ${scopeLabel}` : 'Online') : 'Tap to go online'}
+          </p>
+          <div className="mt-3 flex justify-center">
             <StatusPill online={isOnline} label={isOnline ? t('online') : t('offline')} />
           </div>
           {onlineError && (
@@ -204,8 +259,31 @@ export function HomeView() {
         </Card>
       </section>
 
-      {/* Per-branch online toggles (multi-homing) */}
-      <BranchAvailabilitySection inCooldown={inCooldown} />
+      {/* Restaurants + hours — opens the unified setup sheet (per-restaurant + schedule) */}
+      {approved.length > 0 && (
+        <section className="mt-6 px-4">
+          <button
+            type="button"
+            onClick={() => setSheetOpen(true)}
+            className="focus-ring block w-full rounded-2xl text-left"
+          >
+            <Card className="flex items-center gap-3 p-4">
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                <Store className="h-5 w-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold">Your restaurants &amp; hours</p>
+                <p className="truncate text-sm text-muted-foreground">
+                  {isOnline
+                    ? `Online for ${scopeLabel || 'your restaurants'} · tap to change`
+                    : 'Choose restaurants & set your hours'}
+                </p>
+              </div>
+              <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+            </Card>
+          </button>
+        </section>
+      )}
 
       {/* Apply to restaurants */}
       <section className="mt-6 px-4">
@@ -300,6 +378,17 @@ export function HomeView() {
           />
         )}
       </AnimatePresence>
+
+      <AvailabilitySheet
+        open={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        approved={approved.map((a) => ({ branch_id: a.branch_id, name: a.branch?.name ?? 'Restaurant' }))}
+        initialScope={scope}
+        isOnline={isOnline}
+        applying={toggling}
+        blocked={inCooldown}
+        onApply={applyFromSheet}
+      />
     </div>
   );
 }
@@ -320,37 +409,23 @@ function PowerButton({
       whileTap={disabled ? undefined : { scale: 0.94 }}
       onClick={onClick}
       disabled={disabled}
-      className="focus-ring relative grid h-44 w-44 place-items-center rounded-full disabled:cursor-not-allowed disabled:opacity-80"
+      className="focus-ring relative grid h-36 w-36 place-items-center rounded-full disabled:cursor-not-allowed disabled:opacity-80"
       aria-label={label}
     >
-      <span
-        className={cn(
-          'absolute inset-0 rounded-full transition-all duration-500',
-          online
-            ? 'bg-white/20 shadow-[0_0_70px_rgba(255,255,255,0.45)] backdrop-blur'
-            : 'bg-white/10 backdrop-blur',
-        )}
-      />
       {online && (
-        <>
-          <span className="absolute inset-2 animate-pulse-ring rounded-full bg-white/30" />
-          <span
-            className="absolute inset-2 animate-pulse-ring rounded-full bg-white/20"
-            style={{ animationDelay: '0.6s' }}
-          />
-        </>
+        <span className="absolute inset-1 animate-pulse-ring rounded-full bg-white/25" />
       )}
       <span
         className={cn(
-          'relative grid h-32 w-32 place-items-center rounded-full ring-1 transition-all duration-300',
+          'relative grid h-28 w-28 place-items-center rounded-full ring-1 transition-all duration-300',
           online
-            ? 'bg-white text-primary shadow-warm ring-white/60'
-            : 'bg-white text-stone-700 shadow-lg ring-white/30',
+            ? 'bg-white text-primary shadow-[0_0_50px_rgba(255,255,255,0.45)] ring-white/70'
+            : 'bg-white/95 text-stone-600 shadow-lg ring-white/40',
         )}
       >
-        <Power className="h-14 w-14" strokeWidth={2.5} />
+        <Power className="h-11 w-11" strokeWidth={2.5} />
       </span>
-      <span className="absolute -bottom-9 whitespace-nowrap font-display text-base font-bold text-white drop-shadow">
+      <span className="absolute -bottom-8 whitespace-nowrap font-display text-sm font-bold text-white drop-shadow">
         {label}
       </span>
     </motion.button>
@@ -462,101 +537,3 @@ function formatCountdown(totalSec: number): string {
   return `${m}:${String(r).padStart(2, '0')}`;
 }
 
-// Per-branch online toggles ("Where you're online"). A driver only receives a
-// branch's offers when that branch is toggled on (find_dispatch_candidates gates on
-// driver_branch_availability). Disabled while under a penalty cooldown.
-function BranchAvailabilitySection({ inCooldown }: { inCooldown: boolean }) {
-  const { driver } = useDriverSession();
-  const branchOnline = useDriver((s) => s.branchOnline);
-  const setBranchOnlineLocal = useDriver((s) => s.setBranchOnline);
-  const setBranchAvailability = useDriver((s) => s.setBranchAvailability);
-  const [busy, setBusy] = React.useState<string | null>(null);
-  const [err, setErr] = React.useState<string | null>(null);
-
-  const approved = React.useMemo(
-    () => (driver.approvals ?? []).filter((a) => a.status === 'approved'),
-    [driver.approvals],
-  );
-
-  // Re-sync from the server on mount and whenever the master mirror changes
-  // (e.g. after the big Power button flips all branches at once).
-  React.useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const supabase = getBrowserClient();
-      const rows = await getDriverBranchAvailability(supabase, driver.id);
-      if (cancelled) return;
-      const map: Record<string, boolean> = {};
-      for (const r of rows) map[r.branch_id] = r.is_online;
-      setBranchAvailability(map);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [driver.id, driver.is_online, setBranchAvailability]);
-
-  if (approved.length === 0) return null;
-
-  const toggle = async (branchId: string, next: boolean) => {
-    if (inCooldown) return;
-    setBusy(branchId);
-    setErr(null);
-    setBranchOnlineLocal(branchId, next); // optimistic
-    const supabase = getBrowserClient();
-    const { error } = await setDriverBranchOnline(supabase, branchId, next);
-    setBusy(null);
-    if (error) {
-      setBranchOnlineLocal(branchId, !next); // rollback
-      setErr(
-        error.message?.includes('cooldown')
-          ? "You're in a cooldown after too many missed offers. Try again shortly."
-          : "Couldn't update — check your connection and try again.",
-      );
-    }
-  };
-
-  return (
-    <section className="mt-6 px-4">
-      <Card className="p-5">
-        <h2 className="font-display text-lg font-semibold">Where you&apos;re online</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Toggle each restaurant you want to receive orders from.
-        </p>
-        <ul className="mt-3 divide-y divide-border/60">
-          {approved.map((a) => {
-            const on = branchOnline[a.branch_id] ?? false;
-            return (
-              <li key={a.branch_id} className="flex items-center gap-3 py-3">
-                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
-                  <Store className="h-4 w-4" />
-                </span>
-                <span className="min-w-0 flex-1 truncate font-medium">
-                  {a.branch?.name ?? 'Restaurant'}
-                </span>
-                <button
-                  type="button"
-                  disabled={busy === a.branch_id || inCooldown}
-                  onClick={() => void toggle(a.branch_id, !on)}
-                  className={cn(
-                    'relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-60',
-                    on ? 'bg-success' : 'bg-muted',
-                  )}
-                  aria-pressed={on}
-                  aria-label={`Toggle ${a.branch?.name ?? 'restaurant'}`}
-                >
-                  <span
-                    className={cn(
-                      'absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform',
-                      on ? 'translate-x-[22px]' : 'translate-x-0.5',
-                    )}
-                  />
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-        {err && <p className="mt-2 text-sm text-danger">{err}</p>}
-      </Card>
-    </section>
-  );
-}

@@ -240,3 +240,86 @@ export async function setDriverAllBranchesOnline(
 ) {
   return supabase.rpc('driver_set_all_branches_online', { p_online: online });
 }
+
+// ---- Self-service schedules (auto-online windows) -------------------------
+// The driver sets open/close windows per approved branch; the pg_cron job
+// `apply_driver_schedules` flips driver_branch_availability(mode='scheduled')
+// on at start_at and off at end_at. RLS `driver_schedules_driver_self` lets the
+// driver read/write only their own rows, so these go straight to the table.
+
+export interface DriverScheduleRow {
+  id: string;
+  branch_id: string;
+  start_at: string;
+  end_at: string;
+  status: string;
+  notes: string | null;
+}
+
+/** Upcoming windows for the driver (own rows via RLS); only those not yet ended. */
+export async function getDriverSchedules(
+  supabase: FavornomsClient,
+  driverId: string,
+): Promise<DriverScheduleRow[]> {
+  const { data } = await supabase
+    .from('driver_schedules')
+    .select('id, branch_id, start_at, end_at, status, notes')
+    .eq('driver_id', driverId)
+    .gte('end_at', new Date().toISOString())
+    .order('start_at', { ascending: true })
+    .limit(200);
+  return (data ?? []) as DriverScheduleRow[];
+}
+
+/** Insert one or more availability windows in a single call. */
+export async function createDriverSchedules(
+  supabase: FavornomsClient,
+  rows: Array<{ driver_id: string; branch_id: string; start_at: string; end_at: string }>,
+) {
+  return supabase.from('driver_schedules').insert(rows);
+}
+
+/** Remove one upcoming window (RLS restricts deletes to the driver's own rows). */
+export async function deleteDriverSchedule(supabase: FavornomsClient, id: string) {
+  return supabase.from('driver_schedules').delete().eq('id', id);
+}
+
+// ---- Coverage map (rider vs. applied-restaurant dispatch radius) ----------
+// Dispatch (find_dispatch_candidates, via dispatch-driver) only offers a branch's
+// work to drivers within `settings.driver_search_radius_km` of the branch (default
+// 3 miles). The rider coverage map draws the SAME radius so a rider can see whether
+// they've drifted out of range.
+
+// 3 miles in km — matches dispatch-driver's default when the setting is unset.
+const DEFAULT_DISPATCH_RADIUS_KM = 3 * 1.609344;
+
+export interface BranchLocation {
+  branch_id: string;
+  name: string;
+  lat: number | null;
+  lng: number | null;
+  dispatchRadiusKm: number;
+}
+
+/** Location + dispatch radius for a set of branches (the driver's approved ones). */
+export async function getBranchLocations(
+  supabase: FavornomsClient,
+  branchIds: string[],
+): Promise<BranchLocation[]> {
+  if (branchIds.length === 0) return [];
+  const { data } = await supabase
+    .from('branches')
+    .select('id, name, geo_lat, geo_lng, settings')
+    .in('id', branchIds);
+  return (data ?? []).map((b) => {
+    const s = (b.settings ?? {}) as Record<string, unknown>;
+    const r = Number(s.driver_search_radius_km);
+    return {
+      branch_id: b.id,
+      name: b.name,
+      lat: b.geo_lat ?? null,
+      lng: b.geo_lng ?? null,
+      dispatchRadiusKm: Number.isFinite(r) && r > 0 ? r : DEFAULT_DISPATCH_RADIUS_KM,
+    };
+  });
+}

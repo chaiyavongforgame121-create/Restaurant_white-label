@@ -4,7 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { History, Home, Navigation, User, Wallet } from 'lucide-react';
+import { History, Home, Map as MapIcon, Navigation, User, Wallet } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { cn } from '@favornoms/ui';
 import { useDelivery } from './delivery-provider';
@@ -18,6 +18,7 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
   const tabs = [
     { href: '/app/home', label: t('home'), icon: Home },
     { href: '/app/active', label: t('active'), icon: Navigation, badge },
+    { href: '/app/map', label: 'Map', icon: MapIcon },
     { href: '/app/history', label: t('history'), icon: History },
     { href: '/app/earnings', label: t('earnings'), icon: Wallet },
     { href: '/app/profile', label: t('profile'), icon: User },
@@ -31,7 +32,7 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
         aria-label="Primary"
         className="fixed inset-x-0 bottom-0 z-40 border-t border-border/60 bg-card pb-safe"
       >
-        <ul className="grid h-[68px] grid-cols-5">
+        <ul className="grid h-[68px] grid-cols-6">
           {tabs.map((tab) => {
             const active = pathname?.startsWith(tab.href) ?? false;
             const Icon = tab.icon;

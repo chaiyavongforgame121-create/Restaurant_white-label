@@ -20,6 +20,7 @@ import {
   Badge,
   Button,
   Card,
+  cn,
   DietaryBadge,
   EmptyState,
   IconButton,
@@ -68,11 +69,12 @@ interface MenuViewProps {
   menuCardStyle?: MenuCardStyle;
   logoUrl?: string | null;
   heroUrl?: string | null;
+  heroTitle?: string;
+  heroSubtitle?: string;
 }
 
-export function MenuView({ branch, categories, items, isOpen = true, reviews, combos = [], happyHours = [], menuLayout = 'grid4', menuCardStyle = 'standard', logoUrl, heroUrl }: MenuViewProps) {
+export function MenuView({ branch, categories, items, isOpen = true, reviews, combos = [], happyHours = [], menuLayout = 'grid4', menuCardStyle = 'standard', logoUrl, heroUrl, heroTitle, heroSubtitle }: MenuViewProps) {
   const t = useTranslations();
-  const locale = useLocale() as Locale;
   const [search, setSearch] = React.useState('');
   const [activeCategory, setActiveCategory] = React.useState<string>('all');
   const [activeItem, setActiveItem] = React.useState<MenuItem | null>(null);
@@ -145,20 +147,22 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
     return out;
   }, [items, categories]);
 
-  const heroTitle = pickLocalized(
-    'Welcome — order something delicious',
-    branch.themeOverride?.heroTitle,
-    locale,
-  );
-  const heroSubtitle = pickLocalized(
-    `Now serving from ${branch.name}`,
-    branch.themeOverride?.heroSubtitle,
-    locale,
-  );
+  // Hero copy is merchant-configurable (restaurant default + per-branch override,
+  // via storefront settings). Empty falls back to sensible built-ins.
+  const effectiveHeroTitle = heroTitle?.trim() ? heroTitle : 'Welcome — order something delicious';
+  const effectiveHeroSubtitle = heroSubtitle?.trim()
+    ? heroSubtitle
+    : `Now serving from ${branch.name}`;
 
   return (
     <div>
-      <Hero title={heroTitle} subtitle={heroSubtitle} address={branch.address} logoUrl={logoUrl} heroUrl={heroUrl} />
+      <Hero
+        title={effectiveHeroTitle}
+        subtitle={effectiveHeroSubtitle}
+        address={branch.address}
+        logoUrl={logoUrl}
+        heroUrl={heroUrl}
+      />
 
       {!isOpen && (
         <div className="container mt-4">
@@ -245,7 +249,6 @@ function Hero({
   logoUrl?: string | null;
   heroUrl?: string | null;
 }) {
-  const t = useTranslations('landing');
   return (
     <section className="relative overflow-hidden">
       <div className="absolute inset-0 -z-10 bg-gradient-sunset opacity-90" />
@@ -258,27 +261,19 @@ function Hero({
                 <Image src={logoUrl} alt={title} fill className="object-contain object-left" sizes="176px" />
               </div>
             ) : null}
-            <div className="inline-flex items-center gap-2 rounded-full border border-success/30 bg-success/15 px-3 py-1 text-xs font-semibold text-success">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inset-0 animate-pulse-ring rounded-full bg-success" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
-              </span>
-              {t('openNow')} · {t('deliveryIn', { min: 30 })}
-            </div>
-            <h1 className="mt-4 font-display text-4xl font-bold leading-[1.05] tracking-tight md:text-5xl lg:text-6xl">
+            <h1 className="font-display text-4xl font-bold leading-[1.05] tracking-tight md:text-5xl lg:text-6xl">
               <span className="text-gradient">{title}</span>
             </h1>
             <p className="mt-3 max-w-prose text-base text-muted-foreground md:text-lg">
               {subtitle}
             </p>
-            <div className="mt-5 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-              <Badge variant="outline" className="gap-1.5 px-3 py-1">
-                <Star className="h-3.5 w-3.5 fill-accent text-accent" /> 4.9 · 2,300+ reviews
-              </Badge>
-              <Badge variant="outline" className="gap-1.5 px-3 py-1">
-                <MapPin className="h-3.5 w-3.5" /> {address}
-              </Badge>
-            </div>
+            {address ? (
+              <div className="mt-5 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                <Badge variant="outline" className="gap-1.5 px-3 py-1">
+                  <MapPin className="h-3.5 w-3.5" /> {address}
+                </Badge>
+              </div>
+            ) : null}
           </div>
           <div
             className="relative mx-auto hidden aspect-square w-full max-w-md overflow-hidden rounded-3xl shadow-warm lg:block"
@@ -380,6 +375,11 @@ function RecommendedRow({ items, onOpen }: { items: MenuItem[]; onOpen: (i: Menu
                 <div className="absolute inset-0 bg-gradient-sunset" aria-hidden />
               )}
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+              {item.outOfStock && (
+                <span className="absolute inset-0 z-10 grid place-items-center bg-background/60">
+                  <Badge variant="muted" className="text-sm">Sold out</Badge>
+                </span>
+              )}
               <div className="absolute left-3 top-3 flex gap-1.5">
                 {item.dietaryTags?.slice(0, 2).map((tag) => (
                   <DietaryBadge key={tag} tag={tag} />
@@ -468,13 +468,14 @@ function CategoryTabs({
 
 /* -------------------- Menu grid -------------------- */
 
-// Desktop column count per layout; scales down on small screens. Literal class
-// strings so Tailwind's JIT keeps them. 'list' = single full-width column.
+// Fixed column count per layout — the merchant's pick is honored at every screen
+// width (WYSIWYG), not just on desktop. Literal class strings so Tailwind's JIT
+// keeps them. 'list' = single full-width column.
 const MENU_GRID_CLASS: Record<MenuLayout, string> = {
   list: 'grid-cols-1',
-  grid2: 'grid-cols-1 sm:grid-cols-2',
-  grid3: 'grid-cols-2 sm:grid-cols-2 lg:grid-cols-3',
-  grid4: 'grid-cols-2 sm:grid-cols-3 xl:grid-cols-4',
+  grid2: 'grid-cols-2',
+  grid3: 'grid-cols-3',
+  grid4: 'grid-cols-4',
 };
 
 function MenuGrid({
@@ -517,6 +518,7 @@ function MenuCard({
   const add = useCart((s) => s.add);
   const lines = useCart((s) => s.lines);
   const inCartQty = lines.find((l) => l.menuItemId === item.id)?.quantity ?? 0;
+  const soldOut = !!item.outOfStock;
 
   if (compact) {
     return (
@@ -528,9 +530,16 @@ function MenuCard({
             aria-label={`Open ${item.name}`}
           >
             {item.imageUrl ? (
-              <Image src={item.imageUrl} alt={item.name} fill sizes="96px" className="object-cover" />
+              <Image src={item.imageUrl} alt={item.name} fill sizes="96px" className={cn('object-cover', soldOut && 'opacity-40')} />
             ) : (
-              <div className="absolute inset-0 bg-gradient-sunset" aria-hidden />
+              <div className={cn('absolute inset-0 bg-gradient-sunset', soldOut && 'opacity-40')} aria-hidden />
+            )}
+            {soldOut && (
+              <span className="absolute inset-0 grid place-items-center">
+                <span className="rounded-full bg-background/85 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                  Sold out
+                </span>
+              </span>
             )}
           </button>
           <div className="flex min-w-0 flex-1 flex-col py-1">
@@ -549,11 +558,12 @@ function MenuCard({
               </div>
               <Button
                 size="sm"
-                variant={inCartQty > 0 ? 'soft' : 'gradient'}
-                onClick={() => add(item)}
-                aria-label={`Add ${item.name}`}
+                variant={soldOut ? 'ghost' : inCartQty > 0 ? 'soft' : 'gradient'}
+                onClick={() => { if (!soldOut) add(item); }}
+                disabled={soldOut}
+                aria-label={soldOut ? `${item.name} sold out` : `Add ${item.name}`}
               >
-                {inCartQty > 0 ? `${inCartQty} ${t('inCart')}` : `+ ${t('addToCart')}`}
+                {soldOut ? 'Sold out' : inCartQty > 0 ? `${inCartQty} ${t('inCart')}` : `+ ${t('addToCart')}`}
               </Button>
             </div>
           </div>
@@ -591,6 +601,11 @@ function MenuCard({
             <Badge variant="solid" className="absolute left-3 top-3">
               <Star className="h-3 w-3 fill-current" /> Chef
             </Badge>
+          )}
+          {soldOut && (
+            <span className="absolute inset-0 grid place-items-center bg-background/60">
+              <Badge variant="muted" className="text-sm">Sold out</Badge>
+            </span>
           )}
         </button>
         <div className="flex flex-1 flex-col gap-2 p-4">
@@ -632,11 +647,12 @@ function MenuCard({
             </div>
             <Button
               size="sm"
-              variant={inCartQty > 0 ? 'soft' : 'gradient'}
-              onClick={() => add(item)}
-              aria-label={`Add ${item.name}`}
+              variant={soldOut ? 'ghost' : inCartQty > 0 ? 'soft' : 'gradient'}
+              onClick={() => { if (!soldOut) add(item); }}
+              disabled={soldOut}
+              aria-label={soldOut ? `${item.name} sold out` : `Add ${item.name}`}
             >
-              {inCartQty > 0 ? `${inCartQty} ${t('inCart')}` : `+ ${t('addToCart')}`}
+              {soldOut ? 'Sold out' : inCartQty > 0 ? `${inCartQty} ${t('inCart')}` : `+ ${t('addToCart')}`}
             </Button>
           </div>
         </div>
@@ -978,11 +994,17 @@ function YourUsualsRow({ items, onOpen }: { items: MenuItem[]; onOpen: (item: Me
             className="focus-ring mr-3 inline-block w-44 shrink-0 snap-start overflow-hidden rounded-2xl border border-border bg-card text-left shadow-soft transition-shadow hover:shadow-warm"
           >
             <div
-              className={`aspect-square w-full bg-cover bg-center ${item.imageUrl ? '' : 'bg-gradient-sunset'}`}
+              className={`relative aspect-square w-full bg-cover bg-center ${item.imageUrl ? '' : 'bg-gradient-sunset'}`}
               style={item.imageUrl ? { backgroundImage: `url(${item.imageUrl})` } : undefined}
               role="img"
               aria-label={item.name}
-            />
+            >
+              {item.outOfStock && (
+                <span className="absolute inset-0 grid place-items-center bg-background/60">
+                  <Badge variant="muted" className="text-xs">Sold out</Badge>
+                </span>
+              )}
+            </div>
             <div className="p-2.5">
               <p className="line-clamp-2 text-sm font-semibold leading-tight">{item.name}</p>
               <p className="mt-1 font-display text-sm font-bold text-primary">
