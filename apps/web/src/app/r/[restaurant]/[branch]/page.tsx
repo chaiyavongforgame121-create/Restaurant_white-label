@@ -120,6 +120,8 @@ export default async function MenuPage({ params }: Props) {
       menuCardStyle={tenant.storefront.menuCardStyle}
       logoUrl={tenant.logoUrl}
       heroUrl={tenant.storefront.heroUrl}
+      heroTitle={tenant.storefront.heroTitle}
+      heroSubtitle={tenant.storefront.heroSubtitle}
     />
   );
 }

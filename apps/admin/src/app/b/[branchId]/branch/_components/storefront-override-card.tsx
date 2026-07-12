@@ -16,6 +16,7 @@ import {
 } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Card } from '@favornoms/ui';
+import { ImageUpload } from '@/components/image-upload';
 
 // Per-branch override of the restaurant-wide storefront appearance. Stored under
 // branches.settings.storefront_override (jsonb). Each control can be left on
@@ -23,15 +24,22 @@ import { Card } from '@favornoms/ui';
 
 interface Props {
   branchId: string;
+  restaurantId: string;
   settings: Record<string, unknown>;
   restaurantStorefront: Record<string, unknown> | null;
 }
 
-export function StorefrontOverrideCard({ branchId, settings, restaurantStorefront }: Props) {
+export function StorefrontOverrideCard({ branchId, restaurantId, settings, restaurantStorefront }: Props) {
   const router = useRouter();
   const base = React.useMemo(() => parseStorefront(restaurantStorefront), [restaurantStorefront]);
   const [override, setOverride] = React.useState<StorefrontOverride>(() =>
     parseStorefrontOverride(settings?.storefront_override ?? null),
+  );
+  const [heroTitleText, setHeroTitleText] = React.useState(
+    () => parseStorefrontOverride(settings?.storefront_override ?? null).heroTitle ?? '',
+  );
+  const [heroSubtitleText, setHeroSubtitleText] = React.useState(
+    () => parseStorefrontOverride(settings?.storefront_override ?? null).heroSubtitle ?? '',
   );
   const [saving, setSaving] = React.useState(false);
   const [savedAt, setSavedAt] = React.useState<number | null>(null);
@@ -127,6 +135,42 @@ export function StorefrontOverrideCard({ branchId, settings, restaurantStorefron
               );
             })}
           </div>
+        </div>
+        <div>
+          <p className="mb-1.5 text-sm font-medium">Hero headline</p>
+          <input
+            value={heroTitleText}
+            onChange={(e) => setHeroTitleText(e.target.value)}
+            onBlur={() => save({ ...override, heroTitle: heroTitleText.trim() || null })}
+            disabled={saving}
+            placeholder={base.heroTitle || 'Welcome — order something delicious'}
+            className="h-11 w-full rounded-xl border border-border bg-background px-3 text-base outline-none focus-visible:border-primary"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">Leave empty to inherit the restaurant-wide headline.</p>
+        </div>
+        <div>
+          <p className="mb-1.5 text-sm font-medium">Hero tagline</p>
+          <input
+            value={heroSubtitleText}
+            onChange={(e) => setHeroSubtitleText(e.target.value)}
+            onBlur={() => save({ ...override, heroSubtitle: heroSubtitleText.trim() || null })}
+            disabled={saving}
+            placeholder={base.heroSubtitle || 'Now serving from your city'}
+            className="h-11 w-full rounded-xl border border-border bg-background px-3 text-base outline-none focus-visible:border-primary"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">Leave empty to inherit the restaurant-wide tagline.</p>
+        </div>
+        <div>
+          <p className="mb-1.5 text-sm font-medium">Hero image</p>
+          <ImageUpload
+            restaurantId={restaurantId}
+            folder="hero"
+            value={override.heroUrl}
+            onChange={(url) => save({ ...override, heroUrl: url })}
+            aspect="aspect-video"
+            label="Upload hero image"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">Leave empty to inherit the restaurant-wide image.</p>
         </div>
       </div>
 

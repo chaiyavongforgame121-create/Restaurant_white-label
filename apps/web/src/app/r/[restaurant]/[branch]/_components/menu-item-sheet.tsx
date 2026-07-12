@@ -109,6 +109,7 @@ export function MenuItemSheet({ item, onClose }: Props) {
   }, [item]);
 
   const view = item ?? cached;
+  const soldOut = !!view?.outOfStock;
 
   const modDelta = React.useMemo(() => {
     let sum = 0;
@@ -159,7 +160,7 @@ export function MenuItemSheet({ item, onClose }: Props) {
   };
 
   const handleAdd = () => {
-    if (validation) return;
+    if (validation || soldOut) return;
     const flatMods: CartLineModifier[] = [];
     for (const g of groups) {
       const picked = selections[g.id] ?? new Set();
@@ -391,9 +392,9 @@ export function MenuItemSheet({ item, onClose }: Props) {
             size="xl"
             fullWidth
             onClick={handleAdd}
-            disabled={!!validation}
+            disabled={!!validation || soldOut}
           >
-            {t('menu.addToCart')} · {formatCurrency(total)}
+            {soldOut ? 'Sold out' : `${t('menu.addToCart')} · ${formatCurrency(total)}`}
           </Button>
         </div>
       </motion.div>
