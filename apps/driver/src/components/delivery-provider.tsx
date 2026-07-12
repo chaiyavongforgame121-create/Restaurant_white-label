@@ -42,6 +42,12 @@ export interface ActiveDeliveryUI {
   customerNotes: string | null;
   /** Free-form delivery instructions the customer entered (gate code, room, "leave at door"…). */
   dropoffNotes: string | null;
+  /** Structured drop-off preference (delivery_address.dropoff_pref) — null on orders placed before it existed. */
+  dropoffPref: 'leave_at_door' | 'hand_to_me' | 'at_desk' | 'other' | null;
+  /** Customer's free-text spot, set iff dropoffPref === 'other'. */
+  dropoffOther: string | null;
+  gateCode: string | null;
+  room: string | null;
   assignedAt: string | null;
   /** Stamped by accept_dispatch — null while the job is still just an offer. */
   acceptedAt: string | null;
@@ -77,7 +83,14 @@ function mapDeliveryToUI(row: Record<string, unknown>): ActiveDeliveryUI {
     order_number: string;
     customer_name: string;
     customer_phone: string | null;
-    delivery_address: { line1?: string; notes?: string } | null;
+    delivery_address: {
+      line1?: string;
+      notes?: string;
+      dropoff_pref?: 'leave_at_door' | 'hand_to_me' | 'at_desk' | 'other';
+      dropoff_other?: string;
+      gate_code?: string;
+      room?: string;
+    } | null;
     customer_notes: string | null;
     order_items?: { item_name: string; quantity: number }[];
   };
@@ -116,6 +129,10 @@ function mapDeliveryToUI(row: Record<string, unknown>): ActiveDeliveryUI {
     itemsSummary: itemsSummary || `${order.order_number}`,
     customerNotes: order.customer_notes ?? null,
     dropoffNotes: order.delivery_address?.notes ?? null,
+    dropoffPref: order.delivery_address?.dropoff_pref ?? null,
+    dropoffOther: order.delivery_address?.dropoff_other ?? null,
+    gateCode: order.delivery_address?.gate_code ?? null,
+    room: order.delivery_address?.room ?? null,
     assignedAt: (row.assigned_at as string | null) ?? null,
     acceptedAt: (row.accepted_at as string | null) ?? null,
     offerExpiresAt: (row.offer_expires_at as string | null) ?? null,

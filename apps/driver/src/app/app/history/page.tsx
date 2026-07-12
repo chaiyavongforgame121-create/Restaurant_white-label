@@ -17,29 +17,50 @@ interface Row {
   branch: { name: string } | null;
 }
 
+const RANGE_DAYS = [1, 3, 5, 7] as const;
+
 export default function HistoryPage() {
   const { driver } = useDriverSession();
   const [rows, setRows] = React.useState<Row[]>([]);
+  const [rangeDays, setRangeDays] = React.useState<(typeof RANGE_DAYS)[number]>(7);
 
   React.useEffect(() => {
     const supabase = getBrowserClient();
+    const since = new Date(Date.now() - rangeDays * 24 * 60 * 60 * 1000).toISOString();
     void supabase
       .from('driver_earnings_ledger')
       .select('id, delivered_at, base_pay, distance_pay, tip_net, total, status, branch:branches(name)')
       .eq('driver_id', driver.id)
+      .gte('delivered_at', since)
       .order('delivered_at', { ascending: false })
       .limit(50)
       .then(({ data }) => setRows((data ?? []) as unknown as Row[]));
-  }, [driver.id]);
+  }, [driver.id, rangeDays]);
 
   return (
     <div className="px-4 pt-6">
       <header className="mb-5">
         <h1 className="font-display text-2xl font-bold">History</h1>
       </header>
+      <div className="mb-4 flex gap-2">
+        {RANGE_DAYS.map((d) => (
+          <button
+            key={d}
+            type="button"
+            onClick={() => setRangeDays(d)}
+            className={`focus-ring rounded-full px-4 py-1.5 text-sm font-semibold ${
+              rangeDays === d
+                ? 'bg-primary text-primary-foreground'
+                : 'border border-border bg-card text-muted-foreground'
+            }`}
+          >
+            {d === 1 ? '1 day' : `${d} days`}
+          </button>
+        ))}
+      </div>
       {rows.length === 0 ? (
         <p className="rounded-xl border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
-          No completed deliveries yet.
+          No completed deliveries in the last {rangeDays === 1 ? 'day' : `${rangeDays} days`}.
         </p>
       ) : (
         <ul className="space-y-3">

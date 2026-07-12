@@ -989,6 +989,7 @@ export type Database = {
           status: string
           tip_net: number
           total: number | null
+          withdrawal_id: string | null
         }
         Insert: {
           base_pay?: number
@@ -1008,6 +1009,7 @@ export type Database = {
           status?: string
           tip_net?: number
           total?: number | null
+          withdrawal_id?: string | null
         }
         Update: {
           base_pay?: number
@@ -1027,6 +1029,7 @@ export type Database = {
           status?: string
           tip_net?: number
           total?: number | null
+          withdrawal_id?: string | null
         }
         Relationships: [
           {
@@ -1055,6 +1058,13 @@ export type Database = {
             columns: ["order_id"]
             isOneToOne: false
             referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_earnings_ledger_withdrawal_id_fkey"
+            columns: ["withdrawal_id"]
+            isOneToOne: false
+            referencedRelation: "driver_withdrawals"
             referencedColumns: ["id"]
           },
         ]
@@ -1189,10 +1199,12 @@ export type Database = {
           approved_at: string | null
           approved_by: string | null
           bank_name: string
+          branch_id: string
           created_at: string
           driver_id: string
           id: string
           paid_at: string | null
+          receipt_number: string | null
           rejection_reason: string | null
           status: string
         }
@@ -1203,10 +1215,12 @@ export type Database = {
           approved_at?: string | null
           approved_by?: string | null
           bank_name: string
+          branch_id: string
           created_at?: string
           driver_id: string
           id?: string
           paid_at?: string | null
+          receipt_number?: string | null
           rejection_reason?: string | null
           status?: string
         }
@@ -1217,14 +1231,23 @@ export type Database = {
           approved_at?: string | null
           approved_by?: string | null
           bank_name?: string
+          branch_id?: string
           created_at?: string
           driver_id?: string
           id?: string
           paid_at?: string | null
+          receipt_number?: string | null
           rejection_reason?: string | null
           status?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "driver_withdrawals_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "driver_withdrawals_driver_id_fkey"
             columns: ["driver_id"]
@@ -4257,6 +4280,10 @@ export type Database = {
         Returns: undefined
       }
       notify_waitlist_party: { Args: { p_id: string }; Returns: undefined }
+      pay_driver_withdrawal: {
+        Args: { p_reference?: string; p_withdrawal_id: string }
+        Returns: Json
+      }
       platform_financial_summary: { Args: never; Returns: Json }
       platform_ops_summary: { Args: never; Returns: Json }
       progress_delivery: {
@@ -4309,6 +4336,10 @@ export type Database = {
         Args: { p_delivery_id: string; p_reason?: string }
         Returns: undefined
       }
+      reject_driver_withdrawal: {
+        Args: { p_reason?: string; p_withdrawal_id: string }
+        Returns: Json
+      }
       reorder_menu_categories: {
         Args: { p_branch_id: string; p_orders: Json }
         Returns: undefined
@@ -4316,6 +4347,15 @@ export type Database = {
       reorder_menu_items: {
         Args: { p_branch_id: string; p_orders: Json }
         Returns: undefined
+      }
+      request_driver_withdrawal: {
+        Args: {
+          p_account_name: string
+          p_account_number: string
+          p_bank_name: string
+          p_branch_id: string
+        }
+        Returns: Json
       }
       requeue_failed_delivery: {
         Args: { p_delivery_id: string }
