@@ -89,7 +89,7 @@ export default function RootPage() {
           <Feature
             icon={<ShoppingBag className="h-5 w-5" />}
             title="Customer storefront"
-            description="Branded menus on your custom domain. Cart, voice ordering, loyalty redemption."
+            description="Branded menus on your custom domain. Cart, checkout, loyalty redemption."
           />
           <Feature
             icon={<ChefHat className="h-5 w-5" />}

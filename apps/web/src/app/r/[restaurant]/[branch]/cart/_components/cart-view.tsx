@@ -10,9 +10,8 @@ import { useTranslations } from 'next-intl';
 import { formatCurrency } from '@favornoms/shared';
 import { Button, Card, EmptyState, IconButton, QuantityStepper } from '@favornoms/ui';
 import { useCart } from '@/store/cart';
-import { VoiceOrderButton } from './voice-order-button';
 
-export function CartView({ branchId }: { branchId: string }) {
+export function CartView() {
   const t = useTranslations();
   const router = useRouter();
   const params = useParams<{ restaurant: string; branch: string }>();
@@ -51,10 +50,6 @@ export function CartView({ branchId }: { branchId: string }) {
         </IconButton>
         <h1 className="font-display text-2xl font-bold">{t('cart.title')}</h1>
       </header>
-
-      <div className="mb-5">
-        <VoiceOrderButton branchId={branchId} />
-      </div>
 
       {lines.length === 0 ? (
         <EmptyState
