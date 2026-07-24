@@ -8,6 +8,7 @@ import { useDriver } from '@/store/driver';
 
 const MIN_INTERVAL_MS = 5_000;
 const MAX_AGE_MS = 30_000;
+const HEARTBEAT_MS = 60_000;
 
 /**
  * Watches GPS while driver is online or on a delivery and pushes coords
@@ -67,7 +68,35 @@ export function DriverLocationPing() {
       { enableHighAccuracy: true, maximumAge: MAX_AGE_MS, timeout: 15_000 },
     );
 
-    return () => navigator.geolocation.clearWatch(watchId);
+    // watchPosition only fires on movement — a parked driver goes stale and
+    // dispatch (>5 min staleness cutoff) stops offering them jobs. Heartbeat a
+    // fix every 60s through the same throttled push to keep them dispatchable.
+    const heartbeatId = window.setInterval(() => {
+      navigator.geolocation.getCurrentPosition(push, () => {}, {
+        enableHighAccuracy: true,
+        maximumAge: MAX_AGE_MS,
+        timeout: 15_000,
+      });
+    }, HEARTBEAT_MS);
+
+    // Back to the foreground: timers/watch may have been throttled for minutes,
+    // so reset the throttle and push a fresh fix immediately.
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return;
+      lastSentAt.current = 0;
+      navigator.geolocation.getCurrentPosition(push, () => {}, {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 15_000,
+      });
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+      window.clearInterval(heartbeatId);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, [enabled, driver.id]);
 
   return null;

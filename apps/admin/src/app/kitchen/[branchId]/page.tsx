@@ -39,7 +39,7 @@ export default async function KitchenPage({ params, searchParams }: Props) {
   // rider" picker. Online riders are surfaced first client-side.
   const { data: driverRows } = await supabase
     .from('driver_approvals')
-    .select('driver:drivers(id, full_name, phone, vehicle_type, is_online, cooldown_until)')
+    .select('driver:drivers(id, full_name, phone, vehicle_type, is_online, cooldown_until, location_updated_at)')
     .eq('branch_id', branchId)
     .eq('status', 'approved');
   const drivers = (driverRows ?? [])
@@ -50,6 +50,7 @@ export default async function KitchenPage({ params, searchParams }: Props) {
       vehicle_type: string;
       is_online: boolean;
       cooldown_until: string | null;
+      location_updated_at: string | null;
     })
     .filter((d) => d && d.id);
 

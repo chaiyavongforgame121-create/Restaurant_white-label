@@ -37,6 +37,38 @@ import { pickerLabels } from '@/lib/picker-labels';
 import { useCart } from '@/store/cart';
 
 type PaymentMethod = 'card' | 'cash';
+type PaymentMode = 'asap' | 'scheduled';
+type PaymentMatrix = Record<PaymentMode, Record<PaymentMethod, boolean>>;
+
+// branches.settings.payment_methods — absent key/subkey means ENABLED (legacy
+// branches accept everything). place-order enforces the same matrix server-side.
+const PAYMENT_MATRIX_DEFAULTS: PaymentMatrix = {
+  asap: { cash: true, card: true },
+  scheduled: { cash: true, card: true },
+};
+
+function parsePaymentMatrix(settings: Record<string, unknown>): PaymentMatrix {
+  const raw = settings.payment_methods as
+    | Partial<Record<PaymentMode, Partial<Record<PaymentMethod, unknown>>>>
+    | undefined;
+  const read = (mode: PaymentMode, method: PaymentMethod) => {
+    const v = raw?.[mode]?.[method];
+    return typeof v === 'boolean' ? v : true;
+  };
+  return {
+    asap: { cash: read('asap', 'cash'), card: read('asap', 'card') },
+    scheduled: { cash: read('scheduled', 'cash'), card: read('scheduled', 'card') },
+  };
+}
+
+type DropoffPref = 'leave_at_door' | 'hand_to_me' | 'at_desk' | 'other';
+
+const DROPOFF_OPTIONS: Array<{ value: DropoffPref; label: string }> = [
+  { value: 'leave_at_door', label: 'Leave at the door' },
+  { value: 'hand_to_me', label: 'Hand it to me' },
+  { value: 'at_desk', label: 'At the desk / reception' },
+  { value: 'other', label: 'Other' },
+];
 
 interface Props {
   branchId: string;
@@ -71,10 +103,15 @@ export function CheckoutView({ branchId, base }: Props) {
   const [quote, setQuote] = React.useState<DeliveryQuote | null>(null);
   const [quoting, setQuoting] = React.useState(false);
   const [addressNotes, setAddressNotes] = React.useState('');
+  const [dropoffPref, setDropoffPref] = React.useState<DropoffPref | null>(null);
+  const [dropoffOther, setDropoffOther] = React.useState('');
+  const [gateCode, setGateCode] = React.useState('');
+  const [room, setRoom] = React.useState('');
   // The exact line1 Mapbox last resolved — guards against the autofill's own
   // input event clearing the coordinates immediately after onResolved sets them.
   const resolvedAddressRef = React.useRef<string | null>(null);
   const [method, setMethod] = React.useState<PaymentMethod>('card');
+  const [paymentMatrix, setPaymentMatrix] = React.useState<PaymentMatrix>(PAYMENT_MATRIX_DEFAULTS);
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   // Map picker + geolocation
@@ -88,7 +125,9 @@ export function CheckoutView({ branchId, base }: Props) {
   const phoneRef = React.useRef<HTMLInputElement | null>(null);
   const emailRef = React.useRef<HTMLInputElement | null>(null);
   const addressSectionRef = React.useRef<HTMLDivElement | null>(null);
+  const dropoffSectionRef = React.useRef<HTMLDivElement | null>(null);
   const tableRef = React.useRef<HTMLInputElement | null>(null);
+  const scheduleSectionRef = React.useRef<HTMLLabelElement | null>(null);
   const clearFieldError = (key: string) =>
     setFieldErrors((cur) => {
       if (!cur[key]) return cur;
@@ -135,6 +174,10 @@ export function CheckoutView({ branchId, base }: Props) {
   // actionable). A previously-saved address that happens to lack coords must not trap checkout —
   // it falls back to the flat delivery fee.
   const enteringNewAddress = savedAddresses.length === 0 || selectedAddressId === 'new';
+  const paymentModeKey: PaymentMode = scheduleMode === 'later' ? 'scheduled' : 'asap';
+  const enabledMethods = (['card', 'cash'] as const).filter((m) => paymentMatrix[paymentModeKey][m]);
+  const asapPayable = paymentMatrix.asap.cash || paymentMatrix.asap.card;
+  const scheduledPayable = paymentMatrix.scheduled.cash || paymentMatrix.scheduled.card;
   const serviceFee = Math.round(subtotal * 0.05 * 100) / 100;
   const maxRedeem = Math.min(pointsBalance, Math.floor(subtotal * 0.5));
   const appliedRedeem = Math.min(redeemPoints, maxRedeem);
@@ -211,9 +254,30 @@ export function CheckoutView({ branchId, base }: Props) {
       .eq('id', branchId)
       .maybeSingle()
       .then(({ data }) => {
-        if (data?.settings) setTipConfig(parseTipConfig(data.settings as Record<string, unknown>));
+        if (data?.settings) {
+          const settings = data.settings as Record<string, unknown>;
+          setTipConfig(parseTipConfig(settings));
+          setPaymentMatrix(parsePaymentMatrix(settings));
+        }
       });
   }, [branchId]);
+
+  // Keep the selected payment method valid for the current mode; when the
+  // current mode has no methods at all, flip to the other mode (its toggle is
+  // disabled below, so the user can't get back into the dead one).
+  React.useEffect(() => {
+    const modeKey: PaymentMode = scheduleMode === 'later' ? 'scheduled' : 'asap';
+    const enabled = (['card', 'cash'] as const).filter((m) => paymentMatrix[modeKey][m]);
+    if (enabled.length === 0) {
+      const other: PaymentMode = modeKey === 'asap' ? 'scheduled' : 'asap';
+      if (paymentMatrix[other].cash || paymentMatrix[other].card) {
+        setScheduleMode(modeKey === 'asap' ? 'later' : 'asap');
+      }
+      return;
+    }
+    const fallback = enabled[0];
+    if (fallback && !enabled.includes(method)) setMethod(fallback);
+  }, [scheduleMode, paymentMatrix, method]);
 
   // The restaurant's own coordinates make a sensible default centre for the map
   // picker when the customer hasn't entered an address yet.
@@ -382,6 +446,11 @@ export function CheckoutView({ branchId, base }: Props) {
 
     // Validate every field up front, then focus the first problem.
     const errs: Record<string, string> = {};
+    // 'later' with a cleared time would silently become ASAP server-side
+    // (place-order derives the mode from scheduled_for) — and be gated
+    // against the wrong payment matrix. Block it here.
+    if (scheduleMode === 'later' && !scheduledFor)
+      errs.schedule = 'Please pick a time for your scheduled order.';
     if (!name.trim()) errs.name = t('checkout.errors.nameRequired');
     const phoneDigits = phone.replace(/\D/g, '');
     if (!phone.trim()) errs.phone = t('checkout.errors.phoneRequired');
@@ -392,21 +461,28 @@ export function CheckoutView({ branchId, base }: Props) {
       if (!address.trim()) errs.address = t('checkout.errors.addressRequired');
       else if (enteringNewAddress && !addressCoords)
         errs.address = t('checkout.errors.addressUnconfirmed');
+      if (!dropoffPref) errs.dropoff = 'Please choose where the driver should leave your order.';
+      else if (dropoffPref === 'other' && !dropoffOther.trim())
+        errs.dropoff = 'Please describe the drop-off spot.';
     }
     if (channel === 'dine_in' && !dineInTable.trim()) errs.table = t('checkout.errors.tableRequired');
     if (Object.keys(errs).length > 0) {
       setFieldErrors(errs);
-      const firstEl = errs.name
-        ? nameRef.current
-        : errs.phone
-          ? phoneRef.current
-          : errs.email
-            ? emailRef.current
-            : errs.address
-              ? addressSectionRef.current
-              : errs.table
-                ? tableRef.current
-                : null;
+      const firstEl = errs.schedule
+        ? scheduleSectionRef.current
+        : errs.name
+          ? nameRef.current
+          : errs.phone
+            ? phoneRef.current
+            : errs.email
+              ? emailRef.current
+              : errs.address
+                ? addressSectionRef.current
+                : errs.dropoff
+                  ? dropoffSectionRef.current
+                  : errs.table
+                    ? tableRef.current
+                    : null;
       firstEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       if (firstEl && firstEl instanceof HTMLInputElement) firstEl.focus({ preventScroll: true });
       return;
@@ -449,6 +525,10 @@ export function CheckoutView({ branchId, base }: Props) {
                 state: addressMeta?.state,
                 postal_code: addressMeta?.postal_code,
                 notes: addressNotes.trim() || undefined,
+                dropoff_pref: dropoffPref ?? undefined,
+                dropoff_other: dropoffPref === 'other' ? dropoffOther.trim() : undefined,
+                gate_code: gateCode.trim() || undefined,
+                room: room.trim() || undefined,
                 lat: addressCoords?.lat,
                 lng: addressCoords?.lng,
               }
@@ -506,7 +586,13 @@ export function CheckoutView({ branchId, base }: Props) {
           ? 'This restaurant is currently closed. Please try again during opening hours.'
           : msg.includes('delivery_out_of_range')
             ? 'Sorry, this address is outside the delivery area.'
-            : msg,
+            : msg.includes('payment_method_not_accepted')
+              ? 'That payment method is not available for this order type. Please pick another.'
+              : msg.includes('dropoff_other_required')
+                ? 'Please describe where we should leave your order.'
+                : msg.includes('dropoff_required')
+                  ? 'Please choose where we should leave your order.'
+                  : msg,
       );
       setSubmitting(false);
     }
@@ -527,8 +613,9 @@ export function CheckoutView({ branchId, base }: Props) {
           <div className="mt-3 flex rounded-full bg-muted p-1 text-sm font-semibold">
             <button
               type="button"
+              disabled={!asapPayable}
               onClick={() => setScheduleMode('asap')}
-              className={`focus-ring flex-1 rounded-full py-2 transition-colors ${
+              className={`focus-ring flex-1 rounded-full py-2 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
                 scheduleMode === 'asap' ? 'bg-card text-foreground shadow-soft' : 'text-muted-foreground'
               }`}
             >
@@ -536,24 +623,40 @@ export function CheckoutView({ branchId, base }: Props) {
             </button>
             <button
               type="button"
+              disabled={!scheduledPayable}
               onClick={() => setScheduleMode('later')}
-              className={`focus-ring flex-1 rounded-full py-2 transition-colors ${
+              className={`focus-ring flex-1 rounded-full py-2 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
                 scheduleMode === 'later' ? 'bg-card text-foreground shadow-soft' : 'text-muted-foreground'
               }`}
             >
               Schedule for later
             </button>
           </div>
+          {!scheduledPayable && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Scheduled orders are not available with the restaurant current payment options.
+            </p>
+          )}
+          {!asapPayable && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              ASAP orders are not available with the restaurant current payment options.
+            </p>
+          )}
           {scheduleMode === 'later' && (
-            <label className="mt-3 block">
+            <label ref={scheduleSectionRef} className="mt-3 block">
               <span className="mb-1 block text-sm font-medium">Pickup / delivery time</span>
               <input
                 type="datetime-local"
                 value={scheduledFor}
                 min={new Date(Date.now() + 15 * 60_000).toISOString().slice(0, 16)}
-                onChange={(e) => setScheduledFor(e.target.value)}
+                onChange={(e) => { setScheduledFor(e.target.value); clearFieldError('schedule'); }}
+                aria-invalid={!!fieldErrors.schedule}
                 className="input"
+                style={fieldErrors.schedule ? { borderColor: 'hsl(var(--danger))' } : undefined}
               />
+              {fieldErrors.schedule && (
+                <p className="mt-1 text-xs text-danger">{fieldErrors.schedule}</p>
+              )}
               <p className="mt-1 text-xs text-muted-foreground">
                 We&apos;ll start preparing your order so it&apos;s ready right around this time.
               </p>
@@ -759,6 +862,72 @@ export function CheckoutView({ branchId, base }: Props) {
               </p>
             )}
 
+            <div className="mt-4" ref={dropoffSectionRef}>
+              <label className="mb-1 block text-sm font-medium">Where should we leave it?</label>
+              <div className="grid grid-cols-2 gap-2">
+                {DROPOFF_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => { setDropoffPref(opt.value); clearFieldError('dropoff'); }}
+                    aria-pressed={dropoffPref === opt.value}
+                    className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${
+                      dropoffPref === opt.value
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-border bg-card'
+                    }`}
+                    style={
+                      fieldErrors.dropoff && !dropoffPref
+                        ? { borderColor: 'hsl(var(--danger))' }
+                        : undefined
+                    }
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              {dropoffPref === 'other' && (
+                <input
+                  value={dropoffOther}
+                  onChange={(e) => { setDropoffOther(e.target.value); clearFieldError('dropoff'); }}
+                  placeholder="Tell the driver where to leave it"
+                  maxLength={120}
+                  aria-invalid={!!fieldErrors.dropoff}
+                  className="input mt-2"
+                  style={fieldErrors.dropoff ? { borderColor: 'hsl(var(--danger))' } : undefined}
+                />
+              )}
+              {fieldErrors.dropoff && (
+                <p className="mt-2 text-xs font-medium text-danger">{fieldErrors.dropoff}</p>
+              )}
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <label className="block">
+                  <span className="mb-1 block text-sm font-medium">
+                    Front gate code <span className="font-normal text-muted-foreground">(optional)</span>
+                  </span>
+                  <input
+                    value={gateCode}
+                    onChange={(e) => setGateCode(e.target.value)}
+                    maxLength={40}
+                    placeholder="e.g. #1234"
+                    className="input"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-sm font-medium">
+                    Room / unit <span className="font-normal text-muted-foreground">(optional)</span>
+                  </span>
+                  <input
+                    value={room}
+                    onChange={(e) => setRoom(e.target.value)}
+                    maxLength={40}
+                    placeholder="e.g. Apt 203"
+                    className="input"
+                  />
+                </label>
+              </div>
+            </div>
+
             <div className="mt-4">
               <label className="mb-1 block text-sm font-medium">
                 Delivery instructions <span className="font-normal text-muted-foreground">(optional)</span>
@@ -766,7 +935,7 @@ export function CheckoutView({ branchId, base }: Props) {
               <textarea
                 value={addressNotes}
                 onChange={(e) => setAddressNotes(e.target.value)}
-                placeholder="e.g. Front gate code 1234 · Room 203 · leave at the door"
+                placeholder="e.g. Blue house behind the bakery · call on arrival"
                 rows={2}
                 maxLength={300}
                 className="focus-ring w-full resize-none rounded-2xl border border-border bg-background px-4 py-3 text-base placeholder:text-muted-foreground"
@@ -801,9 +970,18 @@ export function CheckoutView({ branchId, base }: Props) {
         <Card className="p-5">
           <h2 className="font-display text-lg font-semibold">{t('checkout.paymentMethod')}</h2>
           <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <PaymentChoice icon={<CreditCard className="h-5 w-5" />} label={t('checkout.payment.card')} active={method === 'card'} onClick={() => setMethod('card')} />
-            <PaymentChoice icon={<Banknote className="h-5 w-5" />} label={t('checkout.payment.cash')} active={method === 'cash'} onClick={() => setMethod('cash')} />
+            {paymentMatrix[paymentModeKey].card && (
+              <PaymentChoice icon={<CreditCard className="h-5 w-5" />} label={t('checkout.payment.card')} active={method === 'card'} onClick={() => setMethod('card')} />
+            )}
+            {paymentMatrix[paymentModeKey].cash && (
+              <PaymentChoice icon={<Banknote className="h-5 w-5" />} label={t('checkout.payment.cash')} active={method === 'cash'} onClick={() => setMethod('cash')} />
+            )}
           </div>
+          {enabledMethods.length === 0 && (
+            <p className="mt-3 text-sm text-muted-foreground">
+              This restaurant has no payment options available right now.
+            </p>
+          )}
         </Card>
 
         <Card className="p-5">
@@ -981,6 +1159,7 @@ export function CheckoutView({ branchId, base }: Props) {
             loading={submitting}
             disabled={
               outOfRange ||
+              enabledMethods.length === 0 ||
               (channel === 'delivery' && quoting) ||
               (channel === 'delivery' && enteringNewAddress && !addressCoords)
             }

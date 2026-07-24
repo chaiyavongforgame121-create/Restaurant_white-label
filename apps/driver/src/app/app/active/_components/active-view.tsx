@@ -17,6 +17,7 @@ import {
   type DeliveryStatus,
 } from '@favornoms/database/queries';
 import { DriverDeliveryChat } from './delivery-chat';
+import { PhotoUploader } from './photo-uploader';
 
 type StageKey = 'heading_to_pickup' | 'at_pickup' | 'picked_up' | 'in_transit' | 'at_customer';
 
@@ -396,10 +397,14 @@ export function ActiveDeliveryView() {
               />
             )}
 
-            {active.dropoffNotes && (
-              <div className="rounded-2xl border border-primary/30 bg-primary/5 px-4 py-2.5 text-sm">
-                <span className="font-semibold">📍 Delivery note:</span> {active.dropoffNotes}
-              </div>
+            {isInTransit ? (
+              <DropoffInstructionsCard active={active} />
+            ) : (
+              active.dropoffNotes && (
+                <div className="rounded-2xl border border-primary/30 bg-primary/5 px-4 py-2.5 text-sm">
+                  <span className="font-semibold">📍 Delivery note:</span> {active.dropoffNotes}
+                </div>
+              )
             )}
 
             <div className="flex items-center justify-between rounded-2xl bg-muted/40 px-4 py-3">
@@ -430,7 +435,8 @@ export function ActiveDeliveryView() {
                     📦 Order 1 · {active.orderNumber}
                   </p>
                 )}
-                <PickupPhotoUploader
+                <PhotoUploader
+                  mode="pickup"
                   deliveryId={active.id}
                   uploadedUrl={pickupPhotoUrl ?? active.pickupPhotoUrl}
                   onUploaded={setPickupPhotoUrl}
@@ -440,7 +446,8 @@ export function ActiveDeliveryView() {
                     <p className="text-xs font-semibold text-muted-foreground">
                       📦 Order 2 · {mate.orderNumber} — photograph this bag separately
                     </p>
-                    <PickupPhotoUploader
+                    <PhotoUploader
+                      mode="pickup"
                       deliveryId={mate.id}
                       uploadedUrl={matePickupPhotoUrl ?? mate.pickupPhotoUrl}
                       onUploaded={setMatePickupPhotoUrl}
@@ -450,7 +457,8 @@ export function ActiveDeliveryView() {
               </>
             )}
             {stage === 'at_customer' && (
-              <PodUploader
+              <PhotoUploader
+                mode="delivery"
                 deliveryId={active.id}
                 uploadedUrl={podPhotoUrl ?? active.podPhotoUrl}
                 onUploaded={setPodPhotoUrl}
@@ -694,151 +702,52 @@ function NavRow({ children, onClick }: { children: React.ReactNode; onClick: () 
   );
 }
 
-function PickupPhotoUploader({
-  deliveryId,
-  uploadedUrl,
-  onUploaded,
-}: {
-  deliveryId: string;
-  uploadedUrl: string | null;
-  onUploaded: (url: string) => void;
-}) {
-  const [uploading, setUploading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
-  const inputRef = React.useRef<HTMLInputElement>(null);
+const DROPOFF_PREF_LABELS = {
+  leave_at_door: 'Leave at the door',
+  hand_to_me: 'Hand it to me',
+  at_desk: 'At the desk / reception',
+} as const;
 
-  const upload = async (file: File) => {
-    setUploading(true);
-    setError(null);
-    try {
-      const supabase = getBrowserClient();
-      const path = `pickup/${deliveryId}/${Date.now()}.jpg`;
-      const { error: upErr } = await supabase.storage
-        .from('branch-assets')
-        .upload(path, file, { contentType: file.type, upsert: false });
-      if (upErr) throw upErr;
-      const { data: pub } = supabase.storage.from('branch-assets').getPublicUrl(path);
-      const { error: updErr } = await supabase
-        .from('deliveries')
-        // pickup_photo_url/_at aren't in the generated types yet — escape hatch.
-        .update({ pickup_photo_url: pub.publicUrl, pickup_photo_uploaded_at: new Date().toISOString() } as never)
-        .eq('id', deliveryId);
-      if (updErr) throw updErr;
-      onUploaded(pub.publicUrl);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setUploading(false);
-    }
-  };
-
+// Structured drop-off card for the delivery leg. Orders placed before
+// dropoff_pref existed degrade to a notes-only card, or nothing at all.
+function DropoffInstructionsCard({ active }: { active: ActiveDeliveryUI }) {
+  const { dropoffPref, dropoffOther, gateCode, room, dropoffNotes } = active;
+  if (!dropoffPref && !gateCode && !room && !dropoffNotes) return null;
+  const prefLabel =
+    dropoffPref === 'other'
+      ? dropoffOther
+        ? `Other: ${dropoffOther}`
+        : 'Other'
+      : dropoffPref
+        ? DROPOFF_PREF_LABELS[dropoffPref]
+        : null;
   return (
-    <div className="rounded-2xl border border-dashed border-primary/40 bg-primary/5 p-3">
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) void upload(f);
-        }}
-      />
-      {uploadedUrl ? (
-        <div className="flex items-center gap-2 text-sm text-success">
-          <CheckCircle2 className="h-4 w-4" /> Pickup photo uploaded
-        </div>
-      ) : (
-        <>
-          <p className="mb-2 text-xs font-medium">
-            📸 Required — snap a photo of the order at the restaurant before you continue.
-          </p>
-          <button
-            type="button"
-            onClick={() => inputRef.current?.click()}
-            disabled={uploading}
-            className="focus-ring flex w-full items-center justify-center gap-2 rounded-xl bg-card px-4 py-2 text-sm font-semibold"
-          >
-            {uploading ? 'Uploading…' : 'Take pickup photo'}
-          </button>
-        </>
+    <div className="rounded-2xl border-2 border-primary/40 bg-primary/10 p-4">
+      <p className="text-xs font-semibold uppercase tracking-wider text-primary">
+        📍 Drop-off instructions
+      </p>
+      {prefLabel && (
+        <p className="mt-1 font-display text-lg font-bold leading-tight">{prefLabel}</p>
       )}
-      {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
-    </div>
-  );
-}
-
-function PodUploader({
-  deliveryId,
-  uploadedUrl,
-  onUploaded,
-}: {
-  deliveryId: string;
-  uploadedUrl: string | null;
-  onUploaded: (url: string) => void;
-}) {
-  const [uploading, setUploading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
-  const inputRef = React.useRef<HTMLInputElement>(null);
-
-  const upload = async (file: File) => {
-    setUploading(true);
-    setError(null);
-    try {
-      const supabase = getBrowserClient();
-      const path = `pod/${deliveryId}/${Date.now()}.jpg`;
-      const { error: upErr } = await supabase.storage
-        .from('branch-assets')
-        .upload(path, file, { contentType: file.type, upsert: false });
-      if (upErr) throw upErr;
-      const { data: pub } = supabase.storage.from('branch-assets').getPublicUrl(path);
-      const { error: updErr } = await supabase
-        .from('deliveries')
-        .update({ pod_photo_url: pub.publicUrl, pod_uploaded_at: new Date().toISOString() })
-        .eq('id', deliveryId);
-      if (updErr) throw updErr;
-      onUploaded(pub.publicUrl);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  return (
-    <div className="rounded-2xl border border-dashed border-primary/40 bg-primary/5 p-3">
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) void upload(f);
-        }}
-      />
-      {uploadedUrl ? (
-        <div className="flex items-center gap-2 text-sm text-success">
-          <CheckCircle2 className="h-4 w-4" /> Delivery photo uploaded
+      {(gateCode || room || dropoffNotes) && (
+        <div className="mt-1.5 space-y-1 text-sm">
+          {gateCode && (
+            <p>
+              <span className="font-semibold">Gate code:</span> {gateCode}
+            </p>
+          )}
+          {room && (
+            <p>
+              <span className="font-semibold">Room:</span> {room}
+            </p>
+          )}
+          {dropoffNotes && (
+            <p>
+              <span className="font-semibold">Note:</span> {dropoffNotes}
+            </p>
+          )}
         </div>
-      ) : (
-        <>
-          <p className="mb-2 text-xs font-medium">
-            📸 Required — snap a photo of the delivered order before you finish.
-          </p>
-          <button
-            type="button"
-            onClick={() => inputRef.current?.click()}
-            disabled={uploading}
-            className="focus-ring flex w-full items-center justify-center gap-2 rounded-xl bg-card px-4 py-2 text-sm font-semibold"
-          >
-            {uploading ? 'Uploading…' : 'Take delivery photo'}
-          </button>
-        </>
       )}
-      {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
     </div>
   );
 }

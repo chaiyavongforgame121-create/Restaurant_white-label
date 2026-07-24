@@ -148,6 +148,7 @@ export interface DriverLite {
   vehicle_type: string;
   is_online: boolean;
   cooldown_until: string | null;
+  location_updated_at: string | null;
 }
 
 interface Props {
@@ -740,14 +741,21 @@ function MenuRow({ children, onClick, danger }: { children: React.ReactNode; onC
 }
 
 /* Manual "assign a specific rider" picker (staff override of auto-dispatch).
-   Online riders float to the top; picking one sends them a targeted offer. */
+   Riders auto-dispatch can reach (online + GPS ping within 5 min) float to the
+   top; picking one sends them a targeted offer — that still works for online
+   riders with stale GPS, which auto-dispatch skips. */
+const GPS_FRESH_MS = 5 * 60_000; // mirrors find_dispatch_candidates' staleness cutoff
 function AssignPicker({ drivers, onAssign }: { drivers: DriverLite[]; onAssign: (driverId: string) => void | Promise<void> }) {
   const [open, setOpen] = React.useState(false);
   const [busy, setBusy] = React.useState<string | null>(null);
-  const ordered = React.useMemo(
-    () => [...drivers].sort((a, b) => Number(b.is_online) - Number(a.is_online) || a.full_name.localeCompare(b.full_name)),
-    [drivers],
-  );
+  const nowMs = Date.now(); // fresh each render — the kitchen re-renders on a 1s tick
+  const gpsAge = (d: DriverLite) => (d.location_updated_at ? nowMs - new Date(d.location_updated_at).getTime() : null);
+  const rank = (d: DriverLite) => {
+    if (!d.is_online) return 2;
+    const age = gpsAge(d);
+    return age != null && age < GPS_FRESH_MS ? 0 : 1;
+  };
+  const ordered = [...drivers].sort((a, b) => rank(a) - rank(b) || a.full_name.localeCompare(b.full_name));
   const pick = async (id: string) => {
     setBusy(id);
     try { await onAssign(id); setOpen(false); } catch { /* caller surfaces the error */ } finally { setBusy(null); }
@@ -768,20 +776,33 @@ function AssignPicker({ drivers, onAssign }: { drivers: DriverLite[]; onAssign: 
             {ordered.length === 0 ? (
               <div className="px-3 py-2 text-xs" style={{ color: SUN.faint }}>No approved riders for this branch.</div>
             ) : (
-              ordered.map((d) => (
-                <button
-                  key={d.id}
-                  disabled={busy !== null}
-                  onClick={() => void pick(d.id)}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-black/5 disabled:opacity-60"
-                >
-                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: d.is_online ? '#23C16B' : '#CFC2B4' }} />
-                  <span className="flex-1 truncate" style={{ color: SUN.text }}>{d.full_name}</span>
-                  {busy === d.id
-                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" style={{ color: SUN.faint }} />
-                    : <span className="text-[11px] capitalize" style={{ color: SUN.faint }}>{d.is_online ? d.vehicle_type : 'offline'}</span>}
-                </button>
-              ))
+              ordered.map((d) => {
+                const age = gpsAge(d);
+                const fresh = age != null && age < GPS_FRESH_MS;
+                return (
+                  <button
+                    key={d.id}
+                    disabled={busy !== null}
+                    onClick={() => void pick(d.id)}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-black/5 disabled:opacity-60"
+                  >
+                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: d.is_online ? '#23C16B' : '#CFC2B4' }} />
+                    <span className="flex-1 truncate" style={{ color: SUN.text }}>{d.full_name}</span>
+                    {d.is_online && (fresh ? (
+                      <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium" style={{ background: '#DCF6E8', color: '#13794C' }}>
+                        {age < 60_000 ? 'GPS now' : `GPS ${Math.floor(age / 60_000)}m`}
+                      </span>
+                    ) : (
+                      <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium" style={{ background: '#FCEBC6', color: '#9A6206' }} title="No GPS ping in the last 5 min — auto-dispatch skips this rider; a targeted offer still works">
+                        GPS stale
+                      </span>
+                    ))}
+                    {busy === d.id
+                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" style={{ color: SUN.faint }} />
+                      : <span className="text-[11px] capitalize" style={{ color: SUN.faint }}>{d.is_online ? d.vehicle_type : 'offline'}</span>}
+                  </button>
+                );
+              })
             )}
           </div>
         </>

@@ -15,6 +15,12 @@ export interface PlaceOrderInput {
     notes?: string;
     lat?: number;
     lng?: number;
+    /** Required for delivery orders (place-order rejects without it). */
+    dropoff_pref?: 'leave_at_door' | 'hand_to_me' | 'at_desk' | 'other';
+    /** Required when dropoff_pref === 'other'; max 120 chars. */
+    dropoff_other?: string;
+    gate_code?: string;
+    room?: string;
   };
   saved_address_id?: string;
   customer_notes?: string;

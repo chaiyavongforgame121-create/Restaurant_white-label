@@ -1,5 +1,16 @@
-// place-order v9 — US pivot + modifiers + combos + happy-hour + schedules + gift cards
-//                  + distance-based delivery fees (Mapbox location backbone, Phase 1).
+// place-order v9.2 — US pivot + modifiers + combos + happy-hour + schedules + gift cards
+//                  + distance-based delivery fees (Mapbox location backbone, Phase 1)
+//                  + payment-method gating + structured drop-off.
+//   v9.2 (2026-07-12): payment gating from branches.settings.payment_methods
+//        ({asap|scheduled}.{cash|card}); absent key/subkey => allowed, explicit false
+//        => 400 payment_method_not_accepted. Delivery orders now require a structured
+//        drop-off: delivery_address.dropoff_pref (leave_at_door | hand_to_me | at_desk
+//        | other), dropoff_other required when 'other'; free-text fields trimmed and
+//        length-capped (dropoff_other 120, gate_code/room 40) and whitelisted into the
+//        delivery_address JSON stored on the order (survives saved-address rebuild).
+//   v9.3 (2026-07-12): payment gating exempts active staff of the branch's restaurant
+//        (the counter/POS pay buttons are staff-facing, not customer-facing); a
+//        checkout-typed delivery_address.notes now survives the saved-address rebuild.
 //   v9   (2026-06-11): when delivery_address has lat/lng (direct or saved address),
 //        calls quote_delivery() for the authoritative distance fee + heuristic ETA,
 //        rejects out-of-radius addresses (409 delivery_out_of_range), and populates
@@ -29,7 +40,7 @@ interface PlaceOrderRequest {
   channel: 'dine_in' | 'pickup' | 'delivery' | 'qr_ordering';
   customer_name?: string;
   customer_phone?: string;
-  delivery_address?: { line1: string; line2?: string; city?: string; state?: string; postal_code?: string; notes?: string; lat?: number; lng?: number };
+  delivery_address?: { line1: string; line2?: string; city?: string; state?: string; postal_code?: string; notes?: string; lat?: number; lng?: number; dropoff_pref?: 'leave_at_door' | 'hand_to_me' | 'at_desk' | 'other'; dropoff_other?: string; gate_code?: string; room?: string };
   saved_address_id?: string;
   customer_notes?: string;
   payment_method: 'card' | 'cash';
@@ -48,6 +59,11 @@ function json(status: number, body: unknown) { return new Response(JSON.stringif
 
 // Round to two decimals.
 function r2(n: number) { return Math.round(n * 100) / 100; }
+
+// Trim a free-text field and hard-cap its length (non-strings become '').
+function clip(v: unknown, max: number) { return typeof v === 'string' ? v.trim().slice(0, max) : ''; }
+
+const DROPOFF_PREFS = ['leave_at_door', 'hand_to_me', 'at_desk', 'other'] as const;
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: CORS });
@@ -68,6 +84,24 @@ Deno.serve(async (req: Request) => {
   if (payload.channel === 'delivery' && !payload.delivery_address?.line1 && !payload.saved_address_id) return json(400, { error: 'delivery_address_required' });
   if (!payload.customer_phone) return json(400, { error: 'customer_phone_required' });
   if (payload.payment_method !== 'card' && payload.payment_method !== 'cash') return json(400, { error: 'invalid_payment_method' });
+
+  // Structured drop-off (delivery only). dropoff_pref is required; the whitelisted
+  // object is merged into delivery_address later so it survives a saved-address rebuild.
+  let dropoff: { dropoff_pref: (typeof DROPOFF_PREFS)[number]; dropoff_other?: string; gate_code?: string; room?: string } | null = null;
+  if (payload.channel === 'delivery') {
+    const pref = payload.delivery_address?.dropoff_pref;
+    if (!pref || !DROPOFF_PREFS.includes(pref)) return json(400, { error: 'dropoff_required' });
+    const dropoffOther = clip(payload.delivery_address?.dropoff_other, 120);
+    if (pref === 'other' && !dropoffOther) return json(400, { error: 'dropoff_other_required' });
+    const gateCode = clip(payload.delivery_address?.gate_code, 40);
+    const room = clip(payload.delivery_address?.room, 40);
+    dropoff = {
+      dropoff_pref: pref,
+      ...(pref === 'other' ? { dropoff_other: dropoffOther } : {}),
+      ...(gateCode ? { gate_code: gateCode } : {}),
+      ...(room ? { room } : {}),
+    };
+  }
 
   const { data: openCheck } = await admin.rpc('is_branch_open', { p_branch_id: payload.branch_id });
   if (openCheck === false) return json(409, { error: 'branch_closed' });
@@ -182,6 +216,7 @@ Deno.serve(async (req: Request) => {
   const tipAmount = Math.max(0, r2(payload.tip_amount ?? 0));
 
   let customerId: string | null = null;
+  let authedUserId: string | null = null;
   let discountAmount = 0;
   let promoDiscount = 0;
   let promoId: string | null = null;
@@ -190,6 +225,7 @@ Deno.serve(async (req: Request) => {
     const userClient = createClient(url, anonKey, { global: { headers: { Authorization: authHeader } }, auth: { persistSession: false } });
     const { data: { user } } = await userClient.auth.getUser();
     if (user) {
+      authedUserId = user.id;
       // Customer identity is per RESTAURANT (shared across its branches), so resolve
       // by (user, restaurant) and lazily create the row on first order at any branch.
       const { data: c } = await admin.from('customers').select('id').eq('user_id', user.id).eq('restaurant_id', branch.restaurant_id).maybeSingle();
@@ -210,10 +246,34 @@ Deno.serve(async (req: Request) => {
     }
   }
 
+  // Payment gating: settings.payment_methods = { asap: { cash, card }, scheduled: { cash, card } }.
+  // Absent key/subkey => enabled (backward compatible); only an explicit false blocks.
+  // The matrix governs what CUSTOMERS may pick — staff-placed orders (counter/POS
+  // have their own hard-coded Cash/Card buttons) are exempt.
+  const paymentMethods = settings.payment_methods as Record<string, Record<string, boolean>> | undefined;
+  const orderMode = payload.scheduled_for ? 'scheduled' : 'asap';
+  if (paymentMethods?.[orderMode]?.[payload.payment_method] === false) {
+    const { data: staffRow } = authedUserId
+      ? await admin.from('staff_members').select('id')
+          .eq('user_id', authedUserId).eq('restaurant_id', branch.restaurant_id)
+          .eq('status', 'active').limit(1).maybeSingle()
+      : { data: null };
+    if (!staffRow) return json(400, { error: 'payment_method_not_accepted' });
+  }
+
   let deliveryAddress = payload.delivery_address ?? null;
   if (payload.saved_address_id && customerId) {
     const { data: a } = await admin.from('customer_addresses').select('*').eq('id', payload.saved_address_id).eq('customer_id', customerId).maybeSingle();
-    if (a) deliveryAddress = { line1: a.address_line1, line2: a.address_line2, city: a.city ?? a.district, state: a.state ?? a.province, postal_code: a.postal_code, notes: a.delivery_notes, lat: a.lat ?? undefined, lng: a.lng ?? undefined } as never;
+    // The checkout sends both delivery_address and saved_address_id — a
+    // freshly-typed "Delivery instructions" note beats the saved row's stale
+    // one (mirrors the dropoff merge below, which also survives the rebuild).
+    const typedNotes = clip(payload.delivery_address?.notes, 300);
+    if (a) deliveryAddress = { line1: a.address_line1, line2: a.address_line2, city: a.city ?? a.district, state: a.state ?? a.province, postal_code: a.postal_code, notes: typedNotes || a.delivery_notes, lat: a.lat ?? undefined, lng: a.lng ?? undefined } as never;
+  }
+  if (dropoff) {
+    // Drop any raw drop-off keys from the incoming address; only the validated object wins.
+    const { dropoff_pref: _p, dropoff_other: _o, gate_code: _g, room: _r, ...rest } = (deliveryAddress ?? {}) as Record<string, unknown>;
+    deliveryAddress = { ...rest, ...dropoff } as never;
   }
 
   // Distance-based delivery quote (server-authoritative — same RPC the checkout

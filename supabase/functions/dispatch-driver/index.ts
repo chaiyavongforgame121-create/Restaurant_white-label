@@ -24,11 +24,15 @@
 // v2.2 (2026-07-10): stamps net_tip (+ tip_visible_total in transparent mode) so the
 //   driver sees their tip on the offer without exposing the restaurant's cut.
 // v2.3 (2026-07-10): batched offers (งานพ่วง). Before candidate search we try
-//   claim_batch_sibling() — same branch, both READY (dispatching), dropoffs within
-//   batch_max_dropoff_mi, gated by branches.settings.batch_enabled (default OFF).
-//   A batch is offered to ONE driver atomically via stamp_batch_offer(); accept/
-//   reject/expire treat the batch as a unit. v2.3.1: exhausted batches alert staff
-//   for BOTH legs; single-path offer race no longer sends a phantom push.
+//   claim_batch_sibling() — same branch, both READY (dispatching), gated by
+//   branches.settings.batch_enabled (default OFF). A batch is offered to ONE driver
+//   atomically via stamp_batch_offer(); accept/reject/expire treat the batch as a
+//   unit. v2.3.1: exhausted batches alert staff for BOTH legs; single-path offer
+//   race no longer sends a phantom push.
+// v2.3.2 (2026-07-24): the pairing gate is now a same-DIRECTION detour test, not a
+//   dropoff-proximity radius — claim_batch_sibling pairs two orders only when the
+//   second is roughly on the way (detour = dist(A,B) − |dist(R,A) − dist(R,B)| ≤
+//   settings.batch_max_detour_mi, default 1.0 mi). No edge-fn change; SQL-only.
 // v1 history: single-shot nearest-driver assign; source committed 2026-06-11
 //   after living only on the remote.
 

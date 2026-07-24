@@ -8,6 +8,7 @@ import { Badge, Button, Card } from '@favornoms/ui';
 import { ClosuresManager } from './closures-manager';
 import { DeliverySettingsCard } from './delivery-settings-card';
 import { HoursEditor } from './hours-editor';
+import { PaymentMethodsCard } from './payment-methods-card';
 import { TipSettingsCard } from './tip-settings-card';
 import { StorefrontOverrideCard } from './storefront-override-card';
 
@@ -172,6 +173,8 @@ export function BranchSettings({
         <ClosuresManager branchId={branch.id} />
 
         <DeliverySettingsCard branchId={branch.id} settings={branch.settings} />
+
+        <PaymentMethodsCard branchId={branch.id} settings={branch.settings} />
 
         <TipSettingsCard branchId={branch.id} settings={branch.settings} />
 
