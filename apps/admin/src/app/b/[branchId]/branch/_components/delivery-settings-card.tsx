@@ -37,7 +37,7 @@ type NumericKey =
   | 'driver_search_radius_km'
   | 'driver_max_attempts'
   | 'offer_ttl_seconds'
-  | 'batch_max_dropoff_mi'
+  | 'batch_max_detour_mi'
   | 'driver_base_pay'
   | 'driver_per_km_pay';
 
@@ -61,8 +61,8 @@ const FIELDS: Array<{
   { key: 'driver_max_attempts', label: 'Max dispatch attempts', hint: 'Staff get alerted after this many failed rounds', group: 'dispatch', step: '1', fallback: 3 },
   { key: 'offer_ttl_seconds', label: 'Offer timeout (sec)', hint: 'How long a driver has to accept an offer', group: 'dispatch', step: '5', fallback: DELIVERY_SETTING_DEFAULTS.offerTtlSeconds },
   // Stored directly in miles (unlike the km-stored keys above) — the SQL pairing fn
-  // claim_batch_sibling reads settings->>'batch_max_dropoff_mi' as miles.
-  { key: 'batch_max_dropoff_mi', label: 'Stacked-order dropoff radius (mi)', hint: 'Pair two ready orders into one trip when their dropoffs are within this distance (needs stacking enabled below)', group: 'dispatch', step: '0.25', fallback: 1.5 },
+  // claim_batch_sibling reads settings->>'batch_max_detour_mi' as miles.
+  { key: 'batch_max_detour_mi', label: 'Stacked-order max detour (mi)', hint: 'Pair two ready orders only when the second is on the way — this caps the extra driving the second customer accepts. Lower = only near-perfect same-route pairs (needs stacking enabled below)', group: 'dispatch', step: '0.25', fallback: 1.0 },
   { key: 'driver_base_pay', label: 'Driver base pay ($)', group: 'pay', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.driverBasePay },
   { key: 'driver_per_km_pay', label: 'Driver per mile ($)', group: 'pay', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.driverPerKmPay, convert: 'rate' },
 ];
@@ -223,8 +223,9 @@ export function DeliverySettingsCard({ branchId, settings }: Props) {
             <span>
               <span className="block text-sm font-medium">Stack same-route orders (งานพ่วง)</span>
               <span className="block text-xs text-muted-foreground">
-                When two orders are ready together and their dropoffs are close, offer both to one
-                driver as a single trip. Each order still pays the driver in full.
+                When two orders are ready together and the second is on the same route (little extra
+                driving), offer both to one driver as a single trip. Each order still pays the driver
+                in full.
               </span>
             </span>
             <input
