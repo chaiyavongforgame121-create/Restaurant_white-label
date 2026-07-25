@@ -145,16 +145,19 @@ NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...   (in apps/web/.env.local)
    - GitHub Secrets for CI source map upload (`SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`)
 3. Verify error capture: throw test error in `/` page
 
-**Subscription enforcement (wire `check_plan_limit`):**
-Current state: RPC exists, NOTHING calls it.
+**Subscription enforcement — ✅ DONE 2026-07-25, this plan is superseded.**
+Shipped differently and more strictly than planned: enforcement is **BEFORE INSERT triggers**
+in Postgres, not app-side calls to `check_plan_limit`, so it cannot be bypassed by a client
+that forgets to check. Items 1-2 (branch seats) are enforced; **items 3-4 were dropped by
+owner decision** — no menu-item cap and no orders/month cap, only branch seats and per-feature
+entitlements (`card_payment`, `ai_menu_import`, `delivery`, `ai_suite`, `digital_signage`,
+`ai_voice`). `check_plan_limit` still exists but was rewritten for this model and returns
+`limit: -1` (unlimited) for items.
 
-Wire into:
-1. `create_restaurant_with_branch` RPC — check `branches` limit before insert
-2. Branch settings → add new branch button — check before insert
-3. Menu item create — check `items` limit (need to know restaurant_id from branch_id)
-4. (Optional) Daily orders quota — check on each place-order
-
-Show "Upgrade plan" modal in UI when blocked.
+UI surfaces the raised error codes rather than a generic modal:
+`billing_inactive:<scope>` → 402 · `feature_not_entitled:<key>` → 403 ·
+`plan_limit_exceeded:branches:<used>/<limit>` → buy a seat first (extra branches are
+**pay-first**). See `docs/RUNBOOK.md` → Billing operations.
 
 ---
 

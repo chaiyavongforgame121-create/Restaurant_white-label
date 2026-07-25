@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Building2, Mail, ShieldCheck } from 'lucide-react';
@@ -102,6 +103,16 @@ export function LoginView({ next }: { next: string }) {
             </form>
           )}
         </Card>
+
+        {/* shouldCreateUser stays false above, so an unknown email fails here
+            rather than silently creating an empty account. /signup is the
+            deliberate way in. */}
+        <p className="mt-4 text-center text-sm text-muted-foreground">
+          New to Favornoms?{' '}
+          <Link href="/signup" className="font-semibold text-primary hover:underline">
+            Start a free 14-day trial
+          </Link>
+        </p>
       </motion.div>
     </div>
   );

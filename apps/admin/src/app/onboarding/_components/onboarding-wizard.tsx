@@ -4,6 +4,7 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { ChefHat, ChevronRight, Sparkles } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
+import { describeBillingError } from '@favornoms/shared';
 import { Button, Card } from '@favornoms/ui';
 
 const slugify = (s: string) =>
@@ -32,6 +33,7 @@ export function OnboardingWizard() {
     const supabase = getBrowserClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
+      setBusy(false);
       router.push('/login?next=/onboarding');
       return;
     }
@@ -45,15 +47,17 @@ export function OnboardingWizard() {
     });
     setBusy(false);
     if (rpcErr) {
-      const { describePlanError } = await import('@favornoms/database/queries');
-      const planErr = describePlanError(rpcErr);
-      if (planErr) {
-        setError(
-          `Your current plan only allows ${planErr.limit} ${planErr.key}. Please upgrade before adding more.`,
-        );
-      } else {
-        setError(rpcErr.message);
-      }
+      // A first restaurant always succeeds — create_restaurant_with_branch
+      // opens the 14-day trial. This arm is for an owner adding a *second*
+      // restaurant on a package that has no seat left for it.
+      const billing = describeBillingError(rpcErr);
+      setError(
+        billing?.kind === 'seats'
+          ? `You are using all ${billing.limit} of your branch seats. Add a seat on the Plan page first.`
+          : billing?.kind === 'inactive'
+            ? 'Your subscription is not active. Choose a package before adding another restaurant.'
+            : rpcErr.message,
+      );
       return;
     }
     const r = data as { branch_id?: string } | null;

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Save } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Badge, Button, Card } from '@favornoms/ui';
+import { AddonUpsellCard } from '@/components/addon-upsell-card';
 import { ClosuresManager } from './closures-manager';
 import { DeliverySettingsCard } from './delivery-settings-card';
 import { HoursEditor } from './hours-editor';
@@ -28,9 +29,13 @@ interface Branch {
 export function BranchSettings({
   branch,
   restaurantStorefront,
+  canUseDelivery,
+  canUseCard,
 }: {
   branch: Branch;
   restaurantStorefront: Record<string, unknown> | null;
+  canUseDelivery: boolean;
+  canUseCard: boolean;
 }) {
   const router = useRouter();
   const [name, setName] = React.useState(branch.name);
@@ -172,9 +177,27 @@ export function BranchSettings({
 
         <ClosuresManager branchId={branch.id} />
 
-        <DeliverySettingsCard branchId={branch.id} settings={branch.settings} />
+        {canUseDelivery ? (
+          <DeliverySettingsCard branchId={branch.id} settings={branch.settings} />
+        ) : (
+          <AddonUpsellCard
+            branchId={branch.id}
+            title="Delivery"
+            price={49}
+            description="Your own riders, live tracking and automatic dispatch. Not included in your current package."
+            bullets={[
+              'Delivery fees, radius and prep time',
+              'Automatic driver dispatch with offer timeouts',
+              'Live customer tracking map',
+            ]}
+          />
+        )}
 
-        <PaymentMethodsCard branchId={branch.id} settings={branch.settings} />
+        <PaymentMethodsCard
+          branchId={branch.id}
+          settings={branch.settings}
+          canUseCard={canUseCard}
+        />
 
         <TipSettingsCard branchId={branch.id} settings={branch.settings} />
 

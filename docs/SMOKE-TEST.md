@@ -172,8 +172,16 @@
 - [ ] `/promos` → create `WELCOME10` (percent_off 10, min $25)
 
 ### Plan & billing
-- [ ] `/settings/plan` shows current plan + usage bars (branches/items/orders)
-- [ ] Upgrade to Starter → plan banner disappears on dashboard
+- [ ] `/settings/plan` shows the current package: plan, add-ons, branch seats
+      used/bought, monthly total, renewal date.
+      **No item or orders/month bars** — those caps were removed 2026-07-25.
+- [x] Build a package: Base $199 → +Delivery $248 → +AI Suite $307 → +1 seat $406
+- [ ] Stripe dormant (no `STRIPE_SECRET_KEY`) → submitting falls back to the
+      manual request queue, not an error
+- [ ] Platform admin → Subscriptions → Requests → approve → merchant is entitled
+      immediately (no cron wait; `entitled_through` is a deadline)
+- [ ] Suspended branch → `/counter/[branchId]` shows the suspension screen, but
+      `/counter/[branchId]/recent` and `/kitchen/[branchId]` stay reachable
 
 ### Insights
 - [ ] `/reports` → revenue chart with branch timezone

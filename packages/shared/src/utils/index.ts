@@ -87,3 +87,4 @@ export * from './delivery-settings';
 export * from './storefront';
 export * from './platform-settings';
 export * from './tip-settings';
+export * from './entitlements';

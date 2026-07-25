@@ -9,6 +9,7 @@
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { loadEntitlements } from '../_shared/entitlements.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -29,6 +30,18 @@ Deno.serve(async (req) => {
 
   let ok = 0;
   let failed = 0;
+  let skipped = 0;
+
+  // One entitlement lookup per branch, not per job — a drain batch is usually
+  // many jobs for a handful of branches.
+  const entCache = new Map<string, boolean>();
+  async function branchEntitled(branchId: string): Promise<boolean> {
+    const hit = entCache.get(branchId);
+    if (hit !== undefined) return hit;
+    const ent = await loadEntitlements(admin, { branchId });
+    entCache.set(branchId, ent.entitled);
+    return ent.entitled;
+  }
 
   for (const job of jobs ?? []) {
     // deno-lint-ignore no-explicit-any
@@ -37,6 +50,18 @@ Deno.serve(async (req) => {
     if (!integration?.is_active) {
       await admin.from('sync_jobs').update({ status: 'failed', last_error: 'integration_inactive', finished_at: new Date().toISOString() }).eq('id', j.id);
       failed++;
+      continue;
+    }
+    // A suspended tenant's jobs stay queued rather than failing — nothing is lost,
+    // and the drain picks them up the moment billing is restored. `scheduled_for`
+    // is pushed out so a large suspended backlog cannot starve paying tenants of
+    // the 20-job window.
+    if (!(await branchEntitled(integration.branch_id))) {
+      await admin.from('sync_jobs').update({
+        last_error: 'billing_inactive',
+        scheduled_for: new Date(Date.now() + 60 * 60_000).toISOString(),
+      }).eq('id', j.id);
+      skipped++;
       continue;
     }
     await admin.from('sync_jobs').update({ status: 'running', started_at: new Date().toISOString(), attempts: j.attempts + 1 }).eq('id', j.id);
@@ -53,7 +78,7 @@ Deno.serve(async (req) => {
     }
   }
 
-  return json(200, { ok, failed, processed: (jobs ?? []).length });
+  return json(200, { ok, failed, skipped, processed: (jobs ?? []).length });
 });
 
 async function runJob(

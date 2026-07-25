@@ -3,8 +3,10 @@
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { billingInactiveBody, loadEntitlements } from '../_shared/entitlements.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -29,6 +31,12 @@ Deno.serve(async (req) => {
   // Role check
   const { data: staff } = await supabase.from('staff_members').select('role').eq('branch_id', branchId).maybeSingle();
   if (!staff || !['owner', 'manager'].includes(staff.role)) return json({ error: 'not_authorized' }, 403);
+
+  // Back-office data egress stops at suspension. Nothing is deleted — paying
+  // restores the export immediately.
+  const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+  const ent = await loadEntitlements(admin, { branchId });
+  if (!ent.entitled) return json(billingInactiveBody('export'), 402);
 
   let rows: Record<string, unknown>[] = [];
   let headers: string[] = [];

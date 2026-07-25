@@ -39,7 +39,15 @@ interface CartState {
   lines: CartLine[];
   notes: string;
   channel: 'delivery' | 'pickup' | 'dine_in';
+  /**
+   * True once the customer picks a channel themselves. Lets the storefront
+   * promote delivery as the default for branches that sell it, without ever
+   * overriding a deliberate choice.
+   */
+  channelTouched: boolean;
   setChannel: (channel: CartState['channel']) => void;
+  /** Reconcile the persisted channel with what this branch is entitled to sell. */
+  resolveChannel: (canDeliver: boolean) => void;
   setNotes: (notes: string) => void;
   add: (item: MenuItem, quantity?: number, notes?: string, modifiers?: CartLineModifier[]) => void;
   addCombo: (combo: ComboPick, quantity?: number) => void;
@@ -57,8 +65,23 @@ export const useCart = create<CartState>()(
       branchId: null,
       lines: [],
       notes: '',
-      channel: 'delivery',
-      setChannel: (channel) => set({ channel }),
+      // Pickup, not delivery: every branch can do pickup, but delivery is a
+      // paid add-on. Defaulting to a channel the branch may not sell would put
+      // the customer through a whole checkout before place-order rejects them.
+      // The storefront calls resolveChannel() once it knows the entitlement.
+      channel: 'pickup',
+      channelTouched: false,
+      setChannel: (channel) => set({ channel, channelTouched: true }),
+      resolveChannel: (canDeliver) => {
+        const { channel, channelTouched } = get();
+        if (!canDeliver) {
+          // A correction, not a choice — leave channelTouched alone so the
+          // customer's own preference survives a visit to a pickup-only branch.
+          if (channel === 'delivery') set({ channel: 'pickup' });
+          return;
+        }
+        if (!channelTouched) set({ channel: 'delivery' });
+      },
       setNotes: (notes) => set({ notes }),
       add: (item, quantity = 1, notes, modifiers) => {
         const trimmed = notes?.trim() || undefined;

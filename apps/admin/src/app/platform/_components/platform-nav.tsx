@@ -7,17 +7,23 @@ import { cn } from '@favornoms/ui';
 const TABS = [
   { href: '/platform', label: 'Dashboard' },
   { href: '/platform/reports', label: 'Reports' },
-  { href: '/platform/plans', label: 'Plans' },
+  { href: '/platform/subscriptions', label: 'Subscriptions', exact: true },
+  { href: '/platform/subscriptions/requests', label: 'Requests' },
+  { href: '/platform/plans', label: 'Catalog' },
   { href: '/platform/settings', label: 'Settings' },
 ];
 
 export function PlatformNav() {
   const pathname = usePathname();
   return (
-    <nav className="mb-6 flex gap-1 border-b border-border">
+    <nav className="mb-6 flex flex-wrap gap-1 border-b border-border">
       {TABS.map((t) => {
+        // Subscriptions is a prefix of Requests, so it has to match exactly or
+        // both tabs light up on the requests page.
         const active =
-          t.href === '/platform' ? pathname === '/platform' : pathname.startsWith(t.href);
+          t.href === '/platform' || t.exact
+            ? pathname === t.href
+            : pathname.startsWith(t.href);
         return (
           <Link
             key={t.href}

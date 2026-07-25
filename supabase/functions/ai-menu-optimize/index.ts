@@ -4,6 +4,11 @@
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import {
+  edgeHasFeature,
+  featureNotEntitledBody,
+  loadEntitlements,
+} from '../_shared/entitlements.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -34,6 +39,10 @@ Deno.serve(async (req) => {
   }
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+
+  const ent = await loadEntitlements(admin, { branchId: body.branch_id });
+  if (!edgeHasFeature(ent, 'ai_suite')) return cors(json(featureNotEntitledBody('ai_suite'), 403));
+
   const since = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
 
   // Pull sales mix (last 60 days).

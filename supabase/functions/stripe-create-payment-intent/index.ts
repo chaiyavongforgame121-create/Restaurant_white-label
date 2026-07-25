@@ -11,6 +11,11 @@
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import {
+  edgeOwnsFeature,
+  featureNotEntitledBody,
+  loadEntitlements,
+} from '../_shared/entitlements.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -55,6 +60,18 @@ Deno.serve(async (req) => {
     return cors(json({ error: 'order_not_payable', status: order.status }, 409));
   }
 
+  const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+  });
+
+  // Card payment is a paid feature. Gated on the feature, not on `entitled`:
+  // an order placed while the account was live must still be payable, or the
+  // restaurant loses money it has already cooked for.
+  const ent = await loadEntitlements(admin, { branchId: order.branch_id as string });
+  if (!edgeOwnsFeature(ent, 'card_payment')) {
+    return cors(json(featureNotEntitledBody('card_payment'), 403));
+  }
+
   // Amount in smallest currency unit (cents for USD).
   const amount = Math.round(Number(order.total) * 100);
   if (amount <= 50) return cors(json({ error: 'amount_too_small' }, 400));
@@ -76,6 +93,8 @@ Deno.serve(async (req) => {
     headers: {
       Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
       'Content-Type': 'application/x-www-form-urlencoded',
+      // Pinned to match stripe-webhook, which parses the resulting events.
+      'Stripe-Version': '2025-08-27.basil',
       'Idempotency-Key': idempotencyKey,
     },
     body: params,
@@ -85,10 +104,7 @@ Deno.serve(async (req) => {
     return cors(json({ error: 'stripe_error', detail: intent }, 502));
   }
 
-  // Record the pending payment via service-role client (bypasses RLS).
-  const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
-    auth: { persistSession: false },
-  });
+  // Record the pending payment via the service-role client (bypasses RLS).
   await admin.from('payments').upsert(
     {
       order_id: order.id,

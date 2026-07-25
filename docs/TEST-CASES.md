@@ -22,7 +22,9 @@
 ### Test data ที่ต้องสร้างใน admin app
 - [x] Restaurant: `Coastal Grill` / Branch: `Brooklyn` (seeded; branch id 44444444-4444-4444-4444-444444444444)
 - [x] Sales tax rate: `8.875%` (NYC) (stored 0.0888 in branches.sales_tax_rate)
-- [x] Plan: `Free` (subscription_plans seeded)
+- [ ] Package: `trial` (14 days, all add-ons, 1 branch) via `billing_start_trial`, **or**
+      `base` + add-ons via `billing_set_package`. The old `Free/Starter/Pro/Enterprise`
+      ladder was replaced on 2026-07-25 — re-verify this case.
 - [x] Menu items อย่างน้อย 8 รายการ ใน 3 categories (10 items across Burgers/Sides/Drinks)
 - [x] Promo code `WELCOME10` (10% off, min $25)
 - [x] Promo code `FREESHIP` (free delivery, min $30)
@@ -44,7 +46,10 @@
 - [x] เห็น hero section "Your restaurant. Online, in one place."
 - [x] เห็น "Start free trial" button + "See a live menu" button
 - [x] เห็น 6 feature cards (Customer storefront, KDS, Stripe, Driver dispatch, Marketing, Reports)
-- [x] เห็น pricing tiles (Free $0 / Starter $29 / Pro $99 / Enterprise $299)
+- [ ] เห็น pricing tiles — **repriced 2026-07-25**, re-verify:
+      Base $199 (Card Payment + AI menu import, 1 branch) ·
+      +$99 extra branch · +$49 Delivery · +$59 AI Suite ·
+      Pro Start-up $0 / 14-day trial, no card
 - [x] เห็น footer มี: Help, Privacy, Terms, CCPA, Account, Contact
 - [x] Click `Help` → ไปที่ `/help` ได้
 
@@ -497,7 +502,8 @@
 - [x] 4 stat cards: Revenue today $0, Orders today 0, In kitchen 0, Total customers 1
 - [x] Sales trend bar chart (last 7 days)
 - [x] Quick actions: Add menu item, View orders, Approve drivers, Branch settings
-- [x] **Plan upgrade banner** "You're on the Free plan (10/30 items used)" + Upgrade button visible ✓
+- [ ] **Plan banner** — the "N/30 items used" copy is dead (item caps removed
+      2026-07-25). Now shows trial countdown / suspension, not usage bars.
 
 ## 5.4 Dark mode toggle
 - [x] Click "🌙 Dark mode" toggle at bottom sidebar → localStorage 'favornoms-theme-mode' = 'dark' ✓
@@ -511,11 +517,44 @@
 - [x] Sales tax stored 8.875% via SQL setup ✓
 - [ ] Inline save flow not exercised in this pass
 
-## 5.6 Plan & billing
-- [x] `/b/{branchId}/settings/plan` renders
-- [x] Current plan card: "Free" / Branches 1/1 / Active items 10/30 / Orders/mo 1/100 ✓
-- [x] 4 plan tiles: Free $0 (Current), Starter $29, Pro $99, Enterprise $299 ✓
-- [ ] Upgrade action not clicked (would mutate subscription row); flow renders
+## 5.6 Plan & billing — **rewritten + re-verified 2026-07-25**
+
+Verified against the live dev DB over the running dev servers (the Chrome
+extension was unreachable, so pages were fetched server-rendered with a real
+session cookie — same SSR path, no client-side clicking).
+
+- [x] `/b/{branchId}/settings/plan` renders the new package builder
+- [x] Current package card: plan, add-ons, branch seats **used/bought**, monthly
+      total, and renewal date. **No item or orders/month bars** — those caps are gone.
+- [x] Base $199 selected → total $199. Tick Delivery → $248. Tick AI Suite → $307.
+      (Verified in SQL: Somtam Zab resolves to `monthly_total` 307.00.)
+- [x] Branch seats stepper: 2 seats → +$99 → **$406** total.
+      ⚠️ This line previously read $398 — that was an arithmetic slip in the doc,
+      not a bug. `request_package_change` returned `monthly_total: 406.00`, and the
+      paid plan page itemises Base $199 + seat $99 + AI Suite $59 + Delivery $49.
+- [x] Trial restaurant shows "14 days left in your free trial", no card required
+- [x] With Stripe dormant (no `STRIPE_SECRET_KEY`) → `stripe-create-checkout-session`
+      returns `503 stripe_not_configured` and the client falls through to the manual
+      request queue, **not** an error
+- [x] Platform → Subscriptions → Requests shows the pending row (restaurant, package
+      badges, seats, $/mo, note) with Approve & Reject
+- [x] `decide_billing_request(approve)` → entitlement flips trial → base+delivery+
+      ai_suite, 2 seats, $406/mo, `entitled_through` +1 month, **instantly** (no cron)
+- [x] Suspended restaurant → back office redirects to the plan page with "Your
+      account is not active"; `/counter/{branchId}` shows the suspension screen;
+      `/counter/{branchId}/recent` and `/kitchen/{branchId}` stay reachable with
+      in-flight orders still cookable; storefront `/r/{r}/{b}` shows "not taking
+      orders right now" (customer-safe copy — it does not leak the billing reason)
+- [x] `/signage` and `/ai-voice` render "Coming soon — included in your package"
+      (packaging/gating only, per the owner decision)
+
+**Test-method note:** suspension must be simulated by lapsing the *subscription*
+(`current_period_end` / `trial_ends_at`), never by writing `billing_entitlements`
+directly. `private.billing_compute()` is what pushes `entitled_through` down onto
+the `branches` mirror that `storefront_status()` reads; a direct write to
+`billing_entitlements` skips that push and leaves the storefront live while the
+back office locks — which looks exactly like a product bug but isn't.
+All state used in this pass was restored byte-identical afterwards.
 
 ## 5.7 Orders page
 
@@ -723,9 +762,28 @@
 - [ ] daily-loyalty-housekeeping (6:00 UTC): refreshes tiers + birthday rewards
 - [ ] abandoned-cart-sweep (every 15 min): emails carts older than 1hr without order
 
-## 7.6 Plan limits ✓
-- [x] Inserted 19 filler items → total 30 active items on Free plan (limit 30) → succeed
-- [x] 31st insert raised: ERROR P0001: `plan_limit_exceeded:items:30/30` via enforce_item_limit trigger ✓
+## 7.6 Entitlement enforcement ✓ (re-verified 2026-07-25)
+
+The old item cap is **gone** — `enforce_item_limit` no longer exists and
+`check_plan_limit(...,'items')` now returns `limit: -1` (unlimited). Owner
+decision: no menu-item cap, no orders/month cap. Only **branch seats** and
+**feature entitlements** are enforced.
+
+Verified against the live DB in rolled-back transactions (no data persisted).
+Enforcement is BEFORE INSERT triggers, so a minimal INSERT reveals which gate
+speaks first: `23502` = billing gate ALLOWED it, `P0001` = billing gate BLOCKED it.
+
+- [x] +60 menu items past the old 30 cap → **accepted** (10 → 70). Cap is gone ✓
+- [x] Order insert, paid-up restaurant → gate passes (23502 order_number) ✓
+- [x] 2nd branch on 1 seat → `P0001 plan_limit_exceeded:branches:1/1` ✓
+- [x] Remove the Delivery add-on → entitlements recompute, `features.delivery` drops,
+      delivery insert → `P0001 feature_not_entitled:delivery` ✓
+- [x] Expire the subscription → `entitled_through` NULLs **and the
+      `branches.entitled_through` mirror follows automatically** ✓
+- [x] Order insert while suspended → `P0001 billing_inactive:orders` ✓
+- [x] Card payment while suspended → `P0001 feature_not_entitled:card_payment` ✓
+- [x] **Cash** payment while suspended → **allowed** — an in-flight order must
+      still be settleable; suspension blocks new business, not food already cooked ✓
 - [x] Filler items cleaned up after test
 
 ## 7.7 Gift card edge cases (verified in 2nd pass) ✓
