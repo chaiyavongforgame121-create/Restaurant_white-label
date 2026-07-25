@@ -4,6 +4,11 @@
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import {
+  edgeHasFeature,
+  featureNotEntitledBody,
+  loadEntitlements,
+} from '../_shared/entitlements.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -32,6 +37,12 @@ Deno.serve(async (req) => {
     .eq('id', body.rating_id)
     .maybeSingle();
   if (rErr || !rating) return cors(json({ error: 'not_found_or_not_authorized' }, 404));
+
+  // AI Suite gate. RLS on the read above already proved the caller belongs to
+  // this branch; this proves the branch paid for the feature.
+  const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+  const ent = await loadEntitlements(admin, { branchId: rating.branch_id as string });
+  if (!edgeHasFeature(ent, 'ai_suite')) return cors(json(featureNotEntitledBody('ai_suite'), 403));
 
   const branchName = (rating.branches as { name?: string } | null)?.name ?? 'our restaurant';
   const avgStars = (Number(rating.food_stars ?? 0) + Number(rating.delivery_stars ?? 0)) / 2;

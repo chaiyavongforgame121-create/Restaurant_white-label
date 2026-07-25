@@ -7,7 +7,13 @@ import {
   Banknote, CreditCard, Minus, Plus, Search, ShoppingBag, Store,
   Trash2, Utensils, X, Bike,
 } from 'lucide-react';
-import { formatCurrency, type MenuCategory, type MenuItem } from '@favornoms/shared';
+import {
+  billingErrorMessage,
+  describeBillingError,
+  formatCurrency,
+  type MenuCategory,
+  type MenuItem,
+} from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
 import { placeOrder } from '@favornoms/database/queries';
 import { Button, Segmented, Sheet } from '@favornoms/ui';
@@ -29,6 +35,10 @@ interface Props {
   branchName: string;
   categories: MenuCategory[];
   items: MenuItem[];
+  /** `card_payment` entitlement — default false so a missing prop cannot sell it. */
+  canUseCard?: boolean;
+  /** `delivery` entitlement — same. */
+  canDeliver?: boolean;
 }
 
 export function PosView(props: Props) {
@@ -50,7 +60,14 @@ interface ParkedOrder {
 
 const PARK_STORAGE_KEY = (branchId: string) => `pos-parked-orders:${branchId}`;
 
-function PosInner({ branchId, branchName, categories, items }: Props) {
+function PosInner({
+  branchId,
+  branchName,
+  categories,
+  items,
+  canUseCard = false,
+  canDeliver = false,
+}: Props) {
   const { print, kickDrawer } = usePrinter();
   const [activeCategory, setActiveCategory] = React.useState<string>('all');
   const [search, setSearch] = React.useState('');
@@ -111,7 +128,10 @@ function PosInner({ branchId, branchName, categories, items }: Props) {
       if (!window.confirm('Replace current cart with this parked order?')) return;
     }
     setLines(target.lines);
-    setChannel(target.channel);
+    // Parked orders live in localStorage indefinitely, so one can outlive the
+    // delivery add-on. Fall back to pickup rather than resuming into a channel
+    // place-order will now refuse.
+    setChannel(target.channel === 'delivery' && !canDeliver ? 'pickup' : target.channel);
     setTableNumber(target.tableNumber);
     persistParked(parked.filter((p) => p.id !== parkedId));
     setShowParked(false);
@@ -235,7 +255,11 @@ function PosInner({ branchId, branchName, categories, items }: Props) {
 
       setTimeout(() => setSuccess(null), 4000);
     } catch (err) {
-      alert((err as Error).message);
+      // A cashier mid-sale needs the reason, not a raw P0001 code. Suspension
+      // makes place-order refuse every new order here, and the fix is on the
+      // Plan page, not at the till.
+      const billing = describeBillingError(err);
+      alert(billing ? billingErrorMessage(billing) : (err as Error).message);
     } finally {
       setSubmitting(false);
     }
@@ -283,7 +307,9 @@ function PosInner({ branchId, branchName, categories, items }: Props) {
             options={[
               { value: 'dine_in', label: 'Dine-in', icon: <Store className="h-4 w-4" /> },
               { value: 'pickup', label: 'Pickup', icon: <ShoppingBag className="h-4 w-4" /> },
-              { value: 'delivery', label: 'Delivery', icon: <Bike className="h-4 w-4" /> },
+              ...(canDeliver
+                ? [{ value: 'delivery', label: 'Delivery', icon: <Bike className="h-4 w-4" /> }]
+                : []),
             ]}
           />
         </div>
@@ -539,11 +565,14 @@ function PosInner({ branchId, branchName, categories, items }: Props) {
           <p className="text-center font-display text-4xl font-bold text-primary">
             {formatCurrency(total)}
           </p>
+          {/* Card is dropped, not disabled: place-order rejects it server-side
+              without the card_payment entitlement, so a visible button would
+              only produce a failed sale in front of a waiting customer. */}
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {([
-              { m: 'cash', label: 'Cash', Icon: Banknote },
-              { m: 'card', label: 'Card', Icon: CreditCard },
-            ] as const).map(({ m, label, Icon }) => (
+            {[
+              { m: 'cash' as const, label: 'Cash', Icon: Banknote },
+              ...(canUseCard ? [{ m: 'card' as const, label: 'Card', Icon: CreditCard }] : []),
+            ].map(({ m, label, Icon }) => (
               <Button
                 key={m}
                 variant="outline"

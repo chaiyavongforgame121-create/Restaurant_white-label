@@ -16,6 +16,7 @@
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { billingInactiveBody, loadEntitlements } from '../_shared/entitlements.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -50,11 +51,18 @@ Deno.serve(async (req) => {
     .maybeSingle();
   if (invErr || !invoice) return cors(json({ error: 'receipt_not_found_or_unauthorized' }, 404));
 
-  const html = buildReceiptHtml(invoice);
-
   const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
   });
+
+  // Issuing a receipt writes to tax_invoices, so it is a back-office action and
+  // stops at suspension. The row is untouched — the receipt re-issues intact the
+  // moment billing is restored.
+  const ent = await loadEntitlements(adminClient, { branchId: invoice.branch_id as string });
+  if (!ent.entitled) return cors(json(billingInactiveBody('receipts'), 402));
+
+  const html = buildReceiptHtml(invoice);
+
   await adminClient
     .from('tax_invoices')
     .update({ xml_payload: html, status: 'issued' })

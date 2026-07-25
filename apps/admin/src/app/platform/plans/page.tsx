@@ -1,7 +1,10 @@
 import { redirect } from 'next/navigation';
 import { getServerClient } from '@favornoms/database/server';
+import { isPlatformAdmin, listBillingProducts } from '@favornoms/database/queries';
 import { PlatformAccessDenied } from '../_components/platform-nav';
-import { PlansManager, type PlanRow } from './_components/plans-manager';
+import { PlansManager } from './_components/plans-manager';
+
+export const metadata = { title: 'Product catalog · Favornoms' };
 
 export default async function PlatformPlansPage() {
   const supabase = await getServerClient();
@@ -10,14 +13,11 @@ export default async function PlatformPlansPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect('/login?next=/platform/plans');
 
-  // Gate: get_platform_settings self-gates to platform admins.
-  const { error: gateErr } = await supabase.rpc('get_platform_settings');
-  if (gateErr) return <PlatformAccessDenied />;
+  // Server-side gate. The sidebar is cosmetic; this is the one that holds.
+  if (!(await isPlatformAdmin(supabase))) return <PlatformAccessDenied />;
 
-  const { data: plans } = await supabase
-    .from('subscription_plans')
-    .select('code, name, monthly_price, limits, is_active')
-    .order('monthly_price', { ascending: true });
+  // Inactive rows included — deactivated legacy products must stay editable.
+  const products = await listBillingProducts(supabase, true);
 
-  return <PlansManager plans={(plans ?? []) as PlanRow[]} />;
+  return <PlansManager products={products} />;
 }

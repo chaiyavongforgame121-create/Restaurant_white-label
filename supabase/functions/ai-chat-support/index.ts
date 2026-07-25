@@ -1,8 +1,18 @@
 // ai-chat-support — Claude-powered support chatbot for customers.
 // POST { branch_id, history: [{role, content}], message } → { reply, source_refs[] }
+//
+// v2 (2026-07-25): entitlement gating. The body had no auth check of its own —
+// only the gateway's verify_jwt — so any signed-in user could burn Anthropic
+// tokens against any branch_id. Now: Bearer required in-body, and the branch's
+// restaurant must hold the ai_suite feature.
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import {
+  edgeHasFeature,
+  featureNotEntitledBody,
+  loadEntitlements,
+} from '../_shared/entitlements.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -14,11 +24,18 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return cors(json({ error: 'method_not_allowed' }, 405));
   if (!ANTHROPIC_API_KEY) return cors(json({ error: 'ai_not_configured' }, 503));
 
+  const auth = req.headers.get('Authorization') ?? '';
+  if (!auth.toLowerCase().startsWith('bearer ')) return cors(json({ error: 'auth_required' }, 401));
+
   let body: { branch_id?: string; message?: string; history?: Array<{ role: 'user' | 'assistant'; content: string }> };
   try { body = await req.json(); } catch { return cors(json({ error: 'invalid_json' }, 400)); }
   if (!body.branch_id || !body.message) return cors(json({ error: 'missing_fields' }, 400));
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+
+  const ent = await loadEntitlements(admin, { branchId: body.branch_id });
+  if (!edgeHasFeature(ent, 'ai_suite')) return cors(json(featureNotEntitledBody('ai_suite'), 403));
+
   const [{ data: branch }, { data: items }] = await Promise.all([
     admin.from('branches').select('name, address, settings').eq('id', body.branch_id).maybeSingle(),
     admin.from('menu_items').select('name, description, price').eq('branch_id', body.branch_id).eq('is_active', true).limit(50),

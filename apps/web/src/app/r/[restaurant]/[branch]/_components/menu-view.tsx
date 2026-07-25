@@ -71,9 +71,11 @@ interface MenuViewProps {
   heroUrl?: string | null;
   heroTitle?: string;
   heroSubtitle?: string;
+  /** `delivery` entitlement. Defaults false so a missing prop cannot sell delivery. */
+  canDeliver?: boolean;
 }
 
-export function MenuView({ branch, categories, items, isOpen = true, reviews, combos = [], happyHours = [], menuLayout = 'grid4', menuCardStyle = 'standard', logoUrl, heroUrl, heroTitle, heroSubtitle }: MenuViewProps) {
+export function MenuView({ branch, categories, items, isOpen = true, reviews, combos = [], happyHours = [], menuLayout = 'grid4', menuCardStyle = 'standard', logoUrl, heroUrl, heroTitle, heroSubtitle, canDeliver = false }: MenuViewProps) {
   const t = useTranslations();
   const [search, setSearch] = React.useState('');
   const [activeCategory, setActiveCategory] = React.useState<string>('all');
@@ -101,6 +103,14 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
   }, [branch.id, items]);
   const channel = useCart((s) => s.channel);
   const setChannel = useCart((s) => s.setChannel);
+  const resolveChannel = useCart((s) => s.resolveChannel);
+
+  // The cart persists in localStorage, so a visitor may arrive holding a
+  // channel this branch cannot serve. Reconcile on arrival rather than letting
+  // place-order reject them at the last step.
+  React.useEffect(() => {
+    resolveChannel(canDeliver);
+  }, [canDeliver, resolveChannel]);
 
   const toggleDietary = (tag: string) => {
     setDietaryFilters((curr) => {
@@ -190,6 +200,7 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
           setChannel={setChannel}
           search={search}
           setSearch={setSearch}
+          canDeliver={canDeliver}
         />
 
         {!search && usuals.length > 0 && (
@@ -304,24 +315,28 @@ function ChannelAndSearch({
   setChannel,
   search,
   setSearch,
+  canDeliver,
 }: {
   channel: 'delivery' | 'pickup' | 'dine_in';
   setChannel: (c: 'delivery' | 'pickup' | 'dine_in') => void;
   search: string;
   setSearch: (s: string) => void;
+  canDeliver: boolean;
 }) {
   const t = useTranslations();
+  // Delivery is dropped from the options entirely rather than shown disabled —
+  // a restaurant without the add-on does not offer delivery at all, so a greyed
+  // "Delivery" tab would only advertise something the customer cannot have.
+  const options = [
+    ...(canDeliver
+      ? [{ value: 'delivery' as const, label: t('channel.delivery'), icon: <Bike className="h-4 w-4" /> }]
+      : []),
+    { value: 'pickup' as const, label: t('channel.pickup'), icon: <ShoppingBag className="h-4 w-4" /> },
+    { value: 'dine_in' as const, label: t('channel.dineIn'), icon: <Store className="h-4 w-4" /> },
+  ];
   return (
     <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-      <Segmented
-        value={channel}
-        onChange={setChannel}
-        options={[
-          { value: 'delivery', label: t('channel.delivery'), icon: <Bike className="h-4 w-4" /> },
-          { value: 'pickup', label: t('channel.pickup'), icon: <ShoppingBag className="h-4 w-4" /> },
-          { value: 'dine_in', label: t('channel.dineIn'), icon: <Store className="h-4 w-4" /> },
-        ]}
-      />
+      <Segmented value={channel} onChange={setChannel} options={options} />
       <div className="relative w-full lg:max-w-md">
         <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <input

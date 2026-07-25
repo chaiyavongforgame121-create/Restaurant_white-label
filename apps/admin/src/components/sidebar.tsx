@@ -6,40 +6,40 @@ import { usePathname, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   BarChart3, Bike, Building2, CalendarClock, ChefHat, ChevronDown, ClipboardList, Cog,
-  LayoutDashboard, Megaphone, Menu as MenuIcon, Monitor, Network, Package, Palette,
-  QrCode, Receipt, Store, Tag, Timer, UserRound, Users, Wallet, X,
+  CreditCard, LayoutDashboard, Megaphone, Menu as MenuIcon, MicVocal, Monitor, Network,
+  Package, Palette, QrCode, Receipt, Store, Tag, Timer, Tv, UserRound, Users, Wallet, X,
 } from 'lucide-react';
+import { hasFeature, type Entitlements, type FeatureKey } from '@favornoms/shared';
 import { cn } from '@favornoms/ui';
 import { ThemeToggle } from './theme-toggle';
-
-type Tier = 'starter' | 'pro' | 'enterprise';
-const TIER_RANK: Record<Tier, number> = { starter: 0, pro: 1, enterprise: 2 };
 
 interface Props {
   branchId: string;
   branchName: string;
   branches?: { id: string; name: string }[];
-  tier?: string;
+  entitlements: Entitlements;
 }
 
-type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; minTier?: Tier };
-type NavGroup = { title: string; minTier?: Tier; items: NavItem[] };
+type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; feature?: FeatureKey };
+type NavGroup = { title: string; feature?: FeatureKey; items: NavItem[] };
 
-export function Sidebar({ branchId, branchName, branches = [], tier }: Props) {
+export function Sidebar({ branchId, branchName, branches = [], entitlements }: Props) {
   const pathname = usePathname();
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
   const base = `/b/${branchId}`;
 
-  // Unknown/missing tier fails OPEN (shows everything) so paid features are never hidden by mistake.
-  const currentRank = tier && tier in TIER_RANK ? TIER_RANK[tier as Tier] : Number.MAX_SAFE_INTEGER;
-  const allowed = (minTier?: Tier) => currentRank >= (minTier ? TIER_RANK[minTier] : 0);
+  // Fails CLOSED, unlike the tier ladder this replaced: hasFeature() requires an
+  // explicit `true` on a live subscription, so an unknown plan hides the add-on
+  // surfaces instead of advertising them. Only add-on features are gated here —
+  // everything in Base stays visible for every paying tenant.
+  const allowed = (feature?: FeatureKey) => !feature || hasFeature(entitlements, feature);
 
   const core: NavItem[] = [
     { href: `${base}/dashboard`, label: 'Dashboard', icon: LayoutDashboard },
     { href: `${base}/orders`, label: 'Orders', icon: Receipt },
-    { href: `${base}/deliveries`, label: 'Live deliveries', icon: Bike },
+    { href: `${base}/deliveries`, label: 'Live deliveries', icon: Bike, feature: 'delivery' },
     { href: `${base}/menu`, label: 'Menu', icon: ChefHat },
     { href: `/kitchen/${branchId}`, label: 'Kitchen display', icon: Monitor },
     { href: `/counter/${branchId}`, label: 'Counter', icon: Store },
@@ -50,7 +50,6 @@ export function Sidebar({ branchId, branchName, branches = [], tier }: Props) {
   const advanced: NavGroup[] = [
     {
       title: 'Dine-in',
-      minTier: 'pro',
       items: [
         { href: `${base}/reservations`, label: 'Reservations', icon: CalendarClock },
         { href: `${base}/waitlist`, label: 'Waitlist', icon: Users },
@@ -59,21 +58,28 @@ export function Sidebar({ branchId, branchName, branches = [], tier }: Props) {
     },
     {
       title: 'Operations',
-      minTier: 'pro',
       items: [
         { href: `${base}/inventory`, label: 'Inventory', icon: Package },
         { href: `${base}/shifts`, label: 'Shifts', icon: Timer },
       ],
     },
     {
+      title: 'AI Suite',
+      feature: 'ai_suite',
+      items: [
+        { href: `${base}/signage`, label: 'Digital Signage', icon: Tv, feature: 'digital_signage' },
+        { href: `${base}/ai-voice`, label: 'AI Voice', icon: MicVocal, feature: 'ai_voice' },
+      ],
+    },
+    {
       title: 'People & growth',
       items: [
         { href: `${base}/staff`, label: 'Staff', icon: Users },
-        { href: `${base}/drivers`, label: 'Drivers', icon: Bike },
-        { href: `${base}/payouts`, label: 'Driver payouts', icon: Wallet },
+        { href: `${base}/drivers`, label: 'Drivers', icon: Bike, feature: 'delivery' },
+        { href: `${base}/payouts`, label: 'Driver payouts', icon: Wallet, feature: 'delivery' },
         { href: `${base}/customers`, label: 'Customers', icon: UserRound },
-        { href: `${base}/marketing`, label: 'Marketing', icon: Megaphone, minTier: 'pro' },
-        { href: `${base}/promos`, label: 'Promos', icon: Tag, minTier: 'pro' },
+        { href: `${base}/marketing`, label: 'Marketing', icon: Megaphone },
+        { href: `${base}/promos`, label: 'Promos', icon: Tag },
       ],
     },
     {
@@ -87,8 +93,9 @@ export function Sidebar({ branchId, branchName, branches = [], tier }: Props) {
       title: 'Setup',
       items: [
         { href: `${base}/branch`, label: 'Branch settings', icon: Building2 },
-        { href: `${base}/brands`, label: 'Brands', icon: Palette, minTier: 'enterprise' },
-        { href: `${base}/franchise`, label: 'Franchise', icon: Network, minTier: 'enterprise' },
+        { href: `${base}/brands`, label: 'Brands', icon: Palette },
+        { href: `${base}/franchise`, label: 'Franchise', icon: Network },
+        { href: `${base}/settings/plan`, label: 'Plan & billing', icon: CreditCard },
         { href: `${base}/settings`, label: 'Preferences', icon: Cog },
       ],
     },
@@ -184,7 +191,7 @@ export function Sidebar({ branchId, branchName, branches = [], tier }: Props) {
         </div>
 
         <nav className="flex-1 space-y-2 overflow-y-auto px-3 pb-6">
-          <ul className="space-y-0.5">{core.map(renderItem)}</ul>
+          <ul className="space-y-0.5">{core.filter((i) => allowed(i.feature)).map(renderItem)}</ul>
 
           <button
             type="button"
@@ -198,9 +205,9 @@ export function Sidebar({ branchId, branchName, branches = [], tier }: Props) {
 
           {advancedOpen &&
             advanced
-              .filter((section) => allowed(section.minTier))
+              .filter((section) => allowed(section.feature))
               .map((section) => {
-                const items = section.items.filter((i) => allowed(i.minTier));
+                const items = section.items.filter((i) => allowed(i.feature));
                 if (items.length === 0) return null;
                 return (
                   <div key={section.title} className="pt-1">

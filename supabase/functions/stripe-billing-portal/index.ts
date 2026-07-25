@@ -62,6 +62,9 @@ Deno.serve(async (req) => {
     headers: {
       Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
       'Content-Type': 'application/x-www-form-urlencoded',
+      // Pinned like the other Stripe callers so a future account-default bump
+      // cannot change the response shape under us.
+      'Stripe-Version': '2025-08-27.basil',
     },
     body: params,
   });

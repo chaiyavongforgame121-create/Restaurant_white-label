@@ -16,6 +16,11 @@
 // driver's phone number can sign in as them. This is deliberate for a zero-SMS MVP; add a
 // PIN or real OTP later if drivers handle money/PII. New drivers land as kyc_status='pending'
 // and still need KYC + per-branch approval before they can receive dispatch.
+//
+// BILLING: deliberately NOT entitlement-gated (owner decision, 2026-07-25). A driver
+// is platform-scoped, not tenant-scoped — they have no restaurant_id at login time and
+// may work for several branches. Locking a driver out because one of those branches
+// lapsed would strand them mid-shift. The delivery gate lives in dispatch-driver.
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';

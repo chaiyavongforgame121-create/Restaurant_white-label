@@ -350,6 +350,14 @@ function CallDriverButton({ deliveryId, label }: { deliveryId: string; label: st
   );
 }
 
+// Stripe is dormant until the owner supplies keys, so `stripe_not_configured`
+// is the PERMANENT state in production — which made the old "mock confirm"
+// button (a browser UPDATE marking payments.status='completed') a
+// pay-for-nothing button on the live storefront. Gate on the build mode
+// instead: Next inlines NODE_ENV, so this whole branch is eliminated from a
+// production bundle rather than merely hidden.
+const ALLOW_MOCK_PAY = process.env.NODE_ENV !== 'production';
+
 function StripePayment({ orderId }: { orderId: string }) {
   const [stage, setStage] = React.useState<'idle' | 'loading' | 'ready' | 'paying' | 'mock' | 'error'>('idle');
   const [error, setError] = React.useState<string | null>(null);
@@ -371,8 +379,12 @@ function StripePayment({ orderId }: { orderId: string }) {
     } catch (err) {
       const msg = (err as Error).message;
       if (msg.includes('stripe_not_configured')) {
-        // Demo / dev: no Stripe keys set. Allow a one-click mock confirm.
-        setStage('mock');
+        if (ALLOW_MOCK_PAY) {
+          setStage('mock');
+          return;
+        }
+        setError('Online card payment is unavailable. Please pay the restaurant directly.');
+        setStage('error');
         return;
       }
       setError(msg);
@@ -402,6 +414,7 @@ function StripePayment({ orderId }: { orderId: string }) {
   };
 
   const mockConfirm = async () => {
+    if (!ALLOW_MOCK_PAY) return;
     setStage('paying');
     const supabase = getBrowserClient();
     await supabase.from('payments').update({ status: 'completed', paid_at: new Date().toISOString() }).eq('order_id', orderId);
@@ -439,7 +452,7 @@ function StripePayment({ orderId }: { orderId: string }) {
           Processing…
         </Button>
       )}
-      {stage === 'mock' && (
+      {ALLOW_MOCK_PAY && stage === 'mock' && (
         <div className="mt-3 space-y-2">
           <p className="text-xs text-muted-foreground">
             Stripe is not configured on this environment. Use the demo confirm button to mark the

@@ -38,6 +38,7 @@
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { edgeOwnsFeature, featureNotEntitledBody, loadEntitlements } from '../_shared/entitlements.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -116,6 +117,17 @@ Deno.serve(async (req) => {
     .single();
   if (dErr || !delivery) return json(404, { error: 'delivery_not_found' });
 
+  // Entitlement gate on the FEATURE, deliberately not on `entitled`. A delivery
+  // that already exists was accepted while the account was live; suspending
+  // billing must not strand cooked food with no rider. What it does block is a
+  // restaurant that never bought the delivery add-on at all.
+  //
+  // Checked before the `reset` block below, which writes to deliveries — an
+  // unentitled caller must not be able to clear dispatch state and only then
+  // be refused.
+  const ent = await loadEntitlements(admin, { branchId: delivery.branch_id as string });
+  if (!edgeOwnsFeature(ent, 'delivery')) return json(403, featureNotEntitledBody('delivery'));
+
   let status = delivery.status as string;
   let attempts = Number(delivery.dispatch_attempts ?? 0);
   let history0: unknown = delivery.dispatch_history;
@@ -158,6 +170,7 @@ Deno.serve(async (req) => {
     .select('id, settings')
     .eq('id', delivery.branch_id)
     .single();
+
   const settings = (branch?.settings ?? {}) as Record<string, number>;
   const radiusKm = Number(settings.driver_search_radius_km ?? 3 * KM_PER_MILE); // 3 miles
   const maxAttempts = Number(settings.driver_max_attempts ?? 3);

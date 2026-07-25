@@ -1,6 +1,8 @@
+import { headers } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
 import { getServerClient } from '@favornoms/database/server';
-import { getPlanStatus } from '@favornoms/database/queries';
+import { getEntitlementsForBranch } from '@favornoms/database/queries';
+import { PATHNAME_HEADER } from '@favornoms/database/middleware';
 import { Sidebar } from '@/components/sidebar';
 import { AccessDenied } from '@/components/access-denied';
 
@@ -46,16 +48,27 @@ export default async function BranchLayout({ params, children }: Props) {
     );
   }
 
-  // Sibling branches (for the switcher) + current plan tier (for nav gating).
-  const [{ data: branches }, planStatus] = await Promise.all([
+  // Sibling branches (for the switcher) + entitlements (for nav gating and the
+  // suspension gate). getEntitlementsForBranch returns DENIED on any error, so
+  // a failed read locks the back office rather than opening it.
+  const [{ data: branches }, entitlements] = await Promise.all([
     supabase
       .from('branches')
       .select('id, name')
       .eq('restaurant_id', branch.restaurant_id)
       .eq('is_active', true)
       .order('name'),
-    getPlanStatus(supabase, branch.restaurant_id),
+    getEntitlementsForBranch(supabase, branchId),
   ]);
+
+  // Suspension: lock the back office, but never the billing page itself — that
+  // is where the merchant fixes it. Redirecting to a page that redirects would
+  // be an infinite loop, so the exemption is load-bearing, not a nicety.
+  const planPath = `/b/${branchId}/settings/plan`;
+  const pathname = (await headers()).get(PATHNAME_HEADER) ?? '';
+  if (!entitlements.entitled && !pathname.startsWith(planPath)) {
+    redirect(`${planPath}?suspended=1`);
+  }
 
   return (
     <div className="flex min-h-dynamic-screen flex-col lg:flex-row">
@@ -63,7 +76,7 @@ export default async function BranchLayout({ params, children }: Props) {
         branchId={branchId}
         branchName={branch.name}
         branches={branches ?? []}
-        tier={planStatus?.plan}
+        entitlements={entitlements}
       />
       <main className="flex-1 lg:ml-0">{children}</main>
     </div>

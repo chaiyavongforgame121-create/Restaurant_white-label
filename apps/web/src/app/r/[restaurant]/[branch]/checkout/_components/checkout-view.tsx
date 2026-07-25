@@ -42,16 +42,20 @@ type PaymentMatrix = Record<PaymentMode, Record<PaymentMethod, boolean>>;
 
 // branches.settings.payment_methods — absent key/subkey means ENABLED (legacy
 // branches accept everything). place-order enforces the same matrix server-side.
-const PAYMENT_MATRIX_DEFAULTS: PaymentMatrix = {
-  asap: { cash: true, card: true },
-  scheduled: { cash: true, card: true },
-};
-
-function parsePaymentMatrix(settings: Record<string, unknown>): PaymentMatrix {
+//
+// `canUseCard` is the card_payment entitlement. It is ANDed in rather than
+// checked at the render sites so that every downstream consumer — the choice
+// tiles, the enabled-method fallback, the "no payment method" empty state —
+// sees one consistent matrix. place-order enforces the same thing server-side.
+function parsePaymentMatrix(
+  settings: Record<string, unknown>,
+  canUseCard: boolean,
+): PaymentMatrix {
   const raw = settings.payment_methods as
     | Partial<Record<PaymentMode, Partial<Record<PaymentMethod, unknown>>>>
     | undefined;
   const read = (mode: PaymentMode, method: PaymentMethod) => {
+    if (method === 'card' && !canUseCard) return false;
     const v = raw?.[mode]?.[method];
     return typeof v === 'boolean' ? v : true;
   };
@@ -59,6 +63,32 @@ function parsePaymentMatrix(settings: Record<string, unknown>): PaymentMatrix {
     asap: { cash: read('asap', 'cash'), card: read('asap', 'card') },
     scheduled: { cash: read('scheduled', 'cash'), card: read('scheduled', 'card') },
   };
+}
+
+// place-order's error codes, rendered for a customer.
+//
+// The billing codes (402 billing_inactive / 403 feature_not_entitled) are
+// deliberately phrased as restaurant availability: the customer is not the
+// party who owes anything, and telling them the restaurant hasn't paid is a
+// reputational hit we have no right to inflict. Order is significant —
+// `dropoff_other_required` contains `dropoff_required` as a substring.
+const ORDER_ERRORS: Array<[string, string]> = [
+  ['billing_inactive', 'This restaurant is not taking online orders right now. Please try again later.'],
+  ['feature_not_entitled:delivery', 'This restaurant is not offering delivery right now. Please choose pickup or dine-in.'],
+  ['delivery_not_entitled', 'This restaurant is not offering delivery right now. Please choose pickup or dine-in.'],
+  ['feature_not_entitled:card_payment', 'Card payment is not available here right now. Please pay with cash.'],
+  ['branch_closed', 'This restaurant is currently closed. Please try again during opening hours.'],
+  ['delivery_out_of_range', 'Sorry, this address is outside the delivery area.'],
+  ['payment_method_not_accepted', 'That payment method is not available for this order type. Please pick another.'],
+  ['dropoff_other_required', 'Please describe where we should leave your order.'],
+  ['dropoff_required', 'Please choose where we should leave your order.'],
+];
+
+function describeOrderError(msg: string): string {
+  for (const [code, text] of ORDER_ERRORS) {
+    if (msg.includes(code)) return text;
+  }
+  return msg;
 }
 
 type DropoffPref = 'leave_at_door' | 'hand_to_me' | 'at_desk' | 'other';
@@ -73,9 +103,13 @@ const DROPOFF_OPTIONS: Array<{ value: DropoffPref; label: string }> = [
 interface Props {
   branchId: string;
   base: string;
+  /** `delivery` entitlement — default false so a missing prop cannot sell it. */
+  canDeliver?: boolean;
+  /** `card_payment` entitlement — same. */
+  canUseCard?: boolean;
 }
 
-export function CheckoutView({ branchId, base }: Props) {
+export function CheckoutView({ branchId, base, canDeliver = false, canUseCard = false }: Props) {
   const t = useTranslations();
   const router = useRouter();
 
@@ -84,6 +118,14 @@ export function CheckoutView({ branchId, base }: Props) {
   const notes = useCart((s) => s.notes);
   const clear = useCart((s) => s.clear);
   const channel = useCart((s) => s.channel);
+  const resolveChannel = useCart((s) => s.resolveChannel);
+
+  // Deep links reach checkout without passing the menu, so the reconciliation
+  // has to happen here too — otherwise a stale persisted `delivery` would show
+  // an address block for a branch that no longer delivers.
+  React.useEffect(() => {
+    resolveChannel(canDeliver);
+  }, [canDeliver, resolveChannel]);
 
   const [name, setName] = React.useState('');
   const [phone, setPhone] = React.useState('');
@@ -111,7 +153,12 @@ export function CheckoutView({ branchId, base }: Props) {
   // input event clearing the coordinates immediately after onResolved sets them.
   const resolvedAddressRef = React.useRef<string | null>(null);
   const [method, setMethod] = React.useState<PaymentMethod>('card');
-  const [paymentMatrix, setPaymentMatrix] = React.useState<PaymentMatrix>(PAYMENT_MATRIX_DEFAULTS);
+  // Seeded from the entitlement, not from PAYMENT_MATRIX_DEFAULTS: the branch
+  // settings arrive a tick later, and for that tick an unentitled branch would
+  // otherwise offer Card.
+  const [paymentMatrix, setPaymentMatrix] = React.useState<PaymentMatrix>(() =>
+    parsePaymentMatrix({}, canUseCard),
+  );
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   // Map picker + geolocation
@@ -257,10 +304,10 @@ export function CheckoutView({ branchId, base }: Props) {
         if (data?.settings) {
           const settings = data.settings as Record<string, unknown>;
           setTipConfig(parseTipConfig(settings));
-          setPaymentMatrix(parsePaymentMatrix(settings));
+          setPaymentMatrix(parsePaymentMatrix(settings, canUseCard));
         }
       });
-  }, [branchId]);
+  }, [branchId, canUseCard]);
 
   // Keep the selected payment method valid for the current mode; when the
   // current mode has no methods at all, flip to the other mode (its toggle is
@@ -580,20 +627,7 @@ export function CheckoutView({ branchId, base }: Props) {
       clear();
       router.push(`${base}/orders/${result.order_number}`);
     } catch (err) {
-      const msg = (err as Error).message;
-      setError(
-        msg.includes('branch_closed')
-          ? 'This restaurant is currently closed. Please try again during opening hours.'
-          : msg.includes('delivery_out_of_range')
-            ? 'Sorry, this address is outside the delivery area.'
-            : msg.includes('payment_method_not_accepted')
-              ? 'That payment method is not available for this order type. Please pick another.'
-              : msg.includes('dropoff_other_required')
-                ? 'Please describe where we should leave your order.'
-                : msg.includes('dropoff_required')
-                  ? 'Please choose where we should leave your order.'
-                  : msg,
-      );
+      setError(describeOrderError((err as Error).message));
       setSubmitting(false);
     }
   };

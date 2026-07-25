@@ -34,6 +34,12 @@
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import {
+  billingInactiveBody,
+  edgeHasFeature,
+  featureNotEntitledBody,
+  loadEntitlements,
+} from '../_shared/entitlements.ts';
 
 interface PlaceOrderRequest {
   branch_id: string;
@@ -108,6 +114,15 @@ Deno.serve(async (req: Request) => {
 
   const { data: branch, error: bErr } = await admin.from('branches').select('id, restaurant_id, is_active, settings, sales_tax_rate, geo_lat, geo_lng').eq('id', payload.branch_id).single();
   if (bErr || !branch || !branch.is_active) return json(404, { error: 'branch_not_found_or_inactive' });
+
+  // Billing gate. The BEFORE INSERT triggers on orders/payments/deliveries are the
+  // real authority — this check exists so a suspended tenant gets one clean 402
+  // instead of a half-written order rolled back by a P0001 three steps later.
+  const ent = await loadEntitlements(admin, { restaurantId: branch.restaurant_id });
+  if (!ent.entitled) return json(402, billingInactiveBody('orders'));
+  if (payload.channel === 'delivery' && !edgeHasFeature(ent, 'delivery')) {
+    return json(403, featureNotEntitledBody('delivery'));
+  }
 
   const menuItemIds = payload.items.map((i) => i.menu_item_id);
   // deno-lint-ignore no-explicit-any
@@ -250,6 +265,13 @@ Deno.serve(async (req: Request) => {
   // Absent key/subkey => enabled (backward compatible); only an explicit false blocks.
   // The matrix governs what CUSTOMERS may pick — staff-placed orders (counter/POS
   // have their own hard-coded Cash/Card buttons) are exempt.
+  // Entitlement gate on card. Unlike the merchant's own matrix below, this one is
+  // NOT staff-exempt: if card_payment was never paid for, the counter cannot take
+  // a card either. Checked before the matrix so the reason returned is the true one.
+  if (payload.payment_method === 'card' && !edgeHasFeature(ent, 'card_payment')) {
+    return json(403, featureNotEntitledBody('card_payment'));
+  }
+
   const paymentMethods = settings.payment_methods as Record<string, Record<string, boolean>> | undefined;
   const orderMode = payload.scheduled_for ? 'scheduled' : 'asap';
   if (paymentMethods?.[orderMode]?.[payload.payment_method] === false) {
@@ -297,6 +319,10 @@ Deno.serve(async (req: Request) => {
         dropoffLng = lng;
       } else if (quote?.reason === 'out_of_range') {
         return json(409, { error: 'delivery_out_of_range', distance_km: quote.distance_km, radius_km: quote.radius_km });
+      } else if (quote?.reason === 'delivery_not_entitled') {
+        // Must NOT fall through to the legacy flat fee below — that would quietly
+        // sell a delivery the account has not paid for.
+        return json(403, featureNotEntitledBody('delivery'));
       }
       // branch_unavailable / invalid_coordinates → keep the legacy flat fee.
     } else {

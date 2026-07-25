@@ -1,14 +1,18 @@
 'use client';
 
 import * as React from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Palette, Plus, Save, Star } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import {
   MENU_CARD_STYLE_LABELS,
   MENU_LAYOUT_LABELS,
+  canAddBranch,
+  describeBillingError,
   parseStorefront,
   serializeStorefront,
+  type Entitlements,
   type StorefrontSettings,
 } from '@favornoms/shared';
 import { Badge, Button, Card, IconButton } from '@favornoms/ui';
@@ -39,6 +43,7 @@ interface Props {
   brands: Brand[];
   branches: BranchRow[];
   storefront: Record<string, unknown>;
+  entitlements: Entitlements;
 }
 
 const slugify = (s: string) =>
@@ -48,9 +53,11 @@ export function BrandsManager({
   restaurantId,
   restaurantName,
   loyaltyScope: initialScope,
+  currentBranchId,
   brands: initialBrands,
   branches,
   storefront,
+  entitlements,
 }: Props) {
   const router = useRouter();
   const [brands, setBrands] = React.useState(initialBrands);
@@ -250,10 +257,29 @@ export function BrandsManager({
               Locations under {restaurantName}. Each gets its own storefront URL + QR code.
             </p>
           </div>
-          <Button variant="gradient" leftIcon={<Plus className="h-4 w-4" />} onClick={() => setAddingBranch(true)}>
-            Add branch
-          </Button>
+          {/* Pay first, then create (owner decision 2026-07-25). The branches
+              trigger enforces this regardless; sending the merchant to the plan
+              page is friendlier than letting them fill a form that will be
+              refused on submit. */}
+          {canAddBranch(entitlements) ? (
+            <Button variant="gradient" leftIcon={<Plus className="h-4 w-4" />} onClick={() => setAddingBranch(true)}>
+              Add branch
+            </Button>
+          ) : (
+            <Link href={`/b/${currentBranchId}/settings/plan`}>
+              <Button variant="outline" leftIcon={<Plus className="h-4 w-4" />}>
+                Add a branch seat +$99/mo
+              </Button>
+            </Link>
+          )}
         </div>
+        {!canAddBranch(entitlements) && (
+          <p className="mt-3 rounded-xl bg-muted px-3 py-2 text-xs text-muted-foreground">
+            You are using {entitlements.branchesUsed} of {entitlements.branchSeats} branch seat
+            {entitlements.branchSeats === 1 ? '' : 's'}. Add a seat to open another location — it
+            gets the full feature set of your main branch.
+          </p>
+        )}
         <div className="mt-3 space-y-2">
           {branches.map((b) => (
             <div key={b.id} className="flex items-center justify-between rounded-xl border border-border px-3 py-2 text-sm">
@@ -390,13 +416,18 @@ function BranchCreator({
     });
     setSaving(false);
     if (rpcErr) {
-      const { describePlanError } = await import('@favornoms/database/queries');
-      const planErr = describePlanError(rpcErr);
-      setError(
-        planErr
-          ? `Your current plan only allows ${planErr.limit} ${planErr.key}. Please upgrade before adding more.`
-          : rpcErr.message,
-      );
+      // The BEFORE INSERT trigger on branches is the real gate; this arm only
+      // ever runs if the UI let a stale seat count through (or two tabs raced).
+      const billing = describeBillingError(rpcErr);
+      if (billing?.kind === 'seats') {
+        setError(
+          `You are using all ${billing.limit} of your branch seats. Add a seat (+$99/mo) on the Plan page, then create the branch.`,
+        );
+      } else if (billing?.kind === 'inactive') {
+        setError('Your subscription is not active. Choose a package on the Plan page to continue.');
+      } else {
+        setError(rpcErr.message);
+      }
       return;
     }
     onSaved();

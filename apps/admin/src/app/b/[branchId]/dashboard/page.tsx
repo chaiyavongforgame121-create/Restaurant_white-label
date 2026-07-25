@@ -1,6 +1,7 @@
 import { ArrowDownRight, ArrowUpRight, ChefHat, DollarSign, Receipt, Sparkles, Users } from 'lucide-react';
 import { getServerClient } from '@favornoms/database/server';
-import { formatCurrency } from '@favornoms/shared';
+import { getEntitlementsForBranch } from '@favornoms/database/queries';
+import { formatCurrency, trialDaysLeft } from '@favornoms/shared';
 import { Badge, Card } from '@favornoms/ui';
 
 interface Props {
@@ -14,20 +15,11 @@ export default async function DashboardPage({ params }: Props) {
   const start = new Date();
   start.setHours(0, 0, 0, 0);
 
-  const { data: branchRow } = await supabase
-    .from('branches')
-    .select('restaurant_id')
-    .eq('id', branchId)
-    .maybeSingle();
-  const restaurantId = branchRow?.restaurant_id ?? null;
-
-  const planStatus = restaurantId
-    ? (await supabase.rpc('get_my_plan_status', { p_restaurant_id: restaurantId })).data as {
-        plan: string;
-        items: { allowed: boolean; limit: number; current: number | null };
-        orders_per_month: { allowed: boolean; limit: number; current: number | null };
-      } | null
-    : null;
+  // No item cap and no orders/month cap exist any more (owner decision
+  // 2026-07-25), so the old "10/30 items used" nag is gone. What is worth
+  // surfacing here is the trial clock — it is the only thing that expires.
+  const entitlements = await getEntitlementsForBranch(supabase, branchId);
+  const trialDays = trialDaysLeft(entitlements);
 
   const [orderToday, revenueToday, ordersInKitchen, customers] = await Promise.all([
     supabase
@@ -64,7 +56,7 @@ export default async function DashboardPage({ params }: Props) {
         <p className="mt-1 text-muted-foreground">Live metrics from your branch</p>
       </header>
 
-      {planStatus && planStatus.plan === 'free' && planStatus.items.limit > 0 && (
+      {trialDays !== null && (
         <Card className="mb-6 flex items-center justify-between gap-4 border-amber-500/40 bg-amber-500/5 p-4 px-2 lg:px-4">
           <div className="flex items-center gap-3">
             <span className="grid h-10 w-10 place-items-center rounded-xl bg-amber-500/15 text-amber-600">
@@ -72,10 +64,12 @@ export default async function DashboardPage({ params }: Props) {
             </span>
             <div>
               <p className="text-sm font-semibold">
-                You&apos;re on the Free plan ({planStatus.items.current ?? 0} / {planStatus.items.limit} items used)
+                {trialDays === 0
+                  ? 'Your free trial ends today'
+                  : `${trialDays} day${trialDays === 1 ? '' : 's'} left in your free trial`}
               </p>
               <p className="text-xs text-muted-foreground">
-                Upgrade to unlock unlimited items, advanced reporting, and priority support.
+                Everything is unlocked. Choose a package to keep it — no card needed until then.
               </p>
             </div>
           </div>
@@ -83,7 +77,7 @@ export default async function DashboardPage({ params }: Props) {
             href={`/b/${branchId}/settings/plan`}
             className="focus-ring inline-flex items-center rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white shadow-soft hover:bg-amber-600"
           >
-            Upgrade
+            Choose a package
           </a>
         </Card>
       )}

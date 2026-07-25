@@ -1,14 +1,22 @@
 import Link from 'next/link';
 import {
-  Bike, ChefHat, ChevronRight, CreditCard, LineChart,
-  Megaphone, ShoppingBag, Star, Zap,
+  Bike, Check, ChefHat, ChevronRight, CreditCard, LineChart,
+  Megaphone, MonitorPlay, ShoppingBag, Star, Store, Zap,
 } from 'lucide-react';
 
 export const metadata = {
   title: 'Favornoms — All-in-one ordering platform for restaurants',
   description:
-    'Run delivery, pickup, dine-in, KDS, POS, and driver dispatch from one platform. Built for US restaurants.',
+    'Run delivery, pickup, dine-in, KDS, POS, and driver dispatch from one platform. $199/mo, 14-day free trial. Built for US restaurants.',
 };
+
+// The merchant back office is a separate deployment, so signup and onboarding
+// live on another origin. Defaults to the local dev port so `pnpm dev` links
+// work without any .env.local at all.
+const MERCHANT_URL = (
+  process.env.NEXT_PUBLIC_MERCHANT_URL ?? 'http://localhost:3004'
+).replace(/\/$/, '');
+const SIGNUP_URL = `${MERCHANT_URL}/signup`;
 
 export default function RootPage() {
   return (
@@ -27,16 +35,16 @@ export default function RootPage() {
                 <br />Online, in one place.
               </h1>
               <p className="mt-5 max-w-lg text-lg text-white/85">
-                Take orders online, run your kitchen, dispatch drivers, accept Stripe payments, and
-                grow your loyal customer base — without juggling five different tools.
+                Take orders online, run your kitchen, dispatch drivers, take card payments, and grow
+                your loyal customer base — without juggling five different tools.
               </p>
               <div className="mt-7 flex flex-wrap gap-3">
-                <Link
-                  href="/onboarding"
+                <a
+                  href={SIGNUP_URL}
                   className="focus-ring inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-white px-6 text-base font-semibold text-primary shadow-warm hover:bg-white/95"
                 >
-                  Start free trial <ChevronRight className="h-4 w-4" />
-                </Link>
+                  Start 14 days free <ChevronRight className="h-4 w-4" />
+                </a>
                 <Link
                   href="/r/coastal-grill/brooklyn"
                   className="focus-ring inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-white/40 px-6 text-base font-semibold text-white hover:bg-white/10"
@@ -44,7 +52,9 @@ export default function RootPage() {
                   See a live menu
                 </Link>
               </div>
-              <p className="mt-4 text-xs text-white/70">No credit card required &middot; 30 items free forever</p>
+              <p className="mt-4 text-xs text-white/70">
+                No credit card required &middot; every feature unlocked during the trial
+              </p>
             </div>
 
             {/* Stylized phone mock */}
@@ -98,8 +108,8 @@ export default function RootPage() {
           />
           <Feature
             icon={<CreditCard className="h-5 w-5" />}
-            title="Stripe checkout"
-            description="Cards, Apple Pay, Google Pay. Refunds, sales-tax compliant receipts, all from one dashboard."
+            title="Card payment"
+            description="Take cards online and at the counter. Refunds and sales-tax compliant receipts from one dashboard."
           />
           <Feature
             icon={<Bike className="h-5 w-5" />}
@@ -119,23 +129,77 @@ export default function RootPage() {
         </div>
       </section>
 
-      {/* Pricing teaser */}
+      {/* Pricing */}
       <section className="bg-muted/40 py-20">
-        <div className="container max-w-4xl text-center">
-          <h2 className="font-display text-3xl font-bold sm:text-4xl">Pricing that scales with you</h2>
-          <p className="mt-3 text-muted-foreground">Start free. Upgrade when you outgrow it.</p>
-          <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-4">
-            <PlanTile name="Free" price="$0" tag="30 items · 1 branch" />
-            <PlanTile name="Starter" price="$29" tag="200 items · 2k orders/mo" highlight />
-            <PlanTile name="Pro" price="$99" tag="1k items · 5 branches" />
-            <PlanTile name="Enterprise" price="$299" tag="Unlimited everything" />
+        <div className="container max-w-5xl">
+          <div className="text-center">
+            <h2 className="font-display text-3xl font-bold sm:text-4xl">One base plan. Add what you need.</h2>
+            <p className="mt-3 text-muted-foreground">
+              No menu-item limits. No cap on orders. Cancel any time.
+            </p>
           </div>
-          <Link
-            href="/onboarding"
-            className="focus-ring mt-8 inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-primary px-6 text-base font-semibold text-primary-foreground shadow-warm hover:bg-primary/90"
-          >
-            Start your free trial
-          </Link>
+
+          <div className="mx-auto mt-10 max-w-md rounded-3xl border-2 border-primary bg-card p-7 shadow-warm">
+            <p className="text-xs font-semibold uppercase tracking-wider text-primary">Base</p>
+            <p className="mt-2 font-display text-5xl font-bold">
+              $199<span className="text-lg font-normal text-muted-foreground">/mo</span>
+            </p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Everything you need to run one location, including card payment.
+            </p>
+            <ul className="mt-5 space-y-2 text-left">
+              {[
+                'Branded storefront on your own domain',
+                // Deliberately does NOT say "into your own Stripe account" yet:
+                // stripe-create-payment-intent still charges through a single
+                // platform key with no Connect account, so order money would not
+                // land in the restaurant's Stripe. Restore that wording the day
+                // Connect onboarding ships.
+                'Card and cash payments at checkout',
+                'Kitchen Display, POS and counter ordering',
+                'Loyalty, promos, gift cards and reports',
+                'AI menu import — photograph a menu, get a menu',
+              ].map((f) => (
+                <li key={f} className="flex items-start gap-2 text-sm">
+                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
+                  {f}
+                </li>
+              ))}
+            </ul>
+            <a
+              href={SIGNUP_URL}
+              className="focus-ring mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary px-6 text-base font-semibold text-primary-foreground shadow-warm hover:bg-primary/90"
+            >
+              Start 14 days free
+            </a>
+            <p className="mt-3 text-center text-xs text-muted-foreground">
+              Free for 14 days with every add-on included. No card until you decide.
+            </p>
+          </div>
+
+          <p className="mt-12 text-center text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            Add on when you need it
+          </p>
+          <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <AddonTile
+              icon={<Bike className="h-5 w-5" />}
+              name="Delivery"
+              price="+$49"
+              tag="Your own riders, automatic dispatch and live tracking."
+            />
+            <AddonTile
+              icon={<MonitorPlay className="h-5 w-5" />}
+              name="AI Suite"
+              price="+$59"
+              tag="Digital Signage and the AI Voice Assistant."
+            />
+            <AddonTile
+              icon={<Store className="h-5 w-5" />}
+              name="Extra branch"
+              price="+$99"
+              tag="Each additional location, with the full feature set of your main branch."
+            />
+          </div>
         </div>
       </section>
 
@@ -187,16 +251,17 @@ function Feature({ icon, title, description }: { icon: React.ReactNode; title: s
   );
 }
 
-function PlanTile({ name, price, tag, highlight }: { name: string; price: string; tag: string; highlight?: boolean }) {
+function AddonTile({ icon, name, price, tag }: { icon: React.ReactNode; name: string; price: string; tag: string }) {
   return (
-    <div
-      className={`rounded-2xl border p-5 transition ${
-        highlight ? 'border-primary bg-card shadow-warm' : 'border-border bg-card'
-      }`}
-    >
-      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{name}</p>
-      <p className="mt-2 font-display text-3xl font-bold">{price}<span className="text-base font-normal text-muted-foreground">/mo</span></p>
-      <p className="mt-2 text-xs text-muted-foreground">{tag}</p>
+    <div className="rounded-2xl border border-border bg-card p-5">
+      <span className="grid h-10 w-10 place-items-center rounded-xl bg-accent/20 text-accent-foreground">
+        {icon}
+      </span>
+      <p className="mt-4 font-display text-lg font-semibold">{name}</p>
+      <p className="mt-1 font-display text-2xl font-bold">
+        {price}<span className="text-sm font-normal text-muted-foreground">/mo</span>
+      </p>
+      <p className="mt-2 text-sm text-muted-foreground">{tag}</p>
     </div>
   );
 }

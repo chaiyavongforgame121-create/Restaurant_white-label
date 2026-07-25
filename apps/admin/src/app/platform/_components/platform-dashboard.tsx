@@ -118,7 +118,7 @@ export function PlatformDashboard({
                   </td>
                   <td className="px-5 py-3 capitalize">{r.loyalty_scope}</td>
                   <td className="px-5 py-3 text-muted-foreground">
-                    {new Date(r.created_at).toLocaleDateString()}
+                    {new Date(r.created_at).toLocaleDateString('en-US')}
                   </td>
                   <td className="px-5 py-3 text-right">
                     <div className="flex justify-end gap-1">

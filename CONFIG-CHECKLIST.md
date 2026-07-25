@@ -86,9 +86,14 @@ supabase functions deploy place-order            # v4 → v8 (modifiers + combos
 supabase functions deploy notify-worker          # adds gift_card_issued, birthday_reward, abandoned_cart, waitlist_ready templates
 supabase functions deploy issue-tax-invoice      # Thai E-Tax XML → US HTML receipt
 
-# These are BRAND NEW
-supabase functions deploy stripe-create-payment-intent
-supabase functions deploy stripe-webhook
+# Stripe — ALL FOUR ARE ALREADY DEPLOYED AND ACTIVE (2026-07-25).
+# They ship DORMANT: with no STRIPE_SECRET_KEY set they return 503
+# stripe_not_configured, and the plan page falls back to the manual
+# request queue. Setting the secrets in §6 is what switches them on.
+supabase functions deploy stripe-create-payment-intent   # order payments  → platform Stripe (see §6)
+supabase functions deploy stripe-webhook                 # both rails; verify_jwt MUST stay false
+supabase functions deploy stripe-create-checkout-session # subscriptions   → platform's Stripe
+supabase functions deploy stripe-billing-portal          # merchant self-manages card / cancels
 supabase functions deploy integration-sync       # DoorDash/UberEats/QuickBooks worker (stubbed)
 supabase functions deploy ai-chat-support        # Claude customer chatbot
 supabase functions deploy ai-review-response     # Brand-voiced review replies
@@ -118,6 +123,41 @@ supabase link --project-ref ayyfczidnzxetndiijmv
 | `STRIPE_SECRET_KEY` | dashboard.stripe.com → Developers → API keys |
 | `STRIPE_WEBHOOK_SECRET` | After creating webhook (see §8) |
 | `STRIPE_PUBLISHABLE_KEY` | API keys (also set as `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` in app envs) |
+
+> **Two different money flows share these keys — don't confuse them.**
+> - *Subscriptions* (Base $199 / +$99 branch / +$49 Delivery / +$59 AI Suite) are
+>   billed by **the platform** to the restaurant, on **our** Stripe account.
+>   This flow is fully built.
+> - *Order payments* are **meant** to be collected by the restaurant, into its own
+>   account, with the platform taking no cut (owner decision, 2026-07-25). ⚠️ **Not
+>   built yet.** `stripe-create-payment-intent` charges through the single
+>   `STRIPE_SECRET_KEY` above with no Connect account, so today order money would
+>   settle into the *platform's* Stripe. Do not switch on card payments for a real
+>   merchant until per-restaurant Connect onboarding ships (`docs/AUDIT-2026-06-24.md` D2-A).
+
+**Setting the keys is not sufficient to sell subscriptions.** Every row in
+`billing_products` ships with `stripe_price_id = NULL`, and
+`stripe-create-checkout-session` refuses with `400 product_missing_stripe_price`
+(naming the product) until they are filled. That refusal is deliberate — a
+half-mapped catalog would otherwise sell a package and silently under-grant it.
+
+To switch on:
+1. In Stripe, create one **recurring monthly USD Price** per sellable product —
+   `base` $199, `extra_branch` $99, `delivery` $49, `ai_suite` $59.
+   Do **not** create one for `trial`; it is granted, never purchased.
+2. Paste each Price ID into the catalog (platform admin → Plans, or directly):
+   ```sql
+   select public.upsert_billing_product(
+     p_code => 'base', p_stripe_price_id => 'price_...', /* other args unchanged */);
+   ```
+3. Verify none are left unmapped:
+   ```sql
+   select code, kind, monthly_price from public.billing_products
+   where is_active and stripe_price_id is null and code <> 'trial';
+   -- must return 0 rows
+   ```
+Prices must be **recurring**, not one-off: a one-off Price makes Checkout reject
+the session in `subscription` mode.
 
 ### 🤖 AI (required for chatbot, menu import, voice order, review responder, menu optimizer)
 | Key | Where to get |
@@ -178,11 +218,32 @@ on conflict (key) do update set value = excluded.value, updated_at = now();
 **dashboard.stripe.com → Developers → Webhooks → Add endpoint**
 
 - **Endpoint URL:** `https://ayyfczidnzxetndiijmv.supabase.co/functions/v1/stripe-webhook`
-- **Events to send:**
+- **API version:** `2025-08-27.basil` — pinned in every function we ship. If the
+  endpoint is created on a different version the handler still runs, but it logs
+  a `stripe.api_version_mismatch` row into `billing_events`; check there first if
+  a handler goes quiet.
+- **Events to send (13):**
+
+  *Order payments — customer pays the restaurant*
   - `payment_intent.succeeded`
   - `payment_intent.payment_failed`
   - `charge.refunded`
+  - `charge.dispute.created`
+
+  *Subscription billing — the platform charges the restaurant*
+  - `checkout.session.completed`
+  - `customer.subscription.created`
+  - `customer.subscription.updated`
+  - `customer.subscription.deleted`
+  - `customer.subscription.trial_will_end`
+  - `invoice.paid`
+  - `invoice.payment_failed`
+  - `invoice.payment_action_required`
+  - `invoice.marked_uncollectible`
+
 - Copy the **Signing secret** → paste as `STRIPE_WEBHOOK_SECRET` in §6.
+- Signatures older than **300s** are rejected, so the Supabase project clock must
+  be sane. A "bad_signature" storm with a correct secret is a clock-skew symptom.
 
 ---
 

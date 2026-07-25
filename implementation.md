@@ -1908,40 +1908,52 @@ Implementation: Upstash Rate Limit / Cloudflare
 
 ## 16. Subscription & Billing Model
 
-### 16.1 Tiers
+> **Rewritten 2026-07-25.** The Starter/Pro/Enterprise ladder below was the
+> original Thai-market plan (THB, Omise, multi-language). It was **replaced
+> outright** — no grandfathering — by the packaging the owner priced for the
+> US-only market. Catalog lives in `public.billing_products`.
 
-| Feature | Starter | Pro | Enterprise |
-|---------|---------|-----|------------|
-| **Price (THB/branch/month)** | 990-1,490 | 1,990-2,990 | Custom |
-| Branches | unlimited | unlimited | unlimited |
-| Menu items | 100/branch | unlimited | unlimited |
-| Order channels | Dine-in, Pickup, QR | + Delivery | All |
-| Customer accounts | ✅ | ✅ | ✅ |
-| Loyalty | Basic | Advanced | + Custom rules |
-| Driver management | ❌ | ✅ | ✅ |
-| Reports | Basic | Advanced | + Custom + Export |
-| AI Menu Import | ❌ | 5 imports/month | Unlimited |
-| Custom domain | ❌ | ❌ | ✅ |
-| Multi-language | TH only | TH, EN | All |
-| Support | Email | Email + Chat | Dedicated + SLA |
-| Data export | CSV | CSV, Excel | + API access |
+### 16.1 Packages
+
+| Product | Code | Kind | Price (USD/month) | Grants |
+|---------|------|------|-------------------|--------|
+| Base | `base` | plan | **$199** | `card_payment`, `ai_menu_import`, 1 branch seat |
+| Extra branch | `extra_branch` | seat | **+$99** each | 1 additional branch seat, full features of the main branch |
+| Delivery | `delivery` | addon | **+$49** | `delivery` |
+| AI Suite | `ai_suite` | addon | **+$59** | `ai_suite`, `digital_signage`, `ai_voice` |
+| Pro Start-up (trial) | `trial` | plan | **$0 / 14 days** | everything above + 1 branch, **no card required** |
+
+**Not metered.** No menu-item cap and no orders/month cap — only branch seats and
+feature entitlements are enforced. AI Suite is sold as **packaging today**:
+Signage and AI Voice surfaces render locked/coming-soon. AI *menu import* is a
+Base feature and is separate from AI Suite.
 
 ### 16.2 Billing Logic
 
-- **Trial**: 14 วัน free (no card required)
-- **Billing cycle**: รายเดือน (ตัดทุกวันที่ 1)
-- **Proration**: เพิ่ม/ลด branch กลางเดือน → คิด pro-rated
-- **Failed payment**: 3 retries (1, 3, 7 days) → suspend
-- **Suspend behavior**: 
-  - Customer-facing pages ปิด
-  - Admin panel เข้าได้ (read-only)
-  - 30 วัน → delete data (with warnings)
+- **Trial**: 14 days, all add-ons + 1 branch, no card.
+- **Entitlement**: `subscriptions` + `subscription_items` → `billing_entitlements`
+  → mirrored to `branches.entitled_through`.
+- **`entitled_through` is a deadline, not a flag.** Trading while
+  `entitled_through > now()`. No cron suspends or restores anyone; cancelling
+  keeps the merchant trading until the paid period ends; paying restores instantly.
+- **Enforcement**: BEFORE INSERT triggers (not RLS), so it blocks only *new*
+  business. Orders already in the pipe stay cookable, printable, and cash-payable.
+- **Extra branches are pay-first** — the seat must be bought before the branch can
+  be created (`plan_limit_exceeded:branches:<used>/<limit>`).
+- **Suspend behavior** (day 15 unpaid): back office locked, public storefront
+  dark. **No data is ever deleted.**
 
 ### 16.3 Payment Methods
 
-- Credit card (Omise / 2C2P)
-- Thai bank transfer (manual, 7-day terms)
-- Annual prepay (10% discount)
+Two distinct money flows — do not conflate them:
+
+- **Subscription (platform → restaurant)**: Stripe Billing on the *platform's*
+  account. Built but **dormant** until `STRIPE_SECRET_KEY` and the per-product
+  `stripe_price_id`s are set; until then, activation is manual by a platform
+  admin via the billing-requests queue.
+- **Order payments (customer → restaurant)**: collected by the restaurant into
+  **its own** Stripe account. The platform takes **no cut** — this is not a
+  marketplace, so no Stripe Connect. See `docs/AUDIT-2026-06-24.md` D2.
 
 ---
 

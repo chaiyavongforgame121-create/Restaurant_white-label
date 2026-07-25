@@ -8,6 +8,12 @@
 //  - email: not yet wired (SendGrid/Resend)
 //
 // Invoke via pg_cron every minute or manually via HTTP w/ x-worker-secret header.
+//
+// BILLING: deliberately NOT entitlement-gated (owner decision, 2026-07-25). This
+// drains a queue of messages about orders that were already accepted while the
+// account was live — a customer waiting on "your rider is here" must still get it
+// even if the restaurant lapsed an hour ago. Suspension is enforced upstream at
+// order creation (place-order), so nothing new can enter this queue anyway.
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';

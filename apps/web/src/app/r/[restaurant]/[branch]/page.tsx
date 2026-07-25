@@ -1,7 +1,8 @@
 import { getServerClient } from '@favornoms/database/server';
 import { listCategories, listMenuItems } from '@favornoms/database/queries';
-import { resolveTenant } from '@/lib/tenant';
+import { resolveStorefrontStatus, resolveTenant } from '@/lib/tenant';
 import { MenuView } from './_components/menu-view';
+import { SuspendedStorefront } from './_components/suspended-storefront';
 
 interface Props {
   params: Promise<{ restaurant: string; branch: string }>;
@@ -10,6 +11,14 @@ interface Props {
 export default async function MenuPage({ params }: Props) {
   const { restaurant, branch } = await params;
   const tenant = await resolveTenant(restaurant, branch);
+
+  // Checked before the menu queries so a lapsed subscription costs one round
+  // trip, not eight. The deadline is authoritative — no cron has to have run.
+  const status = await resolveStorefrontStatus(tenant.branch.id);
+  if (!status.entitled) {
+    return <SuspendedStorefront brandName={tenant.theme.brandName ?? tenant.restaurant.name} />;
+  }
+
   const supabase = await getServerClient();
 
   // get_happy_hours_for_menu isn't in the generated types yet — thin typed escape.
@@ -116,6 +125,7 @@ export default async function MenuPage({ params }: Props) {
       reviews={reviews}
       combos={combos}
       happyHours={happyHours}
+      canDeliver={status.delivery}
       menuLayout={tenant.storefront.menuLayout}
       menuCardStyle={tenant.storefront.menuCardStyle}
       logoUrl={tenant.logoUrl}

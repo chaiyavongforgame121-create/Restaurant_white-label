@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import { getServerClient } from '@favornoms/database/server';
+import { getEntitlementsForBranch } from '@favornoms/database/queries';
 import { BrandsManager } from './_components/brands-manager';
 
 interface Props { params: Promise<{ branchId: string }> }
@@ -15,7 +16,7 @@ export default async function BrandsPage({ params }: Props) {
     .maybeSingle();
   if (!branch) notFound();
 
-  const [brandsRes, branchesRes, restaurantRes] = await Promise.all([
+  const [brandsRes, branchesRes, restaurantRes, entitlements] = await Promise.all([
     supabase
       .from('brands')
       .select('id, slug, name, theme, logo_url, is_default, created_at')
@@ -32,6 +33,7 @@ export default async function BrandsPage({ params }: Props) {
       .select('id, name, loyalty_scope, storefront')
       .eq('id', branch.restaurant_id)
       .maybeSingle(),
+    getEntitlementsForBranch(supabase, branchId),
   ]);
 
   return (
@@ -43,6 +45,7 @@ export default async function BrandsPage({ params }: Props) {
       brands={(brandsRes.data ?? []) as never}
       branches={(branchesRes.data ?? []) as never}
       storefront={(restaurantRes.data?.storefront ?? {}) as Record<string, unknown>}
+      entitlements={entitlements}
     />
   );
 }

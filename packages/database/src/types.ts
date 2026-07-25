@@ -128,6 +128,210 @@ export type Database = {
           },
         ]
       }
+      billing_entitlements: {
+        Row: {
+          addons: string[]
+          branch_seats: number
+          computed_at: string
+          entitled_through: string | null
+          features: Json
+          monthly_total: number
+          plan_code: string
+          restaurant_id: string
+          status: string
+          trial_ends_at: string | null
+        }
+        Insert: {
+          addons?: string[]
+          branch_seats?: number
+          computed_at?: string
+          entitled_through?: string | null
+          features?: Json
+          monthly_total?: number
+          plan_code?: string
+          restaurant_id: string
+          status?: string
+          trial_ends_at?: string | null
+        }
+        Update: {
+          addons?: string[]
+          branch_seats?: number
+          computed_at?: string
+          entitled_through?: string | null
+          features?: Json
+          monthly_total?: number
+          plan_code?: string
+          restaurant_id?: string
+          status?: string
+          trial_ends_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_entitlements_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: true
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      billing_events: {
+        Row: {
+          created_at: string
+          id: string
+          level: string
+          note: string | null
+          payload: Json | null
+          restaurant_id: string | null
+          stripe_event_id: string | null
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          level?: string
+          note?: string | null
+          payload?: Json | null
+          restaurant_id?: string | null
+          stripe_event_id?: string | null
+          type: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          level?: string
+          note?: string | null
+          payload?: Json | null
+          restaurant_id?: string | null
+          stripe_event_id?: string | null
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_events_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      billing_products: {
+        Row: {
+          code: string
+          created_at: string
+          currency: string
+          description: string | null
+          features: Json
+          included_seats: number
+          is_active: boolean
+          is_quantity: boolean
+          kind: string
+          monthly_price: number
+          name: string
+          seats_per_unit: number
+          sort_order: number
+          stripe_price_id: string | null
+          trial_days: number
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          currency?: string
+          description?: string | null
+          features?: Json
+          included_seats?: number
+          is_active?: boolean
+          is_quantity?: boolean
+          kind: string
+          monthly_price?: number
+          name: string
+          seats_per_unit?: number
+          sort_order?: number
+          stripe_price_id?: string | null
+          trial_days?: number
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          currency?: string
+          description?: string | null
+          features?: Json
+          included_seats?: number
+          is_active?: boolean
+          is_quantity?: boolean
+          kind?: string
+          monthly_price?: number
+          name?: string
+          seats_per_unit?: number
+          sort_order?: number
+          stripe_price_id?: string | null
+          trial_days?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      billing_requests: {
+        Row: {
+          addons: string[]
+          branch_seats: number
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decision_note: string | null
+          id: string
+          monthly_total: number
+          note: string | null
+          plan_code: string
+          requested_by: string | null
+          restaurant_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          addons?: string[]
+          branch_seats?: number
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_note?: string | null
+          id?: string
+          monthly_total?: number
+          note?: string | null
+          plan_code: string
+          requested_by?: string | null
+          restaurant_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          addons?: string[]
+          branch_seats?: number
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_note?: string | null
+          id?: string
+          monthly_total?: number
+          note?: string | null
+          plan_code?: string
+          requested_by?: string | null
+          restaurant_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_requests_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       birthday_rewards: {
         Row: {
           branch_id: string
@@ -246,6 +450,7 @@ export type Database = {
           brand_id: string | null
           created_at: string
           custom_domain: string | null
+          entitled_through: string | null
           geo_lat: number | null
           geo_lng: number | null
           geo_location: unknown
@@ -266,6 +471,7 @@ export type Database = {
           brand_id?: string | null
           created_at?: string
           custom_domain?: string | null
+          entitled_through?: string | null
           geo_lat?: number | null
           geo_lng?: number | null
           geo_location?: unknown
@@ -286,6 +492,7 @@ export type Database = {
           brand_id?: string | null
           created_at?: string
           custom_domain?: string | null
+          entitled_through?: string | null
           geo_lat?: number | null
           geo_lng?: number | null
           geo_location?: unknown
@@ -3278,6 +3485,54 @@ export type Database = {
           },
         ]
       }
+      subscription_items: {
+        Row: {
+          created_at: string
+          id: string
+          product_code: string
+          quantity: number
+          stripe_subscription_item_id: string | null
+          subscription_id: string
+          unit_price: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          product_code: string
+          quantity?: number
+          stripe_subscription_item_id?: string | null
+          subscription_id: string
+          unit_price?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          product_code?: string
+          quantity?: number
+          stripe_subscription_item_id?: string | null
+          subscription_id?: string
+          unit_price?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscription_items_product_code_fkey"
+            columns: ["product_code"]
+            isOneToOne: false
+            referencedRelation: "billing_products"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "subscription_items_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subscription_plans: {
         Row: {
           code: string
@@ -3328,7 +3583,6 @@ export type Database = {
           status: Database["public"]["Enums"]["subscription_status"]
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
-          tier: Database["public"]["Enums"]["subscription_tier"]
           trial_ends_at: string | null
           unit_price: number
           updated_at: string
@@ -3349,7 +3603,6 @@ export type Database = {
           status?: Database["public"]["Enums"]["subscription_status"]
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
-          tier?: Database["public"]["Enums"]["subscription_tier"]
           trial_ends_at?: string | null
           unit_price: number
           updated_at?: string
@@ -3370,7 +3623,6 @@ export type Database = {
           status?: Database["public"]["Enums"]["subscription_status"]
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
-          tier?: Database["public"]["Enums"]["subscription_tier"]
           trial_ends_at?: string | null
           unit_price?: number
           updated_at?: string
@@ -3380,7 +3632,7 @@ export type Database = {
             foreignKeyName: "subscriptions_plan_code_fkey"
             columns: ["plan_code"]
             isOneToOne: false
-            referencedRelation: "subscription_plans"
+            referencedRelation: "billing_products"
             referencedColumns: ["code"]
           },
           {
@@ -3969,6 +4221,28 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      billing_log_event: {
+        Args: {
+          p_level?: string
+          p_note?: string
+          p_payload?: Json
+          p_restaurant_id?: string
+          p_type: string
+        }
+        Returns: undefined
+      }
+      billing_set_package: {
+        Args: {
+          p_addons?: string[]
+          p_branch_seats?: number
+          p_period_end?: string
+          p_plan_code: string
+          p_restaurant_id: string
+          p_status?: string
+        }
+        Returns: Json
+      }
+      billing_start_trial: { Args: { p_restaurant_id: string }; Returns: Json }
       broadcast_franchise_menu: {
         Args: { p_source_branch_id: string; p_target_branch_ids: string[] }
         Returns: Json
@@ -4020,6 +4294,10 @@ export type Database = {
         Returns: Json
       }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
+      decide_billing_request: {
+        Args: { p_approve: boolean; p_id: string; p_note?: string }
+        Returns: Json
+      }
       delete_my_account: { Args: never; Returns: Json }
       driver_1099_summary: {
         Args: { p_driver_id: string; p_year: number }
@@ -4069,6 +4347,7 @@ export type Database = {
         }[]
       }
       forecast_orders: { Args: { p_branch_id: string }; Returns: Json }
+      get_branch_entitlements: { Args: { p_branch_id: string }; Returns: Json }
       get_branch_payout_summary: {
         Args: { p_branch_id: string; p_weeks?: number }
         Returns: {
@@ -4111,6 +4390,7 @@ export type Database = {
           menu_item_id: string
         }[]
       }
+      get_entitlements: { Args: { p_restaurant_id: string }; Returns: Json }
       get_happy_hours_for_menu: {
         Args: { p_branch_id: string }
         Returns: {
@@ -4151,6 +4431,10 @@ export type Database = {
         Returns: string
       }
       get_or_create_my_referral_code: { Args: never; Returns: string }
+      get_pending_billing_request: {
+        Args: { p_restaurant_id: string }
+        Returns: Json
+      }
       get_platform_settings: { Args: never; Returns: Json }
       get_sales_tax_report: {
         Args: { p_branch_id: string; p_from: string; p_to: string }
@@ -4239,6 +4523,7 @@ export type Database = {
         Args: { p_branch_id: string; p_menu_item_id: string }
         Returns: boolean
       }
+      list_billing_requests: { Args: { p_status?: string }; Returns: Json }
       list_my_loyalty_transactions: {
         Args: { p_branch_id: string; p_limit?: number }
         Returns: {
@@ -4262,6 +4547,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      list_restaurant_subscriptions: { Args: never; Returns: Json }
       mark_delivery_arriving: {
         Args: { p_delivery_id: string }
         Returns: undefined
@@ -4357,6 +4643,16 @@ export type Database = {
         }
         Returns: Json
       }
+      request_package_change: {
+        Args: {
+          p_addons?: string[]
+          p_branch_seats?: number
+          p_note?: string
+          p_plan_code: string
+          p_restaurant_id: string
+        }
+        Returns: Json
+      }
       requeue_failed_delivery: {
         Args: { p_delivery_id: string }
         Returns: undefined
@@ -4426,6 +4722,29 @@ export type Database = {
         }
         Returns: number
       }
+      storefront_status: { Args: { p_branch_id: string }; Returns: Json }
+      stripe_event_seen: {
+        Args: { p_event_id: string; p_type?: string }
+        Returns: boolean
+      }
+      stripe_resolve_restaurant: {
+        Args: { p_customer_id?: string; p_subscription_id?: string }
+        Returns: string
+      }
+      stripe_sync_subscription: {
+        Args: {
+          p_cancel_at_period_end?: boolean
+          p_items: Json
+          p_period_end?: string
+          p_period_start?: string
+          p_restaurant_id: string
+          p_status: string
+          p_stripe_customer_id: string
+          p_stripe_subscription_id: string
+          p_trial_end?: string
+        }
+        Returns: Json
+      }
       sweep_abandoned_carts: { Args: never; Returns: number }
       tier_for_lifetime_points: { Args: { p_points: number }; Returns: string }
       tip_pool_distribution: {
@@ -4443,8 +4762,22 @@ export type Database = {
         Returns: undefined
       }
       update_platform_settings: { Args: { p_patch: Json }; Returns: Json }
-      upgrade_plan: {
-        Args: { p_plan_code: string; p_restaurant_id: string }
+      upsert_billing_product: {
+        Args: {
+          p_code: string
+          p_description?: string
+          p_features?: Json
+          p_included_seats?: number
+          p_is_active?: boolean
+          p_is_quantity?: boolean
+          p_kind?: string
+          p_monthly_price?: number
+          p_name?: string
+          p_seats_per_unit?: number
+          p_sort_order?: number
+          p_stripe_price_id?: string
+          p_trial_days?: number
+        }
         Returns: Json
       }
       upsert_customer_address: {
@@ -4511,7 +4844,6 @@ export type Database = {
         | "past_due"
         | "cancelled"
         | "expired"
-      subscription_tier: "starter" | "pro" | "enterprise"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -4673,7 +5005,6 @@ export const Constants = {
         "cancelled",
         "expired",
       ],
-      subscription_tier: ["starter", "pro", "enterprise"],
     },
   },
 } as const
