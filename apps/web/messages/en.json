@@ -10,6 +10,15 @@
     "pickup": "Pickup",
     "dineIn": "Dine-in"
   },
+  "orderType": {
+    "title": "How would you like to order?",
+    "subtitle": "Pick one to start your order.",
+    "subtitleNamed": "Pick one to start your order from {branch}.",
+    "deliveryHint": "We bring it to your address",
+    "pickupHint": "Collect it at the restaurant",
+    "dineInHint": "Eat in — we bring it to your table",
+    "changeLater": "You can change this any time from the menu."
+  },
   "menu": {
     "title": "Menu",
     "search": "Search dishes...",

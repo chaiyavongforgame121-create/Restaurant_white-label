@@ -29,6 +29,18 @@ export interface PlaceOrderInput {
   tip_amount?: number;
   promo_code?: string;
   table_id?: string;
+  /**
+   * Free-text table number for dine-in. place-order resolves it against the
+   * branch's `tables` rows and fills `table_id` when it matches, so the kitchen
+   * and floor plan see a real table instead of a string buried in the notes.
+   * Required for dine-in orders placed from the customer storefront.
+   */
+  table_number?: string;
+  /**
+   * Which surface placed the order. Staff surfaces take walk-in dine-in orders
+   * with no table, so the dine-in table rule applies to `web` only. Defaults to `web`.
+   */
+  source?: 'web' | 'counter' | 'pos';
   scheduled_for?: string;
   gift_card_code?: string;
   items: Array<{

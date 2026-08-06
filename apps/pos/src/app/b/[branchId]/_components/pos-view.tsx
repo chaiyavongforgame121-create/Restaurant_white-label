@@ -223,6 +223,9 @@ function PosInner({
         customer_name: tableNumber ? `Table ${tableNumber}` : 'Walk-in',
         customer_phone: '+10000000000',
         customer_notes: tableNumber ? `Table ${tableNumber}` : undefined,
+        // Staff surface: exempt from the storefront's dine-in-needs-a-table rule.
+        source: 'pos',
+        table_number: tableNumber || undefined,
         payment_method: method,
         items: lines.map((l) => ({ menu_item_id: l.menuItemId, quantity: l.quantity })),
       });
@@ -303,7 +306,12 @@ function PosInner({
           <PrinterStatusButton />
           <Segmented
             value={channel}
-            onChange={(c) => setChannel(c as Channel)}
+            onChange={(c) => {
+              setChannel(c as Channel);
+              // The table input is hidden off dine-in but its state survives.
+              // Leaving it set would stamp a pickup order with a real table.
+              if (c !== 'dine_in') setTableNumber('');
+            }}
             options={[
               { value: 'dine_in', label: 'Dine-in', icon: <Store className="h-4 w-4" /> },
               { value: 'pickup', label: 'Pickup', icon: <ShoppingBag className="h-4 w-4" /> },
