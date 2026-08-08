@@ -82,6 +82,8 @@ const ORDER_ERRORS: Array<[string, string]> = [
   ['payment_method_not_accepted', 'That payment method is not available for this order type. Please pick another.'],
   ['dropoff_other_required', 'Please describe where we should leave your order.'],
   ['dropoff_required', 'Please choose where we should leave your order.'],
+  ['table_required', 'Please enter your table number.'],
+  ['invalid_channel', 'Please choose delivery, pickup or dine-in and try again.'],
 ];
 
 function describeOrderError(msg: string): string {
@@ -117,15 +119,9 @@ export function CheckoutView({ branchId, base, canDeliver = false, canUseCard = 
   const lines = useCart((s) => s.lines);
   const notes = useCart((s) => s.notes);
   const clear = useCart((s) => s.clear);
+  // null until the diner picks an order type. OrderTypeGate (mounted by the page)
+  // covers checkout until they do, so the null window is never interactive.
   const channel = useCart((s) => s.channel);
-  const resolveChannel = useCart((s) => s.resolveChannel);
-
-  // Deep links reach checkout without passing the menu, so the reconciliation
-  // has to happen here too — otherwise a stale persisted `delivery` would show
-  // an address block for a branch that no longer delivers.
-  React.useEffect(() => {
-    resolveChannel(canDeliver);
-  }, [canDeliver, resolveChannel]);
 
   const [name, setName] = React.useState('');
   const [phone, setPhone] = React.useState('');
@@ -231,8 +227,8 @@ export function CheckoutView({ branchId, base, canDeliver = false, canUseCard = 
   const tipAmount = customTip
     ? Math.max(0, Math.round((Number(customTip) || 0) * 100) / 100)
     : Math.round((subtotal * tipPercent)) / 100;
-  const tipPresets = tipPresetsForChannel(tipConfig, channel);
-  const tipWorkerPct = (tipConfig[channel] ?? tipConfig.dine_in).workerPct;
+  const tipPresets = tipPresetsForChannel(tipConfig, channel ?? 'pickup');
+  const tipWorkerPct = (tipConfig[channel ?? 'pickup'] ?? tipConfig.dine_in).workerPct;
   const promoDiscount = promoState.status === 'applied' ? promoState.amount_off : 0;
   const giftCardCredit = giftCardState.status === 'valid' ? Math.min(giftCardState.balance, subtotal) : 0;
   const total = Math.max(
@@ -490,6 +486,8 @@ export function CheckoutView({ branchId, base, canDeliver = false, canUseCard = 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    // OrderTypeGate is covering the page — there is nothing to submit yet.
+    if (!channel) return;
 
     // Validate every field up front, then focus the first problem.
     const errs: Record<string, string> = {};
@@ -563,6 +561,9 @@ export function CheckoutView({ branchId, base, canDeliver = false, canUseCard = 
           channel === 'dine_in' && dineInTable.trim()
             ? `Table ${dineInTable.trim()}${notes ? ` — ${notes}` : ''}`
             : notes || undefined,
+        // Structured too, so place-order can resolve it to a real tables row and
+        // the kitchen/floor plan stop relying on the notes prefix above.
+        table_number: channel === 'dine_in' ? dineInTable.trim() : undefined,
         delivery_address:
           channel === 'delivery'
             ? {
@@ -983,9 +984,11 @@ export function CheckoutView({ branchId, base, canDeliver = false, canUseCard = 
 
         {channel === 'dine_in' && (
           <Card className="p-5">
-            <h2 className="font-display text-lg font-semibold">Dine-in</h2>
+            <h2 className="font-display text-lg font-semibold">
+              Dine-in <span className="text-danger">*</span>
+            </h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              Enter your table number so we can bring your food over.
+              Your table number is required so we can bring your food over.
             </p>
             <input
               ref={tableRef}
@@ -993,6 +996,9 @@ export function CheckoutView({ branchId, base, canDeliver = false, canUseCard = 
               onChange={(e) => { setDineInTable(e.target.value); clearFieldError('table'); }}
               placeholder="Table number"
               inputMode="numeric"
+              // aria only: the form runs its own validation in handleSubmit and
+              // native `required` would pre-empt it with a browser tooltip.
+              aria-required="true"
               aria-invalid={!!fieldErrors.table}
               className="input mt-3"
               style={fieldErrors.table ? { borderColor: 'hsl(var(--danger))' } : undefined}
@@ -1192,6 +1198,7 @@ export function CheckoutView({ branchId, base, canDeliver = false, canUseCard = 
             type="submit"
             loading={submitting}
             disabled={
+              !channel ||
               outOfRange ||
               enabledMethods.length === 0 ||
               (channel === 'delivery' && quoting) ||

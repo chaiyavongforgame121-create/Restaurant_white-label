@@ -1,5 +1,6 @@
 import { resolveStorefrontStatus, resolveTenant } from '@/lib/tenant';
 import { CheckoutView } from './_components/checkout-view';
+import { OrderTypeGate } from '../_components/order-type-gate';
 import { SuspendedStorefront } from '../_components/suspended-storefront';
 
 interface Props {
@@ -14,12 +15,20 @@ export default async function CheckoutPage({ params }: Props) {
     return <SuspendedStorefront brandName={tenant.theme.brandName ?? tenant.restaurant.name} />;
   }
   const base = `/r/${restaurant}/${branch}`;
+  // Deep links reach checkout without passing the menu — same gate, same rules.
   return (
-    <CheckoutView
-      branchId={tenant.branch.id}
-      base={base}
-      canDeliver={status.delivery}
-      canUseCard={status.card_payment}
-    />
+    <>
+      <OrderTypeGate
+        branchId={tenant.branch.id}
+        branchName={tenant.branch.name}
+        canDeliver={status.delivery}
+      />
+      <CheckoutView
+        branchId={tenant.branch.id}
+        base={base}
+        canDeliver={status.delivery}
+        canUseCard={status.card_payment}
+      />
+    </>
   );
 }

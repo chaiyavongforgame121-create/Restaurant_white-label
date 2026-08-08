@@ -1,6 +1,15 @@
-// place-order v9.2 — US pivot + modifiers + combos + happy-hour + schedules + gift cards
+// place-order v9.4 — US pivot + modifiers + combos + happy-hour + schedules + gift cards
 //                  + distance-based delivery fees (Mapbox location backbone, Phase 1)
 //                  + payment-method gating + structured drop-off.
+//   v9.4 (2026-08-06): `channel` is validated against the enum (400 invalid_channel)
+//        instead of failing as a Postgres cast. New `source` field ('web' | 'counter'
+//        | 'pos', default + fallback 'web') is stored on the order instead of the
+//        hardcoded 'web'. Dine-in from source 'web' now requires table_id or
+//        table_number (400 table_required) — staff surfaces are exempt because the
+//        counter takes walk-in dine-in with no table. A supplied table_number is
+//        resolved (exact match, dine_in/qr_ordering only) against the branch's
+//        active `tables` rows to populate orders.table_id, which until now no
+//        surface ever wrote.
 //   v9.2 (2026-07-12): payment gating from branches.settings.payment_methods
 //        ({asap|scheduled}.{cash|card}); absent key/subkey => allowed, explicit false
 //        => 400 payment_method_not_accepted. Delivery orders now require a structured
@@ -54,6 +63,8 @@ interface PlaceOrderRequest {
   tip_amount?: number;
   promo_code?: string;
   table_id?: string;
+  table_number?: string;
+  source?: 'web' | 'counter' | 'pos';
   scheduled_for?: string;
   gift_card_code?: string;
   items: Array<{ menu_item_id: string; quantity: number; notes?: string; modifier_option_ids?: string[] }>;
@@ -71,6 +82,12 @@ function clip(v: unknown, max: number) { return typeof v === 'string' ? v.trim()
 
 const DROPOFF_PREFS = ['leave_at_door', 'hand_to_me', 'at_desk', 'other'] as const;
 
+const ORDER_CHANNELS = ['dine_in', 'pickup', 'delivery', 'qr_ordering'] as const;
+// Staff surfaces take walk-in dine-in orders with no table; the customer
+// storefront never should. Anything unrecognised is treated as `web` — the
+// strictest bucket, so a forged value cannot loosen a rule.
+const ORDER_SOURCES = ['web', 'counter', 'pos'] as const;
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: CORS });
   if (req.method !== 'POST') return json(405, { error: 'method_not_allowed' });
@@ -83,12 +100,25 @@ Deno.serve(async (req: Request) => {
   let payload: PlaceOrderRequest;
   try { payload = await req.json(); } catch { return json(400, { error: 'invalid_json' }); }
   if (!payload.branch_id || !payload.channel || !payload.payment_method) return json(400, { error: 'missing_fields' });
+  // Validate against the enum here rather than letting Postgres fail the cast
+  // three steps later with a 500.
+  if (!ORDER_CHANNELS.includes(payload.channel)) return json(400, { error: 'invalid_channel' });
+  const source = ORDER_SOURCES.includes(payload.source as (typeof ORDER_SOURCES)[number])
+    ? payload.source as (typeof ORDER_SOURCES)[number]
+    : 'web';
   const hasItems = Array.isArray(payload.items) && payload.items.length > 0;
   const hasCombos = Array.isArray(payload.combos) && payload.combos.length > 0;
   if (!hasItems && !hasCombos) return json(400, { error: 'empty_order' });
   if (!Array.isArray(payload.items)) payload.items = [];
   if (payload.channel === 'delivery' && !payload.delivery_address?.line1 && !payload.saved_address_id) return json(400, { error: 'delivery_address_required' });
   if (!payload.customer_phone) return json(400, { error: 'customer_phone_required' });
+  // Dine-in ordered by the diner has to say which table, or the food has nowhere
+  // to go. Staff surfaces legitimately ring up walk-in dine-in with no table, so
+  // the rule is scoped to the customer storefront.
+  const tableNumber = clip(payload.table_number, 20);
+  if (payload.channel === 'dine_in' && source === 'web' && !payload.table_id && !tableNumber) {
+    return json(400, { error: 'table_required' });
+  }
   if (payload.payment_method !== 'card' && payload.payment_method !== 'cash') return json(400, { error: 'invalid_payment_method' });
 
   // Structured drop-off (delivery only). dropoff_pref is required; the whitelisted
@@ -114,6 +144,32 @@ Deno.serve(async (req: Request) => {
 
   const { data: branch, error: bErr } = await admin.from('branches').select('id, restaurant_id, is_active, settings, sales_tax_rate, geo_lat, geo_lng').eq('id', payload.branch_id).single();
   if (bErr || !branch || !branch.is_active) return json(404, { error: 'branch_not_found_or_inactive' });
+
+  // Turn the typed table number into a real table row so the kitchen and the
+  // floor plan see it. A number that matches nothing is not an error — the
+  // restaurant may not have mapped its tables — it just rides along in the notes.
+  //
+  // Exact match, never `ilike`: PostgREST aliases `*` to `%` on like/ilike, so a
+  // diner typing `*` would match every table in the branch and `.limit(1)` would
+  // hand them an arbitrary one. `tables_branch_id_table_number_key
+  // UNIQUE (branch_id, table_number)` makes `eq` at most one row anyway.
+  //
+  // Only dine-in and QR ordering sit at a table. The staff surfaces keep the
+  // typed table number in state after the channel is switched, so without this
+  // guard a pickup order would be stamped with a real table's FK and show up on
+  // the kitchen board as a table order.
+  const wantsTable = payload.channel === 'dine_in' || payload.channel === 'qr_ordering';
+  let tableId: string | null = wantsTable ? payload.table_id ?? null : null;
+  if (wantsTable && !tableId && tableNumber) {
+    const { data: tableRows } = await admin
+      .from('tables')
+      .select('id')
+      .eq('branch_id', payload.branch_id)
+      .eq('is_active', true)
+      .eq('table_number', tableNumber)
+      .limit(1);
+    tableId = tableRows?.[0]?.id ?? null;
+  }
 
   // Billing gate. The BEFORE INSERT triggers on orders/payments/deliveries are the
   // real authority — this check exists so a suspended tenant gets one clean 402
@@ -398,7 +454,7 @@ Deno.serve(async (req: Request) => {
     service_fee: serviceFee, tax_amount: taxAmount, discount_amount: loyaltyDollarsOff + promoDiscount,
     tip_amount: tipAmount, promo_code: promoId ? payload.promo_code : null, promo_discount: promoDiscount,
     total, delivery_address: deliveryAddress, customer_notes: payload.customer_notes,
-    table_id: payload.table_id ?? null, source: 'web',
+    table_id: tableId, source,
     scheduled_for: scheduledFor,
     held,
     status_history: [{ status: 'pending', at: new Date().toISOString(), scheduled_for: scheduledFor, held }],

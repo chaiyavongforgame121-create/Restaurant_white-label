@@ -23,7 +23,7 @@ describe('cart store', () => {
   beforeEach(() => {
     useCart.getState().clear();
     // Reset branchId so each test starts fresh
-    useCart.setState({ branchId: null, notes: '', channel: 'delivery' });
+    useCart.setState({ branchId: null, notes: '', channel: null, channelBranchId: null });
   });
 
   it('starts empty with zero subtotal and zero items', () => {
@@ -112,10 +112,41 @@ describe('cart store', () => {
     expect(s.notes).toBe('');
   });
 
-  it('setChannel updates the order channel', () => {
-    useCart.getState().setChannel('pickup');
+  it('starts with no order channel until one is chosen', () => {
+    expect(useCart.getState().channel).toBeNull();
+    expect(useCart.getState().channelBranchId).toBeNull();
+  });
+
+  it('setChannel records the channel and the branch it was chosen for', () => {
+    useCart.getState().setChannel('pickup', 'branch-1');
     expect(useCart.getState().channel).toBe('pickup');
-    useCart.getState().setChannel('dine_in');
+    expect(useCart.getState().channelBranchId).toBe('branch-1');
+    useCart.getState().setChannel('dine_in', 'branch-1');
     expect(useCart.getState().channel).toBe('dine_in');
+  });
+
+  it('resolveChannel keeps a choice made for this branch', () => {
+    useCart.getState().setChannel('delivery', 'branch-1');
+    useCart.getState().resolveChannel(true, 'branch-1');
+    expect(useCart.getState().channel).toBe('delivery');
+  });
+
+  it('resolveChannel clears a choice made for a different branch', () => {
+    useCart.getState().setChannel('dine_in', 'branch-1');
+    useCart.getState().resolveChannel(true, 'branch-2');
+    expect(useCart.getState().channel).toBeNull();
+    expect(useCart.getState().channelBranchId).toBeNull();
+  });
+
+  it('resolveChannel clears delivery when the branch cannot deliver', () => {
+    useCart.getState().setChannel('delivery', 'branch-1');
+    useCart.getState().resolveChannel(false, 'branch-1');
+    expect(useCart.getState().channel).toBeNull();
+  });
+
+  it('resolveChannel leaves pickup alone when the branch cannot deliver', () => {
+    useCart.getState().setChannel('pickup', 'branch-1');
+    useCart.getState().resolveChannel(false, 'branch-1');
+    expect(useCart.getState().channel).toBe('pickup');
   });
 });

@@ -26,9 +26,10 @@ import {
   IconButton,
   Segmented,
 } from '@favornoms/ui';
-import { useCart } from '@/store/cart';
+import { useCart, type OrderChannel } from '@/store/cart';
 import type { Locale } from '@/i18n/config';
 import { MenuItemSheet } from './menu-item-sheet';
+import { OrderTypeGate } from './order-type-gate';
 
 interface BranchReviews {
   summary: { rating: number | null; count: number };
@@ -103,14 +104,8 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
   }, [branch.id, items]);
   const channel = useCart((s) => s.channel);
   const setChannel = useCart((s) => s.setChannel);
-  const resolveChannel = useCart((s) => s.resolveChannel);
-
-  // The cart persists in localStorage, so a visitor may arrive holding a
-  // channel this branch cannot serve. Reconcile on arrival rather than letting
-  // place-order reject them at the last step.
-  React.useEffect(() => {
-    resolveChannel(canDeliver);
-  }, [canDeliver, resolveChannel]);
+  // Reconciling a stale persisted channel is OrderTypeGate's job — it is the
+  // only place that can wait for rehydration before deciding.
 
   const toggleDietary = (tag: string) => {
     setDietaryFilters((curr) => {
@@ -166,6 +161,8 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
 
   return (
     <div>
+      <OrderTypeGate branchId={branch.id} branchName={branch.name} canDeliver={canDeliver} />
+
       <Hero
         title={effectiveHeroTitle}
         subtitle={effectiveHeroSubtitle}
@@ -197,7 +194,7 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
       <section className="container mt-6 space-y-6 lg:mt-8">
         <ChannelAndSearch
           channel={channel}
-          setChannel={setChannel}
+          setChannel={(c) => setChannel(c, branch.id)}
           search={search}
           setSearch={setSearch}
           canDeliver={canDeliver}
@@ -317,8 +314,8 @@ function ChannelAndSearch({
   setSearch,
   canDeliver,
 }: {
-  channel: 'delivery' | 'pickup' | 'dine_in';
-  setChannel: (c: 'delivery' | 'pickup' | 'dine_in') => void;
+  channel: OrderChannel | null;
+  setChannel: (c: OrderChannel) => void;
   search: string;
   setSearch: (s: string) => void;
   canDeliver: boolean;
@@ -336,7 +333,13 @@ function ChannelAndSearch({
   ];
   return (
     <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-      <Segmented value={channel} onChange={setChannel} options={options} />
+      {/* `channel` is null only while OrderTypeGate is covering the page; the
+          empty value matches no option, so nothing shows as selected. */}
+      <Segmented<string>
+        value={channel ?? ''}
+        onChange={(c) => setChannel(c as OrderChannel)}
+        options={options}
+      />
       <div className="relative w-full lg:max-w-md">
         <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <input

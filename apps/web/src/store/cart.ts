@@ -34,20 +34,31 @@ export interface ComboPick {
   contents: Array<{ item_name: string; quantity: number }>;
 }
 
+export type OrderChannel = 'delivery' | 'pickup' | 'dine_in';
+
 interface CartState {
   branchId: string | null;
   lines: CartLine[];
   notes: string;
-  channel: 'delivery' | 'pickup' | 'dine_in';
   /**
-   * True once the customer picks a channel themselves. Lets the storefront
-   * promote delivery as the default for branches that sell it, without ever
-   * overriding a deliberate choice.
+   * `null` until the diner picks an order type in the gate. There is no default:
+   * delivery, pickup and dine-in change the price, the required fields and where
+   * the food ends up, so the storefront asks instead of guessing.
    */
-  channelTouched: boolean;
-  setChannel: (channel: CartState['channel']) => void;
-  /** Reconcile the persisted channel with what this branch is entitled to sell. */
-  resolveChannel: (canDeliver: boolean) => void;
+  channel: OrderChannel | null;
+  /**
+   * The branch the choice was made for. One localStorage key serves every
+   * restaurant on this origin, so "dine-in, table 7" at one storefront must not
+   * carry into the next one.
+   */
+  channelBranchId: string | null;
+  setChannel: (channel: OrderChannel, branchId: string) => void;
+  /**
+   * Drop a persisted choice that no longer applies — different branch, or a
+   * branch that has since lost the delivery add-on. Clearing re-opens the gate
+   * rather than silently substituting a channel the diner did not pick.
+   */
+  resolveChannel: (canDeliver: boolean, branchId: string) => void;
   setNotes: (notes: string) => void;
   add: (item: MenuItem, quantity?: number, notes?: string, modifiers?: CartLineModifier[]) => void;
   addCombo: (combo: ComboPick, quantity?: number) => void;
@@ -65,22 +76,20 @@ export const useCart = create<CartState>()(
       branchId: null,
       lines: [],
       notes: '',
-      // Pickup, not delivery: every branch can do pickup, but delivery is a
-      // paid add-on. Defaulting to a channel the branch may not sell would put
-      // the customer through a whole checkout before place-order rejects them.
-      // The storefront calls resolveChannel() once it knows the entitlement.
-      channel: 'pickup',
-      channelTouched: false,
-      setChannel: (channel) => set({ channel, channelTouched: true }),
-      resolveChannel: (canDeliver) => {
-        const { channel, channelTouched } = get();
-        if (!canDeliver) {
-          // A correction, not a choice — leave channelTouched alone so the
-          // customer's own preference survives a visit to a pickup-only branch.
-          if (channel === 'delivery') set({ channel: 'pickup' });
+      channel: null,
+      channelBranchId: null,
+      setChannel: (channel, branchId) => set({ channel, channelBranchId: branchId }),
+      resolveChannel: (canDeliver, branchId) => {
+        const { channel, channelBranchId } = get();
+        if (channel === null) return;
+        // A choice belongs to the branch it was made on.
+        if (channelBranchId !== branchId) {
+          set({ channel: null, channelBranchId: null });
           return;
         }
-        if (!channelTouched) set({ channel: 'delivery' });
+        // Delivery is a paid add-on and can lapse between visits. Re-ask rather
+        // than downgrading to pickup behind the diner's back.
+        if (!canDeliver && channel === 'delivery') set({ channel: null, channelBranchId: null });
       },
       setNotes: (notes) => set({ notes }),
       add: (item, quantity = 1, notes, modifiers) => {
@@ -164,6 +173,18 @@ export const useCart = create<CartState>()(
         }, 0),
       itemCount: () => get().lines.reduce((sum, l) => sum + l.quantity, 0),
     }),
-    { name: 'favornoms-cart-v1', skipHydration: true },
+    {
+      name: 'favornoms-cart-v1',
+      version: 2,
+      // v1 persisted a channel that was auto-assigned as often as it was chosen
+      // (`channelTouched` recorded which, but a false there is indistinguishable
+      // from "picked pickup, the old default"). Every v1 cart re-enters the gate;
+      // the lines themselves are kept.
+      migrate: (state) => {
+        const { channelTouched: _dropped, ...rest } = (state ?? {}) as Record<string, unknown>;
+        return { ...rest, channel: null, channelBranchId: null } as CartState;
+      },
+      skipHydration: true,
+    },
   ),
 );

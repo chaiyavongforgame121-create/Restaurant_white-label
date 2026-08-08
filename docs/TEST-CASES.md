@@ -84,6 +84,17 @@
 
 ## 1.2 Browse menu (anonymous)
 
+### 1.2.0 Order-type gate (Delivery / Dine-in / Pickup) — added 2026-08-06
+- [x] เปิด `/r/coastal-grill/brooklyn` ครั้งแรก (localStorage ว่าง) → modal บังคับเลือกประเภทการสั่งลอยทับเมนู, 3 ปุ่ม
+- [x] Non-dismissible: คลิก backdrop + กด Escape → modal ยังอยู่; `document.body.style.overflow = 'hidden'`
+- [x] คลิก Dine-in → modal ปิด, overflow คืนค่า, persist `{channel:'dine_in', channelBranchId:'4444…4444', version:2}`
+- [x] Header `Segmented` สะท้อนค่าที่เลือก (`Dine-in` aria-selected=true) และเปลี่ยนเป็น Delivery ได้
+- [x] กลับเข้าเว็บอีกครั้ง → gate ไม่เด้งซ้ำ (จำ channel เดิม)
+- [x] Deep link `/checkout` ตอน storage ว่าง → gate เปิดกั้น (เช่นเดียวกับ `/cart`)
+- [x] ข้ามสาขา `/r/somtam-zab/silom` → gate เปิดใหม่, store reset `channel: null, channelBranchId: null`
+- [x] Branch ที่ปิด delivery → tile Delivery ไม่แสดง และ `resolveChannel` ล้าง delivery ที่ค้างไว้ (unit test)
+- [x] Unit tests `apps/web/src/store/cart.test.ts` — 6 channel cases ผ่าน
+
 ### 1.2.1 Branch menu page
 - [x] Navigate to `/r/coastal-grill/brooklyn`
 - [x] Hero section render: gradient, branch name, address badge, rating badge (fixed: removed broken framer-motion initial states on Hero/cards that left content invisible after hydration)
@@ -225,6 +236,7 @@
 - [ ] ถ้า customer มี saved addresses → list with radio — needs auth
 - [ ] Default address pre-selected — needs auth
 - [ ] "+ Use a new address" button → input field appears — deferred (no delivery channel checkout pass)
+- [x] Delivery channel บังคับกรอกข้อมูลจุดส่งก่อน submit (ดู 1.7.10) — verified 2026-08-06
 - [ ] กรอก address: `123 Bedford Ave, Brooklyn, NY 11211` — deferred
 - [ ] หลัง place order → address ถูก save ลง customer_addresses — deferred
 
@@ -265,6 +277,29 @@
 - [ ] Button loading state — deferred, requires place-order edge fn v8 deployed
 - [ ] Redirect to `/r/coastal-grill/brooklyn/orders/{order_number}` — deferred
 - [ ] Order status: `pending` — deferred
+
+### 1.7.10 Channel-specific required fields — added 2026-08-06
+- [x] Dine-in checkout: การ์ดหัวข้อ `Dine-in *` + ช่องเลขโต๊ะ `aria-required="true"`
+- [x] Dine-in submit โดยไม่กรอกโต๊ะ → block + error "Please enter your table number." + focus ช่องแรกที่ผิด
+- [x] Dine-in submit พร้อมโต๊ะ 12 → order `A-2608-582893` สำเร็จ, cart ถูกล้าง, redirect ไปหน้า tracking
+- [x] DB row ถูกต้อง: `channel=dine_in, source=web, customer_notes='Table 12', status=pending, total=15.68`
+- [x] Delivery checkout ไม่เลือกจุดส่ง → block + error "Please choose where the driver should leave your order."
+- [x] `handleSubmit` early-return เมื่อ `channel === null` (กัน state หลุด gate)
+
+### 1.7.11 place-order v9.4 edge function — deployed 2026-08-06 (version 12)
+Smoke-test ยิงสดที่ `POST /functions/v1/place-order` branch `4444…4444` (order ทดสอบ 5 ใบถูก cancel หลังเทสต์)
+- [x] `dine_in` + `source:web` + ไม่ส่งโต๊ะ → 400 `table_required`
+- [x] `channel:"banquet"` → 400 `invalid_channel` (เดิมพังเป็น 500 ตอน Postgres cast)
+- [x] `dine_in` + `table_number:"1"` → 201 และ `orders.table_id = e7a93b48…` resolve สำเร็จ (เดิมไม่มี surface ไหนเขียนคอลัมน์นี้)
+- [x] `dine_in` + `table_number:"*"` → 201 แต่ `table_id = null` — PostgREST แปลง `*` เป็น `%` ใน ilike, เปลี่ยนมาใช้ `eq` จึงไม่จับทุกโต๊ะ
+- [x] `pickup` + `table_number:"1"` → 201 แต่ `table_id = null` — resolve เฉพาะ `dine_in`/`qr_ordering`
+- [x] `dine_in` + `source:counter` + ไม่ส่งโต๊ะ → 201, `orders.source = counter` (staff ได้รับยกเว้น)
+- [x] ไม่ส่ง `source` เลย (bundle เว็บเก่า) → 201 + fallback `source = web`
+
+### 1.7.12 Review fixes — 2026-08-06
+- [x] Modal gate มี focus trap: focus เด้งเข้า tile แรกตอนเปิด, Tab/Shift+Tab วนอยู่ในกรอบ, focusin นอกกรอบถูกดึงกลับ
+- [x] Counter/POS: สลับ channel ออกจาก dine-in แล้ว `tableNumber` ถูกล้าง (กัน pickup ติด table FK)
+- [x] `pnpm turbo run type-check` → 7/7 successful
 
 ---
 

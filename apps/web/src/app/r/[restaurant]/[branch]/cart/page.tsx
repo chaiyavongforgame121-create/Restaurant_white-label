@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { resolveStorefrontStatus, resolveTenant } from '@/lib/tenant';
 import { CartView } from './_components/cart-view';
+import { OrderTypeGate } from '../_components/order-type-gate';
 import { SuspendedStorefront } from '../_components/suspended-storefront';
 
 interface Props { params: Promise<{ restaurant: string; branch: string }> }
@@ -13,5 +14,15 @@ export default async function CartPage({ params }: Props) {
   if (!status.entitled) {
     return <SuspendedStorefront brandName={tenant.theme.brandName ?? tenant.restaurant.name} />;
   }
-  return <CartView />;
+  // /cart is directly linkable, so the order-type gate has to stand here too.
+  return (
+    <>
+      <OrderTypeGate
+        branchId={tenant.branch.id}
+        branchName={tenant.branch.name}
+        canDeliver={status.delivery}
+      />
+      <CartView />
+    </>
+  );
 }
