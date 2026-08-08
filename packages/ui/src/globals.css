@@ -45,9 +45,15 @@
     --border: 24 20% 90%;
     --ring: 16 100% 60%;
 
-    --success: 142 70% 42%;
-    --warning: 38 92% 50%;
-    --danger: 0 78% 55%;
+    /* Status hues are used as TEXT on light surfaces (`text-warning` sitting on
+       `bg-warning/15`), so they are tuned for contrast rather than vibrance.
+       The old amber — 38 92% 50% — read at roughly 2:1 on white, which is why
+       the platform status pills were illegible. These clear 4.5:1. The brighter
+       originals live in .dark, where the surface is dark and the contrast maths
+       runs the other way. */
+    --success: 142 72% 29%;
+    --warning: 33 96% 30%;
+    --danger: 0 74% 43%;
 
     --radius: 1rem;
 
@@ -75,6 +81,12 @@
 
     --border: 22 12% 22%;
     --ring: 18 95% 62%;
+
+    /* The pre-contrast-fix light values, which are the right ones here: on a
+       charcoal card a 29%-lightness green is the unreadable one. */
+    --success: 142 70% 48%;
+    --warning: 38 92% 56%;
+    --danger: 0 84% 65%;
   }
 
   * {

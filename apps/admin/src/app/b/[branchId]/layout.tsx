@@ -1,10 +1,11 @@
 import { headers } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
 import { getServerClient } from '@favornoms/database/server';
-import { getEntitlementsForBranch } from '@favornoms/database/queries';
+import { getEntitlementsForBranch, isPlatformAdmin } from '@favornoms/database/queries';
 import { PATHNAME_HEADER } from '@favornoms/database/middleware';
 import { Sidebar } from '@/components/sidebar';
 import { AccessDenied } from '@/components/access-denied';
+import { PlatformAdminBanner } from '@/components/platform-admin-banner';
 
 const ADMIN_ROLES = ['owner', 'manager'] as const;
 
@@ -29,17 +30,25 @@ export default async function BranchLayout({ params, children }: Props) {
     .maybeSingle();
   if (!branch) notFound();
 
-  const { data: membership } = await supabase
-    .from('staff_members')
-    .select('id, role, branch_id')
-    .eq('user_id', userData.user.id)
-    .eq('restaurant_id', branch.restaurant_id)
-    .eq('status', 'active')
-    .in('role', [...ADMIN_ROLES])
-    .or(`branch_id.eq.${branchId},branch_id.is.null`)
-    .maybeSingle();
+  // A platform superadmin opens branches from /platform to support merchants.
+  // They are staff of nobody and their tenants are frequently the lapsed ones,
+  // so both gates below would fire on exactly the branches they need to reach.
+  // Neither read depends on the other, so they go together — this sits in front
+  // of every page in the back office and a serial round trip is paid by all.
+  const [platformAdmin, { data: membership }] = await Promise.all([
+    isPlatformAdmin(supabase),
+    supabase
+      .from('staff_members')
+      .select('id, role, branch_id')
+      .eq('user_id', userData.user.id)
+      .eq('restaurant_id', branch.restaurant_id)
+      .eq('status', 'active')
+      .in('role', [...ADMIN_ROLES])
+      .or(`branch_id.eq.${branchId},branch_id.is.null`)
+      .maybeSingle(),
+  ]);
 
-  if (!membership) {
+  if (!membership && !platformAdmin) {
     return (
       <AccessDenied
         title="No admin access"
@@ -66,9 +75,14 @@ export default async function BranchLayout({ params, children }: Props) {
   // be an infinite loop, so the exemption is load-bearing, not a nicety.
   const planPath = `/b/${branchId}/settings/plan`;
   const pathname = (await headers()).get(PATHNAME_HEADER) ?? '';
-  if (!entitlements.entitled && !pathname.startsWith(planPath)) {
+  if (!platformAdmin && !entitlements.entitled && !pathname.startsWith(planPath)) {
     redirect(`${planPath}?suspended=1`);
   }
+
+  // Membership, not the claim, decides whether this is impersonation: a platform
+  // admin who is also an owner here is just an owner, and banner-ing their own
+  // restaurant would train them to ignore it on the tenants that matter.
+  const impersonating = platformAdmin && !membership;
 
   return (
     <div className="flex min-h-dynamic-screen flex-col lg:flex-row">
@@ -78,7 +92,10 @@ export default async function BranchLayout({ params, children }: Props) {
         branches={branches ?? []}
         entitlements={entitlements}
       />
-      <main className="flex-1 lg:ml-0">{children}</main>
+      <main className="flex-1 lg:ml-0">
+        {impersonating && <PlatformAdminBanner branchName={branch.name} />}
+        {children}
+      </main>
     </div>
   );
 }

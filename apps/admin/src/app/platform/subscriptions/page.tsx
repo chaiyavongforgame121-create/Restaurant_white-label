@@ -10,7 +10,11 @@ import { SubscriptionsManager } from './_components/subscriptions-manager';
 
 export const metadata = { title: 'Subscriptions · Favornoms' };
 
-export default async function PlatformSubscriptionsPage() {
+export default async function PlatformSubscriptionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
   const supabase = await getServerClient();
   const {
     data: { user },
@@ -18,10 +22,11 @@ export default async function PlatformSubscriptionsPage() {
   if (!user) redirect('/login?next=/platform/subscriptions');
   if (!(await isPlatformAdmin(supabase))) return <PlatformAccessDenied />;
 
-  const [rows, catalog] = await Promise.all([
+  const [{ q }, rows, catalog] = await Promise.all([
+    searchParams,
     listRestaurantSubscriptions(supabase),
     listBillingProducts(supabase),
   ]);
 
-  return <SubscriptionsManager rows={rows} catalog={catalog} />;
+  return <SubscriptionsManager rows={rows} catalog={catalog} initialQuery={q ?? ''} />;
 }

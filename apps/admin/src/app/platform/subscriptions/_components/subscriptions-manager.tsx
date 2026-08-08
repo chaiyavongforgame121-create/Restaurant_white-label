@@ -40,11 +40,16 @@ const date = (v: string) => new Date(v).toLocaleDateString('en-US');
 export function SubscriptionsManager({
   rows,
   catalog,
+  initialQuery = '',
 }: {
   rows: RestaurantSubscriptionRow[];
   catalog: BillingProduct[];
+  /** A slug arriving from /platform's "Fix billing" — prefills the search and
+   *  opens that restaurant's editor, so the deep link lands on the control. */
+  initialQuery?: string;
 }) {
-  const [q, setQ] = React.useState('');
+  const [q, setQ] = React.useState(initialQuery);
+  const focusSlug = initialQuery.trim().toLowerCase();
   const filtered = rows.filter((r) => {
     const needle = q.trim().toLowerCase();
     if (!needle) return true;
@@ -76,7 +81,12 @@ export function SubscriptionsManager({
 
       <div className="space-y-4">
         {filtered.map((row) => (
-          <SubscriptionCard key={row.restaurant_id} row={row} catalog={catalog} />
+          <SubscriptionCard
+            key={row.restaurant_id}
+            row={row}
+            catalog={catalog}
+            defaultOpen={focusSlug === row.restaurant_slug.toLowerCase()}
+          />
         ))}
         {filtered.length === 0 && (
           <p className="py-12 text-center text-muted-foreground">No restaurants match.</p>
@@ -89,13 +99,15 @@ export function SubscriptionsManager({
 function SubscriptionCard({
   row,
   catalog,
+  defaultOpen = false,
 }: {
   row: RestaurantSubscriptionRow;
   catalog: BillingProduct[];
+  defaultOpen?: boolean;
 }) {
   const router = useRouter();
   const ent = row.entitlements;
-  const [open, setOpen] = React.useState(false);
+  const [open, setOpen] = React.useState(defaultOpen);
   const [sel, setSel] = React.useState<PackageSelection>(() => currentSelection(ent));
   const [status, setStatus] = React.useState<Status>(
     (STATUSES as readonly string[]).includes(ent.status) ? (ent.status as Status) : 'active',
