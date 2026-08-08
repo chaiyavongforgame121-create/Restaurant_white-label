@@ -14,6 +14,9 @@ interface SheetProps {
   className?: string;
   /** Hide the default close button (for full-screen sheets) */
   hideCloseButton?: boolean;
+  /** Accessible name for the dialog. `title` renders in an inner node, so it
+   *  cannot label the role="dialog" element on its own. */
+  ariaLabel?: string;
 }
 
 // Stack of currently-open sheets so Escape only dismisses the topmost one
@@ -29,6 +32,7 @@ export function Sheet({
   title,
   className,
   hideCloseButton,
+  ariaLabel,
 }: SheetProps) {
   const idRef = React.useRef<symbol | null>(null);
   if (idRef.current === null) idRef.current = Symbol('sheet');
@@ -70,7 +74,7 @@ export function Sheet({
   return (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-[100]" role="dialog" aria-modal="true">
+        <div className="fixed inset-0 z-[100]" role="dialog" aria-modal="true" aria-label={ariaLabel}>
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
