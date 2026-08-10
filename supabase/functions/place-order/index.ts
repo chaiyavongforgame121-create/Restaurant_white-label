@@ -1,4 +1,10 @@
-// place-order v9.4 — US pivot + modifiers + combos + happy-hour + schedules + gift cards
+// place-order v9.5 — US pivot + modifiers + combos + happy-hour + schedules + gift cards
+//   v9.5 (2026-08-10): loyalty redemption is brand-scope aware. The balance
+//        check and debit previously filtered loyalty_points by the ordering
+//        branch_id, but brand-scope balances (the locked default) live at
+//        branch_id NULL + restaurant_id, so redemption silently did nothing.
+//        The ledger insert also used type 'redeem', which violates the
+//        loyalty_transactions type check ('redeemed').
 //                  + distance-based delivery fees (Mapbox location backbone, Phase 1)
 //                  + payment-method gating + structured drop-off.
 //   v9.4 (2026-08-06): `channel` is validated against the enum (400 invalid_channel)
@@ -120,6 +126,26 @@ Deno.serve(async (req: Request) => {
     return json(400, { error: 'table_required' });
   }
   if (payload.payment_method !== 'card' && payload.payment_method !== 'cash') return json(400, { error: 'invalid_payment_method' });
+
+  // Rate limiting (v9.5): this endpoint is public (verify_jwt=false), so cap
+  // scripted abuse without throttling a busy counter. Fail-open on RPC error —
+  // a rate-limit outage must never block real orders.
+  // - per IP: 60 orders / 10 min (a flat-out POS at one order per 10s stays under)
+  // - per phone: 15 orders / 10 min, skipping the counter walk-in sentinel
+  const clientIp = (req.headers.get('x-forwarded-for') ?? 'unknown').split(',')[0].trim();
+  const phoneDigits = String(payload.customer_phone).replace(/\D/g, '');
+  const rlChecks: Array<{ key: string; max: number }> = [
+    { key: `order:ip:${clientIp}`, max: 60 },
+    ...(phoneDigits && phoneDigits !== '10000000000'
+      ? [{ key: `order:phone:${payload.branch_id}:${phoneDigits}`, max: 15 }]
+      : []),
+  ];
+  for (const rl of rlChecks) {
+    const { data: verdict } = await admin.rpc('check_rate_limit', { p_bucket_key: rl.key, p_max_count: rl.max, p_window_seconds: 600 });
+    if (verdict && (verdict as { allowed?: boolean }).allowed === false) {
+      return json(429, { error: 'rate_limited', retry_after_seconds: 600 });
+    }
+  }
 
   // Structured drop-off (delivery only). dropoff_pref is required; the whitelisted
   // object is merged into delivery_address later so it survives a saved-address rebuild.
@@ -397,10 +423,17 @@ Deno.serve(async (req: Request) => {
   }
 
   // Loyalty redemption: stored points are integer "cents-off". 100 pts = $1.
+  // Balances are brand-scoped (branch_id NULL + restaurant_id) when the
+  // restaurant's loyalty_scope is 'brand' — the locked default.
   const redeem = Math.max(0, Math.floor(payload.redeem_points ?? 0));
+  let loyaltyBrandScope = false;
   if (redeem > 0) {
     if (!customerId) return json(400, { error: 'redeem_requires_auth' });
-    const { data: pts } = await admin.from('loyalty_points').select('points_balance').eq('branch_id', payload.branch_id).eq('customer_id', customerId).maybeSingle();
+    const { data: rest } = await admin.from('restaurants').select('loyalty_scope').eq('id', branch.restaurant_id).maybeSingle();
+    loyaltyBrandScope = rest?.loyalty_scope === 'brand';
+    let q = admin.from('loyalty_points').select('points_balance').eq('customer_id', customerId);
+    q = loyaltyBrandScope ? q.eq('restaurant_id', branch.restaurant_id).is('branch_id', null) : q.eq('branch_id', payload.branch_id);
+    const { data: pts } = await q.maybeSingle();
     const balance = pts?.points_balance ?? 0;
     const maxRedeem = Math.min(balance, Math.floor(subtotal * 50));
     discountAmount = Math.min(redeem, maxRedeem);
@@ -509,10 +542,16 @@ Deno.serve(async (req: Request) => {
   }
 
   if (discountAmount > 0 && customerId) {
-    const balanceBefore = await admin.from('loyalty_points').select('points_balance, lifetime_spent').eq('branch_id', payload.branch_id).eq('customer_id', customerId).maybeSingle();
+    let balQ = admin.from('loyalty_points').select('points_balance, lifetime_spent').eq('customer_id', customerId);
+    balQ = loyaltyBrandScope ? balQ.eq('restaurant_id', branch.restaurant_id).is('branch_id', null) : balQ.eq('branch_id', payload.branch_id);
+    const balanceBefore = await balQ.maybeSingle();
     const newBalance = Math.max(0, (balanceBefore.data?.points_balance ?? 0) - discountAmount);
-    await admin.from('loyalty_points').update({ points_balance: newBalance, lifetime_spent: (balanceBefore.data?.lifetime_spent ?? 0) + discountAmount, updated_at: new Date().toISOString() }).eq('branch_id', payload.branch_id).eq('customer_id', customerId);
-    await admin.from('loyalty_transactions').insert({ branch_id: payload.branch_id, customer_id: customerId, points: -discountAmount, balance_after: newBalance, type: 'redeem', reference_type: 'order', reference_id: order.id, description: `Redeemed ${discountAmount} pts on order ${order.order_number}` });
+    let updQ = admin.from('loyalty_points').update({ points_balance: newBalance, lifetime_spent: (balanceBefore.data?.lifetime_spent ?? 0) + discountAmount, updated_at: new Date().toISOString() }).eq('customer_id', customerId);
+    updQ = loyaltyBrandScope ? updQ.eq('restaurant_id', branch.restaurant_id).is('branch_id', null) : updQ.eq('branch_id', payload.branch_id);
+    const { error: debitErr } = await updQ;
+    if (debitErr) console.error('loyalty_debit_failed', debitErr);
+    const { error: ledgerErr } = await admin.from('loyalty_transactions').insert({ branch_id: loyaltyBrandScope ? null : payload.branch_id, restaurant_id: branch.restaurant_id, customer_id: customerId, points: -discountAmount, balance_after: newBalance, type: 'redeemed', reference_type: 'order', reference_id: order.id, description: `Redeemed ${discountAmount} pts on order ${order.order_number}` });
+    if (ledgerErr) console.error('loyalty_ledger_failed', ledgerErr);
   }
 
   const { data: payment } = await admin.from('payments').insert({ order_id: order.id, branch_id: payload.branch_id, amount: total, method: payload.payment_method, status: 'pending', gateway: payload.payment_method === 'cash' ? null : 'stripe', gateway_metadata: { pending: true } }).select('id').single();
