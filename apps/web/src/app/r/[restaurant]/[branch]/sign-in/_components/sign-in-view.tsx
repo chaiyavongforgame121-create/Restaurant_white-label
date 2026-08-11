@@ -1,12 +1,13 @@
 'use client';
 
 import * as React from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { ChefHat, Lock, Mail, Phone, ShieldCheck } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Button, Card } from '@favornoms/ui';
 import { currentOrigin, safeNext } from '@favornoms/shared';
+import { useAuth } from '@/components/auth/use-auth';
 
 interface Props {
   branchId: string;
@@ -47,6 +48,15 @@ export function SignInView({ branchId, brandName }: Props) {
   // is no hydration mismatch.
   const rawNext = searchParams.get('next');
   const next = React.useMemo(() => safeNext(rawNext, currentOrigin()), [rawNext]);
+  const pathname = usePathname();
+  // Where to send the diner when there is no explicit `next`: the branch home, NEVER this
+  // sign-in page itself. Opening /sign-in directly and using Google (whose `next` defaults
+  // to the current path) would otherwise bounce straight back here after a successful login.
+  const branchBase = React.useMemo(() => {
+    const m = pathname?.match(/^(\/r\/[^/]+\/[^/]+)/);
+    return m?.[1] ?? '/';
+  }, [pathname]);
+  const { user } = useAuth();
   const callbackError = searchParams.get('error');
   const [stage, setStage] = React.useState<'phone' | 'email' | 'email_sent'>('phone');
   // Login vs Register is explicit on the phone tab so the edge function knows which path to
@@ -72,12 +82,18 @@ export function SignInView({ branchId, brandName }: Props) {
     return `+${digits}`;
   };
 
-  const goNext = () => {
-    if (next) {
-      router.replace(next);
-    } else {
-      router.back();
+  // Already signed in — e.g. an OAuth or magic-link round-trip landed back here because its
+  // `next` defaulted to this page. Move the diner on instead of showing a login form they no
+  // longer need. (This is what actually fixes "Google worked but bounced me back to sign-in".)
+  React.useEffect(() => {
+    if (user) {
+      router.replace(next ?? branchBase);
+      router.refresh();
     }
+  }, [user, next, branchBase, router]);
+
+  const goNext = () => {
+    router.replace(next ?? branchBase);
     router.refresh();
   };
 
@@ -144,7 +160,7 @@ export function SignInView({ branchId, brandName }: Props) {
     setError(null);
     setGoogleLoading(true);
     const supabase = getBrowserClient();
-    const target = next ?? window.location.pathname;
+    const target = next ?? branchBase;
     const { error: oauthErr } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
@@ -164,7 +180,7 @@ export function SignInView({ branchId, brandName }: Props) {
     setLoading(true);
     const supabase = getBrowserClient();
     const redirectTo = typeof window !== 'undefined'
-      ? `${window.location.origin}${next ?? window.location.pathname}`
+      ? `${window.location.origin}${next ?? branchBase}`
       : undefined;
     const { error } = await supabase.auth.signInWithOtp({
       email: emailAddr.trim().toLowerCase(),
