@@ -54,6 +54,7 @@
     "deliveryAddress": "Delivery address",
     "contactInfo": "Contact information",
     "paymentMethod": "Payment method",
+    "dineInPayAtRestaurant": "No payment needed now — you'll settle up at the restaurant.",
     "name": "Full name",
     "namePlaceholder": "e.g. Jordan Smith",
     "phone": "Phone number",
@@ -82,6 +83,11 @@
       "denied": "Location permission was denied — drag the map to set your spot.",
       "unavailable": "Couldn't find your location — drag the map instead.",
       "timeout": "Locating timed out — try again or drag the map."
+    },
+    "loyalty": {
+      "verifyRequired": "To spend loyalty points, verify your email or link your Google account first — it keeps your points safe. You can still order without redeeming.",
+      "verifyHint": "Verify your email or link Google to spend points — it's how we keep them yours.",
+      "verifyCta": "Verify or link your account"
     },
     "errors": {
       "nameRequired": "Please enter your name.",

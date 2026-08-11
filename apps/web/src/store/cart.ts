@@ -36,6 +36,11 @@ export interface ComboPick {
 
 export type OrderChannel = 'delivery' | 'pickup' | 'dine_in';
 
+// place-order's r2. The cart subtotal feeds the loyalty cap (`subtotal * 50`),
+// so a float tail here — 0.25 + 0.33 sums to 0.5800000000000001 — lets the
+// slider offer a point the server then refuses to honour.
+const r2 = (n: number) => Math.round(n * 100) / 100;
+
 interface CartState {
   branchId: string | null;
   lines: CartLine[];
@@ -166,11 +171,15 @@ export const useCart = create<CartState>()(
                 ),
         }),
       clear: () => set({ lines: [], notes: '' }),
+      // Rounded exactly the way place-order rounds: unit price with modifiers,
+      // then the line, then the sum. Anything looser drifts off the server's cent.
       subtotal: () =>
-        get().lines.reduce((sum, l) => {
-          const modDelta = (l.modifiers ?? []).reduce((s, m) => s + Number(m.price_delta ?? 0), 0);
-          return sum + (l.unitPrice + modDelta) * l.quantity;
-        }, 0),
+        r2(
+          get().lines.reduce((sum, l) => {
+            const modDelta = (l.modifiers ?? []).reduce((s, m) => s + Number(m.price_delta ?? 0), 0);
+            return sum + r2(r2(l.unitPrice + modDelta) * l.quantity);
+          }, 0),
+        ),
       itemCount: () => get().lines.reduce((sum, l) => sum + l.quantity, 0),
     }),
     {

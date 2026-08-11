@@ -10,12 +10,22 @@ import { useTranslations } from 'next-intl';
 import { formatCurrency } from '@favornoms/shared';
 import { Button, Card, EmptyState, IconButton, QuantityStepper } from '@favornoms/ui';
 import { useCart } from '@/store/cart';
+import { useAuth } from '@/components/auth/use-auth';
 
 export function CartView() {
   const t = useTranslations();
   const router = useRouter();
   const params = useParams<{ restaurant: string; branch: string }>();
   const base = `/r/${params.restaurant}/${params.branch}`;
+  const { user, loading: authLoading } = useAuth();
+  // Login is required before checkout. Definitely-signed-out → sign-in with next
+  // back to checkout; while the session is still resolving (or signed in) fall
+  // through to checkout — checkout-view is the hard backstop, so a brief loading
+  // window must never bounce a member to sign-in.
+  const checkoutHref =
+    !authLoading && !user
+      ? `${base}/sign-in?next=${encodeURIComponent(`${base}/checkout`)}`
+      : `${base}/checkout`;
 
   // useCart.persist can be undefined during SSR — start false and confirm hydration
   // in the effect (client-only), matching checkout-view / app-shell. Reading
@@ -179,21 +189,18 @@ export function CartView() {
       )}
 
       {lines.length > 0 && (
-        <>
-          <GuestSignInHint base={base} />
-          <motion.div
-            initial={{ y: 60, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.1 }}
-            className="sticky inset-x-0 bottom-16 mt-6 pb-2 lg:bottom-0 lg:py-4"
-          >
-            <Link href={`${base}/checkout`}>
-              <Button variant="gradient" size="xl" fullWidth>
-                {t('cart.checkout')} · {formatCurrency(subtotal)}
-              </Button>
-            </Link>
-          </motion.div>
-        </>
+        <motion.div
+          initial={{ y: 60, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.1 }}
+          className="sticky inset-x-0 bottom-16 mt-6 pb-2 lg:bottom-0 lg:py-4"
+        >
+          <Link href={checkoutHref}>
+            <Button variant="gradient" size="xl" fullWidth>
+              {t('cart.checkout')} · {formatCurrency(subtotal)}
+            </Button>
+          </Link>
+        </motion.div>
       )}
 
     </div>
@@ -205,37 +212,6 @@ function Row({ label, value, bold }: { label: string; value: string; bold?: bool
     <div className={`flex items-center justify-between ${bold ? 'text-base font-bold' : ''}`}>
       <dt>{label}</dt>
       <dd className={bold ? 'font-display text-xl text-primary' : ''}>{value}</dd>
-    </div>
-  );
-}
-
-function GuestSignInHint({ base }: { base: string }) {
-  const [signedIn, setSignedIn] = React.useState<boolean | null>(null);
-
-  React.useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const { getBrowserClient } = await import('@favornoms/database/client');
-      const supabase = getBrowserClient();
-      const { data } = await supabase.auth.getUser();
-      if (!cancelled) setSignedIn(!!data.user);
-    })();
-    return () => { cancelled = true; };
-  }, []);
-
-  if (signedIn !== false) return null;
-  return (
-    <div className="mt-5 rounded-2xl border border-border bg-muted/40 p-4 text-sm">
-      <p>
-        <strong>Continuing as guest.</strong>{' '}
-        <Link
-          href={`${base}/sign-in?next=${encodeURIComponent(`${base}/checkout`)}`}
-          className="text-primary underline"
-        >
-          Sign in
-        </Link>{' '}
-        to earn loyalty points and reorder with one tap.
-      </p>
     </div>
   );
 }

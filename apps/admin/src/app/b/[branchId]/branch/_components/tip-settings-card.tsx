@@ -48,7 +48,8 @@ export function TipSettingsCard({ branchId, settings }: Props) {
     setSaving(true);
     setError(null);
     // Presets are no longer merchant-editable — checkout uses a fixed default
-    // (0/5/10/15). Persist only the worker/house split; keep qr_ordering aligned
+    // (10/15/20/25 plus Custom and No tip) and serializeTipConfig drops them, so
+    // this write only persists the worker/house split; keep qr_ordering aligned
     // with dine_in.
     const next: TipConfig = { ...config };
     next.qr_ordering = { ...next.dine_in };

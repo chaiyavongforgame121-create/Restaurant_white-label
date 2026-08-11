@@ -1,6 +1,15 @@
 // Minimal service worker — production should use Workbox per responsive-mobile-first.md §13.3
-const CACHE_VERSION = 'favornoms-web-v1';
-const CACHE_FILES = ['/', '/manifest.webmanifest', '/icon.svg'];
+// v2 — install icons landed; bump forces returning users to re-fetch the manifest.
+// Every entry below must exist: `addAll` rejects atomically on a single 404 and
+// the whole service worker then fails to install.
+const CACHE_VERSION = 'favornoms-web-v2';
+const CACHE_FILES = [
+  '/',
+  '/manifest.webmanifest',
+  '/icon.svg',
+  '/icon-192.png',
+  '/icon-512.png',
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -33,8 +42,9 @@ self.addEventListener('push', (event) => {
   const title = data.title || 'Favornoms';
   const options = {
     body: data.body || '',
-    icon: '/icon.svg',
-    badge: '/icon.svg',
+    // PNG, not SVG — Android notification icons do not render SVG.
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
     tag: data.tag,
     data: { url: data.url || '/' },
   };
@@ -62,8 +72,14 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
 
-  // Network-first for API + HTML navigation
-  if (url.pathname.startsWith('/api/') || req.mode === 'navigate') {
+  // Network-first for API + HTML navigation + manifests. Manifests are
+  // per-tenant and carry live branding, so they must not go stale in the
+  // cache-first bucket until the next CACHE_VERSION bump.
+  if (
+    url.pathname.startsWith('/api/') ||
+    url.pathname.endsWith('.webmanifest') ||
+    req.mode === 'navigate'
+  ) {
     event.respondWith(
       fetch(req)
         .then((res) => {

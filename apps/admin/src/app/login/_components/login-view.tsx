@@ -7,15 +7,16 @@ import { motion } from 'framer-motion';
 import { Building2, Mail, ShieldCheck } from 'lucide-react';
 import { Button, Card } from '@favornoms/ui';
 import { getBrowserClient } from '@favornoms/database/client';
-
-function safeNext(next: string | undefined | null): string {
-  if (!next || !next.startsWith('/') || next.startsWith('//')) return '/';
-  return next;
-}
+import { currentOrigin, safeNext } from '@favornoms/shared';
 
 export function LoginView({ next }: { next: string }) {
   const router = useRouter();
-  const target = safeNext(next);
+  // Shared open-redirect guard — see @favornoms/shared. `next` feeds router.replace() on
+  // SIGNED_IN and the magic-link emailRedirectTo below, so a hostile value would hand a
+  // freshly-minted *staff* session to an attacker's page. Falls back to the dashboard root.
+  // During prerender currentOrigin() is '' and this resolves to '/', but target is never
+  // rendered, so hydration can't mismatch.
+  const target = safeNext(next, currentOrigin()) ?? '/';
   const [email, setEmail] = React.useState('');
   const [sent, setSent] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);

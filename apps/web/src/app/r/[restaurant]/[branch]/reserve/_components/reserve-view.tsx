@@ -82,7 +82,7 @@ export function ReserveView({ base, branchId, branchName }: Props) {
             {branchName} · {when} · table for {partySize}
           </p>
           <Card className="mt-6 p-4 text-left text-sm">
-            <p>We&apos;ll send a confirmation to {phone}. The restaurant may reach out if your time isn&apos;t available.</p>
+            <p>Your request was sent to the restaurant. They may call {phone} if your time isn&apos;t available.</p>
           </Card>
           <Button variant="gradient" size="lg" className="mt-6" fullWidth onClick={() => router.push(base)}>
             Back to menu
@@ -181,7 +181,7 @@ export function ReserveView({ base, branchId, branchName }: Props) {
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               autoComplete="tel"
-              placeholder="08x-xxx-xxxx"
+              placeholder="(555) 123-4567"
               className="focus-ring w-full rounded-xl border border-border bg-background px-4 py-3 text-base"
             />
           </label>

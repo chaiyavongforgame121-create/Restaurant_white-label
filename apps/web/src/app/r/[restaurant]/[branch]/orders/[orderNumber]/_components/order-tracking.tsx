@@ -12,11 +12,19 @@ import { Badge, Button, Card, IconButton } from '@favornoms/ui';
 import { DeliveryChat } from './delivery-chat';
 import { OrderActions } from './order-actions';
 
-const steps = [
+// Pickup and dine-in orders jump ready → completed; showing them a bike stage
+// they can never reach reads like the order is stuck. Delivery keeps all 5.
+const DELIVERY_STEPS = [
   { key: 'confirmed', icon: CheckCircle2 },
   { key: 'preparing', icon: ChefHat },
   { key: 'ready', icon: Receipt },
   { key: 'out_for_delivery', icon: Bike },
+  { key: 'completed', icon: MapPin },
+] as const;
+const NON_DELIVERY_STEPS = [
+  { key: 'confirmed', icon: CheckCircle2 },
+  { key: 'preparing', icon: ChefHat },
+  { key: 'ready', icon: Receipt },
   { key: 'completed', icon: MapPin },
 ] as const;
 
@@ -30,6 +38,7 @@ type OrderRow = {
   customer_phone?: string | null;
   created_at: string;
   order_items: Array<{ item_name: string; quantity: number }>;
+  payments?: Array<{ method: string; status: string }>;
   deliveries: Array<{
     id: string;
     status: string;
@@ -88,6 +97,8 @@ export function OrderTracking({ initialOrder, branchId, branchLocation }: Props)
     };
   }, [order.id]);
 
+  const steps = order.channel === 'delivery' ? DELIVERY_STEPS : NON_DELIVERY_STEPS;
+
   // Find current step by status
   const statusIndex = React.useMemo(() => {
     // 'delivered' is a terminal delivery status with no distinct step — map it to the final
@@ -96,7 +107,7 @@ export function OrderTracking({ initialOrder, branchId, branchLocation }: Props)
     const idx = steps.findIndex((s) => s.key === key);
     // 'pending' (pre-confirm) shows step 0 grey, fall back to 0
     return Math.max(idx, 0);
-  }, [order.status]);
+  }, [order.status, steps]);
 
   const Icon = steps[statusIndex]?.icon ?? CheckCircle2;
   const delivery = order.deliveries[0];
@@ -193,7 +204,13 @@ export function OrderTracking({ initialOrder, branchId, branchLocation }: Props)
             })}
           </ol>
 
-          {order.status === 'pending' && <StripePayment orderId={order.id} />}
+          {/* Card orders only — a cash order sitting in 'pending' is normal
+              (staff confirm it) and must not show a "Pay with card" box. Guests
+              can't read their payments row (RLS), but they also can't create a
+              payment intent, so hiding the box for them fixes a dead end. */}
+          {order.status === 'pending' && order.payments?.some((p) => p.method === 'card') && (
+            <StripePayment orderId={order.id} />
+          )}
 
           {delivery?.driver_id && (
             <motion.div

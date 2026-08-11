@@ -21,6 +21,7 @@ export default async function OrderDetailPage({ params }: Props) {
   const normalized = {
     ...order,
     order_items: order.order_items ?? [],
+    payments: Array.isArray(order.payments) ? order.payments : order.payments ? [order.payments] : [],
     deliveries: Array.isArray(order.deliveries) ? order.deliveries : order.deliveries ? [order.deliveries] : [],
   };
   return (

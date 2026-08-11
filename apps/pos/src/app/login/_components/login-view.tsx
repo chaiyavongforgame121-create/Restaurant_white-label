@@ -6,14 +6,10 @@ import { motion } from 'framer-motion';
 import { ChefHat, Mail, ShieldCheck } from 'lucide-react';
 import { Button, Card } from '@favornoms/ui';
 import { getBrowserClient } from '@favornoms/database/client';
+import { currentOrigin, safeNext } from '@favornoms/shared';
 
 interface Props {
   next: string;
-}
-
-function safeNext(next: string | undefined | null): string {
-  if (!next || !next.startsWith('/') || next.startsWith('//')) return '/';
-  return next;
 }
 
 export function LoginView({ next }: Props) {
@@ -23,7 +19,10 @@ export function LoginView({ next }: Props) {
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  const target = safeNext(next);
+  // Shared open-redirect guard — see @favornoms/shared. `next` feeds router.replace() on
+  // SIGNED_IN and the magic-link emailRedirectTo below, so a hostile value would hand a
+  // freshly-minted *staff* session to an attacker's page. Falls back to the app root.
+  const target = safeNext(next, currentOrigin()) ?? '/';
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
