@@ -596,6 +596,19 @@ export function CheckoutView({
       </div>
     );
   }
+  // An order just went through: placeOrder cleared the cart and we're navigating to the
+  // receipt. `submitting` stays true on success (only the error path resets it), so use it
+  // to show a "redirecting" state here instead of flashing "Your cart is empty" in the gap
+  // between clear() and the route change.
+  if (submitting && lines.length === 0) {
+    return (
+      <div className="container max-w-2xl pt-16 text-center">
+        <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-primary/25 border-t-primary" />
+        <h1 className="mt-5 font-display text-2xl font-bold">Order placed!</h1>
+        <p className="mt-1 text-muted-foreground">Taking you to your order…</p>
+      </div>
+    );
+  }
   if (lines.length === 0) {
     return (
       <div className="container max-w-2xl pt-12 text-center">
