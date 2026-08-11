@@ -19,8 +19,12 @@ export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
 
   // Apex/dev hosts pass through to the regular /r/[restaurant]/[branch] routing.
-  // Static and Next internals are excluded by the matcher below.
-  if (host && !APEX_HOSTS.has(host) && !path.startsWith('/r/') && !path.startsWith('/api/')) {
+  // Static and Next internals are excluded by the matcher below. /auth/ is exempt too:
+  // the OAuth callback is a fixed, tenant-less path on every host.
+  if (
+    host && !APEX_HOSTS.has(host)
+    && !path.startsWith('/r/') && !path.startsWith('/api/') && !path.startsWith('/auth/')
+  ) {
     const resolved = await resolveDomain(host);
     if (resolved && resolved.branch) {
       const url = request.nextUrl.clone();

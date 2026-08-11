@@ -25,11 +25,16 @@ export function PushSubscriber() {
 
     void (async () => {
       const supabase = getBrowserClient();
-      const { data: customer } = await supabase
+      // A user can have customers rows at several restaurants (brand-scoped
+      // identity) — maybeSingle() errors on >1 row and would silently skip
+      // push registration everywhere. Any one row works as the recipient.
+      const { data: customerRows } = await supabase
         .from('customers')
         .select('id')
         .eq('user_id', user.id)
-        .maybeSingle();
+        .order('created_at')
+        .limit(1);
+      const customer = customerRows?.[0];
       if (!customer?.id) return;
       await ensurePushSubscription(supabase, {
         vapidPublicKey: vapidKey,

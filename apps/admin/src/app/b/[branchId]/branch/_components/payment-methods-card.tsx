@@ -17,6 +17,10 @@ import { Button, Card } from '@favornoms/ui';
 // ungated (it is the merchant's own row), so leaving the switch live would let
 // a restaurant advertise a payment method that place-order then refuses with a
 // 403 at checkout — the worst possible place to discover it.
+//
+// Scope: DELIVERY and PICKUP only. Dine-in checkout has no payment step at all
+// (the diner settles at the restaurant), and place-order exempts dine-in from
+// this matrix — so nothing here can block a dine-in order.
 
 interface Props {
   branchId: string;
@@ -68,7 +72,9 @@ export function PaymentMethodsCard({ branchId, settings, canUseCard }: Props) {
   const [error, setError] = React.useState<string | null>(null);
 
   // With card locked off, "no method enabled" would fire for every branch that
-  // has cash off — which is the real warning, so it still applies.
+  // has cash off — which is the real warning, so it still applies. The copy names
+  // delivery and pickup explicitly: a dine-in-only restaurant is unaffected, and
+  // telling it that "customers can't order" would be plain wrong.
   const deadModes = MODES.filter((m) => !matrix[m.key].cash && !matrix[m.key].card);
 
   const toggle = (mode: Mode, method: Method) => {
@@ -103,6 +109,10 @@ export function PaymentMethodsCard({ branchId, settings, canUseCard }: Props) {
         Choose which payment methods customers can pick for ASAP and scheduled orders. Card
         payments are collected by you at handoff with your own reader — nothing is charged online
         yet. Orders your staff take at the counter or POS are not affected.
+      </p>
+      <p className="mt-2 text-sm text-muted-foreground">
+        This covers delivery and pickup only. Dine-in customers skip the payment step entirely and
+        settle with you at the restaurant.
       </p>
 
       <div className="mt-4 rounded-xl border border-border p-3">
@@ -165,8 +175,8 @@ export function PaymentMethodsCard({ branchId, settings, canUseCard }: Props) {
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
           <span>
             {deadModes.map((m) => m.label).join(' and ')} orders have no payment method enabled —
-            customers won&apos;t be able to place {deadModes.length > 1 ? 'those' : 'that kind of'}{' '}
-            order{deadModes.length > 1 ? 's' : ''}.
+            customers won&apos;t be able to place delivery or pickup orders{' '}
+            {deadModes.length > 1 ? 'either way' : 'that way'}. Dine-in is not affected.
           </span>
         </p>
       )}

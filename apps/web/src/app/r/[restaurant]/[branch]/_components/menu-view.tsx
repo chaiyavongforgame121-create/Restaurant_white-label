@@ -5,7 +5,19 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Bike, Clock, MapPin, Search, ShoppingBag, Star, Store, Utensils, X } from 'lucide-react';
+import {
+  Bike,
+  ChefHat,
+  Clock,
+  MapPin,
+  Search,
+  ShoppingBag,
+  SlidersHorizontal,
+  Star,
+  Store,
+  Utensils,
+  X,
+} from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import {
   formatCurrency,
@@ -23,10 +35,10 @@ import {
   cn,
   DietaryBadge,
   EmptyState,
-  IconButton,
   Segmented,
 } from '@favornoms/ui';
 import { useCart, type OrderChannel } from '@/store/cart';
+import { useRequireAuth } from '@/components/auth/require-auth';
 import type { Locale } from '@/i18n/config';
 import { MenuItemSheet } from './menu-item-sheet';
 import { OrderTypeGate } from './order-type-gate';
@@ -78,6 +90,7 @@ interface MenuViewProps {
 
 export function MenuView({ branch, categories, items, isOpen = true, reviews, combos = [], happyHours = [], menuLayout = 'grid4', menuCardStyle = 'standard', logoUrl, heroUrl, heroTitle, heroSubtitle, canDeliver = false }: MenuViewProps) {
   const t = useTranslations();
+  const params = useParams<{ restaurant: string; branch: string }>();
   const [search, setSearch] = React.useState('');
   const [activeCategory, setActiveCategory] = React.useState<string>('all');
   const [activeItem, setActiveItem] = React.useState<MenuItem | null>(null);
@@ -106,6 +119,11 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
   const setChannel = useCart((s) => s.setChannel);
   // Reconciling a stale persisted channel is OrderTypeGate's job — it is the
   // only place that can wait for rehydration before deciding.
+
+  // One auth gate for the whole menu: instantiated once here and threaded down to
+  // the quick-add buttons and the combo row. Calling the hook per MenuCard would
+  // fire useAuth's getUser() once per item — dozens of requests on a big menu.
+  const { requireAuthThen } = useRequireAuth();
 
   const toggleDietary = (tag: string) => {
     setDietaryFilters((curr) => {
@@ -169,6 +187,7 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
         address={branch.address}
         logoUrl={logoUrl}
         heroUrl={heroUrl}
+        reserveHref={`/r/${params.restaurant}/${params.branch}/reserve`}
       />
 
       {!isOpen && (
@@ -184,7 +203,7 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
       )}
 
       {combos.length > 0 && (
-        <CombosRow combos={combos} branchId={branch.id} />
+        <CombosRow combos={combos} branchId={branch.id} requireAuthThen={requireAuthThen} />
       )}
 
       {happyHours.length > 0 && (
@@ -208,31 +227,51 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
           <RecommendedRow items={recommended} onOpen={setActiveItem} />
         )}
 
-        {availableDietary.length > 0 && (
-          <DietaryFilters
-            available={availableDietary}
-            selected={dietaryFilters}
-            onToggle={toggleDietary}
-            onClear={() => setDietaryFilters(new Set())}
-          />
-        )}
+        {/* Browse region — filters, category chips and the grid live in ONE
+            wrapper so the sticky chip bar stays pinned for the whole scroll of
+            the grid instead of unpinning at the next sibling. Deliberately a
+            plain toolbar, not a tinted band: it must not read as another
+            "special" section like the chef's picks above it. */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2.5">
+            <span aria-hidden className="h-6 w-1 shrink-0 rounded-full bg-gradient-warm" />
+            <h2 className="font-display text-xl font-semibold tracking-tight sm:text-2xl">
+              {t('menu.title')}
+            </h2>
+          </div>
 
-        <CategoryTabs
-          categories={categories}
-          active={activeCategory}
-          onChange={setActiveCategory}
-          counts={counts}
-        />
+          {availableDietary.length > 0 && (
+            <DietaryFilters
+              available={availableDietary}
+              selected={dietaryFilters}
+              onToggle={toggleDietary}
+              onClear={() => setDietaryFilters(new Set())}
+            />
+          )}
 
-        <MenuGrid items={filtered} onOpen={setActiveItem} layout={menuLayout} cardStyle={menuCardStyle} />
+          {/* Full-bleed: the negative margins cancel the container padding so the
+              bar's own background hides the cards scrolling under it. `top-14`
+              is the AppShell header's `h-14`; z-20 keeps it under that header
+              (z-40) and under the floating cart bar (z-30). */}
+          <div className="sticky top-14 z-20 -mx-4 border-b border-border/60 bg-background/95 pb-1.5 pt-2.5 backdrop-blur-xl sm:-mx-6 lg:-mx-8">
+            <CategoryTabs
+              categories={categories}
+              active={activeCategory}
+              onChange={setActiveCategory}
+              counts={counts}
+            />
+          </div>
 
-        {filtered.length === 0 && (
-          <EmptyState
-            icon={<Utensils className="h-7 w-7" />}
-            title={t('menu.noResults')}
-            description={t('menu.search')}
-          />
-        )}
+          <MenuGrid items={filtered} onOpen={setActiveItem} layout={menuLayout} cardStyle={menuCardStyle} requireAuthThen={requireAuthThen} />
+
+          {filtered.length === 0 && (
+            <EmptyState
+              icon={<Utensils className="h-7 w-7" />}
+              title={t('menu.noResults')}
+              description={t('menu.search')}
+            />
+          )}
+        </div>
       </section>
 
       <FloatingCartBar />
@@ -250,12 +289,14 @@ function Hero({
   address,
   logoUrl,
   heroUrl,
+  reserveHref,
 }: {
   title: string;
   subtitle: string;
   address: string;
   logoUrl?: string | null;
   heroUrl?: string | null;
+  reserveHref?: string;
 }) {
   return (
     <section className="relative overflow-hidden">
@@ -275,11 +316,20 @@ function Hero({
             <p className="mt-3 max-w-prose text-base text-muted-foreground md:text-lg">
               {subtitle}
             </p>
-            {address ? (
+            {(address || reserveHref) ? (
               <div className="mt-5 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                <Badge variant="outline" className="gap-1.5 px-3 py-1">
-                  <MapPin className="h-3.5 w-3.5" /> {address}
-                </Badge>
+                {address ? (
+                  <Badge variant="outline" className="gap-1.5 px-3 py-1">
+                    <MapPin className="h-3.5 w-3.5" /> {address}
+                  </Badge>
+                ) : null}
+                {reserveHref ? (
+                  <Link href={reserveHref} className="focus-ring">
+                    <Badge variant="outline" className="gap-1.5 px-3 py-1 transition-colors hover:bg-muted">
+                      <Utensils className="h-3.5 w-3.5" /> Reserve a table
+                    </Badge>
+                  </Link>
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -368,12 +418,24 @@ function ChannelAndSearch({
 function RecommendedRow({ items, onOpen }: { items: MenuItem[]; onOpen: (i: MenuItem) => void }) {
   const t = useTranslations('menu');
   return (
-    <section>
-      <div className="mb-3 flex items-baseline justify-between">
-        <h2 className="font-display text-2xl font-semibold tracking-tight">{t('recommended')}</h2>
-        <span className="text-sm text-muted-foreground">{t('popular')}</span>
+    // Curated band — same idiom as HappyHourCard (rounded-3xl, hairline border,
+    // 5–10% tint) so the page keeps one visual family, but tinted `accent`
+    // instead of `primary` so "chef's picks" reads apart from the promos above
+    // and from the untinted browse region below.
+    <section className="relative rounded-3xl border border-accent/30 bg-accent/10 p-4 shadow-soft sm:p-5">
+      <span aria-hidden className="absolute inset-x-6 top-0 h-1 rounded-b-full bg-gradient-warm" />
+      <div className="flex items-center gap-3">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-accent text-accent-foreground shadow-soft">
+          <ChefHat className="h-5 w-5" aria-hidden />
+        </span>
+        <div className="min-w-0">
+          <h2 className="font-display text-xl font-semibold leading-tight tracking-tight sm:text-2xl">
+            {t('recommended')}
+          </h2>
+          <p className="text-xs text-muted-foreground sm:text-sm">{t('popular')}</p>
+        </div>
       </div>
-      <div className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 scrollbar-hide lg:mx-0 lg:px-0">
+      <div className="-mx-1 mt-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-1 pb-2 scrollbar-hide">
         {items.map((item) => (
           <button
             key={item.id}
@@ -449,9 +511,12 @@ function CategoryTabs({
   ];
 
   return (
+    // Rendered inside the full-bleed sticky bar, which already carries the
+    // negative margins — the padding here re-aligns the chips with the grid
+    // while letting the scroll region run to the screen edge.
     <nav
       aria-label="Categories"
-      className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 scrollbar-hide lg:mx-0 lg:px-0"
+      className="flex gap-2 overflow-x-auto px-4 pb-1 scrollbar-hide sm:px-6 lg:px-8"
     >
       {items.map((cat) => {
         const isActive = active === cat.id;
@@ -501,11 +566,13 @@ function MenuGrid({
   onOpen,
   layout,
   cardStyle,
+  requireAuthThen,
 }: {
   items: MenuItem[];
   onOpen: (i: MenuItem) => void;
   layout: MenuLayout;
   cardStyle: MenuCardStyle;
+  requireAuthThen: (action: () => void) => void;
 }) {
   return (
     <div className={`grid gap-4 ${MENU_GRID_CLASS[layout]}`}>
@@ -516,6 +583,7 @@ function MenuGrid({
           index={idx}
           onOpen={() => onOpen(item)}
           compact={cardStyle === 'compact'}
+          requireAuthThen={requireAuthThen}
         />
       ))}
     </div>
@@ -526,11 +594,15 @@ function MenuCard({
   item,
   onOpen,
   compact = false,
+  requireAuthThen,
 }: {
   item: MenuItem;
   index: number;
   onOpen: () => void;
   compact?: boolean;
+  // Quick-add is a mutation — gated behind login (browsing the card stays open).
+  // The gate is instantiated once in MenuView and passed down, not per card.
+  requireAuthThen: (action: () => void) => void;
 }) {
   const t = useTranslations('menu');
   const add = useCart((s) => s.add);
@@ -577,7 +649,7 @@ function MenuCard({
               <Button
                 size="sm"
                 variant={soldOut ? 'ghost' : inCartQty > 0 ? 'soft' : 'gradient'}
-                onClick={() => { if (!soldOut) add(item); }}
+                onClick={() => { if (!soldOut) requireAuthThen(() => add(item)); }}
                 disabled={soldOut}
                 aria-label={soldOut ? `${item.name} sold out` : `Add ${item.name}`}
               >
@@ -640,9 +712,13 @@ function MenuCard({
           </div>
           <div className="mt-auto flex items-center justify-between pt-2 text-sm text-muted-foreground">
             <span className="inline-flex items-center gap-1">
-              <Star className="h-3.5 w-3.5 fill-accent text-accent" />
-              <span className="font-semibold text-foreground">{item.rating?.toFixed(1)}</span>
-              <span>·</span>
+              {item.rating != null && (
+                <>
+                  <Star className="h-3.5 w-3.5 fill-accent text-accent" />
+                  <span className="font-semibold text-foreground">{item.rating.toFixed(1)}</span>
+                  <span>·</span>
+                </>
+              )}
               <Clock className="h-3.5 w-3.5" />
               {t('minutes', { n: item.prepTimeMinutes ?? 12 })}
             </span>
@@ -666,7 +742,7 @@ function MenuCard({
             <Button
               size="sm"
               variant={soldOut ? 'ghost' : inCartQty > 0 ? 'soft' : 'gradient'}
-              onClick={() => { if (!soldOut) add(item); }}
+              onClick={() => { if (!soldOut) requireAuthThen(() => add(item)); }}
               disabled={soldOut}
               aria-label={soldOut ? `${item.name} sold out` : `Add ${item.name}`}
             >
@@ -750,7 +826,16 @@ function ReviewsStrip({ reviews }: { reviews: { summary: { rating: number | null
   );
 }
 
-function CombosRow({ combos, branchId }: { combos: ComboRow[]; branchId: string }) {
+function CombosRow({
+  combos,
+  branchId,
+  requireAuthThen,
+}: {
+  combos: ComboRow[];
+  branchId: string;
+  // Same login gate as the item quick-add — adding a combo is still a mutation.
+  requireAuthThen: (action: () => void) => void;
+}) {
   const addCombo = useCart((s) => s.addCombo);
 
   return (
@@ -805,17 +890,19 @@ function CombosRow({ combos, branchId }: { combos: ComboRow[]; branchId: string 
                     size="sm"
                     variant="gradient"
                     onClick={() =>
-                      addCombo({
-                        comboId: c.id,
-                        name: c.name,
-                        imageUrl: c.image_url,
-                        totalPrice: Number(c.total_price),
-                        branchId,
-                        contents: (c.items ?? []).map((it) => ({
-                          item_name: it.item_name,
-                          quantity: it.quantity,
-                        })),
-                      })
+                      requireAuthThen(() =>
+                        addCombo({
+                          comboId: c.id,
+                          name: c.name,
+                          imageUrl: c.image_url,
+                          totalPrice: Number(c.total_price),
+                          branchId,
+                          contents: (c.items ?? []).map((it) => ({
+                            item_name: it.item_name,
+                            quantity: it.quantity,
+                          })),
+                        }),
+                      )
                     }
                   >
                     Add to cart
@@ -961,8 +1048,16 @@ function DietaryFilters({
   onToggle: (tag: string) => void;
   onClear: () => void;
 }) {
+  const t = useTranslations('menu');
   return (
-    <div className="-mx-1 flex flex-wrap gap-2 px-1">
+    <div className="-mx-1 flex flex-wrap items-center gap-2 px-1">
+      {/* Labelled, and active reads as an outlined tint — the category chips
+          directly below are solid `bg-primary`, so the two adjacent chip rows
+          must not share an active colour. */}
+      <span className="inline-flex shrink-0 items-center gap-1.5 pr-0.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden />
+        {t('filters')}
+      </span>
       {available.map((tag) => {
         const meta = DIETARY_LABELS[tag] ?? { label: tag, emoji: '' };
         const isOn = selected.has(tag);
@@ -972,10 +1067,10 @@ function DietaryFilters({
             type="button"
             onClick={() => onToggle(tag)}
             aria-pressed={isOn}
-            className={`focus-ring inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+            className={`focus-ring inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
               isOn
-                ? 'bg-primary text-primary-foreground shadow-soft'
-                : 'border border-border bg-card text-foreground hover:border-primary/40'
+                ? 'border-primary bg-primary/15 text-foreground shadow-soft'
+                : 'border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground'
             }`}
           >
             <span aria-hidden>{meta.emoji}</span>

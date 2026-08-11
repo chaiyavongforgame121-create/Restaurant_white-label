@@ -9,6 +9,7 @@ import { formatCurrency, type MenuItem } from '@favornoms/shared';
 import { Button, DietaryBadge, QuantityStepper, Sheet } from '@favornoms/ui';
 import { getBrowserClient } from '@favornoms/database/client';
 import { useCart, type CartLineModifier } from '@/store/cart';
+import { useRequireAuth } from '@/components/auth/require-auth';
 
 interface Props {
   item: MenuItem | null;
@@ -43,6 +44,9 @@ export function MenuItemSheet({ item, onClose }: Props) {
   const [loadingGroups, setLoadingGroups] = React.useState(false);
   const [recommended, setRecommended] = React.useState<Array<{ menu_item_id: string; item_name: string; image_url: string | null; price: number }>>([]);
   const add = useCart((s) => s.add);
+  // Adding to the cart requires a signed-in diner; a guest is sent to sign-in
+  // and returned to the menu (usePathname) afterwards.
+  const { requireAuthThen } = useRequireAuth();
 
   const [cached, setCached] = React.useState<MenuItem | null>(item);
 
@@ -177,8 +181,10 @@ export function MenuItemSheet({ item, onClose }: Props) {
         }
       }
     }
-    add(view, qty, notes, flatMods.length > 0 ? flatMods : undefined);
-    onClose();
+    requireAuthThen(() => {
+      add(view, qty, notes, flatMods.length > 0 ? flatMods : undefined);
+      onClose();
+    });
   };
 
   return (

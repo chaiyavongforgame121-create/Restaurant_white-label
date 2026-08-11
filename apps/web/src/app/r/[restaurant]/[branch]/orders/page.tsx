@@ -19,20 +19,23 @@ export default async function OrdersPage({ params }: Props) {
   const { data: orders } = await supabase
     .from('orders')
     .select(
-      'id, order_number, total, status, created_at, order_items(id, menu_item_id, item_name, quantity)',
+      'id, order_number, total, status, created_at, order_items(id, menu_item_id, combo_id, item_name, quantity, notes, modifiers)',
     )
     .eq('branch_id', tenant.branch.id)
     .order('created_at', { ascending: false })
     .limit(20);
 
   if (!orders || orders.length === 0) {
+    const { data: { user } } = await supabase.auth.getUser();
     return (
       <div className="container pt-6">
         <h1 className="font-display text-2xl font-bold">Your orders</h1>
         <EmptyState
           icon={<Receipt className="h-7 w-7" />}
           title="No orders yet"
-          description="Your past and active orders will appear here once you sign in"
+          description={user
+            ? 'Order something tasty and it will show up here'
+            : 'Your past and active orders will appear here once you sign in'}
         />
       </div>
     );

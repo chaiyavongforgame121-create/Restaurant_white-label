@@ -1,11 +1,13 @@
 'use client';
 
 import * as React from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Banknote, ChevronLeft, CreditCard, LocateFixed, Map as MapIcon, MapPin, ShoppingBag, Tag } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import {
+  computeSalesTax,
   formatCurrency,
   kmToMi,
   parseTipConfig,
@@ -35,6 +37,7 @@ import {
 import { Badge, Button, Card, IconButton, Sheet } from '@favornoms/ui';
 import { pickerLabels } from '@/lib/picker-labels';
 import { useCart } from '@/store/cart';
+import { useAuth } from '@/components/auth/use-auth';
 
 type PaymentMethod = 'card' | 'cash';
 type PaymentMode = 'asap' | 'scheduled';
@@ -65,6 +68,13 @@ function parsePaymentMatrix(
   };
 }
 
+// The `customer-auth` edge function mints phone-only diners as synthetic
+// `c{digits}@customer.favornoms.local` users with `email_confirm: true`, so they
+// carry a provider-'email' identity that proves nothing. Excluding this domain is
+// what keeps the loyalty gate meaningful. place-order excludes the same domain —
+// keep both in sync with EMAIL_DOMAIN in supabase/functions/customer-auth/index.ts.
+const SYNTHETIC_CUSTOMER_EMAIL_SUFFIX = '@customer.favornoms.local';
+
 // place-order's error codes, rendered for a customer.
 //
 // The billing codes (402 billing_inactive / 403 feature_not_entitled) are
@@ -84,6 +94,10 @@ const ORDER_ERRORS: Array<[string, string]> = [
   ['dropoff_required', 'Please choose where we should leave your order.'],
   ['table_required', 'Please enter your table number.'],
   ['invalid_channel', 'Please choose delivery, pickup or dine-in and try again.'],
+  // Wire code is still `google_link_required` (other surfaces match on it), but the
+  // rule is "prove who you are", and a verified email proves it just as well as
+  // Google. Copy mirrors `checkout.loyalty.verifyRequired` in messages/en.json.
+  ['google_link_required', 'To spend loyalty points, verify your email or link your Google account first — it keeps your points safe. You can still order without redeeming.'],
 ];
 
 function describeOrderError(msg: string): string {
@@ -92,6 +106,11 @@ function describeOrderError(msg: string): string {
   }
   return msg;
 }
+
+// place-order's r2, character for character. Every money expression below is a
+// mirror of the server's, because the diner agrees to the number on this screen
+// and the server charges its own — the two have to land on the same cent.
+const r2 = (n: number) => Math.round(n * 100) / 100;
 
 type DropoffPref = 'leave_at_door' | 'hand_to_me' | 'at_desk' | 'other';
 
@@ -104,16 +123,35 @@ const DROPOFF_OPTIONS: Array<{ value: DropoffPref; label: string }> = [
 
 interface Props {
   branchId: string;
+  /** Scopes customer-row writes — identity is per restaurant, not global. */
+  restaurantId?: string;
   base: string;
   /** `delivery` entitlement — default false so a missing prop cannot sell it. */
   canDeliver?: boolean;
   /** `card_payment` entitlement — same. */
   canUseCard?: boolean;
+  /**
+   * branches.sales_tax_rate as a decimal (0.0701 = 7.01%). Defaults to 0 like
+   * place-order's `Number(branch.sales_tax_rate ?? 0)` — a branch that charges
+   * no tax and a missing prop are the same number, so neither can invent one.
+   */
+  salesTaxRate?: number;
+  /** branches.settings.service_fee_percent, whole percent. Server default is 0. */
+  serviceFeePercent?: number;
 }
 
-export function CheckoutView({ branchId, base, canDeliver = false, canUseCard = false }: Props) {
+export function CheckoutView({
+  branchId,
+  restaurantId,
+  base,
+  canDeliver = false,
+  canUseCard = false,
+  salesTaxRate = 0,
+  serviceFeePercent = 0,
+}: Props) {
   const t = useTranslations();
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
 
   const subtotal = useCart((s) => s.subtotal());
   const lines = useCart((s) => s.lines);
@@ -180,8 +218,17 @@ export function CheckoutView({ branchId, base, canDeliver = false, canUseCard = 
     });
   const [pointsBalance, setPointsBalance] = React.useState(0);
   const [redeemPoints, setRedeemPoints] = React.useState(0);
+  // Redeeming points needs a proven identity — a linked Google account OR a real
+  // (non-synthetic) confirmed email. Phone sign-in is OTP-less, so a phone number
+  // alone is not proof of who you are. place-order is the real gate — this flag
+  // only pre-empts the 403, so it FAILS OPEN: we start at true and only flip it
+  // when the identity call actually says otherwise.
+  const [identityVerified, setIdentityVerified] = React.useState(true);
   const [tipPercent, setTipPercent] = React.useState<number>(0);
   const [customTip, setCustomTip] = React.useState('');
+  // Custom is a chip like the percentages, not an always-on field — the USD input
+  // only exists once it is chosen.
+  const [tipCustom, setTipCustom] = React.useState(false);
   const [tipConfig, setTipConfig] = React.useState<TipConfig>(TIP_CONFIG_DEFAULTS);
   const [promoCode, setPromoCode] = React.useState('');
   const [scheduleMode, setScheduleMode] = React.useState<'asap' | 'later'>('asap');
@@ -217,23 +264,56 @@ export function CheckoutView({ branchId, base, canDeliver = false, canUseCard = 
   // actionable). A previously-saved address that happens to lack coords must not trap checkout —
   // it falls back to the flat delivery fee.
   const enteringNewAddress = savedAddresses.length === 0 || selectedAddressId === 'new';
-  const paymentModeKey: PaymentMode = scheduleMode === 'later' ? 'scheduled' : 'asap';
+  // Dine-in is ASAP only and has no payment step — the diner settles at the
+  // restaurant. Both cards are hidden below, so every consumer reads through
+  // these forced values instead of the raw state: a leftover `scheduleMode ===
+  // 'later'` would send a real scheduled_for (the time input is always
+  // pre-populated), re-gate the order against the *scheduled* payment matrix and
+  // could set held=true — which hides the order from the kitchen.
+  const isDineIn = channel === 'dine_in';
+  const effectiveScheduleMode: 'asap' | 'later' = isDineIn ? 'asap' : scheduleMode;
+  const paymentModeKey: PaymentMode = effectiveScheduleMode === 'later' ? 'scheduled' : 'asap';
   const enabledMethods = (['card', 'cash'] as const).filter((m) => paymentMatrix[paymentModeKey][m]);
   const asapPayable = paymentMatrix.asap.cash || paymentMatrix.asap.card;
   const scheduledPayable = paymentMatrix.scheduled.cash || paymentMatrix.scheduled.card;
-  const serviceFee = Math.round(subtotal * 0.05 * 100) / 100;
-  const maxRedeem = Math.min(pointsBalance, Math.floor(subtotal * 0.5));
-  const appliedRedeem = Math.min(redeemPoints, maxRedeem);
+  const serviceFee = r2(subtotal * (serviceFeePercent / 100));
+  // Loyalty points are integer CENTS-off: 100 pts = $1. `subtotal` is dollars, so
+  // the 50%-of-subtotal cap in points is `subtotal * 100 * 0.5` = `subtotal * 50`.
+  // This is the identical expression place-order uses — the two must never drift,
+  // or the diner agrees to a total the server does not charge.
+  const maxRedeem = Math.min(pointsBalance, Math.floor(subtotal * 50));
+  // Zero without a verified identity, so the summary total matches what the server
+  // will actually charge instead of promising a discount it would reject.
+  const appliedRedeem = identityVerified ? Math.min(redeemPoints, maxRedeem) : 0;
+  // Points -> dollars. Every money-facing consumer reads THIS, never appliedRedeem.
+  const loyaltyDollarsOff = r2(appliedRedeem / 100);
+  // Slider positions: one per $1, then the cap itself as the last stop. With a
+  // plain step=100 the browser clamps to the largest multiple of 100 under the
+  // max, so a 499-pt cap could only ever reach 400 — $0.99 of the diner's own
+  // points stranded behind a control whose label promises them.
+  const redeemStops = Array.from({ length: Math.ceil(maxRedeem / 100) }, (_, i) => i * 100).concat(
+    maxRedeem,
+  );
+  // Stops ascend and appliedRedeem is clamped to the last one, so this always hits.
+  const redeemIndex = Math.max(0, redeemStops.findIndex((p) => p >= appliedRedeem));
   const tipAmount = customTip
     ? Math.max(0, Math.round((Number(customTip) || 0) * 100) / 100)
     : Math.round((subtotal * tipPercent)) / 100;
-  const tipPresets = tipPresetsForChannel(tipConfig, channel ?? 'pickup');
+  // 0 is dropped: "No tip" is its own control now, so a legacy branch row that
+  // still carries a 0 preset would otherwise render a duplicate of it.
+  const tipPresets = tipPresetsForChannel(tipConfig, channel ?? 'pickup').filter((p) => p > 0);
+  const noTipSelected = !tipCustom && !customTip && tipPercent === 0;
   const tipWorkerPct = (tipConfig[channel ?? 'pickup'] ?? tipConfig.dine_in).workerPct;
   const promoDiscount = promoState.status === 'applied' ? promoState.amount_off : 0;
-  const giftCardCredit = giftCardState.status === 'valid' ? Math.min(giftCardState.balance, subtotal) : 0;
-  const total = Math.max(
-    0,
-    subtotal + deliveryFee + serviceFee + tipAmount - appliedRedeem - promoDiscount - giftCardCredit,
+  // The discounted food line. Tax is charged on it, and the gift card can only
+  // ever cover it — fees, tip and delivery are never bought with card balance.
+  // Discounts can exceed the food, hence the clamp before anything reads it.
+  const taxableBase = Math.max(0, subtotal - loyaltyDollarsOff - promoDiscount);
+  const taxAmount = computeSalesTax(taxableBase, salesTaxRate);
+  const giftCardCredit =
+    giftCardState.status === 'valid' ? Math.min(giftCardState.balance, taxableBase) : 0;
+  const total = r2(
+    Math.max(0, taxableBase + deliveryFee + serviceFee + tipAmount + taxAmount - giftCardCredit),
   );
 
   const checkGiftCard = async () => {
@@ -286,6 +366,47 @@ export function CheckoutView({ branchId, base, canDeliver = false, canUseCard = 
     })();
   }, [branchId]);
 
+  // Loyalty redemption needs a proven identity on the account. Read it once so the
+  // redeem control can explain itself up front rather than letting the diner drag
+  // the slider and meet a 403. Any failure leaves the flag at true — the server
+  // still refuses, and a flaky identity call must not silently take someone's
+  // points away from them.
+  //
+  // MUST mirror place-order's predicate exactly: a linked Google identity, OR a
+  // confirmed email identity that is not one of customer-auth's synthetic
+  // c{digits}@customer.favornoms.local addresses (every phone-only diner has one
+  // of those, so `provider !== 'phone'` would wave the whole gate through).
+  React.useEffect(() => {
+    const supabase = getBrowserClient();
+    void (async () => {
+      try {
+        const [{ data: idData, error: idErr }, { data: userData }] = await Promise.all([
+          supabase.auth.getUserIdentities(),
+          supabase.auth.getUser(),
+        ]);
+        if (idErr || !idData) return;
+        const identities = idData.identities ?? [];
+        if (identities.some((i) => i.provider === 'google')) {
+          setIdentityVerified(true);
+          return;
+        }
+        // getUserIdentities() carries no confirmation timestamp, so take it from the
+        // user record (identity_data.email_verified as a fallback for odd shapes).
+        const emailConfirmed = !!userData?.user?.email_confirmed_at;
+        const realEmail = identities.some((i) => {
+          if (i.provider !== 'email') return false;
+          const raw = (i.identity_data?.email as unknown) ?? userData?.user?.email;
+          const addr = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+          if (!addr || addr.endsWith(SYNTHETIC_CUSTOMER_EMAIL_SUFFIX)) return false;
+          return emailConfirmed || i.identity_data?.email_verified === true;
+        });
+        setIdentityVerified(realEmail);
+      } catch {
+        // Leave the flag at true — the server is the real gate.
+      }
+    })();
+  }, []);
+
   // Tip presets + driver/house/staff split are configured per branch (jsonb
   // tip_config). place-order + the completion trigger record the authoritative
   // split on the server; this only drives the presets and the disclosure copy.
@@ -308,7 +429,12 @@ export function CheckoutView({ branchId, base, canDeliver = false, canUseCard = 
   // Keep the selected payment method valid for the current mode; when the
   // current mode has no methods at all, flip to the other mode (its toggle is
   // disabled below, so the user can't get back into the dead one).
+  //
+  // Dine-in opts out entirely: it has neither card on screen, and the flip would
+  // turn a branch with no ASAP payment method into a silently SCHEDULED dine-in
+  // order — held out of the kitchen, with a table number and nobody sitting at it.
   React.useEffect(() => {
+    if (isDineIn) return;
     const modeKey: PaymentMode = scheduleMode === 'later' ? 'scheduled' : 'asap';
     const enabled = (['card', 'cash'] as const).filter((m) => paymentMatrix[modeKey][m]);
     if (enabled.length === 0) {
@@ -320,7 +446,7 @@ export function CheckoutView({ branchId, base, canDeliver = false, canUseCard = 
     }
     const fallback = enabled[0];
     if (fallback && !enabled.includes(method)) setMethod(fallback);
-  }, [scheduleMode, paymentMatrix, method]);
+  }, [scheduleMode, paymentMatrix, method, isDineIn]);
 
   // The restaurant's own coordinates make a sensible default centre for the map
   // picker when the customer hasn't entered an address yet.
@@ -435,7 +561,41 @@ export function CheckoutView({ branchId, base, canDeliver = false, canUseCard = 
     return unsub;
   }, []);
 
-  if (!hydrated) return null;
+  // Login is mandatory to check out — guest checkout was removed. Bounce a
+  // signed-out visitor to sign-in with next back here, so deep-linking straight
+  // to /checkout can't skip it. Wait for the session to resolve so a member is
+  // not bounced on first paint; place-order is the server-side backstop anyway.
+  React.useEffect(() => {
+    if (!authLoading && !user) {
+      router.replace(`${base}/sign-in?next=${encodeURIComponent(`${base}/checkout`)}`);
+    }
+  }, [authLoading, user, base, router]);
+
+  if (!hydrated || authLoading) return null;
+  if (!user) {
+    // Backstop for the redirect above (and the instant before it navigates).
+    return (
+      <div className="container max-w-2xl pt-12 text-center">
+        <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-primary/10 text-primary">
+          <ShoppingBag className="h-7 w-7" />
+        </div>
+        <h1 className="mt-4 font-display text-2xl font-bold">Please sign in to check out</h1>
+        <p className="mt-1 text-muted-foreground">
+          You need an account to place an order — it only takes a moment.
+        </p>
+        <Button
+          variant="gradient"
+          size="lg"
+          className="mt-5"
+          onClick={() =>
+            router.replace(`${base}/sign-in?next=${encodeURIComponent(`${base}/checkout`)}`)
+          }
+        >
+          Sign in to continue
+        </Button>
+      </div>
+    );
+  }
   if (lines.length === 0) {
     return (
       <div className="container max-w-2xl pt-12 text-center">
@@ -493,8 +653,9 @@ export function CheckoutView({ branchId, base, canDeliver = false, canUseCard = 
     const errs: Record<string, string> = {};
     // 'later' with a cleared time would silently become ASAP server-side
     // (place-order derives the mode from scheduled_for) — and be gated
-    // against the wrong payment matrix. Block it here.
-    if (scheduleMode === 'later' && !scheduledFor)
+    // against the wrong payment matrix. Block it here. Dine-in never reaches
+    // this: effectiveScheduleMode pins it to 'asap' and the card is hidden.
+    if (effectiveScheduleMode === 'later' && !scheduledFor)
       errs.schedule = 'Please pick a time for your scheduled order.';
     if (!name.trim()) errs.name = t('checkout.errors.nameRequired');
     const phoneDigits = phone.replace(/\D/g, '');
@@ -541,14 +702,18 @@ export function CheckoutView({ branchId, base, canDeliver = false, canUseCard = 
     setSubmitting(true);
     try {
       const supabase = getBrowserClient();
-      // Persist email on the customer row so receipts/notifications can reach them.
+      // Persist email on the customer row so receipts/notifications can reach
+      // them — scoped to THIS restaurant. Customer identity is per restaurant;
+      // an unscoped update would overwrite the email on every tenant's row.
       if (email.trim()) {
         const { data: user } = await supabase.auth.getUser();
         if (user.user) {
-          await supabase
+          let upd = supabase
             .from('customers')
             .update({ email: email.trim().toLowerCase() })
             .eq('user_id', user.user.id);
+          if (restaurantId) upd = upd.eq('restaurant_id', restaurantId);
+          await upd;
         }
       }
 
@@ -583,12 +748,17 @@ export function CheckoutView({ branchId, base, canDeliver = false, canUseCard = 
             : undefined,
         saved_address_id:
           selectedAddressId && selectedAddressId !== 'new' ? selectedAddressId : undefined,
-        payment_method: method,
+        // Dine-in has no payment step: 'cash' is "pay at the restaurant", and the
+        // only value that neither trips the card_payment entitlement nor breaks
+        // the NOT NULL payments.method column.
+        payment_method: isDineIn ? 'cash' : method,
         redeem_points: appliedRedeem || undefined,
         tip_amount: tipAmount || undefined,
         promo_code: promoState.status === 'applied' ? promoCode.trim() : undefined,
+        // Belt and braces on top of effectiveScheduleMode — no state, however
+        // stale, can smuggle a scheduled_for onto a dine-in order.
         scheduled_for:
-          scheduleMode === 'later' && scheduledFor
+          !isDineIn && effectiveScheduleMode === 'later' && scheduledFor
             ? new Date(scheduledFor).toISOString()
             : undefined,
         gift_card_code: giftCardState.status === 'valid' ? giftCardCode.trim() : undefined,
@@ -643,61 +813,64 @@ export function CheckoutView({ branchId, base, canDeliver = false, canUseCard = 
       </header>
 
       <form className="space-y-5" onSubmit={handleSubmit}>
-        <Card className="p-5">
-          <h2 className="font-display text-lg font-semibold">When?</h2>
-          <div className="mt-3 flex rounded-full bg-muted p-1 text-sm font-semibold">
-            <button
-              type="button"
-              disabled={!asapPayable}
-              onClick={() => setScheduleMode('asap')}
-              className={`focus-ring flex-1 rounded-full py-2 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-                scheduleMode === 'asap' ? 'bg-card text-foreground shadow-soft' : 'text-muted-foreground'
-              }`}
-            >
-              ASAP
-            </button>
-            <button
-              type="button"
-              disabled={!scheduledPayable}
-              onClick={() => setScheduleMode('later')}
-              className={`focus-ring flex-1 rounded-full py-2 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-                scheduleMode === 'later' ? 'bg-card text-foreground shadow-soft' : 'text-muted-foreground'
-              }`}
-            >
-              Schedule for later
-            </button>
-          </div>
-          {!scheduledPayable && (
-            <p className="mt-2 text-xs text-muted-foreground">
-              Scheduled orders are not available with the restaurant current payment options.
-            </p>
-          )}
-          {!asapPayable && (
-            <p className="mt-2 text-xs text-muted-foreground">
-              ASAP orders are not available with the restaurant current payment options.
-            </p>
-          )}
-          {scheduleMode === 'later' && (
-            <label ref={scheduleSectionRef} className="mt-3 block">
-              <span className="mb-1 block text-sm font-medium">Pickup / delivery time</span>
-              <input
-                type="datetime-local"
-                value={scheduledFor}
-                min={new Date(Date.now() + 15 * 60_000).toISOString().slice(0, 16)}
-                onChange={(e) => { setScheduledFor(e.target.value); clearFieldError('schedule'); }}
-                aria-invalid={!!fieldErrors.schedule}
-                className="input"
-                style={fieldErrors.schedule ? { borderColor: 'hsl(var(--danger))' } : undefined}
-              />
-              {fieldErrors.schedule && (
-                <p className="mt-1 text-xs text-danger">{fieldErrors.schedule}</p>
-              )}
-              <p className="mt-1 text-xs text-muted-foreground">
-                We&apos;ll start preparing your order so it&apos;s ready right around this time.
+        {/* Dine-in is ASAP only — the diner is already sitting in the room. */}
+        {!isDineIn && (
+          <Card className="p-5">
+            <h2 className="font-display text-lg font-semibold">When?</h2>
+            <div className="mt-3 flex rounded-full bg-muted p-1 text-sm font-semibold">
+              <button
+                type="button"
+                disabled={!asapPayable}
+                onClick={() => setScheduleMode('asap')}
+                className={`focus-ring flex-1 rounded-full py-2 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                  scheduleMode === 'asap' ? 'bg-card text-foreground shadow-soft' : 'text-muted-foreground'
+                }`}
+              >
+                ASAP
+              </button>
+              <button
+                type="button"
+                disabled={!scheduledPayable}
+                onClick={() => setScheduleMode('later')}
+                className={`focus-ring flex-1 rounded-full py-2 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                  scheduleMode === 'later' ? 'bg-card text-foreground shadow-soft' : 'text-muted-foreground'
+                }`}
+              >
+                Schedule for later
+              </button>
+            </div>
+            {!scheduledPayable && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Scheduled orders are not available with the restaurant current payment options.
               </p>
-            </label>
-          )}
-        </Card>
+            )}
+            {!asapPayable && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                ASAP orders are not available with the restaurant current payment options.
+              </p>
+            )}
+            {scheduleMode === 'later' && (
+              <label ref={scheduleSectionRef} className="mt-3 block">
+                <span className="mb-1 block text-sm font-medium">Pickup / delivery time</span>
+                <input
+                  type="datetime-local"
+                  value={scheduledFor}
+                  min={new Date(Date.now() + 15 * 60_000).toISOString().slice(0, 16)}
+                  onChange={(e) => { setScheduledFor(e.target.value); clearFieldError('schedule'); }}
+                  aria-invalid={!!fieldErrors.schedule}
+                  className="input"
+                  style={fieldErrors.schedule ? { borderColor: 'hsl(var(--danger))' } : undefined}
+                />
+                {fieldErrors.schedule && (
+                  <p className="mt-1 text-xs text-danger">{fieldErrors.schedule}</p>
+                )}
+                <p className="mt-1 text-xs text-muted-foreground">
+                  We&apos;ll start preparing your order so it&apos;s ready right around this time.
+                </p>
+              </label>
+            )}
+          </Card>
+        )}
 
         <Card className="p-5">
           <h2 className="font-display text-lg font-semibold">{t('checkout.contactInfo')}</h2>
@@ -1004,25 +1177,30 @@ export function CheckoutView({ branchId, base, canDeliver = false, canUseCard = 
               style={fieldErrors.table ? { borderColor: 'hsl(var(--danger))' } : undefined}
             />
             {fieldErrors.table && <p className="mt-1 text-xs text-danger">{fieldErrors.table}</p>}
+            <p className="mt-3 text-xs text-muted-foreground">{t('checkout.dineInPayAtRestaurant')}</p>
           </Card>
         )}
 
-        <Card className="p-5">
-          <h2 className="font-display text-lg font-semibold">{t('checkout.paymentMethod')}</h2>
-          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {paymentMatrix[paymentModeKey].card && (
-              <PaymentChoice icon={<CreditCard className="h-5 w-5" />} label={t('checkout.payment.card')} active={method === 'card'} onClick={() => setMethod('card')} />
+        {/* Dine-in never picks a method — it is paid at the restaurant, and the
+            checkout sends 'cash' on its behalf. */}
+        {!isDineIn && (
+          <Card className="p-5">
+            <h2 className="font-display text-lg font-semibold">{t('checkout.paymentMethod')}</h2>
+            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {paymentMatrix[paymentModeKey].card && (
+                <PaymentChoice icon={<CreditCard className="h-5 w-5" />} label={t('checkout.payment.card')} active={method === 'card'} onClick={() => setMethod('card')} />
+              )}
+              {paymentMatrix[paymentModeKey].cash && (
+                <PaymentChoice icon={<Banknote className="h-5 w-5" />} label={t('checkout.payment.cash')} active={method === 'cash'} onClick={() => setMethod('cash')} />
+              )}
+            </div>
+            {enabledMethods.length === 0 && (
+              <p className="mt-3 text-sm text-muted-foreground">
+                This restaurant has no payment options available right now.
+              </p>
             )}
-            {paymentMatrix[paymentModeKey].cash && (
-              <PaymentChoice icon={<Banknote className="h-5 w-5" />} label={t('checkout.payment.cash')} active={method === 'cash'} onClick={() => setMethod('cash')} />
-            )}
-          </div>
-          {enabledMethods.length === 0 && (
-            <p className="mt-3 text-sm text-muted-foreground">
-              This restaurant has no payment options available right now.
-            </p>
-          )}
-        </Card>
+          </Card>
+        )}
 
         <Card className="p-5">
           <h2 className="font-display text-lg font-semibold flex items-center gap-2">
@@ -1100,32 +1278,62 @@ export function CheckoutView({ branchId, base, canDeliver = false, canUseCard = 
             {tipWorkerPct}% goes to your {channel === 'delivery' ? 'driver' : 'kitchen & staff team'}
             {tipWorkerPct < 100 ? ' (the rest supports the restaurant).' : '.'}
           </p>
-          <div
-            className="mt-3 grid gap-2"
-            style={{ gridTemplateColumns: `repeat(${Math.min(Math.max(tipPresets.length, 1), 5)}, minmax(0, 1fr))` }}
-          >
-            {tipPresets.map((p) => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => { setTipPercent(p); setCustomTip(''); }}
-                className={`rounded-xl border px-3 py-2 text-sm font-medium ${
-                  tipPercent === p && !customTip
-                    ? 'border-primary bg-primary/10 text-primary'
-                    : 'border-border bg-card'
-                }`}
-              >
-                {p === 0 ? 'None' : `${p}%`}
-              </button>
-            ))}
+          {/* Three columns on a 360px phone, one row from sm up — five chips
+              across a phone leaves "Custom" too narrow to read. */}
+          <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
+            {tipPresets.map((p) => {
+              const active = !tipCustom && !customTip && tipPercent === p;
+              return (
+                <button
+                  key={p}
+                  type="button"
+                  aria-pressed={active}
+                  // Tapping the selected chip again clears it — the only way back
+                  // to "no tip" without hunting for another control.
+                  onClick={() => {
+                    setTipCustom(false);
+                    setCustomTip('');
+                    setTipPercent(active ? 0 : p);
+                  }}
+                  className={`focus-ring rounded-xl border px-2 py-2 text-sm font-medium transition ${
+                    active ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-card'
+                  }`}
+                >
+                  {p}%
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              aria-pressed={tipCustom}
+              onClick={() => { setTipCustom(true); setTipPercent(0); }}
+              className={`focus-ring rounded-xl border px-2 py-2 text-sm font-medium transition ${
+                tipCustom ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-card'
+              }`}
+            >
+              Custom
+            </button>
           </div>
-          <input
-            value={customTip}
-            onChange={(e) => { setCustomTip(e.target.value.replace(/[^0-9.]/g, '')); setTipPercent(0); }}
-            placeholder="Custom amount in USD"
-            inputMode="decimal"
-            className="input mt-3"
-          />
+          {tipCustom && (
+            <input
+              value={customTip}
+              onChange={(e) => setCustomTip(e.target.value.replace(/[^0-9.]/g, ''))}
+              placeholder="Custom amount in USD"
+              inputMode="decimal"
+              aria-label="Custom tip amount in USD"
+              className="input mt-2"
+            />
+          )}
+          <button
+            type="button"
+            aria-pressed={noTipSelected}
+            onClick={() => { setTipCustom(false); setTipPercent(0); setCustomTip(''); }}
+            className={`focus-ring mt-2 w-full rounded-xl border px-3 py-2 text-sm font-medium transition ${
+              noTipSelected ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-card'
+            }`}
+          >
+            No tip
+          </button>
         </Card>
 
         {pointsBalance > 0 && maxRedeem > 0 && (
@@ -1142,18 +1350,37 @@ export function CheckoutView({ branchId, base, canDeliver = false, canUseCard = 
             <div className="mt-3 flex items-center gap-3">
               <input
                 type="range"
+                // The slider rides the INDEX of redeemStops, not the points
+                // themselves: one detent per $1 (a 1-pt step would be thousands
+                // of drags wide) while the far right still lands exactly on the
+                // cap the copy above quotes. Every stop is an integer <= the cap,
+                // so the control can never emit more than the server allows.
+                // aria-valuetext below speaks the points, not the index.
                 min={0}
-                max={maxRedeem}
-                step={10}
-                value={appliedRedeem}
-                onChange={(e) => setRedeemPoints(Number(e.target.value))}
-                className="h-2 flex-1 accent-primary"
+                max={redeemStops.length - 1}
+                step={1}
+                value={redeemIndex}
+                disabled={!identityVerified}
+                onChange={(e) => setRedeemPoints(redeemStops[Number(e.target.value)] ?? 0)}
+                className="h-2 flex-1 accent-primary disabled:opacity-40"
                 aria-label="Redeem points"
+                aria-valuetext={`${appliedRedeem.toLocaleString()} points, ${formatCurrency(loyaltyDollarsOff)} off`}
               />
               <span className="w-20 text-right font-display text-base font-bold text-primary tabular-nums">
-                -{formatCurrency(appliedRedeem / 100)}
+                -{formatCurrency(loyaltyDollarsOff)}
               </span>
             </div>
+            {!identityVerified && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                {t('checkout.loyalty.verifyHint')}{' '}
+                <Link
+                  href={`${base}/account`}
+                  className="font-medium text-primary underline-offset-2 hover:underline"
+                >
+                  {t('checkout.loyalty.verifyCta')}
+                </Link>
+              </p>
+            )}
           </Card>
         )}
 
@@ -1171,9 +1398,14 @@ export function CheckoutView({ branchId, base, canDeliver = false, canUseCard = 
               }
             />
             <Row label={t('cart.serviceFee')} value={formatCurrency(serviceFee)} />
+            {/* Only where the branch actually charges it — a tax-free branch
+                showing a $0.00 tax line is noise. Same label as the receipt. */}
+            {salesTaxRate > 0 && <Row label="Sales tax" value={formatCurrency(taxAmount)} />}
             {tipAmount > 0 && <Row label="Tip" value={formatCurrency(tipAmount)} />}
             {promoDiscount > 0 && <Row label={`Promo (${promoCode})`} value={`-${formatCurrency(promoDiscount)}`} />}
-            {appliedRedeem > 0 && <Row label="Loyalty discount" value={`-${formatCurrency(appliedRedeem)}`} />}
+            {appliedRedeem > 0 && (
+              <Row label="Loyalty discount" value={`-${formatCurrency(loyaltyDollarsOff)}`} />
+            )}
             <div className="my-2 h-px bg-border" />
             <Row label={t('cart.total')} value={formatCurrency(total)} bold />
           </dl>
@@ -1200,7 +1432,10 @@ export function CheckoutView({ branchId, base, canDeliver = false, canUseCard = 
             disabled={
               !channel ||
               outOfRange ||
-              enabledMethods.length === 0 ||
+              // Dine-in doesn't pay online, so an all-off ASAP matrix must not
+              // disable it — the card that explains why is hidden for dine-in,
+              // and a dead button with no reason is worse than no button.
+              (!isDineIn && enabledMethods.length === 0) ||
               (channel === 'delivery' && quoting) ||
               (channel === 'delivery' && enteringNewAddress && !addressCoords)
             }

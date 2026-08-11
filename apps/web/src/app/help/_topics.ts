@@ -98,7 +98,7 @@ export const TOPICS: Topic[] = [
     faqs: [
       {
         q: 'How do I sign in?',
-        a: 'Use phone OTP or email magic link from the sign-in page. We don\'t use passwords.',
+        a: 'From the sign-in page, continue with Google, or enter your phone number and you\'re straight in — no code to wait for. You can also use an email magic link. We don\'t use passwords.',
       },
       {
         q: 'How do I download my data?',

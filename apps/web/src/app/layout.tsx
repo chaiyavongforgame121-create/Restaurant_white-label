@@ -24,8 +24,11 @@ export const metadata: Metadata = {
   applicationName: 'Favornoms',
   appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Favornoms' },
   icons: {
-    icon: [{ url: '/icon.svg', type: 'image/svg+xml' }],
-    apple: '/icon-512.png',
+    icon: [
+      { url: '/icon.svg', type: 'image/svg+xml' },
+      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+    ],
+    apple: '/apple-touch-icon.png',
   },
   openGraph: {
     type: 'website',
@@ -44,6 +47,16 @@ export const metadata: Metadata = {
   },
 };
 
+/**
+ * Chrome fires `beforeinstallprompt` exactly once, early, and never replays it.
+ * On a repeat visit (warm SW + cached manifest) it lands *before* the React
+ * bundle hydrates, so a listener attached in useEffect misses it for good —
+ * which is why the install banner "hardly ever" appeared. Stash the event on
+ * `window` from <head> instead; <InstallPrompt> consumes it whenever it mounts.
+ * Keep the `__bipEvent` contract in sync with install-prompt.tsx.
+ */
+const CAPTURE_INSTALL_PROMPT = `!function(){var w=window;w.__bipEvent=null;w.addEventListener("beforeinstallprompt",function(e){e.preventDefault();w.__bipEvent=e});w.addEventListener("appinstalled",function(){w.__bipEvent=null})}();`;
+
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
@@ -60,6 +73,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang={locale} className={`${inter.variable} ${playfair.variable}`}>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: CAPTURE_INSTALL_PROMPT }} />
+      </head>
       <body className="min-h-dynamic-screen bg-background font-sans antialiased">
         <NextIntlClientProvider messages={messages} locale={locale}>
           {/* Default theme; tenant layouts re-wrap with branded theme */}

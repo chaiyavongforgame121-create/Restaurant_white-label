@@ -8,7 +8,9 @@ export type TipChannel = 'pickup' | 'dine_in' | 'delivery' | 'qr_ordering';
 
 /** Per-channel tip presets + who the tip is routed to. */
 export interface TipChannelConfig {
-  /** Preset tip percentages shown as buttons at checkout (0 = "None"). */
+  /** Preset tip percentages shown as chips at checkout. Product-fixed, not
+   *  merchant-editable — serializeTipConfig() deliberately does not write these
+   *  back, so a stale list can never be frozen into a branch row. */
   presets: number[];
   /** Percent of the tip routed to the "worker" for this channel — the driver for
    *  delivery, the staff pool for pickup/dine_in/qr_ordering. The remainder
@@ -31,7 +33,9 @@ export interface TipSplit {
   staffCut: number;
 }
 
-export const TIP_PRESET_DEFAULTS: number[] = [0, 5, 10, 15];
+// Checkout offers these four percentages plus a Custom amount and an explicit
+// "No tip" control, so 0 is no longer one of the chips.
+export const TIP_PRESET_DEFAULTS: number[] = [10, 15, 20, 25];
 
 // Default = 100% of the tip to the worker (driver for delivery, staff pool
 // otherwise), 0% house — preserves the pre-config "100% goes to your team"
@@ -85,7 +89,13 @@ export function parseTipConfig(settings: Record<string, unknown> | null | undefi
 }
 
 /** Serialize a typed TipConfig back to the branches.settings.tip_config jsonb shape
- *  the SQL trigger reads (distribution.driver for delivery, distribution.staff else). */
+ *  the SQL trigger reads (distribution.driver for delivery, distribution.staff else).
+ *
+ *  `presets` is intentionally NOT written: they are a product default, and
+ *  persisting them would freeze whatever list the merchant's browser happened to
+ *  hold into the row the first time they hit Save — pinning that branch to an
+ *  outdated set of chips forever. Rows that already carry presets keep working
+ *  (parseTipConfig still reads them) but lose them on the next save. */
 export function serializeTipConfig(config: TipConfig): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const ch of CHANNELS) {
@@ -93,7 +103,6 @@ export function serializeTipConfig(config: TipConfig): Record<string, unknown> {
     const worker = clampPct(c.workerPct, 100);
     const house = round2(100 - worker);
     out[ch] = {
-      presets: c.presets,
       distribution: ch === 'delivery' ? { driver: worker, house } : { staff: worker, house },
     };
   }

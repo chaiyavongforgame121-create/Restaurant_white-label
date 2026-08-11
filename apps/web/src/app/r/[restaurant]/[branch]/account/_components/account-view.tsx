@@ -4,8 +4,8 @@ import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  Award, ChevronRight, LogOut, MapPin, Receipt, Settings,
-  Sparkles,
+  Award, Check, ChevronRight, LogOut, MapPin, Receipt, Settings,
+  ShieldCheck, Sparkles,
 } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { getMyLoyalty, signOut } from '@favornoms/database/queries';
@@ -13,6 +13,11 @@ import { getMyLoyalty, signOut } from '@favornoms/database/queries';
 type LoyaltyBalance = NonNullable<Awaited<ReturnType<typeof getMyLoyalty>>>;
 import { Badge, Button, Card } from '@favornoms/ui';
 import { useAuth } from '@/components/auth/use-auth';
+import { InstallAppButton } from '@/components/install-app-button';
+
+// Phone-only diners are backed by a synthetic auth email they never chose. It is an
+// implementation detail of OTP-less sign-in and must never reach the screen.
+const SYNTHETIC_EMAIL_SUFFIX = '@customer.favornoms.local';
 
 export function AccountView({
   base,
@@ -26,6 +31,10 @@ export function AccountView({
   const { user, loading } = useAuth();
   const router = useRouter();
   const [loyalty, setLoyalty] = React.useState<LoyaltyBalance | null>(null);
+  const [googleEmail, setGoogleEmail] = React.useState<string | null>(null);
+  const [identitiesLoaded, setIdentitiesLoaded] = React.useState(false);
+  const [linking, setLinking] = React.useState(false);
+  const [linkError, setLinkError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (!user) return;
@@ -33,10 +42,46 @@ export function AccountView({
     void getMyLoyalty(supabase, branchId).then(setLoyalty);
   }, [user, branchId]);
 
+  React.useEffect(() => {
+    if (!user) return;
+    const supabase = getBrowserClient();
+    // null = not linked; '' = linked but Google didn't hand back an address.
+    void supabase.auth.getUserIdentities().then(({ data }) => {
+      const google = data?.identities?.find((i) => i.provider === 'google');
+      if (google) setGoogleEmail((google.identity_data?.email as string | undefined) ?? '');
+      setIdentitiesLoaded(true);
+    });
+  }, [user]);
+
+  // A real email only exists for magic-link and Google diners; phone-only ones get the
+  // synthetic address above, which we treat as "no email".
+  const realEmail = user?.email && !user.email.endsWith(SYNTHETIC_EMAIL_SUFFIX) ? user.email : null;
+  const displayPhone = (user?.user_metadata?.phone as string | undefined) ?? user?.phone ?? null;
+  const avatarInitial = (
+    user?.user_metadata?.full_name?.[0] ?? displayPhone?.slice(-2) ?? realEmail?.[0] ?? 'G'
+  ).toUpperCase();
+
   const handleSignOut = async () => {
     const supabase = getBrowserClient();
     await signOut(supabase);
     router.refresh();
+  };
+
+  const linkGoogle = async () => {
+    setLinkError(null);
+    setLinking(true);
+    const supabase = getBrowserClient();
+    const { error } = await supabase.auth.linkIdentity({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(window.location.pathname)}`,
+      },
+    });
+    // On success the browser is already navigating to Google — leave the spinner up.
+    if (error) {
+      setLinking(false);
+      setLinkError(error.message);
+    }
   };
 
   return (
@@ -45,14 +90,14 @@ export function AccountView({
         <div className="bg-gradient-warm p-6 text-white">
           <div className="flex items-center gap-4">
             <div className="grid h-16 w-16 place-items-center rounded-full bg-white/25 font-display text-2xl font-bold backdrop-blur">
-              {(user?.user_metadata?.full_name?.[0] ?? user?.phone?.slice(-2) ?? 'G').toUpperCase()}
+              {avatarInitial}
             </div>
             <div>
               {loading ? (
                 <p className="text-sm text-white/80">Loading…</p>
               ) : user ? (
                 <>
-                  <p className="text-sm text-white/80">{user.phone ?? user.email}</p>
+                  <p className="text-sm text-white/80">{displayPhone ?? realEmail}</p>
                   <h1 className="font-display text-2xl font-bold">
                     {user.user_metadata?.full_name ?? 'Welcome back'}
                   </h1>
@@ -69,7 +114,7 @@ export function AccountView({
                     className="mt-2 inline-block"
                   >
                     <Button variant="glass" size="sm">
-                      Sign in with phone
+                      Sign in
                     </Button>
                   </Link>
                 </>
@@ -106,7 +151,37 @@ export function AccountView({
           }
           href={`${base}/account/loyalty`}
         />
+        {user && identitiesLoaded && (
+          <li>
+            <div className="flex w-full items-center gap-3 rounded-2xl border border-border/60 bg-card p-4 text-left">
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                <ShieldCheck className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold">Google account</p>
+                {googleEmail !== null ? (
+                  <p className="flex items-center gap-1 truncate text-xs text-success">
+                    <Check className="h-3 w-3 shrink-0" />
+                    {googleEmail || 'Linked'}
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Link Google to redeem your points.
+                  </p>
+                )}
+                {linkError && <p className="mt-1 text-xs text-danger">{linkError}</p>}
+              </div>
+              {googleEmail === null && (
+                <Button variant="outline" size="sm" onClick={linkGoogle} loading={linking}>
+                  Link Google
+                </Button>
+              )}
+            </div>
+          </li>
+        )}
         <Row icon={Settings} label="Settings & preferences" href={`${base}/account/settings`} />
+        {/* Renders its own <li>, or nothing when already installed / no install path. */}
+        <InstallAppButton />
       </ul>
 
       {user && (
