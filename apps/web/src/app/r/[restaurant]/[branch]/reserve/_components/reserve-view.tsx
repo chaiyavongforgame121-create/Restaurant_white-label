@@ -9,7 +9,7 @@ import { Button, Card, IconButton } from '@favornoms/ui';
 import { getBrowserClient } from '@favornoms/database/client';
 import { createReservation } from '@favornoms/database/queries';
 import { useAuth } from '@/components/auth/use-auth';
-import { resolveMyCustomerId } from '@/lib/customer';
+import { describeCustomerError, resolveMyCustomerId } from '@/lib/customer';
 import { SignInGate } from '../../account/_components/account-ui';
 
 interface Props {
@@ -91,7 +91,11 @@ export function ReserveView({ base, branchId, branchName }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [user, branchId]);
+    // Keyed on user.id, not `user`: onAuthStateChange hands back a NEW object on every
+    // TOKEN_REFRESHED, which re-ran this effect mid-session, flipped the form back to
+    // "Loading…" and overwrote whatever the diner had typed with the profile values.
+    // That is the "I can't change the name" complaint reappearing by another route.
+  }, [user?.id, branchId]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,7 +123,11 @@ export function ReserveView({ base, branchId, branchName }: Props) {
       });
       setSuccess({ id: result.id, reserved_for: result.reserved_for });
     } catch (err) {
-      setError((err as Error).message);
+      // Was dumping the raw Postgres text at the diner — the RLS failure this page
+      // used to hit rendered as 'reservation_failed:new row violates row-level
+      // security policy for table "reservations"'.
+      const raw = (err as Error).message.replace(/^reservation_failed:/, '');
+      setError(describeCustomerError(raw));
     } finally {
       setSubmitting(false);
     }

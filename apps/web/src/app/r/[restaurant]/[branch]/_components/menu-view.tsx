@@ -179,7 +179,12 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
 
   return (
     <div>
-      <OrderTypeGate branchId={branch.id} branchName={branch.name} canDeliver={canDeliver} />
+      <OrderTypeGate
+        branchId={branch.id}
+        branchName={branch.name}
+        canDeliver={canDeliver}
+        reserveHref={`/r/${params.restaurant}/${params.branch}/reserve`}
+      />
 
       <Hero
         title={effectiveHeroTitle}
@@ -324,10 +329,14 @@ function Hero({
                   </Badge>
                 ) : null}
                 {reserveHref ? (
-                  <Link href={reserveHref} className="focus-ring">
-                    <Badge variant="outline" className="gap-1.5 px-3 py-1 transition-colors hover:bg-muted">
-                      <Utensils className="h-3.5 w-3.5" /> Reserve a table
-                    </Badge>
+                  // Tinted rather than outline. Rendered in the same outline variant as
+                  // the address chip beside it, this read as a second piece of metadata
+                  // instead of the only entry point into booking anywhere in the app.
+                  <Link
+                    href={reserveHref}
+                    className="focus-ring inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 font-medium text-primary transition-colors hover:bg-primary/20"
+                  >
+                    <Utensils className="h-3.5 w-3.5" /> Reserve a table
                   </Link>
                 ) : null}
               </div>
