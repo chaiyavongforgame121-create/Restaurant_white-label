@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { ChefHat, Lock, Mail, Phone, ShieldCheck } from 'lucide-react';
+import { ChefHat, Lock, Phone, ShieldCheck } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Button, Card } from '@favornoms/ui';
 import { currentOrigin, safeNext } from '@favornoms/shared';
@@ -71,14 +71,12 @@ export function SignInView({ branchId, brandName, defaultDial = '+1' }: Props) {
   }, [pathname]);
   const { user } = useAuth();
   const callbackError = searchParams.get('error');
-  const [stage, setStage] = React.useState<'phone' | 'email' | 'email_sent'>('phone');
   // Login vs Register is explicit on the phone tab so the edge function knows which path to
   // take (login must never silently create an account, and register must never take one over).
   const [phoneMode, setPhoneMode] = React.useState<'login' | 'register'>('login');
   const [dial, setDial] = React.useState<Dial>(defaultDial);
   const [phone, setPhone] = React.useState('');
   const [password, setPassword] = React.useState('');
-  const [emailAddr, setEmailAddr] = React.useState('');
   const [fullName, setFullName] = React.useState('');
   const [loading, setLoading] = React.useState(false);
   const [googleLoading, setGoogleLoading] = React.useState(false);
@@ -100,7 +98,7 @@ export function SignInView({ branchId, brandName, defaultDial = '+1' }: Props) {
     return `${dial}${digits}`;
   };
 
-  // Already signed in — e.g. an OAuth or magic-link round-trip landed back here because its
+  // Already signed in — e.g. a Google OAuth round-trip landed back here because its
   // `next` defaulted to this page. Move the diner on instead of showing a login form they no
   // longer need. (This is what actually fixes "Google worked but bounced me back to sign-in".)
   //
@@ -223,33 +221,6 @@ export function SignInView({ branchId, brandName, defaultDial = '+1' }: Props) {
     }
   };
 
-  const submitEmail = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setLoading(true);
-    const supabase = getBrowserClient();
-    // Through /auth/callback, not straight at the destination. @supabase/ssr hard-codes the
-    // PKCE flow, so the link arrives as ?code=… and exchangeCodeForSession is called in
-    // exactly one place in the monorepo — that route. Pointed anywhere else, the server
-    // render is signed out and only the browser client's detectSessionInUrl rescues it.
-    const redirectTo = typeof window !== 'undefined'
-      ? `${window.location.origin}/auth/callback?next=${encodeURIComponent(next ?? branchBase)}`
-      : undefined;
-    const { error } = await supabase.auth.signInWithOtp({
-      email: emailAddr.trim().toLowerCase(),
-      options: {
-        emailRedirectTo: redirectTo,
-        data: { signup_type: 'customer', branch_id: branchId, full_name: fullName.trim() || undefined },
-      },
-    });
-    setLoading(false);
-    if (error) {
-      setError(error.message);
-      return;
-    }
-    setStage('email_sent');
-  };
-
   return (
     <div className="container max-w-md py-8">
       <motion.div
@@ -263,51 +234,24 @@ export function SignInView({ branchId, brandName, defaultDial = '+1' }: Props) {
         </div>
         <h1 className="mt-4 font-display text-3xl font-bold">Welcome to {brandName}</h1>
         <p className="mt-1 text-muted-foreground">
-          {stage === 'phone' && 'Sign in with your phone to track orders and earn points'}
-          {stage === 'email' && "Sign in with email — we'll send you a one-time link"}
-          {stage === 'email_sent' && `We sent a link to ${emailAddr}`}
+          Sign in with your phone to track orders and earn points
         </p>
       </motion.div>
 
       <Card className="mt-6 p-5">
-        {stage !== 'email_sent' && (
-          <>
-            <button
-              type="button"
-              onClick={submitGoogle}
-              disabled={googleLoading}
-              className="focus-ring flex h-14 w-full items-center justify-center gap-3 rounded-xl border border-border bg-card text-base font-semibold shadow-soft transition-shadow hover:shadow-warm disabled:opacity-60"
-            >
-              <GoogleMark className="h-5 w-5" />
-              {googleLoading ? 'Opening Google…' : 'Continue with Google'}
-            </button>
-            <div className="my-4 flex items-center gap-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              <span className="h-px flex-1 bg-border" /> or <span className="h-px flex-1 bg-border" />
-            </div>
-            <div className="mb-4 flex rounded-full bg-muted p-1 text-sm font-semibold">
-              <button
-                type="button"
-                onClick={() => { setStage('phone'); setError(null); }}
-                className={`focus-ring flex flex-1 items-center justify-center gap-1.5 rounded-full py-1.5 transition-colors ${
-                  stage === 'phone' ? 'bg-card text-foreground shadow-soft' : 'text-muted-foreground'
-                }`}
-              >
-                <Phone className="h-3.5 w-3.5" /> Phone
-              </button>
-              <button
-                type="button"
-                onClick={() => { setStage('email'); setError(null); }}
-                className={`focus-ring flex flex-1 items-center justify-center gap-1.5 rounded-full py-1.5 transition-colors ${
-                  stage === 'email' ? 'bg-card text-foreground shadow-soft' : 'text-muted-foreground'
-                }`}
-              >
-                <Mail className="h-3.5 w-3.5" /> Email
-              </button>
-            </div>
-          </>
-        )}
-        {stage === 'phone' ? (
-          <form onSubmit={submitPhone} className="space-y-4">
+        <button
+          type="button"
+          onClick={submitGoogle}
+          disabled={googleLoading}
+          className="focus-ring flex h-14 w-full items-center justify-center gap-3 rounded-xl border border-border bg-card text-base font-semibold shadow-soft transition-shadow hover:shadow-warm disabled:opacity-60"
+        >
+          <GoogleMark className="h-5 w-5" />
+          {googleLoading ? 'Opening Google…' : 'Continue with Google'}
+        </button>
+        <div className="my-4 flex items-center gap-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <span className="h-px flex-1 bg-border" /> or <span className="h-px flex-1 bg-border" />
+        </div>
+        <form onSubmit={submitPhone} className="space-y-4">
             <div className="flex rounded-full bg-muted p-1 text-sm font-semibold">
               <button
                 type="button"
@@ -396,65 +340,7 @@ export function SignInView({ branchId, brandName, defaultDial = '+1' }: Props) {
               <a href="/terms" className="text-primary underline">Terms</a> and{' '}
               <a href="/privacy" className="text-primary underline">Privacy</a>.
             </p>
-          </form>
-        ) : stage === 'email' ? (
-          <form onSubmit={submitEmail} className="space-y-4">
-            <label className="block">
-              <span className="mb-2 block text-sm font-medium">Full name</span>
-              <input
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                autoComplete="name"
-                required
-                placeholder="Your name"
-                className="focus-ring w-full rounded-xl border border-border bg-background px-4 py-3 text-base"
-              />
-            </label>
-            <label className="block">
-              <span className="mb-2 block text-sm font-medium">Email</span>
-              <div className="relative">
-                <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  value={emailAddr}
-                  onChange={(e) => setEmailAddr(e.target.value)}
-                  type="email"
-                  inputMode="email"
-                  autoComplete="email"
-                  required
-                  placeholder="you@example.com"
-                  className="focus-ring w-full rounded-xl border border-border bg-background py-3 pl-11 pr-4 text-base"
-                />
-              </div>
-            </label>
-            {error && <p className="text-sm text-danger">{error}</p>}
-            <Button type="submit" variant="gradient" size="xl" fullWidth loading={loading}>
-              Send magic link
-            </Button>
-            <p className="text-center text-xs text-muted-foreground">
-              By continuing you agree to our{' '}
-              <a href="/terms" className="text-primary underline">Terms</a> and{' '}
-              <a href="/privacy" className="text-primary underline">Privacy</a>.
-            </p>
-          </form>
-        ) : (
-          <div className="space-y-3 text-center">
-            <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-success/15 text-success">
-              <Mail className="h-7 w-7" />
-            </div>
-            <h3 className="font-display text-lg font-semibold">Check your inbox</h3>
-            <p className="text-sm text-muted-foreground">
-              We sent a sign-in link to <strong>{emailAddr}</strong>. Open it on this device to
-              continue.
-            </p>
-            <button
-              type="button"
-              onClick={() => { setStage('email'); setError(null); }}
-              className="focus-ring block w-full py-2 text-center text-sm font-medium text-primary"
-            >
-              ← Use a different email
-            </button>
-          </div>
-        )}
+        </form>
       </Card>
 
       <div className="mt-6 flex items-center gap-2 rounded-2xl bg-muted/50 p-4 text-xs text-muted-foreground">

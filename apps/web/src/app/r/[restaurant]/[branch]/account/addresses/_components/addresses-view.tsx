@@ -75,8 +75,17 @@ export function AddressesView({ base, branchId }: { base: string; branchId: stri
   const refresh = React.useCallback(
     async (cid: string) => {
       const supabase = getBrowserClient();
-      const rows = await listCustomerAddresses(supabase, cid);
-      setAddresses(rows);
+      // listCustomerAddresses now throws on a read failure instead of returning [].
+      // Surface it as loadError (the Retry card) so a failed reload never masquerades
+      // as "No saved addresses", and re-throw so callers know it did not complete.
+      try {
+        const rows = await listCustomerAddresses(supabase, cid);
+        setAddresses(rows);
+        setLoadError(null);
+      } catch (err) {
+        setLoadError((err as Error).message);
+        throw err;
+      }
     },
     [],
   );
@@ -243,8 +252,11 @@ export function AddressesView({ base, branchId }: { base: string; branchId: stri
         notes: notes.trim() || null,
         is_default: isDefault,
       });
+      // The write succeeded (upsertCustomerAddress throws otherwise). Close the sheet,
+      // then reload — a reload failure here must NOT look like the save failed, so it
+      // lands on the list-level Retry card (via refresh -> loadError), not the sheet.
       setFormOpen(false);
-      await refresh(cid);
+      await refresh(cid).catch(() => undefined);
     } catch (err) {
       setFormError(describeAddressError((err as Error).message));
     } finally {

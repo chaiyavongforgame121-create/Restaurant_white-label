@@ -824,6 +824,11 @@ export function CheckoutView({
         }).catch(() => undefined);
       }
       clear();
+      // Invalidate the client Router Cache before navigating: the order was placed by a
+      // direct fetch to the edge function, so Next has no idea the data changed. Without
+      // this, /orders (and rewards) can render a cached tree from before the order and the
+      // diner does not see the order they just placed.
+      router.refresh();
       router.push(`${base}/orders/${result.order_number}`);
     } catch (err) {
       setError(describeOrderError((err as Error).message));

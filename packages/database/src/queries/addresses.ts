@@ -22,7 +22,7 @@ export async function listCustomerAddresses(
   supabase: FavornomsClient,
   customerId: string,
 ): Promise<SavedAddress[]> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('customer_addresses')
     .select(
       'id, label, address_line1, address_line2, city, state, postal_code, delivery_notes, is_default, lat, lng',
@@ -30,6 +30,11 @@ export async function listCustomerAddresses(
     .eq('customer_id', customerId)
     .order('is_default', { ascending: false })
     .order('created_at', { ascending: false });
+  // Do NOT swallow the error. A transient failure here (token mid-refresh, a network
+  // blip) used to return [], which the view renders as "No saved addresses" — identical
+  // to genuinely having none. That is exactly what made a just-saved address look lost.
+  // Surfacing it lets the caller show a retry instead of a false empty state.
+  if (error) throw new Error(`list_addresses_failed:${error.message}`);
   return (data ?? []) as SavedAddress[];
 }
 

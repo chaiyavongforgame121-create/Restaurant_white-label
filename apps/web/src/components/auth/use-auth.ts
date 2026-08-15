@@ -11,12 +11,16 @@ export function useAuth() {
 
   React.useEffect(() => {
     const supabase = getBrowserClient();
-    // The catch is load-bearing: every page that gates a "Loading…" branch on this
-    // flag spins forever if getUser() rejects. Treat a failed lookup as signed-out —
-    // onAuthStateChange still corrects it if a session turns up.
+    // getSession(), NOT getUser(): getUser() hits /auth/v1/user over the network on
+    // EVERY mount, and menu/checkout/account/orders/reserve each mount this hook — that
+    // is 7-9 cross-Pacific round-trips per interaction, each gating a "Loading…" spinner,
+    // which is the bulk of the "everything spins forever" report. getSession() reads the
+    // session from local storage synchronously-ish (no network), and onAuthStateChange
+    // still corrects it the instant a token is refreshed or a sign-in/out happens.
+    // The catch stays load-bearing: a rejection must resolve loading, not hang the page.
     supabase.auth
-      .getUser()
-      .then(({ data }) => setUser(data.user ?? null))
+      .getSession()
+      .then(({ data }) => setUser(data.session?.user ?? null))
       .catch(() => setUser(null))
       .finally(() => setLoading(false));
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {

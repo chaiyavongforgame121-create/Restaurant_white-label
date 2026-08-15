@@ -42,7 +42,7 @@ export default async function OrdersPage({ params }: Props) {
       ).data?.id ?? null
     : null;
 
-  const { data: orders } = customerId
+  const { data: orders, error: ordersError } = customerId
     ? await supabase
         .from('orders')
         .select(
@@ -52,7 +52,23 @@ export default async function OrdersPage({ params }: Props) {
         .eq('branch_id', tenant.branch.id)
         .order('created_at', { ascending: false })
         .limit(20)
-    : { data: null };
+    : { data: null, error: null };
+
+  // A failed query must NOT read as "No orders yet" — that is what made a just-placed
+  // order look missing when the request errored (auth mid-refresh, a slow cold DB). Tell
+  // the diner it couldn't load and let them retry, rather than telling them they have none.
+  if (ordersError) {
+    return (
+      <div className="container pt-6">
+        <h1 className="font-display text-2xl font-bold">Your orders</h1>
+        <EmptyState
+          icon={<Receipt className="h-7 w-7" />}
+          title="Couldn’t load your orders"
+          description="Something went wrong fetching your orders. Refresh the page or try again in a moment."
+        />
+      </div>
+    );
+  }
 
   if (!orders || orders.length === 0) {
     return (
