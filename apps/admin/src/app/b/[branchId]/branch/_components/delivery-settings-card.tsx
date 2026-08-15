@@ -48,23 +48,31 @@ const FIELDS: Array<{
   step?: string;
   group: 'fees' | 'timing' | 'dispatch' | 'pay';
   fallback: number;
+  /**
+   * Upper bound, in the DISPLAY unit (miles / dollars), enforced on the input AND clamped
+   * again on save. Without it these were unbounded: production had a driver search radius of
+   * 1,000,000,000 mi and 999,999,999,999,999 dispatch attempts saved on a live branch, which
+   * makes find_dispatch_candidates match every driver on earth and stops staff ever being
+   * alerted that dispatch failed. A typo of one extra zero must not be able to do that.
+   */
+  max: number;
   /** Field is shown/entered in miles ('dist') or $/mile ('rate'); stored as km / $-per-km. */
   convert?: 'dist' | 'rate';
 }> = [
-  { key: 'delivery_base_fee', label: 'Base fee ($)', group: 'fees', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.deliveryBaseFee },
-  { key: 'delivery_per_km_fee', label: 'Per mile ($)', group: 'fees', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.deliveryPerKmFee, convert: 'rate' },
-  { key: 'delivery_min_fee', label: 'Minimum fee ($)', group: 'fees', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.deliveryMinFee },
-  { key: 'delivery_max_fee', label: 'Maximum fee ($)', group: 'fees', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.deliveryMaxFee },
-  { key: 'delivery_radius_km', label: 'Delivery radius (mi)', hint: 'Orders beyond this distance are rejected at checkout', group: 'timing', step: '0.5', fallback: DELIVERY_SETTING_DEFAULTS.deliveryRadiusKm, convert: 'dist' },
-  { key: 'prep_time_min', label: 'Prep time (min)', hint: 'Baseline kitchen time used in customer ETAs', group: 'timing', step: '1', fallback: DELIVERY_SETTING_DEFAULTS.prepTimeMin },
-  { key: 'driver_search_radius_km', label: 'Driver search radius (mi)', hint: 'How far from the branch to look for drivers', group: 'dispatch', step: '0.5', fallback: 3 * KM_PER_MILE, convert: 'dist' },
-  { key: 'driver_max_attempts', label: 'Max dispatch attempts', hint: 'Staff get alerted after this many failed rounds', group: 'dispatch', step: '1', fallback: 3 },
-  { key: 'offer_ttl_seconds', label: 'Offer timeout (sec)', hint: 'How long a driver has to accept an offer', group: 'dispatch', step: '5', fallback: DELIVERY_SETTING_DEFAULTS.offerTtlSeconds },
+  { key: 'delivery_base_fee', label: 'Base fee ($)', group: 'fees', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.deliveryBaseFee, max: 100 },
+  { key: 'delivery_per_km_fee', label: 'Per mile ($)', group: 'fees', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.deliveryPerKmFee, convert: 'rate', max: 50 },
+  { key: 'delivery_min_fee', label: 'Minimum fee ($)', group: 'fees', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.deliveryMinFee, max: 100 },
+  { key: 'delivery_max_fee', label: 'Maximum fee ($)', group: 'fees', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.deliveryMaxFee, max: 100 },
+  { key: 'delivery_radius_km', label: 'Delivery radius (mi)', hint: 'Orders beyond this distance are rejected at checkout', group: 'timing', step: '0.5', fallback: DELIVERY_SETTING_DEFAULTS.deliveryRadiusKm, convert: 'dist', max: 50 },
+  { key: 'prep_time_min', label: 'Prep time (min)', hint: 'Baseline kitchen time used in customer ETAs', group: 'timing', step: '1', fallback: DELIVERY_SETTING_DEFAULTS.prepTimeMin, max: 240 },
+  { key: 'driver_search_radius_km', label: 'Driver search radius (mi)', hint: 'How far from the branch to look for drivers', group: 'dispatch', step: '0.5', fallback: 3 * KM_PER_MILE, convert: 'dist', max: 50 },
+  { key: 'driver_max_attempts', label: 'Max dispatch attempts', hint: 'Staff get alerted after this many failed rounds', group: 'dispatch', step: '1', fallback: 3, max: 10 },
+  { key: 'offer_ttl_seconds', label: 'Offer timeout (sec)', hint: 'How long a driver has to accept an offer', group: 'dispatch', step: '5', fallback: DELIVERY_SETTING_DEFAULTS.offerTtlSeconds, max: 300 },
   // Stored directly in miles (unlike the km-stored keys above) — the SQL pairing fn
   // claim_batch_sibling reads settings->>'batch_max_detour_mi' as miles.
-  { key: 'batch_max_detour_mi', label: 'Stacked-order max detour (mi)', hint: 'Pair two ready orders only when the second is on the way — this caps the extra driving the second customer accepts. Lower = only near-perfect same-route pairs (needs stacking enabled below)', group: 'dispatch', step: '0.25', fallback: 1.0 },
-  { key: 'driver_base_pay', label: 'Driver base pay ($)', group: 'pay', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.driverBasePay },
-  { key: 'driver_per_km_pay', label: 'Driver per mile ($)', group: 'pay', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.driverPerKmPay, convert: 'rate' },
+  { key: 'batch_max_detour_mi', label: 'Stacked-order max detour (mi)', hint: 'Pair two ready orders only when the second is on the way — this caps the extra driving the second customer accepts. Lower = only near-perfect same-route pairs (needs stacking enabled below)', group: 'dispatch', step: '0.25', fallback: 1.0, max: 10 },
+  { key: 'driver_base_pay', label: 'Driver base pay ($)', group: 'pay', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.driverBasePay, max: 100 },
+  { key: 'driver_per_km_pay', label: 'Driver per mile ($)', group: 'pay', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.driverPerKmPay, convert: 'rate', max: 50 },
 ];
 
 const GROUP_TITLES: Record<string, string> = {
@@ -145,7 +153,11 @@ export function DeliverySettingsCard({ branchId, settings }: Props) {
     const patch: Record<string, number | boolean> = {};
     for (const f of FIELDS) {
       const n = Number(values[f.key]);
-      const display = Number.isFinite(n) && n >= 0 ? n : toDisplayUnit(f.convert, f.fallback);
+      const raw = Number.isFinite(n) && n >= 0 ? n : toDisplayUnit(f.convert, f.fallback);
+      // Clamp on save as well as on the input: `max` on a number input is advisory (typing
+      // past it, pasting, or a scripted change all bypass it), and these values drive
+      // dispatch radius and retry counts.
+      const display = Math.min(raw, f.max);
       patch[f.key] = toStoredUnit(f.convert, display); // store km / $-per-km equivalent
     }
     patch.orders_paused = paused;
@@ -187,6 +199,7 @@ export function DeliverySettingsCard({ branchId, settings }: Props) {
                 <input
                   type="number"
                   min={0}
+                  max={f.max}
                   step={f.step}
                   inputMode="decimal"
                   value={values[f.key]}

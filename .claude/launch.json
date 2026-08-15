@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@favornoms/web", "dev"],
+      "port": 3000
+    },
+    {
+      "name": "driver",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@favornoms/driver", "dev"],
+      "port": 3001
+    },
+    {
+      "name": "admin",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@favornoms/admin", "dev"],
+      "port": 3004
+    }
+  ]
+}
