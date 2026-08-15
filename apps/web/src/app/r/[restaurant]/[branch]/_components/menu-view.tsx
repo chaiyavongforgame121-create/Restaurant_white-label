@@ -343,14 +343,14 @@ function Hero({
             ) : null}
           </div>
           <div
-            className="relative mx-auto hidden aspect-square w-full max-w-md overflow-hidden rounded-3xl shadow-warm lg:block"
+            className="relative mx-auto aspect-square w-full max-w-md overflow-hidden rounded-3xl shadow-warm"
           >
             <Image
               src={heroUrl || 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?auto=format&fit=crop&w=900&h=900&q=80'}
               alt={title}
               fill
               priority
-              sizes="(max-width: 1024px) 0, 50vw"
+              sizes="(max-width: 1024px) 100vw, 50vw"
               className="object-cover"
             />
             <div className="absolute inset-x-4 bottom-4 rounded-2xl border border-white/30 bg-white/85 px-4 py-3 backdrop-blur-md">

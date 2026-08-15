@@ -41,13 +41,17 @@ export function ReserveView({ base, branchId, branchName }: Props) {
   const [submitting, setSubmitting] = React.useState(false);
   const [success, setSuccess] = React.useState<null | { id: string; reserved_for: string }>(null);
   const [error, setError] = React.useState<string | null>(null);
-  // Profile prefill. Prefilled, never locked: the account name is often not the
-  // name the table should be under (booking for a partner, a nickname the host
-  // will actually call out), and a field the diner cannot correct is the exact
-  // complaint this page had.
+  // Profile prefill. Owner decision (2026-08-15): the PHONE is locked to the
+  // account number (identity should not be hand-edited on a no-OTP account),
+  // but the NAME stays editable — the account name is often not the name the
+  // table should be under (booking for a partner, a nickname the host will
+  // call out). The lock only engages when the account actually has a number:
+  // a diner whose profile has no phone (e.g. a Google sign-in) can still type
+  // one, or they could never book.
   const [profileLoading, setProfileLoading] = React.useState(true);
   const [profileError, setProfileError] = React.useState<string | null>(null);
   const [prefilled, setPrefilled] = React.useState(false);
+  const [phoneLocked, setPhoneLocked] = React.useState(false);
 
   React.useEffect(() => {
     if (!user) {
@@ -78,7 +82,10 @@ export function ReserveView({ base, branchId, branchName }: Props) {
         const profileName = (data?.full_name?.trim() || metaName).trim();
         const profilePhone = (data?.phone?.trim() || authPhone).trim();
         if (profileName) setName(profileName);
-        if (profilePhone) setPhone(profilePhone);
+        if (profilePhone) {
+          setPhone(profilePhone);
+          setPhoneLocked(true);
+        }
         if (profileName || profilePhone) setPrefilled(true);
       } catch (err) {
         // Never lock the diner out of booking over a prefill failure — they can
@@ -270,15 +277,22 @@ export function ReserveView({ base, branchId, branchName }: Props) {
               type="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
+              readOnly={phoneLocked}
+              aria-readonly={phoneLocked}
               autoComplete="tel"
               placeholder="(555) 123-4567"
-              className="focus-ring w-full rounded-xl border border-border bg-background px-4 py-3 text-base"
+              className={`focus-ring w-full rounded-xl border border-border px-4 py-3 text-base ${
+                phoneLocked
+                  ? 'cursor-not-allowed bg-muted text-muted-foreground'
+                  : 'bg-background'
+              }`}
             />
           </label>
           {prefilled && (
             <p className="text-xs text-muted-foreground">
-              Prefilled from your account — edit either field to book under a different
-              name or number.{' '}
+              {phoneLocked
+                ? 'Your name is prefilled and editable — change it to book under a different name. The phone number is locked to your account.'
+                : 'Prefilled from your account — edit either field to book under a different name or number.'}{' '}
               <Link href={`${base}/account/settings`} className="font-medium text-primary underline">
                 Update your account
               </Link>

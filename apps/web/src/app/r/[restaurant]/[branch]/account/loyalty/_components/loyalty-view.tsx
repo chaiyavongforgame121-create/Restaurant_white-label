@@ -173,6 +173,11 @@ export function LoyaltyView({
                 <strong className="text-foreground">100 points = {formatCurrency(1)} off</strong> (up to
                 50% of your subtotal).
               </li>
+              <li>
+                Redeemed points leave your balance right away, but the entry shows in{' '}
+                <strong className="text-foreground">Recent activity</strong> once that order is
+                completed.
+              </li>
               <li>Keep ordering to climb tiers and unlock more perks.</li>
             </ul>
           </Card>
