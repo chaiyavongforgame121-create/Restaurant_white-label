@@ -14,8 +14,8 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { BarChart3, ShoppingBag, TrendingUp, Trophy } from 'lucide-react';
-import { Card } from '@favornoms/ui';
+import { AlertTriangle, BarChart3, RefreshCw, ShoppingBag, TrendingUp, Trophy } from 'lucide-react';
+import { Button, Card } from '@favornoms/ui';
 import { formatCurrency } from '@favornoms/shared';
 import type { BranchReports } from '@favornoms/database/queries';
 import { ExportButtons } from './export-buttons';
@@ -24,6 +24,8 @@ interface Props {
   branchId: string;
   initialDays: number;
   reports: BranchReports | null;
+  /** Real failure text from get_branch_reports, or null when the RPC succeeded. */
+  error?: string | null;
   timezone?: string;
 }
 
@@ -36,7 +38,7 @@ const channelColors: Record<string, string> = {
 
 const DOW_ORDER = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-export function ReportsView({ branchId, initialDays, reports, timezone }: Props) {
+export function ReportsView({ branchId, initialDays, reports, error, timezone }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const [days, setDays] = React.useState(initialDays);
@@ -46,11 +48,59 @@ export function ReportsView({ branchId, initialDays, reports, timezone }: Props)
     router.replace(`${pathname}?days=${n}`);
   };
 
+  // The header (range switcher + exports) renders in every state on purpose:
+  // when the fetch failed it used to disappear too, leaving the merchant with
+  // nothing to click — not even a different date range.
+  const header = (
+    <header className="mb-6 flex flex-wrap items-end justify-between gap-3 px-2 pl-16 lg:px-0">
+      <div>
+        <h1 className="font-display text-3xl font-bold">Reports</h1>
+        <p className="mt-1 text-muted-foreground">Last {days} days</p>
+      </div>
+      <ExportButtons branchId={branchId} />
+      <div className="inline-flex rounded-full border border-border bg-card p-1">
+        {[7, 30, 90].map((n) => (
+          <button
+            key={n}
+            onClick={() => setRange(n)}
+            className={`focus-ring rounded-full px-4 py-1.5 text-xs font-semibold transition-colors ${
+              days === n ? 'bg-primary text-primary-foreground' : 'text-foreground hover:bg-muted'
+            }`}
+          >
+            {n}d
+          </button>
+        ))}
+      </div>
+    </header>
+  );
+
+  // Failure ≠ empty week. "Try again later" is unactionable, so show the actual
+  // database error the merchant can quote to support.
   if (!reports) {
     return (
       <div className="container max-w-6xl py-8">
-        <h1 className="font-display text-3xl font-bold">Reports</h1>
-        <p className="mt-1 text-muted-foreground">No data — try again later.</p>
+        {header}
+        <Card className="p-6">
+          <h2 className="flex items-center gap-2 font-display text-lg font-semibold text-destructive">
+            <AlertTriangle className="h-5 w-5" /> Reports could not be loaded
+          </h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Your sales data is safe — this is a problem reading it, not a problem with your
+            orders. Reload the page; if it keeps happening, send the message below to support.
+          </p>
+          <p className="mt-3 break-words rounded-xl bg-destructive/10 px-4 py-3 font-mono text-xs text-destructive">
+            {error ?? 'Unknown error from get_branch_reports.'}
+          </p>
+          <div className="mt-4">
+            <Button
+              variant="outline"
+              leftIcon={<RefreshCw className="h-4 w-4" />}
+              onClick={() => router.refresh()}
+            >
+              Try again
+            </Button>
+          </div>
+        </Card>
       </div>
     );
   }
@@ -58,28 +108,24 @@ export function ReportsView({ branchId, initialDays, reports, timezone }: Props)
   const { totals, daily, by_channel, top_items, by_category, hour_heatmap } = reports;
   const maxHeat = Math.max(1, ...hour_heatmap.map((h) => h.orders));
 
+  if (totals.orders === 0) {
+    return (
+      <div className="container max-w-6xl py-8">
+        {header}
+        <Card className="p-6 text-center">
+          <h2 className="font-display text-lg font-semibold">No orders in the last {days} days</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Reports loaded fine — this branch just hasn&apos;t taken an order in this window. Try a
+            wider range above.
+          </p>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="container max-w-6xl py-8">
-      <header className="mb-6 flex flex-wrap items-end justify-between gap-3 px-2 pl-16 lg:px-0">
-        <div>
-          <h1 className="font-display text-3xl font-bold">Reports</h1>
-          <p className="mt-1 text-muted-foreground">Last {days} days</p>
-        </div>
-        <ExportButtons branchId={branchId} />
-        <div className="inline-flex rounded-full border border-border bg-card p-1">
-          {[7, 30, 90].map((n) => (
-            <button
-              key={n}
-              onClick={() => setRange(n)}
-              className={`focus-ring rounded-full px-4 py-1.5 text-xs font-semibold transition-colors ${
-                days === n ? 'bg-primary text-primary-foreground' : 'text-foreground hover:bg-muted'
-              }`}
-            >
-              {n}d
-            </button>
-          ))}
-        </div>
-      </header>
+      {header}
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Kpi

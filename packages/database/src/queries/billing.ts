@@ -12,8 +12,10 @@
 import {
   DENIED_ENTITLEMENTS,
   parseEntitlements,
+  parseFeatureOverrides,
   type BillingProduct,
   type Entitlements,
+  type FeatureOverrideState,
   type PackageSelection,
 } from '@favornoms/shared';
 import type { FavornomsClient } from '../client-type';
@@ -274,6 +276,8 @@ export interface RestaurantSubscriptionRow {
   restaurant_slug: string;
   created_at: string;
   entitlements: Entitlements;
+  /** The platform switch, NOT the resolved grants. See featureOverrideState(). */
+  feature_overrides: Record<string, boolean>;
 }
 
 export async function listRestaurantSubscriptions(
@@ -289,8 +293,44 @@ export async function listRestaurantSubscriptions(
       restaurant_slug: String(r.restaurant_slug ?? ''),
       created_at: String(r.created_at ?? ''),
       entitlements: parseEntitlements(r.entitlements),
+      feature_overrides: parseFeatureOverrides(r.feature_overrides),
     };
   });
+}
+
+/**
+ * Flip one feature for one restaurant, independently of its package.
+ *
+ * 'off' hides a feature the plan sold (the reason this exists: the trial grants
+ * Digital Signage + AI Voice to everyone and both pages are still placeholders).
+ * 'on' grants one the plan never sold. 'plan' clears the switch.
+ *
+ * The SQL recomputes billing_entitlements inside the same statement, so the
+ * merchant sees the change on their next request — no cron, no cache purge.
+ */
+export async function setFeatureOverride(
+  supabase: FavornomsClient,
+  restaurantId: string,
+  feature: string,
+  state: FeatureOverrideState,
+): Promise<{
+  ok: boolean;
+  overrides?: Record<string, boolean>;
+  entitlements?: Entitlements;
+  error?: string;
+}> {
+  const { data, error } = await supabase.rpc('platform_set_feature_override', {
+    p_restaurant_id: restaurantId,
+    p_feature: feature,
+    p_state: state,
+  });
+  if (error) return { ok: false, error: error.message };
+  const d = (data ?? {}) as Record<string, unknown>;
+  return {
+    ok: d.ok === true,
+    overrides: parseFeatureOverrides(d.feature_overrides),
+    entitlements: d.entitlements ? parseEntitlements(d.entitlements) : undefined,
+  };
 }
 
 /**

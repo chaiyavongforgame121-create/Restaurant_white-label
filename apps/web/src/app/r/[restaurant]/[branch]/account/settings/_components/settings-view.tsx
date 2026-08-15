@@ -5,6 +5,7 @@ import { Bell, Moon, Save, Sun, User } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Button, Card, useTheme } from '@favornoms/ui';
 import { useAuth } from '@/components/auth/use-auth';
+import { resolveMyCustomerId } from '@/lib/customer';
 import { AccountHeader, SignInGate } from '../../_components/account-ui';
 
 export function SettingsView({ base, branchId }: { base: string; branchId: string }) {
@@ -26,30 +27,37 @@ export function SettingsView({ base, branchId }: { base: string; branchId: strin
       setLoadingData(false);
       return;
     }
+    let cancelled = false;
     const supabase = getBrowserClient();
-    // One customer identity per restaurant (shared across branches); resolve/create it.
-    void supabase
-      .rpc('get_or_create_my_customer', { p_branch_id: branchId })
-      .then(async ({ data: cid }) => {
-        const customerIdResolved = cid as string | null;
-        if (!customerIdResolved) {
-          setLoadingData(false);
-          return;
-        }
-        const { data } = await supabase
+    void (async () => {
+      try {
+        // One customer identity per restaurant (shared across branches); resolve/create it.
+        // Checkout resolves the same way, so what's saved here is what's prefilled there.
+        const cid = await resolveMyCustomerId(branchId);
+        if (cancelled) return;
+        setCustomerId(cid);
+        const { data, error: dbErr } = await supabase
           .from('customers')
           .select('id, full_name, phone, email, marketing_consent')
-          .eq('id', customerIdResolved)
+          .eq('id', cid)
           .maybeSingle();
+        if (cancelled) return;
+        if (dbErr) throw new Error(dbErr.message);
         if (data) {
-          setCustomerId(data.id);
           setFullName(data.full_name ?? '');
           setPhone(data.phone ?? '');
           setEmail(data.email ?? '');
           setMarketing(!!data.marketing_consent);
         }
-        setLoadingData(false);
-      });
+      } catch (err) {
+        if (!cancelled) setError((err as Error).message);
+      } finally {
+        if (!cancelled) setLoadingData(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [user, branchId]);
 
   const save = async (e: React.FormEvent) => {
@@ -59,7 +67,9 @@ export function SettingsView({ base, branchId }: { base: string; branchId: strin
     setError(null);
     setSaved(false);
     const supabase = getBrowserClient();
-    const { error: dbErr } = await supabase
+    // `.select()` on the update is deliberate: an RLS-blocked update returns no
+    // error and zero rows, which used to look like a successful save.
+    const { data, error: dbErr } = await supabase
       .from('customers')
       .update({
         full_name: fullName.trim() || null,
@@ -67,12 +77,24 @@ export function SettingsView({ base, branchId }: { base: string; branchId: strin
         email: email.trim().toLowerCase() || null,
         marketing_consent: marketing,
       })
-      .eq('id', customerId);
+      .eq('id', customerId)
+      .select('id, full_name, phone, email, marketing_consent');
     setSaving(false);
     if (dbErr) {
       setError(dbErr.message);
       return;
     }
+    const row = data?.[0];
+    if (!row) {
+      setError("We couldn't save your profile. Please sign in again and retry.");
+      return;
+    }
+    // Round-trip what the database actually stored, so the form can never show
+    // a value that wasn't persisted.
+    setFullName(row.full_name ?? '');
+    setPhone(row.phone ?? '');
+    setEmail(row.email ?? '');
+    setMarketing(!!row.marketing_consent);
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   };

@@ -21,8 +21,21 @@ import {
 } from '@favornoms/maps';
 import { Badge, Button, Card, IconButton, Sheet } from '@favornoms/ui';
 import { useAuth } from '@/components/auth/use-auth';
+import { resolveMyCustomerId } from '@/lib/customer';
 import { pickerLabels } from '@/lib/picker-labels';
 import { AccountHeader, SignInGate } from '../../_components/account-ui';
+
+// upsert/deleteCustomerAddress wrap the Postgres error as
+// `upsert_address_failed:<msg>` — unwrap it and put the known codes into words
+// so a failed save actually tells the diner what to do.
+function describeAddressError(message: string): string {
+  const raw = message.replace(/^(upsert_address_failed|delete_address_failed):/, '');
+  if (raw.includes('line1_required')) return 'Please enter a street address.';
+  if (raw.includes('address_not_found')) return 'That address no longer exists — please refresh.';
+  if (raw.includes('forbidden')) return 'That address belongs to a different account.';
+  if (raw.includes('auth_required')) return 'Your session expired. Please sign in again.';
+  return raw;
+}
 
 export function AddressesView({ base, branchId }: { base: string; branchId: string }) {
   const t = useTranslations();
@@ -53,13 +66,17 @@ export function AddressesView({ base, branchId }: { base: string; branchId: stri
   const [geoError, setGeoError] = React.useState<string | null>(null);
   const [saving, setSaving] = React.useState(false);
   const [formError, setFormError] = React.useState<string | null>(null);
+  // Identity/list failures. Without these the page silently renders an empty
+  // address book and "Save address" does nothing at all.
+  const [loadError, setLoadError] = React.useState<string | null>(null);
+  const [actionError, setActionError] = React.useState<string | null>(null);
+  const [reloadKey, setReloadKey] = React.useState(0);
 
   const refresh = React.useCallback(
     async (cid: string) => {
       const supabase = getBrowserClient();
       const rows = await listCustomerAddresses(supabase, cid);
       setAddresses(rows);
-      setBusy(false);
     },
     [],
   );
@@ -69,20 +86,26 @@ export function AddressesView({ base, branchId }: { base: string; branchId: stri
       setBusy(false);
       return;
     }
-    const supabase = getBrowserClient();
-    // One customer identity per restaurant (shared across branches); resolve/create it.
-    void supabase
-      .rpc('get_or_create_my_customer', { p_branch_id: branchId })
-      .then(({ data }) => {
-        const cid = data as string | null;
-        if (cid) {
-          setCustomerId(cid);
-          void refresh(cid);
-        } else {
-          setBusy(false);
-        }
-      });
-  }, [user, refresh, branchId]);
+    let cancelled = false;
+    setBusy(true);
+    setLoadError(null);
+    void (async () => {
+      try {
+        // One customer identity per restaurant (shared across branches); resolve/create it.
+        const cid = await resolveMyCustomerId(branchId);
+        if (cancelled) return;
+        setCustomerId(cid);
+        await refresh(cid);
+      } catch (err) {
+        if (!cancelled) setLoadError((err as Error).message);
+      } finally {
+        if (!cancelled) setBusy(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, refresh, branchId, reloadKey]);
 
   React.useEffect(() => {
     const supabase = getBrowserClient();
@@ -185,9 +208,18 @@ export function AddressesView({ base, branchId }: { base: string; branchId: stri
     }
   };
 
+  // The address book is useless without an identity, so never fail silently:
+  // re-resolve on demand and let the caller surface whatever went wrong.
+  const ensureCustomerId = async (): Promise<string> => {
+    if (customerId) return customerId;
+    const cid = await resolveMyCustomerId(branchId);
+    setCustomerId(cid);
+    setLoadError(null);
+    return cid;
+  };
+
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!customerId) return;
     if (!addrText.trim()) {
       setFormError(t('checkout.errors.addressRequired'));
       return;
@@ -195,9 +227,10 @@ export function AddressesView({ base, branchId }: { base: string; branchId: stri
     setSaving(true);
     setFormError(null);
     try {
+      const cid = await ensureCustomerId();
       const supabase = getBrowserClient();
       await upsertCustomerAddress(supabase, {
-        customer_id: customerId,
+        customer_id: cid,
         address_id: editingId ?? undefined,
         label: label.trim() || null,
         line1: addrText.trim(),
@@ -211,40 +244,51 @@ export function AddressesView({ base, branchId }: { base: string; branchId: stri
         is_default: isDefault,
       });
       setFormOpen(false);
-      await refresh(customerId);
+      await refresh(cid);
     } catch (err) {
-      setFormError((err as Error).message);
+      setFormError(describeAddressError((err as Error).message));
     } finally {
       setSaving(false);
     }
   };
 
   const setAsDefault = async (a: SavedAddress) => {
-    if (!customerId || a.is_default) return;
-    const supabase = getBrowserClient();
-    await upsertCustomerAddress(supabase, {
-      customer_id: customerId,
-      address_id: a.id,
-      label: a.label,
-      line1: a.address_line1,
-      line2: a.address_line2,
-      city: a.city,
-      state: a.state,
-      postal_code: a.postal_code,
-      lat: a.lat,
-      lng: a.lng,
-      notes: a.delivery_notes,
-      is_default: true,
-    }).catch(() => undefined);
-    await refresh(customerId);
+    if (a.is_default) return;
+    setActionError(null);
+    try {
+      const cid = await ensureCustomerId();
+      const supabase = getBrowserClient();
+      await upsertCustomerAddress(supabase, {
+        customer_id: cid,
+        address_id: a.id,
+        label: a.label,
+        line1: a.address_line1,
+        line2: a.address_line2,
+        city: a.city,
+        state: a.state,
+        postal_code: a.postal_code,
+        lat: a.lat,
+        lng: a.lng,
+        notes: a.delivery_notes,
+        is_default: true,
+      });
+      await refresh(cid);
+    } catch (err) {
+      setActionError(describeAddressError((err as Error).message));
+    }
   };
 
   const remove = async (a: SavedAddress) => {
-    if (!customerId) return;
     if (!confirm('Delete this address?')) return;
-    const supabase = getBrowserClient();
-    await deleteCustomerAddress(supabase, a.id).catch(() => undefined);
-    await refresh(customerId);
+    setActionError(null);
+    try {
+      const cid = await ensureCustomerId();
+      const supabase = getBrowserClient();
+      await deleteCustomerAddress(supabase, a.id);
+      await refresh(cid);
+    } catch (err) {
+      setActionError(describeAddressError((err as Error).message));
+    }
   };
 
   return (
@@ -255,6 +299,25 @@ export function AddressesView({ base, branchId }: { base: string; branchId: stri
         <SignInGate base={base} message="Sign in to save and manage your delivery addresses." />
       ) : (
         <div className="space-y-4">
+          {loadError && (
+            <Card className="border-danger/30 bg-danger/5 p-4">
+              <p className="text-sm font-medium text-danger">{loadError}</p>
+              <Button
+                type="button"
+                variant="ghost"
+                size="md"
+                className="mt-2"
+                onClick={() => setReloadKey((k) => k + 1)}
+              >
+                Retry
+              </Button>
+            </Card>
+          )}
+          {actionError && (
+            <Card className="border-danger/30 bg-danger/5 p-4 text-sm text-danger">
+              {actionError}
+            </Card>
+          )}
           {busy ? (
             <p className="text-sm text-muted-foreground">Loading…</p>
           ) : addresses.length === 0 ? (

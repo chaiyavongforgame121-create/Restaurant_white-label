@@ -130,6 +130,36 @@ export function ownsFeature(e: Entitlements | null | undefined, key: FeatureKey)
   return e?.features[key] === true;
 }
 
+// --- per-restaurant overrides ------------------------------------------------
+//
+// restaurants.feature_overrides is a switch the platform operator controls, kept
+// deliberately separate from the package: `on` grants a key the plan never sold,
+// `off` hides a key it did, and `plan` (the key absent) follows the package.
+// private.billing_compute() folds it into billing_entitlements.features, so
+// hasFeature() already reflects it — this is only for rendering the switch.
+
+export type FeatureOverrideState = 'on' | 'off' | 'plan';
+
+/** Parse restaurants.feature_overrides. Non-boolean values are dropped. */
+export function parseFeatureOverrides(raw: unknown): Record<string, boolean> {
+  const out: Record<string, boolean> = {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof v === 'boolean') out[k] = v;
+  }
+  return out;
+}
+
+export function featureOverrideState(
+  overrides: Record<string, boolean> | null | undefined,
+  key: string,
+): FeatureOverrideState {
+  const v = overrides?.[key];
+  if (v === true) return 'on';
+  if (v === false) return 'off';
+  return 'plan';
+}
+
 export function isEntitled(e: Entitlements | null | undefined): boolean {
   return e?.entitled === true;
 }

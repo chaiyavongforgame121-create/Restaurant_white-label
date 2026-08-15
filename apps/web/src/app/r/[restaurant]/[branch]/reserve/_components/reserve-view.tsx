@@ -1,12 +1,16 @@
 'use client';
 
 import * as React from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Calendar, CheckCircle2, ChevronLeft, Clock, UserRound, Users } from 'lucide-react';
 import { Button, Card, IconButton } from '@favornoms/ui';
 import { getBrowserClient } from '@favornoms/database/client';
 import { createReservation } from '@favornoms/database/queries';
+import { useAuth } from '@/components/auth/use-auth';
+import { resolveMyCustomerId } from '@/lib/customer';
+import { SignInGate } from '../../account/_components/account-ui';
 
 interface Props {
   base: string;
@@ -27,6 +31,7 @@ function todayISO() {
 
 export function ReserveView({ base, branchId, branchName }: Props) {
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   const [date, setDate] = React.useState(todayISO());
   const [time, setTime] = React.useState<string | null>(null);
   const [partySize, setPartySize] = React.useState(2);
@@ -36,11 +41,66 @@ export function ReserveView({ base, branchId, branchName }: Props) {
   const [submitting, setSubmitting] = React.useState(false);
   const [success, setSuccess] = React.useState<null | { id: string; reserved_for: string }>(null);
   const [error, setError] = React.useState<string | null>(null);
+  // Profile prefill. Prefilled, never locked: the account name is often not the
+  // name the table should be under (booking for a partner, a nickname the host
+  // will actually call out), and a field the diner cannot correct is the exact
+  // complaint this page had.
+  const [profileLoading, setProfileLoading] = React.useState(true);
+  const [profileError, setProfileError] = React.useState<string | null>(null);
+  const [prefilled, setPrefilled] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!user) {
+      setProfileLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setProfileLoading(true);
+    setProfileError(null);
+    void (async () => {
+      try {
+        const cid = await resolveMyCustomerId(branchId);
+        if (cancelled) return;
+        const supabase = getBrowserClient();
+        const { data, error: dbErr } = await supabase
+          .from('customers')
+          .select('full_name, phone')
+          .eq('id', cid)
+          .maybeSingle();
+        if (cancelled) return;
+        if (dbErr) throw new Error(dbErr.message);
+        // Fall back to the auth identity when the profile row is still bare —
+        // a phone-OTP sign-in always has a verified number on the user.
+        const metaName = (user.user_metadata?.full_name as string | undefined) ?? '';
+        const authPhone = user.phone ? (user.phone.startsWith('+') ? user.phone : `+${user.phone}`) : '';
+        const profileName = (data?.full_name ?? metaName).trim();
+        const profilePhone = (data?.phone ?? authPhone).trim();
+        if (profileName) setName(profileName);
+        if (profilePhone) setPhone(profilePhone);
+        if (profileName || profilePhone) setPrefilled(true);
+      } catch (err) {
+        // Never lock the diner out of booking over a prefill failure — they can
+        // still type their details in.
+        if (!cancelled) setProfileError((err as Error).message);
+      } finally {
+        // `finally` is the whole point: without it any throw above left the page
+        // spinning forever.
+        if (!cancelled) setProfileLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, branchId]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!time) {
       setError('Please pick a time slot');
+      return;
+    }
+    if (!name.trim() || !phone.trim()) {
+      setError('Please add your name and phone number');
       return;
     }
     setError(null);
@@ -51,8 +111,8 @@ export function ReserveView({ base, branchId, branchName }: Props) {
       const supabase = getBrowserClient();
       const result = await createReservation(supabase, {
         branch_id: branchId,
-        customer_name: name,
-        customer_phone: phone,
+        customer_name: name.trim(),
+        customer_phone: phone.trim(),
         party_size: partySize,
         reserved_for: local.toISOString(),
         notes: notes || undefined,
@@ -92,14 +152,29 @@ export function ReserveView({ base, branchId, branchName }: Props) {
     );
   }
 
+  // Booking a table is an account action: the restaurant has to be able to
+  // recognise and call back whoever is holding it.
+  if (authLoading || (user && profileLoading)) {
+    return (
+      <div className="container max-w-2xl pt-4">
+        <ReserveHeader onBack={() => router.back()} />
+        <p className="text-sm text-muted-foreground">Loading…</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="container max-w-2xl pt-4">
+        <ReserveHeader onBack={() => router.back()} />
+        <SignInGate base={base} message="Sign in to reserve a table — we'll use your account name and phone for the booking." />
+      </div>
+    );
+  }
+
   return (
     <div className="container max-w-2xl pt-4">
-      <header className="mb-5 flex items-center gap-3">
-        <IconButton label="Back" onClick={() => router.back()}>
-          <ChevronLeft className="h-5 w-5" />
-        </IconButton>
-        <h1 className="font-display text-2xl font-bold">Reserve a table</h1>
-      </header>
+      <ReserveHeader onBack={() => router.back()} />
 
       <form className="space-y-4" onSubmit={submit}>
         <Card className="p-5">
@@ -163,6 +238,11 @@ export function ReserveView({ base, branchId, branchName }: Props) {
           <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
             <UserRound className="h-5 w-5 text-primary" /> Your details
           </h2>
+          {profileError && (
+            <p className="text-xs text-warning">
+              We couldn&apos;t load your profile ({profileError}) — please enter your details below.
+            </p>
+          )}
           <label className="block">
             <span className="mb-1 block text-sm font-medium">Name</span>
             <input
@@ -185,6 +265,16 @@ export function ReserveView({ base, branchId, branchName }: Props) {
               className="focus-ring w-full rounded-xl border border-border bg-background px-4 py-3 text-base"
             />
           </label>
+          {prefilled && (
+            <p className="text-xs text-muted-foreground">
+              Prefilled from your account — edit either field to book under a different
+              name or number.{' '}
+              <Link href={`${base}/account/settings`} className="font-medium text-primary underline">
+                Update your account
+              </Link>
+              .
+            </p>
+          )}
           <label className="block">
             <span className="mb-1 block text-sm font-medium">Notes (optional)</span>
             <textarea
@@ -206,5 +296,16 @@ export function ReserveView({ base, branchId, branchName }: Props) {
         </Button>
       </form>
     </div>
+  );
+}
+
+function ReserveHeader({ onBack }: { onBack: () => void }) {
+  return (
+    <header className="mb-5 flex items-center gap-3">
+      <IconButton label="Back" onClick={onBack}>
+        <ChevronLeft className="h-5 w-5" />
+      </IconButton>
+      <h1 className="font-display text-2xl font-bold">Reserve a table</h1>
+    </header>
   );
 }

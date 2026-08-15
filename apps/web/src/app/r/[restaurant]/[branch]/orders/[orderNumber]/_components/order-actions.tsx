@@ -6,65 +6,66 @@ import { AlertCircle, Pencil, Star, XCircle } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Button, Card } from '@favornoms/ui';
 
+export interface ExistingRating {
+  food_stars: number;
+  delivery_stars: number | null;
+  comment: string | null;
+}
+
 interface Props {
   orderId: string;
   branchId: string;
   orderStatus: string;
-  hasRating: boolean;
+  /**
+   * The rating already stored for this order. `undefined` means "not looked up
+   * yet" — the modal stays shut until we actually know, so a slow lookup can
+   * never re-ask someone who has already rated.
+   */
+  existingRating: ExistingRating | null | undefined;
   hasDriver: boolean;
 }
 
 /**
+ * `completed` is the only terminal value of the order status enum
+ * (pending | confirmed | preparing | ready | out_for_delivery | completed |
+ * cancelled | refunded). `delivered` belongs to the *deliveries* table and
+ * never appears on an order, so an order is rateable only once completed —
+ * never while it is still in flight, and never once cancelled/refunded.
+ */
+const RATEABLE_STATUSES = ['completed'];
+
+/**
  * Customer-facing actions on the order tracking page:
  *  - Cancel order (allowed while pending/confirmed)
- *  - Rate the order (after delivered/completed) — auto-opens as a required
+ *  - Rate the order (once completed, exactly once) — auto-opens as a required
  *    modal that can't be dismissed until the stars are submitted (a "skip"
  *    appears after a failed submit so an error can't lock the page)
  */
-export function OrderActions({ orderId, branchId, orderStatus, hasRating, hasDriver }: Props) {
+export function OrderActions({ orderId, branchId, orderStatus, existingRating, hasDriver }: Props) {
   const canCancel = ['pending', 'confirmed'].includes(orderStatus);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [done, setDone] = React.useState(false);
   const [foodStars, setFoodStars] = React.useState(0);
   const [deliveryStars, setDeliveryStars] = React.useState(0);
   const [comment, setComment] = React.useState('');
   const [confirmCancel, setConfirmCancel] = React.useState(false);
   const [editing, setEditing] = React.useState(false);
   const [notesDraft, setNotesDraft] = React.useState('');
-  // The server wiring passes hasRating, but the page can also be reloaded (or
-  // the status flips live via realtime) after a rating exists — confirm against
-  // order_ratings before auto-opening the modal so it never re-asks.
-  const [ratedAlready, setRatedAlready] = React.useState(hasRating);
-  const [ratingChecked, setRatingChecked] = React.useState(hasRating);
+  // What we just wrote in this session — merged over the fetched row so the
+  // stars flip to read-only the moment the insert lands.
+  const [justRated, setJustRated] = React.useState<ExistingRating | null>(null);
   // Escape hatch: a failed submit must not trap the page behind the modal.
   const [skipped, setSkipped] = React.useState(false);
   // Brief in-modal thank-you before the modal closes for good.
   const [thanks, setThanks] = React.useState(false);
 
-  React.useEffect(() => {
-    if (hasRating || !['delivered', 'completed'].includes(orderStatus)) return;
-    let cancelled = false;
-    const supabase = getBrowserClient();
-    void supabase
-      .from('order_ratings')
-      .select('id')
-      .eq('order_id', orderId)
-      .maybeSingle()
-      .then(({ data, error: checkErr }) => {
-        if (cancelled) return;
-        setRatedAlready(!!data);
-        // A failed check can't tell us whether a rating exists — keep the
-        // modal closed rather than re-asking (the insert would just 23505).
-        setRatingChecked(!checkErr);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [orderId, orderStatus, hasRating]);
-
-  const canRate = ['delivered', 'completed'].includes(orderStatus) && !ratedAlready;
-  const ratingModalOpen = canRate && ratingChecked && !done && !skipped;
+  const storedRating = justRated ?? existingRating ?? null;
+  // `undefined` = the lookup hasn't answered yet. Until it does, asking for a
+  // rating risks re-asking someone who already gave one (the insert would just
+  // bounce off the unique(order_id) index anyway).
+  const ratingChecked = existingRating !== undefined;
+  const canRate = RATEABLE_STATUSES.includes(orderStatus) && !storedRating;
+  const ratingModalOpen = canRate && ratingChecked && !skipped;
 
   React.useEffect(() => {
     if (!ratingModalOpen) return;
@@ -75,8 +76,8 @@ export function OrderActions({ orderId, branchId, orderStatus, hasRating, hasDri
     };
   }, [ratingModalOpen]);
 
-  const canReport = ['completed', 'delivered', 'out_for_delivery', 'ready'].includes(orderStatus);
-  if (!canCancel && !canRate && !canReport && !done && !ratedAlready) return null;
+  const canReport = ['completed', 'out_for_delivery', 'ready'].includes(orderStatus);
+  if (!canCancel && !canRate && !canReport && !storedRating) return null;
 
   const doCancel = async () => {
     setBusy(true);
@@ -105,7 +106,9 @@ export function OrderActions({ orderId, branchId, orderStatus, hasRating, hasDri
   };
 
   const submitRating = async () => {
-    if (foodStars === 0 || (hasDriver && deliveryStars === 0)) return;
+    // Guard as well as disable — a double-tap can fire twice before React
+    // paints the disabled state, and the second insert would 23505.
+    if (busy || foodStars === 0 || (hasDriver && deliveryStars === 0)) return;
     setBusy(true);
     setError(null);
     const supabase = getBrowserClient();
@@ -119,26 +122,30 @@ export function OrderActions({ orderId, branchId, orderStatus, hasRating, hasDri
       .eq('id', orderId)
       .maybeSingle();
     if (!orderRow?.customer_id) { setError('no_customer'); setBusy(false); return; }
+    const submission: ExistingRating = {
+      food_stars: foodStars,
+      delivery_stars: hasDriver ? deliveryStars : null,
+      comment: comment || null,
+    };
     const { error: insErr } = await supabase.from('order_ratings').insert({
       order_id: orderId,
       customer_id: orderRow.customer_id,
       branch_id: branchId,
-      food_stars: foodStars,
-      delivery_stars: hasDriver ? deliveryStars : null,
-      comment: comment || null,
+      ...submission,
     });
     setBusy(false);
     if (insErr) {
-      // unique(order_id) — rated in another tab/session; close out gracefully.
-      if (insErr.code === '23505') { setDone(true); setRatedAlready(true); return; }
+      // unique(order_id) on order_ratings — one rating per order, forever. Say
+      // so instead of flashing a thank-you for a write that never happened.
+      if (insErr.code === '23505') {
+        setError("You've already rated this order.");
+        return;
+      }
       setError(insErr.message);
       return;
     }
     setThanks(true);
-    setTimeout(() => {
-      setDone(true);
-      setRatedAlready(true);
-    }, 1800);
+    setTimeout(() => setJustRated(submission), 1800);
   };
 
   return (
@@ -201,9 +208,7 @@ export function OrderActions({ orderId, branchId, orderStatus, hasRating, hasDri
       {canReport && (
         <IssueReportButton orderId={orderId} branchId={branchId} />
       )}
-      {(done || ratedAlready) && (
-        <p className="rounded-xl bg-success/10 px-3 py-2 text-sm text-success">Thanks for your feedback!</p>
-      )}
+      {storedRating && <SubmittedRating rating={storedRating} />}
       {error && <p className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
     </Card>
 
@@ -274,7 +279,7 @@ export function OrderActions({ orderId, branchId, orderStatus, hasRating, hasDri
                     fullWidth
                     onClick={submitRating}
                     loading={busy}
-                    disabled={foodStars === 0 || (hasDriver && deliveryStars === 0)}
+                    disabled={busy || foodStars === 0 || (hasDriver && deliveryStars === 0)}
                     leftIcon={<Star className="h-4 w-4" />}
                   >
                     Submit rating
@@ -305,6 +310,39 @@ export function OrderActions({ orderId, branchId, orderStatus, hasRating, hasDri
       .input:focus-visible { outline: none; border-color: hsl(var(--primary)); box-shadow: 0 0 0 3px hsl(var(--primary) / 0.18); }
     `}</style>
     </>
+  );
+}
+
+/** Read-only echo of the one rating this order is allowed to have. */
+function SubmittedRating({ rating }: { rating: ExistingRating }) {
+  return (
+    <div className="rounded-2xl border border-success/30 bg-success/5 p-3">
+      <p className="text-sm font-semibold text-success">Thanks for your feedback!</p>
+      <div className="mt-2 space-y-1">
+        <StaticStarRow label="Food" value={rating.food_stars} />
+        {rating.delivery_stars != null && (
+          <StaticStarRow label="Delivery" value={rating.delivery_stars} />
+        )}
+      </div>
+      {rating.comment && (
+        <p className="mt-2 text-sm italic text-muted-foreground">&ldquo;{rating.comment}&rdquo;</p>
+      )}
+    </div>
+  );
+}
+
+function StaticStarRow({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="w-16 text-xs text-muted-foreground">{label}</span>
+      <span className="text-base leading-none" aria-label={`${label}: ${value} out of 5 stars`}>
+        {[1, 2, 3, 4, 5].map((n) => (
+          <span key={n} className={n <= value ? 'text-amber-400' : 'text-muted-foreground/25'}>
+            ★
+          </span>
+        ))}
+      </span>
+    </div>
   );
 }
 

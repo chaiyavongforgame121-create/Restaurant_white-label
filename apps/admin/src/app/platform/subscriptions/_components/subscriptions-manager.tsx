@@ -11,13 +11,22 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { Check, Minus, Plus, Search } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
-import { setRestaurantPackage, type RestaurantSubscriptionRow } from '@favornoms/database/queries';
 import {
+  setFeatureOverride,
+  setRestaurantPackage,
+  type RestaurantSubscriptionRow,
+} from '@favornoms/database/queries';
+import {
+  FEATURE_KEYS,
   PLAN_BASE,
   PLAN_TRIAL,
   currentSelection,
+  featureLabel,
+  featureOverrideState,
   packageMonthlyTotal,
   type BillingProduct,
+  type FeatureKey,
+  type FeatureOverrideState,
   type PackageSelection,
 } from '@favornoms/shared';
 import { Badge, Button, Card } from '@favornoms/ui';
@@ -113,6 +122,7 @@ function SubscriptionCard({
     (STATUSES as readonly string[]).includes(ent.status) ? (ent.status as Status) : 'active',
   );
   const [periodEnd, setPeriodEnd] = React.useState('');
+  const [featuresOpen, setFeaturesOpen] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [saved, setSaved] = React.useState(false);
@@ -173,13 +183,24 @@ function SubscriptionCard({
         <Stat label="Trial ends" value={ent.trialEndsAt ? date(ent.trialEndsAt) : '—'} />
       </dl>
 
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="mt-3 text-sm text-primary underline-offset-2 hover:underline"
-      >
-        {open ? 'Close' : 'Change package'}
-      </button>
+      <div className="mt-3 flex flex-wrap gap-4">
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="text-sm text-primary underline-offset-2 hover:underline"
+        >
+          {open ? 'Close' : 'Change package'}
+        </button>
+        <button
+          type="button"
+          onClick={() => setFeaturesOpen((o) => !o)}
+          className="text-sm text-primary underline-offset-2 hover:underline"
+        >
+          {featuresOpen ? 'Close' : 'Feature switches'}
+        </button>
+      </div>
+
+      {featuresOpen && <FeatureSwitches row={row} />}
 
       {open && (
         <div className="mt-4 space-y-4 border-t border-border pt-4">
@@ -318,6 +339,103 @@ function SubscriptionCard({
         </div>
       )}
     </Card>
+  );
+}
+
+// Per-restaurant feature switches.
+//
+// Separate from the package on purpose: the trial plan grants AI Voice and
+// Digital Signage to every restaurant, and both pages are still placeholders, so
+// the operator needs to hide them for one customer without repricing the plan
+// everyone else is on. "Plan" is the default and means: follow the package.
+const STATES: Array<{ value: FeatureOverrideState; label: string }> = [
+  { value: 'plan', label: 'Plan' },
+  { value: 'on', label: 'On' },
+  { value: 'off', label: 'Off' },
+];
+
+function FeatureSwitches({ row }: { row: RestaurantSubscriptionRow }) {
+  const router = useRouter();
+  // Seeded from the server row, then advanced from each RPC reply — the reply
+  // carries the recomputed entitlements, so the "Merchant sees" column stays
+  // truthful without waiting for router.refresh() to land.
+  const [overrides, setOverrides] = React.useState(row.feature_overrides);
+  const [granted, setGranted] = React.useState(row.entitlements.features);
+  const [busy, setBusy] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const apply = async (feature: FeatureKey, state: FeatureOverrideState) => {
+    setBusy(feature);
+    setError(null);
+    const res = await setFeatureOverride(getBrowserClient(), row.restaurant_id, feature, state);
+    setBusy(null);
+    if (!res.ok) {
+      setError(res.error ?? 'Could not save.');
+      return;
+    }
+    if (res.overrides) setOverrides(res.overrides);
+    if (res.entitlements) setGranted(res.entitlements.features);
+    router.refresh();
+  };
+
+  return (
+    <div className="mt-4 space-y-3 border-t border-border pt-4">
+      <p className="text-xs text-muted-foreground">
+        Show or hide a feature for this restaurant only. <strong>Plan</strong> follows the package
+        above; <strong>On</strong> and <strong>Off</strong> ignore it. Hiding a feature removes it
+        from the merchant&apos;s sidebar and blocks its page.
+      </p>
+
+      {error && (
+        <p className="rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p>
+      )}
+
+      <ul className="divide-y divide-border">
+        {FEATURE_KEYS.map((key) => {
+          const state = featureOverrideState(overrides, key);
+          // The package's own answer, i.e. what "Plan" would resolve to. Derived
+          // by undoing the switch rather than re-querying the catalog.
+          const effective = granted[key] === true;
+          const fromPlan = state === 'plan' ? effective : null;
+          return (
+            <li key={key} className="flex flex-wrap items-center justify-between gap-3 py-2.5">
+              <div>
+                <p className="text-sm font-medium">{featureLabel(key)}</p>
+                <p className="text-xs text-muted-foreground">
+                  {effective ? 'Merchant sees it' : 'Hidden from the merchant'}
+                  {state !== 'plan' && ' · overridden'}
+                  {fromPlan === false && ' · not in their package'}
+                </p>
+              </div>
+              <div
+                role="group"
+                aria-label={`${featureLabel(key)} availability`}
+                className="inline-flex rounded-full border border-border bg-muted/50 p-0.5"
+              >
+                {STATES.map((s) => (
+                  <button
+                    key={s.value}
+                    type="button"
+                    aria-pressed={state === s.value}
+                    disabled={busy === key}
+                    onClick={() => apply(key, s.value)}
+                    className={`focus-ring rounded-full px-3 py-1 text-xs font-semibold transition-colors disabled:opacity-50 ${
+                      state === s.value
+                        ? s.value === 'off'
+                          ? 'bg-destructive text-destructive-foreground'
+                          : 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 

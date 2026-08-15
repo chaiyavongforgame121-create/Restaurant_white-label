@@ -54,6 +54,7 @@
     --success: 142 72% 29%;
     --warning: 33 96% 30%;
     --danger: 0 74% 43%;
+    --danger-foreground: 0 0% 100%;
 
     --radius: 1rem;
 

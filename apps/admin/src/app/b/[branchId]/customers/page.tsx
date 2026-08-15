@@ -12,7 +12,9 @@ export default async function CustomersPage({ params }: Props) {
     .from('customers')
     .select('id, full_name, phone, total_orders, total_spent, last_order_at')
     .eq('branch_id', branchId)
-    .order('total_spent', { ascending: false })
+    // nullsFirst:false — Postgres sorts NULLs first on DESC, which would park
+    // never-ordered customers above the biggest spenders.
+    .order('total_spent', { ascending: false, nullsFirst: false })
     .limit(100);
 
   return (
@@ -43,13 +45,22 @@ export default async function CustomersPage({ params }: Props) {
               {customers.map((c) => (
                 <tr key={c.id} className="border-t border-border/40 hover:bg-muted/30">
                   <td className="px-5 py-3 font-medium">{c.full_name ?? '—'}</td>
-                  <td className="px-5 py-3">{c.phone}</td>
-                  <td className="px-5 py-3 text-right tabular-nums">{c.total_orders}</td>
+                  <td className="px-5 py-3">{c.phone ?? '—'}</td>
+                  {/* These three are maintained by a DB trigger; a row written
+                      before the trigger existed can still be null, so coalesce
+                      rather than rendering a blank cell. */}
+                  <td className="px-5 py-3 text-right tabular-nums">{Number(c.total_orders ?? 0)}</td>
                   <td className="px-5 py-3 text-right font-semibold text-primary">
-                    {formatCurrency(Number(c.total_spent))}
+                    {formatCurrency(Number(c.total_spent ?? 0))}
                   </td>
                   <td className="px-5 py-3 text-muted-foreground">
-                    {c.last_order_at ? new Date(c.last_order_at).toLocaleDateString() : 'Never'}
+                    {c.last_order_at
+                      ? new Date(c.last_order_at).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })
+                      : 'Never'}
                   </td>
                 </tr>
               ))}

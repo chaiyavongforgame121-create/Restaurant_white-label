@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { RotateCcw } from 'lucide-react';
+import { Bike, QrCode, RotateCcw, ShoppingBag, Store, type LucideIcon } from 'lucide-react';
 import { formatCurrency } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Badge, Button, Card } from '@favornoms/ui';
@@ -14,6 +14,8 @@ interface OrderRow {
   order_number: string;
   total: number | string;
   status: string;
+  /** `order_channel` enum — how the order was placed. */
+  channel: string;
   created_at: string;
   order_items: Array<{
     id: string;
@@ -30,6 +32,42 @@ interface Props {
   orders: OrderRow[];
   base: string;
   branchId: string;
+}
+
+const CHANNEL_META: Record<string, { label: string; Icon: LucideIcon }> = {
+  dine_in: { label: 'Dine-in', Icon: Store },
+  pickup: { label: 'Pickup', Icon: ShoppingBag },
+  delivery: { label: 'Delivery', Icon: Bike },
+  qr_ordering: { label: 'QR order', Icon: QrCode },
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  pending: 'Pending',
+  confirmed: 'Confirmed',
+  preparing: 'Preparing',
+  ready: 'Ready',
+  out_for_delivery: 'Out for delivery',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
+  refunded: 'Refunded',
+};
+
+// Only the variants that exist on the shared Badge (default/solid/accent/
+// outline/success/warning/danger/muted) — no ad-hoc colours.
+const STATUS_VARIANTS: Record<string, React.ComponentProps<typeof Badge>['variant']> = {
+  pending: 'muted',
+  confirmed: 'default',
+  preparing: 'warning',
+  ready: 'accent',
+  out_for_delivery: 'solid',
+  completed: 'success',
+  cancelled: 'danger',
+  refunded: 'danger',
+};
+
+function humanize(value: string): string {
+  const spaced = value.replace(/_/g, ' ');
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
 export function OrdersList({ orders, base, branchId }: Props) {
@@ -146,7 +184,10 @@ export function OrdersList({ orders, base, branchId }: Props) {
             <Card className="p-4 transition-shadow hover:shadow-warm">
               <div className="flex items-start justify-between gap-3">
                 <Link href={`${base}/orders/${order.order_number}`} className="focus-ring flex-1">
-                  <p className="text-xs font-medium text-muted-foreground">{order.order_number}</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-xs font-medium text-muted-foreground">{order.order_number}</p>
+                    <ChannelBadge channel={order.channel} />
+                  </div>
                   <p className="mt-1 font-display text-lg font-semibold">
                     {order.order_items.length} items · {formatCurrency(Number(order.total))}
                   </p>
@@ -158,7 +199,9 @@ export function OrdersList({ orders, base, branchId }: Props) {
                   </p>
                 </Link>
                 <div className="flex flex-col items-end gap-2">
-                  <Badge variant="solid">{order.status.replace('_', ' ')}</Badge>
+                  <Badge variant={STATUS_VARIANTS[order.status] ?? 'muted'}>
+                    {STATUS_LABELS[order.status] ?? humanize(order.status)}
+                  </Badge>
                   <Button
                     variant="outline"
                     size="sm"
@@ -175,5 +218,16 @@ export function OrdersList({ orders, base, branchId }: Props) {
         ))}
       </ul>
     </div>
+  );
+}
+
+function ChannelBadge({ channel }: { channel: string }) {
+  const meta = CHANNEL_META[channel];
+  if (!meta) return <Badge variant="outline">{humanize(channel)}</Badge>;
+  const { label, Icon } = meta;
+  return (
+    <Badge variant="outline">
+      <Icon className="h-3 w-3" /> {label}
+    </Badge>
   );
 }

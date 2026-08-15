@@ -19,7 +19,7 @@ export default async function OrdersPage({ params }: Props) {
   const { data: orders } = await supabase
     .from('orders')
     .select(
-      'id, order_number, total, status, created_at, order_items(id, menu_item_id, combo_id, item_name, quantity, notes, modifiers)',
+      'id, order_number, total, status, channel, created_at, order_items(id, menu_item_id, combo_id, item_name, quantity, notes, modifiers)',
     )
     .eq('branch_id', tenant.branch.id)
     .order('created_at', { ascending: false })

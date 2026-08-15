@@ -40,7 +40,11 @@ export default async function BrandsPage({ params }: Props) {
     <BrandsManager
       restaurantId={branch.restaurant_id}
       restaurantName={restaurantRes.data?.name ?? 'Restaurant'}
-      loyaltyScope={(restaurantRes.data?.loyalty_scope as 'branch' | 'brand') ?? 'branch'}
+      loyaltyScope={
+        // Fallback matches the column default ('brand'), so a failed read never
+        // renders the opposite of what the database will actually enforce.
+        (restaurantRes.data?.loyalty_scope as 'branch' | 'brand') ?? 'brand'
+      }
       currentBranchId={branchId}
       brands={(brandsRes.data ?? []) as never}
       branches={(branchesRes.data ?? []) as never}

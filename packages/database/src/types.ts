@@ -3268,6 +3268,7 @@ export type Database = {
           brand_settings: Json
           created_at: string
           custom_domain: string | null
+          feature_overrides: Json
           franchise_group_id: string | null
           id: string
           loyalty_scope: string
@@ -3282,6 +3283,7 @@ export type Database = {
           brand_settings?: Json
           created_at?: string
           custom_domain?: string | null
+          feature_overrides?: Json
           franchise_group_id?: string | null
           id?: string
           loyalty_scope?: string
@@ -3296,6 +3298,7 @@ export type Database = {
           brand_settings?: Json
           created_at?: string
           custom_domain?: string | null
+          feature_overrides?: Json
           franchise_group_id?: string | null
           id?: string
           loyalty_scope?: string
@@ -4572,6 +4575,10 @@ export type Database = {
       }
       platform_financial_summary: { Args: never; Returns: Json }
       platform_ops_summary: { Args: never; Returns: Json }
+      platform_set_feature_override: {
+        Args: { p_feature: string; p_restaurant_id: string; p_state: string }
+        Returns: Json
+      }
       progress_delivery: {
         Args: {
           p_delivery_id: string

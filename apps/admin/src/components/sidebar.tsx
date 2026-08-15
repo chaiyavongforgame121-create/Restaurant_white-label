@@ -7,7 +7,7 @@ import { motion } from 'framer-motion';
 import {
   BarChart3, Bike, Building2, CalendarClock, ChefHat, ChevronDown, ClipboardList, Cog,
   CreditCard, LayoutDashboard, Megaphone, Menu as MenuIcon, MicVocal, Monitor, Network,
-  Package, Palette, QrCode, Receipt, Store, Tag, Timer, Tv, UserRound, Users, Wallet, X,
+  Package, Palette, QrCode, Receipt, Star, Store, Tag, Timer, Tv, UserRound, Users, Wallet, X,
 } from 'lucide-react';
 import { hasFeature, type Entitlements, type FeatureKey } from '@favornoms/shared';
 import { cn } from '@favornoms/ui';
@@ -45,6 +45,9 @@ export function Sidebar({ branchId, branchName, branches = [], entitlements }: P
     { href: `/counter/${branchId}`, label: 'Counter', icon: Store },
     { href: `${base}/qr`, label: 'QR code', icon: QrCode },
     { href: `${base}/reports`, label: 'Reports', icon: BarChart3 },
+    // Kept in core, not under Advanced: merchants were reporting "I can't see my
+    // ratings anywhere", and Advanced is collapsed by default.
+    { href: `${base}/ratings`, label: 'Ratings', icon: Star },
   ];
 
   const advanced: NavGroup[] = [

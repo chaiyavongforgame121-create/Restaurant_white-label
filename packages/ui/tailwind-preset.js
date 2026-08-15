@@ -46,6 +46,14 @@ module.exports = {
         success: 'hsl(var(--success) / <alpha-value>)',
         warning: 'hsl(var(--warning) / <alpha-value>)',
         danger: 'hsl(var(--danger) / <alpha-value>)',
+        // Alias of `danger`. 45 files across every surface were already written
+        // against the shadcn name (`text-destructive`, `bg-destructive/10`);
+        // with no such colour Tailwind emitted nothing at all, so every one of
+        // those error messages rendered as ordinary body text on no background.
+        destructive: {
+          DEFAULT: 'hsl(var(--danger) / <alpha-value>)',
+          foreground: 'hsl(var(--danger-foreground) / <alpha-value>)',
+        },
       },
       borderRadius: {
         lg: 'var(--radius)',

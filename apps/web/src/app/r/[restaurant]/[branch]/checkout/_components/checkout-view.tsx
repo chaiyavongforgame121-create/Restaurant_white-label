@@ -35,6 +35,7 @@ import {
   type ResolvedAddress,
 } from '@favornoms/maps';
 import { Badge, Button, Card, IconButton, Sheet } from '@favornoms/ui';
+import { resolveMyCustomerId } from '@/lib/customer';
 import { pickerLabels } from '@/lib/picker-labels';
 import { useCart } from '@/store/cart';
 import { useAuth } from '@/components/auth/use-auth';
@@ -230,6 +231,10 @@ export function CheckoutView({
   // only exists once it is chosen.
   const [tipCustom, setTipCustom] = React.useState(false);
   const [tipConfig, setTipConfig] = React.useState<TipConfig>(TIP_CONFIG_DEFAULTS);
+  // Mirrors branches.settings.service_fee_percent. Defaults to 0 to match
+  // place-order (`service_fee_percent ?? 0`) — a hardcoded 5% here would quote
+  // the diner a fee the server never charges.
+  const [serviceFeePercent, setServiceFeePercent] = React.useState<number>(0);
   const [promoCode, setPromoCode] = React.useState('');
   const [scheduleMode, setScheduleMode] = React.useState<'asap' | 'later'>('asap');
   const [scheduledFor, setScheduledFor] = React.useState<string>(() => {
@@ -341,19 +346,26 @@ export function CheckoutView({
     void (async () => {
       const { data: user } = await supabase.auth.getUser();
       if (!user.user) return;
+      // Resolve identity exactly like account settings does. Querying `customers`
+      // by user_id and taking the newest row could land on a DIFFERENT row, so a
+      // name/phone saved in settings never showed up here.
+      let cid: string;
+      try {
+        cid = await resolveMyCustomerId(branchId);
+      } catch {
+        // Prefill is a convenience — the diner can still type their details.
+        return;
+      }
       const { data: customer } = await supabase
         .from('customers')
         .select('id, full_name, phone, email')
-        .eq('user_id', user.user.id)
-        .order('updated_at', { ascending: false })
-        .limit(1)
+        .eq('id', cid)
         .maybeSingle();
-      if (!customer) return;
-      setCustomerId(customer.id);
-      if (customer.full_name) setName(customer.full_name);
-      if (customer.phone) setPhone(customer.phone);
-      if (customer.email) setEmail(customer.email);
-      const addrs = await listCustomerAddresses(supabase, customer.id);
+      setCustomerId(cid);
+      if (customer?.full_name) setName(customer.full_name);
+      if (customer?.phone) setPhone(customer.phone);
+      if (customer?.email) setEmail(customer.email);
+      const addrs = await listCustomerAddresses(supabase, cid);
       if (addrs.length > 0) {
         setSavedAddresses(addrs);
         const def = addrs.find((a) => a.is_default) ?? addrs[0];
@@ -422,6 +434,8 @@ export function CheckoutView({
           const settings = data.settings as Record<string, unknown>;
           setTipConfig(parseTipConfig(settings));
           setPaymentMatrix(parsePaymentMatrix(settings, canUseCard));
+          const pct = Number(settings.service_fee_percent);
+          setServiceFeePercent(Number.isFinite(pct) && pct > 0 ? pct : 0);
         }
       });
   }, [branchId, canUseCard]);
@@ -716,17 +730,24 @@ export function CheckoutView({
     try {
       const supabase = getBrowserClient();
       // Persist email on the customer row so receipts/notifications can reach
-      // them — scoped to THIS restaurant. Customer identity is per restaurant;
-      // an unscoped update would overwrite the email on every tenant's row.
+      // them. Prefer the resolved customer id — that is the same single row
+      // account settings writes to and this page prefills from. Without it, fall
+      // back to a restaurant-scoped update: identity is per restaurant, so an
+      // unscoped one would overwrite the email on every tenant's row.
       if (email.trim()) {
-        const { data: user } = await supabase.auth.getUser();
-        if (user.user) {
-          let upd = supabase
-            .from('customers')
-            .update({ email: email.trim().toLowerCase() })
-            .eq('user_id', user.user.id);
-          if (restaurantId) upd = upd.eq('restaurant_id', restaurantId);
-          await upd;
+        const nextEmail = email.trim().toLowerCase();
+        if (customerId) {
+          await supabase.from('customers').update({ email: nextEmail }).eq('id', customerId);
+        } else {
+          const { data: user } = await supabase.auth.getUser();
+          if (user.user) {
+            let upd = supabase
+              .from('customers')
+              .update({ email: nextEmail })
+              .eq('user_id', user.user.id);
+            if (restaurantId) upd = upd.eq('restaurant_id', restaurantId);
+            await upd;
+          }
         }
       }
 
@@ -1410,9 +1431,10 @@ export function CheckoutView({
                     : formatCurrency(deliveryFee)
               }
             />
-            <Row label={t('cart.serviceFee')} value={formatCurrency(serviceFee)} />
-            {/* Only where the branch actually charges it — a tax-free branch
-                showing a $0.00 tax line is noise. Same label as the receipt. */}
+            {/* Only where the branch actually charges them — a branch with no
+                service fee or no tax showing a $0.00 line is noise. Same labels
+                as the receipt. */}
+            {serviceFee > 0 && <Row label={t('cart.serviceFee')} value={formatCurrency(serviceFee)} />}
             {salesTaxRate > 0 && <Row label="Sales tax" value={formatCurrency(taxAmount)} />}
             {tipAmount > 0 && <Row label="Tip" value={formatCurrency(tipAmount)} />}
             {promoDiscount > 0 && <Row label={`Promo (${promoCode})`} value={`-${formatCurrency(promoDiscount)}`} />}

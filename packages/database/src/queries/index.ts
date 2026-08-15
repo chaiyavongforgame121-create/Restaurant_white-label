@@ -5,6 +5,7 @@ export * from './orders';
 export * from './driver';
 export * from './staff';
 export * from './reports';
+export * from './ratings';
 export * from './loyalty';
 export * from './reservations';
 export * from './stripe';

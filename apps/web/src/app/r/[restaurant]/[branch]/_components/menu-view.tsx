@@ -605,7 +605,6 @@ function MenuCard({
   requireAuthThen: (action: () => void) => void;
 }) {
   const t = useTranslations('menu');
-  const add = useCart((s) => s.add);
   const lines = useCart((s) => s.lines);
   const inCartQty = lines.find((l) => l.menuItemId === item.id)?.quantity ?? 0;
   const soldOut = !!item.outOfStock;
@@ -646,12 +645,14 @@ function MenuCard({
                 ) : null}
                 <span className="font-display text-lg font-semibold text-primary">{formatCurrency(item.price)}</span>
               </div>
+              {/* Opens the item sheet rather than adding straight to the cart —
+                  otherwise required modifiers/options are silently skipped. */}
               <Button
                 size="sm"
                 variant={soldOut ? 'ghost' : inCartQty > 0 ? 'soft' : 'gradient'}
-                onClick={() => { if (!soldOut) requireAuthThen(() => add(item)); }}
+                onClick={() => { if (!soldOut) onOpen(); }}
                 disabled={soldOut}
-                aria-label={soldOut ? `${item.name} sold out` : `Add ${item.name}`}
+                aria-label={soldOut ? `${item.name} sold out` : `Choose options for ${item.name}`}
               >
                 {soldOut ? 'Sold out' : inCartQty > 0 ? `${inCartQty} ${t('inCart')}` : `+ ${t('addToCart')}`}
               </Button>
@@ -739,12 +740,14 @@ function MenuCard({
                 </span>
               ) : null}
             </div>
+            {/* Opens the item sheet rather than adding straight to the cart —
+                otherwise required modifiers/options are silently skipped. */}
             <Button
               size="sm"
               variant={soldOut ? 'ghost' : inCartQty > 0 ? 'soft' : 'gradient'}
-              onClick={() => { if (!soldOut) requireAuthThen(() => add(item)); }}
+              onClick={() => { if (!soldOut) onOpen(); }}
               disabled={soldOut}
-              aria-label={soldOut ? `${item.name} sold out` : `Add ${item.name}`}
+              aria-label={soldOut ? `${item.name} sold out` : `Choose options for ${item.name}`}
             >
               {soldOut ? 'Sold out' : inCartQty > 0 ? `${inCartQty} ${t('inCart')}` : `+ ${t('addToCart')}`}
             </Button>

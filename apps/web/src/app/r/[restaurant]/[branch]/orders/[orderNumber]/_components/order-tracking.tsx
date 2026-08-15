@@ -10,7 +10,7 @@ import { getBrowserClient } from '@favornoms/database/client';
 import { DeliveryMap, fetchRoute, hasMapboxToken, type LatLng } from '@favornoms/maps';
 import { Badge, Button, Card, IconButton } from '@favornoms/ui';
 import { DeliveryChat } from './delivery-chat';
-import { OrderActions } from './order-actions';
+import { OrderActions, type ExistingRating } from './order-actions';
 
 // Pickup and dine-in orders jump ready → completed; showing them a bike stage
 // they can never reach reads like the order is stuck. Delivery keeps all 5.
@@ -98,6 +98,35 @@ export function OrderTracking({ initialOrder, branchId, branchLocation }: Props)
   }, [order.id]);
 
   const steps = order.channel === 'delivery' ? DELIVERY_STEPS : NON_DELIVERY_STEPS;
+
+  // An order can be rated exactly once (unique(order_id) on order_ratings), so
+  // the CTA must know whether one already exists — `undefined` until answered.
+  const [rating, setRating] = React.useState<ExistingRating | null | undefined>(undefined);
+
+  React.useEffect(() => {
+    if (order.status !== 'completed') {
+      // Nothing to rate yet; skip the round-trip. The effect re-runs when the
+      // status flips to completed (realtime included).
+      setRating(null);
+      return;
+    }
+    let cancelled = false;
+    const supabase = getBrowserClient();
+    void supabase
+      .from('order_ratings')
+      .select('food_stars, delivery_stars, comment')
+      .eq('order_id', order.id)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        // A failed lookup can't prove a rating is absent — stay `undefined` so
+        // we don't re-ask (the insert would only bounce off the unique index).
+        setRating(error ? undefined : (data as ExistingRating | null));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [order.id, order.status]);
 
   // Find current step by status
   const statusIndex = React.useMemo(() => {
@@ -280,7 +309,7 @@ export function OrderTracking({ initialOrder, branchId, branchLocation }: Props)
           orderId={order.id}
           branchId={branchId}
           orderStatus={order.status}
-          hasRating={false}
+          existingRating={rating}
           hasDriver={!!delivery?.driver_id}
         />
       </div>

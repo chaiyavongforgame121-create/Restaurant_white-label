@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Award, Gift, History } from 'lucide-react';
+import { Award, ChevronRight, Gift, History } from 'lucide-react';
 import { formatCurrency } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
 import {
@@ -9,11 +9,59 @@ import {
   listMyLoyaltyTransactions,
   type LoyaltyTxRow,
 } from '@favornoms/database/queries';
-import { Badge, Card } from '@favornoms/ui';
+import { Badge, Card, Sheet } from '@favornoms/ui';
 import { useAuth } from '@/components/auth/use-auth';
 import { AccountHeader, SignInGate } from '../../_components/account-ui';
 
 type Loyalty = NonNullable<Awaited<ReturnType<typeof getMyLoyalty>>>;
+
+/**
+ * Tier thresholds are the DB's, measured against `lifetime_earned` — mirroring
+ * them here keeps "X points to Gold" honest instead of guessed.
+ */
+const TIERS = [
+  { key: 'bronze', label: 'Bronze', threshold: 0, emoji: '🥉' },
+  { key: 'silver', label: 'Silver', threshold: 10000, emoji: '🥈' },
+  { key: 'gold', label: 'Gold', threshold: 30000, emoji: '🥇' },
+  { key: 'platinum', label: 'Platinum', threshold: 100000, emoji: '💎' },
+] as const;
+
+type Tier = (typeof TIERS)[number];
+
+const TIER_BENEFITS: Record<Tier['key'], string[]> = {
+  bronze: [
+    'Where every member starts — no minimum spend.',
+    'Redeem 100 points for ' + formatCurrency(1) + ' off, up to 50% of a subtotal.',
+  ],
+  silver: [
+    'Unlocked at 10,000 lifetime points.',
+    'A Silver badge on your account, so the restaurant can send you member-only offers.',
+  ],
+  gold: [
+    'Unlocked at 30,000 lifetime points.',
+    'Gold-only promotions and early access to campaigns the restaurant runs for its best regulars.',
+  ],
+  platinum: [
+    'Unlocked at 100,000 lifetime points.',
+    'The top tier — the restaurant’s most exclusive offers land here first.',
+  ],
+};
+
+/** Transaction kinds returned by `list_my_loyalty_transactions`. */
+const TX_META: Record<string, { label: string; variant: React.ComponentProps<typeof Badge>['variant'] }> = {
+  earned: { label: 'Earned', variant: 'success' },
+  redeemed: { label: 'Redeemed', variant: 'default' },
+  expired: { label: 'Expired', variant: 'muted' },
+  adjusted: { label: 'Adjusted', variant: 'warning' },
+};
+
+function tierIndexFor(lifetimeEarned: number): number {
+  let idx = 0;
+  for (let i = 0; i < TIERS.length; i += 1) {
+    if (lifetimeEarned >= TIERS[i]!.threshold) idx = i;
+  }
+  return idx;
+}
 
 export function LoyaltyView({
   base,
@@ -47,6 +95,8 @@ export function LoyaltyView({
   }, [user, branchId]);
 
   const balance = loyalty?.points_balance ?? 0;
+  const lifetimeEarned = loyalty?.lifetime_earned ?? 0;
+  const currentTier = TIERS[tierIndexFor(lifetimeEarned)]!;
 
   return (
     <div className="container max-w-2xl pb-24 pt-4">
@@ -60,8 +110,8 @@ export function LoyaltyView({
               <p className="text-sm text-white/80">Your points</p>
               <p className="font-display text-5xl font-bold leading-tight">{balance.toLocaleString()}</p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
-                <Badge variant="solid" className="bg-white/25 capitalize text-white">
-                  <Award className="h-3 w-3" /> {loyalty?.tier ?? 'bronze'} member
+                <Badge variant="solid" className="bg-white/25 text-white">
+                  <Award className="h-3 w-3" /> {currentTier.label} member
                 </Badge>
                 <span className="text-xs text-white/80">
                   worth {formatCurrency(balance / 100)} off your next order
@@ -74,12 +124,22 @@ export function LoyaltyView({
             </div>
           </Card>
 
+          <TierTrack lifetimeEarned={lifetimeEarned} />
+
           <Card className="p-5">
             <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
               <Gift className="h-5 w-5 text-primary" /> How points work
             </h2>
             <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-              <li>Earn points on every order you place.</li>
+              <li>
+                Earn <strong className="text-foreground">1 point per {formatCurrency(1)}</strong> of your
+                order subtotal.
+              </li>
+              <li>
+                Points land{' '}
+                <strong className="text-foreground">once the order is completed</strong> — orders still
+                being prepared or on their way don&apos;t count yet.
+              </li>
               <li>
                 Redeem at checkout —{' '}
                 <strong className="text-foreground">100 points = {formatCurrency(1)} off</strong> (up to
@@ -104,10 +164,18 @@ export function LoyaltyView({
                 {txns.map((t) => (
                   <li key={t.id} className="flex items-center justify-between gap-3 py-3">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium capitalize">
-                        {t.description ?? t.type.replace(/_/g, ' ')}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
+                      {/* The kind of movement is spelled out so nobody reads a
+                          redemption or an adjustment as "points I earned". Only
+                          completed orders ever produce an `earned` row. */}
+                      <div className="flex items-center gap-2">
+                        <Badge variant={TX_META[t.type]?.variant ?? 'muted'}>
+                          {TX_META[t.type]?.label ?? t.type.replace(/_/g, ' ')}
+                        </Badge>
+                        {t.description && (
+                          <p className="truncate text-sm font-medium">{t.description}</p>
+                        )}
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
                         {new Date(t.created_at).toLocaleDateString(undefined, {
                           year: 'numeric',
                           month: 'short',
@@ -131,6 +199,130 @@ export function LoyaltyView({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Bronze → Platinum rail. The tier the customer is actually in is filled in and
+ * lifted; every tier is tappable for a breakdown of what it unlocks.
+ */
+function TierTrack({ lifetimeEarned }: { lifetimeEarned: number }) {
+  const [openTier, setOpenTier] = React.useState<Tier | null>(null);
+  const currentIndex = tierIndexFor(lifetimeEarned);
+  const current = TIERS[currentIndex]!;
+  const next = TIERS[currentIndex + 1] ?? null;
+  const pointsToNext = next ? Math.max(next.threshold - lifetimeEarned, 0) : 0;
+  // Fraction of the way through the current band, so the fill sits between the
+  // two node centres instead of snapping tier to tier.
+  const bandProgress = next
+    ? Math.min(Math.max((lifetimeEarned - current.threshold) / (next.threshold - current.threshold), 0), 1)
+    : 1;
+  const fillPercent = ((currentIndex + (next ? bandProgress : 0)) / (TIERS.length - 1)) * 100;
+
+  return (
+    <Card className="p-5">
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="font-display text-lg font-semibold">Your tier</h2>
+        <span className="text-xs text-muted-foreground">
+          {lifetimeEarned.toLocaleString()} lifetime points
+        </span>
+      </div>
+
+      <div className="relative mt-5">
+        <div className="absolute left-[12.5%] right-[12.5%] top-5 h-1.5 rounded-full bg-muted" />
+        <div
+          className="absolute left-[12.5%] top-5 h-1.5 rounded-full bg-gradient-warm transition-[width] duration-500"
+          style={{ width: `calc(${fillPercent}% * 0.75)` }}
+        />
+        <ul className="relative grid grid-cols-4 gap-1">
+          {TIERS.map((tier, i) => {
+            const reached = i <= currentIndex;
+            const isCurrent = i === currentIndex;
+            return (
+              <li key={tier.key} className="flex flex-col items-center">
+                <button
+                  type="button"
+                  onClick={() => setOpenTier(tier)}
+                  aria-label={`${tier.label} tier benefits`}
+                  aria-current={isCurrent ? 'true' : undefined}
+                  className="focus-ring flex flex-col items-center gap-1.5 rounded-2xl px-1 py-1"
+                >
+                  <span
+                    className={`relative z-10 grid h-11 w-11 place-items-center rounded-full text-lg transition ${
+                      isCurrent
+                        ? 'bg-gradient-warm text-white shadow-warm ring-4 ring-primary/25'
+                        : reached
+                          ? 'bg-primary/15 text-primary'
+                          : 'bg-muted text-muted-foreground/60 grayscale'
+                    }`}
+                  >
+                    {tier.emoji}
+                  </span>
+                  <span
+                    className={`text-[11px] font-semibold leading-tight ${
+                      isCurrent ? 'text-primary' : 'text-muted-foreground'
+                    }`}
+                  >
+                    {tier.label}
+                  </span>
+                  <span className="text-[10px] leading-none text-muted-foreground">
+                    {tier.threshold.toLocaleString()}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+
+      <div className="mt-4 rounded-2xl bg-muted/40 px-4 py-3">
+        {next ? (
+          <p className="text-sm">
+            <strong className="font-semibold">{pointsToNext.toLocaleString()} more points</strong> to
+            reach {next.label}.
+          </p>
+        ) : (
+          <p className="text-sm font-semibold">You&apos;re at the top tier — enjoy it! 🎉</p>
+        )}
+        <p className="mt-1 text-xs text-muted-foreground">
+          Tap any tier to see what it unlocks.
+        </p>
+      </div>
+
+      <Sheet
+        open={!!openTier}
+        onClose={() => setOpenTier(null)}
+        title={openTier ? `${openTier.emoji} ${openTier.label}` : undefined}
+      >
+        {openTier && (
+          <div className="space-y-4 px-5 pb-8">
+            <p className="text-sm text-muted-foreground">
+              {lifetimeEarned >= openTier.threshold
+                ? openTier.key === current.key
+                  ? 'This is your tier right now.'
+                  : 'You have already passed this tier.'
+                : `${(openTier.threshold - lifetimeEarned).toLocaleString()} more points to unlock.`}
+            </p>
+            <ul className="space-y-2 text-sm">
+              {TIER_BENEFITS[openTier.key].map((benefit) => (
+                <li key={benefit} className="flex gap-2">
+                  <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                  <span>{benefit}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="rounded-2xl border border-border bg-muted/40 p-4">
+              <p className="font-display text-sm font-semibold">How you earn points</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                You earn 1 point for every {formatCurrency(1)} of an order&apos;s subtotal. Points are
+                credited when the order is completed — nothing is added while an order is still
+                pending, being prepared, or on its way, and cancelled orders never earn.
+              </p>
+            </div>
+          </div>
+        )}
+      </Sheet>
+    </Card>
   );
 }
 

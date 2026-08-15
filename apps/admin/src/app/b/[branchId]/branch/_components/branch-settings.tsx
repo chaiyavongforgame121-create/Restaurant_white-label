@@ -10,6 +10,7 @@ import { ClosuresManager } from './closures-manager';
 import { DeliverySettingsCard } from './delivery-settings-card';
 import { HoursEditor } from './hours-editor';
 import { PaymentMethodsCard } from './payment-methods-card';
+import { ServiceFeeCard } from './service-fee-card';
 import { TipSettingsCard } from './tip-settings-card';
 import { StorefrontOverrideCard } from './storefront-override-card';
 
@@ -198,6 +199,9 @@ export function BranchSettings({
           settings={branch.settings}
           canUseCard={canUseCard}
         />
+
+        {/* Not gated on delivery: the service fee applies to pickup and dine-in too. */}
+        <ServiceFeeCard branchId={branch.id} settings={branch.settings} />
 
         <TipSettingsCard branchId={branch.id} settings={branch.settings} />
 

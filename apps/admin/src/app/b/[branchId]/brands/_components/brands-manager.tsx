@@ -144,10 +144,10 @@ export function BrandsManager({
       <Card className="mb-6 p-5">
         <h2 className="font-display text-lg font-semibold">Loyalty pool</h2>
         <p className="text-sm text-muted-foreground">
-          Choose whether loyalty points are scoped per branch (default) or shared across all branches.
+          Choose whether loyalty points are shared across all branches (default) or scoped to one branch.
         </p>
         <div className="mt-3 flex gap-2">
-          {(['branch', 'brand'] as const).map((mode) => (
+          {(['brand', 'branch'] as const).map((mode) => (
             <button
               key={mode}
               type="button"
