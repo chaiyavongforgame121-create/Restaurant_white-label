@@ -50,6 +50,26 @@ module.exports = {
           DEFAULT: 'hsl(var(--info) / <alpha-value>)',
           foreground: 'hsl(var(--info-foreground) / <alpha-value>)',
         },
+        // Loyalty tiers. Platform-wide, never re-tinted per brand — see the
+        // --tier-* block in globals.css.
+        tier: {
+          bronze: {
+            DEFAULT: 'hsl(var(--tier-bronze) / <alpha-value>)',
+            foreground: 'hsl(var(--tier-bronze-foreground) / <alpha-value>)',
+          },
+          silver: {
+            DEFAULT: 'hsl(var(--tier-silver) / <alpha-value>)',
+            foreground: 'hsl(var(--tier-silver-foreground) / <alpha-value>)',
+          },
+          gold: {
+            DEFAULT: 'hsl(var(--tier-gold) / <alpha-value>)',
+            foreground: 'hsl(var(--tier-gold-foreground) / <alpha-value>)',
+          },
+          platinum: {
+            DEFAULT: 'hsl(var(--tier-platinum) / <alpha-value>)',
+            foreground: 'hsl(var(--tier-platinum-foreground) / <alpha-value>)',
+          },
+        },
         // Alias of `danger`. 45 files across every surface were already written
         // against the shadcn name (`text-destructive`, `bg-destructive/10`);
         // with no such colour Tailwind emitted nothing at all, so every one of

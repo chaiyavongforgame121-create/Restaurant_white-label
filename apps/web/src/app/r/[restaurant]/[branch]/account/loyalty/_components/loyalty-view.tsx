@@ -16,14 +16,42 @@ import { AccountHeader, SignInGate } from '../../_components/account-ui';
 type Loyalty = NonNullable<Awaited<ReturnType<typeof getMyLoyalty>>>;
 
 /**
+ * Every tier used to render in the same brand orange, so a Bronze member's bar
+ * was pixel-identical to a Platinum member's. These are the platform-fixed
+ * --tier-* tokens (see packages/ui/src/globals.css): deliberately NOT themed per
+ * brand, because the thresholds behind them are DB-global.
+ *
+ * Written as whole literal class strings — Tailwind's scanner cannot see a class
+ * assembled at runtime, so `bg-tier-${key}` would compile to nothing.
+ */
+const TONES = {
+  bronze: {
+    bg: 'bg-tier-bronze', fg: 'text-tier-bronze-foreground',
+    soft: 'bg-tier-bronze/15', label: 'text-tier-bronze', ring: 'ring-tier-bronze/25',
+  },
+  silver: {
+    bg: 'bg-tier-silver', fg: 'text-tier-silver-foreground',
+    soft: 'bg-tier-silver/15', label: 'text-tier-silver', ring: 'ring-tier-silver/25',
+  },
+  gold: {
+    bg: 'bg-tier-gold', fg: 'text-tier-gold-foreground',
+    soft: 'bg-tier-gold/15', label: 'text-tier-gold', ring: 'ring-tier-gold/25',
+  },
+  platinum: {
+    bg: 'bg-tier-platinum', fg: 'text-tier-platinum-foreground',
+    soft: 'bg-tier-platinum/15', label: 'text-tier-platinum', ring: 'ring-tier-platinum/25',
+  },
+} as const;
+
+/**
  * Tier thresholds are the DB's, measured against `lifetime_earned` — mirroring
  * them here keeps "X points to Gold" honest instead of guessed.
  */
 const TIERS = [
-  { key: 'bronze', label: 'Bronze', threshold: 0, emoji: '🥉' },
-  { key: 'silver', label: 'Silver', threshold: 10000, emoji: '🥈' },
-  { key: 'gold', label: 'Gold', threshold: 30000, emoji: '🥇' },
-  { key: 'platinum', label: 'Platinum', threshold: 100000, emoji: '💎' },
+  { key: 'bronze', label: 'Bronze', threshold: 0, emoji: '🥉', tone: TONES.bronze },
+  { key: 'silver', label: 'Silver', threshold: 10000, emoji: '🥈', tone: TONES.silver },
+  { key: 'gold', label: 'Gold', threshold: 30000, emoji: '🥇', tone: TONES.gold },
+  { key: 'platinum', label: 'Platinum', threshold: 100000, emoji: '💎', tone: TONES.platinum },
 ] as const;
 
 type Tier = (typeof TIERS)[number];
@@ -231,7 +259,7 @@ function TierTrack({ lifetimeEarned }: { lifetimeEarned: number }) {
       <div className="relative mt-5">
         <div className="absolute left-[12.5%] right-[12.5%] top-5 h-1.5 rounded-full bg-muted" />
         <div
-          className="absolute left-[12.5%] top-5 h-1.5 rounded-full bg-gradient-warm transition-[width] duration-500"
+          className={`absolute left-[12.5%] top-5 h-1.5 rounded-full transition-[width] duration-500 ${current.tone.bg}`}
           style={{ width: `calc(${fillPercent}% * 0.75)` }}
         />
         <ul className="relative grid grid-cols-4 gap-1">
@@ -250,9 +278,9 @@ function TierTrack({ lifetimeEarned }: { lifetimeEarned: number }) {
                   <span
                     className={`relative z-10 grid h-11 w-11 place-items-center rounded-full text-lg transition ${
                       isCurrent
-                        ? 'bg-gradient-warm text-white shadow-warm ring-4 ring-primary/25'
+                        ? `${tier.tone.bg} ${tier.tone.fg} shadow-warm ring-4 ${tier.tone.ring}`
                         : reached
-                          ? 'bg-primary/15 text-primary'
+                          ? `${tier.tone.soft} ${tier.tone.label}`
                           : 'bg-muted text-muted-foreground/60 grayscale'
                     }`}
                   >
@@ -260,7 +288,7 @@ function TierTrack({ lifetimeEarned }: { lifetimeEarned: number }) {
                   </span>
                   <span
                     className={`text-[11px] font-semibold leading-tight ${
-                      isCurrent ? 'text-primary' : 'text-muted-foreground'
+                      isCurrent ? tier.tone.label : 'text-muted-foreground'
                     }`}
                   >
                     {tier.label}
@@ -306,7 +334,8 @@ function TierTrack({ lifetimeEarned }: { lifetimeEarned: number }) {
             <ul className="space-y-2 text-sm">
               {TIER_BENEFITS[openTier.key].map((benefit) => (
                 <li key={benefit} className="flex gap-2">
-                  <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                  {/* Tinted to the tapped tier, so the sheet visibly belongs to it. */}
+                  <ChevronRight className={`mt-0.5 h-4 w-4 shrink-0 ${openTier.tone.label}`} />
                   <span>{benefit}</span>
                 </li>
               ))}

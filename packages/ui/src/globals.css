@@ -64,6 +64,22 @@
     --info: 210 80% 35%;
     --info-foreground: 0 0% 100%;
 
+    /* Loyalty tiers. Platform-fixed on purpose: the thresholds live in the DB
+       (public.tier_for_lifetime_points) and mean the same thing on every tenant,
+       so the colours must not re-tint per brand. Stated explicitly here rather
+       than achieved by accident — reaching for an unthemed shade like
+       --primary-800 would bake one brand's hue in while looking themed.
+       Each value is dark enough to double as label TEXT on a light card
+       (>=4.5:1); the -foreground is what goes ON the filled node. */
+    --tier-bronze: 25 55% 38%;
+    --tier-bronze-foreground: 0 0% 100%;
+    --tier-silver: 220 9% 42%;
+    --tier-silver-foreground: 0 0% 100%;
+    --tier-gold: 40 85% 31%;
+    --tier-gold-foreground: 0 0% 100%;
+    --tier-platinum: 205 45% 38%;
+    --tier-platinum-foreground: 0 0% 100%;
+
     --radius: 1rem;
 
     /* Fonts (overridable per brand) */
@@ -97,6 +113,17 @@
     --warning: 38 92% 56%;
     --danger: 0 84% 65%;
     --info: 210 90% 68%;
+
+    /* Same inversion as the status hues: on a charcoal card the light value is
+       the readable one, so the fills flip to dark text. */
+    --tier-bronze: 25 60% 62%;
+    --tier-bronze-foreground: 20 18% 8%;
+    --tier-silver: 220 12% 74%;
+    --tier-silver-foreground: 20 18% 8%;
+    --tier-gold: 41 88% 60%;
+    --tier-gold-foreground: 20 18% 8%;
+    --tier-platinum: 205 60% 66%;
+    --tier-platinum-foreground: 20 18% 8%;
   }
 
   * {
