@@ -183,7 +183,6 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
         branchId={branch.id}
         branchName={branch.name}
         canDeliver={canDeliver}
-        reserveHref={`/r/${params.restaurant}/${params.branch}/reserve`}
       />
 
       <Hero
@@ -192,7 +191,6 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
         address={branch.address}
         logoUrl={logoUrl}
         heroUrl={heroUrl}
-        reserveHref={`/r/${params.restaurant}/${params.branch}/reserve`}
       />
 
       {!isOpen && (
@@ -294,14 +292,12 @@ function Hero({
   address,
   logoUrl,
   heroUrl,
-  reserveHref,
 }: {
   title: string;
   subtitle: string;
   address: string;
   logoUrl?: string | null;
   heroUrl?: string | null;
-  reserveHref?: string;
 }) {
   return (
     <section className="relative overflow-hidden">
@@ -321,24 +317,11 @@ function Hero({
             <p className="mt-3 max-w-prose text-base text-muted-foreground md:text-lg">
               {subtitle}
             </p>
-            {(address || reserveHref) ? (
+            {address ? (
               <div className="mt-5 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                {address ? (
-                  <Badge variant="outline" className="gap-1.5 px-3 py-1">
-                    <MapPin className="h-3.5 w-3.5" /> {address}
-                  </Badge>
-                ) : null}
-                {reserveHref ? (
-                  // Tinted rather than outline. Rendered in the same outline variant as
-                  // the address chip beside it, this read as a second piece of metadata
-                  // instead of the only entry point into booking anywhere in the app.
-                  <Link
-                    href={reserveHref}
-                    className="focus-ring inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 font-medium text-primary transition-colors hover:bg-primary/20"
-                  >
-                    <Utensils className="h-3.5 w-3.5" /> Reserve a table
-                  </Link>
-                ) : null}
+                <Badge variant="outline" className="gap-1.5 px-3 py-1">
+                  <MapPin className="h-3.5 w-3.5" /> {address}
+                </Badge>
               </div>
             ) : null}
           </div>

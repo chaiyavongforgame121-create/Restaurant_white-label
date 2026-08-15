@@ -1,7 +1,6 @@
 'use client';
 
 import * as React from 'react';
-import Link from 'next/link';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Bike, ShoppingBag, Store } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -13,13 +12,6 @@ interface Props {
   branchName?: string;
   /** `delivery` entitlement. Defaults false so a missing prop cannot sell delivery. */
   canDeliver?: boolean;
-  /**
-   * Booking page for this branch. Only the menu passes it: the gate is not dismissible,
-   * so a diner who came to book a table rather than order had to answer an ordering
-   * question first. Omitted on cart and checkout, where someone already mid-order
-   * should not be handed an exit.
-   */
-  reserveHref?: string;
 }
 
 /**
@@ -34,7 +26,7 @@ interface Props {
  *
  * Deliberately not dismissible: no backdrop click, no Escape, no close button.
  */
-export function OrderTypeGate({ branchId, branchName, canDeliver = false, reserveHref }: Props) {
+export function OrderTypeGate({ branchId, branchName, canDeliver = false }: Props) {
   const t = useTranslations();
 
   // useCart.persist is undefined during SSR — start false and confirm hydration
@@ -202,13 +194,6 @@ export function OrderTypeGate({ branchId, branchName, canDeliver = false, reserv
                 </button>
               ))}
               <p className="px-1 text-center text-xs text-muted-foreground">{t('orderType.changeLater')}</p>
-              {reserveHref ? (
-                <p className="px-1 text-center text-sm">
-                  <Link href={reserveHref} className="focus-ring font-medium text-primary underline-offset-4 hover:underline">
-                    Just booking a table?
-                  </Link>
-                </p>
-              ) : null}
             </div>
           </motion.div>
         </div>

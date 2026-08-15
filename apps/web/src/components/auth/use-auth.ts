@@ -12,7 +12,7 @@ export function useAuth() {
   React.useEffect(() => {
     const supabase = getBrowserClient();
     // getSession(), NOT getUser(): getUser() hits /auth/v1/user over the network on
-    // EVERY mount, and menu/checkout/account/orders/reserve each mount this hook — that
+    // EVERY mount, and menu/checkout/account/orders each mount this hook — that
     // is 7-9 cross-Pacific round-trips per interaction, each gating a "Loading…" spinner,
     // which is the bulk of the "everything spins forever" report. getSession() reads the
     // session from local storage synchronously-ish (no network), and onAuthStateChange
