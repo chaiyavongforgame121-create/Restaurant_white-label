@@ -73,8 +73,10 @@ export function ReserveView({ base, branchId, branchName }: Props) {
         // a phone-OTP sign-in always has a verified number on the user.
         const metaName = (user.user_metadata?.full_name as string | undefined) ?? '';
         const authPhone = user.phone ? (user.phone.startsWith('+') ? user.phone : `+${user.phone}`) : '';
-        const profileName = (data?.full_name ?? metaName).trim();
-        const profilePhone = (data?.phone ?? authPhone).trim();
+        // `||`, not `??`: a stored empty string is not an answer, and with `??` it beat
+        // the fallback and left the field blank.
+        const profileName = (data?.full_name?.trim() || metaName).trim();
+        const profilePhone = (data?.phone?.trim() || authPhone).trim();
         if (profileName) setName(profileName);
         if (profilePhone) setPhone(profilePhone);
         if (profileName || profilePhone) setPrefilled(true);

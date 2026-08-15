@@ -23,14 +23,23 @@ export function AccountView({
   base,
   brandName,
   branchId,
+  restaurantId,
 }: {
   base: string;
   brandName: string;
   branchId: string;
+  restaurantId: string;
 }) {
   const { user, loading } = useAuth();
   const router = useRouter();
   const [loyalty, setLoyalty] = React.useState<LoyaltyBalance | null>(null);
+  // The `customers` row is the single source of truth for the diner's name and phone —
+  // the same row settings writes and checkout prefills from. This card used to render
+  // auth `user_metadata` instead, which is written once at signup and never updated
+  // (nothing in the app calls auth.updateUser), so a diner who corrected their name in
+  // settings saw the old one here forever. That is the "it cannot be changed" report.
+  const [profile, setProfile] = React.useState<{ full_name: string | null; phone: string | null } | null>(null);
+  const [profileLoaded, setProfileLoaded] = React.useState(false);
   const [googleEmail, setGoogleEmail] = React.useState<string | null>(null);
   const [identitiesLoaded, setIdentitiesLoaded] = React.useState(false);
   const [linking, setLinking] = React.useState(false);
@@ -41,6 +50,32 @@ export function AccountView({
     const supabase = getBrowserClient();
     void getMyLoyalty(supabase, branchId).then(setLoyalty);
   }, [user, branchId]);
+
+  // Deliberately a plain scoped SELECT and not resolveMyCustomerId(): that helper calls
+  // get_or_create_my_customer, a SECURITY DEFINER routine whose adoption step matches on
+  // an unverified phone. Fine as a deliberate act at checkout or settings; not something
+  // to fire on a passive page view that also happens to be the post-sign-in landing page.
+  // customers is UNIQUE on (restaurant_id, user_id), so this resolves the same single row
+  // every other surface uses.
+  React.useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    const supabase = getBrowserClient();
+    void (async () => {
+      const { data } = await supabase
+        .from('customers')
+        .select('full_name, phone')
+        .eq('user_id', user.id)
+        .eq('restaurant_id', restaurantId)
+        .maybeSingle();
+      if (cancelled) return;
+      if (data) setProfile({ full_name: data.full_name, phone: data.phone });
+      setProfileLoaded(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, restaurantId]);
 
   React.useEffect(() => {
     if (!user) return;
@@ -56,9 +91,17 @@ export function AccountView({
   // A real email only exists for magic-link and Google diners; phone-only ones get the
   // synthetic address above, which we treat as "no email".
   const realEmail = user?.email && !user.email.endsWith(SYNTHETIC_EMAIL_SUFFIX) ? user.email : null;
-  const displayPhone = (user?.user_metadata?.phone as string | undefined) ?? user?.phone ?? null;
+  // Never falls back to user_metadata.phone. With no OTP that value is free text the
+  // diner asserted at signup, and a NULL phone on the row is often get_or_create_my_customer
+  // deliberately REFUSING to hand over a number another account already claimed — rendering
+  // the asserted one here would undo that at the display layer. user.phone is the real
+  // verified auth column, so it is the only acceptable fallback.
+  const displayPhone = profile?.phone?.trim() || user?.phone || null;
+  // A display name is not an identity key, so the signup metadata is a fine last resort.
+  const displayName =
+    profile?.full_name?.trim() || (user?.user_metadata?.full_name as string | undefined)?.trim() || null;
   const avatarInitial = (
-    user?.user_metadata?.full_name?.[0] ?? displayPhone?.slice(-2) ?? realEmail?.[0] ?? 'G'
+    displayName?.[0] ?? displayPhone?.slice(-2) ?? realEmail?.[0] ?? 'G'
   ).toUpperCase();
 
   const handleSignOut = async () => {
@@ -93,13 +136,16 @@ export function AccountView({
               {avatarInitial}
             </div>
             <div>
-              {loading ? (
+              {/* Wait for the profile too, not just auth — otherwise the card paints the
+                  stale signup metadata for a beat before correcting itself, which looks
+                  exactly like the bug this is fixing. */}
+              {loading || (user && !profileLoaded) ? (
                 <p className="text-sm text-white/80">Loading…</p>
               ) : user ? (
                 <>
                   <p className="text-sm text-white/80">{displayPhone ?? realEmail}</p>
                   <h1 className="font-display text-2xl font-bold">
-                    {user.user_metadata?.full_name ?? 'Welcome back'}
+                    {displayName ?? 'Welcome back'}
                   </h1>
                   <Badge variant="solid" className="mt-1 bg-white/25 text-white">
                     <Sparkles className="h-3 w-3" /> Member at {brandName}

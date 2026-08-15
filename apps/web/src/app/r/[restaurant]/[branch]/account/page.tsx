@@ -14,6 +14,9 @@ export default async function AccountPage({ params }: Props) {
       base={base}
       brandName={tenant.restaurant.name}
       branchId={tenant.branch.id}
+      // Identity is per restaurant, so the profile read has to be scoped by it —
+      // `customers_self` alone only narrows to the caller, not to this tenant.
+      restaurantId={tenant.restaurant.id}
     />
   );
 }
