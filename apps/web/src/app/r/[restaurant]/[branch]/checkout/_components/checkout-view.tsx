@@ -231,10 +231,6 @@ export function CheckoutView({
   // only exists once it is chosen.
   const [tipCustom, setTipCustom] = React.useState(false);
   const [tipConfig, setTipConfig] = React.useState<TipConfig>(TIP_CONFIG_DEFAULTS);
-  // Mirrors branches.settings.service_fee_percent. Defaults to 0 to match
-  // place-order (`service_fee_percent ?? 0`) — a hardcoded 5% here would quote
-  // the diner a fee the server never charges.
-  const [serviceFeePercent, setServiceFeePercent] = React.useState<number>(0);
   const [promoCode, setPromoCode] = React.useState('');
   const [scheduleMode, setScheduleMode] = React.useState<'asap' | 'later'>('asap');
   const [scheduledFor, setScheduledFor] = React.useState<string>(() => {
@@ -434,8 +430,6 @@ export function CheckoutView({
           const settings = data.settings as Record<string, unknown>;
           setTipConfig(parseTipConfig(settings));
           setPaymentMatrix(parsePaymentMatrix(settings, canUseCard));
-          const pct = Number(settings.service_fee_percent);
-          setServiceFeePercent(Number.isFinite(pct) && pct > 0 ? pct : 0);
         }
       });
   }, [branchId, canUseCard]);

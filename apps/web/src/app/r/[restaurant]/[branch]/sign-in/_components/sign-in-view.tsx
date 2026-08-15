@@ -12,6 +12,10 @@ import { useAuth } from '@/components/auth/use-auth';
 interface Props {
   branchId: string;
   brandName: string;
+  // Preselected dialling code, resolved from the request's country on the server.
+  // Optional so any caller that has not been updated still renders; the fallback is
+  // the market we sell into.
+  defaultDial?: Dial;
 }
 
 // Phone sign-in is password-based (no SMS, no cost): the `customer-auth` edge function
@@ -32,13 +36,22 @@ interface AuthResult {
   error?: string;
 }
 
+// Dialling codes we sell into. The order matters only for the dropdown; which one
+// is preselected comes from the request's country (see the page component).
+const COUNTRIES = [
+  { dial: '+1', label: 'US +1', placeholder: '(555) 234-5678' },
+  { dial: '+66', label: 'TH +66', placeholder: '081 234 5678' },
+] as const;
+
+export type Dial = (typeof COUNTRIES)[number]['dial'];
+
 // Errors handed back by /auth/callback, mapped to something a diner can act on.
 const CALLBACK_ERRORS: Record<string, string> = {
   oauth_failed: 'Google sign-in didn’t complete. Please try again.',
   missing_code: 'That sign-in link has expired. Please try again.',
 };
 
-export function SignInView({ branchId, brandName }: Props) {
+export function SignInView({ branchId, brandName, defaultDial = '+1' }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   // Shared open-redirect guard — see @favornoms/shared. `next` feeds router.replace() and
@@ -62,6 +75,7 @@ export function SignInView({ branchId, brandName }: Props) {
   // Login vs Register is explicit on the phone tab so the edge function knows which path to
   // take (login must never silently create an account, and register must never take one over).
   const [phoneMode, setPhoneMode] = React.useState<'login' | 'register'>('login');
+  const [dial, setDial] = React.useState<Dial>(defaultDial);
   const [phone, setPhone] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [emailAddr, setEmailAddr] = React.useState('');
@@ -72,14 +86,18 @@ export function SignInView({ branchId, brandName }: Props) {
     callbackError ? (CALLBACK_ERRORS[callbackError] ?? 'We couldn’t finish that sign-in. Please try again.') : null,
   );
 
-  // Normalize US numbers: (555) 234-5678 → +15552345678 for Supabase
+  // Build an E.164 number from what was typed plus the SELECTED country. A pasted
+  // "+…" number is taken verbatim and bypasses the selector entirely.
   const normalizePhone = (raw: string) => {
     const trimmed = raw.trim();
     if (trimmed.startsWith('+')) return `+${trimmed.replace(/\D/g, '')}`;
-    const digits = trimmed.replace(/\D/g, '');
-    if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
-    if (digits.length === 10) return `+1${digits}`;
-    return `+${digits}`;
+    let digits = trimmed.replace(/\D/g, '');
+    const cc = dial.slice(1);
+    // Typed WITH the country code but no plus (1 555…, 66 81…).
+    if (digits.length > 10 && digits.startsWith(cc)) digits = digits.slice(cc.length);
+    // National trunk prefix: Thai numbers are commonly written 081… = +6681…
+    if (dial === '+66' && digits.length === 10 && digits.startsWith('0')) digits = digits.slice(1);
+    return `${dial}${digits}`;
   };
 
   // Already signed in — e.g. an OAuth or magic-link round-trip landed back here because its
@@ -100,6 +118,12 @@ export function SignInView({ branchId, brandName }: Props) {
   const submitPhone = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    // Guard as well as `required`: the attribute is trivially bypassed and a blank
+    // name leaves the restaurant with an order it cannot call out.
+    if (phoneMode === 'register' && !fullName.trim()) {
+      setError('Please enter your name.');
+      return;
+    }
     setLoading(true);
     const supabase = getBrowserClient();
     const { data, error: fnErr } = await supabase.functions.invoke('customer-auth', {
@@ -109,7 +133,7 @@ export function SignInView({ branchId, brandName }: Props) {
         password,
         branch_id: branchId,
         // Name is only collected on register; login ignores it.
-        full_name: phoneMode === 'register' ? fullName.trim() || undefined : undefined,
+        full_name: phoneMode === 'register' ? fullName.trim() : undefined,
       },
     });
     if (fnErr) {
@@ -277,11 +301,12 @@ export function SignInView({ branchId, brandName }: Props) {
             </div>
             {phoneMode === 'register' && (
               <label className="block">
-                <span className="mb-2 block text-sm font-medium">Full name (optional)</span>
+                <span className="mb-2 block text-sm font-medium">Full name</span>
                 <input
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   autoComplete="name"
+                  required
                   placeholder="Your name"
                   className="focus-ring w-full rounded-xl border border-border bg-background px-4 py-3 text-base"
                 />
@@ -289,18 +314,32 @@ export function SignInView({ branchId, brandName }: Props) {
             )}
             <label className="block">
               <span className="mb-2 block text-sm font-medium">Phone number</span>
-              <div className="relative">
-                <Phone className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  type="tel"
-                  inputMode="tel"
-                  autoComplete="tel"
-                  required
-                  placeholder="(555) 234-5678"
-                  className="focus-ring w-full rounded-xl border border-border bg-background py-3 pl-11 pr-4 text-base"
-                />
+              <div className="flex gap-2">
+                <select
+                  value={dial}
+                  onChange={(e) => setDial(e.target.value as Dial)}
+                  aria-label="Country calling code"
+                  className="focus-ring shrink-0 rounded-xl border border-border bg-background px-3 py-3 text-base"
+                >
+                  {COUNTRIES.map((c) => (
+                    <option key={c.dial} value={c.dial}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+                <div className="relative flex-1">
+                  <Phone className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    required
+                    placeholder={COUNTRIES.find((c) => c.dial === dial)?.placeholder}
+                    className="focus-ring w-full rounded-xl border border-border bg-background py-3 pl-11 pr-4 text-base"
+                  />
+                </div>
               </div>
             </label>
             <label className="block">
@@ -332,11 +371,12 @@ export function SignInView({ branchId, brandName }: Props) {
         ) : stage === 'email' ? (
           <form onSubmit={submitEmail} className="space-y-4">
             <label className="block">
-              <span className="mb-2 block text-sm font-medium">Full name (optional)</span>
+              <span className="mb-2 block text-sm font-medium">Full name</span>
               <input
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 autoComplete="name"
+                required
                 placeholder="Your name"
                 className="focus-ring w-full rounded-xl border border-border bg-background px-4 py-3 text-base"
               />
