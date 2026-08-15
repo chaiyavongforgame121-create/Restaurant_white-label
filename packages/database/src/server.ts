@@ -31,3 +31,19 @@ export async function getServerClient(): Promise<FavornomsClient> {
     },
   }) as FavornomsClient;
 }
+
+/**
+ * Cookie-LESS anon client for public, non-user-specific reads (tenant, menu, prices).
+ *
+ * It never calls next/headers `cookies()`, so — unlike getServerClient — it does NOT opt
+ * the route into dynamic rendering and IS safe to call inside `unstable_cache`. Use it only
+ * for data that is identical for every visitor (the storefront is publicly viewable, so the
+ * anon role can read it); anything user-scoped must still go through getServerClient so RLS
+ * sees the session.
+ */
+export function getAnonServerClient(): FavornomsClient {
+  const { url, publishableKey } = getSupabaseEnv();
+  return createServerClient<Database>(url, publishableKey, {
+    cookies: { getAll: () => [], setAll: () => {} },
+  }) as FavornomsClient;
+}

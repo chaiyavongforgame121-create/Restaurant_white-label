@@ -32,6 +32,16 @@ export async function updateSession(request: NextRequest) {
 
   let response = NextResponse.next({ request: { headers: buildHeaders() } });
 
+  // Skip the /auth/v1/user round-trip for anonymous visitors. getUser() exists here only to
+  // refresh an access token, and an anonymous visitor has no token to refresh — yet this call
+  // (~1.4s from Thailand, seconds on a cold instance) was on the critical path of EVERY menu
+  // page load, which is the bulk of the "everything spins" report. A signed-in visitor always
+  // carries an `sb-<ref>-auth-token` cookie; only then is there anything to do.
+  const hasAuthCookie = request.cookies
+    .getAll()
+    .some((c) => c.name.startsWith('sb-') && c.name.includes('-auth-token'));
+  if (!hasAuthCookie) return response;
+
   const supabase = createServerClient<Database>(url, publishableKey, {
     cookies: {
       getAll() {
