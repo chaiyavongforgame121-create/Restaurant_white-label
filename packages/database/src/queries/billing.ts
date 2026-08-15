@@ -73,23 +73,57 @@ const STOREFRONT_DENIED: StorefrontStatus = Object.freeze({
   card_payment: false,
 });
 
+/**
+ * Used ONLY when the status could not be read at all (timeout, network, cold DB).
+ *
+ * `entitled` is true on purpose. A failed read is not evidence that the restaurant stopped
+ * paying, but the old code treated it as such and rendered "This restaurant is not taking
+ * orders right now" — telling a paying tenant's customers they were closed every time the
+ * database hiccuped. That is a revenue-destroying false negative, and it happened in
+ * production on a fully-entitled branch (entitled_through was a week away).
+ *
+ * Failing open is safe because entitlement is NOT enforced by this screen: BEFORE INSERT
+ * triggers on orders/payments/deliveries reject writes from an unentitled restaurant at the
+ * database, whatever the UI shows. So a genuinely lapsed tenant still cannot take an order —
+ * they just get the error at submit instead of a polite wall.
+ *
+ * The two feature flags stay false: a wrong `true` there offers a diner a delivery or card
+ * option the branch may not have, and losing an option for one render degrades far more
+ * gracefully than losing the whole storefront.
+ */
+const STOREFRONT_UNKNOWN: StorefrontStatus = Object.freeze({
+  entitled: true,
+  delivery: false,
+  card_payment: false,
+});
+
 export async function getStorefrontStatus(
   supabase: FavornomsClient,
   branchId: string,
 ): Promise<StorefrontStatus> {
+  // An absent branch id is a caller bug, not an outage — still denied.
   if (!branchId) return STOREFRONT_DENIED;
-  try {
-    const { data, error } = await supabase.rpc('storefront_status', { p_branch_id: branchId });
-    if (error || !data || typeof data !== 'object') return STOREFRONT_DENIED;
-    const d = data as Record<string, unknown>;
-    return {
-      entitled: d.entitled === true,
-      delivery: d.delivery === true,
-      card_payment: d.card_payment === true,
-    };
-  } catch {
-    return STOREFRONT_DENIED;
+
+  // Two attempts: the overwhelming majority of failures here are a cold/slow database, and
+  // a second try a moment later usually lands. Only a repeated failure is treated as unknown.
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const { data, error } = await supabase.rpc('storefront_status', { p_branch_id: branchId });
+      if (!error && data && typeof data === 'object') {
+        const d = data as Record<string, unknown>;
+        // A successful read is authoritative, including a genuine `entitled: false`.
+        return {
+          entitled: d.entitled === true,
+          delivery: d.delivery === true,
+          card_payment: d.card_payment === true,
+        };
+      }
+    } catch {
+      // fall through to the retry / unknown
+    }
+    if (attempt === 0) await new Promise((r) => setTimeout(r, 250));
   }
+  return STOREFRONT_UNKNOWN;
 }
 
 /** The sellable catalog. Empty array on error — a broken read must not price anything. */

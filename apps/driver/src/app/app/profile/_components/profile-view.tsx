@@ -47,14 +47,29 @@ export function ProfileView() {
     const supabase = getBrowserClient();
     const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg';
     const path = `${driver.id}/${docKey}.${ext}`;
-    const { error } = await supabase.storage
-      .from('driver-kyc')
-      .upload(path, file, { upsert: true, contentType: file.type });
-    if (error) {
-      alert(`Upload failed: ${error.message}`);
-      return;
+
+    // Storage writes its object metadata to Postgres, so a slow database surfaces here as
+    // "the connection to the database timed out" and the rider is simply stuck — they cannot
+    // get verified and cannot work. Retry a couple of times with backoff before giving up;
+    // these failures are transient far more often than not.
+    let lastMessage = '';
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const { error } = await supabase.storage
+        .from('driver-kyc')
+        .upload(path, file, { upsert: true, contentType: file.type });
+      if (!error) {
+        setUploadedDocs((s) => new Set(s).add(docKey));
+        return;
+      }
+      lastMessage = error.message;
+      if (attempt < 2) await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
     }
-    setUploadedDocs((s) => new Set(s).add(docKey));
+    // Say what to do, not just what broke. The raw message ("connection to the database
+    // timed out") reads as permanent to a rider; it almost never is.
+    alert(
+      `Couldn't upload that document — the server is busy right now.\n\n` +
+        `Please wait a moment and tap Upload again.\n\n(${lastMessage})`,
+    );
   };
 
   const handleSignOut = async () => {
