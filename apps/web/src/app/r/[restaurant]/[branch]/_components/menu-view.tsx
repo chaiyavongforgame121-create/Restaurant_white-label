@@ -40,6 +40,7 @@ import {
 import { useCart, type OrderChannel } from '@/store/cart';
 import { useRequireAuth } from '@/components/auth/require-auth';
 import type { Locale } from '@/i18n/config';
+import { ComboSheet, type ComboRow as ComboRowType } from './combo-sheet';
 import { MenuItemSheet } from './menu-item-sheet';
 import { OrderTypeGate } from './order-type-gate';
 
@@ -48,14 +49,8 @@ interface BranchReviews {
   recent: Array<{ food_stars: number; delivery_stars: number | null; comment: string; created_at: string }>;
 }
 
-interface ComboRow {
-  id: string;
-  name: string;
-  description: string | null;
-  total_price: number | string;
-  image_url: string | null;
-  items: Array<{ menu_item_id: string; item_name: string; quantity: number; list_price: number }>;
-}
+// Shape lives with the sheet that renders it in full — one definition, not two.
+type ComboRow = ComboRowType;
 
 interface HappyHourSection {
   id: string;
@@ -94,6 +89,7 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
   const [search, setSearch] = React.useState('');
   const [activeCategory, setActiveCategory] = React.useState<string>('all');
   const [activeItem, setActiveItem] = React.useState<MenuItem | null>(null);
+  const [activeCombo, setActiveCombo] = React.useState<ComboRow | null>(null);
   const [dietaryFilters, setDietaryFilters] = React.useState<Set<string>>(new Set());
   const [usuals, setUsuals] = React.useState<MenuItem[]>([]);
 
@@ -206,7 +202,7 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
       )}
 
       {combos.length > 0 && (
-        <CombosRow combos={combos} branchId={branch.id} requireAuthThen={requireAuthThen} />
+        <CombosRow combos={combos} onOpenCombo={setActiveCombo} />
       )}
 
       {happyHours.length > 0 && (
@@ -265,7 +261,7 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
             />
           </div>
 
-          <MenuGrid items={filtered} onOpen={setActiveItem} layout={menuLayout} cardStyle={menuCardStyle} requireAuthThen={requireAuthThen} />
+          <MenuGrid items={filtered} onOpen={setActiveItem} layout={menuLayout} cardStyle={menuCardStyle} />
 
           {filtered.length === 0 && (
             <EmptyState
@@ -280,6 +276,12 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
       <FloatingCartBar />
 
       <MenuItemSheet item={activeItem} onClose={() => setActiveItem(null)} />
+      <ComboSheet
+        combo={activeCombo}
+        branchId={branch.id}
+        onClose={() => setActiveCombo(null)}
+        requireAuthThen={requireAuthThen}
+      />
     </div>
   );
 }
@@ -558,13 +560,11 @@ function MenuGrid({
   onOpen,
   layout,
   cardStyle,
-  requireAuthThen,
 }: {
   items: MenuItem[];
   onOpen: (i: MenuItem) => void;
   layout: MenuLayout;
   cardStyle: MenuCardStyle;
-  requireAuthThen: (action: () => void) => void;
 }) {
   return (
     <div className={`grid gap-4 ${MENU_GRID_CLASS[layout]}`}>
@@ -575,26 +575,23 @@ function MenuGrid({
           index={idx}
           onOpen={() => onOpen(item)}
           compact={cardStyle === 'compact'}
-          requireAuthThen={requireAuthThen}
         />
       ))}
     </div>
   );
 }
 
+// No login gate here any more: the card only OPENS the detail sheet, which is a read.
+// The gate now sits on the sheet's Add button, where the actual mutation happens.
 function MenuCard({
   item,
   onOpen,
   compact = false,
-  requireAuthThen,
 }: {
   item: MenuItem;
   index: number;
   onOpen: () => void;
   compact?: boolean;
-  // Quick-add is a mutation — gated behind login (browsing the card stays open).
-  // The gate is instantiated once in MenuView and passed down, not per card.
-  requireAuthThen: (action: () => void) => void;
 }) {
   const t = useTranslations('menu');
   const lines = useCart((s) => s.lines);
@@ -823,16 +820,12 @@ function ReviewsStrip({ reviews }: { reviews: { summary: { rating: number | null
 
 function CombosRow({
   combos,
-  branchId,
-  requireAuthThen,
+  onOpenCombo,
 }: {
   combos: ComboRow[];
-  branchId: string;
-  // Same login gate as the item quick-add — adding a combo is still a mutation.
-  requireAuthThen: (action: () => void) => void;
+  /** Opens the combo detail sheet. Adding happens there, behind the usual login gate. */
+  onOpenCombo: (combo: ComboRow) => void;
 }) {
-  const addCombo = useCart((s) => s.addCombo);
-
   return (
     <section className="container mt-6">
       <div className="flex items-baseline justify-between">
@@ -881,26 +874,11 @@ function CombosRow({
                       <p className="text-[10px] font-semibold text-success">Save {formatCurrency(savings)}</p>
                     )}
                   </div>
-                  <Button
-                    size="sm"
-                    variant="gradient"
-                    onClick={() =>
-                      requireAuthThen(() =>
-                        addCombo({
-                          comboId: c.id,
-                          name: c.name,
-                          imageUrl: c.image_url,
-                          totalPrice: Number(c.total_price),
-                          branchId,
-                          contents: (c.items ?? []).map((it) => ({
-                            item_name: it.item_name,
-                            quantity: it.quantity,
-                          })),
-                        }),
-                      )
-                    }
-                  >
-                    Add to cart
+                  {/* Opens the detail sheet rather than adding straight to the cart — a
+                      combo bundles several dishes and a saving, which the diner should be
+                      able to read before committing. The Add button lives in the sheet. */}
+                  <Button size="sm" variant="gradient" onClick={() => onOpenCombo(c)}>
+                    View deal
                   </Button>
                 </div>
               </div>
