@@ -103,17 +103,29 @@ export function SignInView({ branchId, brandName, defaultDial = '+1' }: Props) {
   // Already signed in — e.g. an OAuth or magic-link round-trip landed back here because its
   // `next` defaulted to this page. Move the diner on instead of showing a login form they no
   // longer need. (This is what actually fixes "Google worked but bounced me back to sign-in".)
+  //
+  // Guarded so it can only ever fire for a session that was ALREADY there. setSession() emits
+  // SIGNED_IN before it resolves and the browser client is a singleton, so without the guard
+  // `user` flips on the same tick submitPhone calls goNext() and both owners dispatch a
+  // navigation. Next discards the first one's in-flight RSC fetch when the second arrives, so
+  // one login cost two full round-trips — 5.3s of spinning, measured in production.
+  const redirected = React.useRef(false);
   React.useEffect(() => {
-    if (user) {
-      router.replace(next ?? branchBase);
-      router.refresh();
-    }
-  }, [user, next, branchBase, router]);
-
-  const goNext = () => {
+    if (!user || redirected.current || loading || googleLoading) return;
+    redirected.current = true;
+    // No router.refresh(): replace() to a different route already fetches a fresh tree, and
+    // the extra action is what the navigation was racing.
     router.replace(next ?? branchBase);
-    router.refresh();
-  };
+  }, [user, next, branchBase, router, loading, googleLoading]);
+
+  // Hard navigation, deliberately. setSession() has already written the auth cookie, and the
+  // destination is a force-dynamic tenant page that has to be re-rendered server-side with it
+  // anyway. A soft replace() can be discarded by a competing navigation, and the success path
+  // never resets `loading` — so a discarded one strands the diner on a disabled spinning
+  // button with no recovery. `next` is safeNext-guarded to a same-origin path above.
+  const goNext = React.useCallback(() => {
+    window.location.assign(next ?? branchBase);
+  }, [next, branchBase]);
 
   const submitPhone = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -150,15 +162,28 @@ export function SignInView({ branchId, brandName, defaultDial = '+1' }: Props) {
     }
     const res = data as AuthResult;
     if ((res.status === 'login' || res.status === 'signup') && res.access_token && res.refresh_token) {
-      await supabase.auth.setSession({
+      const { error: sessErr } = await supabase.auth.setSession({
         access_token: res.access_token,
         refresh_token: res.refresh_token,
       });
+      // Was swallowed. A failure here left `loading` true forever with nothing on screen.
+      if (sessErr) {
+        setLoading(false);
+        setError('We signed you in but couldn’t start your session. Please try again.');
+        return;
+      }
+      // The spinner ends when the document unloads — the one exit that does not reset it.
       goNext();
       return;
     }
     setLoading(false);
     switch (res.status) {
+      case 'login':
+      case 'signup':
+        // 200 with the right status but no tokens. It used to reach `default` by accident;
+        // being explicit keeps that from silently changing meaning.
+        setError('Signed in, but no session was returned. Please try again.');
+        return;
       case 'weak_password':
         setError('Password must be at least 8 characters.');
         return;
@@ -203,8 +228,12 @@ export function SignInView({ branchId, brandName, defaultDial = '+1' }: Props) {
     setError(null);
     setLoading(true);
     const supabase = getBrowserClient();
+    // Through /auth/callback, not straight at the destination. @supabase/ssr hard-codes the
+    // PKCE flow, so the link arrives as ?code=… and exchangeCodeForSession is called in
+    // exactly one place in the monorepo — that route. Pointed anywhere else, the server
+    // render is signed out and only the browser client's detectSessionInUrl rescues it.
     const redirectTo = typeof window !== 'undefined'
-      ? `${window.location.origin}${next ?? branchBase}`
+      ? `${window.location.origin}/auth/callback?next=${encodeURIComponent(next ?? branchBase)}`
       : undefined;
     const { error } = await supabase.auth.signInWithOtp({
       email: emailAddr.trim().toLowerCase(),
