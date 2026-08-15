@@ -55,6 +55,14 @@
     --warning: 33 96% 30%;
     --danger: 0 74% 43%;
     --danger-foreground: 0 0% 100%;
+    /* Deliberately blue, i.e. outside the warm brand ramp. Status colour has to
+       mean the same thing on every tenant, and --primary/--secondary/--accent are
+       all injected per branch by ThemeProvider — a merchant who picks a green
+       accent would otherwise make "Confirmed" read as success. Nothing overrides
+       --info, so it is safe to carry semantics. ~5.9:1 as text on its own /15
+       tint over a white card. */
+    --info: 210 80% 35%;
+    --info-foreground: 0 0% 100%;
 
     --radius: 1rem;
 
@@ -88,6 +96,7 @@
     --success: 142 70% 48%;
     --warning: 38 92% 56%;
     --danger: 0 84% 65%;
+    --info: 210 90% 68%;
   }
 
   * {

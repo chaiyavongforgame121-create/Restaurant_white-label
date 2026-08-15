@@ -14,7 +14,13 @@ const badgeVariants = cva(
         success: 'bg-success/15 text-success',
         warning: 'bg-warning/15 text-warning',
         danger: 'bg-danger/15 text-danger',
+        // Tenant-invariant blue. `default`/`solid`/`accent` all resolve to colours
+        // ThemeProvider rewrites per branch, so they cannot carry status meaning.
+        info: 'bg-info/15 text-info',
         muted: 'bg-muted text-muted-foreground',
+        // `muted` on a card is a 1.11:1 tint — the pill reads as no pill at all.
+        // This is the neutral to use when the background itself has to be visible.
+        neutral: 'bg-foreground/10 text-foreground',
       },
     },
     defaultVariants: { variant: 'default' },

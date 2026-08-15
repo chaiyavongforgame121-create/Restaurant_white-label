@@ -3,7 +3,10 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Bike, QrCode, RotateCcw, ShoppingBag, Store, type LucideIcon } from 'lucide-react';
+import {
+  Bike, CheckCircle2, ChefHat, Clock, MapPin, QrCode, Receipt, RotateCcw,
+  ShoppingBag, Store, XCircle, type LucideIcon,
+} from 'lucide-react';
 import { formatCurrency } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Badge, Button, Card } from '@favornoms/ui';
@@ -41,28 +44,37 @@ const CHANNEL_META: Record<string, { label: string; Icon: LucideIcon }> = {
   qr_ordering: { label: 'QR order', Icon: QrCode },
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  pending: 'Pending',
-  confirmed: 'Confirmed',
-  preparing: 'Preparing',
-  ready: 'Ready',
-  out_for_delivery: 'Out for delivery',
-  completed: 'Completed',
-  cancelled: 'Cancelled',
-  refunded: 'Refunded',
-};
-
-// Only the variants that exist on the shared Badge (default/solid/accent/
-// outline/success/warning/danger/muted) — no ad-hoc colours.
-const STATUS_VARIANTS: Record<string, React.ComponentProps<typeof Badge>['variant']> = {
-  pending: 'muted',
-  confirmed: 'default',
-  preparing: 'warning',
-  ready: 'accent',
-  out_for_delivery: 'solid',
-  completed: 'success',
-  cancelled: 'danger',
-  refunded: 'danger',
+/**
+ * One entry per `order_status` enum value — all 8 are mapped, so nothing falls
+ * through to the humanized default.
+ *
+ * Colour rules, both learned the hard way:
+ *  1. Never `default`, `solid` or `accent`. Those resolve to --primary/--accent,
+ *     which ThemeProvider injects from the branch's own theme, so on a tenant with
+ *     a green accent "Out for delivery" rendered as if the order were complete.
+ *     Only --success/--warning/--danger/--info are tenant-invariant.
+ *  2. Never `muted`. bg-muted against bg-card is a 1.11:1 tint — invisible. That
+ *     hit `pending` specifically, i.e. every freshly placed order, which is
+ *     exactly the row the diner looks at first.
+ *
+ * There are more statuses than there are safe hues, so the icon is the second
+ * channel: it is what keeps ready/completed and confirmed/out_for_delivery
+ * tellable apart at a glance. Icons match the tracking stepper in
+ * orders/[orderNumber]/_components/order-tracking.tsx so the same stage looks the
+ * same on both screens.
+ */
+const STATUS_META: Record<
+  string,
+  { label: string; variant: React.ComponentProps<typeof Badge>['variant']; Icon: LucideIcon }
+> = {
+  pending: { label: 'Pending', variant: 'neutral', Icon: Clock },
+  confirmed: { label: 'Confirmed', variant: 'info', Icon: CheckCircle2 },
+  preparing: { label: 'Preparing', variant: 'warning', Icon: ChefHat },
+  ready: { label: 'Ready', variant: 'success', Icon: Receipt },
+  out_for_delivery: { label: 'Out for delivery', variant: 'info', Icon: Bike },
+  completed: { label: 'Completed', variant: 'success', Icon: MapPin },
+  cancelled: { label: 'Cancelled', variant: 'danger', Icon: XCircle },
+  refunded: { label: 'Refunded', variant: 'danger', Icon: RotateCcw },
 };
 
 function humanize(value: string): string {
@@ -199,9 +211,7 @@ export function OrdersList({ orders, base, branchId }: Props) {
                   </p>
                 </Link>
                 <div className="flex flex-col items-end gap-2">
-                  <Badge variant={STATUS_VARIANTS[order.status] ?? 'muted'}>
-                    {STATUS_LABELS[order.status] ?? humanize(order.status)}
-                  </Badge>
+                  <StatusBadge status={order.status} />
                   <Button
                     variant="outline"
                     size="sm"
@@ -218,6 +228,19 @@ export function OrdersList({ orders, base, branchId }: Props) {
         ))}
       </ul>
     </div>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const meta = STATUS_META[status];
+  // A status added to the enum later must still render something legible rather
+  // than an unstyled pill.
+  if (!meta) return <Badge variant="neutral">{humanize(status)}</Badge>;
+  const { label, variant, Icon } = meta;
+  return (
+    <Badge variant={variant} className="whitespace-nowrap">
+      <Icon className="h-3 w-3 shrink-0" /> {label}
+    </Badge>
   );
 }
 
