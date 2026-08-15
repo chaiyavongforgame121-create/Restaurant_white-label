@@ -1,8 +1,20 @@
 // Minimal service worker — production should use Workbox per responsive-mobile-first.md §13.3
-// v2 — install icons landed; bump forces returning users to re-fetch the manifest.
-// Every entry below must exist: `addAll` rejects atomically on a single 404 and
-// the whole service worker then fails to install.
-const CACHE_VERSION = 'favornoms-web-v2';
+//
+// v3 — CRITICAL FIX. v2's fetch handler fell through to a CACHE-FIRST branch for every GET
+// that was not /api/, a .webmanifest or a navigation. Cross-origin requests were never
+// excluded, so every Supabase REST read (https://<ref>.supabase.co/rest/v1/...) was cached
+// permanently on first response and served from cache forever after.
+//
+// The effect was that the app looked completely broken end to end: a diner saved a delivery
+// address (POST, not intercepted, so it really did persist), but the address LIST kept
+// replaying the first empty response and showed "No saved addresses" — the network was never
+// touched again, so the server logs showed exactly one GET. The same staleness hit orders,
+// rewards and every other client-side read. Bumping the version purges the poisoned caches
+// via the activate handler below.
+//
+// Rules now: never intercept cross-origin (Supabase, Mapbox, fonts) — those must always go to
+// the network. Only same-origin, content-addressed static assets are cache-first.
+const CACHE_VERSION = 'favornoms-web-v3';
 const CACHE_FILES = [
   '/',
   '/manifest.webmanifest',
@@ -10,6 +22,18 @@ const CACHE_FILES = [
   '/icon-192.png',
   '/icon-512.png',
 ];
+
+// Same-origin paths that are safe to serve cache-first: build output is content-addressed
+// (a new build gets a new URL) and icons are versioned by CACHE_VERSION.
+const STATIC_PREFIXES = ['/_next/static/', '/icon', '/apple-touch-icon'];
+const STATIC_EXTENSIONS = /\.(?:css|js|woff2?|ttf|otf|eot|png|jpe?g|gif|webp|avif|svg|ico)$/i;
+
+function isStaticAsset(url) {
+  return (
+    STATIC_PREFIXES.some((p) => url.pathname.startsWith(p)) ||
+    STATIC_EXTENSIONS.test(url.pathname)
+  );
+}
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -70,16 +94,25 @@ self.addEventListener('notificationclick', (event) => {
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
-  const url = new URL(req.url);
 
-  // Network-first for API + HTML navigation + manifests. Manifests are
-  // per-tenant and carry live branding, so they must not go stale in the
-  // cache-first bucket until the next CACHE_VERSION bump.
-  if (
-    url.pathname.startsWith('/api/') ||
-    url.pathname.endsWith('.webmanifest') ||
-    req.mode === 'navigate'
-  ) {
+  let url;
+  try {
+    url = new URL(req.url);
+  } catch {
+    return;
+  }
+
+  // Cross-origin (Supabase REST/Auth/Functions, Mapbox, Google) — DO NOT intercept at all.
+  // This is the v2 bug: caching these froze every client-side read at its first response.
+  // Returning without respondWith lets the browser perform the request normally.
+  if (url.origin !== self.location.origin) return;
+
+  // Same-origin API and auth routes are live data — never serve them from cache.
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/auth/')) return;
+
+  // Network-first for HTML navigation and the per-tenant manifest, with a cache fallback so
+  // the app still opens offline. Manifests carry live branding, so they must not go stale.
+  if (req.mode === 'navigate' || url.pathname.endsWith('.webmanifest')) {
     event.respondWith(
       fetch(req)
         .then((res) => {
@@ -92,7 +125,10 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Cache-first for static assets + images
+  // Cache-first ONLY for content-addressed static assets. Anything else same-origin falls
+  // through to the network untouched.
+  if (!isStaticAsset(url)) return;
+
   event.respondWith(
     caches.match(req).then(
       (cached) =>
