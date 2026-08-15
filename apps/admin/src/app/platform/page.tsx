@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getServerClient } from '@favornoms/database/server';
 import { listBillingProducts, listRestaurantSubscriptions } from '@favornoms/database/queries';
+import { storefrontBase } from '@/lib/site-url';
 import { PlatformAccessDenied } from './_components/platform-nav';
 import { PlatformDashboard } from './_components/platform-dashboard';
 import type { BranchClosureLite, BranchLite, TenantRow } from './_components/tenant-health';
@@ -92,7 +93,7 @@ export default async function PlatformPage() {
       branches={branches}
       nowMs={Date.now()}
       catalog={catalog}
-      siteBase={(process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000').replace(/\/$/, '')}
+      siteBase={storefrontBase()}
       loadError={failed.length > 0 ? `Could not load ${failed.join(', ')}.` : null}
     />
   );

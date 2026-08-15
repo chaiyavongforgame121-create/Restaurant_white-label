@@ -1,22 +1,10 @@
 import { notFound } from 'next/navigation';
 import { getServerClient } from '@favornoms/database/server';
+import { storefrontBase } from '@/lib/site-url';
 import { BranchQr } from './_components/branch-qr';
 
 interface Props {
   params: Promise<{ branchId: string }>;
-}
-
-// Public default matches apps/web (layout.tsx / robots.ts / sitemap.ts). A QR
-// code is printed and stuck on a table — encoding http://localhost:3000 because
-// NEXT_PUBLIC_SITE_URL happened to be unset on the admin deploy produces table
-// tents that can never work, so localhost is only ever used in dev.
-const PUBLIC_FALLBACK = 'https://favornoms.com';
-
-function siteBase(): string {
-  const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim();
-  if (configured) return configured.replace(/\/$/, '');
-  if (process.env.NODE_ENV !== 'production') return 'http://localhost:3000';
-  return PUBLIC_FALLBACK;
 }
 
 export default async function BranchQrPage({ params }: Props) {
@@ -46,7 +34,7 @@ export default async function BranchQrPage({ params }: Props) {
   const url = domain
     ? `https://${domain.replace(/^https?:\/\//, '').replace(/\/$/, '')}`
     : missing.length === 0
-      ? `${siteBase()}/r/${restaurant!.slug}/${branch.slug}`
+      ? `${storefrontBase()}/r/${restaurant!.slug}/${branch.slug}`
       : null;
 
   return (
