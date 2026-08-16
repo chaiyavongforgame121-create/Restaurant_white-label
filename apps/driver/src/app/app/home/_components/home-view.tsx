@@ -65,6 +65,8 @@ export function HomeView() {
 
   const [toggling, setToggling] = React.useState(false);
   const [onlineError, setOnlineError] = React.useState(false);
+  // Distinct from a failed write: the rider is simply not cleared to work anywhere yet.
+  const [noApprovalError, setNoApprovalError] = React.useState(false);
 
   // Penalty cooldown (D3): while cooldown_until is in the future the driver can't go
   // online. Tick every second so the countdown updates live.
@@ -121,11 +123,20 @@ export function HomeView() {
       setOnlineError(true);
       return false;
     }
+    // No approved restaurant = nowhere to be online. Without this the map below runs over an
+    // empty list, Promise.all([]) resolves to [], .some() is false, and the button reported
+    // "You're online · Ready to receive orders" while the rider was registered at ZERO
+    // branches — so they could sit waiting for a dispatch that could never arrive.
+    if (approved.length === 0) {
+      setNoApprovalError(true);
+      return false;
+    }
     const wanted = ids.filter((id) => approvedIds.includes(id));
     const target = new Set(wanted.length ? wanted : approvedIds);
     const prev = status;
     setToggling(true);
     setOnlineError(false);
+    setNoApprovalError(false);
     setStatus('online'); // optimistic
     if ('vibrate' in navigator) navigator.vibrate(40);
     const supabase = getBrowserClient();
@@ -232,6 +243,11 @@ export function HomeView() {
           {onlineError && (
             <p className="mx-auto mt-3 inline-block rounded-full bg-danger/90 px-4 py-1.5 text-sm font-medium text-white">
               Couldn&apos;t update your status — check your connection and try again.
+            </p>
+          )}
+          {noApprovalError && (
+            <p className="mx-auto mt-3 inline-block rounded-full bg-danger/90 px-4 py-1.5 text-sm font-medium text-white">
+              No restaurant has approved you yet — apply below first, then you can go online.
             </p>
           )}
           {inCooldown && (
