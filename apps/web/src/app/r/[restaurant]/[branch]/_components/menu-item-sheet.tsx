@@ -10,6 +10,7 @@ import { Button, DietaryBadge, QuantityStepper, Sheet } from '@favornoms/ui';
 import { getBrowserClient } from '@favornoms/database/client';
 import { useCart, type CartLineModifier } from '@/store/cart';
 import { useRequireAuth } from '@/components/auth/require-auth';
+import { stashPendingAdd } from '@/lib/pending-cart';
 
 interface Props {
   item: MenuItem | null;
@@ -181,10 +182,26 @@ export function MenuItemSheet({ item, onClose }: Props) {
         }
       }
     }
-    requireAuthThen(() => {
-      add(view, qty, notes, flatMods.length > 0 ? flatMods : undefined);
-      onClose();
-    });
+    const modifiers = flatMods.length > 0 ? flatMods : undefined;
+    requireAuthThen(
+      () => {
+        add(view, qty, notes, modifiers);
+        onClose();
+      },
+      undefined,
+      // Signed out: park the fully-configured line so sign-in does not discard the
+      // quantity, modifiers and notes the diner just picked. Replayed by
+      // PendingCartReplay as soon as a session exists.
+      () =>
+        stashPendingAdd({
+          kind: 'item',
+          branchId: view.branchId,
+          item: view,
+          quantity: qty,
+          notes: notes || undefined,
+          modifiers,
+        }),
+    );
   };
 
   return (

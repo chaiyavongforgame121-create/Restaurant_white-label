@@ -7,6 +7,7 @@ import { useTranslations } from 'next-intl';
 import { formatCurrency } from '@favornoms/shared';
 import { Button, QuantityStepper, Sheet } from '@favornoms/ui';
 import { useCart } from '@/store/cart';
+import { stashPendingAdd } from '@/lib/pending-cart';
 
 export interface ComboRow {
   id: string;
@@ -36,7 +37,7 @@ export function ComboSheet({
   branchId: string;
   onClose: () => void;
   /** Adding is a mutation, so it stays behind the same login gate as every other add. */
-  requireAuthThen: (action: () => void) => void;
+  requireAuthThen: (action: () => void, nextPath?: string, onSignedOut?: () => void) => void;
 }) {
   const t = useTranslations();
   const addCombo = useCart((s) => s.addCombo);
@@ -60,23 +61,26 @@ export function ComboSheet({
   const total = unit * qty;
 
   const handleAdd = () => {
-    requireAuthThen(() => {
-      addCombo(
-        {
-          comboId: combo.id,
-          name: combo.name,
-          imageUrl: combo.image_url,
-          totalPrice: unit,
-          branchId,
-          contents: (combo.items ?? []).map((it) => ({
-            item_name: it.item_name,
-            quantity: it.quantity,
-          })),
-        },
-        qty,
-      );
-      onClose();
-    });
+    const pick = {
+      comboId: combo.id,
+      name: combo.name,
+      imageUrl: combo.image_url,
+      totalPrice: unit,
+      branchId,
+      contents: (combo.items ?? []).map((it) => ({
+        item_name: it.item_name,
+        quantity: it.quantity,
+      })),
+    };
+    requireAuthThen(
+      () => {
+        addCombo(pick, qty);
+        onClose();
+      },
+      undefined,
+      // Signed out: park it so the trip through sign-in keeps the deal and quantity.
+      () => stashPendingAdd({ kind: 'combo', branchId, combo: pick, quantity: qty }),
+    );
   };
 
   return (

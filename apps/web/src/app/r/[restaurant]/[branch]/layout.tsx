@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { ThemeProvider } from '@favornoms/ui';
 import { AppShell } from '@/components/app-shell';
+import { PendingCartReplay } from '@/components/pending-cart-replay';
 import { PushSubscriber } from '@/components/push-subscriber';
 import { resolveTenant } from '@/lib/tenant';
 
@@ -20,6 +21,7 @@ export default async function BranchLayout({ params, children }: Props) {
     <ThemeProvider theme={tenant.theme}>
       <AppShell base={base} brandName={tenant.theme.brandName ?? tenant.restaurant.name}>
         <PushSubscriber />
+        <PendingCartReplay branchId={tenant.branch.id} />
         {children}
       </AppShell>
     </ThemeProvider>

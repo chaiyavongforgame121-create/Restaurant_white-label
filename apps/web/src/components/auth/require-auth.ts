@@ -29,9 +29,13 @@ export function useRequireAuth() {
   /**
    * Run `action` when signed in; otherwise redirect to sign-in with `next`
    * pointing back to `nextPath` (defaults to the current path).
+   *
+   * `onSignedOut` runs just before the redirect. Callers use it to park whatever the
+   * diner had configured (see lib/pending-cart) so the trip through sign-in does not
+   * throw their selection away.
    */
   const requireAuthThen = React.useCallback(
-    (action: () => void, nextPath?: string) => {
+    (action: () => void, nextPath?: string, onSignedOut?: () => void) => {
       // Session still resolving: treat the tap as a no-op rather than risk
       // bouncing an already-signed-in diner to sign-in on a fast click.
       if (loading) return;
@@ -39,6 +43,7 @@ export function useRequireAuth() {
         action();
         return;
       }
+      onSignedOut?.();
       const next = nextPath ?? pathname ?? base;
       router.push(`${base}/sign-in?next=${encodeURIComponent(next)}`);
     },
