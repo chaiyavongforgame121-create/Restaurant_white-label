@@ -10,6 +10,14 @@ interface Props {
   searchParams: Promise<{ q?: string; status?: string; channel?: string }>;
 }
 
+const fmtWhen = (iso: string) =>
+  new Date(iso).toLocaleString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    month: 'short',
+    day: 'numeric',
+  });
+
 const statusVariant = (status: string) => {
   if (['pending'].includes(status)) return 'muted';
   if (['confirmed', 'preparing'].includes(status)) return 'warning';
@@ -25,7 +33,7 @@ export default async function OrdersPage({ params, searchParams }: Props) {
 
   let query = supabase
     .from('orders')
-    .select('id, order_number, channel, status, total, customer_name, customer_phone, created_at')
+    .select('id, order_number, channel, status, total, customer_name, customer_phone, created_at, scheduled_for, held')
     .eq('branch_id', branchId);
 
   if (q && q.trim()) {
@@ -104,12 +112,14 @@ export default async function OrdersPage({ params, searchParams }: Props) {
                   </div>
                 </td>
                 <td className="px-5 py-3 text-muted-foreground">
-                  {new Date(o.created_at).toLocaleString('en-US', {
-                    hour: 'numeric',
-                    minute: '2-digit',
-                    month: 'short',
-                    day: 'numeric',
-                  })}
+                  {fmtWhen(o.created_at)}
+                  {/* Without this a pre-order looks like it needs cooking now:
+                      it sits at pending/confirmed and only its created_at showed. */}
+                  {o.scheduled_for && (
+                    <span className="mt-0.5 block text-xs font-medium text-foreground">
+                      {o.held ? 'Scheduled' : 'Due'} {fmtWhen(o.scheduled_for)}
+                    </span>
+                  )}
                 </td>
                 <td className="px-5 py-3 text-right font-display text-base font-semibold text-primary">
                   {formatCurrency(Number(o.total))}
@@ -147,6 +157,11 @@ export default async function OrdersPage({ params, searchParams }: Props) {
                   <p className="font-mono text-xs text-muted-foreground">{o.order_number}</p>
                   <p className="mt-1 font-semibold">{o.customer_name ?? 'Walk-in'}</p>
                   <p className="text-xs text-muted-foreground capitalize">{o.channel.replace('_', ' ')}</p>
+                  {o.scheduled_for && (
+                    <p className="mt-1 text-xs font-medium">
+                      {o.held ? 'Scheduled' : 'Due'} {fmtWhen(o.scheduled_for)}
+                    </p>
+                  )}
                 </div>
                 <div className="text-right">
                   <p className="font-display text-lg font-bold text-primary">

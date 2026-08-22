@@ -1,4 +1,23 @@
-// place-order v9.8 — US pivot + modifiers + combos + happy-hour + schedules + gift cards
+// place-order v10.0 — US pivot + modifiers + combos + happy-hour + schedules + gift cards
+//   v10.0 (2026-08-16): points now buy NAMED REWARDS, not arbitrary dollars off.
+//        The old `redeem_points` let any diner slide up to 50% of the subtotal off
+//        at 100 pts = $1, with the merchant unable to say what points are for.
+//        Redemption is now keyed on `reward_id` pointing at a row the merchant
+//        published in `loyalty_rewards`, and this function prices it server-side
+//        (percent_off with an optional cap / fixed_off / free_item / free_delivery).
+//        Points cost is whatever the merchant set — decoupled from the discount.
+//        `redeem_points` is REJECTED with 409 stale_client_refresh_required rather
+//        than ignored: ignoring it would charge a pre-catalog client more than the
+//        total it displayed, and a silent overcharge is worse than a forced reload.
+//   v9.9 (2026-08-16): scheduled orders are checked against the time the food is
+//        wanted, not the time the order was typed. is_branch_open() was called
+//        with no p_at, so a branch closed right now rejected every pre-order for
+//        tomorrow (409 branch_closed) — scheduling was unusable outside opening
+//        hours — while an order placed during today's lunch for a day the branch
+//        is shut sailed straight through. scheduled_for is now parsed BEFORE the
+//        hours check and passed as p_at; a slot outside hours returns the
+//        distinct code `branch_closed_at_scheduled_time` so the diner is told to
+//        pick another time rather than that the restaurant is closed.
 //   v9.8 (2026-08-11): login is now MANDATORY for customer-placed orders. A non-staff
 //        caller with no authenticated user is rejected 401 login_required, before any
 //        customer/loyalty/order work. The storefront also gates add-to-cart and
@@ -97,7 +116,14 @@ interface PlaceOrderRequest {
   saved_address_id?: string;
   customer_notes?: string;
   payment_method: 'card' | 'cash';
+  /**
+   * Deprecated free-form points redemption. Rejected on sight — see the loyalty
+   * block below for why a stale client must fail loudly instead of silently
+   * being charged more than it displayed.
+   */
   redeem_points?: number;
+  /** Which named reward from the merchant's catalog to spend points on. */
+  reward_id?: string;
   tip_amount?: number;
   promo_code?: string;
   table_id?: string;
@@ -224,8 +250,30 @@ Deno.serve(async (req: Request) => {
     };
   }
 
-  const { data: openCheck } = await admin.rpc('is_branch_open', { p_branch_id: payload.branch_id });
-  if (openCheck === false) return json(409, { error: 'branch_closed' });
+  // Validate scheduled_for: at least 10 min in the future, at most 14 days.
+  // Parsed here rather than next to the insert because the store-hours check
+  // below needs it: a 7pm pickup ordered at 2pm has to be judged against 7pm
+  // opening hours, not against whether the branch happens to be open right now.
+  let scheduledFor: string | null = null;
+  if (payload.scheduled_for) {
+    const t = new Date(payload.scheduled_for).getTime();
+    const now = Date.now();
+    if (!Number.isFinite(t)) return json(400, { error: 'invalid_scheduled_for' });
+    if (t < now + 10 * 60_000) return json(400, { error: 'scheduled_too_soon' });
+    if (t > now + 14 * 24 * 60 * 60_000) return json(400, { error: 'scheduled_too_far' });
+    scheduledFor = new Date(t).toISOString();
+  }
+
+  // A scheduled order is checked against its own pickup time. Without p_at, an
+  // order for tomorrow lunch placed after closing was rejected as `branch_closed`,
+  // and one placed during today's lunch for a day the branch is shut sailed through.
+  const { data: openCheck } = await admin.rpc('is_branch_open', {
+    p_branch_id: payload.branch_id,
+    ...(scheduledFor ? { p_at: scheduledFor } : {}),
+  });
+  if (openCheck === false) {
+    return json(409, { error: scheduledFor ? 'branch_closed_at_scheduled_time' : 'branch_closed' });
+  }
 
   const { data: branch, error: bErr } = await admin.from('branches').select('id, restaurant_id, is_active, settings, sales_tax_rate, geo_lat, geo_lng').eq('id', payload.branch_id).single();
   if (bErr || !branch || !branch.is_active) return json(404, { error: 'branch_not_found_or_inactive' });
@@ -373,7 +421,6 @@ Deno.serve(async (req: Request) => {
 
   let customerId: string | null = null;
   let authedUserId: string | null = null;
-  let discountAmount = 0;
   let promoDiscount = 0;
   let promoId: string | null = null;
   const authHeader = req.headers.get('authorization');
@@ -526,12 +573,28 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  // Loyalty redemption: stored points are integer "cents-off". 100 pts = $1.
-  // Balances are brand-scoped (branch_id NULL + restaurant_id) when the
-  // restaurant's loyalty_scope is 'brand' — the locked default.
-  const redeem = Math.max(0, Math.floor(payload.redeem_points ?? 0));
+  // Loyalty redemption. Points are no longer a free-form currency the diner
+  // slides against any order: they buy exactly the named rewards the merchant
+  // published in `loyalty_rewards`, and THIS function prices the reward.
+  //
+  // A client that still sends `redeem_points` is running pre-catalog code. We
+  // reject rather than ignore, because ignoring means quietly charging more
+  // than the total that client displayed — a silent overcharge is worse than a
+  // visible "please refresh". `reward_id` and `redeem_points` are never both
+  // valid, so this also stops a crafted payload from stacking the two.
+  if (payload.redeem_points != null) {
+    return json(409, { error: 'stale_client_refresh_required' });
+  }
+
+  // Points cost of the chosen reward. Kept separate from the dollar discount:
+  // 100 pts = $1 was only ever true for the old slider, and a merchant is free
+  // to price "Free dessert" at 300 points regardless of what it is worth.
+  let pointsSpent = 0;
+  let loyaltyDollarsOff = 0;
+  let rewardName: string | null = null;
   let loyaltyBrandScope = false;
-  if (redeem > 0) {
+
+  if (payload.reward_id) {
     if (!customerId) return json(400, { error: 'redeem_requires_auth' });
     // Phone sign-in is OTP-less: anyone who knows a number can sign in as that
     // customer. Points are money, so spending them needs a second factor — a
@@ -546,16 +609,65 @@ Deno.serve(async (req: Request) => {
       // email now satisfies the gate too — the customer-facing copy names both.
       if (!loyaltyIdentityProven(authUser?.user)) return json(403, { error: 'google_link_required' });
     }
+
+    // Scoped to THIS restaurant so a reward id lifted from another tenant's
+    // storefront cannot be spent here.
+    const { data: reward } = await admin
+      .from('loyalty_rewards')
+      .select('id, name, kind, value, max_discount, points_cost, min_subtotal, menu_item_id, is_active, restaurant_id')
+      .eq('id', payload.reward_id)
+      .eq('restaurant_id', branch.restaurant_id)
+      .maybeSingle();
+    if (!reward || !reward.is_active) return json(400, { error: 'reward_unavailable' });
+    if (subtotal < Number(reward.min_subtotal ?? 0)) {
+      return json(400, { error: 'reward_min_subtotal', min_subtotal: Number(reward.min_subtotal) });
+    }
+
     const { data: rest } = await admin.from('restaurants').select('loyalty_scope').eq('id', branch.restaurant_id).maybeSingle();
     loyaltyBrandScope = rest?.loyalty_scope === 'brand';
     let q = admin.from('loyalty_points').select('points_balance').eq('customer_id', customerId);
     q = loyaltyBrandScope ? q.eq('restaurant_id', branch.restaurant_id).is('branch_id', null) : q.eq('branch_id', payload.branch_id);
     const { data: pts } = await q.maybeSingle();
     const balance = pts?.points_balance ?? 0;
-    const maxRedeem = Math.min(balance, Math.floor(subtotal * 50));
-    discountAmount = Math.min(redeem, maxRedeem);
+    const cost = Number(reward.points_cost);
+    if (balance < cost) return json(400, { error: 'insufficient_points', balance, required: cost });
+
+    switch (reward.kind) {
+      case 'percent_off': {
+        const off = (subtotal * Number(reward.value)) / 100;
+        loyaltyDollarsOff = r2(reward.max_discount != null ? Math.min(off, Number(reward.max_discount)) : off);
+        break;
+      }
+      case 'fixed_off':
+        loyaltyDollarsOff = r2(Math.min(Number(reward.value), subtotal));
+        break;
+      case 'free_item': {
+        // The diner adds the item to the cart as normal and the reward pays for
+        // one of them. Discounting the BASE price, not the line total, keeps
+        // paid add-ons paid — "free fries" should not also hand over $3 of
+        // extra toppings. Rejecting (rather than silently discounting nothing)
+        // stops the diner from spending points for no benefit.
+        const match = lineComputations.find((c) => c.line.menu_item_id === reward.menu_item_id);
+        if (!match) return json(400, { error: 'reward_item_not_in_cart', menu_item_id: reward.menu_item_id });
+        loyaltyDollarsOff = r2(Math.min(Number(match.it.price), subtotal));
+        break;
+      }
+      case 'free_delivery':
+        // Nothing off the food; the fee is zeroed instead. Charging points for
+        // a fee the diner was never going to pay would be theft, so a pickup or
+        // dine-in order is refused rather than silently costing points.
+        if (payload.channel !== 'delivery' || deliveryFee <= 0) {
+          return json(400, { error: 'reward_not_applicable' });
+        }
+        deliveryFee = 0;
+        break;
+      default:
+        return json(400, { error: 'reward_unavailable' });
+    }
+
+    pointsSpent = cost;
+    rewardName = reward.name;
   }
-  const loyaltyDollarsOff = r2(discountAmount / 100);
 
   // Sales tax computed on the post-discount, pre-tip, pre-delivery food subtotal.
   const taxRate = Number(branch.sales_tax_rate ?? 0);
@@ -579,17 +691,6 @@ Deno.serve(async (req: Request) => {
   const { data: orderNumberData, error: nErr } = await admin.schema('private').rpc('generate_order_number', { p_branch_id: payload.branch_id });
   if (nErr) console.error('order_number_rpc_failed', nErr);
   const orderNumber = (orderNumberData as unknown as string) || `A-${new Date().toISOString().slice(2,7).replace('-','')}-${String(Date.now() % 1000000).padStart(6,'0')}`;
-
-  // Validate scheduled_for: at least 15 min in the future, at most 14 days.
-  let scheduledFor: string | null = null;
-  if (payload.scheduled_for) {
-    const t = new Date(payload.scheduled_for).getTime();
-    const now = Date.now();
-    if (!Number.isFinite(t)) return json(400, { error: 'invalid_scheduled_for' });
-    if (t < now + 10 * 60_000) return json(400, { error: 'scheduled_too_soon' });
-    if (t > now + 14 * 24 * 60 * 60_000) return json(400, { error: 'scheduled_too_far' });
-    scheduledFor = new Date(t).toISOString();
-  }
 
   // Hold far-future scheduled orders out of the kitchen. Released by the
   // pg_cron job private.release_scheduled_orders() at scheduled_for − prep_time.
@@ -658,16 +759,20 @@ Deno.serve(async (req: Request) => {
     await admin.from('promos').update({ redemption_count: ((await admin.from('promos').select('redemption_count').eq('id', promoId).single()).data?.redemption_count ?? 0) + 1 }).eq('id', promoId);
   }
 
-  if (discountAmount > 0 && customerId) {
+  if (pointsSpent > 0 && customerId) {
     let balQ = admin.from('loyalty_points').select('points_balance, lifetime_spent').eq('customer_id', customerId);
     balQ = loyaltyBrandScope ? balQ.eq('restaurant_id', branch.restaurant_id).is('branch_id', null) : balQ.eq('branch_id', payload.branch_id);
     const balanceBefore = await balQ.maybeSingle();
-    const newBalance = Math.max(0, (balanceBefore.data?.points_balance ?? 0) - discountAmount);
-    let updQ = admin.from('loyalty_points').update({ points_balance: newBalance, lifetime_spent: (balanceBefore.data?.lifetime_spent ?? 0) + discountAmount, updated_at: new Date().toISOString() }).eq('customer_id', customerId);
+    const newBalance = Math.max(0, (balanceBefore.data?.points_balance ?? 0) - pointsSpent);
+    let updQ = admin.from('loyalty_points').update({ points_balance: newBalance, lifetime_spent: (balanceBefore.data?.lifetime_spent ?? 0) + pointsSpent, updated_at: new Date().toISOString() }).eq('customer_id', customerId);
     updQ = loyaltyBrandScope ? updQ.eq('restaurant_id', branch.restaurant_id).is('branch_id', null) : updQ.eq('branch_id', payload.branch_id);
     const { error: debitErr } = await updQ;
     if (debitErr) console.error('loyalty_debit_failed', debitErr);
-    const { error: ledgerErr } = await admin.from('loyalty_transactions').insert({ branch_id: loyaltyBrandScope ? null : payload.branch_id, restaurant_id: branch.restaurant_id, customer_id: customerId, points: -discountAmount, balance_after: newBalance, type: 'redeemed', reference_type: 'order', reference_id: order.id, description: `Redeemed ${discountAmount} pts on order ${order.order_number}` });
+    // reference_type stays 'order' — list_my_loyalty_transactions filters on it
+    // to hide points spent on an order that was never completed. The reward is
+    // named in the description so the diner's history reads as what they got,
+    // not as an unexplained points deduction.
+    const { error: ledgerErr } = await admin.from('loyalty_transactions').insert({ branch_id: loyaltyBrandScope ? null : payload.branch_id, restaurant_id: branch.restaurant_id, customer_id: customerId, points: -pointsSpent, balance_after: newBalance, type: 'redeemed', reference_type: 'order', reference_id: order.id, description: `${rewardName ?? 'Reward'} — ${pointsSpent} pts on order ${order.order_number}` });
     if (ledgerErr) console.error('loyalty_ledger_failed', ledgerErr);
   }
 
@@ -693,5 +798,5 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  return json(201, { order_id: order.id, order_number: order.order_number, total, subtotal, tax_amount: taxAmount, discount_amount: loyaltyDollarsOff + promoDiscount, eta_min: tripEtaMin, payment_id: payment?.id ?? null, payment_method: payload.payment_method });
+  return json(201, { order_id: order.id, order_number: order.order_number, total, subtotal, tax_amount: taxAmount, discount_amount: loyaltyDollarsOff + promoDiscount, points_spent: pointsSpent, eta_min: tripEtaMin, payment_id: payment?.id ?? null, payment_method: payload.payment_method });
 });

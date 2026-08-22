@@ -113,8 +113,11 @@
       "confirmed": "Order confirmed",
       "preparing": "Kitchen is preparing",
       "ready": "Ready for pickup",
+      "readyDineIn": "Ready for serving",
       "out_for_delivery": "On the way",
-      "completed": "Delivered"
+      "completed": "Delivered",
+      "completedDineIn": "Served",
+      "completedPickup": "Picked up"
     },
     "driverAssigned": "{name} is bringing your order",
     "callDriver": "Call driver",

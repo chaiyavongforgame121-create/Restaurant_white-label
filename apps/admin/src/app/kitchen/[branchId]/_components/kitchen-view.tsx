@@ -173,7 +173,8 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
   const [batchOpen, setBatchOpen] = React.useState(false);
   const [toast, setToast] = React.useState<{ text: string; onUndo: (() => void) | null } | null>(null);
 
-  const prevCountRef = React.useRef(initialOrders.length);
+  const seenVisibleRef = React.useRef<Set<string> | null>(null);
+  const beepStationRef = React.useRef<string | null>(null);
   const mountNowRef = React.useRef(Date.now());
   const readyAtRef = React.useRef<Record<string, number>>({});
   const toastTimer = React.useRef<number | null>(null);
@@ -232,12 +233,6 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [branchId]);
-
-  /* new-order beep — gated to the active station, with an aging escalation tone */
-  React.useEffect(() => {
-    if (orders.length > prevCountRef.current && soundOn) beep(880);
-    prevCountRef.current = orders.length;
-  }, [orders.length, soundOn]);
 
   /* keyboard: m = mute, f = fullscreen, Esc = close overlays */
   React.useEffect(() => {
@@ -351,6 +346,27 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
   );
   const visible = orders.filter((o) => !o.held && ACTIVE_STATUSES.includes(o.status) && matchesStation(o));
   const scheduled = orders.filter((o) => o.held);
+
+  /* new-order beep — gated to the active station, with an aging escalation tone.
+     Keyed on the tickets actually ON the board, not on orders.length: a
+     scheduled order is released by cron flipping held→false, which arrives as an
+     UPDATE and leaves the count unchanged, so counting orders let it land
+     silently — while a held order still parked in the drawer beeped for nothing. */
+  const visibleKey = visible.map((o) => o.id).join(',');
+  React.useEffect(() => {
+    const ids = visibleKey ? visibleKey.split(',') : [];
+    const prev = seenVisibleRef.current;
+    // First run, and every station switch, only re-baselines: revealing older
+    // tickets by changing the filter is not an arrival and must not beep.
+    if (prev === null || beepStationRef.current !== station) {
+      seenVisibleRef.current = new Set(ids);
+      beepStationRef.current = station;
+      return;
+    }
+    const arrived = ids.some((id) => !prev.has(id));
+    seenVisibleRef.current = new Set(ids);
+    if (arrived && soundOn) beep(880);
+  }, [visibleKey, station, soundOn]);
   const byLane: Record<string, Order[]> = {
     new: visible.filter((o) => o.status === 'pending' || o.status === 'confirmed'),
     cooking: visible.filter((o) => o.status === 'preparing'),

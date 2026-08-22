@@ -41,7 +41,7 @@ export const TOPICS: Topic[] = [
     faqs: [
       {
         q: 'How do I cancel an order?',
-        a: 'Go to your order tracking page and tap "Cancel order". You can cancel while the order is still pending or confirmed — once the kitchen starts preparing it, you\'ll need to contact the restaurant.',
+        a: 'Contact the restaurant directly and ask them to cancel it. Orders are cancelled by the restaurant rather than from the app, so they can stop the kitchen at the same time — the sooner you call, the more likely it can still be stopped.',
       },
       {
         q: 'How long do refunds take?',
@@ -79,7 +79,7 @@ export const TOPICS: Topic[] = [
     faqs: [
       {
         q: 'How do loyalty points work?',
-        a: 'You earn 1 point per $1 spent on completed orders. 100 points = $1 off. Redeem on the checkout page (up to 50% of your subtotal).',
+        a: 'You earn 1 point per $1 spent on completed orders. Each restaurant sets its own rewards — see them under Account → Loyalty & rewards, then pick one at checkout. One reward per order.',
       },
       {
         q: 'How do I use a promo code?',

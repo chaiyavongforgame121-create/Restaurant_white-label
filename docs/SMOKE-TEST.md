@@ -62,7 +62,7 @@
 - [ ] Webhook delivery in Stripe Dashboard shows 200
 - [ ] Order auto-advances `pending → confirmed` via realtime
 - [ ] Watch KDS pop the order
-- [ ] Edit instructions button works while pending
+- [x] While pending/confirmed/preparing: NO "Edit instructions" / "Cancel order" buttons — a "contact the restaurant" note in their place (removed 2026-08-16)
 - [ ] **Report an issue button** opens issue form → submit → ticket created
 - [ ] After delivered: rate the order (food + delivery stars)
 - [ ] "View full receipt →" opens `/orders/{n}/receipt` — printable HTML

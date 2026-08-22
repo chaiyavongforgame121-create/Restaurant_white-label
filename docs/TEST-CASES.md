@@ -225,8 +225,16 @@
 - [x] **When?** section: tabs `ASAP` | `Schedule for later`
 - [x] Default ASAP
 - [x] Click `Schedule for later` → datetime picker ปรากฏ ✓ (default value set to current branch time)
-- [ ] เลือกเวลา <10 นาที จาก now → place order ควร reject "scheduled_too_soon" — deferred (needs deployed place-order v8)
-- [ ] เลือกเวลา >14 วัน → reject "scheduled_too_far" — deferred
+- [x] เลือกเวลา <10 นาที จาก now → place order reject `scheduled_too_soon` — HTTP 400 ✓ (2026-08-16, probed live against place-order v9.9)
+- [x] เลือกเวลา >14 วัน → reject `scheduled_too_far` — HTTP 400 ✓ (2026-08-16)
+- [x] scheduled_for ที่ parse ไม่ได้ → reject `invalid_scheduled_for` — HTTP 400 ✓ (2026-08-16)
+- [x] เวลาที่ถูกต้อง (+1h) ผ่าน validator แล้วไปเช็คเวลาเปิด-ปิด → `branch_closed_at_scheduled_time` (409) ✓
+      เทียบกับ ASAP (ไม่ส่ง scheduled_for) ที่ยังได้ `branch_closed` (409) ✓ — ยืนยันทั้งสองขาของ v9.9
+      **v9.9 fix:** เดิม `is_branch_open()` ถูกเรียกโดยไม่ส่ง `p_at` → สั่งล่วงหน้าสำหรับพรุ่งนี้
+      ตอนร้านปิดอยู่จะโดน reject ทันที และสั่งไว้ตอนร้านเปิดสำหรับวันที่ร้านหยุดกลับผ่านได้
+      (พิสูจน์ที่ระดับ SQL ด้วย rollback test: `open_now=f slot_13:00=t late_22:00=f`)
+- [x] `datetime-local` min/max ใช้เวลาท้องถิ่น ไม่ใช่ `toISOString()` (UTC) — เดิม min เร็วกว่านาฬิกาผู้ใช้หลายชั่วโมงในทุก US timezone; เพิ่ม `max` ที่ขาดไปด้วย
+- [x] `describeOrderError` แมป 5 โค้ดใหม่ครบ และวาง `branch_closed_at_scheduled_time` ไว้**ก่อน** `branch_closed` (matcher ใช้ substring — ลำดับสำคัญ)
 
 - [x] Contact info: name + phone + email
 - [ ] Email auto-populated ถ้า signed in — deferred, requires auth
@@ -316,6 +324,13 @@ Smoke-test ยิงสดที่ `POST /functions/v1/place-order` branch `444
 ### 1.8.3 Customer actions on pending order
 - [x] Cancel order via cancel_order RPC works after enum bugfix (cancelled vs canceled)
 - [x] Edit instructions backend not customer-facing (edit_pending_order is customer-only with p_items; admin uses new admin_edit_order_notes)
+- [x] 2026-08-16: both diner buttons REMOVED. "Edit instructions" had been calling `edit_pending_order(p_customer_notes)` — an overload that does not exist, so it returned PGRST202 on every click. Tracking page now shows a "contact the restaurant" note while pending/confirmed/preparing. Staff cancel/edit unaffected (admin Orders kebab, kitchen Reject order). Verified live on A-2606-471738.
+
+### 1.8.3b Channel-correct status wording (2026-08-16)
+- [x] dine_in order: stepper reads "Ready for serving" / "Served" (completed dine-in previously read "Delivered") — verified on A-2608-582893
+- [x] pickup order: stepper reads "Ready for pickup" / "Picked up" — verified on A-2608-950053
+- [x] delivery order unchanged: "Ready for pickup" / "On the way" / "Delivered" — verified on A-2606-471738
+- [x] stepper grid columns now track steps.length (4 for dine-in/pickup, 5 for delivery) instead of a hardcoded 5 that left a dead trailing column
 
 ### 1.8.4 Driver assigned (after KDS marks ready + dispatch)
 - [x] Driver dispatch simulation verified via SQL: delivery row inserted, walked through stages (assigned → picked_up → in_transit → delivered)
@@ -582,6 +597,16 @@ session cookie — same SSR path, no client-side clicking).
       orders right now" (customer-safe copy — it does not leak the billing reason)
 - [x] `/signage` and `/ai-voice` render "Coming soon — included in your package"
       (packaging/gating only, per the owner decision)
+- [x] 2026-08-16 — AI Suite hidden per restaurant with **no code change**, as the owner
+      chose. `platform_set_feature_override(restaurant, 'digital_signage'|'ai_voice', 'off')`
+      applied to BOTH live restaurants; `billing_entitlements.features` now grants neither.
+      Browser-verified on `/b/4444…/dashboard`: the **AI Suite group is gone** from Advanced
+      (both items gated out → `items.length === 0` → the group returns null), and the other
+      six groups are untouched. Reversible from Platform → Subscriptions → Feature switches.
+- [x] Switching a feature Off does **not** 404 its page — `/signage` still resolves and
+      renders the `LockedFeature` upsell ("Coming soon · +$59/month"). Correct behaviour,
+      but the switch's help text and ADMIN-GUIDE-TH both used to claim the page was
+      "blocked"; both corrected 2026-08-16.
 
 **Test-method note:** suspension must be simulated by lapsing the *subscription*
 (`current_period_end` / `trial_ends_at`), never by writing `billing_entitlements`
@@ -744,6 +769,199 @@ All state used in this pass was restored byte-identical afterwards.
 - [x] "No brands yet. Create your first brand to unlock multi-brand theming." ✓
 - [x] New brand button ✓
 
+### 5.21.1 Logo + favicon per restaurant (2026-08-16, migration `fix_branding_write_access_and_add_favicon`)
+ทดสอบด้วย SQL แบบ rollback-via-exception ภายใต้ JWT ของ **merchant จริง** (`chaiyavongboy1@gmail.com`)
+ไม่ใช่ `owner@test.com` — บัญชีนั้นมี `app_metadata.is_platform_admin='true'` ทำให้บั๊กนี้ **มองไม่เห็น**
+- [x] ก่อนแก้: merchant INSERT `brands` → **BLOCKED 42501**; UPDATE `restaurants` (storefront/loyalty_scope) → **0 rows** ✓ (บั๊กยืนยันแล้ว)
+- [x] หลังแก้: merchant INSERT brand → OK; UPDATE `brands.favicon_url` → 1 row; UPDATE restaurants → 1 row ✓
+- [x] Escalation ปิดครบ — `feature_overrides` / `owner_user_id` / `custom_domain` / `slug` ทุกคอลัมน์ → `denied` (trigger `guard_restaurant_privileged_columns`) ✓
+- [x] Cross-tenant write (merchant เขียนร้านอื่น) → 0 rows ✓
+- [x] Storage `branding` bucket: owner arm ผ่าน 1 row (แก้ `storage.foldername(r.name)` → `objects.name` ที่เคยเทียบผิดตัว) ✓
+- [x] anon storefront read ยังทำงาน (1 brand / 2 restaurants) — ไม่โดน footgun ที่ policy เรียก `private.*` แล้ว HARD-ERROR ✓
+- [x] platform admin ยังแก้ `feature_overrides` ได้ / service_role (Stripe, billing sync) ยังเขียนได้ ✓
+- [x] Resolver fallback: ทุก branch มี `brand_id = NULL` จริง → ยืนยันว่า path ใหม่ (default brand, assets เท่านั้น) คือ path ที่ทำงานจริง
+      probe ภายใต้ role `anon`: `favicon_before=NULL → favicon_after_save=https://cdn.example/fav-probe.png` ✓
+      **ถ้าไม่มี fallback นี้ ฟีเจอร์จะตายสนิท** — logo ที่อัปโหลดถูกเก็บถูกต้องแต่ไม่มีใครอ่าน
+- [x] `generateMetadata` ปล่อย `icons.icon` เฉพาะเมื่อมี favicon จริง (ไม่งั้น inherit ของ platform) และ share card ใช้ logo ไม่ใช่ favicon ✓
+- [x] `pnpm --filter @favornoms/database --filter @favornoms/admin --filter @favornoms/web type-check` → green ✓
+
+**ยังไม่ได้ทดสอบผ่านเบราว์เซอร์:** อัปโหลดไฟล์จริง + ดู `<link rel="icon">` ที่ render ออกมา
+**ข้อควรรู้:** `resolveTenant` ถูกครอบด้วย `unstable_cache` TTL 300s tag `'tenant'` → favicon ที่เพิ่งบันทึกจะขึ้นหน้าร้านช้าสุด 5 นาที
+
+## 5.23 Loyalty rewards catalog (2026-08-16, migration `loyalty_rewards_catalog` + place-order v10.0)
+ร้านค้าสร้าง reward เองได้ที่ `/b/{branchId}/loyalty` — แต้มแลกได้ **เฉพาะ reward ที่ร้านตั้งไว้** เท่านั้น
+(สไลเดอร์ 100 แต้ม = $1 ถูกถอดออกทั้งระบบตามที่เจ้าของสั่ง)
+
+**DB layer** — probe แบบ rollback-via-exception ภายใต้ JWT ของ merchant จริง (`chaiyavongboy1@gmail.com`)
+- [x] staff เห็น `loyalty_points` 5 แถว / `loyalty_transactions` 20 แถว (ก่อนแก้ = **0 ทั้งคู่**) ✓
+      บั๊ก: policy เทียบแค่ `branch_id` แต่ข้อมูลจริงเป็น brand-shaped (`branch_id IS NULL`) → `NULL IN (...)` = NULL ไม่ใช่ FALSE
+- [x] merchant สร้าง reward ได้ 3 อัน / cross-tenant insert → `denied(42501)` ✓
+- [x] free item ของร้านอื่น → `denied(loyalty_reward_menu_item_foreign)` (FK พิสูจน์แค่ว่า item มีอยู่ ไม่ได้พิสูจน์ว่าเป็นของร้านนี้) ✓
+- [x] `list_loyalty_rewards`: branch 1 = 3 อัน (paused ถูกตัด, free item อยู่ครบ) · branch 2 = 2 อัน (free item หายไปถูกต้อง) ✓
+- [x] `enqueue_broadcast` — เจอบั๊กที่ 3 ที่ไม่มีใครรายงาน: `lp.tier` (enum) เทียบ `text[]` เป็น **plan-time error** จึงพังทุกครั้ง ไม่ใช่เฉพาะตอนกรอง tier
+      (ยืนยันว่าไม่ขัดกับข้อมูลจริง: ตาราง `broadcasts` ว่างเปล่า — ไม่เคยสร้างสำเร็จเลย) แก้ด้วย `lp.tier::text` ✓
+      หลังแก้: tier=bronze → 5 ผู้รับ / tier=gold → 0 / ไม่กรอง → 7 / consent-only → 2 / คนนอก → `denied(not_authorized)` ✓
+
+**place-order v10.0 (deployed version 15 → 16, byte-diffed กับไฟล์บนดิสก์แล้วตรงกันทุกตัวอักษร)**
+ยิง HTTP จริงด้วย token ของ `customer@test.com` (แต้มตั้งต้น 177)
+- [x] client เก่าที่ยังส่ง `redeem_points` → **409** `stale_client_refresh_required` ✓
+      (เลือกให้พังดัง ๆ แทนที่จะเมินฟิลด์ทิ้ง เพราะการเมินทิ้ง = เก็บเงินเกินกว่าที่จอแสดง)
+- [x] `reward_id` ที่ไม่มีอยู่ / คนละร้าน → **400** `reward_unavailable` ✓
+- [x] แต้มไม่พอ → **400** `insufficient_points` `{balance:177, required:999999}` ✓
+- [x] ยอดต่ำกว่าขั้นต่ำ → **400** `reward_min_subtotal` `{min_subtotal:500}` ✓
+- [x] `free_delivery` บนออเดอร์ pickup → **400** `reward_not_applicable` ✓
+- [x] `free_item` ที่ของชิ้นนั้นไม่ได้อยู่ในตะกร้า → **400** `reward_item_not_in_cart` ✓
+- [x] **percent_off + เพดาน**: ของ $50 ลด 10% = $5 แต่เพดาน $3 → `discount_amount: 3` ✓
+      total 52.79 = 47 + tax 3.29 (7%) + service 2.50 (5%) ✓ · `points_spent: 100` · balance 177 → 77 ✓
+- [x] **free_item**: ตะกร้า $25 (Veggie $11 + Bacon $14) → `discount_amount: 11` · total 16.23 = 14 + 0.98 + 1.25 ✓ · balance 77 → 27 ✓
+- [x] ledger เขียนชื่อ reward จริง: `type=redeemed, -100, "ZZTEST 10% off — 100 pts on order A-2608-412205"` ✓
+- [ ] `free_delivery` happy path — ตรวจด้วยการอ่านโค้ดแทน (`deliveryFee = 0` ที่บรรทัด 662 มาก่อน `total` ที่ 689
+      และก่อน `delivery_fee` ที่เขียนลง `orders`/`deliveries`) ไม่ยิงจริงเพราะจะปลุก dispatch + แจ้งเตือนไรเดอร์
+
+**Diner surface**
+- [x] `list_loyalty_rewards` เรียกได้ทั้ง anon และ authed (5/5 แถว) ✓
+- [x] อ่านตาราง `loyalty_rewards` ตรง ๆ ในฐานะ diner → **0 แถว** (ตั้งใจไม่มี public SELECT policy — reward ที่ paused จึงไม่รั่ว) ✓
+- [x] คำโฆษณาเก่าที่กลายเป็นคำโกหกถูกแก้ครบ 4 จุด: หน้า Loyalty (3) + `help/_topics.ts` (1) ✓
+- [x] `pnpm --filter @favornoms/database --filter @favornoms/web --filter @favornoms/admin type-check` → green ✓
+
+**ยังไม่ได้ทดสอบผ่านเบราว์เซอร์:** หน้า admin `/b/{branchId}/loyalty` (สร้าง/แก้/พัก/ลบ) และการเลือก reward บนหน้า checkout
+**ร่องรอยที่เหลือไว้:** ออเดอร์ทดสอบ 2 ใบ (`A-2608-412205`, `A-2608-463410`) — set เป็น `cancelled` แล้ว
+เพราะตัวกรองของรายงานคือ `status not in ('cancelled','refunded')` **ไม่ใช่** `= 'completed'` ถ้าปล่อยเป็น `pending`
+มันจะบวกเข้ายอดขาย $69.02 ตลอดไป · reward ที่ขึ้นต้น `ZZTEST` ลบออกหมดแล้ว · แต้มที่หักไป 150 ไม่คืน (ledger บอกความจริงตามนั้น)
+
+## 5.24 Head office dashboard (2026-08-16, migration `hq_restaurant_reports`)
+
+หน้ารวมทุกสาขาของร้านเดียว: ยอดขาย + ค่าใช้จ่ายต่อเดือน + report รวม
+(`/b/{branchId}/hq`) ตอบข้อ 7 ของเจ้าของ ค่าใช้จ่ายใช้ **เฉพาะข้อมูลที่มีอยู่แล้ว**
+(driver payouts + ค่าสมาชิก Favornoms) ตามที่เจ้าของเลือก — ไม่สร้างระบบบันทึกรายจ่ายใหม่
+
+**สิทธิ์ (`private.user_owns_restaurant` — เข้มกว่า `user_manages_restaurant` ที่ใช้ทั่วไป)**
+- [x] staff `owner` ของร้านตัวเอง → `owner_own=OK branches=1 revenue=1176.07 orders=35 payouts=17.66 sub=0.00 months=6` ✓
+- [x] staff `owner` เรียกข้ามร้าน → `owner_cross=denied` ✓
+- [x] **manager** (เลื่อนขั้น cashier ชั่วคราวใน transaction แล้ว rollback) → `active_manager_rows=1 | manager=denied 42501` ✓
+      สำคัญ: `user_manages_restaurant()` ปล่อย manager ผ่าน ถ้าใช้ตัวนั้น manager สาขาเดียวจะเห็นยอดขายของสาขาพี่น้อง
+- [x] cashier → `denied` · kitchen → `denied` · anon → `denied` ✓
+- [x] platform admin (ต้องใส่ `app_metadata.is_platform_admin` ใน claims ที่จำลอง ไม่งั้นจะดูเหมือนถูกปฏิเสธ)
+      → `platadmin_any=OK rev=0 branches=1 sub=307.00` ✓
+- [x] ตรวจว่า rollback ทำงานจริง — `staff_members` ของ cashier ยังเป็น `cashier` หลังจบ probe ✓
+- [x] RPC **raise** `42501` ไม่ใช่คืนค่าว่าง (`errcode = '42501'` ยืนยันจาก `pg_get_functiondef`)
+      เพราะ `get_branch_payout_summary` ซ่อน guard ไว้ใน WHERE คนเรียกจึงแยก "ไม่มีข้อมูล" กับ "ไม่มีสิทธิ์" ไม่ออก ✓
+
+**รูปร่างข้อมูลที่ RPC คืนจริง (ตรงกับ interface `RestaurantReports`)**
+- [x] key ระดับบน 14 ตัว: `branch_count, branch_monthly, branches, by_channel, has_invoices, monthly,
+      period_months, restaurant_id, restaurant_name, since, subscription_monthly, subscription_plan, timezone, totals` ✓
+- [x] `totals` = `{orders 33, revenue 1107.05, driver_payouts 17.66, avg_order_value 33.55, completed_orders 18, subscription_billed 0}` ✓
+- [x] `branches[0]` = `{name Brooklyn, orders 33, revenue 1107.05, branch_id 4444…, is_active true, driver_payouts 17.66, avg_order_value 33.55, completed_orders 18}` ✓
+- [x] `by_channel` = dine_in 14/\$656.88 · delivery 14/\$294.18 · pickup 5/\$155.99 ✓
+- [x] ยอด 1107.05 (ไม่ใช่ 1176.07 ของ probe รอบแรก) ยืนยันว่าออเดอร์ทดสอบ 2 ใบที่ set `cancelled` หลุดออกจากรายงานแล้ว ✓
+
+**UI**
+- [x] `isOwner` ใน layout (เดิมชื่อ `canViewHq` เปลี่ยนชื่อใน §5.26) สะท้อน guard ฝั่ง DB (`platformAdmin || membership.role === 'owner'`) —
+      ไม่โชว์เมนูที่กดแล้วเจอ "access denied" ✓
+- [x] แขน `restaurants.owner_user_id` ของ guard ไม่ถูกเช็คใน layout โดยตั้งใจ: เจ้าของที่ไม่มีแถว staff
+      ผ่านด่าน membership ของ layout ไม่ได้อยู่แล้ว ✓
+- [x] `stacked` pivot เขียนเป็น derivation ธรรมดา **ไม่ใช่ `useMemo`** เพราะอยู่ใต้ early `return`
+      ของ error state — hook ตรงนั้นจะทำให้จำนวน hook เปลี่ยนระหว่าง render ✓
+- [x] `monthLabel()` slice string เอง ไม่ใช้ `new Date('2026-03-01')` ซึ่งเป็น UTC midnight
+      แล้วจะ render เป็นเดือนก่อนหน้าในทุก timezone ฝั่งตะวันตก (คือทั้งประเทศ เพราะขายเฉพาะ US) ✓
+- [x] ไม่เอา `subscription_monthly × จำนวนเดือน` มาแสดงเป็นยอดที่จ่ายไปแล้ว —
+      `invoices` ว่าง (Stripe ยัง dormant) จึงใช้ `has_invoices` สลับไปบอก "อัตราปัจจุบัน" แทนการปั้นประวัติ ✓
+- [x] เขียนกำกับไว้ว่า "Revenue after them" **ไม่ใช่กำไร** (ไม่รวมค่าอาหาร ค่าแรง ค่าเช่า ค่าธรรมเนียมบัตร) ✓
+- [x] retry ใน page.tsx ข้าม `42501` — ถามซ้ำก็แค่ปฏิเสธ manager คนเดิมอีกรอบ ✓
+- [x] `recharts@2.15.4` มี `ComposedChart/Legend/Line` และ `lucide-react@0.468.0` มี `Landmark/Lock` ครบ (ตรวจด้วย require) ✓
+- [x] `pnpm --filter @favornoms/database --filter @favornoms/web --filter @favornoms/admin type-check` → green ✓
+- [x] `pnpm --filter @favornoms/admin build` (production) → ผ่าน exit 0 · route table ครบ ·
+      `.next/server/app/b/[branchId]/hq/page.js` (70 kB) และ `…/loyalty/page.js` ถูก emit จริง ✓
+      **กับดัก:** รอบแรกล้มที่ `Export encountered an error on /_not-found/page: Cannot find module`
+      สาเหตุคือ `.next` ค้างจาก dev เก่า ไม่ใช่โค้ด — `rm -rf apps/admin/.next` แล้ว build ใหม่ผ่านทันที
+      (`/_not-found` ออกมาเป็น 1.15 kB ตามปกติ) อย่าไปไล่แก้ next-intl/next-font ตามที่เดาไว้ตอนแรก
+
+**ยังไม่ได้ทดสอบผ่านเบราว์เซอร์:** การเรนเดอร์จริงของกราฟและตาราง (ทดสอบระดับ build + shape ของข้อมูลแทน)
+**ข้อจำกัดของข้อมูลชุดนี้:** Coastal Grill มีสาขาเดียว การ์ด "Revenue by branch, by month" (stacked)
+จึงยังไม่เคยถูกเรนเดอร์จริง — มันซ่อนตัวเองเมื่อ `branches.length <= 1`
+
+## 5.25 Branch dashboard — ตัวเลขปลอมออก ของจริงเข้า (2026-08-16, ไม่มี migration)
+
+เจอระหว่างทำข้อ 7: `/b/{branchId}/dashboard` โชว์ **ข้อมูลที่ปั้นขึ้นมา** ให้ร้านค้าดู —
+กราฟ 7 วันเป็น array คงที่ `[6200, 7800, 9100, 7400, 10200, 11600, totalRevenue]` เทียบกับ `max = 12000`,
+ป้ายวันเป็น `Mon…Today` ตายตัวไม่ตรงวันจริง, และ badge เติบโต 3 ใบเป็นเลขดิบ `+12.4 / +5.2 / +2.1`
+ซึ่งทุกสาขาเห็นเหมือนกันทุกวัน ไม่ได้อยู่ในลิสต์ของเจ้าของ แต่เป็นการโกหกร้านค้าตรง ๆ จึงแก้ไปพร้อมกัน
+
+**ตัวเลขจริงหลังแก้ (จำลอง logic ที่ ship จริงด้วย Node กับ order จริงทั้ง 18 แถว)**
+- [x] `tz America/New_York · todayKey 2026-08-16 · yesterdayKey 2026-08-15` ✓
+- [x] แท่งทั้ง 7 → `Mon(08-10)=31.80 · Tue(08-11)=19.88 · Wed(08-12)=450.12 · Thu(08-13)=0.00 ·
+      Fri(08-14)=0.00 · Sat(08-15)=11.19 · Today(08-16)=197.20` — **ตรงกับ rollup ฝั่ง SQL ทุกช่อง** ✓
+- [x] `todayRevenue 197.20 · todayOrders 4` ✓
+
+**bug ชั้นที่สอง: bucket ตามนาฬิกาของ "server" ไม่ใช่ของสาขา** (เจอในโค้ดที่ตัวเองเพิ่งแก้)
+- [x] รัน rollup เดียวกันสองโซนเทียบกัน — Bangkok (โซนของเครื่อง dev) ให้ `08-12 = $470.00`,
+      `today = $208.39`, 5 orders และ **กลืน 08-11 กับ 08-15 หายไปทั้งวัน**;
+      `America/New_York` (ค่า `branches.timezone` จริงของ Brooklyn) ให้ `$450.12 / $197.20 / 4 orders`
+      โดย 08-11 = `$19.88` และ 08-15 = `$11.19` โผล่ครบ ✓
+- [x] แก้เป็น `Intl.DateTimeFormat('en-CA', { timeZone: branches.timezone })` → ได้ `YYYY-MM-DD`
+      ตามปฏิทินท้องถิ่นของสาขา (ร้านนิวยอร์กบนโฮสต์ UTC เคยเห็นวันตัดรอบตอนสองทุ่ม กลางรอบมื้อเย็น) ✓
+- [x] ดึง 8 วันไม่ใช่ 7 — วันท้องถิ่นของสาขาเหลื่อมกับของ server ได้ถึงหนึ่งวัน ดึงเกินหนึ่งวันถูกกว่าแท่งผิด ✓
+- [x] เดินวันด้วย `T12:00:00Z` แล้ว `setUTCDate` — ก้าวจากเที่ยงวันข้าม DST ไม่หลุดวัน ✓
+- [x] baseline "เมื่อวาน" คำนวณจาก result set เดิม → query น้อยลงหนึ่งตัวจากของเดิม ✓
+
+**badge % ต้องซ่อนเมื่อไม่มีฐานให้เทียบ**
+- [x] `yOrders 0 → ทั้งสอง badge ซ่อน` — **ถูกตามดีไซน์ ไม่ใช่ bug**: order เดียวของ 08-15 อยู่ที่ `21:26Z`
+      (17:26 NY) ซึ่ง *หลัง* เส้น `now - 24h` กติกา "เวลาเดียวกันของเมื่อวาน" จึงตัดออกอย่างถูกต้อง ✓
+- [x] `delta()` คืน `undefined` ไม่ใช่ `0` เมื่อ `prev = 0` — "+0.0%" เทียบกับวันที่ไม่มีการค้า
+      เป็นตัวเลขที่ร้านค้าจะเอาไปตัดสินใจจริง ทั้งที่ไม่มีความหมาย ✓
+- [x] เทียบ "เวลาเดียวกันของเมื่อวาน" ไม่ใช่ทั้งวันเมื่อวาน — ไม่งั้นยอดครึ่งเช้าจะโดนลูกศรแดงจนเย็น ✓
+- [x] KPI "Total customers" ถอด delta ทิ้งทั้งใบ — ไม่มี baseline ที่ซื่อสัตย์และถูกพอจะคำนวณ ✓
+- [x] `trendMax === 1` (ไม่มียอดเลย) → ขึ้นข้อความ "No sales in the last 7 days yet." แทนแท่งเปล่า ๆ ✓
+
+**นับยอดเข้ากราฟเฉพาะสถานะที่เป็นรายได้จริง** `confirmed/preparing/ready/out_for_delivery/completed`
+(ไม่รวม `cancelled`/`refunded`) — สอดคล้องกับตัวกรองของ Reports ที่เป็น `status not in (...)` ไม่ใช่ `= 'completed'`
+- [x] `DOW[d.getUTCDay()] ?? ''` — `noUncheckedIndexedAccess` เปิดอยู่ ถ้าไม่ใส่ `?? ''` จะได้ `TS2322` ✓
+- [x] `pnpm --filter @favornoms/database --filter @favornoms/web --filter @favornoms/admin type-check` → green ✓
+
+**ยังไม่ได้ทดสอบผ่านเบราว์เซอร์:** การเรนเดอร์จริงของแท่งกราฟและ tooltip (ทดสอบด้วยการจำลอง logic กับข้อมูลจริงแทน)
+
+## 5.26 ปิดรูที่ batch นี้เปิดเอง — reward catalog + brands เขียนได้เฉพาะ owner (2026-08-16, migration `loyalty_rewards_and_brands_owner_only_writes`)
+
+เจอจาก audit หลังทำ 7 ข้อเสร็จ: policy เดียวบนตารางใหม่ `loyalty_rewards` คือ `loyalty_rewards_manage FOR ALL`
+gate ที่ `private.user_manages_restaurant` ซึ่งผ่านทั้ง `owner` **และ `manager`** และไม่เช็ค `branch_id`
+แต่ catalog เป็น restaurant-scoped ทุกสาขาแลกได้ → **manager สาขาเดียวสร้าง reward `percent_off value=100 / points_cost=1`
+ได้ (ผ่านทุก CHECK) และลบ reward ของ owner ได้** · `brands_manage` ผิดแบบเดียวกัน (โลโก้/favicon ระดับร้าน)
+ขัดกฎที่ batch นี้เพิ่งตั้งเองใน §5.24 — ข้ามสาขาต้อง gate ที่ `user_owns_restaurant` เท่านั้น
+
+**กับดักที่เลี่ยงได้ทัน — ทำไมไม่ใช้ `FOR ALL`**
+- [x] `anon` มี EXECUTE บน `private.user_manages_restaurant` และ `user_restaurant_ids` แต่ **ไม่มีบน `user_owns_restaurant`**
+      (`anon_exec=false`) · policy `FOR ALL` ถูกประเมินตอน SELECT ด้วย → storefront อ่าน `brands` แบบไม่ล็อกอิน
+      จะ **hard-error `permission denied for function`** แทนที่จะได้โลโก้ ✓
+- [x] จึงเขียนเป็น policy แยกตามคำสั่ง `FOR INSERT / FOR UPDATE / FOR DELETE` ซึ่ง **ไม่ถูกประเมินตอน SELECT เลย**
+      → ไม่ต้อง grant อะไรเพิ่มให้ anon และ path ของลูกค้าไม่ถูกแตะ ✓
+
+**policy หลังแก้ (ยืนยันจาก `pg_policies`)**
+- [x] `loyalty_rewards`: `staff_read` SELECT=`user_manages_restaurant` · `owner_insert/update/delete`=`user_owns_restaurant` ✓
+- [x] `brands`: `owner_insert/update/delete`=`user_owns_restaurant` · อ่านยังเป็น `brands_staff_read` + `brands_public_read` ตามเดิม ✓
+      (ไม่ต้องเพิ่ม SELECT policy ให้ brands — ของเดิมครอบคลุมผู้อ่านทุกคนอยู่แล้ว)
+
+**probe จริง (เลื่อนขั้น kitchen เป็น manager ใน transaction แล้ว rollback)**
+- [x] `manager_rows=1` — การเลื่อนขั้นมีผลจริงในรอบทดสอบ ✓
+- [x] manager: `mgr_read=1` (ยังอ่านได้) · `mgr_insert=denied 42501` · `mgr_update_rows=0` · `mgr_delete_rows=0` ✓
+- [x] manager กับ brands: `mgr_brand_insert=denied 42501` · `mgr_brand_update_rows=0` ✓
+- [x] owner ตัวจริง (`9467cf42…` staff owner): `owner_insert=OK upd=1 del=1` ·
+      `owner_brand=OK upd=1 del=1` (เขียน `logo_url` + `favicon_url` ได้ — ข้อ 1 ของเจ้าของไม่พัง) ✓
+- [x] diner: `diner_insert=denied 42501` · `diner_rpc_rows=0` (ผ่าน RPC ไม่ error) ✓
+- [x] **anon: `anon_brands_read=1` ไม่ hard-error** — กับดักข้างบนไม่เกิด · `anon_rpc_rows=0` ✓
+- [x] rollback ทำงาน — ทั้ง ZZPROBE row และการเลื่อนขั้น manager หายหมดหลังจบ probe ✓
+
+**UI (ซ่อนเมนูอย่างเดียวไม่ใช่การกันสิทธิ์)**
+- [x] `canViewHq` → เปลี่ยนชื่อเป็น `isOwner` เพราะตอนนี้คุมสองหน้าจอ (Head office + Loyalty rewards) ✓
+- [x] `sidebar.tsx` ซ่อนเมนู Loyalty rewards จาก manager แล้ว (เดิมโชว์ทุก role) ✓
+- [x] `loyalty/page.tsx` มี server-side owner gate — พิมพ์ URL ตรง ๆ เจอการ์ด "Owner access only"
+      ไม่ใช่หน้า CRUD ที่กดแล้วเงียบ ✓
+- [x] `rewards-manager.tsx` — `save`/`toggleActive`/`remove` เติม `.select('id')` แล้วเช็ค `data.length`
+      **เพราะ RLS ปฏิเสธ UPDATE/DELETE ด้วยการกรองแถวทิ้ง ไม่ใช่ raise** → เดิมคืน success 0 แถว
+      ปุ่มดูเหมือนทำงาน รายการวาดใหม่เหมือนเดิม = อาการ "กดปุ่มแล้วไม่มีอะไรเกิดขึ้น" ✓
+- [x] type-check `database + web + admin` → green ✓
+
+**ยังไม่ได้ทดสอบผ่านเบราว์เซอร์:** การเห็นการ์ด "Owner access only" จริงในเบราว์เซอร์ (ทดสอบระดับ SQL probe + type-check แทน)
+
 ## 5.22 Franchise mode
 - [x] `/b/{branchId}/franchise` renders: "Franchise / Manage HQ-to-branch menu broadcasts."
 - [x] "Create a franchise group" card with Create group button ✓
@@ -841,7 +1059,15 @@ speaks first: `23502` = billing gate ALLOWED it, `P0001` = billing gate BLOCKED 
 
 ## 7.10 Order scheduling
 - [x] orders.scheduled_for column exists + accepts ISO timestamp on insert
-- [ ] place-order v8 not deployed yet; bounds check (10min / 14days) happens in edge fn → deferred
+- [x] bounds check (10min / 14days) live — place-order **v9.9 = version 15, ACTIVE** (2026-08-16); see 1.7.1 for the probe results
+- [x] deployed bundle verified byte-identical to disk (`place-order/index.ts` 717 lines / 43,127 chars; `_shared/entitlements.ts` 141 lines / 4,796 chars) — the deploy was hand-transcribed inline because this machine has no Supabase CLI and no Management API token, so the diff was mandatory, not optional
+
+### 7.10.1 "Pickup schedule — หยิบ order จากไหน" (5 holes found + fixed 2026-08-16)
+- [x] **H1** ลูกค้าไม่เคยถูกแจ้งว่าอาหารพร้อมให้มารับ → trigger `notify_customer_when_pickup_order_ready`
+- [x] **H2** `apps/kds` ไม่ได้กรอง `held` → **ไม่ใช่บั๊ก**: `pnpm-workspace.yaml` มี `- "!apps/kds"` (dead code) ตัวจริงคือ `apps/admin/.../kitchen` ซึ่ง select `held, scheduled_for` อยู่แล้ว
+- [x] **H3** เสียงเตือนครัวนับจาก `orders.length` → order ที่ cron ปล่อย (held→false) มาเป็น UPDATE ไม่ใช่ INSERT ยอดเลยไม่ขยับ = **เงียบสนิท** ส่วน held ที่ยังไม่ถึงเวลากลับทำให้ดัง; เปลี่ยนไปนับ ticket ที่อยู่บนบอร์ดจริง + re-baseline ตอนสลับ station (ไม่ให้ดังเพราะเปลี่ยน filter)
+- [x] **H4** หน้า Orders + Counter ไม่เคย select `scheduled_for`/`held` → pre-order ดูเหมือนต้องทำเดี๋ยวนี้; เพิ่ม badge `Scheduled`/`Due` ทั้ง desktop + mobile (การ์ด mobile เดิมไม่มีเวลาเลย)
+- [x] **H5** Counter กรองแค่ `created_at` 24 ชม. → order ที่สั่งไว้ 3 วันก่อนเพื่อมารับ **วันนี้** หายจากจอ; เพิ่ม `.or(created_at.gte / scheduled_for.gte)` + เรียงตามเวลาที่ลูกค้าจะมารับ ไม่ใช่เวลาที่กดสั่ง (PostgREST order by expression ไม่ได้ → sort ใน JS)
 
 ---
 

@@ -84,6 +84,12 @@ export default async function BranchLayout({ params, children }: Props) {
   // restaurant would train them to ignore it on the tenants that matter.
   const impersonating = platformAdmin && !membership;
 
+  // Mirrors private.user_owns_restaurant(), which guards get_restaurant_reports
+  // and every write to the restaurant-wide tables (loyalty_rewards, brands).
+  // Its third arm — restaurants.owner_user_id — is deliberately not checked: an
+  // owner with no staff row never gets past the membership gate above anyway.
+  const isOwner = platformAdmin || membership?.role === 'owner';
+
   return (
     <div className="flex min-h-dynamic-screen flex-col lg:flex-row">
       <Sidebar
@@ -91,6 +97,7 @@ export default async function BranchLayout({ params, children }: Props) {
         branchName={branch.name}
         branches={branches ?? []}
         entitlements={entitlements}
+        isOwner={isOwner}
       />
       <main className="flex-1 lg:ml-0">
         {impersonating && <PlatformAdminBanner branchName={branch.name} />}

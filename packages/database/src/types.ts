@@ -528,6 +528,7 @@ export type Database = {
       brands: {
         Row: {
           created_at: string
+          favicon_url: string | null
           id: string
           is_default: boolean
           logo_url: string | null
@@ -539,6 +540,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          favicon_url?: string | null
           id?: string
           is_default?: boolean
           logo_url?: string | null
@@ -550,6 +552,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          favicon_url?: string | null
           id?: string
           is_default?: boolean
           logo_url?: string | null
@@ -1979,6 +1982,72 @@ export type Database = {
           },
           {
             foreignKeyName: "loyalty_points_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      loyalty_rewards: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          kind: string
+          max_discount: number | null
+          menu_item_id: string | null
+          min_subtotal: number
+          name: string
+          points_cost: number
+          restaurant_id: string
+          sort_order: number
+          updated_at: string
+          value: number
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          kind: string
+          max_discount?: number | null
+          menu_item_id?: string | null
+          min_subtotal?: number
+          name: string
+          points_cost: number
+          restaurant_id: string
+          sort_order?: number
+          updated_at?: string
+          value?: number
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          kind?: string
+          max_discount?: number | null
+          menu_item_id?: string | null
+          min_subtotal?: number
+          name?: string
+          points_cost?: number
+          restaurant_id?: string
+          sort_order?: number
+          updated_at?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "loyalty_rewards_menu_item_id_fkey"
+            columns: ["menu_item_id"]
+            isOneToOne: false
+            referencedRelation: "menu_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loyalty_rewards_restaurant_id_fkey"
             columns: ["restaurant_id"]
             isOneToOne: false
             referencedRelation: "restaurants"
@@ -4439,6 +4508,10 @@ export type Database = {
         Returns: Json
       }
       get_platform_settings: { Args: never; Returns: Json }
+      get_restaurant_reports: {
+        Args: { p_restaurant_id: string; p_months?: number }
+        Returns: Json
+      }
       get_sales_tax_report: {
         Args: { p_branch_id: string; p_from: string; p_to: string }
         Returns: Json
@@ -4527,6 +4600,23 @@ export type Database = {
         Returns: boolean
       }
       list_billing_requests: { Args: { p_status?: string }; Returns: Json }
+      list_loyalty_rewards: {
+        Args: { p_branch_id: string }
+        Returns: {
+          description: string | null
+          id: string
+          kind: string
+          max_discount: number | null
+          menu_item_id: string | null
+          menu_item_image_url: string | null
+          menu_item_name: string | null
+          menu_item_price: number | null
+          min_subtotal: number
+          name: string
+          points_cost: number
+          value: number
+        }[]
+      }
       list_my_loyalty_transactions: {
         Args: { p_branch_id: string; p_limit?: number }
         Returns: {

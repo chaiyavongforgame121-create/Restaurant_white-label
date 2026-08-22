@@ -25,7 +25,15 @@ export interface PlaceOrderInput {
   saved_address_id?: string;
   customer_notes?: string;
   payment_method: 'card' | 'cash';
-  redeem_points?: number;
+  /**
+   * Which named reward from the merchant's catalog to spend points on.
+   *
+   * Replaces the old free-form `redeem_points`. Points are no longer a
+   * general-purpose currency the diner can slide against any order — the
+   * merchant decides what they buy, and the server prices the reward itself.
+   * place-order rejects a payload that still carries `redeem_points`.
+   */
+  reward_id?: string;
   tip_amount?: number;
   promo_code?: string;
   table_id?: string;

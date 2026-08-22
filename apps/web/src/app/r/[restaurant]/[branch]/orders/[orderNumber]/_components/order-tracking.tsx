@@ -99,6 +99,18 @@ export function OrderTracking({ initialOrder, branchId, branchLocation }: Props)
 
   const steps = order.channel === 'delivery' ? DELIVERY_STEPS : NON_DELIVERY_STEPS;
 
+  // One DB status reads three different ways. A seated diner is served at the
+  // table — never "collected", and certainly never "delivered". qr_ordering is
+  // dine-in with a QR menu, so it takes the same wording.
+  const atTable = order.channel === 'dine_in' || order.channel === 'qr_ordering';
+  const statusLabel = (key: string) => {
+    let k = key;
+    if (atTable && key === 'ready') k = 'readyDineIn';
+    else if (atTable && key === 'completed') k = 'completedDineIn';
+    else if (order.channel === 'pickup' && key === 'completed') k = 'completedPickup';
+    return t(('statuses.' + k) as never);
+  };
+
   // An order can be rated exactly once (unique(order_id) on order_ratings), so
   // the CTA must know whether one already exists — `undefined` until answered.
   const [rating, setRating] = React.useState<ExistingRating | null | undefined>(undefined);
@@ -190,7 +202,7 @@ export function OrderTracking({ initialOrder, branchId, branchLocation }: Props)
               </motion.div>
               <div>
                 <p className="text-sm uppercase tracking-wider text-white/80">
-                  {t('statuses.' + (steps[statusIndex]?.key ?? 'confirmed') as never)}
+                  {statusLabel(steps[statusIndex]?.key ?? 'confirmed')}
                 </p>
                 <h2 className="mt-1 font-display text-2xl font-bold leading-tight">
                   {order.order_items.map((i) => `${i.quantity}× ${i.item_name}`).join(', ')}
@@ -201,7 +213,13 @@ export function OrderTracking({ initialOrder, branchId, branchLocation }: Props)
         )}
 
         <div className="px-5 pb-5 pt-6">
-          <ol className="relative grid grid-cols-5 gap-2">
+          {/* Columns must track steps.length: dine-in/pickup have 4 stages, and
+              a hardcoded 5 left an empty trailing column that the progress bar
+              (already computed from steps.length) did not line up with. */}
+          <ol
+            className="relative grid gap-2"
+            style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}
+          >
             <div className="absolute left-5 right-5 top-4 h-1 rounded-full bg-muted" />
             <motion.div
               className="absolute left-5 top-4 h-1 rounded-full bg-primary"
@@ -226,7 +244,7 @@ export function OrderTracking({ initialOrder, branchId, branchLocation }: Props)
                     <SIcon className="h-4 w-4" />
                   </motion.div>
                   <span className="text-center text-[10px] font-medium leading-tight text-muted-foreground">
-                    {t('statuses.' + step.key as never)}
+                    {statusLabel(step.key)}
                   </span>
                 </li>
               );

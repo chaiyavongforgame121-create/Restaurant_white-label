@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { AlertCircle, Pencil, Star, XCircle } from 'lucide-react';
+import { AlertCircle, Info, Star } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Button, Card } from '@favornoms/ui';
 
@@ -36,21 +36,25 @@ const RATEABLE_STATUSES = ['completed'];
 
 /**
  * Customer-facing actions on the order tracking page:
- *  - Cancel order (allowed while pending/confirmed)
+ *  - Report an issue (once the food is out of the kitchen)
  *  - Rate the order (once completed, exactly once) — auto-opens as a required
  *    modal that can't be dismissed until the stars are submitted (a "skip"
  *    appears after a failed submit so an error can't lock the page)
+ *
+ * Self-serve "Edit instructions" and "Cancel order" were removed: a placed
+ * order is worked by real people in a kitchen, so a change has to be agreed
+ * with the restaurant rather than applied behind their back. Staff keep both
+ * powers (admin Orders kebab, kitchen "Reject order").
  */
 export function OrderActions({ orderId, branchId, orderStatus, existingRating, hasDriver }: Props) {
-  const canCancel = ['pending', 'confirmed'].includes(orderStatus);
+  // The window in which contacting the restaurant can still change anything —
+  // once it is out for delivery or handed over, there is nothing left to alter.
+  const canStillChange = ['pending', 'confirmed', 'preparing'].includes(orderStatus);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [foodStars, setFoodStars] = React.useState(0);
   const [deliveryStars, setDeliveryStars] = React.useState(0);
   const [comment, setComment] = React.useState('');
-  const [confirmCancel, setConfirmCancel] = React.useState(false);
-  const [editing, setEditing] = React.useState(false);
-  const [notesDraft, setNotesDraft] = React.useState('');
   // What we just wrote in this session — merged over the fetched row so the
   // stars flip to read-only the moment the insert lands.
   const [justRated, setJustRated] = React.useState<ExistingRating | null>(null);
@@ -77,33 +81,7 @@ export function OrderActions({ orderId, branchId, orderStatus, existingRating, h
   }, [ratingModalOpen]);
 
   const canReport = ['completed', 'out_for_delivery', 'ready'].includes(orderStatus);
-  if (!canCancel && !canRate && !canReport && !storedRating) return null;
-
-  const doCancel = async () => {
-    setBusy(true);
-    setError(null);
-    const supabase = getBrowserClient();
-    const { error: rpcErr } = await supabase.rpc('cancel_order', {
-      p_order_id: orderId,
-      p_reason: 'Customer requested',
-    });
-    setBusy(false);
-    setConfirmCancel(false);
-    if (rpcErr) setError(rpcErr.message);
-  };
-
-  const saveNotes = async () => {
-    setBusy(true);
-    setError(null);
-    const supabase = getBrowserClient();
-    const { error: rpcErr } = await supabase.rpc('edit_pending_order', {
-      p_order_id: orderId,
-      p_customer_notes: notesDraft,
-    });
-    setBusy(false);
-    setEditing(false);
-    if (rpcErr) setError(rpcErr.message);
-  };
+  if (!canStillChange && !canRate && !canReport && !storedRating) return null;
 
   const submitRating = async () => {
     // Guard as well as disable — a double-tap can fire twice before React
@@ -151,58 +129,16 @@ export function OrderActions({ orderId, branchId, orderStatus, existingRating, h
   return (
     <>
     <Card className="space-y-3 p-5">
-      {canCancel && !editing && !confirmCancel && (
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <Button
-            variant="outline"
-            fullWidth
-            onClick={() => { setNotesDraft(''); setEditing(true); }}
-            leftIcon={<Pencil className="h-4 w-4" />}
-          >
-            Edit instructions
-          </Button>
-          <Button
-            variant="ghost"
-            fullWidth
-            onClick={() => setConfirmCancel(true)}
-            leftIcon={<XCircle className="h-4 w-4" />}
-          >
-            Cancel order
-          </Button>
-        </div>
-      )}
-      {canCancel && editing && (
-        <div className="space-y-2">
-          <textarea
-            value={notesDraft}
-            onChange={(e) => setNotesDraft(e.target.value)}
-            placeholder="Add or update special instructions for this order…"
-            className="input min-h-20 py-3"
-            maxLength={500}
-            autoFocus
-          />
-          <div className="flex gap-2">
-            <Button variant="ghost" fullWidth onClick={() => setEditing(false)}>
-              Cancel
-            </Button>
-            <Button variant="gradient" fullWidth onClick={saveNotes} loading={busy}>
-              Save instructions
-            </Button>
-          </div>
-        </div>
-      )}
-      {canCancel && confirmCancel && (
-        <div className="space-y-2 rounded-2xl border border-danger/30 bg-danger/5 p-3">
-          <p className="text-sm font-semibold">Cancel this order?</p>
-          <p className="text-xs text-muted-foreground">This can&apos;t be undone.</p>
-          <div className="flex gap-2">
-            <Button variant="outline" fullWidth onClick={() => setConfirmCancel(false)}>
-              Keep order
-            </Button>
-            <Button variant="danger" fullWidth onClick={doCancel} loading={busy}>
-              Yes, cancel
-            </Button>
-          </div>
+      {/* Replaces the old self-serve Edit/Cancel buttons — the kitchen has to
+          agree to a change, so point people at the restaurant instead of
+          silently rewriting an order someone may already be cooking. */}
+      {canStillChange && (
+        <div className="flex gap-2.5 rounded-2xl border border-border bg-muted/40 p-3">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">
+            Need to change or cancel this order? Please contact the restaurant
+            directly — they can update it for you while it&apos;s still being prepared.
+          </p>
         </div>
       )}
       {canReport && (

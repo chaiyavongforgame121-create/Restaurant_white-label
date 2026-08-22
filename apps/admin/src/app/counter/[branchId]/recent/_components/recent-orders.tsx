@@ -15,6 +15,8 @@ interface OrderRow {
   customer_name: string | null;
   created_at: string;
   channel: string;
+  scheduled_for: string | null;
+  held: boolean | null;
 }
 
 interface Props {
@@ -86,9 +88,17 @@ export function RecentOrders({ branchId, orders: initial }: Props) {
                     {o.status}
                   </Badge>
                   <span className="text-xs text-muted-foreground">· {o.channel}</span>
+                  {o.scheduled_for && (
+                    <Badge variant="warning">
+                      {o.held ? 'Scheduled' : 'Due now'}
+                    </Badge>
+                  )}
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {o.customer_name ?? 'Walk-in'} · {new Date(o.created_at).toLocaleString()}
+                  {o.customer_name ?? 'Walk-in'} ·{' '}
+                  {o.scheduled_for
+                    ? `for ${new Date(o.scheduled_for).toLocaleString()}`
+                    : new Date(o.created_at).toLocaleString()}
                 </p>
               </div>
               <div className="flex items-center gap-3">

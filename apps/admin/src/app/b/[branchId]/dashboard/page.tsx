@@ -12,27 +12,24 @@ export default async function DashboardPage({ params }: Props) {
   const { branchId } = await params;
   const supabase = await getServerClient();
 
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-
   // No item cap and no orders/month cap exist any more (owner decision
   // 2026-07-25), so the old "10/30 items used" nag is gone. What is worth
   // surfacing here is the trial clock — it is the only thing that expires.
   const entitlements = await getEntitlementsForBranch(supabase, branchId);
   const trialDays = trialDaysLeft(entitlements);
 
-  const [orderToday, revenueToday, ordersInKitchen, customers] = await Promise.all([
+  const now = Date.now();
+  const yesterdaySameTime = now - 24 * 60 * 60 * 1000;
+
+  const [branch, weekOrders, ordersInKitchen, customers] = await Promise.all([
+    supabase.from('branches').select('timezone').eq('id', branchId).maybeSingle(),
+    // Eight days, not seven: the branch's local day can start up to a day away
+    // from the server's, and over-fetching one day is cheaper than a wrong bar.
     supabase
       .from('orders')
-      .select('id', { count: 'exact', head: true })
+      .select('created_at, total, status')
       .eq('branch_id', branchId)
-      .gte('created_at', start.toISOString()),
-    supabase
-      .from('orders')
-      .select('total')
-      .eq('branch_id', branchId)
-      .gte('created_at', start.toISOString())
-      .in('status', ['confirmed', 'preparing', 'ready', 'out_for_delivery', 'completed']),
+      .gte('created_at', new Date(now - 8 * 24 * 60 * 60 * 1000).toISOString()),
     supabase
       .from('orders')
       .select('id', { count: 'exact', head: true })
@@ -44,10 +41,57 @@ export default async function DashboardPage({ params }: Props) {
       .eq('branch_id', branchId),
   ]);
 
-  const totalRevenue = (revenueToday.data ?? []).reduce(
-    (s, o) => s + Number(o.total ?? 0),
-    0,
-  );
+  // "Today" has to mean the branch's today. This used to bucket on the server's
+  // clock, so a New York merchant on a UTC host watched their day roll over at
+  // 8pm — mid-dinner-service.
+  const tz = branch.data?.timezone ?? 'America/New_York';
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+  });
+  const dayKey = (d: Date) => fmt.format(d);
+
+  const earning = (s: string | null) =>
+    ['confirmed', 'preparing', 'ready', 'out_for_delivery', 'completed'].includes(s ?? '');
+
+  // Date arithmetic at noon UTC on the branch's calendar date: stepping whole
+  // days from midday can't be pushed across a boundary by a DST shift.
+  const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const anchor = new Date(`${dayKey(new Date(now))}T12:00:00Z`);
+  const trend: { key: string; label: string; revenue: number }[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(anchor);
+    d.setUTCDate(d.getUTCDate() - i);
+    trend.push({
+      key: d.toISOString().slice(0, 10),
+      label: i === 0 ? 'Today' : DOW[d.getUTCDay()] ?? '',
+      revenue: 0,
+    });
+  }
+  const todayKey = trend[6]?.key ?? '';
+  const yesterdayKey = trend[5]?.key ?? '';
+
+  let todayOrders = 0;
+  let yOrders = 0;
+  let yRevenue = 0;
+  for (const o of weekOrders.data ?? []) {
+    const at = new Date(o.created_at as string);
+    const key = dayKey(at);
+    const bucket = trend.find((t) => t.key === key);
+    if (bucket && earning(o.status as string)) bucket.revenue += Number(o.total ?? 0);
+    if (key === todayKey) todayOrders += 1;
+    // Same clock time yesterday, not all of yesterday: comparing a morning's
+    // takings against a full previous day shows a red arrow until late afternoon.
+    if (key === yesterdayKey && at.getTime() < yesterdaySameTime) {
+      yOrders += 1;
+      if (earning(o.status as string)) yRevenue += Number(o.total ?? 0);
+    }
+  }
+  const totalRevenue = trend[6]?.revenue ?? 0;
+  const trendMax = Math.max(1, ...trend.map((t) => t.revenue));
+
+  // undefined, not 0, when there is no baseline: "+0.0%" against a day with no
+  // trade is a number the merchant would act on, and it means nothing.
+  const delta = (a: number, prev: number) => (prev > 0 ? ((a - prev) / prev) * 100 : undefined);
 
   return (
     <div className="container max-w-6xl py-8">
@@ -83,17 +127,21 @@ export default async function DashboardPage({ params }: Props) {
       )}
 
       <div className="grid grid-cols-1 gap-4 px-2 sm:grid-cols-2 lg:grid-cols-4 lg:px-0">
+        {/* Deltas compare today-so-far with the same hours yesterday. They used
+            to be the literals +12.4 / +5.2 / +2.1 on every branch, every day. */}
         <Stat
           label="Revenue today"
           value={formatCurrency(totalRevenue)}
-          delta={+12.4}
+          delta={delta(totalRevenue, yRevenue)}
+          deltaLabel="vs same time yesterday"
           icon={DollarSign}
           tone="primary"
         />
         <Stat
           label="Orders today"
-          value={(orderToday.count ?? 0).toString()}
-          delta={+5.2}
+          value={todayOrders.toString()}
+          delta={delta(todayOrders, yOrders)}
+          deltaLabel="vs same time yesterday"
           icon={Receipt}
           tone="accent"
         />
@@ -106,7 +154,6 @@ export default async function DashboardPage({ params }: Props) {
         <Stat
           label="Total customers"
           value={(customers.count ?? 0).toString()}
-          delta={+2.1}
           icon={Users}
           tone="success"
         />
@@ -116,25 +163,32 @@ export default async function DashboardPage({ params }: Props) {
         <Card className="p-6">
           <h2 className="font-display text-lg font-semibold">Sales trend</h2>
           <p className="text-sm text-muted-foreground">Last 7 days</p>
+          {/* Real revenue per day. This was a fixed array of made-up figures
+              (6200, 7800, 9100 …) that every branch saw as its own trade, with
+              weekday labels that never matched the actual days either. */}
           <div className="mt-4 flex h-40 items-end gap-2">
-            {[6200, 7800, 9100, 7400, 10200, 11600, totalRevenue].map((v, i) => {
-              const max = 12000;
-              const h = Math.round((v / max) * 100);
+            {trend.map((t) => {
+              const h = Math.round((t.revenue / trendMax) * 100);
               return (
-                <div key={i} className="flex flex-1 flex-col items-center gap-2">
-                  <div className="relative w-full overflow-hidden rounded-lg bg-muted" style={{ height: '128px' }}>
+                <div key={t.key} className="flex flex-1 flex-col items-center gap-2">
+                  <div
+                    className="relative w-full overflow-hidden rounded-lg bg-muted"
+                    style={{ height: '128px' }}
+                    title={`${t.label} · ${formatCurrency(t.revenue)}`}
+                  >
                     <div
                       className="absolute inset-x-0 bottom-0 rounded-lg bg-gradient-warm"
                       style={{ height: `${h}%` }}
                     />
                   </div>
-                  <span className="text-[10px] text-muted-foreground">
-                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Today'][i]}
-                  </span>
+                  <span className="text-[10px] text-muted-foreground">{t.label}</span>
                 </div>
               );
             })}
           </div>
+          {trendMax === 1 && (
+            <p className="mt-2 text-xs text-muted-foreground">No sales in the last 7 days yet.</p>
+          )}
         </Card>
         <Card className="p-6">
           <h2 className="font-display text-lg font-semibold">Quick actions</h2>
@@ -162,11 +216,14 @@ export default async function DashboardPage({ params }: Props) {
 }
 
 function Stat({
-  label, value, delta, icon: Icon, tone,
+  label, value, delta, deltaLabel, icon: Icon, tone,
 }: {
   label: string;
   value: string;
+  /** undefined when there is no baseline to compare against — the badge then
+   *  hides rather than claiming 0%. */
   delta?: number;
+  deltaLabel?: string;
   icon: React.ComponentType<{ className?: string }>;
   tone: 'primary' | 'accent' | 'warning' | 'success';
 }) {
@@ -183,13 +240,18 @@ function Stat({
           <p className="text-xs font-medium text-muted-foreground">{label}</p>
           <p className="mt-1 font-display text-3xl font-bold">{value}</p>
           {delta != null && (
-            <Badge
-              variant={delta >= 0 ? 'success' : 'danger'}
-              className="mt-2"
-            >
-              {delta >= 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
-              {Math.abs(delta).toFixed(1)}%
-            </Badge>
+            <>
+              <Badge
+                variant={delta >= 0 ? 'success' : 'danger'}
+                className="mt-2"
+              >
+                {delta >= 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                {Math.abs(delta).toFixed(1)}%
+              </Badge>
+              {deltaLabel && (
+                <p className="mt-1 text-[10px] text-muted-foreground">{deltaLabel}</p>
+              )}
+            </>
           )}
         </div>
         <div className={`grid h-10 w-10 place-items-center rounded-xl ${tones[tone]}`}>

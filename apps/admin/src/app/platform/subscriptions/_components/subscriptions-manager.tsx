@@ -383,7 +383,8 @@ function FeatureSwitches({ row }: { row: RestaurantSubscriptionRow }) {
       <p className="text-xs text-muted-foreground">
         Show or hide a feature for this restaurant only. <strong>Plan</strong> follows the package
         above; <strong>On</strong> and <strong>Off</strong> ignore it. Hiding a feature removes it
-        from the merchant&apos;s sidebar and blocks its page.
+        from the merchant&apos;s sidebar; if they open the URL directly they get the locked
+        page instead of the feature.
       </p>
 
       {error && (

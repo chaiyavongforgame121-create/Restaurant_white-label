@@ -24,6 +24,7 @@ interface Brand {
   name: string;
   theme: Record<string, unknown>;
   logo_url: string | null;
+  favicon_url: string | null;
   is_default: boolean;
   created_at: string;
 }
@@ -75,7 +76,7 @@ export function BrandsManager({
     const supabase = getBrowserClient();
     const { data } = await supabase
       .from('brands')
-      .select('id, slug, name, theme, logo_url, is_default, created_at')
+      .select('id, slug, name, theme, logo_url, favicon_url, is_default, created_at')
       .eq('restaurant_id', restaurantId)
       .order('is_default', { ascending: false })
       .order('created_at', { ascending: true });
@@ -521,6 +522,7 @@ function BrandEditor({
     (brand?.theme?.accentColor as string) ?? '#F7B538',
   );
   const [logoUrl, setLogoUrl] = React.useState(brand?.logo_url ?? '');
+  const [faviconUrl, setFaviconUrl] = React.useState(brand?.favicon_url ?? '');
   const [isDefault, setIsDefault] = React.useState(brand?.is_default ?? false);
   const [linkedBranchIds, setLinkedBranchIds] = React.useState<Set<string>>(() => {
     if (!brand) return new Set();
@@ -544,6 +546,7 @@ function BrandEditor({
         slug: slug || slugify(name),
         theme: { ...(brand?.theme ?? {}), primaryColor, accentColor, brandName: name },
         logo_url: logoUrl || null,
+        favicon_url: faviconUrl || null,
         is_default: isDefault,
       };
       let brandId: string;
@@ -638,6 +641,39 @@ function BrandEditor({
                 aspect="aspect-[3/1]"
                 label="Upload logo"
               />
+            </Field>
+          </div>
+          <div className="sm:col-span-2">
+            {/* Kept separate from the logo rather than derived from it: the logo is
+                a wide lockup that turns to mush at 32px, which reads as a broken
+                site rather than an unbranded one. */}
+            <Field label="Favicon (optional)">
+              <div className="flex items-start gap-4">
+                <div className="w-24 shrink-0">
+                  <ImageUpload
+                    restaurantId={restaurantId}
+                    folder="favicon"
+                    value={faviconUrl || null}
+                    onChange={(url) => setFaviconUrl(url ?? '')}
+                    aspect="aspect-square"
+                    label="Upload"
+                  />
+                </div>
+                <div className="min-w-0 flex-1 text-xs text-muted-foreground">
+                  <p>The small icon shown in the browser tab of your online store.</p>
+                  <p className="mt-1">
+                    Use a square image — 512×512 PNG works best. Leave empty to use the
+                    Favornoms icon.
+                  </p>
+                  {faviconUrl && (
+                    <div className="mt-3 flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-2.5 py-1.5">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={faviconUrl} alt="" className="h-4 w-4 rounded-sm object-cover" />
+                      <span className="truncate text-foreground">{name || 'Your store'}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
             </Field>
           </div>
         </div>

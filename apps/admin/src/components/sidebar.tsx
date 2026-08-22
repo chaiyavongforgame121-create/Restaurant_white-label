@@ -6,8 +6,9 @@ import { usePathname, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   BarChart3, Bike, Building2, CalendarClock, ChefHat, ChevronDown, ClipboardList, Cog,
-  CreditCard, LayoutDashboard, Megaphone, Menu as MenuIcon, MicVocal, Monitor, Network,
-  Package, Palette, QrCode, Receipt, Star, Store, Tag, Timer, Tv, UserRound, Users, Wallet, X,
+  CreditCard, Gift, Landmark, LayoutDashboard, Megaphone, Menu as MenuIcon, MicVocal, Monitor,
+  Network, Package, Palette, QrCode, Receipt, Star, Store, Tag, Timer, Tv, UserRound, Users,
+  Wallet, X,
 } from 'lucide-react';
 import { hasFeature, type Entitlements, type FeatureKey } from '@favornoms/shared';
 import { cn } from '@favornoms/ui';
@@ -18,12 +19,24 @@ interface Props {
   branchName: string;
   branches?: { id: string; name: string }[];
   entitlements: Entitlements;
+  /** Owner of this restaurant (or a platform admin), as opposed to a manager.
+   *  Gates the screens whose scope is the whole restaurant rather than this one
+   *  branch: head office rolls up every branch's sales, and one reward catalog
+   *  is redeemed at every branch. RLS denies managers both anyway — advertising
+   *  a page that answers "access denied" reads as a broken product. */
+  isOwner?: boolean;
 }
 
 type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; feature?: FeatureKey };
 type NavGroup = { title: string; feature?: FeatureKey; items: NavItem[] };
 
-export function Sidebar({ branchId, branchName, branches = [], entitlements }: Props) {
+export function Sidebar({
+  branchId,
+  branchName,
+  branches = [],
+  entitlements,
+  isOwner = false,
+}: Props) {
   const pathname = usePathname();
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = React.useState(false);
@@ -45,6 +58,12 @@ export function Sidebar({ branchId, branchName, branches = [], entitlements }: P
     { href: `/counter/${branchId}`, label: 'Counter', icon: Store },
     { href: `${base}/qr`, label: 'QR code', icon: QrCode },
     { href: `${base}/reports`, label: 'Reports', icon: BarChart3 },
+    // Shown for single-branch restaurants too: it is the only screen that puts
+    // driver payouts and the subscription next to revenue, which the per-branch
+    // Reports page never does.
+    ...(isOwner
+      ? [{ href: `${base}/hq`, label: 'Head office', icon: Landmark }]
+      : []),
     // Kept in core, not under Advanced: merchants were reporting "I can't see my
     // ratings anywhere", and Advanced is collapsed by default.
     { href: `${base}/ratings`, label: 'Ratings', icon: Star },
@@ -83,6 +102,12 @@ export function Sidebar({ branchId, branchName, branches = [], entitlements }: P
         { href: `${base}/customers`, label: 'Customers', icon: UserRound },
         { href: `${base}/marketing`, label: 'Marketing', icon: Megaphone },
         { href: `${base}/promos`, label: 'Promos', icon: Tag },
+        // Owner-only for the same reason as Head office: the catalog is
+        // restaurant-scoped, so a reward a branch manager creates is redeemable
+        // at every other branch. Writes are refused by RLS regardless.
+        ...(isOwner
+          ? [{ href: `${base}/loyalty`, label: 'Loyalty rewards', icon: Gift }]
+          : []),
       ],
     },
     {

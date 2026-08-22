@@ -6,7 +6,9 @@ import { formatCurrency } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
 import {
   getMyLoyalty,
+  listLoyaltyRewards,
   listMyLoyaltyTransactions,
+  type LoyaltyReward,
   type LoyaltyTxRow,
 } from '@favornoms/database/queries';
 import { Badge, Card, Sheet } from '@favornoms/ui';
@@ -59,7 +61,7 @@ type Tier = (typeof TIERS)[number];
 const TIER_BENEFITS: Record<Tier['key'], string[]> = {
   bronze: [
     'Where every member starts — no minimum spend.',
-    'Redeem 100 points for ' + formatCurrency(1) + ' off, up to 50% of a subtotal.',
+    'Spend your points on any reward the restaurant is offering.',
   ],
   silver: [
     'Unlocked at 10,000 lifetime points.',
@@ -103,6 +105,7 @@ export function LoyaltyView({
   const { user, loading } = useAuth();
   const [loyalty, setLoyalty] = React.useState<Loyalty | null>(null);
   const [txns, setTxns] = React.useState<LoyaltyTxRow[]>([]);
+  const [rewards, setRewards] = React.useState<LoyaltyReward[]>([]);
   const [busy, setBusy] = React.useState(true);
 
   React.useEffect(() => {
@@ -115,9 +118,11 @@ export function LoyaltyView({
     void Promise.all([
       getMyLoyalty(supabase, branchId),
       listMyLoyaltyTransactions(supabase, branchId, 30),
-    ]).then(([l, t]) => {
+      listLoyaltyRewards(supabase, branchId),
+    ]).then(([l, t, r]) => {
       setLoyalty(l);
       setTxns(t);
+      setRewards(r);
       setBusy(false);
     });
   }, [user, branchId]);
@@ -125,6 +130,13 @@ export function LoyaltyView({
   const balance = loyalty?.points_balance ?? 0;
   const lifetimeEarned = loyalty?.lifetime_earned ?? 0;
   const currentTier = TIERS[tierIndexFor(lifetimeEarned)]!;
+  // The catalog arrives sorted by the merchant's sort_order, then points_cost —
+  // so the cheapest thing still out of reach is the first unaffordable one by
+  // cost, not the first in display order.
+  const affordable = rewards.filter((r) => r.points_cost <= balance);
+  const nextReward = rewards
+    .filter((r) => r.points_cost > balance)
+    .reduce<LoyaltyReward | null>((best, r) => (!best || r.points_cost < best.points_cost ? r : best), null);
 
   return (
     <div className="container max-w-2xl pb-24 pt-4">
@@ -141,8 +153,14 @@ export function LoyaltyView({
                 <Badge variant="solid" className="bg-white/25 text-white">
                   <Award className="h-3 w-3" /> {currentTier.label} member
                 </Badge>
+                {/* Points buy named rewards now, not a floating dollar rate, so
+                    quoting one would be a number the diner can never cash in. */}
                 <span className="text-xs text-white/80">
-                  worth {formatCurrency(balance / 100)} off your next order
+                  {affordable.length > 0
+                    ? `${affordable.length} reward${affordable.length === 1 ? '' : 's'} ready to redeem`
+                    : nextReward
+                      ? `${(nextReward.points_cost - balance).toLocaleString()} more points for ${nextReward.name}`
+                      : 'Keep ordering to earn more'}
                 </span>
               </div>
             </div>
@@ -151,6 +169,8 @@ export function LoyaltyView({
               <Stat label="Lifetime redeemed" value={(loyalty?.lifetime_spent ?? 0).toLocaleString()} />
             </div>
           </Card>
+
+          <RewardsCatalog rewards={rewards} balance={balance} busy={busy} brandName={brandName} />
 
           <TierTrack lifetimeEarned={lifetimeEarned} />
 
@@ -169,9 +189,9 @@ export function LoyaltyView({
                 being prepared or on their way don&apos;t count yet.
               </li>
               <li>
-                Redeem at checkout —{' '}
-                <strong className="text-foreground">100 points = {formatCurrency(1)} off</strong> (up to
-                50% of your subtotal).
+                At checkout, pick{' '}
+                <strong className="text-foreground">one reward</strong> from the list above — its points
+                come off your balance and the discount comes off that order.
               </li>
               <li>
                 Redeemed points leave your balance right away, but the entry shows in{' '}
@@ -232,6 +252,94 @@ export function LoyaltyView({
         </div>
       )}
     </div>
+  );
+}
+
+/** What a reward gives, in the diner's words. */
+function rewardValueLabel(r: LoyaltyReward): string {
+  switch (r.kind) {
+    case 'percent_off':
+      return `${Number(r.value)}% off${
+        r.max_discount ? ` (up to ${formatCurrency(Number(r.max_discount))})` : ''
+      }`;
+    case 'fixed_off':
+      return `${formatCurrency(Number(r.value))} off`;
+    case 'free_item':
+      return `Free ${r.menu_item_name ?? 'item'}`;
+    default:
+      return 'Free delivery';
+  }
+}
+
+/**
+ * The merchant's reward catalog. This is the whole answer to "what are my points
+ * for?" — points are no longer a free-floating currency, so if the restaurant
+ * has listed nothing, saying so plainly beats an empty box.
+ */
+function RewardsCatalog({
+  rewards,
+  balance,
+  busy,
+  brandName,
+}: {
+  rewards: LoyaltyReward[];
+  balance: number;
+  busy: boolean;
+  brandName: string;
+}) {
+  return (
+    <Card className="p-5">
+      <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
+        <Gift className="h-5 w-5 text-primary" /> Rewards you can redeem
+      </h2>
+      {busy ? (
+        <p className="mt-3 text-sm text-muted-foreground">Loading…</p>
+      ) : rewards.length === 0 ? (
+        <p className="mt-3 text-sm text-muted-foreground">
+          {brandName} hasn&apos;t published any rewards yet. Your points keep adding up in the
+          meantime — they don&apos;t expire while you&apos;re waiting.
+        </p>
+      ) : (
+        <ul className="mt-3 space-y-2">
+          {rewards.map((r) => {
+            const short = Math.max(0, r.points_cost - balance);
+            return (
+              <li
+                key={r.id}
+                className={`flex items-center justify-between gap-3 rounded-2xl border p-3 ${
+                  short === 0 ? 'border-primary/30 bg-primary/5' : 'border-border'
+                }`}
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-semibold">{r.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {rewardValueLabel(r)}
+                    {Number(r.min_subtotal) > 0 &&
+                      ` · on orders over ${formatCurrency(Number(r.min_subtotal))}`}
+                  </p>
+                  {r.description && (
+                    <p className="mt-0.5 text-xs text-muted-foreground">{r.description}</p>
+                  )}
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="font-display text-base font-bold tabular-nums">
+                    {r.points_cost.toLocaleString()}
+                  </p>
+                  <p className="text-[11px] leading-none text-muted-foreground">
+                    {short === 0 ? 'ready' : `${short.toLocaleString()} to go`}
+                  </p>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {rewards.length > 0 && (
+        <p className="mt-3 text-xs text-muted-foreground">
+          Pick one at checkout — one reward per order.
+        </p>
+      )}
+    </Card>
   );
 }
 

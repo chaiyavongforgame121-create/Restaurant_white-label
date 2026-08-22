@@ -19,10 +19,13 @@ import { getBrowserClient } from '@favornoms/database/client';
 import {
   getMyLoyalty,
   listCustomerAddresses,
+  listLoyaltyRewards,
+  loyaltyRewardDiscount,
   placeOrder,
   quoteDelivery,
   upsertCustomerAddress,
   type DeliveryQuote,
+  type LoyaltyReward,
   type SavedAddress,
 } from '@favornoms/database/queries';
 import {
@@ -88,7 +91,14 @@ const ORDER_ERRORS: Array<[string, string]> = [
   ['feature_not_entitled:delivery', 'This restaurant is not offering delivery right now. Please choose pickup or dine-in.'],
   ['delivery_not_entitled', 'This restaurant is not offering delivery right now. Please choose pickup or dine-in.'],
   ['feature_not_entitled:card_payment', 'Card payment is not available here right now. Please pay with cash.'],
+  // Must precede `branch_closed` — it contains it as a substring, and the
+  // generic "currently closed" line is wrong here: the restaurant may well be
+  // open now, it's the time they picked that isn't served.
+  ['branch_closed_at_scheduled_time', 'The restaurant is closed at the time you picked. Please choose another time.'],
   ['branch_closed', 'This restaurant is currently closed. Please try again during opening hours.'],
+  ['scheduled_too_soon', 'Please pick a time at least 10 minutes from now.'],
+  ['scheduled_too_far', 'Please pick a time within the next 14 days.'],
+  ['invalid_scheduled_for', 'That scheduled time could not be read. Please pick it again.'],
   ['delivery_out_of_range', 'Sorry, this address is outside the delivery area.'],
   ['payment_method_not_accepted', 'That payment method is not available for this order type. Please pick another.'],
   ['dropoff_other_required', 'Please describe where we should leave your order.'],
@@ -99,6 +109,14 @@ const ORDER_ERRORS: Array<[string, string]> = [
   // rule is "prove who you are", and a verified email proves it just as well as
   // Google. Copy mirrors `checkout.loyalty.verifyRequired` in messages/en.json.
   ['google_link_required', 'To spend loyalty points, verify your email or link your Google account first — it keeps your points safe. You can still order without redeeming.'],
+  // Reward redemption. The server re-prices every reward from the catalog, so
+  // these fire when the catalog moved under a checkout that was already open.
+  ['stale_client_refresh_required', 'Rewards changed while you were ordering. Please refresh this page and try again.'],
+  ['reward_min_subtotal', 'Your order is below the minimum for that reward. Add a little more, or pick another one.'],
+  ['reward_item_not_in_cart', "That reward's free item is no longer in your cart. Add it back, or pick another reward."],
+  ['reward_not_applicable', "That reward doesn't apply to this order. Please pick another one."],
+  ['reward_unavailable', 'That reward is no longer available. Please pick another one.'],
+  ['insufficient_points', "You don't have enough points for that reward any more. Please pick another one."],
 ];
 
 function describeOrderError(msg: string): string {
@@ -106,6 +124,14 @@ function describeOrderError(msg: string): string {
     if (msg.includes(code)) return text;
   }
   return msg;
+}
+
+// `datetime-local` reads its value/min/max as LOCAL wall-clock time, so they must
+// never be built from toISOString() — that is UTC, and in every US timezone it
+// reads hours ahead of the diner's actual clock.
+function toLocalInputValue(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 // place-order's r2, character for character. Every money expression below is a
@@ -218,7 +244,10 @@ export function CheckoutView({
       return next;
     });
   const [pointsBalance, setPointsBalance] = React.useState(0);
-  const [redeemPoints, setRedeemPoints] = React.useState(0);
+  // The merchant's published reward catalog. Points are no longer spendable as
+  // free-form dollars-off — the diner picks one of these or spends nothing.
+  const [rewards, setRewards] = React.useState<LoyaltyReward[]>([]);
+  const [rewardId, setRewardId] = React.useState<string | null>(null);
   // Redeeming points needs a proven identity — a linked Google account OR a real
   // (non-synthetic) confirmed email. Phone sign-in is OTP-less, so a phone number
   // alone is not proof of who you are. place-order is the real gate — this flag
@@ -237,9 +266,7 @@ export function CheckoutView({
     // Default: 1 hour from now, rounded to next 15 min
     const d = new Date(Date.now() + 60 * 60_000);
     d.setMinutes(Math.ceil(d.getMinutes() / 15) * 15, 0, 0);
-    // datetime-local needs local YYYY-MM-DDTHH:mm
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    return toLocalInputValue(d);
   });
   const [promoState, setPromoState] = React.useState<
     | { status: 'idle' }
@@ -260,7 +287,7 @@ export function CheckoutView({
   const deliveryFeeBase = channel !== 'delivery' ? 0 : quote?.deliverable ? quote.fee : 3.99;
   const outOfRange =
     channel === 'delivery' && quote != null && !quote.deliverable && quote.reason === 'out_of_range';
-  const deliveryFee = promoState.status === 'applied' && promoState.free_delivery ? 0 : deliveryFeeBase;
+  const promoFreeDelivery = promoState.status === 'applied' && promoState.free_delivery;
   // Coordinates are required only while ENTERING a new address (the autofill is on screen and
   // actionable). A previously-saved address that happens to lack coords must not trap checkout —
   // it falls back to the flat delivery fee.
@@ -278,25 +305,43 @@ export function CheckoutView({
   const asapPayable = paymentMatrix.asap.cash || paymentMatrix.asap.card;
   const scheduledPayable = paymentMatrix.scheduled.cash || paymentMatrix.scheduled.card;
   const serviceFee = r2(subtotal * (serviceFeePercent / 100));
-  // Loyalty points are integer CENTS-off: 100 pts = $1. `subtotal` is dollars, so
-  // the 50%-of-subtotal cap in points is `subtotal * 100 * 0.5` = `subtotal * 50`.
-  // This is the identical expression place-order uses — the two must never drift,
-  // or the diner agrees to a total the server does not charge.
-  const maxRedeem = Math.min(pointsBalance, Math.floor(subtotal * 50));
-  // Zero without a verified identity, so the summary total matches what the server
-  // will actually charge instead of promising a discount it would reject.
-  const appliedRedeem = identityVerified ? Math.min(redeemPoints, maxRedeem) : 0;
-  // Points -> dollars. Every money-facing consumer reads THIS, never appliedRedeem.
-  const loyaltyDollarsOff = r2(appliedRedeem / 100);
-  // Slider positions: one per $1, then the cap itself as the last stop. With a
-  // plain step=100 the browser clamps to the largest multiple of 100 under the
-  // max, so a 499-pt cap could only ever reach 400 — $0.99 of the diner's own
-  // points stranded behind a control whose label promises them.
-  const redeemStops = Array.from({ length: Math.ceil(maxRedeem / 100) }, (_, i) => i * 100).concat(
-    maxRedeem,
+  // Why a reward may not be redeemable right now. Returning the reason (not just
+  // a boolean) lets each card say what to DO about it instead of being mutely
+  // greyed out. `free_item` needs its item actually in the cart — the reward pays
+  // for one you ordered, it does not add one.
+  const rewardBlocker = React.useCallback(
+    (r: LoyaltyReward): string | null => {
+      if (r.points_cost > pointsBalance)
+        return `Needs ${(r.points_cost - pointsBalance).toLocaleString()} more points`;
+      if (subtotal < Number(r.min_subtotal))
+        return `Spend ${formatCurrency(Number(r.min_subtotal))} to unlock`;
+      // Combo lines reuse menuItemId to carry the combo id, so they must not
+      // satisfy a free-item reward for a menu item that merely shares the slot.
+      if (
+        r.kind === 'free_item' &&
+        !lines.some((l) => !l.comboId && l.menuItemId === r.menu_item_id)
+      )
+        return `Add ${r.menu_item_name ?? 'the item'} to your cart`;
+      if (r.kind === 'free_delivery' && (channel !== 'delivery' || deliveryFeeBase <= 0))
+        return 'Delivery orders only';
+      return null;
+    },
+    [pointsBalance, subtotal, lines, channel, deliveryFeeBase],
   );
-  // Stops ascend and appliedRedeem is clamped to the last one, so this always hits.
-  const redeemIndex = Math.max(0, redeemStops.findIndex((p) => p >= appliedRedeem));
+  const selectedReward = rewards.find((r) => r.id === rewardId) ?? null;
+  // Zero without a verified identity, and zero the moment the cart changes out
+  // from under a selection, so the summary total matches what the server will
+  // actually charge instead of promising a discount place-order would reject.
+  const appliedReward =
+    selectedReward && identityVerified && !rewardBlocker(selectedReward) ? selectedReward : null;
+  // Mirrors the switch in place-order. The server is authoritative; this only
+  // keeps the on-screen total honest.
+  const loyaltyDollarsOff = appliedReward ? loyaltyRewardDiscount(appliedReward, subtotal) : 0;
+  // Declared here rather than beside deliveryFeeBase because a free-delivery
+  // REWARD can zero the fee too, and that depends on the reward being applicable
+  // — which in turn is measured against deliveryFeeBase, never against this.
+  const deliveryFee =
+    promoFreeDelivery || appliedReward?.kind === 'free_delivery' ? 0 : deliveryFeeBase;
   const tipAmount = customTip
     ? Math.max(0, Math.round((Number(customTip) || 0) * 100) / 100)
     : Math.round((subtotal * tipPercent)) / 100;
@@ -339,6 +384,7 @@ export function CheckoutView({
     void getMyLoyalty(supabase, branchId).then((row) => {
       if (row) setPointsBalance(row.points_balance);
     });
+    void listLoyaltyRewards(supabase, branchId).then(setRewards);
     void (async () => {
       const { data: user } = await supabase.auth.getUser();
       if (!user.user) return;
@@ -780,7 +826,10 @@ export function CheckoutView({
         // only value that neither trips the card_payment entitlement nor breaks
         // the NOT NULL payments.method column.
         payment_method: isDineIn ? 'cash' : method,
-        redeem_points: appliedRedeem || undefined,
+        // Send the reward only when it is actually applicable — appliedReward is
+        // already null if the identity check failed or the cart drifted, so the
+        // server is never asked to honour something the summary did not show.
+        reward_id: appliedReward?.id,
         tip_amount: tipAmount || undefined,
         promo_code: promoState.status === 'applied' ? promoCode.trim() : undefined,
         // Belt and braces on top of effectiveScheduleMode — no state, however
@@ -888,7 +937,8 @@ export function CheckoutView({
                 <input
                   type="datetime-local"
                   value={scheduledFor}
-                  min={new Date(Date.now() + 15 * 60_000).toISOString().slice(0, 16)}
+                  min={toLocalInputValue(new Date(Date.now() + 15 * 60_000))}
+                  max={toLocalInputValue(new Date(Date.now() + 14 * 24 * 60 * 60_000))}
                   onChange={(e) => { setScheduledFor(e.target.value); clearFieldError('schedule'); }}
                   aria-invalid={!!fieldErrors.schedule}
                   className="input"
@@ -1369,39 +1419,58 @@ export function CheckoutView({
           </button>
         </Card>
 
-        {pointsBalance > 0 && maxRedeem > 0 && (
+        {rewards.length > 0 && (
           <Card className="p-5">
             <div className="flex items-baseline justify-between">
-              <h2 className="font-display text-lg font-semibold">Loyalty points</h2>
+              <h2 className="font-display text-lg font-semibold">Redeem points</h2>
               <span className="text-sm text-muted-foreground">
                 Balance: <strong>{pointsBalance.toLocaleString()}</strong>
               </span>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              Redeem up to {maxRedeem.toLocaleString()} pts (50% of subtotal) — 100 pts = $1 off.
+              Pick one reward per order.
             </p>
-            <div className="mt-3 flex items-center gap-3">
-              <input
-                type="range"
-                // The slider rides the INDEX of redeemStops, not the points
-                // themselves: one detent per $1 (a 1-pt step would be thousands
-                // of drags wide) while the far right still lands exactly on the
-                // cap the copy above quotes. Every stop is an integer <= the cap,
-                // so the control can never emit more than the server allows.
-                // aria-valuetext below speaks the points, not the index.
-                min={0}
-                max={redeemStops.length - 1}
-                step={1}
-                value={redeemIndex}
-                disabled={!identityVerified}
-                onChange={(e) => setRedeemPoints(redeemStops[Number(e.target.value)] ?? 0)}
-                className="h-2 flex-1 accent-primary disabled:opacity-40"
-                aria-label="Redeem points"
-                aria-valuetext={`${appliedRedeem.toLocaleString()} points, ${formatCurrency(loyaltyDollarsOff)} off`}
-              />
-              <span className="w-20 text-right font-display text-base font-bold text-primary tabular-nums">
-                -{formatCurrency(loyaltyDollarsOff)}
-              </span>
+            <div className="mt-3 space-y-2">
+              {rewards.map((r) => {
+                const blocker = rewardBlocker(r);
+                const selected = rewardId === r.id;
+                const off = loyaltyRewardDiscount(r, subtotal);
+                return (
+                  <button
+                    key={r.id}
+                    type="button"
+                    // Blocked rewards stay visible and pressable-looking but inert,
+                    // so the diner learns what to do (add the item, spend $5 more)
+                    // instead of hunting for a reward that silently vanished.
+                    aria-pressed={selected}
+                    disabled={!!blocker || !identityVerified}
+                    onClick={() => setRewardId(selected ? null : r.id)}
+                    className={`flex w-full items-center gap-3 rounded-2xl border p-3 text-left transition ${
+                      selected
+                        ? 'border-primary bg-primary/5'
+                        : 'border-border/60 hover:border-primary/40'
+                    } ${blocker || !identityVerified ? 'opacity-55' : ''}`}
+                  >
+                    <span
+                      aria-hidden
+                      className={`h-4 w-4 shrink-0 rounded-full border-2 ${
+                        selected ? 'border-primary bg-primary' : 'border-border'
+                      }`}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-medium">{r.name}</span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {r.points_cost.toLocaleString()} pts
+                        {r.description ? ` · ${r.description}` : ''}
+                        {blocker ? ` · ${blocker}` : ''}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-right font-display text-sm font-bold text-primary tabular-nums">
+                      {r.kind === 'free_delivery' ? 'Free delivery' : `-${formatCurrency(off)}`}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
             {!identityVerified && (
               <p className="mt-2 text-xs text-muted-foreground">
@@ -1437,8 +1506,17 @@ export function CheckoutView({
             {salesTaxRate > 0 && <Row label="Sales tax" value={formatCurrency(taxAmount)} />}
             {tipAmount > 0 && <Row label="Tip" value={formatCurrency(tipAmount)} />}
             {promoDiscount > 0 && <Row label={`Promo (${promoCode})`} value={`-${formatCurrency(promoDiscount)}`} />}
-            {appliedRedeem > 0 && (
-              <Row label="Loyalty discount" value={`-${formatCurrency(loyaltyDollarsOff)}`} />
+            {appliedReward && (
+              <Row
+                label={`Reward (${appliedReward.name})`}
+                value={
+                  loyaltyDollarsOff > 0
+                    ? `-${formatCurrency(loyaltyDollarsOff)}`
+                    : // free_delivery zeroes the delivery fee row above rather than
+                      // discounting the food, so a -$ figure here would double-count it.
+                      'Delivery free'
+                }
+              />
             )}
             <div className="my-2 h-px bg-border" />
             <Row label={t('cart.total')} value={formatCurrency(total)} bold />
