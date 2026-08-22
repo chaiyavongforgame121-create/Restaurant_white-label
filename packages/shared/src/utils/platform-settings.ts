@@ -41,7 +41,6 @@ export interface PlatformDefaults {
 /** Known feature flags. Unknown keys are preserved but not typed. */
 export interface FeatureFlags {
   combos: boolean;
-  reservations: boolean;
   giftCards: boolean;
 }
 
@@ -67,7 +66,7 @@ export const PLATFORM_SETTING_DEFAULTS: PlatformSettings = {
     driverBasePay: 2,
     driverPerMilePay: 1,
   },
-  features: { combos: true, reservations: true, giftCards: true },
+  features: { combos: true, giftCards: true },
 };
 
 function num(v: unknown, fallback: number): number {
@@ -106,7 +105,6 @@ export function parsePlatformSettings(raw: Json): PlatformSettings {
     },
     features: {
       combos: bool(f.combos, def.features.combos),
-      reservations: bool(f.reservations, def.features.reservations),
       giftCards: bool(f.gift_cards, def.features.giftCards),
     },
   };
@@ -131,7 +129,6 @@ export function serializePlatformSettings(s: PlatformSettings): Record<string, u
     },
     features: {
       combos: s.features.combos,
-      reservations: s.features.reservations,
       gift_cards: s.features.giftCards,
     },
   };

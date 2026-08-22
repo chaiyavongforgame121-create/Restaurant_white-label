@@ -5,9 +5,9 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
-  BarChart3, Bike, Building2, CalendarClock, ChefHat, ChevronDown, ClipboardList, Cog,
-  CreditCard, Gift, Landmark, LayoutDashboard, Megaphone, Menu as MenuIcon, MicVocal, Monitor,
-  Network, Package, Palette, QrCode, Receipt, Star, Store, Tag, Timer, Tv, UserRound, Users,
+  BarChart3, Bike, Building2, ChefHat, ChevronDown, ClipboardList, Cog,
+  CreditCard, Gift, Landmark, LayoutDashboard, Menu as MenuIcon, MicVocal, Monitor,
+  Network, Package, Palette, QrCode, Receipt, Star, Store, Tag, Tv, UserRound, Users,
   Wallet, X,
 } from 'lucide-react';
 import { hasFeature, type Entitlements, type FeatureKey } from '@favornoms/shared';
@@ -71,18 +71,9 @@ export function Sidebar({
 
   const advanced: NavGroup[] = [
     {
-      title: 'Dine-in',
-      items: [
-        { href: `${base}/reservations`, label: 'Reservations', icon: CalendarClock },
-        { href: `${base}/waitlist`, label: 'Waitlist', icon: Users },
-        { href: `${base}/floor-plan`, label: 'Floor plan', icon: LayoutDashboard },
-      ],
-    },
-    {
       title: 'Operations',
       items: [
         { href: `${base}/inventory`, label: 'Inventory', icon: Package },
-        { href: `${base}/shifts`, label: 'Shifts', icon: Timer },
       ],
     },
     {
@@ -100,7 +91,6 @@ export function Sidebar({
         { href: `${base}/drivers`, label: 'Drivers', icon: Bike, feature: 'delivery' },
         { href: `${base}/payouts`, label: 'Driver payouts', icon: Wallet, feature: 'delivery' },
         { href: `${base}/customers`, label: 'Customers', icon: UserRound },
-        { href: `${base}/marketing`, label: 'Marketing', icon: Megaphone },
         { href: `${base}/promos`, label: 'Promos', icon: Tag },
         // Owner-only for the same reason as Head office: the catalog is
         // restaurant-scoped, so a reward a branch manager creates is redeemable

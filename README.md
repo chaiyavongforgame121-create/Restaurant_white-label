@@ -8,7 +8,7 @@ Monorepo for the Favornoms platform — **fully feature-complete** as of 2026-05
 | **`apps/driver`** | 3001 | Driver PWA — phone OTP (US), realtime dispatch, GPS, KYC, **photo POD upload**, **onboarding training**, **performance dashboard**, peak-hour bonus, 1099 summary, Web Push |
 | **`apps/kds`** | 3002 | Kitchen Display — realtime + station filter, audio beep, **long-press to 86**, recall |
 | **`apps/pos`** | 3003 | Tablet POS — magic-link, ESC/POS printer, **clock in/out**, **park order**, refunds, keyboard hotkeys (1-9, Ctrl+P), card+cash |
-| **`apps/admin`** | 3004 | Owner/Manager — dashboard with plan banner, orders (search/filter/saved views/partial refund), reservations, **waitlist**, **floor plan**, menu (CRUD + DnD + AI import + CSV + modifiers + combos + happy hours), **inventory**, **shifts/tips**, drivers + KYC, brands, marketing, promos, receipts, reports, plan & billing, dark mode |
+| **`apps/admin`** | 3004 | Owner/Manager — dashboard with plan banner, orders (search/filter/saved views/partial refund), menu (CRUD + DnD + AI import + CSV + modifiers + combos + happy hours), **inventory**, drivers + KYC, brands, promos, loyalty, receipts, reports, plan & billing, dark mode |
 
 Backend: Supabase project `ayyfczidnzxetndiijmv` — **71 migrations**, RLS everywhere, **14 Edge Functions** (10 active, 4+ new awaiting CLI deploy), PostGIS dispatch, realtime, `pg_cron` for notifications + loyalty + abandoned carts.
 
@@ -67,7 +67,7 @@ Realtime tickets · Station filter · Audio beep · Long-press 86 · Recall wind
 Magic-link · Cash drawer + receipt printer · Park order · Clock in/out · Refund flow · Keyboard hotkeys · Split bill · Table number · Manual discount
 
 ### Admin
-Dashboard with plan upgrade banner · Orders with search/filter/saved views/partial refund · Reservations · Walk-in waitlist · Floor plan editor · Menu CRUD + DnD reorder + AI import + CSV import + modifiers + combos + happy hours · Inventory (restock + waste log) · Shifts + tip pooling · Drivers + KYC · Customers · Marketing broadcasts · Promos · Receipts list · Reports (with branch TZ) · Activity log · Brands · Franchise · Plan & billing · Dark mode
+Dashboard with plan upgrade banner · Orders with search/filter/saved views/partial refund · Menu CRUD + DnD reorder + AI import + CSV import + modifiers + combos + happy hours · Inventory (restock + waste log) · Drivers + KYC · Driver payouts · Customers · Promos · Loyalty rewards · Ratings · Receipts list · Reports (with branch TZ) · Activity log · Brands · Franchise · Head office · Plan & billing · Dark mode
 
 ### Backend
 Stripe payment intents + webhooks · US sales tax · Gift card issue/redeem · Promo validation · Tiered loyalty + birthday cron · Abandoned cart sweep cron · Recommendations RPC · Recurring orders · Group cart sharing · Driver stats RPC · Peak-hour bonus trigger · Driver 1099 · Cohort retention RPC · Customer LTV RPC · 7-day forecast · AI chatbot edge fn · AI review responder · AI menu optimizer · Sync jobs queue · Sales tax filing RPC · Food safety logs · Age verification flag

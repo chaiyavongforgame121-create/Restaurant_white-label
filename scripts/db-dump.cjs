@@ -39,7 +39,7 @@ const TABLES = [
   // Drivers + delivery
   'drivers', 'driver_approvals', 'driver_schedules', 'deliveries',
   // Operations
-  'reservations', 'tables', 'broadcasts',
+  'tables',
   // Franchise
   'franchise_groups', 'franchise_menu_locks',
 ];

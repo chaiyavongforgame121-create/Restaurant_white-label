@@ -572,62 +572,6 @@ export type Database = {
           },
         ]
       }
-      broadcasts: {
-        Row: {
-          audience: Json
-          body: string
-          branch_id: string
-          channels: string[]
-          created_at: string
-          created_by: string | null
-          id: string
-          recipient_count: number
-          scheduled_for: string | null
-          sent_at: string | null
-          status: string
-          title: string
-          url: string | null
-        }
-        Insert: {
-          audience?: Json
-          body: string
-          branch_id: string
-          channels?: string[]
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          recipient_count?: number
-          scheduled_for?: string | null
-          sent_at?: string | null
-          status?: string
-          title: string
-          url?: string | null
-        }
-        Update: {
-          audience?: Json
-          body?: string
-          branch_id?: string
-          channels?: string[]
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          recipient_count?: number
-          scheduled_for?: string | null
-          sent_at?: string | null
-          status?: string
-          title?: string
-          url?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "broadcasts_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "branches"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       cart_shares: {
         Row: {
           branch_id: string
@@ -2047,6 +1991,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "loyalty_rewards_menu_item_id_fkey"
+            columns: ["menu_item_id"]
+            isOneToOne: false
+            referencedRelation: "v_low_stock_items"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "loyalty_rewards_restaurant_id_fkey"
             columns: ["restaurant_id"]
             isOneToOne: false
@@ -2814,13 +2765,6 @@ export type Database = {
             referencedRelation: "tables"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "orders_table_id_fkey"
-            columns: ["table_id"]
-            isOneToOne: false
-            referencedRelation: "v_branch_floor_plan"
-            referencedColumns: ["id"]
-          },
         ]
       }
       payments: {
@@ -3248,86 +3192,6 @@ export type Database = {
             columns: ["referred_customer_id"]
             isOneToOne: true
             referencedRelation: "customers"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      reservations: {
-        Row: {
-          branch_id: string
-          created_at: string
-          customer_id: string | null
-          customer_name: string
-          customer_phone: string
-          duration_minutes: number
-          id: string
-          notes: string | null
-          party_size: number
-          reserved_for: string
-          source: string
-          status: string
-          table_id: string | null
-          updated_at: string
-        }
-        Insert: {
-          branch_id: string
-          created_at?: string
-          customer_id?: string | null
-          customer_name: string
-          customer_phone: string
-          duration_minutes?: number
-          id?: string
-          notes?: string | null
-          party_size: number
-          reserved_for: string
-          source?: string
-          status?: string
-          table_id?: string | null
-          updated_at?: string
-        }
-        Update: {
-          branch_id?: string
-          created_at?: string
-          customer_id?: string | null
-          customer_name?: string
-          customer_phone?: string
-          duration_minutes?: number
-          id?: string
-          notes?: string | null
-          party_size?: number
-          reserved_for?: string
-          source?: string
-          status?: string
-          table_id?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "reservations_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "branches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "reservations_customer_id_fkey"
-            columns: ["customer_id"]
-            isOneToOne: false
-            referencedRelation: "customers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "reservations_table_id_fkey"
-            columns: ["table_id"]
-            isOneToOne: false
-            referencedRelation: "tables"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "reservations_table_id_fkey"
-            columns: ["table_id"]
-            isOneToOne: false
-            referencedRelation: "v_branch_floor_plan"
             referencedColumns: ["id"]
           },
         ]
@@ -4020,59 +3884,6 @@ export type Database = {
           },
         ]
       }
-      waitlist: {
-        Row: {
-          added_at: string | null
-          added_by: string | null
-          branch_id: string
-          id: string
-          notes: string | null
-          notified_at: string | null
-          party_name: string
-          party_size: number
-          phone: string | null
-          position: number | null
-          seated_at: string | null
-          status: string
-        }
-        Insert: {
-          added_at?: string | null
-          added_by?: string | null
-          branch_id: string
-          id?: string
-          notes?: string | null
-          notified_at?: string | null
-          party_name: string
-          party_size: number
-          phone?: string | null
-          position?: number | null
-          seated_at?: string | null
-          status?: string
-        }
-        Update: {
-          added_at?: string | null
-          added_by?: string | null
-          branch_id?: string
-          id?: string
-          notes?: string | null
-          notified_at?: string | null
-          party_name?: string
-          party_size?: number
-          phone?: string | null
-          position?: number | null
-          seated_at?: string | null
-          status?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "waitlist_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "branches"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       waste_log: {
         Row: {
           branch_id: string
@@ -4144,65 +3955,6 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "combo_sets_branch_id_fkey"
-            columns: ["branch_id"]
-            isOneToOne: false
-            referencedRelation: "branches"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      v_branch_floor_plan: {
-        Row: {
-          branch_id: string | null
-          capacity: number | null
-          display_name: string | null
-          id: string | null
-          is_active: boolean | null
-          open_orders: number | null
-          pos_h: number | null
-          pos_w: number | null
-          pos_x: number | null
-          pos_y: number | null
-          shape: string | null
-          status: string | null
-          table_number: string | null
-          zone: string | null
-        }
-        Insert: {
-          branch_id?: string | null
-          capacity?: number | null
-          display_name?: string | null
-          id?: string | null
-          is_active?: boolean | null
-          open_orders?: never
-          pos_h?: number | null
-          pos_w?: number | null
-          pos_x?: number | null
-          pos_y?: number | null
-          shape?: string | null
-          status?: string | null
-          table_number?: string | null
-          zone?: string | null
-        }
-        Update: {
-          branch_id?: string | null
-          capacity?: number | null
-          display_name?: string | null
-          id?: string | null
-          is_active?: boolean | null
-          open_orders?: never
-          pos_h?: number | null
-          pos_w?: number | null
-          pos_x?: number | null
-          pos_y?: number | null
-          shape?: string | null
-          status?: string | null
-          table_number?: string | null
-          zone?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "tables_branch_id_fkey"
             columns: ["branch_id"]
             isOneToOne: false
             referencedRelation: "branches"
@@ -4396,7 +4148,6 @@ export type Database = {
         Args: { p_items: Json; p_order_id: string }
         Returns: Json
       }
-      enqueue_broadcast: { Args: { p_broadcast_id: string }; Returns: Json }
       enqueue_sync_job: {
         Args: { p_integration_id: string; p_kind: string; p_payload?: Json }
         Returns: string
@@ -4509,7 +4260,7 @@ export type Database = {
       }
       get_platform_settings: { Args: never; Returns: Json }
       get_restaurant_reports: {
-        Args: { p_restaurant_id: string; p_months?: number }
+        Args: { p_months?: number; p_restaurant_id: string }
         Returns: Json
       }
       get_sales_tax_report: {
@@ -4540,6 +4291,7 @@ export type Database = {
         Args: { p_delivery_id: string }
         Returns: boolean
       }
+      is_platform_admin: { Args: never; Returns: boolean }
       issue_birthday_rewards: { Args: never; Returns: number }
       issue_gift_card: {
         Args: {
@@ -4603,14 +4355,14 @@ export type Database = {
       list_loyalty_rewards: {
         Args: { p_branch_id: string }
         Returns: {
-          description: string | null
+          description: string
           id: string
           kind: string
-          max_discount: number | null
-          menu_item_id: string | null
-          menu_item_image_url: string | null
-          menu_item_name: string | null
-          menu_item_price: number | null
+          max_discount: number
+          menu_item_id: string
+          menu_item_image_url: string
+          menu_item_name: string
+          menu_item_price: number
           min_subtotal: number
           name: string
           points_cost: number
@@ -4658,7 +4410,6 @@ export type Database = {
         Args: { p_delivery_id: string }
         Returns: undefined
       }
-      notify_waitlist_party: { Args: { p_id: string }; Returns: undefined }
       pay_driver_withdrawal: {
         Args: { p_reference?: string; p_withdrawal_id: string }
         Returns: Json
@@ -4675,6 +4426,10 @@ export type Database = {
           p_next: Database["public"]["Enums"]["delivery_status"]
         }
         Returns: undefined
+      }
+      provision_customer_for_branch: {
+        Args: { p_branch_id: string }
+        Returns: string
       }
       quote_delivery: {
         Args: { p_branch_id: string; p_lat: number; p_lng: number }

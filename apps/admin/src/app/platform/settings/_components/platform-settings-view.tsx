@@ -205,7 +205,6 @@ export function PlatformSettingsView({ initial }: { initial: Record<string, unkn
           {(
             [
               ['combos', 'Combos'],
-              ['reservations', 'Reservations'],
               ['giftCards', 'Gift cards'],
             ] as Array<[keyof PlatformSettings['features'], string]>
           ).map(([key, label]) => (

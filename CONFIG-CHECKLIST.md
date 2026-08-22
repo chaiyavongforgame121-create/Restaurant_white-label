@@ -294,12 +294,11 @@ Also add a `stripe-refund` edge function so admin Refund actually issues a Strip
 **Dashboard → Database → Replication → `supabase_realtime`**
 
 Already added by migrations:
-- `orders`, `order_items`, `deliveries`, `notifications_outbox`, `menu_items`, `reservations`, `broadcasts`
+- `orders`, `order_items`, `deliveries`, `delivery_messages`, `notifications_outbox`, `menu_items`
 
 **Optional adds if you want live updates:**
 ```sql
 alter publication supabase_realtime add table public.tax_invoices;
-alter publication supabase_realtime add table public.waitlist;
 alter publication supabase_realtime add table public.tables;
 ```
 
