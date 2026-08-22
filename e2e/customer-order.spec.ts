@@ -16,10 +16,13 @@ test.describe('customer order flow', () => {
     }
   });
 
-  test('cart page shows the voice-order button', async ({ page }) => {
+  // Voice ordering was pulled from the storefront on 2026-07-11 at the owner's
+  // request. The old test asserted the button WAS visible, so it could only fail.
+  // Assert the removal instead — now the button reappearing is what breaks the build.
+  test('cart page has no voice-order button', async ({ page }) => {
     await page.goto('/r/coastal-grill/brooklyn/cart');
-    // Voice button only renders if SpeechRecognition is supported; chromium has it
-    await expect(page.getByText(/voice order|stop|speak/i)).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByRole('heading').first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/voice order/i)).toHaveCount(0);
   });
 
   test('privacy + terms + ccpa pages render', async ({ page }) => {
