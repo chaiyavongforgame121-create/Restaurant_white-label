@@ -14,6 +14,15 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ branchId: string }> },
 ) {
+  // Hard-404 in production unless explicitly re-enabled, matching /api/test-sign-in.
+  // Without this gate the route shipped live: a password in a query string lands in
+  // server logs, browser history and Referer headers, and the link is bearer-grade —
+  // anyone who sees it holds back-office access until the password is rotated.
+  // Set ENABLE_TEST_AUTH=1 on a demo deployment if a reviewer still needs it.
+  if (process.env.NODE_ENV === 'production' && process.env.ENABLE_TEST_AUTH !== '1') {
+    return new NextResponse(null, { status: 404 });
+  }
+
   const { branchId } = await params;
   const origin = request.nextUrl.origin;
 

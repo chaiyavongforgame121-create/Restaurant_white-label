@@ -54,14 +54,16 @@ self.addEventListener('push', (event) => {
     badge: '/icon.svg',
     tag: data.tag,
     requireInteraction: data.tag === 'new_dispatch',
-    data: { url: data.url || '/app' },
+    data: { url: data.url || '/app/home' },
   };
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = (event.notification.data && event.notification.data.url) || '/app';
+  // '/app' has no page — the driver app's entry is /app/home. Defaulting to it meant
+  // tapping a notification opened a 404.
+  const url = (event.notification.data && event.notification.data.url) || '/app/home';
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       for (const client of clientList) {

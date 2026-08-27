@@ -110,6 +110,14 @@ async function dispatch(
   supabase: ReturnType<typeof createClient>,
   row: OutboxRow,
 ) {
+  // Every order notification used to deep-link to `/orders/{uuid}`, which does not exist:
+  // the customer app serves orders at /r/{restaurant}/{branch}/orders/{order_number} —
+  // wrong prefix AND wrong identifier. So every "your order is ready" push landed on a
+  // 404. The slugs are not in `variables` (the DB triggers never wrote them), so they are
+  // resolved here, once per row, before anything is rendered. Doing it here rather than in
+  // the triggers also repairs rows already sitting in the queue.
+  row = { ...row, variables: await enrichVars(supabase, row.variables) };
+
   switch (row.channel) {
     case 'in_app':
       return;
@@ -366,13 +374,58 @@ function renderTitle(template: string, vars: Record<string, unknown>) {
   return dict[template] ?? template;
 }
 
-function renderUrl(template: string, vars: Record<string, unknown>) {
-  if (template.startsWith('order_') && vars.order_id) return `/orders/${vars.order_id}`;
-  if (template === 'driver_assigned' && vars.order_id) return `/orders/${vars.order_id}`;
-  if (template === 'new_message') {
-    return (vars.sender as string) === 'driver' && vars.order_id ? `/orders/${vars.order_id}` : '/app/active';
+/** Resolve the storefront slugs an order URL needs. Cached for the lifetime of the
+ *  invocation: a batch is usually many notifications about a handful of orders. */
+const orderPathCache = new Map<string, string | null>();
+
+async function enrichVars(
+  supabase: ReturnType<typeof createClient>,
+  vars: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const orderId = typeof vars.order_id === 'string' ? vars.order_id : null;
+  if (!orderId || vars.order_path) return vars;
+
+  if (!orderPathCache.has(orderId)) {
+    let path: string | null = null;
+    try {
+      const { data } = await supabase
+        .from('orders')
+        .select('order_number, branches(slug, restaurants(slug))')
+        .eq('id', orderId)
+        .maybeSingle();
+      const row = data as {
+        order_number?: string;
+        branches?: { slug?: string; restaurants?: { slug?: string } | { slug?: string }[] } | null;
+      } | null;
+      const branch = row?.branches ?? null;
+      const restaurant = Array.isArray(branch?.restaurants) ? branch?.restaurants[0] : branch?.restaurants;
+      if (row?.order_number && branch?.slug && restaurant?.slug) {
+        path = `/r/${restaurant.slug}/${branch.slug}/orders/${row.order_number}`;
+      }
+    } catch {
+      // A failed lookup must never stop the notification going out — it just falls back
+      // to the app root rather than a deep link.
+      path = null;
+    }
+    orderPathCache.set(orderId, path);
   }
-  if (template === 'new_dispatch') return '/app';
+
+  const resolved = orderPathCache.get(orderId) ?? null;
+  return resolved ? { ...vars, order_path: resolved } : vars;
+}
+
+function renderUrl(template: string, vars: Record<string, unknown>) {
+  // order_path is set by enrichVars(); '/' is the honest fallback when the order could
+  // not be resolved, and is at least a page that exists.
+  const orderPath = typeof vars.order_path === 'string' ? vars.order_path : null;
+  if (template.startsWith('order_')) return orderPath ?? '/';
+  if (template === 'driver_assigned') return orderPath ?? '/';
+  if (template === 'new_message') {
+    return (vars.sender as string) === 'driver' ? (orderPath ?? '/') : '/app/active';
+  }
+  // The driver app has no page at /app — only /app/home and its siblings — so the most
+  // time-critical notification in the product opened a 404.
+  if (template === 'new_dispatch') return '/app/home';
   if (template === 'promo' && vars.url) return vars.url as string;
   return '/';
 }
