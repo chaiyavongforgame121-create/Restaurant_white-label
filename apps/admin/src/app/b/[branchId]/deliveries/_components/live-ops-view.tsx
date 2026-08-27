@@ -10,6 +10,7 @@ import {
   type MapboxMarker,
 } from '@favornoms/maps';
 import { getBrowserClient } from '@favornoms/database/client';
+import { useRealtime } from '@favornoms/database/realtime';
 import { Badge, Button, Card } from '@favornoms/ui';
 
 // Live delivery operations board: every in-flight delivery for the branch on
@@ -67,6 +68,64 @@ function RedispatchButton({ deliveryId, onDone }: { deliveryId: string; onDone: 
   );
 }
 
+/**
+ * Advance a self-delivered order. Only rendered when the branch delivers with its own
+ * staff — in platform mode the rider moves the delivery from their phone, and a second
+ * button that bypasses the photo and sequence rules in progress_delivery would be a way
+ * to mark food delivered that never left.
+ */
+function SelfDeliveryButtons({
+  deliveryId,
+  status,
+  onDone,
+}: {
+  deliveryId: string;
+  status: string;
+  onDone: () => void | Promise<void>;
+}) {
+  const [busy, setBusy] = React.useState<string | null>(null);
+  const [err, setErr] = React.useState<string | null>(null);
+
+  const advance = async (to: 'picked_up' | 'delivered') => {
+    setBusy(to);
+    setErr(null);
+    const supabase = getBrowserClient();
+    const { error } = await supabase.rpc('advance_self_delivery', {
+      p_delivery_id: deliveryId,
+      p_to: to,
+    } as never);
+    setBusy(null);
+    if (error) {
+      setErr(/forbidden/i.test(error.message) ? 'You cannot update deliveries.' : error.message);
+      return;
+    }
+    void onDone();
+  };
+
+  const next =
+    status === 'picked_up'
+      ? ({ to: 'delivered', label: 'Mark delivered' } as const)
+      : (['assigned', 'dispatching', 'pending'] as string[]).includes(status)
+        ? ({ to: 'picked_up', label: 'Out for delivery' } as const)
+        : null;
+
+  if (!next) return null;
+
+  return (
+    <div className="mt-2">
+      <Button
+        variant="soft"
+        size="sm"
+        onClick={() => void advance(next.to)}
+        loading={busy === next.to}
+      >
+        {next.label}
+      </Button>
+      {err && <p className="mt-1 text-xs text-destructive">{err}</p>}
+    </div>
+  );
+}
+
 function markerEl(emoji: string, bg: string, size = 30): HTMLDivElement {
   const el = document.createElement('div');
   el.style.cssText = `width:${size}px;height:${size}px;border-radius:50%;background:${bg};display:grid;place-items:center;font-size:${Math.round(size * 0.5)}px;box-shadow:0 2px 6px rgba(0,0,0,0.3);border:2px solid #fff;`;
@@ -79,11 +138,15 @@ export function LiveOpsView({
   branchName,
   branchLat,
   branchLng,
+  selfDelivery = false,
 }: {
   branchId: string;
   branchName: string;
   branchLat: number | null;
   branchLng: number | null;
+  /** branches.settings.delivery_mode === 'self' — the restaurant's own staff deliver,
+   *  so there is no rider app moving the delivery along and no position to plot. */
+  selfDelivery?: boolean;
 }) {
   const [deliveries, setDeliveries] = React.useState<LiveDelivery[]>([]);
   const mapRef = React.useRef<MapboxMap | null>(null);
@@ -108,21 +171,13 @@ export function LiveOpsView({
     );
   }, [branchId]);
 
-  React.useEffect(() => {
-    void refresh();
-    const supabase = getBrowserClient();
-    const channel = supabase
-      .channel(`live-ops:${branchId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'deliveries', filter: `branch_id=eq.${branchId}` },
-        () => void refresh(),
-      )
-      .subscribe();
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [branchId, refresh]);
+  // useRealtime refetches on connect, on reconnect, on tab focus and on network return,
+  // so the board recovers by itself instead of silently freezing on a dropped socket.
+  const { healthy: liveHealthy } = useRealtime({
+    channel: `live-ops:${branchId}`,
+    tables: [{ table: 'deliveries', filter: `branch_id=eq.${branchId}` }],
+    refetch: refresh,
+  });
 
   // Sync driver/dropoff markers with the latest snapshot.
   React.useEffect(() => {
@@ -193,7 +248,9 @@ export function LiveOpsView({
           <Bike className="h-7 w-7 text-primary" /> Live deliveries
         </h1>
         <p className="mt-1 text-muted-foreground">
-          {branchName} · {deliveries.length} in flight · realtime
+          {branchName} · {deliveries.length} in flight ·{' '}
+          {liveHealthy ? 'realtime' : 'reconnecting…'}
+          {selfDelivery && ' · you deliver these yourself'}
         </p>
       </header>
 
@@ -242,7 +299,12 @@ export function LiveOpsView({
                           ? `Offer expires ${new Date(d.offer_expires_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
                           : ''}
                   </p>
-                  {d.status === 'failed' && <RedispatchButton deliveryId={d.id} onDone={refresh} />}
+                  {d.status === 'failed' && !selfDelivery && (
+                    <RedispatchButton deliveryId={d.id} onDone={refresh} />
+                  )}
+                  {selfDelivery && (
+                    <SelfDeliveryButtons deliveryId={d.id} status={d.status} onDone={refresh} />
+                  )}
                 </li>
               );
             })}

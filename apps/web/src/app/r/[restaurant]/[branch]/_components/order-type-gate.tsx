@@ -10,8 +10,14 @@ import { useCart, type OrderChannel } from '@/store/cart';
 interface Props {
   branchId: string;
   branchName?: string;
-  /** `delivery` entitlement. Defaults false so a missing prop cannot sell delivery. */
+  /** Delivery is sellable right now. Defaults false so a missing prop cannot sell delivery. */
   canDeliver?: boolean;
+  /** The restaurant DOES sell delivery, it is just outside its hours at the moment.
+   *  Drives an explanation instead of silently hiding the tile — a diner who was
+   *  offered delivery yesterday and cannot find it today assumes the site is broken. */
+  deliveryClosedNow?: boolean;
+  /** Today's delivery windows, 'HH:MM' local, for that explanation. */
+  deliveryWindowsToday?: Array<{ opens_at: string; closes_at: string }>;
 }
 
 /**
@@ -26,7 +32,13 @@ interface Props {
  *
  * Deliberately not dismissible: no backdrop click, no Escape, no close button.
  */
-export function OrderTypeGate({ branchId, branchName, canDeliver = false }: Props) {
+export function OrderTypeGate({
+  branchId,
+  branchName,
+  canDeliver = false,
+  deliveryClosedNow = false,
+  deliveryWindowsToday = [],
+}: Props) {
   const t = useTranslations();
 
   // useCart.persist is undefined during SSR — start false and confirm hydration
@@ -193,6 +205,23 @@ export function OrderTypeGate({ branchId, branchName, canDeliver = false }: Prop
                   </span>
                 </button>
               ))}
+              {/* The restaurant sells delivery, just not at this hour. Saying so beats
+                  hiding the tile: a diner offered delivery yesterday reads its absence
+                  as a broken site, not as a schedule. */}
+              {deliveryClosedNow && (
+                <div className="rounded-2xl border border-dashed border-border bg-muted/40 px-4 py-3">
+                  <p className="flex items-center gap-2 text-sm font-semibold">
+                    <Bike className="h-4 w-4 text-muted-foreground" /> Delivery is closed right now
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {deliveryWindowsToday.length > 0
+                      ? `Today we deliver ${deliveryWindowsToday
+                          .map((w) => `${w.opens_at}–${w.closes_at}`)
+                          .join(' and ')}. Pickup and dine-in are open now.`
+                      : 'No delivery today. Pickup and dine-in are open now.'}
+                  </p>
+                </div>
+              )}
               <p className="px-1 text-center text-xs text-muted-foreground">{t('orderType.changeLater')}</p>
             </div>
           </motion.div>

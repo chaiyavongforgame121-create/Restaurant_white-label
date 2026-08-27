@@ -2,6 +2,7 @@ import { getServerClient } from '@favornoms/database/server';
 import { resolveStorefrontStatus, resolveTenant } from '@/lib/tenant';
 import { CheckoutView } from './_components/checkout-view';
 import { OrderTypeGate } from '../_components/order-type-gate';
+import { todaysDeliveryWindows } from '@/lib/delivery-windows';
 import { SuspendedStorefront } from '../_components/suspended-storefront';
 
 interface Props {
@@ -32,6 +33,8 @@ export default async function CheckoutPage({ params }: Props) {
         branchId={tenant.branch.id}
         branchName={tenant.branch.name}
         canDeliver={status.delivery}
+        deliveryClosedNow={status.delivery_entitled && !status.delivery_available}
+        deliveryWindowsToday={todaysDeliveryWindows(status)}
       />
       <CheckoutView
         branchId={tenant.branch.id}

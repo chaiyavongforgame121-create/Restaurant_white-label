@@ -81,9 +81,11 @@ interface MenuViewProps {
   heroSubtitle?: string;
   /** `delivery` entitlement. Defaults false so a missing prop cannot sell delivery. */
   canDeliver?: boolean;
+  deliveryClosedNow?: boolean;
+  deliveryWindowsToday?: Array<{ opens_at: string; closes_at: string }>;
 }
 
-export function MenuView({ branch, categories, items, isOpen = true, reviews, combos = [], happyHours = [], menuLayout = 'grid4', menuCardStyle = 'standard', logoUrl, heroUrl, heroTitle, heroSubtitle, canDeliver = false }: MenuViewProps) {
+export function MenuView({ branch, categories, items, isOpen = true, reviews, combos = [], happyHours = [], menuLayout = 'grid4', menuCardStyle = 'standard', logoUrl, heroUrl, heroTitle, heroSubtitle, canDeliver = false, deliveryClosedNow = false, deliveryWindowsToday = [] }: MenuViewProps) {
   const t = useTranslations();
   const params = useParams<{ restaurant: string; branch: string }>();
   const [search, setSearch] = React.useState('');
@@ -179,6 +181,8 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
         branchId={branch.id}
         branchName={branch.name}
         canDeliver={canDeliver}
+        deliveryClosedNow={deliveryClosedNow}
+        deliveryWindowsToday={deliveryWindowsToday}
       />
 
       <Hero

@@ -63,13 +63,32 @@ export async function getEntitlementsForBranch(
  */
 export interface StorefrontStatus {
   entitled: boolean;
+  /** Delivery is sellable RIGHT NOW: the add-on is paid for AND the branch is inside
+   *  its delivery window. This is what gates the order-type picker. */
   delivery: boolean;
+  /** The add-on is paid for, regardless of the clock. Kept separate so the storefront
+   *  can say "delivery opens at 5pm" instead of hiding delivery as if it were never
+   *  bought — two very different messages for a paying merchant. */
+  delivery_entitled: boolean;
+  /** Inside a delivery window (true whenever the hours feature is switched off). */
+  delivery_available: boolean;
+  /** Whether the merchant restricted delivery to set windows at all. */
+  delivery_hours_on: boolean;
+  /** 'platform' = dispatched to a rider; 'self' = the restaurant's own staff deliver,
+   *  which means no live tracking map. */
+  delivery_mode: 'platform' | 'self';
+  delivery_windows: Array<{ day_of_week: number; opens_at: string; closes_at: string }>;
   card_payment: boolean;
 }
 
 const STOREFRONT_DENIED: StorefrontStatus = Object.freeze({
   entitled: false,
   delivery: false,
+  delivery_entitled: false,
+  delivery_available: false,
+  delivery_hours_on: false,
+  delivery_mode: 'platform',
+  delivery_windows: [],
   card_payment: false,
 });
 
@@ -94,6 +113,11 @@ const STOREFRONT_DENIED: StorefrontStatus = Object.freeze({
 const STOREFRONT_UNKNOWN: StorefrontStatus = Object.freeze({
   entitled: true,
   delivery: false,
+  delivery_entitled: false,
+  delivery_available: false,
+  delivery_hours_on: false,
+  delivery_mode: 'platform',
+  delivery_windows: [],
   card_payment: false,
 });
 
@@ -115,6 +139,18 @@ export async function getStorefrontStatus(
         return {
           entitled: d.entitled === true,
           delivery: d.delivery === true,
+          // Older deployments of storefront_status did not return these keys. Defaulting
+          // delivery_entitled to `delivery` keeps a stale function from making the
+          // storefront claim delivery was never purchased.
+          delivery_entitled: d.delivery_entitled === undefined
+            ? d.delivery === true
+            : d.delivery_entitled === true,
+          delivery_available: d.delivery_available === undefined ? true : d.delivery_available === true,
+          delivery_hours_on: d.delivery_hours_on === true,
+          delivery_mode: d.delivery_mode === 'self' ? 'self' : 'platform',
+          delivery_windows: Array.isArray(d.delivery_windows)
+            ? (d.delivery_windows as StorefrontStatus['delivery_windows'])
+            : [],
           card_payment: d.card_payment === true,
         };
       }

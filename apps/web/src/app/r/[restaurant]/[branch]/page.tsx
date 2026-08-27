@@ -1,4 +1,5 @@
 import { getServerClient } from '@favornoms/database/server';
+import { todaysDeliveryWindows } from '@/lib/delivery-windows';
 import { listCategories, listMenuItems } from '@favornoms/database/queries';
 import { resolveStorefrontStatus, resolveTenant } from '@/lib/tenant';
 import { MenuView } from './_components/menu-view';
@@ -126,6 +127,8 @@ export default async function MenuPage({ params }: Props) {
       combos={combos}
       happyHours={happyHours}
       canDeliver={status.delivery}
+      deliveryClosedNow={status.delivery_entitled && !status.delivery_available}
+      deliveryWindowsToday={todaysDeliveryWindows(status)}
       menuLayout={tenant.storefront.menuLayout}
       menuCardStyle={tenant.storefront.menuCardStyle}
       logoUrl={tenant.logoUrl}

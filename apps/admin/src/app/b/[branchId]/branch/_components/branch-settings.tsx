@@ -10,6 +10,7 @@ import { ClosuresManager } from './closures-manager';
 import { DeliverySettingsCard } from './delivery-settings-card';
 import { HoursEditor } from './hours-editor';
 import { PaymentMethodsCard } from './payment-methods-card';
+import { DeliveryHoursCard } from './delivery-hours-card';
 import { ServiceFeeCard } from './service-fee-card';
 import { TipSettingsCard } from './tip-settings-card';
 import { StorefrontOverrideCard } from './storefront-override-card';
@@ -179,7 +180,12 @@ export function BranchSettings({
         <ClosuresManager branchId={branch.id} />
 
         {canUseDelivery ? (
-          <DeliverySettingsCard branchId={branch.id} settings={branch.settings} />
+          <>
+            <DeliverySettingsCard branchId={branch.id} settings={branch.settings} />
+            {/* Grouped with the other delivery settings and behind the same entitlement:
+                delivery hours and self-delivery are meaningless without the add-on. */}
+            <DeliveryHoursCard branchId={branch.id} settings={branch.settings} />
+          </>
         ) : (
           <AddonUpsellCard
             branchId={branch.id}
@@ -196,6 +202,7 @@ export function BranchSettings({
 
         <PaymentMethodsCard
           branchId={branch.id}
+          restaurantId={branch.restaurant_id}
           settings={branch.settings}
           canUseCard={canUseCard}
         />
