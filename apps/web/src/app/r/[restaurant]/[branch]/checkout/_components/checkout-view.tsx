@@ -4,7 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Banknote, ChevronLeft, CreditCard, LocateFixed, Map as MapIcon, MapPin, ShoppingBag, Tag } from 'lucide-react';
+import { Banknote, ChevronLeft, CreditCard, LocateFixed, Map as MapIcon, MapPin, QrCode, ShoppingBag, Tag } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import {
   computeSalesTax,
@@ -43,7 +43,7 @@ import { pickerLabels } from '@/lib/picker-labels';
 import { useCart } from '@/store/cart';
 import { useAuth } from '@/components/auth/use-auth';
 
-type PaymentMethod = 'card' | 'cash';
+type PaymentMethod = 'card' | 'cash' | 'transfer';
 type PaymentMode = 'asap' | 'scheduled';
 type PaymentMatrix = Record<PaymentMode, Record<PaymentMethod, boolean>>;
 
@@ -66,9 +66,18 @@ function parsePaymentMatrix(
     const v = raw?.[mode]?.[method];
     return typeof v === 'boolean' ? v : true;
   };
+  // Transfer is opt-in and additionally requires a saved QR image, mirroring
+  // place-order's `transfer_not_configured` guard — otherwise the diner reaches a
+  // payment step with nothing to scan.
+  const qrReady = !!(settings.qr_transfer as { image_url?: string } | undefined)?.image_url;
+  const readTransfer = (mode: PaymentMode) => qrReady && raw?.[mode]?.transfer === true;
   return {
-    asap: { cash: read('asap', 'cash'), card: read('asap', 'card') },
-    scheduled: { cash: read('scheduled', 'cash'), card: read('scheduled', 'card') },
+    asap: { cash: read('asap', 'cash'), card: read('asap', 'card'), transfer: readTransfer('asap') },
+    scheduled: {
+      cash: read('scheduled', 'cash'),
+      card: read('scheduled', 'card'),
+      transfer: readTransfer('scheduled'),
+    },
   };
 }
 
@@ -101,6 +110,8 @@ const ORDER_ERRORS: Array<[string, string]> = [
   ['invalid_scheduled_for', 'That scheduled time could not be read. Please pick it again.'],
   ['delivery_out_of_range', 'Sorry, this address is outside the delivery area.'],
   ['payment_method_not_accepted', 'That payment method is not available for this order type. Please pick another.'],
+  ['transfer_not_configured', 'This restaurant has not finished setting up QR transfers. Please pick another payment method.'],
+  ['delivery_not_available_at_that_time', 'Delivery is closed at that time. Pick another time, or switch to pickup.'],
   ['dropoff_other_required', 'Please describe where we should leave your order.'],
   ['dropoff_required', 'Please choose where we should leave your order.'],
   ['table_required', 'Please enter your table number.'],
@@ -214,6 +225,11 @@ export function CheckoutView({
   // input event clearing the coordinates immediately after onResolved sets them.
   const resolvedAddressRef = React.useRef<string | null>(null);
   const [method, setMethod] = React.useState<PaymentMethod>('card');
+  const [qrTransfer, setQrTransfer] = React.useState<{
+    image_url?: string;
+    account_name?: string;
+    instructions?: string;
+  } | null>(null);
   // Seeded from the entitlement, not from PAYMENT_MATRIX_DEFAULTS: the branch
   // settings arrive a tick later, and for that tick an unentitled branch would
   // otherwise offer Card.
@@ -301,9 +317,13 @@ export function CheckoutView({
   const isDineIn = channel === 'dine_in';
   const effectiveScheduleMode: 'asap' | 'later' = isDineIn ? 'asap' : scheduleMode;
   const paymentModeKey: PaymentMode = effectiveScheduleMode === 'later' ? 'scheduled' : 'asap';
-  const enabledMethods = (['card', 'cash'] as const).filter((m) => paymentMatrix[paymentModeKey][m]);
-  const asapPayable = paymentMatrix.asap.cash || paymentMatrix.asap.card;
-  const scheduledPayable = paymentMatrix.scheduled.cash || paymentMatrix.scheduled.card;
+  const enabledMethods = (['card', 'cash', 'transfer'] as const).filter(
+    (m) => paymentMatrix[paymentModeKey][m],
+  );
+  const asapPayable =
+    paymentMatrix.asap.cash || paymentMatrix.asap.card || paymentMatrix.asap.transfer;
+  const scheduledPayable =
+    paymentMatrix.scheduled.cash || paymentMatrix.scheduled.card || paymentMatrix.scheduled.transfer;
   const serviceFee = r2(subtotal * (serviceFeePercent / 100));
   // Why a reward may not be redeemable right now. Returning the reason (not just
   // a boolean) lets each card say what to DO about it instead of being mutely
@@ -476,6 +496,13 @@ export function CheckoutView({
           const settings = data.settings as Record<string, unknown>;
           setTipConfig(parseTipConfig(settings));
           setPaymentMatrix(parsePaymentMatrix(settings, canUseCard));
+          setQrTransfer(
+            (settings.qr_transfer as {
+              image_url?: string;
+              account_name?: string;
+              instructions?: string;
+            }) ?? null,
+          );
         }
       });
   }, [branchId, canUseCard]);
@@ -490,10 +517,10 @@ export function CheckoutView({
   React.useEffect(() => {
     if (isDineIn) return;
     const modeKey: PaymentMode = scheduleMode === 'later' ? 'scheduled' : 'asap';
-    const enabled = (['card', 'cash'] as const).filter((m) => paymentMatrix[modeKey][m]);
+    const enabled = (['card', 'cash', 'transfer'] as const).filter((m) => paymentMatrix[modeKey][m]);
     if (enabled.length === 0) {
       const other: PaymentMode = modeKey === 'asap' ? 'scheduled' : 'asap';
-      if (paymentMatrix[other].cash || paymentMatrix[other].card) {
+      if (paymentMatrix[other].cash || paymentMatrix[other].card || paymentMatrix[other].transfer) {
         setScheduleMode(modeKey === 'asap' ? 'later' : 'asap');
       }
       return;
@@ -1276,7 +1303,33 @@ export function CheckoutView({
               {paymentMatrix[paymentModeKey].cash && (
                 <PaymentChoice icon={<Banknote className="h-5 w-5" />} label={t('checkout.payment.cash')} active={method === 'cash'} onClick={() => setMethod('cash')} />
               )}
+              {paymentMatrix[paymentModeKey].transfer && (
+                <PaymentChoice icon={<QrCode className="h-5 w-5" />} label="QR transfer" active={method === 'transfer'} onClick={() => setMethod('transfer')} />
+              )}
             </div>
+            {method === 'transfer' && qrTransfer?.image_url && (
+              <div className="mt-4 rounded-2xl border border-border bg-muted/30 p-4">
+                <p className="text-sm font-semibold">Scan to pay {formatCurrency(total)}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Place the order first, then upload your transfer slip on the order page. The
+                  restaurant starts cooking once they have checked it.
+                </p>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={qrTransfer.image_url}
+                  alt="Payment QR code"
+                  className="mx-auto mt-3 h-48 w-48 rounded-xl bg-white object-contain p-2"
+                />
+                {qrTransfer.account_name && (
+                  <p className="mt-2 text-center text-sm font-medium">{qrTransfer.account_name}</p>
+                )}
+                {qrTransfer.instructions && (
+                  <p className="mt-1 text-center text-xs text-muted-foreground">
+                    {qrTransfer.instructions}
+                  </p>
+                )}
+              </div>
+            )}
             {enabledMethods.length === 0 && (
               <p className="mt-3 text-sm text-muted-foreground">
                 This restaurant has no payment options available right now.

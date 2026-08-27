@@ -3,6 +3,7 @@ import { formatCurrency } from '@favornoms/shared';
 import { Badge, Card } from '@favornoms/ui';
 import { OrderRowActions } from './_components/order-row-actions';
 import { OrderFilters } from './_components/order-filters';
+import { PaymentApprovals, type PendingTransfer } from './_components/payment-approvals';
 import { DeliveryIssues, type DeliveryIssue } from './_components/delivery-issues';
 
 interface Props {
@@ -71,6 +72,37 @@ export default async function OrdersPage({ params, searchParams }: Props) {
     };
   });
 
+  // QR-transfer slips awaiting a decision. The order cannot leave 'pending' until one is
+  // made (enforced by the orders_block_unpaid_transfer trigger), so this is surfaced above
+  // the table rather than buried in a row.
+  const { data: transferRows } = await supabase
+    .from('payments')
+    .select('id, order_id, amount, proof_image_url, gateway_metadata, orders!inner(order_number, customer_name, customer_phone)')
+    .eq('branch_id', branchId)
+    .eq('method', 'transfer')
+    .eq('status', 'pending')
+    .order('created_at', { ascending: true })
+    .limit(50);
+
+  const pendingTransfers: PendingTransfer[] = (transferRows ?? []).map((p) => {
+    const o = (Array.isArray(p.orders) ? p.orders[0] : p.orders) as {
+      order_number: string;
+      customer_name: string | null;
+      customer_phone: string | null;
+    } | null;
+    const meta = (p.gateway_metadata ?? {}) as Record<string, unknown>;
+    return {
+      payment_id: p.id,
+      order_id: p.order_id,
+      order_number: o?.order_number ?? '—',
+      customer_name: o?.customer_name ?? null,
+      customer_phone: o?.customer_phone ?? null,
+      amount: Number(p.amount ?? 0),
+      proof_path: (p.proof_image_url as string | null) ?? null,
+      submitted_at: (meta.proof_submitted_at as string | undefined) ?? null,
+    };
+  });
+
   return (
     <div className="container max-w-6xl py-8">
       <header className="mb-6 px-2 pl-16 lg:px-0">
@@ -79,6 +111,7 @@ export default async function OrdersPage({ params, searchParams }: Props) {
       </header>
 
       <div className="px-2 lg:px-0">
+        <PaymentApprovals branchId={branchId} pending={pendingTransfers} />
         <DeliveryIssues issues={issues} />
       </div>
 

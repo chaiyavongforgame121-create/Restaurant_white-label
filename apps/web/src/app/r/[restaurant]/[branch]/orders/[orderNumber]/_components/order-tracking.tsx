@@ -7,6 +7,7 @@ import { Bike, ChefHat, CheckCircle2, ChevronLeft, MapPin, Phone, Receipt } from
 import { useTranslations } from 'next-intl';
 import { formatCurrency, kmToMi } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
+import { useRealtime } from '@favornoms/database/realtime';
 import { DeliveryMap, fetchRoute, hasMapboxToken, type LatLng } from '@favornoms/maps';
 import { Badge, Button, Card, IconButton } from '@favornoms/ui';
 import { DeliveryChat } from './delivery-chat';
@@ -38,7 +39,13 @@ type OrderRow = {
   customer_phone?: string | null;
   created_at: string;
   order_items: Array<{ item_name: string; quantity: number }>;
-  payments?: Array<{ method: string; status: string }>;
+  payments?: Array<{
+    id?: string;
+    method: string;
+    status: string;
+    proof_image_url?: string | null;
+    gateway_metadata?: Record<string, unknown> | null;
+  }>;
   deliveries: Array<{
     id: string;
     status: string;
@@ -69,33 +76,41 @@ export function OrderTracking({ initialOrder, branchId, branchLocation }: Props)
   const pathname = usePathname();
   const [order, setOrder] = React.useState<OrderRow>(initialOrder);
 
-  // Realtime subscribe
-  React.useEffect(() => {
+  // Re-read the order from the server. Used on (re)connect and when the tab wakes:
+  // a diner watching this page leaves it backgrounded for the whole delivery, by which
+  // time the socket is usually gone and the progress bar was silently frozen.
+  const reload = React.useCallback(async () => {
     const supabase = getBrowserClient();
-    const channel = supabase
-      .channel(`order:${order.id}`)
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'orders', filter: `id=eq.${order.id}` },
-        (payload) => {
-          setOrder((curr) => ({ ...curr, ...(payload.new as Partial<OrderRow>) }));
-        },
+    const { data } = await supabase
+      .from('orders')
+      .select(
+        'id, status, deliveries(id, status, driver_id, distance_km, estimated_duration_min, assigned_at, accepted_at, picked_up_at, delivered_at, driver_lat, driver_lng, driver_location_updated_at, current_eta_min, arriving_at, dropoff_lat, dropoff_lng, batch_seq)',
       )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'deliveries', filter: `order_id=eq.${order.id}` },
-        (payload) => {
-          setOrder((curr) => ({
-            ...curr,
-            deliveries: payload.new ? [payload.new as OrderRow['deliveries'][number]] : curr.deliveries,
-          }));
-        },
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
+      .eq('id', order.id)
+      .maybeSingle();
+    if (data) setOrder((curr) => ({ ...curr, ...(data as unknown as Partial<OrderRow>) }));
   }, [order.id]);
+
+  const { healthy: liveHealthy } = useRealtime({
+    channel: `order:${order.id}`,
+    tables: [
+      { table: 'orders', event: 'UPDATE', filter: `id=eq.${order.id}` },
+      { table: 'deliveries', filter: `order_id=eq.${order.id}` },
+    ],
+    refetch: reload,
+    onChange: (payload, table) => {
+      if (table === 'deliveries') {
+        setOrder((curr) => ({
+          ...curr,
+          deliveries: payload.new
+            ? [payload.new as OrderRow['deliveries'][number]]
+            : curr.deliveries,
+        }));
+        return;
+      }
+      setOrder((curr) => ({ ...curr, ...(payload.new as Partial<OrderRow>) }));
+    },
+  });
 
   const steps = order.channel === 'delivery' ? DELIVERY_STEPS : NON_DELIVERY_STEPS;
 
@@ -212,6 +227,18 @@ export function OrderTracking({ initialOrder, branchId, branchLocation }: Props)
           </div>
         )}
 
+        {/* A frozen progress bar is indistinguishable from a slow kitchen, and the diner
+            has no way to tell which they are looking at. Saying it is a connection
+            problem is the difference between waiting patiently and phoning the shop. */}
+        {!liveHealthy && (
+          <p
+            role="status"
+            className="mx-5 mt-4 rounded-xl bg-warning/10 px-3 py-2 text-center text-xs text-foreground"
+          >
+            Reconnecting… this page may be a moment behind.
+          </p>
+        )}
+
         <div className="px-5 pb-5 pt-6">
           {/* Columns must track steps.length: dine-in/pickup have 4 stages, and
               a hardcoded 5 left an empty trailing column that the progress bar
@@ -258,6 +285,16 @@ export function OrderTracking({ initialOrder, branchId, branchLocation }: Props)
           {order.status === 'pending' && order.payments?.some((p) => p.method === 'card') && (
             <StripePayment orderId={order.id} />
           )}
+
+          {/* QR transfer: the diner has already scanned and paid outside the app, so what
+              is left is proving it. The order deliberately stays 'pending' until the
+              restaurant approves the slip — a DB trigger enforces the same rule, so the
+              kitchen cannot start early even from its own screen. */}
+          {order.payments
+            ?.filter((p) => p.method === 'transfer')
+            .map((p) => (
+              <TransferProof key={p.id ?? 'transfer'} orderId={order.id} payment={p} />
+            ))}
 
           {delivery?.driver_id && (
             <motion.div
@@ -555,4 +592,114 @@ async function loadStripe(publishableKey: string) {
   }
   if (!w.Stripe) throw new Error('stripe_js_missing');
   return w.Stripe(publishableKey);
+}
+
+/**
+ * QR-transfer proof. The diner pays outside the app, then uploads the slip here.
+ *
+ * The upload goes to the PRIVATE `payment-proofs` bucket and the URL is recorded through
+ * `submit_payment_proof`, a SECURITY DEFINER RPC — deliberately not a table UPDATE, so
+ * `payments.status` stays out of the customer's reach. Approval is the merchant's.
+ */
+function TransferProof({
+  orderId,
+  payment,
+}: {
+  orderId: string;
+  payment: {
+    method: string;
+    status: string;
+    proof_image_url?: string | null;
+    gateway_metadata?: Record<string, unknown> | null;
+  };
+}) {
+  const router = useRouter();
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const note = (payment.gateway_metadata?.decision_note as string | undefined) ?? null;
+  const submitted = !!payment.proof_image_url;
+
+  const upload = async (file: File) => {
+    setBusy(true);
+    setError(null);
+    try {
+      if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+        throw new Error('Please upload a PNG, JPEG or WebP photo of your slip.');
+      }
+      if (file.size > 10 * 1024 * 1024) throw new Error('That image is larger than 10 MB.');
+      const supabase = getBrowserClient();
+      const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
+      const path = `${orderId}/${crypto.randomUUID()}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from('payment-proofs')
+        .upload(path, file, { contentType: file.type, upsert: false });
+      if (upErr) throw new Error(upErr.message);
+      const { error: rpcErr } = await supabase.rpc('submit_payment_proof', {
+        p_order_id: orderId,
+        p_path: path,
+      });
+      if (rpcErr) throw new Error(rpcErr.message);
+      router.refresh();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (payment.status === 'completed') {
+    return (
+      <Card className="mt-6 border-success/40 bg-success/5 p-4">
+        <p className="flex items-center gap-2 font-semibold text-success">
+          <CheckCircle2 className="h-5 w-5" /> Transfer confirmed
+        </p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          The restaurant has checked your slip and started your order.
+        </p>
+      </Card>
+    );
+  }
+
+  const rejected = payment.status === 'failed';
+
+  return (
+    <Card className={`mt-6 p-4 ${rejected ? 'border-danger/40 bg-danger/5' : ''}`}>
+      <p className="font-semibold">
+        {rejected
+          ? 'Your transfer slip was not accepted'
+          : submitted
+            ? 'Waiting for the restaurant to check your slip'
+            : 'Upload your transfer slip'}
+      </p>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {rejected
+          ? note
+            ? `Reason: ${note}`
+            : 'Please upload a clearer photo of the transfer.'
+          : submitted
+            ? 'We will start your order as soon as they confirm it. This usually takes a few minutes.'
+            : 'Scan the QR shown at checkout, transfer the total, then upload a photo of the confirmation.'}
+      </p>
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) void upload(f);
+          e.target.value = '';
+        }}
+      />
+      {(!submitted || rejected) && (
+        <Button className="mt-3" fullWidth loading={busy} onClick={() => inputRef.current?.click()}>
+          {submitted ? 'Upload a new photo' : 'Choose photo'}
+        </Button>
+      )}
+      {error && <p className="mt-2 text-sm text-danger">{error}</p>}
+    </Card>
+  );
 }

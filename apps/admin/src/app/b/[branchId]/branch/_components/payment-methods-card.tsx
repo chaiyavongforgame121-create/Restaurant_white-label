@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { AlertTriangle, Lock, Save, Wallet } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Button, Card } from '@favornoms/ui';
+import { ImageUpload } from '@/components/image-upload';
 
 // Editor for the payment_methods key inside branches.settings (jsonb).
 // Saves independently from the main BranchSettings form — merges keys, never
@@ -24,12 +25,21 @@ import { Button, Card } from '@favornoms/ui';
 
 interface Props {
   branchId: string;
+  restaurantId: string;
   settings: Record<string, unknown>;
   canUseCard: boolean;
 }
 
+/** branches.settings.qr_transfer — the merchant's own bank/QR details, shown to the
+ *  diner at checkout. Not secret: the whole point is that customers scan it. */
+interface QrTransfer {
+  image_url: string | null;
+  account_name: string;
+  instructions: string;
+}
+
 type Mode = 'asap' | 'scheduled';
-type Method = 'cash' | 'card';
+type Method = 'cash' | 'card' | 'transfer';
 
 const MODES: Array<{ key: Mode; label: string }> = [
   { key: 'asap', label: 'ASAP' },
@@ -39,6 +49,11 @@ const MODES: Array<{ key: Mode; label: string }> = [
 const METHODS: Array<{ key: Method; label: string; hint: string }> = [
   { key: 'cash', label: 'Cash', hint: 'Paid to the driver or at the counter' },
   { key: 'card', label: 'Card', hint: 'Collected at handoff with your own reader' },
+  {
+    key: 'transfer',
+    label: 'QR transfer',
+    hint: 'Customer scans your QR, transfers, and uploads the slip for you to approve',
+  },
 ];
 
 type PaymentMatrix = Record<Mode, Record<Method, boolean>>;
@@ -51,13 +66,30 @@ function seedFromSettings(settings: Record<string, unknown>): PaymentMatrix {
     const v = raw?.[mode]?.[method];
     return typeof v === 'boolean' ? v : true;
   };
+  // Transfer defaults to OFF for every existing branch. Every other method defaults to
+  // ON for backward compatibility, but a merchant who has never seen this feature must
+  // not silently start accepting bank transfers they are not watching for.
+  const readTransfer = (mode: Mode) => raw?.[mode]?.transfer === true;
   return {
-    asap: { cash: read('asap', 'cash'), card: read('asap', 'card') },
-    scheduled: { cash: read('scheduled', 'cash'), card: read('scheduled', 'card') },
+    asap: { cash: read('asap', 'cash'), card: read('asap', 'card'), transfer: readTransfer('asap') },
+    scheduled: {
+      cash: read('scheduled', 'cash'),
+      card: read('scheduled', 'card'),
+      transfer: readTransfer('scheduled'),
+    },
   };
 }
 
-export function PaymentMethodsCard({ branchId, settings, canUseCard }: Props) {
+function seedQr(settings: Record<string, unknown>): QrTransfer {
+  const raw = settings?.qr_transfer as Partial<QrTransfer> | undefined;
+  return {
+    image_url: typeof raw?.image_url === 'string' && raw.image_url ? raw.image_url : null,
+    account_name: typeof raw?.account_name === 'string' ? raw.account_name : '',
+    instructions: typeof raw?.instructions === 'string' ? raw.instructions : '',
+  };
+}
+
+export function PaymentMethodsCard({ branchId, restaurantId, settings, canUseCard }: Props) {
   const router = useRouter();
   const [matrix, setMatrix] = React.useState<PaymentMatrix>(() => {
     const seeded = seedFromSettings(settings);
@@ -67,6 +99,7 @@ export function PaymentMethodsCard({ branchId, settings, canUseCard }: Props) {
       scheduled: { ...seeded.scheduled, card: false },
     };
   });
+  const [qr, setQr] = React.useState<QrTransfer>(() => seedQr(settings));
   const [saving, setSaving] = React.useState(false);
   const [savedAt, setSavedAt] = React.useState<number | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -75,10 +108,17 @@ export function PaymentMethodsCard({ branchId, settings, canUseCard }: Props) {
   // has cash off — which is the real warning, so it still applies. The copy names
   // delivery and pickup explicitly: a dine-in-only restaurant is unaffected, and
   // telling it that "customers can't order" would be plain wrong.
-  const deadModes = MODES.filter((m) => !matrix[m.key].cash && !matrix[m.key].card);
+  const deadModes = MODES.filter(
+    (m) => !matrix[m.key].cash && !matrix[m.key].card && !matrix[m.key].transfer,
+  );
+  // Mirrors place-order's `transfer_not_configured` guard: without a QR there is
+  // nothing for the diner to scan, so the toggle cannot be armed.
+  const canUseTransfer = !!qr.image_url;
+  const transferOn = matrix.asap.transfer || matrix.scheduled.transfer;
 
   const toggle = (mode: Mode, method: Method) => {
     if (method === 'card' && !canUseCard) return;
+    if (method === 'transfer' && !canUseTransfer) return;
     setMatrix((v) => ({ ...v, [mode]: { ...v[mode], [method]: !v[mode][method] } }));
   };
 
@@ -89,7 +129,7 @@ export function PaymentMethodsCard({ branchId, settings, canUseCard }: Props) {
     // Merge into the existing jsonb — other settings keys stay untouched.
     const { error: updateError } = await supabase
       .from('branches')
-      .update({ settings: { ...settings, payment_methods: matrix } })
+      .update({ settings: { ...settings, payment_methods: matrix, qr_transfer: qr } })
       .eq('id', branchId);
     setSaving(false);
     if (updateError) {
@@ -127,7 +167,9 @@ export function PaymentMethodsCard({ branchId, settings, canUseCard }: Props) {
             </span>
           ))}
           {METHODS.map((method) => {
-            const locked = method.key === 'card' && !canUseCard;
+            const locked =
+              (method.key === 'card' && !canUseCard) ||
+              (method.key === 'transfer' && !canUseTransfer);
             return (
               <React.Fragment key={method.key}>
                 <span className={locked ? 'opacity-60' : undefined}>
@@ -136,7 +178,11 @@ export function PaymentMethodsCard({ branchId, settings, canUseCard }: Props) {
                     {locked && <Lock className="h-3.5 w-3.5 text-muted-foreground" />}
                   </span>
                   <span className="block text-xs text-muted-foreground">
-                    {locked ? 'Not included in your package' : method.hint}
+                    {locked
+                      ? method.key === 'transfer'
+                        ? 'Upload your QR code below to enable'
+                        : 'Not included in your package'
+                      : method.hint}
                   </span>
                 </span>
                 {MODES.map((m) => (
@@ -180,6 +226,63 @@ export function PaymentMethodsCard({ branchId, settings, canUseCard }: Props) {
           </span>
         </p>
       )}
+
+      <div className="mt-5 rounded-xl border border-border p-4">
+        <h3 className="font-display text-base font-semibold">Your QR code</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Customers see this at checkout, transfer the total, then upload a photo of the slip.
+          Nothing is charged automatically — the order waits in{' '}
+          <span className="font-medium">Orders</span> until you approve the slip.
+        </p>
+        <div className="mt-3 grid gap-4 sm:grid-cols-[10rem_1fr]">
+          <ImageUpload
+            restaurantId={restaurantId}
+            folder="payment-qr"
+            value={qr.image_url}
+            onChange={(url) => setQr((v) => ({ ...v, image_url: url }))}
+            aspect="aspect-square"
+            label="Upload QR"
+          />
+          <div className="space-y-3">
+            <div>
+              <label htmlFor="qr-account" className="text-sm font-medium">
+                Account name
+              </label>
+              <input
+                id="qr-account"
+                value={qr.account_name}
+                onChange={(e) => setQr((v) => ({ ...v, account_name: e.target.value }))}
+                maxLength={120}
+                placeholder="Name shown on your bank account"
+                className="focus-ring mt-1 w-full rounded-xl border border-border bg-card px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label htmlFor="qr-instructions" className="text-sm font-medium">
+                Instructions (optional)
+              </label>
+              <textarea
+                id="qr-instructions"
+                value={qr.instructions}
+                onChange={(e) => setQr((v) => ({ ...v, instructions: e.target.value }))}
+                rows={2}
+                maxLength={280}
+                placeholder="e.g. Include your order number in the transfer note"
+                className="focus-ring mt-1 w-full resize-none rounded-xl border border-border bg-card px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+        </div>
+        {transferOn && !qr.image_url && (
+          <p className="mt-3 flex items-start gap-2 rounded-xl bg-warning/10 px-4 py-3 text-sm">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+            <span>
+              QR transfer is switched on but no QR image is saved. Customers will be refused at
+              checkout until you upload one.
+            </span>
+          </p>
+        )}
+      </div>
 
       {error && (
         <p className="mt-3 rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p>
