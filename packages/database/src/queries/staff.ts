@@ -23,7 +23,7 @@ export async function inviteStaff(
   supabase: FavornomsClient,
   input: {
     email: string;
-    role: 'manager' | 'cashier' | 'kitchen' | 'staff';
+    role: 'admin' | 'manager' | 'cashier' | 'server' | 'kitchen' | 'driver' | 'staff';
     restaurant_id: string;
     branch_id?: string | null;
     permissions?: string[];

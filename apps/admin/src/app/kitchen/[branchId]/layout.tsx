@@ -1,7 +1,5 @@
-import { requireBranchRole } from '@/lib/auth';
+import { getBranchAccess } from '@/lib/capabilities';
 import { AccessDenied } from '@/components/access-denied';
-
-const KITCHEN_ROLES = ['kitchen', 'owner', 'manager'] as const;
 
 interface Props {
   params: Promise<{ branchId: string }>;
@@ -10,13 +8,9 @@ interface Props {
 
 export default async function KitchenLayout({ params, children }: Props) {
   const { branchId } = await params;
-  const { branch, membership } = await requireBranchRole(
-    branchId,
-    KITCHEN_ROLES,
-    `/kitchen/${branchId}`,
-  );
+  const { branch, can } = await getBranchAccess(branchId, `/kitchen/${branchId}`);
 
-  if (!membership) {
+  if (!can('kitchen.access')) {
     return (
       <AccessDenied
         title="No kitchen access"

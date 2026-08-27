@@ -7,15 +7,24 @@ function landingPath(role: string, branchId: string): string {
     case 'kitchen':
       return `/kitchen/${branchId}`;
     case 'cashier':
+    case 'server':
     case 'staff':
       return `/counter/${branchId}`;
-    default: // owner, manager
+    // A rider has no back-office surface at all; the driver app is a separate
+    // deployment, so there is nothing here to land on but the sign-in explainer.
+    case 'driver':
+      return '/no-access';
+    default: // owner, admin, manager
       return `/b/${branchId}/dashboard`;
   }
 }
 
 // When a user holds several memberships, the highest-privilege one wins the landing.
-const ROLE_PRIORITY = ['owner', 'manager', 'cashier', 'kitchen', 'staff'];
+//
+// Every staff_role value must appear here. A missing one gets indexOf === -1 and
+// therefore sorts FIRST, ahead of owner — so an omission is not a cosmetic bug, it
+// silently changes which membership decides where a multi-role user lands.
+const ROLE_PRIORITY = ['owner', 'admin', 'manager', 'cashier', 'server', 'kitchen', 'staff', 'driver'];
 
 export default async function RootPage() {
   const supabase = await getServerClient();

@@ -26,11 +26,61 @@ interface Props {
   initialStaff: StaffListItem[];
 }
 
-const roleOptions: { value: 'manager' | 'cashier' | 'kitchen' | 'staff'; label: string }[] = [
-  { value: 'manager', label: 'Manager' },
-  { value: 'cashier', label: 'Cashier (POS)' },
-  { value: 'kitchen', label: 'Kitchen (KDS)' },
-  { value: 'staff', label: 'Staff' },
+/** Assignable roles, in descending order of access. `owner` is absent on purpose —
+ *  it is created by restaurant onboarding and cannot be handed out here. The
+ *  description is what a non-technical merchant needs to pick correctly, so it names
+ *  the boundary rather than listing screens. */
+export type AssignableRole =
+  | 'admin'
+  | 'manager'
+  | 'cashier'
+  | 'server'
+  | 'kitchen'
+  | 'driver'
+  | 'staff';
+
+const roleOptions: { value: AssignableRole; label: string; description: string }[] = [
+  {
+    value: 'admin',
+    label: 'Admin',
+    description:
+      'Everything you can do, except billing and adding another admin. For a business partner or general manager.',
+  },
+  {
+    value: 'manager',
+    label: 'Manager',
+    description:
+      'Runs the day to day: orders, refunds, menu, stock, promos, drivers, reports and staff hours. No billing, branding or staff invites.',
+  },
+  {
+    value: 'cashier',
+    label: 'Cashier',
+    description:
+      'Counter and payments. Takes orders and money, applies discounts, reprints receipts, cancels before payment. Refunds need a manager.',
+  },
+  {
+    value: 'server',
+    label: 'Server',
+    description:
+      'Dine-in only. Builds a table order, sends it to the kitchen and watches its progress. Sees only their own orders — no takings, no reports.',
+  },
+  {
+    value: 'kitchen',
+    label: 'Kitchen',
+    description:
+      'The kitchen display only. Accept, cooking, ready, plus marking items low or sold out. No customer or payment details.',
+  },
+  {
+    value: 'driver',
+    label: 'Driver',
+    description:
+      'Appears in your staff list but has no back-office access at all — riders work in the Driver app, where they see only their own jobs and earnings.',
+  },
+  {
+    value: 'staff',
+    label: 'Staff (general)',
+    description: 'Counter access only. The original catch-all role, kept for existing team members.',
+  },
 ];
 
 export function StaffView({ branchId, restaurantId, branchName, initialStaff }: Props) {
@@ -122,7 +172,7 @@ function InviteModal({
   onInvited: () => void;
 }) {
   const [email, setEmail] = React.useState('');
-  const [role, setRole] = React.useState<'manager' | 'cashier' | 'kitchen' | 'staff'>('cashier');
+  const [role, setRole] = React.useState<AssignableRole>('cashier');
   const [scope, setScope] = React.useState<'branch' | 'restaurant'>('branch');
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -198,6 +248,12 @@ function InviteModal({
                 </option>
               ))}
             </select>
+            {/* Naming what the role can and cannot do at the point of choosing is the
+                difference between a considered decision and everyone being made a
+                manager. */}
+            <span className="mt-1.5 block text-xs text-muted-foreground">
+              {roleOptions.find((o) => o.value === role)?.description}
+            </span>
           </label>
 
           <fieldset className="space-y-2">

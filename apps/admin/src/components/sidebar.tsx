@@ -19,15 +19,21 @@ interface Props {
   branchName: string;
   branches?: { id: string; name: string }[];
   entitlements: Entitlements;
-  /** Owner of this restaurant (or a platform admin), as opposed to a manager.
-   *  Gates the screens whose scope is the whole restaurant rather than this one
-   *  branch: head office rolls up every branch's sales, and one reward catalog
-   *  is redeemed at every branch. RLS denies managers both anyway — advertising
-   *  a page that answers "access denied" reads as a broken product. */
-  isOwner?: boolean;
+  /** What this user may do here, from public.my_capabilities(). Nav entries are hidden
+   *  when the capability is missing: RLS denies the page anyway, and advertising a
+   *  screen that answers "access denied" reads as a broken product. */
+  capabilities?: string[];
 }
 
-type NavItem = { href: string; label: string; icon: typeof LayoutDashboard; feature?: FeatureKey };
+type NavItem = {
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  feature?: FeatureKey;
+  /** Hidden unless the user holds this capability. Absent = visible to anyone who
+   *  already passed the backoffice.access gate in the layout. */
+  capability?: string;
+};
 type NavGroup = { title: string; feature?: FeatureKey; items: NavItem[] };
 
 export function Sidebar({
@@ -35,7 +41,7 @@ export function Sidebar({
   branchName,
   branches = [],
   entitlements,
-  isOwner = false,
+  capabilities = [],
 }: Props) {
   const pathname = usePathname();
   const router = useRouter();
@@ -48,22 +54,24 @@ export function Sidebar({
   // surfaces instead of advertising them. Only add-on features are gated here —
   // everything in Base stays visible for every paying tenant.
   const allowed = (feature?: FeatureKey) => !feature || hasFeature(entitlements, feature);
+  // Capability gating sits alongside the entitlement gate: entitlements answer "did the
+  // restaurant pay for this", capabilities answer "may this person use it". Both must pass.
+  const capSet = React.useMemo(() => new Set(capabilities), [capabilities]);
+  const permitted = (capability?: string) => !capability || capSet.has(capability);
 
   const core: NavItem[] = [
-    { href: `${base}/dashboard`, label: 'Dashboard', icon: LayoutDashboard },
-    { href: `${base}/orders`, label: 'Orders', icon: Receipt },
-    { href: `${base}/deliveries`, label: 'Live deliveries', icon: Bike, feature: 'delivery' },
-    { href: `${base}/menu`, label: 'Menu', icon: ChefHat },
-    { href: `/kitchen/${branchId}`, label: 'Kitchen display', icon: Monitor },
-    { href: `/counter/${branchId}`, label: 'Counter', icon: Store },
+    { href: `${base}/dashboard`, label: 'Dashboard', icon: LayoutDashboard, capability: 'dashboard.view' },
+    { href: `${base}/orders`, label: 'Orders', icon: Receipt, capability: 'orders.view' },
+    { href: `${base}/deliveries`, label: 'Live deliveries', icon: Bike, feature: 'delivery', capability: 'delivery.manage' },
+    { href: `${base}/menu`, label: 'Menu', icon: ChefHat, capability: 'menu.manage' },
+    { href: `/kitchen/${branchId}`, label: 'Kitchen display', icon: Monitor, capability: 'kitchen.access' },
+    { href: `/counter/${branchId}`, label: 'Counter', icon: Store, capability: 'counter.access' },
     { href: `${base}/qr`, label: 'QR code', icon: QrCode },
-    { href: `${base}/reports`, label: 'Reports', icon: BarChart3 },
+    { href: `${base}/reports`, label: 'Reports', icon: BarChart3, capability: 'reports.view' },
     // Shown for single-branch restaurants too: it is the only screen that puts
     // driver payouts and the subscription next to revenue, which the per-branch
     // Reports page never does.
-    ...(isOwner
-      ? [{ href: `${base}/hq`, label: 'Head office', icon: Landmark }]
-      : []),
+    { href: `${base}/hq`, label: 'Head office', icon: Landmark, capability: 'hq.view' },
     // Kept in core, not under Advanced: merchants were reporting "I can't see my
     // ratings anywhere", and Advanced is collapsed by default.
     { href: `${base}/ratings`, label: 'Ratings', icon: Star },
@@ -73,7 +81,7 @@ export function Sidebar({
     {
       title: 'Operations',
       items: [
-        { href: `${base}/inventory`, label: 'Inventory', icon: Package },
+        { href: `${base}/inventory`, label: 'Inventory', icon: Package, capability: 'inventory.manage' },
       ],
     },
     {
@@ -87,34 +95,32 @@ export function Sidebar({
     {
       title: 'People & growth',
       items: [
-        { href: `${base}/staff`, label: 'Staff', icon: Users },
-        { href: `${base}/drivers`, label: 'Drivers', icon: Bike, feature: 'delivery' },
-        { href: `${base}/payouts`, label: 'Driver payouts', icon: Wallet, feature: 'delivery' },
-        { href: `${base}/customers`, label: 'Customers', icon: UserRound },
-        { href: `${base}/promos`, label: 'Promos', icon: Tag },
+        { href: `${base}/staff`, label: 'Staff', icon: Users, capability: 'staff.manage' },
+        { href: `${base}/drivers`, label: 'Drivers', icon: Bike, feature: 'delivery', capability: 'drivers.manage' },
+        { href: `${base}/payouts`, label: 'Driver payouts', icon: Wallet, feature: 'delivery', capability: 'drivers.manage' },
+        { href: `${base}/customers`, label: 'Customers', icon: UserRound, capability: 'customers.view' },
+        { href: `${base}/promos`, label: 'Promos', icon: Tag, capability: 'promos.manage' },
         // Owner-only for the same reason as Head office: the catalog is
         // restaurant-scoped, so a reward a branch manager creates is redeemable
         // at every other branch. Writes are refused by RLS regardless.
-        ...(isOwner
-          ? [{ href: `${base}/loyalty`, label: 'Loyalty rewards', icon: Gift }]
-          : []),
+        { href: `${base}/loyalty`, label: 'Loyalty rewards', icon: Gift, capability: 'loyalty.manage' },
       ],
     },
     {
       title: 'Records',
       items: [
-        { href: `${base}/receipts`, label: 'Receipts', icon: Receipt },
-        { href: `${base}/activity`, label: 'Activity log', icon: ClipboardList },
+        { href: `${base}/receipts`, label: 'Receipts', icon: Receipt, capability: 'orders.view' },
+        { href: `${base}/activity`, label: 'Activity log', icon: ClipboardList, capability: 'reports.view' },
       ],
     },
     {
       title: 'Setup',
       items: [
-        { href: `${base}/branch`, label: 'Branch settings', icon: Building2 },
-        { href: `${base}/brands`, label: 'Brands', icon: Palette },
-        { href: `${base}/franchise`, label: 'Franchise', icon: Network },
-        { href: `${base}/settings/plan`, label: 'Plan & billing', icon: CreditCard },
-        { href: `${base}/settings`, label: 'Preferences', icon: Cog },
+        { href: `${base}/branch`, label: 'Branch settings', icon: Building2, capability: 'branch.settings' },
+        { href: `${base}/brands`, label: 'Brands', icon: Palette, capability: 'brand.edit' },
+        { href: `${base}/franchise`, label: 'Franchise', icon: Network, capability: 'hq.view' },
+        { href: `${base}/settings/plan`, label: 'Plan & billing', icon: CreditCard, capability: 'billing.manage' },
+        { href: `${base}/settings`, label: 'Preferences', icon: Cog, capability: 'branch.settings' },
       ],
     },
   ];
@@ -209,7 +215,9 @@ export function Sidebar({
         </div>
 
         <nav className="flex-1 space-y-2 overflow-y-auto px-3 pb-6">
-          <ul className="space-y-0.5">{core.filter((i) => allowed(i.feature)).map(renderItem)}</ul>
+          <ul className="space-y-0.5">
+            {core.filter((i) => allowed(i.feature) && permitted(i.capability)).map(renderItem)}
+          </ul>
 
           <button
             type="button"
@@ -225,7 +233,9 @@ export function Sidebar({
             advanced
               .filter((section) => allowed(section.feature))
               .map((section) => {
-                const items = section.items.filter((i) => allowed(i.feature));
+                const items = section.items.filter(
+                  (i) => allowed(i.feature) && permitted(i.capability),
+                );
                 if (items.length === 0) return null;
                 return (
                   <div key={section.title} className="pt-1">

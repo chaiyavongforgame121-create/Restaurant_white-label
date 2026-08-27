@@ -1,13 +1,11 @@
 import { headers } from 'next/headers';
-import { notFound, redirect } from 'next/navigation';
-import { getServerClient } from '@favornoms/database/server';
+import { redirect } from 'next/navigation';
 import { getEntitlementsForBranch, isPlatformAdmin } from '@favornoms/database/queries';
+import { getBranchAccess } from '@/lib/capabilities';
 import { PATHNAME_HEADER } from '@favornoms/database/middleware';
 import { Sidebar } from '@/components/sidebar';
 import { AccessDenied } from '@/components/access-denied';
 import { PlatformAdminBanner } from '@/components/platform-admin-banner';
-
-const ADMIN_ROLES = ['owner', 'manager'] as const;
 
 interface Props {
   params: Promise<{ branchId: string }>;
@@ -16,43 +14,25 @@ interface Props {
 
 export default async function BranchLayout({ params, children }: Props) {
   const { branchId } = await params;
-  const supabase = await getServerClient();
+  const { supabase, branch, capabilities, can, role } = await getBranchAccess(
+    branchId,
+    `/b/${branchId}/dashboard`,
+  );
 
-  const { data: userData } = await supabase.auth.getUser();
-  if (!userData.user) {
-    redirect(`/login?next=${encodeURIComponent(`/b/${branchId}/dashboard`)}`);
-  }
+  // A platform superadmin opens branches from /platform to support merchants. They are
+  // staff of nobody, so they hold no capabilities via staff_members -- my_capabilities()
+  // grants them the owner set separately, and this flag drives the impersonation banner.
+  const platformAdmin = await isPlatformAdmin(supabase);
 
-  const { data: branch } = await supabase
-    .from('branches')
-    .select('id, restaurant_id, name')
-    .eq('id', branchId)
-    .maybeSingle();
-  if (!branch) notFound();
-
-  // A platform superadmin opens branches from /platform to support merchants.
-  // They are staff of nobody and their tenants are frequently the lapsed ones,
-  // so both gates below would fire on exactly the branches they need to reach.
-  // Neither read depends on the other, so they go together — this sits in front
-  // of every page in the back office and a serial round trip is paid by all.
-  const [platformAdmin, { data: membership }] = await Promise.all([
-    isPlatformAdmin(supabase),
-    supabase
-      .from('staff_members')
-      .select('id, role, branch_id')
-      .eq('user_id', userData.user.id)
-      .eq('restaurant_id', branch.restaurant_id)
-      .eq('status', 'active')
-      .in('role', [...ADMIN_ROLES])
-      .or(`branch_id.eq.${branchId},branch_id.is.null`)
-      .maybeSingle(),
-  ]);
-
-  if (!membership && !platformAdmin) {
+  if (!can('backoffice.access')) {
     return (
       <AccessDenied
         title="No admin access"
-        reason={`Your account isn't an owner or manager of ${branch.name}.`}
+        reason={
+          role
+            ? `A ${role} account cannot open the back office for ${branch.name}. Your work is on the counter or kitchen screen.`
+            : `Your account isn't a member of staff at ${branch.name}.`
+        }
       />
     );
   }
@@ -82,13 +62,11 @@ export default async function BranchLayout({ params, children }: Props) {
   // Membership, not the claim, decides whether this is impersonation: a platform
   // admin who is also an owner here is just an owner, and banner-ing their own
   // restaurant would train them to ignore it on the tenants that matter.
-  const impersonating = platformAdmin && !membership;
+  const impersonating = platformAdmin && role === null;
 
-  // Mirrors private.user_owns_restaurant(), which guards get_restaurant_reports
-  // and every write to the restaurant-wide tables (loyalty_rewards, brands).
-  // Its third arm — restaurants.owner_user_id — is deliberately not checked: an
-  // owner with no staff row never gets past the membership gate above anyway.
-  const isOwner = platformAdmin || membership?.role === 'owner';
+  // Nav gating is now capability-driven rather than a single owner/not-owner flag, so
+  // Admin and Manager can differ from each other instead of collapsing into "not owner".
+  const caps = Array.from(capabilities);
 
   return (
     <div className="flex min-h-dynamic-screen flex-col lg:flex-row">
@@ -97,7 +75,7 @@ export default async function BranchLayout({ params, children }: Props) {
         branchName={branch.name}
         branches={branches ?? []}
         entitlements={entitlements}
-        isOwner={isOwner}
+        capabilities={caps}
       />
       <main className="flex-1 lg:ml-0">
         {impersonating && <PlatformAdminBanner branchName={branch.name} />}
