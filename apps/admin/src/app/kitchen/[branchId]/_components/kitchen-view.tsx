@@ -8,6 +8,7 @@ import {
   UserRound, Volume2, VolumeX, X,
 } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
+import { useRealtime } from '@favornoms/database/realtime';
 import { OpsToggles } from './ops-toggles';
 
 /* ──────────────────────────────────────────────────────────────────────────
@@ -194,45 +195,65 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
     return () => document.removeEventListener('fullscreenchange', h);
   }, []);
 
+  /* Full reload of the active board. Used on (re)connect, on tab focus and on network
+     return: a channel that dropped silently means the deltas below were missed, and a
+     kitchen that quietly stops showing tickets is the worst failure this screen has. */
+  const reload = React.useCallback(async () => {
+    const { data } = await supa()
+      .from('orders')
+      .select(
+        'id, order_number, status, channel, created_at, customer_name, customer_notes, kitchen_notes, held, scheduled_for, table_id, tables(table_number, display_name), order_items(id, item_name, quantity, notes, prep_status, station, modifiers), deliveries(id, status, driver_id, accepted_at, batch_id, batch_seq)',
+      )
+      .eq('branch_id', branchId)
+      .in('status', ACTIVE_STATUSES)
+      .order('created_at', { ascending: false });
+    if (data) setOrders(data as unknown as Order[]);
+  }, [branchId, supa]);
+
   /* realtime: orders INSERT/UPDATE + deliveries */
-  React.useEffect(() => {
-    const supabase = getBrowserClient();
-    const channel = supabase
-      .channel(`kitchen-branch:${branchId}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders', filter: `branch_id=eq.${branchId}` },
-        async (payload) => {
-          const row = payload.new as Order;
-          const { data: items } = await supabase
+  const { healthy: liveHealthy } = useRealtime({
+    channel: `kitchen-branch:${branchId}`,
+    tables: [
+      { table: 'orders', filter: `branch_id=eq.${branchId}` },
+      { table: 'deliveries', filter: `branch_id=eq.${branchId}` },
+    ],
+    refetch: reload,
+    onChange: (payload, table) => {
+      if (table === 'deliveries') {
+        const d = payload.new as { id?: string; order_id?: string; status?: string; driver_id?: string | null; accepted_at?: string | null; batch_id?: string | null; batch_seq?: number | null };
+        if (!d?.order_id) return;
+        setOrders((curr) => curr.map((o) => (o.id === d.order_id
+          ? { ...o, deliveries: [{ id: d.id ?? o.deliveries?.[0]?.id ?? '', status: d.status ?? 'pending', driver_id: d.driver_id ?? null, accepted_at: d.accepted_at ?? null, batch_id: d.batch_id ?? null, batch_seq: d.batch_seq ?? null }] }
+          : o)));
+        return;
+      }
+      if (payload.eventType === 'INSERT') {
+        // The payload carries the order row only; its items and table have to be read.
+        const row = payload.new as Order;
+        void (async () => {
+          const { data: items } = await supa()
             .from('order_items')
             .select('id, item_name, quantity, notes, prep_status, station, modifiers')
             .eq('order_id', row.id);
           let tables: Order['tables'] = null;
           if (row.table_id) {
-            const { data: t } = await supabase
+            const { data: t } = await supa()
               .from('tables').select('table_number, display_name').eq('id', row.table_id).maybeSingle();
             tables = (t as Order['tables']) ?? null;
           }
           setOrders((curr) => (curr.some((o) => o.id === row.id) ? curr : [...curr, { ...row, order_items: items ?? [], tables }]));
-        })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders', filter: `branch_id=eq.${branchId}` },
-        (payload) => {
-          const updated = payload.new as Order;
-          setOrders((curr) => {
-            if (!ACTIVE_STATUSES.includes(updated.status)) return curr.filter((o) => o.id !== updated.id);
-            return curr.map((o) => (o.id === updated.id ? { ...o, ...updated, tables: o.tables ?? updated.tables, order_items: o.order_items, deliveries: o.deliveries } : o));
-          });
-        })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'deliveries', filter: `branch_id=eq.${branchId}` },
-        (payload) => {
-          const d = payload.new as { id?: string; order_id?: string; status?: string; driver_id?: string | null; accepted_at?: string | null; batch_id?: string | null; batch_seq?: number | null };
-          if (!d?.order_id) return;
-          setOrders((curr) => curr.map((o) => (o.id === d.order_id
-            ? { ...o, deliveries: [{ id: d.id ?? o.deliveries?.[0]?.id ?? '', status: d.status ?? 'pending', driver_id: d.driver_id ?? null, accepted_at: d.accepted_at ?? null, batch_id: d.batch_id ?? null, batch_seq: d.batch_seq ?? null }] }
-            : o)));
-        })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [branchId]);
+        })();
+        return;
+      }
+      if (payload.eventType === 'UPDATE') {
+        const updated = payload.new as Order;
+        setOrders((curr) => {
+          if (!ACTIVE_STATUSES.includes(updated.status)) return curr.filter((o) => o.id !== updated.id);
+          return curr.map((o) => (o.id === updated.id ? { ...o, ...updated, tables: o.tables ?? updated.tables, order_items: o.order_items, deliveries: o.deliveries } : o));
+        });
+      }
+    },
+  });
 
   /* keyboard: m = mute, f = fullscreen, Esc = close overlays */
   React.useEffect(() => {
@@ -411,6 +432,18 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
   return (
     <div className="flex min-h-dynamic-screen flex-col" style={{ background: SUN.page, color: SUN.text }}>
       {/* header */}
+      {/* A dropped socket used to look identical to a quiet kitchen. On a wall-mounted
+          tablet nobody is watching for a subtle status word, so a lost connection gets a
+          full-width bar — the board is not to be trusted while this is up. */}
+      {!liveHealthy && (
+        <div
+          role="status"
+          className="px-4 py-2 text-center text-sm font-semibold text-white"
+          style={{ background: '#B62D25' }}
+        >
+          Connection lost — reconnecting. New tickets may not appear until this clears.
+        </div>
+      )}
       <header className="flex items-center gap-3 px-4 py-3 text-white" style={{ background: SUN.header }}>
         <span className="grid h-9 w-9 place-items-center rounded-[10px]" style={{ background: 'rgba(255,255,255,.24)' }}>
           <ChefHat className="h-5 w-5" />
@@ -418,7 +451,8 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
         <div className="leading-tight">
           <h1 className="text-[15px] font-semibold">{branchName} · Kitchen</h1>
           <p className="text-[11px] tracking-wide" style={{ opacity: 0.85 }}>
-            {visible.length} active · live{station ? ` · ${station}` : ''}
+            {visible.length} active · {liveHealthy ? 'live' : 'reconnecting…'}
+            {station ? ` · ${station}` : ''}
           </p>
         </div>
         <div className="ml-auto flex items-center gap-1.5">

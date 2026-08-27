@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { getBrowserClient } from '@favornoms/database/client';
+import { useRealtime } from '@favornoms/database/realtime';
 import {
   acceptDispatch as acceptDispatchQuery,
   rejectDispatch as rejectDispatchQuery,
@@ -73,6 +74,9 @@ interface DeliveryContextValue {
   progress: (next: DeliveryStatus) => Promise<void>;
   /** Persist "arrived at the customer" (sets arriving_at). */
   markArriving: () => Promise<void>;
+  /** False while the realtime channel is down. Surfaced so the rider is told their
+   *  phone is not currently receiving offers, rather than assuming it is quiet. */
+  liveHealthy: boolean;
 }
 
 const DeliveryContext = React.createContext<DeliveryContextValue | null>(null);
@@ -172,28 +176,16 @@ export function DeliveryProvider({ children }: { children: React.ReactNode }) {
     }
   }, [driverId]);
 
-  React.useEffect(() => {
-    void refreshFromServer();
-    const supabase = getBrowserClient();
-    const channel = supabase
-      .channel(`driver-deliveries-${driverId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'deliveries',
-          filter: `driver_id=eq.${driverId}`,
-        },
-        () => {
-          void refreshFromServer();
-        },
-      )
-      .subscribe();
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [driverId, refreshFromServer]);
+  // A rider's phone backgrounds constantly and rides through dead spots, so the socket
+  // dropping is the normal case rather than the exception. useRealtime reconnects with
+  // backoff and re-reads on every reconnect, on app focus and on network return —
+  // without it a rider simply stopped being offered work with no sign anything was wrong.
+  const { healthy: liveHealthy } = useRealtime({
+    channel: `driver-deliveries-${driverId}`,
+    tables: [{ table: 'deliveries', filter: `driver_id=eq.${driverId}` }],
+    refetch: refreshFromServer,
+    enabled: !!driverId,
+  });
 
   const accept = React.useCallback(async (): Promise<boolean> => {
     if (!offered) return false;
@@ -253,7 +245,7 @@ export function DeliveryProvider({ children }: { children: React.ReactNode }) {
   }, [active]);
 
   return (
-    <DeliveryContext.Provider value={{ offered, active, accept, reject, progress, markArriving }}>
+    <DeliveryContext.Provider value={{ offered, active, accept, reject, progress, markArriving, liveHealthy }}>
       {children}
     </DeliveryContext.Provider>
   );

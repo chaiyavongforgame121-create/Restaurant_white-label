@@ -25,7 +25,7 @@ export function HomeView() {
   const scope = useDriver((s) => s.scope);
   const setScope = useDriver((s) => s.setScope);
   const [sheetOpen, setSheetOpen] = React.useState(false);
-  const { offered, active, accept, reject } = useDelivery();
+  const { offered, active, accept, reject, liveHealthy } = useDelivery();
 
   const approved = React.useMemo(
     () => (driver.approvals ?? []).filter((a) => a.status === 'approved'),
@@ -216,6 +216,17 @@ export function HomeView() {
           <p className="mt-1.5 text-sm text-white/80">
             {isOnline ? t('readyToReceive') : t('subOffline')}
           </p>
+          {/* Being "online" with a dead socket looks exactly like a quiet shift. Say it
+              plainly — a rider who thinks they are available but is not loses the whole
+              shift's earnings before anyone notices. */}
+          {isOnline && !liveHealthy && (
+            <p
+              role="status"
+              className="mx-auto mt-3 max-w-xs rounded-xl bg-black/35 px-3 py-2 text-xs font-medium text-white"
+            >
+              Reconnecting — you may not receive offers until this clears.
+            </p>
+          )}
 
           <div className="mt-8 flex justify-center">
             <PowerButton

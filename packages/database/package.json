@@ -11,7 +11,8 @@
     "./server": "./src/server.ts",
     "./middleware": "./src/middleware.ts",
     "./env": "./src/env.ts",
-    "./queries": "./src/queries/index.ts"
+    "./queries": "./src/queries/index.ts",
+    "./realtime": "./src/realtime.ts"
   },
   "scripts": {
     "lint": "tsc --noEmit",
@@ -23,10 +24,13 @@
     "@supabase/supabase-js": "^2.47.10"
   },
   "peerDependencies": {
-    "next": "^15.0.0"
+    "next": "^15.0.0",
+    "react": "^19.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "@types/react": "^19.0.0",
+    "react": "^19.0.0"
   }
 }
