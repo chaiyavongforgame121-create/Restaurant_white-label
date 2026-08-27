@@ -22,7 +22,7 @@ describe('safeNext', () => {
   // of these resolves to https://evil.com/ despite starting with a single slash.
   it.each(['/\\evil.com', '/\\/evil.com', '/\\\\evil.com', '/./\\evil.com'])(
     'rejects backslash-smuggled host %j',
-    (input) => {
+    (input: string) => {
       expect(safeNext(input, ORIGIN)).toBeNull();
     },
   );
@@ -31,12 +31,12 @@ describe('safeNext', () => {
   // cannot be relied on to keep "//evil.com" out of the protocol-relative branch.
   it.each(['/\t//evil.com', '/\r//evil.com', '/\n//evil.com'])(
     'rejects control-char-smuggled host %j',
-    (input) => {
+    (input: string) => {
       expect(safeNext(input, ORIGIN)).toBeNull();
     },
   );
 
-  it.each(['//evil.com', '////evil.com'])('rejects protocol-relative %j', (input) => {
+  it.each(['//evil.com', '////evil.com'])('rejects protocol-relative %j', (input: string) => {
     expect(safeNext(input, ORIGIN)).toBeNull();
   });
 
@@ -45,7 +45,7 @@ describe('safeNext', () => {
     expect(safeNext('/..//evil.com', ORIGIN)).toBeNull();
   });
 
-  it.each(['https://evil.com', 'javascript:alert(1)'])('rejects absolute URL %j', (input) => {
+  it.each(['https://evil.com', 'javascript:alert(1)'])('rejects absolute URL %j', (input: string) => {
     expect(safeNext(input, ORIGIN)).toBeNull();
   });
 

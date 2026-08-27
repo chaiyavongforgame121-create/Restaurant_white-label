@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.17"
   }
   public: {
     Tables: {
@@ -529,6 +529,9 @@ export type Database = {
         Row: {
           created_at: string
           favicon_url: string | null
+          icon_192_url: string | null
+          icon_512_url: string | null
+          icon_maskable_512_url: string | null
           id: string
           is_default: boolean
           logo_url: string | null
@@ -541,6 +544,9 @@ export type Database = {
         Insert: {
           created_at?: string
           favicon_url?: string | null
+          icon_192_url?: string | null
+          icon_512_url?: string | null
+          icon_maskable_512_url?: string | null
           id?: string
           is_default?: boolean
           logo_url?: string | null
@@ -553,6 +559,9 @@ export type Database = {
         Update: {
           created_at?: string
           favicon_url?: string | null
+          icon_192_url?: string | null
+          icon_512_url?: string | null
+          icon_maskable_512_url?: string | null
           id?: string
           is_default?: boolean
           logo_url?: string | null
@@ -1074,13 +1083,6 @@ export type Database = {
             columns: ["driver_id"]
             isOneToOne: false
             referencedRelation: "drivers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "driver_approvals_reviewed_by_fkey"
-            columns: ["reviewed_by"]
-            isOneToOne: false
-            referencedRelation: "staff_members"
             referencedColumns: ["id"]
           },
         ]
@@ -2193,6 +2195,7 @@ export type Database = {
           requires_age_verification: boolean
           review_count: number
           slug: string | null
+          sold_out_until: string | null
           station: string | null
           stock_quantity: number | null
           track_stock: boolean
@@ -2227,6 +2230,7 @@ export type Database = {
           requires_age_verification?: boolean
           review_count?: number
           slug?: string | null
+          sold_out_until?: string | null
           station?: string | null
           stock_quantity?: number | null
           track_stock?: boolean
@@ -2261,6 +2265,7 @@ export type Database = {
           requires_age_verification?: boolean
           review_count?: number
           slug?: string | null
+          sold_out_until?: string | null
           station?: string | null
           stock_quantity?: number | null
           track_stock?: boolean
@@ -3310,6 +3315,21 @@ export type Database = {
           },
         ]
       }
+      role_capabilities: {
+        Row: {
+          capability: string
+          role: string
+        }
+        Insert: {
+          capability: string
+          role: string
+        }
+        Update: {
+          capability?: string
+          role?: string
+        }
+        Relationships: []
+      }
       staff_members: {
         Row: {
           accepted_at: string | null
@@ -3417,6 +3437,61 @@ export type Database = {
             columns: ["staff_member_id"]
             isOneToOne: false
             referencedRelation: "staff_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stock_count_log: {
+        Row: {
+          branch_id: string
+          counted_qty: number
+          created_at: string
+          created_by: string | null
+          id: string
+          menu_item_id: string
+          notes: string | null
+          previous_qty: number | null
+        }
+        Insert: {
+          branch_id: string
+          counted_qty: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          menu_item_id: string
+          notes?: string | null
+          previous_qty?: number | null
+        }
+        Update: {
+          branch_id?: string
+          counted_qty?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          menu_item_id?: string
+          notes?: string | null
+          previous_qty?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_count_log_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_count_log_menu_item_id_fkey"
+            columns: ["menu_item_id"]
+            isOneToOne: false
+            referencedRelation: "menu_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_count_log_menu_item_id_fkey"
+            columns: ["menu_item_id"]
+            isOneToOne: false
+            referencedRelation: "v_low_stock_items"
             referencedColumns: ["id"]
           },
         ]
@@ -3967,28 +4042,40 @@ export type Database = {
           branch_id: string | null
           id: string | null
           image_url: string | null
+          is_active: boolean | null
+          is_sold_out: boolean | null
           low_stock_threshold: number | null
           name: string | null
           price: number | null
+          sold_out_until: string | null
           stock_quantity: number | null
+          track_stock: boolean | null
         }
         Insert: {
           branch_id?: string | null
           id?: string | null
           image_url?: string | null
+          is_active?: boolean | null
+          is_sold_out?: never
           low_stock_threshold?: number | null
           name?: string | null
           price?: number | null
+          sold_out_until?: string | null
           stock_quantity?: number | null
+          track_stock?: boolean | null
         }
         Update: {
           branch_id?: string | null
           id?: string | null
           image_url?: string | null
+          is_active?: boolean | null
+          is_sold_out?: never
           low_stock_threshold?: number | null
           name?: string | null
           price?: number | null
+          sold_out_until?: string | null
           stock_quantity?: number | null
+          track_stock?: boolean | null
         }
         Relationships: [
           {
@@ -4098,6 +4185,8 @@ export type Database = {
         Args: {
           p_address?: string
           p_brand_id?: string
+          p_lat?: number
+          p_lng?: number
           p_name: string
           p_restaurant_id: string
           p_slug: string
@@ -4110,6 +4199,8 @@ export type Database = {
           p_branch_address?: string
           p_branch_name: string
           p_branch_slug: string
+          p_lat?: number
+          p_lng?: number
           p_restaurant_name: string
           p_restaurant_slug: string
           p_theme?: Json
@@ -4121,6 +4212,10 @@ export type Database = {
       decide_billing_request: {
         Args: { p_approve: boolean; p_id: string; p_note?: string }
         Returns: Json
+      }
+      decide_payment_proof: {
+        Args: { p_approve: boolean; p_note?: string; p_payment_id: string }
+        Returns: undefined
       }
       delete_my_account: { Args: never; Returns: Json }
       driver_1099_summary: {
@@ -4410,6 +4505,7 @@ export type Database = {
         Args: { p_delivery_id: string }
         Returns: undefined
       }
+      my_capabilities: { Args: { p_branch_id: string }; Returns: string[] }
       pay_driver_withdrawal: {
         Args: { p_reference?: string; p_withdrawal_id: string }
         Returns: Json
@@ -4525,6 +4621,15 @@ export type Database = {
         Args: { p_branch_id: string; p_windows: Json }
         Returns: undefined
       }
+      set_branch_location: {
+        Args: {
+          p_address: string
+          p_branch_id: string
+          p_lat?: number
+          p_lng?: number
+        }
+        Returns: Json
+      }
       set_driver_kyc_status: {
         Args: {
           p_driver_id: string
@@ -4542,6 +4647,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      set_item_86: {
+        Args: { p_menu_item_id: string; p_sold_out: boolean; p_until?: string }
+        Returns: Json
+      }
       set_menu_item_category: {
         Args: {
           p_branch_id: string
@@ -4551,9 +4660,21 @@ export type Database = {
         }
         Returns: undefined
       }
+      set_restaurant_name: {
+        Args: { p_name: string; p_restaurant_id: string }
+        Returns: Json
+      }
       set_restaurant_suspended: {
         Args: { p_restaurant_id: string; p_suspended: boolean }
         Returns: undefined
+      }
+      set_stock: {
+        Args: {
+          p_counted_qty: number
+          p_menu_item_id: string
+          p_notes?: string
+        }
+        Returns: Json
       }
       set_subscription_plan_active: {
         Args: { p_active: boolean; p_code: string }
@@ -4596,6 +4717,10 @@ export type Database = {
           p_trial_end?: string
         }
         Returns: Json
+      }
+      submit_payment_proof: {
+        Args: { p_order_id: string; p_path: string }
+        Returns: string
       }
       sweep_abandoned_carts: { Args: never; Returns: number }
       tier_for_lifetime_points: { Args: { p_points: number }; Returns: string }
@@ -4688,7 +4813,15 @@ export type Database = {
         | "cancelled"
         | "refunded"
       payment_status: "pending" | "completed" | "failed" | "refunded" | "voided"
-      staff_role: "owner" | "manager" | "cashier" | "kitchen" | "staff"
+      staff_role:
+        | "owner"
+        | "manager"
+        | "cashier"
+        | "kitchen"
+        | "staff"
+        | "admin"
+        | "server"
+        | "driver"
       staff_status: "pending" | "active" | "suspended" | "removed"
       subscription_status:
         | "trialing"
@@ -4848,7 +4981,16 @@ export const Constants = {
         "refunded",
       ],
       payment_status: ["pending", "completed", "failed", "refunded", "voided"],
-      staff_role: ["owner", "manager", "cashier", "kitchen", "staff"],
+      staff_role: [
+        "owner",
+        "manager",
+        "cashier",
+        "kitchen",
+        "staff",
+        "admin",
+        "server",
+        "driver",
+      ],
       staff_status: ["pending", "active", "suspended", "removed"],
       subscription_status: [
         "trialing",
