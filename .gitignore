@@ -35,6 +35,11 @@ Thumbs.db
 .cache/
 coverage/
 
+# Playwright run artefacts. `test-results/.last-run.json` was committed in May 2026
+# and has been asserting {"status":"passed"} ever since, regardless of reality.
+test-results/
+playwright-report/
+
 # Supabase
 supabase/.branches/
 supabase/.temp/
