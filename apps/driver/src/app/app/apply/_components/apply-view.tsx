@@ -17,6 +17,12 @@ interface BranchRow {
 // (mirrors DOC_TYPES in profile-view). A verified driver already has them.
 const REQUIRED_DOCS = ['license', 'vehicle_reg', 'selfie'] as const;
 
+const DOC_LABEL: Record<(typeof REQUIRED_DOCS)[number], string> = {
+  license: 'Driver licence',
+  vehicle_reg: 'Vehicle registration',
+  selfie: 'Selfie with licence',
+};
+
 export function ApplyView() {
   const router = useRouter();
   const { driver, refresh } = useDriverSession();
@@ -27,6 +33,10 @@ export function ApplyView() {
   const kycVerified = (driver.kyc_status ?? 'pending') === 'verified';
   // null = still checking; true = all docs uploaded (or verified); false = missing docs.
   const [docsComplete, setDocsComplete] = React.useState<boolean | null>(kycVerified ? true : null);
+  // Naming the missing documents is the difference between a rider finishing signup and a
+  // rider quietly giving up: an application is never created until all three are uploaded,
+  // so an incomplete rider is invisible to every restaurant and nobody can tell them why.
+  const [missingDocs, setMissingDocs] = React.useState<string[]>([]);
   const [notice, setNotice] = React.useState(false);
   const noticeTimer = React.useRef<number | null>(null);
 
@@ -60,7 +70,9 @@ export function ApplyView() {
       .then(({ data }) => {
         if (cancelled) return;
         const uploaded = new Set((data ?? []).map((f) => f.name.split('.')[0]));
-        setDocsComplete(REQUIRED_DOCS.every((k) => uploaded.has(k)));
+        const missing = REQUIRED_DOCS.filter((k) => !uploaded.has(k));
+        setMissingDocs(missing.map((k) => DOC_LABEL[k]));
+        setDocsComplete(missing.length === 0);
       });
     return () => {
       cancelled = true;
@@ -132,9 +144,17 @@ export function ApplyView() {
         >
           <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0" />
           <span className="flex-1 text-sm">
-            <span className="block font-semibold">Documents required to apply</span>
+            <span className="block font-semibold">
+              {missingDocs.length === 1
+                ? '1 document still needed'
+                : `${missingDocs.length || 3} documents still needed`}
+            </span>
             <span className="block text-xs">
-              Upload your driver license, vehicle registration and selfie first. Tap to upload.
+              Restaurants cannot see you until you upload{' '}
+              {missingDocs.length > 0
+                ? missingDocs.join(', ').toLowerCase()
+                : 'your driver licence, vehicle registration and selfie'}
+              . Tap to upload.
             </span>
           </span>
         </button>

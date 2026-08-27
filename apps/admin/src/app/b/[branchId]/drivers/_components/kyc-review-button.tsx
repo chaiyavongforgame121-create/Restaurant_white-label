@@ -30,11 +30,20 @@ export function KycReviewButton({
   const [open, setOpen] = React.useState(false);
   const [docs, setDocs] = React.useState<Doc[]>([]);
   const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [listError, setListError] = React.useState<string | null>(null);
 
   const openDialog = async () => {
     setOpen(true);
+    setError(null);
+    setListError(null);
     const supabase = getBrowserClient();
-    const { data } = await supabase.storage.from('driver-kyc').list(driverId, { limit: 50 });
+    const { data, error: lsErr } = await supabase.storage
+      .from('driver-kyc')
+      .list(driverId, { limit: 50 });
+    // A storage denial rendered as three "Not uploaded" rows, which reads as "the rider
+    // never sent anything" — the opposite of the truth, and grounds for a wrong rejection.
+    if (lsErr) setListError(lsErr.message);
     const next: Doc[] = await Promise.all(
       DOC_TYPES.map(async (doc) => {
         const match = data?.find((f) => f.name.startsWith(`${doc.key}.`));
@@ -50,14 +59,22 @@ export function KycReviewButton({
 
   const setStatus = async (status: 'verified' | 'rejected') => {
     setBusy(true);
+    setError(null);
     const supabase = getBrowserClient();
-    const { error } = await supabase.rpc('set_driver_kyc_status', {
+    const { error: rpcErr } = await supabase.rpc('set_driver_kyc_status', {
       p_driver_id: driverId,
       p_status: status,
     });
     setBusy(false);
-    if (error) {
-      alert(error.message);
+    if (rpcErr) {
+      // `set_driver_kyc_status` raises 'forbidden' unless the caller holds an active
+      // owner/manager staff row. An alert() here was swallowed by some mobile browsers,
+      // so a denied review looked like a dead button.
+      setError(
+        /forbidden/i.test(rpcErr.message)
+          ? 'You do not have permission to review driver documents. Only an owner or manager can.'
+          : rpcErr.message,
+      );
       return;
     }
     setOpen(false);
@@ -130,6 +147,15 @@ export function KycReviewButton({
                   </li>
                 ))}
               </ul>
+
+              {listError && (
+                <p className="mt-3 rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">
+                  Could not read the rider&apos;s documents: {listError}
+                </p>
+              )}
+              {error && (
+                <p className="mt-3 rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>
+              )}
 
               <footer className="mt-5 flex gap-2">
                 <Button
