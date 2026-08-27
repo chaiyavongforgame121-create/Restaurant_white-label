@@ -47,11 +47,27 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     applicationName: name,
     // iOS ignores the manifest for A2HS naming and reads this instead.
     appleWebApp: { capable: true, statusBarStyle: 'default', title: name },
-    // No `sizes`/`type` declared: these are arbitrary merchant uploads and
-    // claiming dimensions the file does not have is worse than claiming none —
-    // the same reason the branch manifest route keeps serving platform PNGs.
-    ...(tenant.faviconUrl
-      ? { icons: { icon: [{ url: tenant.faviconUrl }], apple: tenant.faviconUrl } }
+    // Sizes are declared only for the normalised icons the admin uploader produced —
+    // those really are 192x192/512x512 PNGs. A legacy free-form favicon (uploaded
+    // before normalisation existed) still gets no `sizes`, because claiming dimensions
+    // a file does not have is worse than claiming none.
+    // `apple` prefers the 192: iOS renders alpha as black, and the normalised variants
+    // are flattened onto an opaque ground while a raw upload may not be.
+    ...(tenant.icon192Url || tenant.faviconUrl
+      ? {
+          icons: {
+            icon: [
+              ...(tenant.icon192Url
+                ? [{ url: tenant.icon192Url, sizes: '192x192', type: 'image/png' }]
+                : []),
+              ...(tenant.icon512Url
+                ? [{ url: tenant.icon512Url, sizes: '512x512', type: 'image/png' }]
+                : []),
+              ...(!tenant.icon192Url && tenant.faviconUrl ? [{ url: tenant.faviconUrl }] : []),
+            ],
+            apple: tenant.icon192Url ?? tenant.faviconUrl ?? undefined,
+          },
+        }
       : {}),
     openGraph: {
       type: 'website',

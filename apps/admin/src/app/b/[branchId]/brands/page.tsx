@@ -19,7 +19,9 @@ export default async function BrandsPage({ params }: Props) {
   const [brandsRes, branchesRes, restaurantRes, entitlements] = await Promise.all([
     supabase
       .from('brands')
-      .select('id, slug, name, theme, logo_url, favicon_url, is_default, created_at')
+      .select(
+        'id, slug, name, theme, logo_url, favicon_url, icon_192_url, icon_512_url, icon_maskable_512_url, is_default, created_at',
+      )
       .eq('restaurant_id', branch.restaurant_id)
       .order('is_default', { ascending: false })
       .order('created_at', { ascending: true }),

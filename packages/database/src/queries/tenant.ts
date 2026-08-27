@@ -27,6 +27,15 @@ export interface ResolvedTenant {
    * would look broken rather than unbranded. Null means "use the platform icon".
    */
   faviconUrl: string | null;
+  /**
+   * Exactly-sized PNGs for the web app manifest. Null means "fall back to the
+   * platform icons" — a manifest entry whose declared `sizes` does not match the
+   * bytes fails Chrome's installability check and removes the install prompt
+   * entirely, so these are only ever written by the normalising admin uploader.
+   */
+  icon192Url: string | null;
+  icon512Url: string | null;
+  iconMaskable512Url: string | null;
 }
 
 /**
@@ -65,10 +74,13 @@ export async function resolveTenantBySlug(
   let brandName: string | undefined;
   let brandLogo: string | null = null;
   let brandFavicon: string | null = null;
+  let brandIcon192: string | null = null;
+  let brandIcon512: string | null = null;
+  let brandIconMaskable: string | null = null;
   if (b.brand_id) {
     const { data: brandRow } = await supabase
       .from('brands')
-      .select('name, theme, logo_url, favicon_url')
+      .select('name, theme, logo_url, favicon_url, icon_192_url, icon_512_url, icon_maskable_512_url')
       .eq('id', b.brand_id)
       .maybeSingle();
     if (brandRow) {
@@ -76,6 +88,9 @@ export async function resolveTenantBySlug(
       brandName = brandRow.name;
       brandLogo = brandRow.logo_url ?? null;
       brandFavicon = brandRow.favicon_url ?? null;
+      brandIcon192 = brandRow.icon_192_url ?? null;
+      brandIcon512 = brandRow.icon_512_url ?? null;
+      brandIconMaskable = brandRow.icon_maskable_512_url ?? null;
     }
   } else {
     // Fall back to the restaurant's default brand for the ASSETS only.
@@ -91,7 +106,7 @@ export async function resolveTenantBySlug(
     // source — that absence is the whole bug.
     const { data: defaultBrand } = await supabase
       .from('brands')
-      .select('logo_url, favicon_url')
+      .select('logo_url, favicon_url, icon_192_url, icon_512_url, icon_maskable_512_url')
       .eq('restaurant_id', r.id)
       .order('is_default', { ascending: false })
       .order('created_at', { ascending: true })
@@ -100,6 +115,9 @@ export async function resolveTenantBySlug(
     if (db) {
       brandLogo = db.logo_url ?? null;
       brandFavicon = db.favicon_url ?? null;
+      brandIcon192 = db.icon_192_url ?? null;
+      brandIcon512 = db.icon_512_url ?? null;
+      brandIconMaskable = db.icon_maskable_512_url ?? null;
     }
   }
 
@@ -137,7 +155,17 @@ export async function resolveTenantBySlug(
   );
   const storefront = mergeStorefrontOverride(restaurantStorefront, branchOverride);
 
-  return { restaurant, branch, theme, storefront, logoUrl: brandLogo, faviconUrl: brandFavicon };
+  return {
+    restaurant,
+    branch,
+    theme,
+    storefront,
+    logoUrl: brandLogo,
+    faviconUrl: brandFavicon,
+    icon192Url: brandIcon192,
+    icon512Url: brandIcon512,
+    iconMaskable512Url: brandIconMaskable,
+  };
 }
 
 function parseSettings(raw: unknown): Branch['settings'] {

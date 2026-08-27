@@ -55,14 +55,13 @@ export async function GET(request: Request, { params }: Props) {
     orientation: 'portrait',
     background_color: hexOr(tenant.theme.backgroundColor, '#FFFAF5'),
     theme_color: hexOr(tenant.theme.primaryColor, '#FF6B35'),
-    // Platform PNGs, deliberately: the tenant logo is an arbitrary merchant
-    // upload of unknown dimensions, and declaring a `sizes` the file does not
-    // match makes the app fail Chrome's installability check outright.
-    icons: [
-      { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-      { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-      { src: '/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
-    ],
+    // Tenant icons first, platform icons last. The tenant entries are only ever
+    // written by the admin icon uploader, which rasterises the merchant's image to
+    // exactly these dimensions — so the declared `sizes` is honest, which is what
+    // Chrome's installability check actually requires. The platform icons stay as an
+    // unconditional tail: a tenant asset that 404s or fails CORS then degrades to an
+    // unbranded install rather than to no install button at all.
+    icons: tenantIcons(tenant),
     categories: ['food', 'lifestyle', 'shopping'],
     lang: 'en',
     dir: 'ltr',
@@ -78,6 +77,43 @@ export async function GET(request: Request, { params }: Props) {
       Vary: 'Host',
     },
   });
+}
+
+interface ManifestIcon {
+  src: string;
+  sizes: string;
+  type: string;
+  purpose: string;
+}
+
+/** Only the sizes the admin uploader guarantees. A tenant that has never set an icon
+ *  gets exactly the previous platform-only list. */
+function tenantIcons(tenant: {
+  icon192Url: string | null;
+  icon512Url: string | null;
+  iconMaskable512Url: string | null;
+}): ManifestIcon[] {
+  const icons: ManifestIcon[] = [];
+  if (tenant.icon192Url) {
+    icons.push({ src: tenant.icon192Url, sizes: '192x192', type: 'image/png', purpose: 'any' });
+  }
+  if (tenant.icon512Url) {
+    icons.push({ src: tenant.icon512Url, sizes: '512x512', type: 'image/png', purpose: 'any' });
+  }
+  if (tenant.iconMaskable512Url) {
+    icons.push({
+      src: tenant.iconMaskable512Url,
+      sizes: '512x512',
+      type: 'image/png',
+      purpose: 'maskable',
+    });
+  }
+  icons.push(
+    { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+    { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+    { src: '/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+  );
+  return icons;
 }
 
 /** Manifest colours must be valid CSS colours; tenant theme values are free text. */
