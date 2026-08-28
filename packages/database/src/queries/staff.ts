@@ -47,7 +47,17 @@ export async function inviteStaff(
     const text = await res.text();
     throw new Error(`invite_staff_failed:${res.status}:${text}`);
   }
-  return (await res.json()) as { ok: true; staff_id: string; redirect_to: string };
+  // `emailed` distinguishes the two outcomes the caller must word differently: a brand-new
+  // account really does have to wait for mail, whereas someone who already had an account
+  // was linked server-side and can sign in immediately. Telling the second group to "check
+  // their inbox" sends them looking for an email that is deliberately never sent.
+  return (await res.json()) as {
+    ok: true;
+    staff_id: string;
+    redirect_to: string;
+    emailed: boolean;
+    already_registered?: boolean;
+  };
 }
 
 /**

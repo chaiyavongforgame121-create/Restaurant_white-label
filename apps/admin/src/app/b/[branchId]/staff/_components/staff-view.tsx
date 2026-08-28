@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mail, Plus, UserPlus, X } from 'lucide-react';
+import { CheckCircle2, Mail, Plus, UserPlus, X } from 'lucide-react';
 import { Badge, Button, Card, EmptyState } from '@favornoms/ui';
 import { getBrowserClient } from '@favornoms/database/client';
 import { inviteStaff, type StaffRole } from '@favornoms/database/queries';
@@ -142,10 +142,10 @@ export function StaffView({ branchId, restaurantId, branchName, initialStaff }: 
             restaurantId={restaurantId}
             branchId={branchId}
             onClose={() => setModalOpen(false)}
-            onInvited={() => {
-              setModalOpen(false);
-              router.refresh();
-            }}
+            // Refresh only — the modal stays up to report which of the two outcomes
+            // happened, because "we emailed them" and "they can sign in right now" need
+            // different things from the owner.
+            onInvited={() => router.refresh()}
           />
         )}
       </AnimatePresence>
@@ -176,6 +176,7 @@ function InviteModal({
   const [scope, setScope] = React.useState<'branch' | 'restaurant'>('branch');
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [result, setResult] = React.useState<{ emailed: boolean } | null>(null);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -183,12 +184,14 @@ function InviteModal({
     setSubmitting(true);
     try {
       const supabase = getBrowserClient();
-      await inviteStaff(supabase, {
+      const res = await inviteStaff(supabase, {
         email: email.trim(),
         role,
         restaurant_id: restaurantId,
         branch_id: scope === 'branch' ? branchId : null,
       });
+      setSubmitting(false);
+      setResult({ emailed: res.emailed });
       onInvited();
     } catch (err) {
       setError((err as Error).message);
@@ -221,6 +224,35 @@ function InviteModal({
           </button>
         </header>
 
+        {result ? (
+          <div className="py-2 text-center">
+            <CheckCircle2 className="mx-auto h-10 w-10 text-success" />
+            {result.emailed ? (
+              <>
+                <p className="mt-3 font-display text-lg font-semibold">Invitation sent</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  We emailed <strong>{email}</strong> a link. Opening it adds them to the
+                  team and asks them to choose a password.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="mt-3 font-display text-lg font-semibold">Added to the team</p>
+                {/* The old code reported plain success here and sent no email at all, so an
+                    owner inviting an existing account waited forever for a message that was
+                    never going to arrive. Say what actually happened instead. */}
+                <p className="mt-1 text-sm text-muted-foreground">
+                  <strong>{email}</strong> already had an account, so no email was needed —
+                  they can sign in here right now with the password they already use.
+                </p>
+              </>
+            )}
+            <Button variant="gradient" className="mt-5" fullWidth onClick={onClose}>
+              Done
+            </Button>
+          </div>
+        ) : (
+          <>
         <div className="space-y-4">
           <label className="block">
             <span className="mb-1 block text-sm font-medium">Email</span>
@@ -299,6 +331,8 @@ function InviteModal({
             Send invite
           </Button>
         </footer>
+          </>
+        )}
       </motion.form>
     </motion.div>
   );
