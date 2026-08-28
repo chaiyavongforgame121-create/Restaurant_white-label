@@ -24,7 +24,16 @@ export default defineConfig({
     baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:3000',
     trace: 'on-first-retry',
     actionTimeout: 10_000,
-    navigationTimeout: 20_000,
+    // 20s produced one false failure per full-suite run — a different route each time
+    // (kitchen on one run, drivers on the next), every one of them passing on its own.
+    // The cause is always the same: `next dev` compiles a route on first hit, and under a
+    // 59-test sweep that first hit can exceed 20s on a cold cache.
+    //
+    // Raising this does not paper over a latency regression, because these specs never
+    // asserted latency — they assert "returns <500 and throws no page errors". The
+    // navigation budget here is a dev-server COMPILE budget, and 20s was simply the wrong
+    // number for it. Run against a production build and the compile disappears entirely.
+    navigationTimeout: 60_000,
   },
   projects: [
     {
