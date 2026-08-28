@@ -2,17 +2,21 @@
 
 // The only door into the product for a brand-new owner.
 //
-// /login deliberately passes `shouldCreateUser: false` so that a typo in an
-// email address cannot mint an empty account and silently swallow the sign-in.
-// That left no way to ever reach the 14-day trial, which is what this route
-// fixes: same magic link, `shouldCreateUser: true`, landing on /onboarding.
-// create_restaurant_with_branch starts the trial from there.
+// Was magic-link only, which meant a new owner's very first act was a round-trip through
+// their inbox — and left the account with no password, so they could never use the password
+// sign-in screen afterwards. Now the trial starts with email + password in one step;
+// signUp mints a session immediately when the project does not require email confirmation,
+// and falls back to the confirm-your-inbox message when it does.
+//
+// /login deliberately passes `shouldCreateUser: false` so that a typo in an email address
+// cannot mint an empty account and silently swallow the sign-in. This route is the
+// deliberate way in. create_restaurant_with_branch starts the trial from /onboarding.
 
 import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Check, Mail, ShieldCheck, Sparkles } from 'lucide-react';
+import { Check, KeyRound, Mail, ShieldCheck, Sparkles } from 'lucide-react';
 import { Button, Card } from '@favornoms/ui';
 import { getBrowserClient } from '@favornoms/database/client';
 
@@ -22,9 +26,14 @@ const TRIAL_BULLETS = [
   'No credit card, no charge if you walk away',
 ];
 
+/** Matches /auth/update-password. Kept in step by hand rather than shared: this is a UX
+ *  hint, and the real floor is the project's own password policy. */
+const MIN_LENGTH = 8;
+
 export function SignupView() {
   const router = useRouter();
   const [email, setEmail] = React.useState('');
+  const [password, setPassword] = React.useState('');
   const [sent, setSent] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -32,19 +41,32 @@ export function SignupView() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    if (password.length < MIN_LENGTH) {
+      setError(`Use at least ${MIN_LENGTH} characters for your password.`);
+      return;
+    }
     setSubmitting(true);
     const supabase = getBrowserClient();
-    const { error: otpError } = await supabase.auth.signInWithOtp({
+    const { data, error: signUpError } = await supabase.auth.signUp({
       email: email.trim(),
+      password,
       options: {
+        // Only used when the project requires email confirmation. Through /auth/callback,
+        // since the confirmation arrives as a `?code=` that has to be exchanged.
         emailRedirectTo:
-          typeof window !== 'undefined' ? `${window.location.origin}/onboarding` : undefined,
-        shouldCreateUser: true,
+          typeof window !== 'undefined'
+            ? `${window.location.origin}/auth/callback?next=${encodeURIComponent('/onboarding')}`
+            : undefined,
       },
     });
     setSubmitting(false);
-    if (otpError) {
-      setError(otpError.message);
+    if (signUpError) {
+      setError(signUpError.message);
+      return;
+    }
+    if (data.session) {
+      router.replace('/onboarding');
+      router.refresh();
       return;
     }
     setSent(true);
@@ -63,7 +85,11 @@ export function SignupView() {
 
   return (
     <div className="grid min-h-dynamic-screen place-items-center bg-background px-4 py-10">
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md">
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="w-full max-w-md"
+      >
         <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-gradient-warm text-white shadow-warm">
           <Sparkles className="h-8 w-8" />
         </div>
@@ -76,9 +102,10 @@ export function SignupView() {
           {sent ? (
             <div className="text-center">
               <ShieldCheck className="mx-auto h-10 w-10 text-success" />
-              <p className="mt-3 font-display text-lg font-semibold">Check your inbox</p>
+              <p className="mt-3 font-display text-lg font-semibold">Confirm your email</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                We sent a link to <strong>{email}</strong>. Open it to set up your restaurant.
+                We sent a link to <strong>{email}</strong>. Open it to finish setting up your
+                restaurant — then sign in with the password you just chose.
               </p>
             </div>
           ) : (
@@ -106,6 +133,24 @@ export function SignupView() {
                       className="focus-ring w-full rounded-xl border border-border bg-background py-3 pl-11 pr-4 text-base"
                     />
                   </div>
+                </label>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium">Password</span>
+                  <div className="relative">
+                    <KeyRound className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      minLength={MIN_LENGTH}
+                      autoComplete="new-password"
+                      className="focus-ring w-full rounded-xl border border-border bg-background py-3 pl-11 pr-4 text-base"
+                    />
+                  </div>
+                  <span className="mt-1 block text-xs text-muted-foreground">
+                    At least {MIN_LENGTH} characters.
+                  </span>
                 </label>
                 {error && <p className="text-sm text-danger">{error}</p>}
                 <Button type="submit" variant="gradient" size="xl" fullWidth loading={submitting}>

@@ -84,19 +84,32 @@ export function AcceptInviteView({ staffId }: { staffId?: string }) {
             <CheckCircle2 className="mx-auto h-10 w-10 text-success" />
             <p className="mt-3 font-display text-xl font-semibold">You&apos;re in!</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Welcome aboard. Head to your dashboard to get started.
+              Welcome aboard. Choose a password so you can sign in on the restaurant&apos;s
+              tablet without waiting for an email every shift.
             </p>
+            {/* Primary, not optional-looking: inviteUserByEmail creates the account with no
+                password at all, so skipping here leaves this person dependent on a fresh
+                emailed link every single time they sign in. */}
             <Button
               variant="gradient"
               size="lg"
               className="mt-5"
+              fullWidth
+              onClick={() => router.push('/auth/update-password?welcome=1')}
+            >
+              Set your password
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-2"
               fullWidth
               onClick={() => {
                 if (state.branchId) router.push(`/b/${state.branchId}/dashboard`);
                 else router.push('/');
               }}
             >
-              Go to dashboard
+              Skip for now
             </Button>
           </Card>
         )}

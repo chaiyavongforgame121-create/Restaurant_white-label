@@ -2,14 +2,19 @@
 
 > Things that can't be applied via SQL/migrations. You must click through Supabase Dashboard / Stripe Dashboard / set env vars.
 >
-> Project ref: `ayyfczidnzxetndiijmv` · Region: `ap-southeast-1`
+> Project ref: `ayyfczidnzxetndiijmv` · Region: `us-east-1`
 > Dashboard: https://supabase.com/dashboard/project/ayyfczidnzxetndiijmv
+>
+> Region corrected 2026-08-29: this said `ap-southeast-1`, which is wrong and had been
+> copied into other docs. Verified against the live project.
 
 ---
 
 ## TL;DR — blocks real users
 
-- [ ] §1 Auth redirect URLs (1 min)
+- [ ] §1 Auth redirect URLs (1 min) — **still unticked as of 2026-08-29, and it is the
+      reason merchant sign-in links land on the customer marketing site**
+- [ ] §1b Custom SMTP — the built-in mailer is rate-limited and silently drops invites
 - [ ] §2 Auth SMS provider (Twilio creds)
 - [ ] §3 Auth password policies (1 toggle)
 - [ ] §4 Auth Custom Access Token Hook (1 toggle)
@@ -26,18 +31,61 @@
 ## 1. Auth → URL Configuration
 
 **Dashboard → Authentication → URL Configuration**
+https://supabase.com/dashboard/project/ayyfczidnzxetndiijmv/auth/url-configuration
 
-Add to **Redirect URLs**:
+### What goes wrong when this is skipped
+
+GoTrue does not error on an unlisted `redirect_to` — it **silently discards it and uses the
+Site URL instead**. Site URL is the customer storefront, so a merchant who asked for a
+sign-in link on `localhost:3004` (or on the admin domain) gets mailed a link that lands on
+the *diner marketing page*, carrying `?error=access_denied&error_code=otp_expired`. Nothing
+in the merchant app is broken at that point and nothing logs an error; the click just goes
+somewhere else. This was reported as "I click the email and it bounces me to the home page"
+on 2026-08-29 and is exactly this setting.
+
+Password sign-in (now the default on `/login`) does **not** depend on this list. Magic
+links, staff invitations, and password resets all do.
+
+Add to **Redirect URLs** — ports 3002/3003 are gone, `apps/pos` and `apps/kds` were merged
+into `apps/admin` as `/counter` and `/kitchen`:
 ```
 http://localhost:3000/**
 http://localhost:3001/**
-http://localhost:3002/**
-http://localhost:3003/**
 http://localhost:3004/**
+https://restaurant-white-label-web.vercel.app/**
+https://restaurant-white-label-admin.vercel.app/**
+https://restaurant-white-label-driver.vercel.app/**
+https://*-boyproject.vercel.app/**
 ```
-Plus your production domain (e.g. `https://app.favornoms.com/**`).
+The last line covers Vercel's per-deployment and per-branch preview aliases (e.g.
+`restaurant-white-label-admin-git-main-boyproject.vercel.app`); without it, sign-in works on
+production but not on any preview build. Add each merchant's custom domain as it is issued.
 
-**Site URL:** `http://localhost:3000` for dev, prod domain for prod.
+**Site URL:** the customer storefront —
+`https://restaurant-white-label-web.vercel.app` today. Leave it pointing at the storefront:
+it is the fallback for links whose target is not on the list, and a diner landing on the
+storefront is the least-wrong outcome.
+
+---
+
+## 1b. Auth → Custom SMTP
+
+**Dashboard → Project Settings → Authentication → SMTP Settings**
+
+The project is still on Supabase's **built-in** mailer, which is documented as a low
+hourly cap for development only. Measured on 2026-08-29: a single signup attempt returned
+`429 over_email_send_rate_limit`.
+
+Every one of these goes through that mailer:
+- staff invitations (`invite-staff` → `inviteUserByEmail`)
+- password resets (`/forgot-password`)
+- magic links (`/login` → "Email me a link instead")
+- signup confirmation (email confirmation is **on** for this project)
+
+A restaurant onboarding its 7 staff in one sitting will hit the cap partway through, and the
+failures are near-silent — the UI says "check your inbox" because GoTrue accepted the
+request; the mail simply never arrives. Configure a real sender (Resend is already a
+dependency for order mail, and `RESEND_API_KEY` is in §6) before handing over to a client.
 
 ---
 

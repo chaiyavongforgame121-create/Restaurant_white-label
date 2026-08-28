@@ -113,8 +113,14 @@ Deno.serve(async (req) => {
     staffId = insert.data.id;
   }
 
-  // Send the magic link
-  const redirectTo = `${PUBLIC_ADMIN_URL}/invite/accept?staff_id=${staffId}`;
+  // Send the magic link.
+  //
+  // Via /auth/callback, not straight to /invite/accept: the invitation comes back as a PKCE
+  // `?code=` and only that route can trade it for a session. Pointed at the page directly
+  // (as it was) the invitee landed on "Sign in required" with the code unspent, which made
+  // every staff invitation a dead end.
+  const acceptPath = `/invite/accept?staff_id=${staffId}`;
+  const redirectTo = `${PUBLIC_ADMIN_URL}/auth/callback?next=${encodeURIComponent(acceptPath)}`;
   const invite = await admin.auth.admin.inviteUserByEmail(body.email, {
     redirectTo,
     data: { signup_type: 'staff', staff_id: staffId },
