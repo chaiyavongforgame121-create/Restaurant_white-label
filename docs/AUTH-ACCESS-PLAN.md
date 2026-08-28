@@ -81,6 +81,13 @@ Neither can be applied from SQL or a migration. Both are in `CONFIG-CHECKLIST.md
 - **§1 Redirect URLs** — without the app's origin on the list, GoTrue discards it and sends
   the user to the Site URL instead. Affects magic links, invitations and password resets.
   Password sign-in is unaffected.
+
+  Read back from the live project on 2026-08-29: the three **production** origins are all
+  present and correct, so nothing is outstanding there. What is missing is
+  `http://localhost:3004/**` and `http://localhost:3001/**` — local development only. That
+  is the entire reason a merchant sign-in link opened on a dev machine lands on the
+  customer storefront. See CONFIG-CHECKLIST §1 for the probe that reads the list back
+  without sending mail.
 - **§1b Custom SMTP** — the built-in mailer is rate-limited and returns
   `429 over_email_send_rate_limit`. Invitations and resets fail quietly when it trips.
 

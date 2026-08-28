@@ -46,20 +46,39 @@ on 2026-08-29 and is exactly this setting.
 Password sign-in (now the default on `/login`) does **not** depend on this list. Magic
 links, staff invitations, and password resets all do.
 
-Add to **Redirect URLs** — ports 3002/3003 are gone, `apps/pos` and `apps/kds` were merged
-into `apps/admin` as `/counter` and `/kitchen`:
+### Measured state, 2026-08-29
+
+Probed directly rather than assumed. `GET /auth/v1/verify` with a deliberately bogus token
+redirects to `redirect_to` when that URL is on the list and to the Site URL when it is not,
+so the list can be read back without sending a single email:
+
 ```
-http://localhost:3000/**
+curl -s -o /dev/null -w '%{redirect_url}\n' \
+  "$SUPABASE_URL/auth/v1/verify?token=bogus&type=recovery&redirect_to=<url-encoded>"
+```
+
+| URL | On the list? |
+|---|---|
+| `http://localhost:3000/**` | yes |
+| `http://localhost:3001/**` | **NO** |
+| `http://localhost:3004/**` | **NO** |
+| `https://restaurant-white-label-web.vercel.app/**` | yes (also the Site URL) |
+| `https://restaurant-white-label-admin.vercel.app/**` | yes |
+| `https://restaurant-white-label-admin-git-main-boyproject.vercel.app/**` | yes |
+| `https://restaurant-white-label-driver.vercel.app/**` | yes |
+| `https://evil.example.com/` | no — the list is doing its job |
+
+So **production is already configured correctly**; nothing needs adding there. Once an
+admin build carrying `/auth/callback` is live, merchant magic links, staff invitations and
+password resets work on the Vercel domain with no dashboard change at all.
+
+Only local development is missing, and only two lines of it:
+```
 http://localhost:3001/**
 http://localhost:3004/**
-https://restaurant-white-label-web.vercel.app/**
-https://restaurant-white-label-admin.vercel.app/**
-https://restaurant-white-label-driver.vercel.app/**
-https://*-boyproject.vercel.app/**
 ```
-The last line covers Vercel's per-deployment and per-branch preview aliases (e.g.
-`restaurant-white-label-admin-git-main-boyproject.vercel.app`); without it, sign-in works on
-production but not on any preview build. Add each merchant's custom domain as it is issued.
+Without them, `localhost:3004` sign-in links land on the customer storefront — which is the
+whole of the 2026-08-29 report. Add each merchant's custom domain as it is issued.
 
 **Site URL:** the customer storefront —
 `https://restaurant-white-label-web.vercel.app` today. Leave it pointing at the storefront:
