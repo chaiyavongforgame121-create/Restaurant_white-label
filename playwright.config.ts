@@ -19,6 +19,11 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   workers: 1,
+  // Must stay ABOVE navigationTimeout below, or raising that one achieves nothing: the
+  // per-test budget fires first and the run fails with a vaguer message than before. That
+  // is exactly what happened when navigationTimeout went 20s -> 60s and this was left at
+  // Playwright's 30s default.
+  timeout: 90_000,
   reporter: process.env.CI ? 'github' : 'list',
   use: {
     baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:3000',

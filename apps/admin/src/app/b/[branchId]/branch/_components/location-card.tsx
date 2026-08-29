@@ -19,8 +19,24 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { AlertTriangle, MapPin, Pencil } from 'lucide-react';
 import { Button, Card } from '@favornoms/ui';
-import { LocationPicker, hasMapboxToken, type ResolvedAddress } from '@favornoms/maps';
+import dynamic from 'next/dynamic';
+import { hasMapboxToken, type ResolvedAddress } from '@favornoms/maps';
 import { getBrowserClient } from '@favornoms/database/client';
+
+// The picker is behind a button most visits never press, and /branch is already the
+// heaviest screen in the back office. Loading it on demand keeps the cost of adding this
+// card off every page view.
+const LocationPicker = dynamic(
+  () => import('@favornoms/maps').then((m) => m.LocationPicker),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="grid h-full place-items-center text-sm text-muted-foreground">
+        Loading map…
+      </div>
+    ),
+  },
+);
 
 export interface BranchLocation {
   id: string;
