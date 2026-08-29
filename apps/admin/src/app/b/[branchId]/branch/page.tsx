@@ -11,7 +11,9 @@ export default async function BranchPage({ params }: Props) {
   const supabase = await getServerClient();
   const { data: branch } = await supabase
     .from('branches')
-    .select('id, restaurant_id, name, address, timezone, theme_override, settings, is_active, custom_domain, sales_tax_rate')
+    .select(
+      'id, restaurant_id, name, address, timezone, theme_override, settings, is_active, custom_domain, sales_tax_rate, geo_lat, geo_lng',
+    )
     .eq('id', branchId)
     .maybeSingle();
   if (!branch) notFound();

@@ -11,6 +11,7 @@ import { DeliverySettingsCard } from './delivery-settings-card';
 import { HoursEditor } from './hours-editor';
 import { PaymentMethodsCard } from './payment-methods-card';
 import { DeliveryHoursCard } from './delivery-hours-card';
+import { LocationCard } from './location-card';
 import { ServiceFeeCard } from './service-fee-card';
 import { TipSettingsCard } from './tip-settings-card';
 import { StorefrontOverrideCard } from './storefront-override-card';
@@ -26,6 +27,8 @@ interface Branch {
   is_active: boolean;
   custom_domain: string | null;
   sales_tax_rate: number | null;
+  geo_lat: number | null;
+  geo_lng: number | null;
 }
 
 export function BranchSettings({
@@ -41,7 +44,6 @@ export function BranchSettings({
 }) {
   const router = useRouter();
   const [name, setName] = React.useState(branch.name);
-  const [address, setAddress] = React.useState(branch.address ?? '');
   const [isActive, setIsActive] = React.useState(branch.is_active);
   const [customDomain, setCustomDomain] = React.useState(branch.custom_domain ?? '');
   const [salesTaxPercent, setSalesTaxPercent] = React.useState(
@@ -67,7 +69,6 @@ export function BranchSettings({
       .from('branches')
       .update({
         name,
-        address: address || null,
         is_active: isActive,
         custom_domain: customDomain.trim() ? customDomain.trim().toLowerCase() : null,
         sales_tax_rate: parsedRate,
@@ -110,13 +111,21 @@ export function BranchSettings({
                 </Badge>
               </label>
             </Field>
-            <div className="sm:col-span-2">
-              <Field label="Address">
-                <input value={address} onChange={(e) => setAddress(e.target.value)} className="input" />
-              </Field>
-            </div>
           </div>
         </Card>
+
+        {/* Address lives here, not in Identity. Editing branches.address directly leaves
+            geo_location behind, and every delivery decision is made from the pin — so the
+            two have to move together, which is what set_branch_location enforces. */}
+        <LocationCard
+          branch={{
+            id: branch.id,
+            address: branch.address,
+            geo_lat: branch.geo_lat,
+            geo_lng: branch.geo_lng,
+            timezone: branch.timezone,
+          }}
+        />
 
         <Card className="p-5">
           <h2 className="font-display text-lg font-semibold">Brand theme</h2>
