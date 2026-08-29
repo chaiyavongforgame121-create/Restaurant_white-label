@@ -91,6 +91,42 @@ Neither can be applied from SQL or a migration. Both are in `CONFIG-CHECKLIST.md
 - **§1b Custom SMTP** — the built-in mailer is rate-limited and returns
   `429 over_email_send_rate_limit`. Invitations and resets fail quietly when it trips.
 
+## Local development: the three apps share one cookie jar
+
+**Cookies are scoped to the host, not the port.** All three dev servers run on `localhost`,
+so `localhost:3000`, `localhost:3001` and `localhost:3004` read and write the *same*
+`sb-<ref>-auth-token` cookie. Signing into any one of them silently signs you out of the
+other two.
+
+This is not theoretical. Observed 2026-08-29: after signing into the merchant app, opening
+the driver app and logging in as a rider replaced the shared cookie, and the merchant app
+then rendered "Your account isn't a member of staff at sweetgreen" — the branch layout's
+no-membership branch, because the session it found belonged to
+`d10123456789@driver.favornoms.local`. The same session id was present on both ports.
+
+It makes the one thing this project most needs to test — a full order flowing from diner to
+kitchen to rider — impossible in a single browser profile, and it looks exactly like a
+permissions bug, which is the expensive part.
+
+Give each app its own hostname. Chrome resolves any `*.localhost` name to 127.0.0.1 with no
+hosts-file entry, and host-only cookies then stay separate. Verified serving on 2026-08-29:
+
+| App | Use this, not `localhost` |
+|---|---|
+| customer | `http://localhost:3000` |
+| driver | `http://driver.localhost:3001` |
+| merchant | `http://admin.localhost:3004` |
+
+No code change is needed — Next's dev server answers on any host that resolves to it.
+`http://127.0.0.1:<port>` works as a second distinct host too, if a plain IP is preferred.
+
+Two caveats:
+- Password sign-in works on these hostnames immediately. Magic links and password resets
+  would additionally need `http://admin.localhost:3004/**` etc. in the Supabase redirect
+  allow-list (CONFIG-CHECKLIST §1).
+- Production is unaffected: the three apps are already on distinct Vercel subdomains, so
+  their cookie jars have always been separate there.
+
 ## Test accounts
 
 `owner@test.com`, `cashier@test.com`, `kitchen@test.com` and `demo-owner@favornoms.local`
