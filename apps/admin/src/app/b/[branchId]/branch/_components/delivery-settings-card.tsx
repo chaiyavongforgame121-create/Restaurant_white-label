@@ -39,7 +39,8 @@ type NumericKey =
   | 'offer_ttl_seconds'
   | 'batch_max_detour_mi'
   | 'driver_base_pay'
-  | 'driver_per_km_pay';
+  | 'driver_per_km_pay'
+  | 'driver_max_pay';
 
 const FIELDS: Array<{
   key: NumericKey;
@@ -63,7 +64,15 @@ const FIELDS: Array<{
   { key: 'delivery_per_km_fee', label: 'Per mile ($)', group: 'fees', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.deliveryPerKmFee, convert: 'rate', max: 50 },
   { key: 'delivery_min_fee', label: 'Minimum fee ($)', group: 'fees', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.deliveryMinFee, max: 100 },
   { key: 'delivery_max_fee', label: 'Maximum fee ($)', group: 'fees', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.deliveryMaxFee, max: 100 },
-  { key: 'delivery_radius_km', label: 'Delivery radius (mi)', hint: 'Orders beyond this distance are rejected at checkout', group: 'timing', step: '0.5', fallback: DELIVERY_SETTING_DEFAULTS.deliveryRadiusKm, convert: 'dist', max: 50 },
+  // Was capped at 50 mi. Opened at the owner's request (2026-08-29) for long-distance
+  // testing, on the same reasoning as the two dispatch fields below — with one caveat that
+  // is NOT true of those, and that the hint now states: 50 mi was not an arbitrary number.
+  // private.branch_driver_pay_cap defaults to $50 and its comment says so outright — "$2
+  // base + $1/mi caps out at the old 50 mi radius. Deliberate." Past 50 mi the driver's pay
+  // stops growing while their drive does, so `driver_max_pay` has to move with the radius.
+  // The exposure is bounded either way: the customer fee is already clamped by
+  // delivery_max_fee, so the worst case per order is pay_cap minus that fee, not a runaway.
+  { key: 'delivery_radius_km', label: 'Delivery radius (mi)', hint: 'Orders beyond this distance are rejected at checkout. Above ~50 mi, raise "Driver max pay" too or drivers are capped at $50 no matter how far they drive.', group: 'timing', step: '0.5', fallback: DELIVERY_SETTING_DEFAULTS.deliveryRadiusKm, convert: 'dist', max: 9_999_999_999 },
   { key: 'prep_time_min', label: 'Prep time (min)', hint: 'Baseline kitchen time used in customer ETAs', group: 'timing', step: '1', fallback: DELIVERY_SETTING_DEFAULTS.prepTimeMin, max: 240 },
   // These two are deliberately near-unbounded (owner's call): a huge search radius and a
   // huge attempt count are how you force every driver to be a candidate while testing
@@ -77,6 +86,10 @@ const FIELDS: Array<{
   { key: 'batch_max_detour_mi', label: 'Stacked-order max detour (mi)', hint: 'Pair two ready orders only when the second is on the way — this caps the extra driving the second customer accepts. Lower = only near-perfect same-route pairs (needs stacking enabled below)', group: 'dispatch', step: '0.25', fallback: 1.0, max: 10 },
   { key: 'driver_base_pay', label: 'Driver base pay ($)', group: 'pay', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.driverBasePay, max: 100 },
   { key: 'driver_per_km_pay', label: 'Driver per mile ($)', group: 'pay', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.driverPerKmPay, convert: 'rate', max: 50 },
+  // branch_driver_pay_cap reads this key and falls back to $50. It had no editor, so the
+  // ceiling that silently truncates a long delivery's pay could not be seen or moved from
+  // the back office — which only became reachable once the radius above was opened.
+  { key: 'driver_max_pay', label: 'Driver max pay ($)', hint: 'Hard ceiling on what one delivery can pay a driver, before tips. Must be raised alongside a large delivery radius, or long runs are truncated to this amount.', group: 'pay', step: '1', fallback: 50, max: 9_999_999_999 },
 ];
 
 const GROUP_TITLES: Record<string, string> = {
