@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Home, Receipt, ShoppingBag, UserRound } from 'lucide-react';
@@ -13,10 +14,14 @@ import { ThemeToggle } from './theme-toggle';
 export function AppShell({
   base,
   brandName = 'Favornoms',
+  logoUrl = null,
   children,
 }: {
   base: string;
   brandName?: string;
+  /** brands.logo_url. Absent for a merchant who has not uploaded one, which is why the
+   *  initial-in-a-circle fallback stays. */
+  logoUrl?: string | null;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -68,11 +73,38 @@ export function AppShell({
     <div className="relative flex min-h-dynamic-screen flex-col">
       <header className="sticky top-0 z-40 border-b border-border/40 bg-background/85 backdrop-blur-xl">
         <div className="container flex h-14 items-center justify-between gap-3">
+          {/* The header is the most-seen piece of branding in the whole storefront — it is
+              on every page — and it used to render brandName.charAt(0) unconditionally. A
+              merchant could upload a logo on the Brands page, watch it appear in the hero
+              and on the browser tab, and still see a generic letter here. It now uses the
+              logo when there is one.
+
+              A logo is a wide lockup (the hero renders it at h-12 w-44), so it replaces the
+              mark AND the wordmark rather than sitting beside a duplicate of the name; the
+              name stays for screen readers. Without a logo, nothing changes. */}
           <Link href={base} className="focus-ring inline-flex items-center gap-2 rounded-full">
-            <span className="grid h-8 w-8 place-items-center rounded-full bg-gradient-warm text-white shadow-warm">
-              <span className="font-display text-lg leading-none">{brandName.charAt(0)}</span>
-            </span>
-            <span className="font-display text-lg font-semibold tracking-tight">{brandName}</span>
+            {logoUrl ? (
+              <>
+                <span className="relative block h-8 w-[150px]">
+                  <Image
+                    src={logoUrl}
+                    alt={brandName}
+                    fill
+                    className="object-contain object-left"
+                    sizes="150px"
+                    priority
+                  />
+                </span>
+                <span className="sr-only">{brandName}</span>
+              </>
+            ) : (
+              <>
+                <span className="grid h-8 w-8 place-items-center rounded-full bg-gradient-warm text-white shadow-warm">
+                  <span className="font-display text-lg leading-none">{brandName.charAt(0)}</span>
+                </span>
+                <span className="font-display text-lg font-semibold tracking-tight">{brandName}</span>
+              </>
+            )}
           </Link>
           <div className="flex items-center gap-1">
             <ThemeToggle />

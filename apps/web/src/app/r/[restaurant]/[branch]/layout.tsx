@@ -19,7 +19,11 @@ export default async function BranchLayout({ params, children }: Props) {
   // ThemeProvider applies as CSS variables on a wrapping div.
   return (
     <ThemeProvider theme={tenant.theme}>
-      <AppShell base={base} brandName={tenant.theme.brandName ?? tenant.restaurant.name}>
+      <AppShell
+        base={base}
+        brandName={tenant.theme.brandName ?? tenant.restaurant.name}
+        logoUrl={tenant.logoUrl}
+      >
         <PushSubscriber />
         <PendingCartReplay branchId={tenant.branch.id} />
         {children}
