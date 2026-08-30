@@ -36,6 +36,7 @@ type NumericKey =
   | 'prep_time_min'
   | 'driver_search_radius_km'
   | 'driver_max_attempts'
+  | 'dispatch_max_gps_age_min'
   | 'offer_ttl_seconds'
   | 'batch_max_detour_mi'
   | 'driver_base_pay'
@@ -80,6 +81,12 @@ const FIELDS: Array<{
   // the fee fields above, which stay tightly capped.
   { key: 'driver_search_radius_km', label: 'Driver search radius (mi)', hint: 'How far from the branch to look for drivers. Set it very high to reach every driver (useful when testing dispatch).', group: 'dispatch', step: '0.5', fallback: 3 * KM_PER_MILE, convert: 'dist', max: 9_999_999_999 },
   { key: 'driver_max_attempts', label: 'Max dispatch attempts', hint: 'Staff get alerted after this many failed rounds. Set it very high to keep retrying (useful when testing dispatch).', group: 'dispatch', step: '1', fallback: 3, max: 9_999_999_999 },
+  // find_dispatch_candidates refuses a rider whose last GPS fix is older than this. It was
+  // a hardcoded 5 minutes, and the rider app only pings while it is OPEN and in the
+  // foreground — so a rider who locks their phone becomes undispatchable in five minutes
+  // while every screen still shows them online. That is what produced "No rider found" with
+  // five riders online.
+  { key: 'dispatch_max_gps_age_min', label: 'Max rider GPS age (min)', hint: 'How stale a last known rider location may be and still be offered work. Raise it while testing — riders only send GPS while the app is open in the foreground.', group: 'dispatch', step: '1', fallback: 5, max: 9_999_999_999 },
   { key: 'offer_ttl_seconds', label: 'Offer timeout (sec)', hint: 'How long a driver has to accept an offer', group: 'dispatch', step: '5', fallback: DELIVERY_SETTING_DEFAULTS.offerTtlSeconds, max: 300 },
   // Stored directly in miles (unlike the km-stored keys above) — the SQL pairing fn
   // claim_batch_sibling reads settings->>'batch_max_detour_mi' as miles.

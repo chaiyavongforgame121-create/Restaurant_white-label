@@ -262,7 +262,20 @@ Deno.serve(async (req) => {
         status: 'dispatching',
       })
       .eq('id', delivery.id);
-    return json(503, { error: 'no_drivers_available', radius_km: radiusKm, excluded: exclude.length });
+    // "No rider found" on its own is indistinguishable from "nobody is working today", and
+    // sends the merchant looking in the wrong place. The diagnostic says which gate emptied
+    // the list — in practice almost always gps_fresh, because the rider app only pings while
+    // it is open and in the foreground.
+    const { data: diag } = await admin.rpc('dispatch_candidate_diagnostics', {
+      p_branch_id: delivery.branch_id,
+      p_radius_km: radiusKm,
+    });
+    return json(503, {
+      error: 'no_drivers_available',
+      radius_km: radiusKm,
+      excluded: exclude.length,
+      diagnostics: diag ?? null,
+    });
   }
 
   const chosen = candidates[0];

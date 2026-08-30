@@ -167,6 +167,48 @@ interface Props {
 
 const ACTIVE_STATUSES = ['pending', 'confirmed', 'preparing', 'ready'];
 
+interface DispatchFailure {
+  error?: string;
+  diagnostics?: {
+    branch_has_pin?: boolean;
+    max_gps_age_min?: number;
+    radius_km?: number;
+    approved?: number;
+    online?: number;
+    has_location?: number;
+    gps_fresh?: number;
+    in_radius?: number;
+    not_busy?: number;
+  } | null;
+}
+
+/** Turn dispatch-driver's gate counts into the one sentence that tells the merchant where
+ *  to look. Ordered from "nothing is set up" to "everyone is busy", so the first failing
+ *  gate is the one reported. */
+function describeDispatchFailure(body: DispatchFailure): string {
+  if (body?.error && body.error !== 'no_drivers_available') {
+    if (body.error === 'max_attempts_reached') return 'Tried every rider — raise "Max dispatch attempts" or assign one by hand.';
+    return body.error.replace(/_/g, ' ');
+  }
+  const d = body?.diagnostics;
+  if (!d) return 'No rider available right now.';
+  if (d.branch_has_pin === false) return 'This branch has no map pin yet — set it in Branch settings.';
+  if (!d.approved) return 'No rider is approved for this branch yet.';
+  if (!d.online) return `No rider is online right now (${d.approved} approved).`;
+  if (!d.has_location) {
+    return `${d.online} online, but none have shared a location — the rider app must be open with location permission granted.`;
+  }
+  if (!d.gps_fresh) {
+    return `${d.online} online, but no location newer than ${d.max_gps_age_min ?? 5} min. The rider app only sends GPS while it is open in the foreground.`;
+  }
+  if (!d.not_busy) return `${d.online} online, all already on a delivery.`;
+  if (!d.in_radius) {
+    const mi = d.radius_km != null ? Math.round(d.radius_km / 1.609344) : null;
+    return `${d.online} online, but none within${mi != null ? ` ${mi} mi` : ' the search radius'} — raise "Driver search radius".`;
+  }
+  return 'No rider available right now.';
+}
+
 export function KitchenView({ branchId, branchName, initialOrders, stations, activeStation, drivers }: Props) {
   const [orders, setOrders] = React.useState<Order[]>(initialOrders);
   const [station, setStation] = React.useState<string | null>(activeStation);
@@ -328,7 +370,19 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
   const recall = async (order: Order) => {
     setOrders((curr) => curr.map((o) => (o.id === order.id ? { ...o, status: 'preparing' } : o)));
     delete readyAtRef.current[order.id];
-    await supa().rpc('recall_order', { p_order_id: order.id });
+    // The result was discarded and the success toast shown unconditionally, so a refusal —
+    // recall_order raises not_recallable_status and recall_window_passed, both surfacing as
+    // a 400 — read to the cook as "recalled to kitchen" while nothing had moved.
+    const { error } = await supa().rpc('recall_order', { p_order_id: order.id });
+    if (error) {
+      const msg = error.message.includes('not_recallable_status')
+        ? 'That order is too far along to recall.'
+        : error.message.includes('recall_window_passed')
+          ? 'The recall window for that order has passed.'
+          : error.message;
+      showToast(`Couldn't recall #${order.order_number.slice(-4)} — ${msg}`, null);
+      return;
+    }
     showToast(`#${order.order_number.slice(-4)} recalled to kitchen`, null);
   };
 
@@ -346,7 +400,21 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
 
   const dispatchDriver = async (orderId: string, reset = false) => {
     const { error } = await supa().functions.invoke('dispatch-driver', { body: { order_id: orderId, reset } });
-    if (error) throw error;
+    if (!error) return;
+    // supabase-js hides the response body behind error.context. A 503 from dispatch-driver
+    // carries the reason the candidate list came back empty, and that reason is the only
+    // useful thing on this screen — "No rider found" alone had the merchant chasing riders
+    // who were online the whole time.
+    let reason = '';
+    try {
+      const ctx = (error as unknown as { context?: Response }).context;
+      if (ctx && typeof ctx.json === 'function') {
+        reason = describeDispatchFailure((await ctx.json()) as DispatchFailure);
+      }
+    } catch {
+      /* body unreadable — fall through to the bare error */
+    }
+    throw new Error(reason || error.message);
   };
 
   // Manually offer a delivery to a SPECIFIC rider (staff override of auto-dispatch).
@@ -602,6 +670,7 @@ function OrderCard({
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [dispatching, setDispatching] = React.useState(false);
   const [dispatchError, setDispatchError] = React.useState(false);
+  const [dispatchReason, setDispatchReason] = React.useState<string | null>(null);
   const fromMs = lane === 'ready' ? readyAt : new Date(order.created_at).getTime();
   const sec = safeElapsedSec(fromMs, now);
   const tg = agingTier(sec, lane);
@@ -654,12 +723,14 @@ function OrderCard({
   }, [delivery]);
   const handleDispatch = async (reset = false) => {
     setDispatchError(false);
+    setDispatchReason(null);
     setDispatching(true);
     try {
       await onDispatch(reset);
-    } catch {
+    } catch (e) {
       setDispatching(false); // dispatch failed — surface it so they can retry
       setDispatchError(true);
+      setDispatchReason((e as Error)?.message || null);
     }
   };
 
@@ -766,9 +837,16 @@ function OrderCard({
               <Bike className="h-4 w-4" /> {driverLabel}
             </div>
           ) : dispatchError || searchTimedOut ? (
-            <button onClick={() => handleDispatch(true)} className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-[10px] py-2.5 text-sm font-medium active:scale-[.985]" style={{ background: '#FBE3E1', color: '#C0382F' }}>
-              <AlertTriangle className="h-4 w-4" /> No rider found — tap to retry
-            </button>
+            <div className="mt-2.5">
+              <button onClick={() => handleDispatch(true)} className="flex w-full items-center justify-center gap-2 rounded-[10px] py-2.5 text-sm font-medium active:scale-[.985]" style={{ background: '#FBE3E1', color: '#C0382F' }}>
+                <AlertTriangle className="h-4 w-4" /> No rider found — tap to retry
+              </button>
+              {dispatchReason && (
+                <p className="mt-1.5 px-1 text-[11px] leading-snug" style={{ color: '#C0382F' }}>
+                  {dispatchReason}
+                </p>
+              )}
+            </div>
           ) : searching ? (
             <div className="mt-2.5 flex items-center justify-center gap-2 rounded-[10px] px-3 py-2.5 text-sm font-medium" style={{ background: '#E7EEFB', color: '#2E5FB0' }}>
               <Loader2 className="h-4 w-4 animate-spin" /> Searching for a rider…
