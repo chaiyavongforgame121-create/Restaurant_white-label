@@ -282,6 +282,19 @@ export function PaymentMethodsCard({ branchId, restaurantId, settings, canUseCar
             </span>
           </p>
         )}
+        {/* The opposite trap, and the one that actually bites: the merchant uploads their QR,
+            sees it saved, and assumes that is the whole job. It is not — the method also has
+            to be ticked above, and until it is the QR option simply never appears at
+            checkout, with nothing on either screen explaining the silence. */}
+        {!transferOn && qr.image_url && (
+          <p className="mt-3 flex items-start gap-2 rounded-xl bg-warning/10 px-4 py-3 text-sm">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+            <span>
+              Your QR code is saved but <strong>QR transfer is still switched off</strong>, so
+              customers cannot choose it. Tick it under ASAP and/or Scheduled above, then save.
+            </span>
+          </p>
+        )}
       </div>
 
       {error && (

@@ -97,9 +97,40 @@ export function PhotoUploader({
         onChange={onFile}
       />
       <input ref={galleryRef} type="file" accept="image/*" className="hidden" onChange={onFile} />
+      {/* The driver could not see what they had just sent. A one-line "uploaded" tick is no
+          use for proof of pickup or delivery: a blurred, dark or wrong-bag photo looked
+          exactly like a good one, and there was no way to replace it — the row was already
+          stamped, so the CTA unlocked regardless. The thumbnail is the check, and Retake is
+          the fix. */}
       {uploadedUrl ? (
-        <div className="flex items-center gap-2 text-sm text-success">
-          <CheckCircle2 className="h-4 w-4" /> {copy.success}
+        <div>
+          <div className="flex items-center gap-2 text-sm text-success">
+            <CheckCircle2 className="h-4 w-4" /> {copy.success}
+          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={uploadedUrl}
+            alt={copy.success}
+            className="mt-2 max-h-56 w-full rounded-xl border border-border object-cover"
+          />
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              onClick={() => cameraRef.current?.click()}
+              disabled={uploading}
+              className="focus-ring flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-card px-3 py-2 text-sm font-semibold"
+            >
+              <Camera className="h-4 w-4 shrink-0" /> {uploading ? 'Uploading…' : 'Retake'}
+            </button>
+            <button
+              type="button"
+              onClick={() => galleryRef.current?.click()}
+              disabled={uploading}
+              className="focus-ring flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-card px-3 py-2 text-sm font-semibold"
+            >
+              <ImageIcon className="h-4 w-4 shrink-0" /> Choose another
+            </button>
+          </div>
         </div>
       ) : (
         <>

@@ -49,15 +49,21 @@ const stageMeta: Record<
     color: 'from-secondary to-primary',
     transition: 'picked_up',
   },
+  // picked_up and in_transit both read ctaKey 'atCustomer' — so the driver saw "I've
+  // arrived" twice in a row, on two screens that were otherwise identical, and the first
+  // press appeared to do nothing. It did: it moved the DB status to in_transit. Only the
+  // SECOND press means "I am standing at the customer's door", which is what reveals the
+  // proof-of-delivery uploader. Distinct labels, and distinct titles, so the two steps are
+  // visibly different things.
   picked_up: {
     titleKey: 'pickedUp',
-    ctaKey: 'atCustomer',
+    ctaKey: 'startDelivery',
     icon: Bike,
     color: 'from-accent to-primary',
     transition: 'in_transit',
   },
   in_transit: {
-    titleKey: 'pickedUp',
+    titleKey: 'onTheWay',
     ctaKey: 'atCustomer',
     icon: Bike,
     color: 'from-accent to-primary',

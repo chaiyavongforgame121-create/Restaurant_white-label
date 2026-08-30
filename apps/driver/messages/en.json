@@ -56,6 +56,8 @@
     "headToPickup": "Head to pickup",
     "atPickup": "I'm at the restaurant",
     "pickedUp": "Picked up — start delivery",
+    "startDelivery": "Start delivery — I'm driving",
+    "onTheWay": "On the way to the customer",
     "atCustomer": "I've arrived",
     "delivered": "Mark as delivered",
     "callCustomer": "Call customer",

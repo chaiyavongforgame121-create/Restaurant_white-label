@@ -43,20 +43,26 @@ export function HomeView() {
         ? scopeNames[0]
         : `${scopeNames[0]} +${scopeNames.length - 1}`;
 
-  // Real today / week earnings for the hero stat tiles (was hardcoded $0).
+  // Today / week earnings for the hero tiles.
+  //
+  // Was two calls with p_days 1 and 7, reading total_earnings_usd out of each. Three things
+  // were wrong and they compounded into a confident, wrong number:
+  //   - the RPC raised on every call (it filtered on a delivery_status label that does not
+  //     exist), and `?? 0` turned that failure into "$0 earned";
+  //   - p_days 1 and 7 are rolling 24h and 168h windows in UTC, not the driver's today and
+  //     this week;
+  //   - the sum came from deliveries.driver_earnings, which excludes tips, so it disagreed
+  //     with the Earnings and History screens by exactly the tips.
+  // The RPC now returns proper calendar-window figures from the payout ledger. One call.
   const [earnings, setEarnings] = React.useState<{ today: number; week: number } | null>(null);
   React.useEffect(() => {
     let cancelled = false;
     void (async () => {
       const supabase = getBrowserClient();
-      const [d1, d7] = await Promise.all([
-        supabase.rpc('get_my_driver_stats', { p_days: 1 }),
-        supabase.rpc('get_my_driver_stats', { p_days: 7 }),
-      ]);
+      const { data } = await supabase.rpc('get_my_driver_stats', { p_days: 30 });
       if (cancelled) return;
-      const today = (d1.data as { total_earnings_usd?: number } | null)?.total_earnings_usd ?? 0;
-      const week = (d7.data as { total_earnings_usd?: number } | null)?.total_earnings_usd ?? 0;
-      setEarnings({ today, week });
+      const d = data as { today_earnings_usd?: number; week_earnings_usd?: number } | null;
+      setEarnings({ today: d?.today_earnings_usd ?? 0, week: d?.week_earnings_usd ?? 0 });
     })();
     return () => {
       cancelled = true;
@@ -509,7 +515,10 @@ interface DriverStats {
   acceptance_rate: number | null;
   on_time_rate: number | null;
   avg_rating: number | null;
+  rating_count: number;
   total_earnings_usd: number;
+  today_earnings_usd: number;
+  week_earnings_usd: number;
 }
 
 function PerformanceCard() {
@@ -542,6 +551,13 @@ function PerformanceCard() {
         <Tile
           label="On-time"
           value={stats.on_time_rate != null ? `${stats.on_time_rate}%` : '—'}
+        />
+        {/* Customers have been rating riders all along (order_ratings.delivery_stars); the
+            number simply had nowhere to appear. '—' now means genuinely unrated, not
+            "we never looked". */}
+        <Tile
+          label={stats.rating_count > 0 ? `Rating · ${stats.rating_count}` : 'Rating'}
+          value={stats.avg_rating != null ? `${stats.avg_rating.toFixed(2)} ★` : '—'}
         />
       </div>
     </Card>

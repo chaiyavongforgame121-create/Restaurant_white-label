@@ -189,7 +189,7 @@ export function OrderActions({ orderId, branchId, orderStatus, existingRating, h
                     <h3 className="font-display text-2xl font-bold">How was your order?</h3>
                     <p className="mt-1 text-sm text-white/85">
                       {hasDriver
-                        ? 'Rate the food and your delivery to finish up.'
+                        ? 'Rate the food and your driver to finish up.'
                         : 'Rate the food to finish up.'}
                     </p>
                   </div>
@@ -197,7 +197,7 @@ export function OrderActions({ orderId, branchId, orderStatus, existingRating, h
                 <div className="space-y-4 p-6">
                   <BigStarRow label="Food" value={foodStars} onChange={setFoodStars} />
                   {hasDriver && (
-                    <BigStarRow label="Delivery" value={deliveryStars} onChange={setDeliveryStars} />
+                    <BigStarRow label="Your driver" value={deliveryStars} onChange={setDeliveryStars} />
                   )}
                   <textarea
                     value={comment}
@@ -221,7 +221,7 @@ export function OrderActions({ orderId, branchId, orderStatus, existingRating, h
                     Submit rating
                   </Button>
                   <p className="text-center text-xs text-muted-foreground">
-                    {hasDriver ? 'Food and delivery stars are required.' : 'Food stars are required.'}
+                    {hasDriver ? 'Food and driver stars are required.' : 'Food stars are required.'}
                   </p>
                   {/* Once a submit has failed, the modal must not hold the page hostage. */}
                   {error && (
@@ -257,7 +257,7 @@ function SubmittedRating({ rating }: { rating: ExistingRating }) {
       <div className="mt-2 space-y-1">
         <StaticStarRow label="Food" value={rating.food_stars} />
         {rating.delivery_stars != null && (
-          <StaticStarRow label="Delivery" value={rating.delivery_stars} />
+          <StaticStarRow label="Your driver" value={rating.delivery_stars} />
         )}
       </div>
       {rating.comment && (
