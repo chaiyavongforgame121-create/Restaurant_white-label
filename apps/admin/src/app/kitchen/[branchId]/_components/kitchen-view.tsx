@@ -135,6 +135,10 @@ interface Order {
   customer_notes?: string | null;
   kitchen_notes?: string | null;
   held?: boolean;
+  /** A QR-transfer order whose money the merchant has not confirmed. Read from the ORDER
+   *  row on purpose: payments is gated behind the 'payments.view' capability, which kitchen
+   *  staff do not have, so an embedded payments check silently returns nothing and passes. */
+  awaiting_payment?: boolean;
   scheduled_for?: string | null;
   table_id?: string | null;
   tables?: { table_number: string; display_name: string | null } | null;
@@ -202,7 +206,7 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
     const { data } = await supa()
       .from('orders')
       .select(
-        'id, order_number, status, channel, created_at, customer_name, customer_notes, kitchen_notes, held, scheduled_for, table_id, tables(table_number, display_name), order_items(id, item_name, quantity, notes, prep_status, station, modifiers), deliveries(id, status, driver_id, accepted_at, batch_id, batch_seq)',
+        'id, order_number, status, channel, created_at, customer_name, customer_notes, kitchen_notes, held, awaiting_payment, scheduled_for, table_id, tables(table_number, display_name), order_items(id, item_name, quantity, notes, prep_status, station, modifiers), deliveries(id, status, driver_id, accepted_at, batch_id, batch_seq)',
       )
       .eq('branch_id', branchId)
       .in('status', ACTIVE_STATUSES)
@@ -365,7 +369,12 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
     (o: Order) => !station || o.order_items.some((it) => it.station === station),
     [station],
   );
-  const visible = orders.filter((o) => !o.held && ACTIVE_STATUSES.includes(o.status) && matchesStation(o));
+  // awaiting_payment tickets are not work yet — the money has not arrived, and
+  // orders_block_unpaid_transfer would refuse the transition anyway, but only AFTER the cook
+  // had tried it mid-service.
+  const visible = orders.filter(
+    (o) => !o.held && !o.awaiting_payment && ACTIVE_STATUSES.includes(o.status) && matchesStation(o),
+  );
   const scheduled = orders.filter((o) => o.held);
 
   /* new-order beep — gated to the active station, with an aging escalation tone.
@@ -401,7 +410,7 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
   const stationStat: Record<string, { count: number; drown: boolean }> = {};
   for (const s of stations) stationStat[s] = { count: 0, drown: false };
   for (const o of orders) {
-    if (o.held || !ACTIVE_STATUSES.includes(o.status)) continue;
+    if (o.held || o.awaiting_payment || !ACTIVE_STATUSES.includes(o.status)) continue;
     const lane = o.status === 'preparing' ? 'cooking' : o.status === 'ready' ? 'ready' : 'new';
     const from = lane === 'ready' ? (readyAtRef.current[o.id] ?? mountNowRef.current) : new Date(o.created_at).getTime();
     const tier = agingTier(safeElapsedSec(from, now), lane).tier;

@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertCircle, Info, Star } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
@@ -23,6 +24,9 @@ interface Props {
    */
   existingRating: ExistingRating | null | undefined;
   hasDriver: boolean;
+  /** QR-transfer order the merchant has not confirmed payment for. Nothing is cooking — the
+   *  kitchen board filters these out — so the customer may still call it off themselves. */
+  awaitingPayment?: boolean;
 }
 
 /**
@@ -46,7 +50,16 @@ const RATEABLE_STATUSES = ['completed'];
  * with the restaurant rather than applied behind their back. Staff keep both
  * powers (admin Orders kebab, kitchen "Reject order").
  */
-export function OrderActions({ orderId, branchId, orderStatus, existingRating, hasDriver }: Props) {
+export function OrderActions({
+  orderId,
+  branchId,
+  orderStatus,
+  existingRating,
+  hasDriver,
+  awaitingPayment = false,
+}: Props) {
+  const router = useRouter();
+  const [cancelling, setCancelling] = React.useState(false);
   // The window in which contacting the restaurant can still change anything —
   // once it is out for delivery or handed over, there is nothing left to alter.
   const canStillChange = ['pending', 'confirmed', 'preparing'].includes(orderStatus);
@@ -132,7 +145,43 @@ export function OrderActions({ orderId, branchId, orderStatus, existingRating, h
       {/* Replaces the old self-serve Edit/Cancel buttons — the kitchen has to
           agree to a change, so point people at the restaurant instead of
           silently rewriting an order someone may already be cooking. */}
-      {canStillChange && (
+      {/* Self-cancel came back for exactly one case. The blanket removal was right while
+          food might already be on the pass, but an unpaid QR order is not on the pass: the
+          kitchen board filters awaiting_payment out, and cancel_order already permits the
+          customer while the order is pending or confirmed. Waiting on hold to call off an
+          order nobody has started is the wrong ask. */}
+      {awaitingPayment && canStillChange && (
+        <div className="space-y-2 rounded-2xl border border-border bg-muted/40 p-3">
+          <p className="text-sm text-muted-foreground">
+            Changed your mind? Nothing has been prepared yet — the restaurant has not
+            confirmed your transfer, so you can still call this order off.
+          </p>
+          <Button
+            variant="outline"
+            size="md"
+            fullWidth
+            loading={cancelling}
+            onClick={async () => {
+              setCancelling(true);
+              setError(null);
+              const supabase = getBrowserClient();
+              const { error: cancelErr } = await supabase.rpc('cancel_order', {
+                p_order_id: orderId,
+                p_reason: 'Cancelled by the customer before payment was confirmed.',
+              });
+              setCancelling(false);
+              if (cancelErr) {
+                setError(cancelErr.message);
+                return;
+              }
+              router.refresh();
+            }}
+          >
+            Cancel this order
+          </Button>
+        </div>
+      )}
+      {!awaitingPayment && canStillChange && (
         <div className="flex gap-2.5 rounded-2xl border border-border bg-muted/40 p-3">
           <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">

@@ -114,7 +114,7 @@ export async function getOrderByNumber(
       `id, order_number, branch_id, channel, status, total, subtotal,
        delivery_fee, service_fee, customer_name, customer_phone,
        delivery_address, customer_notes, created_at, confirmed_at, completed_at,
-       cancellation_reason,
+       cancellation_reason, awaiting_payment,
        order_items(id, item_name, item_image_url, unit_price, quantity, subtotal),
        payments(id, method, status, proof_image_url, gateway_metadata),
        deliveries(id, status, driver_id, distance_km, estimated_duration_min, assigned_at, accepted_at, picked_up_at, delivered_at,

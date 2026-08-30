@@ -37,6 +37,9 @@ type OrderRow = {
   /** Why the order was cancelled. Set by decide_payment_proof when a merchant refuses a
    *  transfer slip — before this the order simply stopped moving with no explanation. */
   cancellation_reason?: string | null;
+  /** A QR-transfer order the merchant has not confirmed payment for. It is deliberately not
+   *  on the kitchen board yet, which is what makes self-cancel safe here. */
+  awaiting_payment?: boolean | null;
   total: number | string;
   customer_name?: string | null;
   customer_phone?: string | null;
@@ -399,6 +402,7 @@ export function OrderTracking({ initialOrder, branchId, branchLocation }: Props)
 
       <div className="mt-4">
         <OrderActions
+          awaitingPayment={order.awaiting_payment === true}
           orderId={order.id}
           branchId={branchId}
           orderStatus={order.status}
@@ -657,13 +661,19 @@ function TransferProof({
   const [error, setError] = React.useState<string | null>(null);
 
   const note = (payment.gateway_metadata?.decision_note as string | undefined) ?? null;
-  const submitted = !!payment.proof_image_url;
+  // Held locally as well as read from the server row. router.refresh() re-renders a server
+  // component, and until that round-trip lands the screen still showed "Upload your transfer
+  // slip" with no image — indistinguishable from the upload having failed, which is exactly
+  // how it was reported. The local value wins immediately.
+  const [justUploaded, setJustUploaded] = React.useState<string | null>(null);
+  const proofPath = justUploaded ?? payment.proof_image_url ?? null;
+  const submitted = !!proofPath;
   // payment-proofs is a private bucket, so the slip needs a signed URL to be shown back.
   // Without this the customer had no way to see what they had sent — the button simply
   // vanished on success, which reads as "the upload failed", which is what was reported.
   const [slipUrl, setSlipUrl] = React.useState<string | null>(null);
   React.useEffect(() => {
-    const path = payment.proof_image_url;
+    const path = proofPath;
     if (!path) {
       setSlipUrl(null);
       return;
@@ -679,7 +689,7 @@ function TransferProof({
     return () => {
       cancelled = true;
     };
-  }, [payment.proof_image_url]);
+  }, [proofPath]);
 
   const upload = async (file: File) => {
     setBusy(true);
@@ -701,6 +711,7 @@ function TransferProof({
         p_path: path,
       });
       if (rpcErr) throw new Error(rpcErr.message);
+      setJustUploaded(path);
       router.refresh();
     } catch (e) {
       setError((e as Error).message);

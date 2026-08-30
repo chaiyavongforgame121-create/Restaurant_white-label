@@ -658,6 +658,10 @@ Deno.serve(async (req: Request) => {
     table_id: tableId, source,
     scheduled_for: scheduledFor,
     held,
+    // Set here as well as by the payments trigger. The order row is inserted BEFORE the
+    // payment row, so a kitchen client subscribed to realtime would otherwise see the
+    // ticket appear and then vanish a moment later when the trigger fired.
+    awaiting_payment: payload.payment_method === 'transfer',
     status_history: [{ status: 'pending', at: new Date().toISOString(), scheduled_for: scheduledFor, held }],
   }).select('id, order_number').single();
   if (oErr || !order) return json(500, { error: 'order_insert_failed', detail: oErr?.message });
