@@ -30,8 +30,7 @@ const INPUT_CLS =
 type NumericKey =
   | 'delivery_base_fee'
   | 'delivery_per_km_fee'
-  | 'delivery_min_fee'
-  | 'delivery_max_fee'
+  | 'delivery_surge_from_mi'
   | 'delivery_radius_km'
   | 'prep_time_min'
   | 'driver_search_radius_km'
@@ -39,8 +38,6 @@ type NumericKey =
   | 'dispatch_max_gps_age_min'
   | 'offer_ttl_seconds'
   | 'batch_max_detour_mi'
-  | 'driver_base_pay'
-  | 'driver_per_km_pay'
   | 'driver_max_pay';
 
 const FIELDS: Array<{
@@ -63,17 +60,18 @@ const FIELDS: Array<{
 }> = [
   { key: 'delivery_base_fee', label: 'Base fee ($)', group: 'fees', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.deliveryBaseFee, max: 100 },
   { key: 'delivery_per_km_fee', label: 'Per mile ($)', group: 'fees', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.deliveryPerKmFee, convert: 'rate', max: 50 },
-  { key: 'delivery_min_fee', label: 'Minimum fee ($)', group: 'fees', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.deliveryMinFee, max: 100 },
-  { key: 'delivery_max_fee', label: 'Maximum fee ($)', group: 'fees', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.deliveryMaxFee, max: 100 },
   // Was capped at 50 mi. Opened at the owner's request (2026-08-29) for long-distance
   // testing, on the same reasoning as the two dispatch fields below — with one caveat that
   // is NOT true of those, and that the hint now states: 50 mi was not an arbitrary number.
   // private.branch_driver_pay_cap defaults to $50 and its comment says so outright — "$2
   // base + $1/mi caps out at the old 50 mi radius. Deliberate." Past 50 mi the driver's pay
   // stops growing while their drive does, so `driver_max_pay` has to move with the radius.
-  // The exposure is bounded either way: the customer fee is already clamped by
-  // delivery_max_fee, so the worst case per order is pay_cap minus that fee, not a runaway.
+  // The customer side is NO LONGER bounded: the minimum/maximum fee inputs were removed at
+  // the owner's request (2026-08-31) and quote_delivery no longer clamps, so a long delivery
+  // now charges base + per-mile in full. Rider pay still stops at driver_max_pay, which is
+  // why that one stayed.
   { key: 'delivery_radius_km', label: 'Delivery radius (mi)', hint: 'Orders beyond this distance are rejected at checkout. Above ~50 mi, raise "Driver max pay" too or drivers are capped at $50 no matter how far they drive.', group: 'timing', step: '0.5', fallback: DELIVERY_SETTING_DEFAULTS.deliveryRadiusKm, convert: 'dist', max: 9_999_999_999 },
+  { key: 'delivery_surge_from_mi', label: 'Surge starts at (mi)', hint: 'Distance from the branch at which the surge multiplier below begins to apply. 0 applies it to every order, including a half-mile hop.', group: 'fees', step: '0.5', fallback: 0, max: 9_999_999_999 },
   { key: 'prep_time_min', label: 'Prep time (min)', hint: 'Baseline kitchen time used in customer ETAs', group: 'timing', step: '1', fallback: DELIVERY_SETTING_DEFAULTS.prepTimeMin, max: 240 },
   // These two are deliberately near-unbounded (owner's call): a huge search radius and a
   // huge attempt count are how you force every driver to be a candidate while testing
@@ -91,8 +89,6 @@ const FIELDS: Array<{
   // Stored directly in miles (unlike the km-stored keys above) — the SQL pairing fn
   // claim_batch_sibling reads settings->>'batch_max_detour_mi' as miles.
   { key: 'batch_max_detour_mi', label: 'Stacked-order max detour (mi)', hint: 'Pair two ready orders only when the second is on the way — this caps the extra driving the second customer accepts. Lower = only near-perfect same-route pairs (needs stacking enabled below)', group: 'dispatch', step: '0.25', fallback: 1.0, max: 10 },
-  { key: 'driver_base_pay', label: 'Driver base pay ($)', group: 'pay', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.driverBasePay, max: 100 },
-  { key: 'driver_per_km_pay', label: 'Driver per mile ($)', group: 'pay', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.driverPerKmPay, convert: 'rate', max: 50 },
   // branch_driver_pay_cap reads this key and falls back to $50. It had no editor, so the
   // ceiling that silently truncates a long delivery's pay could not be seen or moved from
   // the back office — which only became reachable once the radius above was opened.
@@ -302,7 +298,7 @@ export function DeliverySettingsCard({ branchId, settings }: Props) {
               className="h-2 w-full accent-primary"
             />
             <span className="mt-1 block text-xs text-muted-foreground">
-              Applied to the delivery fee after the min/max clamp. 1.00 = off.
+              Multiplies the delivery fee beyond &ldquo;Surge starts at&rdquo; above. 1.00 = off.
             </span>
           </label>
         </div>

@@ -70,13 +70,22 @@ type OrderRow = {
   }>;
 };
 
+export interface QrTransfer {
+  image_url?: string;
+  account_name?: string;
+  instructions?: string;
+}
+
 interface Props {
   initialOrder: OrderRow;
   branchId: string;
   branchLocation?: { lat: number; lng: number } | null;
+  /** branches.settings.qr_transfer. The code is shown HERE, not at checkout, so the diner
+   *  pays against an order that already exists and has a number to quote. */
+  qrTransfer?: QrTransfer | null;
 }
 
-export function OrderTracking({ initialOrder, branchId, branchLocation }: Props) {
+export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransfer }: Props) {
   const t = useTranslations('tracking');
   const router = useRouter();
   const pathname = usePathname();
@@ -334,7 +343,13 @@ export function OrderTracking({ initialOrder, branchId, branchLocation }: Props)
           {order.payments
             ?.filter((p) => p.method === 'transfer')
             .map((p) => (
-              <TransferProof key={p.id ?? 'transfer'} orderId={order.id} payment={p} />
+              <TransferProof
+                key={p.id ?? 'transfer'}
+                orderId={order.id}
+                payment={p}
+                total={Number(order.total)}
+                qr={qrTransfer ?? null}
+              />
             ))}
 
           {delivery?.driver_id && (
@@ -647,6 +662,8 @@ async function loadStripe(publishableKey: string) {
 function TransferProof({
   orderId,
   payment,
+  total,
+  qr,
 }: {
   orderId: string;
   payment: {
@@ -655,6 +672,8 @@ function TransferProof({
     proof_image_url?: string | null;
     gateway_metadata?: Record<string, unknown> | null;
   };
+  total: number;
+  qr: QrTransfer | null;
 }) {
   const router = useRouter();
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -669,6 +688,26 @@ function TransferProof({
   const [justUploaded, setJustUploaded] = React.useState<string | null>(null);
   const proofPath = justUploaded ?? payment.proof_image_url ?? null;
   const submitted = !!proofPath;
+  // Uploading a slip and saying "I have paid" are two different acts. The merchant is only
+  // asked to look once the diner confirms — before that they may still be swapping a
+  // screenshot, and an approval queue full of half-finished uploads is noise.
+  const [justConfirmed, setJustConfirmed] = React.useState(false);
+  const confirmed = justConfirmed || !!payment.gateway_metadata?.customer_confirmed_at;
+  const [confirming, setConfirming] = React.useState(false);
+
+  const confirmPaid = async () => {
+    setConfirming(true);
+    setError(null);
+    const supabase = getBrowserClient();
+    const { error: rpcErr } = await supabase.rpc('confirm_payment_proof', { p_order_id: orderId });
+    setConfirming(false);
+    if (rpcErr) {
+      setError(rpcErr.hint ?? rpcErr.message);
+      return;
+    }
+    setJustConfirmed(true);
+    router.refresh();
+  };
   // payment-proofs is a private bucket, so the slip needs a signed URL to be shown back.
   // Without this the customer had no way to see what they had sent — the button simply
   // vanished on success, which reads as "the upload failed", which is what was reported.
@@ -741,19 +780,40 @@ function TransferProof({
       <p className="font-semibold">
         {rejected
           ? 'Your transfer slip was not accepted'
-          : submitted
+          : confirmed
             ? 'Waiting for the restaurant to check your slip'
-            : 'Upload your transfer slip'}
+            : submitted
+              ? 'Check your slip, then confirm'
+              : `Pay ${formatCurrency(total)} to continue`}
       </p>
       <p className="mt-1 text-sm text-muted-foreground">
         {rejected
           ? note
             ? `Reason: ${note}`
             : 'Please upload a clearer photo of the transfer.'
-          : submitted
+          : confirmed
             ? 'We will start your order as soon as they confirm it. This usually takes a few minutes.'
-            : 'Scan the QR shown at checkout, transfer the total, then upload a photo of the confirmation.'}
+            : submitted
+              ? 'Have a look at the photo below. Replace it if it is not right, then confirm you have paid — that is what sends it to the restaurant.'
+              : 'Scan the code, transfer the total, then upload a photo of the confirmation.'}
       </p>
+
+      {/* The QR lives here rather than at checkout: the diner now has a real order number to
+          put in the transfer note, and nothing is asked of them until the order exists. */}
+      {!confirmed && qr?.image_url && (
+        <div className="mt-3 rounded-2xl border border-border bg-muted/30 p-4 text-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={qr.image_url}
+            alt="Payment QR code"
+            className="mx-auto h-48 w-48 rounded-xl bg-white object-contain p-2"
+          />
+          {qr.account_name && <p className="mt-2 text-sm font-medium">{qr.account_name}</p>}
+          {qr.instructions && (
+            <p className="mt-1 text-xs text-muted-foreground">{qr.instructions}</p>
+          )}
+        </div>
+      )}
 
       <input
         ref={inputRef}
@@ -777,12 +837,24 @@ function TransferProof({
         />
       )}
 
-      {/* Replacing stayed possible only after a rejection. But the merchant may not have
-          looked yet, and a customer who spots their own mistake in the preview above should
-          not have to wait to be refused before they can fix it. */}
-      <Button className="mt-3" fullWidth loading={busy} onClick={() => inputRef.current?.click()}>
-        {submitted ? 'Upload a different photo' : 'Choose photo'}
-      </Button>
+      {/* Replaceable right up until the diner confirms — after that it is with the merchant
+          and swapping it underneath them would be dishonest. A rejection reopens it. */}
+      {(!confirmed || rejected) && (
+        <Button
+          className="mt-3"
+          fullWidth
+          variant={submitted ? 'outline' : 'gradient'}
+          loading={busy}
+          onClick={() => inputRef.current?.click()}
+        >
+          {submitted ? 'Upload a different photo' : 'Choose photo'}
+        </Button>
+      )}
+      {submitted && (!confirmed || rejected) && (
+        <Button className="mt-2" fullWidth loading={confirming} onClick={confirmPaid}>
+          I&apos;ve paid — send to the restaurant
+        </Button>
+      )}
       {error && <p className="mt-2 text-sm text-danger">{error}</p>}
     </Card>
   );

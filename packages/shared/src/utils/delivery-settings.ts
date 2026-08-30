@@ -7,18 +7,17 @@ export interface DeliverySettings {
   deliveryBaseFee: number;
   /** Per-kilometer fee on top of the base (USD/km). */
   deliveryPerKmFee: number;
-  /** Fee floor after base+distance (USD). */
-  deliveryMinFee: number;
-  /** Fee ceiling after base+distance (USD). */
-  deliveryMaxFee: number;
   /** Max straight-line delivery radius from the branch (km). */
   deliveryRadiusKm: number;
   /** Kitchen prep time baseline (minutes). */
   prepTimeMin: number;
   /** Extra prep buffer while "busy mode" is on (minutes). */
   busyExtraPrepMin: number;
-  /** Manual surge multiplier applied to the clamped fee (1 = off). */
+  /** Manual surge multiplier (1 = off). */
   deliverySurgeMultiplier: number;
+  /** Distance from the branch at which the surge multiplier starts applying (km).
+   *  0 applies it to every order, which is what it did before this existed. */
+  deliverySurgeFromKm: number;
   /** Seconds a dispatch offer stays valid before re-offer. */
   offerTtlSeconds: number;
   /** Driver pay: flat per delivery (USD). */
@@ -46,12 +45,11 @@ export const miToKm = (mi: number): number => mi * KM_PER_MILE;
 export const DELIVERY_SETTING_DEFAULTS: DeliverySettings = {
   deliveryBaseFee: 2.49,
   deliveryPerKmFee: 2 / KM_PER_MILE, // $2.00 / mile
-  deliveryMinFee: 2.99,
-  deliveryMaxFee: 9.99,
   deliveryRadiusKm: 5 * KM_PER_MILE, // 5 miles
   prepTimeMin: 15,
   busyExtraPrepMin: 0,
   deliverySurgeMultiplier: 1,
+  deliverySurgeFromKm: 0,
   offerTtlSeconds: 75,
   driverBasePay: 2.0,
   driverPerKmPay: 1 / KM_PER_MILE, // $1.00 / mile
@@ -73,12 +71,13 @@ export function parseDeliverySettings(settings: Record<string, unknown> | null |
   return {
     deliveryBaseFee: num(s.delivery_base_fee, d.deliveryBaseFee),
     deliveryPerKmFee: num(s.delivery_per_km_fee, d.deliveryPerKmFee),
-    deliveryMinFee: num(s.delivery_min_fee, d.deliveryMinFee),
-    deliveryMaxFee: num(s.delivery_max_fee, d.deliveryMaxFee),
     deliveryRadiusKm: num(s.delivery_radius_km, d.deliveryRadiusKm),
     prepTimeMin: num(s.prep_time_min, d.prepTimeMin),
     busyExtraPrepMin: num(s.busy_extra_prep_min, d.busyExtraPrepMin),
     deliverySurgeMultiplier: Math.max(1, num(s.delivery_surge_multiplier, d.deliverySurgeMultiplier)),
+    // Set in MILES by the admin (that is the unit on screen); kept metric here so the rest
+    // of this module and quote_delivery() stay in the same units.
+    deliverySurgeFromKm: Math.max(0, miToKm(num(s.delivery_surge_from_mi, 0))),
     offerTtlSeconds: num(s.offer_ttl_seconds, d.offerTtlSeconds),
     driverBasePay: num(s.driver_base_pay, d.driverBasePay),
     driverPerKmPay: num(s.driver_per_km_pay, d.driverPerKmPay),
@@ -91,11 +90,19 @@ function round2(n: number): number {
 }
 
 /** clamp(base + km×perKm, min, max) × surge — identical to quote_delivery() in SQL. */
+/**
+ * Mirrors SQL quote_delivery(). The two must land on the same cent — the merchant is shown
+ * this number and the server charges its own.
+ *
+ * The min/max clamp is gone: the owner removed both inputs (2026-08-31) and quote_delivery
+ * stopped clamping with them, so keeping a floor and a $9.99 ceiling here would have made
+ * the preview disagree with every real order.
+ */
 export function computeDeliveryFee(settings: DeliverySettings, distanceKm: number): number {
-  let fee = settings.deliveryBaseFee + distanceKm * settings.deliveryPerKmFee;
-  fee = Math.max(fee, settings.deliveryMinFee);
-  fee = Math.min(fee, settings.deliveryMaxFee);
-  return round2(fee * settings.deliverySurgeMultiplier);
+  const fee = Math.max(0, settings.deliveryBaseFee + distanceKm * settings.deliveryPerKmFee);
+  // Surge starts at a distance now, so a short hop is not multiplied.
+  const surge = distanceKm < settings.deliverySurgeFromKm ? 1 : settings.deliverySurgeMultiplier;
+  return round2(fee * surge);
 }
 
 /** prep + busy buffer + travel at CITY_SPEED_KMH — identical to quote_delivery() in SQL. */

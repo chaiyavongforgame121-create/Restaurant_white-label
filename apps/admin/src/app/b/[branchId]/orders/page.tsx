@@ -34,7 +34,7 @@ export default async function OrdersPage({ params, searchParams }: Props) {
 
   let query = supabase
     .from('orders')
-    .select('id, order_number, channel, status, total, customer_name, customer_phone, created_at, scheduled_for, held')
+    .select('id, order_number, channel, status, total, customer_name, customer_phone, created_at, scheduled_for, held, awaiting_payment')
     .eq('branch_id', branchId);
 
   if (q && q.trim()) {
@@ -92,11 +92,11 @@ export default async function OrdersPage({ params, searchParams }: Props) {
   // made (enforced by the orders_block_unpaid_transfer trigger), so this is surfaced above
   // the table rather than buried in a row.
   //
-  // Only once a slip actually exists. Without the proof_image_url filter this listed orders
-  // the customer had not paid for yet, under a heading saying they were waiting for the
-  // merchant — with an Approve button and a grey box reading "No slip uploaded yet". There
-  // is nothing to approve at that point, and approving anyway released the ticket to the
-  // kitchen for money that had not arrived.
+  // Only once the CUSTOMER has confirmed. A slip on its own is not a claim of payment — the
+  // diner may still be swapping a screenshot for a clearer one — and an approval queue full
+  // of half-finished uploads is noise the merchant has to re-check every time it changes.
+  // customer_confirmed_at is stamped by confirm_payment_proof, i.e. by the diner pressing
+  // "I've paid".
   const { data: transferRows } = await supabase
     .from('payments')
     .select('id, order_id, amount, proof_image_url, gateway_metadata, orders!inner(order_number, customer_name, customer_phone)')
@@ -104,6 +104,7 @@ export default async function OrdersPage({ params, searchParams }: Props) {
     .eq('method', 'transfer')
     .eq('status', 'pending')
     .not('proof_image_url', 'is', null)
+    .not('gateway_metadata->customer_confirmed_at', 'is', null)
     .order('created_at', { ascending: true })
     .limit(50);
 
@@ -176,6 +177,13 @@ export default async function OrdersPage({ params, searchParams }: Props) {
                   {fmtWhen(o.created_at)}
                   {/* Without this a pre-order looks like it needs cooking now:
                       it sits at pending/confirmed and only its created_at showed. */}
+                  {/* A QR order is invisible to the kitchen until the money is confirmed, so
+                      say so here rather than leaving it looking like an untouched ticket. */}
+                  {o.awaiting_payment && (
+                    <span className="ml-2 rounded-full bg-warning/15 px-2 py-0.5 text-[11px] font-semibold text-warning">
+                      Waiting for customer payment
+                    </span>
+                  )}
                   {o.scheduled_for && (
                     <span className="mt-0.5 block text-xs font-medium text-foreground">
                       {o.held ? 'Scheduled' : 'Due'} {fmtWhen(o.scheduled_for)}
@@ -218,6 +226,13 @@ export default async function OrdersPage({ params, searchParams }: Props) {
                   <p className="font-mono text-xs text-muted-foreground">{o.order_number}</p>
                   <p className="mt-1 font-semibold">{o.customer_name ?? 'Walk-in'}</p>
                   <p className="text-xs text-muted-foreground capitalize">{o.channel.replace('_', ' ')}</p>
+                  {/* A QR order is invisible to the kitchen until the money is confirmed, so
+                      say so here rather than leaving it looking like an untouched ticket. */}
+                  {o.awaiting_payment && (
+                    <span className="ml-2 rounded-full bg-warning/15 px-2 py-0.5 text-[11px] font-semibold text-warning">
+                      Waiting for customer payment
+                    </span>
+                  )}
                   {o.scheduled_for && (
                     <p className="mt-1 text-xs font-medium">
                       {o.held ? 'Scheduled' : 'Due'} {fmtWhen(o.scheduled_for)}

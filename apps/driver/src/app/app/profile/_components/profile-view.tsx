@@ -21,23 +21,36 @@ type DocKey = (typeof DOC_TYPES)[number]['key'];
 export function ProfileView() {
   const { driver, refresh } = useDriverSession();
   const router = useRouter();
-  const [uploadedDocs, setUploadedDocs] = React.useState<Set<DocKey>>(new Set());
+  // Was a Set of keys — enough to tick a box, not enough to show the rider what they sent.
+  // A wrong or unreadable photo looked identical to a good one, and there was no way to
+  // check short of re-uploading and hoping.
+  type DocFile = { name: string; url: string | null };
+  const [uploadedDocs, setUploadedDocs] = React.useState<Partial<Record<DocKey, DocFile>>>({});
+
+  const loadDocs = React.useCallback(async () => {
+    const supabase = getBrowserClient();
+    const { data } = await supabase.storage.from('driver-kyc').list(driver.id, { limit: 50 });
+    if (!data) return;
+    const found: Partial<Record<DocKey, DocFile>> = {};
+    const wanted = data.filter((f) =>
+      DOC_TYPES.some((d) => d.key === (f.name.split('.')[0] as DocKey)),
+    );
+    // driver-kyc is private (driver_kyc_self_read lets the rider read their own folder), so
+    // a preview needs a signed URL rather than a public one.
+    const paths = wanted.map((f) => `${driver.id}/${f.name}`);
+    const signed = paths.length
+      ? (await supabase.storage.from('driver-kyc').createSignedUrls(paths, 60 * 10)).data
+      : null;
+    wanted.forEach((f, i) => {
+      const key = f.name.split('.')[0] as DocKey;
+      found[key] = { name: f.name, url: signed?.[i]?.signedUrl ?? null };
+    });
+    setUploadedDocs(found);
+  }, [driver.id]);
 
   React.useEffect(() => {
-    const supabase = getBrowserClient();
-    void supabase.storage
-      .from('driver-kyc')
-      .list(driver.id, { limit: 50 })
-      .then(({ data }) => {
-        if (!data) return;
-        const found = new Set<DocKey>();
-        for (const f of data) {
-          const base = f.name.split('.')[0] as DocKey;
-          if (DOC_TYPES.some((d) => d.key === base)) found.add(base);
-        }
-        setUploadedDocs(found);
-      });
-  }, [driver.id]);
+    void loadDocs();
+  }, [loadDocs]);
 
   const kycStatus = driver.kyc_status ?? 'pending';
   const isVerified = kycStatus === 'verified';
@@ -58,7 +71,9 @@ export function ProfileView() {
         .from('driver-kyc')
         .upload(path, file, { upsert: true, contentType: file.type });
       if (!error) {
-        setUploadedDocs((s) => new Set(s).add(docKey));
+        // Re-list so the preview below is the file that is actually stored, not an
+        // optimistic guess at it.
+        void loadDocs();
         return;
       }
       lastMessage = error.message;
@@ -151,20 +166,36 @@ export function ProfileView() {
 
           <ul className="divide-y divide-border">
             {DOC_TYPES.map((doc) => {
-              const done = uploadedDocs.has(doc.key);
+              const file = uploadedDocs[doc.key];
+              const done = !!file;
+              const isPdf = file?.name.toLowerCase().endsWith('.pdf') ?? false;
               return (
                 <li key={doc.key} className="flex items-center gap-3 px-5 py-3">
-                  <div
-                    className={`grid h-10 w-10 place-items-center rounded-xl ${
-                      done ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground'
-                    }`}
-                  >
-                    {done ? <CheckCircle2 className="h-5 w-5" /> : <FileCheck2 className="h-5 w-5" />}
-                  </div>
-                  <div className="flex-1">
+                  {/* The document itself, not a tick. A rider who photographed the wrong
+                      side of a licence can now see that without re-uploading blind. */}
+                  {done && file?.url && !isPdf ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={file.url}
+                      alt={doc.label}
+                      className="h-10 w-10 shrink-0 rounded-xl border border-border object-cover"
+                    />
+                  ) : (
+                    <div
+                      className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${
+                        done ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground'
+                      }`}
+                    >
+                      {done ? <CheckCircle2 className="h-5 w-5" /> : <FileCheck2 className="h-5 w-5" />}
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
                     <p className="font-semibold">{doc.label}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {done ? 'Uploaded — pending review' : 'Not uploaded'}
+                    {/* "pending review" is removed: whether a human has looked yet is the
+                        merchant's business, not something the rider can act on, and it made
+                        a finished upload read as unfinished. */}
+                    <p className="truncate text-xs text-muted-foreground">
+                      {done ? file!.name : 'Not uploaded'}
                     </p>
                   </div>
                   <label className="focus-ring inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-full bg-primary px-3 text-xs font-semibold text-primary-foreground">

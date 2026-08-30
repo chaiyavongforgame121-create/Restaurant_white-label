@@ -1403,28 +1403,16 @@ export function CheckoutView({
                 <PaymentChoice icon={<QrCode className="h-5 w-5" />} label="QR transfer" active={method === 'transfer'} onClick={() => setMethod('transfer')} />
               )}
             </div>
-            {method === 'transfer' && qrTransfer?.image_url && (
-              <div className="mt-4 rounded-2xl border border-border bg-muted/30 p-4">
-                <p className="text-sm font-semibold">Scan to pay {formatCurrency(total)}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  Place the order first, then upload your transfer slip on the order page. The
-                  restaurant starts cooking once they have checked it.
-                </p>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={qrTransfer.image_url}
-                  alt="Payment QR code"
-                  className="mx-auto mt-3 h-48 w-48 rounded-xl bg-white object-contain p-2"
-                />
-                {qrTransfer.account_name && (
-                  <p className="mt-2 text-center text-sm font-medium">{qrTransfer.account_name}</p>
-                )}
-                {qrTransfer.instructions && (
-                  <p className="mt-1 text-center text-xs text-muted-foreground">
-                    {qrTransfer.instructions}
-                  </p>
-                )}
-              </div>
+            {/* The QR itself has moved to the order page. Showing it here asked the diner to
+                pay before the order existed — nothing to attach the slip to, no order number
+                to quote in the transfer note, and no way back if checkout then failed. Here
+                they only choose the method; the code, the amount and the upload all live on
+                the tracking screen a moment later. */}
+            {method === 'transfer' && (
+              <p className="mt-3 rounded-2xl border border-border bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
+                Place your order first. The QR code and the slip upload appear on the order
+                page straight after — nothing is charged until you confirm you have paid.
+              </p>
             )}
             {enabledMethods.length === 0 && (
               <p className="mt-3 text-sm text-muted-foreground">

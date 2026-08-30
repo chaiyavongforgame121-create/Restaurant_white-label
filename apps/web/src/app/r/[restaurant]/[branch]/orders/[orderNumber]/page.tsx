@@ -29,6 +29,15 @@ export default async function OrderDetailPage({ params }: Props) {
       initialOrder={normalized as never}
       branchId={tenant.branch.id}
       branchLocation={tenant.branch.geoLocation}
+      // The QR moved off checkout: a diner should not be asked to pay before the order
+      // exists. It is shown here, against a real order number they can quote in the note.
+      qrTransfer={
+        ((tenant.branch.settings as unknown as Record<string, unknown> | null)?.qr_transfer ?? null) as {
+          image_url?: string;
+          account_name?: string;
+          instructions?: string;
+        } | null
+      }
     />
   );
 }

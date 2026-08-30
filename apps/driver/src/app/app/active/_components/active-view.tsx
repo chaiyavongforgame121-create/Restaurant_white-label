@@ -7,7 +7,7 @@ import { Bike, CheckCircle2, Coffee, MapPin, Navigation, Package, Phone } from '
 import { useTranslations } from 'next-intl';
 import { formatCurrency, kmToMi } from '@favornoms/shared';
 import { Button, Card, EmptyState } from '@favornoms/ui';
-import { DeliveryMap, fetchRoute, hasMapboxToken } from '@favornoms/maps';
+import { DeliveryMap, fetchRoute, hasMapboxToken, haversineKm } from '@favornoms/maps';
 import { getBrowserClient } from '@favornoms/database/client';
 import { useDelivery, type ActiveDeliveryUI } from '@/components/delivery-provider';
 import {
@@ -18,6 +18,11 @@ import {
 } from '@favornoms/database/queries';
 import { DriverDeliveryChat } from './delivery-chat';
 import { PhotoUploader } from './photo-uploader';
+
+/** How close the rider must be before "I'm at the restaurant" / "I've arrived" unlock.
+ *  Owner's number. Wide enough for GPS drift and a car park, tight enough that it cannot be
+ *  pressed from the other side of town. */
+const ARRIVAL_RADIUS_MI = 0.2;
 
 type StageKey = 'heading_to_pickup' | 'at_pickup' | 'picked_up' | 'in_transit' | 'at_customer';
 
@@ -49,15 +54,13 @@ const stageMeta: Record<
     color: 'from-secondary to-primary',
     transition: 'picked_up',
   },
-  // picked_up and in_transit both read ctaKey 'atCustomer' — so the driver saw "I've
-  // arrived" twice in a row, on two screens that were otherwise identical, and the first
-  // press appeared to do nothing. It did: it moved the DB status to in_transit. Only the
-  // SECOND press means "I am standing at the customer's door", which is what reveals the
-  // proof-of-delivery uploader. Distinct labels, and distinct titles, so the two steps are
-  // visibly different things.
+  // 'picked_up' is no longer a screen the driver stops on. Collecting the bag and setting
+  // off are one act, so at_pickup drives the row through picked_up AND in_transit together
+  // (see handleAdvance) and the rider lands straight on "On the way". The stage is kept
+  // only so a resync that catches the row mid-transition has somewhere to sit.
   picked_up: {
-    titleKey: 'pickedUp',
-    ctaKey: 'startDelivery',
+    titleKey: 'onTheWay',
+    ctaKey: 'atCustomer',
     icon: Bike,
     color: 'from-accent to-primary',
     transition: 'in_transit',
@@ -226,6 +229,29 @@ export function ActiveDeliveryView() {
 
   // Proof of pickup is mandatory: at the restaurant the driver must snap a photo
   // before "Picked up" unlocks. Trust either the fresh local upload or the server row.
+  // Distance to whatever the rider is currently heading for, in miles. null when we have no
+  // fix yet — which must read as "we cannot tell", never as "you have arrived".
+  const arrivalTarget =
+    stage === 'heading_to_pickup'
+      ? { lat: active.branchLat, lng: active.branchLng, what: 'the restaurant' }
+      : { lat: active.dropoffLat, lng: active.dropoffLng, what: 'the drop-off' };
+  const milesToTarget =
+    driverPos && arrivalTarget.lat != null && arrivalTarget.lng != null
+      ? kmToMi(
+          haversineKm(
+            { lat: driverPos.lat, lng: driverPos.lng },
+            { lat: arrivalTarget.lat, lng: arrivalTarget.lng },
+          ),
+        )
+      : null;
+  // Only the two "I am here" steps are gated. Everything else is unaffected.
+  const isArrivalStep = stage === 'heading_to_pickup' || stage === 'in_transit';
+  // A branch or address with no coordinates cannot be checked against, and blocking the job
+  // over missing data the rider cannot fix would strand them mid-delivery.
+  const targetKnown = arrivalTarget.lat != null && arrivalTarget.lng != null;
+  const tooFarToArrive =
+    isArrivalStep && targetKnown && (milesToTarget == null || milesToTarget > ARRIVAL_RADIUS_MI);
+
   const hasPickupPhoto = !!pickupPhotoUrl || !!active.pickupPhotoUrl;
   const needsPickupPhoto = stage === 'at_pickup' && !hasPickupPhoto;
   // Proof of delivery is mandatory: at the customer the driver must snap a photo
@@ -279,14 +305,24 @@ export function ActiveDeliveryView() {
           /* keep the snapshot earnings */
         }
         setCompleted({ earnings, orderNumber: snap.orderNumber });
-      } else if (meta.transition === 'picked_up' && mate && matePendingPickup) {
-        // Batched job: both bags leave the counter together — mark the second leg
-        // picked up first (its own photo already gates this server-side), then the
-        // active leg via the provider (which also resyncs state).
+      } else if (meta.transition === 'picked_up') {
+        // Collecting the bag and setting off are one act now — the separate "start delivery"
+        // tap was a screen with nothing on it to decide. Batched jobs still mark the sibling
+        // picked up first, exactly as before.
         const supabase = getBrowserClient();
-        const { error: mateErr } = await progressDelivery(supabase, mate.id, 'picked_up');
-        if (mateErr) throw new Error(mateErr.message);
+        if (mate && matePendingPickup) {
+          const { error: mateErr } = await progressDelivery(supabase, mate.id, 'picked_up');
+          if (mateErr) throw new Error(mateErr.message);
+        }
         await progress('picked_up');
+        // Straight on to in_transit. A failure here is not fatal: the row is legitimately
+        // picked_up, the stage machine will show the on-the-way screen from the server
+        // status, and the rider can carry on.
+        try {
+          await progress('in_transit');
+        } catch {
+          /* stays at picked_up; the board and the customer both read that correctly */
+        }
       } else if (meta.transition) {
         await progress(meta.transition);
       } else if (meta.nextStage) {
@@ -476,10 +512,21 @@ export function ActiveDeliveryView() {
               fullWidth
               onClick={handleAdvance}
               loading={advancing}
-              disabled={advancing || needsPickupPhoto || needsPodPhoto || needsMatePickupPhoto}
+              disabled={advancing || needsPickupPhoto || needsPodPhoto || needsMatePickupPhoto || tooFarToArrive}
             >
               {t(meta.ctaKey as never)}
             </Button>
+            {/* Why the button is dead, in the rider's own terms. Silently disabling it is
+                how "the app is broken" reports start. */}
+            {tooFarToArrive && (
+              <p className="mt-2 text-center text-xs text-muted-foreground">
+                {milesToTarget == null
+                  ? geoDenied
+                    ? `Turn on location to confirm you're at ${arrivalTarget.what}.`
+                    : `Waiting for your location to confirm you're at ${arrivalTarget.what}…`
+                  : `You're ${milesToTarget.toFixed(1)} mi away — get within ${ARRIVAL_RADIUS_MI} mi of ${arrivalTarget.what} to continue.`}
+              </p>
+            )}
             {(needsPickupPhoto || needsMatePickupPhoto) && (
               <p className="text-center text-xs text-muted-foreground">
                 {needsMatePickupPhoto && !needsPickupPhoto

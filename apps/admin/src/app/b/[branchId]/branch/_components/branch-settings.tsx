@@ -13,6 +13,7 @@ import { PaymentMethodsCard } from './payment-methods-card';
 import { DeliveryHoursCard } from './delivery-hours-card';
 import { LocationCard } from './location-card';
 import { ScheduledOrdersCard } from './scheduled-orders-card';
+import { BrandingCard, type BrandingBrand } from './branding-card';
 import { ServiceFeeCard } from './service-fee-card';
 import { TipSettingsCard } from './tip-settings-card';
 import { StorefrontOverrideCard } from './storefront-override-card';
@@ -35,11 +36,15 @@ interface Branch {
 export function BranchSettings({
   branch,
   restaurantStorefront,
+  restaurantName,
+  brand,
   canUseDelivery,
   canUseCard,
 }: {
   branch: Branch;
   restaurantStorefront: Record<string, unknown> | null;
+  restaurantName: string;
+  brand: BrandingBrand | null;
   canUseDelivery: boolean;
   canUseCard: boolean;
 }) {
@@ -126,6 +131,14 @@ export function BranchSettings({
             geo_lng: branch.geo_lng,
             timezone: branch.timezone,
           }}
+        />
+
+        {/* Next to Brand theme on purpose: colours, logo and icon are one decision, and the
+            merchant looks for all three in the same place. */}
+        <BrandingCard
+          restaurantId={branch.restaurant_id}
+          restaurantName={restaurantName}
+          brand={brand}
         />
 
         <Card className="p-5">

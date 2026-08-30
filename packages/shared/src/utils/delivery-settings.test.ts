@@ -29,7 +29,6 @@ describe('parseDeliverySettings', () => {
     expect(s.deliveryRadiusKm).toBe(5);
     expect(s.prepTimeMin).toBe(20);
     expect(s.legacyFlatFee).toBe(4.99);
-    expect(s.deliveryMinFee).toBe(DELIVERY_SETTING_DEFAULTS.deliveryMinFee);
   });
 
   it('ignores junk values and never lets surge drop below 1', () => {
@@ -39,6 +38,8 @@ describe('parseDeliverySettings', () => {
   });
 });
 
+const round2Local = (n: number) => Math.round(n * 100) / 100;
+
 describe('computeDeliveryFee — mirrors SQL quote_delivery()', () => {
   const d = DELIVERY_SETTING_DEFAULTS;
 
@@ -47,20 +48,30 @@ describe('computeDeliveryFee — mirrors SQL quote_delivery()', () => {
     expect(computeDeliveryFee(d, 2.21)).toBe(5.24);
   });
 
-  it('applies the min-fee floor for very short trips', () => {
-    // 0.1 km → 2.49 + 0.125 = 2.615 < 2.99 floor
-    expect(computeDeliveryFee(d, 0.1)).toBe(2.99);
+  it('no longer floors a very short trip — the minimum fee input was removed', () => {
+    // 0.1 km → 2.49 + 0.124 = 2.61. Used to be lifted to the 2.99 floor.
+    expect(computeDeliveryFee(d, 0.1)).toBe(2.61);
   });
 
-  it('applies the max-fee ceiling for long trips', () => {
-    // 7.9 km → 2.49 + 9.875 = 12.365 > 9.99 ceiling
-    expect(computeDeliveryFee(d, 7.9)).toBe(9.99);
+  it('no longer caps a long trip — the maximum fee input was removed', () => {
+    // 7.9 km → 2.49 + 9.82 = 12.31. Used to be cut to the 9.99 ceiling, which meant the
+    // restaurant absorbed everything past it.
+    expect(computeDeliveryFee(d, 7.9)).toBe(12.31);
   });
 
-  it('multiplies surge after the clamp', () => {
+  it('multiplies by surge', () => {
     const surged = { ...d, deliverySurgeMultiplier: 1.5 };
-    // clamp(2.49 + 2×$2.00/mi-per-km, 2.99, 9.99) = 4.975… → ×1.5 = 7.46 (can exceed max)
+    // (2.49 + 2 × $2.00/mi-per-km) × 1.5 = 7.46
     expect(computeDeliveryFee(surged, 2)).toBe(7.46);
+  });
+
+  it('does not surge a trip shorter than the surge distance', () => {
+    const surged = { ...d, deliverySurgeMultiplier: 2, deliverySurgeFromKm: miToKm(5) };
+    // 2 km is inside the 5-mile threshold, so the multiplier must not apply.
+    expect(computeDeliveryFee(surged, 2)).toBe(computeDeliveryFee({ ...d, deliverySurgeFromKm: miToKm(5) }, 2));
+    // 10 mi is beyond it, so it must.
+    const far = miToKm(10);
+    expect(computeDeliveryFee(surged, far)).toBe(round2Local(computeDeliveryFee({ ...d }, far) * 2));
   });
 });
 
@@ -103,8 +114,6 @@ describe('miles ↔ km conversion (US display layer)', () => {
       ...DELIVERY_SETTING_DEFAULTS,
       deliveryBaseFee: 0,
       deliveryPerKmFee: 2 / KM_PER_MILE,
-      deliveryMinFee: 0,
-      deliveryMaxFee: 999,
     };
     // A 3-mile trip should cost 3 × $2.00 = $6.00.
     expect(computeDeliveryFee(settings, miToKm(3))).toBe(6);
