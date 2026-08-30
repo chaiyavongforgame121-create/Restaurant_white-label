@@ -8,9 +8,11 @@ import { getBrowserClient } from '@favornoms/database/client';
 import { Button, Card } from '@favornoms/ui';
 
 export interface ExistingRating {
-  food_stars: number;
+  /** Null while only the driver half of a two-step rating has been given. */
+  food_stars: number | null;
   delivery_stars: number | null;
   comment: string | null;
+  driver_comment?: string | null;
 }
 
 interface Props {
@@ -24,6 +26,9 @@ interface Props {
    */
   existingRating: ExistingRating | null | undefined;
   hasDriver: boolean;
+  /** The rider being rated. order_ratings.driver_id was never set by this component, so
+   *  every star the customer gave attached to nobody and no rider average could move. */
+  driverId?: string | null;
   /** QR-transfer order the merchant has not confirmed payment for. Nothing is cooking — the
    *  kitchen board filters these out — so the customer may still call it off themselves. */
   awaitingPayment?: boolean;
@@ -56,6 +61,7 @@ export function OrderActions({
   orderStatus,
   existingRating,
   hasDriver,
+  driverId = null,
   awaitingPayment = false,
 }: Props) {
   const router = useRouter();
@@ -68,6 +74,11 @@ export function OrderActions({
   const [foodStars, setFoodStars] = React.useState(0);
   const [deliveryStars, setDeliveryStars] = React.useState(0);
   const [comment, setComment] = React.useState('');
+  const [driverComment, setDriverComment] = React.useState('');
+  // One sheet asked for both scores and offered a single comment box, so anything written
+  // about the rider was filed against the restaurant. Two sheets now, rider first, each
+  // with its own words.
+  const [step, setStep] = React.useState<'driver' | 'food'>('driver');
   // What we just wrote in this session — merged over the fetched row so the
   // stars flip to read-only the moment the insert lands.
   const [justRated, setJustRated] = React.useState<ExistingRating | null>(null);
@@ -81,8 +92,19 @@ export function OrderActions({
   // rating risks re-asking someone who already gave one (the insert would just
   // bounce off the unique(order_id) index anyway).
   const ratingChecked = existingRating !== undefined;
-  const canRate = RATEABLE_STATUSES.includes(orderStatus) && !storedRating;
+  // Each half is asked for independently, so a customer who gives the rider their stars and
+  // then closes the tab has still rated the rider — and is asked only for the missing half
+  // when they come back.
+  const needsDriver = hasDriver && storedRating?.delivery_stars == null;
+  const needsFood = storedRating?.food_stars == null;
+  const canRate = RATEABLE_STATUSES.includes(orderStatus) && (needsDriver || needsFood);
   const ratingModalOpen = canRate && ratingChecked && !skipped;
+
+  // Start on whichever half is outstanding; the rider always goes first when both are.
+  React.useEffect(() => {
+    if (!ratingChecked) return;
+    setStep(needsDriver ? 'driver' : 'food');
+  }, [ratingChecked, needsDriver]);
 
   React.useEffect(() => {
     if (!ratingModalOpen) return;
@@ -96,45 +118,75 @@ export function OrderActions({
   const canReport = ['completed', 'out_for_delivery', 'ready'].includes(orderStatus);
   if (!canStillChange && !canRate && !canReport && !storedRating) return null;
 
-  const submitRating = async () => {
-    // Guard as well as disable — a double-tap can fire twice before React
-    // paints the disabled state, and the second insert would 23505.
-    if (busy || foodStars === 0 || (hasDriver && deliveryStars === 0)) return;
-    setBusy(true);
-    setError(null);
+  /** Resolve the customers row through the ORDER, never by user_id: identity is per
+   *  restaurant, so one person can own several customers rows. */
+  const resolveCustomerId = async (): Promise<string | null> => {
     const supabase = getBrowserClient();
     const { data: user } = await supabase.auth.getUser();
-    if (!user.user) { setError('not_signed_in'); setBusy(false); return; }
-    // Customer identity is per restaurant, so a user can have several customers
-    // rows — resolve through the order's own customer link, never by user_id.
+    if (!user.user) { setError('not_signed_in'); return null; }
     const { data: orderRow } = await supabase
       .from('orders')
       .select('customer_id')
       .eq('id', orderId)
       .maybeSingle();
-    if (!orderRow?.customer_id) { setError('no_customer'); setBusy(false); return; }
+    if (!orderRow?.customer_id) { setError('no_customer'); return null; }
+    return orderRow.customer_id;
+  };
+
+  /** Upsert on order_id. The table is unique(order_id) and each step writes only its own
+   *  columns, so the second step never disturbs the first — and a retry is harmless. */
+  const saveHalf = async (patch: Record<string, unknown>): Promise<boolean> => {
+    setBusy(true);
+    setError(null);
+    const customerId = await resolveCustomerId();
+    if (!customerId) { setBusy(false); return false; }
+    const supabase = getBrowserClient();
+    const { error: upErr } = await supabase
+      .from('order_ratings')
+      .upsert(
+        { order_id: orderId, customer_id: customerId, branch_id: branchId, ...patch },
+        { onConflict: 'order_id' },
+      );
+    setBusy(false);
+    if (upErr) {
+      setError(upErr.message);
+      return false;
+    }
+    return true;
+  };
+
+  const submitDriver = async () => {
+    if (busy || deliveryStars === 0) return;
+    // driver_id was simply never written. Every delivery star the customer had given
+    // attached to no rider at all, which is why drivers.average_rating could not move even
+    // once the sync trigger existed.
+    const ok = await saveHalf({
+      driver_id: driverId,
+      delivery_stars: deliveryStars,
+      driver_comment: driverComment || null,
+    });
+    if (!ok) return;
+    setJustRated({
+      food_stars: storedRating?.food_stars ?? null,
+      delivery_stars: deliveryStars,
+      comment: storedRating?.comment ?? null,
+      driver_comment: driverComment || null,
+    });
+    // Straight on to the restaurant — the rider's half is banked either way.
+    if (needsFood) setStep('food');
+    else { setThanks(true); setTimeout(() => setSkipped(true), 1800); }
+  };
+
+  const submitFood = async () => {
+    if (busy || foodStars === 0) return;
+    const ok = await saveHalf({ food_stars: foodStars, comment: comment || null });
+    if (!ok) return;
     const submission: ExistingRating = {
       food_stars: foodStars,
-      delivery_stars: hasDriver ? deliveryStars : null,
+      delivery_stars: deliveryStars || storedRating?.delivery_stars || null,
       comment: comment || null,
+      driver_comment: driverComment || storedRating?.driver_comment || null,
     };
-    const { error: insErr } = await supabase.from('order_ratings').insert({
-      order_id: orderId,
-      customer_id: orderRow.customer_id,
-      branch_id: branchId,
-      ...submission,
-    });
-    setBusy(false);
-    if (insErr) {
-      // unique(order_id) on order_ratings — one rating per order, forever. Say
-      // so instead of flashing a thank-you for a write that never happened.
-      if (insErr.code === '23505') {
-        setError("You've already rated this order.");
-        return;
-      }
-      setError(insErr.message);
-      return;
-    }
     setThanks(true);
     setTimeout(() => setJustRated(submission), 1800);
   };
@@ -232,29 +284,56 @@ export function OrderActions({
               </div>
             ) : (
               <>
+                {/* Two sheets, one subject each. Both scores and one shared comment box on a
+                    single sheet meant whatever the customer wrote landed against the
+                    restaurant even when it was plainly about the rider. */}
                 <div className="relative bg-gradient-warm p-6 text-white">
                   <div className="absolute inset-0 bg-noise opacity-30" />
                   <div className="relative">
-                    <h3 className="font-display text-2xl font-bold">How was your order?</h3>
+                    <h3 className="font-display text-2xl font-bold">
+                      {step === 'driver' ? 'How was your driver?' : 'How was the food?'}
+                    </h3>
                     <p className="mt-1 text-sm text-white/85">
-                      {hasDriver
-                        ? 'Rate the food and your driver to finish up.'
-                        : 'Rate the food to finish up.'}
+                      {step === 'driver'
+                        ? needsFood
+                          ? 'Rate your rider first — the restaurant is next.'
+                          : 'Rate the rider who brought your order.'
+                        : needsDriver || deliveryStars > 0
+                          ? 'Last step — how was the food itself?'
+                          : 'Rate the food to finish up.'}
                     </p>
+                    {step === 'food' && hasDriver && (
+                      <p className="mt-2 text-xs text-white/70">Step 2 of 2</p>
+                    )}
+                    {step === 'driver' && needsFood && (
+                      <p className="mt-2 text-xs text-white/70">Step 1 of 2</p>
+                    )}
                   </div>
                 </div>
                 <div className="space-y-4 p-6">
-                  <BigStarRow label="Food" value={foodStars} onChange={setFoodStars} />
-                  {hasDriver && (
-                    <BigStarRow label="Your driver" value={deliveryStars} onChange={setDeliveryStars} />
+                  {step === 'driver' ? (
+                    <>
+                      <BigStarRow label="Your driver" value={deliveryStars} onChange={setDeliveryStars} />
+                      <textarea
+                        value={driverComment}
+                        onChange={(e) => setDriverComment(e.target.value)}
+                        placeholder="Anything to say about your driver? (optional)"
+                        className="input min-h-24 py-3"
+                        maxLength={500}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <BigStarRow label="Food" value={foodStars} onChange={setFoodStars} />
+                      <textarea
+                        value={comment}
+                        onChange={(e) => setComment(e.target.value)}
+                        placeholder="Anything to say about the food? (optional)"
+                        className="input min-h-24 py-3"
+                        maxLength={500}
+                      />
+                    </>
                   )}
-                  <textarea
-                    value={comment}
-                    onChange={(e) => setComment(e.target.value)}
-                    placeholder="Anything else you'd like to share? (optional)"
-                    className="input min-h-24 py-3"
-                    maxLength={500}
-                  />
                   {error && (
                     <p className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>
                   )}
@@ -262,15 +341,15 @@ export function OrderActions({
                     variant="gradient"
                     size="lg"
                     fullWidth
-                    onClick={submitRating}
+                    onClick={step === 'driver' ? submitDriver : submitFood}
                     loading={busy}
-                    disabled={busy || foodStars === 0 || (hasDriver && deliveryStars === 0)}
+                    disabled={busy || (step === 'driver' ? deliveryStars === 0 : foodStars === 0)}
                     leftIcon={<Star className="h-4 w-4" />}
                   >
-                    Submit rating
+                    {step === 'driver' && needsFood ? 'Next — rate the restaurant' : 'Submit rating'}
                   </Button>
                   <p className="text-center text-xs text-muted-foreground">
-                    {hasDriver ? 'Food and driver stars are required.' : 'Food stars are required.'}
+                    {step === 'driver' ? 'Driver stars are required.' : 'Food stars are required.'}
                   </p>
                   {/* Once a submit has failed, the modal must not hold the page hostage. */}
                   {error && (
@@ -304,13 +383,22 @@ function SubmittedRating({ rating }: { rating: ExistingRating }) {
     <div className="rounded-2xl border border-success/30 bg-success/5 p-3">
       <p className="text-sm font-semibold text-success">Thanks for your feedback!</p>
       <div className="mt-2 space-y-1">
-        <StaticStarRow label="Food" value={rating.food_stars} />
+        {/* Either half can stand alone now: the rider is rated in its own step and banked
+            before the restaurant is even asked about. */}
         {rating.delivery_stars != null && (
           <StaticStarRow label="Your driver" value={rating.delivery_stars} />
         )}
+        {rating.food_stars != null && <StaticStarRow label="Food" value={rating.food_stars} />}
       </div>
+      {rating.driver_comment && (
+        <p className="mt-2 text-sm italic text-muted-foreground">
+          On your driver: &ldquo;{rating.driver_comment}&rdquo;
+        </p>
+      )}
       {rating.comment && (
-        <p className="mt-2 text-sm italic text-muted-foreground">&ldquo;{rating.comment}&rdquo;</p>
+        <p className="mt-2 text-sm italic text-muted-foreground">
+          On the food: &ldquo;{rating.comment}&rdquo;
+        </p>
       )}
     </div>
   );

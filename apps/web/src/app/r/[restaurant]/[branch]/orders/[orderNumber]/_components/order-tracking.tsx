@@ -168,7 +168,7 @@ export function OrderTracking({ initialOrder, branchId, branchLocation }: Props)
     const supabase = getBrowserClient();
     void supabase
       .from('order_ratings')
-      .select('food_stars, delivery_stars, comment')
+      .select('food_stars, delivery_stars, comment, driver_comment')
       .eq('order_id', order.id)
       .maybeSingle()
       .then(({ data, error }) => {
@@ -408,6 +408,7 @@ export function OrderTracking({ initialOrder, branchId, branchLocation }: Props)
           orderStatus={order.status}
           existingRating={rating}
           hasDriver={!!delivery?.driver_id}
+          driverId={delivery?.driver_id ?? null}
         />
       </div>
     </div>
