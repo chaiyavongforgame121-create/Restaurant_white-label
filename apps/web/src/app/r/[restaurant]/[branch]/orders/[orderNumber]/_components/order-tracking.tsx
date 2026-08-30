@@ -34,6 +34,9 @@ type OrderRow = {
   order_number: string;
   status: string;
   channel: string;
+  /** Why the order was cancelled. Set by decide_payment_proof when a merchant refuses a
+   *  transfer slip — before this the order simply stopped moving with no explanation. */
+  cancellation_reason?: string | null;
   total: number | string;
   customer_name?: string | null;
   customer_phone?: string | null;
@@ -88,7 +91,19 @@ export function OrderTracking({ initialOrder, branchId, branchLocation }: Props)
       )
       .eq('id', order.id)
       .maybeSingle();
-    if (data) setOrder((curr) => ({ ...curr, ...(data as unknown as Partial<OrderRow>) }));
+    if (!data) return;
+    setOrder((curr) => {
+      const next = { ...curr, ...(data as unknown as Partial<OrderRow>) };
+      // A refetch must never REMOVE the driver. useRealtime calls this on connect,
+      // reconnect, tab focus and network resume, and any of those can land while the
+      // embedded deliveries read comes back empty — a moment of RLS/replication lag is
+      // enough. Overwriting with [] made the driver card appear the instant the rider
+      // accepted and then vanish a beat later, which is exactly the reported flicker.
+      if ((next.deliveries?.length ?? 0) === 0 && curr.deliveries.length > 0) {
+        next.deliveries = curr.deliveries;
+      }
+      return next;
+    });
   }, [order.id]);
 
   const { healthy: liveHealthy } = useRealtime({
@@ -100,12 +115,21 @@ export function OrderTracking({ initialOrder, branchId, branchLocation }: Props)
     refetch: reload,
     onChange: (payload, table) => {
       if (table === 'deliveries') {
-        setOrder((curr) => ({
-          ...curr,
-          deliveries: payload.new
-            ? [payload.new as OrderRow['deliveries'][number]]
-            : curr.deliveries,
-        }));
+        setOrder((curr) => {
+          if (!payload.new) return curr;
+          const incoming = payload.new as Partial<OrderRow['deliveries'][number]>;
+          const existing = curr.deliveries[0];
+          // Merge rather than replace. A postgres_changes payload carries the row as the
+          // TABLE has it, not as this page selected it, so swapping the object wholesale
+          // can drop fields the UI depends on — driver_id among them, which is what
+          // decides whether the driver card renders at all.
+          return {
+            ...curr,
+            deliveries: [
+              { ...(existing ?? {}), ...incoming } as OrderRow['deliveries'][number],
+            ],
+          };
+        });
         return;
       }
       setOrder((curr) => ({ ...curr, ...(payload.new as Partial<OrderRow>) }));
@@ -290,6 +314,20 @@ export function OrderTracking({ initialOrder, branchId, branchLocation }: Props)
               is left is proving it. The order deliberately stays 'pending' until the
               restaurant approves the slip — a DB trigger enforces the same rule, so the
               kitchen cannot start early even from its own screen. */}
+          {/* A refused slip now cancels the order. Say so plainly and give the reason the
+              merchant typed, rather than leaving the customer on a progress bar that has
+              quietly stopped advancing. */}
+          {order.status === 'cancelled' && (
+            <Card className="mt-6 border-danger/40 bg-danger/5 p-4">
+              <p className="font-semibold text-danger">This order was cancelled</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {order.cancellation_reason
+                  ? order.cancellation_reason
+                  : 'Please contact the restaurant if you were not expecting this.'}
+              </p>
+            </Card>
+          )}
+
           {order.payments
             ?.filter((p) => p.method === 'transfer')
             .map((p) => (
@@ -620,6 +658,28 @@ function TransferProof({
 
   const note = (payment.gateway_metadata?.decision_note as string | undefined) ?? null;
   const submitted = !!payment.proof_image_url;
+  // payment-proofs is a private bucket, so the slip needs a signed URL to be shown back.
+  // Without this the customer had no way to see what they had sent — the button simply
+  // vanished on success, which reads as "the upload failed", which is what was reported.
+  const [slipUrl, setSlipUrl] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    const path = payment.proof_image_url;
+    if (!path) {
+      setSlipUrl(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const supabase = getBrowserClient();
+      const { data } = await supabase.storage
+        .from('payment-proofs')
+        .createSignedUrl(path, 60 * 10);
+      if (!cancelled) setSlipUrl(data?.signedUrl ?? null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [payment.proof_image_url]);
 
   const upload = async (file: File) => {
     setBusy(true);
@@ -694,11 +754,23 @@ function TransferProof({
           e.target.value = '';
         }}
       />
-      {(!submitted || rejected) && (
-        <Button className="mt-3" fullWidth loading={busy} onClick={() => inputRef.current?.click()}>
-          {submitted ? 'Upload a new photo' : 'Choose photo'}
-        </Button>
+      {/* Show the slip back. It is the only confirmation the customer gets that the upload
+          worked at all, and the only way to notice they photographed the wrong screen. */}
+      {slipUrl && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={slipUrl}
+          alt="Your transfer slip"
+          className="mt-3 max-h-64 w-full rounded-xl border border-border object-contain"
+        />
       )}
+
+      {/* Replacing stayed possible only after a rejection. But the merchant may not have
+          looked yet, and a customer who spots their own mistake in the preview above should
+          not have to wait to be refused before they can fix it. */}
+      <Button className="mt-3" fullWidth loading={busy} onClick={() => inputRef.current?.click()}>
+        {submitted ? 'Upload a different photo' : 'Choose photo'}
+      </Button>
       {error && <p className="mt-2 text-sm text-danger">{error}</p>}
     </Card>
   );

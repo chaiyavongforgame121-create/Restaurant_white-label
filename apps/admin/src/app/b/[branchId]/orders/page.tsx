@@ -91,12 +91,19 @@ export default async function OrdersPage({ params, searchParams }: Props) {
   // QR-transfer slips awaiting a decision. The order cannot leave 'pending' until one is
   // made (enforced by the orders_block_unpaid_transfer trigger), so this is surfaced above
   // the table rather than buried in a row.
+  //
+  // Only once a slip actually exists. Without the proof_image_url filter this listed orders
+  // the customer had not paid for yet, under a heading saying they were waiting for the
+  // merchant — with an Approve button and a grey box reading "No slip uploaded yet". There
+  // is nothing to approve at that point, and approving anyway released the ticket to the
+  // kitchen for money that had not arrived.
   const { data: transferRows } = await supabase
     .from('payments')
     .select('id, order_id, amount, proof_image_url, gateway_metadata, orders!inner(order_number, customer_name, customer_phone)')
     .eq('branch_id', branchId)
     .eq('method', 'transfer')
     .eq('status', 'pending')
+    .not('proof_image_url', 'is', null)
     .order('created_at', { ascending: true })
     .limit(50);
 
