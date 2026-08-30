@@ -8,6 +8,7 @@ interface Props {
   defaultQ: string;
   defaultStatus: string;
   defaultChannel: string;
+  defaultWhen: string;
 }
 
 interface SavedView {
@@ -16,13 +17,22 @@ interface SavedView {
   q: string;
   status: string;
   channel: string;
+  /** Older saved views predate this filter and have no `when`; they read as 'all'. */
+  when?: string;
 }
 
 const SAVED_VIEW_KEY = 'admin-orders-saved-views';
 const STATUSES = ['all', 'pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'completed', 'cancelled', 'refunded'];
 const CHANNELS = ['all', 'dine_in', 'pickup', 'delivery', 'qr_ordering'];
+// Pre-orders are the one thing this page could not show: everything was sorted newest-first
+// by created_at, so a booking for next week sank out of sight the day after it was taken.
+const WHENS: Array<{ value: string; label: string }> = [
+  { value: 'all', label: 'All orders' },
+  { value: 'scheduled', label: 'Scheduled — upcoming' },
+  { value: 'held', label: 'Scheduled — not yet in kitchen' },
+];
 
-export function OrderFilters({ defaultQ, defaultStatus, defaultChannel }: Props) {
+export function OrderFilters({ defaultQ, defaultStatus, defaultChannel, defaultWhen }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -56,6 +66,7 @@ export function OrderFilters({ defaultQ, defaultStatus, defaultChannel }: Props)
       q,
       status: defaultStatus,
       channel: defaultChannel,
+      when: defaultWhen,
     };
     persistViews([view, ...savedViews]);
   };
@@ -66,6 +77,7 @@ export function OrderFilters({ defaultQ, defaultStatus, defaultChannel }: Props)
     if (v.q) sp.set('q', v.q);
     if (v.status && v.status !== 'all') sp.set('status', v.status);
     if (v.channel && v.channel !== 'all') sp.set('channel', v.channel);
+    if (v.when && v.when !== 'all') sp.set('when', v.when);
     router.replace(`${pathname}?${sp.toString()}`);
   };
 
@@ -73,7 +85,7 @@ export function OrderFilters({ defaultQ, defaultStatus, defaultChannel }: Props)
     persistViews(savedViews.filter((v) => v.id !== id));
   };
 
-  const pushParams = (next: { q?: string; status?: string; channel?: string }) => {
+  const pushParams = (next: { q?: string; status?: string; channel?: string; when?: string }) => {
     const sp = new URLSearchParams(params);
     for (const [k, v] of Object.entries(next)) {
       if (v && v !== 'all') sp.set(k, v); else sp.delete(k);
@@ -151,6 +163,16 @@ export function OrderFilters({ defaultQ, defaultStatus, defaultChannel }: Props)
       >
         {CHANNELS.map((c) => (
           <option key={c} value={c}>{c === 'all' ? 'All channels' : c.replace('_', ' ')}</option>
+        ))}
+      </select>
+      <select
+        value={defaultWhen}
+        onChange={(e) => pushParams({ when: e.target.value })}
+        className="focus-ring rounded-xl border border-border bg-background px-3 py-2 text-sm"
+        aria-label="Scheduled orders"
+      >
+        {WHENS.map((w) => (
+          <option key={w.value} value={w.value}>{w.label}</option>
         ))}
       </select>
       <button

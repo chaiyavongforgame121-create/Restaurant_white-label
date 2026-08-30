@@ -8,7 +8,7 @@ import { DeliveryIssues, type DeliveryIssue } from './_components/delivery-issue
 
 interface Props {
   params: Promise<{ branchId: string }>;
-  searchParams: Promise<{ q?: string; status?: string; channel?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; channel?: string; when?: string }>;
 }
 
 const fmtWhen = (iso: string) =>
@@ -29,7 +29,7 @@ const statusVariant = (status: string) => {
 
 export default async function OrdersPage({ params, searchParams }: Props) {
   const { branchId } = await params;
-  const { q, status, channel } = await searchParams;
+  const { q, status, channel, when } = await searchParams;
   const supabase = await getServerClient();
 
   let query = supabase
@@ -46,7 +46,23 @@ export default async function OrdersPage({ params, searchParams }: Props) {
   if (status && status !== 'all') query = query.eq('status', status);
   if (channel && channel !== 'all') query = query.eq('channel', channel);
 
-  const { data: orders } = await query.order('created_at', { ascending: false }).limit(100);
+  // Pre-orders were invisible here. Everything sorted by created_at descending, so a
+  // booking taken today for next Saturday sat at the top today and then sank out of the
+  // first 100 rows long before the day it mattered — a restaurant taking pre-orders could
+  // not see what was coming. `when=scheduled` inverts both filters: future bookings only,
+  // soonest first, which is the order the kitchen actually needs them in.
+  const scheduledOnly = when === 'scheduled';
+  const heldOnly = when === 'held';
+  if (scheduledOnly || heldOnly) {
+    query = query.not('scheduled_for', 'is', null).gte('scheduled_for', new Date().toISOString());
+    // held = accepted but deliberately withheld from the kitchen until its lead time.
+    if (heldOnly) query = query.eq('held', true);
+  }
+
+  const { data: orders } = await (scheduledOnly || heldOnly
+    ? query.order('scheduled_for', { ascending: true })
+    : query.order('created_at', { ascending: false })
+  ).limit(100);
 
   // Failed deliveries that need staff attention (re-dispatch or refund).
   const { data: failedRows } = await supabase
@@ -116,7 +132,12 @@ export default async function OrdersPage({ params, searchParams }: Props) {
       </div>
 
       <div className="mb-4 px-2 lg:px-0">
-        <OrderFilters defaultQ={q ?? ''} defaultStatus={status ?? 'all'} defaultChannel={channel ?? 'all'} />
+        <OrderFilters
+          defaultQ={q ?? ''}
+          defaultStatus={status ?? 'all'}
+          defaultChannel={channel ?? 'all'}
+          defaultWhen={when ?? 'all'}
+        />
       </div>
 
       {/* Desktop table */}

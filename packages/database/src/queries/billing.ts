@@ -79,6 +79,20 @@ export interface StorefrontStatus {
   delivery_mode: 'platform' | 'self';
   delivery_windows: Array<{ day_of_week: number; opens_at: string; closes_at: string }>;
   card_payment: boolean;
+  /** The BRANCH's zone. Scheduling slots must be built in it, not in the phone's — a diner
+   *  in California ordering from a Texas branch would otherwise be offered windows shifted
+   *  two hours from the ones the kitchen actually keeps. */
+  timezone: string;
+  /** branch_hours, the same rows is_branch_open() checks. An EMPTY array means "no hours
+   *  configured", which that function treats as always-open — not "closed all week". */
+  opening_hours: Array<{ day_of_week: number; opens_at: string; closes_at: string }>;
+  scheduling_enabled: boolean;
+  /** Soonest a diner may schedule, in minutes from now. */
+  schedule_min_lead_min: number;
+  /** Furthest ahead a diner may schedule, in days. */
+  schedule_max_days: number;
+  /** Granularity of the offered time slots, in minutes. */
+  schedule_slot_minutes: number;
 }
 
 const STOREFRONT_DENIED: StorefrontStatus = Object.freeze({
@@ -90,6 +104,12 @@ const STOREFRONT_DENIED: StorefrontStatus = Object.freeze({
   delivery_mode: 'platform',
   delivery_windows: [],
   card_payment: false,
+  timezone: 'America/New_York',
+  opening_hours: [],
+  scheduling_enabled: false,
+  schedule_min_lead_min: 15,
+  schedule_max_days: 14,
+  schedule_slot_minutes: 15,
 });
 
 /**
@@ -119,7 +139,21 @@ const STOREFRONT_UNKNOWN: StorefrontStatus = Object.freeze({
   delivery_mode: 'platform',
   delivery_windows: [],
   card_payment: false,
+  timezone: 'America/New_York',
+  opening_hours: [],
+  // Same reasoning as the two feature flags above: on an unreadable status, offering a
+  // scheduling UI built from hours we could not read is worse than not offering it.
+  scheduling_enabled: false,
+  schedule_min_lead_min: 15,
+  schedule_max_days: 14,
+  schedule_slot_minutes: 15,
 });
+
+/** jsonb numbers arrive as number; anything else (missing key, string, null) falls back. */
+function numOr(v: unknown, fallback: number): number {
+  const n = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
 
 export async function getStorefrontStatus(
   supabase: FavornomsClient,
@@ -152,6 +186,18 @@ export async function getStorefrontStatus(
             ? (d.delivery_windows as StorefrontStatus['delivery_windows'])
             : [],
           card_payment: d.card_payment === true,
+          // Older deployments of storefront_status predate these keys. Defaulting
+          // scheduling_enabled to true keeps a stale function from silently removing
+          // "Schedule for later" from a storefront that has always had it; the server
+          // still refuses anything outside the real policy.
+          timezone: typeof d.timezone === 'string' && d.timezone ? d.timezone : 'America/New_York',
+          opening_hours: Array.isArray(d.opening_hours)
+            ? (d.opening_hours as StorefrontStatus['opening_hours'])
+            : [],
+          scheduling_enabled: d.scheduling_enabled === undefined ? true : d.scheduling_enabled === true,
+          schedule_min_lead_min: numOr(d.schedule_min_lead_min, 15),
+          schedule_max_days: numOr(d.schedule_max_days, 14),
+          schedule_slot_minutes: numOr(d.schedule_slot_minutes, 15),
         };
       }
     } catch {

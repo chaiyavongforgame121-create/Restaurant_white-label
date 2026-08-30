@@ -46,6 +46,16 @@ export default async function CheckoutPage({ params }: Props) {
         // neither configured is charged nothing, so it must be shown nothing.
         salesTaxRate={Number(taxRow?.sales_tax_rate ?? 0)}
         serviceFeePercent={Number(tenant.branch.settings.serviceFeePercent ?? 0)}
+        // The branch's own hours and scheduling policy, so the picker offers times the
+        // server will actually accept instead of any moment the diner's clock can express.
+        scheduling={{
+          enabled: status.scheduling_enabled,
+          timezone: status.timezone,
+          openingHours: status.opening_hours,
+          minLeadMinutes: status.schedule_min_lead_min,
+          maxDays: status.schedule_max_days,
+          slotMinutes: status.schedule_slot_minutes,
+        }}
       />
     </>
   );

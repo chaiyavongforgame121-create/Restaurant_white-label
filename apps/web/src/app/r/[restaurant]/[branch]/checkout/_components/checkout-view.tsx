@@ -39,6 +39,7 @@ import {
 } from '@favornoms/maps';
 import { Badge, Button, Card, IconButton, Sheet } from '@favornoms/ui';
 import { resolveMyCustomerId } from '@/lib/customer';
+import { buildScheduleDays, type OpeningWindow } from '@/lib/schedule-slots';
 import { pickerLabels } from '@/lib/picker-labels';
 import { useCart } from '@/store/cart';
 import { useAuth } from '@/components/auth/use-auth';
@@ -105,8 +106,12 @@ const ORDER_ERRORS: Array<[string, string]> = [
   // open now, it's the time they picked that isn't served.
   ['branch_closed_at_scheduled_time', 'The restaurant is closed at the time you picked. Please choose another time.'],
   ['branch_closed', 'This restaurant is currently closed. Please try again during opening hours.'],
-  ['scheduled_too_soon', 'Please pick a time at least 10 minutes from now.'],
-  ['scheduled_too_far', 'Please pick a time within the next 14 days.'],
+  // No fixed numbers here any more: how soon and how far ahead are per-branch settings, so
+  // quoting "10 minutes" and "14 days" would state someone else's policy as fact. The
+  // picker only offers times inside the real one, so reaching these is already unusual.
+  ['scheduled_too_soon', 'That time is too soon for this restaurant. Please pick a later slot.'],
+  ['scheduled_too_far', 'That time is further ahead than this restaurant takes bookings.'],
+  ['scheduling_disabled', 'This restaurant is not taking orders in advance right now.'],
   ['invalid_scheduled_for', 'That scheduled time could not be read. Please pick it again.'],
   ['delivery_out_of_range', 'Sorry, this address is outside the delivery area.'],
   ['payment_method_not_accepted', 'That payment method is not available for this order type. Please pick another.'],
@@ -176,6 +181,22 @@ interface Props {
   salesTaxRate?: number;
   /** branches.settings.service_fee_percent, whole percent. Server default is 0. */
   serviceFeePercent?: number;
+  /**
+   * The branch's own scheduling policy, straight from storefront_status.
+   *
+   * The picker used to be a bare datetime-local with hardcoded now+15m / now+14d bounds,
+   * so a diner could choose a time the branch is shut, fill in the whole form, and only
+   * discover it at submit. These are the same hours is_branch_open() enforces, so the
+   * offered slots and the server's answer cannot disagree.
+   */
+  scheduling?: {
+    enabled: boolean;
+    timezone: string;
+    openingHours: OpeningWindow[];
+    minLeadMinutes: number;
+    maxDays: number;
+    slotMinutes: number;
+  };
 }
 
 export function CheckoutView({
@@ -186,6 +207,7 @@ export function CheckoutView({
   canUseCard = false,
   salesTaxRate = 0,
   serviceFeePercent = 0,
+  scheduling,
 }: Props) {
   const t = useTranslations();
   const router = useRouter();
@@ -251,7 +273,7 @@ export function CheckoutView({
   const addressSectionRef = React.useRef<HTMLDivElement | null>(null);
   const dropoffSectionRef = React.useRef<HTMLDivElement | null>(null);
   const tableRef = React.useRef<HTMLInputElement | null>(null);
-  const scheduleSectionRef = React.useRef<HTMLLabelElement | null>(null);
+  const scheduleSectionRef = React.useRef<HTMLDivElement | null>(null);
   const clearFieldError = (key: string) =>
     setFieldErrors((cur) => {
       if (!cur[key]) return cur;
@@ -278,12 +300,43 @@ export function CheckoutView({
   const [tipConfig, setTipConfig] = React.useState<TipConfig>(TIP_CONFIG_DEFAULTS);
   const [promoCode, setPromoCode] = React.useState('');
   const [scheduleMode, setScheduleMode] = React.useState<'asap' | 'later'>('asap');
-  const [scheduledFor, setScheduledFor] = React.useState<string>(() => {
-    // Default: 1 hour from now, rounded to next 15 min
-    const d = new Date(Date.now() + 60 * 60_000);
-    d.setMinutes(Math.ceil(d.getMinutes() / 15) * 15, 0, 0);
-    return toLocalInputValue(d);
-  });
+  // Holds a UTC ISO instant now, not a datetime-local string: the slots are generated in
+  // the BRANCH's zone, so the diner's own clock never enters the calculation.
+  const [scheduledFor, setScheduledFor] = React.useState<string>('');
+  const [scheduleDate, setScheduleDate] = React.useState<string>('');
+  // Recomputed only when the policy changes; `now` is captured once per mount so the list
+  // cannot shift under the diner mid-form.
+  const scheduleMountedAt = React.useRef(new Date());
+  const scheduleDays = React.useMemo(() => {
+    if (!scheduling?.enabled) return [];
+    return buildScheduleDays({
+      timezone: scheduling.timezone,
+      openingHours: scheduling.openingHours,
+      minLeadMinutes: scheduling.minLeadMinutes,
+      maxDays: scheduling.maxDays,
+      slotMinutes: scheduling.slotMinutes,
+      now: scheduleMountedAt.current,
+    });
+  }, [scheduling]);
+
+  const selectedDay = scheduleDays.find((d) => d.date === scheduleDate) ?? scheduleDays[0];
+
+  // Preselect the first open slot so "Schedule for later" is never a dead end the diner has
+  // to fight, and re-point it if the policy changes underneath.
+  React.useEffect(() => {
+    if (scheduleDays.length === 0) {
+      if (scheduledFor) setScheduledFor('');
+      return;
+    }
+    const stillValid = scheduleDays.some((d) => d.slots.some((sl) => sl.iso === scheduledFor));
+    const first = scheduleDays[0];
+    if (!stillValid && first) {
+      setScheduleDate(first.date);
+      setScheduledFor(first.slots[0]?.iso ?? '');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scheduleDays]);
+
   const [promoState, setPromoState] = React.useState<
     | { status: 'idle' }
     | { status: 'validating' }
@@ -863,7 +916,7 @@ export function CheckoutView({
         // stale, can smuggle a scheduled_for onto a dine-in order.
         scheduled_for:
           !isDineIn && effectiveScheduleMode === 'later' && scheduledFor
-            ? new Date(scheduledFor).toISOString()
+            ? scheduledFor
             : undefined,
         gift_card_code: giftCardState.status === 'valid' ? giftCardCode.trim() : undefined,
         items: lines
@@ -939,7 +992,7 @@ export function CheckoutView({
               </button>
               <button
                 type="button"
-                disabled={!scheduledPayable}
+                disabled={!scheduledPayable || !scheduling?.enabled}
                 onClick={() => setScheduleMode('later')}
                 className={`focus-ring flex-1 rounded-full py-2 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
                   scheduleMode === 'later' ? 'bg-card text-foreground shadow-soft' : 'text-muted-foreground'
@@ -953,31 +1006,74 @@ export function CheckoutView({
                 Scheduled orders are not available with the restaurant current payment options.
               </p>
             )}
+            {scheduledPayable && !scheduling?.enabled && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                This restaurant is not taking orders in advance right now.
+              </p>
+            )}
             {!asapPayable && (
               <p className="mt-2 text-xs text-muted-foreground">
                 ASAP orders are not available with the restaurant current payment options.
               </p>
             )}
+            {/* Day and time, both drawn from the branch's own opening hours. The old
+                free-form datetime-local let a diner pick a moment the branch is shut and
+                only told them after they had filled in the entire form. */}
             {scheduleMode === 'later' && (
-              <label ref={scheduleSectionRef} className="mt-3 block">
-                <span className="mb-1 block text-sm font-medium">Pickup / delivery time</span>
-                <input
-                  type="datetime-local"
-                  value={scheduledFor}
-                  min={toLocalInputValue(new Date(Date.now() + 15 * 60_000))}
-                  max={toLocalInputValue(new Date(Date.now() + 14 * 24 * 60 * 60_000))}
-                  onChange={(e) => { setScheduledFor(e.target.value); clearFieldError('schedule'); }}
-                  aria-invalid={!!fieldErrors.schedule}
-                  className="input"
-                  style={fieldErrors.schedule ? { borderColor: 'hsl(var(--danger))' } : undefined}
-                />
-                {fieldErrors.schedule && (
-                  <p className="mt-1 text-xs text-danger">{fieldErrors.schedule}</p>
+              <div ref={scheduleSectionRef} className="mt-3">
+                {scheduleDays.length === 0 ? (
+                  <p className="rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">
+                    No times are available to book at the moment. Please try ASAP, or check
+                    back when the restaurant is open.
+                  </p>
+                ) : (
+                  <>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="block">
+                        <span className="mb-1 block text-sm font-medium">Day</span>
+                        <select
+                          value={selectedDay?.date ?? ''}
+                          onChange={(e) => {
+                            const next = scheduleDays.find((d) => d.date === e.target.value);
+                            setScheduleDate(e.target.value);
+                            // Re-point at that day's first slot: keeping the old time would
+                            // silently carry a moment the new day may not even be open.
+                            setScheduledFor(next?.slots[0]?.iso ?? '');
+                            clearFieldError('schedule');
+                          }}
+                          className="input"
+                        >
+                          {scheduleDays.map((d) => (
+                            <option key={d.date} value={d.date}>{d.label}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="block">
+                        <span className="mb-1 block text-sm font-medium">Time</span>
+                        <select
+                          value={scheduledFor}
+                          onChange={(e) => { setScheduledFor(e.target.value); clearFieldError('schedule'); }}
+                          aria-invalid={!!fieldErrors.schedule}
+                          className="input"
+                          style={fieldErrors.schedule ? { borderColor: 'hsl(var(--danger))' } : undefined}
+                        >
+                          {(selectedDay?.slots ?? []).map((sl) => (
+                            <option key={sl.iso} value={sl.iso}>{sl.label}</option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                    {fieldErrors.schedule && (
+                      <p className="mt-1 text-xs text-danger">{fieldErrors.schedule}</p>
+                    )}
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Only times this restaurant is open are shown, in the restaurant&apos;s
+                      local time. We&apos;ll start preparing your order so it&apos;s ready
+                      right around then.
+                    </p>
+                  </>
                 )}
-                <p className="mt-1 text-xs text-muted-foreground">
-                  We&apos;ll start preparing your order so it&apos;s ready right around this time.
-                </p>
-              </label>
+              </div>
             )}
           </Card>
         )}

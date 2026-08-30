@@ -12,6 +12,7 @@ import { HoursEditor } from './hours-editor';
 import { PaymentMethodsCard } from './payment-methods-card';
 import { DeliveryHoursCard } from './delivery-hours-card';
 import { LocationCard } from './location-card';
+import { ScheduledOrdersCard } from './scheduled-orders-card';
 import { ServiceFeeCard } from './service-fee-card';
 import { TipSettingsCard } from './tip-settings-card';
 import { StorefrontOverrideCard } from './storefront-override-card';
@@ -187,6 +188,13 @@ export function BranchSettings({
         <HoursEditor branchId={branch.id} />
 
         <ClosuresManager branchId={branch.id} />
+
+
+        {/* Sits directly after Opening hours on purpose: the picker's available times
+
+            ARE those hours, so the two are read together. */}
+
+        <ScheduledOrdersCard branchId={branch.id} settings={branch.settings} />
 
         {canUseDelivery ? (
           <>

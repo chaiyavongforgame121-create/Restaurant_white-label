@@ -161,17 +161,18 @@ Deno.serve(async (req: Request) => {
     };
   }
 
-  // Validate scheduled_for: at least 10 min in the future, at most 14 days.
-  // Parsed here rather than next to the insert because the store-hours check
-  // below needs it: a 7pm pickup ordered at 2pm has to be judged against 7pm
-  // opening hours, not against whether the branch happens to be open right now.
+  // Parsed here rather than next to the insert because the store-hours check below needs
+  // it: a 7pm pickup ordered at 2pm has to be judged against 7pm opening hours, not
+  // against whether the branch happens to be open right now.
+  //
+  // The BOUNDS (too soon / too far / scheduling switched off) are per-branch settings and
+  // are enforced further down, once branch.settings has been read. They were hardcoded
+  // 10-minutes-to-14-days here, and disagreed with the checkout input's own hardcoded
+  // 15 minutes — a diner picking a 12-minute-out slot cleared the picker and failed here.
   let scheduledFor: string | null = null;
   if (payload.scheduled_for) {
     const t = new Date(payload.scheduled_for).getTime();
-    const now = Date.now();
     if (!Number.isFinite(t)) return json(400, { error: 'invalid_scheduled_for' });
-    if (t < now + 10 * 60_000) return json(400, { error: 'scheduled_too_soon' });
-    if (t > now + 14 * 24 * 60 * 60_000) return json(400, { error: 'scheduled_too_far' });
     scheduledFor = new Date(t).toISOString();
   }
 
@@ -304,6 +305,26 @@ Deno.serve(async (req: Request) => {
   }
 
   const settings = (branch.settings || {}) as Record<string, unknown>;
+
+  // Per-branch scheduling policy. Defaults reproduce the old hardcoded behaviour, and match
+  // storefront_status() key for key — if the two ever drift, the picker offers times this
+  // function then refuses, which is the exact failure the picker was rebuilt to remove.
+  if (scheduledFor) {
+    const schedulingEnabled = settings.scheduling_enabled === undefined
+      ? true
+      : settings.scheduling_enabled === true;
+    if (!schedulingEnabled) return json(400, { error: 'scheduling_disabled' });
+
+    const minLeadMin = Math.max(0, Number(settings.schedule_min_lead_min ?? 15));
+    const maxDays = Math.max(0, Number(settings.schedule_max_days ?? 14));
+    const t = new Date(scheduledFor).getTime();
+    const now = Date.now();
+    if (t < now + minLeadMin * 60_000) return json(400, { error: 'scheduled_too_soon' });
+    // maxDays counts branch-local DAYS and the client offers the whole of the last one, so
+    // the server allows a further 24h rather than cutting mid-day. Deliberately looser than
+    // the picker: the set of times a diner can choose stays a subset of what is accepted.
+    if (t > now + (maxDays + 1) * 24 * 60 * 60_000) return json(400, { error: 'scheduled_too_far' });
+  }
 
   // Per-line subtotal: (unit_price + mod_delta) * quantity. Modifier total saved per line.
   const lineComputations = payload.items.map((line) => {
@@ -614,11 +635,18 @@ Deno.serve(async (req: Request) => {
   if (nErr) console.error('order_number_rpc_failed', nErr);
   const orderNumber = (orderNumberData as unknown as string) || `A-${new Date().toISOString().slice(2,7).replace('-','')}-${String(Date.now() % 1000000).padStart(6,'0')}`;
 
-  // Hold far-future scheduled orders out of the kitchen. Released by the
-  // pg_cron job private.release_scheduled_orders() at scheduled_for − prep_time.
+  // Hold far-future scheduled orders out of the kitchen. Released by the pg_cron job
+  // private.release_scheduled_orders() at scheduled_for − schedule_lead_time_min.
+  //
+  // Both sides must read the SAME number or the hold and the release disagree. They did:
+  // this used prep_time_min + 15 while the job used prep_time_min, so for 15 minutes an
+  // order could be held with nothing scheduled to let it out until the next cron tick.
+  // schedule_lead_time_min also separates "when the kitchen sees it" from prep_time_min,
+  // which is the figure quoted to the diner as an ETA — they were the same key.
   const prepTimeMin = Number(settings.prep_time_min ?? 15);
+  const leadTimeMin = Math.max(0, Number(settings.schedule_lead_time_min ?? prepTimeMin));
   const held = scheduledFor != null &&
-    new Date(scheduledFor).getTime() - Date.now() > (prepTimeMin + 15) * 60_000;
+    new Date(scheduledFor).getTime() - Date.now() > leadTimeMin * 60_000;
 
   const { data: order, error: oErr } = await admin.from('orders').insert({
     order_number: orderNumber, branch_id: payload.branch_id, customer_id: customerId,
