@@ -462,10 +462,15 @@ function TrackingMap({
     delivery.dropoff_lat != null && delivery.dropoff_lng != null
       ? { lat: delivery.dropoff_lat, lng: delivery.dropoff_lng }
       : null;
-  const driver =
-    delivery.driver_lat != null && delivery.driver_lng != null
-      ? { lat: delivery.driver_lat, lng: delivery.driver_lng }
-      : null;
+  // Memoised on the numbers, not rebuilt per render: DeliveryMap moves the puck in an effect
+  // keyed on this object, and a fresh literal every render made it re-run on every unrelated
+  // state change. Now the marker moves when the rider does, and only then.
+  const driverLat = delivery.driver_lat ?? null;
+  const driverLng = delivery.driver_lng ?? null;
+  const driver = React.useMemo(
+    () => (driverLat != null && driverLng != null ? { lat: driverLat, lng: driverLng } : null),
+    [driverLat, driverLng],
+  );
   const [route, setRoute] = React.useState<[number, number][] | null>(null);
 
   // One Directions call per tracking session (cost control) — the trip path

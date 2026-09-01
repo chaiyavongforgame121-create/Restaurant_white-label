@@ -24,6 +24,23 @@ import { PhotoUploader } from './photo-uploader';
  *  pressed from the other side of town. */
 const ARRIVAL_RADIUS_MI = 0.2;
 
+/**
+ * progress_delivery raises bare codes, and anything a trigger raises underneath it arrives
+ * here as raw Postgres text. Name the ones a rider can act on; for the rest say plainly that
+ * it is not their fault and not worth retrying, and show the reason so it can be reported.
+ */
+function advanceErrorMessage(e: unknown): string {
+  const raw = e instanceof Error ? e.message : String(e ?? '');
+  if (raw.includes('pod_photo_required')) return 'Take a delivery photo before you finish.';
+  if (raw.includes('pickup_photo_required')) return 'Take a pickup photo before you continue.';
+  if (raw.includes('not_accepted')) return 'Accept the job before moving it on.';
+  if (raw.includes('illegal_transition')) {
+    return 'This job has already moved on — pull down to refresh.';
+  }
+  if (raw.includes('forbidden')) return 'This job is no longer assigned to you.';
+  return `Couldn't update this delivery. Tell support: ${raw.slice(0, 120)}`;
+}
+
 type StageKey = 'heading_to_pickup' | 'at_pickup' | 'picked_up' | 'in_transit' | 'at_customer';
 
 const stageMeta: Record<
@@ -138,7 +155,10 @@ export function ActiveDeliveryView() {
       (err) => {
         if (err.code === err.PERMISSION_DENIED) setGeoDenied(true);
       },
-      { enableHighAccuracy: true, maximumAge: 15_000, timeout: 15_000 },
+      // Was 15s. This position drives the rider's own map marker and the arrival distance
+      // check, so a fix that may be a quarter-minute stale is too old for both — the map
+      // lagged behind the road, and "how far am I" answered for where they used to be.
+      { enableHighAccuracy: true, maximumAge: 3_000, timeout: 15_000 },
     );
     return () => navigator.geolocation.clearWatch(id);
   }, []);
@@ -356,10 +376,14 @@ export function ActiveDeliveryView() {
         if (meta.nextStage === 'at_customer') await markArriving();
         setSoftStage(meta.nextStage);
       }
-    } catch {
+    } catch (e) {
       // Server rejected the step (already resynced by progress()). Surface it instead
       // of optimistically advancing or faking a completion.
-      setAdvanceError("Couldn't update this delivery — please try again.");
+      //
+      // The reason used to be thrown away for a flat "please try again", which is exactly
+      // wrong when the cause is not transient: a broken earnings trigger made every
+      // "Mark as delivered" fail, and the message invited a retry that could never work.
+      setAdvanceError(advanceErrorMessage(e));
     } finally {
       setAdvancing(false);
     }

@@ -110,20 +110,27 @@ export function DeliveryChat({ deliveryId, deliveryStatus }: Props) {
 
   return (
     <>
-      <Button
-        variant="soft"
-        size="md"
-        leftIcon={<MessageCircle className="h-4 w-4" />}
-        onClick={openChat}
-        className="relative"
-      >
-        Chat
+      {/* The badge hangs OUTSIDE the button, on a wrapper, because Button's base class list
+          includes overflow-hidden — anything absolutely positioned past its edge was clipped
+          to a red sliver with the number cut off entirely, which is how it was reported. */}
+      <span className="relative inline-flex">
+        <Button
+          variant="soft"
+          size="md"
+          leftIcon={<MessageCircle className="h-4 w-4" />}
+          onClick={openChat}
+        >
+          Chat
+        </Button>
         {unread > 0 && (
-          <span className="absolute -right-1.5 -top-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-danger px-1 text-[10px] font-bold text-white">
-            {unread}
+          <span
+            aria-label={`${unread} unread message${unread === 1 ? '' : 's'}`}
+            className="pointer-events-none absolute -right-2 -top-2 grid h-5 min-w-5 place-items-center rounded-full bg-danger px-1.5 text-[11px] font-bold leading-none text-white ring-2 ring-background"
+          >
+            {unread > 99 ? '99+' : unread}
           </span>
         )}
-      </Button>
+      </span>
 
       <Sheet open={open} onClose={() => setOpen(false)} title="Chat with your driver">
         <div className="h-[60vh]">
