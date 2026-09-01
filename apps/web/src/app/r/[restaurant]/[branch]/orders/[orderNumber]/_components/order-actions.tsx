@@ -55,6 +55,20 @@ const RATEABLE_STATUSES = ['completed'];
  * with the restaurant rather than applied behind their back. Staff keep both
  * powers (admin Orders kebab, kitchen "Reject order").
  */
+/** cancel_order's error codes, in words a diner can act on. */
+function cancelOrderMessage(raw: string): string {
+  if (raw.includes('auth_required')) {
+    return 'Please sign in with the account you ordered with to cancel this order.';
+  }
+  if (raw.includes('not_authorized')) {
+    return 'This order belongs to a different account. Please contact the restaurant to cancel it.';
+  }
+  if (raw.includes('too_late_for_customer_cancel') || raw.includes('cannot_cancel_status')) {
+    return 'This order has moved on and can no longer be cancelled here — please contact the restaurant.';
+  }
+  return "That didn't go through. Please try again, or contact the restaurant.";
+}
+
 export function OrderActions({
   orderId,
   branchId,
@@ -69,6 +83,23 @@ export function OrderActions({
   // The window in which contacting the restaurant can still change anything —
   // once it is out for delivery or handed over, there is nothing left to alter.
   const canStillChange = ['pending', 'confirmed', 'preparing'].includes(orderStatus);
+  // cancel_order raises 'auth_required' and is not granted to anon: it matches the order
+  // against customers.user_id = auth.uid(). orders.customer_id is nullable, so guest
+  // checkout is real, and the tracking page is readable without a session — offering a
+  // guest a Cancel button only to answer "auth_required" is worse than not offering it.
+  // `null` while the session is still being read, so the button never flashes and vanishes.
+  const [signedIn, setSignedIn] = React.useState<boolean | null>(null);
+  React.useEffect(() => {
+    let cancelledEffect = false;
+    void getBrowserClient()
+      .auth.getUser()
+      .then(({ data }) => {
+        if (!cancelledEffect) setSignedIn(!!data.user);
+      });
+    return () => {
+      cancelledEffect = true;
+    };
+  }, []);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [foodStars, setFoodStars] = React.useState(0);
@@ -202,7 +233,7 @@ export function OrderActions({
           kitchen board filters awaiting_payment out, and cancel_order already permits the
           customer while the order is pending or confirmed. Waiting on hold to call off an
           order nobody has started is the wrong ask. */}
-      {awaitingPayment && canStillChange && (
+      {awaitingPayment && canStillChange && signedIn === true && (
         <div className="space-y-2 rounded-2xl border border-border bg-muted/40 p-3">
           <p className="text-sm text-muted-foreground">
             Changed your mind? Nothing has been prepared yet — the restaurant has not
@@ -223,7 +254,10 @@ export function OrderActions({
               });
               setCancelling(false);
               if (cancelErr) {
-                setError(cancelErr.message);
+                // cancel_order raises bare codes. The tracking page is readable by anyone
+                // holding the link, so "signed in" is not the same as "this is your order" —
+                // show the reason in words instead of leaking `not_authorized` at a diner.
+                setError(cancelOrderMessage(cancelErr.message));
                 return;
               }
               router.refresh();
@@ -233,7 +267,9 @@ export function OrderActions({
           </Button>
         </div>
       )}
-      {!awaitingPayment && canStillChange && (
+      {/* A normal order shows this at once, as before. Only the awaiting-payment case waits
+          on the session read, so a guest lands here instead of on a button that cannot work. */}
+      {canStillChange && (!awaitingPayment || signedIn === false) && (
         <div className="flex gap-2.5 rounded-2xl border border-border bg-muted/40 p-3">
           <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">

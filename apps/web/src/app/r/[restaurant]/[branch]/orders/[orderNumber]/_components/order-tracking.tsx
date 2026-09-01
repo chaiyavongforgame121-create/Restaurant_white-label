@@ -85,11 +85,30 @@ interface Props {
   qrTransfer?: QrTransfer | null;
 }
 
+/**
+ * PostgREST returns `null` — not `[]` — for an embed with no related rows, and this page
+ * reads `order.deliveries[0]` directly.
+ *
+ * The server page normalises the FIRST render, but `reload()` and the realtime merge write
+ * straight into state, so an order with no delivery row yet (every pickup, dine-in and
+ * QR order, and every delivery order before dispatch creates the row) put `null` back and
+ * the next render threw "Cannot read properties of null (reading '0')". Normalising on
+ * every path into state is the only place this can be fixed once.
+ */
+function asArray<T>(v: T[] | T | null | undefined): T[] {
+  return Array.isArray(v) ? v : v ? [v] : [];
+}
+
 export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransfer }: Props) {
   const t = useTranslations('tracking');
   const router = useRouter();
   const pathname = usePathname();
-  const [order, setOrder] = React.useState<OrderRow>(initialOrder);
+  const [order, setOrder] = React.useState<OrderRow>(() => ({
+    ...initialOrder,
+    order_items: initialOrder.order_items ?? [],
+    payments: asArray(initialOrder.payments),
+    deliveries: asArray(initialOrder.deliveries),
+  }));
 
   // Re-read the order from the server. Used on (re)connect and when the tab wakes:
   // a diner watching this page leaves it backgrounded for the whole delivery, by which
@@ -106,14 +125,14 @@ export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransf
     if (!data) return;
     setOrder((curr) => {
       const next = { ...curr, ...(data as unknown as Partial<OrderRow>) };
+      const incoming = asArray(next.deliveries);
+      const existing = asArray(curr.deliveries);
       // A refetch must never REMOVE the driver. useRealtime calls this on connect,
       // reconnect, tab focus and network resume, and any of those can land while the
       // embedded deliveries read comes back empty — a moment of RLS/replication lag is
       // enough. Overwriting with [] made the driver card appear the instant the rider
       // accepted and then vanish a beat later, which is exactly the reported flicker.
-      if ((next.deliveries?.length ?? 0) === 0 && curr.deliveries.length > 0) {
-        next.deliveries = curr.deliveries;
-      }
+      next.deliveries = incoming.length === 0 && existing.length > 0 ? existing : incoming;
       return next;
     });
   }, [order.id]);
@@ -130,7 +149,7 @@ export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransf
         setOrder((curr) => {
           if (!payload.new) return curr;
           const incoming = payload.new as Partial<OrderRow['deliveries'][number]>;
-          const existing = curr.deliveries[0];
+          const existing = asArray(curr.deliveries)[0];
           // Merge rather than replace. A postgres_changes payload carries the row as the
           // TABLE has it, not as this page selected it, so swapping the object wholesale
           // can drop fields the UI depends on — driver_id among them, which is what

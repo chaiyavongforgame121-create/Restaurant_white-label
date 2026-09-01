@@ -16,6 +16,22 @@ export default async function OrderDetailPage({ params }: Props) {
   const supabase = await getServerClient();
   const order = await getOrderByNumber(supabase, tenant.branch.id, orderNumber);
   if (!order) notFound();
+
+  // Read qr_transfer off the RAW branches.settings jsonb, exactly as the checkout page reads
+  // sales_tax_rate directly. resolveTenant runs the settings through parseSettings(), which is
+  // a seven-key whitelist — qr_transfer is not one of them, so tenant.branch.settings.qr_transfer
+  // is ALWAYS undefined. Sourcing it from there rendered "Scan the code" above no code at all.
+  const { data: qrRow } = await supabase
+    .from('branches')
+    .select('settings')
+    .eq('id', tenant.branch.id)
+    .maybeSingle();
+  const qrTransfer =
+    (((qrRow?.settings as Record<string, unknown> | null)?.qr_transfer ?? null) as {
+      image_url?: string;
+      account_name?: string;
+      instructions?: string;
+    } | null) ?? null;
   // PostgREST returns null (not []) for left joins with no related rows.
   // OrderTracking expects array — normalize here.
   const normalized = {
@@ -31,13 +47,7 @@ export default async function OrderDetailPage({ params }: Props) {
       branchLocation={tenant.branch.geoLocation}
       // The QR moved off checkout: a diner should not be asked to pay before the order
       // exists. It is shown here, against a real order number they can quote in the note.
-      qrTransfer={
-        ((tenant.branch.settings as unknown as Record<string, unknown> | null)?.qr_transfer ?? null) as {
-          image_url?: string;
-          account_name?: string;
-          instructions?: string;
-        } | null
-      }
+      qrTransfer={qrTransfer}
     />
   );
 }
