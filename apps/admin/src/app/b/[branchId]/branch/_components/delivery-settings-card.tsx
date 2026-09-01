@@ -45,7 +45,8 @@ const FIELDS: Array<{
   label: string;
   hint?: string;
   step?: string;
-  group: 'fees' | 'timing' | 'dispatch' | 'pay';
+  /** 'surge' is rendered by hand next to the multiplier slider, not by the group loop. */
+  group: 'fees' | 'timing' | 'dispatch' | 'pay' | 'surge';
   fallback: number;
   /**
    * Upper bound, in the DISPLAY unit (miles / dollars), enforced on the input AND clamped
@@ -71,7 +72,10 @@ const FIELDS: Array<{
   // now charges base + per-mile in full. Rider pay still stops at driver_max_pay, which is
   // why that one stayed.
   { key: 'delivery_radius_km', label: 'Delivery radius (mi)', hint: 'Orders beyond this distance are rejected at checkout. Above ~50 mi, raise "Driver max pay" too or drivers are capped at $50 no matter how far they drive.', group: 'timing', step: '0.5', fallback: DELIVERY_SETTING_DEFAULTS.deliveryRadiusKm, convert: 'dist', max: 9_999_999_999 },
-  { key: 'delivery_surge_from_mi', label: 'Surge starts at (mi)', hint: 'Distance from the branch at which the surge multiplier below begins to apply. 0 applies it to every order, including a half-mile hop.', group: 'fees', step: '0.5', fallback: 0, max: 9_999_999_999 },
+    // group 'surge', not 'fees': this and the multiplier are one setting, and they were two
+  // sections apart — the merchant read "Surge multiplier" with no distance beside it and
+  // reported the distance field as missing. They now sit together.
+  { key: 'delivery_surge_from_mi', label: 'Surge starts at (mi)', hint: 'Below this distance the multiplier is not applied at all. 0 surges every order, including a half-mile hop.', group: 'surge', step: '0.5', fallback: 0, max: 9_999_999_999 },
   { key: 'prep_time_min', label: 'Prep time (min)', hint: 'Baseline kitchen time used in customer ETAs', group: 'timing', step: '1', fallback: DELIVERY_SETTING_DEFAULTS.prepTimeMin, max: 240 },
   // These two are deliberately near-unbounded (owner's call): a huge search radius and a
   // huge attempt count are how you force every driver to be a candidate while testing
@@ -94,6 +98,9 @@ const FIELDS: Array<{
   // the back office — which only became reachable once the radius above was opened.
   { key: 'driver_max_pay', label: 'Driver max pay ($)', hint: 'Hard ceiling on what one delivery can pay a driver, before tips. Must be raised alongside a large delivery radius, or long runs are truncated to this amount.', group: 'pay', step: '1', fallback: 50, max: 9_999_999_999 },
 ];
+
+/** Rendered by hand beside the multiplier slider, not by the group loop. */
+const SURGE_FIELDS = FIELDS.filter((f) => f.group === 'surge');
 
 const GROUP_TITLES: Record<string, string> = {
   fees: 'Customer delivery fee',
@@ -145,6 +152,10 @@ export function DeliverySettingsCard({ branchId, settings }: Props) {
   const [error, setError] = React.useState<string | null>(null);
 
   // Live preview using the exact formula place-order/quote_delivery applies.
+  // Echoed back under the two inputs in words, because "×1.50" and "3" sitting in separate
+  // boxes do not say what a customer will actually be charged.
+  const surgeFromMi = Number(values.delivery_surge_from_mi) || 0;
+
   const preview = React.useMemo(() => {
     const numeric: Record<string, number> = {};
     for (const f of FIELDS) {
@@ -283,24 +294,58 @@ export function DeliverySettingsCard({ branchId, settings }: Props) {
               Added to every customer ETA while the kitchen is slammed. 0 = off.
             </span>
           </label>
-          <label className="block">
-            <span className="mb-1.5 flex items-center justify-between text-sm font-medium">
-              <span>Surge multiplier</span>
-              <span className="font-display text-base font-bold text-primary">×{surge.toFixed(2)}</span>
+          {/* Surge is two numbers — how much, and from how far — and they only make sense
+              read together. The distance used to live up in "Customer delivery fee", two
+              sections away, each half pointing at the other with "above" and "below". */}
+          <div className="rounded-xl border border-border/70 p-3">
+            <span className="block text-sm font-medium">Surge pricing</span>
+            <span className="mt-0.5 block text-xs text-muted-foreground">
+              Charges more for the long deliveries that cost more to run, and leaves short
+              ones alone.
             </span>
-            <input
-              type="range"
-              min={1}
-              max={2}
-              step={0.05}
-              value={surge}
-              onChange={(e) => setSurge(Number(e.target.value))}
-              className="h-2 w-full accent-primary"
-            />
-            <span className="mt-1 block text-xs text-muted-foreground">
-              Multiplies the delivery fee beyond &ldquo;Surge starts at&rdquo; above. 1.00 = off.
-            </span>
-          </label>
+
+            <label className="mt-3 block">
+              <span className="mb-1.5 flex items-center justify-between text-sm font-medium">
+                <span>Surge multiplier</span>
+                <span className="font-display text-base font-bold text-primary">×{surge.toFixed(2)}</span>
+              </span>
+              <input
+                type="range"
+                min={1}
+                max={2}
+                step={0.05}
+                value={surge}
+                onChange={(e) => setSurge(Number(e.target.value))}
+                className="h-2 w-full accent-primary"
+              />
+              <span className="mt-1 block text-xs text-muted-foreground">
+                1.00 = off, and nothing below is charged extra.
+              </span>
+            </label>
+
+            {SURGE_FIELDS.map((f) => (
+              <label key={f.key} className="mt-3 block">
+                <span className="mb-1.5 block text-sm font-medium">{f.label}</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={f.max}
+                  step={f.step}
+                  inputMode="decimal"
+                  value={values[f.key]}
+                  onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
+                  className={INPUT_CLS}
+                />
+                {f.hint && <span className="mt-1 block text-xs text-muted-foreground">{f.hint}</span>}
+              </label>
+            ))}
+
+            <p className="mt-3 text-xs text-muted-foreground">
+              {surge <= 1
+                ? 'Surge is off — every order is charged base + per-mile.'
+                : `Under ${surgeFromMi} mi: base + per mile. From ${surgeFromMi} mi: ×${surge.toFixed(2)} on the whole fee.`}
+            </p>
+          </div>
         </div>
       </div>
 
