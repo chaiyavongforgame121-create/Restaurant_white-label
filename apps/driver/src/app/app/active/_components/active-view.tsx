@@ -105,6 +105,10 @@ export function ActiveDeliveryView() {
   const [route, setRoute] = React.useState<[number, number][] | null>(null);
   const [completed, setCompleted] = React.useState<{ earnings: number; orderNumber: string } | null>(null);
   const [advanceError, setAdvanceError] = React.useState<string | null>(null);
+  // Which arrival step the rider has explicitly overridden the distance check for. Stored as
+  // the stage rather than a boolean so it expires by itself: once the job moves on, the value
+  // no longer matches the current stage and the next arrival step is gated again.
+  const [arrivalOverride, setArrivalOverride] = React.useState<StageKey | null>(null);
   // Local echoes of the just-uploaded proof photos for instant CTA-unlock
   // (the provider also picks them up from the server on its next realtime resync).
   const [pickupPhotoUrl, setPickupPhotoUrl] = React.useState<string | null>(null);
@@ -118,6 +122,8 @@ export function ActiveDeliveryView() {
     setPickupPhotoUrl(null);
     setPodPhotoUrl(null);
     setMatePickupPhotoUrl(null);
+    // A distance override belongs to one step of one job — never carry it into the next.
+    setArrivalOverride(null);
   }, [active?.id]);
 
   // Watch GPS for the live route map (separate from DriverLocationPing's DB push) +
@@ -251,6 +257,10 @@ export function ActiveDeliveryView() {
   const targetKnown = arrivalTarget.lat != null && arrivalTarget.lng != null;
   const tooFarToArrive =
     isArrivalStep && targetKnown && (milesToTarget == null || milesToTarget > ARRIVAL_RADIUS_MI);
+  // The rider has said "I am here regardless" for THIS step. Recorded on the delivery when
+  // they advance, so the gate can be got past without the gate becoming meaningless.
+  const arrivalOverridden = arrivalOverride === stage;
+  const blockedByDistance = tooFarToArrive && !arrivalOverridden;
 
   const hasPickupPhoto = !!pickupPhotoUrl || !!active.pickupPhotoUrl;
   const needsPickupPhoto = stage === 'at_pickup' && !hasPickupPhoto;
@@ -286,6 +296,21 @@ export function ActiveDeliveryView() {
     setAdvancing(true);
     setAdvanceError(null);
     try {
+      // Record the skip on the delivery BEFORE it moves, so the step that was allowed
+      // through carries the reason with it. Never fatal: the gate is a safeguard, not a
+      // paywall, and failing to write the audit line must not strand a rider at the door.
+      if (tooFarToArrive && arrivalOverridden) {
+        try {
+          const supabase = getBrowserClient();
+          await supabase.rpc('record_arrival_override', {
+            p_delivery_id: active.id,
+            p_stage: stage,
+            p_miles: milesToTarget,
+          });
+        } catch {
+          /* the delivery matters more than its audit line */
+        }
+      }
       if (meta.transition === 'delivered') {
         const snap = active;
         // Throws if the guarded RPC rejects — so we never show a false completion.
@@ -512,19 +537,37 @@ export function ActiveDeliveryView() {
               fullWidth
               onClick={handleAdvance}
               loading={advancing}
-              disabled={advancing || needsPickupPhoto || needsPodPhoto || needsMatePickupPhoto || tooFarToArrive}
+              disabled={advancing || needsPickupPhoto || needsPodPhoto || needsMatePickupPhoto || blockedByDistance}
             >
               {t(meta.ctaKey as never)}
             </Button>
             {/* Why the button is dead, in the rider's own terms. Silently disabling it is
                 how "the app is broken" reports start. */}
-            {tooFarToArrive && (
+            {blockedByDistance && (
+              <>
+                <p className="mt-2 text-center text-xs text-muted-foreground">
+                  {milesToTarget == null
+                    ? geoDenied
+                      ? `Turn on location to confirm you're at ${arrivalTarget.what}.`
+                      : `Waiting for your location to confirm you're at ${arrivalTarget.what}…`
+                    : `You're ${milesToTarget.toFixed(1)} mi away — get within ${ARRIVAL_RADIUS_MI} mi of ${arrivalTarget.what} to continue.`}
+                </p>
+                {/* GPS does fail — indoors, in a canyon of buildings, or when the branch pin
+                    itself is wrong — and a rider standing at the counter with a dead button
+                    has nowhere to go. Deliberately plain rather than inviting: a second tap,
+                    and the delivery records that it was used. */}
+                <button
+                  type="button"
+                  onClick={() => setArrivalOverride(stage)}
+                  className="focus-ring mx-auto mt-1 block rounded-lg px-2 py-1 text-xs font-medium text-muted-foreground underline underline-offset-4"
+                >
+                  My GPS is wrong — I&apos;m at {arrivalTarget.what}
+                </button>
+              </>
+            )}
+            {tooFarToArrive && arrivalOverridden && (
               <p className="mt-2 text-center text-xs text-muted-foreground">
-                {milesToTarget == null
-                  ? geoDenied
-                    ? `Turn on location to confirm you're at ${arrivalTarget.what}.`
-                    : `Waiting for your location to confirm you're at ${arrivalTarget.what}…`
-                  : `You're ${milesToTarget.toFixed(1)} mi away — get within ${ARRIVAL_RADIUS_MI} mi of ${arrivalTarget.what} to continue.`}
+                Distance check skipped. This is recorded on the delivery.
               </p>
             )}
             {(needsPickupPhoto || needsMatePickupPhoto) && (
