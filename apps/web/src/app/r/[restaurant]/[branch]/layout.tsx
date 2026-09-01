@@ -21,7 +21,11 @@ export default async function BranchLayout({ params, children }: Props) {
     <ThemeProvider theme={tenant.theme}>
       <AppShell
         base={base}
-        brandName={tenant.theme.brandName ?? tenant.restaurant.name}
+        // The branch, not the restaurant. A diner is standing in (or ordering from) ONE
+        // location, and the hero already says "Now serving from <branch>" — the header
+        // saying the parent company's name instead was the odd one out. Falls back to the
+        // brand and then the restaurant for a branch with no name of its own.
+        brandName={tenant.branch.name || tenant.theme.brandName || tenant.restaurant.name}
         logoUrl={tenant.logoUrl}
       >
         <PushSubscriber />
@@ -35,7 +39,9 @@ export default async function BranchLayout({ params, children }: Props) {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { restaurant, branch } = await params;
   const tenant = await resolveTenant(restaurant, branch);
-  const name = tenant.theme.brandName ?? tenant.restaurant.name;
+  // Same rule as the header: this storefront is one branch, so the tab, the installed app
+  // name and the share card all say the branch. The restaurant still names the description.
+  const name = tenant.branch.name || tenant.theme.brandName || tenant.restaurant.name;
   const description = `Order from ${tenant.restaurant.name} — ${tenant.branch.name}`;
   // Share card uses the wide logo; the tab icon uses the square favicon. Falling
   // back to the platform icon (by omitting the key, so the root layout's value is
@@ -43,7 +49,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const shareImage = tenant.logoUrl ?? tenant.faviconUrl;
 
   return {
-    title: tenant.restaurant.name,
+    title: name,
     description,
     // Branch-scoped manifest so an install from here opens this restaurant,
     // not the platform landing page the root manifest points at.

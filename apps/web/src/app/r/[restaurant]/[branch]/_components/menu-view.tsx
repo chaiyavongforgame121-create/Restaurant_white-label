@@ -75,7 +75,6 @@ interface MenuViewProps {
   happyHours?: HappyHourSection[];
   menuLayout?: MenuLayout;
   menuCardStyle?: MenuCardStyle;
-  logoUrl?: string | null;
   heroUrl?: string | null;
   heroTitle?: string;
   heroSubtitle?: string;
@@ -85,7 +84,7 @@ interface MenuViewProps {
   deliveryWindowsToday?: Array<{ opens_at: string; closes_at: string }>;
 }
 
-export function MenuView({ branch, categories, items, isOpen = true, reviews, combos = [], happyHours = [], menuLayout = 'grid4', menuCardStyle = 'standard', logoUrl, heroUrl, heroTitle, heroSubtitle, canDeliver = false, deliveryClosedNow = false, deliveryWindowsToday = [] }: MenuViewProps) {
+export function MenuView({ branch, categories, items, isOpen = true, reviews, combos = [], happyHours = [], menuLayout = 'grid4', menuCardStyle = 'standard', heroUrl, heroTitle, heroSubtitle, canDeliver = false, deliveryClosedNow = false, deliveryWindowsToday = [] }: MenuViewProps) {
   const t = useTranslations();
   const params = useParams<{ restaurant: string; branch: string }>();
   const [search, setSearch] = React.useState('');
@@ -189,7 +188,6 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
         title={effectiveHeroTitle}
         subtitle={effectiveHeroSubtitle}
         address={branch.address}
-        logoUrl={logoUrl}
         heroUrl={heroUrl}
       />
 
@@ -296,13 +294,11 @@ function Hero({
   title,
   subtitle,
   address,
-  logoUrl,
   heroUrl,
 }: {
   title: string;
   subtitle: string;
   address: string;
-  logoUrl?: string | null;
   heroUrl?: string | null;
 }) {
   return (
@@ -312,11 +308,9 @@ function Hero({
       <div className="container relative pt-6 pb-8 lg:pt-12 lg:pb-16">
         <div className="grid items-center gap-8 lg:grid-cols-2">
           <div>
-            {logoUrl ? (
-              <div className="relative mb-4 h-12 w-44">
-                <Image src={logoUrl} alt={title} fill className="object-contain object-left" sizes="176px" />
-              </div>
-            ) : null}
+            {/* No logo here. The sticky header above carries it on every page, so repeating it
+                a few pixels lower printed the same image twice in one screenful. The header is
+                the one that has to be right; this was the duplicate. */}
             <h1 className="font-display text-4xl font-bold leading-[1.05] tracking-tight md:text-5xl lg:text-6xl">
               <span className="text-gradient">{title}</span>
             </h1>

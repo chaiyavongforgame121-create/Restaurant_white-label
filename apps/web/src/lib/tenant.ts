@@ -27,7 +27,13 @@ const cachedTenantBySlug = unstable_cache(
     return resolveTenantBySlug(supabase, restaurantSlug, branchSlug);
   },
   ['tenant-by-slug'],
-  { revalidate: 300, tags: ['tenant'] },
+  // Was 300s. Branding is edited in a DIFFERENT app (admin), which cannot call
+  // revalidateTag('tenant') here — so this window is the ONLY thing between a merchant
+  // pressing "Save branding" and seeing their logo. Five minutes of staring at the old one
+  // reads as a failed upload; the merchant re-uploads, and re-uploads again. Thirty seconds
+  // still absorbs the storefront's read traffic (one fetch per window for every visitor)
+  // while keeping the edit loop honest.
+  { revalidate: 30, tags: ['tenant'] },
 );
 
 /**
