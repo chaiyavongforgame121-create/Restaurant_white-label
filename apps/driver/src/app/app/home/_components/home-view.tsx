@@ -14,6 +14,7 @@ import { useDriver } from '@/store/driver';
 import { useDriverSession } from '@/components/driver-session';
 import { useDelivery } from '@/components/delivery-provider';
 import { DispatchSheet } from '@/components/dispatch-sheet';
+import { DriverInstallRow } from '@/components/install-app-button';
 import { AvailabilitySheet } from './availability-sheet';
 
 export function HomeView() {
@@ -32,6 +33,14 @@ export function HomeView() {
     [driver.approvals],
   );
   const approvedIds = React.useMemo(() => approved.map((a) => a.branch_id), [approved]);
+  // AvailabilitySheet seeds its checklist from this list. Built inline in the JSX it was a
+  // new array on every render of this screen — once a second while a cooldown counts down —
+  // so the rider's ticks were wiped and the sheet snapped back to the "Online now" tab
+  // under their thumb.
+  const approvedForSheet = React.useMemo(
+    () => approved.map((a) => ({ branch_id: a.branch_id, name: a.branch?.name ?? 'Restaurant' })),
+    [approved],
+  );
   // Short label of the restaurants the driver is (or will be) online for.
   const scopeNames = (scope.length ? approved.filter((a) => scope.includes(a.branch_id)) : approved).map(
     (a) => a.branch?.name ?? 'Restaurant',
@@ -119,6 +128,10 @@ export function HomeView() {
   const isOnline = status === 'online' || status === 'on_delivery';
   const onDelivery = status === 'on_delivery';
   const approvedCount = approved.length;
+  // An application the restaurant has not decided on is otherwise invisible from here, so
+  // a rider who applied last week reads "Get approved to start receiving orders" and applies
+  // again. Surface the count that is actually waiting.
+  const pendingCount = (driver.approvals ?? []).filter((a) => a.status === 'pending').length;
 
   // Going online applies to a chosen SET of restaurants (the "scope"): each branch
   // is set individually so an unselected one can't dispatch to this driver. Tapping
@@ -329,13 +342,21 @@ export function HomeView() {
               <p className="font-semibold">Apply to restaurants</p>
               <p className="text-sm text-muted-foreground">
                 {approvedCount > 0
-                  ? `${approvedCount} approved · tap to add more`
-                  : 'Get approved to start receiving orders'}
+                  ? `${approvedCount} approved${pendingCount > 0 ? ` · ${pendingCount} waiting` : ''} · tap to see all`
+                  : pendingCount > 0
+                    ? `${pendingCount} waiting for review · tap to see`
+                    : 'Get approved to start receiving orders'}
               </p>
             </div>
             <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
           </Card>
         </Link>
+      </section>
+
+      {/* The row renders nothing once the rider is running the installed app (or on a
+          browser with no install path), so collapse the spacing with it. */}
+      <section className="mt-6 px-4 empty:hidden">
+        <DriverInstallRow as="div" />
       </section>
 
       <section className="mt-6 px-4">
@@ -415,7 +436,7 @@ export function HomeView() {
       <AvailabilitySheet
         open={sheetOpen}
         onClose={() => setSheetOpen(false)}
-        approved={approved.map((a) => ({ branch_id: a.branch_id, name: a.branch?.name ?? 'Restaurant' }))}
+        approved={approvedForSheet}
         initialScope={scope}
         isOnline={isOnline}
         applying={toggling}
