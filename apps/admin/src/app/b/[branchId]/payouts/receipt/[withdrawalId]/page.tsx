@@ -3,6 +3,8 @@ import { notFound } from 'next/navigation';
 import { getServerClient } from '@favornoms/database/server';
 import { formatCurrency } from '@favornoms/shared';
 import { Card } from '@favornoms/ui';
+import { PayoutAttachments } from '../../_components/payout-attachments';
+import { fetchPayoutMedia } from '../../_components/payout-media';
 import { PrintButton } from '../../_components/print-button';
 
 interface Props {
@@ -26,6 +28,7 @@ export default async function WithdrawalReceiptPage({ params }: Props) {
   const embed = withdrawal.drivers as { full_name: string } | { full_name: string }[] | null;
   const driverName = (Array.isArray(embed) ? embed[0]?.full_name : embed?.full_name) ?? 'Driver';
 
+  const media = await fetchPayoutMedia(supabase, [withdrawalId]);
   const [{ data: branch }, { data: items }] = await Promise.all([
     supabase.from('branches').select('name, address').eq('id', branchId).maybeSingle(),
     supabase
@@ -82,7 +85,15 @@ export default async function WithdrawalReceiptPage({ params }: Props) {
           </div>
         </div>
 
-        <table className="w-full text-sm">
+        {/* The QR the money was sent to and the slip that proves it was, on the paper copy. */}
+        <PayoutAttachments
+          withdrawalId={withdrawalId}
+          qrPath={media.get(withdrawalId)?.qrPath ?? null}
+          slipPath={media.get(withdrawalId)?.slipPath ?? null}
+          canAttach={false}
+        />
+
+        <table className="mt-6 w-full text-sm">
           <thead>
             <tr className="border-b border-border text-left text-xs uppercase tracking-wider text-muted-foreground">
               <th className="py-2 pr-2 font-semibold">Delivered</th>

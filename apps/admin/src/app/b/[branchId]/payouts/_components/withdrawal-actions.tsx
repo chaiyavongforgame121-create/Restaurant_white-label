@@ -9,6 +9,7 @@ interface Props {
   withdrawalId: string;
   amount: number;
   driverName: string;
+  slipAttached: boolean;
 }
 
 const RPC_ERRORS: Record<string, string> = {
@@ -16,7 +17,7 @@ const RPC_ERRORS: Record<string, string> = {
   not_authorized: "You don't have permission to settle this request.",
 };
 
-export function WithdrawalActions({ withdrawalId, amount, driverName }: Props) {
+export function WithdrawalActions({ withdrawalId, amount, driverName, slipAttached }: Props) {
   const router = useRouter();
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -25,7 +26,13 @@ export function WithdrawalActions({ withdrawalId, amount, driverName }: Props) {
   const [reason, setReason] = React.useState('');
 
   const markPaid = async () => {
-    if (!window.confirm(`Pay $${amount.toFixed(2)} to ${driverName}? Confirm only after the transfer is sent.`)) return;
+    // Not a hard block: merchants transfer first and screenshot second, and the slip can be
+    // filed against a paid payout afterwards.
+    const missingSlip = slipAttached ? '' : ' No transfer slip is attached yet.';
+    const confirmed = window.confirm(
+      `Pay $${amount.toFixed(2)} to ${driverName}?${missingSlip} Confirm only after the transfer is sent.`,
+    );
+    if (!confirmed) return;
     setBusy(true);
     setError(null);
     const supabase = getBrowserClient();

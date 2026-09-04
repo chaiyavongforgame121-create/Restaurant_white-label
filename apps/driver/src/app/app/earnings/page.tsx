@@ -6,6 +6,8 @@ import { Receipt, Send, Store, TrendingUp } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Badge, Button, Card, Sheet } from '@favornoms/ui';
 import { useDriverSession } from '@/components/driver-session';
+import { driverPayoutQrPath } from './_components/payout-media';
+import { PayoutQrCard } from './_components/payout-qr-card';
 
 interface Withdrawal {
   id: string;
@@ -47,6 +49,9 @@ export default function EarningsPage() {
   const [accountName, setAccountName] = React.useState('');
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  // Held here rather than read off `driver` on every render so the card and the copy of it
+  // inside the request sheet can never disagree about whether a QR is saved.
+  const [qrPath, setQrPath] = React.useState<string | null>(() => driverPayoutQrPath(driver));
 
   const refresh = React.useCallback(async () => {
     const supabase = getBrowserClient();
@@ -163,6 +168,8 @@ export default function EarningsPage() {
         <div><p className="text-[11px] uppercase text-muted-foreground">Tips</p><p className="font-semibold">${totals.tip.toFixed(2)}</p></div>
       </Card>
 
+      <PayoutQrCard qrPath={qrPath} onChange={setQrPath} />
+
       <h2 className="mb-2 font-display text-lg font-semibold">Balance by restaurant</h2>
       {balances.length === 0 ? (
         <p className="mb-5 rounded-xl border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
@@ -259,6 +266,7 @@ export default function EarningsPage() {
               </div>
               <p className="font-display text-2xl font-bold text-primary">${requesting.accrued.toFixed(2)}</p>
             </Card>
+            <PayoutQrCard qrPath={qrPath} onChange={setQrPath} compact />
             <label className="block">
               <span className="mb-1 block text-sm font-medium">Bank</span>
               <input value={bankName} onChange={(e) => setBankName(e.target.value)} className="input" placeholder="Chase / Bank of America / etc." maxLength={80} />
