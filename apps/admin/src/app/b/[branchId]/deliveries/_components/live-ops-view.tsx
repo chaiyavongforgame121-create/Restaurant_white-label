@@ -151,8 +151,10 @@ export function LiveOpsView({
   const [deliveries, setDeliveries] = React.useState<LiveDelivery[]>([]);
   const mapRef = React.useRef<MapboxMap | null>(null);
   const markersRef = React.useRef<Map<string, MapboxMarker>>(new Map());
+  const refreshSeq = React.useRef(0);
 
   const refresh = React.useCallback(async () => {
+    const seq = ++refreshSeq.current;
     const supabase = getBrowserClient();
     const { data } = await supabase
       .from('deliveries')
@@ -163,12 +165,18 @@ export function LiveOpsView({
       .in('status', LIVE_STATUSES)
       .order('created_at', { ascending: false })
       .limit(50);
-    setDeliveries(
-      ((data ?? []) as unknown as Array<Omit<LiveDelivery, 'order'> & { order: unknown }>).map((d) => ({
-        ...d,
-        order: (Array.isArray(d.order) ? d.order[0] : d.order) as LiveDelivery['order'],
-      })),
-    );
+    // Several of these can be in flight at once; an older snapshot resolving last would
+    // pop rows back on to the board that a newer one had already retired.
+    if (seq !== refreshSeq.current) return;
+    const next = ((data ?? []) as unknown as Array<Omit<LiveDelivery, 'order'> & { order: unknown }>).map((d) => ({
+      ...d,
+      order: (Array.isArray(d.order) ? d.order[0] : d.order) as LiveDelivery['order'],
+    }));
+    // A refetch must never EMPTY a board that has deliveries on it. This runs on connect,
+    // reconnect, tab focus and network return, and a moment of RLS/replication lag is enough
+    // to come back with nothing — which wiped the list, dropped "4 in flight" to 0 and
+    // destroyed every map marker, only to rebuild the lot a beat later.
+    setDeliveries((prev) => (next.length === 0 && prev.length > 0 ? prev : next));
   }, [branchId]);
 
   // useRealtime refetches on connect, on reconnect, on tab focus and on network return,
@@ -177,6 +185,30 @@ export function LiveOpsView({
     channel: `live-ops:${branchId}`,
     tables: [{ table: 'deliveries', filter: `branch_id=eq.${branchId}` }],
     refetch: refresh,
+    // Merge the payload into the row already held instead of refetching the board. A rider
+    // pushes GPS every 3 seconds while on a delivery and it lands on deliveries.driver_lat /
+    // driver_lng, so leaving this out meant a 50-row refetch several times a second, each one
+    // replacing the whole list and re-running the marker sync. Only a row we have never seen
+    // needs the round trip, because its `order` embed is not in the payload.
+    onChange: (payload) => {
+      if (payload.eventType === 'DELETE') {
+        const goneId = (payload.old as { id?: string } | null)?.id;
+        if (goneId) setDeliveries((prev) => prev.filter((d) => d.id !== goneId));
+        return;
+      }
+      const row = payload.new as (Partial<LiveDelivery> & { id?: string }) | null;
+      if (!row?.id) return;
+      const stillLive = row.status == null || LIVE_STATUSES.includes(row.status);
+      if (!deliveries.some((d) => d.id === row.id)) {
+        if (stillLive) void refresh();
+        return;
+      }
+      setDeliveries((prev) =>
+        stillLive
+          ? prev.map((d) => (d.id === row.id ? ({ ...d, ...row, order: d.order } as LiveDelivery) : d))
+          : prev.filter((d) => d.id !== row.id),
+      );
+    },
   });
 
   // Sync driver/dropoff markers with the latest snapshot.

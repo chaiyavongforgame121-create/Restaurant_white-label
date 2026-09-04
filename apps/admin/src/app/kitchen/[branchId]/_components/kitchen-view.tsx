@@ -92,6 +92,32 @@ function fmtTimer(sec: number): string {
   return `${Math.floor(sec / 3600)}h ${Math.floor((sec % 3600) / 60)}m`;
 }
 
+// Only the mm:ss text has to move every second. A board-wide 1s tick re-rendered every
+// card — and while the cards carried framer-motion's `layout`, re-measured and re-committed
+// a transform for each one — which is the twitch the cooks reported. Everything else here
+// (aging colours, station "drowning", the scheduled drawer) is keyed to thresholds measured
+// in minutes, so it reads a coarse tick instead.
+const CLOCK_TICK_MS = 1_000;
+const AGING_TICK_MS = 5_000;
+const BOARD_TICK_MS = 30_000;
+
+function useTick(periodMs: number): number {
+  const [now, setNow] = React.useState(() => Date.now());
+  React.useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), periodMs);
+    return () => window.clearInterval(id);
+  }, [periodMs]);
+  return now;
+}
+
+/** PostgREST returns a one-to-one embed as a single object (or null), never an array, and
+ *  every card reads `order.deliveries[0]`. page.tsx normalises the rows it renders on the
+ *  server; anything that writes into state after that has to agree, or a dispatched ticket
+ *  loses its delivery and offers "Find a rider" for a rider already on the way. */
+function asArray<T>(v: T[] | T | null | undefined): T[] {
+  return Array.isArray(v) ? v : v ? [v] : [];
+}
+
 function parseMods(m: unknown): { label: string; remove: boolean }[] {
   let arr: unknown[] = [];
   if (Array.isArray(m)) arr = m;
@@ -125,6 +151,14 @@ interface OrderItem {
   station?: string | null;
   modifiers?: unknown;
 }
+interface Delivery {
+  id: string;
+  status: string;
+  driver_id: string | null;
+  accepted_at: string | null;
+  batch_id?: string | null;
+  batch_seq?: number | null;
+}
 interface Order {
   id: string;
   order_number: string;
@@ -143,7 +177,7 @@ interface Order {
   table_id?: string | null;
   tables?: { table_number: string; display_name: string | null } | null;
   order_items: OrderItem[];
-  deliveries?: { id: string; status: string; driver_id: string | null; accepted_at: string | null; batch_id?: string | null; batch_seq?: number | null }[];
+  deliveries?: Delivery[];
 }
 
 export interface DriverLite {
@@ -210,10 +244,14 @@ function describeDispatchFailure(body: DispatchFailure): string {
 }
 
 export function KitchenView({ branchId, branchName, initialOrders, stations, activeStation, drivers }: Props) {
-  const [orders, setOrders] = React.useState<Order[]>(initialOrders);
+  const [orders, setOrders] = React.useState<Order[]>(() =>
+    initialOrders.map((o) => ({ ...o, deliveries: asArray(o.deliveries) })),
+  );
   const [station, setStation] = React.useState<string | null>(activeStation);
   const [soundOn, setSoundOn] = React.useState(true);
-  const [now, setNow] = React.useState(() => Date.now());
+  // Aging colours and the "drowning" station pills turn on minute-scale thresholds, so the
+  // board reads a coarse clock. The per-second mm:ss lives in its own leaf (TimerPill).
+  const now = useTick(AGING_TICK_MS);
   const [paused, setPaused] = React.useState(false);
   const [isFs, setIsFs] = React.useState(false);
   const [scheduledOpen, setScheduledOpen] = React.useState(false);
@@ -227,12 +265,6 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
   const toastTimer = React.useRef<number | null>(null);
 
   const supa = React.useCallback(() => getBrowserClient(), []);
-
-  /* tick every second so mm:ss is smooth and aging recolours live */
-  React.useEffect(() => {
-    const id = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(id);
-  }, []);
 
   /* fullscreen state mirror */
   React.useEffect(() => {
@@ -253,7 +285,18 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
       .eq('branch_id', branchId)
       .in('status', ACTIVE_STATUSES)
       .order('created_at', { ascending: false });
-    if (data) setOrders(data as unknown as Order[]);
+    if (!data) return;
+    const rows = (data as unknown as Order[]).map((o) => ({ ...o, deliveries: asArray(o.deliveries) }));
+    setOrders((curr) =>
+      rows.map((r) => {
+        // A refetch must never REMOVE a delivery already on the board either. This runs on
+        // connect, reconnect, tab focus and network return, and a moment of replication lag
+        // is enough to come back without the embed — which put a "Find a rider" button back
+        // under a ticket whose rider was already riding.
+        const known = curr.find((o) => o.id === r.id)?.deliveries;
+        return r.deliveries.length === 0 && (known?.length ?? 0) > 0 ? { ...r, deliveries: known } : r;
+      }),
+    );
   }, [branchId, supa]);
 
   /* realtime: orders INSERT/UPDATE + deliveries */
@@ -266,11 +309,17 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
     refetch: reload,
     onChange: (payload, table) => {
       if (table === 'deliveries') {
-        const d = payload.new as { id?: string; order_id?: string; status?: string; driver_id?: string | null; accepted_at?: string | null; batch_id?: string | null; batch_seq?: number | null };
+        const d = payload.new as Partial<Delivery> & { order_id?: string };
         if (!d?.order_id) return;
-        setOrders((curr) => curr.map((o) => (o.id === d.order_id
-          ? { ...o, deliveries: [{ id: d.id ?? o.deliveries?.[0]?.id ?? '', status: d.status ?? 'pending', driver_id: d.driver_id ?? null, accepted_at: d.accepted_at ?? null, batch_id: d.batch_id ?? null, batch_seq: d.batch_seq ?? null }] }
-          : o)));
+        setOrders((curr) => curr.map((o) => {
+          if (o.id !== d.order_id) return o;
+          // Merge over the row already held rather than rebuilding it from the payload. A
+          // postgres_changes payload carries the row as the TABLE has it, not as this board
+          // selected it, so an absent accepted_at used to knock a settled card from "Rider
+          // assigned" back to "Rider offered…".
+          const existing = asArray(o.deliveries)[0];
+          return { ...o, deliveries: [{ ...(existing ?? {}), ...d } as Delivery] };
+        }));
         return;
       }
       if (payload.eventType === 'INSERT') {
@@ -615,7 +664,7 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
       </main>
 
       <AnimatePresence>{toast && <UndoToast text={toast.text} onUndo={toast.onUndo} onClose={() => setToast(null)} />}</AnimatePresence>
-      <AnimatePresence>{scheduledOpen && <ScheduledDrawer orders={scheduled} now={now} onClose={() => setScheduledOpen(false)} />}</AnimatePresence>
+      <AnimatePresence>{scheduledOpen && <ScheduledDrawer orders={scheduled} onClose={() => setScheduledOpen(false)} />}</AnimatePresence>
     </div>
   );
 }
@@ -736,7 +785,6 @@ function OrderCard({
 
   return (
     <motion.div
-      layout layoutId={order.id}
       initial={{ opacity: 0, y: 10, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
@@ -760,9 +808,7 @@ function OrderCard({
             <span key={i} className="h-[7px] w-[7px] rounded-full" style={{ background: i < doneLines ? '#23C16B' : 'rgba(0,0,0,.14)' }} />
           ))}
         </span>
-        <span className={`ml-auto rounded-lg px-2 py-0.5 text-[17px] font-medium tabular-nums ${tg.pulse ? 'animate-pulse' : ''}`} style={{ background: tg.pill, color: tg.pc }}>
-          {fmtTimer(sec)}
-        </span>
+        <TimerPill fromMs={fromMs} lane={lane} />
         <div className="relative" onClick={(e) => e.stopPropagation()}>
           <button aria-label="More actions" onClick={() => setMenuOpen((m) => !m)} className="grid h-7 w-7 place-items-center rounded-lg" style={{ color: SUN.faint }}>
             <MoreVertical className="h-4 w-4" />
@@ -869,6 +915,19 @@ function OrderCard({
   );
 }
 
+/* The one thing on the board that has to move every second. It owns the 1s tick so the
+   clock cannot re-render the ticket around it — or the two hundred lines of card beside it. */
+function TimerPill({ fromMs, lane }: { fromMs: number; lane: string }) {
+  const now = useTick(CLOCK_TICK_MS);
+  const sec = safeElapsedSec(fromMs, now);
+  const tg = agingTier(sec, lane);
+  return (
+    <span className={`ml-auto rounded-lg px-2 py-0.5 text-[17px] font-medium tabular-nums ${tg.pulse ? 'animate-pulse' : ''}`} style={{ background: tg.pill, color: tg.pc }}>
+      {fmtTimer(sec)}
+    </span>
+  );
+}
+
 function MenuRow({ children, onClick, danger }: { children: React.ReactNode; onClick: () => void; danger?: boolean }) {
   return (
     <button onClick={onClick} className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-black/5" style={{ color: danger ? '#C0382F' : SUN.text }}>
@@ -885,7 +944,7 @@ const GPS_FRESH_MS = 5 * 60_000; // mirrors find_dispatch_candidates' staleness 
 function AssignPicker({ drivers, onAssign }: { drivers: DriverLite[]; onAssign: (driverId: string) => void | Promise<void> }) {
   const [open, setOpen] = React.useState(false);
   const [busy, setBusy] = React.useState<string | null>(null);
-  const nowMs = Date.now(); // fresh each render — the kitchen re-renders on a 1s tick
+  const nowMs = Date.now(); // fresh each render — the list is only up while someone is picking
   const gpsAge = (d: DriverLite) => (d.location_updated_at ? nowMs - new Date(d.location_updated_at).getTime() : null);
   const rank = (d: DriverLite) => {
     if (!d.is_online) return 2;
@@ -965,7 +1024,10 @@ function UndoToast({ text, onUndo, onClose }: { text: string; onUndo: (() => voi
   );
 }
 
-function ScheduledDrawer({ orders, now, onClose }: { orders: Order[]; now: number; onClose: () => void }) {
+function ScheduledDrawer({ orders, onClose }: { orders: Order[]; onClose: () => void }) {
+  // "Releases in 12m" only ever moves a minute at a time, and the drawer is open for a
+  // moment, so it keeps its own slow clock instead of riding the board's.
+  const now = useTick(BOARD_TICK_MS);
   return (
     <motion.div className="fixed inset-0 z-40 flex justify-end" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} style={{ background: 'rgba(0,0,0,.35)' }}>
       <motion.div

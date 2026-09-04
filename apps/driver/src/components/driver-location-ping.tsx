@@ -18,6 +18,20 @@ const MAX_AGE_MS = 30_000;
 // map is expected to redraw at, and it lasts only as long as the trip.
 const HEARTBEAT_IDLE_MS = 60_000;
 const HEARTBEAT_ACTIVE_MS = 3_000;
+// Below this a "new" fix is GPS noise, not the rider moving. Writing it anyway made the
+// customer's pin twitch in place and, because set_driver_location stamps the rider's own
+// delivery row, woke every screen subscribed to that row for nothing.
+const MIN_MOVE_M = 12;
+// However still the rider stands, never go quieter than this: dispatch drops riders whose
+// fix has gone stale, and the customer needs to see the pin is still being reported.
+const MAX_SILENCE_MS = 45_000;
+
+/** Flat-earth metres — fine at the tens-of-metres scale this is asked about. */
+function metresBetween(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const dLat = (b.lat - a.lat) * 111_320;
+  const dLng = (b.lng - a.lng) * 111_320 * Math.cos((a.lat * Math.PI) / 180);
+  return Math.hypot(dLat, dLng);
+}
 
 /**
  * Watches GPS while driver is online or on a delivery and pushes coords
@@ -32,6 +46,7 @@ export function DriverLocationPing() {
   const onDelivery = status === 'on_delivery';
   const enabled = status === 'online' || onDelivery;
   const lastSentAt = React.useRef(0);
+  const lastSentFix = React.useRef<{ lat: number; lng: number } | null>(null);
 
   React.useEffect(() => {
     if (!enabled) return;
@@ -42,7 +57,21 @@ export function DriverLocationPing() {
     const push = (pos: GeolocationPosition) => {
       const now = Date.now();
       if (now - lastSentAt.current < MIN_INTERVAL_MS) return;
+
+      // A rider waiting at the counter still produces a fix every three seconds, and every
+      // write of one lands on rows other screens are subscribed to. Publish movement, not
+      // jitter — but never let the silence outlast MAX_SILENCE_MS.
+      const fix = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      const previous = lastSentFix.current;
+      if (
+        previous &&
+        metresBetween(previous, fix) < MIN_MOVE_M &&
+        now - lastSentAt.current < MAX_SILENCE_MS
+      ) {
+        return;
+      }
       lastSentAt.current = now;
+      lastSentFix.current = fix;
 
       let battery: number | undefined;
       const navAny = navigator as Navigator & { getBattery?: () => Promise<{ level: number }> };
