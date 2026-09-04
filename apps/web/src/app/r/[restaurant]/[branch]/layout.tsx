@@ -4,6 +4,7 @@ import { AppShell } from '@/components/app-shell';
 import { PendingCartReplay } from '@/components/pending-cart-replay';
 import { PushSubscriber } from '@/components/push-subscriber';
 import { resolveTenant } from '@/lib/tenant';
+import { TablePinProvider } from './_components/table-pin';
 
 interface Props {
   params: Promise<{ restaurant: string; branch: string }>;
@@ -19,19 +20,23 @@ export default async function BranchLayout({ params, children }: Props) {
   // ThemeProvider applies as CSS variables on a wrapping div.
   return (
     <ThemeProvider theme={tenant.theme}>
-      <AppShell
-        base={base}
-        // The branch, not the restaurant. A diner is standing in (or ordering from) ONE
-        // location, and the hero already says "Now serving from <branch>" — the header
-        // saying the parent company's name instead was the odd one out. Falls back to the
-        // brand and then the restaurant for a branch with no name of its own.
-        brandName={tenant.branch.name || tenant.theme.brandName || tenant.restaurant.name}
-        logoUrl={tenant.logoUrl}
-      >
-        <PushSubscriber />
-        <PendingCartReplay branchId={tenant.branch.id} />
-        {children}
-      </AppShell>
+      {/* Above AppShell so the scanned table survives every navigation inside this
+          storefront — the menu, the cart and the checkout all read the same pin. */}
+      <TablePinProvider branchId={tenant.branch.id}>
+        <AppShell
+          base={base}
+          // The branch, not the restaurant. A diner is standing in (or ordering from) ONE
+          // location, and the hero already says "Now serving from <branch>" — the header
+          // saying the parent company's name instead was the odd one out. Falls back to the
+          // brand and then the restaurant for a branch with no name of its own.
+          brandName={tenant.branch.name || tenant.theme.brandName || tenant.restaurant.name}
+          logoUrl={tenant.logoUrl}
+        >
+          <PushSubscriber />
+          <PendingCartReplay branchId={tenant.branch.id} />
+          {children}
+        </AppShell>
+      </TablePinProvider>
     </ThemeProvider>
   );
 }

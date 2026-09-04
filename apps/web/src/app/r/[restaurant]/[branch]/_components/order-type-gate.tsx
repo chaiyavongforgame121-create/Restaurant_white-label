@@ -6,6 +6,7 @@ import { Bike, ShoppingBag, Store } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { cn } from '@favornoms/ui';
 import { useCart, type OrderChannel } from '@/store/cart';
+import { useTablePin } from './table-pin';
 
 interface Props {
   branchId: string;
@@ -60,6 +61,11 @@ export function OrderTypeGate({
   const setChannel = useCart((s) => s.setChannel);
   const resolveChannel = useCart((s) => s.resolveChannel);
 
+  // A diner who scanned the QR on their table has already answered this question with
+  // their phone, and answering it again with "Delivery" would be a wrong answer. `ready`
+  // is what stops the gate flashing up for the frame before the pin has been read.
+  const { table: pinnedTable, ready: pinReady } = useTablePin();
+
   // Only after hydration: before it the store still holds initializer defaults,
   // and rehydration would merge the persisted values straight back over any
   // decision made here.
@@ -68,7 +74,8 @@ export function OrderTypeGate({
     resolveChannel(canDeliver, branchId);
   }, [hydrated, canDeliver, branchId, resolveChannel]);
 
-  const open = hydrated && (channel === null || channelBranchId !== branchId);
+  const open =
+    hydrated && pinReady && !pinnedTable && (channel === null || channelBranchId !== branchId);
 
   // Nothing behind the overlay should scroll while the gate is up.
   React.useEffect(() => {

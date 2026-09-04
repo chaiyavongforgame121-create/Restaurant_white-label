@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import { getServerClient } from '@favornoms/database/server';
-import { storefrontBase } from '@/lib/site-url';
+import { branchMenuLink } from './_lib/menu-url';
 import { BranchQr } from './_components/branch-qr';
 
 interface Props {
@@ -24,18 +24,15 @@ export default async function BranchQrPage({ params }: Props) {
     .eq('id', branch.restaurant_id)
     .maybeSingle();
 
-  // A branch custom domain is rewritten straight to this branch's menu by the
-  // customer-app middleware (resolve_custom_domain), so its root IS the menu.
-  const domain = branch.custom_domain?.trim().toLowerCase();
-  const missing: string[] = [];
-  if (!branch.slug) missing.push('branch');
-  if (!restaurant?.slug) missing.push('restaurant');
+  const { url, missingSlugs } = branchMenuLink(branch.slug, restaurant?.slug, branch.custom_domain);
 
-  const url = domain
-    ? `https://${domain.replace(/^https?:\/\//, '').replace(/\/$/, '')}`
-    : missing.length === 0
-      ? `${storefrontBase()}/r/${restaurant!.slug}/${branch.slug}`
-      : null;
+  // Whether this branch has any table codes decides how the page describes itself: with
+  // tables set up, this code is the counter/takeaway one and the table tents are elsewhere.
+  const { count: tableCount } = await supabase
+    .from('tables')
+    .select('id', { count: 'exact', head: true })
+    .eq('branch_id', branchId)
+    .eq('is_active', true);
 
   return (
     <BranchQr
@@ -43,7 +40,8 @@ export default async function BranchQrPage({ params }: Props) {
       branchId={branchId}
       branchName={branch.name}
       restaurantName={restaurant?.name ?? ''}
-      missingSlugs={missing}
+      missingSlugs={missingSlugs}
+      tableCount={tableCount ?? 0}
     />
   );
 }

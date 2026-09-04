@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react';
-import { Check, Copy, Download, Printer, Settings2 } from 'lucide-react';
+import { Check, Copy, Download, Printer, QrCode, Settings2 } from 'lucide-react';
 import { Button, Card } from '@favornoms/ui';
 
 interface Props {
@@ -13,12 +13,21 @@ interface Props {
   restaurantName: string;
   /** Which slug(s) are empty — drives the "fix exactly this" message. */
   missingSlugs?: string[];
+  /** Active tables with a code of their own, so this page can say what it is NOT for. */
+  tableCount?: number;
 }
 
 /** Print resolution for the downloaded PNG — big enough for a table tent. */
 const PNG_SIZE = 1024;
 
-export function BranchQr({ url, branchId, branchName, restaurantName, missingSlugs = [] }: Props) {
+export function BranchQr({
+  url,
+  branchId,
+  branchName,
+  restaurantName,
+  missingSlugs = [],
+  tableCount = 0,
+}: Props) {
   const [copied, setCopied] = React.useState(false);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
 
@@ -81,9 +90,29 @@ export function BranchQr({ url, branchId, branchName, restaurantName, missingSlu
     <div className="container max-w-xl py-8">
       <h1 className="font-display text-2xl font-bold">Branch QR code</h1>
       <p className="mt-1 text-sm text-muted-foreground">
-        Print this and place it on tables or at the counter. Guests scan it to open {branchName}&apos;s
-        menu and order from their phone.
+        {tableCount > 0 ? (
+          <>
+            One code for the whole branch — the counter, the window, a takeaway flyer. Guests
+            scan it to open {branchName}&apos;s menu and pick how they want to order. Tables have
+            their own codes.
+          </>
+        ) : (
+          <>
+            Print this and place it at the counter or on a flyer. Guests scan it to open{' '}
+            {branchName}&apos;s menu and order from their phone.
+          </>
+        )}
       </p>
+
+      {/* The two codes do different jobs and the difference is easy to miss, so the
+          per-table one is offered here rather than left to the sidebar. */}
+      <div className="mt-4 print:hidden">
+        <Link href={`/b/${branchId}/qr/tables`}>
+          <Button variant="outline" leftIcon={<QrCode className="h-4 w-4" />}>
+            {tableCount > 0 ? `Table QR codes (${tableCount})` : 'Set up table QR codes'}
+          </Button>
+        </Link>
+      </div>
 
       <Card className="mt-5 p-6">
         <div className="flex flex-col items-center gap-4 text-center">

@@ -4,13 +4,26 @@ import { listCategories, listMenuItems } from '@favornoms/database/queries';
 import { resolveStorefrontStatus, resolveTenant } from '@/lib/tenant';
 import { MenuView } from './_components/menu-view';
 import { SuspendedStorefront } from './_components/suspended-storefront';
+import { TableScanPin, type PinnedTable } from './_components/table-pin';
 
 interface Props {
   params: Promise<{ restaurant: string; branch: string }>;
+  /** `?t=<tables.qr_code_token>` — the whole of the per-table deep link. */
+  searchParams: Promise<{ t?: string | string[] }>;
 }
 
-export default async function MenuPage({ params }: Props) {
+/** One row of public.resolve_table_qr. */
+interface ScannedTable {
+  branch_id: string;
+  table_id: string;
+  table_number: string;
+  display_name: string | null;
+}
+
+export default async function MenuPage({ params, searchParams }: Props) {
   const { restaurant, branch } = await params;
+  const { t: tokenParam } = await searchParams;
+  const tableToken = (Array.isArray(tokenParam) ? tokenParam[0] : tokenParam)?.trim();
   const tenant = await resolveTenant(restaurant, branch);
 
   // Checked before the menu queries so a lapsed subscription costs one round
@@ -22,25 +35,52 @@ export default async function MenuPage({ params }: Props) {
 
   const supabase = await getServerClient();
 
-  // get_happy_hours_for_menu isn't in the generated types yet — thin typed escape.
+  // get_happy_hours_for_menu and resolve_table_qr aren't in the generated types yet —
+  // thin typed escape.
   const rpcAny = supabase.rpc.bind(supabase) as unknown as (
     fn: string,
     args?: Record<string, unknown>,
   ) => Promise<{ data: unknown }>;
 
-  const [categories, items, openCheck, reviewsCheck, combosCheck, effectivePriceCheck, hhCheck] =
-    await Promise.all([
-      listCategories(supabase, tenant.branch.id),
-      listMenuItems(supabase, tenant.branch.id),
-      supabase.rpc('is_branch_open', { p_branch_id: tenant.branch.id }),
-      supabase.rpc('get_branch_reviews', { p_branch_id: tenant.branch.id, p_limit: 3 }),
-      supabase
-        .from('v_active_combos')
-        .select('id, name, description, total_price, image_url, items')
-        .eq('branch_id', tenant.branch.id),
-      supabase.rpc('get_effective_prices', { p_branch_id: tenant.branch.id }),
-      rpcAny('get_happy_hours_for_menu', { p_branch_id: tenant.branch.id }),
-    ]);
+  const [
+    categories,
+    items,
+    openCheck,
+    reviewsCheck,
+    combosCheck,
+    effectivePriceCheck,
+    hhCheck,
+    tableCheck,
+  ] = await Promise.all([
+    listCategories(supabase, tenant.branch.id),
+    listMenuItems(supabase, tenant.branch.id),
+    supabase.rpc('is_branch_open', { p_branch_id: tenant.branch.id }),
+    supabase.rpc('get_branch_reviews', { p_branch_id: tenant.branch.id, p_limit: 3 }),
+    supabase
+      .from('v_active_combos')
+      .select('id, name, description, total_price, image_url, items')
+      .eq('branch_id', tenant.branch.id),
+    supabase.rpc('get_effective_prices', { p_branch_id: tenant.branch.id }),
+    rpcAny('get_happy_hours_for_menu', { p_branch_id: tenant.branch.id }),
+    // Unknown, retired or rotated tokens come back empty; the diner just gets the
+    // ordinary menu rather than an error page they cannot act on.
+    tableToken
+      ? rpcAny('resolve_table_qr', { p_token: tableToken })
+      : Promise.resolve({ data: null }),
+  ]);
+
+  // The storefront in the URL wins. A token belonging to another branch must not pin
+  // anything here — otherwise a code lifted from one restaurant's table tent would seat
+  // a diner in a second restaurant's dining room and send the ticket to its kitchen.
+  const scanned = ((tableCheck.data as ScannedTable[] | null) ?? [])[0];
+  const pinnedTable: PinnedTable | null =
+    scanned && scanned.branch_id === tenant.branch.id
+      ? {
+          id: scanned.table_id,
+          number: scanned.table_number,
+          label: scanned.display_name?.trim() || `Table ${scanned.table_number}`,
+        }
+      : null;
 
   const priceMap = new Map<string, { list: number; effective: number; label: string | null }>();
   for (const row of (effectivePriceCheck.data ?? []) as Array<{
@@ -118,22 +158,25 @@ export default async function MenuPage({ params }: Props) {
     items: Array<{ menu_item_id: string; item_name: string; quantity: number; list_price: number }>;
   }>;
   return (
-    <MenuView
-      branch={tenant.branch}
-      categories={categories}
-      items={items}
-      isOpen={isOpen}
-      reviews={reviews}
-      combos={combos}
-      happyHours={happyHours}
-      canDeliver={status.delivery}
-      deliveryClosedNow={status.delivery_entitled && !status.delivery_available}
-      deliveryWindowsToday={todaysDeliveryWindows(status)}
-      menuLayout={tenant.storefront.menuLayout}
-      menuCardStyle={tenant.storefront.menuCardStyle}
-      heroUrl={tenant.storefront.heroUrl}
-      heroTitle={tenant.storefront.heroTitle}
-      heroSubtitle={tenant.storefront.heroSubtitle}
-    />
+    <>
+      {pinnedTable && <TableScanPin table={pinnedTable} />}
+      <MenuView
+        branch={tenant.branch}
+        categories={categories}
+        items={items}
+        isOpen={isOpen}
+        reviews={reviews}
+        combos={combos}
+        happyHours={happyHours}
+        canDeliver={status.delivery}
+        deliveryClosedNow={status.delivery_entitled && !status.delivery_available}
+        deliveryWindowsToday={todaysDeliveryWindows(status)}
+        menuLayout={tenant.storefront.menuLayout}
+        menuCardStyle={tenant.storefront.menuCardStyle}
+        heroUrl={tenant.storefront.heroUrl}
+        heroTitle={tenant.storefront.heroTitle}
+        heroSubtitle={tenant.storefront.heroSubtitle}
+      />
+    </>
   );
 }
