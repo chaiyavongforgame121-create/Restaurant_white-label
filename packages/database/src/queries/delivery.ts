@@ -14,7 +14,15 @@ export type DeliveryQuote =
     }
   | {
       deliverable: false;
-      reason: 'invalid_coordinates' | 'branch_unavailable' | 'out_of_range';
+      // 'delivery_not_entitled' is returned when the branch has no delivery add-on. It was
+      // missing here, so checkout treated it like "no coordinates yet", quoted the legacy
+      // flat fee, and place-order then 403'd at submit — the diner saw a price for something
+      // that was never for sale.
+      reason:
+        | 'invalid_coordinates'
+        | 'branch_unavailable'
+        | 'delivery_not_entitled'
+        | 'out_of_range';
       distance_km?: number;
       radius_km?: number;
     };

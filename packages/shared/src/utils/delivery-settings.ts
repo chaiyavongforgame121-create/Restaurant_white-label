@@ -85,11 +85,46 @@ export function parseDeliverySettings(settings: Record<string, unknown> | null |
   };
 }
 
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
+/**
+ * Mirrors Postgres `round(numeric, 2)`: exact decimal, half away from zero.
+ *
+ * `Math.round(n * 100) / 100` is not the same function. Binary floats lose the
+ * half-cent (2.675 * 100 is 267.49999999999997), so it rounds those DOWN while
+ * Postgres rounds them up, and the merchant is then shown a cent the server will
+ * never charge. Snapping to 15 significant digits — far finer than a cent, far
+ * coarser than the float noise — puts the value back on the decimal Postgres sees.
+ */
+export function round2Exact(n: number): number {
+  if (!Number.isFinite(n)) return 0;
+  const scaled = Number((n * 100).toPrecision(15));
+  return (Math.sign(scaled) || 1) * (Math.round(Math.abs(scaled)) / 100);
 }
 
-/** clamp(base + km×perKm, min, max) × surge — identical to quote_delivery() in SQL. */
+/** Half away from zero, like Postgres `round(numeric)` — Math.round alone breaks on
+ *  negatives (-0.5 goes to -0, not -1). */
+function roundHalfUp(n: number): number {
+  if (!Number.isFinite(n)) return 0;
+  return (Math.sign(n) || 1) * Math.round(Math.abs(n));
+}
+
+/**
+ * The distance quote_delivery() actually works with.
+ *
+ * The SQL computes `v_km := round(distance_m / 1000, 2)` FIRST and then uses that
+ * rounded value for the radius test, the surge threshold test and the fee. A mirror
+ * that skips it disagrees by a cent at most distances — and by a whole multiplier
+ * within 0.02 mi of the threshold, where 2.999 mi rounds up to 4.83 km and surges.
+ */
+export function quoteDistanceKm(distanceKm: number): number {
+  return round2Exact(distanceKm);
+}
+
+/** The multiplier quote_delivery() will actually apply at this distance. */
+export function effectiveSurge(settings: DeliverySettings, distanceKm: number): number {
+  const km = quoteDistanceKm(distanceKm);
+  return km < settings.deliverySurgeFromKm ? 1 : settings.deliverySurgeMultiplier;
+}
+
 /**
  * Mirrors SQL quote_delivery(). The two must land on the same cent — the merchant is shown
  * this number and the server charges its own.
@@ -99,17 +134,141 @@ function round2(n: number): number {
  * the preview disagree with every real order.
  */
 export function computeDeliveryFee(settings: DeliverySettings, distanceKm: number): number {
-  const fee = Math.max(0, settings.deliveryBaseFee + distanceKm * settings.deliveryPerKmFee);
+  const km = quoteDistanceKm(distanceKm);
+  const fee = Math.max(0, settings.deliveryBaseFee + km * settings.deliveryPerKmFee);
   // Surge starts at a distance now, so a short hop is not multiplied.
-  const surge = distanceKm < settings.deliverySurgeFromKm ? 1 : settings.deliverySurgeMultiplier;
-  return round2(fee * surge);
+  return round2Exact(fee * effectiveSurge(settings, km));
 }
 
 /** prep + busy buffer + travel at CITY_SPEED_KMH — identical to quote_delivery() in SQL. */
 export function heuristicEtaMin(settings: DeliverySettings, distanceKm: number): number {
-  return settings.prepTimeMin + settings.busyExtraPrepMin + Math.ceil((distanceKm / CITY_SPEED_KMH) * 60);
+  const km = quoteDistanceKm(distanceKm);
+  // The SQL turns both minute settings into an int; rounding here rather than truncating
+  // matches `round(...)::int`, which is what the companion migration replaced the bare
+  // `::int` cast with so a merchant's 15.5 could not abort the whole quote.
+  return (
+    roundHalfUp(settings.prepTimeMin) +
+    roundHalfUp(settings.busyExtraPrepMin) +
+    Math.ceil((km / CITY_SPEED_KMH) * 60)
+  );
 }
 
 export function isWithinDeliveryRadius(settings: DeliverySettings, distanceKm: number): boolean {
-  return distanceKm <= settings.deliveryRadiusKm;
+  // `if v_km > v_radius then out_of_range`, inverted — and on the ROUNDED km, which is
+  // why a drop-off exactly on a 5 mi radius is out of range (8.04672 km rounds to 8.05).
+  return quoteDistanceKm(distanceKm) <= settings.deliveryRadiusKm;
+}
+
+/** Everything quote_delivery() returns for a deliverable address, in its shape. */
+export interface LocalDeliveryQuote {
+  deliverable: boolean;
+  /** Already rounded — exactly the `distance_km` the RPC would report. */
+  distanceKm: number;
+  distanceMi: number;
+  fee: number;
+  etaMin: number;
+  /** The multiplier actually applied at this distance, 1 when the trip is too short. */
+  surge: number;
+}
+
+/**
+ * Line-for-line mirror of public.quote_delivery()'s arithmetic; the branch, entitlement
+ * and coordinate guards are server-only. Asserted against a transcription of the SQL in
+ * delivery-settings.test.ts, which also checks the migration text has not moved.
+ */
+export function quoteDeliveryLocal(
+  settings: DeliverySettings,
+  distanceKm: number,
+): LocalDeliveryQuote {
+  const km = quoteDistanceKm(distanceKm);
+  return {
+    deliverable: isWithinDeliveryRadius(settings, km),
+    distanceKm: km,
+    distanceMi: kmToMi(km),
+    fee: computeDeliveryFee(settings, km),
+    etaMin: heuristicEtaMin(settings, km),
+    surge: effectiveSurge(settings, km),
+  };
+}
+
+const floor2 = (n: number): number => Math.floor(n * 100) / 100;
+const ceil2 = (n: number): number => Math.ceil(n * 100) / 100;
+
+/**
+ * The farthest sample distance still inside the radius.
+ *
+ * Stepping down matters: the radius test runs on the 2 dp km, so the mileage that looks
+ * exactly on the line is out of range (5 mi is 8.04672 km, which rounds to 8.05 against
+ * an 8.04672 km radius). Showing "Out of range" on the row meant to demonstrate the most
+ * expensive legal order is the opposite of useful.
+ */
+function farthestSampleMi(settings: DeliverySettings): number {
+  let mi = floor2(round2Exact(kmToMi(settings.deliveryRadiusKm)));
+  // 0.01 mi is 16 m and the rounding error is at most 5 m, so this settles in one step.
+  for (let i = 0; i < 4 && mi > 0 && !isWithinDeliveryRadius(settings, miToKm(mi)); i += 1) {
+    mi = round2Exact(mi - 0.01);
+  }
+  return Math.max(0, mi);
+}
+
+/**
+ * The first sample that really pays the multiplier.
+ *
+ * Not the threshold itself: the surge test also runs on the 2 dp km, so an address exactly
+ * 8.00 mi out is still unsurged against an 8 mi threshold (12.874752 km quotes as 12.87,
+ * a shade under). Showing "no surge" on the row meant to demonstrate the surge would have
+ * been the same kind of lie the old fixed distances told.
+ */
+function firstSurgedSampleMi(settings: DeliverySettings, capMi: number): number {
+  let mi = ceil2(round2Exact(kmToMi(settings.deliverySurgeFromKm)));
+  for (let i = 0; i < 4 && mi < capMi && effectiveSurge(settings, miToKm(mi)) === 1; i += 1) {
+    mi = round2Exact(mi + 0.01);
+  }
+  return Math.min(mi, capMi);
+}
+
+/** The companion of the above: a sample that provably has NOT surged, so the two rows
+ *  read as a before and after rather than as two arbitrary numbers. */
+function lastUnsurgedSampleMi(settings: DeliverySettings, startMi: number): number {
+  let mi = floor2(startMi);
+  for (let i = 0; i < 4 && mi > 0 && effectiveSurge(settings, miToKm(mi)) > 1; i += 1) {
+    mi = round2Exact(mi - 0.01);
+  }
+  return Math.max(0, mi);
+}
+
+/**
+ * Sample distances for the admin fee preview, derived from THIS branch's own settings:
+ * one below the surge threshold, one at the first distance that actually surges, and one
+ * at the farthest address the branch will still deliver to.
+ *
+ * A fixed 1 / 3 / 5 mi could not show a surge that starts at 8 mi, and wasted a column on
+ * "Out of range" whenever the radius was under 5 — so the preview read as a canned example
+ * of somebody else's restaurant. With surge off (or set past the radius, where it can never
+ * fire) the three points spread across the radius instead.
+ */
+export function previewDistancesMi(settings: DeliverySettings): number[] {
+  const radiusMi = round2Exact(kmToMi(settings.deliveryRadiusKm));
+  const surgeAtMi = round2Exact(kmToMi(settings.deliverySurgeFromKm));
+  const far = farthestSampleMi(settings);
+  const showsSurge =
+    settings.deliverySurgeMultiplier > 1 && surgeAtMi > 0 && !surgeIsUnreachable(settings);
+  const points = showsSurge
+    ? [lastUnsurgedSampleMi(settings, surgeAtMi * 0.8), firstSurgedSampleMi(settings, far), far]
+    : [floor2(radiusMi / 4), floor2(radiusMi / 2), far];
+  return Array.from(new Set(points.map((mi) => Math.min(mi, far)).filter((mi) => mi > 0))).sort(
+    (a, b) => a - b,
+  );
+}
+
+/**
+ * True when no deliverable address can ever be surged, because the threshold sits past the
+ * radius. Worth saying out loud: the field accepts 9,999,999,999 mi, and the multiplier
+ * then looks broken rather than unreachable. Compared against the largest distance the RPC
+ * can report inside the radius, so a 5 mi threshold on a 5 mi radius counts as dead — the
+ * rounded km never reaches it.
+ */
+export function surgeIsUnreachable(settings: DeliverySettings): boolean {
+  if (settings.deliverySurgeMultiplier <= 1) return false;
+  return settings.deliverySurgeFromKm > floor2(settings.deliveryRadiusKm);
 }
