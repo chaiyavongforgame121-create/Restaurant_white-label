@@ -23,6 +23,13 @@ interface Props {
    *  when the capability is missing: RLS denies the page anyway, and advertising a
    *  screen that answers "access denied" reads as a broken product. */
   capabilities?: string[];
+  /** brands.logo_url for this branch's brand — or the restaurant's default brand, or
+   *  restaurants.brand_settings.logoUrl. Null keeps the platform mark, which is still the
+   *  right answer for a merchant who has not uploaded a logo. */
+  logoUrl?: string | null;
+  /** What the logo stands for, for alt text. The visible name stays the branch, which is
+   *  what a merchant is actually working inside. */
+  brandName?: string | null;
 }
 
 type NavItem = {
@@ -42,6 +49,8 @@ export function Sidebar({
   branches = [],
   entitlements,
   capabilities = [],
+  logoUrl = null,
+  brandName = null,
 }: Props) {
   const pathname = usePathname();
   const router = useRouter();
@@ -117,7 +126,7 @@ export function Sidebar({
       title: 'Setup',
       items: [
         { href: `${base}/branch`, label: 'Branch settings', icon: Building2, capability: 'branch.settings' },
-        { href: `${base}/brands`, label: 'Brands', icon: Palette, capability: 'brand.edit' },
+        { href: `${base}/brands`, label: 'Brand & branches', icon: Palette, capability: 'brand.edit' },
         { href: `${base}/franchise`, label: 'Franchise', icon: Network, capability: 'hq.view' },
         { href: `${base}/settings/plan`, label: 'Plan & billing', icon: CreditCard, capability: 'billing.manage' },
         { href: `${base}/settings`, label: 'Preferences', icon: Cog, capability: 'branch.settings' },
@@ -152,6 +161,30 @@ export function Sidebar({
     );
   };
 
+  // Lifted out of the header because the logo and no-logo arms both render it: the
+  // switcher when there is more than one branch, the plain name otherwise.
+  const nameBlock = (
+    <>
+      {branches.length > 1 ? (
+        <select
+          value={branchId}
+          onChange={(e) => router.push(`/b/${e.target.value}/dashboard`)}
+          className="focus-ring -ml-1 max-w-[150px] truncate rounded-md bg-transparent py-0.5 font-display text-base font-semibold"
+          aria-label="Switch branch"
+        >
+          {branches.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.name}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <p className="truncate font-display text-base font-semibold">{branchName}</p>
+      )}
+      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Merchant</p>
+    </>
+  );
+
   return (
     <>
       {/* Mobile toggle */}
@@ -178,33 +211,52 @@ export function Sidebar({
           mobileOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
-        <div className="flex items-center justify-between gap-2 px-5 py-4">
-          <div className="flex min-w-0 items-center gap-2">
-            <Link href={base} onClick={() => setMobileOpen(false)} className="focus-ring shrink-0">
-              <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-warm text-white shadow-warm">
-                <ChefHat className="h-5 w-5" />
-              </span>
-            </Link>
-            <div className="min-w-0 leading-tight">
-              {branches.length > 1 ? (
-                <select
-                  value={branchId}
-                  onChange={(e) => router.push(`/b/${e.target.value}/dashboard`)}
-                  className="focus-ring -ml-1 max-w-[150px] truncate rounded-md bg-transparent py-0.5 font-display text-base font-semibold"
-                  aria-label="Switch branch"
-                >
-                  {branches.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <p className="truncate font-display text-base font-semibold">{branchName}</p>
-              )}
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Merchant</p>
+        <div className="flex items-start justify-between gap-2 px-5 py-4">
+          {/* The merchant's own logo, in the chrome they spend the day inside. It is
+              uploaded two screens away (Branch settings -> Branding, which writes the very
+              brands.logo_url the storefront header reads) and this was the one place it
+              never appeared. A logo is a wide lockup, so it takes its own row above the
+              branch line rather than being crushed into the 36px mark slot — and the
+              branch switcher stays, because a multi-branch merchant needs to see, and
+              change, which location they are editing. With no logo the row is unchanged.
+
+              The link goes to the dashboard rather than /b/{branchId}, which has no page
+              and answered every click on this mark with a 404. */}
+          {logoUrl ? (
+            <div className="min-w-0 flex-1">
+              <Link
+                href={`${base}/dashboard`}
+                onClick={() => setMobileOpen(false)}
+                className="focus-ring block w-fit max-w-full rounded-xl"
+              >
+                {/* A plain <img>, not next/image: brands.logo_url is free-form text, and
+                    next/image throws at render on a host outside images.remotePatterns —
+                    one legacy row would take down every back-office page instead of
+                    showing a broken image. Same call ImageUpload makes. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={logoUrl}
+                  alt={brandName ?? branchName}
+                  className="h-9 w-[168px] max-w-full object-contain object-left"
+                />
+              </Link>
+              <div className="mt-2 min-w-0 leading-tight">{nameBlock}</div>
             </div>
-          </div>
+          ) : (
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <Link
+                href={`${base}/dashboard`}
+                onClick={() => setMobileOpen(false)}
+                className="focus-ring shrink-0"
+                aria-label={`${branchName} dashboard`}
+              >
+                <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-warm text-white shadow-warm">
+                  <ChefHat className="h-5 w-5" />
+                </span>
+              </Link>
+              <div className="min-w-0 leading-tight">{nameBlock}</div>
+            </div>
+          )}
           <button
             onClick={() => setMobileOpen(false)}
             className="focus-ring grid h-9 w-9 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-muted lg:hidden"

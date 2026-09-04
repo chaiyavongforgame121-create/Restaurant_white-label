@@ -1,7 +1,8 @@
-import { getServerClient } from '@favornoms/database/server';
 import { formatCurrency } from '@favornoms/shared';
 import { Badge, Card } from '@favornoms/ui';
+import { getBranchAccess } from '@/lib/capabilities';
 import { OrderRowActions } from './_components/order-row-actions';
+import { OrderReceiptButton } from './_components/order-receipt-sheet';
 import { OrderFilters } from './_components/order-filters';
 import { PaymentApprovals, type PendingTransfer } from './_components/payment-approvals';
 import { DeliveryIssues, type DeliveryIssue } from './_components/delivery-issues';
@@ -30,7 +31,27 @@ const statusVariant = (status: string) => {
 export default async function OrdersPage({ params, searchParams }: Props) {
   const { branchId } = await params;
   const { q, status, channel, when } = await searchParams;
-  const supabase = await getServerClient();
+  const { supabase, branch, can } = await getBranchAccess(branchId, `/b/${branchId}/orders`);
+
+  // Two capabilities decide the receipt drawer. orders.view is who may read the order at
+  // all; receipt.reprint is the counter's named right to put one on paper. The matrix
+  // seeds receipt.reprint for `cashier` alone and a cashier cannot open the back office,
+  // so asking for it on its own would hide printing from every role that can reach this
+  // page — hence "either". Granting receipt.reprint to owner/admin/manager is a
+  // role_capabilities change, and this reads correctly the day someone makes it.
+  const canViewReceipt = can('orders.view');
+  const canPrintReceipt = can('receipt.reprint') || can('orders.view');
+
+  // getBranchAccess reads only id/name/restaurant_id. A receipt header needs the address a
+  // diner would recognise and the currency the branch actually charges in.
+  const { data: branchDetail } = await supabase
+    .from('branches')
+    .select('address, settings')
+    .eq('id', branchId)
+    .maybeSingle();
+  const branchAddress = branchDetail?.address ?? null;
+  const branchSettings = (branchDetail?.settings ?? {}) as Record<string, unknown>;
+  const currency = typeof branchSettings.currency === 'string' ? branchSettings.currency : 'USD';
 
   let query = supabase
     .from('orders')
@@ -197,11 +218,23 @@ export default async function OrdersPage({ params, searchParams }: Props) {
                   <Badge variant={statusVariant(o.status) as never}>{o.status.replace('_', ' ')}</Badge>
                 </td>
                 <td className="px-5 py-3">
-                  <OrderRowActions
-                    orderId={o.id}
-                    orderTotal={Number(o.total)}
-                    orderStatus={o.status}
-                  />
+                  <div className="flex items-center justify-end gap-1">
+                    {canViewReceipt && (
+                      <OrderReceiptButton
+                        orderId={o.id}
+                        orderNumber={o.order_number}
+                        branchName={branch.name}
+                        branchAddress={branchAddress}
+                        canPrint={canPrintReceipt}
+                        currency={currency}
+                      />
+                    )}
+                    <OrderRowActions
+                      orderId={o.id}
+                      orderTotal={Number(o.total)}
+                      orderStatus={o.status}
+                    />
+                  </div>
                 </td>
               </tr>
             ))}
@@ -248,6 +281,20 @@ export default async function OrdersPage({ params, searchParams }: Props) {
                   </Badge>
                 </div>
               </div>
+              {/* The phone list carried no actions at all, so the receipt is the first
+                  thing on it a member of staff can actually open from a handset. */}
+              {canViewReceipt && (
+                <div className="mt-3 flex justify-end border-t border-border/40 pt-3">
+                  <OrderReceiptButton
+                    orderId={o.id}
+                    orderNumber={o.order_number}
+                    branchName={branch.name}
+                    branchAddress={branchAddress}
+                    canPrint={canPrintReceipt}
+                    currency={currency}
+                  />
+                </div>
+              )}
             </Card>
           </li>
         ))}

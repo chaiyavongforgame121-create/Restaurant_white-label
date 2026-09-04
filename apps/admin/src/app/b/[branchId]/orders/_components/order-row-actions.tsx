@@ -12,6 +12,14 @@ interface Props {
   orderStatus: string;
 }
 
+const INVOICE_ERRORS: Record<string, string> = {
+  order_not_completed:
+    'A receipt can only be issued once the order is confirmed, ready or completed.',
+  not_authorized:
+    'Your account is not listed as staff at this branch, so it cannot issue receipts.',
+  order_not_found: 'That order no longer exists.',
+};
+
 export function OrderRowActions({ orderId, orderTotal, orderStatus }: Props) {
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
@@ -28,6 +36,10 @@ export function OrderRowActions({ orderId, orderTotal, orderStatus }: Props) {
   const canRefund = !['cancelled', 'refunded'].includes(orderStatus);
   const canCancel = !['cancelled', 'refunded', 'completed'].includes(orderStatus);
   const canEdit = ['pending', 'confirmed'].includes(orderStatus);
+  // issue_tax_invoice raises 'order_not_completed' outside these three, so offering it on a
+  // pending or cancelled row was an error waiting to be clicked. Viewing the receipt is a
+  // separate button and stays available on every order.
+  const canIssueReceipt = ['confirmed', 'ready', 'completed'].includes(orderStatus);
 
   const saveNotes = async () => {
     setBusy(true);
@@ -65,7 +77,9 @@ export function OrderRowActions({ orderId, orderTotal, orderStatus }: Props) {
       p_order_id: orderId,
     });
     setBusy(false);
-    if (rpcErr) { setError(rpcErr.message); return; }
+    // The RPC raises bare postgres exception names. Left alone they surface as
+    // "order_not_completed", which reads like a crash rather than a rule.
+    if (rpcErr) { setError(INVOICE_ERRORS[rpcErr.message] ?? rpcErr.message); return; }
     const inv = data as { invoice_number?: string } | null;
     setOpen(false);
     setInvoiceMsg(`Issued invoice ${inv?.invoice_number ?? '(unknown)'}`);
@@ -74,7 +88,16 @@ export function OrderRowActions({ orderId, orderTotal, orderStatus }: Props) {
 
   return (
     <>
-      <IconButton label="Actions" size="sm" onClick={() => setOpen((o) => !o)}>
+      <IconButton
+        label="Actions"
+        size="sm"
+        onClick={() => {
+          // The menu now shows its own errors, so a failed "Issue receipt" must not
+          // greet the next order the operator opens the menu on.
+          setError(null);
+          setOpen((o) => !o);
+        }}
+      >
         <MoreHorizontal className="h-4 w-4" />
       </IconButton>
 
@@ -114,14 +137,21 @@ export function OrderRowActions({ orderId, orderTotal, orderStatus }: Props) {
                   <Pencil className="h-4 w-4" /> Edit notes
                 </button>
               )}
-              <button
-                type="button"
-                onClick={issueTaxInvoice}
-                disabled={busy}
-                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted"
-              >
-                <FileText className="h-4 w-4" /> Issue receipt
-              </button>
+              {canIssueReceipt && (
+                <button
+                  type="button"
+                  onClick={issueTaxInvoice}
+                  disabled={busy}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted"
+                >
+                  <FileText className="h-4 w-4" /> Issue receipt
+                </button>
+              )}
+              {error && (
+                <p role="alert" className="rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger">
+                  {error}
+                </p>
+              )}
             </Card>
           </div>
         </div>

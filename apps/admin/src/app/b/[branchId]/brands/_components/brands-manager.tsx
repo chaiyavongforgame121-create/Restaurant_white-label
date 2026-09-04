@@ -69,7 +69,6 @@ export function BrandsManager({
   const [scope, setScope] = React.useState(initialScope);
   const [scopeSaving, setScopeSaving] = React.useState(false);
   const [editing, setEditing] = React.useState<Brand | null>(null);
-  const [creating, setCreating] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [store, setStore] = React.useState(() => parseStorefront(storefront));
   const [storeSaving, setStoreSaving] = React.useState(false);
@@ -136,14 +135,12 @@ export function BrandsManager({
     <div className="container max-w-5xl py-8">
       <header className="mb-6 flex flex-wrap items-start justify-between gap-3 px-2 pl-16 lg:px-0">
         <div>
-          <h1 className="font-display text-3xl font-bold">Brands</h1>
+          <h1 className="font-display text-3xl font-bold">Brand &amp; branches</h1>
           <p className="mt-1 text-muted-foreground">
-            Run multiple concepts under {restaurantName}. Each brand has its own theme and can power one or many branches.
+            Your look for {restaurantName} — logo, app icon and colors — plus the branches
+            that use it.
           </p>
         </div>
-        <Button variant="gradient" leftIcon={<Plus className="h-4 w-4" />} onClick={() => setCreating(true)}>
-          New brand
-        </Button>
       </header>
 
       <Card className="mb-6 p-5">
@@ -334,25 +331,31 @@ export function BrandsManager({
             </Card>
           );
         })}
+        {/* A restaurant starts with no brands row at all — create_restaurant_with_branch
+            writes restaurants.brand_settings and never a brand — so the first one is minted
+            by the Branding card on Branch settings. Say where, or this reads as a dead end. */}
         {brands.length === 0 && (
           <Card className="p-6 text-center text-sm text-muted-foreground">
-            No brands yet. Create your first brand to unlock multi-brand theming.
+            No brand yet. Upload your logo under{' '}
+            <Link
+              href={`/b/${currentBranchId}/branch`}
+              className="font-medium text-primary hover:underline"
+            >
+              Branch settings → Branding
+            </Link>{' '}
+            and it is created for you.
           </Card>
         )}
       </div>
 
-      {(editing || creating) && (
+      {editing && (
         <BrandEditor
           restaurantId={restaurantId}
           brand={editing}
           branches={branches}
-          onClose={() => {
-            setEditing(null);
-            setCreating(false);
-          }}
+          onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null);
-            setCreating(false);
             void refresh();
             router.refresh();
           }}
@@ -512,37 +515,32 @@ function BrandEditor({
   onSaved,
 }: {
   restaurantId: string;
-  brand: Brand | null;
+  brand: Brand;
   branches: BranchRow[];
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [name, setName] = React.useState(brand?.name ?? '');
-  const [slug, setSlug] = React.useState(brand?.slug ?? '');
+  const [name, setName] = React.useState(brand.name);
+  const [slug, setSlug] = React.useState(brand.slug);
   const [primaryColor, setPrimaryColor] = React.useState(
-    (brand?.theme?.primaryColor as string) ?? '#FF6B35',
+    (brand.theme?.primaryColor as string) ?? '#FF6B35',
   );
   const [accentColor, setAccentColor] = React.useState(
-    (brand?.theme?.accentColor as string) ?? '#F7B538',
+    (brand.theme?.accentColor as string) ?? '#F7B538',
   );
-  const [logoUrl, setLogoUrl] = React.useState(brand?.logo_url ?? '');
+  const [logoUrl, setLogoUrl] = React.useState(brand.logo_url ?? '');
   const [icons, setIcons] = React.useState<IconSet>({
-    faviconUrl: brand?.favicon_url ?? null,
-    icon192Url: brand?.icon_192_url ?? null,
-    icon512Url: brand?.icon_512_url ?? null,
-    iconMaskable512Url: brand?.icon_maskable_512_url ?? null,
+    faviconUrl: brand.favicon_url,
+    icon192Url: brand.icon_192_url,
+    icon512Url: brand.icon_512_url,
+    iconMaskable512Url: brand.icon_maskable_512_url,
   });
-  const [isDefault, setIsDefault] = React.useState(brand?.is_default ?? false);
-  const [linkedBranchIds, setLinkedBranchIds] = React.useState<Set<string>>(() => {
-    if (!brand) return new Set();
-    return new Set(branches.filter((b) => b.brand_id === brand.id).map((b) => b.id));
-  });
+  const [isDefault, setIsDefault] = React.useState(brand.is_default);
+  const [linkedBranchIds, setLinkedBranchIds] = React.useState<Set<string>>(
+    () => new Set(branches.filter((b) => b.brand_id === brand.id).map((b) => b.id)),
+  );
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-
-  React.useEffect(() => {
-    if (!brand && !slug && name) setSlug(slugify(name));
-  }, [name, brand, slug]);
 
   const save = async () => {
     setSaving(true);
@@ -553,7 +551,7 @@ function BrandEditor({
         restaurant_id: restaurantId,
         name,
         slug: slug || slugify(name),
-        theme: { ...(brand?.theme ?? {}), primaryColor, accentColor, brandName: name },
+        theme: { ...brand.theme, primaryColor, accentColor, brandName: name },
         logo_url: logoUrl || null,
         favicon_url: icons.faviconUrl,
         icon_192_url: icons.icon192Url,
@@ -561,32 +559,20 @@ function BrandEditor({
         icon_maskable_512_url: icons.iconMaskable512Url,
         is_default: isDefault,
       };
-      let brandId: string;
-      if (brand) {
-        // `.select()` matters: brands writes are owner-only, and RLS denies by filtering
-        // the row out rather than raising. A manager used to see "saved", the dialog
-        // close, and nothing change — while the image had already reached the bucket.
-        const { data: updated, error: upErr } = await supabase
-          .from('brands')
-          .update(payload)
-          .eq('id', brand.id)
-          .select('id');
-        if (upErr) throw new Error(upErr.message);
-        if (!updated || updated.length === 0) {
-          throw new Error(
-            'That did not save — only the restaurant owner can change branding.',
-          );
-        }
-        brandId = brand.id;
-      } else {
-        const { data: created, error: insErr } = await supabase
-          .from('brands')
-          .insert(payload)
-          .select('id')
-          .single();
-        if (insErr || !created) throw new Error(insErr?.message ?? 'failed_to_create');
-        brandId = created.id;
+      // `.select()` matters: brands writes are gated on the 'brand.edit' capability, and
+      // RLS denies by filtering the row out rather than raising. A role without it used to
+      // see "saved", the dialog close, and nothing change — while the image had already
+      // reached the bucket.
+      const { data: updated, error: upErr } = await supabase
+        .from('brands')
+        .update(payload)
+        .eq('id', brand.id)
+        .select('id');
+      if (upErr) throw new Error(upErr.message);
+      if (!updated || updated.length === 0) {
+        throw new Error("That didn't save — your role may not be allowed to change branding.");
       }
+      const brandId = brand.id;
 
       // Reconcile branch linkage
       const want = new Set(linkedBranchIds);
@@ -622,7 +608,7 @@ function BrandEditor({
         className="w-full max-w-2xl space-y-4 overflow-y-auto p-6 sm:max-h-[85vh]"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="font-display text-xl font-semibold">{brand ? 'Edit brand' : 'New brand'}</h2>
+        <h2 className="font-display text-xl font-semibold">Edit brand</h2>
 
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Brand name">
