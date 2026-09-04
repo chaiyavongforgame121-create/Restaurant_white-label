@@ -2,10 +2,10 @@
 // Server-side recalculation never trusts client totals.
 //
 // Version history: see ./CHANGELOG.md (moved out of this file 2026-08-28).
-// Current: v10.1 — adds 'transfer' (QR + slip) alongside card|cash. A branch with the
-// method enabled but no QR saved is refused with 400 transfer_not_configured. The order
-// stays 'pending' until the merchant approves the slip; that rule is enforced by the DB
-// trigger orders_block_unpaid_transfer, not here, so the kitchen cannot start early.
+// Current: v10.3 — deliveries.surge_multiplier records the multiplier quote_delivery
+// actually applied. The column has existed since the delivery backbone and nothing wrote
+// it, so no completed order could say whether it had been surged. Rows written before
+// this ship carry the column default regardless of what was charged.
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
@@ -352,7 +352,6 @@ Deno.serve(async (req: Request) => {
   );
   const defaultDeliveryFee = Number(settings.delivery_fee ?? 3.99);
   let deliveryFee = payload.channel === 'delivery' ? defaultDeliveryFee : 0;
-  const serviceFee = r2(subtotal * (Number(settings.service_fee_percent ?? 0) / 100));
   const tipAmount = Math.max(0, r2(payload.tip_amount ?? 0));
 
   let customerId: string | null = null;
@@ -459,6 +458,16 @@ Deno.serve(async (req: Request) => {
     if (!(await callerIsStaff())) return json(400, { error: 'payment_method_not_accepted' });
   }
 
+  // The service fee is a CARD-ONLY surcharge. Cash, QR transfer and dine-in (the
+  // storefront submits dine-in as 'cash') pay none, and there is no staff carve-out:
+  // a card sale rung up at the counter is charged like any other card sale, so the
+  // till and this row cannot disagree. Computed here, after the payment gates, so a
+  // method that is about to be refused never gets priced. Mirrored by
+  // computeServiceFee() in packages/shared/src/utils/pricing.ts — a Deno function
+  // cannot import that package, so the two expressions have to be kept identical.
+  const serviceFeePercent = Math.max(0, Math.min(25, Number(settings.service_fee_percent ?? 0) || 0));
+  const serviceFee = payload.payment_method === 'card' ? r2(subtotal * (serviceFeePercent / 100)) : 0;
+
   let deliveryAddress = payload.delivery_address ?? null;
   if (payload.saved_address_id && customerId) {
     const { data: a } = await admin.from('customer_addresses').select('*').eq('id', payload.saved_address_id).eq('customer_id', customerId).maybeSingle();
@@ -478,6 +487,9 @@ Deno.serve(async (req: Request) => {
   // UI previews with). Falls back to the legacy flat fee when no coordinates.
   let tripDistanceKm: number | null = null;
   let tripEtaMin: number | null = null;
+  // quote_delivery has always returned the multiplier it applied; nothing ever stored it,
+  // so no completed order could answer "was this surged, and by how much".
+  let tripSurge: number | null = null;
   let dropoffLat: number | null = null;
   let dropoffLng: number | null = null;
   if (payload.channel === 'delivery') {
@@ -486,11 +498,12 @@ Deno.serve(async (req: Request) => {
     const lng = typeof addr?.lng === 'number' && Number.isFinite(addr.lng) ? addr.lng : null;
     if (lat != null && lng != null) {
       const { data: q } = await admin.rpc('quote_delivery', { p_branch_id: payload.branch_id, p_lat: lat, p_lng: lng });
-      const quote = q as { deliverable?: boolean; reason?: string; distance_km?: number; fee?: number; eta_min?: number; radius_km?: number } | null;
+      const quote = q as { deliverable?: boolean; reason?: string; distance_km?: number; fee?: number; eta_min?: number; radius_km?: number; surge?: number } | null;
       if (quote?.deliverable) {
         deliveryFee = Number(quote.fee ?? deliveryFee);
         tripDistanceKm = Number.isFinite(Number(quote.distance_km)) ? Number(quote.distance_km) : null;
         tripEtaMin = Number.isFinite(Number(quote.eta_min)) ? Number(quote.eta_min) : null;
+        tripSurge = Number.isFinite(Number(quote.surge)) ? Number(quote.surge) : null;
         dropoffLat = lat;
         dropoffLng = lng;
       } else if (quote?.reason === 'out_of_range') {
@@ -749,6 +762,7 @@ Deno.serve(async (req: Request) => {
       ...(dropoffLat != null && dropoffLng != null ? { dropoff_lat: dropoffLat, dropoff_lng: dropoffLng } : {}),
       ...(tripDistanceKm != null ? { distance_km: tripDistanceKm } : {}),
       ...(tripEtaMin != null ? { estimated_duration_min: tripEtaMin } : {}),
+      ...(tripSurge != null ? { surge_multiplier: tripSurge } : {}),
     });
   }
 

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { computeSalesTax, formatCurrency } from './index';
+import {
+  computeSalesTax,
+  computeServiceFee,
+  formatCurrency,
+  parseServiceFeePercent,
+  serviceFeeApplies,
+} from './index';
 
 /**
  * Mirrors the server-side math in supabase/functions/place-order. Each test
@@ -20,6 +26,7 @@ function computeTotal({
   taxRate = 0,
   deliveryFee = 0,
   serviceFeePercent = 0,
+  paymentMethod = 'card',
   tipAmount = 0,
   loyaltyPointsRedeemed = 0,
   promoDiscount = 0,
@@ -29,6 +36,7 @@ function computeTotal({
   taxRate?: number;
   deliveryFee?: number;
   serviceFeePercent?: number;
+  paymentMethod?: 'card' | 'cash' | 'transfer';
   tipAmount?: number;
   loyaltyPointsRedeemed?: number;
   promoDiscount?: number;
@@ -36,7 +44,7 @@ function computeTotal({
 }) {
   const subtotal = subtotalOf(lines);
   const fee = freeDelivery ? 0 : deliveryFee;
-  const service = r2(subtotal * (serviceFeePercent / 100));
+  const service = computeServiceFee(subtotal, serviceFeePercent, paymentMethod);
   const loyaltyDollarsOff = r2(loyaltyPointsRedeemed / 100);
   const taxableBase = Math.max(0, subtotal - loyaltyDollarsOff - promoDiscount);
   const tax = computeSalesTax(taxableBase, taxRate);
@@ -138,6 +146,59 @@ describe('place-order math', () => {
   it('formatCurrency matches the receipt display', () => {
     expect(formatCurrency(48.67)).toMatch(/\$48\.67/);
     expect(formatCurrency(0)).toMatch(/\$0\.00/);
+  });
+});
+
+describe('service fee is card-only', () => {
+  // The rule the merchant sets in Branch settings: the surcharge rides on card
+  // payments and nothing else. place-order mirrors computeServiceFee() by hand, so a
+  // change here without a change there is exactly the drift these cases are for.
+
+  it('applies to card and to nothing else', () => {
+    expect(serviceFeeApplies('card')).toBe(true);
+    expect(serviceFeeApplies('cash')).toBe(false);
+    expect(serviceFeeApplies('transfer')).toBe(false);
+    expect(serviceFeeApplies(undefined)).toBe(false);
+    expect(serviceFeeApplies(null)).toBe(false);
+    expect(serviceFeeApplies('')).toBe(false);
+  });
+
+  it('charges the percentage on card, zero on cash and transfer', () => {
+    expect(computeServiceFee(34.85, 5, 'card')).toBe(1.74);
+    expect(computeServiceFee(34.85, 5, 'cash')).toBe(0);
+    expect(computeServiceFee(34.85, 5, 'transfer')).toBe(0);
+  });
+
+  it('rounds to the cent and clamps the percentage', () => {
+    expect(computeServiceFee(12.34, 5, 'card')).toBe(0.62);
+    expect(computeServiceFee(100, 0, 'card')).toBe(0);
+    expect(computeServiceFee(100, 40, 'card')).toBe(25);
+    expect(computeServiceFee(100, -3, 'card')).toBe(0);
+    expect(computeServiceFee(-5, 5, 'card')).toBe(0);
+  });
+
+  it('reads the branch setting out of the raw jsonb', () => {
+    expect(parseServiceFeePercent({ service_fee_percent: '7.5' })).toBe(7.5);
+    expect(parseServiceFeePercent({})).toBe(0);
+    expect(parseServiceFeePercent(null)).toBe(0);
+    expect(parseServiceFeePercent({ service_fee_percent: 99 })).toBe(25);
+    expect(parseServiceFeePercent({ service_fee_percent: 'abc' })).toBe(0);
+  });
+
+  it('changes the order total with the method the diner picks', () => {
+    const lines = [{ unitPrice: 20, quantity: 1 }];
+    expect(computeTotal({ lines, serviceFeePercent: 5, paymentMethod: 'card' }).total).toBe(21);
+    expect(computeTotal({ lines, serviceFeePercent: 5, paymentMethod: 'cash' }).total).toBe(20);
+    expect(computeTotal({ lines, serviceFeePercent: 5, paymentMethod: 'transfer' }).total).toBe(20);
+  });
+
+  it('dine-in pays none — the checkout submits it as cash', () => {
+    const result = computeTotal({
+      lines: [{ unitPrice: 20, quantity: 1 }],
+      serviceFeePercent: 5,
+      paymentMethod: 'cash',
+    });
+    expect(result.serviceFee).toBe(0);
   });
 });
 

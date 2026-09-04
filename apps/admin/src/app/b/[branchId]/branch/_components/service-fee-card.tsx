@@ -2,8 +2,9 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { Percent, Save } from 'lucide-react';
+import { Lock, Percent, Save } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
+import { SERVICE_FEE_MAX_PERCENT } from '@favornoms/shared';
 import { Button, Card } from '@favornoms/ui';
 
 // Structured editor for branches.settings.service_fee_percent (jsonb). Saves
@@ -12,20 +13,27 @@ import { Button, Card } from '@favornoms/ui';
 //
 // service_fee_percent is the SAME key the authoritative pricing already reads:
 // supabase/functions/place-order applies `subtotal * service_fee_percent / 100`
-// and defaults to 0 when unset. Blank/0 here means "no service fee" end to end.
+// ONLY when payment_method is 'card' (Stripe) — cash, QR transfer and dine-in
+// orders store 0, whether they were rung up by a diner or by staff at the
+// counter. Blank/0 here means "no service fee" end to end.
 
 interface Props {
   branchId: string;
   settings: Record<string, unknown>;
+  /** `card_payment` entitlement. Without it no order can be paid by card, so the
+   *  fee is dead however it is set — say so instead of letting it look live. */
+  canUseCard: boolean;
 }
 
 const INPUT_CLS =
   'h-12 w-full rounded-xl border border-border bg-background px-4 text-base outline-none transition-colors focus-visible:border-primary';
 
 const PREVIEW_SUBTOTALS = [20, 40, 80];
-const MAX_PCT = 25;
+// Same ceiling place-order clamps to, so the preview can never promise a fee the
+// server would trim.
+const MAX_PCT = SERVICE_FEE_MAX_PERCENT;
 
-export function ServiceFeeCard({ branchId, settings }: Props) {
+export function ServiceFeeCard({ branchId, settings, canUseCard }: Props) {
   const router = useRouter();
   const [percent, setPercent] = React.useState<string>(() => {
     const n = Number(settings?.service_fee_percent);
@@ -66,8 +74,9 @@ export function ServiceFeeCard({ branchId, settings }: Props) {
         <Percent className="h-5 w-5 text-primary" /> Service fee
       </h2>
       <p className="text-sm text-muted-foreground">
-        A percentage of the food subtotal added at checkout, on every order type. Set it to{' '}
-        <strong>0</strong> to charge no service fee at all.
+        A percentage of the food subtotal, charged{' '}
+        <strong>only when the customer pays by credit / debit card</strong>. Cash, QR transfer and
+        dine-in orders never pay it. Set it to <strong>0</strong> to charge no service fee at all.
       </p>
 
       <div className="mt-4 max-w-xs">
@@ -84,14 +93,15 @@ export function ServiceFeeCard({ branchId, settings }: Props) {
             className={INPUT_CLS}
           />
           <span className="mt-1 block text-xs text-muted-foreground">
-            0 – {MAX_PCT}%. Charged on the subtotal only — never on tax, tips or the delivery fee.
+            0 – {MAX_PCT}%. Card payments only. Charged on the subtotal — never on tax, tips or
+            the delivery fee.
           </span>
         </label>
       </div>
 
       <div className="mt-4 rounded-xl bg-muted/50 p-3">
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Fee preview
+          Fee preview (card payments)
         </p>
         <div className="mt-2 grid grid-cols-3 gap-2 text-center text-sm">
           {PREVIEW_SUBTOTALS.map((s) => (
@@ -104,6 +114,16 @@ export function ServiceFeeCard({ branchId, settings }: Props) {
           ))}
         </div>
       </div>
+
+      {!canUseCard && (
+        <p className="mt-3 flex items-center gap-2 rounded-xl bg-muted px-4 py-3 text-sm">
+          <Lock className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <span>
+            Card payment is not included in your current package, so this fee is never charged
+            right now.
+          </span>
+        </p>
+      )}
 
       {error && (
         <p className="mt-3 rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p>

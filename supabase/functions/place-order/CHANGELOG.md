@@ -5,7 +5,26 @@ the bulk of the file; every deploy had to carry it. The history is the valuable 
 so it lives here rather than being deleted.
 
 ```
-// place-order v10.1 — US pivot + modifiers + combos + happy-hour + schedules + gift cards
+// place-order v10.3 — US pivot + modifiers + combos + happy-hour + schedules + gift cards
+//   v10.3 (2026-09-04): the delivery row now records the surge multiplier the quote
+//        applied. quote_delivery has returned `surge` since the delivery backbone and
+//        nothing ever read it, so deliveries.surge_multiplier sat at its column default
+//        on every order and there was no way to answer "was this one surged, and by how
+//        much" after the fact — not for support, not for reporting, not for a dispute.
+//        Only written when the RPC actually quoted (an address with coordinates); the
+//        no-coordinates flat-fee path leaves the column alone. Historical rows keep the
+//        default whether or not they were surged, so reporting on it has to start here.
+//   v10.2 (2026-09-04): the service fee is now a CARD-ONLY surcharge. It used to be
+//        computed from branches.settings.service_fee_percent before any payment gate
+//        ran, so cash, QR transfer, dine-in (submitted as 'cash') and every counter /
+//        POS sale were charged it too — invisibly, since the counter prints a receipt
+//        it builds itself and never showed a fee line. The fee now moves below the
+//        entitlement / transfer / matrix gates and is charged only when
+//        payment_method === 'card', with no staff exemption: a card sale at the till
+//        is a card sale. The percentage is clamped to 0–25% here as well as in the
+//        admin editor, so a hand-edited jsonb cannot exceed the advertised ceiling.
+//        Mirrored by computeServiceFee() in packages/shared/src/utils/pricing.ts.
+//        Historical rows keep their fee — those totals were really collected.
 //   v10.1 (2026-08-28): 'transfer' joins card|cash as a payment method. The diner scans
 //        the branch's own QR (branches.settings.qr_transfer.image_url), transfers, and
 //        uploads a slip; the merchant approves it from Orders. A branch with the method

@@ -230,8 +230,23 @@ function PosInner({
         payment_method: method,
         items: lines.map((l) => ({ menu_item_id: l.menuItemId, quantity: l.quantity })),
       });
+      // place-order is the only thing that prices an order, and a card sale now carries
+      // the card-only service fee — but the response does not spell the fee out, so read
+      // back what actually landed on the row. Paper that disagrees with the till is worth
+      // one extra round trip.
+      const { data: priced } = await supabase
+        .from('orders')
+        .select('service_fee, total')
+        .eq('id', result.order_id)
+        .maybeSingle();
+      const serviceFee = Number(priced?.service_fee ?? 0);
+      // The counter's discount is applied here rather than by place-order, so it comes
+      // OFF the server's total instead of replacing it — replacing it silently wiped the
+      // service fee and the sales tax the server had just charged.
+      const chargedTotal =
+        Math.round((Number(priced?.total ?? result.total) - discountAmount) * 100) / 100;
       if (discountAmount > 0) {
-        await supabase.from('orders').update({ discount_amount: discountAmount, total }).eq('id', result.order_id);
+        await supabase.from('orders').update({ discount_amount: discountAmount, total: chargedTotal }).eq('id', result.order_id);
       }
       await supabase.from('orders').update({ status: 'confirmed' }).eq('id', result.order_id);
       setSuccess(result.order_number);
@@ -250,7 +265,8 @@ function PosInner({
           unit_price: l.unitPrice,
         })),
         subtotal: snapshotTotal,
-        total: snapshotTotal,
+        serviceFee,
+        total: chargedTotal,
         paymentMethod: method,
       });
       if (method === 'cash') {

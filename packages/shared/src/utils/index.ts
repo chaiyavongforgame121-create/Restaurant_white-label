@@ -87,5 +87,7 @@ export * from './delivery-settings';
 export * from './safe-next';
 export * from './storefront';
 export * from './platform-settings';
+export * from './pricing';
 export * from './tip-settings';
 export * from './entitlements';
+export * from './customer-sort';

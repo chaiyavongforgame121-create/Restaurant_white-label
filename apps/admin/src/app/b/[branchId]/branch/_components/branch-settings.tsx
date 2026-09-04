@@ -237,8 +237,9 @@ export function BranchSettings({
           canUseCard={canUseCard}
         />
 
-        {/* Not gated on delivery: the service fee applies to pickup and dine-in too. */}
-        <ServiceFeeCard branchId={branch.id} settings={branch.settings} />
+        {/* Card-only surcharge, so it sits directly under Payment methods — the two are
+            read together, and the fee is dead without the card entitlement. */}
+        <ServiceFeeCard branchId={branch.id} settings={branch.settings} canUseCard={canUseCard} />
 
         <TipSettingsCard branchId={branch.id} settings={branch.settings} />
 

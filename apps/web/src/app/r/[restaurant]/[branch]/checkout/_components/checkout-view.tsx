@@ -8,8 +8,11 @@ import { Banknote, ChevronLeft, CreditCard, LocateFixed, Map as MapIcon, MapPin,
 import { useTranslations } from 'next-intl';
 import {
   computeSalesTax,
+  computeServiceFee,
+  DELIVERY_SETTING_DEFAULTS,
   formatCurrency,
   kmToMi,
+  parseDeliverySettings,
   parseTipConfig,
   tipPresetsForChannel,
   TIP_CONFIG_DEFAULTS,
@@ -43,6 +46,7 @@ import { buildScheduleDays, type OpeningWindow } from '@/lib/schedule-slots';
 import { pickerLabels } from '@/lib/picker-labels';
 import { useCart } from '@/store/cart';
 import { useAuth } from '@/components/auth/use-auth';
+import { useTablePin } from '../../_components/table-pin';
 
 type PaymentMethod = 'card' | 'cash' | 'transfer';
 type PaymentMode = 'asap' | 'scheduled';
@@ -220,6 +224,8 @@ export function CheckoutView({
   // null until the diner picks an order type. OrderTypeGate (mounted by the page)
   // covers checkout until they do, so the null window is never interactive.
   const channel = useCart((s) => s.channel);
+  // Only ever set for THIS branch — the provider drops a pin scanned anywhere else.
+  const { table: pinnedTable } = useTablePin();
 
   const [name, setName] = React.useState('');
   const [phone, setPhone] = React.useState('');
@@ -238,6 +244,13 @@ export function CheckoutView({
   const [customerId, setCustomerId] = React.useState<string | null>(null);
   const [quote, setQuote] = React.useState<DeliveryQuote | null>(null);
   const [quoting, setQuoting] = React.useState(false);
+  // branches.settings.delivery_fee, the fee charged when an address has no coordinates.
+  // place-order reads the same key (`Number(settings.delivery_fee ?? 3.99)`); hardcoding
+  // 3.99 here showed the diner one number and charged another on any legacy branch row
+  // that carries the key.
+  const [legacyFlatFee, setLegacyFlatFee] = React.useState<number>(
+    DELIVERY_SETTING_DEFAULTS.legacyFlatFee,
+  );
   const [addressNotes, setAddressNotes] = React.useState('');
   const [dropoffPref, setDropoffPref] = React.useState<DropoffPref | null>(null);
   const [dropoffOther, setDropoffOther] = React.useState('');
@@ -353,9 +366,18 @@ export function CheckoutView({
 
   // Distance-based quote when the address has coordinates (server-authoritative —
   // place-order runs the same quote_delivery formula); legacy flat fee otherwise.
-  const deliveryFeeBase = channel !== 'delivery' ? 0 : quote?.deliverable ? quote.fee : 3.99;
   const outOfRange =
     channel === 'delivery' && quote != null && !quote.deliverable && quote.reason === 'out_of_range';
+  // The branch has no delivery add-on. place-order answers 403 for this, so quoting ANY
+  // fee would be selling something that cannot be bought — the flat-fee fallback below is
+  // for a missing pin, not for a branch that does not deliver.
+  const deliveryNotSold =
+    channel === 'delivery' &&
+    quote != null &&
+    !quote.deliverable &&
+    quote.reason === 'delivery_not_entitled';
+  const deliveryFeeBase =
+    channel !== 'delivery' || deliveryNotSold ? 0 : quote?.deliverable ? quote.fee : legacyFlatFee;
   const promoFreeDelivery = promoState.status === 'applied' && promoState.free_delivery;
   // Coordinates are required only while ENTERING a new address (the autofill is on screen and
   // actionable). A previously-saved address that happens to lack coords must not trap checkout —
@@ -368,8 +390,14 @@ export function CheckoutView({
   // pre-populated), re-gate the order against the *scheduled* payment matrix and
   // could set held=true — which hides the order from the kitchen.
   const isDineIn = channel === 'dine_in';
+  // A scanned table is an id the storefront was handed by the server, not a number the
+  // diner typed — so it needs no field, no validation and no guessing at the other end.
+  const atTable = isDineIn && pinnedTable !== null;
   const effectiveScheduleMode: 'asap' | 'later' = isDineIn ? 'asap' : scheduleMode;
   const paymentModeKey: PaymentMode = effectiveScheduleMode === 'later' ? 'scheduled' : 'asap';
+  // What place-order will actually be told. Dine-in has no payment step, so it is sent
+  // as 'cash' — and everything priced off the method has to read this, not `method`.
+  const effectivePaymentMethod: PaymentMethod = isDineIn ? 'cash' : method;
   const enabledMethods = (['card', 'cash', 'transfer'] as const).filter(
     (m) => paymentMatrix[paymentModeKey][m],
   );
@@ -377,7 +405,10 @@ export function CheckoutView({
     paymentMatrix.asap.cash || paymentMatrix.asap.card || paymentMatrix.asap.transfer;
   const scheduledPayable =
     paymentMatrix.scheduled.cash || paymentMatrix.scheduled.card || paymentMatrix.scheduled.transfer;
-  const serviceFee = r2(subtotal * (serviceFeePercent / 100));
+  // Card-only, and derived from the SELECTED tile so the summary row and the
+  // "Place order" button re-price the instant the diner switches to cash or QR
+  // transfer. Mirrors the same rule in place-order.
+  const serviceFee = computeServiceFee(subtotal, serviceFeePercent, effectivePaymentMethod);
   // Why a reward may not be redeemable right now. Returning the reason (not just
   // a boolean) lets each card say what to DO about it instead of being mutely
   // greyed out. `free_item` needs its item actually in the cart — the reward pays
@@ -548,6 +579,7 @@ export function CheckoutView({
         if (data?.settings) {
           const settings = data.settings as Record<string, unknown>;
           setTipConfig(parseTipConfig(settings));
+          setLegacyFlatFee(parseDeliverySettings(settings).legacyFlatFee);
           setPaymentMatrix(parsePaymentMatrix(settings, canUseCard));
           setQrTransfer(
             (settings.qr_transfer as {
@@ -818,7 +850,8 @@ export function CheckoutView({
       else if (dropoffPref === 'other' && !dropoffOther.trim())
         errs.dropoff = 'Please describe the drop-off spot.';
     }
-    if (channel === 'dine_in' && !dineInTable.trim()) errs.table = t('checkout.errors.tableRequired');
+    if (channel === 'dine_in' && !atTable && !dineInTable.trim())
+      errs.table = t('checkout.errors.tableRequired');
     if (Object.keys(errs).length > 0) {
       setFieldErrors(errs);
       const firstEl = errs.schedule
@@ -844,6 +877,10 @@ export function CheckoutView({
 
     if (outOfRange) {
       setError('This address is outside the delivery area.');
+      return;
+    }
+    if (deliveryNotSold) {
+      setError("This branch isn't taking delivery orders right now. Try pickup instead.");
       return;
     }
     setSubmitting(true);
@@ -877,12 +914,18 @@ export function CheckoutView({
         customer_name: name,
         customer_phone: phone,
         customer_notes:
-          channel === 'dine_in' && dineInTable.trim()
-            ? `Table ${dineInTable.trim()}${notes ? ` — ${notes}` : ''}`
+          channel === 'dine_in' && (atTable || dineInTable.trim())
+            ? `${atTable ? pinnedTable!.label : `Table ${dineInTable.trim()}`}${notes ? ` — ${notes}` : ''}`
             : notes || undefined,
+        // A scanned table is already a row id, so place-order stores the FK instead of
+        // string-matching a number the diner typed. The number rides along as the
+        // fallback for the hand-typed path.
+        table_id: atTable ? pinnedTable!.id : undefined,
         // Structured too, so place-order can resolve it to a real tables row and
         // the kitchen/floor plan stop relying on the notes prefix above.
-        table_number: channel === 'dine_in' ? dineInTable.trim() : undefined,
+        table_number: channel === 'dine_in'
+          ? (atTable ? pinnedTable!.number : dineInTable.trim())
+          : undefined,
         delivery_address:
           channel === 'delivery'
             ? {
@@ -905,7 +948,7 @@ export function CheckoutView({
         // Dine-in has no payment step: 'cash' is "pay at the restaurant", and the
         // only value that neither trips the card_payment entitlement nor breaks
         // the NOT NULL payments.method column.
-        payment_method: isDineIn ? 'cash' : method,
+        payment_method: effectivePaymentMethod,
         // Send the reward only when it is actually applicable — appliedReward is
         // already null if the identity check failed or the cart drifted, so the
         // server is never asked to honour something the summary did not show.
@@ -1270,6 +1313,12 @@ export function CheckoutView({
                 {!quote.deliverable && quote.radius_km ? ` (max ${kmToMi(quote.radius_km).toFixed(1)} mi)` : ''}.
               </p>
             )}
+            {deliveryNotSold && (
+              <p className="mt-2 text-sm font-medium text-danger" role="alert">
+                Sorry, this branch isn&apos;t taking delivery orders right now. Pickup is still
+                available.
+              </p>
+            )}
             {enteringNewAddress && !addressCoords && !quoting && address.trim().length > 3 && (
               <p className="mt-2 text-xs font-medium text-warning">
                 Select your address from the suggestions to confirm delivery and see the exact fee.
@@ -1364,25 +1413,38 @@ export function CheckoutView({
         {channel === 'dine_in' && (
           <Card className="p-5">
             <h2 className="font-display text-lg font-semibold">
-              Dine-in <span className="text-danger">*</span>
+              Dine-in {!atTable && <span className="text-danger">*</span>}
             </h2>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Your table number is required so we can bring your food over.
-            </p>
-            <input
-              ref={tableRef}
-              value={dineInTable}
-              onChange={(e) => { setDineInTable(e.target.value); clearFieldError('table'); }}
-              placeholder="Table number"
-              inputMode="numeric"
-              // aria only: the form runs its own validation in handleSubmit and
-              // native `required` would pre-empt it with a browser tooltip.
-              aria-required="true"
-              aria-invalid={!!fieldErrors.table}
-              className="input mt-3"
-              style={fieldErrors.table ? { borderColor: 'hsl(var(--danger))' } : undefined}
-            />
-            {fieldErrors.table && <p className="mt-1 text-xs text-danger">{fieldErrors.table}</p>}
+            {atTable ? (
+              <>
+                <p className="mt-3 rounded-xl bg-primary/10 px-3 py-2 font-display text-lg font-semibold text-primary">
+                  {pinnedTable!.label}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Scanned from the QR code on your table — nothing to type.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Your table number is required so we can bring your food over.
+                </p>
+                <input
+                  ref={tableRef}
+                  value={dineInTable}
+                  onChange={(e) => { setDineInTable(e.target.value); clearFieldError('table'); }}
+                  placeholder="Table number"
+                  inputMode="numeric"
+                  // aria only: the form runs its own validation in handleSubmit and
+                  // native `required` would pre-empt it with a browser tooltip.
+                  aria-required="true"
+                  aria-invalid={!!fieldErrors.table}
+                  className="input mt-3"
+                  style={fieldErrors.table ? { borderColor: 'hsl(var(--danger))' } : undefined}
+                />
+                {fieldErrors.table && <p className="mt-1 text-xs text-danger">{fieldErrors.table}</p>}
+              </>
+            )}
             <p className="mt-3 text-xs text-muted-foreground">{t('checkout.dineInPayAtRestaurant')}</p>
           </Card>
         )}
@@ -1400,9 +1462,16 @@ export function CheckoutView({
                 <PaymentChoice icon={<Banknote className="h-5 w-5" />} label={t('checkout.payment.cash')} active={method === 'cash'} onClick={() => setMethod('cash')} />
               )}
               {paymentMatrix[paymentModeKey].transfer && (
-                <PaymentChoice icon={<QrCode className="h-5 w-5" />} label="QR transfer" active={method === 'transfer'} onClick={() => setMethod('transfer')} />
+                <PaymentChoice icon={<QrCode className="h-5 w-5" />} label={t('checkout.payment.transfer')} active={method === 'transfer'} onClick={() => setMethod('transfer')} />
               )}
             </div>
+            {/* Said once, next to the tiles, rather than only in the summary — the fee
+                is the reason the total moves when they tap another method. */}
+            {serviceFeePercent > 0 && paymentMatrix[paymentModeKey].card && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                {t('checkout.payment.cardFeeNote', { percent: serviceFeePercent })}
+              </p>
+            )}
             {/* The QR itself has moved to the order page. Showing it here asked the diner to
                 pay before the order existed — nothing to attach the slip to, no order number
                 to quote in the transfer note, and no way back if checkout then failed. Here
@@ -1681,6 +1750,7 @@ export function CheckoutView({
             disabled={
               !channel ||
               outOfRange ||
+              deliveryNotSold ||
               // Dine-in doesn't pay online, so an all-off ASAP matrix must not
               // disable it — the card that explains why is hidden for dine-in,
               // and a dead button with no reason is worse than no button.
