@@ -43,6 +43,7 @@ import type { Locale } from '@/i18n/config';
 import { ComboSheet, type ComboRow as ComboRowType } from './combo-sheet';
 import { MenuItemSheet } from './menu-item-sheet';
 import { OrderTypeGate } from './order-type-gate';
+import { useTablePin } from './table-pin';
 
 interface BranchReviews {
   summary: { rating: number | null; count: number };
@@ -116,6 +117,11 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
   const setChannel = useCart((s) => s.setChannel);
   // Reconciling a stale persisted channel is OrderTypeGate's job — it is the
   // only place that can wait for rehydration before deciding.
+
+  // Scanned their table: the order type is settled and the branch is not theirs to
+  // change. Offering the switcher anyway would let them send a dine-in ticket for the
+  // table they are sitting at away on a bike.
+  const { table: pinnedTable } = useTablePin();
 
   // One auth gate for the whole menu: instantiated once here and threaded down to
   // the quick-add buttons and the combo row. Calling the hook per MenuCard would
@@ -218,6 +224,7 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
           search={search}
           setSearch={setSearch}
           canDeliver={canDeliver}
+          lockedTableLabel={pinnedTable?.label ?? null}
         />
 
         {!search && usuals.length > 0 && (
@@ -277,7 +284,12 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
 
       <FloatingCartBar />
 
-      <MenuItemSheet item={activeItem} onClose={() => setActiveItem(null)} />
+      <MenuItemSheet
+        item={activeItem}
+        items={items}
+        onOpenItem={setActiveItem}
+        onClose={() => setActiveItem(null)}
+      />
       <ComboSheet
         combo={activeCombo}
         branchId={branch.id}
@@ -355,12 +367,15 @@ function ChannelAndSearch({
   search,
   setSearch,
   canDeliver,
+  lockedTableLabel = null,
 }: {
   channel: OrderChannel | null;
   setChannel: (c: OrderChannel) => void;
   search: string;
   setSearch: (s: string) => void;
   canDeliver: boolean;
+  /** Set when the diner scanned a table code — the order type is no longer a choice. */
+  lockedTableLabel?: string | null;
 }) {
   const t = useTranslations();
   // Delivery is dropped from the options entirely rather than shown disabled —
@@ -375,13 +390,20 @@ function ChannelAndSearch({
   ];
   return (
     <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-      {/* `channel` is null only while OrderTypeGate is covering the page; the
-          empty value matches no option, so nothing shows as selected. */}
-      <Segmented<string>
-        value={channel ?? ''}
-        onChange={(c) => setChannel(c as OrderChannel)}
-        options={options}
-      />
+      {lockedTableLabel ? (
+        <span className="inline-flex items-center gap-2 self-start rounded-full bg-primary/10 px-4 py-2.5 text-sm font-semibold text-primary">
+          <Store className="h-4 w-4" aria-hidden />
+          {t('channel.dineIn')} · {lockedTableLabel}
+        </span>
+      ) : (
+        /* `channel` is null only while OrderTypeGate is covering the page; the
+           empty value matches no option, so nothing shows as selected. */
+        <Segmented<string>
+          value={channel ?? ''}
+          onChange={(c) => setChannel(c as OrderChannel)}
+          options={options}
+        />
+      )}
       <div className="relative w-full lg:max-w-md">
         <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <input

@@ -6,15 +6,22 @@ import { motion } from 'framer-motion';
 import { AlertTriangle, Clock, Flame, Star } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { formatCurrency, type MenuItem } from '@favornoms/shared';
-import { Button, DietaryBadge, QuantityStepper, Sheet } from '@favornoms/ui';
+import { Badge, Button, DietaryBadge, QuantityStepper, Sheet } from '@favornoms/ui';
 import { getBrowserClient } from '@favornoms/database/client';
 import { useCart, type CartLineModifier } from '@/store/cart';
 import { useRequireAuth } from '@/components/auth/require-auth';
 import { stashPendingAdd } from '@/lib/pending-cart';
+import { resolveRecommendations, type RecommendationRow } from '@/lib/recommendations';
 
 interface Props {
   item: MenuItem | null;
   onClose: () => void;
+  /** The branch's loaded menu. "You might also like" rows come back from the RPC as thin
+   *  records, so each one is resolved against this list — the sheet and the cart need the
+   *  effective price, the stock flag and the branch id — and dropped when it is not there. */
+  items: MenuItem[];
+  /** Swap the sheet to another item in place (a recommendation tap). */
+  onOpenItem: (item: MenuItem) => void;
 }
 
 interface ModifierGroup {
@@ -36,28 +43,38 @@ interface ModifierOption {
   is_active: boolean;
 }
 
-export function MenuItemSheet({ item, onClose }: Props) {
+export function MenuItemSheet({ item, onClose, items, onOpenItem }: Props) {
   const t = useTranslations();
   const [qty, setQty] = React.useState(1);
   const [notes, setNotes] = React.useState('');
   const [groups, setGroups] = React.useState<ModifierGroup[]>([]);
   const [selections, setSelections] = React.useState<Record<string, Set<string>>>({});
   const [loadingGroups, setLoadingGroups] = React.useState(false);
-  const [recommended, setRecommended] = React.useState<Array<{ menu_item_id: string; item_name: string; image_url: string | null; price: number }>>([]);
+  const [recommended, setRecommended] = React.useState<RecommendationRow[]>([]);
   const add = useCart((s) => s.add);
   // Adding to the cart requires a signed-in diner; a guest is sent to sign-in
   // and returned to the menu (usePathname) afterwards.
   const { requireAuthThen } = useRequireAuth();
 
   const [cached, setCached] = React.useState<MenuItem | null>(item);
+  const heroRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
     if (item) {
+      // A recommendation tap swaps `item` while the sheet stays mounted, so a slow
+      // response for the item the diner just left must not land on the new one.
+      let cancelled = false;
       setCached(item);
       setQty(1);
       setNotes('');
       setGroups([]);
       setSelections({});
+      // Cleared here rather than left to the RPC: the previous item's strip must not
+      // linger under the new item while its own recommendations are on the way.
+      setRecommended([]);
+      // Same reason for the scroll: the sheet keeps its offset across a swap, so put the
+      // new item's photo back in view instead of leaving the diner at the bottom.
+      heroRef.current?.scrollIntoView({ block: 'start' });
       // Load modifier groups for this item
       setLoadingGroups(true);
       void (async () => {
@@ -74,6 +91,7 @@ export function MenuItemSheet({ item, onClose }: Props) {
           )
           .eq('menu_item_id', item.id)
           .order('display_order');
+        if (cancelled) return;
         const groupRows = (data ?? [])
           .map((row) => {
             const g = Array.isArray(row.modifier_groups) ? row.modifier_groups[0] : row.modifier_groups;
@@ -108,9 +126,14 @@ export function MenuItemSheet({ item, onClose }: Props) {
           p_menu_item_id: item.id,
           p_limit: 4,
         });
-        setRecommended((recs ?? []) as never[]);
+        if (cancelled) return;
+        setRecommended((recs ?? []) as RecommendationRow[]);
       })();
+      return () => {
+        cancelled = true;
+      };
     }
+    return undefined;
   }, [item]);
 
   const view = item ?? cached;
@@ -140,6 +163,11 @@ export function MenuItemSheet({ item, onClose }: Props) {
     }
     return null;
   }, [groups, selections]);
+
+  const openableRecs = React.useMemo(
+    () => resolveRecommendations(recommended, items, view?.id),
+    [recommended, items, view?.id],
+  );
 
   if (!view) return null;
 
@@ -206,7 +234,7 @@ export function MenuItemSheet({ item, onClose }: Props) {
 
   return (
     <Sheet open={!!item} onClose={onClose} hideCloseButton className="max-h-[94dvh]">
-      <div className="relative aspect-[16/10] w-full overflow-hidden rounded-t-3xl">
+      <div ref={heroRef} className="relative aspect-[16/10] w-full overflow-hidden rounded-t-3xl">
         {view.imageUrl ? (
           <Image
             src={view.imageUrl}
@@ -374,28 +402,45 @@ export function MenuItemSheet({ item, onClose }: Props) {
           </p>
         )}
 
-        {recommended.length > 0 && (
+        {openableRecs.length > 0 && (
           <div className="mt-7">
-            <p className="font-display text-sm font-semibold">You might also like</p>
+            <p className="font-display text-sm font-semibold">{t('menu.alsoLike')}</p>
             <div className="-mx-1 mt-2 flex snap-x snap-mandatory overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {recommended.map((r) => (
-                <div
-                  key={r.menu_item_id}
-                  className="mr-2 inline-flex w-32 shrink-0 snap-start flex-col overflow-hidden rounded-xl border border-border bg-card"
+              {openableRecs.map(({ target }) => (
+                // A button like every other card that opens the sheet: opening is a read,
+                // so the login gate stays on the Add button of the sheet it swaps to.
+                <button
+                  key={target.id}
+                  type="button"
+                  onClick={() => onOpenItem(target)}
+                  aria-label={`Open ${target.name}`}
+                  className="focus-ring mr-2 inline-flex w-32 shrink-0 snap-start flex-col overflow-hidden rounded-xl border border-border bg-card text-left transition-shadow hover:shadow-warm"
                 >
-                  {r.image_url && (
-                    <div
-                      className="aspect-square w-full bg-muted bg-cover bg-center"
-                      style={{ backgroundImage: `url(${r.image_url})` }}
-                      role="img"
-                      aria-label={r.item_name}
-                    />
-                  )}
-                  <div className="px-2 py-1.5">
-                    <p className="line-clamp-2 text-xs font-semibold leading-tight">{r.item_name}</p>
-                    <p className="mt-0.5 text-xs font-bold text-primary">{formatCurrency(Number(r.price))}</p>
+                  <div
+                    className={`relative aspect-square w-full bg-muted bg-cover bg-center ${target.imageUrl ? '' : 'bg-gradient-sunset'}`}
+                    style={
+                      target.imageUrl ? { backgroundImage: `url(${target.imageUrl})` } : undefined
+                    }
+                    role="img"
+                    aria-label={target.name}
+                  >
+                    {target.outOfStock && (
+                      <span className="absolute inset-0 grid place-items-center bg-background/60">
+                        <Badge variant="muted" className="text-xs">
+                          Sold out
+                        </Badge>
+                      </span>
+                    )}
                   </div>
-                </div>
+                  <div className="px-2 py-1.5">
+                    <p className="line-clamp-2 text-xs font-semibold leading-tight">
+                      {target.name}
+                    </p>
+                    <p className="mt-0.5 text-xs font-bold text-primary">
+                      {formatCurrency(target.price)}
+                    </p>
+                  </div>
+                </button>
               ))}
             </div>
           </div>
