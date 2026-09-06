@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Bike,
@@ -37,6 +37,7 @@ import {
   EmptyState,
   Segmented,
 } from '@favornoms/ui';
+import { useRealtime } from '@favornoms/database/realtime';
 import { useCart, type OrderChannel } from '@/store/cart';
 import { useRequireAuth } from '@/components/auth/require-auth';
 import type { Locale } from '@/i18n/config';
@@ -44,6 +45,111 @@ import { ComboSheet, type ComboRow as ComboRowType } from './combo-sheet';
 import { MenuItemSheet } from './menu-item-sheet';
 import { OrderTypeGate } from './order-type-gate';
 import { useTablePin } from './table-pin';
+
+/** Never re-run the server tree more often than this, whatever the kitchen is doing. */
+const LIVE_MIN_GAP_MS = 5_000;
+/** A view that comes back after this long re-reads; flicking to another app and back does not. */
+const LIVE_WAKE_MIN_AGE_MS = 60_000;
+
+/**
+ * Keeps an already-open menu honest.
+ *
+ * Every navigation already renders fresh data — prices, sold-out flags, happy hours and the
+ * "Currently closed" banner are all read per request. What nothing covered is the app that is
+ * simply LEFT OPEN: an installed storefront stays alive on a phone for hours, so a diner who
+ * opened the menu at lunch and came back at dinner was ordering from lunch's menu, at lunch's
+ * prices, from a kitchen that had 86'd half of it. There was no subscription and no refresh on
+ * wake; the only cure was tapping a tab.
+ *
+ * `router.refresh()` re-runs the server tree and keeps client state — the search box, the
+ * selected category, the cart, the order-type gate all survive it, which is why this is a
+ * refresh and not a reload.
+ */
+function useLiveStorefront(branchId: string, restaurantSlug: string, branchSlug: string) {
+  const router = useRouter();
+  const lastRefresh = React.useRef(Date.now());
+  const timer = React.useRef<number | null>(null);
+  // storefront_versions only exists once its migration is applied. Subscribing to a table the
+  // database does not have puts the channel in a CHANNEL_ERROR/backoff loop, so ask first;
+  // menu_items alone still carries price and availability either way.
+  const [versionsLive, setVersionsLive] = React.useState(false);
+
+  const refresh = React.useCallback(() => {
+    if (timer.current !== null) return;
+    const wait = Math.max(0, LIVE_MIN_GAP_MS - (Date.now() - lastRefresh.current));
+    timer.current = window.setTimeout(() => {
+      timer.current = null;
+      lastRefresh.current = Date.now();
+      router.refresh();
+    }, wait);
+  }, [router]);
+
+  React.useEffect(
+    () => () => {
+      if (timer.current !== null) window.clearTimeout(timer.current);
+    },
+    [],
+  );
+
+  React.useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const { getBrowserClient } = await import('@favornoms/database/client');
+      const supabase = getBrowserClient();
+      // Newer than the last types.ts regeneration — same thin typed escape the menu page uses.
+      const rpcAny = supabase.rpc.bind(supabase) as unknown as (
+        fn: string,
+        args: Record<string, unknown>,
+      ) => Promise<{ data: unknown; error: unknown }>;
+      try {
+        const { data, error } = await rpcAny('storefront_version', {
+          p_restaurant_slug: restaurantSlug,
+          p_branch_slug: branchSlug,
+        });
+        if (!cancelled && !error && data != null) setVersionsLive(true);
+      } catch {
+        /* leave it off; menu_items still covers the menu itself */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [restaurantSlug, branchSlug]);
+
+  // Desktop alt-tab never fires visibilitychange, and useRealtime only listens for that and
+  // for `online`.
+  React.useEffect(() => {
+    const onFocus = () => {
+      if (Date.now() - lastRefresh.current > LIVE_WAKE_MIN_AGE_MS) refresh();
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [refresh]);
+
+  useRealtime({
+    channel: `storefront:${branchId}`,
+    tables: [
+      ...(versionsLive
+        ? [
+            {
+              table: 'storefront_versions',
+              event: 'UPDATE' as const,
+              filter: `branch_id=eq.${branchId}`,
+            },
+          ]
+        : []),
+      // Belt and braces: the counter covers hours, categories, branding and combos too, but
+      // menu_items is the row that matters most and it is already published.
+      { table: 'menu_items', filter: `branch_id=eq.${branchId}` },
+    ],
+    onChange: refresh,
+    // useRealtime calls this on first connect, on reconnect, when the tab becomes visible and
+    // when the network returns. Only the long sleeps are worth a full re-render.
+    refetch: () => {
+      if (Date.now() - lastRefresh.current > LIVE_WAKE_MIN_AGE_MS) refresh();
+    },
+  });
+}
 
 interface BranchReviews {
   summary: { rating: number | null; count: number };
@@ -94,6 +200,17 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
   const [activeCombo, setActiveCombo] = React.useState<ComboRow | null>(null);
   const [dietaryFilters, setDietaryFilters] = React.useState<Set<string>>(new Set());
   const [usuals, setUsuals] = React.useState<MenuItem[]>([]);
+
+  useLiveStorefront(branch.id, params.restaurant, params.branch);
+
+  // A refresh replaces `items`; an open item sheet was still rendering the object captured
+  // when it opened, so the one screen a diner is actually reading was the last to hear that
+  // the price changed or that it had just sold out.
+  React.useEffect(() => {
+    setActiveItem((current) =>
+      current ? (items.find((i) => i.id === current.id) ?? current) : current,
+    );
+  }, [items]);
 
   React.useEffect(() => {
     let cancelled = false;

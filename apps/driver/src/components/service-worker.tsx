@@ -32,7 +32,12 @@ export function ServiceWorkerRegistrar() {
     };
     navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
 
-    window.addEventListener('load', handler);
+    // Hydration finishes after `load` on a production build, so a listener added here
+    // would wait for an event that has already fired and the worker would never register
+    // — which is exactly what a production probe showed: readyState 'complete', zero
+    // registrations. Register now if the page has already loaded, otherwise wait for it.
+    if (document.readyState === 'complete') handler();
+    else window.addEventListener('load', handler);
     return () => {
       window.removeEventListener('load', handler);
       navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);

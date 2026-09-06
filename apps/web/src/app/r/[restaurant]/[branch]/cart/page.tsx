@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { resolveStorefrontStatus, resolveTenant } from '@/lib/tenant';
+import { resolveStorefrontStatus, resolveStorefrontVersion, resolveTenant } from '@/lib/tenant';
 import { CartView } from './_components/cart-view';
 import { OrderTypeGate } from '../_components/order-type-gate';
 import { todaysDeliveryWindows } from '@/lib/delivery-windows';
@@ -16,6 +16,9 @@ export default async function CartPage({ params }: Props) {
   if (!status.entitled) {
     return <SuspendedStorefront brandName={tenant.theme.brandName ?? tenant.restaurant.name} />;
   }
+  // Passed down so the cart re-checks its prices whenever the storefront changes, not only
+  // when it is first opened. Free here — resolveTenant already read it this render.
+  const version = await resolveStorefrontVersion(restaurant, branch);
   // /cart is directly linkable, so the order-type gate has to stand here too.
   return (
     <>
@@ -27,7 +30,7 @@ export default async function CartPage({ params }: Props) {
         deliveryWindowsToday={todaysDeliveryWindows(status)}
       />
       <TablePinNotice />
-      <CartView />
+      <CartView branchId={tenant.branch.id} storefrontVersion={version.version} />
     </>
   );
 }

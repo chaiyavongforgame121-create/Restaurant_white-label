@@ -51,7 +51,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const locale = await getLocale();
   const messages = await getMessages();
   return (
-    <html lang={locale} className={`${inter.variable} ${notoThai.variable}`}>
+    <html lang={locale} className={`${inter.variable} ${notoThai.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: CAPTURE_INSTALL_PROMPT }} />
       </head>
