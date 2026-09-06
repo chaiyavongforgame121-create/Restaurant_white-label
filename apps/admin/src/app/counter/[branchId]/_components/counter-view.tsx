@@ -9,6 +9,8 @@ import {
 } from 'lucide-react';
 import {
   billingErrorMessage,
+  computeSalesTax,
+  computeServiceFee,
   describeBillingError,
   formatCurrency,
   type MenuCategory,
@@ -39,6 +41,63 @@ interface Props {
   canUseCard?: boolean;
   /** `delivery` entitlement — same. */
   canDeliver?: boolean;
+  /** branches.sales_tax_rate as a decimal (0.0701 = 7.01%), the figure place-order taxes
+   *  with. Defaults to 0 like the server does, so a missing prop can only undercharge. */
+  salesTaxRate?: number;
+  /** branches.settings.service_fee_percent — a card-only surcharge on the food subtotal. */
+  serviceFeePercent?: number;
+  /** branches.settings.delivery_fee. A delivery rung up here carries no address, so
+   *  place-order skips quote_delivery and charges this flat figure. */
+  deliveryFeeFlat?: number;
+}
+
+// place-order's r2, character for character. The cashier collects the number on this
+// screen and the server charges its own, so the two have to land on the same cent.
+const r2 = (n: number) => Math.round(n * 100) / 100;
+
+// place-order's wire codes, in words a cashier can act on with a customer waiting. The
+// storefront keeps its own table for the same codes phrased for a diner; this one names
+// the till's remedies — the Pause switch on the kitchen board, an 86'd item — instead.
+// Order is significant: `branch_closed_at_scheduled_time` contains `branch_closed`.
+const COUNTER_ERRORS: Array<[string, string]> = [
+  ['branch_closed_at_scheduled_time', 'The branch is closed at that time.'],
+  [
+    'branch_closed',
+    'Orders are paused, or the branch is outside its opening hours. Un-pause on the kitchen board, or check the hours in Branch settings.',
+  ],
+  ['rate_limited', 'Too many orders in a row from this till. Wait a moment, then charge again.'],
+  [
+    'item_sold_out',
+    'Something in this order is marked sold out. Take it off, or put it back in stock on the kitchen board.',
+  ],
+  ['insufficient_stock', 'There is not enough stock left for one of these items.'],
+  ['item_inactive', 'Something in this order is no longer on the menu. Take it off and charge again.'],
+  [
+    'item_not_in_branch',
+    'Something in this order belongs to another branch. Clear the cart and ring it up again.',
+  ],
+  [
+    'stale_client_refresh_required',
+    'The menu changed while this order was open. Refresh the page and ring it up again.',
+  ],
+  ['payment_method_not_accepted', 'This branch does not take that payment method for this order type.'],
+  ['invalid_payment_method', 'That is not a payment method this branch accepts.'],
+  ['table_required', 'Enter a table number for a dine-in order.'],
+  ['delivery_out_of_range', 'That address is outside the delivery area.'],
+  ['empty_order', 'There is nothing in the cart.'],
+  ['invalid_channel', 'Pick dine-in, pickup or delivery, then charge again.'],
+];
+
+function describeCounterError(raw: string): string {
+  for (const [code, text] of COUNTER_ERRORS) {
+    if (raw.includes(code)) return text;
+  }
+  // placeOrder throws `place_order_failed:<status>:<body>`. A raw wire string in front of a
+  // queue is not a message, so anything unrecognised at least says what to do next.
+  if (raw.includes('place_order_failed')) {
+    return 'That order was refused. Try again, or take it in the back office.';
+  }
+  return raw;
 }
 
 export function CounterView(props: Props) {
@@ -67,6 +126,9 @@ function PosInner({
   items,
   canUseCard = false,
   canDeliver = false,
+  salesTaxRate = 0,
+  serviceFeePercent = 0,
+  deliveryFeeFlat = 0,
 }: Props) {
   const { print, kickDrawer } = usePrinter();
   const [activeCategory, setActiveCategory] = React.useState<string>('all');
@@ -81,6 +143,7 @@ function PosInner({
   const [splitN, setSplitN] = React.useState(1);
   const [parked, setParked] = React.useState<ParkedOrder[]>([]);
   const [showParked, setShowParked] = React.useState(false);
+  const [payError, setPayError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -151,9 +214,33 @@ function PosInner({
     });
   }, [items, activeCategory, search]);
 
-  const subtotal = lines.reduce((s, l) => s + l.unitPrice * l.quantity, 0);
-  const discountAmount = Math.round(subtotal * (discountPercent / 100));
-  const total = subtotal - discountAmount; // Counter — no delivery fee, no svc fee for in-store
+  const subtotal = r2(lines.reduce((s, l) => s + l.unitPrice * l.quantity, 0));
+  // A percentage of a DOLLAR amount, rounded to the cent. Rounding to whole dollars took
+  // $2.00 off a $23.40 cart at 10%, and nothing at all off anything under $6.67.
+  const discountAmount = Math.min(subtotal, r2(subtotal * (discountPercent / 100)));
+  // place-order charges a flat settings.delivery_fee when a delivery order carries no
+  // address — which is every delivery rung up at the till.
+  const deliveryFee = channel === 'delivery' ? r2(deliveryFeeFlat) : 0;
+  const taxAmount = computeSalesTax(subtotal, salesTaxRate);
+
+  // What place-order will price this cart at, per payment method. The screen used to show
+  // subtotal minus discount while the server charged tax and the card fee on top, so the
+  // cashier collected one number and the order row recorded a higher one — every till
+  // session ended short. The service fee is card-only, so Cash and Card are genuinely
+  // different amounts and both are named rather than one standing in for the other.
+  const quoteFor = React.useCallback(
+    (method: PayMethod) => {
+      const serviceFee = computeServiceFee(subtotal, serviceFeePercent, method);
+      const serverTotal = r2(subtotal + deliveryFee + serviceFee + taxAmount);
+      // The till's discount comes off the server's total rather than replacing it —
+      // replacing it silently wiped the fee and the tax the server had just charged.
+      return { serviceFee, serverTotal, total: r2(Math.max(0, serverTotal - discountAmount)) };
+    },
+    [subtotal, deliveryFee, taxAmount, serviceFeePercent, discountAmount],
+  );
+  const cashQuote = quoteFor('cash');
+  const cardQuote = quoteFor('card');
+  const total = cashQuote.total;
   const perPerson = splitN > 1 ? Math.ceil(total / splitN) : 0;
 
   const addItem = (item: MenuItem) => {
@@ -213,8 +300,9 @@ function PosInner({
 
   const handlePay = async (method: PayMethod) => {
     setSubmitting(true);
+    setPayError(null);
     const snapshotLines = lines;
-    const snapshotTotal = total;
+    const expected = quoteFor(method);
     try {
       const supabase = getBrowserClient();
       const result = await placeOrder(supabase, {
@@ -230,25 +318,74 @@ function PosInner({
         payment_method: method,
         items: lines.map((l) => ({ menu_item_id: l.menuItemId, quantity: l.quantity })),
       });
-      // place-order is the only thing that prices an order, and a card sale now carries
-      // the card-only service fee — but the response does not spell the fee out, so read
-      // back what actually landed on the row. Paper that disagrees with the till is worth
-      // one extra round trip.
+      // Everything past this point settles an order that already exists, so a failure here
+      // is never "the sale did not happen". Two kinds of failure, kept apart because they
+      // call for opposite things: `paperWrong` means the receipt would not match the row,
+      // and no paper beats wrong paper; `booksWrong` means the customer's copy is right but
+      // the ledger is not, and that has to be said out loud without stranding a customer at
+      // the counter with no receipt. Both used to be discarded and printed over.
+      const paperWrong: string[] = [];
+      let booksWrong: string | null = null;
+
+      // place-order is the only thing that prices an order, so the row is still the truth
+      // the paper has to match. It is read FIRST and used as the assertion on the quote the
+      // cashier just showed the customer — not, as before, as the first time the real total
+      // was known. Reading it after the discount write would only assert the till's own
+      // arithmetic against itself.
       const { data: priced } = await supabase
         .from('orders')
-        .select('service_fee, total')
+        .select('subtotal, delivery_fee, service_fee, tax_amount, total')
         .eq('id', result.order_id)
         .maybeSingle();
-      const serviceFee = Number(priced?.service_fee ?? 0);
-      // The counter's discount is applied here rather than by place-order, so it comes
-      // OFF the server's total instead of replacing it — replacing it silently wiped the
-      // service fee and the sales tax the server had just charged.
-      const chargedTotal =
-        Math.round((Number(priced?.total ?? result.total) - discountAmount) * 100) / 100;
-      if (discountAmount > 0) {
-        await supabase.from('orders').update({ discount_amount: discountAmount, total: chargedTotal }).eq('id', result.order_id);
+      const serverTotal = priced ? Number(priced.total) : Number(result.total);
+      const chargedTotal = r2(Math.max(0, serverTotal - discountAmount));
+      if (Math.abs(chargedTotal - expected.total) > 0.005) {
+        paperWrong.push(
+          `the till quoted ${formatCurrency(expected.total)} and the order priced ${formatCurrency(chargedTotal)}`,
+        );
       }
-      await supabase.from('orders').update({ status: 'confirmed' }).eq('id', result.order_id);
+
+      // The discount lands before the payment is settled, because record_counter_payment
+      // re-reads orders.total for the amount it records as received.
+      if (discountAmount > 0) {
+        const { error: discountErr } = await supabase
+          .from('orders')
+          .update({ discount_amount: discountAmount, total: chargedTotal })
+          .eq('id', result.order_id);
+        if (discountErr) paperWrong.push('the discount was not applied to the order');
+      }
+
+      // Cash in the drawer is money received, and nothing used to say so: place-order
+      // inserts the payment as 'pending' and the till only moved orders.status, so every
+      // cash and card sale stayed unsettled forever. The RPC re-reads the order's own
+      // total, refuses a QR transfer, and stamps who took the money — a browser is not
+      // allowed to simply declare a payment complete.
+      const { error: settleErr } = await supabase.rpc('record_counter_payment', {
+        p_order_id: result.order_id,
+      } as never);
+      if (settleErr) {
+        booksWrong =
+          'the payment was not recorded as taken — settle it from the back office before the cash-up';
+        // The RPC also promotes a card sale out of 'pending'. If it could not run, the
+        // ticket still has to reach the kitchen, so fall back to the plain status write.
+        await supabase
+          .from('orders')
+          .update({ status: 'confirmed' })
+          .eq('id', result.order_id)
+          .eq('status', 'pending');
+      }
+
+      if (paperWrong.length > 0) {
+        // No receipt and no success toast. The cart is cleared anyway because the order is
+        // real — ringing it again would charge the customer twice.
+        setPayError(
+          `Order ${result.order_number} was placed, but ${paperWrong.join(', and ')}. Sort it out in Recent orders before handing over a receipt.`,
+        );
+        clear();
+        return;
+      }
+
+      if (booksWrong) setPayError(`Order ${result.order_number} was placed, but ${booksWrong}.`);
       setSuccess(result.order_number);
       clear();
       setPayOpen(false);
@@ -264,8 +401,11 @@ function PosInner({
           quantity: l.quantity,
           unit_price: l.unitPrice,
         })),
-        subtotal: snapshotTotal,
-        serviceFee,
+        subtotal: priced ? Number(priced.subtotal) : subtotal,
+        deliveryFee: (priced ? Number(priced.delivery_fee) : deliveryFee) || undefined,
+        serviceFee: (priced ? Number(priced.service_fee) : expected.serviceFee) || undefined,
+        discount: discountAmount || undefined,
+        taxAmount: (priced ? Number(priced.tax_amount) : taxAmount) || undefined,
         total: chargedTotal,
         paymentMethod: method,
       });
@@ -275,11 +415,13 @@ function PosInner({
 
       setTimeout(() => setSuccess(null), 4000);
     } catch (err) {
-      // A cashier mid-sale needs the reason, not a raw P0001 code. Suspension
-      // makes place-order refuse every new order here, and the fix is on the
-      // Plan page, not at the till.
+      // A cashier mid-sale needs the reason, not a raw wire string in a browser alert().
+      // Suspension makes place-order refuse every new order here, and the fix for that one
+      // is on the Plan page, not at the till.
       const billing = describeBillingError(err);
-      alert(billing ? billingErrorMessage(billing) : (err as Error).message);
+      setPayError(
+        billing ? billingErrorMessage(billing) : describeCounterError((err as Error).message),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -560,15 +702,39 @@ function PosInner({
                 />
               </label>
             </div>
+            {/* Every line the server will charge, itemised. The screen showed one bare
+                number that left out tax and the card fee, so the cashier could not see
+                what the customer was actually being asked for. */}
+            <dl className="space-y-1 text-sm">
+              <TotalRow label="Subtotal" value={formatCurrency(subtotal)} />
+              {discountAmount > 0 && (
+                <TotalRow
+                  label={`Discount ${discountPercent}%`}
+                  value={`−${formatCurrency(discountAmount)}`}
+                />
+              )}
+              {deliveryFee > 0 && <TotalRow label="Delivery" value={formatCurrency(deliveryFee)} />}
+              {taxAmount > 0 && <TotalRow label="Sales tax" value={formatCurrency(taxAmount)} />}
+            </dl>
             <div className="flex items-baseline justify-between">
-              <span className="text-sm font-medium text-muted-foreground">
-                {discountAmount > 0 ? `${formatCurrency(subtotal)} − ${discountPercent}% =` : 'Total'}
+              <span className="text-sm font-medium text-muted-foreground">Total</span>
+              <span className="font-display text-3xl font-bold text-primary">
+                {formatCurrency(total)}
               </span>
-              <span className="font-display text-3xl font-bold text-primary">{formatCurrency(total)}</span>
             </div>
+            {canUseCard && cardQuote.serviceFee > 0 && (
+              <p className="text-right text-xs text-muted-foreground">
+                Card adds a {serviceFeePercent}% service fee — {formatCurrency(cardQuote.total)}
+              </p>
+            )}
             {perPerson > 0 && (
               <p className="text-right text-xs text-muted-foreground">
                 {formatCurrency(perPerson)} per person ({splitN} ways)
+              </p>
+            )}
+            {payError && (
+              <p role="alert" className="rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">
+                {payError}
               </p>
             )}
             <Button
@@ -576,7 +742,10 @@ function PosInner({
               size="xl"
               fullWidth
               disabled={lines.length === 0}
-              onClick={() => setPayOpen(true)}
+              onClick={() => {
+                setPayError(null);
+                setPayOpen(true);
+              }}
             >
               Charge {formatCurrency(total)}
             </Button>
@@ -590,14 +759,23 @@ function PosInner({
           <p className="text-center font-display text-4xl font-bold text-primary">
             {formatCurrency(total)}
           </p>
+          {payError && (
+            <p role="alert" className="rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">
+              {payError}
+            </p>
+          )}
           {/* Card is dropped, not disabled: place-order rejects it server-side
               without the card_payment entitlement, so a visible button would
-              only produce a failed sale in front of a waiting customer. */}
+              only produce a failed sale in front of a waiting customer.
+              Each button carries its own total — the card fee makes them differ, and the
+              cashier has to know which number to ask for before pressing anything. */}
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {[
-              { m: 'cash' as const, label: 'Cash', Icon: Banknote },
-              ...(canUseCard ? [{ m: 'card' as const, label: 'Card', Icon: CreditCard }] : []),
-            ].map(({ m, label, Icon }) => (
+              { m: 'cash' as const, label: 'Cash', Icon: Banknote, amount: cashQuote.total },
+              ...(canUseCard
+                ? [{ m: 'card' as const, label: 'Card', Icon: CreditCard, amount: cardQuote.total }]
+                : []),
+            ].map(({ m, label, Icon, amount }) => (
               <Button
                 key={m}
                 variant="outline"
@@ -607,7 +785,7 @@ function PosInner({
                 onClick={() => handlePay(m)}
                 leftIcon={<Icon className="h-5 w-5" />}
               >
-                {label}
+                {label} · {formatCurrency(amount)}
               </Button>
             ))}
           </div>
@@ -627,6 +805,15 @@ function PosInner({
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+function TotalRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="tabular-nums">{value}</dd>
     </div>
   );
 }

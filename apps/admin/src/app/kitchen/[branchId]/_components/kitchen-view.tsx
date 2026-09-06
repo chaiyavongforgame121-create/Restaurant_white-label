@@ -92,6 +92,26 @@ function fmtTimer(sec: number): string {
   return `${Math.floor(sec / 3600)}h ${Math.floor((sec % 3600) / 60)}m`;
 }
 
+// place-order's fallback when branches.settings carries neither key.
+const DEFAULT_LEAD_MIN = 15;
+
+/** When a ticket became the kitchen's work.
+ *
+ *  For a scheduled order that is the moment private.release_scheduled_orders() let it out —
+ *  scheduled_for − schedule_lead_time_min — not the moment the diner typed it in. A pickup
+ *  booked at 09:00 for 13:00 reached the board at 12:40 already showing 3h 40m, wearing the
+ *  urgent red skin with a pulsing critical ring, and dragged its stations into "drowning",
+ *  which made every genuinely late ticket beside it unreadable. */
+function workStartedMs(order: Order, leadMs: number): number {
+  const created = new Date(order.created_at).getTime();
+  if (!order.scheduled_for) return created;
+  const due = new Date(order.scheduled_for).getTime();
+  if (!Number.isFinite(due)) return created;
+  // Clamped to created_at: a slot booked for sooner than the lead time is released
+  // immediately, and such a ticket has been work since it was placed.
+  return Math.max(created, due - leadMs);
+}
+
 // Only the mm:ss text has to move every second. A board-wide 1s tick re-rendered every
 // card — and while the cards carried framer-motion's `layout`, re-measured and re-committed
 // a transform for each one — which is the twitch the cooks reported. Everything else here
@@ -265,6 +285,25 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
   const toastTimer = React.useRef<number | null>(null);
 
   const supa = React.useCallback(() => getBrowserClient(), []);
+
+  /* How far ahead of its slot a scheduled order is released to the board. Read from the
+     branch rather than assumed, because the same two keys decide when release_scheduled_orders()
+     fires — and a ticket's clock has to start when the cook was meant to start it. */
+  const [leadMin, setLeadMin] = React.useState(DEFAULT_LEAD_MIN);
+  React.useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const { data } = await supa()
+        .from('branches').select('settings').eq('id', branchId).maybeSingle();
+      if (cancelled) return;
+      const s = (data?.settings ?? {}) as Record<string, unknown>;
+      const prep = Number(s.prep_time_min ?? DEFAULT_LEAD_MIN);
+      const lead = Number(s.schedule_lead_time_min ?? prep);
+      if (Number.isFinite(lead) && lead >= 0) setLeadMin(lead);
+    })();
+    return () => { cancelled = true; };
+  }, [branchId, supa]);
+  const leadMs = leadMin * 60_000;
 
   /* fullscreen state mirror */
   React.useEffect(() => {
@@ -529,7 +568,7 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
   for (const o of orders) {
     if (o.held || o.awaiting_payment || !ACTIVE_STATUSES.includes(o.status)) continue;
     const lane = o.status === 'preparing' ? 'cooking' : o.status === 'ready' ? 'ready' : 'new';
-    const from = lane === 'ready' ? (readyAtRef.current[o.id] ?? mountNowRef.current) : new Date(o.created_at).getTime();
+    const from = lane === 'ready' ? (readyAtRef.current[o.id] ?? mountNowRef.current) : workStartedMs(o, leadMs);
     const tier = agingTier(safeElapsedSec(from, now), lane).tier;
     for (const it of o.order_items) {
       if (it.station && stationStat[it.station]) {
@@ -648,6 +687,7 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
                     now={now}
                     station={station}
                     readyAt={readyAtRef.current[order.id] ?? mountNowRef.current}
+                    workStartedAt={workStartedMs(order, leadMs)}
                     onAdvance={() => advance(order)}
                     onReject={() => reject(order)}
                     onRecall={() => recall(order)}
@@ -710,9 +750,9 @@ function Column({ lane, count, children }: { lane: (typeof LANES)[number]; count
 const SEARCH_TIMEOUT_SEC = 120;
 
 function OrderCard({
-  order, lane, now, station, readyAt, onAdvance, onReject, onRecall, on86, onDispatch, drivers, onAssign,
+  order, lane, now, station, readyAt, workStartedAt, onAdvance, onReject, onRecall, on86, onDispatch, drivers, onAssign,
 }: {
-  order: Order; lane: string; now: number; station: string | null; readyAt: number;
+  order: Order; lane: string; now: number; station: string | null; readyAt: number; workStartedAt: number;
   onAdvance: () => void; onReject: () => void; onRecall: () => void; on86: (name: string) => void; onDispatch: (reset?: boolean) => void | Promise<void>;
   drivers: DriverLite[]; onAssign: (deliveryId: string, driverId: string) => void | Promise<void>;
 }) {
@@ -720,7 +760,7 @@ function OrderCard({
   const [dispatching, setDispatching] = React.useState(false);
   const [dispatchError, setDispatchError] = React.useState(false);
   const [dispatchReason, setDispatchReason] = React.useState<string | null>(null);
-  const fromMs = lane === 'ready' ? readyAt : new Date(order.created_at).getTime();
+  const fromMs = lane === 'ready' ? readyAt : workStartedAt;
   const sec = safeElapsedSec(fromMs, now);
   const tg = agingTier(sec, lane);
 
@@ -817,7 +857,15 @@ function OrderCard({
             <>
               <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
               <div className="absolute right-0 top-8 z-20 w-52 overflow-hidden rounded-xl py-1 text-left text-sm" style={{ background: SUN.card, border: `1px solid ${SUN.cardBorder}`, boxShadow: '0 8px 24px rgba(0,0,0,.14)' }}>
-                {order.status === 'pending' && (
+                {/* Any ticket the pass has not started cooking can still be refused. Gating
+                    this on 'pending' alone made Reject unreachable for exactly the orders a
+                    cook most often has to refuse: payments_confirm_cash_order promotes every
+                    cash payment straight to 'confirmed', place-order inserts that row in the
+                    same request, and dine-in always pays cash — so a diner at table 4 whose
+                    dish has just run out arrived already confirmed, and the cook had to leave
+                    the board and find someone with back-office access. cancel_order permits
+                    the kitchen role and accepts a confirmed order. */}
+                {(order.status === 'pending' || order.status === 'confirmed') && (
                   <MenuRow onClick={() => { setMenuOpen(false); onReject(); }} danger><X className="h-4 w-4" />Reject order</MenuRow>
                 )}
                 {order.status === 'ready' && (

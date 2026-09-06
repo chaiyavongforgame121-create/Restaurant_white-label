@@ -109,6 +109,13 @@ export interface ReceiptInput {
   subtotal: number;
   deliveryFee?: number;
   serviceFee?: number;
+  /** Money off the food line, printed as a negative. */
+  discount?: number;
+  /** Sales tax. A US receipt is expected to itemise it, and a TOTAL that sits above the
+   *  lines with no row to explain the gap is one neither the diner nor a bookkeeper can
+   *  reconcile. Zero and undefined both omit the row. */
+  taxAmount?: number;
+  tipAmount?: number;
   total: number;
   paymentMethod: string;
   cashTendered?: number;
@@ -154,6 +161,9 @@ export function buildReceipt(input: ReceiptInput): Uint8Array {
   b.row('Subtotal', fmtCurrency(input.subtotal, currency));
   if (input.deliveryFee) b.row('Delivery', fmtCurrency(input.deliveryFee, currency));
   if (input.serviceFee) b.row('Service', fmtCurrency(input.serviceFee, currency));
+  if (input.discount) b.row('Discount', `-${fmtCurrency(input.discount, currency)}`);
+  if (input.taxAmount) b.row('Sales tax', fmtCurrency(input.taxAmount, currency));
+  if (input.tipAmount) b.row('Tip', fmtCurrency(input.tipAmount, currency));
   b.bold(true).size('wide').row('TOTAL', fmtCurrency(input.total, currency)).size('normal').bold(false);
   b.row('Paid via', input.paymentMethod);
   if (input.cashTendered !== undefined) {

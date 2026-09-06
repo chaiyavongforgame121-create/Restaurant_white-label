@@ -6,6 +6,11 @@ import { ArrowLeft, RefreshCcw, Undo2 } from 'lucide-react';
 import { formatCurrency } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Badge, Button, Card } from '@favornoms/ui';
+// The one receipt drawer in the product. It loads the order itself and prints the same
+// 80mm document the till prints after a sale, so the counter reuses it rather than growing
+// a second, drifting copy — /b/[branchId]/orders sits behind backoffice.access, which the
+// cashier who holds receipt.reprint does not have.
+import { OrderReceiptButton } from '@/app/b/[branchId]/orders/_components/order-receipt-sheet';
 
 interface OrderRow {
   id: string;
@@ -22,9 +27,21 @@ interface OrderRow {
 interface Props {
   branchId: string;
   orders: OrderRow[];
+  branchName: string;
+  branchAddress: string | null;
+  currency: string;
+  /** receipt.reprint, or the orders.view right that lets this account read the order. */
+  canPrintReceipt: boolean;
 }
 
-export function RecentOrders({ branchId, orders: initial }: Props) {
+export function RecentOrders({
+  branchId,
+  orders: initial,
+  branchName,
+  branchAddress,
+  currency,
+  canPrintReceipt,
+}: Props) {
   const [orders, setOrders] = React.useState(initial);
   const [refundingId, setRefundingId] = React.useState<string | null>(null);
 
@@ -103,8 +120,16 @@ export function RecentOrders({ branchId, orders: initial }: Props) {
               </div>
               <div className="flex items-center gap-3">
                 <span className="font-display text-xl font-bold text-primary tabular-nums">
-                  {formatCurrency(Number(o.total))}
+                  {formatCurrency(Number(o.total), currency)}
                 </span>
+                <OrderReceiptButton
+                  orderId={o.id}
+                  orderNumber={o.order_number}
+                  branchName={branchName}
+                  branchAddress={branchAddress}
+                  canPrint={canPrintReceipt}
+                  currency={currency}
+                />
                 <Button
                   variant="outline"
                   size="md"

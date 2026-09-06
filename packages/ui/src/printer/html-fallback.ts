@@ -38,6 +38,11 @@ export function printReceiptViaBrowser(input: ReceiptInput) {
     lines.push(padTo('Delivery', `${input.deliveryFee.toFixed(2)} ${currency}`, 42));
   if (input.serviceFee)
     lines.push(padTo('Service', `${input.serviceFee.toFixed(2)} ${currency}`, 42));
+  if (input.discount)
+    lines.push(padTo('Discount', `-${input.discount.toFixed(2)} ${currency}`, 42));
+  if (input.taxAmount)
+    lines.push(padTo('Sales tax', `${input.taxAmount.toFixed(2)} ${currency}`, 42));
+  if (input.tipAmount) lines.push(padTo('Tip', `${input.tipAmount.toFixed(2)} ${currency}`, 42));
   lines.push(padTo('TOTAL', `${input.total.toFixed(2)} ${currency}`, 42));
   lines.push(`Paid via ${input.paymentMethod}`);
   if (input.cashTendered !== undefined) {
