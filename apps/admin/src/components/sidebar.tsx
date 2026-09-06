@@ -40,6 +40,8 @@ type NavItem = {
   /** Hidden unless the user holds this capability. Absent = visible to anyone who
    *  already passed the backoffice.access gate in the layout. */
   capability?: string;
+  /** Hover text for an entry whose label alone does not say what the screen is for. */
+  description?: string;
 };
 type NavGroup = { title: string; feature?: FeatureKey; items: NavItem[] };
 
@@ -71,7 +73,9 @@ export function Sidebar({
   const core: NavItem[] = [
     { href: `${base}/dashboard`, label: 'Dashboard', icon: LayoutDashboard, capability: 'dashboard.view' },
     { href: `${base}/orders`, label: 'Orders', icon: Receipt, capability: 'orders.view' },
-    { href: `${base}/deliveries`, label: 'Live deliveries', icon: Bike, feature: 'delivery', capability: 'delivery.manage' },
+    // "Live deliveries" alone read as a report of past deliveries to more than one
+    // merchant; the hover says which of the two screens this is.
+    { href: `${base}/deliveries`, label: 'Live deliveries', icon: Bike, feature: 'delivery', capability: 'delivery.manage', description: 'Where your riders and live orders are right now' },
     { href: `${base}/menu`, label: 'Menu', icon: ChefHat, capability: 'menu.manage' },
     { href: `/kitchen/${branchId}`, label: 'Kitchen display', icon: Monitor, capability: 'kitchen.access' },
     { href: `/counter/${branchId}`, label: 'Counter', icon: Store, capability: 'counter.access' },
@@ -142,6 +146,7 @@ export function Sidebar({
         <Link
           href={item.href}
           onClick={() => setMobileOpen(false)}
+          title={item.description}
           className={cn(
             'focus-ring relative flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors',
             active ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-muted',
