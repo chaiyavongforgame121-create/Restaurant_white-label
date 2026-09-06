@@ -47,10 +47,10 @@ export function TipSettingsCard({ branchId, settings }: Props) {
   const save = async () => {
     setSaving(true);
     setError(null);
-    // Presets are no longer merchant-editable — checkout uses a fixed default
-    // (10/15/20/25 plus Custom and No tip) and serializeTipConfig drops them, so
-    // this write only persists the worker/house split; keep qr_ordering aligned
-    // with dine_in.
+    // Presets are not merchant-editable — checkout uses a fixed default
+    // (18/20/25 plus Custom and No tip); parseTipConfig ignores any presets on
+    // the row and serializeTipConfig never writes them, so this write only
+    // persists the worker/house split; keep qr_ordering aligned with dine_in.
     const next: TipConfig = { ...config };
     next.qr_ordering = { ...next.dine_in };
     const supabase = getBrowserClient();

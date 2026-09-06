@@ -9,6 +9,7 @@ import { useTranslations } from 'next-intl';
 import {
   computeSalesTax,
   computeServiceFee,
+  computeTipAmount,
   DELIVERY_SETTING_DEFAULTS,
   formatCurrency,
   kmToMi,
@@ -446,12 +447,9 @@ export function CheckoutView({
   // — which in turn is measured against deliveryFeeBase, never against this.
   const deliveryFee =
     promoFreeDelivery || appliedReward?.kind === 'free_delivery' ? 0 : deliveryFeeBase;
-  const tipAmount = customTip
-    ? Math.max(0, Math.round((Number(customTip) || 0) * 100) / 100)
-    : Math.round((subtotal * tipPercent)) / 100;
-  // 0 is dropped: "No tip" is its own control now, so a legacy branch row that
-  // still carries a 0 preset would otherwise render a duplicate of it.
-  const tipPresets = tipPresetsForChannel(tipConfig, channel ?? 'pickup').filter((p) => p > 0);
+  const tipAmount = computeTipAmount(subtotal, tipPercent, customTip);
+  // Product-fixed 18 / 20 / 25 — parseTipConfig ignores any presets on the row.
+  const tipPresets = tipPresetsForChannel(tipConfig, channel ?? 'pickup');
   const noTipSelected = !tipCustom && !customTip && tipPercent === 0;
   const tipWorkerPct = (tipConfig[channel ?? 'pickup'] ?? tipConfig.dine_in).workerPct;
   const promoDiscount = promoState.status === 'applied' ? promoState.amount_off : 0;
@@ -565,9 +563,10 @@ export function CheckoutView({
     })();
   }, []);
 
-  // Tip presets + driver/house/staff split are configured per branch (jsonb
-  // tip_config). place-order + the completion trigger record the authoritative
-  // split on the server; this only drives the presets and the disclosure copy.
+  // The driver/house/staff split is configured per branch (jsonb tip_config);
+  // the preset chips are product-fixed and parseTipConfig ignores any on the row.
+  // place-order + the completion trigger record the authoritative split on the
+  // server; this only drives the disclosure copy.
   React.useEffect(() => {
     const supabase = getBrowserClient();
     void supabase
@@ -1567,9 +1566,14 @@ export function CheckoutView({
             {tipWorkerPct}% goes to your {channel === 'delivery' ? 'driver' : 'kitchen & staff team'}
             {tipWorkerPct < 100 ? ' (the rest supports the restaurant).' : '.'}
           </p>
-          {/* Three columns on a 360px phone, one row from sm up — five chips
-              across a phone leaves "Custom" too narrow to read. */}
-          <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
+          {/* Exactly five choices, one grid. On a phone the three percentages
+              share the first row; Custom and "No tip" split the second, with No
+              tip tucked in the corner at the same footprint as a percent chip.
+              From sm up all five sit on one row. "No tip" is deliberately the
+              quiet one: smaller muted text, no card fill, and even when it is the
+              current choice it takes a neutral grey rather than the brand
+              highlight, so the eye lands on the percentages first. */}
+          <div className="mt-3 grid grid-cols-6 gap-2 sm:grid-cols-5">
             {tipPresets.map((p) => {
               const active = !tipCustom && !customTip && tipPercent === p;
               return (
@@ -1577,14 +1581,13 @@ export function CheckoutView({
                   key={p}
                   type="button"
                   aria-pressed={active}
-                  // Tapping the selected chip again clears it — the only way back
-                  // to "no tip" without hunting for another control.
+                  // Tapping the selected chip again clears it.
                   onClick={() => {
                     setTipCustom(false);
                     setCustomTip('');
                     setTipPercent(active ? 0 : p);
                   }}
-                  className={`focus-ring rounded-xl border px-2 py-2 text-sm font-medium transition ${
+                  className={`focus-ring col-span-2 rounded-xl border px-2 py-2 text-sm font-medium transition sm:col-span-1 ${
                     active ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-card'
                   }`}
                 >
@@ -1595,12 +1598,31 @@ export function CheckoutView({
             <button
               type="button"
               aria-pressed={tipCustom}
-              onClick={() => { setTipCustom(true); setTipPercent(0); }}
-              className={`focus-ring rounded-xl border px-2 py-2 text-sm font-medium transition ${
+              onClick={() => {
+                setTipCustom(true);
+                setTipPercent(0);
+              }}
+              className={`focus-ring col-span-4 rounded-xl border px-2 py-2 text-sm font-medium transition sm:col-span-1 ${
                 tipCustom ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-card'
               }`}
             >
               Custom
+            </button>
+            <button
+              type="button"
+              aria-pressed={noTipSelected}
+              onClick={() => {
+                setTipCustom(false);
+                setTipPercent(0);
+                setCustomTip('');
+              }}
+              className={`focus-ring col-span-2 rounded-xl border px-2 py-2 text-xs font-medium transition sm:col-span-1 ${
+                noTipSelected
+                  ? 'border-border bg-muted text-foreground'
+                  : 'border-transparent bg-transparent text-muted-foreground hover:border-border'
+              }`}
+            >
+              No tip
             </button>
           </div>
           {tipCustom && (
@@ -1613,16 +1635,6 @@ export function CheckoutView({
               className="input mt-2"
             />
           )}
-          <button
-            type="button"
-            aria-pressed={noTipSelected}
-            onClick={() => { setTipCustom(false); setTipPercent(0); setCustomTip(''); }}
-            className={`focus-ring mt-2 w-full rounded-xl border px-3 py-2 text-sm font-medium transition ${
-              noTipSelected ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-card'
-            }`}
-          >
-            No tip
-          </button>
         </Card>
 
         {rewards.length > 0 && (
