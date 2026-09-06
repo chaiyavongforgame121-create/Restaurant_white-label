@@ -4,31 +4,23 @@ import * as React from 'react';
 import Link from 'next/link';
 import { Receipt, Send, Store, TrendingUp } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
-import { Badge, Button, Card, Sheet } from '@favornoms/ui';
+import {
+  listDriverEarnings,
+  listDriverWithdrawals,
+  requestDriverWithdrawal,
+  type DriverWithdrawalRow,
+} from '@favornoms/database/queries';
+import {
+  branchSubtitle,
+  restaurantLabel,
+  summariseDriverEarnings,
+  type DriverEarningsSummary,
+  type RestaurantEarnings,
+} from '@favornoms/shared';
+import { Badge, Button, Card, EmptyState, Sheet } from '@favornoms/ui';
 import { useDriverSession } from '@/components/driver-session';
 import { driverPayoutQrPath } from './_components/payout-media';
 import { PayoutQrCard } from './_components/payout-qr-card';
-
-interface Withdrawal {
-  id: string;
-  branch_id: string;
-  amount: number;
-  status: string;
-  bank_name: string;
-  account_number: string;
-  account_name: string;
-  rejection_reason: string | null;
-  receipt_number: string | null;
-  created_at: string;
-  branch: { name: string } | null;
-}
-
-interface BranchBalance {
-  branch_id: string;
-  name: string;
-  accrued: number;
-  deliveries: number;
-}
 
 // RPC raises these as bare exception messages; anything else falls through raw.
 const RPC_ERROR_COPY: Record<string, string> = {
@@ -37,13 +29,32 @@ const RPC_ERROR_COPY: Record<string, string> = {
   nothing_to_withdraw: 'Nothing to withdraw for this restaurant yet.',
 };
 
+const EMPTY_SUMMARY: DriverEarningsSummary = {
+  restaurants: [],
+  restaurantCount: 0,
+  totals: {
+    available: 0,
+    requested: 0,
+    paid: 0,
+    lifetime: 0,
+    deliveries: 0,
+    availableDeliveries: 0,
+    base: 0,
+    distance: 0,
+    tip: 0,
+  },
+};
+
+const money = (n: number) => `$${n.toFixed(2)}`;
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
 export default function EarningsPage() {
   const { driver } = useDriverSession();
-  const [withdrawals, setWithdrawals] = React.useState<Withdrawal[]>([]);
-  const [balances, setBalances] = React.useState<BranchBalance[]>([]);
-  const [estimatedEarnings, setEstimatedEarnings] = React.useState(0);
-  const [totals, setTotals] = React.useState({ accrued: 0, paid: 0, base: 0, distance: 0, tip: 0 });
-  const [requesting, setRequesting] = React.useState<BranchBalance | null>(null);
+  const [withdrawals, setWithdrawals] = React.useState<DriverWithdrawalRow[]>([]);
+  const [summary, setSummary] = React.useState<DriverEarningsSummary>(EMPTY_SUMMARY);
+  const [loadError, setLoadError] = React.useState<string | null>(null);
+  const [requesting, setRequesting] = React.useState<RestaurantEarnings | null>(null);
   const [bankName, setBankName] = React.useState('');
   const [accountNumber, setAccountNumber] = React.useState('');
   const [accountName, setAccountName] = React.useState('');
@@ -55,62 +66,44 @@ export default function EarningsPage() {
 
   const refresh = React.useCallback(async () => {
     const supabase = getBrowserClient();
-    const { data: w } = await supabase
-      .from('driver_withdrawals')
-      .select('id, branch_id, amount, status, bank_name, account_number, account_name, rejection_reason, receipt_number, created_at, branch:branches(name)')
-      .eq('driver_id', driver.id)
-      .order('created_at', { ascending: false })
-      .limit(20);
-    setWithdrawals((w ?? []) as unknown as Withdrawal[]);
-
-    // The settlement ledger is the source of truth for what the driver is owed / was paid.
-    const { data: ledger } = await supabase
-      .from('driver_earnings_ledger')
-      .select('branch_id, base_pay, distance_pay, tip_net, total, status, branch:branches(name)')
-      .eq('driver_id', driver.id);
-    const perBranch = new Map<string, BranchBalance>();
-    const t = (ledger ?? []).reduce(
-      (a, r) => {
-        const total = Number(r.total ?? 0);
-        if (r.status === 'paid') a.paid += total;
-        else {
-          a.accrued += total;
-          const b = perBranch.get(r.branch_id) ?? {
-            branch_id: r.branch_id,
-            name: (r.branch as unknown as { name: string } | null)?.name ?? 'Restaurant',
-            accrued: 0,
-            deliveries: 0,
-          };
-          b.accrued += total;
-          b.deliveries += 1;
-          perBranch.set(r.branch_id, b);
-        }
-        a.base += Number(r.base_pay ?? 0);
-        a.distance += Number(r.distance_pay ?? 0);
-        a.tip += Number(r.tip_net ?? 0);
-        return a;
-      },
-      { accrued: 0, paid: 0, base: 0, distance: 0, tip: 0 },
-    );
-    setTotals(t);
-    setEstimatedEarnings(t.accrued + t.paid);
-    setBalances([...perBranch.values()].sort((a, b) => b.accrued - a.accrued));
+    try {
+      // The settlement ledger is the source of truth for what each restaurant owes and paid;
+      // the withdrawals list only records what has been asked for.
+      const [ledger, requests] = await Promise.all([
+        listDriverEarnings(supabase, driver.id),
+        listDriverWithdrawals(supabase, driver.id),
+      ]);
+      setSummary(summariseDriverEarnings(ledger));
+      setWithdrawals(requests);
+      setLoadError(null);
+    } catch {
+      // Whatever is already on screen stays: a read that never landed is not "you earned
+      // nothing", and a rider deciding whether to chase a restaurant must not be told it is.
+      setLoadError('Could not load your earnings just now — check your signal and reopen.');
+    }
   }, [driver.id]);
 
   React.useEffect(() => {
     void refresh();
   }, [refresh]);
 
-  const pendingBranchIds = new Set(withdrawals.filter((w) => w.status === 'pending').map((w) => w.branch_id));
+  const { restaurants, totals, restaurantCount } = summary;
+  // Below two restaurants the "all restaurants" framing is noise: there is only one pot.
+  const manyRestaurants = restaurantCount > 1;
+  const unpaid = totals.available + totals.requested;
 
-  const openRequest = (b: BranchBalance) => {
-    // Prefill bank details from the driver's most recent request, any branch.
+  const pendingBranchIds = new Set(
+    withdrawals.filter((w) => w.status === 'pending').map((w) => w.branch_id),
+  );
+
+  const openRequest = (r: RestaurantEarnings) => {
+    // Prefill bank details from the driver's most recent request, any restaurant.
     const last = withdrawals[0];
     setBankName(last?.bank_name ?? '');
     setAccountNumber(last?.account_number ?? '');
     setAccountName(last?.account_name ?? '');
     setError(null);
-    setRequesting(b);
+    setRequesting(r);
   };
 
   const submit = async () => {
@@ -118,11 +111,12 @@ export default function EarningsPage() {
     setBusy(true);
     setError(null);
     const supabase = getBrowserClient();
-    const { error: rpcErr } = await supabase.rpc('request_driver_withdrawal', {
-      p_branch_id: requesting.branch_id,
-      p_bank_name: bankName.trim(),
-      p_account_number: accountNumber.trim(),
-      p_account_name: accountName.trim(),
+    // Branch-scoped on purpose: the RPC tags only this restaurant's untagged accrued rows and
+    // pays the sum of those, so a request can never reach into another restaurant's balance.
+    const { error: rpcErr } = await requestDriverWithdrawal(supabase, requesting.branchId, {
+      bankName: bankName.trim(),
+      accountNumber: accountNumber.trim(),
+      accountName: accountName.trim(),
     });
     setBusy(false);
     if (rpcErr) {
@@ -134,79 +128,179 @@ export default function EarningsPage() {
     void refresh();
   };
 
+  const requestingSubtitle = requesting ? branchSubtitle(requesting) : null;
+
   return (
     <div className="container max-w-xl py-6">
       <header className="mb-5 px-1">
         <h1 className="font-display text-2xl font-bold">Earnings</h1>
+        {manyRestaurants && (
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Every restaurant pays you separately — each figure below says which one it is.
+          </p>
+        )}
       </header>
 
-      <Card className="mb-5 bg-gradient-warm p-5 text-white">
+      {loadError && (
+        <p role="alert" className="mb-4 rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">
+          {loadError}
+        </p>
+      )}
+
+      <Card className="mb-3 bg-gradient-warm p-5 text-white">
         <div className="flex items-center gap-3">
-          <TrendingUp className="h-6 w-6" />
-          <div>
-            <p className="text-xs uppercase tracking-wider text-white/80">Lifetime earnings</p>
-            <p className="font-display text-3xl font-bold">${estimatedEarnings.toFixed(2)}</p>
+          <TrendingUp className="h-6 w-6 shrink-0" />
+          <div className="min-w-0">
+            <p className="text-xs uppercase tracking-wider text-white/80">
+              {manyRestaurants ? 'All restaurants · lifetime' : 'Lifetime earnings'}
+            </p>
+            <p className="font-display text-3xl font-bold">{money(totals.lifetime)}</p>
+            <p className="truncate text-xs text-white/80">
+              {restaurantCount === 0
+                ? 'No deliveries yet'
+                : manyRestaurants
+                  ? `${plural(restaurantCount, 'restaurant', 'restaurants')} · ${plural(totals.deliveries, 'delivery', 'deliveries')}`
+                  : `${restaurants[0]?.restaurantName} · ${plural(totals.deliveries, 'delivery', 'deliveries')}`}
+            </p>
           </div>
         </div>
       </Card>
 
-      <div className="mb-5 grid grid-cols-2 gap-3">
+      <div className="mb-3 grid grid-cols-2 gap-3">
         <Card className="p-4">
           <p className="text-xs uppercase tracking-wider text-muted-foreground">Unpaid</p>
-          <p className="font-display text-2xl font-bold">${totals.accrued.toFixed(2)}</p>
-          <p className="mt-0.5 text-[11px] text-muted-foreground">request a payout per restaurant</p>
+          <p className="font-display text-2xl font-bold">{money(unpaid)}</p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">
+            {manyRestaurants ? 'all restaurants — withdraw one at a time' : 'waiting to be paid'}
+          </p>
         </Card>
         <Card className="p-4">
           <p className="text-xs uppercase tracking-wider text-muted-foreground">Paid</p>
-          <p className="font-display text-2xl font-bold">${totals.paid.toFixed(2)}</p>
-          <p className="mt-0.5 text-[11px] text-muted-foreground">settled by restaurants</p>
+          <p className="font-display text-2xl font-bold">{money(totals.paid)}</p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">
+            {manyRestaurants ? 'all restaurants, settled' : 'settled by the restaurant'}
+          </p>
         </Card>
       </div>
-      <Card className="mb-5 grid grid-cols-3 divide-x divide-border p-4 text-center">
-        <div><p className="text-[11px] uppercase text-muted-foreground">Base</p><p className="font-semibold">${totals.base.toFixed(2)}</p></div>
-        <div><p className="text-[11px] uppercase text-muted-foreground">Distance</p><p className="font-semibold">${totals.distance.toFixed(2)}</p></div>
-        <div><p className="text-[11px] uppercase text-muted-foreground">Tips</p><p className="font-semibold">${totals.tip.toFixed(2)}</p></div>
-      </Card>
+
+      {/* One restaurant already gets this split on its own card below — showing it twice would
+          only invite the reader to treat one of the two as somebody else's money. */}
+      {manyRestaurants && (
+        <Card className="mb-5 p-4">
+          <p className="mb-2 text-[11px] uppercase tracking-wider text-muted-foreground">
+            All restaurants
+          </p>
+          <div className="grid grid-cols-3 divide-x divide-border text-center">
+            <div>
+              <p className="text-[11px] uppercase text-muted-foreground">Base</p>
+              <p className="font-semibold">{money(totals.base)}</p>
+            </div>
+            <div>
+              <p className="text-[11px] uppercase text-muted-foreground">Distance</p>
+              <p className="font-semibold">{money(totals.distance)}</p>
+            </div>
+            <div>
+              <p className="text-[11px] uppercase text-muted-foreground">Tips</p>
+              <p className="font-semibold">{money(totals.tip)}</p>
+            </div>
+          </div>
+        </Card>
+      )}
 
       <PayoutQrCard qrPath={qrPath} onChange={setQrPath} />
 
-      <h2 className="mb-2 font-display text-lg font-semibold">Balance by restaurant</h2>
-      {balances.length === 0 ? (
-        <p className="mb-5 rounded-xl border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
-          Nothing unpaid right now — new deliveries show up here.
-        </p>
+      <h2 className="mb-2 px-1 font-display text-lg font-semibold">Balance by restaurant</h2>
+      {restaurants.length === 0 ? (
+        <EmptyState
+          className="mb-5 rounded-xl border border-dashed border-border bg-card"
+          icon={<Store className="h-6 w-6" />}
+          title="No earnings yet"
+          description="Once you deliver for a restaurant it gets its own card here, with its own balance and its own withdrawals."
+        />
       ) : (
         <ul className="mb-5 space-y-2">
-          {balances.map((b) => {
-            const pending = pendingBranchIds.has(b.branch_id);
+          {restaurants.map((r) => {
+            const pending = pendingBranchIds.has(r.branchId);
+            const subtitle = branchSubtitle(r);
+            const canRequest = !pending && r.available > 0;
             return (
-              <li key={b.branch_id}>
+              <li key={r.branchId}>
                 <Card className="p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary">
+                  <div className="flex items-start gap-3">
+                    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
                       <Store className="h-5 w-5" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-semibold">{b.name}</p>
+                      <p className="truncate font-semibold">{r.restaurantName}</p>
+                      {subtitle && (
+                        <p className="truncate text-sm text-muted-foreground">{subtitle}</p>
+                      )}
                       <p className="text-xs text-muted-foreground">
-                        {b.deliveries} {b.deliveries === 1 ? 'delivery' : 'deliveries'}
+                        {plural(r.deliveries, 'delivery', 'deliveries')}
                       </p>
                     </div>
-                    <p className="font-display text-xl font-bold text-primary">${b.accrued.toFixed(2)}</p>
+                    <div className="shrink-0 text-right">
+                      <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                        To withdraw
+                      </p>
+                      <p className="font-display text-xl font-bold text-primary">
+                        {money(r.available)}
+                      </p>
+                    </div>
                   </div>
+
+                  <div className="mt-3 grid grid-cols-3 divide-x divide-border rounded-xl bg-muted/40 py-2 text-center">
+                    <div>
+                      <p className="text-[10px] uppercase text-muted-foreground">Base</p>
+                      <p className="text-sm font-semibold">{money(r.base)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase text-muted-foreground">Distance</p>
+                      <p className="text-sm font-semibold">{money(r.distance)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase text-muted-foreground">Tips</p>
+                      <p className="text-sm font-semibold">{money(r.tip)}</p>
+                    </div>
+                  </div>
+
+                  <dl className="mt-2 flex justify-between text-xs text-muted-foreground">
+                    <div className="flex gap-1.5">
+                      <dt>Paid by this restaurant</dt>
+                      <dd className="font-semibold text-foreground">{money(r.paid)}</dd>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <dt>Lifetime</dt>
+                      <dd className="font-semibold text-foreground">{money(r.lifetime)}</dd>
+                    </div>
+                  </dl>
+
+                  {pending && (
+                    <p className="mt-2 rounded-xl bg-warning/10 px-3 py-2 text-xs text-warning">
+                      {money(r.requested)} already requested — waiting for {r.restaurantName}.
+                      {r.available > 0
+                        ? ` The ${money(r.available)} you have earned since goes into your next request.`
+                        : ' You can request again once they pay it.'}
+                    </p>
+                  )}
+
                   <Button
                     variant="gradient"
                     fullWidth
                     className="mt-3"
-                    disabled={pending}
-                    onClick={() => openRequest(b)}
+                    disabled={!canRequest}
+                    onClick={() => openRequest(r)}
                     leftIcon={<Send className="h-4 w-4" />}
                   >
-                    Request withdrawal
+                    {pending
+                      ? 'Request pending'
+                      : r.available > 0
+                        ? `Request ${money(r.available)}`
+                        : 'Nothing to withdraw yet'}
                   </Button>
-                  {pending && (
+                  {canRequest && manyRestaurants && (
                     <p className="mt-2 text-center text-xs text-muted-foreground">
-                      Requested — waiting for the restaurant
+                      Settles {r.restaurantName} only
                     </p>
                   )}
                 </Card>
@@ -216,70 +310,126 @@ export default function EarningsPage() {
         </ul>
       )}
 
-      <h2 className="mb-2 font-display text-lg font-semibold">History</h2>
+      <h2 className="mb-1 px-1 font-display text-lg font-semibold">Withdrawal requests</h2>
+      <p className="mb-2 px-1 text-xs text-muted-foreground">
+        Each request covers one restaurant&apos;s balance only.
+      </p>
       {withdrawals.length === 0 ? (
         <p className="rounded-xl border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
           No withdrawal requests yet.
         </p>
       ) : (
         <ul className="space-y-2">
-          {withdrawals.map((w) => (
-            <li key={w.id}>
-              <Card className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-display text-lg font-bold">${Number(w.amount).toFixed(2)}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {w.branch?.name ?? 'Restaurant'} · {w.bank_name} · ··{w.account_number.slice(-4)} · {new Date(w.created_at).toLocaleDateString()}
-                    </p>
+          {withdrawals.map((w) => {
+            const label = restaurantLabel(w.branch);
+            const subtitle = branchSubtitle(label);
+            return (
+              <li key={w.id}>
+                <Card className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold">{label.restaurantName}</p>
+                      {subtitle && (
+                        <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
+                      )}
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {w.bank_name} · ··{w.account_number.slice(-4)} ·{' '}
+                        {new Date(w.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="font-display text-lg font-bold">{money(Number(w.amount))}</p>
+                      <Badge
+                        variant={
+                          w.status === 'paid'
+                            ? 'success'
+                            : w.status === 'rejected'
+                              ? 'danger'
+                              : 'warning'
+                        }
+                      >
+                        {w.status}
+                      </Badge>
+                    </div>
                   </div>
-                  <Badge variant={w.status === 'paid' ? 'success' : w.status === 'rejected' ? 'danger' : 'warning'}>
-                    {w.status}
-                  </Badge>
-                </div>
-                {w.status === 'rejected' && w.rejection_reason && (
-                  <p className="mt-2 rounded-xl bg-danger/10 px-3 py-2 text-xs text-danger">{w.rejection_reason}</p>
-                )}
-                {w.status === 'paid' && (
-                  <Link
-                    href={`/app/earnings/receipt/${w.id}`}
-                    className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-primary"
-                  >
-                    <Receipt className="h-4 w-4" /> View receipt
-                  </Link>
-                )}
-              </Card>
-            </li>
-          ))}
+                  {w.status === 'rejected' && w.rejection_reason && (
+                    <p className="mt-2 rounded-xl bg-danger/10 px-3 py-2 text-xs text-danger">
+                      {w.rejection_reason}
+                    </p>
+                  )}
+                  {w.status === 'paid' && (
+                    <Link
+                      href={`/app/earnings/receipt/${w.id}`}
+                      className="focus-ring mt-2 inline-flex items-center gap-1.5 rounded-lg text-sm font-semibold text-primary"
+                    >
+                      <Receipt className="h-4 w-4" /> View receipt
+                    </Link>
+                  )}
+                </Card>
+              </li>
+            );
+          })}
         </ul>
       )}
 
       <Sheet open={requesting !== null} onClose={() => setRequesting(null)} title="Request withdrawal">
         {requesting && (
           <div className="space-y-3 px-5 pb-8 pt-1">
-            <Card className="flex items-center justify-between bg-muted/40 p-4">
-              <div>
-                <p className="font-semibold">{requesting.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {requesting.deliveries} {requesting.deliveries === 1 ? 'delivery' : 'deliveries'} · final amount confirmed by the restaurant
+            <Card className="bg-muted/40 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate font-semibold">{requesting.restaurantName}</p>
+                  {requestingSubtitle && (
+                    <p className="truncate text-xs text-muted-foreground">{requestingSubtitle}</p>
+                  )}
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {plural(requesting.availableDeliveries, 'delivery', 'deliveries')} · final
+                    amount confirmed by the restaurant
+                  </p>
+                </div>
+                <p className="shrink-0 font-display text-2xl font-bold text-primary">
+                  {money(requesting.available)}
                 </p>
               </div>
-              <p className="font-display text-2xl font-bold text-primary">${requesting.accrued.toFixed(2)}</p>
+              <p className="mt-2 border-t border-dashed border-border pt-2 text-xs text-muted-foreground">
+                This request settles {requesting.restaurantName} only — anything your other
+                restaurants owe you stays where it is.
+              </p>
             </Card>
             <PayoutQrCard qrPath={qrPath} onChange={setQrPath} compact />
             <label className="block">
               <span className="mb-1 block text-sm font-medium">Bank</span>
-              <input value={bankName} onChange={(e) => setBankName(e.target.value)} className="input" placeholder="Chase / Bank of America / etc." maxLength={80} />
+              <input
+                value={bankName}
+                onChange={(e) => setBankName(e.target.value)}
+                className="input"
+                placeholder="Chase / Bank of America / etc."
+                maxLength={80}
+              />
             </label>
             <label className="block">
               <span className="mb-1 block text-sm font-medium">Account number</span>
-              <input value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} className="input" maxLength={34} />
+              <input
+                value={accountNumber}
+                onChange={(e) => setAccountNumber(e.target.value)}
+                className="input"
+                maxLength={34}
+              />
             </label>
             <label className="block">
               <span className="mb-1 block text-sm font-medium">Account holder name</span>
-              <input value={accountName} onChange={(e) => setAccountName(e.target.value)} className="input" maxLength={80} />
+              <input
+                value={accountName}
+                onChange={(e) => setAccountName(e.target.value)}
+                className="input"
+                maxLength={80}
+              />
             </label>
-            {error && <p className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
+            {error && (
+              <p role="alert" className="rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">
+                {error}
+              </p>
+            )}
             <Button
               variant="gradient"
               fullWidth
@@ -287,15 +437,27 @@ export default function EarningsPage() {
               loading={busy}
               disabled={!bankName.trim() || !accountNumber.trim() || !accountName.trim()}
             >
-              Submit request
+              Request {money(requesting.available)}
             </Button>
           </div>
         )}
       </Sheet>
 
       <style jsx>{`
-        .input { width: 100%; height: 48px; padding: 0 1rem; font-size: 16px; border-radius: 0.875rem; border: 1px solid hsl(var(--border)); background: hsl(var(--background)); }
-        .input:focus-visible { outline: none; border-color: hsl(var(--primary)); box-shadow: 0 0 0 3px hsl(var(--primary) / 0.18); }
+        .input {
+          width: 100%;
+          height: 48px;
+          padding: 0 1rem;
+          font-size: 16px;
+          border-radius: 0.875rem;
+          border: 1px solid hsl(var(--border));
+          background: hsl(var(--background));
+        }
+        .input:focus-visible {
+          outline: none;
+          border-color: hsl(var(--primary));
+          box-shadow: 0 0 0 3px hsl(var(--primary) / 0.18);
+        }
       `}</style>
     </div>
   );
