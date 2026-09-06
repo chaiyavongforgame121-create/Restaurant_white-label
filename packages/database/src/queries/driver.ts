@@ -33,24 +33,38 @@ export interface BranchAvailability {
   mode: 'manual' | 'scheduled';
 }
 
-/** Fetch the drivers row that belongs to the currently-signed-in user. */
+/**
+ * Fetch the drivers row that belongs to the currently-signed-in user.
+ *
+ * Null means one thing only: this user has no rider row. A failed read throws, the same way
+ * `getActiveDelivery` below does and for the same reason — the driver app used to sign a rider
+ * out on that null, so a PostgREST 5xx, an expired JWT or a dead spot ejected them from the
+ * installed app as convincingly as a missing profile did.
+ *
+ * Pass `userId` when the caller has already resolved it; otherwise this makes a live
+ * /auth/v1/user round trip, which is one more thing to fail in a tunnel.
+ */
 export async function getMyDriver(
   supabase: FavornomsClient,
+  userId?: string,
 ): Promise<DriverWithApproval | null> {
-  const { data: userData } = await supabase.auth.getUser();
-  const userId = userData.user?.id;
-  if (!userId) return null;
+  let id = userId;
+  if (!id) {
+    const { data: userData } = await supabase.auth.getUser();
+    id = userData.user?.id;
+  }
+  if (!id) return null;
 
   const { data, error } = await supabase
     .from('drivers')
     .select(
       `*, approvals:driver_approvals(id, status, branch_id, applied_at, reviewed_at, notes, branch:branches(id, name, restaurant:restaurants(name)))`,
     )
-    .eq('user_id', userId)
+    .eq('user_id', id)
     .maybeSingle();
 
-  if (error || !data) return null;
-  return data as unknown as DriverWithApproval;
+  if (error) throw new Error('driver_read_failed:' + error.message);
+  return (data as unknown as DriverWithApproval | null) ?? null;
 }
 
 /**

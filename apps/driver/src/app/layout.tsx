@@ -15,7 +15,15 @@ export const metadata: Metadata = {
   description: 'Driver app for the Favornoms food delivery platform.',
   manifest: '/manifest.webmanifest',
   applicationName: 'Favornoms Driver',
-  appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'Favornoms Driver' },
+  // 'black-translucent' hands the status-bar strip to the web view, and almost nothing in the
+  // app compensated: installed on an iPhone, the Navigate button on /app/active, every screen
+  // heading and the offline banner all sat under the Dynamic Island. 'default' makes iOS
+  // reserve the strip. viewportFit 'cover' below still matters — it is what pb-safe reads for
+  // the home indicator at the bottom.
+  appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Favornoms Driver' },
+  // Next only emits the apple- prefixed form, which Chrome has deprecated and warns about on
+  // every load.
+  other: { 'mobile-web-app-capable': 'yes' },
   icons: {
     icon: [
       { url: '/icon.svg', type: 'image/svg+xml' },
@@ -51,7 +59,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const locale = await getLocale();
   const messages = await getMessages();
   return (
-    <html lang={locale} className={`${inter.variable} ${notoThai.variable}`} suppressHydrationWarning>
+    <html
+      lang={locale}
+      className={`${inter.variable} ${notoThai.variable}`}
+      suppressHydrationWarning
+    >
       <head>
         <script dangerouslySetInnerHTML={{ __html: CAPTURE_INSTALL_PROMPT }} />
       </head>
@@ -61,7 +73,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <ConnectionBanner />
             <ServiceWorkerRegistrar />
             {children}
-            {/* Root, not app/layout: a first-time rider lands on /login. */}
+            {/* Mounted at the root rather than inside the app shell; which routes it stays
+                quiet on is its own decision (NO_PROMPT_ROUTES). */}
             <DriverInstallPrompt />
           </ThemeProvider>
         </NextIntlClientProvider>

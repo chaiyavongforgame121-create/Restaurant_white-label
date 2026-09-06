@@ -331,7 +331,15 @@ async function sendPush(
     title: renderTitle(row.template, row.variables),
     body: renderTemplate(row.template, row.variables),
     url: renderUrl(row.template, row.variables),
-    tag: row.template,
+    // One tag per template meant every dispatch offer carried the constant tag 'new_dispatch',
+    // and a notification whose tag is already on the shade REPLACES it in silence — no sound,
+    // no vibration, no banner. Offer #2 arrived invisibly while offer #1 was still showing, and
+    // the rider lost the work. Give each offer its own tag; order-status templates keep
+    // collapsing onto one, which is what you want there.
+    tag:
+      row.template === 'new_dispatch' && typeof row.variables.delivery_id === 'string'
+        ? `new_dispatch:${row.variables.delivery_id}`
+        : row.template,
   });
 
   let okCount = 0;

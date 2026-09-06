@@ -23,12 +23,34 @@ export function ServiceWorkerRegistrar() {
         .catch(() => undefined);
     };
 
-    // Reload once when a new worker takes control so the page stops running assets
-    // fetched by the old one.
-    const onControllerChange = () => {
+    // Reload once when a new worker REPLACES the one controlling this page, so the page stops
+    // running assets fetched by the old one.
+    //
+    // clients.claim() also fires controllerchange the first time a worker takes an
+    // uncontrolled page, so the unguarded version reloaded every single first launch —
+    // wiping whatever the rider had typed into the login form on a slow connection. And on a
+    // redeploy it reloaded without asking, which mid-run means an in-flight proof-of-delivery
+    // upload, a half-typed cancellation reason or an unsent chat message. Wait until the rider
+    // is off the active-delivery screen, or has put the app in the background.
+    const hadController = !!navigator.serviceWorker.controller;
+    const reloadNow = () => {
       if (reloaded) return;
       reloaded = true;
       window.location.reload();
+    };
+    const onControllerChange = () => {
+      if (reloaded || !hadController) return;
+      const midRun = window.location.pathname.startsWith('/app/active');
+      if (midRun && document.visibilityState === 'visible') {
+        const whenHidden = () => {
+          if (document.visibilityState !== 'hidden') return;
+          document.removeEventListener('visibilitychange', whenHidden);
+          reloadNow();
+        };
+        document.addEventListener('visibilitychange', whenHidden);
+        return;
+      }
+      reloadNow();
     };
     navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
 

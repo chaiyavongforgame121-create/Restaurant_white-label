@@ -14,23 +14,78 @@ interface DriverSessionContextValue {
 const DriverSessionContext = React.createContext<DriverSessionContextValue | null>(null);
 
 /**
- * Provides the signed-in driver record + auth gate. If no session, redirects to /login.
- * Children only mount when a valid driver is loaded.
+ * Why the session check could not reach a conclusion. 'no_profile' is a real answer from the
+ * server; the other two mean we never got one, which is not the same thing and must never be
+ * treated as a sign-out.
+ */
+type SessionProblem = 'offline' | 'unreachable' | 'no_profile';
+
+/**
+ * A round trip that never completed is not a sign-out. supabase-js hands back an
+ * AuthRetryableFetchError (HTTP status 0) when the request never reached the server, which is
+ * exactly what a tunnel, a basement car park or a dead cell looks like. Only an answered 401
+ * means the session is actually gone.
+ */
+function isRetryableAuthFailure(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const e = error as { name?: string; status?: number; message?: string };
+  if (e.name === 'AuthRetryableFetchError') return true;
+  if (e.status === 0) return true;
+  return /fetch|network|timeout|timed out/i.test(e.message ?? '');
+}
+
+/**
+ * Provides the signed-in driver record + auth gate. If there is genuinely no session, redirects
+ * to /login. Children only mount when a valid driver is loaded.
+ *
+ * The installed app has no address bar and no back button, so this component decides whether a
+ * rider can use their phone at all. Two of its old answers were dead ends:
+ *
+ *  - `getUser()` failing offline returned `{ user: null }`, which sent the rider to /login —
+ *    a screen the worker did not precache, behind a fallback that was a redirect. Riding into
+ *    a tunnel and cold-opening the app produced Chrome's error page inside a chromeless
+ *    window. A failed request now keeps the locally stored session and says so.
+ *  - A single failed `drivers` read looked identical to "this user has no rider row", so the
+ *    provider called auth.signOut() *during render* (double-invoked under StrictMode) and
+ *    returned null — a blank white screen, recoverable only by force-quitting and signing in
+ *    again. The read now throws when it fails, nothing signs out except a tap, and every
+ *    failure renders something with a way forward.
  */
 export function DriverSessionProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [driver, setDriver] = React.useState<DriverWithApproval | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const [problem, setProblem] = React.useState<SessionProblem | null>(null);
 
   const load = React.useCallback(async () => {
     const supabase = getBrowserClient();
-    const { data: userData } = await supabase.auth.getUser();
-    if (!userData.user) {
+    // A live /auth/v1/user round trip, not a local read.
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    const userId = userData.user?.id ?? null;
+
+    if (!userId) {
+      // getSession() reads the stored token without touching the network. Holding one and
+      // failing to reach the server means "no signal", never "signed out".
+      const { data: sessionData } = await supabase.auth.getSession();
+      const unreachable = !navigator.onLine || isRetryableAuthFailure(userError);
+      if (sessionData.session && unreachable) {
+        setProblem(navigator.onLine ? 'unreachable' : 'offline');
+        setLoading(false);
+        return;
+      }
       router.replace('/login');
       return;
     }
-    const d = await getMyDriver(supabase);
-    setDriver(d);
+
+    try {
+      const d = await getMyDriver(supabase, userId);
+      setDriver(d);
+      setProblem(d ? null : 'no_profile');
+    } catch {
+      // Keep whatever we already have on screen — a rider mid-delivery loses nothing to one
+      // failed read — and let the retry below settle it.
+      setProblem(navigator.onLine ? 'unreachable' : 'offline');
+    }
     setLoading(false);
   }, [router]);
 
@@ -46,22 +101,63 @@ export function DriverSessionProvider({ children }: { children: React.ReactNode 
         void load();
       }
     });
-    return () => sub.subscription.unsubscribe();
+    // Coming back into signal should not cost the rider a tap.
+    const onOnline = () => void load();
+    window.addEventListener('online', onOnline);
+    return () => {
+      sub.subscription.unsubscribe();
+      window.removeEventListener('online', onOnline);
+    };
   }, [load, router]);
 
-  if (loading) {
+  const retry = () => {
+    setLoading(true);
+    void load();
+  };
+
+  const signOut = () => {
+    void getBrowserClient().auth.signOut();
+    router.replace('/login');
+  };
+
+  if (loading && !driver) {
     return (
-      <div className="grid min-h-dynamic-screen place-items-center bg-background">
-        <div className="text-sm text-muted-foreground">Loading…</div>
+      <div className="min-h-dynamic-screen bg-background grid place-items-center">
+        <div className="text-muted-foreground text-sm">Loading…</div>
       </div>
     );
   }
 
   if (!driver) {
-    // Edge case: signed in but no drivers row. handle_new_user trigger should
-    // have created one; if not, sign out and force re-onboarding.
-    void getBrowserClient().auth.signOut();
-    return null;
+    const noProfile = problem === 'no_profile';
+    return (
+      <div className="min-h-dynamic-screen bg-background grid place-items-center px-6 text-center">
+        <div>
+          <p className="font-display text-lg font-semibold">
+            {noProfile ? 'No rider profile yet' : 'Can’t reach Favornoms'}
+          </p>
+          <p className="text-muted-foreground mt-1 text-sm">
+            {noProfile
+              ? 'This account is signed in but has no rider profile. Sign out and sign in again, or ask your restaurant to add you.'
+              : problem === 'offline'
+                ? 'You appear to be offline. Your deliveries are safe — try again once you have signal.'
+                : 'We couldn’t load your rider profile. Please try again.'}
+          </p>
+          <button
+            onClick={retry}
+            className="focus-ring bg-primary text-primary-foreground mt-5 inline-flex h-12 items-center rounded-2xl px-5 text-sm font-semibold"
+          >
+            Try again
+          </button>
+          <button
+            onClick={signOut}
+            className="focus-ring text-muted-foreground mt-3 block h-auto min-h-0 w-full text-xs underline"
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (

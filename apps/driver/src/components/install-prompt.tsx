@@ -9,8 +9,12 @@ import { useTranslations } from 'next-intl';
 /** Session-scoped: quiet for the rest of this shift, offered again next sign-in. */
 const DISMISS_KEY = 'driver_a2hs_dismissed';
 const SHOW_DELAY_MS = 2000;
-/** Never interrupt a live run — the rider is riding. */
-const NO_PROMPT_ROUTES = /^\/app\/active/;
+/**
+ * Never interrupt a live run — the rider is riding. Never offer on /login either: an iOS
+ * home-screen app gets its own cookie jar, so a rider who installs from the login screen taps
+ * the shiny new icon and lands straight back on a login screen. Offer it once they are in.
+ */
+const NO_PROMPT_ROUTES = /^\/(?:app\/active|login)/;
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -52,7 +56,18 @@ export function useInstallAvailability(): InstallAvailability {
     );
 
     const ua = navigator.userAgent;
-    setIsIosSafari(/iPhone|iPad|iPod/i.test(ua) && /Safari/i.test(ua) && !/CriOS|FxiOS/i.test(ua));
+    // iPadOS 13+ Safari reports a "Macintosh; Intel Mac OS X" UA, so the old iPhone|iPad|iPod
+    // test never matched a real iPad. Touch points are what separates one from a Mac.
+    const isIosDevice =
+      /iPhone|iPod/i.test(ua) || (/Macintosh/i.test(ua) && navigator.maxTouchPoints > 1);
+    // The LINE, Facebook and Instagram in-app browsers all carry "Safari" in the UA and none of
+    // them has an Add to Home Screen action. Telling a rider who opened the link from LINE —
+    // which is how most Thai riders will open it — to "tap Share in Safari" is worse than
+    // saying nothing.
+    const inAppBrowser = /FBAN|FBAV|Instagram|Line\/|MicroMessenger|Twitter/i.test(ua);
+    setIsIosSafari(
+      isIosDevice && /Safari/i.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS/i.test(ua) && !inAppBrowser,
+    );
 
     if (window.__bipEvent) {
       deferred.current = window.__bipEvent;
@@ -136,9 +151,10 @@ export function DriverInstallPrompt() {
     dismiss();
   };
 
-  // Clear the tab bar (68px + pb-safe) on /app/*; /login has no tab bar. Same
-  // offset the apply screen's floating notice uses.
-  const bottom = pathname?.startsWith('/app') ? 'bottom-24' : 'bottom-4';
+  // Clear the tab bar (68px + pb-safe) on /app/*, and the "turn on alerts" strip that
+  // <PushSubscriber> parks at bottom-24 — on a first run both are offered at once and two
+  // stacked cards beat two overlapping ones. Nothing floats at the bottom off /app/*.
+  const bottom = pathname?.startsWith('/app') ? 'bottom-40' : 'bottom-4';
 
   return (
     <AnimatePresence>
