@@ -1,4 +1,4 @@
-import { updateSession } from '@favornoms/database/middleware';
+import { updateSession, PATHNAME_HEADER } from '@favornoms/database/middleware';
 import { getSupabaseEnv } from '@favornoms/database/env';
 import { NextResponse, type NextRequest } from 'next/server';
 
@@ -21,19 +21,39 @@ export async function middleware(request: NextRequest) {
   // Apex/dev hosts pass through to the regular /r/[restaurant]/[branch] routing.
   // Static and Next internals are excluded by the matcher below. /auth/ is exempt too:
   // the OAuth callback is a fixed, tenant-less path on every host.
-  if (
-    host && !APEX_HOSTS.has(host)
-    && !path.startsWith('/r/') && !path.startsWith('/api/') && !path.startsWith('/auth/')
-  ) {
-    const resolved = await resolveDomain(host);
-    if (resolved && resolved.branch) {
-      const url = request.nextUrl.clone();
-      url.pathname = `/r/${resolved.restaurant}/${resolved.branch}${path === '/' ? '' : path}`;
-      return NextResponse.rewrite(url);
-    }
+  const isTenantHost =
+    !!host && !APEX_HOSTS.has(host)
+    && !path.startsWith('/r/') && !path.startsWith('/api/') && !path.startsWith('/auth/');
+
+  // The session refresh has to happen on a merchant's own domain too. Returning the rewrite
+  // on its own skipped updateSession entirely there, so an access token that expired mid-visit
+  // was never renewed: getServerClient() cannot write cookies from a server component, and a
+  // refresh token re-spent on every render eventually trips GoTrue's reuse detection and
+  // revokes the session outright. A diner on order.myrestaurant.com then saw "no orders" for
+  // orders they had just placed, while the same page on the apex host worked.
+  //
+  // The two hops do not depend on each other, so they run together rather than in series —
+  // a custom domain must not pay for the domain lookup and the token refresh one after the
+  // other on every request.
+  const [sessionResponse, resolved] = await Promise.all([
+    updateSession(request),
+    isTenantHost ? resolveDomain(host) : Promise.resolve(null),
+  ]);
+
+  if (resolved && resolved.branch) {
+    const url = request.nextUrl.clone();
+    url.pathname = `/r/${resolved.restaurant}/${resolved.branch}${path === '/' ? '' : path}`;
+    // updateSession writes any refreshed token back onto request.cookies, so rebuilding the
+    // request headers here hands the fresh access token to this render; carrying its
+    // Set-Cookie headers across is what stores that token in the browser.
+    const headers = new Headers(request.headers);
+    headers.set(PATHNAME_HEADER, path);
+    const rewrite = NextResponse.rewrite(url, { request: { headers } });
+    for (const cookie of sessionResponse.cookies.getAll()) rewrite.cookies.set(cookie);
+    return rewrite;
   }
 
-  return updateSession(request);
+  return sessionResponse;
 }
 
 async function resolveDomain(host: string): Promise<{ restaurant: string; branch: string | null } | null> {

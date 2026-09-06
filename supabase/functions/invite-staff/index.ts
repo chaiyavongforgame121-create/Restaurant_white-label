@@ -21,6 +21,18 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
+// This is called straight from the browser (staff-view.tsx -> queries/staff.ts inviteStaff)
+// cross-origin to <ref>.supabase.co with a JSON content type, which makes the request
+// preflighted. Without an OPTIONS branch the preflight got a bare 405 with no
+// Access-Control-* headers, so the browser blocked the POST before it was ever sent and the
+// owner saw a raw "Failed to fetch" — no staff row, no email, no second user on the account.
+// Every other browser-facing function in this project carries the same block.
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 // Deliberately NOT defaulted to localhost. It was, and a project that never set the secret
@@ -52,7 +64,8 @@ interface Body {
 }
 
 Deno.serve(async (req) => {
-  if (req.method !== 'POST') return new Response('method_not_allowed', { status: 405 });
+  if (req.method === 'OPTIONS') return new Response(null, { headers: CORS });
+  if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
 
   if (!PUBLIC_ADMIN_URL) {
     return json(
@@ -207,6 +220,6 @@ Deno.serve(async (req) => {
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { ...CORS, 'Content-Type': 'application/json' },
   });
 }

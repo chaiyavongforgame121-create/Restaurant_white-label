@@ -10,6 +10,13 @@ import { Button, Card } from '@favornoms/ui';
 const slugify = (s: string) =>
   s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 64);
 
+// A slug is the tenant's public web address, so an empty one is not a cosmetic slip: it
+// reaches create_restaurant_with_branch and comes back as a raw Postgres message under the
+// Launch button. slugify() already forces the shape as you type, but it happily reduces a
+// name made only of punctuation (or a cleared field) to '', which is what has to be caught.
+const SLUG_HINT = 'Letters and numbers only — this becomes part of your web address.';
+const isUsableSlug = (s: string) => s.length > 0;
+
 export function OnboardingWizard() {
   const router = useRouter();
   const [step, setStep] = React.useState<0 | 1 | 2>(0);
@@ -28,6 +35,14 @@ export function OnboardingWizard() {
   }, [restaurantName, restaurantSlug]);
 
   const create = async () => {
+    // Step 2 has no slug fields of its own, so a slug can only be empty here if someone
+    // stepped back and cleared one. Cheap to re-check, and it keeps the RPC from being the
+    // thing that discovers it.
+    if (!isUsableSlug(restaurantSlug) || !isUsableSlug(branchSlug)) {
+      setStep(isUsableSlug(restaurantSlug) ? 1 : 0);
+      setError('Give your restaurant and branch a web address before launching.');
+      return;
+    }
     setBusy(true);
     setError(null);
     const supabase = getBrowserClient();
@@ -51,17 +66,39 @@ export function OnboardingWizard() {
       // opens the 14-day trial. This arm is for an owner adding a *second*
       // restaurant on a package that has no seat left for it.
       const billing = describeBillingError(rpcErr);
+      // A taken slug is the one failure a new owner can actually fix, and it is likelier
+      // than any of the above: two restaurants called Thai Garden slugify identically. Left
+      // as rpcErr.message it read 'duplicate key value violates unique constraint
+      // "restaurants_slug_key"' on the very first screen of the product.
+      const takenField = rpcErr.code === '23505'
+        ? /branch/i.test(`${rpcErr.message} ${rpcErr.details ?? ''}`)
+          ? 'branch'
+          : 'restaurant'
+        : null;
       setError(
         billing?.kind === 'seats'
           ? `You are using all ${billing.limit} of your branch seats. Add a seat on the Plan page first.`
           : billing?.kind === 'inactive'
             ? 'Your subscription is not active. Choose a package before adding another restaurant.'
-            : rpcErr.message,
+            : takenField
+              ? `That ${takenField} web address is already taken. Go back and pick another one.`
+              : rpcErr.message,
+      );
+      if (takenField) setStep(takenField === 'branch' ? 1 : 0);
+      return;
+    }
+    // The RPC answering without a branch_id used to fall off the end of this function:
+    // no error, no spinner, no navigation, and an owner left pressing Launch on a
+    // restaurant that may well have been created.
+    const r = data as { branch_id?: string } | null;
+    if (!r?.branch_id) {
+      setError(
+        'Your restaurant may have been created, but we could not open it. Sign in again to ' +
+          'check before trying a second time.',
       );
       return;
     }
-    const r = data as { branch_id?: string } | null;
-    if (r?.branch_id) router.push(`/b/${r.branch_id}/dashboard`);
+    router.push(`/b/${r.branch_id}/dashboard`);
   };
 
   return (
@@ -84,7 +121,10 @@ export function OnboardingWizard() {
             <Field label="Restaurant name">
               <input value={restaurantName} onChange={(e) => setRestaurantName(e.target.value)} className="input" placeholder="Coastal Grill" autoFocus />
             </Field>
-            <Field label="URL slug (becomes /r/your-slug/…)">
+            <Field
+              label="URL slug (becomes /r/your-slug/…)"
+              hint={restaurantName && !isUsableSlug(restaurantSlug) ? SLUG_HINT : null}
+            >
               <input value={restaurantSlug} onChange={(e) => setRestaurantSlug(slugify(e.target.value))} className="input font-mono" placeholder="somtam-zab" />
             </Field>
           </div>
@@ -95,7 +135,10 @@ export function OnboardingWizard() {
             <Field label="Branch name">
               <input value={branchName} onChange={(e) => setBranchName(e.target.value)} className="input" placeholder="Sukhumvit branch" />
             </Field>
-            <Field label="Branch URL slug">
+            <Field
+              label="Branch URL slug"
+              hint={branchName && !isUsableSlug(branchSlug) ? SLUG_HINT : null}
+            >
               <input value={branchSlug} onChange={(e) => setBranchSlug(slugify(e.target.value))} className="input font-mono" placeholder="sukhumvit" />
             </Field>
             <Field label="Address (optional)">
@@ -124,7 +167,11 @@ export function OnboardingWizard() {
           </div>
         )}
 
-        {error && <p className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
+        {error && (
+          <p role="alert" className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {error}
+          </p>
+        )}
 
         <div className="flex justify-between">
           {step > 0 ? (
@@ -134,7 +181,11 @@ export function OnboardingWizard() {
             <Button
               variant="gradient"
               onClick={() => setStep((s) => (s + 1) as 0 | 1 | 2)}
-              disabled={step === 0 ? !restaurantName : !branchName}
+              disabled={
+                step === 0
+                  ? !restaurantName || !isUsableSlug(restaurantSlug)
+                  : !branchName || !isUsableSlug(branchSlug)
+              }
               rightIcon={<ChevronRight className="h-4 w-4" />}
             >
               Continue
@@ -155,6 +206,12 @@ export function OnboardingWizard() {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <label className="block"><span className="mb-1 block text-sm font-medium">{label}</span>{children}</label>;
+function Field({ label, hint, children }: { label: string; hint?: string | null; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-sm font-medium">{label}</span>
+      {children}
+      {hint && <span className="mt-1 block text-xs text-muted-foreground">{hint}</span>}
+    </label>
+  );
 }
