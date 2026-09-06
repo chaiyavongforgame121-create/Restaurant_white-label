@@ -10,6 +10,7 @@ import { Button, Card, EmptyState } from '@favornoms/ui';
 import { DeliveryMap, fetchRoute, hasMapboxToken, haversineKm } from '@favornoms/maps';
 import { getBrowserClient } from '@favornoms/database/client';
 import { useDelivery, type ActiveDeliveryUI } from '@/components/delivery-provider';
+import { useDriver } from '@/store/driver';
 import {
   cancelDelivery,
   failDelivery,
@@ -118,7 +119,12 @@ export function ActiveDeliveryView() {
   const { active, progress, markArriving } = useDelivery();
   const [advancing, setAdvancing] = React.useState(false);
   const [driverPos, setDriverPos] = React.useState<{ lat: number; lng: number } | null>(null);
-  const [geoDenied, setGeoDenied] = React.useState(false);
+  const [geoWatchDenied, setGeoWatchDenied] = React.useState(false);
+  // The location ping is the thing dispatch and the customer's map depend on, and it lives
+  // in the app shell. Its verdict and this screen's own watch used to disagree — one screen
+  // said location was off while the other said nothing at all — so read both.
+  const gps = useDriver((s) => s.gps);
+  const geoDenied = geoWatchDenied || gps === 'denied' || gps === 'insecure';
   const [route, setRoute] = React.useState<[number, number][] | null>(null);
   const [completed, setCompleted] = React.useState<{ earnings: number; orderNumber: string } | null>(null);
   const [advanceError, setAdvanceError] = React.useState<string | null>(null);
@@ -163,10 +169,10 @@ export function ActiveDeliveryView() {
     const id = navigator.geolocation.watchPosition(
       (pos) => {
         setDriverPos({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        setGeoDenied(false);
+        setGeoWatchDenied(false);
       },
       (err) => {
-        if (err.code === err.PERMISSION_DENIED) setGeoDenied(true);
+        if (err.code === err.PERMISSION_DENIED) setGeoWatchDenied(true);
       },
       // Was 15s. This position drives the rider's own map marker and the arrival distance
       // check, so a fix that may be a quarter-minute stale is too old for both — the map
@@ -469,11 +475,24 @@ export function ActiveDeliveryView() {
           </motion.div>
 
           <div className="space-y-4 p-5">
-            {geoDenied && (
-              <div className="rounded-2xl border border-warning/40 bg-warning/10 px-4 py-2.5 text-xs font-medium text-warning">
-                📍 Location is off. Turn it on so the customer can track you and you keep receiving
-                offers.
+            {geoDenied ? (
+              <div
+                role="alert"
+                className="rounded-2xl border border-warning/40 bg-warning/10 px-4 py-2.5 text-xs font-medium text-warning"
+              >
+                📍{' '}
+                {gps === 'insecure'
+                  ? 'Location only works over https. Open the app from its installed icon so the customer can track you.'
+                  : 'Location is off. Turn it on so the customer can track you and you keep receiving offers.'}
               </div>
+            ) : (
+              // A browser cannot report GPS from the background, and Navigate below sends the
+              // rider into Google Maps for the drive. Say so once, here, rather than leaving
+              // the customer's pin frozen with nobody able to explain it.
+              <p className="rounded-2xl bg-muted/50 px-4 py-2.5 text-xs text-muted-foreground">
+                📍 Your position is shared while this app is on screen. Navigating in another app
+                pauses it — come back here and it catches up straight away.
+              </p>
             )}
             <Step
               done={isInTransit}

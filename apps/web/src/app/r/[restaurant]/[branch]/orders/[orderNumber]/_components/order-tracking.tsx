@@ -8,7 +8,15 @@ import { useTranslations } from 'next-intl';
 import { formatCurrency, kmToMi } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
 import { useRealtime } from '@favornoms/database/realtime';
-import { DeliveryMap, fetchRoute, hasMapboxToken, type LatLng } from '@favornoms/maps';
+import {
+  DeliveryMap,
+  fetchRoute,
+  fixAgeSeconds,
+  formatFixAge,
+  hasMapboxToken,
+  isFixStale,
+  type LatLng,
+} from '@favornoms/maps';
 import { Badge, Button, Card, IconButton } from '@favornoms/ui';
 import { DeliveryChat } from './delivery-chat';
 import { OrderActions, type ExistingRating } from './order-actions';
@@ -61,6 +69,9 @@ type OrderRow = {
     accepted_at?: string | null;
     driver_lat?: number | null;
     driver_lng?: number | null;
+    /** When that pin was last reported. A frozen pin and a parked rider look identical
+     *  without it, and the rider's app stops reporting the moment it is backgrounded. */
+    driver_location_updated_at?: string | null;
     current_eta_min?: number | null;
     arriving_at?: string | null;
     dropoff_lat?: number | null;
@@ -97,6 +108,43 @@ interface Props {
  */
 function asArray<T>(v: T[] | T | null | undefined): T[] {
   return Array.isArray(v) ? v : v ? [v] : [];
+}
+
+type DeliveryRow = OrderRow['deliveries'][number];
+
+/**
+ * What this page draws, and nothing else.
+ *
+ * A postgres_changes payload carries the deliveries row as the TABLE has it — the rider's
+ * earnings, their tip split, the dispatch history, the pickup photo, the failure reason —
+ * and the old merge copied all of it into this component's state, where it stayed for the
+ * whole delivery. None of it is the diner's business. (The row still reaches the browser:
+ * Postgres column privileges are per-ROLE, and staff and riders read those same columns as
+ * `authenticated`. See the migration header for what a real fix costs.)
+ */
+const TRACKED_DELIVERY_FIELDS = [
+  'id',
+  'status',
+  'driver_id',
+  'distance_km',
+  'estimated_duration_min',
+  'accepted_at',
+  'driver_lat',
+  'driver_lng',
+  'driver_location_updated_at',
+  'current_eta_min',
+  'arriving_at',
+  'dropoff_lat',
+  'dropoff_lng',
+  'batch_seq',
+] as const;
+
+function pickTrackedFields(row: Record<string, unknown>): Partial<DeliveryRow> {
+  const out: Record<string, unknown> = {};
+  for (const key of TRACKED_DELIVERY_FIELDS) {
+    if (key in row) out[key] = row[key];
+  }
+  return out as Partial<DeliveryRow>;
 }
 
 export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransfer }: Props) {
@@ -148,7 +196,7 @@ export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransf
       if (table === 'deliveries') {
         setOrder((curr) => {
           if (!payload.new) return curr;
-          const incoming = payload.new as Partial<OrderRow['deliveries'][number]>;
+          const incoming = pickTrackedFields(payload.new as Record<string, unknown>);
           const existing = asArray(curr.deliveries)[0];
           // Merge rather than replace. A postgres_changes payload carries the row as the
           // TABLE has it, not as this page selected it, so swapping the object wholesale
@@ -156,9 +204,7 @@ export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransf
           // decides whether the driver card renders at all.
           return {
             ...curr,
-            deliveries: [
-              { ...(existing ?? {}), ...incoming } as OrderRow['deliveries'][number],
-            ],
+            deliveries: [{ ...(existing ?? {}), ...incoming } as DeliveryRow],
           };
         });
         return;
@@ -234,8 +280,29 @@ export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransf
       : null;
   const showMap =
     !!liveDelivery && !!branchLocation && (branchLocation.lat !== 0 || branchLocation.lng !== 0) && hasMapboxToken();
-  const etaMin = delivery?.current_eta_min ?? delivery?.estimated_duration_min ?? null;
-  const arriving = !!delivery?.arriving_at;
+  // set_driver_location computes this from a straight line at 24 km/h, and a rider whose
+  // test fix sat in another country produced current_eta_min 37104 on the live project.
+  // Whatever the row says, this page only ever prints a number a person can act on.
+  const rawEta = delivery?.current_eta_min ?? delivery?.estimated_duration_min ?? null;
+  const etaMin =
+    rawEta != null && Number.isFinite(rawEta) ? Math.min(600, Math.max(1, Math.round(rawEta))) : null;
+  // arriving_at outlived its rider too: a row handed back to dispatch kept the stamp, so the
+  // page announced "almost there" for a delivery with no driver on it.
+  const arriving = !!delivery?.arriving_at && delivery?.driver_id != null;
+
+  // How old the pin is. The rider's app cannot report GPS from the background — iOS suspends
+  // it, Android throttles it — and the app's own Navigate button sends them to Google Maps
+  // for the drive. Until now the pin simply froze mid-street and the ETA kept counting down
+  // beside it, which reads as a driver who has stopped. Age it out loud instead.
+  const trackingLive = !!liveDelivery;
+  const [nowMs, setNowMs] = React.useState(() => Date.now());
+  React.useEffect(() => {
+    if (!trackingLive) return;
+    const id = window.setInterval(() => setNowMs(Date.now()), 5_000);
+    return () => window.clearInterval(id);
+  }, [trackingLive]);
+  const fixAge = fixAgeSeconds(delivery?.driver_location_updated_at ?? null, nowMs);
+  const fixStale = trackingLive && isFixStale(fixAge);
 
   return (
     <div className="container max-w-xl pt-4">
@@ -256,7 +323,13 @@ export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransf
 
       <Card className="overflow-hidden p-0">
         {showMap && liveDelivery && branchLocation ? (
-          <TrackingMap branch={branchLocation} delivery={liveDelivery} arriving={arriving} />
+          <TrackingMap
+            branch={branchLocation}
+            delivery={liveDelivery}
+            arriving={arriving}
+            stale={fixStale}
+            fixAge={fixAge}
+          />
         ) : (
           <div className="relative bg-gradient-warm p-6 text-white">
             <div className="absolute inset-0 bg-noise opacity-30" />
@@ -371,7 +444,11 @@ export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransf
               />
             ))}
 
-          {delivery?.driver_id && (
+          {/* Gated on the same condition as the map, not on driver_id alone. Dispatch sets
+              driver_id the moment it OFFERS the job, so this card used to appear — with Chat
+              and Call — for a rider who had not accepted, and vanish again when they
+              declined, blinking once per offer. accepted_at is the acceptance. */}
+          {liveDelivery && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -388,23 +465,36 @@ export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransf
                       : // Stop-2 of a stacked trip: honest while the driver is still on the
                         // first drop (assigned/picked_up). Once THIS leg is in_transit the
                         // driver is genuinely heading here — back to the normal copy.
-                        delivery.batch_seq === 2 && ['assigned', 'picked_up'].includes(delivery.status)
+                        liveDelivery.batch_seq === 2 &&
+                          ['assigned', 'picked_up'].includes(liveDelivery.status)
                         ? 'Your driver is finishing one nearby delivery first'
-                        : 'Your driver is on the way'}
+                        : // 'assigned' means they are riding to the RESTAURANT. Calling that
+                          // "on the way" and printing a minutes figure beside it is how the
+                          // number came to be read as time-to-you when it was not.
+                          liveDelivery.status === 'assigned'
+                          ? 'Your driver is collecting your order'
+                          : 'Your driver is on the way'}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {delivery.distance_km != null && `${kmToMi(delivery.distance_km).toFixed(1)} mi · `}
-                    {etaMin != null && `${etaMin} min ETA`}
-                    {delivery.batch_seq === 2 &&
+                    {liveDelivery.distance_km != null &&
+                      `${kmToMi(liveDelivery.distance_km).toFixed(1)} mi · `}
+                    {fixAge == null
+                      ? 'Waiting for your driver’s location…'
+                      : fixStale
+                        ? `Location last updated ${formatFixAge(fixAge)} — the map and ETA may be behind`
+                        : etaMin != null
+                          ? `${etaMin} min to you · updated ${formatFixAge(fixAge)}`
+                          : `Updated ${formatFixAge(fixAge)}`}
+                    {liveDelivery.batch_seq === 2 &&
                       !arriving &&
-                      ['assigned', 'picked_up'].includes(delivery.status) &&
+                      ['assigned', 'picked_up'].includes(liveDelivery.status) &&
                       ' · includes their other stop'}
                   </p>
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                <DeliveryChat deliveryId={delivery.id} deliveryStatus={delivery.status} />
-                <CallDriverButton deliveryId={delivery.id} label={t('callDriver')} />
+                <DeliveryChat deliveryId={liveDelivery.id} deliveryStatus={liveDelivery.status} />
+                <CallDriverButton deliveryId={liveDelivery.id} label={t('callDriver')} />
               </div>
             </motion.div>
           )}
@@ -453,10 +543,14 @@ function TrackingMap({
   branch,
   delivery,
   arriving,
+  stale,
+  fixAge,
 }: {
   branch: LatLng;
-  delivery: OrderRow['deliveries'][number];
+  delivery: DeliveryRow;
   arriving: boolean;
+  stale: boolean;
+  fixAge: number | null;
 }) {
   const dropoff =
     delivery.dropoff_lat != null && delivery.dropoff_lng != null
@@ -465,8 +559,13 @@ function TrackingMap({
   // Memoised on the numbers, not rebuilt per render: DeliveryMap moves the puck in an effect
   // keyed on this object, and a fresh literal every render made it re-run on every unrelated
   // state change. Now the marker moves when the rider does, and only then.
-  const driverLat = delivery.driver_lat ?? null;
-  const driverLng = delivery.driver_lng ?? null;
+  //
+  // driver_id gates the coordinates because the columns outlive the rider: until the
+  // reassignment trigger existed, a delivery sent back out for dispatch kept the previous
+  // rider's position, and this drew their pin for a job they had already dropped.
+  const hasDriver = delivery.driver_id != null;
+  const driverLat = hasDriver ? (delivery.driver_lat ?? null) : null;
+  const driverLng = hasDriver ? (delivery.driver_lng ?? null) : null;
   const driver = React.useMemo(
     () => (driverLat != null && driverLng != null ? { lat: driverLat, lng: driverLng } : null),
     [driverLat, driverLng],
@@ -494,11 +593,22 @@ function TrackingMap({
         dropoff={dropoff}
         driver={driver}
         routeCoordinates={route}
+        driverStale={stale}
         className="h-full w-full"
       />
-      {arriving && (
+      {/* "Arriving now" on top of a pin nobody has heard from in two minutes is the worst of
+          both: it sends the diner to the door for a rider who may still be streets away. */}
+      {arriving && !stale && (
         <span className="absolute left-3 top-3 z-10 rounded-full bg-success px-3 py-1.5 text-xs font-bold text-white shadow-lg">
           🛵 Arriving now
+        </span>
+      )}
+      {stale && fixAge != null && (
+        <span
+          role="status"
+          className="absolute right-3 top-3 z-10 rounded-full bg-card/90 px-3 py-1.5 text-xs font-semibold text-muted-foreground shadow"
+        >
+          Last seen {formatFixAge(fixAge)}
         </span>
       )}
     </div>

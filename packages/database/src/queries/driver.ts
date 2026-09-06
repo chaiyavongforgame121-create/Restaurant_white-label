@@ -54,10 +54,23 @@ export async function getMyDriver(
 }
 
 /**
- * Push the driver's current GPS position. We use PostGIS POINT via the
- * `ST_SetSRID(ST_MakePoint(lng, lat), 4326)` RPC, but to keep clients simple
- * we cast through a small RPC `set_driver_location(driver_id, lng, lat)` —
- * see migration 20260526000005_driver_location_rpc.sql.
+ * Push the driver's current GPS position.
+ *
+ * One RPC does three things, which is why it is worth knowing what a call costs: it stamps
+ * drivers.current_location + location_updated_at (dispatch refuses anyone whose fix is older
+ * than dispatch_max_gps_age_min), and it mirrors the position onto whichever delivery this
+ * rider is carrying — driver_lat/lng, driver_location_updated_at, a recomputed
+ * current_eta_min for the WHOLE remaining trip, and a one-shot arriving_at inside the 300 m
+ * geofence. That mirror is what the customer's tracking map subscribes to, so every call
+ * here wakes their page.
+ *
+ * Note the argument order: lng before lat. Defined in
+ * 20260904150000_driver_gps_freshness_and_customer_tracking.sql (the original
+ * 20260526000005_driver_location_rpc.sql pre-dates this repo and is not in git).
+ *
+ * Errors are worth reading: 'auth_required', 'driver_not_found', 'forbidden' (the driver row
+ * belongs to another user). Callers that treat a failed write as a successful fix will tell
+ * the rider they are visible when they are not.
  */
 export async function updateDriverLocation(
   supabase: FavornomsClient,

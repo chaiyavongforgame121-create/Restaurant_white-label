@@ -5,6 +5,13 @@ export { fetchRoute } from './directions';
 export { loadMapboxGl, type MapboxMap, type MapboxMarker } from './gl';
 export { DeliveryMap, type DeliveryMapProps } from './delivery-map';
 export {
+  fixAgeSeconds,
+  formatFixAge,
+  isFixStale,
+  GPS_STALE_AFTER_SEC,
+  GPS_DISPATCH_MAX_AGE_SEC,
+} from './gps-freshness';
+export {
   AddressAutofillInput,
   type AddressAutofillInputProps,
   type ResolvedAddress,
