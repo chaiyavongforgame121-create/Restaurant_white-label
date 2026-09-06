@@ -10,6 +10,7 @@ import { Button, Card, EmptyState } from '@favornoms/ui';
 import { DeliveryMap, fetchRoute, hasMapboxToken, haversineKm } from '@favornoms/maps';
 import { getBrowserClient } from '@favornoms/database/client';
 import { useDelivery, type ActiveDeliveryUI } from '@/components/delivery-provider';
+import { useDriver } from '@/store/driver';
 import {
   cancelDelivery,
   failDelivery,
@@ -118,7 +119,12 @@ export function ActiveDeliveryView() {
   const { active, progress, markArriving } = useDelivery();
   const [advancing, setAdvancing] = React.useState(false);
   const [driverPos, setDriverPos] = React.useState<{ lat: number; lng: number } | null>(null);
-  const [geoDenied, setGeoDenied] = React.useState(false);
+  const [geoWatchDenied, setGeoWatchDenied] = React.useState(false);
+  // The location ping is the thing dispatch and the customer's map depend on, and it lives
+  // in the app shell. Its verdict and this screen's own watch used to disagree — one screen
+  // said location was off while the other said nothing at all — so read both.
+  const gps = useDriver((s) => s.gps);
+  const geoDenied = geoWatchDenied || gps === 'denied' || gps === 'insecure';
   const [route, setRoute] = React.useState<[number, number][] | null>(null);
   const [completed, setCompleted] = React.useState<{ earnings: number; orderNumber: string } | null>(null);
   const [advanceError, setAdvanceError] = React.useState<string | null>(null);
@@ -133,14 +139,27 @@ export function ActiveDeliveryView() {
   // Batched job (งานพ่วง): the second order needs its OWN pickup photo — one photo
   // per bag is the wrong-bag safeguard.
   const [matePickupPhotoUrl, setMatePickupPhotoUrl] = React.useState<string | null>(null);
+  // Local soft stage for transitions that don't map to a DB status change
+  // (e.g. "I'm at the restaurant" is a UI-only step; only "Picked up" changes the row).
+  const [softStage, setSoftStage] = React.useState<StageKey>('heading_to_pickup');
 
-  // Reset the local echoes when the active job changes.
+  // Reset the local echoes when the active job changes — and only then. A null `active` is
+  // "we have momentarily lost sight of the job", not "a new job started": keying this on
+  // active?.id alone meant a single dropped refetch ran the reset twice through undefined,
+  // greying out "Mark as delivered" on a rider who had already taken the photo.
+  const lastJobIdRef = React.useRef<string | null>(null);
   React.useEffect(() => {
+    const id = active?.id ?? null;
+    if (id === null || id === lastJobIdRef.current) return;
+    lastJobIdRef.current = id;
     setPickupPhotoUrl(null);
     setPodPhotoUrl(null);
     setMatePickupPhotoUrl(null);
     // A distance override belongs to one step of one job — never carry it into the next.
     setArrivalOverride(null);
+    // The soft stage belongs to the job too; the sync effect below then pulls it forward to
+    // wherever the server says this one already is.
+    setSoftStage('heading_to_pickup');
   }, [active?.id]);
 
   // Watch GPS for the live route map (separate from DriverLocationPing's DB push) +
@@ -150,10 +169,10 @@ export function ActiveDeliveryView() {
     const id = navigator.geolocation.watchPosition(
       (pos) => {
         setDriverPos({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        setGeoDenied(false);
+        setGeoWatchDenied(false);
       },
       (err) => {
-        if (err.code === err.PERMISSION_DENIED) setGeoDenied(true);
+        if (err.code === err.PERMISSION_DENIED) setGeoWatchDenied(true);
       },
       // Was 15s. This position drives the rider's own map marker and the arrival distance
       // check, so a fix that may be a quarter-minute stale is too old for both — the map
@@ -180,25 +199,23 @@ export function ActiveDeliveryView() {
     };
   }, [active?.branchLat, active?.branchLng, active?.dropoffLat, active?.dropoffLng]);
 
-  // Local soft stage for transitions that don't map to a DB status change
-  // (e.g. "I'm at the restaurant" is a UI-only step; only "Picked up" changes the row).
-  const [softStage, setSoftStage] = React.useState<StageKey>('heading_to_pickup');
-
+  // Sync soft stage with server-side status on mount/refresh. Preserve the local
+  // "arrived" sub-steps (at_pickup / at_customer) so a realtime resync — e.g. the
+  // one markArriving() triggers — doesn't yank the driver back a step.
+  //
+  // Only the status can move this, so only the status is a dependency: `active` itself is a
+  // new object on every resync, and a momentary null is not the job restarting. Between them
+  // those two facts used to throw a rider standing at the customer's door back to "Head to
+  // pickup" — different card, different icon, different button — and then forward again.
   React.useEffect(() => {
-    if (!active) {
-      setSoftStage('heading_to_pickup');
-      return;
-    }
-    // Sync soft stage with server-side status on mount/refresh. Preserve the local
-    // "arrived" sub-steps (at_pickup / at_customer) so a realtime resync — e.g. the
-    // one markArriving() triggers — doesn't yank the driver back a step.
-    if (active.status === 'picked_up') setSoftStage('picked_up');
-    else if (active.status === 'in_transit') {
+    const status = active?.status;
+    if (status === 'picked_up') setSoftStage('picked_up');
+    else if (status === 'in_transit') {
       setSoftStage((prev) => (prev === 'at_customer' ? 'at_customer' : 'in_transit'));
-    } else if (active.status === 'assigned') {
+    } else if (status === 'assigned') {
       setSoftStage((prev) => (prev === 'at_pickup' ? 'at_pickup' : 'heading_to_pickup'));
     }
-  }, [active]);
+  }, [active?.id, active?.status]);
 
   if (!active) {
     // Just finished a delivery → celebrate + show credited earnings + hand to the next run.
@@ -458,11 +475,24 @@ export function ActiveDeliveryView() {
           </motion.div>
 
           <div className="space-y-4 p-5">
-            {geoDenied && (
-              <div className="rounded-2xl border border-warning/40 bg-warning/10 px-4 py-2.5 text-xs font-medium text-warning">
-                📍 Location is off. Turn it on so the customer can track you and you keep receiving
-                offers.
+            {geoDenied ? (
+              <div
+                role="alert"
+                className="rounded-2xl border border-warning/40 bg-warning/10 px-4 py-2.5 text-xs font-medium text-warning"
+              >
+                📍{' '}
+                {gps === 'insecure'
+                  ? 'Location only works over https. Open the app from its installed icon so the customer can track you.'
+                  : 'Location is off. Turn it on so the customer can track you and you keep receiving offers.'}
               </div>
+            ) : (
+              // A browser cannot report GPS from the background, and Navigate below sends the
+              // rider into Google Maps for the drive. Say so once, here, rather than leaving
+              // the customer's pin frozen with nobody able to explain it.
+              <p className="rounded-2xl bg-muted/50 px-4 py-2.5 text-xs text-muted-foreground">
+                📍 Your position is shared while this app is on screen. Navigating in another app
+                pauses it — come back here and it catches up straight away.
+              </p>
             )}
             <Step
               done={isInTransit}

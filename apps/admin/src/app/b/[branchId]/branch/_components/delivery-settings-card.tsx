@@ -6,11 +6,12 @@ import { Bike, Save } from 'lucide-react';
 import {
   DELIVERY_SETTING_DEFAULTS,
   KM_PER_MILE,
-  computeDeliveryFee,
-  heuristicEtaMin,
   kmToMi,
   miToKm,
   parseDeliverySettings,
+  previewDistancesMi,
+  quoteDeliveryLocal,
+  surgeIsUnreachable,
 } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Button, Card } from '@favornoms/ui';
@@ -58,6 +59,17 @@ const FIELDS: Array<{
   max: number;
   /** Field is shown/entered in miles ('dist') or $/mile ('rate'); stored as km / $-per-km. */
   convert?: 'dist' | 'rate';
+  /**
+   * Whole numbers only. Postgres reads prep_time_min, busy_extra_prep_min, offer_ttl_seconds
+   * and dispatch_max_gps_age_min with an `::int` cast, and a cast does not round — it
+   * RAISES. One merchant typing 15.5 for prep time makes quote_delivery throw, quoteDelivery()
+   * swallows the error and returns null, and both checkout and place-order quietly fall back
+   * to the legacy flat fee: distance pricing and surge stop working for that branch with
+   * nothing on any screen to say why. `step="1"` on a number input does not prevent it
+   * (typing, pasting and scripted changes all bypass it), so these round on save. The
+   * attempt count rides along because half an attempt is meaningless too.
+   */
+  integer?: boolean;
 }> = [
   { key: 'delivery_base_fee', label: 'Base fee ($)', group: 'fees', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.deliveryBaseFee, max: 100 },
   { key: 'delivery_per_km_fee', label: 'Per mile ($)', group: 'fees', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.deliveryPerKmFee, convert: 'rate', max: 50 },
@@ -76,20 +88,20 @@ const FIELDS: Array<{
   // sections apart — the merchant read "Surge multiplier" with no distance beside it and
   // reported the distance field as missing. They now sit together.
   { key: 'delivery_surge_from_mi', label: 'Surge starts at (mi)', hint: 'Below this distance the multiplier is not applied at all. 0 surges every order, including a half-mile hop.', group: 'surge', step: '0.5', fallback: 0, max: 9_999_999_999 },
-  { key: 'prep_time_min', label: 'Prep time (min)', hint: 'Baseline kitchen time used in customer ETAs', group: 'timing', step: '1', fallback: DELIVERY_SETTING_DEFAULTS.prepTimeMin, max: 240 },
+  { key: 'prep_time_min', label: 'Prep time (min)', hint: 'Baseline kitchen time used in customer ETAs', group: 'timing', step: '1', fallback: DELIVERY_SETTING_DEFAULTS.prepTimeMin, max: 240, integer: true },
   // These two are deliberately near-unbounded (owner's call): a huge search radius and a
   // huge attempt count are how you force every driver to be a candidate while testing
   // dispatch. They are safe to leave open because neither charges anyone money — unlike
   // the fee fields above, which stay tightly capped.
   { key: 'driver_search_radius_km', label: 'Driver search radius (mi)', hint: 'How far from the branch to look for drivers. Set it very high to reach every driver (useful when testing dispatch).', group: 'dispatch', step: '0.5', fallback: 3 * KM_PER_MILE, convert: 'dist', max: 9_999_999_999 },
-  { key: 'driver_max_attempts', label: 'Max dispatch attempts', hint: 'Staff get alerted after this many failed rounds. Set it very high to keep retrying (useful when testing dispatch).', group: 'dispatch', step: '1', fallback: 3, max: 9_999_999_999 },
+  { key: 'driver_max_attempts', label: 'Max dispatch attempts', hint: 'Staff get alerted after this many failed rounds. Set it very high to keep retrying (useful when testing dispatch).', group: 'dispatch', step: '1', fallback: 3, max: 9_999_999_999, integer: true },
   // find_dispatch_candidates refuses a rider whose last GPS fix is older than this. It was
   // a hardcoded 5 minutes, and the rider app only pings while it is OPEN and in the
   // foreground — so a rider who locks their phone becomes undispatchable in five minutes
   // while every screen still shows them online. That is what produced "No rider found" with
   // five riders online.
-  { key: 'dispatch_max_gps_age_min', label: 'Max rider GPS age (min)', hint: 'How stale a last known rider location may be and still be offered work. Raise it while testing — riders only send GPS while the app is open in the foreground.', group: 'dispatch', step: '1', fallback: 5, max: 9_999_999_999 },
-  { key: 'offer_ttl_seconds', label: 'Offer timeout (sec)', hint: 'How long a driver has to accept an offer', group: 'dispatch', step: '5', fallback: DELIVERY_SETTING_DEFAULTS.offerTtlSeconds, max: 300 },
+  { key: 'dispatch_max_gps_age_min', label: 'Max rider GPS age (min)', hint: 'How stale a last known rider location may be and still be offered work. Raise it while testing — riders only send GPS while the app is open in the foreground.', group: 'dispatch', step: '1', fallback: 5, max: 9_999_999_999, integer: true },
+  { key: 'offer_ttl_seconds', label: 'Offer timeout (sec)', hint: 'How long a driver has to accept an offer', group: 'dispatch', step: '5', fallback: DELIVERY_SETTING_DEFAULTS.offerTtlSeconds, max: 300, integer: true },
   // Stored directly in miles (unlike the km-stored keys above) — the SQL pairing fn
   // claim_batch_sibling reads settings->>'batch_max_detour_mi' as miles.
   { key: 'batch_max_detour_mi', label: 'Stacked-order max detour (mi)', hint: 'Pair two ready orders only when the second is on the way — this caps the extra driving the second customer accepts. Lower = only near-perfect same-route pairs (needs stacking enabled below)', group: 'dispatch', step: '0.25', fallback: 1.0, max: 10 },
@@ -125,6 +137,34 @@ function toStoredUnit(convert: 'dist' | 'rate' | undefined, display: number): nu
 }
 const round2disp = (n: number) => Math.round(n * 100) / 100;
 
+/**
+ * The exact branches.settings patch this form will write. save() sends it and the preview
+ * parses it, so the number on screen is by construction the number quote_delivery() will
+ * read back. They used to be two loops: the preview skipped save()'s `max` clamp and its
+ * negative-to-fallback rule, so typing -5 into "Per mile" previewed a shrinking fee while
+ * Save wrote the $2.00/mi default.
+ */
+function buildPatch(
+  values: Record<NumericKey, string>,
+  surge: number,
+  busyExtra: string,
+): Record<string, number> {
+  const patch: Record<string, number> = {};
+  for (const f of FIELDS) {
+    const n = Number(values[f.key]);
+    const raw = Number.isFinite(n) && n >= 0 ? n : toDisplayUnit(f.convert, f.fallback);
+    // Clamp here as well as on the input: `max` on a number input is advisory (typing past
+    // it, pasting, or a scripted change all bypass it), and these values drive dispatch
+    // radius and retry counts.
+    const display = Math.min(raw, f.max);
+    const stored = toStoredUnit(f.convert, display); // km / $-per-km equivalent
+    patch[f.key] = f.integer ? Math.round(stored) : stored;
+  }
+  patch.busy_extra_prep_min = Math.round(Math.max(0, Number(busyExtra) || 0));
+  patch.delivery_surge_multiplier = Math.min(2, Math.max(1, surge));
+  return patch;
+}
+
 export function DeliverySettingsCard({ branchId, settings }: Props) {
   const router = useRouter();
   const [values, setValues] = React.useState<Record<NumericKey, string>>(() => {
@@ -151,50 +191,38 @@ export function DeliverySettingsCard({ branchId, settings }: Props) {
   const [savedAt, setSavedAt] = React.useState<number | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
-  // Live preview using the exact formula place-order/quote_delivery applies.
-  // Echoed back under the two inputs in words, because "×1.50" and "3" sitting in separate
-  // boxes do not say what a customer will actually be charged.
-  const surgeFromMi = Number(values.delivery_surge_from_mi) || 0;
-
-  const preview = React.useMemo(() => {
-    const numeric: Record<string, number> = {};
-    for (const f of FIELDS) {
-      const dv = Number(values[f.key]);
-      const display = Number.isFinite(dv) ? dv : toDisplayUnit(f.convert, f.fallback);
-      numeric[f.key] = toStoredUnit(f.convert, display); // back to km for the shared formula
-    }
-    numeric.delivery_surge_multiplier = surge;
-    numeric.busy_extra_prep_min = Number(busyExtra) || 0;
-    const parsed = parseDeliverySettings(numeric);
-    return [1, 3, 5].map((mi) => {
-      const km = miToKm(mi);
-      return {
-        mi,
-        fee: computeDeliveryFee(parsed, km),
-        eta: heuristicEtaMin(parsed, km),
-        inRange: km <= parsed.deliveryRadiusKm,
-      };
-    });
-  }, [values, surge, busyExtra]);
+  // Live preview of the settings Save is about to write, run through the same formula
+  // quote_delivery() runs — same clamps, same fallbacks, same rounding, same order.
+  // Echoed back under the two surge inputs in words, because "×1.50" and "3" sitting in
+  // separate boxes do not say what a customer will actually be charged.
+  const parsed = React.useMemo(
+    () => parseDeliverySettings(buildPatch(values, surge, busyExtra)),
+    [values, surge, busyExtra],
+  );
+  // Read back off the patch rather than off the keystrokes, so the prose quotes the clamped
+  // value Save will store.
+  const surgeFromMi = round2disp(kmToMi(parsed.deliverySurgeFromKm));
+  const radiusMi = round2disp(kmToMi(parsed.deliveryRadiusKm));
+  const surgeDead = surgeIsUnreachable(parsed);
+  // The sample distances come from THIS branch's surge threshold and radius. Fixed 1/3/5 mi
+  // rows could not show a surge that starts at 8 mi and wasted a column on "Out of range"
+  // whenever the radius was under 5, which is what made the preview read as somebody else's
+  // example restaurant.
+  const preview = React.useMemo(
+    () =>
+      previewDistancesMi(parsed).map((mi) => ({ mi, ...quoteDeliveryLocal(parsed, miToKm(mi)) })),
+    [parsed],
+  );
 
   const save = async () => {
     setSaving(true);
     setError(null);
     const supabase = getBrowserClient();
-    const patch: Record<string, number | boolean> = {};
-    for (const f of FIELDS) {
-      const n = Number(values[f.key]);
-      const raw = Number.isFinite(n) && n >= 0 ? n : toDisplayUnit(f.convert, f.fallback);
-      // Clamp on save as well as on the input: `max` on a number input is advisory (typing
-      // past it, pasting, or a scripted change all bypass it), and these values drive
-      // dispatch radius and retry counts.
-      const display = Math.min(raw, f.max);
-      patch[f.key] = toStoredUnit(f.convert, display); // store km / $-per-km equivalent
-    }
-    patch.orders_paused = paused;
-    patch.batch_enabled = batching;
-    patch.busy_extra_prep_min = Math.max(0, Number(busyExtra) || 0);
-    patch.delivery_surge_multiplier = Math.min(2, Math.max(1, surge));
+    const patch: Record<string, number | boolean> = {
+      ...buildPatch(values, surge, busyExtra),
+      orders_paused: paused,
+      batch_enabled: batching,
+    };
     // Merge into the existing jsonb — other settings keys stay untouched.
     const { error: updateError } = await supabase
       .from('branches')
@@ -345,6 +373,13 @@ export function DeliverySettingsCard({ branchId, settings }: Props) {
                 ? 'Surge is off — every order is charged base + per-mile.'
                 : `Under ${surgeFromMi} mi: base + per mile. From ${surgeFromMi} mi: ×${surge.toFixed(2)} on the whole fee.`}
             </p>
+            {surgeDead && (
+              <p className="mt-2 text-xs font-medium text-warning" role="status">
+                This multiplier never applies: it starts at {surgeFromMi} mi, and nothing past
+                your {radiusMi} mi delivery radius can be ordered. Lower the surge distance or
+                raise the radius.
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -353,14 +388,31 @@ export function DeliverySettingsCard({ branchId, settings }: Props) {
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Fee preview
         </p>
-        <div className="mt-2 grid grid-cols-3 gap-2 text-center text-sm">
+        <div
+          className={`mt-2 grid gap-2 text-center text-sm ${
+            preview.length >= 3
+              ? 'grid-cols-3'
+              : preview.length === 2
+                ? 'grid-cols-2'
+                : 'grid-cols-1'
+          }`}
+        >
           {preview.map((p) => (
             <div key={p.mi} className="rounded-lg bg-card p-2">
               <p className="text-xs text-muted-foreground">{p.mi} mi</p>
-              {p.inRange ? (
+              {p.deliverable ? (
                 <>
                   <p className="font-display text-base font-bold text-primary">${p.fee.toFixed(2)}</p>
-                  <p className="text-xs text-muted-foreground">~{p.eta} min</p>
+                  <p className="text-xs text-muted-foreground">~{p.etaMin} min</p>
+                  <p
+                    className={
+                      p.surge > 1
+                        ? 'mt-0.5 text-[11px] font-medium text-primary'
+                        : 'mt-0.5 text-[11px] text-muted-foreground'
+                    }
+                  >
+                    {p.surge > 1 ? `×${p.surge.toFixed(2)} surge` : 'no surge'}
+                  </p>
                 </>
               ) : (
                 <p className="mt-1 text-xs font-medium text-muted-foreground">Out of range</p>
@@ -368,6 +420,10 @@ export function DeliverySettingsCard({ branchId, settings }: Props) {
             </div>
           ))}
         </div>
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          Sample distances picked from your own surge distance and delivery radius, priced by
+          the same formula the storefront and the order server use.
+        </p>
       </div>
 
       {error && (

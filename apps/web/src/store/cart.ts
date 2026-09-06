@@ -36,6 +36,12 @@ export interface ComboPick {
 
 export type OrderChannel = 'delivery' | 'pickup' | 'dine_in';
 
+/** What the restaurant sells this line for RIGHT NOW, and whether it still sells it at all. */
+export interface CurrentPrice {
+  price: number;
+  available: boolean;
+}
+
 // place-order's r2. The cart subtotal feeds the loyalty cap (`subtotal * 50`),
 // so a float tail here — 0.25 + 0.33 sums to 0.5800000000000001 — lets the
 // slider offer a point the server then refuses to honour.
@@ -71,6 +77,20 @@ interface CartState {
   remove: (lineId: string) => void;
   setQuantity: (lineId: string, quantity: number) => void;
   clear: () => void;
+  /**
+   * Re-price the cart against what the restaurant sells now. Keyed by `comboId` for combo
+   * lines and `menuItemId` for everything else.
+   *
+   * A line records the price it was added at and kept it forever, so a cart opened after a
+   * price change — or after the kitchen 86'd something — showed a total the diner would not be
+   * charged: place-order re-reads menu_items and prices from the server rows, so it silently
+   * charged a different number, or refused the whole order for an item the diner had no idea
+   * was gone. Better to say so on the cart screen than in the confirmation.
+   *
+   * Keys that are absent from `current` are left exactly as they are: a failed or partial read
+   * must never empty somebody's cart. Returns what changed so the caller can say it out loud.
+   */
+  reprice: (current: Map<string, CurrentPrice>) => { changed: number; removed: number };
   subtotal: () => number;
   itemCount: () => number;
 }
@@ -171,6 +191,26 @@ export const useCart = create<CartState>()(
                 ),
         }),
       clear: () => set({ lines: [], notes: '' }),
+      reprice: (current) => {
+        let changed = 0;
+        let removed = 0;
+        const lines = get().lines.flatMap((l) => {
+          const now = current.get(l.comboId ?? l.menuItemId);
+          if (!now) return [l];
+          if (!now.available) {
+            removed += 1;
+            return [];
+          }
+          const price = r2(now.price);
+          if (price !== r2(l.unitPrice)) {
+            changed += 1;
+            return [{ ...l, unitPrice: price }];
+          }
+          return [l];
+        });
+        if (changed > 0 || removed > 0) set({ lines });
+        return { changed, removed };
+      },
       // Rounded exactly the way place-order rounds: unit price with modifiers,
       // then the line, then the sum. Anything looser drifts off the server's cent.
       subtotal: () =>

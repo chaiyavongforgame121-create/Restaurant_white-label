@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { ArrowDownRight, ArrowUpRight, ChefHat, DollarSign, Receipt, Sparkles, Users } from 'lucide-react';
 import { getServerClient } from '@favornoms/database/server';
 import { getEntitlementsForBranch } from '@favornoms/database/queries';
@@ -117,12 +118,12 @@ export default async function DashboardPage({ params }: Props) {
               </p>
             </div>
           </div>
-          <a
+          <Link
             href={`/b/${branchId}/settings/plan`}
             className="focus-ring inline-flex items-center rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white shadow-soft hover:bg-amber-600"
           >
             Choose a package
-          </a>
+          </Link>
         </Card>
       )}
 
@@ -195,18 +196,18 @@ export default async function DashboardPage({ params }: Props) {
           <p className="text-sm text-muted-foreground">Common tasks</p>
           <div className="mt-4 grid grid-cols-2 gap-3">
             {[
-              { label: 'Add menu item', href: 'menu' },
-              { label: 'View orders', href: 'orders' },
-              { label: 'Approve drivers', href: 'drivers' },
-              { label: 'Branch settings', href: 'branch' },
+              { label: 'Add menu item', href: `/b/${branchId}/menu` },
+              { label: 'View orders', href: `/b/${branchId}/orders` },
+              { label: 'Approve drivers', href: `/b/${branchId}/drivers` },
+              { label: 'Branch settings', href: `/b/${branchId}/branch` },
             ].map((a) => (
-              <a
+              <Link
                 key={a.label}
                 href={a.href}
                 className="focus-ring inline-flex min-h-touch items-center justify-center rounded-xl border border-border bg-card px-3 py-3 text-sm font-semibold transition-shadow hover:shadow-soft"
               >
                 {a.label} →
-              </a>
+              </Link>
             ))}
           </div>
         </Card>

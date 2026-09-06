@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.17"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -405,6 +405,41 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "branch_closures_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      branch_delivery_hours: {
+        Row: {
+          branch_id: string
+          closes_at: string
+          created_at: string
+          day_of_week: number
+          id: string
+          opens_at: string
+        }
+        Insert: {
+          branch_id: string
+          closes_at: string
+          created_at?: string
+          day_of_week: number
+          id?: string
+          opens_at: string
+        }
+        Update: {
+          branch_id?: string
+          closes_at?: string
+          created_at?: string
+          day_of_week?: number
+          id?: string
+          opens_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "branch_delivery_hours_branch_id_fkey"
             columns: ["branch_id"]
             isOneToOne: false
             referencedRelation: "branches"
@@ -1003,6 +1038,9 @@ export type Database = {
       }
       delivery_messages: {
         Row: {
+          attachment_height: number | null
+          attachment_path: string | null
+          attachment_width: number | null
           body: string
           created_at: string
           delivery_id: string
@@ -1012,6 +1050,9 @@ export type Database = {
           sender_user_id: string
         }
         Insert: {
+          attachment_height?: number | null
+          attachment_path?: string | null
+          attachment_width?: number | null
           body: string
           created_at?: string
           delivery_id: string
@@ -1021,6 +1062,9 @@ export type Database = {
           sender_user_id?: string
         }
         Update: {
+          attachment_height?: number | null
+          attachment_path?: string | null
+          attachment_width?: number | null
           body?: string
           created_at?: string
           delivery_id?: string
@@ -1363,6 +1407,8 @@ export type Database = {
           receipt_number: string | null
           rejection_reason: string | null
           status: string
+          transfer_slip_at: string | null
+          transfer_slip_path: string | null
         }
         Insert: {
           account_name: string
@@ -1379,6 +1425,8 @@ export type Database = {
           receipt_number?: string | null
           rejection_reason?: string | null
           status?: string
+          transfer_slip_at?: string | null
+          transfer_slip_path?: string | null
         }
         Update: {
           account_name?: string
@@ -1395,6 +1443,8 @@ export type Database = {
           receipt_number?: string | null
           rejection_reason?: string | null
           status?: string
+          transfer_slip_at?: string | null
+          transfer_slip_path?: string | null
         }
         Relationships: [
           {
@@ -1432,6 +1482,7 @@ export type Database = {
           location_updated_at: string | null
           national_id_encrypted: string | null
           national_id_hash: string | null
+          payout_qr_path: string | null
           phone: string
           reject_streak: number
           total_deliveries: number
@@ -1459,6 +1510,7 @@ export type Database = {
           location_updated_at?: string | null
           national_id_encrypted?: string | null
           national_id_hash?: string | null
+          payout_qr_path?: string | null
           phone: string
           reject_streak?: number
           total_deliveries?: number
@@ -1486,6 +1538,7 @@ export type Database = {
           location_updated_at?: string | null
           national_id_encrypted?: string | null
           national_id_hash?: string | null
+          payout_qr_path?: string | null
           phone?: string
           reject_streak?: number
           total_deliveries?: number
@@ -2532,6 +2585,7 @@ export type Database = {
           created_at: string
           customer_id: string
           delivery_stars: number | null
+          driver_comment: string | null
           driver_id: string | null
           food_stars: number | null
           id: string
@@ -2543,6 +2597,7 @@ export type Database = {
           created_at?: string
           customer_id: string
           delivery_stars?: number | null
+          driver_comment?: string | null
           driver_id?: string | null
           food_stars?: number | null
           id?: string
@@ -2554,6 +2609,7 @@ export type Database = {
           created_at?: string
           customer_id?: string
           delivery_stars?: number | null
+          driver_comment?: string | null
           driver_id?: string | null
           food_stars?: number | null
           id?: string
@@ -2643,7 +2699,9 @@ export type Database = {
       }
       orders: {
         Row: {
+          awaiting_payment: boolean
           branch_id: string
+          cancellation_reason: string | null
           channel: Database["public"]["Enums"]["order_channel"]
           completed_at: string | null
           confirmed_at: string | null
@@ -2676,7 +2734,9 @@ export type Database = {
           total: number
         }
         Insert: {
+          awaiting_payment?: boolean
           branch_id: string
+          cancellation_reason?: string | null
           channel: Database["public"]["Enums"]["order_channel"]
           completed_at?: string | null
           confirmed_at?: string | null
@@ -2709,7 +2769,9 @@ export type Database = {
           total: number
         }
         Update: {
+          awaiting_payment?: boolean
           branch_id?: string
+          cancellation_reason?: string | null
           channel?: Database["public"]["Enums"]["order_channel"]
           completed_at?: string | null
           confirmed_at?: string | null
@@ -3787,7 +3849,7 @@ export type Database = {
           pos_w: number | null
           pos_x: number | null
           pos_y: number | null
-          qr_code_token: string | null
+          qr_code_token: string
           shape: string | null
           status: string | null
           table_number: string
@@ -3804,7 +3866,7 @@ export type Database = {
           pos_w?: number | null
           pos_x?: number | null
           pos_y?: number | null
-          qr_code_token?: string | null
+          qr_code_token?: string
           shape?: string | null
           status?: string | null
           table_number: string
@@ -3821,7 +3883,7 @@ export type Database = {
           pos_w?: number | null
           pos_x?: number | null
           pos_y?: number | null
-          qr_code_token?: string | null
+          qr_code_token?: string
           shape?: string | null
           status?: string | null
           table_number?: string
@@ -4093,7 +4155,9 @@ export type Database = {
       admin_edit_order_notes: {
         Args: { p_notes: string; p_order_id: string }
         Returns: {
+          awaiting_payment: boolean
           branch_id: string
+          cancellation_reason: string | null
           channel: Database["public"]["Enums"]["order_channel"]
           completed_at: string | null
           confirmed_at: string | null
@@ -4131,6 +4195,14 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      advance_self_delivery: {
+        Args: { p_delivery_id: string; p_to: string }
+        Returns: undefined
+      }
+      attach_driver_payout_slip: {
+        Args: { p_path: string; p_withdrawal_id: string }
+        Returns: Json
       }
       billing_log_event: {
         Args: {
@@ -4181,6 +4253,10 @@ export type Database = {
         Returns: string
       }
       clock_out: { Args: { p_shift_id?: string }; Returns: string }
+      confirm_payment_proof: {
+        Args: { p_order_id: string }
+        Returns: undefined
+      }
       create_branch: {
         Args: {
           p_address?: string
@@ -4218,6 +4294,10 @@ export type Database = {
         Returns: undefined
       }
       delete_my_account: { Args: never; Returns: Json }
+      dispatch_candidate_diagnostics: {
+        Args: { p_branch_id: string; p_radius_km?: number }
+        Returns: Json
+      }
       driver_1099_summary: {
         Args: { p_driver_id: string; p_year: number }
         Returns: Json
@@ -4226,6 +4306,7 @@ export type Database = {
         Args: { p_delivery_id: string; p_reason?: string }
         Returns: undefined
       }
+      driver_reapply_to_branch: { Args: { p_branch_id: string }; Returns: Json }
       driver_set_all_branches_online: {
         Args: { p_online: boolean }
         Returns: Json
@@ -4379,6 +4460,10 @@ export type Database = {
         Returns: undefined
       }
       is_branch_open: {
+        Args: { p_at?: string; p_branch_id: string }
+        Returns: boolean
+      }
+      is_delivery_available: {
         Args: { p_at?: string; p_branch_id: string }
         Returns: boolean
       }
@@ -4543,6 +4628,10 @@ export type Database = {
         }[]
       }
       recompute_loyalty_tiers: { Args: never; Returns: number }
+      record_arrival_override: {
+        Args: { p_delivery_id: string; p_miles?: number; p_stage: string }
+        Returns: undefined
+      }
       redeem_gift_card: {
         Args: { p_code: string; p_max_amount: number; p_order_id: string }
         Returns: number
@@ -4617,6 +4706,23 @@ export type Database = {
           restaurant_slug: string
         }[]
       }
+      resolve_table_qr: {
+        Args: { p_token: string }
+        Returns: {
+          branch_id: string
+          branch_name: string
+          branch_slug: string
+          display_name: string
+          restaurant_slug: string
+          table_id: string
+          table_number: string
+        }[]
+      }
+      rotate_table_qr_token: { Args: { p_table_id: string }; Returns: string }
+      set_branch_delivery_hours: {
+        Args: { p_branch_id: string; p_windows: Json }
+        Returns: undefined
+      }
       set_branch_hours: {
         Args: { p_branch_id: string; p_windows: Json }
         Returns: undefined
@@ -4647,6 +4753,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      set_driver_payout_qr: { Args: { p_path: string }; Returns: string }
       set_item_86: {
         Args: { p_menu_item_id: string; p_sold_out: boolean; p_until?: string }
         Returns: Json
@@ -4844,12 +4951,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -4873,11 +4980,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -4898,11 +5005,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -4923,11 +5030,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -4940,11 +5047,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }

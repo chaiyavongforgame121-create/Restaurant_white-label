@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
 import { getServerClient } from '@favornoms/database/server';
 import { resolveTenantBySlug } from '@favornoms/database/queries';
+import { DEFAULT_THEME_COLOR, hexOr, resolveStorefrontVersion } from '@/lib/tenant';
 
 interface Props {
   params: Promise<{ restaurant: string; branch: string }>;
 }
-
-const HEX_COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
 
 // Same constant + default list the middleware parses, so "is this a custom
 // domain?" is answered identically in both places. Keep in sync with
@@ -34,12 +33,26 @@ const APEX_HOSTS = new Set(
  */
 export async function GET(request: Request, { params }: Props) {
   const { restaurant, branch } = await params;
+  const host = ((request.headers.get('host') ?? '').split(':')[0] ?? '').toLowerCase();
+  const onApex = !host || APEX_HOSTS.has(host);
+
+  // Cheap enough to ask before doing the real work, and it turns the common case — a browser
+  // or CDN re-checking a manifest that has not changed — into a 304 with no body and no tenant
+  // read at all. `known: false` degrades to a time bucket, so the ETag still changes, just on
+  // a clock rather than on the merchant's save.
+  const version = await resolveStorefrontVersion(restaurant, branch);
+  const etag = `W/"${version.key}:${onApex ? 'apex' : 'custom'}"`;
+  if (request.headers.get('if-none-match') === etag) {
+    return new NextResponse(null, {
+      status: 304,
+      headers: { ETag: etag, 'Cache-Control': MANIFEST_CACHE_CONTROL, Vary: 'Host' },
+    });
+  }
+
   const supabase = await getServerClient();
   const tenant = await resolveTenantBySlug(supabase, restaurant, branch);
   if (!tenant) return new NextResponse(null, { status: 404 });
 
-  const host = ((request.headers.get('host') ?? '').split(':')[0] ?? '').toLowerCase();
-  const onApex = !host || APEX_HOSTS.has(host);
   const base = onApex ? `/r/${restaurant}/${branch}` : '/';
   const name = tenant.theme.brandName ?? tenant.restaurant.name;
 
@@ -54,7 +67,9 @@ export async function GET(request: Request, { params }: Props) {
     display: 'standalone',
     orientation: 'portrait',
     background_color: hexOr(tenant.theme.backgroundColor, '#FFFAF5'),
-    theme_color: hexOr(tenant.theme.primaryColor, '#FF6B35'),
+    // Same value generateViewport paints the address bar with, from the same helper —
+    // an installed app whose chrome changes colour on install looks broken.
+    theme_color: hexOr(tenant.theme.primaryColor, DEFAULT_THEME_COLOR),
     // Tenant icons first, platform icons last. The tenant entries are only ever
     // written by the admin icon uploader, which rasterises the merchant's image to
     // exactly these dimensions — so the declared `sizes` is honest, which is what
@@ -70,7 +85,8 @@ export async function GET(request: Request, { params }: Props) {
   return new NextResponse(JSON.stringify(manifest), {
     headers: {
       'Content-Type': 'application/manifest+json; charset=utf-8',
-      'Cache-Control': 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400',
+      'Cache-Control': MANIFEST_CACHE_CONTROL,
+      ETag: etag,
       // The body differs by host (apex vs custom domain), and the same path is
       // reachable on both — without this a shared cache could serve one host's
       // scope to the other.
@@ -78,6 +94,19 @@ export async function GET(request: Request, { params }: Props) {
     },
   });
 }
+
+/**
+ * Was `max-age=300, s-maxage=3600, stale-while-revalidate=86400`. A merchant who changed their
+ * icon, app name or colour then sat behind the CDN for an hour — and for up to a day more while
+ * it revalidated — BEFORE Chrome's own roughly-daily manifest re-check could even see the new
+ * file. Two platform delays stacked on top of each other, and the merchant read the result as
+ * "the upload didn't work".
+ *
+ * The body is a few hundred bytes and the ETag above makes an unchanged one a 304, so
+ * revalidating every minute costs almost nothing. `max-age=0` keeps the browser asking, which
+ * is the half that decides how fast an already-installed app sees the change.
+ */
+const MANIFEST_CACHE_CONTROL = 'public, max-age=0, s-maxage=60, stale-while-revalidate=300';
 
 interface ManifestIcon {
   src: string;
@@ -114,9 +143,4 @@ function tenantIcons(tenant: {
     { src: '/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
   );
   return icons;
-}
-
-/** Manifest colours must be valid CSS colours; tenant theme values are free text. */
-function hexOr(value: string | undefined, fallback: string): string {
-  return value && HEX_COLOR.test(value) ? value : fallback;
 }

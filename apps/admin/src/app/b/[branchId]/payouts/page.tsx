@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { getServerClient } from '@favornoms/database/server';
 import { formatCurrency } from '@favornoms/shared';
 import { Badge, Card } from '@favornoms/ui';
+import { PayoutAttachments } from './_components/payout-attachments';
+import { fetchPayoutMedia } from './_components/payout-media';
 import { WithdrawalActions } from './_components/withdrawal-actions';
 
 interface Props {
@@ -58,6 +60,9 @@ export default async function PayoutsPage({ params }: Props) {
   const pending = normalize(pendingData ?? []);
   const settled = normalize(settledData ?? []);
   const rows = (summaryData ?? []) as SummaryRow[];
+  // The rider's receiving QR and the transfer slip, fetched once the rows above have settled
+  // which withdrawals are actually on screen.
+  const media = await fetchPayoutMedia(supabase, [...pending, ...settled].map((w) => w.id));
 
   return (
     <div className="container max-w-4xl py-8">
@@ -96,9 +101,16 @@ export default async function PayoutsPage({ params }: Props) {
                         withdrawalId={w.id}
                         amount={Number(w.amount)}
                         driverName={w.driver_name}
+                        slipAttached={!!media.get(w.id)?.slipPath}
                       />
                     </div>
                   </div>
+                  <PayoutAttachments
+                    withdrawalId={w.id}
+                    qrPath={media.get(w.id)?.qrPath ?? null}
+                    slipPath={media.get(w.id)?.slipPath ?? null}
+                    canAttach
+                  />
                 </Card>
               </li>
             ))}
@@ -135,6 +147,16 @@ export default async function PayoutsPage({ params }: Props) {
                       )}
                     </div>
                   </div>
+                  {w.status === 'paid' && (
+                    // A merchant who transferred first and screenshotted second can still file
+                    // the slip after the fact; a rejected request has no transfer behind it.
+                    <PayoutAttachments
+                      withdrawalId={w.id}
+                      qrPath={media.get(w.id)?.qrPath ?? null}
+                      slipPath={media.get(w.id)?.slipPath ?? null}
+                      canAttach
+                    />
+                  )}
                 </Card>
               </li>
             ))}

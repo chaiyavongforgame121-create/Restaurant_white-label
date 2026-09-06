@@ -11,8 +11,15 @@ import { formatCurrency } from '@favornoms/shared';
 import { Button, Card, EmptyState, IconButton, QuantityStepper } from '@favornoms/ui';
 import { useCart } from '@/store/cart';
 import { useAuth } from '@/components/auth/use-auth';
+import { useCartReprice } from './use-cart-reprice';
 
-export function CartView() {
+interface Props {
+  branchId: string;
+  /** Changes when the merchant changes anything the storefront renders; re-triggers the check. */
+  storefrontVersion: number;
+}
+
+export function CartView({ branchId, storefrontVersion }: Props) {
   const t = useTranslations();
   const router = useRouter();
   const params = useParams<{ restaurant: string; branch: string }>();
@@ -50,6 +57,11 @@ export function CartView() {
   const notes = useCart((s) => s.notes);
   const setNotes = useCart((s) => s.setNotes);
 
+  // Checked here rather than at checkout: the diner still has room to change their mind, and
+  // the alternative is finding out from a payment total that does not match, or from an order
+  // the server refuses outright.
+  const priceNotice = useCartReprice(branchId, storefrontVersion);
+
   if (!hydrated) return <div className="container max-w-2xl pt-4 text-sm text-muted-foreground">Loading…</div>;
 
   return (
@@ -60,6 +72,15 @@ export function CartView() {
         </IconButton>
         <h1 className="font-display text-2xl font-bold">{t('cart.title')}</h1>
       </header>
+
+      {priceNotice && (
+        <p
+          role="status"
+          className="mb-4 rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning"
+        >
+          {priceNotice}
+        </p>
+      )}
 
       {lines.length === 0 ? (
         <EmptyState

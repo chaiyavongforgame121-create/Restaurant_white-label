@@ -1,4 +1,4 @@
-import { getServerClient } from '@favornoms/database/server';
+import { getBranchAccess } from '@/lib/capabilities';
 import { RecentOrders } from './_components/recent-orders';
 
 interface Props {
@@ -7,7 +7,19 @@ interface Props {
 
 export default async function RecentOrdersPage({ params }: Props) {
   const { branchId } = await params;
-  const supabase = await getServerClient();
+  // The receipt drawer needs the branch's address and currency, and the capability set
+  // decides whether it may put paper in a printer. receipt.reprint is the right named for
+  // this job and the matrix seeds it for `cashier` alone — a role with no back office at
+  // all, which is why the only surface for it until now was one the cashier cannot reach.
+  const { supabase, branch, can } = await getBranchAccess(branchId, `/counter/${branchId}/recent`);
+  const { data: branchDetail } = await supabase
+    .from('branches')
+    .select('address, settings')
+    .eq('id', branchId)
+    .maybeSingle();
+  const branchSettings = (branchDetail?.settings ?? {}) as Record<string, unknown>;
+  const currency = typeof branchSettings.currency === 'string' ? branchSettings.currency : 'USD';
+
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   // A pickup ordered three days ago for today is the counter's problem today, so
   // a flat 24h floor on created_at hid exactly the orders staff most need to see.
@@ -28,5 +40,14 @@ export default async function RecentOrdersPage({ params }: Props) {
       new Date(a.scheduled_for ?? a.created_at).getTime(),
   );
 
-  return <RecentOrders branchId={branchId} orders={sorted as never[]} />;
+  return (
+    <RecentOrders
+      branchId={branchId}
+      orders={sorted as never[]}
+      branchName={branch.name}
+      branchAddress={branchDetail?.address ?? null}
+      currency={currency}
+      canPrintReceipt={can('receipt.reprint') || can('orders.view')}
+    />
+  );
 }

@@ -26,6 +26,7 @@
     "addToCart": "Add",
     "inCart": "In cart",
     "recommended": "Chef's recommendations",
+    "alsoLike": "You might also like",
     "popular": "Popular today",
     "viewMore": "View more",
     "rating": "{rating} ({count} reviews)",
@@ -103,7 +104,9 @@
     "estimatedDelivery": "Estimated arrival: {time}",
     "payment": {
       "card": "Credit / Debit card",
-      "cash": "Cash on delivery"
+      "cash": "Cash on delivery",
+      "transfer": "QR transfer",
+      "cardFeeNote": "A {percent}% service fee applies to card payments only — cash and QR transfer pay none."
     }
   },
   "tracking": {

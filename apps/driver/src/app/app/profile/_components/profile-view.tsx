@@ -3,89 +3,67 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Bike, Building2, CheckCircle2, ChevronRight, FileCheck2,
-  HeartHandshake, LogOut, ShieldAlert, Star, Upload,
+  Bike, Building2, ChevronRight, FileCheck2,
+  HeartHandshake, LogOut, Star,
 } from 'lucide-react';
 import { Badge, Button, Card } from '@favornoms/ui';
 import { getBrowserClient } from '@favornoms/database/client';
 import { useDriverSession } from '@/components/driver-session';
+import { DriverInstallRow } from '@/components/install-app-button';
+import { listDriverDocuments } from './document-storage';
+import { documentsStage, documentsSummary, type DocFile, type DocsStage } from './documents';
 
-const DOC_TYPES = [
-  { key: 'license', label: 'Driver license' },
-  { key: 'vehicle_reg', label: 'Vehicle registration' },
-  { key: 'selfie', label: 'Selfie with Driver license' },
-] as const;
+/** The hero pill used to print the raw enum ("0.0 · pending"), which is a column name,
+ *  not a status a rider can act on. */
+const KYC_PILL: Record<string, string> = {
+  verified: 'Verified',
+  pending: 'In review',
+  rejected: 'Action needed',
+  suspended: 'Suspended',
+};
 
-type DocKey = (typeof DOC_TYPES)[number]['key'];
+const SUMMARY_CLASS: Record<DocsStage, string> = {
+  unreadable: 'text-danger',
+  incomplete: 'text-warning',
+  awaiting: 'text-info',
+  rechecking: 'text-warning',
+  verified: 'text-success',
+  changes_needed: 'text-danger',
+};
 
 export function ProfileView() {
-  const { driver, refresh } = useDriverSession();
+  const { driver } = useDriverSession();
   const router = useRouter();
-  // Was a Set of keys — enough to tick a box, not enough to show the rider what they sent.
-  // A wrong or unreadable photo looked identical to a good one, and there was no way to
-  // check short of re-uploading and hoping.
-  type DocFile = { name: string; url: string | null };
-  const [uploadedDocs, setUploadedDocs] = React.useState<Partial<Record<DocKey, DocFile>>>({});
 
-  const loadDocs = React.useCallback(async () => {
-    const supabase = getBrowserClient();
-    const { data } = await supabase.storage.from('driver-kyc').list(driver.id, { limit: 50 });
-    if (!data) return;
-    const found: Partial<Record<DocKey, DocFile>> = {};
-    const wanted = data.filter((f) =>
-      DOC_TYPES.some((d) => d.key === (f.name.split('.')[0] as DocKey)),
-    );
-    // driver-kyc is private (driver_kyc_self_read lets the rider read their own folder), so
-    // a preview needs a signed URL rather than a public one.
-    const paths = wanted.map((f) => `${driver.id}/${f.name}`);
-    const signed = paths.length
-      ? (await supabase.storage.from('driver-kyc').createSignedUrls(paths, 60 * 10)).data
-      : null;
-    wanted.forEach((f, i) => {
-      const key = f.name.split('.')[0] as DocKey;
-      found[key] = { name: f.name, url: signed?.[i]?.signedUrl ?? null };
-    });
-    setUploadedDocs(found);
-  }, [driver.id]);
+  // Uploading and reviewing now live on their own screen; this page keeps only the
+  // one-line state, so the folder is listed without asking for signed previews.
+  const [docs, setDocs] = React.useState<DocFile[]>([]);
+  const [listError, setListError] = React.useState<string | null>(null);
+  const [loaded, setLoaded] = React.useState(false);
 
   React.useEffect(() => {
-    void loadDocs();
-  }, [loadDocs]);
+    let cancelled = false;
+    void listDriverDocuments(driver.id, false).then((result) => {
+      if (cancelled) return;
+      setDocs(result.docs);
+      setListError(result.error);
+      setLoaded(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [driver.id]);
 
   const kycStatus = driver.kyc_status ?? 'pending';
-  const isVerified = kycStatus === 'verified';
-  const isRejected = kycStatus === 'rejected' || kycStatus === 'suspended';
-
-  const uploadDoc = async (docKey: DocKey, file: File) => {
-    const supabase = getBrowserClient();
-    const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg';
-    const path = `${driver.id}/${docKey}.${ext}`;
-
-    // Storage writes its object metadata to Postgres, so a slow database surfaces here as
-    // "the connection to the database timed out" and the rider is simply stuck — they cannot
-    // get verified and cannot work. Retry a couple of times with backoff before giving up;
-    // these failures are transient far more often than not.
-    let lastMessage = '';
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      const { error } = await supabase.storage
-        .from('driver-kyc')
-        .upload(path, file, { upsert: true, contentType: file.type });
-      if (!error) {
-        // Re-list so the preview below is the file that is actually stored, not an
-        // optimistic guess at it.
-        void loadDocs();
-        return;
-      }
-      lastMessage = error.message;
-      if (attempt < 2) await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
-    }
-    // Say what to do, not just what broke. The raw message ("connection to the database
-    // timed out") reads as permanent to a rider; it almost never is.
-    alert(
-      `Couldn't upload that document — the server is busy right now.\n\n` +
-        `Please wait a moment and tap Upload again.\n\n(${lastMessage})`,
-    );
-  };
+  const stage = documentsStage({
+    listFailed: listError !== null,
+    docs,
+    kycStatus,
+    kycVerifiedAt: driver.kyc_verified_at,
+  });
+  const summary = loaded
+    ? documentsSummary(stage, docs, driver.approvals ?? [])
+    : 'Checking your documents…';
 
   const handleSignOut = async () => {
     const supabase = getBrowserClient();
@@ -110,7 +88,7 @@ export function ProfileView() {
               <h1 className="font-display text-2xl font-bold">{driver.full_name}</h1>
               <Badge variant="solid" className="mt-1 bg-white/25 text-white">
                 <Star className="h-3 w-3 fill-current" /> {(driver.average_rating ?? 0).toFixed(1)} ·{' '}
-                {kycStatus}
+                {KYC_PILL[kycStatus] ?? kycStatus}
               </Badge>
             </div>
           </div>
@@ -120,6 +98,27 @@ export function ProfileView() {
           <Stat label="Battery" value={`${driver.battery_level ?? '—'}%`} />
           <Stat label="Rating" value={(driver.average_rating ?? 0).toFixed(1)} />
         </div>
+      </Card>
+
+      {/* First thing under the hero: the apply screen sends riders here when a document
+          is missing, so the row it wants them to tap must not be below the fold. */}
+      <Card className="mt-4 overflow-hidden p-0">
+        <button
+          type="button"
+          onClick={() => router.push('/app/profile/documents')}
+          className="focus-ring flex w-full items-center gap-3 p-4 text-left"
+        >
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+            <FileCheck2 className="h-5 w-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold">Documents &amp; verification</p>
+            <p className={`truncate text-xs ${loaded ? SUMMARY_CLASS[stage] : 'text-muted-foreground'}`}>
+              {summary}
+            </p>
+          </div>
+          <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+        </button>
       </Card>
 
       <Card className="mt-4 p-5">
@@ -135,88 +134,6 @@ export function ProfileView() {
           </div>
         </div>
       </Card>
-
-      <section className="mt-4">
-        <Card className="overflow-hidden">
-          <header
-            className={`flex items-center gap-3 px-5 py-4 ${
-              isVerified
-                ? 'bg-success/10 text-success'
-                : isRejected
-                  ? 'bg-danger/10 text-danger'
-                  : 'bg-warning/10 text-warning'
-            }`}
-          >
-            {isVerified ? (
-              <CheckCircle2 className="h-6 w-6" />
-            ) : (
-              <ShieldAlert className="h-6 w-6" />
-            )}
-            <div>
-              <p className="font-display text-base font-semibold capitalize">{kycStatus}</p>
-              <p className="text-xs">
-                {isVerified
-                  ? 'Your documents are verified. You can receive dispatches.'
-                  : isRejected
-                    ? 'KYC was rejected — please re-upload and contact support.'
-                    : 'Upload your documents to start receiving dispatches.'}
-              </p>
-            </div>
-          </header>
-
-          <ul className="divide-y divide-border">
-            {DOC_TYPES.map((doc) => {
-              const file = uploadedDocs[doc.key];
-              const done = !!file;
-              const isPdf = file?.name.toLowerCase().endsWith('.pdf') ?? false;
-              return (
-                <li key={doc.key} className="flex items-center gap-3 px-5 py-3">
-                  {/* The document itself, not a tick. A rider who photographed the wrong
-                      side of a licence can now see that without re-uploading blind. */}
-                  {done && file?.url && !isPdf ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={file.url}
-                      alt={doc.label}
-                      className="h-10 w-10 shrink-0 rounded-xl border border-border object-cover"
-                    />
-                  ) : (
-                    <div
-                      className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${
-                        done ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground'
-                      }`}
-                    >
-                      {done ? <CheckCircle2 className="h-5 w-5" /> : <FileCheck2 className="h-5 w-5" />}
-                    </div>
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold">{doc.label}</p>
-                    {/* "pending review" is removed: whether a human has looked yet is the
-                        merchant's business, not something the rider can act on, and it made
-                        a finished upload read as unfinished. */}
-                    <p className="truncate text-xs text-muted-foreground">
-                      {done ? file!.name : 'Not uploaded'}
-                    </p>
-                  </div>
-                  <label className="focus-ring inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-full bg-primary px-3 text-xs font-semibold text-primary-foreground">
-                    <Upload className="h-3.5 w-3.5" />
-                    {done ? 'Replace' : 'Upload'}
-                    <input
-                      type="file"
-                      accept="image/*,.pdf"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) void uploadDoc(doc.key, file).then(() => refresh());
-                      }}
-                    />
-                  </label>
-                </li>
-              );
-            })}
-          </ul>
-        </Card>
-      </section>
 
       <ul className="mt-4 space-y-2">
         <li>
@@ -247,6 +164,8 @@ export function ProfileView() {
             <ChevronRight className="h-5 w-5 text-muted-foreground" />
           </button>
         </li>
+        {/* Renders its own <li>, or nothing when already installed / no install path. */}
+        <DriverInstallRow />
         <li>
           <Button
             variant="ghost"

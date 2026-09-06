@@ -8,7 +8,15 @@ import { useTranslations } from 'next-intl';
 import { formatCurrency, kmToMi } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
 import { useRealtime } from '@favornoms/database/realtime';
-import { DeliveryMap, fetchRoute, hasMapboxToken, type LatLng } from '@favornoms/maps';
+import {
+  DeliveryMap,
+  fetchRoute,
+  fixAgeSeconds,
+  formatFixAge,
+  hasMapboxToken,
+  isFixStale,
+  type LatLng,
+} from '@favornoms/maps';
 import { Badge, Button, Card, IconButton } from '@favornoms/ui';
 import { DeliveryChat } from './delivery-chat';
 import { OrderActions, type ExistingRating } from './order-actions';
@@ -61,6 +69,9 @@ type OrderRow = {
     accepted_at?: string | null;
     driver_lat?: number | null;
     driver_lng?: number | null;
+    /** When that pin was last reported. A frozen pin and a parked rider look identical
+     *  without it, and the rider's app stops reporting the moment it is backgrounded. */
+    driver_location_updated_at?: string | null;
     current_eta_min?: number | null;
     arriving_at?: string | null;
     dropoff_lat?: number | null;
@@ -97,6 +108,43 @@ interface Props {
  */
 function asArray<T>(v: T[] | T | null | undefined): T[] {
   return Array.isArray(v) ? v : v ? [v] : [];
+}
+
+type DeliveryRow = OrderRow['deliveries'][number];
+
+/**
+ * What this page draws, and nothing else.
+ *
+ * A postgres_changes payload carries the deliveries row as the TABLE has it — the rider's
+ * earnings, their tip split, the dispatch history, the pickup photo, the failure reason —
+ * and the old merge copied all of it into this component's state, where it stayed for the
+ * whole delivery. None of it is the diner's business. (The row still reaches the browser:
+ * Postgres column privileges are per-ROLE, and staff and riders read those same columns as
+ * `authenticated`. See the migration header for what a real fix costs.)
+ */
+const TRACKED_DELIVERY_FIELDS = [
+  'id',
+  'status',
+  'driver_id',
+  'distance_km',
+  'estimated_duration_min',
+  'accepted_at',
+  'driver_lat',
+  'driver_lng',
+  'driver_location_updated_at',
+  'current_eta_min',
+  'arriving_at',
+  'dropoff_lat',
+  'dropoff_lng',
+  'batch_seq',
+] as const;
+
+function pickTrackedFields(row: Record<string, unknown>): Partial<DeliveryRow> {
+  const out: Record<string, unknown> = {};
+  for (const key of TRACKED_DELIVERY_FIELDS) {
+    if (key in row) out[key] = row[key];
+  }
+  return out as Partial<DeliveryRow>;
 }
 
 export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransfer }: Props) {
@@ -148,7 +196,7 @@ export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransf
       if (table === 'deliveries') {
         setOrder((curr) => {
           if (!payload.new) return curr;
-          const incoming = payload.new as Partial<OrderRow['deliveries'][number]>;
+          const incoming = pickTrackedFields(payload.new as Record<string, unknown>);
           const existing = asArray(curr.deliveries)[0];
           // Merge rather than replace. A postgres_changes payload carries the row as the
           // TABLE has it, not as this page selected it, so swapping the object wholesale
@@ -156,9 +204,7 @@ export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransf
           // decides whether the driver card renders at all.
           return {
             ...curr,
-            deliveries: [
-              { ...(existing ?? {}), ...incoming } as OrderRow['deliveries'][number],
-            ],
+            deliveries: [{ ...(existing ?? {}), ...incoming } as DeliveryRow],
           };
         });
         return;
@@ -234,8 +280,29 @@ export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransf
       : null;
   const showMap =
     !!liveDelivery && !!branchLocation && (branchLocation.lat !== 0 || branchLocation.lng !== 0) && hasMapboxToken();
-  const etaMin = delivery?.current_eta_min ?? delivery?.estimated_duration_min ?? null;
-  const arriving = !!delivery?.arriving_at;
+  // set_driver_location computes this from a straight line at 24 km/h, and a rider whose
+  // test fix sat in another country produced current_eta_min 37104 on the live project.
+  // Whatever the row says, this page only ever prints a number a person can act on.
+  const rawEta = delivery?.current_eta_min ?? delivery?.estimated_duration_min ?? null;
+  const etaMin =
+    rawEta != null && Number.isFinite(rawEta) ? Math.min(600, Math.max(1, Math.round(rawEta))) : null;
+  // arriving_at outlived its rider too: a row handed back to dispatch kept the stamp, so the
+  // page announced "almost there" for a delivery with no driver on it.
+  const arriving = !!delivery?.arriving_at && delivery?.driver_id != null;
+
+  // How old the pin is. The rider's app cannot report GPS from the background — iOS suspends
+  // it, Android throttles it — and the app's own Navigate button sends them to Google Maps
+  // for the drive. Until now the pin simply froze mid-street and the ETA kept counting down
+  // beside it, which reads as a driver who has stopped. Age it out loud instead.
+  const trackingLive = !!liveDelivery;
+  const [nowMs, setNowMs] = React.useState(() => Date.now());
+  React.useEffect(() => {
+    if (!trackingLive) return;
+    const id = window.setInterval(() => setNowMs(Date.now()), 5_000);
+    return () => window.clearInterval(id);
+  }, [trackingLive]);
+  const fixAge = fixAgeSeconds(delivery?.driver_location_updated_at ?? null, nowMs);
+  const fixStale = trackingLive && isFixStale(fixAge);
 
   return (
     <div className="container max-w-xl pt-4">
@@ -256,7 +323,13 @@ export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransf
 
       <Card className="overflow-hidden p-0">
         {showMap && liveDelivery && branchLocation ? (
-          <TrackingMap branch={branchLocation} delivery={liveDelivery} arriving={arriving} />
+          <TrackingMap
+            branch={branchLocation}
+            delivery={liveDelivery}
+            arriving={arriving}
+            stale={fixStale}
+            fixAge={fixAge}
+          />
         ) : (
           <div className="relative bg-gradient-warm p-6 text-white">
             <div className="absolute inset-0 bg-noise opacity-30" />
@@ -334,11 +407,11 @@ export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransf
           </ol>
 
           {/* Card orders only — a cash order sitting in 'pending' is normal
-              (staff confirm it) and must not show a "Pay with card" box. Guests
-              can't read their payments row (RLS), but they also can't create a
-              payment intent, so hiding the box for them fixes a dead end. */}
+              (staff confirm it) and must not be told its payment is unavailable.
+              Guests can't read their payments row (RLS), so the box simply does
+              not render for them, which is the right answer either way. */}
           {order.status === 'pending' && order.payments?.some((p) => p.method === 'card') && (
-            <StripePayment orderId={order.id} />
+            <CardPaymentNotice orderId={order.id} />
           )}
 
           {/* QR transfer: the diner has already scanned and paid outside the app, so what
@@ -371,7 +444,11 @@ export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransf
               />
             ))}
 
-          {delivery?.driver_id && (
+          {/* Gated on the same condition as the map, not on driver_id alone. Dispatch sets
+              driver_id the moment it OFFERS the job, so this card used to appear — with Chat
+              and Call — for a rider who had not accepted, and vanish again when they
+              declined, blinking once per offer. accepted_at is the acceptance. */}
+          {liveDelivery && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -388,23 +465,36 @@ export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransf
                       : // Stop-2 of a stacked trip: honest while the driver is still on the
                         // first drop (assigned/picked_up). Once THIS leg is in_transit the
                         // driver is genuinely heading here — back to the normal copy.
-                        delivery.batch_seq === 2 && ['assigned', 'picked_up'].includes(delivery.status)
+                        liveDelivery.batch_seq === 2 &&
+                          ['assigned', 'picked_up'].includes(liveDelivery.status)
                         ? 'Your driver is finishing one nearby delivery first'
-                        : 'Your driver is on the way'}
+                        : // 'assigned' means they are riding to the RESTAURANT. Calling that
+                          // "on the way" and printing a minutes figure beside it is how the
+                          // number came to be read as time-to-you when it was not.
+                          liveDelivery.status === 'assigned'
+                          ? 'Your driver is collecting your order'
+                          : 'Your driver is on the way'}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {delivery.distance_km != null && `${kmToMi(delivery.distance_km).toFixed(1)} mi · `}
-                    {etaMin != null && `${etaMin} min ETA`}
-                    {delivery.batch_seq === 2 &&
+                    {liveDelivery.distance_km != null &&
+                      `${kmToMi(liveDelivery.distance_km).toFixed(1)} mi · `}
+                    {fixAge == null
+                      ? 'Waiting for your driver’s location…'
+                      : fixStale
+                        ? `Location last updated ${formatFixAge(fixAge)} — the map and ETA may be behind`
+                        : etaMin != null
+                          ? `${etaMin} min to you · updated ${formatFixAge(fixAge)}`
+                          : `Updated ${formatFixAge(fixAge)}`}
+                    {liveDelivery.batch_seq === 2 &&
                       !arriving &&
-                      ['assigned', 'picked_up'].includes(delivery.status) &&
+                      ['assigned', 'picked_up'].includes(liveDelivery.status) &&
                       ' · includes their other stop'}
                   </p>
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                <DeliveryChat deliveryId={delivery.id} deliveryStatus={delivery.status} />
-                <CallDriverButton deliveryId={delivery.id} label={t('callDriver')} />
+                <DeliveryChat deliveryId={liveDelivery.id} deliveryStatus={liveDelivery.status} />
+                <CallDriverButton deliveryId={liveDelivery.id} label={t('callDriver')} />
               </div>
             </motion.div>
           )}
@@ -453,10 +543,14 @@ function TrackingMap({
   branch,
   delivery,
   arriving,
+  stale,
+  fixAge,
 }: {
   branch: LatLng;
-  delivery: OrderRow['deliveries'][number];
+  delivery: DeliveryRow;
   arriving: boolean;
+  stale: boolean;
+  fixAge: number | null;
 }) {
   const dropoff =
     delivery.dropoff_lat != null && delivery.dropoff_lng != null
@@ -465,8 +559,13 @@ function TrackingMap({
   // Memoised on the numbers, not rebuilt per render: DeliveryMap moves the puck in an effect
   // keyed on this object, and a fresh literal every render made it re-run on every unrelated
   // state change. Now the marker moves when the rider does, and only then.
-  const driverLat = delivery.driver_lat ?? null;
-  const driverLng = delivery.driver_lng ?? null;
+  //
+  // driver_id gates the coordinates because the columns outlive the rider: until the
+  // reassignment trigger existed, a delivery sent back out for dispatch kept the previous
+  // rider's position, and this drew their pin for a job they had already dropped.
+  const hasDriver = delivery.driver_id != null;
+  const driverLat = hasDriver ? (delivery.driver_lat ?? null) : null;
+  const driverLng = hasDriver ? (delivery.driver_lng ?? null) : null;
   const driver = React.useMemo(
     () => (driverLat != null && driverLng != null ? { lat: driverLat, lng: driverLng } : null),
     [driverLat, driverLng],
@@ -494,11 +593,22 @@ function TrackingMap({
         dropoff={dropoff}
         driver={driver}
         routeCoordinates={route}
+        driverStale={stale}
         className="h-full w-full"
       />
-      {arriving && (
+      {/* "Arriving now" on top of a pin nobody has heard from in two minutes is the worst of
+          both: it sends the diner to the door for a rider who may still be streets away. */}
+      {arriving && !stale && (
         <span className="absolute left-3 top-3 z-10 rounded-full bg-success px-3 py-1.5 text-xs font-bold text-white shadow-lg">
           🛵 Arriving now
+        </span>
+      )}
+      {stale && fixAge != null && (
+        <span
+          role="status"
+          className="absolute right-3 top-3 z-10 rounded-full bg-card/90 px-3 py-1.5 text-xs font-semibold text-muted-foreground shadow"
+        >
+          Last seen {formatFixAge(fixAge)}
         </span>
       )}
     </div>
@@ -533,74 +643,33 @@ function CallDriverButton({ deliveryId, label }: { deliveryId: string; label: st
   );
 }
 
-// Stripe is dormant until the owner supplies keys, so `stripe_not_configured`
-// is the PERMANENT state in production — which made the old "mock confirm"
-// button (a browser UPDATE marking payments.status='completed') a
-// pay-for-nothing button on the live storefront. Gate on the build mode
-// instead: Next inlines NODE_ENV, so this whole branch is eliminated from a
-// production bundle rather than merely hidden.
+// Card money cannot be collected on this storefront, and no key changes that.
+//
+// Nothing in apps/web mounts Stripe Elements, and `stripe-create-payment-intent` creates
+// the intent with `automatic_payment_methods` — an intent only a PaymentElement plus
+// `stripe.confirmPayment({ elements, confirmParams: { return_url } })` can confirm. What
+// stood here instead was `stripe.confirmCardPayment(clientSecret)` with no card attached:
+// it could never succeed, so the diner's one card button led to an error and every card
+// payment ever taken on this project is still sitting at 'pending'.
+//
+// A half-working card flow is worse than an honest one, so the button is gone and the box
+// says where to actually pay. Checkout no longer offers the card tile for the same reason
+// (CARD_CHECKOUT_AVAILABLE in checkout-view); these are the orders placed before it did.
+// Restoring the button means mounting Elements and letting the existing stripe-webhook
+// `payment_intent.succeeded` handler flip payments+orders — not re-adding a confirm call.
 const ALLOW_MOCK_PAY = process.env.NODE_ENV !== 'production';
 
-function StripePayment({ orderId }: { orderId: string }) {
-  const [stage, setStage] = React.useState<'idle' | 'loading' | 'ready' | 'paying' | 'mock' | 'error'>('idle');
-  const [error, setError] = React.useState<string | null>(null);
-  const [clientSecret, setClientSecret] = React.useState<string | null>(null);
-  const [publishableKey, setPublishableKey] = React.useState<string | null>(null);
-
-  const publicKeyEnv = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
-
-  const initStripe = async () => {
-    setStage('loading');
-    setError(null);
-    try {
-      const supabase = getBrowserClient();
-      const { createStripePaymentIntent } = await import('@favornoms/database/queries');
-      const intent = await createStripePaymentIntent(supabase, orderId);
-      setClientSecret(intent.client_secret);
-      setPublishableKey(intent.publishable_key ?? publicKeyEnv ?? null);
-      setStage('ready');
-    } catch (err) {
-      const msg = (err as Error).message;
-      if (msg.includes('stripe_not_configured')) {
-        if (ALLOW_MOCK_PAY) {
-          setStage('mock');
-          return;
-        }
-        setError('Online card payment is unavailable. Please pay the restaurant directly.');
-        setStage('error');
-        return;
-      }
-      setError(msg);
-      setStage('error');
-    }
-  };
-
-  const confirmStripe = async () => {
-    if (!clientSecret || !publishableKey) return;
-    setStage('paying');
-    setError(null);
-    try {
-      const stripe = await loadStripe(publishableKey);
-      // Use redirect-less confirmation with a placeholder card. In a real
-      // implementation we'd mount Stripe Elements; this is a minimal flow.
-      const result = await stripe.confirmCardPayment(clientSecret);
-      if (result.error) {
-        setError(result.error.message ?? 'Payment failed');
-        setStage('ready');
-        return;
-      }
-      // Server-side webhook will flip order → confirmed; client sees via realtime.
-    } catch (err) {
-      setError((err as Error).message);
-      setStage('ready');
-    }
-  };
+function CardPaymentNotice({ orderId }: { orderId: string }) {
+  const [confirming, setConfirming] = React.useState(false);
 
   const mockConfirm = async () => {
     if (!ALLOW_MOCK_PAY) return;
-    setStage('paying');
+    setConfirming(true);
     const supabase = getBrowserClient();
-    await supabase.from('payments').update({ status: 'completed', paid_at: new Date().toISOString() }).eq('order_id', orderId);
+    await supabase
+      .from('payments')
+      .update({ status: 'completed', paid_at: new Date().toISOString() })
+      .eq('order_id', orderId);
     await supabase.from('orders').update({ status: 'confirmed' }).eq('id', orderId);
   };
 
@@ -608,72 +677,33 @@ function StripePayment({ orderId }: { orderId: string }) {
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
+      role="status"
       className="mt-6 rounded-2xl border border-warning/40 bg-warning/5 p-4"
     >
-      <p className="text-sm font-semibold text-warning">Payment pending</p>
+      <p className="text-sm font-semibold text-warning">Card payment isn&apos;t available here</p>
       <p className="mt-1 text-xs text-muted-foreground">
-        Pay securely via Stripe. We never store your card details.
+        This order was placed as a card payment, but we can&apos;t take the card online yet.
+        Please pay the restaurant directly — they can take it when you collect your order or
+        when it arrives. Your order is not cancelled.
       </p>
-      {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
-      {stage === 'idle' && (
-        <Button variant="gradient" size="md" fullWidth className="mt-3" onClick={initStripe}>
-          Pay with card
-        </Button>
-      )}
-      {stage === 'loading' && (
-        <Button variant="gradient" size="md" fullWidth className="mt-3" loading>
-          Loading…
-        </Button>
-      )}
-      {stage === 'ready' && (
-        <Button variant="gradient" size="md" fullWidth className="mt-3" onClick={confirmStripe}>
-          Confirm payment
-        </Button>
-      )}
-      {stage === 'paying' && (
-        <Button variant="gradient" size="md" fullWidth className="mt-3" loading>
-          Processing…
-        </Button>
-      )}
-      {ALLOW_MOCK_PAY && stage === 'mock' && (
+      {ALLOW_MOCK_PAY && (
         <div className="mt-3 space-y-2">
           <p className="text-xs text-muted-foreground">
-            Stripe is not configured on this environment. Use the demo confirm button to mark the
-            order paid for local testing.
+            Development build only: mark the order paid so the rest of the flow can be tested.
           </p>
-          <Button variant="gradient" size="md" fullWidth onClick={mockConfirm}>
+          <Button
+            variant="outline"
+            size="md"
+            fullWidth
+            loading={confirming}
+            onClick={mockConfirm}
+          >
             Mock confirm (dev only)
           </Button>
         </div>
       )}
-      {stage === 'error' && (
-        <Button variant="outline" size="md" fullWidth className="mt-3" onClick={initStripe}>
-          Try again
-        </Button>
-      )}
     </motion.div>
   );
-}
-
-// Dynamically load Stripe.js from CDN. Avoids an npm dep at build-time.
-async function loadStripe(publishableKey: string) {
-  if (typeof window === 'undefined') throw new Error('client_only');
-  type StripeFn = (key: string) => {
-    confirmCardPayment: (secret: string) => Promise<{ error?: { message?: string }; paymentIntent?: { status: string } }>;
-  };
-  const w = window as unknown as { Stripe?: StripeFn };
-  if (!w.Stripe) {
-    await new Promise<void>((resolve, reject) => {
-      const s = document.createElement('script');
-      s.src = 'https://js.stripe.com/v3/';
-      s.async = true;
-      s.onload = () => resolve();
-      s.onerror = () => reject(new Error('stripe_js_load_failed'));
-      document.head.appendChild(s);
-    });
-  }
-  if (!w.Stripe) throw new Error('stripe_js_missing');
-  return w.Stripe(publishableKey);
 }
 
 /**

@@ -1,16 +1,22 @@
+/**
+ * Every route under this segment is dynamic (resolveTenant reads cookies), so Next paints
+ * this on every tap of the bottom tab bar. It used to be an eight-tile *menu* skeleton,
+ * which meant opening an order flashed a grid of squares and then swapped to a completely
+ * different layout. Two rules now: promise nothing about the shape of the page that is
+ * coming, and stay invisible for the first 400 ms, so the navigations that resolve quickly
+ * — nearly all of them — show no interstitial at all.
+ */
 export default function BranchLoading() {
   return (
-    <div className="container max-w-6xl py-8">
-      <div className="h-44 animate-pulse rounded-3xl bg-muted" />
-      <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-        {Array.from({ length: 8 }).map((_, i) => (
-          <div key={i} className="space-y-3">
-            <div className="aspect-square animate-pulse rounded-2xl bg-muted" />
-            <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
-            <div className="h-4 w-1/2 animate-pulse rounded bg-muted" />
-          </div>
-        ))}
-      </div>
+    <div
+      className="grid min-h-[60vh] animate-fade-in place-items-center"
+      style={{ animationDelay: '400ms', animationFillMode: 'both' }}
+    >
+      <span
+        role="status"
+        aria-label="Loading"
+        className="h-10 w-10 animate-spin rounded-full border-4 border-muted border-t-primary"
+      />
     </div>
   );
 }

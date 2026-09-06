@@ -4,9 +4,13 @@ import * as React from 'react';
 import { MessageCircle } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import {
+  chatAttachmentErrorMessage,
+  isChatPhotoBody,
   listMessages,
   markMessagesRead,
   sendMessage,
+  sendPhotoMessage,
+  signAttachments,
   subscribeMessages,
   type DeliveryMessage,
 } from '@favornoms/database/queries';
@@ -27,7 +31,8 @@ export function DriverDeliveryChat({ deliveryId, deliveryStatus }: Props) {
   const [userId, setUserId] = React.useState<string | null>(null);
   const [messages, setMessages] = React.useState<DeliveryMessage[]>([]);
   const [unread, setUnread] = React.useState(0);
-  const [sending, setSending] = React.useState(false);
+  const [urls, setUrls] = React.useState<Record<string, string>>({});
+  const [photoError, setPhotoError] = React.useState<string | null>(null);
   const openRef = React.useRef(open);
   openRef.current = open;
 
@@ -58,6 +63,29 @@ export function DriverDeliveryChat({ deliveryId, deliveryStatus }: Props) {
     return unsubscribe;
   }, [deliveryId, userId]);
 
+  // Chat photos live in a private bucket, so each one needs a signed URL. Serialising the
+  // outstanding paths — the same idiom realtime.ts uses for its tablesKey — keys the effect
+  // off the SET of unsigned photos rather than the array identity, so it covers the history
+  // load and every realtime arrival without re-signing what it already holds.
+  const unsignedKey = messages
+    .map((m) => m.attachment_path)
+    .filter((p): p is string => !!p && !urls[p])
+    .join(',');
+
+  React.useEffect(() => {
+    if (!unsignedKey) return;
+    let cancelled = false;
+    void signAttachments(
+      getBrowserClient(),
+      unsignedKey.split(',').map((attachment_path) => ({ attachment_path })),
+    ).then((next) => {
+      if (!cancelled) setUrls((curr) => ({ ...curr, ...next }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [unsignedKey]);
+
   const openChat = () => {
     setOpen(true);
     setUnread(0);
@@ -65,13 +93,20 @@ export function DriverDeliveryChat({ deliveryId, deliveryStatus }: Props) {
   };
 
   const send = async (body: string) => {
-    setSending(true);
+    const supabase = getBrowserClient();
+    const msg = await sendMessage(supabase, deliveryId, 'driver', body);
+    if (msg) setMessages((curr) => (curr.some((m) => m.id === msg.id) ? curr : [...curr, msg]));
+  };
+
+  const sendPhoto = async (file: File) => {
+    setPhotoError(null);
     try {
-      const supabase = getBrowserClient();
-      const msg = await sendMessage(supabase, deliveryId, 'driver', body);
-      if (msg) setMessages((curr) => (curr.some((m) => m.id === msg.id) ? curr : [...curr, msg]));
-    } finally {
-      setSending(false);
+      const msg = await sendPhotoMessage(getBrowserClient(), deliveryId, 'driver', file);
+      setMessages((curr) => (curr.some((m) => m.id === msg.id) ? curr : [...curr, msg]));
+    } catch (err) {
+      setPhotoError(chatAttachmentErrorMessage(err));
+      // Rethrow so the thread marks the optimistic bubble failed and offers the retry.
+      throw err;
     }
   };
 
@@ -109,9 +144,15 @@ export function DriverDeliveryChat({ deliveryId, deliveryStatus }: Props) {
               body: m.body,
               mine: m.sender_user_id === userId,
               created_at: m.created_at,
+              hasImage: !!m.attachment_path,
+              imageUrl: m.attachment_path ? (urls[m.attachment_path] ?? null) : null,
+              imageWidth: m.attachment_width,
+              imageHeight: m.attachment_height,
+              photoOnly: !!m.attachment_path && isChatPhotoBody(m.body),
             }))}
             onSend={send}
-            sending={sending}
+            onSendPhoto={sendPhoto}
+            photoError={photoError}
             quickReplies={DRIVER_QUICK_REPLIES}
             disabled={!inFlight}
             disabledNotice="Chat closes when the delivery ends."

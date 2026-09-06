@@ -8,7 +8,7 @@ interface Props { params: Promise<{ branchId: string }> }
 export default async function RatingsPage({ params }: Props) {
   const { branchId } = await params;
   const supabase = await getServerClient();
-  const { ratings, foodAvg, foodCount, deliveryAvg, deliveryCount, total, error } =
+  const { ratings, foodAvg, foodCount, deliveryAvg, deliveryCount, total, drivers, error } =
     await getBranchRatings(supabase, branchId);
 
   return (
@@ -54,6 +54,86 @@ export default async function RatingsPage({ params }: Props) {
           </Card>
         </section>
 
+        {drivers.length > 0 && (
+          <section>
+            <h2 className="mb-3 font-display text-lg font-semibold">Riders</h2>
+            {/* The branch-wide delivery average above hides who is earning it. This is the
+                same rows grouped per rider, so a merchant can tell one rider's run of one
+                stars from a bad week across the board. */}
+            <ul className="grid gap-3 sm:grid-cols-2">
+              {drivers.map((d) => (
+                <li key={d.driver_id}>
+                  <Card className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                          <Bike className="h-5 w-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate font-semibold">
+                            {d.name ?? `Rider ${d.driver_id.slice(0, 8)}`}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {d.count} rated {d.count === 1 ? 'delivery' : 'deliveries'}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="shrink-0 font-display text-2xl font-bold tabular-nums">
+                        {d.avg != null ? d.avg.toFixed(1) : '—'}
+                        {d.avg != null && (
+                          <span className="text-sm font-medium text-muted-foreground"> / 5</span>
+                        )}
+                      </p>
+                    </div>
+
+                    {d.count > 0 && (
+                      <ul className="mt-3 space-y-1">
+                        {[5, 4, 3, 2, 1].map((star) => {
+                          const n = d.distribution[star - 1] ?? 0;
+                          return (
+                            <li key={star} className="flex items-center gap-2 text-xs">
+                              <span className="w-6 shrink-0 tabular-nums text-muted-foreground">
+                                {star}★
+                              </span>
+                              <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                                <span
+                                  className="block h-full rounded-full bg-warning"
+                                  style={{ width: `${d.count ? (n / d.count) * 100 : 0}%` }}
+                                />
+                              </span>
+                              <span className="w-5 shrink-0 text-right tabular-nums text-muted-foreground">
+                                {n}
+                              </span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+
+                    {d.comments.length > 0 && (
+                      <ul className="mt-3 space-y-2 border-t border-border pt-3">
+                        {d.comments.slice(0, 3).map((c) => (
+                          <li key={c.id} className="text-sm">
+                            <span className="mr-2 font-mono text-xs text-muted-foreground">
+                              {c.order_number ?? '—'}
+                            </span>
+                            &ldquo;{c.comment}&rdquo;
+                          </li>
+                        ))}
+                        {d.comments.length > 3 && (
+                          <li className="text-xs text-muted-foreground">
+                            +{d.comments.length - 3} more
+                          </li>
+                        )}
+                      </ul>
+                    )}
+                  </Card>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
         {ratings.length === 0 && !error ? (
           <EmptyState
             icon={<Star className="h-7 w-7" />}
@@ -82,6 +162,20 @@ export default async function RatingsPage({ params }: Props) {
                     </div>
                   </div>
                   {r.comment && <p className="mt-3 text-sm">&ldquo;{r.comment}&rdquo;</p>}
+                  {r.driver_comment && (
+                    // Kept visibly apart from the food comment: they are two different
+                    // questions, and reading a complaint about the ride as a complaint
+                    // about the kitchen sends the merchant after the wrong problem.
+                    <p className="mt-2 flex items-start gap-2 text-sm text-muted-foreground">
+                      <Bike className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span>
+                        &ldquo;{r.driver_comment}&rdquo;
+                        {r.driver_name && (
+                          <span className="ml-1 text-xs">— about {r.driver_name}</span>
+                        )}
+                      </span>
+                    </p>
+                  )}
                 </Card>
               </li>
             ))}

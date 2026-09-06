@@ -72,7 +72,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const messages = await getMessages();
 
   return (
-    <html lang={locale} className={`${inter.variable} ${playfair.variable}`}>
+    // ThemeProvider stamps `.dark` on <html> from a blocking script before the first
+    // paint, so the class the browser has is deliberately one ahead of the one React
+    // rendered. Without this, that difference is reported as a hydration mismatch.
+    <html
+      lang={locale}
+      className={`${inter.variable} ${playfair.variable}`}
+      suppressHydrationWarning
+    >
       <head>
         <script dangerouslySetInnerHTML={{ __html: CAPTURE_INSTALL_PROMPT }} />
       </head>

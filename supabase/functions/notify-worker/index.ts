@@ -331,7 +331,15 @@ async function sendPush(
     title: renderTitle(row.template, row.variables),
     body: renderTemplate(row.template, row.variables),
     url: renderUrl(row.template, row.variables),
-    tag: row.template,
+    // One tag per template meant every dispatch offer carried the constant tag 'new_dispatch',
+    // and a notification whose tag is already on the shade REPLACES it in silence — no sound,
+    // no vibration, no banner. Offer #2 arrived invisibly while offer #1 was still showing, and
+    // the rider lost the work. Give each offer its own tag; order-status templates keep
+    // collapsing onto one, which is what you want there.
+    tag:
+      row.template === 'new_dispatch' && typeof row.variables.delivery_id === 'string'
+        ? `new_dispatch:${row.variables.delivery_id}`
+        : row.template,
   });
 
   let okCount = 0;
@@ -431,6 +439,15 @@ function renderUrl(template: string, vars: Record<string, unknown>) {
 }
 
 function renderTemplate(template: string, vars: Record<string, unknown>) {
+  // `?? 'New message'` only caught null, so an empty preview rendered as "Driver: " on a
+  // lock screen. A photo sent without a caption already carries "📷 Photo" as its body, so
+  // has_attachment is only the belt to that braces.
+  const messagePreview =
+    typeof vars.preview === 'string' && vars.preview.trim() !== ''
+      ? vars.preview.trim()
+      : vars.has_attachment === true
+        ? '📷 Photo'
+        : 'New message';
   const dict: Record<string, string> = {
     order_confirmed: `Order ${vars.order_number} confirmed. ETA ${vars.eta_minutes ?? 30} min.`,
     order_ready_pickup: `Order ${vars.order_number} is ready for pickup at ${vars.branch_name}.`,
@@ -438,7 +455,7 @@ function renderTemplate(template: string, vars: Record<string, unknown>) {
     order_delivered: `Order ${vars.order_number} delivered. Enjoy!`,
     driver_assigned: `A driver has taken your order ${vars.order_number}${vars.eta_minutes ? ` — about ${vars.eta_minutes} min away` : ''}.`,
     order_arriving: `Your driver is arriving with order ${vars.order_number} — time to meet them!`,
-    new_message: `${(vars.sender as string) === 'driver' ? 'Driver' : 'Customer'}: ${vars.preview ?? 'New message'}`,
+    new_message: `${(vars.sender as string) === 'driver' ? 'Driver' : 'Customer'}: ${messagePreview}`,
     delivery_failed_at_door: `Delivery for order failed: ${vars.reason ?? 'unknown reason'}. Open Orders to resolve.`,
     delivery_returned: `Driver cancelled after pickup: ${vars.reason ?? 'unknown reason'}. The order needs attention.`,
     order_released: `Scheduled order ${vars.order_number} is due — start preparing.`,

@@ -1,40 +1,58 @@
-import { getServerClient } from '@favornoms/database/server';
-import { formatCurrency } from '@favornoms/shared';
-import { Badge, Card } from '@favornoms/ui';
-import { OrderRowActions } from './_components/order-row-actions';
+import { Card } from '@favornoms/ui';
+import { getBranchAccess } from '@/lib/capabilities';
 import { OrderFilters } from './_components/order-filters';
 import { PaymentApprovals, type PendingTransfer } from './_components/payment-approvals';
 import { DeliveryIssues, type DeliveryIssue } from './_components/delivery-issues';
+import {
+  OrderMobileCard,
+  OrderTableRow,
+  type OrderRowContext,
+  type OrderRowData,
+} from './_components/order-row';
+import type { OrderLine } from './_components/order-lines';
 
 interface Props {
   params: Promise<{ branchId: string }>;
   searchParams: Promise<{ q?: string; status?: string; channel?: string; when?: string }>;
 }
 
-const fmtWhen = (iso: string) =>
-  new Date(iso).toLocaleString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    month: 'short',
-    day: 'numeric',
-  });
-
-const statusVariant = (status: string) => {
-  if (['pending'].includes(status)) return 'muted';
-  if (['confirmed', 'preparing'].includes(status)) return 'warning';
-  if (['ready', 'out_for_delivery'].includes(status)) return 'default';
-  if (status === 'completed') return 'success';
-  return 'danger';
-};
-
 export default async function OrdersPage({ params, searchParams }: Props) {
   const { branchId } = await params;
   const { q, status, channel, when } = await searchParams;
-  const supabase = await getServerClient();
+  const { supabase, branch, can } = await getBranchAccess(branchId, `/b/${branchId}/orders`);
 
+  // Two capabilities decide the receipt drawer. orders.view is who may read the order at
+  // all; receipt.reprint is the counter's named right to put one on paper. The matrix
+  // seeds receipt.reprint for `cashier` alone and a cashier cannot open the back office,
+  // so asking for it on its own would hide printing from every role that can reach this
+  // page — hence "either". Granting receipt.reprint to owner/admin/manager is a
+  // role_capabilities change, and this reads correctly the day someone makes it.
+  const canViewReceipt = can('orders.view');
+  const canPrintReceipt = can('receipt.reprint') || can('orders.view');
+
+  // getBranchAccess reads only id/name/restaurant_id. A receipt header needs the address a
+  // diner would recognise and the currency the branch actually charges in.
+  const { data: branchDetail } = await supabase
+    .from('branches')
+    .select('address, settings')
+    .eq('id', branchId)
+    .maybeSingle();
+  const branchAddress = branchDetail?.address ?? null;
+  const branchSettings = (branchDetail?.settings ?? {}) as Record<string, unknown>;
+  const currency = typeof branchSettings.currency === 'string' ? branchSettings.currency : 'USD';
+
+  // The list used to carry totals only, so the owner had to open a receipt to learn what a
+  // ticket was. Items, options and notes ride along on the same query now: order_items is
+  // readable under order_items_staff for anyone who can see the order, and the tables embed
+  // is the one the kitchen board already uses, so a merchant sees "Table 4" here too.
   let query = supabase
     .from('orders')
-    .select('id, order_number, channel, status, total, customer_name, customer_phone, created_at, scheduled_for, held, awaiting_payment')
+    .select(
+      `id, order_number, channel, status, total, customer_name, customer_phone, created_at,
+       scheduled_for, held, awaiting_payment, customer_notes, kitchen_notes, delivery_address,
+       tables(table_number, display_name),
+       order_items(id, item_name, quantity, unit_price, subtotal, modifiers, notes, combo_id)`,
+    )
     .eq('branch_id', branchId);
 
   if (q && q.trim()) {
@@ -63,6 +81,44 @@ export default async function OrdersPage({ params, searchParams }: Props) {
     ? query.order('scheduled_for', { ascending: true })
     : query.order('created_at', { ascending: false })
   ).limit(100);
+
+  const rows: OrderRowData[] = (orders ?? []).map((o) => {
+    // tables is a many-to-one embed, so PostgREST hands back one object (or null), but the
+    // loosened client type cannot promise that — normalise the same way the kitchen does.
+    const t = (Array.isArray(o.tables) ? o.tables[0] : o.tables) as {
+      table_number: string;
+      display_name: string | null;
+    } | null;
+    const addr = (o.delivery_address ?? null) as Record<string, unknown> | null;
+    const deliveryNotes =
+      typeof addr?.notes === 'string' && addr.notes.trim() ? addr.notes.trim() : null;
+    return {
+      id: o.id,
+      order_number: o.order_number,
+      channel: o.channel,
+      status: o.status,
+      total: Number(o.total),
+      customer_name: o.customer_name,
+      customer_phone: o.customer_phone,
+      created_at: o.created_at,
+      scheduled_for: o.scheduled_for,
+      held: !!o.held,
+      awaiting_payment: !!o.awaiting_payment,
+      customer_notes: o.customer_notes,
+      kitchen_notes: o.kitchen_notes,
+      table_label: t ? t.display_name || `Table ${t.table_number}` : null,
+      delivery_notes: deliveryNotes,
+      lines: (o.order_items ?? []) as OrderLine[],
+    };
+  });
+
+  const rowCtx: OrderRowContext = {
+    branchName: branch.name,
+    branchAddress,
+    currency,
+    canViewReceipt,
+    canPrintReceipt,
+  };
 
   // Failed deliveries that need staff attention (re-dispatch or refund).
   const { data: failedRows } = await supabase
@@ -131,7 +187,7 @@ export default async function OrdersPage({ params, searchParams }: Props) {
     <div className="container max-w-6xl py-8">
       <header className="mb-6 px-2 pl-16 lg:px-0">
         <h1 className="font-display text-3xl font-bold">Orders</h1>
-        <p className="mt-1 text-muted-foreground">{orders?.length ?? 0} matching</p>
+        <p className="mt-1 text-muted-foreground">{rows.length} matching</p>
       </header>
 
       <div className="px-2 lg:px-0">
@@ -156,6 +212,7 @@ export default async function OrdersPage({ params, searchParams }: Props) {
               <th className="px-5 py-3">Order #</th>
               <th className="px-5 py-3">Channel</th>
               <th className="px-5 py-3">Customer</th>
+              <th className="px-5 py-3">Items</th>
               <th className="px-5 py-3">Created</th>
               <th className="px-5 py-3 text-right">Total</th>
               <th className="px-5 py-3 text-center">Status</th>
@@ -163,51 +220,12 @@ export default async function OrdersPage({ params, searchParams }: Props) {
             </tr>
           </thead>
           <tbody>
-            {(orders ?? []).map((o) => (
-              <tr key={o.id} className="border-t border-border/40 hover:bg-muted/30">
-                <td className="px-5 py-3 font-mono text-xs">{o.order_number}</td>
-                <td className="px-5 py-3 capitalize">{o.channel.replace('_', ' ')}</td>
-                <td className="px-5 py-3">
-                  <div>
-                    <p className="font-medium">{o.customer_name ?? '—'}</p>
-                    <p className="text-xs text-muted-foreground">{o.customer_phone ?? ''}</p>
-                  </div>
-                </td>
-                <td className="px-5 py-3 text-muted-foreground">
-                  {fmtWhen(o.created_at)}
-                  {/* Without this a pre-order looks like it needs cooking now:
-                      it sits at pending/confirmed and only its created_at showed. */}
-                  {/* A QR order is invisible to the kitchen until the money is confirmed, so
-                      say so here rather than leaving it looking like an untouched ticket. */}
-                  {o.awaiting_payment && (
-                    <span className="ml-2 rounded-full bg-warning/15 px-2 py-0.5 text-[11px] font-semibold text-warning">
-                      Waiting for customer payment
-                    </span>
-                  )}
-                  {o.scheduled_for && (
-                    <span className="mt-0.5 block text-xs font-medium text-foreground">
-                      {o.held ? 'Scheduled' : 'Due'} {fmtWhen(o.scheduled_for)}
-                    </span>
-                  )}
-                </td>
-                <td className="px-5 py-3 text-right font-display text-base font-semibold text-primary">
-                  {formatCurrency(Number(o.total))}
-                </td>
-                <td className="px-5 py-3 text-center">
-                  <Badge variant={statusVariant(o.status) as never}>{o.status.replace('_', ' ')}</Badge>
-                </td>
-                <td className="px-5 py-3">
-                  <OrderRowActions
-                    orderId={o.id}
-                    orderTotal={Number(o.total)}
-                    orderStatus={o.status}
-                  />
-                </td>
-              </tr>
+            {rows.map((o) => (
+              <OrderTableRow key={o.id} order={o} ctx={rowCtx} />
             ))}
-            {(!orders || orders.length === 0) && (
+            {rows.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-5 py-12 text-center text-muted-foreground">
+                <td colSpan={8} className="px-5 py-12 text-center text-muted-foreground">
                   No orders match your filters
                 </td>
               </tr>
@@ -218,37 +236,9 @@ export default async function OrdersPage({ params, searchParams }: Props) {
 
       {/* Mobile cards */}
       <ul className="space-y-3 px-2 md:hidden">
-        {(orders ?? []).map((o) => (
+        {rows.map((o) => (
           <li key={o.id}>
-            <Card className="p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-mono text-xs text-muted-foreground">{o.order_number}</p>
-                  <p className="mt-1 font-semibold">{o.customer_name ?? 'Walk-in'}</p>
-                  <p className="text-xs text-muted-foreground capitalize">{o.channel.replace('_', ' ')}</p>
-                  {/* A QR order is invisible to the kitchen until the money is confirmed, so
-                      say so here rather than leaving it looking like an untouched ticket. */}
-                  {o.awaiting_payment && (
-                    <span className="ml-2 rounded-full bg-warning/15 px-2 py-0.5 text-[11px] font-semibold text-warning">
-                      Waiting for customer payment
-                    </span>
-                  )}
-                  {o.scheduled_for && (
-                    <p className="mt-1 text-xs font-medium">
-                      {o.held ? 'Scheduled' : 'Due'} {fmtWhen(o.scheduled_for)}
-                    </p>
-                  )}
-                </div>
-                <div className="text-right">
-                  <p className="font-display text-lg font-bold text-primary">
-                    {formatCurrency(Number(o.total))}
-                  </p>
-                  <Badge variant={statusVariant(o.status) as never} className="mt-1">
-                    {o.status.replace('_', ' ')}
-                  </Badge>
-                </div>
-              </div>
-            </Card>
+            <OrderMobileCard order={o} ctx={rowCtx} />
           </li>
         ))}
       </ul>

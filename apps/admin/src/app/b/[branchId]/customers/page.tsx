@@ -1,44 +1,107 @@
-import { getServerClient } from '@favornoms/database/server';
-import { formatCurrency } from '@favornoms/shared';
-import { Card, EmptyState } from '@favornoms/ui';
-import { UserRound } from 'lucide-react';
+import Link from 'next/link';
+import { listBranchCustomers } from '@favornoms/database/queries';
+import {
+  customerSortQuery,
+  defaultDirFor,
+  formatCurrency,
+  parseCustomerSort,
+  type CustomerSort,
+  type CustomerSortKey,
+} from '@favornoms/shared';
+import { Card, EmptyState, cn } from '@favornoms/ui';
+import { AlertTriangle, ChevronDown, ChevronUp, UserRound } from 'lucide-react';
+import { getBranchAccess } from '@/lib/capabilities';
+import { AccessDenied } from '@/components/access-denied';
+import { CustomerSortControls } from './_components/customer-sort-controls';
+import { CustomersPager } from './_components/customers-pager';
 
-interface Props { params: Promise<{ branchId: string }> }
+interface Props {
+  params: Promise<{ branchId: string }>;
+  searchParams: Promise<{ sort?: string; dir?: string; page?: string }>;
+}
 
-export default async function CustomersPage({ params }: Props) {
+const fmtDate = (iso: string) =>
+  new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+export default async function CustomersPage({ params, searchParams }: Props) {
   const { branchId } = await params;
-  const supabase = await getServerClient();
-  const { data: customers } = await supabase
-    .from('customers')
-    .select('id, full_name, phone, total_orders, total_spent, last_order_at')
-    .eq('branch_id', branchId)
-    // nullsFirst:false — Postgres sorts NULLs first on DESC, which would park
-    // never-ordered customers above the biggest spenders.
-    .order('total_spent', { ascending: false, nullsFirst: false })
-    .limit(100);
+  const { sort, dir, page } = parseCustomerSort(await searchParams);
+
+  // RLS already hides the rows from a cook or a server, but without this the page
+  // answers them with "No customers yet", which reads as an empty branch rather
+  // than as a door they may not open.
+  const { supabase, branch, can } = await getBranchAccess(branchId, `/b/${branchId}/customers`);
+  if (!can('customers.view')) {
+    return (
+      <AccessDenied
+        title="No customer access"
+        reason={`Only owners, admins, managers and cashiers can see the customer list at ${branch.name}.`}
+      />
+    );
+  }
+
+  const { customers, total, pageSize, error } = await listBranchCustomers(supabase, branchId, {
+    sort,
+    dir,
+    page,
+  });
+
+  const basePath = `/b/${branchId}/customers`;
+  const state: CustomerSort = { sort, dir };
 
   return (
     <div className="container max-w-5xl py-8">
       <header className="mb-6 px-2 pl-16 lg:px-0">
         <h1 className="font-display text-3xl font-bold">Customers</h1>
-        <p className="mt-1 text-muted-foreground">{customers?.length ?? 0} customers at this branch</p>
+        <p className="mt-1 text-muted-foreground">
+          {total} customer{total === 1 ? '' : 's'} at this branch
+        </p>
       </header>
-      {(!customers || customers.length === 0) ? (
+
+      <div className="mb-4 px-2 lg:px-0">
+        <CustomerSortControls sort={sort} dir={dir} />
+      </div>
+
+      {error ? (
+        <Card className="mx-2 p-5 lg:mx-0">
+          <h2 className="flex items-center gap-2 font-display text-lg font-semibold text-danger">
+            <AlertTriangle className="h-5 w-5" /> Customers could not be loaded
+          </h2>
+          <p className="mt-3 break-words rounded-xl bg-danger/10 px-4 py-3 font-mono text-xs text-danger">
+            {error}
+          </p>
+        </Card>
+      ) : total === 0 ? (
         <EmptyState
           icon={<UserRound className="h-7 w-7" />}
           title="No customers yet"
           description="Once people order via the customer web app they'll appear here."
         />
+      ) : customers.length === 0 ? (
+        <EmptyState
+          icon={<UserRound className="h-7 w-7" />}
+          title="Nothing on this page"
+          description={`This branch has ${total} customers, but none on page ${page}.`}
+          action={
+            <Link
+              href={`${basePath}${customerSortQuery(state)}`}
+              className="focus-ring text-sm font-semibold text-primary hover:underline"
+            >
+              Back to the first page
+            </Link>
+          }
+        />
       ) : (
         <Card className="overflow-hidden">
-          <div className="overflow-x-auto"><table className="w-full min-w-[600px] text-sm">
+          <div className="overflow-x-auto"><table className="w-full min-w-[700px] text-sm">
             <thead className="bg-muted/50 text-left text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
-                <th className="px-5 py-3">Name</th>
-                <th className="px-5 py-3">Phone</th>
-                <th className="px-5 py-3 text-right">Orders</th>
-                <th className="px-5 py-3 text-right">Lifetime spend</th>
-                <th className="px-5 py-3">Last seen</th>
+                <SortHeader label="Name" column="name" state={state} basePath={basePath} />
+                <th scope="col" className="px-5 py-3">Phone</th>
+                <SortHeader label="Orders" column="orders" state={state} basePath={basePath} align="right" />
+                <SortHeader label="Lifetime spend" column="spent" state={state} basePath={basePath} align="right" />
+                <SortHeader label="Last seen" column="last_seen" state={state} basePath={basePath} />
+                <SortHeader label="Joined" column="joined" state={state} basePath={basePath} />
               </tr>
             </thead>
             <tbody>
@@ -46,28 +109,72 @@ export default async function CustomersPage({ params }: Props) {
                 <tr key={c.id} className="border-t border-border/40 hover:bg-muted/30">
                   <td className="px-5 py-3 font-medium">{c.full_name ?? '—'}</td>
                   <td className="px-5 py-3">{c.phone ?? '—'}</td>
-                  {/* These three are maintained by a DB trigger; a row written
-                      before the trigger existed can still be null, so coalesce
-                      rather than rendering a blank cell. */}
-                  <td className="px-5 py-3 text-right tabular-nums">{Number(c.total_orders ?? 0)}</td>
+                  <td className="px-5 py-3 text-right tabular-nums">{c.total_orders}</td>
                   <td className="px-5 py-3 text-right font-semibold text-primary">
-                    {formatCurrency(Number(c.total_spent ?? 0))}
+                    {formatCurrency(c.total_spent)}
                   </td>
                   <td className="px-5 py-3 text-muted-foreground">
-                    {c.last_order_at
-                      ? new Date(c.last_order_at).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                        })
-                      : 'Never'}
+                    {c.last_order_at ? fmtDate(c.last_order_at) : 'Never'}
                   </td>
+                  <td className="px-5 py-3 text-muted-foreground">{fmtDate(c.created_at)}</td>
                 </tr>
               ))}
             </tbody>
           </table></div>
         </Card>
       )}
+
+      <CustomersPager
+        basePath={basePath}
+        sort={state}
+        page={page}
+        pageSize={pageSize}
+        total={total}
+      />
     </div>
+  );
+}
+
+/**
+ * A column heading that is also its own sort link: clicking the active column flips
+ * direction, clicking any other starts it in that column's natural direction. The
+ * caret is the only marker of which column the list is actually ordered by, so
+ * `aria-sort` carries the same fact for a screen reader.
+ */
+function SortHeader({
+  label,
+  column,
+  state,
+  basePath,
+  align = 'left',
+}: {
+  label: string;
+  column: CustomerSortKey;
+  state: CustomerSort;
+  basePath: string;
+  align?: 'left' | 'right';
+}) {
+  const active = state.sort === column;
+  const ascending = state.dir === 'asc';
+  const nextDir = active ? (ascending ? 'desc' : 'asc') : defaultDirFor(column);
+
+  return (
+    <th
+      scope="col"
+      className={cn('px-5 py-3', align === 'right' && 'text-right')}
+      aria-sort={active ? (ascending ? 'ascending' : 'descending') : 'none'}
+    >
+      <Link
+        href={`${basePath}${customerSortQuery({ sort: column, dir: nextDir })}`}
+        className={cn(
+          'focus-ring inline-flex items-center gap-1 hover:text-foreground',
+          active && 'text-foreground',
+        )}
+      >
+        {label}
+        {active &&
+          (ascending ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />)}
+      </Link>
+    </th>
   );
 }

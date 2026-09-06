@@ -7,9 +7,20 @@ export type DeliveryStatus = Database['public']['Enums']['delivery_status'];
 export type DriverApprovalStatus = Database['public']['Enums']['driver_approval_status'];
 
 export interface DriverApproval {
+  /** driver_approvals.id — the rider needs it to address their own application row. */
+  id: string;
   status: DriverApprovalStatus;
   branch_id: string;
-  branch: { id: string; name: string } | null;
+  applied_at: string;
+  reviewed_at: string | null;
+  /**
+   * The merchant's reason, typed into the reject textarea in the admin app, whose
+   * placeholder promises it is "Shown to the rider in their app". It never was, because
+   * this column was never selected. Null unless a reason was actually given.
+   */
+  notes: string | null;
+  /** Null once the branch is deactivated — branches_public_read only exposes is_active. */
+  branch: { id: string; name: string; restaurant: { name: string } | null } | null;
 }
 
 export interface DriverWithApproval extends DriverRow {
@@ -22,31 +33,58 @@ export interface BranchAvailability {
   mode: 'manual' | 'scheduled';
 }
 
-/** Fetch the drivers row that belongs to the currently-signed-in user. */
+/**
+ * Fetch the drivers row that belongs to the currently-signed-in user.
+ *
+ * Null means one thing only: this user has no rider row. A failed read throws, the same way
+ * `getActiveDelivery` below does and for the same reason — the driver app used to sign a rider
+ * out on that null, so a PostgREST 5xx, an expired JWT or a dead spot ejected them from the
+ * installed app as convincingly as a missing profile did.
+ *
+ * Pass `userId` when the caller has already resolved it; otherwise this makes a live
+ * /auth/v1/user round trip, which is one more thing to fail in a tunnel.
+ */
 export async function getMyDriver(
   supabase: FavornomsClient,
+  userId?: string,
 ): Promise<DriverWithApproval | null> {
-  const { data: userData } = await supabase.auth.getUser();
-  const userId = userData.user?.id;
-  if (!userId) return null;
+  let id = userId;
+  if (!id) {
+    const { data: userData } = await supabase.auth.getUser();
+    id = userData.user?.id;
+  }
+  if (!id) return null;
 
   const { data, error } = await supabase
     .from('drivers')
     .select(
-      `*, approvals:driver_approvals(status, branch_id, branch:branches(id, name))`,
+      `*, approvals:driver_approvals(id, status, branch_id, applied_at, reviewed_at, notes, branch:branches(id, name, restaurant:restaurants(name)))`,
     )
-    .eq('user_id', userId)
+    .eq('user_id', id)
     .maybeSingle();
 
-  if (error || !data) return null;
-  return data as unknown as DriverWithApproval;
+  if (error) throw new Error('driver_read_failed:' + error.message);
+  return (data as unknown as DriverWithApproval | null) ?? null;
 }
 
 /**
- * Push the driver's current GPS position. We use PostGIS POINT via the
- * `ST_SetSRID(ST_MakePoint(lng, lat), 4326)` RPC, but to keep clients simple
- * we cast through a small RPC `set_driver_location(driver_id, lng, lat)` —
- * see migration 20260526000005_driver_location_rpc.sql.
+ * Push the driver's current GPS position.
+ *
+ * One RPC does three things, which is why it is worth knowing what a call costs: it stamps
+ * drivers.current_location + location_updated_at (dispatch refuses anyone whose fix is older
+ * than dispatch_max_gps_age_min), and it mirrors the position onto whichever delivery this
+ * rider is carrying — driver_lat/lng, driver_location_updated_at, a recomputed
+ * current_eta_min for the WHOLE remaining trip, and a one-shot arriving_at inside the 300 m
+ * geofence. That mirror is what the customer's tracking map subscribes to, so every call
+ * here wakes their page.
+ *
+ * Note the argument order: lng before lat. Defined in
+ * 20260904150000_driver_gps_freshness_and_customer_tracking.sql (the original
+ * 20260526000005_driver_location_rpc.sql pre-dates this repo and is not in git).
+ *
+ * Errors are worth reading: 'auth_required', 'driver_not_found', 'forbidden' (the driver row
+ * belongs to another user). Callers that treat a failed write as a successful fix will tell
+ * the rider they are visible when they are not.
  */
 export async function updateDriverLocation(
   supabase: FavornomsClient,
@@ -64,6 +102,11 @@ export async function updateDriverLocation(
 /**
  * Fetch driver's active delivery (any status that means "in flight").
  * Returns null when driver has nothing on their plate.
+ *
+ * Throws when the read itself failed. "No job" and "could not ask" used to be the same
+ * `null`, so a dead spot or an expired JWT wiped the rider's live job off the screen as
+ * convincingly as a completed drop-off. Callers are expected to keep what they already
+ * have on a throw and let the next refetch settle it.
  */
 export async function getActiveDelivery(
   supabase: FavornomsClient,
@@ -76,7 +119,7 @@ export async function getActiveDelivery(
   // is the driver's own cut, tip_visible_total is null unless platform tips.mode=transparent.
   // Batched jobs: batch_seq orders the legs (1 delivers first), so the queue is
   // served seq1 → seq2; the other live leg rides along as `batch_mate`.
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('deliveries')
     .select(`*, branch:branches(id, name, address, geo_location, geo_lat, geo_lng)`)
     .eq('driver_id', driverId)
@@ -85,11 +128,13 @@ export async function getActiveDelivery(
     .order('assigned_at', { ascending: false })
     .limit(1)
     .maybeSingle();
+  if (error) throw error;
   if (!data) return null;
   const row = data as { id: string; batch_id: string | null };
-  const { data: order } = await supabase.rpc('get_driver_order', {
+  const { data: order, error: orderError } = await supabase.rpc('get_driver_order', {
     p_delivery_id: row.id,
   });
+  if (orderError) throw orderError;
   // Non-atomic gap: the delivery can be reassigned/expired between the select and
   // the RPC. A null order means it's no longer this driver's — treat as no active
   // delivery rather than dereferencing null downstream. The next realtime tick refetches.
@@ -97,6 +142,9 @@ export async function getActiveDelivery(
 
   let batchMate: Record<string, unknown> | null = null;
   if (row.batch_id) {
+    // Best-effort, unlike the two reads above: the mate is a preview of the *other* leg,
+    // so losing it is worth a missing card, never worth throwing away the job the rider
+    // is currently on.
     const { data: mate } = await supabase
       .from('deliveries')
       .select(`*, branch:branches(id, name, address, geo_location, geo_lat, geo_lng)`)
@@ -321,5 +369,46 @@ export async function getBranchLocations(
       lng: b.geo_lng ?? null,
       dispatchRadiusKm: Number.isFinite(r) && r > 0 ? r : DEFAULT_DISPATCH_RADIUS_KM,
     };
+  });
+}
+
+// ---- Restaurant applications (driver_approvals) ---------------------------
+// A rider's application to one branch. The row is created by the rider, decided by the
+// merchant (apps/admin .../drivers), and read back by the rider on /app/apply.
+
+/** Create a pending application. UNIQUE (driver_id, branch_id) makes a repeat a duplicate. */
+export async function applyToBranch(
+  supabase: FavornomsClient,
+  driverId: string,
+  branchId: string,
+) {
+  // applied_at is deliberately not sent: the column defaults to now(), and the merchant's
+  // queue orders by it — an audit timestamp must not come from an unsynced phone clock.
+  return supabase
+    .from('driver_approvals')
+    .insert({ driver_id: driverId, branch_id: branchId, status: 'pending' })
+    .select('id');
+}
+
+/**
+ * Withdraw a still-pending application. The `driver_approvals_driver_withdraw` policy
+ * restricts the delete to the rider's own PENDING rows, so a row the merchant has just
+ * decided matches zero rows rather than erroring — hence `.select('id')`, the same shape
+ * the admin's approve-button uses to tell "saved" from "RLS matched nothing".
+ */
+export async function withdrawDriverApplication(supabase: FavornomsClient, approvalId: string) {
+  return supabase.from('driver_approvals').delete().eq('id', approvalId).select('id');
+}
+
+/**
+ * Apply again after a rejection. A guarded RPC rather than an update: UNIQUE
+ * (driver_id, branch_id) means the rejected row is in the way of a second insert, and an
+ * RLS update policy could pin the new status but not stop the same statement rewriting
+ * `notes` — a rider could erase the reason they were turned down. Raises `no_application`,
+ * `not_rejected` or `reapply_too_soon`.
+ */
+export async function reapplyToBranch(supabase: FavornomsClient, branchId: string) {
+  return (supabase as unknown as { rpc: UntypedRpc }).rpc('driver_reapply_to_branch', {
+    p_branch_id: branchId,
   });
 }

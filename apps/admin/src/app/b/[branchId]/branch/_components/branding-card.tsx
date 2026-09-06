@@ -13,12 +13,39 @@
 // several brands; nothing here replaces it.
 
 import * as React from 'react';
-import { useRouter } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { Palette, Save } from 'lucide-react';
 import { Button, Card } from '@favornoms/ui';
 import { getBrowserClient } from '@favornoms/database/client';
+import { storefrontBase } from '@/lib/site-url';
 import { ImageUpload } from '@/components/image-upload';
 import { IconUpload, type IconSet } from '@/components/icon-upload';
+
+/**
+ * Tell the storefront to drop its cached copy of this branch.
+ *
+ * The storefront caches restaurant/branch/brand data across requests, and it is a different
+ * deployment: nothing here could reach it, so a merchant who replaced their logo watched the
+ * old one for as long as the storefront's TTL, decided the upload had failed, and uploaded it
+ * again. Fire-and-forget by design — the storefront re-reads on its own soon enough, and a
+ * save must never fail because a cache hint did.
+ *
+ * `no-cors` + text/plain keeps this a simple cross-origin request: no preflight, no CORS
+ * configuration to keep in step on the other side. The response is opaque and is not read.
+ */
+function askStorefrontToRefresh(branchId: string): void {
+  try {
+    void fetch(`${storefrontBase()}/api/revalidate`, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+      body: JSON.stringify({ branchId }),
+      keepalive: true,
+    }).catch(() => undefined);
+  } catch {
+    /* the storefront's own version check is the backstop */
+  }
+}
 
 export interface BrandingBrand {
   id: string;
@@ -43,6 +70,7 @@ function slugify(v: string): string {
 
 export function BrandingCard({ restaurantId, restaurantName, brand }: Props) {
   const router = useRouter();
+  const { branchId } = useParams<{ branchId: string }>();
   const [logoUrl, setLogoUrl] = React.useState<string | null>(brand?.logo_url ?? null);
   const [icons, setIcons] = React.useState<IconSet>({
     faviconUrl: brand?.favicon_url ?? null,
@@ -99,6 +127,7 @@ export function BrandingCard({ restaurantId, restaurantName, brand }: Props) {
       }
     }
     setSavedAt(Date.now());
+    if (branchId) askStorefrontToRefresh(branchId);
     router.refresh();
   };
 
@@ -150,7 +179,9 @@ export function BrandingCard({ restaurantId, restaurantName, brand }: Props) {
         <Button onClick={save} loading={saving} leftIcon={<Save className="h-4 w-4" />}>
           Save branding
         </Button>
-        {savedAt && !saving && <span className="text-sm text-success">Saved ✓</span>}
+        {savedAt && !saving && (
+          <span className="text-sm text-success">Saved ✓ — customers see this within seconds</span>
+        )}
       </div>
     </Card>
   );

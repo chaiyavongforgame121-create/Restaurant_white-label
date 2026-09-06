@@ -10,9 +10,19 @@ interface Props {
   orderId: string;
   orderTotal: number;
   orderStatus: string;
+  /** orders.customer_notes as the list already read it, so the dialog can open on it. */
+  customerNotes?: string | null;
 }
 
-export function OrderRowActions({ orderId, orderTotal, orderStatus }: Props) {
+const INVOICE_ERRORS: Record<string, string> = {
+  order_not_completed:
+    'A receipt can only be issued once the order is confirmed, ready or completed.',
+  not_authorized:
+    'Your account is not listed as staff at this branch, so it cannot issue receipts.',
+  order_not_found: 'That order no longer exists.',
+};
+
+export function OrderRowActions({ orderId, orderTotal, orderStatus, customerNotes }: Props) {
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
   const [refundOpen, setRefundOpen] = React.useState(false);
@@ -27,8 +37,18 @@ export function OrderRowActions({ orderId, orderTotal, orderStatus }: Props) {
   // 'canceled'/'delivered' for orders) so terminal-state orders don't offer dead actions.
   const canRefund = !['cancelled', 'refunded'].includes(orderStatus);
   const canCancel = !['cancelled', 'refunded', 'completed'].includes(orderStatus);
-  const canEdit = ['pending', 'confirmed'].includes(orderStatus);
+  // admin_edit_order_notes accepts pending, confirmed and preparing; the menu offered two
+  // of the three, so a ticket already on the pass could not be corrected.
+  const canEdit = ['pending', 'confirmed', 'preparing'].includes(orderStatus);
+  // issue_tax_invoice raises 'order_not_completed' outside these three, so offering it on a
+  // pending or cancelled row was an error waiting to be clicked. Viewing the receipt is a
+  // separate button and stays available on every order.
+  const canIssueReceipt = ['confirmed', 'ready', 'completed'].includes(orderStatus);
 
+  // admin_edit_order_notes writes orders.customer_notes — the note the diner typed at
+  // checkout and the one the kitchen ticket prints. The dialog used to open empty under
+  // the heading "Internal notes", so every save silently replaced that request with
+  // whatever staff typed, or with nothing at all.
   const saveNotes = async () => {
     setBusy(true);
     setError(null);
@@ -65,7 +85,9 @@ export function OrderRowActions({ orderId, orderTotal, orderStatus }: Props) {
       p_order_id: orderId,
     });
     setBusy(false);
-    if (rpcErr) { setError(rpcErr.message); return; }
+    // The RPC raises bare postgres exception names. Left alone they surface as
+    // "order_not_completed", which reads like a crash rather than a rule.
+    if (rpcErr) { setError(INVOICE_ERRORS[rpcErr.message] ?? rpcErr.message); return; }
     const inv = data as { invoice_number?: string } | null;
     setOpen(false);
     setInvoiceMsg(`Issued invoice ${inv?.invoice_number ?? '(unknown)'}`);
@@ -74,7 +96,16 @@ export function OrderRowActions({ orderId, orderTotal, orderStatus }: Props) {
 
   return (
     <>
-      <IconButton label="Actions" size="sm" onClick={() => setOpen((o) => !o)}>
+      <IconButton
+        label="Actions"
+        size="sm"
+        onClick={() => {
+          // The menu now shows its own errors, so a failed "Issue receipt" must not
+          // greet the next order the operator opens the menu on.
+          setError(null);
+          setOpen((o) => !o);
+        }}
+      >
         <MoreHorizontal className="h-4 w-4" />
       </IconButton>
 
@@ -107,21 +138,33 @@ export function OrderRowActions({ orderId, orderTotal, orderStatus }: Props) {
               {canEdit && (
                 <button
                   type="button"
-                  onClick={() => { setOpen(false); setError(null); setNotesDraft(''); setNotesOpen(true); }}
+                  onClick={() => {
+                    setOpen(false);
+                    setError(null);
+                    setNotesDraft(customerNotes ?? '');
+                    setNotesOpen(true);
+                  }}
                   disabled={busy}
                   className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted"
                 >
-                  <Pencil className="h-4 w-4" /> Edit notes
+                  <Pencil className="h-4 w-4" /> Edit customer note
                 </button>
               )}
-              <button
-                type="button"
-                onClick={issueTaxInvoice}
-                disabled={busy}
-                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted"
-              >
-                <FileText className="h-4 w-4" /> Issue receipt
-              </button>
+              {canIssueReceipt && (
+                <button
+                  type="button"
+                  onClick={issueTaxInvoice}
+                  disabled={busy}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted"
+                >
+                  <FileText className="h-4 w-4" /> Issue receipt
+                </button>
+              )}
+              {error && (
+                <p role="alert" className="rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger">
+                  {error}
+                </p>
+              )}
             </Card>
           </div>
         </div>
@@ -161,19 +204,23 @@ export function OrderRowActions({ orderId, orderTotal, orderStatus }: Props) {
           onClick={() => !busy && setNotesOpen(false)}
         >
           <Card className="w-full max-w-md space-y-3 p-5" onClick={(e) => e.stopPropagation()}>
-            <h2 className="font-display text-lg font-semibold">Internal notes</h2>
+            <h2 className="font-display text-lg font-semibold">Customer note</h2>
+            <p className="text-xs text-muted-foreground">
+              This is the note the diner typed at checkout, and the one the kitchen ticket
+              shows. Saving replaces it.
+            </p>
             <textarea
               value={notesDraft}
               onChange={(e) => setNotesDraft(e.target.value)}
               rows={3}
               autoFocus
-              placeholder="Update internal notes for this order…"
+              placeholder="e.g. No peanuts — allergy"
               className="focus-ring w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
             />
             {error && <p className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
             <div className="flex justify-end gap-2">
               <Button variant="ghost" onClick={() => setNotesOpen(false)}>Cancel</Button>
-              <Button variant="gradient" onClick={saveNotes} loading={busy}>Save notes</Button>
+              <Button variant="gradient" onClick={saveNotes} loading={busy}>Save note</Button>
             </div>
           </Card>
         </div>

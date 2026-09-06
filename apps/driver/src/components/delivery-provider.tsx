@@ -149,6 +149,47 @@ function mapDeliveryToUI(row: Record<string, unknown>): ActiveDeliveryUI {
   };
 }
 
+/**
+ * The columns this app actually draws. An UPDATE that touches none of them is not worth a
+ * reload — and that is the overwhelming majority of them, because set_driver_location
+ * stamps the rider's own GPS fix onto their own delivery row every three seconds.
+ */
+const RENDERED_COLUMNS = [
+  'status',
+  'assigned_at',
+  'accepted_at',
+  'offer_expires_at',
+  'pickup_photo_url',
+  'pod_photo_url',
+  'driver_earnings',
+  'net_tip',
+  'tip_visible_total',
+  'batch_id',
+  'batch_seq',
+  'distance_km',
+  'estimated_duration_min',
+  'dropoff_lat',
+  'dropoff_lng',
+] as const;
+
+function rowsAgree(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
+  return RENDERED_COLUMNS.every((c) => Object.is(a[c] ?? null, b[c] ?? null));
+}
+
+/**
+ * A refetch hands back a structurally identical job over and over. Keeping the object we
+ * already have when nothing changed is what stops every consumer of this context — and
+ * every effect downstream keyed on the job — from re-running for a job that did not move.
+ */
+function sameDelivery(a: ActiveDeliveryUI | null, b: ActiveDeliveryUI | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if (!sameDelivery(a.batchMate, b.batchMate)) return false;
+  return (Object.keys(a) as (keyof ActiveDeliveryUI)[]).every(
+    (k) => k === 'batchMate' || a[k] === b[k],
+  );
+}
+
 export function DeliveryProvider({ children }: { children: React.ReactNode }) {
   const { driver, refresh: refreshDriver } = useDriverSession();
   const driverId = driver.id;
@@ -156,23 +197,75 @@ export function DeliveryProvider({ children }: { children: React.ReactNode }) {
   const [offered, setOffered] = React.useState<ActiveDeliveryUI | null>(null);
   const [active, setActive] = React.useState<ActiveDeliveryUI | null>(null);
 
+  // What is on screen right now, readable from the realtime handler and from a refresh
+  // that is already in flight without either of them being rebuilt when the job changes.
+  const offeredRef = React.useRef<ActiveDeliveryUI | null>(null);
+  const activeRef = React.useRef<ActiveDeliveryUI | null>(null);
+  offeredRef.current = offered;
+  activeRef.current = active;
+
+  // The raw rows behind those two, so an incoming UPDATE can be compared column by column
+  // against what was last read. At most two entries: a job and its batch mate.
+  const rawRowsRef = React.useRef(new Map<string, Record<string, unknown>>());
+
+  // Each refresh is several sequential round trips and one CTA tap fires three writes, so
+  // several refreshes are routinely in flight together. Only the newest may set state —
+  // otherwise the one that started first lands last and drags the stage card backwards.
+  const seqRef = React.useRef(0);
+
   const refreshFromServer = React.useCallback(async () => {
     const supabase = getBrowserClient();
-    const row = await getActiveDelivery(supabase, driverId);
+    const seq = ++seqRef.current;
+
+    let result: Awaited<ReturnType<typeof getActiveDelivery>>;
+    try {
+      result = await getActiveDelivery(supabase, driverId);
+    } catch {
+      // It now throws rather than passing a failed read off as "no job". Keep what is on
+      // screen: useRealtime re-reads on reconnect, on focus and when the network returns.
+      return;
+    }
+    if (seq !== seqRef.current) return;
+
+    const row = result as unknown as Record<string, unknown> | null;
     if (!row) {
+      if (!offeredRef.current && !activeRef.current) return;
+      // Still not proof the rider is free: a null also means get_driver_order lost the race
+      // against a reassign, and the read can simply be lagging. Clearing a live job on that
+      // is how a delivery the rider is carrying vanishes from their screen mid-ride — the
+      // same defect 1dc661d fixed on the customer's tracking page. Ask once more, cheaply,
+      // and keep what we hold unless the server plainly says there is nothing.
+      const { count, error } = await supabase
+        .from('deliveries')
+        .select('id', { head: true, count: 'exact' })
+        .eq('driver_id', driverId)
+        .in('status', ['assigned', 'picked_up', 'in_transit']);
+      if (seq !== seqRef.current) return;
+      if (error || (count ?? 0) > 0) return;
+      rawRowsRef.current = new Map();
       setOffered(null);
       setActive(null);
       return;
     }
-    const ui = mapDeliveryToUI(row as unknown as Record<string, unknown>);
+
+    const rawRows = new Map<string, Record<string, unknown>>();
+    rawRows.set(row.id as string, row);
+    const mate = row.batch_mate;
+    if (mate && typeof mate === 'object') {
+      const mateRow = mate as Record<string, unknown>;
+      if (typeof mateRow.id === 'string') rawRows.set(mateRow.id, mateRow);
+    }
+    rawRowsRef.current = rawRows;
+
+    const ui = mapDeliveryToUI(row);
     // accepted_at is the server-side acceptance signal (stamped by
     // accept_dispatch) — 'assigned' without it means a pending offer.
     if (ui.status === 'assigned' && !ui.acceptedAt) {
-      setOffered(ui);
+      setOffered((prev) => (sameDelivery(prev, ui) ? prev : ui));
       setActive(null);
     } else {
       setOffered(null);
-      setActive(ui);
+      setActive((prev) => (sameDelivery(prev, ui) ? prev : ui));
     }
   }, [driverId]);
 
@@ -183,6 +276,24 @@ export function DeliveryProvider({ children }: { children: React.ReactNode }) {
   const { healthy: liveHealthy } = useRealtime({
     channel: `driver-deliveries-${driverId}`,
     tables: [{ table: 'deliveries', filter: `driver_id=eq.${driverId}` }],
+    onChange: (payload) => {
+      // The rider's own location ping writes to this very row every three seconds. Taking
+      // a bare refetch on each of those meant reloading the whole screen twenty times a
+      // minute for columns this app never draws. Anything else still resyncs in full.
+      if (payload.eventType === 'UPDATE') {
+        const next = payload.new as Record<string, unknown>;
+        const id = typeof next.id === 'string' ? next.id : null;
+        if (id) {
+          const known = rawRowsRef.current.get(id);
+          if (known && rowsAgree(known, next)) {
+            // Hold the fresher row so the next comparison is against what the server has.
+            rawRowsRef.current.set(id, next);
+            return;
+          }
+        }
+      }
+      void refreshFromServer();
+    },
     refetch: refreshFromServer,
     enabled: !!driverId,
   });
@@ -244,11 +355,15 @@ export function DeliveryProvider({ children }: { children: React.ReactNode }) {
     await markArrivingQuery(supabase, active.id);
   }, [active]);
 
-  return (
-    <DeliveryContext.Provider value={{ offered, active, accept, reject, progress, markArriving, liveHealthy }}>
-      {children}
-    </DeliveryContext.Provider>
+  // A fresh object literal here re-rendered every useDelivery() consumer — the tab bar, Home
+  // and the whole Active view — on any provider render at all, which multiplied the cost of
+  // everything above.
+  const value = React.useMemo(
+    () => ({ offered, active, accept, reject, progress, markArriving, liveHealthy }),
+    [offered, active, accept, reject, progress, markArriving, liveHealthy],
   );
+
+  return <DeliveryContext.Provider value={value}>{children}</DeliveryContext.Provider>;
 }
 
 export function useDelivery() {

@@ -17,8 +17,11 @@ export const viewport: Viewport = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const locale = await getLocale();
   const messages = await getMessages();
+  // ThemeProvider's blocking script stamps `.dark` on <html> before first paint, so the
+  // client sees a class the server never rendered; without suppressHydrationWarning React
+  // logs a hydration mismatch on every dark-mode load.
   return (
-    <html lang={locale} className={inter.variable}>
+    <html lang={locale} className={inter.variable} suppressHydrationWarning>
       <body className="min-h-dynamic-screen bg-background font-sans antialiased">
         <NextIntlClientProvider messages={messages} locale={locale}>
           <ThemeProvider theme={{ primaryColor: '#FF6B35', accentColor: '#F7B538' }}>

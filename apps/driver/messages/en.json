@@ -65,6 +65,15 @@
     "noActive": "No active delivery",
     "noActiveDescription": "When you accept a dispatch it'll appear here"
   },
+  "install": {
+    "title": "Install Favornoms Driver",
+    "body": "Add it to your home screen — opens full screen and keeps dispatch alerts on.",
+    "cta": "Install",
+    "iosHint": "Tap Share in Safari, then Add to Home Screen.",
+    "rowTitle": "Install the app",
+    "rowSubtitle": "Full screen · home-screen icon · dispatch alerts",
+    "dismiss": "Dismiss"
+  },
   "common": {
     "back": "Back",
     "close": "Close",

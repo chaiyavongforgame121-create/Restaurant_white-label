@@ -8,9 +8,10 @@ export type TipChannel = 'pickup' | 'dine_in' | 'delivery' | 'qr_ordering';
 
 /** Per-channel tip presets + who the tip is routed to. */
 export interface TipChannelConfig {
-  /** Preset tip percentages shown as chips at checkout. Product-fixed, not
-   *  merchant-editable — serializeTipConfig() deliberately does not write these
-   *  back, so a stale list can never be frozen into a branch row. */
+  /** Preset tip percentages shown as chips at checkout. Product-fixed: always
+   *  TIP_PRESET_DEFAULTS. A `presets` key on the branch row is ignored on read
+   *  (parseTipConfig) and never written (serializeTipConfig), so no row can pin a
+   *  branch to a different set of chips. */
   presets: number[];
   /** Percent of the tip routed to the "worker" for this channel — the driver for
    *  delivery, the staff pool for pickup/dine_in/qr_ordering. The remainder
@@ -33,9 +34,9 @@ export interface TipSplit {
   staffCut: number;
 }
 
-// Checkout offers these four percentages plus a Custom amount and an explicit
-// "No tip" control, so 0 is no longer one of the chips.
-export const TIP_PRESET_DEFAULTS: number[] = [10, 15, 20, 25];
+// Checkout offers exactly five choices: these three percentages, a Custom amount
+// and a quiet "No tip" control. 0 is never one of the chips.
+export const TIP_PRESET_DEFAULTS: number[] = [18, 20, 25];
 
 // Default = 100% of the tip to the worker (driver for delivery, staff pool
 // otherwise), 0% house — preserves the pre-config "100% goes to your team"
@@ -59,16 +60,8 @@ function clampPct(v: unknown, fallback: number): number {
   return Math.max(0, Math.min(100, n));
 }
 
-function parsePresets(v: unknown, fallback: number[]): number[] {
-  if (!Array.isArray(v)) return [...fallback];
-  const out = v
-    .map((x) => (typeof x === 'string' ? Number(x) : (x as number)))
-    .filter((n) => typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= 100)
-    .map((n) => Math.round(n));
-  return out.length > 0 ? Array.from(new Set(out)) : [...fallback];
-}
-
-/** Parse branches.settings jsonb into a typed TipConfig with defaults. */
+/** Parse branches.settings jsonb into a typed TipConfig with defaults. Only the
+ *  split is read from the row; the chip list is always the product default. */
 export function parseTipConfig(settings: Record<string, unknown> | null | undefined): TipConfig {
   const raw = ((settings ?? {}) as Record<string, unknown>).tip_config as
     | Record<string, unknown>
@@ -81,7 +74,8 @@ export function parseTipConfig(settings: Record<string, unknown> | null | undefi
     // delivery routes to the driver; every other channel routes to the staff pool.
     const workerRaw = ch === 'delivery' ? dist.driver : dist.staff;
     out[ch] = {
-      presets: parsePresets(c.presets, TIP_PRESET_DEFAULTS),
+      // Copied per channel so a caller mutating its list cannot touch the defaults.
+      presets: [...TIP_PRESET_DEFAULTS],
       workerPct: clampPct(workerRaw, TIP_CONFIG_DEFAULTS[ch].workerPct),
     };
   }
@@ -94,8 +88,8 @@ export function parseTipConfig(settings: Record<string, unknown> | null | undefi
  *  `presets` is intentionally NOT written: they are a product default, and
  *  persisting them would freeze whatever list the merchant's browser happened to
  *  hold into the row the first time they hit Save — pinning that branch to an
- *  outdated set of chips forever. Rows that already carry presets keep working
- *  (parseTipConfig still reads them) but lose them on the next save. */
+ *  outdated set of chips forever. Rows that still carry a presets key are
+ *  ignored on read as well (see parseTipConfig). */
 export function serializeTipConfig(config: TipConfig): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const ch of CHANNELS) {
@@ -112,6 +106,16 @@ export function serializeTipConfig(config: TipConfig): Record<string, unknown> {
 /** Preset % buttons for the given channel. */
 export function tipPresetsForChannel(config: TipConfig, channel: TipChannel): number[] {
   return (config[channel] ?? config.dine_in).presets;
+}
+
+/** The tip the checkout sends with the order. A Custom dollar amount (the raw
+ *  string from the USD input) wins over a percentage; a percentage is
+ *  subtotal × pct / 100 rounded to the cent. Kept as the exact expression the
+ *  checkout used inline so previously agreed totals do not drift; place-order
+ *  re-rounds and clamps on its own side. */
+export function computeTipAmount(subtotal: number, tipPercent: number, customTip: string): number {
+  if (customTip !== '') return Math.max(0, round2(Number(customTip) || 0));
+  return Math.round(subtotal * tipPercent) / 100;
 }
 
 /** Split a tip into driver/house/staff cuts. MUST stay identical to the SQL trigger

@@ -2,36 +2,43 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Battery, CalendarDays, ChevronRight, Coffee, MapPin, Power, Star, Store, Wallet, Zap } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { formatCurrency, kmToMi } from '@favornoms/shared';
+import { formatFixAge, GPS_DISPATCH_MAX_AGE_SEC } from '@favornoms/maps';
 import { getBrowserClient } from '@favornoms/database/client';
 import { setDriverAllBranchesOnline, setDriverBranchOnline } from '@favornoms/database/queries';
 import { Card, cn } from '@favornoms/ui';
 import { useDriver } from '@/store/driver';
 import { useDriverSession } from '@/components/driver-session';
 import { useDelivery } from '@/components/delivery-provider';
-import { DispatchSheet } from '@/components/dispatch-sheet';
+import { DriverInstallRow } from '@/components/install-app-button';
 import { AvailabilitySheet } from './availability-sheet';
 
 export function HomeView() {
   const t = useTranslations('home');
-  const router = useRouter();
   const { driver, refresh: refreshDriver } = useDriverSession();
   const status = useDriver((s) => s.status);
   const setStatus = useDriver((s) => s.setStatus);
   const scope = useDriver((s) => s.scope);
   const setScope = useDriver((s) => s.setScope);
   const [sheetOpen, setSheetOpen] = React.useState(false);
-  const { offered, active, accept, reject, liveHealthy } = useDelivery();
+  const { active, liveHealthy } = useDelivery();
 
   const approved = React.useMemo(
     () => (driver.approvals ?? []).filter((a) => a.status === 'approved'),
     [driver.approvals],
   );
   const approvedIds = React.useMemo(() => approved.map((a) => a.branch_id), [approved]);
+  // AvailabilitySheet seeds its checklist from this list. Built inline in the JSX it was a
+  // new array on every render of this screen — once a second while a cooldown counts down —
+  // so the rider's ticks were wiped and the sheet snapped back to the "Online now" tab
+  // under their thumb.
+  const approvedForSheet = React.useMemo(
+    () => approved.map((a) => ({ branch_id: a.branch_id, name: a.branch?.name ?? 'Restaurant' })),
+    [approved],
+  );
   // Short label of the restaurants the driver is (or will be) online for.
   const scopeNames = (scope.length ? approved.filter((a) => scope.includes(a.branch_id)) : approved).map(
     (a) => a.branch?.name ?? 'Restaurant',
@@ -80,11 +87,49 @@ export function HomeView() {
   const [nowMs, setNowMs] = React.useState(() => Date.now());
   const inCooldown = cooldownUntilMs > nowMs;
   const cooldownRemainingSec = inCooldown ? Math.ceil((cooldownUntilMs - nowMs) / 1000) : 0;
+  const isOnline = status === 'online' || status === 'on_delivery';
   React.useEffect(() => {
-    if (!inCooldown) return;
-    const t = window.setInterval(() => setNowMs(Date.now()), 1000);
+    if (!inCooldown && !isOnline) return;
+    // A cooldown counts down in seconds; while merely online the clock exists only to age
+    // the last GPS fix, which every ten seconds answers well enough.
+    const t = window.setInterval(() => setNowMs(Date.now()), inCooldown ? 1000 : 10_000);
     return () => window.clearInterval(t);
-  }, [inCooldown]);
+  }, [inCooldown, isOnline]);
+
+  // "You're online" was the whole story this screen told, and on the live project it was
+  // telling it to a rider whose browser had blocked location and whose last fix was ten
+  // weeks old. find_dispatch_candidates refuses anyone staler than dispatch_max_gps_age_min,
+  // so that rider could not be offered a single job and had no way to find out why.
+  const gps = useDriver((s) => s.gps);
+  const lastFixAt = useDriver((s) => s.lastFixAt);
+  const serverFixMs = driver.location_updated_at ? Date.parse(driver.location_updated_at) : NaN;
+  // The ping's own stamp is fresher than the drivers row, which is only re-read when the
+  // session refreshes; take whichever is later.
+  const lastFixMs = Math.max(lastFixAt ?? 0, Number.isFinite(serverFixMs) ? serverFixMs : 0);
+  const fixAgeSec = lastFixMs > 0 ? Math.max(0, Math.round((nowMs - lastFixMs) / 1000)) : null;
+  const locationProblem: 'denied' | 'insecure' | 'waiting' | 'stale' | null = !isOnline
+    ? null
+    : gps === 'denied'
+      ? 'denied'
+      : gps === 'insecure'
+        ? 'insecure'
+        : fixAgeSec == null
+          ? 'waiting'
+          : fixAgeSec > GPS_DISPATCH_MAX_AGE_SEC
+            ? 'stale'
+            : gps === 'unavailable'
+              ? 'waiting'
+              : null;
+  const locationMessage =
+    locationProblem === 'denied'
+      ? 'Location is off. Turn it on for this app in your phone settings — restaurants can only offer you jobs when we can see where you are.'
+      : locationProblem === 'insecure'
+        ? 'Location only works over https. Open the app from its installed icon, or an https address.'
+        : locationProblem === 'stale'
+          ? `We last saw you ${formatFixAge(fixAgeSec ?? 0)}. Keep this app open with location allowed — you will not be offered jobs until your position updates.`
+          : locationProblem === 'waiting'
+            ? 'Waiting for a GPS fix — you are not being offered jobs yet.'
+            : null;
 
   // Server is the source of truth for online state on load — the persisted store
   // is only a cache and can disagree after reopening on another device or a
@@ -110,15 +155,12 @@ export function HomeView() {
     else if (!inCooldown && status === 'cooldown') setStatus(driver.is_online ? 'online' : 'offline');
   }, [inCooldown, status, setStatus, driver.is_online]);
 
-  // Vibrate when a new offer arrives
-  const offeredId = offered?.id;
-  React.useEffect(() => {
-    if (offeredId && 'vibrate' in navigator) navigator.vibrate([200, 100, 200]);
-  }, [offeredId]);
-
-  const isOnline = status === 'online' || status === 'on_delivery';
   const onDelivery = status === 'on_delivery';
   const approvedCount = approved.length;
+  // An application the restaurant has not decided on is otherwise invisible from here, so
+  // a rider who applied last week reads "Get approved to start receiving orders" and applies
+  // again. Surface the count that is actually waiting.
+  const pendingCount = (driver.approvals ?? []).filter((a) => a.status === 'pending').length;
 
   // Going online applies to a chosen SET of restaurants (the "scope"): each branch
   // is set individually so an unselected one can't dispatch to this driver. Tapping
@@ -220,7 +262,11 @@ export function HomeView() {
             {isOnline ? t('statusOnline') : t('statusOffline')}
           </h1>
           <p className="mt-1.5 text-sm text-white/80">
-            {isOnline ? t('readyToReceive') : t('subOffline')}
+            {isOnline
+              ? locationProblem
+                ? 'Online — but we cannot see where you are'
+                : t('readyToReceive')
+              : t('subOffline')}
           </p>
           {/* Being "online" with a dead socket looks exactly like a quiet shift. Say it
               plainly — a rider who thinks they are available but is not loses the whole
@@ -231,6 +277,14 @@ export function HomeView() {
               className="mx-auto mt-3 max-w-xs rounded-xl bg-black/35 px-3 py-2 text-xs font-medium text-white"
             >
               Reconnecting — you may not receive offers until this clears.
+            </p>
+          )}
+          {locationMessage && (
+            <p
+              role={locationProblem === 'waiting' ? 'status' : 'alert'}
+              className="mx-auto mt-3 max-w-xs rounded-xl bg-black/35 px-3 py-2 text-xs font-medium text-white ring-1 ring-warning/60"
+            >
+              📍 {locationMessage}
             </p>
           )}
 
@@ -329,13 +383,21 @@ export function HomeView() {
               <p className="font-semibold">Apply to restaurants</p>
               <p className="text-sm text-muted-foreground">
                 {approvedCount > 0
-                  ? `${approvedCount} approved · tap to add more`
-                  : 'Get approved to start receiving orders'}
+                  ? `${approvedCount} approved${pendingCount > 0 ? ` · ${pendingCount} waiting` : ''} · tap to see all`
+                  : pendingCount > 0
+                    ? `${pendingCount} waiting for review · tap to see`
+                    : 'Get approved to start receiving orders'}
               </p>
             </div>
             <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
           </Card>
         </Link>
+      </section>
+
+      {/* The row renders nothing once the rider is running the installed app (or on a
+          browser with no install path), so collapse the spacing with it. */}
+      <section className="mt-6 px-4 empty:hidden">
+        <DriverInstallRow as="div" />
       </section>
 
       <section className="mt-6 px-4">
@@ -383,39 +445,14 @@ export function HomeView() {
         </Card>
       </section>
 
-      <AnimatePresence>
-        {offered && (
-          <DispatchSheet
-            offer={offered}
-            timeoutSeconds={
-              // Server truth (dispatch v2 offer_expires_at); the pg_cron sweep
-              // enforces it even if the app is closed. 45s fallback for legacy offers.
-              offered.offerExpiresAt
-                ? Math.max(5, Math.round((new Date(offered.offerExpiresAt).getTime() - Date.now()) / 1000))
-                : 45
-            }
-            onAccept={() => {
-              void (async () => {
-                const ok = await accept();
-                // Hand the driver straight to the active run instead of stranding
-                // them on the home screen to hunt for the Active-tab badge.
-                if (ok) router.push('/app/active');
-              })();
-            }}
-            onReject={() => {
-              void reject('declined');
-            }}
-            onTimeout={() => {
-              void reject('timeout');
-            }}
-          />
-        )}
-      </AnimatePresence>
+      {/* The offer sheet used to live here. It now hangs off the /app layout
+          (DispatchOfferOverlay) so an offer that lands on any other tab is still
+          answerable — see the comment on that component. */}
 
       <AvailabilitySheet
         open={sheetOpen}
         onClose={() => setSheetOpen(false)}
-        approved={approved.map((a) => ({ branch_id: a.branch_id, name: a.branch?.name ?? 'Restaurant' }))}
+        approved={approvedForSheet}
         initialScope={scope}
         isOnline={isOnline}
         applying={toggling}

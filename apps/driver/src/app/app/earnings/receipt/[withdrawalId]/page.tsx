@@ -7,6 +7,7 @@ import { ArrowLeft, Receipt } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Card } from '@favornoms/ui';
 import { useDriverSession } from '@/components/driver-session';
+import { fetchTransferSlipPath } from '../../_components/payout-media';
 
 interface Withdrawal {
   id: string;
@@ -34,6 +35,7 @@ export default function ReceiptPage() {
   const { withdrawalId } = useParams<{ withdrawalId: string }>();
   const [withdrawal, setWithdrawal] = React.useState<Withdrawal | null>(null);
   const [lines, setLines] = React.useState<LedgerLine[]>([]);
+  const [slipUrl, setSlipUrl] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
@@ -54,6 +56,16 @@ export default function ReceiptPage() {
           .eq('withdrawal_id', withdrawalId)
           .order('delivered_at', { ascending: true });
         setLines((l ?? []) as unknown as LedgerLine[]);
+
+        // The merchant's own proof that the money left their bank. payout-slips is private,
+        // and the rider reads it through the owns_withdrawal_folder half of the read policy.
+        const slipPath = await fetchTransferSlipPath(supabase, withdrawalId, driver.id);
+        if (slipPath) {
+          const { data: signed } = await supabase.storage
+            .from('payout-slips')
+            .createSignedUrl(slipPath, 60 * 10);
+          setSlipUrl(signed?.signedUrl ?? null);
+        }
       }
       setLoading(false);
     })();
@@ -119,6 +131,19 @@ export default function ReceiptPage() {
             <span className="text-muted-foreground">Bank</span>
             <span className="font-medium">{withdrawal.bank_name} ··{withdrawal.account_number.slice(-4)}</span>
           </div>
+          {slipUrl && (
+            <a href={slipUrl} target="_blank" rel="noopener noreferrer" className="mt-3 block">
+              <p className="mb-1 text-[11px] uppercase tracking-wider text-muted-foreground">
+                Transfer slip
+              </p>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={slipUrl}
+                alt="Transfer slip from the restaurant"
+                className="max-h-64 w-full rounded-lg border border-border bg-muted object-contain"
+              />
+            </a>
+          )}
         </div>
 
         <div className="p-5">

@@ -18,24 +18,65 @@ export interface EnsurePushOptions {
   recipientType: 'customer' | 'driver' | 'staff';
   recipientId: string;
   serviceWorkerUrl?: string;
+  /**
+   * Only ask for permission while a user gesture is still live, and report 'needs_gesture'
+   * otherwise. Safari — and an iOS 16.4+ home-screen web app is the only place iOS supports
+   * Web Push at all — requires transient user activation for `requestPermission()`, so a call
+   * from a mount effect rejects and the caller never learns push is off. Off by default so
+   * existing callers keep their behaviour; pass true from anything that runs on mount.
+   */
+  requireGesture?: boolean;
+}
+
+export type EnsurePushStatus = 'subscribed' | 'denied' | 'unsupported' | 'needs_gesture' | 'error';
+
+/**
+ * Wait briefly for the service worker registration owned by
+ * apps/<app>/src/components/service-worker.tsx. This helper used to call `register()` itself,
+ * which quietly defeated that component's `NODE_ENV === 'production'` gate: the moment a VAPID
+ * key was present, `pnpm dev` served un-hashed dev chunks cache-first and the dev server looked
+ * broken in a way unrelated to whatever was being edited. Registration happens on `load`, so
+ * arriving a few milliseconds early is normal — poll rather than register a second worker.
+ */
+async function findRegistration(swUrl: string): Promise<ServiceWorkerRegistration | null> {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const reg =
+      (await navigator.serviceWorker.getRegistration(swUrl)) ??
+      (await navigator.serviceWorker.getRegistration());
+    if (reg) return reg;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  return null;
 }
 
 export async function ensurePushSubscription(
   supabase: SupabaseLike,
   opts: EnsurePushOptions,
-): Promise<{ status: 'subscribed' | 'denied' | 'unsupported' | 'error'; error?: string }> {
+): Promise<{ status: EnsurePushStatus; error?: string }> {
   if (typeof window === 'undefined') return { status: 'unsupported' };
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
     return { status: 'unsupported' };
   }
+  if (typeof Notification === 'undefined') return { status: 'unsupported' };
 
   try {
     const swUrl = opts.serviceWorkerUrl ?? '/sw.js';
-    const reg = await navigator.serviceWorker.register(swUrl);
-    await navigator.serviceWorker.ready;
 
-    const perm = await Notification.requestPermission();
+    // Permission first, while any gesture that got us here is still transient.
+    let perm = Notification.permission;
+    if (perm === 'default') {
+      const activation = (navigator as Navigator & { userActivation?: { isActive: boolean } })
+        .userActivation;
+      if (opts.requireGesture && activation && !activation.isActive) {
+        return { status: 'needs_gesture' };
+      }
+      perm = await Notification.requestPermission();
+    }
     if (perm !== 'granted') return { status: 'denied' };
+
+    const reg = await findRegistration(swUrl);
+    if (!reg) return { status: 'error', error: 'no_service_worker' };
+    if (!reg.active) await navigator.serviceWorker.ready;
 
     let sub = await reg.pushManager.getSubscription();
     if (!sub) {

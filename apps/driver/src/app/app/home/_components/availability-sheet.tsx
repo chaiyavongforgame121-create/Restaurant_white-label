@@ -42,8 +42,19 @@ export function AvailabilitySheet({
 
   // Seed the checklist each time the sheet opens: remembered scope, or all
   // approved when nothing's been chosen yet.
+  //
+  // Only on the transition into open. Seeding whenever `approved` or `initialScope` changed
+  // identity re-ran it under the rider's thumb — every re-render of Home reset their ticks
+  // and pulled them off the Schedule tab — and a re-seed while the sheet is open is never
+  // what anyone wants anyway: it throws away the choice they are in the middle of making.
+  const seededRef = React.useRef(false);
   React.useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      seededRef.current = false;
+      return;
+    }
+    if (seededRef.current) return;
+    seededRef.current = true;
     const seed = initialScope.filter((id) => approved.some((a) => a.branch_id === id));
     setSelected(new Set(seed.length ? seed : approved.map((a) => a.branch_id)));
     setTab('now');

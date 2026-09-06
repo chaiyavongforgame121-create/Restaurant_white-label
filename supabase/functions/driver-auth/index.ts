@@ -71,6 +71,7 @@ Deno.serve(async (req) => {
   const url = Deno.env.get('SUPABASE_URL')!;
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+  const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
 
   const body = await req.json().catch(() => ({}));
 
@@ -87,6 +88,27 @@ Deno.serve(async (req) => {
   // password can never reach createUser (whose own policy error we'd have to disambiguate).
   const password = String(body?.password ?? '');
   if (password.length < MIN_PASSWORD) return json(200, { status: 'weak_password' });
+
+  // Rate limiting: this endpoint is public (verify_jwt=false) and mints sessions, so it is
+  // the natural target for phone-number enumeration and password-guessing — more so than the
+  // diner side, because a rider's synthetic address is fully derivable from a phone number
+  // and a rider session can accept dispatch offers, read customer addresses and phone
+  // numbers, and file payout requests. Same generic check_rate_limit RPC / rate_limits table
+  // customer-auth uses, and the same two buckets:
+  // - per IP: 30 sign-ins / 10 min (a shared NAT at a rider hub stays under)
+  // - per phone: 10 sign-ins / 10 min
+  // Fail-open on RPC error — a rate-limit outage must never strand a rider mid-shift.
+  const clientIp = (req.headers.get('x-forwarded-for') ?? 'unknown').split(',')[0].trim();
+  const rlChecks: Array<{ key: string; max: number }> = [
+    { key: `drvauth:ip:${clientIp}`, max: 30 },
+    { key: `drvauth:phone:${norm.digits}`, max: 10 },
+  ];
+  for (const rl of rlChecks) {
+    const { data: verdict } = await admin.rpc('check_rate_limit', { p_bucket_key: rl.key, p_max_count: rl.max, p_window_seconds: 600 });
+    if (verdict && (verdict as { allowed?: boolean }).allowed === false) {
+      return json(429, { error: 'rate_limited', retry_after_seconds: 600 });
+    }
+  }
 
   const email = `d${norm.digits}@${EMAIL_DOMAIN}`;
   const authClient = createClient(url, anonKey, { auth: { persistSession: false } });
@@ -113,7 +135,6 @@ Deno.serve(async (req) => {
   const fullName = (profile.full_name ?? '').trim();
   if (!fullName) return json(200, { status: 'needs_profile' });
 
-  const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
   const created = await admin.auth.admin.createUser({
     email,
     password,
