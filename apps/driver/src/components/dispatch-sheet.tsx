@@ -1,11 +1,70 @@
 'use client';
 
 import * as React from 'react';
-import { motion } from 'framer-motion';
+import { useRouter } from 'next/navigation';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Bike, Check, MapPin, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { formatCurrency, kmToMi } from '@favornoms/shared';
-import type { ActiveDeliveryUI } from './delivery-provider';
+import { useDelivery, type ActiveDeliveryUI } from './delivery-provider';
+
+/**
+ * The offer overlay for every screen in the app.
+ *
+ * Mounted in the /app layout, not on Home. An offer arrives over realtime wherever the
+ * rider happens to be standing, and while the sheet lived on the home screen alone, one
+ * that landed while they were on Active, Map, History, Earnings or Profile put a '!'
+ * badge on the Active tab that led to "no active delivery" — an unaccepted offer is not
+ * yet active, so the only screen with an Accept button was one the rider had no reason to
+ * open. The offer then lapsed at offer_expires_at and reject_dispatch('timeout') stamped
+ * a penalty for declining something they were never shown. With the notification worker
+ * unconfigured there is no push to pull them to Home either, so this has to find them.
+ */
+export function DispatchOfferOverlay() {
+  const router = useRouter();
+  const { offered, accept, reject } = useDelivery();
+
+  // A buzz is the only alert a rider gets while push is dead, so it follows the sheet out
+  // of Home rather than firing only when they happen to be on that tab.
+  const offeredId = offered?.id;
+  React.useEffect(() => {
+    if (offeredId && 'vibrate' in navigator) navigator.vibrate([200, 100, 200]);
+  }, [offeredId]);
+
+  return (
+    <AnimatePresence>
+      {offered && (
+        <DispatchSheet
+          offer={offered}
+          timeoutSeconds={
+            // Server truth (dispatch v2 offer_expires_at); the pg_cron sweep
+            // enforces it even if the app is closed. 45s fallback for legacy offers.
+            offered.offerExpiresAt
+              ? Math.max(
+                  5,
+                  Math.round((new Date(offered.offerExpiresAt).getTime() - Date.now()) / 1000),
+                )
+              : 45
+          }
+          onAccept={() => {
+            void (async () => {
+              const ok = await accept();
+              // Hand the rider straight to the active run instead of leaving them on
+              // whatever screen the offer interrupted.
+              if (ok) router.push('/app/active');
+            })();
+          }}
+          onReject={() => {
+            void reject('declined');
+          }}
+          onTimeout={() => {
+            void reject('timeout');
+          }}
+        />
+      )}
+    </AnimatePresence>
+  );
+}
 
 interface DispatchSheetProps {
   offer: ActiveDeliveryUI;

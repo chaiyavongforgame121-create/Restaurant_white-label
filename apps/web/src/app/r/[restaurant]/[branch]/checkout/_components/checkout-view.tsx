@@ -47,7 +47,7 @@ import { buildScheduleDays, type OpeningWindow } from '@/lib/schedule-slots';
 import { pickerLabels } from '@/lib/picker-labels';
 import { useCart } from '@/store/cart';
 import { useAuth } from '@/components/auth/use-auth';
-import { useTablePin } from '../../_components/table-pin';
+import { LeaveTableButton, useTablePin } from '../../_components/table-pin';
 
 type PaymentMethod = 'card' | 'cash' | 'transfer';
 type PaymentMode = 'asap' | 'scheduled';
@@ -84,6 +84,38 @@ function parsePaymentMatrix(
       card: read('scheduled', 'card'),
       transfer: readTransfer('scheduled'),
     },
+  };
+}
+
+/**
+ * Whether this storefront can actually take a card.
+ *
+ * It cannot, and no environment variable changes that. Nothing in apps/web mounts Stripe
+ * Elements, and `stripe-create-payment-intent` creates the intent with
+ * `automatic_payment_methods`, which can only be confirmed through a PaymentElement and
+ * `stripe.confirmPayment({ elements, confirmParams: { return_url } })`. The order page's
+ * card box therefore had no card to attach and no way to attach one — every card order
+ * ever placed here is still sitting at `payments.status = 'pending'`.
+ *
+ * Offering the tile anyway sold the diner an order they could not pay for and then
+ * stranded them on a tracking screen with a dead button, so the tile comes down and the
+ * reason is said out loud. Flip this to `!!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
+ * in the same change that mounts Elements — never before it.
+ */
+const CARD_CHECKOUT_AVAILABLE: boolean = false;
+
+/**
+ * The merchant's matrix, masked down to what the app can genuinely collect.
+ *
+ * Kept separate from parsePaymentMatrix so the checkout can still tell the difference
+ * between "this restaurant does not take card" (say nothing) and "this restaurant takes
+ * card but we cannot process it here" (say so).
+ */
+function withCollectableCard(matrix: PaymentMatrix): PaymentMatrix {
+  if (CARD_CHECKOUT_AVAILABLE) return matrix;
+  return {
+    asap: { ...matrix.asap, card: false },
+    scheduled: { ...matrix.scheduled, card: false },
   };
 }
 
@@ -269,8 +301,15 @@ export function CheckoutView({
   // Seeded from the entitlement, not from PAYMENT_MATRIX_DEFAULTS: the branch
   // settings arrive a tick later, and for that tick an unentitled branch would
   // otherwise offer Card.
-  const [paymentMatrix, setPaymentMatrix] = React.useState<PaymentMatrix>(() =>
+  const [merchantPaymentMatrix, setMerchantPaymentMatrix] = React.useState<PaymentMatrix>(() =>
     parsePaymentMatrix({}, canUseCard),
+  );
+  // Everything downstream — the tiles, the enabled-method fallback, the empty state and
+  // the service fee — reads the masked matrix, so no part of the checkout can offer a
+  // method another part knows cannot be collected.
+  const paymentMatrix = React.useMemo(
+    () => withCollectableCard(merchantPaymentMatrix),
+    [merchantPaymentMatrix],
   );
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -402,6 +441,12 @@ export function CheckoutView({
   const enabledMethods = (['card', 'cash', 'transfer'] as const).filter(
     (m) => paymentMatrix[paymentModeKey][m],
   );
+  // The restaurant does sell card at this mode; this storefront just cannot take one.
+  // Worth saying rather than silently dropping a method the diner may have been told to
+  // expect — and worth saying HERE, before they commit, instead of on the order page
+  // afterwards where the only card button could never have worked.
+  const cardWithheld =
+    !isDineIn && merchantPaymentMatrix[paymentModeKey].card && !paymentMatrix[paymentModeKey].card;
   const asapPayable =
     paymentMatrix.asap.cash || paymentMatrix.asap.card || paymentMatrix.asap.transfer;
   const scheduledPayable =
@@ -579,7 +624,7 @@ export function CheckoutView({
           const settings = data.settings as Record<string, unknown>;
           setTipConfig(parseTipConfig(settings));
           setLegacyFlatFee(parseDeliverySettings(settings).legacyFlatFee);
-          setPaymentMatrix(parsePaymentMatrix(settings, canUseCard));
+          setMerchantPaymentMatrix(parsePaymentMatrix(settings, canUseCard));
           setQrTransfer(
             (settings.qr_transfer as {
               image_url?: string;
@@ -1422,6 +1467,9 @@ export function CheckoutView({
                 <p className="mt-1 text-xs text-muted-foreground">
                   Scanned from the QR code on your table — nothing to type.
                 </p>
+                {/* The last point at which a wrong table is still cheap to fix. After this
+                    the order carries the table id and the food is walked to it. */}
+                <LeaveTableButton className="mt-2 px-0" />
               </>
             ) : (
               <>
@@ -1482,7 +1530,15 @@ export function CheckoutView({
                 page straight after — nothing is charged until you confirm you have paid.
               </p>
             )}
-            {enabledMethods.length === 0 && (
+            {cardWithheld && (
+              <p role="status" className="mt-3 rounded-2xl bg-warning/10 px-4 py-3 text-xs text-warning">
+                Card payment isn&apos;t available on this site yet.{' '}
+                {enabledMethods.length > 0
+                  ? 'Choose one of the options above — you can still pay the restaurant by card in person.'
+                  : 'It is the only method this restaurant has switched on, so this order cannot be placed online right now. Please call them to order.'}
+              </p>
+            )}
+            {enabledMethods.length === 0 && !cardWithheld && (
               <p className="mt-3 text-sm text-muted-foreground">
                 This restaurant has no payment options available right now.
               </p>

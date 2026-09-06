@@ -2,8 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Battery, CalendarDays, ChevronRight, Coffee, MapPin, Power, Star, Store, Wallet, Zap } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { formatCurrency, kmToMi } from '@favornoms/shared';
@@ -14,20 +13,18 @@ import { Card, cn } from '@favornoms/ui';
 import { useDriver } from '@/store/driver';
 import { useDriverSession } from '@/components/driver-session';
 import { useDelivery } from '@/components/delivery-provider';
-import { DispatchSheet } from '@/components/dispatch-sheet';
 import { DriverInstallRow } from '@/components/install-app-button';
 import { AvailabilitySheet } from './availability-sheet';
 
 export function HomeView() {
   const t = useTranslations('home');
-  const router = useRouter();
   const { driver, refresh: refreshDriver } = useDriverSession();
   const status = useDriver((s) => s.status);
   const setStatus = useDriver((s) => s.setStatus);
   const scope = useDriver((s) => s.scope);
   const setScope = useDriver((s) => s.setScope);
   const [sheetOpen, setSheetOpen] = React.useState(false);
-  const { offered, active, accept, reject, liveHealthy } = useDelivery();
+  const { active, liveHealthy } = useDelivery();
 
   const approved = React.useMemo(
     () => (driver.approvals ?? []).filter((a) => a.status === 'approved'),
@@ -157,12 +154,6 @@ export function HomeView() {
     if (inCooldown && status !== 'cooldown') setStatus('cooldown');
     else if (!inCooldown && status === 'cooldown') setStatus(driver.is_online ? 'online' : 'offline');
   }, [inCooldown, status, setStatus, driver.is_online]);
-
-  // Vibrate when a new offer arrives
-  const offeredId = offered?.id;
-  React.useEffect(() => {
-    if (offeredId && 'vibrate' in navigator) navigator.vibrate([200, 100, 200]);
-  }, [offeredId]);
 
   const onDelivery = status === 'on_delivery';
   const approvedCount = approved.length;
@@ -454,34 +445,9 @@ export function HomeView() {
         </Card>
       </section>
 
-      <AnimatePresence>
-        {offered && (
-          <DispatchSheet
-            offer={offered}
-            timeoutSeconds={
-              // Server truth (dispatch v2 offer_expires_at); the pg_cron sweep
-              // enforces it even if the app is closed. 45s fallback for legacy offers.
-              offered.offerExpiresAt
-                ? Math.max(5, Math.round((new Date(offered.offerExpiresAt).getTime() - Date.now()) / 1000))
-                : 45
-            }
-            onAccept={() => {
-              void (async () => {
-                const ok = await accept();
-                // Hand the driver straight to the active run instead of stranding
-                // them on the home screen to hunt for the Active-tab badge.
-                if (ok) router.push('/app/active');
-              })();
-            }}
-            onReject={() => {
-              void reject('declined');
-            }}
-            onTimeout={() => {
-              void reject('timeout');
-            }}
-          />
-        )}
-      </AnimatePresence>
+      {/* The offer sheet used to live here. It now hangs off the /app layout
+          (DispatchOfferOverlay) so an offer that lands on any other tab is still
+          answerable — see the comment on that component. */}
 
       <AvailabilitySheet
         open={sheetOpen}

@@ -407,11 +407,11 @@ export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransf
           </ol>
 
           {/* Card orders only — a cash order sitting in 'pending' is normal
-              (staff confirm it) and must not show a "Pay with card" box. Guests
-              can't read their payments row (RLS), but they also can't create a
-              payment intent, so hiding the box for them fixes a dead end. */}
+              (staff confirm it) and must not be told its payment is unavailable.
+              Guests can't read their payments row (RLS), so the box simply does
+              not render for them, which is the right answer either way. */}
           {order.status === 'pending' && order.payments?.some((p) => p.method === 'card') && (
-            <StripePayment orderId={order.id} />
+            <CardPaymentNotice orderId={order.id} />
           )}
 
           {/* QR transfer: the diner has already scanned and paid outside the app, so what
@@ -643,74 +643,33 @@ function CallDriverButton({ deliveryId, label }: { deliveryId: string; label: st
   );
 }
 
-// Stripe is dormant until the owner supplies keys, so `stripe_not_configured`
-// is the PERMANENT state in production — which made the old "mock confirm"
-// button (a browser UPDATE marking payments.status='completed') a
-// pay-for-nothing button on the live storefront. Gate on the build mode
-// instead: Next inlines NODE_ENV, so this whole branch is eliminated from a
-// production bundle rather than merely hidden.
+// Card money cannot be collected on this storefront, and no key changes that.
+//
+// Nothing in apps/web mounts Stripe Elements, and `stripe-create-payment-intent` creates
+// the intent with `automatic_payment_methods` — an intent only a PaymentElement plus
+// `stripe.confirmPayment({ elements, confirmParams: { return_url } })` can confirm. What
+// stood here instead was `stripe.confirmCardPayment(clientSecret)` with no card attached:
+// it could never succeed, so the diner's one card button led to an error and every card
+// payment ever taken on this project is still sitting at 'pending'.
+//
+// A half-working card flow is worse than an honest one, so the button is gone and the box
+// says where to actually pay. Checkout no longer offers the card tile for the same reason
+// (CARD_CHECKOUT_AVAILABLE in checkout-view); these are the orders placed before it did.
+// Restoring the button means mounting Elements and letting the existing stripe-webhook
+// `payment_intent.succeeded` handler flip payments+orders — not re-adding a confirm call.
 const ALLOW_MOCK_PAY = process.env.NODE_ENV !== 'production';
 
-function StripePayment({ orderId }: { orderId: string }) {
-  const [stage, setStage] = React.useState<'idle' | 'loading' | 'ready' | 'paying' | 'mock' | 'error'>('idle');
-  const [error, setError] = React.useState<string | null>(null);
-  const [clientSecret, setClientSecret] = React.useState<string | null>(null);
-  const [publishableKey, setPublishableKey] = React.useState<string | null>(null);
-
-  const publicKeyEnv = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
-
-  const initStripe = async () => {
-    setStage('loading');
-    setError(null);
-    try {
-      const supabase = getBrowserClient();
-      const { createStripePaymentIntent } = await import('@favornoms/database/queries');
-      const intent = await createStripePaymentIntent(supabase, orderId);
-      setClientSecret(intent.client_secret);
-      setPublishableKey(intent.publishable_key ?? publicKeyEnv ?? null);
-      setStage('ready');
-    } catch (err) {
-      const msg = (err as Error).message;
-      if (msg.includes('stripe_not_configured')) {
-        if (ALLOW_MOCK_PAY) {
-          setStage('mock');
-          return;
-        }
-        setError('Online card payment is unavailable. Please pay the restaurant directly.');
-        setStage('error');
-        return;
-      }
-      setError(msg);
-      setStage('error');
-    }
-  };
-
-  const confirmStripe = async () => {
-    if (!clientSecret || !publishableKey) return;
-    setStage('paying');
-    setError(null);
-    try {
-      const stripe = await loadStripe(publishableKey);
-      // Use redirect-less confirmation with a placeholder card. In a real
-      // implementation we'd mount Stripe Elements; this is a minimal flow.
-      const result = await stripe.confirmCardPayment(clientSecret);
-      if (result.error) {
-        setError(result.error.message ?? 'Payment failed');
-        setStage('ready');
-        return;
-      }
-      // Server-side webhook will flip order → confirmed; client sees via realtime.
-    } catch (err) {
-      setError((err as Error).message);
-      setStage('ready');
-    }
-  };
+function CardPaymentNotice({ orderId }: { orderId: string }) {
+  const [confirming, setConfirming] = React.useState(false);
 
   const mockConfirm = async () => {
     if (!ALLOW_MOCK_PAY) return;
-    setStage('paying');
+    setConfirming(true);
     const supabase = getBrowserClient();
-    await supabase.from('payments').update({ status: 'completed', paid_at: new Date().toISOString() }).eq('order_id', orderId);
+    await supabase
+      .from('payments')
+      .update({ status: 'completed', paid_at: new Date().toISOString() })
+      .eq('order_id', orderId);
     await supabase.from('orders').update({ status: 'confirmed' }).eq('id', orderId);
   };
 
@@ -718,72 +677,33 @@ function StripePayment({ orderId }: { orderId: string }) {
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
+      role="status"
       className="mt-6 rounded-2xl border border-warning/40 bg-warning/5 p-4"
     >
-      <p className="text-sm font-semibold text-warning">Payment pending</p>
+      <p className="text-sm font-semibold text-warning">Card payment isn&apos;t available here</p>
       <p className="mt-1 text-xs text-muted-foreground">
-        Pay securely via Stripe. We never store your card details.
+        This order was placed as a card payment, but we can&apos;t take the card online yet.
+        Please pay the restaurant directly — they can take it when you collect your order or
+        when it arrives. Your order is not cancelled.
       </p>
-      {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
-      {stage === 'idle' && (
-        <Button variant="gradient" size="md" fullWidth className="mt-3" onClick={initStripe}>
-          Pay with card
-        </Button>
-      )}
-      {stage === 'loading' && (
-        <Button variant="gradient" size="md" fullWidth className="mt-3" loading>
-          Loading…
-        </Button>
-      )}
-      {stage === 'ready' && (
-        <Button variant="gradient" size="md" fullWidth className="mt-3" onClick={confirmStripe}>
-          Confirm payment
-        </Button>
-      )}
-      {stage === 'paying' && (
-        <Button variant="gradient" size="md" fullWidth className="mt-3" loading>
-          Processing…
-        </Button>
-      )}
-      {ALLOW_MOCK_PAY && stage === 'mock' && (
+      {ALLOW_MOCK_PAY && (
         <div className="mt-3 space-y-2">
           <p className="text-xs text-muted-foreground">
-            Stripe is not configured on this environment. Use the demo confirm button to mark the
-            order paid for local testing.
+            Development build only: mark the order paid so the rest of the flow can be tested.
           </p>
-          <Button variant="gradient" size="md" fullWidth onClick={mockConfirm}>
+          <Button
+            variant="outline"
+            size="md"
+            fullWidth
+            loading={confirming}
+            onClick={mockConfirm}
+          >
             Mock confirm (dev only)
           </Button>
         </div>
       )}
-      {stage === 'error' && (
-        <Button variant="outline" size="md" fullWidth className="mt-3" onClick={initStripe}>
-          Try again
-        </Button>
-      )}
     </motion.div>
   );
-}
-
-// Dynamically load Stripe.js from CDN. Avoids an npm dep at build-time.
-async function loadStripe(publishableKey: string) {
-  if (typeof window === 'undefined') throw new Error('client_only');
-  type StripeFn = (key: string) => {
-    confirmCardPayment: (secret: string) => Promise<{ error?: { message?: string }; paymentIntent?: { status: string } }>;
-  };
-  const w = window as unknown as { Stripe?: StripeFn };
-  if (!w.Stripe) {
-    await new Promise<void>((resolve, reject) => {
-      const s = document.createElement('script');
-      s.src = 'https://js.stripe.com/v3/';
-      s.async = true;
-      s.onload = () => resolve();
-      s.onerror = () => reject(new Error('stripe_js_load_failed'));
-      document.head.appendChild(s);
-    });
-  }
-  if (!w.Stripe) throw new Error('stripe_js_missing');
-  return w.Stripe(publishableKey);
 }
 
 /**
