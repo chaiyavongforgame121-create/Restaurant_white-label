@@ -6,6 +6,7 @@ import { getBrowserClient } from '@favornoms/database/client';
 import { formatCurrency } from '@favornoms/shared';
 import { Button, Card, Sheet } from '@favornoms/ui';
 import { printReceiptViaBrowser } from '@favornoms/ui/printer';
+import { modifierLabel, parseLineModifiers } from './order-lines';
 import { formatReceiptAddress, toReceiptInput, type ReceiptOrder } from './receipt-input';
 
 interface Props {
@@ -48,7 +49,7 @@ export function OrderReceiptButton({
           `order_number, status, channel, created_at,
            subtotal, delivery_fee, service_fee, tax_amount, tip_amount,
            discount_amount, total, customer_name, customer_phone, delivery_address,
-           order_items(item_name, quantity, unit_price, subtotal, notes),
+           order_items(item_name, quantity, unit_price, subtotal, notes, modifiers),
            payments(method, status),
            tax_invoices(invoice_number, issued_at)`,
         )
@@ -225,20 +226,32 @@ function ReceiptCard({
 
       <table className="w-full text-sm">
         <tbody>
-          {order.order_items.map((item, i) => (
-            <tr key={i} className="border-b border-dashed border-border/60 last:border-0">
-              <td className="py-2">
-                <div className="font-medium">{item.item_name}</div>
-                <div className="text-xs text-muted-foreground">
-                  {item.quantity} × {money(n(item.unit_price))}
-                </div>
-                {item.notes && <div className="text-xs text-muted-foreground">{item.notes}</div>}
-              </td>
-              <td className="py-2 text-right font-display font-semibold tabular-nums">
-                {money(n(item.subtotal))}
-              </td>
-            </tr>
-          ))}
+          {order.order_items.map((item, i) => {
+            // The unit shown is derived from the line, not read from unit_price: subtotal
+            // carries the options the diner chose, so the base price beside it read as a
+            // receipt that could not add up (2 × $8.00 against a $17.50 line).
+            const qty = Math.max(1, Number(item.quantity) || 1);
+            const mods = parseLineModifiers(item.modifiers);
+            return (
+              <tr key={i} className="border-b border-dashed border-border/60 last:border-0">
+                <td className="py-2">
+                  <div className="font-medium">{item.item_name}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {item.quantity} × {money(n(item.subtotal) / qty)}
+                  </div>
+                  {mods.length > 0 && (
+                    <div className="text-xs text-muted-foreground">
+                      {mods.map((m) => modifierLabel(m, currency)).join(', ')}
+                    </div>
+                  )}
+                  {item.notes && <div className="text-xs text-muted-foreground">{item.notes}</div>}
+                </td>
+                <td className="py-2 text-right font-display font-semibold tabular-nums">
+                  {money(n(item.subtotal))}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
 

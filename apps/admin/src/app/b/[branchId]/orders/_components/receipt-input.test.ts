@@ -78,6 +78,53 @@ describe('toReceiptInput', () => {
     expect(dineIn.serviceFee).toBeUndefined();
   });
 
+  it('prices a modified line so it reaches the subtotal, and names the options', () => {
+    // 2 × a $8.00 burger with a $0.75 jalapeño costs $17.50, not $16.00. The printer only
+    // multiplies, so the effective unit has to arrive already folded.
+    const modified = toReceiptInput(
+      {
+        ...order,
+        order_items: [
+          {
+            item_name: 'Double Smash Spicy',
+            quantity: 2,
+            unit_price: '8.00',
+            subtotal: '17.50',
+            notes: 'no onion',
+            modifiers: [
+              { group_id: 'g1', option_id: 'o1', name: 'Regular', price_delta: 0 },
+              { group_id: 'g2', option_id: 'o2', name: 'Jalapeños', price_delta: 0.75 },
+            ],
+          },
+        ],
+      },
+      { branchName: 'Coastal Grill' },
+    );
+    expect(modified.items).toEqual([
+      {
+        name: 'Double Smash Spicy',
+        quantity: 2,
+        unit_price: 8.75,
+        notes: 'Regular, Jalapeños · no onion',
+      },
+    ]);
+    const line = modified.items[0]!;
+    expect(line.unit_price * line.quantity).toBeCloseTo(17.5, 2);
+  });
+
+  it('falls back to the base price when a line has no readable subtotal', () => {
+    const broken = toReceiptInput(
+      {
+        ...order,
+        order_items: [
+          { item_name: 'Pad Thai', quantity: 2, unit_price: '8.00', subtotal: 'n/a' },
+        ],
+      },
+      { branchName: 'Coastal Grill' },
+    );
+    expect(broken.items[0]!.unit_price).toBe(8);
+  });
+
   it('says unpaid when the reader cannot see the payment row', () => {
     expect(toReceiptInput(order, { branchName: 'Coastal Grill' }).paymentMethod).toBe('unpaid');
     expect(

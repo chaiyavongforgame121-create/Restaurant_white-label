@@ -1,4 +1,5 @@
 import type { ReceiptInput } from '@favornoms/ui/printer';
+import { parseLineModifiers } from './order-lines';
 
 export interface ReceiptOrderItem {
   item_name: string;
@@ -6,6 +7,8 @@ export interface ReceiptOrderItem {
   unit_price: number | string;
   subtotal: number | string;
   notes?: string | null;
+  /** order_items.modifiers jsonb — the options the diner picked, priced into subtotal. */
+  modifiers?: unknown;
 }
 
 /** The order shape a receipt needs — money columns arrive as strings over PostgREST. */
@@ -80,12 +83,30 @@ export function toReceiptInput(order: ReceiptOrder, ctx: ReceiptContext): Receip
     orderNumber: order.order_number,
     channel: order.channel.replace('_', ' '),
     createdAt: order.created_at,
-    items: order.order_items.map((item) => ({
-      name: item.item_name,
-      quantity: item.quantity,
-      unit_price: num(item.unit_price),
-      notes: item.notes ?? null,
-    })),
+    // unit_price is the price of the plain dish; subtotal is what the line actually cost,
+    // options included (place-order: subtotal = r2((price + modDelta) x qty)). buildReceipt
+    // prints quantity × unit_price, so handing it the base price made every modified line
+    // fall short of the Subtotal printed two rows below it. The option names ride on the
+    // notes line, which is the one piece of free text the 80mm format gives a line.
+    items: order.order_items.map((item) => {
+      const qty = Math.max(1, Number(item.quantity) || 1);
+      const lineTotal = num(item.subtotal);
+      // A line with no readable subtotal still has to print something a cashier can read,
+      // so it falls back to the base price rather than to NaN.
+      const effectiveUnit = Number.isFinite(lineTotal)
+        ? Math.round((lineTotal / qty) * 100) / 100
+        : num(item.unit_price);
+      const options = parseLineModifiers(item.modifiers).map((m) => m.name);
+      const notes = [options.length > 0 ? options.join(', ') : null, item.notes ?? null]
+        .filter(Boolean)
+        .join(' · ');
+      return {
+        name: item.item_name,
+        quantity: item.quantity,
+        unit_price: effectiveUnit,
+        notes: notes || null,
+      };
+    }),
     subtotal: num(order.subtotal),
     deliveryFee: num(order.delivery_fee) || undefined,
     serviceFee: num(order.service_fee) || undefined,
