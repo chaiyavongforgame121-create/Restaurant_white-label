@@ -1,3 +1,4 @@
+import { branchDayKey, shiftDayKey, startOfBranchDayUtc } from '@favornoms/database/queries';
 import { Card } from '@favornoms/ui';
 import { getBranchAccess } from '@/lib/capabilities';
 import { OrderFilters } from './_components/order-filters';
@@ -13,12 +14,20 @@ import type { OrderLine } from './_components/order-lines';
 
 interface Props {
   params: Promise<{ branchId: string }>;
-  searchParams: Promise<{ q?: string; status?: string; channel?: string; when?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    status?: string;
+    channel?: string;
+    when?: string;
+    range?: string;
+    from?: string;
+    to?: string;
+  }>;
 }
 
 export default async function OrdersPage({ params, searchParams }: Props) {
   const { branchId } = await params;
-  const { q, status, channel, when } = await searchParams;
+  const { q, status, channel, when, range, from, to } = await searchParams;
   const { supabase, branch, can } = await getBranchAccess(branchId, `/b/${branchId}/orders`);
 
   // Two capabilities decide the receipt drawer. orders.view is who may read the order at
@@ -31,15 +40,17 @@ export default async function OrdersPage({ params, searchParams }: Props) {
   const canPrintReceipt = can('receipt.reprint') || can('orders.view');
 
   // getBranchAccess reads only id/name/restaurant_id. A receipt header needs the address a
-  // diner would recognise and the currency the branch actually charges in.
+  // diner would recognise and the currency the branch actually charges in; the date range
+  // needs the timezone whose calendar days the merchant counts in.
   const { data: branchDetail } = await supabase
     .from('branches')
-    .select('address, settings')
+    .select('address, settings, timezone')
     .eq('id', branchId)
     .maybeSingle();
   const branchAddress = branchDetail?.address ?? null;
   const branchSettings = (branchDetail?.settings ?? {}) as Record<string, unknown>;
   const currency = typeof branchSettings.currency === 'string' ? branchSettings.currency : 'USD';
+  const tz = branchDetail?.timezone ?? 'America/New_York';
 
   // The list used to carry totals only, so the owner had to open a receipt to learn what a
   // ticket was. Items, options and notes ride along on the same query now: order_items is
@@ -52,6 +63,9 @@ export default async function OrdersPage({ params, searchParams }: Props) {
        scheduled_for, held, awaiting_payment, customer_notes, kitchen_notes, delivery_address,
        tables(table_number, display_name),
        order_items(id, item_name, quantity, unit_price, subtotal, modifiers, notes, combo_id)`,
+      // The header said "{rows.length} matching", which was really "rows returned" — with
+      // no date filter and a cap of 100, "all orders" quietly meant "the newest 100 ever".
+      { count: 'exact' },
     )
     .eq('branch_id', branchId);
 
@@ -77,7 +91,35 @@ export default async function OrdersPage({ params, searchParams }: Props) {
     if (heldOnly) query = query.eq('held', true);
   }
 
-  const { data: orders } = await (scheduledOnly || heldOnly
+  // Both the column the window applies to and the direction it runs follow the mode. A
+  // scheduled list is about when the food is DUE, so "Last 7 days" there reads as the next
+  // seven; windowing it on created_at would hide a booking taken six weeks ago for
+  // tomorrow, which is the exact case `when=scheduled` exists for.
+  const dueMode = scheduledOnly || heldOnly;
+  const rangeColumn = dueMode ? 'scheduled_for' : 'created_at';
+
+  // Resolved against the BRANCH's calendar, not the server's: bucketing on the host clock
+  // is what made a New York merchant's day roll over at 8pm on the dashboard.
+  const todayKey = branchDayKey(new Date(), tz);
+  const spanDays = range === 'today' ? 1 : range === '7d' ? 7 : range === '30d' ? 30 : 0;
+  let rangeStart: Date | null = null;
+  let rangeEnd: Date | null = null; // exclusive
+  if (spanDays > 0) {
+    rangeStart = startOfBranchDayUtc(dueMode ? todayKey : shiftDayKey(todayKey, 1 - spanDays), tz);
+    rangeEnd = startOfBranchDayUtc(shiftDayKey(todayKey, dueMode ? spanDays : 1), tz);
+  } else if (range === 'custom') {
+    const ymd = /^\d{4}-\d{2}-\d{2}$/; // never interpolate an unvalidated param into a filter
+    if (from && ymd.test(from)) rangeStart = startOfBranchDayUtc(from, tz);
+    // The end day is inclusive to a merchant, so the bound is the start of the day after.
+    if (to && ymd.test(to)) rangeEnd = startOfBranchDayUtc(shiftDayKey(to, 1), tz);
+  }
+
+  // In due mode the lower bound is usually a no-op — scheduled_for is already pinned to
+  // now() above — and only bites when a custom range starts in the future.
+  if (rangeStart) query = query.gte(rangeColumn, rangeStart.toISOString());
+  if (rangeEnd) query = query.lt(rangeColumn, rangeEnd.toISOString());
+
+  const { data: orders, count } = await (scheduledOnly || heldOnly
     ? query.order('scheduled_for', { ascending: true })
     : query.order('created_at', { ascending: false })
   ).limit(100);
@@ -187,7 +229,10 @@ export default async function OrdersPage({ params, searchParams }: Props) {
     <div className="container max-w-6xl py-8">
       <header className="mb-6 px-2 pl-16 lg:px-0">
         <h1 className="font-display text-3xl font-bold">Orders</h1>
-        <p className="mt-1 text-muted-foreground">{rows.length} matching</p>
+        <p className="mt-1 text-muted-foreground">
+          {count ?? rows.length} matching
+          {(count ?? 0) > rows.length && ` · showing the first ${rows.length}`}
+        </p>
       </header>
 
       <div className="px-2 lg:px-0">
@@ -201,6 +246,9 @@ export default async function OrdersPage({ params, searchParams }: Props) {
           defaultStatus={status ?? 'all'}
           defaultChannel={channel ?? 'all'}
           defaultWhen={when ?? 'all'}
+          defaultRange={range ?? 'all'}
+          defaultFrom={from ?? ''}
+          defaultTo={to ?? ''}
         />
       </div>
 

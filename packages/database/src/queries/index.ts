@@ -15,3 +15,4 @@ export * from './chat';
 export * from './billing';
 export * from './guards';
 export * from './customers';
+export * from './dashboard';
