@@ -43,7 +43,7 @@ import {
 } from '@favornoms/maps';
 import { Badge, Button, Card, IconButton, Sheet } from '@favornoms/ui';
 import { resolveMyCustomerId } from '@/lib/customer';
-import { buildScheduleDays, type OpeningWindow } from '@/lib/schedule-slots';
+import { buildScheduleDays, type ClosurePeriod, type OpeningWindow } from '@/lib/schedule-slots';
 import { pickerLabels } from '@/lib/picker-labels';
 import { useCart } from '@/store/cart';
 import { useAuth } from '@/components/auth/use-auth';
@@ -142,6 +142,10 @@ const ORDER_ERRORS: Array<[string, string]> = [
   // generic "currently closed" line is wrong here: the restaurant may well be
   // open now, it's the time they picked that isn't served.
   ['branch_closed_at_scheduled_time', 'The restaurant is closed at the time you picked. Please choose another time.'],
+  // Distinct from being closed: the restaurant may well be open then, it just does not take
+  // advance orders at that hour. Saying "closed" would send the diner to look at opening
+  // hours that already agree with them.
+  ['outside_scheduling_window', 'This restaurant only takes orders in advance at certain times. Please pick one of the times offered.'],
   ['branch_closed', 'This restaurant is currently closed. Please try again during opening hours.'],
   // No fixed numbers here any more: how soon and how far ahead are per-branch settings, so
   // quoting "10 minutes" and "14 days" would state someone else's policy as fact. The
@@ -360,17 +364,65 @@ export function CheckoutView({
   // Recomputed only when the policy changes; `now` is captured once per mount so the list
   // cannot shift under the diner mid-form.
   const scheduleMountedAt = React.useRef(new Date());
+  // Opening hours are only half of what decides a bookable time. The merchant can also
+  // narrow bookings per weekday (branch_schedule_hours) and close the shop for a holiday
+  // (branch_closures); is_branch_open() and is_schedule_window_open() both refuse a slot
+  // outside those, so offering one means a diner fills in the whole form for a 409.
+  //
+  // Read here rather than through the `scheduling` prop: that comes from storefront_status,
+  // which is fetched on the server page, and this policy is one anon RPC the picker can ask
+  // for itself. Null means "not answered yet"; a branch that never armed windows comes back
+  // with `windows: null`, which is today's behaviour exactly.
+  const [bookingPolicy, setBookingPolicy] = React.useState<{
+    windows: OpeningWindow[] | null;
+    closures: ClosurePeriod[];
+  } | null>(null);
+
+  React.useEffect(() => {
+    if (!scheduling?.enabled) return;
+    let cancelled = false;
+    void (async () => {
+      // packages/database/src/types.ts is regenerated centrally and does not know this RPC
+      // yet. A deployment that predates it answers with an error and no data, which lands
+      // on the same fail-open defaults below — opening hours alone, as before.
+      const { data } = await (
+        getBrowserClient() as unknown as {
+          rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown }>;
+        }
+      ).rpc('branch_schedule_policy', { p_branch_id: branchId });
+      if (cancelled) return;
+      const d = (data ?? {}) as Record<string, unknown>;
+      setBookingPolicy({
+        // null, not [] — an empty array means "nothing bookable all week", and defaulting
+        // to it would silently remove scheduling from every branch on the platform.
+        windows:
+          d.schedule_hours_enabled === true && Array.isArray(d.schedule_windows)
+            ? (d.schedule_windows as OpeningWindow[])
+            : null,
+        closures: Array.isArray(d.closures) ? (d.closures as ClosurePeriod[]) : [],
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [branchId, scheduling?.enabled]);
+
   const scheduleDays = React.useMemo(() => {
     if (!scheduling?.enabled) return [];
+    // Nothing until the policy lands. Showing the un-narrowed list first and pulling times
+    // back out from under the diner a moment later is worse than a brief wait.
+    if (!bookingPolicy) return [];
     return buildScheduleDays({
       timezone: scheduling.timezone,
       openingHours: scheduling.openingHours,
+      scheduleWindows: bookingPolicy.windows,
+      closures: bookingPolicy.closures,
       minLeadMinutes: scheduling.minLeadMinutes,
       maxDays: scheduling.maxDays,
       slotMinutes: scheduling.slotMinutes,
       now: scheduleMountedAt.current,
     });
-  }, [scheduling]);
+  }, [scheduling, bookingPolicy]);
 
   const selectedDay = scheduleDays.find((d) => d.date === scheduleDate) ?? scheduleDays[0];
 
@@ -1108,7 +1160,11 @@ export function CheckoutView({
                 only told them after they had filled in the entire form. */}
             {scheduleMode === 'later' && (
               <div ref={scheduleSectionRef} className="mt-3">
-                {scheduleDays.length === 0 ? (
+                {!bookingPolicy ? (
+                  <p role="status" className="rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">
+                    Loading the times this restaurant takes bookings…
+                  </p>
+                ) : scheduleDays.length === 0 ? (
                   <p className="rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">
                     No times are available to book at the moment. Please try ASAP, or check
                     back when the restaurant is open.
@@ -1154,9 +1210,9 @@ export function CheckoutView({
                       <p className="mt-1 text-xs text-danger">{fieldErrors.schedule}</p>
                     )}
                     <p className="mt-2 text-xs text-muted-foreground">
-                      Only times this restaurant is open are shown, in the restaurant&apos;s
-                      local time. We&apos;ll start preparing your order so it&apos;s ready
-                      right around then.
+                      Only times you can book at this restaurant are shown, in the
+                      restaurant&apos;s local time. We&apos;ll start preparing your order so
+                      it&apos;s ready right around then.
                     </p>
                   </>
                 )}

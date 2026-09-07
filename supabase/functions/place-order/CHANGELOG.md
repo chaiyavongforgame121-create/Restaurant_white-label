@@ -5,7 +5,28 @@ the bulk of the file; every deploy had to carry it. The history is the valuable 
 so it lives here rather than being deleted.
 
 ```
-// place-order v10.3 — US pivot + modifiers + combos + happy-hour + schedules + gift cards
+// place-order v10.4 — US pivot + modifiers + combos + happy-hour + schedules + gift cards
+//   v10.4 (2026-09-08): scheduled orders are now checked against the branch's BOOKABLE
+//        window, not only its opening hours. The times a diner could pick came from
+//        branch_hours alone — whenever the kitchen is open, it is bookable — so a shop
+//        open every day that wanted pre-orders from 17:00 Monday to Saturday but only
+//        10:00-14:00 on Sunday had no way to say so. Those windows live in the new
+//        branch_schedule_hours, armed per branch by settings.schedule_hours_enabled, and
+//        are judged by is_schedule_window_open() `at time zone branches.timezone` — asking
+//        here would use the edge runtime's UTC and put a Bangkok shop seven hours out.
+//        Returns true whenever the feature is off, so every existing branch is unaffected.
+//        source 'counter'/'pos' are exempt: it is a self-service policy for diners, and a
+//        manager taking a phone booking IS the override. They are not exempt from opening
+//        hours. Refusals are 409 outside_scheduling_window.
+//        This function is NOT the only writer of orders — orders_public_insert lets anon
+//        INSERT a pending row into any active branch, and until now no BEFORE INSERT
+//        trigger checked opening hours at all, so a hand-crafted PostgREST request could
+//        book a pickup for 3am on a day the shop was shut. The real gate is
+//        tg_enforce_scheduled_time on public.orders; the check here exists so the diner
+//        gets readable copy instead of a database error. Both must exempt the same
+//        sources or a counter booking passes one and dies in the other.
+//        An insert rejected by one of those triggers is now returned as the 409 it is
+//        rather than a 500 order_insert_failed carrying the code in `detail`.
 //   v10.3 (2026-09-04): the delivery row now records the surge multiplier the quote
 //        applied. quote_delivery has returned `surge` since the delivery backbone and
 //        nothing ever read it, so deliveries.surge_multiplier sat at its column default

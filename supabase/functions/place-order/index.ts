@@ -2,10 +2,10 @@
 // Server-side recalculation never trusts client totals.
 //
 // Version history: see ./CHANGELOG.md (moved out of this file 2026-08-28).
-// Current: v10.3 — deliveries.surge_multiplier records the multiplier quote_delivery
-// actually applied. The column has existed since the delivery backbone and nothing wrote
-// it, so no completed order could say whether it had been surged. Rows written before
-// this ship carry the column default regardless of what was charged.
+// Current: v10.4 — a scheduled order is now checked against the branch's BOOKABLE window
+// (branch_schedule_hours) as well as its opening hours, and the same rule is enforced by
+// tg_enforce_scheduled_time on orders so a hand-crafted PostgREST insert cannot skip it.
+// Insert failures raised by those gates come back as the 409 they are instead of a 500.
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
@@ -324,6 +324,29 @@ Deno.serve(async (req: Request) => {
     // the server allows a further 24h rather than cutting mid-day. Deliberately looser than
     // the picker: the set of times a diner can choose stays a subset of what is accepted.
     if (t > now + (maxDays + 1) * 24 * 60 * 60_000) return json(400, { error: 'scheduled_too_far' });
+
+    // The per-weekday BOOKABLE window, on top of is_branch_open() further up. A shop open
+    // all day may still only take pre-orders 17:00-22:00 Monday to Saturday and 10:00-14:00
+    // on Sunday, which no amount of opening-hours data can express.
+    //
+    // Evaluated in the database so the BRANCH's timezone decides. Doing the weekday
+    // arithmetic here would use the edge runtime's UTC clock and put a shop in Asia/Bangkok
+    // seven hours out — its 17:00 window would be read as 17:00 UTC, which is midnight
+    // local. Returns true whenever the merchant has not armed the feature, so this can be
+    // asked unconditionally.
+    //
+    // Staff surfaces are exempt on purpose: the window is a self-service policy for diners,
+    // and a manager taking a phone booking at the till IS the override. They are NOT exempt
+    // from opening hours above. tg_enforce_scheduled_time exempts exactly the same sources;
+    // if the two ever diverge, a counter booking clears this check and dies in the trigger
+    // as a bare 500.
+    if (source === 'web') {
+      const { data: windowOk } = await admin.rpc('is_schedule_window_open', {
+        p_branch_id: payload.branch_id,
+        p_at: scheduledFor,
+      });
+      if (windowOk === false) return json(409, { error: 'outside_scheduling_window' });
+    }
   }
 
   // Per-line subtotal: (unit_price + mod_delta) * quantity. Modifier total saved per line.
@@ -677,7 +700,21 @@ Deno.serve(async (req: Request) => {
     awaiting_payment: payload.payment_method === 'transfer',
     status_history: [{ status: 'pending', at: new Date().toISOString(), scheduled_for: scheduledFor, held }],
   }).select('id, order_number').single();
-  if (oErr || !order) return json(500, { error: 'order_insert_failed', detail: oErr?.message });
+  // The BEFORE INSERT gates on orders (delivery hours, scheduled time) raise P0001 with the
+  // wire code as the message. Reporting those as a 500 blames the server for a rule the
+  // request broke, and only worked at all because the checkout matches ORDER_ERRORS by
+  // substring against the whole body. Give them back the status they would have had.
+  if (oErr || !order) {
+    const detail = oErr?.message ?? '';
+    for (const code of [
+      'outside_scheduling_window',
+      'branch_closed_at_scheduled_time',
+      'delivery_not_available_at_that_time',
+    ]) {
+      if (detail.includes(code)) return json(409, { error: code });
+    }
+    return json(500, { error: 'order_insert_failed', detail });
+  }
 
   // Reserve gift card credit (best-effort; if it fails the order still stands).
   if (giftCardCode && giftCardCredit > 0) {
