@@ -42,8 +42,11 @@ type OrderRow = {
   order_number: string;
   status: string;
   channel: string;
-  /** Why the order was cancelled. Set by decide_payment_proof when a merchant refuses a
-   *  transfer slip — before this the order simply stopped moving with no explanation. */
+  /**
+   * Why the order was cancelled — the merchant's or the diner's own words. decide_payment_proof
+   * was the only function that ever wrote it, so every staff, kitchen and customer cancellation
+   * fell through to the generic line below; cancel_order writes it now (20260908111000).
+   */
   cancellation_reason?: string | null;
   /** A QR-transfer order the merchant has not confirmed payment for. It is deliberately not
    *  on the kitchen board yet, which is what makes self-cancel safe here. */
@@ -79,6 +82,17 @@ type OrderRow = {
     /** Stacked order (งานพ่วง): 2 = the driver makes one other drop-off first. */
     batch_seq?: number | null;
   }>;
+};
+
+/**
+ * One rider's turn at this delivery. deliveries has a UNIQUE index on order_id, so the row
+ * itself is reused by every re-dispatch — the thread the diner is looking at belongs to the
+ * turn, not to the delivery, or a replacement rider inherits the last one's conversation.
+ */
+type DeliveryAssignment = {
+  id: string;
+  seq: number;
+  ended_at: string | null;
 };
 
 export interface QrTransfer {
@@ -158,6 +172,24 @@ export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransf
     deliveries: asArray(initialOrder.deliveries),
   }));
 
+  const [assignments, setAssignments] = React.useState<DeliveryAssignment[]>([]);
+
+  // Read separately from the order: getOrderByNumber's embed is shared with the receipt and
+  // the server render, and this list changes on its own schedule (every re-dispatch).
+  const loadAssignments = React.useCallback(async () => {
+    const supabase = getBrowserClient();
+    const { data } = await supabase
+      .from('delivery_assignments')
+      .select('id, seq, ended_at')
+      .eq('order_id', order.id)
+      .order('seq', { ascending: true });
+    if (data) setAssignments(data as unknown as DeliveryAssignment[]);
+  }, [order.id]);
+
+  React.useEffect(() => {
+    void loadAssignments();
+  }, [loadAssignments]);
+
   // Re-read the order from the server. Used on (re)connect and when the tab wakes:
   // a diner watching this page leaves it backgrounded for the whole delivery, by which
   // time the socket is usually gone and the progress bar was silently frozen.
@@ -190,9 +222,19 @@ export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransf
     tables: [
       { table: 'orders', event: 'UPDATE', filter: `id=eq.${order.id}` },
       { table: 'deliveries', filter: `order_id=eq.${order.id}` },
+      { table: 'delivery_assignments', filter: `order_id=eq.${order.id}` },
     ],
-    refetch: reload,
+    refetch: () => {
+      void loadAssignments();
+      return reload();
+    },
     onChange: (payload, table) => {
+      if (table === 'delivery_assignments') {
+        // A turn opening or closing swaps which thread the Chat button addresses, so it has
+        // to be a re-read rather than a merge into whatever is held.
+        void loadAssignments();
+        return;
+      }
       if (table === 'deliveries') {
         setOrder((curr) => {
           if (!payload.new) return curr;
@@ -278,6 +320,11 @@ export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransf
       delivery.status === 'in_transit')
       ? delivery
       : null;
+  // The open turn is the thread the diner can still write into. The ended ones are their own
+  // record of the riders who came before — they were a party to those words, and only the
+  // rider side of the leak was ever the privacy defect.
+  const liveAssignment = assignments.find((a) => a.ended_at === null) ?? null;
+  const pastAssignmentIds = assignments.filter((a) => a.ended_at !== null).map((a) => a.id);
   const showMap =
     !!liveDelivery && !!branchLocation && (branchLocation.lat !== 0 || branchLocation.lng !== 0) && hasMapboxToken();
   // set_driver_location computes this from a straight line at 24 km/h, and a rider whose
@@ -421,9 +468,11 @@ export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransf
           {/* A refused slip now cancels the order. Say so plainly and give the reason the
               merchant typed, rather than leaving the customer on a progress bar that has
               quietly stopped advancing. */}
-          {order.status === 'cancelled' && (
+          {(order.status === 'cancelled' || order.status === 'refunded') && (
             <Card className="mt-6 border-danger/40 bg-danger/5 p-4">
-              <p className="font-semibold text-danger">This order was cancelled</p>
+              <p className="font-semibold text-danger">
+                {order.status === 'refunded' ? 'This order was refunded' : 'This order was cancelled'}
+              </p>
               <p className="mt-1 text-sm text-muted-foreground">
                 {order.cancellation_reason
                   ? order.cancellation_reason
@@ -493,7 +542,16 @@ export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransf
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                <DeliveryChat deliveryId={liveDelivery.id} deliveryStatus={liveDelivery.status} />
+                {/* Only the Chat button waits on a live turn — Call sits beside it and must
+                    stay reachable while the order is between riders. */}
+                {liveAssignment && (
+                  <DeliveryChat
+                    assignmentId={liveAssignment.id}
+                    deliveryId={liveDelivery.id}
+                    deliveryStatus={liveDelivery.status}
+                    pastAssignmentIds={pastAssignmentIds}
+                  />
+                )}
                 <CallDriverButton deliveryId={liveDelivery.id} label={t('callDriver')} />
               </div>
             </motion.div>

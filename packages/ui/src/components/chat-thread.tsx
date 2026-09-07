@@ -49,6 +49,11 @@ export interface ChatThreadProps {
   disabled?: boolean;
   disabledNotice?: string;
   placeholder?: string;
+  /** Rendered above the first bubble. A read-only archive needs to say whose words these are;
+   *  a delivery's thread now belongs to one rider's turn, and an order can have several. */
+  header?: React.ReactNode;
+  /** Replaces the "say hi" line. Wrong copy for a thread nobody can add to. */
+  emptyNotice?: string;
   className?: string;
 }
 
@@ -61,6 +66,8 @@ export function ChatThread({
   disabled,
   disabledNotice = 'This conversation is closed.',
   placeholder = 'Type a message…',
+  header,
+  emptyNotice = 'No messages yet — say hi 👋',
   className,
 }: ChatThreadProps) {
   const [draft, setDraft] = React.useState('');
@@ -140,10 +147,9 @@ export function ChatThread({
   return (
     <div className={cn('flex h-full min-h-0 flex-col', className)}>
       <div ref={scrollRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto px-1 py-3">
+        {header && <div className="pb-1">{header}</div>}
         {messages.length === 0 && (
-          <p className="py-8 text-center text-sm text-muted-foreground">
-            No messages yet — say hi 👋
-          </p>
+          <p className="py-8 text-center text-sm text-muted-foreground">{emptyNotice}</p>
         )}
         {messages.map((m) => (
           <div key={m.id} className={cn('flex', m.mine ? 'justify-end' : 'justify-start')}>

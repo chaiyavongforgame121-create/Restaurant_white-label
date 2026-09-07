@@ -7,7 +7,7 @@ import {
   chatAttachmentErrorMessage,
   isChatPhotoBody,
   listMessages,
-  markMessagesRead,
+  markThreadRead,
   sendMessage,
   sendPhotoMessage,
   signAttachments,
@@ -21,12 +21,17 @@ const DRIVER_QUICK_REPLIES = ["On my way", "I've arrived", "Can't find the entra
 const ACTIVE_STATUSES = ['assigned', 'picked_up', 'in_transit'];
 
 interface Props {
+  /** delivery_assignments.id — the thread key. A new rider gets a new one, so their sheet
+   *  opens empty instead of on the rider they replaced. */
+  assignmentId: string;
+  /** Still written on every message: delivery_messages.delivery_id is NOT NULL and is what
+   *  the merchant's audit view joins on. */
   deliveryId: string;
   deliveryStatus: string;
 }
 
-/** Driver side of the per-delivery chat. */
-export function DriverDeliveryChat({ deliveryId, deliveryStatus }: Props) {
+/** Driver side of the chat for ONE turn at a delivery. */
+export function DriverDeliveryChat({ assignmentId, deliveryId, deliveryStatus }: Props) {
   const [open, setOpen] = React.useState(false);
   const [userId, setUserId] = React.useState<string | null>(null);
   const [messages, setMessages] = React.useState<DeliveryMessage[]>([]);
@@ -46,22 +51,27 @@ export function DriverDeliveryChat({ deliveryId, deliveryStatus }: Props) {
   React.useEffect(() => {
     if (!userId) return;
     const supabase = getBrowserClient();
-    void listMessages(supabase, deliveryId).then((msgs) => {
+    // A turn switch must not leave the previous rider's bubbles on screen while the new
+    // thread loads — that is the bug, briefly, in front of the person it protects.
+    setMessages([]);
+    setUnread(0);
+    setUrls({});
+    void listMessages(supabase, assignmentId).then((msgs) => {
       setMessages(msgs);
       setUnread(msgs.filter((m) => m.read_at == null && m.sender_user_id !== userId).length);
     });
-    const unsubscribe = subscribeMessages(supabase, deliveryId, (msg) => {
+    const unsubscribe = subscribeMessages(supabase, assignmentId, (msg) => {
       setMessages((curr) => (curr.some((m) => m.id === msg.id) ? curr : [...curr, msg]));
       if (msg.sender_user_id !== userId) {
         if (openRef.current) {
-          void markMessagesRead(supabase, deliveryId);
+          void markThreadRead(supabase, assignmentId);
         } else {
           setUnread((n) => n + 1);
         }
       }
     });
     return unsubscribe;
-  }, [deliveryId, userId]);
+  }, [assignmentId, userId]);
 
   // Chat photos live in a private bucket, so each one needs a signed URL. Serialising the
   // outstanding paths — the same idiom realtime.ts uses for its tablesKey — keys the effect
@@ -89,19 +99,25 @@ export function DriverDeliveryChat({ deliveryId, deliveryStatus }: Props) {
   const openChat = () => {
     setOpen(true);
     setUnread(0);
-    void markMessagesRead(getBrowserClient(), deliveryId);
+    void markThreadRead(getBrowserClient(), assignmentId);
   };
 
   const send = async (body: string) => {
     const supabase = getBrowserClient();
-    const msg = await sendMessage(supabase, deliveryId, 'driver', body);
+    const msg = await sendMessage(supabase, assignmentId, deliveryId, 'driver', body);
     if (msg) setMessages((curr) => (curr.some((m) => m.id === msg.id) ? curr : [...curr, msg]));
   };
 
   const sendPhoto = async (file: File) => {
     setPhotoError(null);
     try {
-      const msg = await sendPhotoMessage(getBrowserClient(), deliveryId, 'driver', file);
+      const msg = await sendPhotoMessage(
+        getBrowserClient(),
+        assignmentId,
+        deliveryId,
+        'driver',
+        file,
+      );
       setMessages((curr) => (curr.some((m) => m.id === msg.id) ? curr : [...curr, msg]));
     } catch (err) {
       setPhotoError(chatAttachmentErrorMessage(err));

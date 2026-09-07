@@ -9,7 +9,11 @@ import { formatCurrency, kmToMi } from '@favornoms/shared';
 import { Button, Card, EmptyState } from '@favornoms/ui';
 import { DeliveryMap, fetchRoute, hasMapboxToken, haversineKm } from '@favornoms/maps';
 import { getBrowserClient } from '@favornoms/database/client';
-import { useDelivery, type ActiveDeliveryUI } from '@/components/delivery-provider';
+import {
+  useDelivery,
+  type ActiveDeliveryUI,
+  type EndedJobNotice,
+} from '@/components/delivery-provider';
 import { useDriver } from '@/store/driver';
 import {
   cancelDelivery,
@@ -116,7 +120,7 @@ function softStageFromStatus(active: ActiveDeliveryUI, soft: StageKey): StageKey
 
 export function ActiveDeliveryView() {
   const t = useTranslations('active');
-  const { active, progress, markArriving } = useDelivery();
+  const { active, progress, markArriving, lastEnded, dismissLastEnded } = useDelivery();
   const [advancing, setAdvancing] = React.useState(false);
   const [driverPos, setDriverPos] = React.useState<{ lat: number; lng: number } | null>(null);
   const [geoWatchDenied, setGeoWatchDenied] = React.useState(false);
@@ -250,6 +254,7 @@ export function ActiveDeliveryView() {
     }
     return (
       <div className="px-4 pt-6">
+        {lastEnded && <TakenAwayNotice notice={lastEnded} onDismiss={dismissLastEnded} />}
         <EmptyState
           icon={<Navigation className="h-7 w-7" />}
           title={t('noActive')}
@@ -421,6 +426,11 @@ export function ActiveDeliveryView() {
 
   return (
     <div className="relative">
+      {lastEnded && (
+        <div className="px-4 pt-4">
+          <TakenAwayNotice notice={lastEnded} onDismiss={dismissLastEnded} />
+        </div>
+      )}
       <section className="relative h-[42vh] overflow-hidden bg-muted">
         {showMap && branchLL ? (
           <DeliveryMap
@@ -538,7 +548,16 @@ export function ActiveDeliveryView() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <DriverDeliveryChat deliveryId={active.id} deliveryStatus={active.status} />
+                {/* Gated on the turn, not on the delivery. Without an open assignment there
+                    is no thread to open, and falling back to the delivery is exactly how a
+                    replacement rider used to inherit the last one's conversation. */}
+                {active.assignmentId && (
+                  <DriverDeliveryChat
+                    assignmentId={active.assignmentId}
+                    deliveryId={active.id}
+                    deliveryStatus={active.status}
+                  />
+                )}
                 {active.customerPhone && (
                   <a href={`tel:${active.customerPhone}`}>
                     <Button variant="soft" leftIcon={<Phone className="h-4 w-4" />} size="md">
@@ -650,12 +669,59 @@ export function ActiveDeliveryView() {
   );
 }
 
-const PRE_PICKUP_REASONS = ['Vehicle problem', 'Personal emergency', 'Wait at restaurant too long', 'Other'];
-const AT_DOOR_REASONS = ['Customer unreachable', "Can't find the address", 'Customer refused the order', 'Other'];
+/**
+ * A job leaving this phone without the rider touching anything used to be silent at best: the
+ * card either froze until the app was next focused, or vanished with no explanation. Say who
+ * took it and, when somebody typed one, what they said.
+ */
+function TakenAwayNotice({
+  notice,
+  onDismiss,
+}: {
+  notice: EndedJobNotice;
+  onDismiss: () => void;
+}) {
+  const what =
+    notice.endKind === 'order_cancelled'
+      ? 'The restaurant cancelled this order'
+      : notice.endKind === 'reassigned_by_staff'
+        ? 'The restaurant gave this job to another rider'
+        : notice.endKind === 'requeued_by_staff'
+          ? 'The restaurant sent this job back to dispatch'
+          : notice.endKind === 'offer_expired'
+            ? 'The offer expired before you answered'
+            : 'This job is no longer yours';
+
+  return (
+    <div
+      role="status"
+      className="mb-4 rounded-2xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm"
+    >
+      <p className="font-semibold">{notice.orderNumber} was taken off your list</p>
+      <p className="mt-0.5 text-xs text-muted-foreground">{what}</p>
+      {notice.endReason && (
+        <p className="mt-1 text-xs italic text-muted-foreground">“{notice.endReason}”</p>
+      )}
+      <Button variant="outline" size="sm" className="mt-2.5" onClick={onDismiss}>
+        Got it
+      </Button>
+    </div>
+  );
+}
+
+const PRE_PICKUP_REASONS = ['Vehicle problem', 'Personal emergency', 'Wait at restaurant too long'];
+const AT_DOOR_REASONS = ['Customer unreachable', "Can't find the address", 'Customer refused the order'];
+/** Kept out of the arrays above because it is not a reason — it is the promise of one. The
+ *  word "Other" used to be sent verbatim as the cancellation reason and shown to nobody. */
+const OTHER = 'Other';
+/** Matches the server-side cap in driver_cancel_delivery / fail_delivery. */
+const REASON_MAX = 300;
 
 function DeliveryIssuePanel({ active }: { active: ActiveDeliveryUI }) {
+  const { clearActive } = useDelivery();
   const [open, setOpen] = React.useState(false);
   const [reason, setReason] = React.useState<string | null>(null);
+  const [otherText, setOtherText] = React.useState('');
   const [photoUrl, setPhotoUrl] = React.useState<string | null>(null);
   const [uploading, setUploading] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
@@ -685,20 +751,30 @@ function DeliveryIssuePanel({ active }: { active: ActiveDeliveryUI }) {
     }
   };
 
+  // "Other" is only a reason once somebody has typed one. Everything downstream — the
+  // rider's own history, the merchant's board, the diner's cancelled card — prints this
+  // string, so an empty one is a job nobody can explain afterwards.
+  const finalReason = reason === OTHER ? otherText.trim() : (reason ?? '');
+
   const submit = async () => {
-    if (!reason) return;
+    if (!finalReason) return;
     setSubmitting(true);
     setError(null);
     const supabase = getBrowserClient();
     const { error: err } = prePickup
-      ? await cancelDelivery(supabase, active.id, reason)
-      : await failDelivery(supabase, active.id, reason, photoUrl);
+      ? await cancelDelivery(supabase, active.id, finalReason)
+      : await failDelivery(supabase, active.id, finalReason, photoUrl);
     setSubmitting(false);
     if (err) {
       setError(err.message);
       return;
     }
-    // Realtime on deliveries clears the active job via the provider.
+    // The comment that used to sit here said Realtime would clear the job. It cannot:
+    // driver_cancel_delivery nulls deliveries.driver_id, and this app's subscription filters
+    // on driver_id=eq.<rider>, which Realtime evaluates against the NEW row — so the rider
+    // who just cancelled is the only party guaranteed to receive nothing. The card stayed on
+    // screen until the app was next focused. Clear it here.
+    clearActive();
     setOpen(false);
   };
 
@@ -725,13 +801,32 @@ function DeliveryIssuePanel({ active }: { active: ActiveDeliveryUI }) {
           : 'The restaurant will be alerted to sort out the order.'}
       </p>
       <div className="mt-3 space-y-1.5">
-        {reasons.map((r) => (
+        {[...reasons, OTHER].map((r) => (
           <label key={r} className="flex items-center gap-2 text-sm">
             <input type="radio" name="issue-reason" checked={reason === r} onChange={() => setReason(r)} />
             {r}
           </label>
         ))}
       </div>
+      {reason === OTHER && (
+        <div className="mt-2">
+          <label htmlFor="issue-other" className="sr-only">
+            What happened
+          </label>
+          <textarea
+            id="issue-other"
+            value={otherText}
+            onChange={(e) => setOtherText(e.target.value)}
+            rows={3}
+            maxLength={REASON_MAX}
+            placeholder="Tell the restaurant what happened"
+            className="focus-ring w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none"
+          />
+          <p className="mt-1 text-right text-[11px] text-muted-foreground">
+            {otherText.trim().length}/{REASON_MAX}
+          </p>
+        </div>
+      )}
       {!prePickup && (
         <div className="mt-3">
           <input
@@ -772,7 +867,7 @@ function DeliveryIssuePanel({ active }: { active: ActiveDeliveryUI }) {
           fullWidth
           onClick={submit}
           loading={submitting}
-          disabled={!reason}
+          disabled={!finalReason}
         >
           {prePickup ? 'Cancel delivery' : 'Mark as failed'}
         </Button>

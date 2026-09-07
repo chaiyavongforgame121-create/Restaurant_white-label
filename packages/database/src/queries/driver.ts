@@ -100,6 +100,35 @@ export async function updateDriverLocation(
   });
 }
 
+/** The rider's current turn at one delivery — the key the chat thread hangs off. */
+export interface DriverAssignment {
+  id: string;
+  seq: number;
+  status: string;
+  offered_at: string;
+  accepted_at: string | null;
+}
+
+/**
+ * The open delivery_assignments row for this delivery, or null.
+ *
+ * Deliberately best-effort. A delivery in pending/dispatching has no live turn by design —
+ * there is no rider to talk to — and a failed read must cost the rider their Chat button, not
+ * the job they are carrying.
+ */
+async function getLiveAssignment(
+  supabase: FavornomsClient,
+  deliveryId: string,
+): Promise<DriverAssignment | null> {
+  const { data } = await supabase
+    .from('delivery_assignments')
+    .select('id, seq, status, offered_at, accepted_at')
+    .eq('delivery_id', deliveryId)
+    .is('ended_at', null)
+    .maybeSingle();
+  return (data ?? null) as unknown as DriverAssignment | null;
+}
+
 /**
  * Fetch driver's active delivery (any status that means "in flight").
  * Returns null when driver has nothing on their plate.
@@ -158,10 +187,21 @@ export async function getActiveDelivery(
       const { data: mateOrder } = await supabase.rpc('get_driver_order', {
         p_delivery_id: (mate as { id: string }).id,
       });
-      if (mateOrder) batchMate = { ...(mate as Record<string, unknown>), order: mateOrder };
+      if (mateOrder) {
+        batchMate = {
+          ...(mate as Record<string, unknown>),
+          order: mateOrder,
+          assignment: await getLiveAssignment(supabase, (mate as { id: string }).id),
+        };
+      }
     }
   }
-  return { ...data, order, batch_mate: batchMate };
+  return {
+    ...data,
+    order,
+    assignment: await getLiveAssignment(supabase, row.id),
+    batch_mate: batchMate,
+  };
 }
 
 /** Driver accepts the dispatch offer. Single round-trip RPC for atomicity. */
@@ -473,6 +513,49 @@ export async function listDriverEarnings(
   const { data, error } = await query;
   if (error) throw new Error('driver_earnings_read_failed:' + error.message);
   return (data ?? []) as unknown as DriverLedgerRow[];
+}
+
+/**
+ * One row per job the rider has HELD — delivered, cancelled, failed, declined or expired —
+ * with the reason it ended.
+ *
+ * Not the ledger. driver_earnings_ledger only ever gets a row on a successful drop-off
+ * (accrue_driver_earnings returns early for every other status), which is why the History
+ * screen could only say "no completed deliveries" about a cancelled job. Not `deliveries`
+ * either: deliveries_driver_assigned scopes a rider to `driver_id = private.driver_id_for_user()`
+ * and every cancel path moves driver_id away, so the row a rider wants to look back at is
+ * exactly the one they may no longer read. delivery_assignments keeps driver_id for ever.
+ *
+ * Throws when the read fails, for the same reason listDriverEarnings does.
+ */
+export interface DriverJobHistoryRow {
+  assignment_id: string;
+  delivery_id: string;
+  order_number: string;
+  branch_id: string;
+  branch_name: string;
+  restaurant_name: string | null;
+  status: string;
+  end_kind: string | null;
+  end_reason: string | null;
+  offered_at: string;
+  accepted_at: string | null;
+  ended_at: string | null;
+  /** driver_earnings_ledger.total for the delivered ones; null for every job that paid nothing. */
+  earned: number | string | null;
+  ledger_status: string | null;
+}
+
+export async function listDriverJobHistory(
+  supabase: FavornomsClient,
+  opts: { since?: string; limit?: number } = {},
+): Promise<DriverJobHistoryRow[]> {
+  const { data, error } = await supabase.rpc('driver_job_history', {
+    p_since: opts.since ?? null,
+    p_limit: opts.limit ?? 100,
+  } as never);
+  if (error) throw new Error('driver_job_history_read_failed:' + error.message);
+  return (data ?? []) as unknown as DriverJobHistoryRow[];
 }
 
 /** The rider's withdrawal requests, newest first. One request settles one restaurant. */

@@ -23,6 +23,36 @@ export const ETA_MAX_MIN = 180;
 /** arriving_at means "the rider is at the door" only for a little while afterwards. */
 export const ARRIVING_WINDOW_MS = 30 * 60_000;
 
+/**
+ * One rider's turn at a delivery (public.delivery_assignments). The delivery row is reused by
+ * every re-dispatch, so this is the only place a rider's own cancellation reason survives —
+ * requeue_failed_delivery nulls deliveries.failed_reason, and a pre-pickup rider cancel never
+ * wrote it at all.
+ */
+export interface DeliveryAssignmentRef {
+  id: string;
+  delivery_id: string;
+  seq: number;
+  driver_id: string;
+  status: string;
+  end_kind: string | null;
+  end_reason: string | null;
+  offered_at: string;
+  ended_at: string | null;
+}
+
+/** The most recently ended turn that somebody actually explained. Null when nobody did. */
+export function lastEndedWithReason(
+  assignments: readonly DeliveryAssignmentRef[],
+): DeliveryAssignmentRef | null {
+  let best: DeliveryAssignmentRef | null = null;
+  for (const a of assignments) {
+    if (!a.ended_at || !a.end_reason) continue;
+    if (!best || a.seq > best.seq) best = a;
+  }
+  return best;
+}
+
 export interface DeliveryDescription {
   label: string;
   variant: BadgeVariant;
@@ -108,7 +138,12 @@ export function offerOpen(d: Pick<LiveDelivery, 'status' | 'driver_id' | 'accept
   return Number.isFinite(exp) && exp > nowMs;
 }
 
-export function describeDelivery(d: LiveDelivery, nowMs: number, selfDelivery: boolean): DeliveryDescription {
+export function describeDelivery(
+  d: LiveDelivery,
+  nowMs: number,
+  selfDelivery: boolean,
+  assignments: readonly DeliveryAssignmentRef[] = [],
+): DeliveryDescription {
   const age = msSince(d.created_at, nowMs) ?? 0;
   const kitchen = d.order?.status;
 
@@ -124,7 +159,16 @@ export function describeDelivery(d: LiveDelivery, nowMs: number, selfDelivery: b
     }
     case 'dispatching': {
       const n = d.dispatch_attempts;
-      const detail = n > 0 ? `Asked ${n} rider${n === 1 ? '' : 's'} so far` : 'Looking for a rider';
+      // A row back in the pool because a rider walked away is not the same as a row nobody has
+      // answered yet, and "Asked 3 riders so far" said nothing about which one it was. The
+      // rider's own words win over the attempt count whenever there are any.
+      const walked = lastEndedWithReason(assignments);
+      const detail =
+        walked && walked.end_kind?.startsWith('driver_cancelled')
+          ? `Rider cancelled: ${walked.end_reason}`
+          : n > 0
+            ? `Asked ${n} rider${n === 1 ? '' : 's'} so far`
+            : 'Looking for a rider';
       return { label: 'Finding a rider', variant: 'warning', detail, overdue: age > OVERDUE_AFTER_MS };
     }
     case 'assigned': {
@@ -154,8 +198,16 @@ export function describeDelivery(d: LiveDelivery, nowMs: number, selfDelivery: b
       const eta = saneEta(d.current_eta_min, d.driver_location_updated_at, nowMs);
       return { label: 'On the way', variant: 'default', detail: eta != null ? `ETA ${eta} min` : 'ETA unknown — waiting for the rider’s GPS', overdue: false };
     }
-    case 'failed':
-      return { label: 'Failed — needs you', variant: 'danger', detail: d.failed_reason ?? 'No reason recorded', overdue: true };
+    case 'failed': {
+      // failed_reason is cleared by requeue_failed_delivery; the turn keeps what was said.
+      const ended = lastEndedWithReason(assignments);
+      return {
+        label: 'Failed — needs you',
+        variant: 'danger',
+        detail: d.failed_reason ?? ended?.end_reason ?? 'No reason recorded',
+        overdue: true,
+      };
+    }
     default:
       return { label: String(d.status), variant: 'muted', detail: '', overdue: false };
   }

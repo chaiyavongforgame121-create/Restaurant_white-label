@@ -32,6 +32,7 @@ import {
   describeDispatchFailure,
   dropoffPosition,
   formatCountdown,
+  lastEndedWithReason,
   mergeRefetch,
   offerOpen,
   partitionStale,
@@ -39,12 +40,31 @@ import {
   riderMapPosition,
   riderPinState,
   riderPosition,
+  type DeliveryAssignmentRef,
   type DispatchFailure,
 } from './live-ops-model';
 
 // Live delivery operations board. Two questions, one screen: where is every order that has
 // not been handed over yet, and where are the riders who could take it. The map draws both;
 // the list beside it is where a stuck one gets unstuck.
+
+/**
+ * What a merchant is actually cancelling for. This screen used to send the literal string
+ * 'Cancelled from Live deliveries' with no input at all, and the diner's tracking page — which
+ * has always rendered orders.cancellation_reason — showed its generic fallback instead.
+ */
+const CANCEL_REASONS = [
+  'Kitchen cannot make it',
+  'Customer asked to cancel',
+  'No rider available',
+  'Duplicate order',
+];
+const CANCEL_OTHER = 'Other';
+/** Matches the server-side cap in cancel_order. */
+const CANCEL_REASON_MAX = 300;
+
+/** No assignments yet is the common case; one shared array keeps the card memo-stable. */
+const NO_ASSIGNMENTS: DeliveryAssignmentRef[] = [];
 
 /** Riders idle on the map. A rider on a job is drawn by the job, in the shop's blue. */
 const RIDER_COLOR: Record<'available' | 'stale', string> = {
@@ -220,6 +240,8 @@ function StatPill({ label, value, tone }: { label: string; value: number; tone?:
 
 interface CardProps {
   d: LiveDelivery;
+  /** This delivery's rider turns, oldest first. Carries the reasons the delivery row lost. */
+  assignments: readonly DeliveryAssignmentRef[];
   branchId: string;
   nowMs: number;
   selfDelivery: boolean;
@@ -237,6 +259,7 @@ interface CardProps {
 
 function DeliveryCard({
   d,
+  assignments,
   branchId,
   nowMs,
   selfDelivery,
@@ -251,7 +274,14 @@ function DeliveryCard({
   onFindRider,
   onRefresh,
 }: CardProps) {
-  const info = describeDelivery(d, nowMs, selfDelivery);
+  const info = describeDelivery(d, nowMs, selfDelivery, assignments);
+  const walked = lastEndedWithReason(assignments);
+  // Suppressed when describeDelivery already put those exact words on the card — the point is
+  // that the reason is visible once, not that it is visible twice.
+  const lastRiderNote =
+    walked && walked.end_reason && !info.detail.includes(walked.end_reason)
+      ? walked.end_reason
+      : null;
   const order = d.order;
   const addr = order?.delivery_address ?? null;
   const addressLine = [addr?.line1, addr?.city].filter(Boolean).join(', ');
@@ -323,6 +353,8 @@ function DeliveryCard({
         {' · placed '}
         {ageLabel(d.created_at, nowMs)} ago
       </p>
+
+      {lastRiderNote && <p className="mt-1 text-xs text-danger">Last rider: “{lastRiderNote}”</p>}
 
       <div className="mt-2 flex flex-wrap items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
         {canFindRider(d, selfDelivery) && (
@@ -433,6 +465,9 @@ export function LiveOpsView({
   const [cancelFor, setCancelFor] = React.useState<LiveDelivery | null>(null);
   const [cancelBusy, setCancelBusy] = React.useState(false);
   const [cancelError, setCancelError] = React.useState<string | null>(null);
+  const [cancelReason, setCancelReason] = React.useState<string | null>(null);
+  const [cancelOther, setCancelOther] = React.useState('');
+  const [assignments, setAssignments] = React.useState<DeliveryAssignmentRef[]>([]);
   const [busyId, setBusyId] = React.useState<string | null>(null);
   const [actionError, setActionError] = React.useState<{
     id: string;
@@ -448,6 +483,26 @@ export function LiveOpsView({
 
   const nowMs = useNow(20_000);
 
+  /**
+   * The rider turns behind the rows on the board. Read separately because
+   * LIVE_DELIVERY_SELECT is shared with other callers, and because these rows change on their
+   * own schedule — one per re-dispatch — while the delivery row they belong to does not.
+   */
+  const loadAssignments = React.useCallback(async (deliveryIds: string[]) => {
+    if (deliveryIds.length === 0) {
+      setAssignments([]);
+      return;
+    }
+    const supabase = getBrowserClient();
+    const { data } = await supabase
+      .from('delivery_assignments')
+      .select('id, delivery_id, seq, driver_id, status, end_kind, end_reason, offered_at, ended_at')
+      .in('delivery_id', deliveryIds)
+      .order('seq', { ascending: true });
+    // Best-effort: losing the reasons costs a line of explanation, never the board.
+    if (data) setAssignments(data as unknown as DeliveryAssignmentRef[]);
+  }, []);
+
   const refresh = React.useCallback(async () => {
     const seq = ++refreshSeq.current;
     const supabase = getBrowserClient();
@@ -458,6 +513,7 @@ export function LiveOpsView({
       if (seq !== refreshSeq.current) return;
       setLoadError(null);
       setDeliveries((prev) => mergeRefetch(prev, rows, false));
+      void loadAssignments(rows.map((r) => r.id));
     } catch (e) {
       if (seq !== refreshSeq.current) return;
       // A read that failed used to arrive as an empty array and render as "no active
@@ -466,7 +522,7 @@ export function LiveOpsView({
     } finally {
       if (seq === refreshSeq.current) setLoaded(true);
     }
-  }, [branchId]);
+  }, [branchId, loadAssignments]);
 
   const loadRiders = React.useCallback(async () => {
     if (selfDelivery) return;
@@ -506,13 +562,21 @@ export function LiveOpsView({
   // so the board recovers by itself instead of silently freezing on a dropped socket.
   const { healthy: liveHealthy } = useRealtime({
     channel: `live-ops:${branchId}`,
-    tables: [{ table: 'deliveries', filter: `branch_id=eq.${branchId}` }],
+    tables: [
+      { table: 'deliveries', filter: `branch_id=eq.${branchId}` },
+      { table: 'delivery_assignments', filter: `branch_id=eq.${branchId}` },
+    ],
     refetch: refresh,
     // Merge the payload into the row already held instead of refetching the board. A rider
     // pushes GPS every 3 seconds while on a delivery and it lands on deliveries.driver_lat /
     // driver_lng, so leaving this out meant a full refetch several times a second, each one
     // replacing the whole list and re-running the marker sync.
-    onChange: (payload) => {
+    onChange: (payload, table) => {
+      if (table === 'delivery_assignments') {
+        // A turn opening or ending is what carries the rider's own words onto the board.
+        void loadAssignments(deliveriesRef.current.map((d) => d.id));
+        return;
+      }
       if (payload.eventType === 'DELETE') {
         const goneId = (payload.old as { id?: string } | null)?.id;
         if (goneId) setDeliveries((prev) => prev.filter((d) => d.id !== goneId));
@@ -766,9 +830,14 @@ export function LiveOpsView({
     [refresh],
   );
 
+  // "Other" is only a reason once somebody types one, and this string is what the diner reads
+  // on their tracking page — so an empty one is a cancellation nobody can explain to them.
+  const finalCancelReason =
+    cancelReason === CANCEL_OTHER ? cancelOther.trim() : (cancelReason ?? '');
+
   const doCancel = React.useCallback(async () => {
     const d = cancelFor;
-    if (!d?.order) return;
+    if (!d?.order || !finalCancelReason) return;
     setCancelBusy(true);
     setCancelError(null);
     const supabase = getBrowserClient();
@@ -776,7 +845,7 @@ export function LiveOpsView({
     // orders_cancel_syncs_delivery trigger that ships with this screen.
     const { error } = await supabase.rpc('cancel_order', {
       p_order_id: d.order.id,
-      p_reason: 'Cancelled from Live deliveries',
+      p_reason: finalCancelReason,
     });
     setCancelBusy(false);
     if (error) {
@@ -785,7 +854,17 @@ export function LiveOpsView({
     }
     setCancelFor(null);
     await refresh();
-  }, [cancelFor, refresh]);
+  }, [cancelFor, finalCancelReason, refresh]);
+
+  const assignmentsByDelivery = React.useMemo(() => {
+    const m = new Map<string, DeliveryAssignmentRef[]>();
+    for (const a of assignments) {
+      const list = m.get(a.delivery_id);
+      if (list) list.push(a);
+      else m.set(a.delivery_id, [a]);
+    }
+    return m;
+  }, [assignments]);
 
   const riderNameById = React.useMemo(() => {
     const m = new Map<string, string>();
@@ -799,6 +878,7 @@ export function LiveOpsView({
     <DeliveryCard
       key={d.id}
       d={d}
+      assignments={assignmentsByDelivery.get(d.id) ?? NO_ASSIGNMENTS}
       branchId={branchId}
       nowMs={nowMs}
       selfDelivery={selfDelivery}
@@ -811,6 +891,8 @@ export function LiveOpsView({
       onAssign={() => setAssignFor(d)}
       onCancel={() => {
         setCancelError(null);
+        setCancelReason(null);
+        setCancelOther('');
         setCancelFor(d);
       }}
       onFindRider={(reset) => void findRider(d, reset)}
@@ -1036,6 +1118,41 @@ export function LiveOpsView({
               This cancels the order, restores stock and takes the delivery off the board. It
               can&apos;t be undone.
             </p>
+            <fieldset className="space-y-1.5">
+              <legend className="text-sm font-medium">
+                Why? The customer sees this on their order page.
+              </legend>
+              {[...CANCEL_REASONS, CANCEL_OTHER].map((r) => (
+                <label key={r} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="cancel-reason"
+                    checked={cancelReason === r}
+                    onChange={() => setCancelReason(r)}
+                  />
+                  {r}
+                </label>
+              ))}
+            </fieldset>
+            {cancelReason === CANCEL_OTHER && (
+              <div>
+                <label htmlFor="cancel-other" className="sr-only">
+                  What happened
+                </label>
+                <textarea
+                  id="cancel-other"
+                  value={cancelOther}
+                  onChange={(e) => setCancelOther(e.target.value)}
+                  rows={3}
+                  maxLength={CANCEL_REASON_MAX}
+                  placeholder="Tell the customer what happened"
+                  className="focus-ring w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none"
+                />
+                <p className="mt-1 text-right text-[11px] text-muted-foreground">
+                  {cancelOther.trim().length}/{CANCEL_REASON_MAX}
+                </p>
+              </div>
+            )}
             {cancelError && (
               <p role="alert" className="rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">
                 {cancelError}
@@ -1045,7 +1162,12 @@ export function LiveOpsView({
               <Button variant="ghost" onClick={() => setCancelFor(null)} disabled={cancelBusy}>
                 Keep order
               </Button>
-              <Button variant="danger" onClick={() => void doCancel()} loading={cancelBusy}>
+              <Button
+                variant="danger"
+                onClick={() => void doCancel()}
+                loading={cancelBusy}
+                disabled={!finalCancelReason}
+              >
                 Yes, cancel
               </Button>
             </div>
