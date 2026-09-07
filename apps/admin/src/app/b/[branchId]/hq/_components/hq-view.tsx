@@ -18,7 +18,6 @@ import {
 import {
   AlertTriangle,
   ArrowUpRight,
-  Bike,
   CreditCard,
   Landmark,
   Lock,
@@ -28,7 +27,7 @@ import {
   TrendingUp,
   Wallet,
 } from 'lucide-react';
-import { Button, Card } from '@favornoms/ui';
+import { Button, Card, RiderIcon } from '@favornoms/ui';
 import { formatCurrency } from '@favornoms/shared';
 import type { RestaurantReports } from '@favornoms/database/queries';
 
@@ -328,7 +327,7 @@ export function HqView({ branchId, initialMonths, reports, error }: Props) {
           <ul className="mt-3 space-y-2 text-sm">
             <li className="flex items-start justify-between gap-3">
               <span className="flex items-center gap-2">
-                <Bike className="h-4 w-4 text-muted-foreground" /> Driver payouts
+                <RiderIcon className="h-4 w-4 text-muted-foreground" /> Driver payouts
               </span>
               <span className="font-semibold tabular-nums">{formatCurrency(totals.driver_payouts)}</span>
             </li>

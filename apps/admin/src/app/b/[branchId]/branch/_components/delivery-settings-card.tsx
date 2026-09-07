@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { Bike, Save } from 'lucide-react';
+import { Save } from 'lucide-react';
 import {
   DELIVERY_SETTING_DEFAULTS,
   KM_PER_MILE,
@@ -14,7 +14,7 @@ import {
   surgeIsUnreachable,
 } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
-import { Button, Card } from '@favornoms/ui';
+import { Button, Card, RiderIcon } from '@favornoms/ui';
 
 // Structured editor for the delivery keys inside branches.settings (jsonb).
 // Saves independently from the main BranchSettings form — merges keys, never
@@ -240,7 +240,7 @@ export function DeliverySettingsCard({ branchId, settings }: Props) {
   return (
     <Card className="p-5">
       <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
-        <Bike className="h-5 w-5 text-primary" /> Delivery
+        <RiderIcon className="h-5 w-5 text-primary" /> Delivery
       </h2>
       <p className="text-sm text-muted-foreground">
         Distance-based pricing, delivery radius, and dispatch behavior for this branch. Distances and per-distance rates are in miles.

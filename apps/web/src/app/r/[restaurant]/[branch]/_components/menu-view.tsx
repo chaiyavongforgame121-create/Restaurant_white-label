@@ -6,7 +6,6 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  Bike,
   ChefHat,
   Clock,
   MapPin,
@@ -35,6 +34,7 @@ import {
   cn,
   DietaryBadge,
   EmptyState,
+  RiderIcon,
   Segmented,
 } from '@favornoms/ui';
 import { useRealtime } from '@favornoms/database/realtime';
@@ -237,7 +237,7 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
 
   // Scanned their table: the order type is settled and the branch is not theirs to
   // change. Offering the switcher anyway would let them send a dine-in ticket for the
-  // table they are sitting at away on a bike.
+  // table they are sitting at away with a driver.
   const { table: pinnedTable } = useTablePin();
 
   // One auth gate for the whole menu: instantiated once here and threaded down to
@@ -500,7 +500,7 @@ function ChannelAndSearch({
   // "Delivery" tab would only advertise something the customer cannot have.
   const options = [
     ...(canDeliver
-      ? [{ value: 'delivery' as const, label: t('channel.delivery'), icon: <Bike className="h-4 w-4" /> }]
+      ? [{ value: 'delivery' as const, label: t('channel.delivery'), icon: <RiderIcon className="h-4 w-4" /> }]
       : []),
     { value: 'pickup' as const, label: t('channel.pickup'), icon: <ShoppingBag className="h-4 w-4" /> },
     { value: 'dine_in' as const, label: t('channel.dineIn'), icon: <Store className="h-4 w-4" /> },

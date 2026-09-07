@@ -5,13 +5,13 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
-  BarChart3, Bike, Building2, ChefHat, ChevronDown, ClipboardList, Cog,
+  BarChart3, Building2, ChefHat, ChevronDown, ClipboardList, Cog,
   CreditCard, Gift, Landmark, LayoutDashboard, Menu as MenuIcon, MicVocal, Monitor,
   Network, Package, Palette, QrCode, Receipt, Star, Store, Tag, Tv, UserRound, Users,
   Wallet, X,
 } from 'lucide-react';
 import { hasFeature, type Entitlements, type FeatureKey } from '@favornoms/shared';
-import { cn } from '@favornoms/ui';
+import { cn, RiderIcon } from '@favornoms/ui';
 import { ThemeToggle } from './theme-toggle';
 
 interface Props {
@@ -75,7 +75,7 @@ export function Sidebar({
     { href: `${base}/orders`, label: 'Orders', icon: Receipt, capability: 'orders.view' },
     // "Live deliveries" alone read as a report of past deliveries to more than one
     // merchant; the hover says which of the two screens this is.
-    { href: `${base}/deliveries`, label: 'Live deliveries', icon: Bike, feature: 'delivery', capability: 'delivery.manage', description: 'Where your riders and live orders are right now' },
+    { href: `${base}/deliveries`, label: 'Live deliveries', icon: RiderIcon, feature: 'delivery', capability: 'delivery.manage', description: 'Where your riders and live orders are right now' },
     { href: `${base}/menu`, label: 'Menu', icon: ChefHat, capability: 'menu.manage' },
     { href: `/kitchen/${branchId}`, label: 'Kitchen display', icon: Monitor, capability: 'kitchen.access' },
     { href: `/counter/${branchId}`, label: 'Counter', icon: Store, capability: 'counter.access' },
@@ -109,7 +109,7 @@ export function Sidebar({
       title: 'People & growth',
       items: [
         { href: `${base}/staff`, label: 'Staff', icon: Users, capability: 'staff.manage' },
-        { href: `${base}/drivers`, label: 'Drivers', icon: Bike, feature: 'delivery', capability: 'drivers.manage' },
+        { href: `${base}/drivers`, label: 'Drivers', icon: RiderIcon, feature: 'delivery', capability: 'drivers.manage' },
         { href: `${base}/payouts`, label: 'Driver payouts', icon: Wallet, feature: 'delivery', capability: 'drivers.manage' },
         { href: `${base}/customers`, label: 'Customers', icon: UserRound, capability: 'customers.view' },
         { href: `${base}/promos`, label: 'Promos', icon: Tag, capability: 'promos.manage' },

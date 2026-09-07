@@ -1,6 +1,5 @@
 import Link from 'next/link';
-import { Bike } from 'lucide-react';
-import { Card } from '@favornoms/ui';
+import { Card, RiderIcon } from '@favornoms/ui';
 
 /**
  * Where a rider lands if they sign in to the merchant back office.
@@ -15,7 +14,7 @@ export default function NoAccessPage() {
     <div className="grid min-h-dynamic-screen place-items-center p-6">
       <Card className="max-w-md p-8 text-center">
         <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-primary/10 text-primary">
-          <Bike className="h-7 w-7" />
+          <RiderIcon className="h-7 w-7" />
         </span>
         <h1 className="mt-4 font-display text-2xl font-bold">You&apos;re a driver here</h1>
         <p className="mt-2 text-muted-foreground">
