@@ -1,6 +1,11 @@
 import { notFound } from 'next/navigation';
 import { getServerClient } from '@favornoms/database/server';
-import { getEntitlementsForBranch, listCategories, listMenuItems } from '@favornoms/database/queries';
+import {
+  getEntitlementsForBranch,
+  listCategories,
+  listMenuItems,
+  listTableStates,
+} from '@favornoms/database/queries';
 import { hasFeature, parseServiceFeePercent } from '@favornoms/shared';
 import { SuspensionScreen } from '@/components/suspension-screen';
 import { CounterView } from './_components/counter-view';
@@ -22,11 +27,24 @@ export default async function CounterPage({ params }: Props) {
     .maybeSingle();
   if (!branch) notFound();
   const settings = (branch.settings ?? {}) as Record<string, unknown>;
-  const [categories, items, entitlements] = await Promise.all([
+  const [categories, items, entitlements, floor] = await Promise.all([
     listCategories(supabase, branchId),
     listMenuItems(supabase, branchId),
     getEntitlementsForBranch(supabase, branchId),
+    // The till used to take the table as free text, so a typo rang a dine-in order up
+    // against no table at all. Picking a real row is also what lets place-order attach the
+    // order to the sitting the diners' phones are already adding to.
+    listTableStates(supabase, branchId),
   ]);
+  const seatedTableIds = new Set(floor.sessions.map((s) => s.table_id));
+  const tables = floor.tables
+    .filter((t) => t.is_active)
+    .map((t) => ({
+      id: t.id,
+      number: t.table_number,
+      label: t.display_name?.trim() || `Table ${t.table_number}`,
+      seated: seatedTableIds.has(t.id),
+    }));
   // Gate the till at the page, not the layout: /counter/[branchId]/recent must
   // stay reachable while suspended so staff can look up and reprint an order
   // that was already taken. Without the gate a cashier would ring a whole sale
@@ -41,6 +59,7 @@ export default async function CounterPage({ params }: Props) {
       branchName={branch.name}
       categories={categories}
       items={items}
+      tables={tables}
       canUseCard={hasFeature(entitlements, 'card_payment')}
       canDeliver={hasFeature(entitlements, 'delivery')}
       salesTaxRate={Number(branch.sales_tax_rate ?? 0)}

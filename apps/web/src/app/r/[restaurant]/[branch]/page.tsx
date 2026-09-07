@@ -4,7 +4,7 @@ import { listCategories, listMenuItems } from '@favornoms/database/queries';
 import { resolveStorefrontStatus, resolveTenant } from '@/lib/tenant';
 import { MenuView } from './_components/menu-view';
 import { SuspendedStorefront } from './_components/suspended-storefront';
-import { TableScanPin, type PinnedTable } from './_components/table-pin';
+import { TablePinNotice, TableScanPin } from './_components/table-pin';
 
 interface Props {
   params: Promise<{ restaurant: string; branch: string }>;
@@ -12,12 +12,20 @@ interface Props {
   searchParams: Promise<{ t?: string | string[] }>;
 }
 
-/** One row of public.resolve_table_qr. */
+/** One row of public.resolve_table_qr. The session columns arrived with dine-in sittings;
+ *  `session_code` is deliberately absent — the resolver is the one function anon can call. */
 interface ScannedTable {
   branch_id: string;
   table_id: string;
   table_number: string;
   display_name: string | null;
+  session_id: string | null;
+  /** 'open' | 'locked' | 'closed' | 'none'. */
+  session_status: string;
+  accepting_orders: boolean;
+  requires_join_code: boolean;
+  /** 'auto' — a scan opens the sitting; 'staff' — only staff may seat a table. */
+  session_mode: string;
 }
 
 export default async function MenuPage({ params, searchParams }: Props) {
@@ -73,14 +81,11 @@ export default async function MenuPage({ params, searchParams }: Props) {
   // anything here — otherwise a code lifted from one restaurant's table tent would seat
   // a diner in a second restaurant's dining room and send the ticket to its kitchen.
   const scanned = ((tableCheck.data as ScannedTable[] | null) ?? [])[0];
-  const pinnedTable: PinnedTable | null =
-    scanned && scanned.branch_id === tenant.branch.id
-      ? {
-          id: scanned.table_id,
-          number: scanned.table_number,
-          label: scanned.display_name?.trim() || `Table ${scanned.table_number}`,
-        }
-      : null;
+  // Resolving the code says which table it is, not that this diner may order at it: the
+  // sitting, the sign-in and the party membership are all decided by join_table_session and
+  // re-checked by place-order. This just decides whether to offer the seat at all.
+  const scannedHere =
+    scanned && scanned.branch_id === tenant.branch.id && tableToken ? scanned : null;
 
   const priceMap = new Map<string, { list: number; effective: number; label: string | null }>();
   for (const row of (effectivePriceCheck.data ?? []) as Array<{
@@ -159,7 +164,21 @@ export default async function MenuPage({ params, searchParams }: Props) {
   }>;
   return (
     <>
-      {pinnedTable && <TableScanPin table={pinnedTable} />}
+      {scannedHere && (
+        <TableScanPin
+          token={tableToken!}
+          table={{
+            id: scannedHere.table_id,
+            number: scannedHere.table_number,
+            label: scannedHere.display_name?.trim() || `Table ${scannedHere.table_number}`,
+          }}
+          sessionMode={scannedHere.session_mode}
+          requiresJoinCode={scannedHere.requires_join_code}
+        />
+      )}
+      {/* The menu is where a diner spends the meal, so it is where the running bill has to
+          be reachable — the cart says it too, but nobody opens the cart to check a total. */}
+      <TablePinNotice />
       <MenuView
         branch={tenant.branch}
         categories={categories}

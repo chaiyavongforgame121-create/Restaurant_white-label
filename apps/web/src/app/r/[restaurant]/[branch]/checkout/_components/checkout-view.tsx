@@ -30,6 +30,7 @@ import {
   upsertCustomerAddress,
   type DeliveryQuote,
   type LoyaltyReward,
+  type PlaceOrderInput,
   type SavedAddress,
 } from '@favornoms/database/queries';
 import {
@@ -160,6 +161,15 @@ const ORDER_ERRORS: Array<[string, string]> = [
   ['delivery_not_available_at_that_time', 'Delivery is closed at that time. Pick another time, or switch to pickup.'],
   ['dropoff_other_required', 'Please describe where we should leave your order.'],
   ['dropoff_required', 'Please choose where we should leave your order.'],
+  // Dine-in is a sitting now, so the ways it can be refused are about the table's session
+  // rather than about a number the diner typed. Every one of these is a server decision —
+  // the phone cannot know a bill was settled while the diner was still choosing dessert.
+  ['table_session_closed', "This table's bill has been settled. Scan the code on your table to start a new one."],
+  ['table_session_changed', 'This table has been settled and re-seated. Scan the code again to start a new bill.'],
+  ['table_not_seated', 'Ask a member of staff to open your table, then try again.'],
+  ['not_at_this_table', 'Scan the code on your table again to join its bill.'],
+  ['table_not_in_branch', "That table isn't at this restaurant. Scan the code on your own table."],
+  ['sign_in_required', 'Please sign in again to order at your table.'],
   ['table_required', 'Please enter your table number.'],
   ['invalid_channel', 'Please choose delivery, pickup or dine-in and try again.'],
   // Wire code is still `google_link_required` (other surfaces match on it), but the
@@ -262,7 +272,7 @@ export function CheckoutView({
   // covers checkout until they do, so the null window is never interactive.
   const channel = useCart((s) => s.channel);
   // Only ever set for THIS branch — the provider drops a pin scanned anywhere else.
-  const { table: pinnedTable } = useTablePin();
+  const { table: pinnedTable, bill: tableBill } = useTablePin();
 
   const [name, setName] = React.useState('');
   const [phone, setPhone] = React.useState('');
@@ -1004,7 +1014,10 @@ export function CheckoutView({
         }
       }
 
-      const result = await placeOrder(supabase, {
+      // place-order v10.5 takes the sitting a dine-in round belongs to. PlaceOrderInput in
+      // queries/orders.ts has not caught up with the field yet, so it is widened here
+      // rather than asserted over the whole payload — the rest still type-checks.
+      const orderInput: PlaceOrderInput & { session_id?: string } = {
         branch_id: branchId,
         channel,
         customer_name: name,
@@ -1017,6 +1030,10 @@ export function CheckoutView({
         // string-matching a number the diner typed. The number rides along as the
         // fallback for the hand-typed path.
         table_id: atTable ? pinnedTable!.id : undefined,
+        // The sitting this round joins. place-order refuses a dine-in web order whose table
+        // has no open session, or whose caller never joined it, so this is what makes the
+        // round land on the party's bill instead of starting a private one.
+        session_id: atTable ? pinnedTable!.sessionId : undefined,
         // Structured too, so place-order can resolve it to a real tables row and
         // the kitchen/floor plan stop relying on the notes prefix above.
         table_number: channel === 'dine_in'
@@ -1073,7 +1090,9 @@ export function CheckoutView({
             quantity: l.quantity,
             notes: l.notes,
           })),
-      });
+      };
+
+      const result = await placeOrder(supabase, orderInput);
 
       // Save the address (with coordinates) if it was a new entry and the
       // customer is signed in. Best-effort — the order already went through.
@@ -1523,6 +1542,15 @@ export function CheckoutView({
                 <p className="mt-1 text-xs text-muted-foreground">
                   Scanned from the QR code on your table — nothing to type.
                 </p>
+                {/* Which round this is, and what the table already owes. The number is the
+                    whole party's, not this phone's: everyone who scanned the same tent is
+                    adding to one bill, and that is the figure they will be asked to pay. */}
+                {tableBill && tableBill.order_count > 0 && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Round {tableBill.order_count + 1} · Table total so far{' '}
+                    {formatCurrency(Number(tableBill.running_total))}
+                  </p>
+                )}
                 {/* The last point at which a wrong table is still cheap to fix. After this
                     the order carries the table id and the food is walked to it. */}
                 <LeaveTableButton className="mt-2 px-0" />
@@ -1883,7 +1911,12 @@ export function CheckoutView({
               (channel === 'delivery' && enteringNewAddress && !addressCoords)
             }
           >
-            {t('checkout.placeOrder', { amount: formatCurrency(total) })}
+            {/* At a table nothing is being paid for here — the round goes to the kitchen and
+                the bill is settled with a server at the end of the meal. "Place order" read
+                as the last step of a transaction that has not happened yet. */}
+            {atTable
+              ? `Send to kitchen · ${formatCurrency(total)}`
+              : t('checkout.placeOrder', { amount: formatCurrency(total) })}
           </Button>
         </motion.div>
       </form>

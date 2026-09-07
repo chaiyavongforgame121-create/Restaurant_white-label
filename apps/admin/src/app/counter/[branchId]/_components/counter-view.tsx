@@ -32,11 +32,22 @@ interface Line {
 type Channel = 'dine_in' | 'pickup' | 'delivery' | 'qr_ordering';
 type PayMethod = 'cash' | 'card';
 
+/** One of the branch's tables, as the till needs it. */
+export interface CounterTable {
+  id: string;
+  number: string;
+  label: string;
+  /** Someone is already sitting there — this order joins their bill. */
+  seated: boolean;
+}
+
 interface Props {
   branchId: string;
   branchName: string;
   categories: MenuCategory[];
   items: MenuItem[];
+  /** Active tables at this branch. Empty for a branch that has never set any up. */
+  tables?: CounterTable[];
   /** `card_payment` entitlement — default false so a missing prop cannot sell it. */
   canUseCard?: boolean;
   /** `delivery` entitlement — same. */
@@ -124,6 +135,7 @@ function PosInner({
   branchName,
   categories,
   items,
+  tables = [],
   canUseCard = false,
   canDeliver = false,
   salesTaxRate = 0,
@@ -139,6 +151,9 @@ function PosInner({
   const [submitting, setSubmitting] = React.useState(false);
   const [success, setSuccess] = React.useState<string | null>(null);
   const [tableNumber, setTableNumber] = React.useState('');
+  // The row, not the text. place-order refuses a table that is not at this branch, and uses
+  // the id to attach this order to whatever sitting is already open there.
+  const [tableId, setTableId] = React.useState<string | null>(null);
   const [discountPercent, setDiscountPercent] = React.useState(0);
   const [splitN, setSplitN] = React.useState(1);
   const [parked, setParked] = React.useState<ParkedOrder[]>([]);
@@ -180,6 +195,7 @@ function PosInner({
     persistParked([next, ...parked]);
     setLines([]);
     setTableNumber('');
+    setTableId(null);
     setDiscountPercent(0);
     setSplitN(1);
   };
@@ -196,6 +212,9 @@ function PosInner({
     // place-order will now refuse.
     setChannel(target.channel === 'delivery' && !canDeliver ? 'pickup' : target.channel);
     setTableNumber(target.tableNumber);
+    // Re-resolved from the current floor rather than carried in the parked order: a cart
+    // parked before lunch can be resumed after the table it named was renumbered or retired.
+    setTableId(tables.find((t) => t.number === target.tableNumber)?.id ?? null);
     persistParked(parked.filter((p) => p.id !== parkedId));
     setShowParked(false);
   };
@@ -314,6 +333,7 @@ function PosInner({
         // Staff surface: place-order exempts it from the storefront's
         // dine-in-needs-a-table rule, since the counter rings up walk-ins.
         source: 'counter',
+        table_id: tableId ?? undefined,
         table_number: tableNumber || undefined,
         payment_method: method,
         items: lines.map((l) => ({ menu_item_id: l.menuItemId, quantity: l.quantity })),
@@ -457,6 +477,12 @@ function PosInner({
             Park order
           </button>
           <a
+            href={`/counter/${branchId}/tables`}
+            className="focus-ring inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-xs font-semibold hover:bg-muted/70"
+          >
+            Tables →
+          </a>
+          <a
             href={`/counter/${branchId}/recent`}
             className="focus-ring inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-xs font-semibold hover:bg-muted/70"
           >
@@ -467,9 +493,12 @@ function PosInner({
             value={channel}
             onChange={(c) => {
               setChannel(c as Channel);
-              // The table input is hidden off dine-in but its state survives.
+              // The table picker is hidden off dine-in but its state survives.
               // Leaving it set would stamp a pickup order with a real table.
-              if (c !== 'dine_in') setTableNumber('');
+              if (c !== 'dine_in') {
+                setTableNumber('');
+                setTableId(null);
+              }
             }}
             options={[
               { value: 'dine_in', label: 'Dine-in', icon: <Store className="h-4 w-4" /> },
@@ -669,15 +698,37 @@ function PosInner({
             )}
           </div>
           <div className="border-t border-border/60 p-4 space-y-3">
-            {channel === 'dine_in' && (
-              <input
-                value={tableNumber}
-                onChange={(e) => setTableNumber(e.target.value)}
-                placeholder="Table no."
-                inputMode="numeric"
-                className="focus-ring h-10 w-full rounded-xl border border-border bg-card px-3 text-base"
-              />
-            )}
+            {channel === 'dine_in' &&
+              (tables.length > 0 ? (
+                <select
+                  value={tableId ?? ''}
+                  onChange={(e) => {
+                    const picked = tables.find((t) => t.id === e.target.value) ?? null;
+                    setTableId(picked?.id ?? null);
+                    setTableNumber(picked?.number ?? '');
+                  }}
+                  aria-label="Table"
+                  className="focus-ring h-10 w-full rounded-xl border border-border bg-card px-3 text-base"
+                >
+                  <option value="">No table (walk-in)</option>
+                  {tables.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.label}
+                      {t.seated ? ' · seated' : ''}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                // A branch that has never set a table up still has to be able to ring one
+                // up. The typed number is resolved against the branch's rows server-side.
+                <input
+                  value={tableNumber}
+                  onChange={(e) => setTableNumber(e.target.value)}
+                  placeholder="Table no."
+                  inputMode="numeric"
+                  className="focus-ring h-10 w-full rounded-xl border border-border bg-card px-3 text-base"
+                />
+              ))}
             <div className="flex items-center gap-2">
               <label className="flex flex-1 items-center gap-2 text-xs text-muted-foreground">
                 Discount %

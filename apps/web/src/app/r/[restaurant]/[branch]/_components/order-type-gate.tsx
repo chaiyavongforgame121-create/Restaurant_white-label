@@ -2,9 +2,9 @@
 
 import * as React from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Bike, ShoppingBag, Store } from 'lucide-react';
+import { ShoppingBag, Store } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { cn } from '@favornoms/ui';
+import { cn, RiderIcon } from '@favornoms/ui';
 import { useCart, type OrderChannel } from '@/store/cart';
 import { useTablePin } from './table-pin';
 
@@ -137,7 +137,7 @@ export function OrderTypeGate({
             value: 'delivery' as const,
             label: t('channel.delivery'),
             hint: t('orderType.deliveryHint'),
-            icon: <Bike className="h-6 w-6" />,
+            icon: <RiderIcon className="h-6 w-6" />,
           },
         ]
       : []),
@@ -218,7 +218,7 @@ export function OrderTypeGate({
               {deliveryClosedNow && (
                 <div className="rounded-2xl border border-dashed border-border bg-muted/40 px-4 py-3">
                   <p className="flex items-center gap-2 text-sm font-semibold">
-                    <Bike className="h-4 w-4 text-muted-foreground" /> Delivery is closed right now
+                    <RiderIcon className="h-4 w-4 text-muted-foreground" /> Delivery is closed right now
                   </p>
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     {deliveryWindowsToday.length > 0

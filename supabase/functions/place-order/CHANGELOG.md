@@ -5,7 +5,29 @@ the bulk of the file; every deploy had to carry it. The history is the valuable 
 so it lives here rather than being deleted.
 
 ```
-// place-order v10.4 — US pivot + modifiers + combos + happy-hour + schedules + gift cards
+// place-order v10.5 — US pivot + modifiers + combos + happy-hour + schedules + gift cards
+//   v10.5 (2026-09-08): dine-in by QR is a SESSION, and this function enforces it.
+//        Two holes closed. First, `payload.table_id` was taken verbatim — the FK proves
+//        the row exists, not that it belongs to the branch being ordered from, so a token
+//        lifted from one restaurant's table tent could stamp an order at another branch
+//        with that branch's table id, and the ticket was walked to a table that is not
+//        there. It is now read back and checked for branch and is_active, and the same
+//        rule is enforced by tg_orders_table_and_session on orders so a direct insert
+//        cannot skip it. Second, dine-in was orderable forever by anyone holding the
+//        token: verify_jwt is false, the storefront's sign-in requirement is client-side
+//        javascript, and there was no session because there was no session entity. A
+//        dine-in order with source 'web' now requires an OPEN table_sessions row at that
+//        table, a signed-in caller (401 sign_in_required), and a table_session_participants
+//        row for that exact sitting (403 not_at_this_table); a payload.session_id that no
+//        longer matches the sitting is 409 table_session_changed. Settling the bill closes
+//        the session, so the code on the tent is inert until staff seat the next party.
+//        Counter and POS are exempt in the other direction: they may seat the table
+//        themselves, so a walk-in rung up at the till joins the same bill the diner's
+//        phone is adding to. orders.session_id is written, and the trigger assigns
+//        session_seq — the round number the kitchen ticket prints.
+//        Auth moved up: it used to be resolved after pricing, which is far too late to
+//        gate anything, so it is now read once straight after the branch fetch and reused
+//        by the customer/loyalty block rather than fetched twice.
 //   v10.4 (2026-09-08): scheduled orders are now checked against the branch's BOOKABLE
 //        window, not only its opening hours. The times a diner could pick came from
 //        branch_hours alone — whenever the kitchen is open, it is bookable — so a shop

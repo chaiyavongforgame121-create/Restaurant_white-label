@@ -2,10 +2,10 @@
 // Server-side recalculation never trusts client totals.
 //
 // Version history: see ./CHANGELOG.md (moved out of this file 2026-08-28).
-// Current: v10.4 — a scheduled order is now checked against the branch's BOOKABLE window
-// (branch_schedule_hours) as well as its opening hours, and the same rule is enforced by
-// tg_enforce_scheduled_time on orders so a hand-crafted PostgREST insert cannot skip it.
-// Insert failures raised by those gates come back as the 409 they are instead of a 500.
+// Current: v10.5 — dine-in is now a SESSION. A supplied table_id is checked against the
+// branch instead of being trusted, and a dine-in order from the storefront is refused
+// unless a sitting is open at that table AND the signed-in caller has joined it. Auth is
+// resolved before pricing so that gate can run at all.
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
@@ -37,6 +37,8 @@ interface PlaceOrderRequest {
   promo_code?: string;
   table_id?: string;
   table_number?: string;
+  /** The open sitting this round belongs to. Re-checked here — see the session gate. */
+  session_id?: string;
   source?: 'web' | 'counter' | 'pos';
   scheduled_for?: string;
   gift_card_code?: string;
@@ -190,6 +192,21 @@ Deno.serve(async (req: Request) => {
   const { data: branch, error: bErr } = await admin.from('branches').select('id, restaurant_id, is_active, settings, sales_tax_rate, geo_lat, geo_lng').eq('id', payload.branch_id).single();
   if (bErr || !branch || !branch.is_active) return json(404, { error: 'branch_not_found_or_inactive' });
 
+  // Who is calling, resolved HERE rather than down in the pricing block, because the
+  // dine-in session gate below has to know before anything is priced. `Bearer
+  // <publishableKey>` yields no user, so an anonymous caller stays anonymous.
+  let authedUser: { id: string } | null = null;
+  let authedUserId: string | null = null;
+  {
+    const header = req.headers.get('authorization');
+    if (header && header.toLowerCase().startsWith('bearer ')) {
+      const userClient = createClient(url, anonKey, { global: { headers: { Authorization: header } }, auth: { persistSession: false } });
+      const { data: { user } } = await userClient.auth.getUser();
+      authedUser = user ?? null;
+      authedUserId = user?.id ?? null;
+    }
+  }
+
   // Turn the typed table number into a real table row so the kitchen and the
   // floor plan see it. A number that matches nothing is not an error — the
   // restaurant may not have mapped its tables — it just rides along in the notes.
@@ -204,7 +221,23 @@ Deno.serve(async (req: Request) => {
   // guard a pickup order would be stamped with a real table's FK and show up on
   // the kitchen board as a table order.
   const wantsTable = payload.channel === 'dine_in' || payload.channel === 'qr_ordering';
-  let tableId: string | null = wantsTable ? payload.table_id ?? null : null;
+  let tableId: string | null = null;
+  if (wantsTable && payload.table_id) {
+    // A table id arrives from the client and its FK only proves the row EXISTS. Without
+    // this check a token lifted from one restaurant's tent stamped an order at THIS branch
+    // with THAT branch's table, and the ticket was walked to a table that is not here.
+    // (tg_orders_table_and_session enforces the same rule at the insert; this is here so
+    // the diner gets a readable 400 instead of a database error.)
+    const { data: t } = await admin
+      .from('tables')
+      .select('id, branch_id, is_active')
+      .eq('id', payload.table_id)
+      .maybeSingle();
+    if (!t || t.branch_id !== payload.branch_id || !t.is_active) {
+      return json(400, { error: 'table_not_in_branch' });
+    }
+    tableId = t.id;
+  }
   if (wantsTable && !tableId && tableNumber) {
     const { data: tableRows } = await admin
       .from('tables')
@@ -214,6 +247,52 @@ Deno.serve(async (req: Request) => {
       .eq('table_number', tableNumber)
       .limit(1);
     tableId = tableRows?.[0]?.id ?? null;
+  }
+
+  // DINE-IN SESSION. A table QR is a sitting, not a standing licence to order: food is only
+  // cooked while a session is open at that table, and settling the bill closes it. Before
+  // this, anyone who photographed a table tent could have food cooked and carried to that
+  // table, from anywhere on earth, unpaid, forever.
+  let sessionId: string | null = null;
+  if (wantsTable && tableId) {
+    const { data: sess } = await admin
+      .from('table_sessions')
+      .select('id, status')
+      .eq('table_id', tableId)
+      .neq('status', 'closed')
+      .maybeSingle();
+    if (source === 'web') {
+      if (!sess) return json(409, { error: 'table_not_seated' });
+      if (sess.status !== 'open') return json(409, { error: 'table_session_closed' });
+      // The sitting the checkout thought it was adding to has been settled and another
+      // party seated since. Better a refusal than this round landing on their bill.
+      if (payload.session_id && payload.session_id !== sess.id) {
+        return json(409, { error: 'table_session_changed' });
+      }
+      // The storefront's sign-in requirement is client-side javascript. This is the server
+      // one, and it is why the token being public does not matter outside a live sitting.
+      if (!authedUserId) return json(401, { error: 'sign_in_required' });
+      const { count } = await admin
+        .from('table_session_participants')
+        .select('user_id', { count: 'exact', head: true })
+        .eq('session_id', sess.id)
+        .eq('user_id', authedUserId);
+      if (!count) return json(403, { error: 'not_at_this_table' });
+      sessionId = sess.id;
+    } else {
+      // The till and the POS may seat a table themselves, so a walk-in rung up at the
+      // counter joins the same bill the diner's phone is adding to.
+      if (sess?.status === 'open') {
+        sessionId = sess.id;
+      } else if (!sess) {
+        const { data: opened } = await admin
+          .from('table_sessions')
+          .insert({ branch_id: payload.branch_id, table_id: tableId, opened_via: 'counter' })
+          .select('id').single();
+        sessionId = opened?.id ?? null;
+        await admin.from('tables').update({ status: 'occupied' }).eq('id', tableId);
+      }
+    }
   }
 
   // Billing gate. The BEFORE INSERT triggers on orders/payments/deliveries are the
@@ -378,15 +457,13 @@ Deno.serve(async (req: Request) => {
   const tipAmount = Math.max(0, r2(payload.tip_amount ?? 0));
 
   let customerId: string | null = null;
-  let authedUserId: string | null = null;
   let promoDiscount = 0;
   let promoId: string | null = null;
-  const authHeader = req.headers.get('authorization');
-  if (authHeader && authHeader.toLowerCase().startsWith('bearer ')) {
-    const userClient = createClient(url, anonKey, { global: { headers: { Authorization: authHeader } }, auth: { persistSession: false } });
-    const { data: { user } } = await userClient.auth.getUser();
+  // The caller was resolved before pricing, because the dine-in session gate needed it
+  // there. Asking auth again here would be a second round trip for the same answer.
+  {
+    const user = authedUser;
     if (user) {
-      authedUserId = user.id;
       // Customer identity is per RESTAURANT (shared across its branches), so resolve
       // by (user, restaurant) and lazily create the row on first order at any branch.
       const { data: c } = await admin.from('customers').select('id').eq('user_id', user.id).eq('restaurant_id', branch.restaurant_id).maybeSingle();
@@ -691,7 +768,7 @@ Deno.serve(async (req: Request) => {
     service_fee: serviceFee, tax_amount: taxAmount, discount_amount: loyaltyDollarsOff + promoDiscount,
     tip_amount: tipAmount, promo_code: promoId ? payload.promo_code : null, promo_discount: promoDiscount,
     total, delivery_address: deliveryAddress, customer_notes: payload.customer_notes,
-    table_id: tableId, source,
+    table_id: tableId, session_id: sessionId, source,
     scheduled_for: scheduledFor,
     held,
     // Set here as well as by the payments trigger. The order row is inserted BEFORE the
@@ -710,6 +787,12 @@ Deno.serve(async (req: Request) => {
       'outside_scheduling_window',
       'branch_closed_at_scheduled_time',
       'delivery_not_available_at_that_time',
+      // tg_orders_table_and_session. It is the real authority on the table/session rules —
+      // the checks above exist so the diner reads copy instead of a database error.
+      'table_not_in_branch',
+      'table_session_closed',
+      'session_branch_mismatch',
+      'session_table_mismatch',
     ]) {
       if (detail.includes(code)) return json(409, { error: code });
     }
