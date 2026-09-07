@@ -93,11 +93,16 @@ export default async function CustomersPage({ params, searchParams }: Props) {
         />
       ) : (
         <Card className="overflow-hidden">
-          <div className="overflow-x-auto"><table className="w-full min-w-[700px] text-sm">
+          <div className="overflow-x-auto"><table className="w-full min-w-[900px] text-sm">
             <thead className="bg-muted/50 text-left text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
                 <SortHeader label="Name" column="name" state={state} basePath={basePath} />
                 <th scope="col" className="px-5 py-3">Phone</th>
+                {/* Deliberately not a SortHeader: every sort key is a real customers
+                    column, which is what lets the database page the list. Address is
+                    assembled from two other tables, so sorting on it would either be a
+                    lie about the whole branch or force the paging into JavaScript. */}
+                <th scope="col" className="px-5 py-3">Address</th>
                 <SortHeader label="Orders" column="orders" state={state} basePath={basePath} align="right" />
                 <SortHeader label="Lifetime spend" column="spent" state={state} basePath={basePath} align="right" />
                 <SortHeader label="Last seen" column="last_seen" state={state} basePath={basePath} />
@@ -109,6 +114,29 @@ export default async function CustomersPage({ params, searchParams }: Props) {
                 <tr key={c.id} className="border-t border-border/40 hover:bg-muted/30">
                   <td className="px-5 py-3 font-medium">{c.full_name ?? '—'}</td>
                   <td className="px-5 py-3">{c.phone ?? '—'}</td>
+                  <td className="px-5 py-3">
+                    {c.address ? (
+                      // The cap lives on this div, not the cell: an auto-layout table
+                      // ignores max-width on a <td> and would simply grow the column
+                      // until a pin-drop or a five-line Thai address pushed Lifetime
+                      // spend off the screen. The full text stays in the tooltip.
+                      <div className="max-w-[22rem]">
+                        <span className="block truncate" title={c.address}>
+                          {c.address}
+                        </span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {c.address_source === 'delivered' && c.address_at
+                            ? `Last delivered ${fmtDate(c.address_at)}`
+                            : 'Saved address'}
+                          {c.saved_address_count > 1
+                            ? ` · +${c.saved_address_count - 1} more saved`
+                            : ''}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </td>
                   <td className="px-5 py-3 text-right tabular-nums">{c.total_orders}</td>
                   <td className="px-5 py-3 text-right font-semibold text-primary">
                     {formatCurrency(c.total_spent)}

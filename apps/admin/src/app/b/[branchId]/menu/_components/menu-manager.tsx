@@ -13,44 +13,156 @@ import { Badge, Button, Card, IconButton, Sheet } from '@favornoms/ui';
 import { MenuReorder } from './menu-reorder';
 import { ItemModifierEditor, type ItemModifierEditorHandle } from './item-modifier-editor';
 
+/**
+ * The stock columns as the database holds them. They are not part of MenuItem: the
+ * storefront only needs `outOfStock` and the mapper in @favornoms/database throws the
+ * rest away. The merchant needs the raw numbers — after unticking Track stock the card
+ * has to visibly stop saying "Sold out" — so the menu page reads them alongside the
+ * items and hands them straight over.
+ */
+export interface MenuItemStockRow {
+  id: string;
+  track_stock: boolean | null;
+  stock_quantity: number | null;
+  low_stock_threshold: number | null;
+}
+
+interface ItemStock {
+  trackStock: boolean;
+  stockQuantity: number | null;
+  lowStockThreshold: number;
+}
+
+/** low_stock_threshold is `integer NOT NULL default 5`; the default is mirrored here. */
+const DEFAULT_LOW_STOCK_THRESHOLD = 5;
+
+function toStockMap(rows: MenuItemStockRow[]): Record<string, ItemStock> {
+  const map: Record<string, ItemStock> = {};
+  for (const row of rows) {
+    map[row.id] = {
+      trackStock: row.track_stock === true,
+      stockQuantity: row.stock_quantity ?? null,
+      lowStockThreshold: row.low_stock_threshold ?? DEFAULT_LOW_STOCK_THRESHOLD,
+    };
+  }
+  return map;
+}
+
+interface SavedItemSummary {
+  /** Null only if an insert somehow came back without one. */
+  id: string | null;
+  name: string;
+  trackStock: boolean;
+  stockQuantity: number | null;
+  lowStockThreshold: number;
+  /** The item itself saved, but something attached to it did not. */
+  warning?: string;
+}
+
 interface Props {
   branchId: string;
   categories: MenuCategory[];
   items: MenuItem[];
+  stockRows: MenuItemStockRow[];
 }
 
-export function MenuManager({ branchId, categories: initCategories, items: initItems }: Props) {
+export function MenuManager({
+  branchId,
+  categories: initCategories,
+  items: initItems,
+  stockRows,
+}: Props) {
   const [items, setItems] = React.useState(initItems);
   const [categories, setCategories] = React.useState(initCategories);
+  const [stock, setStock] = React.useState(() => toStockMap(stockRows));
   const [editing, setEditing] = React.useState<MenuItem | null>(null);
   const [creating, setCreating] = React.useState(false);
   const [mode, setMode] = React.useState<'grid' | 'reorder'>('grid');
+  const [notice, setNotice] = React.useState<string | null>(null);
+  const [problem, setProblem] = React.useState<string | null>(null);
+
+  // The confirmation is the only proof a save landed — the card can look identical
+  // afterwards — but it should not sit there for the rest of the shift either.
+  React.useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(null), 6000);
+    return () => clearTimeout(timer);
+  }, [notice]);
 
   const refresh = async () => {
     const supabase = getBrowserClient();
-    // Use the same query helpers as the server page so the refreshed rows are
-    // mapped to the camelCase shape (categoryId/imageUrl/…) the grid expects.
-    // A raw snake_case select here left categoryId undefined, which filtered
-    // every item out of its category and blanked the page after save.
-    const [nextItems, nextCategories] = await Promise.all([
-      listMenuItems(supabase, branchId),
-      listCategories(supabase, branchId),
-    ]);
-    setItems(nextItems);
-    setCategories(nextCategories);
+    try {
+      // Use the same query helpers as the server page so the refreshed rows are
+      // mapped to the camelCase shape (categoryId/imageUrl/…) the grid expects.
+      // A raw snake_case select here left categoryId undefined, which filtered
+      // every item out of its category and blanked the page after save.
+      const [nextItems, nextCategories, stockRes] = await Promise.all([
+        listMenuItems(supabase, branchId),
+        listCategories(supabase, branchId),
+        supabase
+          .from('menu_items')
+          .select('id, track_stock, stock_quantity, low_stock_threshold')
+          .eq('branch_id', branchId)
+          .eq('is_active', true),
+      ]);
+      if (stockRes.error) throw stockRes.error;
+      setItems(nextItems);
+      setCategories(nextCategories);
+      setStock(toStockMap((stockRes.data ?? []) as MenuItemStockRow[]));
+    } catch (err) {
+      // This used to reject unhandled. A refresh that fails in silence is
+      // indistinguishable from a save that did nothing, which is exactly the
+      // complaint this screen collected.
+      setProblem(`Saved, but this list could not be reloaded: ${(err as Error).message}`);
+    }
+  };
+
+  const handleSaved = (saved: SavedItemSummary) => {
+    setEditing(null);
+    setCreating(false);
+    setProblem(saved.warning ?? null);
+    // Paint the new stock state straight away. refresh() will confirm it a moment
+    // later, but the merchant has to see the card change on the same click that
+    // closed the sheet, or the save reads as nothing at all.
+    const savedId = saved.id;
+    if (savedId) {
+      setStock((cur) => ({
+        ...cur,
+        [savedId]: {
+          trackStock: saved.trackStock,
+          stockQuantity: saved.trackStock ? saved.stockQuantity : null,
+          lowStockThreshold: saved.lowStockThreshold,
+        },
+      }));
+    }
+    setNotice(
+      saved.trackStock
+        ? `Saved “${saved.name}” — tracking stock, ${saved.stockQuantity ?? 0} left.`
+        : `Saved “${saved.name}” — stock tracking is off, so the storefront will not mark it sold out.`,
+    );
+    void refresh();
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this menu item? This cannot be undone.')) return;
     const supabase = getBrowserClient();
-    await supabase.from('menu_items').delete().eq('id', id);
+    const { error } = await supabase.from('menu_items').delete().eq('id', id);
+    if (error) {
+      setProblem(error.message);
+      return;
+    }
     setItems((curr) => curr.filter((i) => i.id !== id));
+    setProblem(null);
   };
 
   const handleDuplicate = async (id: string) => {
     const supabase = getBrowserClient();
     const { error } = await supabase.rpc('duplicate_menu_item', { p_item_id: id });
-    if (error) { alert(error.message); return; }
+    if (error) {
+      setProblem(error.message);
+      return;
+    }
+    setProblem(null);
     await refresh();
   };
 
@@ -114,6 +226,23 @@ export function MenuManager({ branchId, categories: initCategories, items: initI
         </div>
       </header>
 
+      {notice && (
+        <p
+          role="status"
+          className="mx-2 mb-4 rounded-xl bg-success/10 px-4 py-2 text-sm text-success lg:mx-0"
+        >
+          {notice}
+        </p>
+      )}
+      {problem && (
+        <p
+          role="alert"
+          className="mx-2 mb-4 rounded-xl bg-warning/10 px-4 py-2 text-sm text-warning lg:mx-0"
+        >
+          {problem}
+        </p>
+      )}
+
       {mode === 'reorder' ? (
         <MenuReorder branchId={branchId} categories={categories} items={items} onSaved={refresh} />
       ) : null}
@@ -158,6 +287,7 @@ export function MenuManager({ branchId, categories: initCategories, items: initI
                             {formatCurrency(item.price)}
                           </span>
                         </div>
+                        <StockBadge stock={stock[item.id]} />
                         <div className="mt-auto flex items-center gap-1">
                           <IconButton label="Edit" size="sm" onClick={() => setEditing(item)}>
                             <Edit3 className="h-4 w-4" />
@@ -189,18 +319,37 @@ export function MenuManager({ branchId, categories: initCategories, items: initI
         title={editing ? 'Edit item' : 'Add menu item'}
         side="right"
       >
+        {/* Keyed so every state initialiser re-runs for the item actually being
+            edited. Sheet unmounts its children today, but nothing in ItemEditor
+            should depend on that — without a key, a change there would silently
+            prefill the previous item's stock figures into the next one. */}
         <ItemEditor
+          key={editing?.id ?? 'new'}
           branchId={branchId}
           categories={categories}
           item={editing}
+          initialStock={editing ? stock[editing.id] : undefined}
           onCategoryCreated={(cat) => setCategories((cur) => [...cur, cat])}
-          onSaved={() => {
-            setEditing(null);
-            setCreating(false);
-            refresh();
-          }}
+          onSaved={handleSaved}
         />
       </Sheet>
+    </div>
+  );
+}
+
+/**
+ * What the merchant needs to see from the grid: whether this item is being counted,
+ * and whether it has run out. When Track stock goes off the badge disappears — which
+ * is the only thing on the card that moves after that save.
+ */
+function StockBadge({ stock }: { stock: ItemStock | undefined }) {
+  if (!stock?.trackStock) return null;
+  const left = stock.stockQuantity ?? 0;
+  return (
+    <div className="flex">
+      <Badge variant={left <= 0 ? 'danger' : left <= stock.lowStockThreshold ? 'warning' : 'muted'}>
+        {left <= 0 ? 'Sold out' : `${left} left`}
+      </Badge>
     </div>
   );
 }
@@ -209,12 +358,14 @@ const CATEGORY_EMOJIS = ['🍔', '🍕', '🥗', '🍟', '🥤', '🍰', '🍣',
 const COMMON_ALLERGENS = ['Peanuts', 'Tree nuts', 'Milk', 'Eggs', 'Fish', 'Shellfish', 'Soy', 'Wheat / Gluten', 'Sesame'];
 
 function ItemEditor({
-  branchId, categories, item, onSaved, onCategoryCreated,
+  branchId, categories, item, initialStock, onSaved, onCategoryCreated,
 }: {
   branchId: string;
   categories: MenuCategory[];
   item: MenuItem | null;
-  onSaved: () => void;
+  /** Stock as the page last read it, so the checkbox opens in the right position. */
+  initialStock: ItemStock | undefined;
+  onSaved: (saved: SavedItemSummary) => void;
   onCategoryCreated: (cat: MenuCategory) => void;
 }) {
   const [name, setName] = React.useState(item?.name ?? '');
@@ -224,11 +375,18 @@ function ItemEditor({
   const [categoryId, setCategoryId] = React.useState(item?.categoryId ?? categories[0]?.id ?? '');
   const [recommended, setRecommended] = React.useState(item?.isRecommended ?? false);
   const [isNew, setIsNew] = React.useState(item?.isNew ?? false);
-  const [trackStock, setTrackStock] = React.useState(false);
-  const [stockQuantity, setStockQuantity] = React.useState('0');
-  const [lowStockThreshold, setLowStockThreshold] = React.useState('5');
+  const [trackStock, setTrackStock] = React.useState(initialStock?.trackStock ?? false);
+  const [stockQuantity, setStockQuantity] = React.useState(
+    String(initialStock?.stockQuantity ?? 0),
+  );
+  const [lowStockThreshold, setLowStockThreshold] = React.useState(
+    String(initialStock?.lowStockThreshold ?? DEFAULT_LOW_STOCK_THRESHOLD),
+  );
+  /** Set the moment the merchant moves the checkbox, so a late read cannot undo it. */
+  const stockTouched = React.useRef(false);
   const [uploading, setUploading] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
   const [allergens, setAllergens] = React.useState<string[]>(item?.allergens ?? []);
   const [allergenDraft, setAllergenDraft] = React.useState('');
   const [showNewCat, setShowNewCat] = React.useState(false);
@@ -251,14 +409,14 @@ function ItemEditor({
     setCreatingCat(true);
     const supabase = getBrowserClient();
     const maxOrder = categories.reduce((m, c) => Math.max(m, c.displayOrder ?? 0), -1);
-    const { data, error } = await supabase
+    const { data, error: catErr } = await supabase
       .from('menu_categories')
       .insert({ branch_id: branchId, name: nm, icon_emoji: newCatEmoji || null, display_order: maxOrder + 1, is_active: true })
       .select('id, branch_id, name, display_order, icon_emoji')
       .single();
     setCreatingCat(false);
-    if (error || !data) {
-      alert(error?.message ?? 'Could not create category');
+    if (catErr || !data) {
+      setError(catErr?.message ?? 'Could not create category');
       return;
     }
     const cat: MenuCategory = {
@@ -275,22 +433,39 @@ function ItemEditor({
     setNewCatEmoji('🍽️');
   };
 
-  // Load track_stock + stock_quantity for existing items
+  // Re-read the stock columns on open. stock_quantity moves without the merchant:
+  // every order decrements it, so the copy the page was rendered with can be minutes
+  // out of date and saving it back would undo those sales.
+  //
+  // Two guards, both load-bearing. `cancelled` stops a read for one item landing in a
+  // later item's editor, and `stockTouched` stands down entirely once the merchant has
+  // moved the checkbox — a slow read landing after a click used to put the tick back
+  // with no trace, which is one of the ways "Track stock cannot be unticked" is
+  // reported. The read error is surfaced too: swallowing it left the box showing
+  // whatever it happened to hold and the merchant believing that was the truth.
   React.useEffect(() => {
     if (!item) return;
+    let cancelled = false;
     const supabase = getBrowserClient();
     void supabase
       .from('menu_items')
       .select('track_stock, stock_quantity, low_stock_threshold')
       .eq('id', item.id)
       .maybeSingle()
-      .then(({ data }) => {
-        if (data) {
-          setTrackStock(!!data.track_stock);
-          setStockQuantity(String(data.stock_quantity ?? 0));
-          setLowStockThreshold(String(data.low_stock_threshold ?? 5));
+      .then(({ data, error: readErr }) => {
+        if (cancelled || stockTouched.current) return;
+        if (readErr) {
+          setError(`Could not read this item's stock settings: ${readErr.message}`);
+          return;
         }
+        if (!data) return;
+        setTrackStock(data.track_stock === true);
+        setStockQuantity(String(data.stock_quantity ?? 0));
+        setLowStockThreshold(String(data.low_stock_threshold ?? DEFAULT_LOW_STOCK_THRESHOLD));
       });
+    return () => {
+      cancelled = true;
+    };
   }, [item]);
 
   const uploadImage = async (file: File) => {
@@ -305,19 +480,20 @@ function ItemEditor({
       const { data } = supabase.storage.from('branch-assets').getPublicUrl(path);
       setImageUrl(data.publicUrl);
     } else {
-      alert(upErr.message);
+      setError(upErr.message);
     }
     setUploading(false);
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     // Catch half-built option groups before we create anything, so a blank or
     // optionless group never reaches the DB (and the customer menu).
     if (!item) {
       const draftError = modifierRef.current?.validateDraft();
       if (draftError) {
-        alert(draftError);
+        setError(draftError);
         return;
       }
     }
@@ -336,44 +512,64 @@ function ItemEditor({
         track_stock: trackStock,
         stock_quantity: trackStock ? Number(stockQuantity) : null,
         // low_stock_threshold is NOT NULL (default 5) — never send null, or inserts fail.
-        low_stock_threshold: trackStock ? Number(lowStockThreshold) : 5,
+        low_stock_threshold: trackStock ? Number(lowStockThreshold) : DEFAULT_LOW_STOCK_THRESHOLD,
         allergens,
       };
-      // Insert needs the new id back so we can attach any option groups the user
-      // built inline (draft mode); update keeps its original no-select shape.
+      // Both branches ask for the id back. The insert needs it to attach any option
+      // groups built inline (draft mode); the update needs it as proof. An update that
+      // matches no row — a deleted item, an RLS write denial — comes back 204 with no
+      // error, which was indistinguishable from a successful save, and the merchant was
+      // told nothing either way.
       const res = item
-        ? await supabase.from('menu_items').update(payload).eq('id', item.id)
+        ? await supabase
+            .from('menu_items')
+            .update(payload)
+            .eq('id', item.id)
+            .select('id')
+            .maybeSingle()
         : await supabase.from('menu_items').insert(payload).select('id').single();
       if (res.error) {
         const { describePlanError } = await import('@favornoms/database/queries');
         const planErr = describePlanError(res.error);
-        if (planErr) {
-          alert(
-            `You've reached your plan's limit (${planErr.current} of ${planErr.limit} items). ` +
-              `Upgrade your subscription in Preferences → Plan to add more.`,
-          );
-        } else {
-          alert(res.error.message);
-        }
+        setError(
+          planErr
+            ? `You've reached your plan's limit (${planErr.current} of ${planErr.limit} items). ` +
+                `Upgrade your subscription in Preferences → Plan to add more.`
+            : res.error.message,
+        );
+        return;
+      }
+      const savedId = (res.data as { id: string } | null)?.id ?? null;
+      if (item && !savedId) {
+        setError(
+          'Nothing was saved. This item may have been deleted, or your role may not be ' +
+            'allowed to edit the menu at this branch.',
+        );
         return;
       }
       // New item: persist the draft option groups now that it has an id.
-      if (!item) {
-        const newId = (res.data as { id: string } | null)?.id;
-        if (newId) {
-          const persistRes = await modifierRef.current?.persistDraft(newId);
-          if (persistRes?.error) {
-            alert(
-              `The item was saved and any option groups that succeeded were kept, ` +
-                `but one couldn't be saved: ${persistRes.error}\n` +
-                `Reopen the item to finish its options.`,
-            );
-          }
+      let warning: string | undefined;
+      if (!item && savedId) {
+        const persistRes = await modifierRef.current?.persistDraft(savedId);
+        if (persistRes?.error) {
+          // The item itself is saved, so the sheet still closes and the grid still
+          // reloads; the warning rides up to the page banner, which outlives the sheet.
+          warning =
+            `“${name}” was saved and any option groups that succeeded were kept, ` +
+            `but one couldn't be saved: ${persistRes.error}. ` +
+            `Reopen the item to finish its options.`;
         }
       }
-      onSaved();
+      onSaved({
+        id: savedId,
+        name,
+        trackStock,
+        stockQuantity: trackStock ? Number(stockQuantity) : null,
+        lowStockThreshold: trackStock ? Number(lowStockThreshold) : DEFAULT_LOW_STOCK_THRESHOLD,
+        warning,
+      });
     } catch (err) {
-      alert((err as Error).message);
+      setError((err as Error).message);
     } finally {
       setSaving(false);
     }
@@ -553,9 +749,22 @@ function ItemEditor({
 
       <div className="rounded-xl border border-border bg-muted/20 p-3 space-y-3">
         <label className="flex items-center gap-2 text-sm font-medium">
-          <input type="checkbox" checked={trackStock} onChange={(e) => setTrackStock(e.target.checked)} />
+          <input
+            type="checkbox"
+            checked={trackStock}
+            onChange={(e) => {
+              // Claim the value for the merchant before anything else can set it.
+              stockTouched.current = true;
+              setTrackStock(e.target.checked);
+            }}
+          />
           Track stock
         </label>
+        <p className="text-xs text-muted-foreground">
+          {trackStock
+            ? 'The storefront marks this item sold out when the count reaches zero.'
+            : 'Not counted. The storefront will always offer this item.'}
+        </p>
         {trackStock && (
           <div className="grid grid-cols-2 gap-2">
             <Field label="Current stock">
@@ -581,6 +790,16 @@ function ItemEditor({
       <div className="rounded-xl border border-border bg-muted/20 p-3">
         <ItemModifierEditor ref={modifierRef} branchId={branchId} itemId={item?.id ?? null} />
       </div>
+
+      {/* Next to the button that failed. This screen used to speak only through
+          window.alert(), which mobile browsers swallow and Chrome suppresses outright
+          once a merchant ticks "prevent additional dialogs" — so a rejected save and a
+          save that did nothing looked exactly the same. */}
+      {error && (
+        <p role="alert" className="rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">
+          {error}
+        </p>
+      )}
 
       <Button
         type="submit"
