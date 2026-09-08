@@ -14,3 +14,4 @@ export * from './components/connection-banner';
 export * from './components/theme-provider';
 export * from './components/language-switcher';
 export * from './components/chat-thread';
+export * from './components/rider-icon';

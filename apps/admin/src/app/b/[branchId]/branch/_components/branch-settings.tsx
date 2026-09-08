@@ -65,6 +65,11 @@ export function BranchSettings({
   const [error, setError] = React.useState<string | null>(null);
 
   const save = async () => {
+    const domain = normaliseCustomDomain(customDomain);
+    if (domain.error) {
+      setError(domain.error);
+      return;
+    }
     setSaving(true);
     setError(null);
     const supabase = getBrowserClient();
@@ -76,7 +81,7 @@ export function BranchSettings({
       .update({
         name,
         is_active: isActive,
-        custom_domain: customDomain.trim() ? customDomain.trim().toLowerCase() : null,
+        custom_domain: domain.value,
         sales_tax_rate: parsedRate,
         theme_override: { ...branch.theme_override, primaryColor, accentColor },
       })
@@ -297,6 +302,32 @@ export function BranchSettings({
       `}</style>
     </div>
   );
+}
+
+/**
+ * A custom domain is a HOSTNAME, and the field never checked that it was one — a live
+ * branch had "hamburger" saved in it, which is the branch's name typed into the wrong box.
+ * That row is what the storefront asks about every unrecognised Host header, and since the
+ * per-branch manifest now decides a PWA's identity from the same answer, junk here stops
+ * being cosmetic. Paste-tolerant: a merchant copying from their browser bar sends
+ * "https://order.example.com/" and means order.example.com.
+ */
+function normaliseCustomDomain(raw: string): { value: string | null; error: string | null } {
+  const trimmed = raw.trim();
+  if (!trimmed) return { value: null, error: null };
+  const host = trimmed
+    .toLowerCase()
+    .replace(/^[a-z][a-z0-9+.-]*:\/\//, '')
+    .replace(/\/.*$/, '')
+    .replace(/:\d+$/, '')
+    .replace(/\.$/, '');
+  if (!/^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/.test(host)) {
+    return {
+      value: null,
+      error: `"${trimmed}" is not a hostname. Enter the address customers will type, like order.myrestaurant.com — not your restaurant's name.`,
+    };
+  }
+  return { value: host, error: null };
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {

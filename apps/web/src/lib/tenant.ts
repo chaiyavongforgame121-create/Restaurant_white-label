@@ -124,18 +124,108 @@ export const resolveStorefrontVersion = cache(
 );
 
 /**
- * Resolve `{restaurant_slug, branch_slug}` to ResolvedTenant.
+ * Resolve `{restaurant_slug, branch_slug}` to ResolvedTenant, or null when nothing live
+ * answers to that pair.
  * React `cache()` dedupes within one RSC render; the inner unstable_cache dedupes across
  * requests until the storefront version changes (or the TTL backstop expires).
+ *
+ * Route handlers use this rather than resolveTenant() below: they answer with a status code
+ * of their own choosing, and they must not depend on notFound()'s rendering path.
  */
+export const resolveTenantOptional = cache(
+  async (restaurantSlug: string, branchSlug: string): Promise<ResolvedTenant | null> => {
+    const { key } = await resolveStorefrontVersion(restaurantSlug, branchSlug);
+    return tenantCache(restaurantSlug, branchSlug)(restaurantSlug, branchSlug, key);
+  },
+);
+
+/** The same read, for a page or layout that wants the not-found page when there is no tenant. */
 export const resolveTenant = cache(
   async (restaurantSlug: string, branchSlug: string): Promise<ResolvedTenant> => {
-    const { key } = await resolveStorefrontVersion(restaurantSlug, branchSlug);
-    const tenant = await tenantCache(restaurantSlug, branchSlug)(restaurantSlug, branchSlug, key);
+    const tenant = await resolveTenantOptional(restaurantSlug, branchSlug);
     if (!tenant) notFound();
     return tenant;
   },
 );
+
+/** A Host header with any port stripped and lower-cased — the form every lookup here wants. */
+export function hostOf(headerValue: string | null | undefined): string {
+  return ((headerValue ?? '').split(':')[0] ?? '').toLowerCase();
+}
+
+export interface HostTenant {
+  restaurant: string;
+  branch: string | null;
+}
+
+interface CustomDomainRow {
+  restaurant_slug: string;
+  branch_slug: string | null;
+}
+
+/**
+ * Warm-instance cache for the custom-domain lookup, with the two TTLs the middleware already
+ * uses. The miss TTL is the load-bearing one: the platform's own hosts never match, so
+ * without negative caching every storefront request would re-ask.
+ */
+const HOST_TENANT_HIT_TTL_MS = 10 * 60 * 1000;
+const HOST_TENANT_MISS_TTL_MS = 60_000;
+const hostTenantCache = new Map<string, { value: HostTenant | null; expires: number }>();
+
+/**
+ * Which tenant, if any, a Host header really belongs to — the same
+ * public.resolve_custom_domain() answer the middleware acts on before it rewrites that host's
+ * "/" to a branch.
+ *
+ * Null for the platform's own hosts and for every host the database does not map to a live
+ * branch: a Vercel preview URL, a production host nobody remembered to add to
+ * NEXT_PUBLIC_APEX_HOSTS, a bare IP. Defaulting that way is the point of the function. The
+ * manifest route used to infer the opposite — "absent from the static apex list" meant
+ * "merchant's own domain" — and the production storefront host is absent from that list, so
+ * every tenant published the platform root as its PWA id, start_url and scope. Three
+ * restaurants and the marketing site claimed one installed app between them.
+ */
+export async function hostTenant(host: string): Promise<HostTenant | null> {
+  if (!host) return null;
+
+  const now = Date.now();
+  const cached = hostTenantCache.get(host);
+  if (cached && cached.expires > now) return cached.value;
+
+  let value: HostTenant | null = null;
+  try {
+    const supabase = getAnonServerClient();
+    const { data, error } = await supabase.rpc('resolve_custom_domain', { p_domain: host });
+    if (!error) {
+      const first = (data as CustomDomainRow[] | null)?.[0];
+      if (first) value = { restaurant: first.restaurant_slug, branch: first.branch_slug };
+    }
+  } catch {
+    // An unreachable database cannot prove this host belongs to anybody, and an unproven host
+    // is the platform's. Serving a merchant domain the /r/-prefixed paths for a minute costs
+    // a longer URL; publishing the wrong PWA identity is permanent for whoever installs it.
+    value = null;
+  }
+
+  hostTenantCache.set(host, {
+    value,
+    expires: now + (value ? HOST_TENANT_HIT_TTL_MS : HOST_TENANT_MISS_TTL_MS),
+  });
+  return value;
+}
+
+/**
+ * True when this host's advertised root IS this branch — i.e. the middleware rewrites "/" here
+ * to /r/{restaurant}/{branch}. Only then may an installed app scope itself to the origin root.
+ */
+export async function hostIsOwnDomainFor(
+  host: string,
+  restaurantSlug: string,
+  branchSlug: string,
+): Promise<boolean> {
+  const mapped = await hostTenant(host);
+  return !!mapped && mapped.restaurant === restaurantSlug && mapped.branch === branchSlug;
+}
 
 /**
  * What this storefront may show an anonymous visitor: `entitled` (the

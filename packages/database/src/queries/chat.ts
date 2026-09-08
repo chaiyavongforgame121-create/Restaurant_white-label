@@ -1,12 +1,20 @@
 import type { FavornomsClient } from '../client-type';
 
-// Driver ↔ customer chat, scoped to one delivery. RLS limits reads/writes to
-// the two participants and blocks sends once the delivery leaves the active
-// statuses. Mark-read goes through the mark_messages_read RPC.
+// Driver ↔ customer chat, scoped to one rider ASSIGNMENT — not to the delivery.
 //
-// A message can also carry one photo, kept in the private `chat-attachments`
-// bucket under the delivery's id (see 20260904130000). The bucket is private, so
-// rendering one needs a signed URL — signAttachments() mints them a page at a time.
+// deliveries has a UNIQUE index on order_id, so one order keeps one delivery row for life and
+// every re-dispatch is an UPDATE that moves driver_id. Keying the thread on delivery_id
+// therefore handed a replacement rider the whole previous conversation, and locked the rider
+// who wrote it out of their own words. delivery_assignments (20260908111000) is one row per
+// (delivery, rider) turn, and it owns the thread: a new rider starts empty, the old rider keeps
+// theirs, and staff can still audit the lot through delivery_thread_history.
+//
+// deliveryId still travels with every write because delivery_messages.delivery_id stays NOT
+// NULL — it is what the staff audit view and the older photo objects are addressed by.
+//
+// A message can also carry one photo, kept in the private `chat-attachments` bucket under the
+// assignment's id (see 20260904130000 and 20260908111000). The bucket is private, so rendering
+// one needs a signed URL — signAttachments() mints them a page at a time.
 
 /** Private bucket the chat photos live in. */
 export const CHAT_ATTACHMENT_BUCKET = 'chat-attachments';
@@ -33,6 +41,8 @@ export function isChatPhotoBody(body: string): boolean {
 export interface DeliveryMessage {
   id: string;
   delivery_id: string;
+  /** The rider turn this message belongs to. The thread key. */
+  assignment_id: string;
   sender_role: 'customer' | 'driver';
   sender_user_id: string;
   body: string;
@@ -46,7 +56,7 @@ export interface DeliveryMessage {
 
 export async function listMessages(
   supabase: FavornomsClient,
-  deliveryId: string,
+  assignmentId: string,
 ): Promise<DeliveryMessage[]> {
   const { data } = await supabase
     .from('delivery_messages')
@@ -55,7 +65,7 @@ export async function listMessages(
     // would have shown a photo when it arrived live and lost it on reload — the hardest
     // version of this bug to see. The row is seven small columns; there is nothing to save.
     .select('*')
-    .eq('delivery_id', deliveryId)
+    .eq('assignment_id', assignmentId)
     .order('created_at', { ascending: true })
     .limit(200);
   return (data ?? []) as unknown as DeliveryMessage[];
@@ -63,6 +73,7 @@ export async function listMessages(
 
 export async function sendMessage(
   supabase: FavornomsClient,
+  assignmentId: string,
   deliveryId: string,
   senderRole: 'customer' | 'driver',
   body: string,
@@ -71,7 +82,14 @@ export async function sendMessage(
   if (!trimmed) return null;
   const { data, error } = await supabase
     .from('delivery_messages')
-    .insert({ delivery_id: deliveryId, sender_role: senderRole, body: trimmed })
+    // assignment_id is not in the generated types yet; the repo's convention for that gap is
+    // `as never` on the payload rather than hand-editing types.ts.
+    .insert({
+      assignment_id: assignmentId,
+      delivery_id: deliveryId,
+      sender_role: senderRole,
+      body: trimmed,
+    } as never)
     .select('*')
     .single();
   if (error) throw new Error(`send_message_failed:${error.message}`);
@@ -161,13 +179,17 @@ export function chatAttachmentErrorMessage(err: unknown): string {
  */
 export async function sendPhotoMessage(
   supabase: FavornomsClient,
+  assignmentId: string,
   deliveryId: string,
   senderRole: 'customer' | 'driver',
   file: File,
   caption = '',
 ): Promise<DeliveryMessage> {
   const { blob, width, height, ext, contentType } = await compressChatImage(file);
-  const path = `${deliveryId}/${crypto.randomUUID()}.${ext}`;
+  // The folder is the assignment, not the delivery: the storage policy authorises an upload
+  // by the caller holding the LIVE turn whose id names the folder, so a replacement rider
+  // cannot mint a signed URL for the folder the previous rider filled.
+  const path = `${assignmentId}/${crypto.randomUUID()}.${ext}`;
   const { error: uploadError } = await supabase.storage
     .from(CHAT_ATTACHMENT_BUCKET)
     .upload(path, blob, { contentType, upsert: false });
@@ -180,6 +202,7 @@ export async function sendPhotoMessage(
     // The generated types are regenerated centrally and do not know the attachment
     // columns yet; the repo's convention for that gap is `as never` on the payload.
     .insert({
+      assignment_id: assignmentId,
       delivery_id: deliveryId,
       sender_role: senderRole,
       body,
@@ -212,21 +235,23 @@ export async function signAttachments(
   return urls;
 }
 
-export async function markMessagesRead(supabase: FavornomsClient, deliveryId: string) {
-  return supabase.rpc('mark_messages_read', { p_delivery_id: deliveryId } as never);
+/** Marks everything the OTHER party sent in this one turn as read. The delivery-scoped
+ *  mark_messages_read used to mark the previous rider's messages read too. */
+export async function markThreadRead(supabase: FavornomsClient, assignmentId: string) {
+  return supabase.rpc('mark_thread_read', { p_assignment_id: assignmentId } as never);
 }
 
-/** Realtime INSERT subscription for one delivery's thread. Returns unsubscribe. */
+/** Realtime INSERT subscription for one turn's thread. Returns unsubscribe. */
 export function subscribeMessages(
   supabase: FavornomsClient,
-  deliveryId: string,
+  assignmentId: string,
   onMessage: (message: DeliveryMessage) => void,
 ): () => void {
   const channel = supabase
-    .channel(`delivery-chat:${deliveryId}`)
+    .channel(`delivery-chat:${assignmentId}`)
     .on(
       'postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'delivery_messages', filter: `delivery_id=eq.${deliveryId}` },
+      { event: 'INSERT', schema: 'public', table: 'delivery_messages', filter: `assignment_id=eq.${assignmentId}` },
       // payload.new carries every published column, so the attachment fields ride along
       // with no change here.
       (payload) => onMessage(payload.new as DeliveryMessage),
@@ -235,4 +260,34 @@ export function subscribeMessages(
   return () => {
     void supabase.removeChannel(channel);
   };
+}
+
+/** One rider's turn at a delivery, as the merchant's audit view sees it. */
+export interface ThreadSummary {
+  assignment_id: string;
+  seq: number;
+  driver_id: string;
+  driver_name: string | null;
+  status: string;
+  end_kind: string | null;
+  end_reason: string | null;
+  offered_at: string;
+  ended_at: string | null;
+  message_count: number;
+}
+
+/**
+ * Every thread this delivery has had, oldest turn first. Staff only — the RPC checks
+ * delivery.manage itself. Splitting the thread per rider is a boundary between riders, not a
+ * hole in the merchant's record, and this is the hole's replacement.
+ */
+export async function listDeliveryThreads(
+  supabase: FavornomsClient,
+  deliveryId: string,
+): Promise<ThreadSummary[]> {
+  const { data, error } = await supabase.rpc('delivery_thread_history', {
+    p_delivery_id: deliveryId,
+  } as never);
+  if (error) throw new Error('delivery_thread_history_read_failed:' + error.message);
+  return (data ?? []) as unknown as ThreadSummary[];
 }

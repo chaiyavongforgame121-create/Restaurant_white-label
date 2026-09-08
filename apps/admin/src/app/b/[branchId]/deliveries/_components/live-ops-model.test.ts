@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BranchRider, LiveDelivery } from '@favornoms/database/queries';
+import type { DeliveryAssignmentRef } from './live-ops-model';
 import {
   ageLabel,
   boardCounts,
@@ -8,6 +9,7 @@ import {
   canFindRider,
   describeDelivery,
   describeDispatchFailure,
+  lastEndedWithReason,
   isStale,
   mergeRefetch,
   partitionStale,
@@ -75,6 +77,37 @@ function rider(over: Partial<BranchRider> = {}): BranchRider {
   };
 }
 
+function assignment(over: Partial<DeliveryAssignmentRef> = {}): DeliveryAssignmentRef {
+  return {
+    id: 'a1',
+    delivery_id: 'd1',
+    seq: 1,
+    driver_id: 'r1',
+    status: 'cancelled',
+    end_kind: 'driver_cancelled',
+    end_reason: null,
+    offered_at: minsAgo(20),
+    ended_at: minsAgo(5),
+    ...over,
+  };
+}
+
+describe('lastEndedWithReason', () => {
+  it('picks the newest turn that actually said something', () => {
+    const found = lastEndedWithReason([
+      assignment({ id: 'a1', seq: 1, end_reason: 'Flat tyre' }),
+      assignment({ id: 'a2', seq: 2, end_reason: 'Customer never came down' }),
+      // An open turn cannot be a reason: nothing has ended yet.
+      assignment({ id: 'a3', seq: 3, ended_at: null, end_reason: 'not yet' }),
+    ]);
+    expect(found?.id).toBe('a2');
+  });
+
+  it('is null when every turn ended silently', () => {
+    expect(lastEndedWithReason([assignment({ end_reason: null })])).toBeNull();
+  });
+});
+
 describe('describeDelivery', () => {
   it('says the kitchen still has it while the delivery is pending', () => {
     const d = describeDelivery(delivery({ status: 'pending' }), NOW, false);
@@ -96,6 +129,35 @@ describe('describeDelivery', () => {
     );
     expect(d.label).toBe('Finding a rider');
     expect(d.detail).toBe('Asked 3 riders so far');
+  });
+
+  it('prefers the rider’s own cancellation reason over the attempt count', () => {
+    const d = describeDelivery(
+      delivery({ status: 'dispatching', dispatch_attempts: 3 }),
+      NOW,
+      false,
+      [assignment({ end_kind: 'driver_cancelled', end_reason: 'Bike chain snapped on Silom' })],
+    );
+    expect(d.label).toBe('Finding a rider');
+    expect(d.detail).toBe('Rider cancelled: Bike chain snapped on Silom');
+  });
+
+  it('falls back to the attempt count when the turn ended without words', () => {
+    const d = describeDelivery(
+      delivery({ status: 'dispatching', dispatch_attempts: 3 }),
+      NOW,
+      false,
+      [assignment({ end_kind: 'offer_expired', end_reason: null })],
+    );
+    expect(d.detail).toBe('Asked 3 riders so far');
+  });
+
+  it('still explains a failed row after requeue nulled failed_reason', () => {
+    const d = describeDelivery(delivery({ status: 'failed', failed_reason: null }), NOW, false, [
+      assignment({ end_kind: 'failed_at_door', end_reason: 'Nobody answered the door' }),
+    ]);
+    expect(d.label).toBe('Failed — needs you');
+    expect(d.detail).toBe('Nobody answered the door');
   });
 
   it('counts down an open offer', () => {

@@ -5,7 +5,50 @@ the bulk of the file; every deploy had to carry it. The history is the valuable 
 so it lives here rather than being deleted.
 
 ```
-// place-order v10.3 — US pivot + modifiers + combos + happy-hour + schedules + gift cards
+// place-order v10.5 — US pivot + modifiers + combos + happy-hour + schedules + gift cards
+//   v10.5 (2026-09-08): dine-in by QR is a SESSION, and this function enforces it.
+//        Two holes closed. First, `payload.table_id` was taken verbatim — the FK proves
+//        the row exists, not that it belongs to the branch being ordered from, so a token
+//        lifted from one restaurant's table tent could stamp an order at another branch
+//        with that branch's table id, and the ticket was walked to a table that is not
+//        there. It is now read back and checked for branch and is_active, and the same
+//        rule is enforced by tg_orders_table_and_session on orders so a direct insert
+//        cannot skip it. Second, dine-in was orderable forever by anyone holding the
+//        token: verify_jwt is false, the storefront's sign-in requirement is client-side
+//        javascript, and there was no session because there was no session entity. A
+//        dine-in order with source 'web' now requires an OPEN table_sessions row at that
+//        table, a signed-in caller (401 sign_in_required), and a table_session_participants
+//        row for that exact sitting (403 not_at_this_table); a payload.session_id that no
+//        longer matches the sitting is 409 table_session_changed. Settling the bill closes
+//        the session, so the code on the tent is inert until staff seat the next party.
+//        Counter and POS are exempt in the other direction: they may seat the table
+//        themselves, so a walk-in rung up at the till joins the same bill the diner's
+//        phone is adding to. orders.session_id is written, and the trigger assigns
+//        session_seq — the round number the kitchen ticket prints.
+//        Auth moved up: it used to be resolved after pricing, which is far too late to
+//        gate anything, so it is now read once straight after the branch fetch and reused
+//        by the customer/loyalty block rather than fetched twice.
+//   v10.4 (2026-09-08): scheduled orders are now checked against the branch's BOOKABLE
+//        window, not only its opening hours. The times a diner could pick came from
+//        branch_hours alone — whenever the kitchen is open, it is bookable — so a shop
+//        open every day that wanted pre-orders from 17:00 Monday to Saturday but only
+//        10:00-14:00 on Sunday had no way to say so. Those windows live in the new
+//        branch_schedule_hours, armed per branch by settings.schedule_hours_enabled, and
+//        are judged by is_schedule_window_open() `at time zone branches.timezone` — asking
+//        here would use the edge runtime's UTC and put a Bangkok shop seven hours out.
+//        Returns true whenever the feature is off, so every existing branch is unaffected.
+//        source 'counter'/'pos' are exempt: it is a self-service policy for diners, and a
+//        manager taking a phone booking IS the override. They are not exempt from opening
+//        hours. Refusals are 409 outside_scheduling_window.
+//        This function is NOT the only writer of orders — orders_public_insert lets anon
+//        INSERT a pending row into any active branch, and until now no BEFORE INSERT
+//        trigger checked opening hours at all, so a hand-crafted PostgREST request could
+//        book a pickup for 3am on a day the shop was shut. The real gate is
+//        tg_enforce_scheduled_time on public.orders; the check here exists so the diner
+//        gets readable copy instead of a database error. Both must exempt the same
+//        sources or a counter booking passes one and dies in the other.
+//        An insert rejected by one of those triggers is now returned as the 409 it is
+//        rather than a 500 order_insert_failed carrying the code in `detail`.
 //   v10.3 (2026-09-04): the delivery row now records the surge multiplier the quote
 //        applied. quote_delivery has returned `surge` since the delivery backbone and
 //        nothing ever read it, so deliveries.surge_multiplier sat at its column default

@@ -1,3 +1,4 @@
+import type { DriverLedgerEntry, EarningsBranchRef } from '@favornoms/shared';
 import type { FavornomsClient } from '../client-type';
 import type { Database } from '../types';
 
@@ -99,6 +100,35 @@ export async function updateDriverLocation(
   });
 }
 
+/** The rider's current turn at one delivery — the key the chat thread hangs off. */
+export interface DriverAssignment {
+  id: string;
+  seq: number;
+  status: string;
+  offered_at: string;
+  accepted_at: string | null;
+}
+
+/**
+ * The open delivery_assignments row for this delivery, or null.
+ *
+ * Deliberately best-effort. A delivery in pending/dispatching has no live turn by design —
+ * there is no rider to talk to — and a failed read must cost the rider their Chat button, not
+ * the job they are carrying.
+ */
+async function getLiveAssignment(
+  supabase: FavornomsClient,
+  deliveryId: string,
+): Promise<DriverAssignment | null> {
+  const { data } = await supabase
+    .from('delivery_assignments')
+    .select('id, seq, status, offered_at, accepted_at')
+    .eq('delivery_id', deliveryId)
+    .is('ended_at', null)
+    .maybeSingle();
+  return (data ?? null) as unknown as DriverAssignment | null;
+}
+
 /**
  * Fetch driver's active delivery (any status that means "in flight").
  * Returns null when driver has nothing on their plate.
@@ -157,10 +187,21 @@ export async function getActiveDelivery(
       const { data: mateOrder } = await supabase.rpc('get_driver_order', {
         p_delivery_id: (mate as { id: string }).id,
       });
-      if (mateOrder) batchMate = { ...(mate as Record<string, unknown>), order: mateOrder };
+      if (mateOrder) {
+        batchMate = {
+          ...(mate as Record<string, unknown>),
+          order: mateOrder,
+          assignment: await getLiveAssignment(supabase, (mate as { id: string }).id),
+        };
+      }
     }
   }
-  return { ...data, order, batch_mate: batchMate };
+  return {
+    ...data,
+    order,
+    assignment: await getLiveAssignment(supabase, row.id),
+    batch_mate: batchMate,
+  };
 }
 
 /** Driver accepts the dispatch offer. Single round-trip RPC for atomicity. */
@@ -410,5 +451,164 @@ export async function withdrawDriverApplication(supabase: FavornomsClient, appro
 export async function reapplyToBranch(supabase: FavornomsClient, branchId: string) {
   return (supabase as unknown as { rpc: UntypedRpc }).rpc('driver_reapply_to_branch', {
     p_branch_id: branchId,
+  });
+}
+
+// ---- Earnings, per restaurant ---------------------------------------------
+// A rider is approved branch by branch and paid branch by branch: request_driver_withdrawal
+// tags only the accrued, untagged driver_earnings_ledger rows of the branch it is given and
+// pays the sum of exactly those. Every rider screen that shows money therefore has to name
+// the restaurant beside it, which is what the shared branch embed below is for. Fold the rows
+// with summariseDriverEarnings from @favornoms/shared.
+
+/**
+ * The branch name is the shop ("Hamburger"); the restaurant name is the brand the rider
+ * applied to ("Coastal Grill"). Screens lead with the brand, so both travel together.
+ */
+const EARNINGS_BRANCH_EMBED = 'branch:branches(name, restaurant:restaurants(name))';
+
+export interface DriverLedgerRow extends DriverLedgerEntry {
+  id: string;
+  delivered_at: string;
+}
+
+export interface DriverWithdrawalRow {
+  id: string;
+  branch_id: string;
+  amount: number;
+  status: string;
+  bank_name: string;
+  account_number: string;
+  account_name: string;
+  rejection_reason: string | null;
+  receipt_number: string | null;
+  paid_at: string | null;
+  created_at: string;
+  branch: EarningsBranchRef | null;
+}
+
+/**
+ * The rider's settlement ledger — the source of truth for what each restaurant owes and has
+ * paid. `withdrawal_id` is selected because it is the difference between money a rider can
+ * still request and money already sitting inside an open request.
+ *
+ * Throws when the read fails: an empty array would tell a rider they have earned nothing,
+ * which is the one answer a dead spot must never be allowed to give.
+ */
+export async function listDriverEarnings(
+  supabase: FavornomsClient,
+  driverId: string,
+  opts: { since?: string; limit?: number } = {},
+): Promise<DriverLedgerRow[]> {
+  let query = supabase
+    .from('driver_earnings_ledger')
+    .select(
+      `id, delivered_at, branch_id, base_pay, distance_pay, tip_net, total, status, withdrawal_id, ${EARNINGS_BRANCH_EMBED}`,
+    )
+    .eq('driver_id', driverId)
+    .order('delivered_at', { ascending: false });
+  if (opts.since) query = query.gte('delivered_at', opts.since);
+  if (opts.limit) query = query.limit(opts.limit);
+
+  const { data, error } = await query;
+  if (error) throw new Error('driver_earnings_read_failed:' + error.message);
+  return (data ?? []) as unknown as DriverLedgerRow[];
+}
+
+/**
+ * One row per job the rider has HELD — delivered, cancelled, failed, declined or expired —
+ * with the reason it ended.
+ *
+ * Not the ledger. driver_earnings_ledger only ever gets a row on a successful drop-off
+ * (accrue_driver_earnings returns early for every other status), which is why the History
+ * screen could only say "no completed deliveries" about a cancelled job. Not `deliveries`
+ * either: deliveries_driver_assigned scopes a rider to `driver_id = private.driver_id_for_user()`
+ * and every cancel path moves driver_id away, so the row a rider wants to look back at is
+ * exactly the one they may no longer read. delivery_assignments keeps driver_id for ever.
+ *
+ * Throws when the read fails, for the same reason listDriverEarnings does.
+ */
+export interface DriverJobHistoryRow {
+  assignment_id: string;
+  delivery_id: string;
+  order_number: string;
+  branch_id: string;
+  branch_name: string;
+  restaurant_name: string | null;
+  status: string;
+  end_kind: string | null;
+  end_reason: string | null;
+  offered_at: string;
+  accepted_at: string | null;
+  ended_at: string | null;
+  /** driver_earnings_ledger.total for the delivered ones; null for every job that paid nothing. */
+  earned: number | string | null;
+  ledger_status: string | null;
+}
+
+export async function listDriverJobHistory(
+  supabase: FavornomsClient,
+  opts: { since?: string; limit?: number } = {},
+): Promise<DriverJobHistoryRow[]> {
+  const { data, error } = await supabase.rpc('driver_job_history', {
+    p_since: opts.since ?? null,
+    p_limit: opts.limit ?? 100,
+  } as never);
+  if (error) throw new Error('driver_job_history_read_failed:' + error.message);
+  return (data ?? []) as unknown as DriverJobHistoryRow[];
+}
+
+/** The rider's withdrawal requests, newest first. One request settles one restaurant. */
+export async function listDriverWithdrawals(
+  supabase: FavornomsClient,
+  driverId: string,
+  limit = 20,
+): Promise<DriverWithdrawalRow[]> {
+  const { data, error } = await supabase
+    .from('driver_withdrawals')
+    .select(
+      `id, branch_id, amount, status, bank_name, account_number, account_name, rejection_reason, receipt_number, paid_at, created_at, ${EARNINGS_BRANCH_EMBED}`,
+    )
+    .eq('driver_id', driverId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw new Error('driver_withdrawals_read_failed:' + error.message);
+  return (data ?? []) as unknown as DriverWithdrawalRow[];
+}
+
+/** One request, for the receipt. RLS already scopes to the rider; the filter is belt-and-braces. */
+export async function getDriverWithdrawal(
+  supabase: FavornomsClient,
+  driverId: string,
+  withdrawalId: string,
+): Promise<DriverWithdrawalRow | null> {
+  const { data, error } = await supabase
+    .from('driver_withdrawals')
+    .select(
+      `id, branch_id, amount, status, bank_name, account_number, account_name, rejection_reason, receipt_number, paid_at, created_at, ${EARNINGS_BRANCH_EMBED}`,
+    )
+    .eq('id', withdrawalId)
+    .eq('driver_id', driverId)
+    .maybeSingle();
+  if (error) throw new Error('driver_withdrawal_read_failed:' + error.message);
+  return (data ?? null) as unknown as DriverWithdrawalRow | null;
+}
+
+/**
+ * Open a withdrawal request against ONE restaurant. The RPC re-derives the amount server-side
+ * from that branch's accrued, untagged rows, so what the rider is shown before tapping is a
+ * preview of the same sum and never becomes the amount itself. Raises `bank_details_required`,
+ * `withdrawal_already_pending` (one open request per restaurant) or `nothing_to_withdraw`.
+ */
+export async function requestDriverWithdrawal(
+  supabase: FavornomsClient,
+  branchId: string,
+  bank: { bankName: string; accountNumber: string; accountName: string },
+) {
+  return supabase.rpc('request_driver_withdrawal', {
+    p_branch_id: branchId,
+    p_bank_name: bank.bankName,
+    p_account_number: bank.accountNumber,
+    p_account_name: bank.accountName,
   });
 }

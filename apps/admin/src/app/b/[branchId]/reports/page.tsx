@@ -1,43 +1,55 @@
-import { getServerClient } from '@favornoms/database/server';
-import { getBranchReportsResult } from '@favornoms/database/queries';
+import { getBranchAccess } from '@/lib/capabilities';
+import { AccessDenied } from '@/components/access-denied';
 import { ReportsView } from './_components/reports-view';
+import { getReportSections } from './_components/report-queries';
+import { localDay, parseReportRange } from './_components/report-range';
 
 interface Props {
   params: Promise<{ branchId: string }>;
-  searchParams: Promise<{ days?: string }>;
+  searchParams: Promise<{ range?: string; from?: string; to?: string; days?: string }>;
 }
 
 export default async function ReportsPage({ params, searchParams }: Props) {
   const { branchId } = await params;
-  const { days } = await searchParams;
-  const daysBack = Math.max(1, Math.min(90, Number(days) || 7));
+  const sp = await searchParams;
 
-  const supabase = await getServerClient();
-  // Sequential, not Promise.all: firing two calls at once on a freshly-expired
-  // access token makes them race the same refresh, and the loser comes back as
-  // `anon` — which has no EXECUTE on get_branch_reports, so the page rendered
-  // "No data" for what is really an auth blip. The cheap branch read goes first
-  // and settles the token for the RPC that follows.
-  const { data: branch } = await supabase
+  // The sidebar has always hidden Reports without reports.view, but the URL is guessable
+  // and get_branch_reports only ever gated on branch membership — so a cook or cashier who
+  // typed it in got the whole sales picture. The six section RPCs gate on the capability;
+  // this check is what turns that into a card instead of a raw 42501.
+  const { supabase, branch, can } = await getBranchAccess(branchId, `/b/${branchId}/reports`);
+  if (!can('reports.view')) {
+    return (
+      <AccessDenied
+        title="No reports access"
+        reason={`Only owners, admins and managers can see sales reports at ${branch.name}.`}
+      />
+    );
+  }
+
+  // getBranchAccess reads only id/name/restaurant_id. Reports needs the branch's clock, so
+  // a day means the merchant's day, and the currency it actually charges in.
+  const { data: detail } = await supabase
     .from('branches')
-    .select('timezone')
+    .select('timezone, settings')
     .eq('id', branchId)
     .maybeSingle();
+  const timezone = detail?.timezone ?? 'America/New_York';
+  const settings = (detail?.settings ?? {}) as Record<string, unknown>;
+  const currency = typeof settings.currency === 'string' ? settings.currency : 'USD';
 
-  let { data: reports, error } = await getBranchReportsResult(supabase, branchId, daysBack);
-  if (error) {
-    // One retry — transient 401/503s from a token refresh or a cold PostgREST
-    // should not cost the merchant their reports.
-    ({ data: reports, error } = await getBranchReportsResult(supabase, branchId, daysBack));
-  }
+  const now = new Date();
+  const range = parseReportRange(sp, timezone, now);
+  const sections = await getReportSections(supabase, branchId, range);
 
   return (
     <ReportsView
       branchId={branchId}
-      initialDays={daysBack}
-      reports={reports}
-      error={error}
-      timezone={branch?.timezone ?? 'America/New_York'}
+      timezone={timezone}
+      currency={currency}
+      range={range}
+      today={localDay(now, timezone)}
+      sections={sections}
     />
   );
 }

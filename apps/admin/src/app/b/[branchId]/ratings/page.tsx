@@ -1,7 +1,7 @@
 import { getServerClient } from '@favornoms/database/server';
 import { getBranchRatings } from '@favornoms/database/queries';
-import { Card, EmptyState } from '@favornoms/ui';
-import { AlertTriangle, Bike, MessageSquare, Star, UtensilsCrossed } from 'lucide-react';
+import { Card, EmptyState, RiderIcon } from '@favornoms/ui';
+import { AlertTriangle, MessageSquare, Star, UtensilsCrossed } from 'lucide-react';
 
 interface Props { params: Promise<{ branchId: string }> }
 
@@ -38,7 +38,7 @@ export default async function RatingsPage({ params }: Props) {
             sub={`${foodCount} rating${foodCount === 1 ? '' : 's'}`}
           />
           <ScoreCard
-            icon={<Bike className="h-5 w-5" />}
+            icon={<RiderIcon className="h-5 w-5" />}
             label="Delivery rating"
             value={deliveryAvg}
             sub={`${deliveryCount} rating${deliveryCount === 1 ? '' : 's'}`}
@@ -67,7 +67,7 @@ export default async function RatingsPage({ params }: Props) {
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex min-w-0 items-center gap-3">
                         <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
-                          <Bike className="h-5 w-5" />
+                          <RiderIcon className="h-5 w-5" />
                         </div>
                         <div className="min-w-0">
                           <p className="truncate font-semibold">
@@ -167,7 +167,7 @@ export default async function RatingsPage({ params }: Props) {
                     // questions, and reading a complaint about the ride as a complaint
                     // about the kitchen sends the merchant after the wrong problem.
                     <p className="mt-2 flex items-start gap-2 text-sm text-muted-foreground">
-                      <Bike className="mt-0.5 h-4 w-4 shrink-0" />
+                      <RiderIcon className="mt-0.5 h-4 w-4 shrink-0" />
                       <span>
                         &ldquo;{r.driver_comment}&rdquo;
                         {r.driver_name && (

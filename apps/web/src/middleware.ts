@@ -2,6 +2,23 @@ import { updateSession, PATHNAME_HEADER } from '@favornoms/database/middleware';
 import { getSupabaseEnv } from '@favornoms/database/env';
 import { NextResponse, type NextRequest } from 'next/server';
 
+/**
+ * Hosts we already know are the platform's, kept only to skip the lookup below on them. It is
+ * a fast path and never an authority: a host missing from this list costs one cached RPC and
+ * then behaves identically, because resolveDomain() has to find a live branch before anything
+ * is rewritten.
+ *
+ * That distinction is not academic. The per-tenant manifest route used to carry a copy of this
+ * list and treat "absent" as "this is a merchant's own domain", which is how the production
+ * storefront host — absent from the list to this day — published the platform root as every
+ * restaurant's PWA start_url and scope. It now asks the database through hostTenant() in
+ * src/lib/tenant.ts instead. Do not reintroduce a second copy of this list anywhere that
+ * decides what a page or a manifest says; only a lookup may decide that.
+ *
+ * Edge middleware cannot import that helper — src/lib/tenant.ts reaches next/headers through
+ * the server Supabase client — so this file keeps its own lookup, and the two agree because
+ * they call the same RPC and both treat "no live branch" as "not a merchant domain".
+ */
 const APEX_HOSTS = new Set(
   (process.env.NEXT_PUBLIC_APEX_HOSTS ?? 'localhost,127.0.0.1,favornoms.com,app.favornoms.com')
     .split(',')
@@ -10,9 +27,12 @@ const APEX_HOSTS = new Set(
 );
 
 // Minimal in-memory cache for custom-domain lookups. Edge runtime warm
-// instances retain this map; cold starts re-fetch. 10-minute TTL.
-const DOMAIN_CACHE = new Map<string, { restaurant: string; branch: string | null; expires: number }>();
+// instances retain this map; cold starts re-fetch. 10-minute TTL for a hit;
+// a miss is cached far more briefly so a domain added today starts working today.
+type DomainTenant = { restaurant: string; branch: string | null };
+const DOMAIN_CACHE = new Map<string, { value: DomainTenant | null; expires: number }>();
 const TTL_MS = 10 * 60 * 1000;
+const MISS_TTL_MS = 60_000;
 
 export async function middleware(request: NextRequest) {
   const host = ((request.headers.get('host') ?? '').split(':')[0] ?? '').toLowerCase();
@@ -56,10 +76,10 @@ export async function middleware(request: NextRequest) {
   return sessionResponse;
 }
 
-async function resolveDomain(host: string): Promise<{ restaurant: string; branch: string | null } | null> {
+async function resolveDomain(host: string): Promise<DomainTenant | null> {
   const cached = DOMAIN_CACHE.get(host);
   const now = Date.now();
-  if (cached && cached.expires > now) return cached;
+  if (cached && cached.expires > now) return cached.value;
 
   try {
     const { url, publishableKey } = getSupabaseEnv();
@@ -76,13 +96,15 @@ async function resolveDomain(host: string): Promise<{ restaurant: string; branch
     const rows = (await res.json()) as Array<{ restaurant_slug: string; branch_slug: string | null }>;
     const first = rows?.[0];
     if (!first) {
-      DOMAIN_CACHE.set(host, { restaurant: '', branch: null, expires: now + 60_000 });
+      DOMAIN_CACHE.set(host, { value: null, expires: now + MISS_TTL_MS });
       return null;
     }
     const value = { restaurant: first.restaurant_slug, branch: first.branch_slug };
-    DOMAIN_CACHE.set(host, { ...value, expires: now + TTL_MS });
+    DOMAIN_CACHE.set(host, { value, expires: now + TTL_MS });
     return value;
   } catch {
+    // Deliberately not cached: a transient outage must not pin a merchant's domain to the
+    // marketing site for a minute. No rewrite happens either way, which is the safe half.
     return null;
   }
 }

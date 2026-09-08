@@ -1,8 +1,9 @@
 import Link from 'next/link';
 import {
-  Bike, Check, ChefHat, ChevronRight, CreditCard, LineChart,
+  Check, ChefHat, ChevronRight, CreditCard, LineChart,
   Megaphone, MonitorPlay, ShoppingBag, Star, Store, Zap,
 } from 'lucide-react';
+import { RiderIcon } from '@favornoms/ui';
 
 export const metadata = {
   title: 'Favornoms — All-in-one ordering platform for restaurants',
@@ -112,7 +113,7 @@ export default function RootPage() {
             description="Take cards online and at the counter. Refunds and sales-tax compliant receipts from one dashboard."
           />
           <Feature
-            icon={<Bike className="h-5 w-5" />}
+            icon={<RiderIcon className="h-5 w-5" />}
             title="Driver dispatch"
             description="Auto-route to your nearest online driver. GPS tracking customers can watch live."
           />
@@ -182,7 +183,7 @@ export default function RootPage() {
           </p>
           <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
             <AddonTile
-              icon={<Bike className="h-5 w-5" />}
+              icon={<RiderIcon className="h-5 w-5" />}
               name="Delivery"
               price="+$49"
               tag="Your own riders, automatic dispatch and live tracking."

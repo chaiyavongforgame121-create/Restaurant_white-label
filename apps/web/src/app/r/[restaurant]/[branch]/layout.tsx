@@ -48,6 +48,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   // name and the share card all say the branch. The restaurant still names the description.
   const name = tenant.branch.name || tenant.theme.brandName || tenant.restaurant.name;
   const description = `Order from ${tenant.restaurant.name} — ${tenant.branch.name}`;
+  // What the app is CALLED, built exactly the way the branch manifest builds its `name`.
+  // Chrome's install dialog reads the manifest; our own in-page install prompt reads
+  // <meta name="application-name"> (see components/install-prompt.tsx). They used to be two
+  // different strings — "Coastal Grill — Hamburger" and "Hamburger" — so the same restaurant
+  // was offered under two names on the same screen.
+  const appName = `${tenant.theme.brandName ?? tenant.restaurant.name} — ${tenant.branch.name}`;
   // Share card uses the wide logo; the tab icon uses the square favicon. Falling
   // back to the platform icon (by omitting the key, so the root layout's value is
   // inherited) beats scaling a merchant's banner down to 32px.
@@ -59,8 +65,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     // Branch-scoped manifest so an install from here opens this restaurant,
     // not the platform landing page the root manifest points at.
     manifest: `/r/${restaurant}/${branch}/manifest.webmanifest`,
-    applicationName: name,
-    // iOS ignores the manifest for A2HS naming and reads this instead.
+    applicationName: appName,
+    // iOS ignores the manifest for A2HS naming and reads this instead. It stays the short
+    // branch name on purpose — iOS truncates a home-screen label to roughly a dozen characters.
     appleWebApp: { capable: true, statusBarStyle: 'default', title: name },
     // Sizes are declared only for the normalised icons the admin uploader produced —
     // those really are 192x192/512x512 PNGs. A legacy free-form favicon (uploaded

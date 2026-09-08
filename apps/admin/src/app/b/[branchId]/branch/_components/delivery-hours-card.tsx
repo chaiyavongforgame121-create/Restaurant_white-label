@@ -2,9 +2,9 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { Bike, Clock, Plus, Save, Trash2 } from 'lucide-react';
+import { Clock, Plus, Save, Trash2 } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
-import { Button, Card } from '@favornoms/ui';
+import { Button, Card, RiderIcon } from '@favornoms/ui';
 
 /**
  * Delivery hours and who does the delivering.
@@ -135,7 +135,7 @@ export function DeliveryHoursCard({
   return (
     <Card className="p-5">
       <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
-        <Bike className="h-5 w-5 text-primary" /> Delivery
+        <RiderIcon className="h-5 w-5 text-primary" /> Delivery
       </h2>
 
       <div className="mt-4 space-y-3">

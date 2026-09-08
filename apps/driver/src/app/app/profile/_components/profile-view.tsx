@@ -3,10 +3,10 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Bike, Building2, ChevronRight, FileCheck2,
+  Building2, ChevronRight, FileCheck2,
   HeartHandshake, LogOut, Star,
 } from 'lucide-react';
-import { Badge, Button, Card } from '@favornoms/ui';
+import { Badge, Button, Card, vehicleTypeIcon } from '@favornoms/ui';
 import { getBrowserClient } from '@favornoms/database/client';
 import { useDriverSession } from '@/components/driver-session';
 import { DriverInstallRow } from '@/components/install-app-button';
@@ -71,6 +71,12 @@ export function ProfileView() {
     router.replace('/login');
   };
 
+  // The rest of the product draws a car for "a delivery". This card is the exception: it
+  // sits directly on top of the rider's own vehicle_type, which they entered themselves
+  // and which is still 'motorcycle' for most riders, so it follows the row rather than
+  // the brand. A car above the word "motorcycle" is the app arguing with its own data.
+  const VehicleIcon = vehicleTypeIcon(driver.vehicle_type);
+
   return (
     <div className="px-4 pt-6 pb-6">
       <Card className="overflow-hidden p-0">
@@ -124,7 +130,7 @@ export function ProfileView() {
       <Card className="mt-4 p-5">
         <div className="flex items-center gap-3">
           <div className="grid h-12 w-12 place-items-center rounded-2xl bg-primary/10 text-primary">
-            <Bike className="h-6 w-6" />
+            <VehicleIcon className="h-6 w-6" />
           </div>
           <div>
             <p className="text-sm text-muted-foreground">Vehicle</p>

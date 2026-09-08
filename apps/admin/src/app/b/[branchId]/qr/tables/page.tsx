@@ -44,8 +44,13 @@ export default async function TableQrPage({ params }: Props) {
 
   const { data: tables } = await supabase
     .from('tables')
-    .select('id, table_number, display_name, capacity, zone, is_active, qr_code_token')
+    .select(
+      'id, table_number, display_name, capacity, zone, table_type, sort_order, status, is_active, qr_code_token',
+    )
     .eq('branch_id', branchId)
+    // sort_order first: table_number is text, so on its own '10' sorts before '2' and a
+    // floor of more than nine tables prints out of order.
+    .order('sort_order')
     .order('table_number');
 
   return (

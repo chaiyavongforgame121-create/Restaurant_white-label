@@ -5,21 +5,11 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ArrowLeft, Receipt } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
+import { getDriverWithdrawal, type DriverWithdrawalRow } from '@favornoms/database/queries';
+import { branchSubtitle, restaurantLabel } from '@favornoms/shared';
 import { Card } from '@favornoms/ui';
 import { useDriverSession } from '@/components/driver-session';
 import { fetchTransferSlipPath } from '../../_components/payout-media';
-
-interface Withdrawal {
-  id: string;
-  amount: number;
-  status: string;
-  bank_name: string;
-  account_number: string;
-  account_name: string;
-  receipt_number: string | null;
-  paid_at: string | null;
-  branch: { name: string } | null;
-}
 
 interface LedgerLine {
   id: string;
@@ -33,7 +23,7 @@ interface LedgerLine {
 export default function ReceiptPage() {
   const { driver } = useDriverSession();
   const { withdrawalId } = useParams<{ withdrawalId: string }>();
-  const [withdrawal, setWithdrawal] = React.useState<Withdrawal | null>(null);
+  const [withdrawal, setWithdrawal] = React.useState<DriverWithdrawalRow | null>(null);
   const [lines, setLines] = React.useState<LedgerLine[]>([]);
   const [slipUrl, setSlipUrl] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(true);
@@ -41,14 +31,8 @@ export default function ReceiptPage() {
   React.useEffect(() => {
     const supabase = getBrowserClient();
     void (async () => {
-      // RLS already scopes to the driver's own rows; the driver_id filter is belt-and-braces.
-      const { data: w } = await supabase
-        .from('driver_withdrawals')
-        .select('id, amount, status, bank_name, account_number, account_name, receipt_number, paid_at, branch:branches(name)')
-        .eq('id', withdrawalId)
-        .eq('driver_id', driver.id)
-        .maybeSingle();
-      setWithdrawal((w ?? null) as unknown as Withdrawal | null);
+      const w = await getDriverWithdrawal(supabase, driver.id, withdrawalId).catch(() => null);
+      setWithdrawal(w);
       if (w) {
         const { data: l } = await supabase
           .from('driver_earnings_ledger')
@@ -105,6 +89,9 @@ export default function ReceiptPage() {
     );
   }
 
+  const label = restaurantLabel(withdrawal.branch);
+  const subtitle = branchSubtitle(label);
+
   return (
     <div className="container max-w-xl py-6">
       <Link href="/app/earnings" className="mb-4 inline-flex items-center gap-1.5 px-1 text-sm font-semibold text-primary">
@@ -118,10 +105,22 @@ export default function ReceiptPage() {
           </div>
           <p className="text-xs uppercase tracking-wider text-white/80">Payout receipt</p>
           <p className="font-display text-lg font-bold">{withdrawal.receipt_number}</p>
+          {/* Named up here too: a rider who works for several restaurants files these, and a
+              receipt that only says "payout" is not evidence of who paid. */}
+          <p className="mt-0.5 text-sm text-white/90">Paid by {label.restaurantName}</p>
         </div>
 
         <div className="space-y-1.5 border-b border-dashed border-border p-5 text-sm">
-          <div className="flex justify-between"><span className="text-muted-foreground">Restaurant</span><span className="font-medium">{withdrawal.branch?.name ?? 'Restaurant'}</span></div>
+          <div className="flex justify-between gap-3">
+            <span className="shrink-0 text-muted-foreground">Restaurant</span>
+            <span className="text-right font-medium">{label.restaurantName}</span>
+          </div>
+          {subtitle && (
+            <div className="flex justify-between gap-3">
+              <span className="shrink-0 text-muted-foreground">Branch</span>
+              <span className="text-right font-medium">{subtitle}</span>
+            </div>
+          )}
           <div className="flex justify-between"><span className="text-muted-foreground">Driver</span><span className="font-medium">{driver.full_name}</span></div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Paid</span>

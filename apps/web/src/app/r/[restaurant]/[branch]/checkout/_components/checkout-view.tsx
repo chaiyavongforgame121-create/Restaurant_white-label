@@ -30,6 +30,7 @@ import {
   upsertCustomerAddress,
   type DeliveryQuote,
   type LoyaltyReward,
+  type PlaceOrderInput,
   type SavedAddress,
 } from '@favornoms/database/queries';
 import {
@@ -43,7 +44,7 @@ import {
 } from '@favornoms/maps';
 import { Badge, Button, Card, IconButton, Sheet } from '@favornoms/ui';
 import { resolveMyCustomerId } from '@/lib/customer';
-import { buildScheduleDays, type OpeningWindow } from '@/lib/schedule-slots';
+import { buildScheduleDays, type ClosurePeriod, type OpeningWindow } from '@/lib/schedule-slots';
 import { pickerLabels } from '@/lib/picker-labels';
 import { useCart } from '@/store/cart';
 import { useAuth } from '@/components/auth/use-auth';
@@ -142,6 +143,10 @@ const ORDER_ERRORS: Array<[string, string]> = [
   // generic "currently closed" line is wrong here: the restaurant may well be
   // open now, it's the time they picked that isn't served.
   ['branch_closed_at_scheduled_time', 'The restaurant is closed at the time you picked. Please choose another time.'],
+  // Distinct from being closed: the restaurant may well be open then, it just does not take
+  // advance orders at that hour. Saying "closed" would send the diner to look at opening
+  // hours that already agree with them.
+  ['outside_scheduling_window', 'This restaurant only takes orders in advance at certain times. Please pick one of the times offered.'],
   ['branch_closed', 'This restaurant is currently closed. Please try again during opening hours.'],
   // No fixed numbers here any more: how soon and how far ahead are per-branch settings, so
   // quoting "10 minutes" and "14 days" would state someone else's policy as fact. The
@@ -156,6 +161,15 @@ const ORDER_ERRORS: Array<[string, string]> = [
   ['delivery_not_available_at_that_time', 'Delivery is closed at that time. Pick another time, or switch to pickup.'],
   ['dropoff_other_required', 'Please describe where we should leave your order.'],
   ['dropoff_required', 'Please choose where we should leave your order.'],
+  // Dine-in is a sitting now, so the ways it can be refused are about the table's session
+  // rather than about a number the diner typed. Every one of these is a server decision —
+  // the phone cannot know a bill was settled while the diner was still choosing dessert.
+  ['table_session_closed', "This table's bill has been settled. Scan the code on your table to start a new one."],
+  ['table_session_changed', 'This table has been settled and re-seated. Scan the code again to start a new bill.'],
+  ['table_not_seated', 'Ask a member of staff to open your table, then try again.'],
+  ['not_at_this_table', 'Scan the code on your table again to join its bill.'],
+  ['table_not_in_branch', "That table isn't at this restaurant. Scan the code on your own table."],
+  ['sign_in_required', 'Please sign in again to order at your table.'],
   ['table_required', 'Please enter your table number.'],
   ['invalid_channel', 'Please choose delivery, pickup or dine-in and try again.'],
   // Wire code is still `google_link_required` (other surfaces match on it), but the
@@ -258,7 +272,7 @@ export function CheckoutView({
   // covers checkout until they do, so the null window is never interactive.
   const channel = useCart((s) => s.channel);
   // Only ever set for THIS branch — the provider drops a pin scanned anywhere else.
-  const { table: pinnedTable } = useTablePin();
+  const { table: pinnedTable, bill: tableBill } = useTablePin();
 
   const [name, setName] = React.useState('');
   const [phone, setPhone] = React.useState('');
@@ -360,17 +374,65 @@ export function CheckoutView({
   // Recomputed only when the policy changes; `now` is captured once per mount so the list
   // cannot shift under the diner mid-form.
   const scheduleMountedAt = React.useRef(new Date());
+  // Opening hours are only half of what decides a bookable time. The merchant can also
+  // narrow bookings per weekday (branch_schedule_hours) and close the shop for a holiday
+  // (branch_closures); is_branch_open() and is_schedule_window_open() both refuse a slot
+  // outside those, so offering one means a diner fills in the whole form for a 409.
+  //
+  // Read here rather than through the `scheduling` prop: that comes from storefront_status,
+  // which is fetched on the server page, and this policy is one anon RPC the picker can ask
+  // for itself. Null means "not answered yet"; a branch that never armed windows comes back
+  // with `windows: null`, which is today's behaviour exactly.
+  const [bookingPolicy, setBookingPolicy] = React.useState<{
+    windows: OpeningWindow[] | null;
+    closures: ClosurePeriod[];
+  } | null>(null);
+
+  React.useEffect(() => {
+    if (!scheduling?.enabled) return;
+    let cancelled = false;
+    void (async () => {
+      // packages/database/src/types.ts is regenerated centrally and does not know this RPC
+      // yet. A deployment that predates it answers with an error and no data, which lands
+      // on the same fail-open defaults below — opening hours alone, as before.
+      const { data } = await (
+        getBrowserClient() as unknown as {
+          rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown }>;
+        }
+      ).rpc('branch_schedule_policy', { p_branch_id: branchId });
+      if (cancelled) return;
+      const d = (data ?? {}) as Record<string, unknown>;
+      setBookingPolicy({
+        // null, not [] — an empty array means "nothing bookable all week", and defaulting
+        // to it would silently remove scheduling from every branch on the platform.
+        windows:
+          d.schedule_hours_enabled === true && Array.isArray(d.schedule_windows)
+            ? (d.schedule_windows as OpeningWindow[])
+            : null,
+        closures: Array.isArray(d.closures) ? (d.closures as ClosurePeriod[]) : [],
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [branchId, scheduling?.enabled]);
+
   const scheduleDays = React.useMemo(() => {
     if (!scheduling?.enabled) return [];
+    // Nothing until the policy lands. Showing the un-narrowed list first and pulling times
+    // back out from under the diner a moment later is worse than a brief wait.
+    if (!bookingPolicy) return [];
     return buildScheduleDays({
       timezone: scheduling.timezone,
       openingHours: scheduling.openingHours,
+      scheduleWindows: bookingPolicy.windows,
+      closures: bookingPolicy.closures,
       minLeadMinutes: scheduling.minLeadMinutes,
       maxDays: scheduling.maxDays,
       slotMinutes: scheduling.slotMinutes,
       now: scheduleMountedAt.current,
     });
-  }, [scheduling]);
+  }, [scheduling, bookingPolicy]);
 
   const selectedDay = scheduleDays.find((d) => d.date === scheduleDate) ?? scheduleDays[0];
 
@@ -952,7 +1014,10 @@ export function CheckoutView({
         }
       }
 
-      const result = await placeOrder(supabase, {
+      // place-order v10.5 takes the sitting a dine-in round belongs to. PlaceOrderInput in
+      // queries/orders.ts has not caught up with the field yet, so it is widened here
+      // rather than asserted over the whole payload — the rest still type-checks.
+      const orderInput: PlaceOrderInput & { session_id?: string } = {
         branch_id: branchId,
         channel,
         customer_name: name,
@@ -965,6 +1030,10 @@ export function CheckoutView({
         // string-matching a number the diner typed. The number rides along as the
         // fallback for the hand-typed path.
         table_id: atTable ? pinnedTable!.id : undefined,
+        // The sitting this round joins. place-order refuses a dine-in web order whose table
+        // has no open session, or whose caller never joined it, so this is what makes the
+        // round land on the party's bill instead of starting a private one.
+        session_id: atTable ? pinnedTable!.sessionId : undefined,
         // Structured too, so place-order can resolve it to a real tables row and
         // the kitchen/floor plan stop relying on the notes prefix above.
         table_number: channel === 'dine_in'
@@ -1021,7 +1090,9 @@ export function CheckoutView({
             quantity: l.quantity,
             notes: l.notes,
           })),
-      });
+      };
+
+      const result = await placeOrder(supabase, orderInput);
 
       // Save the address (with coordinates) if it was a new entry and the
       // customer is signed in. Best-effort — the order already went through.
@@ -1108,7 +1179,11 @@ export function CheckoutView({
                 only told them after they had filled in the entire form. */}
             {scheduleMode === 'later' && (
               <div ref={scheduleSectionRef} className="mt-3">
-                {scheduleDays.length === 0 ? (
+                {!bookingPolicy ? (
+                  <p role="status" className="rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">
+                    Loading the times this restaurant takes bookings…
+                  </p>
+                ) : scheduleDays.length === 0 ? (
                   <p className="rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">
                     No times are available to book at the moment. Please try ASAP, or check
                     back when the restaurant is open.
@@ -1154,9 +1229,9 @@ export function CheckoutView({
                       <p className="mt-1 text-xs text-danger">{fieldErrors.schedule}</p>
                     )}
                     <p className="mt-2 text-xs text-muted-foreground">
-                      Only times this restaurant is open are shown, in the restaurant&apos;s
-                      local time. We&apos;ll start preparing your order so it&apos;s ready
-                      right around then.
+                      Only times you can book at this restaurant are shown, in the
+                      restaurant&apos;s local time. We&apos;ll start preparing your order so
+                      it&apos;s ready right around then.
                     </p>
                   </>
                 )}
@@ -1467,6 +1542,15 @@ export function CheckoutView({
                 <p className="mt-1 text-xs text-muted-foreground">
                   Scanned from the QR code on your table — nothing to type.
                 </p>
+                {/* Which round this is, and what the table already owes. The number is the
+                    whole party's, not this phone's: everyone who scanned the same tent is
+                    adding to one bill, and that is the figure they will be asked to pay. */}
+                {tableBill && tableBill.order_count > 0 && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Round {tableBill.order_count + 1} · Table total so far{' '}
+                    {formatCurrency(Number(tableBill.running_total))}
+                  </p>
+                )}
                 {/* The last point at which a wrong table is still cheap to fix. After this
                     the order carries the table id and the food is walked to it. */}
                 <LeaveTableButton className="mt-2 px-0" />
@@ -1827,7 +1911,12 @@ export function CheckoutView({
               (channel === 'delivery' && enteringNewAddress && !addressCoords)
             }
           >
-            {t('checkout.placeOrder', { amount: formatCurrency(total) })}
+            {/* At a table nothing is being paid for here — the round goes to the kitchen and
+                the bill is settled with a server at the end of the meal. "Place order" read
+                as the last step of a transaction that has not happened yet. */}
+            {atTable
+              ? `Send to kitchen · ${formatCurrency(total)}`
+              : t('checkout.placeOrder', { amount: formatCurrency(total) })}
           </Button>
         </motion.div>
       </form>

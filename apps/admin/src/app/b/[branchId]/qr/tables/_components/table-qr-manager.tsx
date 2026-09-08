@@ -7,6 +7,7 @@ import {
   Check,
   Copy,
   Download,
+  Pencil,
   Plus,
   Printer,
   QrCode,
@@ -15,6 +16,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
+import { TABLE_TYPES, tableTypeLabel } from '@favornoms/database/queries';
 import { Badge, Button, Card, EmptyState, IconButton } from '@favornoms/ui';
 import { tableMenuLink } from '../../_lib/menu-url';
 
@@ -24,6 +26,12 @@ export interface BranchTable {
   display_name: string | null;
   capacity: number | null;
   zone: string | null;
+  /** booth / bar / high top / private room / …. `shape` is the floor-plan glyph, not this. */
+  table_type: string;
+  /** table_number is text, so this is what actually puts 2 before 10. */
+  sort_order: number;
+  /** 'open' | 'occupied' | 'dirty' | 'reserved' — written by the floor board. */
+  status: string | null;
   is_active: boolean;
   /** Nullable in the generated types until the token migration is applied. */
   qr_code_token: string | null;
@@ -39,7 +47,11 @@ interface Props {
   initialTables: BranchTable[];
 }
 
-const SELECT = 'id, table_number, display_name, capacity, zone, is_active, qr_code_token';
+const SELECT =
+  'id, table_number, display_name, capacity, zone, table_type, sort_order, status, is_active, qr_code_token';
+
+/** The digits in "T12" are what a floor means by "twelfth table". Mirrors the migration's backfill. */
+const digitsOf = (value: string) => Number(value.replace(/\D/g, '')) || 0;
 
 /** Print resolution for a downloaded code — big enough for a table tent. */
 const PNG_SIZE = 1024;
@@ -66,6 +78,10 @@ export function TableQrManager({
   const [displayName, setDisplayName] = React.useState('');
   const [capacity, setCapacity] = React.useState('');
   const [zone, setZone] = React.useState('');
+  const [tableType, setTableType] = React.useState<string>('standard');
+  const [sortOrder, setSortOrder] = React.useState('');
+  /** The table being edited, or null when the form is composing a new one. */
+  const [editingId, setEditingId] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [copiedId, setCopiedId] = React.useState<string | null>(null);
@@ -86,8 +102,34 @@ export function TableQrManager({
       .from('tables')
       .select(SELECT)
       .eq('branch_id', branchId)
+      // sort_order first, because table_number is text: on its own it puts 10 before 2.
+      .order('sort_order')
       .order('table_number');
-    if (data) setList(data as BranchTable[]);
+    if (data) setList(data as unknown as BranchTable[]);
+  };
+
+  const resetForm = () => {
+    setTableNumber('');
+    setDisplayName('');
+    setCapacity('');
+    setZone('');
+    setTableType('standard');
+    setSortOrder('');
+    setEditingId(null);
+    setComposing(false);
+  };
+
+  const startEdit = (t: BranchTable) => {
+    setEditingId(t.id);
+    setComposing(false);
+    setError(null);
+    setTableNumber(t.table_number);
+    setDisplayName(t.display_name ?? '');
+    setCapacity(t.capacity ? String(t.capacity) : '');
+    setZone(t.zone ?? '');
+    setTableType(t.table_type || 'standard');
+    setSortOrder(t.sort_order ? String(t.sort_order) : '');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const describe = (message: string) =>
@@ -95,29 +137,52 @@ export function TableQrManager({
       ? 'A table with that number already exists at this branch.'
       : message;
 
+  /** The fields both Add and Edit write. Sort order defaults to the digits in the number. */
+  const formValues = () => ({
+    table_number: tableNumber.trim(),
+    display_name: displayName.trim() || null,
+    capacity: capacity ? Number(capacity) : null,
+    zone: zone.trim() || null,
+    table_type: tableType,
+    sort_order: sortOrder ? Number(sortOrder) : digitsOf(tableNumber),
+  });
+
   const create = async () => {
     const number = tableNumber.trim();
     if (!number) return;
     setBusy(true);
     setError(null);
     const supabase = getBrowserClient();
-    const { error: insErr } = await supabase.from('tables').insert({
-      branch_id: branchId,
-      table_number: number,
-      display_name: displayName.trim() || null,
-      capacity: capacity ? Number(capacity) : null,
-      zone: zone.trim() || null,
-    });
+    const { error: insErr } = await supabase
+      .from('tables')
+      .insert({ branch_id: branchId, ...formValues() });
     setBusy(false);
     if (insErr) {
       setError(describe(insErr.message));
       return;
     }
-    setTableNumber('');
-    setDisplayName('');
-    setCapacity('');
-    setZone('');
-    setComposing(false);
+    resetForm();
+    void refresh();
+  };
+
+  // Every field except the code itself. A table gets renamed, re-zoned and re-seated over
+  // its life, and the only way to do any of that used to be delete-and-recreate — which
+  // destroys the token and every printed tent standing on the floor.
+  const saveEdit = async () => {
+    if (!editingId || !tableNumber.trim()) return;
+    setBusy(true);
+    setError(null);
+    const supabase = getBrowserClient();
+    const { error: updErr } = await supabase
+      .from('tables')
+      .update(formValues())
+      .eq('id', editingId);
+    setBusy(false);
+    if (updErr) {
+      setError(describe(updErr.message));
+      return;
+    }
+    resetForm();
     void refresh();
   };
 
@@ -127,7 +192,7 @@ export function TableQrManager({
     const taken = new Set(list.map((t) => t.table_number));
     const rows = Array.from({ length: BULK_COUNT }, (_, i) => String(i + 1))
       .filter((n) => !taken.has(n))
-      .map((n) => ({ branch_id: branchId, table_number: n }));
+      .map((n) => ({ branch_id: branchId, table_number: n, sort_order: Number(n) }));
     if (rows.length === 0) {
       setBusy(false);
       return;
@@ -274,17 +339,26 @@ export function TableQrManager({
             </Button>
           )}
           <Button
-            variant={composing ? 'ghost' : 'gradient'}
+            variant={composing || editingId ? 'ghost' : 'gradient'}
             leftIcon={<Plus className="h-4 w-4" />}
-            onClick={() => setComposing((c) => !c)}
+            onClick={() => {
+              if (composing || editingId) resetForm();
+              else setComposing(true);
+            }}
           >
-            {composing ? 'Cancel' : 'Add table'}
+            {composing || editingId ? 'Cancel' : 'Add table'}
           </Button>
         </div>
       </header>
 
-      {composing && (
+      {(composing || editingId) && (
         <Card className="no-print mb-6 space-y-3 p-5">
+          {editingId && (
+            <p className="text-sm text-muted-foreground">
+              Editing this table. Its QR code is untouched — every tent already on the floor
+              keeps working.
+            </p>
+          )}
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Table number">
               <input
@@ -303,6 +377,19 @@ export function TableQrManager({
                 placeholder="Window booth"
               />
             </Field>
+            <Field label="Type">
+              <select
+                value={tableType}
+                onChange={(e) => setTableType(e.target.value)}
+                className="input"
+              >
+                {TABLE_TYPES.map((value) => (
+                  <option key={value} value={value}>
+                    {tableTypeLabel(value)}
+                  </option>
+                ))}
+              </select>
+            </Field>
             <Field label="Seats (optional)">
               <input
                 value={capacity}
@@ -320,19 +407,38 @@ export function TableQrManager({
                 placeholder="Terrace"
               />
             </Field>
+            <Field label="Sort order (optional)">
+              <input
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value.replace(/\D/g, ''))}
+                className="input"
+                inputMode="numeric"
+                placeholder={String(digitsOf(tableNumber) || 1)}
+              />
+            </Field>
           </div>
+          <p className="text-xs text-muted-foreground">
+            Sort order is what puts table 2 before table 10 — table numbers are text, so left
+            to themselves they sort alphabetically. Leave it blank and the digits in the
+            number are used.
+          </p>
           {error && (
             <p role="alert" className="rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">
               {error}
             </p>
           )}
-          <Button variant="gradient" onClick={create} disabled={!tableNumber.trim()} loading={busy}>
-            Add table
+          <Button
+            variant="gradient"
+            onClick={editingId ? saveEdit : create}
+            disabled={!tableNumber.trim()}
+            loading={busy}
+          >
+            {editingId ? 'Save changes' : 'Add table'}
           </Button>
         </Card>
       )}
 
-      {!composing && error && (
+      {!composing && !editingId && error && (
         <p role="alert" className="no-print mb-4 rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">
           {error}
         </p>
@@ -375,9 +481,15 @@ export function TableQrManager({
                     <p className="text-sm text-muted-foreground">
                       Scan to order · {restaurantName || branchName}
                     </p>
-                    {(t.zone || t.capacity) && (
+                    {(t.zone || t.capacity || t.table_type !== 'standard') && (
                       <p className="mt-0.5 text-xs text-muted-foreground">
-                        {[t.zone, t.capacity ? `${t.capacity} seats` : null]
+                        {[
+                          t.zone,
+                          t.table_type && t.table_type !== 'standard'
+                            ? tableTypeLabel(t.table_type)
+                            : null,
+                          t.capacity ? `${t.capacity} seats` : null,
+                        ]
                           .filter(Boolean)
                           .join(' · ')}
                       </p>
@@ -408,6 +520,9 @@ export function TableQrManager({
                     >
                       PNG
                     </Button>
+                    <IconButton label="Edit table" size="sm" onClick={() => startEdit(t)}>
+                      <Pencil className="h-4 w-4" />
+                    </IconButton>
                     <IconButton label="Issue a new code" size="sm" onClick={() => void rotate(t)}>
                       <RefreshCw className="h-4 w-4" />
                     </IconButton>

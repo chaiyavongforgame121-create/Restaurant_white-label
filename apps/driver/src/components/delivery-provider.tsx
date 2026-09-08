@@ -18,6 +18,13 @@ import { useDriverSession } from './driver-session';
  */
 export interface ActiveDeliveryUI {
   id: string;
+  /**
+   * The rider's current turn at this delivery (delivery_assignments.id) — the chat thread's
+   * key. Null while there is no open turn, which is a real state: the sheet must not mount
+   * on a thread that does not exist rather than fall back to the delivery and reopen the
+   * previous rider's conversation.
+   */
+  assignmentId: string | null;
   orderId: string;
   orderNumber: string;
   status: DeliveryStatus;
@@ -64,6 +71,14 @@ export interface ActiveDeliveryUI {
   dropoffLng: number | null;
 }
 
+/** A job that stopped being this rider's, and why — so the screen can say so. */
+export interface EndedJobNotice {
+  assignmentId: string;
+  orderNumber: string;
+  endKind: string | null;
+  endReason: string | null;
+}
+
 interface DeliveryContextValue {
   /** A new offer that has not been accepted yet. */
   offered: ActiveDeliveryUI | null;
@@ -74,12 +89,29 @@ interface DeliveryContextValue {
   progress: (next: DeliveryStatus) => Promise<void>;
   /** Persist "arrived at the customer" (sets arriving_at). */
   markArriving: () => Promise<void>;
+  /**
+   * Drop the job on screen without waiting for the server to say so. driver_cancel_delivery
+   * nulls deliveries.driver_id and Realtime matches an UPDATE against the NEW row, so the
+   * rider who just cancelled is the one party guaranteed NOT to receive the event.
+   */
+  clearActive: () => void;
+  /** Set when a job was taken away from this rider. Null once dismissed. */
+  lastEnded: EndedJobNotice | null;
+  dismissLastEnded: () => void;
   /** False while the realtime channel is down. Surfaced so the rider is told their
    *  phone is not currently receiving offers, rather than assuming it is quiet. */
   liveHealthy: boolean;
 }
 
 const DeliveryContext = React.createContext<DeliveryContextValue | null>(null);
+
+/** Endings worth interrupting the rider for: the ones somebody else caused. */
+const ANNOUNCED_END_KINDS = [
+  'order_cancelled',
+  'reassigned_by_staff',
+  'requeued_by_staff',
+  'offer_expired',
+];
 
 function mapDeliveryToUI(row: Record<string, unknown>): ActiveDeliveryUI {
   const order = row.order as {
@@ -111,6 +143,7 @@ function mapDeliveryToUI(row: Record<string, unknown>): ActiveDeliveryUI {
 
   return {
     id: row.id as string,
+    assignmentId: ((row.assignment as { id?: string } | null)?.id ?? null) as string | null,
     orderId: order.id,
     orderNumber: order.order_number,
     status: row.status as DeliveryStatus,
@@ -196,6 +229,11 @@ export function DeliveryProvider({ children }: { children: React.ReactNode }) {
 
   const [offered, setOffered] = React.useState<ActiveDeliveryUI | null>(null);
   const [active, setActive] = React.useState<ActiveDeliveryUI | null>(null);
+  const [lastEnded, setLastEnded] = React.useState<EndedJobNotice | null>(null);
+
+  // An assignment row keeps being UPDATEd after it ends (status, earnings), so the notice is
+  // announced once per turn rather than once per payload.
+  const announcedEndRef = React.useRef(new Set<string>());
 
   // What is on screen right now, readable from the realtime handler and from a refresh
   // that is already in flight without either of them being rebuilt when the job changes.
@@ -275,8 +313,51 @@ export function DeliveryProvider({ children }: { children: React.ReactNode }) {
   // without it a rider simply stopped being offered work with no sign anything was wrong.
   const { healthy: liveHealthy } = useRealtime({
     channel: `driver-deliveries-${driverId}`,
-    tables: [{ table: 'deliveries', filter: `driver_id=eq.${driverId}` }],
-    onChange: (payload) => {
+    // Two tables, because deliveries alone cannot tell this rider they have lost a job.
+    // Realtime evaluates the filter against the NEW row of an UPDATE, and every path that
+    // takes a job away — the rider's own pre-pickup cancel, requeue_failed_delivery, a staff
+    // reassign, reject_dispatch, expire_dispatch_offers — clears or moves driver_id, so the
+    // row stops matching driver_id=eq.<rider> and no event is delivered at all. The
+    // assignment row keeps driver_id for ever, so the turn ending is something this phone
+    // can actually hear.
+    tables: [
+      { table: 'deliveries', filter: `driver_id=eq.${driverId}` },
+      { table: 'delivery_assignments', filter: `driver_id=eq.${driverId}` },
+    ],
+    onChange: (payload, table) => {
+      if (table === 'delivery_assignments') {
+        if (payload.eventType === 'DELETE') return;
+        const row = payload.new as {
+          id?: string;
+          delivery_id?: string;
+          ended_at?: string | null;
+          end_kind?: string | null;
+          end_reason?: string | null;
+        } | null;
+        if (!row?.id) return;
+        if (row.ended_at && !announcedEndRef.current.has(row.id)) {
+          announcedEndRef.current.add(row.id);
+          const held =
+            activeRef.current?.id === row.delivery_id
+              ? activeRef.current
+              : offeredRef.current?.id === row.delivery_id
+                ? offeredRef.current
+                : null;
+          // Only for a job that was on this phone, and only for the endings the rider did
+          // not choose — a drop-off, a cancel or a decline they just made already has its
+          // own screen, and being told about it reads as a second, different event.
+          if (held && ANNOUNCED_END_KINDS.includes(row.end_kind ?? '')) {
+            setLastEnded({
+              assignmentId: row.id,
+              orderNumber: held.orderNumber,
+              endKind: row.end_kind ?? null,
+              endReason: row.end_reason ?? null,
+            });
+          }
+        }
+        void refreshFromServer();
+        return;
+      }
       // The rider's own location ping writes to this very row every three seconds. Taking
       // a bare refetch on each of those meant reloading the whole screen twenty times a
       // minute for columns this app never draws. Anything else still resyncs in full.
@@ -355,12 +436,45 @@ export function DeliveryProvider({ children }: { children: React.ReactNode }) {
     await markArrivingQuery(supabase, active.id);
   }, [active]);
 
+  const clearActive = React.useCallback(() => {
+    // Invalidate anything already in flight as well: a refresh that started before the
+    // cancel would otherwise land afterwards and put the job straight back on screen.
+    seqRef.current += 1;
+    rawRowsRef.current = new Map();
+    setOffered(null);
+    setActive(null);
+  }, []);
+
+  const dismissLastEnded = React.useCallback(() => setLastEnded(null), []);
+
   // A fresh object literal here re-rendered every useDelivery() consumer — the tab bar, Home
   // and the whole Active view — on any provider render at all, which multiplied the cost of
   // everything above.
   const value = React.useMemo(
-    () => ({ offered, active, accept, reject, progress, markArriving, liveHealthy }),
-    [offered, active, accept, reject, progress, markArriving, liveHealthy],
+    () => ({
+      offered,
+      active,
+      accept,
+      reject,
+      progress,
+      markArriving,
+      clearActive,
+      lastEnded,
+      dismissLastEnded,
+      liveHealthy,
+    }),
+    [
+      offered,
+      active,
+      accept,
+      reject,
+      progress,
+      markArriving,
+      clearActive,
+      lastEnded,
+      dismissLastEnded,
+      liveHealthy,
+    ],
   );
 
   return <DeliveryContext.Provider value={value}>{children}</DeliveryContext.Provider>;

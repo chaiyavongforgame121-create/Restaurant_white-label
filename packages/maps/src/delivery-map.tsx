@@ -28,6 +28,13 @@ function markerElement(emoji: string, bg: string): HTMLDivElement {
   return el;
 }
 
+// Must stay in step with RIDER_EMOJI / RiderIcon in packages/ui — a car on the tracking
+// stepper and a scooter on the pin above it reads as two different deliveries. It is
+// copied rather than imported because this package deliberately depends on nothing in the
+// workspace (mapbox-gl only), and pulling in @favornoms/ui for one string would drag React
+// component code into every Mapbox bundle.
+const DRIVER_EMOJI = '🚗';
+
 const ROUTE_SOURCE_ID = 'favornoms-route';
 // One fix every few seconds, drawn instantly, reads as a pin teleporting down the street.
 // Gliding it over roughly one heartbeat looks like a rider riding.
@@ -152,7 +159,7 @@ export function DeliveryMap({
       let marker = driverMarkerRef.current;
       if (!marker) {
         marker = new mapboxgl.Marker({
-          element: markerElement('🛵', '#1F6FEB'),
+          element: markerElement(DRIVER_EMOJI, '#1F6FEB'),
           rotationAlignment: 'map',
         })
           .setLngLat([target.lng, target.lat])

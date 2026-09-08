@@ -6,9 +6,22 @@ import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Button, Card } from '@favornoms/ui';
 
+interface AssignmentReason {
+  delivery_id: string;
+  seq: number;
+  end_kind: string | null;
+  end_reason: string | null;
+}
+
 // Failed deliveries needing a staff decision: re-dispatch (sends it back into
 // the driver pool via requeue_failed_delivery) or handle offline (refund/void
 // through the normal order actions).
+//
+// requeue_failed_delivery nulls deliveries.failed_reason — the job is being retried and the
+// board must stop calling it failed — so this panel used to be the last screen that could
+// explain a failure, and only until somebody pressed the button. The reason lives on the rider
+// turn now (delivery_assignments.end_reason, 20260908111000), which is read here so a row that
+// has been through a re-dispatch still says what happened the first time.
 
 export interface DeliveryIssue {
   id: string;
@@ -24,6 +37,33 @@ export function DeliveryIssues({ issues }: { issues: DeliveryIssue[] }) {
   const router = useRouter();
   const [busy, setBusy] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [reasons, setReasons] = React.useState<Map<string, AssignmentReason>>(new Map());
+
+  // Serialised so the effect keys off the SET of deliveries on screen, not the array identity
+  // the parent server component rebuilds on every refresh.
+  const issueKey = issues.map((d) => d.id).join(',');
+
+  React.useEffect(() => {
+    if (!issueKey) return;
+    let cancelled = false;
+    const supabase = getBrowserClient();
+    void supabase
+      .from('delivery_assignments')
+      .select('delivery_id, seq, end_kind, end_reason')
+      .in('delivery_id', issueKey.split(','))
+      .not('end_reason', 'is', null)
+      .order('seq', { ascending: true })
+      .then(({ data }) => {
+        if (cancelled || !data) return;
+        // Ascending seq, so the last write per delivery is the newest turn that explained itself.
+        const next = new Map<string, AssignmentReason>();
+        for (const row of data as unknown as AssignmentReason[]) next.set(row.delivery_id, row);
+        setReasons(next);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [issueKey]);
 
   if (issues.length === 0) return null;
 
@@ -63,7 +103,7 @@ export function DeliveryIssues({ issues }: { issues: DeliveryIssue[] }) {
                 {d.customer_phone ? ` · ${d.customer_phone}` : ''}
               </p>
               <p className="text-xs text-danger">
-                {d.failed_reason ?? 'No reason recorded'}
+                {d.failed_reason ?? reasons.get(d.id)?.end_reason ?? 'No reason recorded'}
                 {d.failed_photo_url && (
                   <>
                     {' · '}

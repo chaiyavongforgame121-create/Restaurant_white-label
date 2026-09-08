@@ -10,11 +10,30 @@
 // keeps, not the ones their phone thinks are happening. Slot labels are branch-local wall
 // time; the value handed to place-order is a UTC instant, which is what the server compares
 // against is_branch_open().
+//
+// Opening hours are only half the question. A shop can be open all day and still take
+// pre-orders in a narrower band — the owner's case is bookings from 17:00 Monday to
+// Saturday but 10:00-14:00 on Sunday — which branch_hours cannot express. Those windows
+// live in branch_schedule_hours and arrive here as `scheduleWindows`; they NARROW opening
+// hours and never extend them, because is_branch_open() still has the final say at submit.
 
-export interface OpeningWindow {
-  day_of_week: number; // 0 = Sunday, matching Postgres extract(dow)
-  opens_at: string; // 'HH:MM'
-  closes_at: string; // 'HH:MM'
+import {
+  bookableRangesForDay,
+  intersectRanges,
+  openRangesForDay,
+  type MinuteRange,
+  type WeekdayWindow,
+} from '@favornoms/shared';
+
+/** The branch_hours row shape, under the name the storefront has always used for it. The
+ *  model itself now lives in @favornoms/shared, where the merchant editor reads it too —
+ *  two copies of these three overnight clauses is how the picker and the server drift. */
+export type OpeningWindow = WeekdayWindow;
+
+export interface ClosurePeriod {
+  /** UTC ISO instants, straight from branch_closures. */
+  starts_at: string;
+  ends_at: string;
 }
 
 export interface ScheduleSlot {
@@ -37,6 +56,15 @@ export interface BuildScheduleInput {
    *  not as closed all week. Flattening those two would silently kill scheduling for
    *  every branch that never filled in Opening hours. */
   openingHours: OpeningWindow[];
+  /** Per-weekday windows a diner may BOOK inside, narrowing openingHours.
+   *  null/undefined = the merchant never armed the feature, so opening hours alone decide.
+   *  An EMPTY ARRAY is a different statement: armed with no windows, so nothing is bookable
+   *  all week. Flattening those two would apply branch_hours' "no rows = always open" rule
+   *  to a table whose whole purpose is the opposite. */
+  scheduleWindows?: OpeningWindow[] | null;
+  /** Slots falling inside one of these are dropped, matching is_branch_open()'s
+   *  `p_at between starts_at and ends_at` — inclusive at both ends. */
+  closures?: ClosurePeriod[];
   minLeadMinutes: number;
   maxDays: number;
   slotMinutes: number;
@@ -111,41 +139,12 @@ function branchDateParts(date: Date, tz: string): { y: number; m: number; d: num
   };
 }
 
-function hhmmToMinutes(v: string): number {
-  const [h, m] = v.split(':');
-  return Number(h ?? 0) * 60 + Number(m ?? 0);
-}
-
 function iso(y: number, m: number, d: number): string {
   return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
 
-/** Minute-of-day ranges open on `dow`, in branch-local time.
- *
- *  Mirrors is_branch_open()'s three clauses. An overnight window (closes <= opens, e.g.
- *  22:00-02:00) contributes the evening side to its own day and the morning side to the
- *  following one, which is why the previous day is consulted too. */
-function windowsForDay(hours: OpeningWindow[], dow: number): Array<[number, number]> {
-  if (hours.length === 0) return [[0, 24 * 60]]; // no hours configured = always open
-
-  const out: Array<[number, number]> = [];
-  for (const h of hours) {
-    const opens = hhmmToMinutes(h.opens_at);
-    const closes = hhmmToMinutes(h.closes_at);
-    if (closes > opens) {
-      if (h.day_of_week === dow) out.push([opens, closes]);
-    } else {
-      // Evening side, on the day the window is filed under.
-      if (h.day_of_week === dow) out.push([opens, 24 * 60]);
-      // Morning side, spilling into the next day.
-      if (h.day_of_week === (dow + 6) % 7 && closes > 0) out.push([0, closes]);
-    }
-  }
-  return out;
-}
-
 export function buildScheduleDays(input: BuildScheduleInput): ScheduleDay[] {
-  const { timezone, openingHours, minLeadMinutes, maxDays, slotMinutes } = input;
+  const { timezone, openingHours, scheduleWindows, minLeadMinutes, maxDays, slotMinutes } = input;
   const now = input.now ?? new Date();
   const earliest = now.getTime() + Math.max(0, minLeadMinutes) * 60_000;
   // No upper instant cutoff on purpose. The horizon is a number of branch-local DAYS, and
@@ -153,6 +152,14 @@ export function buildScheduleDays(input: BuildScheduleInput): ScheduleDay[] {
   // looks equivalent and is not: with maxDays = 0 it lands exactly on `now`, which threw
   // away every remaining slot today — the opposite of "same-day only".
   const step = Math.max(5, slotMinutes);
+
+  // Parsed once. A closure is an absolute instant range, so it is compared against the
+  // slot's UTC instant and needs no timezone arithmetic at all — which is why it is the one
+  // gate here that cannot drift from the branch's zone.
+  const closureBounds = (input.closures ?? [])
+    .map((c) => [Date.parse(c.starts_at), Date.parse(c.ends_at)] as const)
+    .filter(([start, end]) => Number.isFinite(start) && Number.isFinite(end));
+  const insideClosure = (ms: number) => closureBounds.some(([start, end]) => ms >= start && ms <= end);
 
   const timeFmt = new Intl.DateTimeFormat('en-US', {
     timeZone: timezone,
@@ -176,7 +183,13 @@ export function buildScheduleDays(input: BuildScheduleInput): ScheduleDay[] {
       wallTimeToUtc(today.y, today.m, today.d + offset, 12, 0, timezone),
     );
     const parts = branchDateParts(probe, timezone);
-    const ranges = windowsForDay(openingHours, parts.dow);
+    let ranges: MinuteRange[] = openRangesForDay(openingHours, parts.dow);
+    // Both gates, in this order. A bookable window can only NARROW opening hours, never
+    // extend them: a merchant who takes bookings 17:00-22:00 on a day the kitchen shuts at
+    // 21:00 gets 17:00-21:00, not an hour is_branch_open() would refuse at submit.
+    if (scheduleWindows) {
+      ranges = intersectRanges(ranges, bookableRangesForDay(scheduleWindows, parts.dow));
+    }
     if (ranges.length === 0) continue;
 
     const slots: ScheduleSlot[] = [];
@@ -188,6 +201,9 @@ export function buildScheduleDays(input: BuildScheduleInput): ScheduleDay[] {
       for (let mins = start; mins < to; mins += step) {
         const ms = wallTimeToUtc(parts.y, parts.m, parts.d, Math.floor(mins / 60), mins % 60, timezone);
         if (ms < earliest) continue;
+        // is_branch_open() rejects any instant inside a branch_closures row, so offering
+        // one sends the diner through the whole form to a 409 on a public holiday.
+        if (insideClosure(ms)) continue;
         if (seen.has(ms)) continue; // overlapping windows must not double up
         seen.add(ms);
         slots.push({ iso: new Date(ms).toISOString(), label: timeFmt.format(new Date(ms)) });

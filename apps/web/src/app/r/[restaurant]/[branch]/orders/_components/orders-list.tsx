@@ -4,12 +4,12 @@ import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  Bike, CheckCircle2, ChefHat, Clock, MapPin, QrCode, Receipt, RotateCcw,
+  CheckCircle2, ChefHat, Clock, MapPin, QrCode, Receipt, RotateCcw,
   ShoppingBag, Store, XCircle, type LucideIcon,
 } from 'lucide-react';
 import { formatCurrency } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
-import { Badge, Button, Card } from '@favornoms/ui';
+import { Badge, Button, Card, RiderIcon } from '@favornoms/ui';
 import { useCart } from '@/store/cart';
 
 interface OrderRow {
@@ -40,7 +40,7 @@ interface Props {
 const CHANNEL_META: Record<string, { label: string; Icon: LucideIcon }> = {
   dine_in: { label: 'Dine-in', Icon: Store },
   pickup: { label: 'Pickup', Icon: ShoppingBag },
-  delivery: { label: 'Delivery', Icon: Bike },
+  delivery: { label: 'Delivery', Icon: RiderIcon },
   qr_ordering: { label: 'QR order', Icon: QrCode },
 };
 
@@ -71,7 +71,7 @@ const STATUS_META: Record<
   confirmed: { label: 'Confirmed', variant: 'info', Icon: CheckCircle2 },
   preparing: { label: 'Preparing', variant: 'warning', Icon: ChefHat },
   ready: { label: 'Ready', variant: 'success', Icon: Receipt },
-  out_for_delivery: { label: 'Out for delivery', variant: 'info', Icon: Bike },
+  out_for_delivery: { label: 'Out for delivery', variant: 'info', Icon: RiderIcon },
   completed: { label: 'Completed', variant: 'success', Icon: MapPin },
   cancelled: { label: 'Cancelled', variant: 'danger', Icon: XCircle },
   refunded: { label: 'Refunded', variant: 'danger', Icon: RotateCcw },
