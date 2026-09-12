@@ -154,6 +154,10 @@ function PosInner({
   // The row, not the text. place-order refuses a table that is not at this branch, and uses
   // the id to attach this order to whatever sitting is already open there.
   const [tableId, setTableId] = React.useState<string | null>(null);
+  const pickedTable = React.useMemo(
+    () => tables.find((t) => t.id === tableId) ?? null,
+    [tables, tableId],
+  );
   const [discountPercent, setDiscountPercent] = React.useState(0);
   const [splitN, setSplitN] = React.useState(1);
   const [parked, setParked] = React.useState<ParkedOrder[]>([]);
@@ -698,37 +702,71 @@ function PosInner({
             )}
           </div>
           <div className="border-t border-border/60 p-4 space-y-3">
-            {channel === 'dine_in' &&
-              (tables.length > 0 ? (
-                <select
-                  value={tableId ?? ''}
-                  onChange={(e) => {
-                    const picked = tables.find((t) => t.id === e.target.value) ?? null;
-                    setTableId(picked?.id ?? null);
-                    setTableNumber(picked?.number ?? '');
-                  }}
-                  aria-label="Table"
-                  className="focus-ring h-10 w-full rounded-xl border border-border bg-card px-3 text-base"
+            {channel === 'dine_in' && (
+              <div className="space-y-1.5">
+                {/* The picker used to carry an aria-label and nothing visible, so a closed
+                    select reading "No table (walk-in)" was indistinguishable from a branch
+                    with no tables set up. It was reported as exactly that, with three
+                    tables one click away. */}
+                <label
+                  htmlFor="counter-table"
+                  className="text-muted-foreground flex items-center justify-between text-xs font-semibold uppercase tracking-wider"
                 >
-                  <option value="">No table (walk-in)</option>
-                  {tables.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.label}
-                      {t.seated ? ' · seated' : ''}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                // A branch that has never set a table up still has to be able to ring one
-                // up. The typed number is resolved against the branch's rows server-side.
-                <input
-                  value={tableNumber}
-                  onChange={(e) => setTableNumber(e.target.value)}
-                  placeholder="Table no."
-                  inputMode="numeric"
-                  className="focus-ring h-10 w-full rounded-xl border border-border bg-card px-3 text-base"
-                />
-              ))}
+                  <span>Table</span>
+                  {tables.length > 0 && (
+                    <span className="font-normal normal-case tracking-normal">
+                      {tables.length} on the floor
+                    </span>
+                  )}
+                </label>
+                {tables.length > 0 ? (
+                  <>
+                    <select
+                      id="counter-table"
+                      value={tableId ?? ''}
+                      onChange={(e) => {
+                        const picked = tables.find((t) => t.id === e.target.value) ?? null;
+                        setTableId(picked?.id ?? null);
+                        setTableNumber(picked?.number ?? '');
+                      }}
+                      className="focus-ring h-10 w-full rounded-xl border border-border bg-card px-3 text-base"
+                    >
+                      <option value="">No table (walk-in)</option>
+                      {tables.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.label}
+                          {t.seated ? ' · seated' : ''}
+                        </option>
+                      ))}
+                    </select>
+                    {/* place-order joins the table's open sitting rather than starting a
+                        rival one, so this round lands on the bill the diners' phones are
+                        already adding to. Worth saying out loud before Charge is pressed. */}
+                    {pickedTable?.seated && (
+                      <p className="text-warning text-xs">
+                        {pickedTable.label} has an open bill — this round is added to it.
+                      </p>
+                    )}
+                    {pickedTable && !pickedTable.seated && (
+                      <p className="text-muted-foreground text-xs">
+                        Seats {pickedTable.label} and starts its bill.
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  // A branch that has never set a table up still has to be able to ring one
+                  // up. The typed number is resolved against the branch's rows server-side.
+                  <input
+                    id="counter-table"
+                    value={tableNumber}
+                    onChange={(e) => setTableNumber(e.target.value)}
+                    placeholder="Table no."
+                    inputMode="numeric"
+                    className="focus-ring h-10 w-full rounded-xl border border-border bg-card px-3 text-base"
+                  />
+                )}
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <label className="flex flex-1 items-center gap-2 text-xs text-muted-foreground">
                 Discount %
