@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { getServerClient } from '@favornoms/database/server';
 import {
   getEntitlementsForBranch,
+  listActiveCombos,
   listCategories,
   listMenuItems,
   listTableStates,
@@ -27,7 +28,7 @@ export default async function CounterPage({ params }: Props) {
     .maybeSingle();
   if (!branch) notFound();
   const settings = (branch.settings ?? {}) as Record<string, unknown>;
-  const [categories, items, entitlements, floor] = await Promise.all([
+  const [categories, items, entitlements, floor, combos] = await Promise.all([
     listCategories(supabase, branchId),
     listMenuItems(supabase, branchId),
     getEntitlementsForBranch(supabase, branchId),
@@ -35,6 +36,10 @@ export default async function CounterPage({ params }: Props) {
     // against no table at all. Picking a real row is also what lets place-order attach the
     // order to the sitting the diners' phones are already adding to.
     listTableStates(supabase, branchId),
+    // The same view the storefront reads. A deal a diner can order from their phone was
+    // unsellable at the till, so a customer who walked in asking for it got it keyed as
+    // separate dishes at separate prices.
+    listActiveCombos(supabase, branchId),
   ]);
   const seatedTableIds = new Set(floor.sessions.map((s) => s.table_id));
   const tables = floor.tables
@@ -60,6 +65,7 @@ export default async function CounterPage({ params }: Props) {
       categories={categories}
       items={items}
       tables={tables}
+      combos={combos}
       canUseCard={hasFeature(entitlements, 'card_payment')}
       canDeliver={hasFeature(entitlements, 'delivery')}
       salesTaxRate={Number(branch.sales_tax_rate ?? 0)}

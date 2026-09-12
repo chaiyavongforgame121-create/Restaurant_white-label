@@ -185,3 +185,55 @@ export async function listItemModifierGroups(
     })
     .filter((g): g is ModifierGroup => g !== null);
 }
+
+/** A combo as the till and the storefront both need it: the deal, and what is in it. */
+export interface ComboSet {
+  id: string;
+  name: string;
+  description: string | null;
+  total_price: number;
+  image_url: string | null;
+  items: Array<{ menu_item_id: string; item_name: string; quantity: number; list_price: number }>;
+}
+
+/**
+ * The branch's live combos.
+ *
+ * v_active_combos is the same view the storefront reads, so a deal the diner can see is a
+ * deal the cashier can ring up. The counter could not sell one at all until this existed --
+ * place-order has always accepted `combos`, and the till simply never offered them, so a
+ * customer who walked in asking for the deal on the poster got it keyed as separate dishes
+ * at separate prices.
+ */
+export async function listActiveCombos(
+  supabase: FavornomsClient,
+  branchId: string,
+): Promise<ComboSet[]> {
+  const { data, error } = await supabase
+    .from('v_active_combos')
+    .select('id, name, description, total_price, image_url, items')
+    .eq('branch_id', branchId);
+
+  if (error) throw error;
+
+  return (data ?? [])
+    // The view's columns are all nullable in the generated types; a row with no id is not
+    // a combo anything can be ordered against.
+    .filter((row) => !!row.id && !!row.name)
+    .map((row) => ({
+      id: row.id as string,
+      name: row.name as string,
+      description: row.description,
+      total_price: Number(row.total_price ?? 0),
+      image_url: row.image_url,
+      items: Array.isArray(row.items)
+        ? (row.items as Array<Record<string, unknown>>).map((it) => ({
+            menu_item_id: String(it.menu_item_id ?? ''),
+            item_name: String(it.item_name ?? ''),
+            quantity: Number(it.quantity ?? 1),
+            list_price: Number(it.list_price ?? 0),
+          }))
+        : [],
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
