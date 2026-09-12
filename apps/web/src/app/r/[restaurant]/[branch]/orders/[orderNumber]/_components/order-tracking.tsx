@@ -51,6 +51,9 @@ type OrderRow = {
   /** A QR-transfer order the merchant has not confirmed payment for. It is deliberately not
    *  on the kitchen board yet, which is what makes self-cancel safe here. */
   awaiting_payment?: boolean | null;
+  /** The table sitting this round belongs to, set when the diner scanned the table. Null
+   *  for every other order, a dine-in order rung up at the till included. */
+  session_id?: string | null;
   total: number | string;
   customer_name?: string | null;
   customer_phone?: string | null;
@@ -297,6 +300,50 @@ export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransf
       cancelled = true;
     };
   }, [order.id, order.status]);
+
+  // The kitchen bumps a ROUND to `completed` when its food leaves the pass, which at a
+  // table is the middle of the meal. `null` = this order belongs to no sitting, so
+  // `completed` means finished as it always has; `undefined` = not answered yet, because a
+  // read we could not make is no proof the bill has been paid.
+  const [sessionSettled, setSessionSettled] = React.useState<boolean | null | undefined>(undefined);
+
+  const readSession = React.useCallback(async () => {
+    if (!order.session_id) {
+      setSessionSettled(null);
+      return;
+    }
+    const supabase = getBrowserClient();
+    const { data, error } = await supabase
+      .from('table_sessions')
+      .select('status, closed_reason')
+      .eq('id', order.session_id)
+      .maybeSingle();
+    if (error || !data) {
+      setSessionSettled(undefined);
+      return;
+    }
+    const session = data as { status: string; closed_reason: string | null };
+    setSessionSettled(session.status === 'closed' && session.closed_reason === 'paid');
+  }, [order.session_id]);
+
+  React.useEffect(() => {
+    void readSession();
+  }, [readSession]);
+
+  // Its own channel rather than a fourth table on the subscription above: that hook's
+  // onChange ends by merging any payload it does not recognise into the order, and a
+  // table_sessions row carries its own `id` and `status` — the order would take on the
+  // sitting's. It has to exist at all because settle_table_session only promotes rounds
+  // still at `ready`; a round the kitchen already bumped is left untouched, so nothing on
+  // the orders channel ever fires when the counter settles the bill.
+  useRealtime({
+    channel: `order-session:${order.session_id ?? 'none'}`,
+    tables: [
+      { table: 'table_sessions', event: 'UPDATE', filter: `id=eq.${order.session_id ?? ''}` },
+    ],
+    refetch: readSession,
+    enabled: !!order.session_id,
+  });
 
   // Find current step by status
   const statusIndex = React.useMemo(() => {
@@ -589,6 +636,7 @@ export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransf
           branchId={branchId}
           orderStatus={order.status}
           existingRating={rating}
+          sessionSettled={sessionSettled}
           hasDriver={!!delivery?.driver_id}
           driverId={delivery?.driver_id ?? null}
         />
