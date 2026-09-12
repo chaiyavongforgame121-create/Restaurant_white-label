@@ -226,7 +226,7 @@ export default async function OrdersPage({ params, searchParams }: Props) {
   });
 
   return (
-    <div className="container max-w-6xl py-8">
+    <div className="container max-w-7xl py-8">
       <header className="mb-6 px-2 pl-16 lg:px-0">
         <h1 className="font-display text-3xl font-bold">Orders</h1>
         <p className="mt-1 text-muted-foreground">
@@ -253,18 +253,20 @@ export default async function OrdersPage({ params, searchParams }: Props) {
       </div>
 
       {/* Desktop table */}
-      <Card className="hidden overflow-hidden md:block">
+      <Card className="hidden overflow-x-auto md:block">
         <table className="w-full text-sm">
-          <thead className="bg-muted/50 text-left text-xs uppercase tracking-wider text-muted-foreground">
+          <thead className="bg-muted text-left text-xs uppercase tracking-wider text-muted-foreground">
             <tr>
-              <th className="px-5 py-3">Order #</th>
-              <th className="px-5 py-3">Channel</th>
-              <th className="px-5 py-3">Customer</th>
-              <th className="px-5 py-3">Items</th>
-              <th className="px-5 py-3">Created</th>
-              <th className="px-5 py-3 text-right">Total</th>
-              <th className="px-5 py-3 text-center">Status</th>
-              <th className="px-5 py-3" />
+              <th className="px-3 py-3">Order #</th>
+              <th className="px-3 py-3">Channel</th>
+              <th className="px-3 py-3">Customer</th>
+              <th className="px-3 py-3">Items</th>
+              <th className="px-3 py-3">Created</th>
+              <th className="px-3 py-3 text-right">Total</th>
+              <th className="px-3 py-3 text-center">Status</th>
+              <th className="bg-muted sticky right-0 z-20 w-px whitespace-nowrap px-3 py-3 text-right">
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -273,7 +275,7 @@ export default async function OrdersPage({ params, searchParams }: Props) {
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-5 py-12 text-center text-muted-foreground">
+                <td colSpan={8} className="px-3 py-12 text-center text-muted-foreground">
                   No orders match your filters
                 </td>
               </tr>

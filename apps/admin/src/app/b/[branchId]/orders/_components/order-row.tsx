@@ -61,6 +61,12 @@ const fmtWhen = (iso: string) =>
     day: 'numeric',
   });
 
+const fmtDay = (iso: string) =>
+  new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric' });
+
+const fmtTime = (iso: string) =>
+  new Date(iso).toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' });
+
 const statusVariant = (status: string): React.ComponentProps<typeof Badge>['variant'] => {
   if (status === 'pending') return 'muted';
   if (['confirmed', 'preparing'].includes(status)) return 'warning';
@@ -72,9 +78,15 @@ const statusVariant = (status: string): React.ComponentProps<typeof Badge>['vari
 // A QR order is invisible to the kitchen until the money is confirmed, so say so here
 // rather than leaving it looking like an untouched ticket.
 function AwaitingPill() {
+  // One word, one line. The sentence this used to spell out broke into four stacked
+  // fragments in a column narrow enough to fit the rest of the table, and the full
+  // meaning is a hover away.
   return (
-    <span className="bg-warning/15 text-warning ml-2 rounded-full px-2 py-0.5 text-[11px] font-semibold">
-      Waiting for customer payment
+    <span
+      title="Waiting for the customer to confirm payment"
+      className="bg-warning/15 text-warning mt-1 inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold"
+    >
+      Unpaid
     </span>
   );
 }
@@ -102,7 +114,7 @@ function ItemsToggle({
       onClick={onToggle}
       aria-expanded={open}
       aria-controls={open ? panelId : undefined}
-      className="focus-ring hover:bg-muted -mx-2 flex max-w-[22rem] items-start gap-1.5 rounded-lg px-2 py-1 text-left"
+      className="focus-ring hover:bg-muted -mx-2 flex max-w-[9rem] items-start gap-1.5 rounded-lg px-2 py-1 text-left"
     >
       <ChevronDown
         aria-hidden
@@ -148,7 +160,7 @@ export function OrderLinesPanel({ order: o, currency }: { order: OrderRowData; c
     <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_18rem]">
       <ul className="divide-border/50 border-border/60 bg-card divide-y rounded-xl border">
         {o.lines.length === 0 && (
-          <li className="text-muted-foreground px-4 py-3 text-sm">
+          <li className="text-muted-foreground px-3 py-3 text-sm">
             No line items were recorded for this order.
           </li>
         )}
@@ -237,13 +249,13 @@ export function OrderTableRow({ order: o, ctx }: { order: OrderRowData; ctx: Ord
   return (
     <>
       <tr className="border-border/40 hover:bg-muted/30 border-t">
-        <td className="px-5 py-3 font-mono text-xs">{o.order_number}</td>
-        <td className="px-5 py-3 capitalize">{o.channel.replace('_', ' ')}</td>
-        <td className="px-5 py-3">
+        <td className="px-3 py-3 font-mono text-xs">{o.order_number}</td>
+        <td className="px-3 py-3 capitalize">{o.channel.replace('_', ' ')}</td>
+        <td className="px-3 py-3">
           <p className="font-medium">{o.customer_name ?? '—'}</p>
           <p className="text-muted-foreground text-xs">{o.customer_phone ?? ''}</p>
         </td>
-        <td className="px-5 py-3">
+        <td className="px-3 py-3">
           <ItemsToggle
             order={o}
             open={open}
@@ -251,24 +263,32 @@ export function OrderTableRow({ order: o, ctx }: { order: OrderRowData; ctx: Ord
             panelId={panelId}
           />
         </td>
-        <td className="text-muted-foreground px-5 py-3">
-          {fmtWhen(o.created_at)}
+        <td className="text-muted-foreground px-3 py-3">
+          {/* Stacked, not one string: "Sep 6, 10:22 PM" kept on a single line made this
+              the third-widest column in a table with no room left for its own buttons,
+              and letting it wrap broke the date after the comma, which reads as two
+              separate facts. */}
+          <span className="block whitespace-nowrap">{fmtDay(o.created_at)}</span>
+          <span className="block whitespace-nowrap">{fmtTime(o.created_at)}</span>
           {o.awaiting_payment && <AwaitingPill />}
           {/* Without this a pre-order looks like it needs cooking now:
               it sits at pending/confirmed and only its created_at showed. */}
           {o.scheduled_for && (
             <span className="text-foreground mt-0.5 block text-xs font-medium">
-              {o.held ? 'Scheduled' : 'Due'} {fmtWhen(o.scheduled_for)}
+              <span className="block whitespace-nowrap">
+                {o.held ? 'Scheduled' : 'Due'} {fmtDay(o.scheduled_for)}
+              </span>
+              <span className="block whitespace-nowrap">{fmtTime(o.scheduled_for)}</span>
             </span>
           )}
         </td>
-        <td className="font-display text-primary px-5 py-3 text-right text-base font-semibold">
+        <td className="font-display text-primary px-3 py-3 text-right text-base font-semibold">
           {formatCurrency(o.total, ctx.currency)}
         </td>
-        <td className="px-5 py-3 text-center">
+        <td className="px-3 py-3 text-center">
           <Badge variant={statusVariant(o.status)}>{o.status.replace('_', ' ')}</Badge>
         </td>
-        <td className="px-5 py-3">
+        <td className="bg-card border-border/40 sticky right-0 z-10 w-px whitespace-nowrap border-l px-3 py-3">
           <div className="flex items-center justify-end gap-1">
             {ctx.canViewReceipt && (
               <OrderReceiptButton
@@ -291,7 +311,7 @@ export function OrderTableRow({ order: o, ctx }: { order: OrderRowData; ctx: Ord
       </tr>
       {open && (
         <tr id={panelId} className="bg-muted/20">
-          <td colSpan={8} className="px-5 pb-4 pt-1">
+          <td colSpan={8} className="px-3 pb-4 pt-1">
             <OrderLinesPanel order={o} currency={ctx.currency} />
           </td>
         </tr>
