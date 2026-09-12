@@ -20,7 +20,7 @@ import {
 } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
 import { placeOrder, type ComboSet } from '@favornoms/database/queries';
-import { Button, RiderIcon, Segmented, Sheet, useConfirm } from '@favornoms/ui';
+import { Badge, Button, RiderIcon, Segmented, Sheet, useConfirm } from '@favornoms/ui';
 import {
   changeDue,
   digitsOnly,
@@ -455,7 +455,9 @@ function PosInner({
 
   // Hotkeys: digits 1-9 OPEN the Nth visible menu item (Enter in the sheet adds it, so the
   // two-keystroke path is still faster than reaching for the screen); Esc closes a sheet;
-  // Ctrl+P opens payment sheet when there's a cart.
+  // Ctrl+P opens payment sheet when there's a cart. A sold-out item still takes up its
+  // number — the digits have to keep matching the positions the cashier can see — but
+  // pressing it does nothing, so the keyboard cannot reach a tile the finger cannot.
   React.useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName;
@@ -474,7 +476,7 @@ function PosInner({
       const idx = Number(e.key);
       if (Number.isInteger(idx) && idx >= 1 && idx <= 9) {
         const target = filtered[idx - 1];
-        if (target) setConfiguring(target);
+        if (target && !target.outOfStock) setConfiguring(target);
       }
     };
     window.addEventListener('keydown', handler);
@@ -868,34 +870,51 @@ function PosInner({
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-                {filtered.map((item) => (
-                  <motion.button
-                    key={item.id}
-                    whileTap={{ scale: 0.96 }}
-                    onClick={() => setConfiguring(item)}
-                    className="focus-ring overflow-hidden rounded-2xl bg-card text-left shadow-soft transition-shadow hover:shadow-warm"
-                  >
-                    <div className="relative aspect-square overflow-hidden">
-                      {item.imageUrl ? (
-                        <Image
-                          src={item.imageUrl}
-                          alt={item.name}
-                          fill
-                          sizes="(max-width:640px) 50vw, 20vw"
-                          className="object-cover"
-                        />
-                      ) : (
-                        <div className="absolute inset-0 bg-gradient-sunset" aria-hidden />
-                      )}
-                    </div>
-                    <div className="p-2.5">
-                      <p className="line-clamp-2 text-sm font-semibold leading-tight">{item.name}</p>
-                      <p className="mt-0.5 font-display text-base font-bold text-primary">
-                        {formatCurrency(item.price)}
-                      </p>
-                    </div>
-                  </motion.button>
-                ))}
+                {filtered.map((item) => {
+                  const soldOut = !!item.outOfStock;
+                  return (
+                    <motion.button
+                      key={item.id}
+                      // A sold-out tile used to look and tap exactly like a live one, and the
+                      // cashier only found out at the item sheet, or worse at Charge. Disabled
+                      // rather than merely dimmed: on a touch till a grey tile still gets tapped.
+                      disabled={soldOut}
+                      whileTap={soldOut ? undefined : { scale: 0.96 }}
+                      onClick={() => setConfiguring(item)}
+                      aria-label={soldOut ? `${item.name} — out of stock` : undefined}
+                      className={`focus-ring overflow-hidden rounded-2xl bg-card text-left shadow-soft transition-shadow ${
+                        soldOut ? 'cursor-not-allowed opacity-50 grayscale' : 'hover:shadow-warm'
+                      }`}
+                    >
+                      <div className="relative aspect-square overflow-hidden">
+                        {item.imageUrl ? (
+                          <Image
+                            src={item.imageUrl}
+                            alt={item.name}
+                            fill
+                            sizes="(max-width:640px) 50vw, 20vw"
+                            className="object-cover"
+                          />
+                        ) : (
+                          <div className="absolute inset-0 bg-gradient-sunset" aria-hidden />
+                        )}
+                        {soldOut && (
+                          <span className="absolute inset-0 grid place-items-center bg-background/70">
+                            <Badge variant="neutral" className="text-xs">
+                              Out of stock
+                            </Badge>
+                          </span>
+                        )}
+                      </div>
+                      <div className="p-2.5">
+                        <p className="line-clamp-2 text-sm font-semibold leading-tight">{item.name}</p>
+                        <p className="mt-0.5 font-display text-base font-bold text-primary">
+                          {formatCurrency(item.price)}
+                        </p>
+                      </div>
+                    </motion.button>
+                  );
+                })}
               </div>
             )}
           </div>

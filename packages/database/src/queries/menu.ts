@@ -39,7 +39,8 @@ export async function listMenuItems(
       id, branch_id, category_id, name, name_translations,
       description, description_translations, price, image_url,
       is_recommended, is_new, dietary_tags, allergens, rating, review_count,
-      prep_time_minutes, calories, display_order, track_stock, stock_quantity
+      prep_time_minutes, calories, display_order, track_stock, stock_quantity,
+      sold_out_until
     `,
     )
     .eq('branch_id', branchId)
@@ -62,7 +63,8 @@ export async function getMenuItem(
       id, branch_id, category_id, name, name_translations,
       description, description_translations, price, image_url,
       is_recommended, is_new, dietary_tags, allergens, rating, review_count,
-      prep_time_minutes, calories, display_order, track_stock, stock_quantity
+      prep_time_minutes, calories, display_order, track_stock, stock_quantity,
+      sold_out_until
     `,
     )
     .eq('id', itemId)
@@ -105,7 +107,13 @@ function mapItem(row: Partial<RowItem>): MenuItem {
     reviewCount: row.review_count ?? 0,
     prepTimeMinutes: row.prep_time_minutes ?? undefined,
     calories: row.calories ?? undefined,
-    outOfStock: row.track_stock === true && (row.stock_quantity ?? 0) <= 0,
+    // Sold out has two halves, and reading only the stock counter meant a manual 86 -- which
+    // writes sold_out_until and touches nothing else -- reached no client at all: the cashier
+    // and the diner both saw the item on sale and first heard of it when place-order refused
+    // the line with 409 item_sold_out at payment. This is the same test the server runs.
+    outOfStock:
+      (row.track_stock === true && (row.stock_quantity ?? 0) <= 0) ||
+      (!!row.sold_out_until && new Date(row.sold_out_until).getTime() > Date.now()),
   };
 }
 

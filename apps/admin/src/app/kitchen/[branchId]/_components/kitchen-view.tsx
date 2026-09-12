@@ -474,15 +474,29 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
     showToast(`#${order.order_number.slice(-4)} recalled to kitchen`, null);
   };
 
+  /**
+   * 86 an item for the rest of the day.
+   *
+   * This used to call toggle_item_availability, which clears is_active — and listMenuItems
+   * filters on is_active, so an 86'd dish did not go grey anywhere, it VANISHED from the
+   * storefront and from the till. A cashier then had no way to tell "we are out of it" from
+   * "we never sold it", and the item stayed gone until somebody remembered to put it back.
+   *
+   * set_item_86 is what this button always meant: it stamps sold_out_until, which the menu
+   * queries surface as outOfStock, place-order refuses at 409, and the counter and storefront
+   * both now render dimmed and unclickable. It defaults to "until we open tomorrow" computed
+   * in the BRANCH's timezone, so the item returns on its own. is_active stays what it is for
+   * — taking a dish off the menu for good.
+   */
   const eightySix = async (itemName: string) => {
     const supabase = supa();
     const { data: row } = await supabase.from('menu_items').select('id').eq('branch_id', branchId).ilike('name', itemName).maybeSingle();
     if (!row) { showToast(`Couldn't find "${itemName}" — may already be 86'd`, null); return; }
-    const { error } = await supabase.rpc('toggle_item_availability', { p_item_id: row.id, p_active: false });
+    const { error } = await supabase.rpc('set_item_86', { p_menu_item_id: row.id, p_sold_out: true });
     if (error) { showToast(`86 failed — ${error.message}`, null); return; }
-    showToast(`86'd ${itemName}`, async () => {
+    showToast(`86'd ${itemName} until tomorrow`, async () => {
       setToast(null);
-      await supabase.rpc('toggle_item_availability', { p_item_id: row.id, p_active: true });
+      await supabase.rpc('set_item_86', { p_menu_item_id: row.id, p_sold_out: false });
     });
   };
 
