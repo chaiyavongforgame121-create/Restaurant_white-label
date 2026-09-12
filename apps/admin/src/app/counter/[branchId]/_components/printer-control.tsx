@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { Printer, PrinterCheck, AlertCircle } from 'lucide-react';
+import { useAlert } from '@favornoms/ui';
 import {
   EscPosBuilder,
   buildReceipt,
@@ -93,6 +94,7 @@ export function usePrinter() {
 export function PrinterStatusButton() {
   const { ready, vendor, pair } = usePrinter();
   const [busy, setBusy] = React.useState(false);
+  const notify = useAlert();
 
   if (!isWebUsbSupported()) {
     return (
@@ -113,7 +115,9 @@ export function PrinterStatusButton() {
       await pair();
     } catch (err) {
       const msg = (err as Error).message;
-      if (msg !== 'webusb_unsupported') alert(`Pairing failed: ${msg}`);
+      if (msg !== 'webusb_unsupported') {
+        await notify({ title: 'Pairing failed', body: msg });
+      }
     } finally {
       setBusy(false);
     }

@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { getBrowserClient } from '@favornoms/database/client';
-import { Button } from '@favornoms/ui';
+import { Button, useConfirm } from '@favornoms/ui';
 
 interface Props {
   withdrawalId: string;
@@ -19,6 +19,7 @@ const RPC_ERRORS: Record<string, string> = {
 
 export function WithdrawalActions({ withdrawalId, amount, driverName, slipAttached }: Props) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [paidReceipt, setPaidReceipt] = React.useState<string | null>(null);
@@ -29,9 +30,12 @@ export function WithdrawalActions({ withdrawalId, amount, driverName, slipAttach
     // Not a hard block: merchants transfer first and screenshot second, and the slip can be
     // filed against a paid payout afterwards.
     const missingSlip = slipAttached ? '' : ' No transfer slip is attached yet.';
-    const confirmed = window.confirm(
-      `Pay $${amount.toFixed(2)} to ${driverName}?${missingSlip} Confirm only after the transfer is sent.`,
-    );
+    const confirmed = await confirm({
+      title: `Pay $${amount.toFixed(2)} to ${driverName}?`,
+      body: `Confirm only after the transfer is sent.${missingSlip}`,
+      confirmLabel: 'Mark as paid',
+      destructive: true,
+    });
     if (!confirmed) return;
     setBusy(true);
     setError(null);

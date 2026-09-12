@@ -9,7 +9,7 @@ import type { MenuCategory, MenuItem } from '@favornoms/shared';
 import { formatCurrency } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
 import { listCategories, listMenuItems } from '@favornoms/database/queries';
-import { Badge, Button, Card, IconButton, Sheet } from '@favornoms/ui';
+import { Badge, Button, Card, IconButton, Sheet, useConfirm } from '@favornoms/ui';
 import { MenuReorder } from './menu-reorder';
 import { ItemModifierEditor, type ItemModifierEditorHandle } from './item-modifier-editor';
 
@@ -80,6 +80,7 @@ export function MenuManager({
   const [mode, setMode] = React.useState<'grid' | 'reorder'>('grid');
   const [notice, setNotice] = React.useState<string | null>(null);
   const [problem, setProblem] = React.useState<string | null>(null);
+  const confirm = useConfirm();
 
   // The confirmation is the only proof a save landed — the card can look identical
   // afterwards — but it should not sit there for the rest of the shift either.
@@ -144,7 +145,16 @@ export function MenuManager({
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this menu item? This cannot be undone.')) return;
+    if (
+      !(await confirm({
+        title: 'Delete this menu item?',
+        body: 'It disappears from the customer menu, and this cannot be undone.',
+        confirmLabel: 'Delete',
+        destructive: true,
+      }))
+    ) {
+      return;
+    }
     const supabase = getBrowserClient();
     const { error } = await supabase.from('menu_items').delete().eq('id', id);
     if (error) {

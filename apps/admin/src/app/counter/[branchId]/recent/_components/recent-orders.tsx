@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { ArrowLeft, RefreshCcw, Undo2 } from 'lucide-react';
 import { formatCurrency } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
-import { Badge, Button, Card } from '@favornoms/ui';
+import { Badge, Button, Card, useAlert, usePrompt } from '@favornoms/ui';
 // The one receipt drawer in the product. It loads the order itself and prints the same
 // 80mm document the till prints after a sale, so the counter reuses it rather than growing
 // a second, drifting copy — /b/[branchId]/orders sits behind backoffice.access, which the
@@ -44,29 +44,43 @@ export function RecentOrders({
 }: Props) {
   const [orders, setOrders] = React.useState(initial);
   const [refundingId, setRefundingId] = React.useState<string | null>(null);
+  const prompt = usePrompt();
+  const notify = useAlert();
 
   const refund = async (order: OrderRow) => {
-    const raw = window.prompt(
-      `Refund order ${order.order_number}. Enter amount in USD (max $${Number(order.total).toFixed(2)}). Leave blank to refund in full.`,
-      String(Number(order.total).toFixed(2)),
-    );
+    const raw = await prompt({
+      title: `Refund order ${order.order_number}`,
+      body: `Enter an amount in USD, up to $${Number(order.total).toFixed(2)}. Leave it blank to refund in full.`,
+      defaultValue: String(Number(order.total).toFixed(2)),
+      confirmLabel: 'Continue',
+    });
     if (raw === null) return;
     const amount = raw.trim() ? Number(raw) : Number(order.total);
     if (!Number.isFinite(amount) || amount <= 0) {
-      window.alert('Invalid amount.');
+      await notify({
+        title: 'Invalid amount',
+        body: 'Enter a number greater than zero, or leave the field blank to refund in full.',
+      });
       return;
     }
-    const reason = window.prompt('Reason (optional)') ?? null;
+    // This is the button that moves the money — the amount step only said "Continue".
+    //
+    // Cancelling here now ABORTS. window.prompt returned null on cancel and the old code
+    // coalesced that to "no reason" and refunded anyway, which was survivable when the
+    // buttons were the browser's; it is not when this dialog's own buttons read Cancel and
+    // Refund. An empty reason is still fine — that is the Refund button with nothing typed.
+    const reason = await prompt({ title: 'Reason (optional)', confirmLabel: 'Refund' });
+    if (reason === null) return;
     setRefundingId(order.id);
     try {
       const supabase = getBrowserClient();
       const { error } = await supabase.rpc('refund_order', {
         p_order_id: order.id,
         p_amount: amount,
-        p_reason: reason,
+        p_reason: reason.trim() || null,
       });
       if (error) {
-        window.alert(`Refund failed: ${error.message}`);
+        await notify({ title: 'Refund failed', body: error.message });
         return;
       }
       setOrders((curr) =>

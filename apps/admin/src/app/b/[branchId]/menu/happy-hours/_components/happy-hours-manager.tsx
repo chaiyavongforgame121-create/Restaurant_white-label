@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
-import { Badge, Button, Card } from '@favornoms/ui';
+import { Badge, Button, Card, useConfirm, usePrompt } from '@favornoms/ui';
 
 interface HappyHour {
   id: string;
@@ -34,6 +34,8 @@ const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export function HappyHoursManager({ branchId, initialHours, menuItems, categories }: Props) {
   const router = useRouter();
+  const confirm = useConfirm();
+  const prompt = usePrompt();
   const [hours, setHours] = React.useState(initialHours);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -50,7 +52,13 @@ export function HappyHoursManager({ branchId, initialHours, menuItems, categorie
   };
 
   const createNew = async () => {
-    const name = window.prompt('Promotion name (e.g. "Happy hour", "Lunch special")');
+    const name = await prompt({
+      title: 'Name this promotion',
+      body: 'For example "Happy hour" or "Lunch special".',
+      placeholder: 'Happy hour',
+      confirmLabel: 'Create',
+      required: true,
+    });
     if (!name) return;
     const supabase = getBrowserClient();
     const { error: insErr } = await supabase.from('happy_hours').insert({
@@ -83,7 +91,16 @@ export function HappyHoursManager({ branchId, initialHours, menuItems, categorie
   };
 
   const remove = async (id: string) => {
-    if (!window.confirm('Delete this happy hour?')) return;
+    if (
+      !(await confirm({
+        title: 'Delete this happy hour?',
+        body: 'The discount stops applying on the customer menu right away.',
+        confirmLabel: 'Delete',
+        destructive: true,
+      }))
+    ) {
+      return;
+    }
     const supabase = getBrowserClient();
     await supabase.from('happy_hours').delete().eq('id', id);
     refetch();

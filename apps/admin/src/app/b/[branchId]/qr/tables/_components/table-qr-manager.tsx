@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { TABLE_TYPES, tableTypeLabel } from '@favornoms/database/queries';
-import { Badge, Button, Card, EmptyState, IconButton } from '@favornoms/ui';
+import { Badge, Button, Card, EmptyState, IconButton, useConfirm } from '@favornoms/ui';
 import { tableMenuLink } from '../../_lib/menu-url';
 
 export interface BranchTable {
@@ -89,6 +89,7 @@ export function TableQrManager({
   // 1024px canvases painted up-front is megabytes of idle bitmap on a floor of tables.
   const [pngTarget, setPngTarget] = React.useState<BranchTable | null>(null);
   const pngCanvasRef = React.useRef<HTMLCanvasElement>(null);
+  const confirm = useConfirm();
 
   const active = list.filter((t) => t.is_active);
   const retired = list.filter((t) => !t.is_active);
@@ -222,11 +223,15 @@ export function TableQrManager({
 
   const rotate = async (t: BranchTable) => {
     if (
-      !confirm(
-        `Issue a new code for ${labelFor(t)}?\n\nEvery printed copy of this table's QR stops working immediately.`,
-      )
-    )
+      !(await confirm({
+        title: `Issue a new code for ${labelFor(t)}?`,
+        body: "Every printed copy of this table's QR stops working immediately.",
+        confirmLabel: 'Issue new code',
+        destructive: true,
+      }))
+    ) {
       return;
+    }
     const supabase = getBrowserClient();
     // Not in the generated types yet — same thin escape the other new RPCs use.
     const { error: rpcErr } = await supabase.rpc('rotate_table_qr_token', {
@@ -241,11 +246,15 @@ export function TableQrManager({
 
   const remove = async (t: BranchTable) => {
     if (
-      !confirm(
-        `Delete ${labelFor(t)}?\n\nIts code is destroyed for good. To retire a table but keep past orders readable, turn it off instead.`,
-      )
-    )
+      !(await confirm({
+        title: `Delete ${labelFor(t)}?`,
+        body: 'Its code is destroyed for good — to retire a table but keep past orders readable, turn it off instead.',
+        confirmLabel: 'Delete',
+        destructive: true,
+      }))
+    ) {
       return;
+    }
     const supabase = getBrowserClient();
     const { error: delErr } = await supabase.from('tables').delete().eq('id', t.id);
     if (delErr) {

@@ -4,7 +4,7 @@ import * as React from 'react';
 import { Gift, Pencil, Plus, Trash2 } from 'lucide-react';
 import { formatCurrency } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
-import { Badge, Button, Card, EmptyState, IconButton } from '@favornoms/ui';
+import { Badge, Button, Card, EmptyState, IconButton, useConfirm } from '@favornoms/ui';
 
 type Kind = 'percent_off' | 'fixed_off' | 'free_item' | 'free_delivery';
 
@@ -58,6 +58,7 @@ export function RewardsManager({
   const [draft, setDraft] = React.useState<Draft | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const confirm = useConfirm();
 
   const set = <K extends keyof Draft>(key: K, v: Draft[K]) =>
     setDraft((d) => (d ? { ...d, [key]: v } : d));
@@ -129,7 +130,16 @@ export function RewardsManager({
   };
 
   const remove = async (r: Reward) => {
-    if (!confirm(`Delete the reward "${r.name}"? Customers will stop seeing it at checkout.`)) return;
+    if (
+      !(await confirm({
+        title: `Delete the reward "${r.name}"?`,
+        body: 'Customers will stop seeing it at checkout.',
+        confirmLabel: 'Delete',
+        destructive: true,
+      }))
+    ) {
+      return;
+    }
     const supabase = getBrowserClient();
     const { data, error: err } = await supabase
       .from('loyalty_rewards')

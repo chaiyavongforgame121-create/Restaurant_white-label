@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { CalendarX, Plus, Trash2 } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
-import { Button, Card, IconButton } from '@favornoms/ui';
+import { Button, Card, IconButton, useConfirm } from '@favornoms/ui';
 
 interface Closure {
   id: string;
@@ -15,6 +15,7 @@ interface Closure {
 
 export function ClosuresManager({ branchId }: { branchId: string }) {
   const router = useRouter();
+  const confirm = useConfirm();
   const [list, setList] = React.useState<Closure[]>([]);
   const [composing, setComposing] = React.useState(false);
   const [startsAt, setStartsAt] = React.useState('');
@@ -55,7 +56,16 @@ export function ClosuresManager({ branchId }: { branchId: string }) {
   };
 
   const remove = async (id: string) => {
-    if (!confirm('Remove this closure?')) return;
+    if (
+      !(await confirm({
+        title: 'Remove this closure?',
+        body: 'Ordering opens again during this period.',
+        confirmLabel: 'Remove',
+        destructive: true,
+      }))
+    ) {
+      return;
+    }
     const supabase = getBrowserClient();
     await supabase.from('branch_closures').delete().eq('id', id);
     await refresh();

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Plus, Trash2 } from 'lucide-react';
 import { formatCurrency } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
-import { Badge, Button, Card } from '@favornoms/ui';
+import { Badge, Button, Card, useConfirm, usePrompt } from '@favornoms/ui';
 
 interface ComboItem {
   menu_item_id: string;
@@ -38,6 +38,8 @@ interface Props {
 
 export function CombosManager({ branchId, initialCombos, menuItems }: Props) {
   const router = useRouter();
+  const confirm = useConfirm();
+  const prompt = usePrompt();
   const [combos, setCombos] = React.useState(initialCombos);
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -56,9 +58,20 @@ export function CombosManager({ branchId, initialCombos, menuItems }: Props) {
   };
 
   const createCombo = async () => {
-    const name = window.prompt('Combo name (e.g. "Burger Combo", "Family Meal")');
+    const name = await prompt({
+      title: 'Name this combo',
+      body: 'Customers see this in the featured combo row above the menu.',
+      placeholder: 'e.g. "Burger Combo", "Family Meal"',
+      confirmLabel: 'Next',
+      required: true,
+    });
     if (!name) return;
-    const priceStr = window.prompt('Total price (USD)', '0');
+    const priceStr = await prompt({
+      title: 'Total price (USD)',
+      body: 'What the customer pays for the whole bundle. You can change it later.',
+      defaultValue: '0',
+      confirmLabel: 'Create combo',
+    });
     if (priceStr === null) return;
     const price = Number(priceStr);
     if (!Number.isFinite(price) || price <= 0) {
@@ -90,7 +103,16 @@ export function CombosManager({ branchId, initialCombos, menuItems }: Props) {
   };
 
   const deleteCombo = async (id: string) => {
-    if (!window.confirm('Delete this combo? Existing orders are not affected.')) return;
+    if (
+      !(await confirm({
+        title: 'Delete this combo?',
+        body: 'Existing orders are not affected.',
+        confirmLabel: 'Delete',
+        destructive: true,
+      }))
+    ) {
+      return;
+    }
     const supabase = getBrowserClient();
     await supabase.from('combo_sets').delete().eq('id', id);
     refetch();
