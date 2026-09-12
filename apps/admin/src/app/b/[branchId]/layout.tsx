@@ -135,7 +135,7 @@ export default async function BranchLayout({ params, children }: Props) {
         logoUrl={mark.logoUrl}
         brandName={mark.brandName}
       />
-      <main className="flex-1 lg:ml-0">
+      <main className="min-w-0 flex-1 lg:ml-0">
         {impersonating && <PlatformAdminBanner branchName={branch.name} />}
         {children}
       </main>

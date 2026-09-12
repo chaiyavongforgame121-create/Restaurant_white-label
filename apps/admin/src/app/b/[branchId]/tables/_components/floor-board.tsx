@@ -17,7 +17,7 @@ import {
   type TableSessionBill,
 } from '@favornoms/database/queries';
 import { useRealtime } from '@favornoms/database/realtime';
-import { Badge, Button, Card, EmptyState, Sheet } from '@favornoms/ui';
+import { Badge, Button, Card, EmptyState, Sheet, usePrompt } from '@favornoms/ui';
 import { buildFloor, floorCounts, groupByZone, type FloorTableState } from './floor-model';
 
 interface Props {
@@ -69,6 +69,7 @@ export function FloorBoard({
   const [bill, setBill] = React.useState<TableSessionBill | null>(null);
   const [billLoading, setBillLoading] = React.useState(false);
   const [settleNote, setSettleNote] = React.useState<string | null>(null);
+  const prompt = usePrompt();
 
   // Re-rendered on a timer so "Seated · 42m" keeps counting without a refetch. A minute is
   // the resolution the label has, so anything faster is only work.
@@ -182,13 +183,16 @@ export function FloorBoard({
     });
   };
 
-  const voidBill = (state: FloorTableState) => {
+  const voidBill = async (state: FloorTableState) => {
     const session = state.session;
     if (!session) return;
-    const note = window.prompt(
-      `Close ${state.label} WITHOUT taking payment?\n\nThe rounds stay on the books as unpaid. Say why:`,
-      'Walk-out',
-    );
+    const note = await prompt({
+      title: `Close ${state.label} without taking payment?`,
+      body: 'The rounds stay on the books as unpaid.',
+      defaultValue: 'Walk-out',
+      placeholder: 'Say why',
+      confirmLabel: 'Close unpaid',
+    });
     if (note === null) return;
     return run(state.table.id, async () => {
       await closeTableSession(getBrowserClient(), session.id, 'voided', note || undefined);

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ChevronDown, ChevronUp, Link2, Plus, Trash2 } from 'lucide-react';
 import { formatCurrency } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
-import { Badge, Button, Card } from '@favornoms/ui';
+import { Badge, Button, Card, useConfirm, usePrompt } from '@favornoms/ui';
 
 interface Option {
   id: string;
@@ -41,6 +41,8 @@ interface Props {
 
 export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) {
   const router = useRouter();
+  const confirm = useConfirm();
+  const prompt = usePrompt();
   const [groups, setGroups] = React.useState(initialGroups);
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -59,7 +61,13 @@ export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) 
   };
 
   const createGroup = async () => {
-    const name = window.prompt('Modifier group name (e.g. "Size", "Add-ons")');
+    const name = await prompt({
+      title: 'Name the modifier group',
+      body: 'This is the heading customers see above the choices, like Size or Add-ons.',
+      placeholder: 'Size',
+      confirmLabel: 'Create group',
+      required: true,
+    });
     if (!name) return;
     const supabase = getBrowserClient();
     const { error: insErr } = await supabase.from('modifier_groups').insert({
@@ -89,7 +97,16 @@ export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) 
   };
 
   const deleteGroup = async (id: string) => {
-    if (!window.confirm('Delete this modifier group and all its options? This affects every menu item linked to it.')) return;
+    if (
+      !(await confirm({
+        title: 'Delete this modifier group?',
+        body: 'Its options go with it, and every menu item linked to the group loses those choices.',
+        confirmLabel: 'Delete',
+        destructive: true,
+      }))
+    ) {
+      return;
+    }
     const supabase = getBrowserClient();
     const { error: delErr } = await supabase.from('modifier_groups').delete().eq('id', id);
     if (delErr) {
@@ -100,9 +117,20 @@ export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) 
   };
 
   const addOption = async (groupId: string) => {
-    const name = window.prompt('Option name (e.g. "Large", "Extra cheese")');
+    const name = await prompt({
+      title: 'Name the option',
+      body: 'One of the choices in this group, like Large or Extra cheese.',
+      placeholder: 'Large',
+      confirmLabel: 'Next',
+      required: true,
+    });
     if (!name) return;
-    const priceStr = window.prompt('Price delta (USD, can be 0 or negative)', '0');
+    const priceStr = await prompt({
+      title: 'Price delta for this option',
+      body: 'Added to the item price in USD. Use 0 for no change, or a negative number to take money off.',
+      defaultValue: '0',
+      confirmLabel: 'Add option',
+    });
     if (priceStr === null) return;
     const price = Number(priceStr);
     if (!Number.isFinite(price)) {
@@ -137,7 +165,16 @@ export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) 
   };
 
   const deleteOption = async (optionId: string) => {
-    if (!window.confirm('Delete this option?')) return;
+    if (
+      !(await confirm({
+        title: 'Delete this option?',
+        body: 'Customers can no longer pick it on any item using this group.',
+        confirmLabel: 'Delete',
+        destructive: true,
+      }))
+    ) {
+      return;
+    }
     const supabase = getBrowserClient();
     const { error: delErr } = await supabase.from('modifier_options').delete().eq('id', optionId);
     if (delErr) {

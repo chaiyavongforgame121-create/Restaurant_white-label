@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { Plus, Tag, Trash2 } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
-import { Badge, Button, Card, EmptyState, IconButton } from '@favornoms/ui';
+import { Badge, Button, Card, EmptyState, IconButton, useConfirm } from '@favornoms/ui';
 
 interface Promo {
   id: string;
@@ -31,6 +31,7 @@ export function PromosManager({ branchId, initialPromos }: { branchId: string; i
   const [endsAt, setEndsAt] = React.useState('');
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const confirm = useConfirm();
 
   const refresh = async () => {
     const supabase = getBrowserClient();
@@ -65,7 +66,16 @@ export function PromosManager({ branchId, initialPromos }: { branchId: string; i
   };
 
   const remove = async (p: Promo) => {
-    if (!confirm(`Delete promo ${p.code}?`)) return;
+    if (
+      !(await confirm({
+        title: `Delete promo ${p.code}?`,
+        body: 'Customers can no longer redeem this code at checkout.',
+        confirmLabel: 'Delete',
+        destructive: true,
+      }))
+    ) {
+      return;
+    }
     const supabase = getBrowserClient();
     await supabase.from('promos').delete().eq('id', p.id);
     void refresh();

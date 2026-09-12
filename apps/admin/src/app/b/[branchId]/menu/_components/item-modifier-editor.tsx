@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { Check, Minus, Plus, Trash2 } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
-import { Button, cn } from '@favornoms/ui';
+import { Button, cn, useConfirm } from '@favornoms/ui';
 
 // Per-item modifier editor — manage this menu item's option groups (Size, Add-ons, …)
 // and their options right inside the item editor. Groups created here are linked to this
@@ -72,6 +72,7 @@ export const ItemModifierEditor = React.forwardRef<
   const [loading, setLoading] = React.useState(!isDraft);
   const [error, setError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
+  const confirm = useConfirm();
   const tmpCounter = React.useRef(0);
   const newTmpId = () => `tmp_${tmpCounter.current++}`;
 
@@ -233,7 +234,16 @@ export const ItemModifierEditor = React.forwardRef<
   };
 
   const removeGroup = async (id: string) => {
-    if (!confirm('Remove this option group from this item?')) return;
+    if (
+      !(await confirm({
+        title: 'Remove this option group?',
+        body: 'It stops showing on this item, and is deleted entirely if no other item uses it.',
+        confirmLabel: 'Remove',
+        destructive: true,
+      }))
+    ) {
+      return;
+    }
     if (isDraft) {
       setGroups((cur) => cur.filter((g) => g.id !== id));
       return;

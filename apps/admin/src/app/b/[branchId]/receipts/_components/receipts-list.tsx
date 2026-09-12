@@ -4,7 +4,7 @@ import * as React from 'react';
 import { Download, FileText, Printer } from 'lucide-react';
 import { formatCurrency } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
-import { Badge, Button, Card } from '@favornoms/ui';
+import { Badge, Button, Card, useAlert } from '@favornoms/ui';
 
 interface ReceiptRow {
   id: string;
@@ -24,6 +24,7 @@ interface Props {
 
 export function ReceiptsList({ branchId, receipts }: Props) {
   const [busyId, setBusyId] = React.useState<string | null>(null);
+  const notify = useAlert();
 
   const openReceipt = async (id: string) => {
     setBusyId(id);
@@ -43,13 +44,19 @@ export function ReceiptsList({ branchId, receipts }: Props) {
         body: JSON.stringify({ tax_invoice_id: id }),
       });
       if (!res.ok) {
-        alert(`Failed to render receipt: ${res.status}`);
+        await notify({
+          title: 'Could not open this receipt',
+          body: `The receipt service returned error ${res.status}. Try again in a moment.`,
+        });
         return;
       }
       const data = await res.json();
       const w = window.open('', '_blank', 'width=520,height=720');
       if (!w) {
-        alert('Pop-up blocked. Allow pop-ups for this site.');
+        await notify({
+          title: 'Pop-up blocked',
+          body: 'Allow pop-ups for this site, then open the receipt again.',
+        });
         return;
       }
       w.document.open();

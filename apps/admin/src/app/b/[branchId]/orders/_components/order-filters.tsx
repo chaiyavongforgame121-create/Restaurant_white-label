@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Bookmark, Search, Trash2, X } from 'lucide-react';
+import { usePrompt } from '@favornoms/ui';
 
 interface Props {
   defaultQ: string;
@@ -71,6 +72,7 @@ export function OrderFilters({
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
+  const prompt = usePrompt();
   const [q, setQ] = React.useState(defaultQ);
   const [savedViews, setSavedViews] = React.useState<SavedView[]>([]);
 
@@ -92,8 +94,14 @@ export function OrderFilters({
     }
   };
 
-  const saveCurrentView = () => {
-    const name = window.prompt('Name this view (e.g. "Today\'s deliveries"):');
+  const saveCurrentView = async () => {
+    const name = await prompt({
+      title: 'Name this view',
+      body: 'The filters set right now are kept on this device, ready to reapply in one click.',
+      placeholder: "Today's deliveries",
+      confirmLabel: 'Save view',
+      required: true,
+    });
     if (!name) return;
     const view: SavedView = {
       id: `view-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
