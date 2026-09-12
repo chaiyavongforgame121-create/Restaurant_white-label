@@ -258,3 +258,36 @@ export function hexOr(value: string | undefined, fallback: string): string {
 export const DEFAULT_THEME_COLOR = '#FF6B35';
 /** Platform dark ground, for the dark-scheme half of the browser chrome. */
 export const DEFAULT_DARK_THEME_COLOR = '#1a0e08';
+
+/**
+ * The names a storefront calls itself, derived once so the six surfaces that show one
+ * cannot disagree.
+ *
+ * They used to be built inline in four places and produced four different answers for the
+ * same restaurant: the manifest said "Coastal Grill — Hamburger", the home-screen label
+ * said "Coastal Grill", the browser tab said "Hamburger · Favornoms" — the platform's brand,
+ * in a white-labelled tenant's tab — and iOS said "Hamburger".
+ *
+ * `||` rather than `??` throughout: an empty-string brand name is as absent as a missing
+ * one, and `??` would let it through and produce " — Hamburger".
+ */
+export function storefrontNames(tenant: ResolvedTenant): {
+  /** What the merchant set under Branding, else the restaurant's own name. */
+  brand: string;
+  /** This branch. */
+  branch: string;
+  /** Brand and branch together, for the install dialog and the share card. */
+  full: string;
+  /** What fits under a home-screen icon. Android and iOS both truncate around a dozen
+   *  characters, and the brand is what the merchant typed and expects to see. */
+  short: string;
+} {
+  const brand = (tenant.theme.brandName || tenant.restaurant.name || '').trim();
+  const branch = (tenant.branch.name || '').trim();
+  return {
+    brand,
+    branch,
+    full: branch && brand ? `${brand} — ${branch}` : brand || branch,
+    short: brand || branch,
+  };
+}

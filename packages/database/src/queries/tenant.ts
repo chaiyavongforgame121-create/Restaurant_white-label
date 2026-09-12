@@ -100,19 +100,24 @@ export async function resolveTenantBySlug(
     // uploaded logo or favicon was stored correctly and then never read,
     // looking to the merchant like the upload had silently failed.
     //
-    // Theme and brandName deliberately do NOT fall back: they already have a
-    // restaurant-level source (restaurants.brand_settings), so overriding them
-    // here would silently restyle a live storefront. The assets have no such
-    // source — that absence is the whole bug.
+    // The THEME still deliberately does not fall back: colours have a restaurant-level
+    // source (restaurants.brand_settings), so overriding them here would silently restyle
+    // a live storefront. The NAME does now, and that is a change from when this comment
+    // was written: migration 20260904132000 made one brand row per restaurant a hard
+    // invariant and removed "New brand" from the admin, so there is no longer a question
+    // of WHICH brand's name would win. Leaving it out meant a merchant renamed their brand
+    // and the install dialog, the home-screen label and the share card all kept saying the
+    // restaurant's original name back at them.
     const { data: defaultBrand } = await supabase
       .from('brands')
-      .select('logo_url, favicon_url, icon_192_url, icon_512_url, icon_maskable_512_url')
+      .select('name, logo_url, favicon_url, icon_192_url, icon_512_url, icon_maskable_512_url')
       .eq('restaurant_id', r.id)
       .order('is_default', { ascending: false })
       .order('created_at', { ascending: true })
       .limit(1);
     const db = defaultBrand?.[0];
     if (db) {
+      brandName = db.name ?? brandName;
       brandLogo = db.logo_url ?? null;
       brandFavicon = db.favicon_url ?? null;
       brandIcon192 = db.icon_192_url ?? null;

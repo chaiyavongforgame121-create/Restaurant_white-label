@@ -127,9 +127,35 @@ export function useApplicationName(): string {
   return name;
 }
 
+/**
+ * The merchant's own app icon, read the same way the name is.
+ *
+ * The install card showed a generic download arrow while the merchant's icon sat in the
+ * very same document as <link rel="apple-touch-icon">. A card offering to install "Coastal
+ * Grill" under a grey arrow does not look like the app it installs, which is the whole of
+ * what the merchant is being asked to trust.
+ */
+export function useApplicationIcon(): string | null {
+  const pathname = usePathname();
+  const [src, setSrc] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    const el =
+      document.querySelector('link[rel="apple-touch-icon"]') ??
+      document.querySelector('link[rel="icon"][sizes="192x192"]');
+    const href = el?.getAttribute('href')?.trim();
+    // A tenant with no upload falls back to the platform icon in the root layout, and the
+    // glyph is a better answer than the platform's mark on a merchant's card.
+    setSrc(href && !href.startsWith('/icon') && !href.startsWith('/apple-touch') ? href : null);
+  }, [pathname]);
+
+  return src;
+}
+
 export function InstallPrompt() {
   const { canInstall, isIosSafari, isStandalone, install } = useInstallAvailability();
   const appName = useApplicationName();
+  const appIcon = useApplicationIcon();
   const pathname = usePathname();
   const [visible, setVisible] = React.useState(false);
   const [dismissed, setDismissed] = React.useState(false);
@@ -203,9 +229,21 @@ export function InstallPrompt() {
             <X className="h-4 w-4" />
           </button>
           <div className="flex items-start gap-3 pr-7">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-warm text-white">
-              <Download className="h-5 w-5" />
-            </span>
+            {appIcon ? (
+              // eslint-disable-next-line @next/next/no-img-element -- the href comes from the
+              // document's own icon link, which next/image cannot be configured for per tenant.
+              <img
+                src={appIcon}
+                alt=""
+                width={40}
+                height={40}
+                className="h-10 w-10 shrink-0 rounded-xl object-cover"
+              />
+            ) : (
+              <span className="bg-primary grid h-10 w-10 shrink-0 place-items-center rounded-xl text-primary-foreground">
+                <Download className="h-5 w-5" />
+              </span>
+            )}
             <div className="flex-1">
               <p className="font-display text-sm font-semibold">Install {appName}</p>
               {isIosSafari && !canInstall ? (

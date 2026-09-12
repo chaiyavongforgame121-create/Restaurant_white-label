@@ -7,7 +7,10 @@ interface Props {
   params: Promise<{ restaurant: string; branch: string; orderNumber: string }>;
 }
 
-export const metadata = { title: 'Receipt · Favornoms' };
+// Plain 'Receipt', with `absolute` so the root layout's '%s · Favornoms' template does not
+// put the platform's brand on a white-labelled restaurant's receipt. The restaurant names
+// itself inside the document.
+export const metadata = { title: { absolute: 'Receipt' } };
 
 export default async function CustomerReceiptPage({ params }: Props) {
   const { restaurant, branch, orderNumber } = await params;

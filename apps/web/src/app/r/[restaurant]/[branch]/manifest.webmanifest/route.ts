@@ -6,6 +6,7 @@ import {
   hostOf,
   resolveStorefrontVersion,
   resolveTenantOptional,
+  storefrontNames,
 } from '@/lib/tenant';
 
 interface Props {
@@ -75,7 +76,9 @@ export async function GET(request: Request, { params }: Props) {
   // this one (brooklyn / brooklyn-north) falls inside this scope — a containment quirk in the
   // window, not an identity one, because `id` below still keeps the two apps apart.
   const scope = base || '/';
-  const name = tenant.theme.brandName ?? tenant.restaurant.name;
+  // Same source as the tab, the apple title and the share card — they were four separate
+  // expressions producing four different answers for one restaurant.
+  const names = storefrontNames(tenant);
 
   const manifest = {
     // Identity is the branch, not the URL it currently sits at. `id` is resolved as a URL
@@ -85,9 +88,12 @@ export async function GET(request: Request, { params }: Props) {
     // installed on the old shared "/" identity keeps that one for good, which is what the
     // notice on the platform landing page exists to tell them.
     id: `/?app=${tenant.branch.id}`,
-    name: `${name} — ${tenant.branch.name}`,
-    short_name: name,
-    description: `Order from ${name} — ${tenant.branch.name}`,
+    name: names.full,
+    // What Android prints under the home-screen icon, and what appleWebApp.title says on
+    // iOS. Both truncate around a dozen characters, so it is the brand the merchant typed
+    // rather than brand-and-branch, which would be cut off mid-word on either platform.
+    short_name: names.short,
+    description: `Order from ${names.full}`,
     // Where the home-screen icon lands. "/" is the marketing page on every host that is not
     // this merchant's own — the single most visible half of the bug.
     start_url: scope,

@@ -2,7 +2,11 @@
 
 import * as React from 'react';
 import { Download, Share } from 'lucide-react';
-import { useApplicationName, useInstallAvailability } from './install-prompt';
+import {
+  useApplicationIcon,
+  useApplicationName,
+  useInstallAvailability,
+} from './install-prompt';
 
 /**
  * Explicit "Install app" entry point for the Account menu — the always-there
@@ -16,6 +20,7 @@ import { useApplicationName, useInstallAvailability } from './install-prompt';
 export function InstallAppButton() {
   const { canInstall, isIosSafari, isStandalone, install } = useInstallAvailability();
   const appName = useApplicationName();
+  const appIcon = useApplicationIcon();
   const [hintOpen, setHintOpen] = React.useState(false);
 
   // Nothing to offer: already installed, or a browser with no install path.
@@ -37,9 +42,22 @@ export function InstallAppButton() {
         aria-expanded={canInstall ? undefined : hintOpen}
         className="focus-ring flex w-full items-center gap-3 rounded-2xl border border-border/60 bg-card p-4 text-left transition-shadow hover:shadow-soft"
       >
-        <div className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary">
-          <Download className="h-5 w-5" />
-        </div>
+        {/* The merchant's own icon, so the row looks like the app it installs. */}
+        {appIcon ? (
+          // eslint-disable-next-line @next/next/no-img-element -- the href comes from the
+          // document's own icon link, which next/image cannot be configured for per tenant.
+          <img
+            src={appIcon}
+            alt=""
+            width={40}
+            height={40}
+            className="h-10 w-10 shrink-0 rounded-xl object-cover"
+          />
+        ) : (
+          <div className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary">
+            <Download className="h-5 w-5" />
+          </div>
+        )}
         <div className="flex-1">
           <p className="font-semibold">Install {appName}</p>
           <p className="text-xs text-muted-foreground">
