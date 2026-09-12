@@ -25,7 +25,11 @@ export function SectionFrame({
   children: React.ReactNode;
 }) {
   return (
-    <section id={id} className="mt-10 scroll-mt-24">
+    // scroll-mt clears the toolbar pinned at the top of the reports page: without it a tab
+    // click parked the section heading behind the bar and the merchant landed on a headless
+    // table. The mobile figure is the tall case, where a custom range's two date fields wrap
+    // the picker onto a second row.
+    <section id={id} className="mt-10 scroll-mt-36 lg:scroll-mt-28">
       <header className="mb-3 flex items-start gap-3">
         <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
           {icon}

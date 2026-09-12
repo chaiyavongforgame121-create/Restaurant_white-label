@@ -12,6 +12,7 @@ import { useDriverSession } from '@/components/driver-session';
 import { DriverInstallRow } from '@/components/install-app-button';
 import { listDriverDocuments } from './document-storage';
 import { documentsStage, documentsSummary, type DocFile, type DocsStage } from './documents';
+import { formatPhone } from '@favornoms/shared';
 
 /** The hero pill used to print the raw enum ("0.0 · pending"), which is a column name,
  *  not a status a rider can act on. */
@@ -90,7 +91,7 @@ export function ProfileView() {
                 .join('')}
             </div>
             <div>
-              <p className="text-sm text-white/80">{driver.phone}</p>
+              <p className="text-sm text-white/80">{formatPhone(driver.phone)}</p>
               <h1 className="font-display text-2xl font-bold">{driver.full_name}</h1>
               <Badge variant="solid" className="mt-1 bg-white/25 text-white">
                 <Star className="h-3 w-3 fill-current" /> {(driver.average_rating ?? 0).toFixed(1)} ·{' '}

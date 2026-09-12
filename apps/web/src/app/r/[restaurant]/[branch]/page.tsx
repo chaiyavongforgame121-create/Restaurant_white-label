@@ -190,6 +190,10 @@ export default async function MenuPage({ params, searchParams }: Props) {
         canDeliver={status.delivery}
         deliveryClosedNow={status.delivery_entitled && !status.delivery_available}
         deliveryWindowsToday={todaysDeliveryWindows(status)}
+        // The scan is being seated by <TableScanPin> above, which may be bouncing the diner
+        // through sign-in. Until that lands there is no pin, and without this the gate would
+        // open over somebody who is demonstrably sitting at a table.
+        seatingFromScan={scannedHere !== null}
         menuLayout={tenant.storefront.menuLayout}
         menuCardStyle={tenant.storefront.menuCardStyle}
         heroUrl={tenant.storefront.heroUrl}

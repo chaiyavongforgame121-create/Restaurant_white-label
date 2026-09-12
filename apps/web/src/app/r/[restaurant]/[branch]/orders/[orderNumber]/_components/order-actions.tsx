@@ -25,6 +25,13 @@ interface Props {
    * never re-ask someone who has already rated.
    */
   existingRating: ExistingRating | null | undefined;
+  /**
+   * Whether the table sitting this order belongs to has been settled at the counter.
+   * `null` means the order belongs to no sitting — every channel but a scanned table, and
+   * the dine-in orders rung up at the till, which carry no session_id. `undefined` means
+   * "not looked up yet"; like `existingRating` it keeps the modal shut until we know.
+   */
+  sessionSettled: boolean | null | undefined;
   hasDriver: boolean;
   /** The rider being rated. order_ratings.driver_id was never set by this component, so
    *  every star the customer gave attached to nobody and no rider average could move. */
@@ -74,6 +81,7 @@ export function OrderActions({
   branchId,
   orderStatus,
   existingRating,
+  sessionSettled,
   hasDriver,
   driverId = null,
   awaitingPayment = false,
@@ -128,7 +136,13 @@ export function OrderActions({
   // when they come back.
   const needsDriver = hasDriver && storedRating?.delivery_stars == null;
   const needsFood = storedRating?.food_stars == null;
-  const canRate = RATEABLE_STATUSES.includes(orderStatus) && (needsDriver || needsFood);
+  // A round is bumped the moment its food leaves the pass, so for a table sitting
+  // `completed` arrives between courses while the party is still ordering — and this modal
+  // cannot be dismissed. Their meal ends when the counter settles the bill, which closes
+  // the sitting as paid; until then a round that belongs to one is not rateable.
+  const sessionRateable = sessionSettled === null || sessionSettled === true;
+  const canRate =
+    RATEABLE_STATUSES.includes(orderStatus) && sessionRateable && (needsDriver || needsFood);
   const ratingModalOpen = canRate && ratingChecked && !skipped;
 
   // Start on whichever half is outstanding; the rider always goes first when both are.

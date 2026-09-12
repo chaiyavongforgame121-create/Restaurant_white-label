@@ -47,21 +47,52 @@ export function ReportsView({
   const results = Object.values(sections);
   const allFailed = results.every((r) => r.data === null);
 
-  // The header renders in every state on purpose: when the fetch failed it used to
-  // disappear too, leaving the merchant with nothing to click — not even a different range.
-  const header = (
-    <header className="mb-4 flex flex-wrap items-end justify-between gap-3 px-2 pl-16 lg:px-0">
+  const title = (
+    <header className="mb-3 flex flex-wrap items-end justify-between gap-3 px-2 pl-16 lg:px-0">
       <div>
         <h1 className="font-display text-3xl font-bold">Reports</h1>
         <p className="mt-1 text-muted-foreground">
           {reportRangeLabel(range)} · {range.from} to {range.to} ({timezone})
         </p>
       </div>
-      <div className="flex flex-wrap items-center gap-3">
-        <ExportButtons branchId={branchId} range={range} />
+      {/* Export stays out of the pinned bar below: seven buttons wrap to three rows on a
+          phone, which would spend a third of the screen on something clicked once. */}
+      <ExportButtons branchId={branchId} range={range} />
+    </header>
+  );
+
+  // The owner reads six sections in one scroll, and the controls used to scroll away with
+  // the title: changing the range or jumping to Payments meant going back to the top. The
+  // bar renders in the failed state too, because a merchant staring at an error still needs
+  // a way to ask for a different range.
+  //
+  // The negative margins cancel `container`'s padding so the bar's own background hides the
+  // cards passing underneath; the padding restores it, plus the `px-2` the title carries so
+  // the picker stays aligned with the export buttons. z-20 keeps it under the fixed
+  // hamburger (z-30), which has to stay clickable, and `pl-16` is that same hamburger —
+  // without it the controls pin themselves underneath it on a phone.
+  const toolbar = (withTabs: boolean) => (
+    <div className="sticky top-0 z-20 -mx-4 mb-4 border-b border-border bg-background/95 px-6 py-2 backdrop-blur sm:-mx-6 sm:px-8 lg:-mx-8 lg:px-8">
+      <div className="flex flex-wrap items-center justify-end gap-3 pl-16 lg:pl-0">
         <RangePicker range={range} today={today} />
       </div>
-    </header>
+      {withTabs && (
+        // overflow-x-auto belongs on the nav and never on the sticky wrapper: it resolves
+        // overflow-y to auto as well, which would turn the bar into a scroll container and
+        // clip the range picker's pills.
+        <nav aria-label="Report sections" className="mt-2 flex gap-1 overflow-x-auto pl-16 lg:pl-0">
+          {ANCHORS.map((a) => (
+            <a
+              key={a.id}
+              href={`#${a.id}`}
+              className="focus-ring whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              {a.label}
+            </a>
+          ))}
+        </nav>
+      )}
+    </div>
   );
 
   if (allFailed) {
@@ -70,7 +101,8 @@ export function ReportsView({
     const first = results.find((r) => r.error)?.error;
     return (
       <div className="container max-w-6xl py-8">
-        {header}
+        {title}
+        {toolbar(false)}
         <Card className="p-6" role="alert">
           <h2 className="flex items-center gap-2 font-display text-lg font-semibold text-danger">
             <AlertTriangle className="h-5 w-5" /> Reports could not be loaded
@@ -100,7 +132,8 @@ export function ReportsView({
   if (orders && orders.totals.orders === 0) {
     return (
       <div className="container max-w-6xl py-8">
-        {header}
+        {title}
+        {toolbar(false)}
         <Card className="p-6 text-center">
           <h2 className="font-display text-lg font-semibold">
             No orders between {range.from} and {range.to}
@@ -116,22 +149,8 @@ export function ReportsView({
 
   return (
     <div className="container max-w-6xl py-8">
-      {header}
-
-      <nav
-        aria-label="Report sections"
-        className="sticky top-0 z-10 -mx-2 mb-2 flex gap-1 overflow-x-auto border-b border-border bg-background/95 px-2 py-2 backdrop-blur lg:mx-0 lg:px-0"
-      >
-        {ANCHORS.map((a) => (
-          <a
-            key={a.id}
-            href={`#${a.id}`}
-            className="focus-ring whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            {a.label}
-          </a>
-        ))}
-      </nav>
+      {title}
+      {toolbar(true)}
 
       <SectionSales result={sections.sales} currency={currency} />
       <SectionOrders result={sections.orders} currency={currency} timezone={timezone} />

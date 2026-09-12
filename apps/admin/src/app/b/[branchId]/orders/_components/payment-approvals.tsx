@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Check, QrCode, X } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Button, Card } from '@favornoms/ui';
+import { formatPhone } from '@favornoms/shared';
 
 export interface PendingTransfer {
   payment_id: string;
@@ -109,7 +110,7 @@ export function PaymentApprovals({
                     ${Number(p.amount).toFixed(2)} · {p.customer_name ?? 'Customer'}
                   </p>
                   {p.customer_phone && (
-                    <p className="text-sm text-muted-foreground">{p.customer_phone}</p>
+                    <p className="text-sm text-muted-foreground">{formatPhone(p.customer_phone)}</p>
                   )}
                   {p.submitted_at && (
                     <p className="mt-0.5 text-xs text-muted-foreground">

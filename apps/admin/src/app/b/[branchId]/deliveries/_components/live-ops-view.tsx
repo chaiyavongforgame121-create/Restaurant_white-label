@@ -19,7 +19,7 @@ import {
   type BranchRider,
   type LiveDelivery,
 } from '@favornoms/database/queries';
-import { formatUSPhone } from '@favornoms/shared';
+import { formatPhone } from '@favornoms/shared';
 import { Badge, Button, Card, EmptyState } from '@favornoms/ui';
 import { AssignRiderSheet } from './assign-rider-sheet';
 import {
@@ -313,7 +313,7 @@ function DeliveryCard({
           onClick={(e) => e.stopPropagation()}
           className="focus-ring mt-0.5 inline-flex items-center gap-1 text-xs text-primary hover:underline"
         >
-          <Phone className="h-3 w-3" /> {formatUSPhone(order.customer_phone)}
+          <Phone className="h-3 w-3" /> {formatPhone(order.customer_phone)}
         </a>
       )}
 

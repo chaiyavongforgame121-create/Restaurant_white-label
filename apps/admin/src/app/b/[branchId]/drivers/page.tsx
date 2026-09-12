@@ -1,3 +1,4 @@
+import { formatPhone } from '@favornoms/shared';
 import { Badge, Card } from '@favornoms/ui';
 import { getBranchAccess } from '@/lib/capabilities';
 import { AccessDenied } from '@/components/access-denied';
@@ -175,7 +176,7 @@ export default async function DriversPage({ params }: Props) {
                         {d?.full_name ?? 'Unknown driver'}
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        {d?.phone} · {d?.vehicle_type} {d?.vehicle_plate ?? ''}
+                        {d?.phone ? formatPhone(d.phone) : ''} · {d?.vehicle_type} {d?.vehicle_plate ?? ''}
                       </p>
                       <div className="mt-1.5 flex flex-wrap items-center gap-2">
                         <Badge variant={d?.kyc_status === 'verified' ? 'success' : 'warning'}>

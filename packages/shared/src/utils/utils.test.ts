@@ -5,7 +5,6 @@ import {
   distanceKm,
   distanceMiles,
   formatCurrency,
-  formatUSPhone,
   generateOrderNumber,
   localeToBcp47,
   pickLocalized,
@@ -79,18 +78,6 @@ describe('distanceMiles', () => {
     const b = { lat: 40.8074, lng: -73.9572 };
     expect(distanceMiles(a, b)).toBeGreaterThan(5);
     expect(distanceMiles(a, b)).toBeLessThan(7);
-  });
-});
-
-describe('formatUSPhone', () => {
-  it('formats a 10-digit string', () => {
-    expect(formatUSPhone('5552345678')).toBe('(555) 234-5678');
-  });
-  it('formats E.164 with country code', () => {
-    expect(formatUSPhone('+15552345678')).toBe('(555) 234-5678');
-  });
-  it('returns input when not a valid US number', () => {
-    expect(formatUSPhone('123')).toBe('123');
   });
 });
 

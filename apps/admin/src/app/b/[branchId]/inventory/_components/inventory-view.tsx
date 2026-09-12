@@ -54,11 +54,18 @@ interface Props {
 
 const WASTE_REASONS = ['expired', 'spoiled', 'spilled', 'damaged', 'staff_meal', 'other'];
 
+/** low_stock_threshold is `integer NOT NULL default 5`; the default is mirrored here. */
+const DEFAULT_LOW_STOCK_THRESHOLD = 5;
+
 export function InventoryView({ branchId, items, lowStock, restocks, waste }: Props) {
   const router = useRouter();
   const [restockOpen, setRestockOpen] = React.useState<MenuItem | null>(null);
   const [wasteOpen, setWasteOpen] = React.useState<MenuItem | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [notice, setNotice] = React.useState<string | null>(null);
+  const [savingIds, setSavingIds] = React.useState<string[]>([]);
+  const [pendingTracking, setPendingTracking] = React.useState<Record<string, boolean>>({});
+  const errorRef = React.useRef<HTMLDivElement | null>(null);
 
   const trackable = items.filter((i) => i.track_stock);
   const total = trackable.length;
@@ -66,20 +73,83 @@ export function InventoryView({ branchId, items, lowStock, restocks, waste }: Pr
 
   const itemById = React.useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
 
+  // The banner sits above a table that runs for pages on a real menu, so the merchant who
+  // clicked a checkbox near the bottom had already scrolled past the only place the
+  // rejection was reported — which is most of why this read as a dead control.
+  React.useEffect(() => {
+    if (error) errorRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [error]);
+
+  // Turning tracking off only shows up in the row as an em dash, so the confirmation is
+  // what tells the merchant the count was cleared. It should not sit there all shift.
+  React.useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(null), 6000);
+    return () => clearTimeout(timer);
+  }, [notice]);
+
+  // The checkbox is bound straight to the server row and router.refresh() is a round-trip,
+  // so between the click and the repaint the box would show the old value again — the same
+  // flicker the failing write produced. Hold the merchant's choice until the refreshed row
+  // agrees with it, or the item is gone.
+  React.useEffect(() => {
+    setPendingTracking((cur) => {
+      const next: Record<string, boolean> = {};
+      for (const [id, on] of Object.entries(cur)) {
+        const row = itemById.get(id);
+        if (row && row.track_stock !== on) next[id] = on;
+      }
+      return Object.keys(next).length === Object.keys(cur).length ? cur : next;
+    });
+  }, [itemById]);
+
   const toggleTracking = async (item: MenuItem, on: boolean) => {
+    const quantity = on ? (item.stock_quantity ?? 0) : null;
+    setSavingIds((cur) => [...cur, item.id]);
+    setPendingTracking((cur) => ({ ...cur, [item.id]: on }));
     const supabase = getBrowserClient();
-    const { error: upErr } = await supabase
+    const { data, error: upErr } = await supabase
       .from('menu_items')
       .update({
         track_stock: on,
-        stock_quantity: on ? (item.stock_quantity ?? 0) : null,
-        low_stock_threshold: on ? (item.low_stock_threshold ?? 5) : null,
+        stock_quantity: quantity,
+        // low_stock_threshold is NOT NULL. Unticking used to send null here, Postgres threw
+        // 23502 and rolled the whole statement back, so track_stock never changed and the
+        // box snapped straight back: tracking could be turned on but never off. Keep the
+        // merchant's own threshold so re-ticking restores the number they chose.
+        low_stock_threshold: item.low_stock_threshold ?? DEFAULT_LOW_STOCK_THRESHOLD,
       })
-      .eq('id', item.id);
-    if (upErr) {
-      setError(upErr.message);
+      .eq('id', item.id)
+      // An update that matches no row — the item was deleted, or RLS refused the write —
+      // comes back 204 with no error, which is indistinguishable from a save that worked.
+      .select('id')
+      .maybeSingle();
+    setSavingIds((cur) => cur.filter((id) => id !== item.id));
+    if (upErr || !data) {
+      setPendingTracking((cur) => {
+        const next = { ...cur };
+        delete next[item.id];
+        return next;
+      });
+      setNotice(null);
+      setError(
+        upErr
+          ? `Could not change stock tracking for “${item.name}”: ${upErr.message}`
+          : `Nothing was saved for “${item.name}”. It may have been deleted, or your role ` +
+            `may not be allowed to edit the menu at this branch.`,
+      );
       return;
     }
+    setError(null);
+    setNotice(
+      !on
+        ? `Stock tracking is off for “${item.name}” — the storefront will no longer mark it ` +
+          `sold out, and its count is cleared, so ticking the box again starts it at 0.`
+        : (quantity ?? 0) > 0
+          ? `Tracking stock for “${item.name}” — ${quantity} left.`
+          : `Tracking stock for “${item.name}”, but it has 0 left, so customers see it as sold ` +
+            `out right away. Log a restock to put it back on sale.`,
+    );
     router.refresh();
   };
 
@@ -99,7 +169,11 @@ export function InventoryView({ branchId, items, lowStock, restocks, waste }: Pr
       </header>
 
       {error && (
-        <div className="mb-4 rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</div>
+        <div ref={errorRef} role="alert" className="mb-4 rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</div>
+      )}
+
+      {notice && (
+        <div role="status" className="mb-4 rounded-xl bg-success/10 px-4 py-3 text-sm text-success">{notice}</div>
       )}
 
       {lowCount > 0 && (
@@ -168,16 +242,17 @@ export function InventoryView({ branchId, items, lowStock, restocks, waste }: Pr
                 <td className="px-5 py-3 text-center">
                   <input
                     type="checkbox"
-                    checked={it.track_stock}
+                    checked={pendingTracking[it.id] ?? it.track_stock}
+                    disabled={savingIds.includes(it.id)}
                     onChange={(e) => toggleTracking(it, e.target.checked)}
-                    className="h-4 w-4 accent-primary"
+                    className="h-4 w-4 accent-primary disabled:opacity-50"
                   />
                 </td>
                 <td className="px-5 py-3 text-right tabular-nums">
                   {it.track_stock ? (it.stock_quantity ?? 0) : '—'}
                 </td>
                 <td className="px-5 py-3 text-right tabular-nums text-muted-foreground">
-                  {it.track_stock ? (it.low_stock_threshold ?? 5) : '—'}
+                  {it.track_stock ? (it.low_stock_threshold ?? DEFAULT_LOW_STOCK_THRESHOLD) : '—'}
                 </td>
                 <td className="px-5 py-3 text-right">
                   {it.track_stock && (

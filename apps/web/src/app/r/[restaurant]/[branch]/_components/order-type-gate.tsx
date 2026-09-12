@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ShoppingBag, Store } from 'lucide-react';
+import { ShoppingBag } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { cn, RiderIcon } from '@favornoms/ui';
 import { useCart, type OrderChannel } from '@/store/cart';
@@ -19,12 +19,27 @@ interface Props {
   deliveryClosedNow?: boolean;
   /** Today's delivery windows, 'HH:MM' local, for that explanation. */
   deliveryWindowsToday?: Array<{ opens_at: string; closes_at: string }>;
+  /**
+   * A table token in the URL resolved to a table at THIS branch, so a scan is being
+   * seated right now.
+   *
+   * The pin is not enough on its own: joining a sitting needs a signed-in account, so a
+   * diner who scans while signed out is bounced to sign-in and has no pin for the whole
+   * round trip. Without this the gate opens over them and offers Delivery and Pickup to
+   * somebody sitting at table 1 — which, since dine-in stopped being a choice, is a
+   * question with no right answer on it.
+   */
+  seatingFromScan?: boolean;
 }
 
 /**
- * Blocking order-type picker. Delivery, pickup and dine-in change the price, the
- * fields the diner has to fill in and where the food ends up, so the storefront
- * makes the diner say which one before anything can go in the cart.
+ * Blocking order-type picker. Delivery and pickup change the price, the fields
+ * the diner has to fill in and where the food ends up, so the storefront makes
+ * the diner say which one before anything can go in the cart.
+ *
+ * Dine-in is not on offer here: it is not a claim a phone can make. It comes from
+ * scanning the QR on a table, which proves an open sitting for the round to land
+ * on — a diner who merely says "dine-in" has none, and place-order refuses them.
  *
  * Mounted on all three ordering surfaces (menu, cart, checkout) rather than in
  * the layout — the layout also wraps order tracking, receipts and account pages,
@@ -39,6 +54,7 @@ export function OrderTypeGate({
   canDeliver = false,
   deliveryClosedNow = false,
   deliveryWindowsToday = [],
+  seatingFromScan = false,
 }: Props) {
   const t = useTranslations();
 
@@ -66,16 +82,23 @@ export function OrderTypeGate({
   // is what stops the gate flashing up for the frame before the pin has been read.
   const { table: pinnedTable, ready: pinReady } = useTablePin();
 
+  // A scan that has not become a pin yet counts as seated for both decisions below:
+  // the diner is demonstrably at a table, whatever the sign-in round trip is doing.
+  const seated = pinnedTable !== null || seatingFromScan;
+
   // Only after hydration: before it the store still holds initializer defaults,
   // and rehydration would merge the persisted values straight back over any
-  // decision made here.
+  // decision made here. And only once the pin is settled — `ready` is false while
+  // the provider is still checking a stored sitting with the server, and a `false`
+  // for `hasTablePin` during that window would clear a seated diner's dine_in,
+  // leaving checkout's submit button dead with nothing on screen to explain it.
   React.useEffect(() => {
-    if (!hydrated) return;
-    resolveChannel(canDeliver, branchId);
-  }, [hydrated, canDeliver, branchId, resolveChannel]);
+    if (!hydrated || !pinReady) return;
+    resolveChannel(canDeliver, branchId, seated);
+  }, [hydrated, pinReady, seated, canDeliver, branchId, resolveChannel]);
 
   const open =
-    hydrated && pinReady && !pinnedTable && (channel === null || channelBranchId !== branchId);
+    hydrated && pinReady && !seated && (channel === null || channelBranchId !== branchId);
 
   // Nothing behind the overlay should scroll while the gate is up.
   React.useEffect(() => {
@@ -146,12 +169,6 @@ export function OrderTypeGate({
       label: t('channel.pickup'),
       hint: t('orderType.pickupHint'),
       icon: <ShoppingBag className="h-6 w-6" />,
-    },
-    {
-      value: 'dine_in',
-      label: t('channel.dineIn'),
-      hint: t('orderType.dineInHint'),
-      icon: <Store className="h-6 w-6" />,
     },
   ];
 
@@ -224,8 +241,8 @@ export function OrderTypeGate({
                     {deliveryWindowsToday.length > 0
                       ? `Today we deliver ${deliveryWindowsToday
                           .map((w) => `${w.opens_at}–${w.closes_at}`)
-                          .join(' and ')}. Pickup and dine-in are open now.`
-                      : 'No delivery today. Pickup and dine-in are open now.'}
+                          .join(' and ')}. Pickup is open now.`
+                      : 'No delivery today. Pickup is open now.'}
                   </p>
                 </div>
               )}

@@ -83,7 +83,7 @@ export interface MenuItem {
   /** When happy hour applies, `price` is the discounted price and `listPrice` is the original. */
   listPrice?: number;
   saleLabel?: string;
-  /** True when stock tracking is on and the branch has none left — sold out on the storefront. */
+  /** True when the stock counter has run out, or the branch has 86'd the item by hand. */
   outOfStock?: boolean;
 }
 

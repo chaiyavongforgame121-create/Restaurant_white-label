@@ -136,8 +136,8 @@ const SYNTHETIC_CUSTOMER_EMAIL_SUFFIX = '@customer.favornoms.local';
 // `dropoff_other_required` contains `dropoff_required` as a substring.
 const ORDER_ERRORS: Array<[string, string]> = [
   ['billing_inactive', 'This restaurant is not taking online orders right now. Please try again later.'],
-  ['feature_not_entitled:delivery', 'This restaurant is not offering delivery right now. Please choose pickup or dine-in.'],
-  ['delivery_not_entitled', 'This restaurant is not offering delivery right now. Please choose pickup or dine-in.'],
+  ['feature_not_entitled:delivery', 'This restaurant is not offering delivery right now. Please choose pickup instead.'],
+  ['delivery_not_entitled', 'This restaurant is not offering delivery right now. Please choose pickup instead.'],
   ['feature_not_entitled:card_payment', 'Card payment is not available here right now. Please pay with cash.'],
   // Must precede `branch_closed` — it contains it as a substring, and the
   // generic "currently closed" line is wrong here: the restaurant may well be
@@ -170,8 +170,10 @@ const ORDER_ERRORS: Array<[string, string]> = [
   ['not_at_this_table', 'Scan the code on your table again to join its bill.'],
   ['table_not_in_branch', "That table isn't at this restaurant. Scan the code on your own table."],
   ['sign_in_required', 'Please sign in again to order at your table.'],
-  ['table_required', 'Please enter your table number.'],
-  ['invalid_channel', 'Please choose delivery, pickup or dine-in and try again.'],
+  // There is no table field to send them back to any more — the order reached the server
+  // without a table because the pin was gone by the time they pressed the button.
+  ['table_required', 'Scan the code on your table to start your order.'],
+  ['invalid_channel', 'Please choose delivery or pickup and try again.'],
   // Wire code is still `google_link_required` (other surfaces match on it), but the
   // rule is "prove who you are", and a verified email proves it just as well as
   // Google. Copy mirrors `checkout.loyalty.verifyRequired` in messages/en.json.
@@ -278,7 +280,6 @@ export function CheckoutView({
   const [phone, setPhone] = React.useState('');
   const [email, setEmail] = React.useState('');
   const [address, setAddress] = React.useState('');
-  const [dineInTable, setDineInTable] = React.useState('');
   const [savedAddresses, setSavedAddresses] = React.useState<SavedAddress[]>([]);
   const [selectedAddressId, setSelectedAddressId] = React.useState<string | 'new' | null>(null);
   const [addressCoords, setAddressCoords] = React.useState<{ lat: number; lng: number } | null>(null);
@@ -339,7 +340,6 @@ export function CheckoutView({
   const emailRef = React.useRef<HTMLInputElement | null>(null);
   const addressSectionRef = React.useRef<HTMLDivElement | null>(null);
   const dropoffSectionRef = React.useRef<HTMLDivElement | null>(null);
-  const tableRef = React.useRef<HTMLInputElement | null>(null);
   const scheduleSectionRef = React.useRef<HTMLDivElement | null>(null);
   const clearFieldError = (key: string) =>
     setFieldErrors((cur) => {
@@ -956,8 +956,6 @@ export function CheckoutView({
       else if (dropoffPref === 'other' && !dropoffOther.trim())
         errs.dropoff = 'Please describe the drop-off spot.';
     }
-    if (channel === 'dine_in' && !atTable && !dineInTable.trim())
-      errs.table = t('checkout.errors.tableRequired');
     if (Object.keys(errs).length > 0) {
       setFieldErrors(errs);
       const firstEl = errs.schedule
@@ -972,9 +970,7 @@ export function CheckoutView({
                 ? addressSectionRef.current
                 : errs.dropoff
                   ? dropoffSectionRef.current
-                  : errs.table
-                    ? tableRef.current
-                    : null;
+                  : null;
       firstEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       if (firstEl && firstEl instanceof HTMLInputElement) firstEl.focus({ preventScroll: true });
       return;
@@ -1022,13 +1018,12 @@ export function CheckoutView({
         channel,
         customer_name: name,
         customer_phone: phone,
-        customer_notes:
-          channel === 'dine_in' && (atTable || dineInTable.trim())
-            ? `${atTable ? pinnedTable!.label : `Table ${dineInTable.trim()}`}${notes ? ` — ${notes}` : ''}`
-            : notes || undefined,
+        customer_notes: atTable
+          ? `${pinnedTable!.label}${notes ? ` — ${notes}` : ''}`
+          : notes || undefined,
         // A scanned table is already a row id, so place-order stores the FK instead of
-        // string-matching a number the diner typed. The number rides along as the
-        // fallback for the hand-typed path.
+        // string-matching a number. Dine-in only ever comes from a scan now, so there is
+        // no typed number to fall back to.
         table_id: atTable ? pinnedTable!.id : undefined,
         // The sitting this round joins. place-order refuses a dine-in web order whose table
         // has no open session, or whose caller never joined it, so this is what makes the
@@ -1036,9 +1031,7 @@ export function CheckoutView({
         session_id: atTable ? pinnedTable!.sessionId : undefined,
         // Structured too, so place-order can resolve it to a real tables row and
         // the kitchen/floor plan stop relying on the notes prefix above.
-        table_number: channel === 'dine_in'
-          ? (atTable ? pinnedTable!.number : dineInTable.trim())
-          : undefined,
+        table_number: atTable ? pinnedTable!.number : undefined,
         delivery_address:
           channel === 'delivery'
             ? {
@@ -1529,53 +1522,32 @@ export function CheckoutView({
           </Card>
         )}
 
-        {channel === 'dine_in' && (
+        {/* Keyed off the pin, not off the channel. Dine-in is only ever reached by
+            scanning the table, so there is no longer a table to ask for — and a
+            dine_in restored from storage still has nothing to show here until the
+            provider has checked the sitting, which ends with either a pin or the
+            gate reopening. */}
+        {atTable && (
           <Card className="p-5">
-            <h2 className="font-display text-lg font-semibold">
-              Dine-in {!atTable && <span className="text-danger">*</span>}
-            </h2>
-            {atTable ? (
-              <>
-                <p className="mt-3 rounded-xl bg-primary/10 px-3 py-2 font-display text-lg font-semibold text-primary">
-                  {pinnedTable!.label}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Scanned from the QR code on your table — nothing to type.
-                </p>
-                {/* Which round this is, and what the table already owes. The number is the
-                    whole party's, not this phone's: everyone who scanned the same tent is
-                    adding to one bill, and that is the figure they will be asked to pay. */}
-                {tableBill && tableBill.order_count > 0 && (
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Round {tableBill.order_count + 1} · Table total so far{' '}
-                    {formatCurrency(Number(tableBill.running_total))}
-                  </p>
-                )}
-                {/* The last point at which a wrong table is still cheap to fix. After this
-                    the order carries the table id and the food is walked to it. */}
-                <LeaveTableButton className="mt-2 px-0" />
-              </>
-            ) : (
-              <>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Your table number is required so we can bring your food over.
-                </p>
-                <input
-                  ref={tableRef}
-                  value={dineInTable}
-                  onChange={(e) => { setDineInTable(e.target.value); clearFieldError('table'); }}
-                  placeholder="Table number"
-                  inputMode="numeric"
-                  // aria only: the form runs its own validation in handleSubmit and
-                  // native `required` would pre-empt it with a browser tooltip.
-                  aria-required="true"
-                  aria-invalid={!!fieldErrors.table}
-                  className="input mt-3"
-                  style={fieldErrors.table ? { borderColor: 'hsl(var(--danger))' } : undefined}
-                />
-                {fieldErrors.table && <p className="mt-1 text-xs text-danger">{fieldErrors.table}</p>}
-              </>
+            <h2 className="font-display text-lg font-semibold">Dine-in</h2>
+            <p className="mt-3 rounded-xl bg-primary/10 px-3 py-2 font-display text-lg font-semibold text-primary">
+              {pinnedTable!.label}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Scanned from the QR code on your table — nothing to type.
+            </p>
+            {/* Which round this is, and what the table already owes. The number is the
+                whole party's, not this phone's: everyone who scanned the same tent is
+                adding to one bill, and that is the figure they will be asked to pay. */}
+            {tableBill && tableBill.order_count > 0 && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Round {tableBill.order_count + 1} · Table total so far{' '}
+                {formatCurrency(Number(tableBill.running_total))}
+              </p>
             )}
+            {/* The last point at which a wrong table is still cheap to fix. After this
+                the order carries the table id and the food is walked to it. */}
+            <LeaveTableButton className="mt-2 px-0" />
             <p className="mt-3 text-xs text-muted-foreground">{t('checkout.dineInPayAtRestaurant')}</p>
           </Card>
         )}

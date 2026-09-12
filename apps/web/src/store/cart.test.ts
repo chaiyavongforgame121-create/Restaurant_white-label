@@ -127,26 +127,43 @@ describe('cart store', () => {
 
   it('resolveChannel keeps a choice made for this branch', () => {
     useCart.getState().setChannel('delivery', 'branch-1');
-    useCart.getState().resolveChannel(true, 'branch-1');
+    useCart.getState().resolveChannel(true, 'branch-1', false);
     expect(useCart.getState().channel).toBe('delivery');
   });
 
   it('resolveChannel clears a choice made for a different branch', () => {
     useCart.getState().setChannel('dine_in', 'branch-1');
-    useCart.getState().resolveChannel(true, 'branch-2');
+    useCart.getState().resolveChannel(true, 'branch-2', true);
     expect(useCart.getState().channel).toBeNull();
     expect(useCart.getState().channelBranchId).toBeNull();
   });
 
   it('resolveChannel clears delivery when the branch cannot deliver', () => {
     useCart.getState().setChannel('delivery', 'branch-1');
-    useCart.getState().resolveChannel(false, 'branch-1');
+    useCart.getState().resolveChannel(false, 'branch-1', false);
     expect(useCart.getState().channel).toBeNull();
   });
 
   it('resolveChannel leaves pickup alone when the branch cannot deliver', () => {
     useCart.getState().setChannel('pickup', 'branch-1');
-    useCart.getState().resolveChannel(false, 'branch-1');
+    useCart.getState().resolveChannel(false, 'branch-1', false);
     expect(useCart.getState().channel).toBe('pickup');
+  });
+
+  // Dine-in stopped being a choice a diner can make; only a scanned table grants it.
+  // A dine_in left in localStorage from before that has no sitting behind it, and the
+  // gate treats any channel as an answered question — so it has to be taken away.
+  it('resolveChannel clears dine-in on this branch when no table is pinned', () => {
+    useCart.getState().setChannel('dine_in', 'branch-1');
+    useCart.getState().resolveChannel(true, 'branch-1', false);
+    expect(useCart.getState().channel).toBeNull();
+    expect(useCart.getState().channelBranchId).toBeNull();
+  });
+
+  it('resolveChannel leaves dine-in alone while a table is pinned', () => {
+    useCart.getState().setChannel('dine_in', 'branch-1');
+    useCart.getState().resolveChannel(true, 'branch-1', true);
+    expect(useCart.getState().channel).toBe('dine_in');
+    expect(useCart.getState().channelBranchId).toBe('branch-1');
   });
 });

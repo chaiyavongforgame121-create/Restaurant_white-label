@@ -16,7 +16,6 @@
     "subtitleNamed": "Pick one to start your order from {branch}.",
     "deliveryHint": "We bring it to your address",
     "pickupHint": "Collect it at the restaurant",
-    "dineInHint": "Eat in — we bring it to your table",
     "changeLater": "You can change this any time from the menu."
   },
   "menu": {
@@ -96,8 +95,7 @@
       "phoneInvalid": "Please enter a valid phone number.",
       "emailInvalid": "Please enter a valid email address.",
       "addressRequired": "Please enter your delivery address.",
-      "addressUnconfirmed": "Pick your address from the suggestions or the map so we can locate you.",
-      "tableRequired": "Please enter your table number."
+      "addressUnconfirmed": "Pick your address from the suggestions or the map so we can locate you."
     },
     "promoCode": "Have a promo code?",
     "placeOrder": "Place order — {amount}",

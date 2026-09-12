@@ -52,9 +52,10 @@ interface CartState {
   lines: CartLine[];
   notes: string;
   /**
-   * `null` until the diner picks an order type in the gate. There is no default:
-   * delivery, pickup and dine-in change the price, the required fields and where
-   * the food ends up, so the storefront asks instead of guessing.
+   * `null` until the diner picks an order type in the gate, or a scanned table
+   * pin sets dine-in on their behalf. There is no default: delivery, pickup and
+   * dine-in change the price, the required fields and where the food ends up, so
+   * the storefront asks instead of guessing.
    */
   channel: OrderChannel | null;
   /**
@@ -65,11 +66,16 @@ interface CartState {
   channelBranchId: string | null;
   setChannel: (channel: OrderChannel, branchId: string) => void;
   /**
-   * Drop a persisted choice that no longer applies — different branch, or a
-   * branch that has since lost the delivery add-on. Clearing re-opens the gate
-   * rather than silently substituting a channel the diner did not pick.
+   * Drop a persisted choice that no longer applies — different branch, a branch
+   * that has since lost the delivery add-on, or dine-in on a device that is not
+   * sitting at a table. Clearing re-opens the gate rather than silently
+   * substituting a channel the diner did not pick.
+   *
+   * `hasTablePin` must be the SETTLED answer: call this only once the table-pin
+   * provider is ready, never while it is still validating a stored sitting, or
+   * this will clear the channel out from under a seated diner.
    */
-  resolveChannel: (canDeliver: boolean, branchId: string) => void;
+  resolveChannel: (canDeliver: boolean, branchId: string, hasTablePin: boolean) => void;
   setNotes: (notes: string) => void;
   add: (item: MenuItem, quantity?: number, notes?: string, modifiers?: CartLineModifier[]) => void;
   addCombo: (combo: ComboPick, quantity?: number) => void;
@@ -104,11 +110,20 @@ export const useCart = create<CartState>()(
       channel: null,
       channelBranchId: null,
       setChannel: (channel, branchId) => set({ channel, channelBranchId: branchId }),
-      resolveChannel: (canDeliver, branchId) => {
+      resolveChannel: (canDeliver, branchId, hasTablePin) => {
         const { channel, channelBranchId } = get();
         if (channel === null) return;
         // A choice belongs to the branch it was made on.
         if (channelBranchId !== branchId) {
+          set({ channel: null, channelBranchId: null });
+          return;
+        }
+        // Dine-in is not something a phone can claim any more: it is granted by the
+        // table pin the QR scan proves. A dine_in persisted before that — or left
+        // behind by a sitting this device has since lost — would sail past the gate
+        // and reach a checkout with no table and no session, which place-order
+        // refuses. Hand the question back instead.
+        if (channel === 'dine_in' && !hasTablePin) {
           set({ channel: null, channelBranchId: null });
           return;
         }
