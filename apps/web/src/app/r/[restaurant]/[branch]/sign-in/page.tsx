@@ -1,7 +1,7 @@
 import { headers } from 'next/headers';
+import { countryForIso } from '@favornoms/shared';
 import { resolveTenant } from '@/lib/tenant';
 import { SignInView } from './_components/sign-in-view';
-import type { Dial } from './_components/sign-in-view';
 
 interface Props {
   params: Promise<{ restaurant: string; branch: string }>;
@@ -12,14 +12,6 @@ interface Props {
 // everyone whichever country happened to render first.
 export const dynamic = 'force-dynamic';
 
-// Geo comes from the edge, not from us: Vercel sets x-vercel-ip-country on every
-// request. Cloudflare's cf-ipcountry is read too so a self-hosted or proxied deploy
-// behaves the same. Anything we do not sell into falls through to +1 (US is the
-// market); the diner can still switch the selector or paste a full +… number.
-function dialForCountry(country: string | null): Dial {
-  return country?.toUpperCase() === 'TH' ? '+66' : '+1';
-}
-
 export default async function SignInPage({ params }: Props) {
   const { restaurant, branch } = await params;
   const tenant = await resolveTenant(restaurant, branch);
@@ -29,7 +21,12 @@ export default async function SignInPage({ params }: Props) {
     <SignInView
       branchId={tenant.branch.id}
       brandName={tenant.restaurant.name}
-      defaultDial={dialForCountry(country)}
+      // Geo comes from the edge, not from us: Vercel sets x-vercel-ip-country on every
+      // request, and Cloudflare's cf-ipcountry is read too so a self-hosted or proxied
+      // deploy behaves the same. countryForIso falls back to the market we sell into for
+      // anything not on the list; the diner can still switch the selector or paste a full
+      // +… number.
+      defaultCountryIso={countryForIso(country).iso}
     />
   );
 }

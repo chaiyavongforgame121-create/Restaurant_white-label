@@ -70,14 +70,6 @@ export function generateOrderNumber(branchPrefix = 'A'): string {
   return `${branchPrefix}-${yymm}-${seq}`;
 }
 
-// Format US phone number as (xxx) xxx-xxxx; accepts already-formatted or E.164 input.
-export function formatUSPhone(input: string): string {
-  const digits = input.replace(/\D/g, '');
-  const ten = digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits;
-  if (ten.length !== 10) return input;
-  return `(${ten.slice(0, 3)}) ${ten.slice(3, 6)}-${ten.slice(6)}`;
-}
-
 // US sales tax computation. Pass the rate as a decimal (e.g. 0.0875 for 8.75%).
 export function computeSalesTax(subtotal: number, taxRate: number): number {
   return Math.round(subtotal * taxRate * 100) / 100;
@@ -94,3 +86,4 @@ export * from './customer-sort';
 export * from './driver-earnings';
 export * from './schedule-windows';
 export * from './modifiers';
+export * from './phone';

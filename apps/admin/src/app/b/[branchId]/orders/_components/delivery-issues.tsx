@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Button, Card } from '@favornoms/ui';
+import { formatPhone } from '@favornoms/shared';
 
 interface AssignmentReason {
   delivery_id: string;
@@ -100,7 +101,7 @@ export function DeliveryIssues({ issues }: { issues: DeliveryIssue[] }) {
               <p className="font-mono text-xs text-muted-foreground">{d.order_number}</p>
               <p className="text-sm font-semibold">
                 {d.customer_name ?? 'Customer'}
-                {d.customer_phone ? ` · ${d.customer_phone}` : ''}
+                {d.customer_phone ? ` · ${formatPhone(d.customer_phone)}` : ''}
               </p>
               <p className="text-xs text-danger">
                 {d.failed_reason ?? reasons.get(d.id)?.end_reason ?? 'No reason recorded'}

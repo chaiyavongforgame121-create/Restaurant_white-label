@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { Printer, ReceiptText } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
-import { formatCurrency } from '@favornoms/shared';
+import { formatPhone, formatCurrency } from '@favornoms/shared';
 import { Button, Card, Sheet } from '@favornoms/ui';
 import { printReceiptViaBrowser } from '@favornoms/ui/printer';
 import { modifierLabel, parseLineModifiers } from './order-lines';
@@ -217,7 +217,7 @@ function ReceiptCard({
         {order.customer_phone && (
           <>
             <dt className="text-muted-foreground">Phone</dt>
-            <dd className="text-right">{order.customer_phone}</dd>
+            <dd className="text-right">{formatPhone(order.customer_phone)}</dd>
           </>
         )}
       </dl>

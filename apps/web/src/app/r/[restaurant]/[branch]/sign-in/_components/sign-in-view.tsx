@@ -6,16 +6,24 @@ import { motion } from 'framer-motion';
 import { ChefHat, Lock, Phone, ShieldCheck } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Button, Card } from '@favornoms/ui';
-import { currentOrigin, safeNext } from '@favornoms/shared';
+import {
+  COUNTRY_DIALS,
+  countryForIso,
+  currentOrigin,
+  DEFAULT_COUNTRY_ISO,
+  safeNext,
+  toE164,
+} from '@favornoms/shared';
 import { useAuth } from '@/components/auth/use-auth';
 
 interface Props {
   branchId: string;
   brandName: string;
-  // Preselected dialling code, resolved from the request's country on the server.
+  // Preselected country, resolved from the request's country on the server. An ISO code
+  // rather than a dial code, because +1 is two countries and +7 is two more.
   // Optional so any caller that has not been updated still renders; the fallback is
   // the market we sell into.
-  defaultDial?: Dial;
+  defaultCountryIso?: string;
 }
 
 // Phone sign-in is password-based (no SMS, no cost): the `customer-auth` edge function
@@ -36,22 +44,17 @@ interface AuthResult {
   error?: string;
 }
 
-// Dialling codes we sell into. The order matters only for the dropdown; which one
-// is preselected comes from the request's country (see the page component).
-const COUNTRIES = [
-  { dial: '+1', label: 'US +1', placeholder: '(555) 234-5678' },
-  { dial: '+66', label: 'TH +66', placeholder: '081 234 5678' },
-] as const;
-
-export type Dial = (typeof COUNTRIES)[number]['dial'];
-
 // Errors handed back by /auth/callback, mapped to something a diner can act on.
 const CALLBACK_ERRORS: Record<string, string> = {
   oauth_failed: 'Google sign-in didn’t complete. Please try again.',
   missing_code: 'That sign-in link has expired. Please try again.',
 };
 
-export function SignInView({ branchId, brandName, defaultDial = '+1' }: Props) {
+export function SignInView({
+  branchId,
+  brandName,
+  defaultCountryIso = DEFAULT_COUNTRY_ISO,
+}: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   // Shared open-redirect guard — see @favornoms/shared. `next` feeds router.replace() and
@@ -74,7 +77,8 @@ export function SignInView({ branchId, brandName, defaultDial = '+1' }: Props) {
   // Login vs Register is explicit on the phone tab so the edge function knows which path to
   // take (login must never silently create an account, and register must never take one over).
   const [phoneMode, setPhoneMode] = React.useState<'login' | 'register'>('login');
-  const [dial, setDial] = React.useState<Dial>(defaultDial);
+  const [countryIso, setCountryIso] = React.useState(defaultCountryIso);
+  const country = React.useMemo(() => countryForIso(countryIso), [countryIso]);
   const [phone, setPhone] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [fullName, setFullName] = React.useState('');
@@ -83,20 +87,6 @@ export function SignInView({ branchId, brandName, defaultDial = '+1' }: Props) {
   const [error, setError] = React.useState<string | null>(
     callbackError ? (CALLBACK_ERRORS[callbackError] ?? 'We couldn’t finish that sign-in. Please try again.') : null,
   );
-
-  // Build an E.164 number from what was typed plus the SELECTED country. A pasted
-  // "+…" number is taken verbatim and bypasses the selector entirely.
-  const normalizePhone = (raw: string) => {
-    const trimmed = raw.trim();
-    if (trimmed.startsWith('+')) return `+${trimmed.replace(/\D/g, '')}`;
-    let digits = trimmed.replace(/\D/g, '');
-    const cc = dial.slice(1);
-    // Typed WITH the country code but no plus (1 555…, 66 81…).
-    if (digits.length > 10 && digits.startsWith(cc)) digits = digits.slice(cc.length);
-    // National trunk prefix: Thai numbers are commonly written 081… = +6681…
-    if (dial === '+66' && digits.length === 10 && digits.startsWith('0')) digits = digits.slice(1);
-    return `${dial}${digits}`;
-  };
 
   // Already signed in — e.g. a Google OAuth round-trip landed back here because its
   // `next` defaulted to this page. Move the diner on instead of showing a login form they no
@@ -139,7 +129,7 @@ export function SignInView({ branchId, brandName, defaultDial = '+1' }: Props) {
     const { data, error: fnErr } = await supabase.functions.invoke('customer-auth', {
       body: {
         mode: phoneMode === 'register' ? 'signup' : 'login',
-        phone: normalizePhone(phone),
+        phone: toE164(phone, country),
         password,
         branch_id: branchId,
         // Name is only collected on register; login ignores it.
@@ -289,13 +279,13 @@ export function SignInView({ branchId, brandName, defaultDial = '+1' }: Props) {
               <span className="mb-2 block text-sm font-medium">Phone number</span>
               <div className="flex gap-2">
                 <select
-                  value={dial}
-                  onChange={(e) => setDial(e.target.value as Dial)}
+                  value={countryIso}
+                  onChange={(e) => setCountryIso(e.target.value)}
                   aria-label="Country calling code"
-                  className="focus-ring shrink-0 rounded-xl border border-border bg-background px-3 py-3 text-base"
+                  className="focus-ring w-32 shrink-0 rounded-xl border border-border bg-background px-2 py-3 text-base"
                 >
-                  {COUNTRIES.map((c) => (
-                    <option key={c.dial} value={c.dial}>
+                  {COUNTRY_DIALS.map((c) => (
+                    <option key={c.iso} value={c.iso}>
                       {c.label}
                     </option>
                   ))}
@@ -309,7 +299,7 @@ export function SignInView({ branchId, brandName, defaultDial = '+1' }: Props) {
                     inputMode="tel"
                     autoComplete="tel"
                     required
-                    placeholder={COUNTRIES.find((c) => c.dial === dial)?.placeholder}
+                    placeholder={country.placeholder}
                     className="focus-ring w-full rounded-xl border border-border bg-background py-3 pl-11 pr-4 text-base"
                   />
                 </div>

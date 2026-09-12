@@ -5,6 +5,12 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Bike, Sparkles } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
+import {
+  COUNTRY_DIALS,
+  countryForIso,
+  DEFAULT_COUNTRY_ISO,
+  toE164,
+} from '@favornoms/shared';
 import { Button } from '@favornoms/ui';
 
 // Password-based phone auth (no SMS): the `driver-auth` edge function takes an explicit
@@ -40,6 +46,11 @@ export function LoginView() {
   // create an account, register must not take one over.
   const [mode, setMode] = React.useState<'login' | 'register'>('login');
   const [phone, setPhone] = React.useState('');
+  // The rider app never had a country selector, so whatever was typed went to driver-auth
+  // as-is and the edge function's "prepend 1 if it looks like ten digits" fallback decided
+  // the account key. A rider outside the US got a number that was not theirs.
+  const [countryIso, setCountryIso] = React.useState(DEFAULT_COUNTRY_ISO);
+  const country = React.useMemo(() => countryForIso(countryIso), [countryIso]);
   const [password, setPassword] = React.useState('');
   const [firstName, setFirstName] = React.useState('');
   const [lastName, setLastName] = React.useState('');
@@ -99,7 +110,7 @@ export function LoginView() {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
-    const res = await callAuth({ mode: 'login', phone, password });
+    const res = await callAuth({ mode: 'login', phone: toE164(phone, country), password });
     setSubmitting(false);
     if (!res) return;
     if (res.status === 'login') return applySession(res);
@@ -117,7 +128,7 @@ export function LoginView() {
     setSubmitting(true);
     const res = await callAuth({
       mode: 'signup',
-      phone,
+      phone: toE164(phone, country),
       password,
       profile: {
         full_name,
@@ -199,16 +210,30 @@ export function LoginView() {
         <form className="space-y-4" onSubmit={mode === 'login' ? submitLogin : submitRegister}>
           <label className="block">
             <span className="mb-2 block text-sm font-medium">Phone number</span>
-            <input
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              type="tel"
-              inputMode="tel"
-              autoComplete="tel"
-              required
-              placeholder="(555) 234-5678"
-              className="focus-ring w-full rounded-2xl border border-border bg-background px-4 py-4 text-lg font-medium tracking-wide placeholder:font-normal placeholder:text-muted-foreground"
-            />
+            <div className="flex gap-2">
+              <select
+                value={countryIso}
+                onChange={(e) => setCountryIso(e.target.value)}
+                aria-label="Country calling code"
+                className="focus-ring w-32 shrink-0 rounded-2xl border border-border bg-background px-2 py-4 text-base"
+              >
+                {COUNTRY_DIALS.map((c) => (
+                  <option key={c.iso} value={c.iso}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+              <input
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                required
+                placeholder={country.placeholder}
+                className="focus-ring w-full min-w-0 flex-1 rounded-2xl border border-border bg-background px-4 py-4 text-lg font-medium tracking-wide placeholder:font-normal placeholder:text-muted-foreground"
+              />
+            </div>
           </label>
           <label className="block">
             <span className="mb-2 block text-sm font-medium">Password</span>

@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { AlertTriangle, Armchair, ChevronDown, MapPin, MessageSquareText } from 'lucide-react';
-import { formatCurrency } from '@favornoms/shared';
+import { formatPhone, formatCurrency } from '@favornoms/shared';
 import { Badge, Card, cn } from '@favornoms/ui';
 import { OrderReceiptButton } from './order-receipt-sheet';
 import { OrderRowActions } from './order-row-actions';
@@ -253,7 +253,7 @@ export function OrderTableRow({ order: o, ctx }: { order: OrderRowData; ctx: Ord
         <td className="px-3 py-3 capitalize">{o.channel.replace('_', ' ')}</td>
         <td className="px-3 py-3">
           <p className="font-medium">{o.customer_name ?? '—'}</p>
-          <p className="text-muted-foreground text-xs">{o.customer_phone ?? ''}</p>
+          <p className="text-muted-foreground text-xs">{o.customer_phone ? formatPhone(o.customer_phone) : ''}</p>
         </td>
         <td className="px-3 py-3">
           <ItemsToggle

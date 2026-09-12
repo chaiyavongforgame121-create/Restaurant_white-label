@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { listBranchCustomers } from '@favornoms/database/queries';
-import {
+import { formatPhone,
   customerSortQuery,
   defaultDirFor,
   formatCurrency,
@@ -113,7 +113,7 @@ export default async function CustomersPage({ params, searchParams }: Props) {
               {customers.map((c) => (
                 <tr key={c.id} className="border-t border-border/40 hover:bg-muted/30">
                   <td className="px-5 py-3 font-medium">{c.full_name ?? '—'}</td>
-                  <td className="px-5 py-3">{c.phone ?? '—'}</td>
+                  <td className="px-5 py-3">{c.phone ? formatPhone(c.phone) : '—'}</td>
                   <td className="px-5 py-3">
                     {c.address ? (
                       // The cap lives on this div, not the cell: an auto-layout table
