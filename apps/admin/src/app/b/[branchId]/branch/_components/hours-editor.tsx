@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Clock, Plus, Save, Trash2 } from 'lucide-react';
+import { Clock, Globe, Plus, Save, Trash2 } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Button, Card } from '@favornoms/ui';
 
@@ -20,12 +20,39 @@ type WeekHours = Record<number, Window[]>;
 const INPUT_CLS =
   'h-10 rounded-lg border border-border bg-background px-2 text-sm outline-none transition-colors focus-visible:border-primary';
 
-export function HoursEditor({ branchId }: { branchId: string }) {
+/**
+ * Reads the wall clock at a named IANA zone. Returns null for a zone the browser cannot
+ * resolve rather than throwing -- branches.timezone is free text at the database level.
+ */
+function clockAt(timezone: string): string | null {
+  try {
+    return new Date().toLocaleString('en-US', {
+      timeZone: timezone,
+      weekday: 'short',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  } catch {
+    return null;
+  }
+}
+
+export function HoursEditor({ branchId, timezone }: { branchId: string; timezone: string }) {
   const [week, setWeek] = React.useState<WeekHours>({});
   const [loaded, setLoaded] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [savedAt, setSavedAt] = React.useState<number | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  // Null until mounted on purpose: the server renders in its own zone, so a clock printed
+  // during SSR is both wrong and a hydration mismatch.
+  const [branchNow, setBranchNow] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    const tick = () => setBranchNow(clockAt(timezone));
+    tick();
+    const id = window.setInterval(tick, 30_000);
+    return () => window.clearInterval(id);
+  }, [timezone]);
 
   React.useEffect(() => {
     const supabase = getBrowserClient();
@@ -108,6 +135,20 @@ export function HoursEditor({ branchId }: { branchId: string }) {
       <p className="text-sm text-muted-foreground">
         Ordering opens and closes automatically. No hours set = always open. A window ending at or
         before its start time crosses midnight (late-night service).
+      </p>
+
+      {/* is_branch_open() reads these times in the BRANCH's timezone, and the card never said
+          so. A merchant setting 10:00-21:00 from a different country watched their storefront
+          say "Currently closed" in the middle of their own afternoon with no way to tell why.
+          The live clock is the part that makes it obvious. */}
+      <p className="bg-muted/50 mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl px-3 py-2 text-sm">
+        <Globe aria-hidden className="text-primary h-4 w-4 shrink-0" />
+        <span>
+          These are <strong>{timezone.replace(/_/g, ' ')}</strong> times, not your device&apos;s.
+        </span>
+        {branchNow && (
+          <span className="text-muted-foreground">It is {branchNow} at the shop right now.</span>
+        )}
       </p>
 
       {!loaded ? (

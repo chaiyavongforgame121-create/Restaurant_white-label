@@ -203,7 +203,7 @@ export function BranchSettings({
           </div>
         </Card>
 
-        <HoursEditor branchId={branch.id} />
+        <HoursEditor branchId={branch.id} timezone={branch.timezone} />
 
         <ClosuresManager branchId={branch.id} />
 
