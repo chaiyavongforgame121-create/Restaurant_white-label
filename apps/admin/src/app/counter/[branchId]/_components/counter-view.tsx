@@ -211,7 +211,7 @@ function PosInner({
   };
 
   const suggestedParkLabel = () =>
-    tableNumber ? `Table ${tableNumber}` : `Order at ${new Date().toLocaleTimeString()}`;
+    tableNumber ? `Table ${tableNumber}` : `Order at ${new Date().toLocaleTimeString('en-US')}`;
 
   /**
    * Park used to ask for its label with window.prompt, which Chrome refuses outright in a
@@ -634,7 +634,7 @@ function PosInner({
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold">{p.label}</p>
                     <p className="text-xs text-muted-foreground">
-                      {p.lines.length} item{p.lines.length === 1 ? '' : 's'} · {new Date(p.parkedAt).toLocaleTimeString()}
+                      {p.lines.length} item{p.lines.length === 1 ? '' : 's'} · {new Date(p.parkedAt).toLocaleTimeString('en-US')}
                     </p>
                   </div>
                   <div className="flex gap-1">

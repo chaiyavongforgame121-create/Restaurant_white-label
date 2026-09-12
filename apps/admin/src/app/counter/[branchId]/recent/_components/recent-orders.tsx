@@ -114,8 +114,8 @@ export function RecentOrders({
                 <p className="mt-1 text-sm text-muted-foreground">
                   {o.customer_name ?? 'Walk-in'} ·{' '}
                   {o.scheduled_for
-                    ? `for ${new Date(o.scheduled_for).toLocaleString()}`
-                    : new Date(o.created_at).toLocaleString()}
+                    ? `for ${new Date(o.scheduled_for).toLocaleString('en-US')}`
+                    : new Date(o.created_at).toLocaleString('en-US')}
                 </p>
               </div>
               <div className="flex items-center gap-3">
