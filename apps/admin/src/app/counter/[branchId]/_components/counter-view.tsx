@@ -188,6 +188,8 @@ function PosInner({
   const [tenderedInput, setTenderedInput] = React.useState('');
   /** Change owed on the sale just completed, held until the cashier dismisses it. */
   const [changeOwed, setChangeOwed] = React.useState<number | null>(null);
+  /** The label being typed for a cart about to be parked, or null. */
+  const [parkLabel, setParkLabel] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -208,20 +210,34 @@ function PosInner({
     }
   };
 
+  const suggestedParkLabel = () =>
+    tableNumber ? `Table ${tableNumber}` : `Order at ${new Date().toLocaleTimeString()}`;
+
+  /**
+   * Park used to ask for its label with window.prompt, which Chrome refuses outright in a
+   * sandboxed frame and which any browser will suppress once a user ticks "prevent this
+   * page from creating more dialogs". It THROWS there rather than returning null, so the
+   * button did nothing at all and said nothing about why -- with a customer's order in the
+   * cart. This opens the app's own dialog instead.
+   */
   const parkCurrent = () => {
     if (lines.length === 0) return;
-    const suggested = tableNumber ? `Table ${tableNumber}` : `Order at ${new Date().toLocaleTimeString()}`;
-    const label = window.prompt('Label this parked order (e.g. "Table 5", "Sarah pickup"):', suggested);
-    if (label === null) return;
+    setParkLabel(suggestedParkLabel());
+  };
+
+  const confirmPark = () => {
+    if (lines.length === 0 || parkLabel === null) return;
+    const suggested = suggestedParkLabel();
     const next: ParkedOrder = {
       id: `parked-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      label: label || suggested,
+      label: parkLabel.trim() || suggested,
       lines: lines.slice(),
       channel,
       tableNumber,
       parkedAt: new Date().toISOString(),
     };
     persistParked([next, ...parked]);
+    setParkLabel(null);
     setLines([]);
     setTableNumber('');
     setTableId(null);
@@ -1023,6 +1039,42 @@ function PosInner({
           )}
         </div>
       </Sheet>
+
+      {parkLabel !== null && (
+        <div
+          className="fixed inset-0 z-[60] grid place-items-center bg-black/50 p-4"
+          onClick={() => setParkLabel(null)}
+        >
+          <div
+            className="bg-card w-full max-w-sm space-y-3 rounded-3xl p-6 shadow-warm"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="font-display text-lg font-semibold">Park this order</h2>
+            <p className="text-muted-foreground text-sm">
+              Name it so you can find it again — a table, or who it is for.
+            </p>
+            <input
+              value={parkLabel}
+              onChange={(e) => setParkLabel(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') confirmPark();
+                if (e.key === 'Escape') setParkLabel(null);
+              }}
+              autoFocus
+              placeholder='e.g. "Table 5", "Sarah pickup"'
+              className="focus-ring border-border bg-background h-12 w-full rounded-xl border px-3 text-base"
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setParkLabel(null)}>
+                Cancel
+              </Button>
+              <Button variant="gradient" onClick={confirmPark}>
+                Park order
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Change owed. Not a toast: it stays until the cashier says they have handed it
           over, because it is the last thing standing between the drawer and the customer. */}
