@@ -189,9 +189,11 @@ interface MenuViewProps {
   canDeliver?: boolean;
   deliveryClosedNow?: boolean;
   deliveryWindowsToday?: Array<{ opens_at: string; closes_at: string }>;
+  /** A `?t=` token resolved to a table here, so the order type is already settled. */
+  seatingFromScan?: boolean;
 }
 
-export function MenuView({ branch, categories, items, isOpen = true, reviews, combos = [], happyHours = [], menuLayout = 'grid4', menuCardStyle = 'standard', heroUrl, heroTitle, heroSubtitle, canDeliver = false, deliveryClosedNow = false, deliveryWindowsToday = [] }: MenuViewProps) {
+export function MenuView({ branch, categories, items, isOpen = true, reviews, combos = [], happyHours = [], menuLayout = 'grid4', menuCardStyle = 'standard', heroUrl, heroTitle, heroSubtitle, canDeliver = false, deliveryClosedNow = false, deliveryWindowsToday = [], seatingFromScan = false }: MenuViewProps) {
   const t = useTranslations();
   const params = useParams<{ restaurant: string; branch: string }>();
   const [search, setSearch] = React.useState('');
@@ -305,6 +307,7 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
         canDeliver={canDeliver}
         deliveryClosedNow={deliveryClosedNow}
         deliveryWindowsToday={deliveryWindowsToday}
+        seatingFromScan={seatingFromScan}
       />
 
       <Hero
@@ -498,12 +501,14 @@ function ChannelAndSearch({
   // Delivery is dropped from the options entirely rather than shown disabled —
   // a restaurant without the add-on does not offer delivery at all, so a greyed
   // "Delivery" tab would only advertise something the customer cannot have.
+  // Dine-in is not a tab at all: tapping it was a claim to be sitting at a table
+  // that nothing had proved, and the round then had no session to land on. It is
+  // the table QR that decides it, and the locked chip below is what it looks like.
   const options = [
     ...(canDeliver
       ? [{ value: 'delivery' as const, label: t('channel.delivery'), icon: <RiderIcon className="h-4 w-4" /> }]
       : []),
     { value: 'pickup' as const, label: t('channel.pickup'), icon: <ShoppingBag className="h-4 w-4" /> },
-    { value: 'dine_in' as const, label: t('channel.dineIn'), icon: <Store className="h-4 w-4" /> },
   ];
   return (
     <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
