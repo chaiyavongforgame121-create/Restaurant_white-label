@@ -3,6 +3,7 @@ import type {
   LocalizedText,
   MenuCategory,
   MenuItem,
+  ModifierGroup,
 } from '@favornoms/shared';
 import type { Database } from '../types';
 import type { FavornomsClient } from '../client-type';
@@ -106,4 +107,81 @@ function mapItem(row: Partial<RowItem>): MenuItem {
     calories: row.calories ?? undefined,
     outOfStock: row.track_stock === true && (row.stock_quantity ?? 0) <= 0,
   };
+}
+
+
+/**
+ * The option groups attached to one menu item, ordered, with dead options dropped.
+ *
+ * Shared rather than inlined at the call site: the storefront's item sheet and the
+ * counter's both ask this question, and a till that reads the groups differently from the
+ * phone at the table is a till that prices the same burger differently. `price_delta` is a
+ * postgres numeric, which arrives as a string over PostgREST -- coercing it here is what
+ * keeps `modifierDelta` doing arithmetic instead of string concatenation.
+ */
+export async function listItemModifierGroups(
+  supabase: FavornomsClient,
+  menuItemId: string,
+): Promise<ModifierGroup[]> {
+  const { data, error } = await supabase
+    .from('menu_item_modifiers')
+    .select(
+      `display_order,
+       modifier_group_id,
+       modifier_groups!inner(
+         id, name, min_select, max_select, is_required, selection_type, display_order,
+         modifier_options(id, name, price_delta, is_default, is_active)
+       )`,
+    )
+    .eq('menu_item_id', menuItemId)
+    .order('display_order');
+
+  if (error) throw error;
+
+  return (data ?? [])
+    .map((row) => {
+      // A many-to-one embed comes back as an object, but PostgREST types it as an array.
+      const g = (Array.isArray(row.modifier_groups) ? row.modifier_groups[0] : row.modifier_groups) as
+        | {
+            id: string;
+            name: string;
+            min_select: number | null;
+            max_select: number | null;
+            is_required: boolean | null;
+            selection_type: string | null;
+            display_order: number | null;
+            modifier_options: Array<{
+              id: string;
+              name: string;
+              price_delta: number | string | null;
+              is_default: boolean | null;
+              is_active: boolean | null;
+            }> | null;
+          }
+        | null
+        | undefined;
+      if (!g) return null;
+      const group: ModifierGroup = {
+        id: g.id,
+        name: g.name,
+        min_select: g.min_select ?? 0,
+        max_select: g.max_select ?? 1,
+        is_required: !!g.is_required,
+        selection_type: g.selection_type === 'multiple' ? 'multiple' : 'single',
+        display_order: g.display_order ?? 0,
+        options: (g.modifier_options ?? [])
+          .filter((o) => o.is_active)
+          .map((o) => ({
+            id: o.id,
+            name: o.name,
+            price_delta: Number(o.price_delta ?? 0),
+            is_default: !!o.is_default,
+            is_active: true,
+          }))
+          // Cheapest first, so "no cheese" sits above "add bacon" the way a menu reads.
+          .sort((a, b) => a.price_delta - b.price_delta),
+      };
+      return group;
+    })
+    .filter((g): g is ModifierGroup => g !== null);
 }

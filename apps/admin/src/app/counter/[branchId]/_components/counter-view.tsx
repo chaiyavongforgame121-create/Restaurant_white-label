@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Banknote, CreditCard, Minus, Plus, Search, ShoppingBag, Store,
-  Trash2, Utensils, X, Bike,
+  Trash2, Utensils, X,
 } from 'lucide-react';
 import {
   billingErrorMessage,
@@ -13,21 +13,37 @@ import {
   computeServiceFee,
   describeBillingError,
   formatCurrency,
+  lineSignature,
   type MenuCategory,
   type MenuItem,
+  type SelectedModifier,
 } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
 import { placeOrder } from '@favornoms/database/queries';
-import { Button, Segmented, Sheet } from '@favornoms/ui';
+import { Button, RiderIcon, Segmented, Sheet } from '@favornoms/ui';
+import {
+  changeDue,
+  digitsOnly,
+  quickTender,
+  readNumericField,
+  summariseSplit,
+} from './counter-math';
+import { CounterItemSheet } from './counter-item-sheet';
 import { PrinterProvider, PrinterStatusButton, usePrinter } from './printer-control';
 
 interface Line {
   id: string;
   menuItemId: string;
   name: string;
+  /** Base price PLUS the chosen options, which is what this line actually sells for. */
   unitPrice: number;
   quantity: number;
   imageUrl: string | null;
+  /** Chosen options. Empty for an item that has none. Absent on orders parked before
+   *  the till could take them. */
+  modifiers?: SelectedModifier[];
+  /** Free text for the kitchen ticket. */
+  notes?: string;
 }
 type Channel = 'dine_in' | 'pickup' | 'delivery' | 'qr_ordering';
 type PayMethod = 'cash' | 'card';
@@ -158,11 +174,20 @@ function PosInner({
     () => tables.find((t) => t.id === tableId) ?? null,
     [tables, tableId],
   );
-  const [discountPercent, setDiscountPercent] = React.useState(0);
-  const [splitN, setSplitN] = React.useState(1);
+  const [discountInput, setDiscountInput] = React.useState('');
+  const [splitInput, setSplitInput] = React.useState('');
+  const discountPercent = readNumericField(discountInput, { min: 0, max: 100, empty: 0 });
+  const splitN = readNumericField(splitInput, { min: 1, max: 20, empty: 1 });
   const [parked, setParked] = React.useState<ParkedOrder[]>([]);
   const [showParked, setShowParked] = React.useState(false);
   const [payError, setPayError] = React.useState<string | null>(null);
+  /** The item whose options are being picked, or null. Tapping a tile no longer adds. */
+  const [configuring, setConfiguring] = React.useState<MenuItem | null>(null);
+  /** Counting out a cash sale. Card skips this and charges straight away. */
+  const [cashStep, setCashStep] = React.useState(false);
+  const [tenderedInput, setTenderedInput] = React.useState('');
+  /** Change owed on the sale just completed, held until the cashier dismisses it. */
+  const [changeOwed, setChangeOwed] = React.useState<number | null>(null);
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -200,8 +225,8 @@ function PosInner({
     setLines([]);
     setTableNumber('');
     setTableId(null);
-    setDiscountPercent(0);
-    setSplitN(1);
+    setDiscountInput('');
+    setSplitInput('');
   };
 
   const resumeParked = (parkedId: string) => {
@@ -264,27 +289,54 @@ function PosInner({
   const cashQuote = quoteFor('cash');
   const cardQuote = quoteFor('card');
   const total = cashQuote.total;
-  const perPerson = splitN > 1 ? Math.ceil(total / splitN) : 0;
+  // Was Math.ceil(total / splitN) -- a round UP TO THE DOLLAR, so a $4.82 bill split
+  // four ways asked each of four people for $2.00 and collected $8.00. summariseSplit
+  // works in cents and its parts add back up to the total exactly.
+  const split = React.useMemo(() => summariseSplit(total, splitN), [total, splitN]);
 
-  const addItem = (item: MenuItem) => {
-    setLines((curr) => {
-      const existing = curr.find((l) => l.menuItemId === item.id);
-      if (existing) {
-        return curr.map((l) => (l.id === existing.id ? { ...l, quantity: l.quantity + 1 } : l));
-      }
-      return [
-        ...curr,
-        {
-          id: `${item.id}-${Date.now()}`,
-          menuItemId: item.id,
-          name: item.name,
-          unitPrice: item.price,
-          imageUrl: item.imageUrl,
-          quantity: 1,
-        },
-      ];
-    });
-  };
+  /**
+   * Add what the sheet was configured with.
+   *
+   * Merging is keyed on the item AND its options AND its note, not the item alone. With
+   * options in play the old key is actively wrong: a plain burger and a burger with bacon
+   * would have collapsed into one line at one of the two prices.
+   */
+  const addConfigured = React.useCallback(
+    (args: {
+      item: MenuItem;
+      quantity: number;
+      notes: string;
+      modifiers: SelectedModifier[];
+      unitPrice: number;
+    }) => {
+      const { item, quantity, notes, modifiers, unitPrice } = args;
+      const signature = lineSignature(item.id, modifiers, notes);
+      setLines((curr) => {
+        const existing = curr.find(
+          (l) => lineSignature(l.menuItemId, l.modifiers ?? [], l.notes) === signature,
+        );
+        if (existing) {
+          return curr.map((l) =>
+            l.id === existing.id ? { ...l, quantity: l.quantity + quantity } : l,
+          );
+        }
+        return [
+          ...curr,
+          {
+            id: `${item.id}-${Date.now()}-${curr.length}`,
+            menuItemId: item.id,
+            name: item.name,
+            unitPrice,
+            imageUrl: item.imageUrl,
+            quantity,
+            modifiers,
+            notes: notes || undefined,
+          },
+        ];
+      });
+    },
+    [],
+  );
 
   const updateQty = (lineId: string, delta: number) => {
     setLines((curr) =>
@@ -296,7 +348,8 @@ function PosInner({
 
   const clear = () => setLines([]);
 
-  // Hotkeys: digits 1-9 add the Nth visible menu item; Esc closes pay sheet;
+  // Hotkeys: digits 1-9 OPEN the Nth visible menu item (Enter in the sheet adds it, so the
+  // two-keystroke path is still faster than reaching for the screen); Esc closes a sheet;
   // Ctrl+P opens payment sheet when there's a cart.
   React.useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -304,6 +357,7 @@ function PosInner({
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
       if (e.key === 'Escape') {
         setPayOpen(false);
+        setConfiguring(null);
         return;
       }
       if ((e.key === 'p' || e.key === 'P') && (e.ctrlKey || e.metaKey)) {
@@ -314,14 +368,14 @@ function PosInner({
       const idx = Number(e.key);
       if (Number.isInteger(idx) && idx >= 1 && idx <= 9) {
         const target = filtered[idx - 1];
-        if (target) addItem(target);
+        if (target) setConfiguring(target);
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [filtered, lines.length]);
 
-  const handlePay = async (method: PayMethod) => {
+  const handlePay = async (method: PayMethod, tendered?: number) => {
     setSubmitting(true);
     setPayError(null);
     const snapshotLines = lines;
@@ -340,7 +394,15 @@ function PosInner({
         table_id: tableId ?? undefined,
         table_number: tableNumber || undefined,
         payment_method: method,
-        items: lines.map((l) => ({ menu_item_id: l.menuItemId, quantity: l.quantity })),
+        // The options and the note travel with the line. place-order has always accepted
+        // both; the till simply never sent them, so every counter ticket reached the
+        // kitchen stripped of whatever the customer actually asked for.
+        items: lines.map((l) => ({
+          menu_item_id: l.menuItemId,
+          quantity: l.quantity,
+          notes: l.notes,
+          modifier_option_ids: l.modifiers?.map((m) => m.option_id),
+        })),
       });
       // Everything past this point settles an order that already exists, so a failure here
       // is never "the sale did not happen". Two kinds of failure, kept apart because they
@@ -411,8 +473,15 @@ function PosInner({
 
       if (booksWrong) setPayError(`Order ${result.order_number} was placed, but ${booksWrong}.`);
       setSuccess(result.order_number);
+      // Held until dismissed, not for four seconds: the cashier is counting notes out of a
+      // drawer and the number has to still be there when they look up.
+      setChangeOwed(
+        method === 'cash' && tendered != null ? changeDue(tendered, chargedTotal) : null,
+      );
       clear();
       setPayOpen(false);
+      setCashStep(false);
+      setTenderedInput('');
 
       // Fire-and-forget receipt print + cash drawer kick on cash payments
       void print({
@@ -423,7 +492,16 @@ function PosInner({
         items: snapshotLines.map((l) => ({
           name: l.name,
           quantity: l.quantity,
+          // Already the price with options in it, which is what keeps quantity × unit_price
+          // matching the Subtotal printed below the lines.
           unit_price: l.unitPrice,
+          notes:
+            [
+              l.modifiers?.length ? l.modifiers.map((m) => m.option_name).join(', ') : null,
+              l.notes ?? null,
+            ]
+              .filter(Boolean)
+              .join(' · ') || null,
         })),
         subtotal: priced ? Number(priced.subtotal) : subtotal,
         deliveryFee: (priced ? Number(priced.delivery_fee) : deliveryFee) || undefined,
@@ -432,6 +510,9 @@ function PosInner({
         taxAmount: (priced ? Number(priced.tax_amount) : taxAmount) || undefined,
         total: chargedTotal,
         paymentMethod: method,
+        // ReceiptInput has carried this field all along and the till never filled it, so a
+        // cash receipt printed no record of what was handed over or given back.
+        cashTendered: method === 'cash' ? tendered : undefined,
       });
       if (method === 'cash') {
         void kickDrawer();
@@ -508,7 +589,7 @@ function PosInner({
               { value: 'dine_in', label: 'Dine-in', icon: <Store className="h-4 w-4" /> },
               { value: 'pickup', label: 'Pickup', icon: <ShoppingBag className="h-4 w-4" /> },
               ...(canDeliver
-                ? [{ value: 'delivery', label: 'Delivery', icon: <Bike className="h-4 w-4" /> }]
+                ? [{ value: 'delivery', label: 'Delivery', icon: <RiderIcon className="h-4 w-4" /> }]
                 : []),
             ]}
           />
@@ -612,7 +693,7 @@ function PosInner({
                   <motion.button
                     key={item.id}
                     whileTap={{ scale: 0.96 }}
-                    onClick={() => addItem(item)}
+                    onClick={() => setConfiguring(item)}
                     className="focus-ring overflow-hidden rounded-2xl bg-card text-left shadow-soft transition-shadow hover:shadow-warm"
                   >
                     <div className="relative aspect-square overflow-hidden">
@@ -676,6 +757,16 @@ function PosInner({
                     >
                       <div className="flex-1 min-w-0">
                         <p className="line-clamp-1 text-sm font-semibold">{line.name}</p>
+                        {/* What was picked, on the line itself: a cashier reading the order
+                            back has to be able to see it without opening anything. */}
+                        {line.modifiers && line.modifiers.length > 0 && (
+                          <p className="text-muted-foreground line-clamp-2 text-xs">
+                            {line.modifiers.map((m) => m.option_name).join(', ')}
+                          </p>
+                        )}
+                        {line.notes && (
+                          <p className="text-warning line-clamp-2 text-xs">{line.notes}</p>
+                        )}
                         <p className="text-xs text-muted-foreground">{formatCurrency(line.unitPrice)} ea</p>
                       </div>
                       <div className="flex items-center gap-1">
@@ -771,22 +862,24 @@ function PosInner({
               <label className="flex flex-1 items-center gap-2 text-xs text-muted-foreground">
                 Discount %
                 <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={discountPercent}
-                  onChange={(e) => setDiscountPercent(Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
+                  inputMode="numeric"
+                  value={discountInput}
+                  onChange={(e) => setDiscountInput(digitsOnly(e.target.value).slice(0, 3))}
+                  onBlur={() => setDiscountInput(discountInput === '' ? '' : String(discountPercent))}
+                  placeholder="0"
+                  aria-label="Discount percent"
                   className="focus-ring h-9 w-16 rounded-lg border border-border bg-card px-2 text-base"
                 />
               </label>
               <label className="flex flex-1 items-center gap-2 text-xs text-muted-foreground">
                 Split
                 <input
-                  type="number"
-                  min={1}
-                  max={20}
-                  value={splitN}
-                  onChange={(e) => setSplitN(Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
+                  inputMode="numeric"
+                  value={splitInput}
+                  onChange={(e) => setSplitInput(digitsOnly(e.target.value).slice(0, 2))}
+                  onBlur={() => setSplitInput(splitInput === '' ? '' : String(splitN))}
+                  placeholder="1"
+                  aria-label="Split how many ways"
                   className="focus-ring h-9 w-16 rounded-lg border border-border bg-card px-2 text-base"
                 />
               </label>
@@ -816,9 +909,24 @@ function PosInner({
                 Card adds a {serviceFeePercent}% service fee — {formatCurrency(cardQuote.total)}
               </p>
             )}
-            {perPerson > 0 && (
+            {splitN > 1 && (
+              // Spelled out per tier when the total will not divide evenly: the cashier is
+              // reading these numbers out to people who are about to hand them over, and
+              // "$1.21 each" for a bill that needs two of them at $1.20 does not add up in
+              // front of the table.
               <p className="text-right text-xs text-muted-foreground">
-                {formatCurrency(perPerson)} per person ({splitN} ways)
+                {split.even ? (
+                  <>
+                    {formatCurrency(split.tiers[0]?.amount ?? 0)} each ({splitN} ways)
+                  </>
+                ) : (
+                  <>
+                    {split.tiers
+                      .map((t) => `${t.people} × ${formatCurrency(t.amount)}`)
+                      .join('  +  ')}{' '}
+                    ({splitN} ways)
+                  </>
+                )}
               </p>
             )}
             {payError && (
@@ -843,43 +951,96 @@ function PosInner({
       </div>
 
       {/* Payment sheet */}
-      <Sheet open={payOpen} onClose={() => setPayOpen(false)} title="Take payment" side="bottom">
+      <CounterItemSheet
+        item={configuring}
+        onClose={() => setConfiguring(null)}
+        onAdd={addConfigured}
+      />
+
+      <Sheet
+        open={payOpen}
+        onClose={() => {
+          setPayOpen(false);
+          setCashStep(false);
+          setTenderedInput('');
+        }}
+        title={cashStep ? 'Cash' : 'Take payment'}
+        side="bottom"
+      >
         <div className="space-y-3 p-5">
           <p className="text-center font-display text-4xl font-bold text-primary">
-            {formatCurrency(total)}
+            {formatCurrency(cashStep ? cashQuote.total : total)}
           </p>
           {payError && (
             <p role="alert" className="rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">
               {payError}
             </p>
           )}
-          {/* Card is dropped, not disabled: place-order rejects it server-side
-              without the card_payment entitlement, so a visible button would
-              only produce a failed sale in front of a waiting customer.
-              Each button carries its own total — the card fee makes them differ, and the
-              cashier has to know which number to ask for before pressing anything. */}
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {[
-              { m: 'cash' as const, label: 'Cash', Icon: Banknote, amount: cashQuote.total },
-              ...(canUseCard
-                ? [{ m: 'card' as const, label: 'Card', Icon: CreditCard, amount: cardQuote.total }]
-                : []),
-            ].map(({ m, label, Icon, amount }) => (
+
+          {cashStep ? (
+            <CashPad
+              total={cashQuote.total}
+              value={tenderedInput}
+              onChange={setTenderedInput}
+              submitting={submitting}
+              onSettle={(tendered) => void handlePay('cash', tendered)}
+              onBack={() => {
+                setCashStep(false);
+                setTenderedInput('');
+              }}
+            />
+          ) : (
+            /* Card is dropped, not disabled: place-order rejects it server-side
+               without the card_payment entitlement, so a visible button would
+               only produce a failed sale in front of a waiting customer.
+               Each button carries its own total — the card fee makes them differ, and the
+               cashier has to know which number to ask for before pressing anything. */
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <Button
-                key={m}
                 variant="outline"
                 size="xl"
                 fullWidth
-                loading={submitting}
-                onClick={() => handlePay(m)}
-                leftIcon={<Icon className="h-5 w-5" />}
+                disabled={submitting}
+                // Cash counts the money out first. Card has nothing to count.
+                onClick={() => setCashStep(true)}
+                leftIcon={<Banknote className="h-5 w-5" />}
               >
-                {label} · {formatCurrency(amount)}
+                Cash · {formatCurrency(cashQuote.total)}
               </Button>
-            ))}
-          </div>
+              {canUseCard && (
+                <Button
+                  variant="outline"
+                  size="xl"
+                  fullWidth
+                  loading={submitting}
+                  onClick={() => void handlePay('card')}
+                  leftIcon={<CreditCard className="h-5 w-5" />}
+                >
+                  Card · {formatCurrency(cardQuote.total)}
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       </Sheet>
+
+      {/* Change owed. Not a toast: it stays until the cashier says they have handed it
+          over, because it is the last thing standing between the drawer and the customer. */}
+      {changeOwed != null && changeOwed > 0 && (
+        <div className="fixed inset-0 z-[60] grid place-items-center bg-black/50 p-4">
+          <div className="bg-card w-full max-w-sm rounded-3xl p-6 text-center shadow-warm">
+            <p className="text-muted-foreground text-sm font-medium uppercase tracking-wider">
+              Change due
+            </p>
+            <p className="font-display text-primary my-2 text-5xl font-bold tabular-nums">
+              {formatCurrency(changeOwed)}
+            </p>
+            <Button variant="gradient" size="xl" fullWidth onClick={() => setChangeOwed(null)}>
+              Handed over
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Success toast */}
       <AnimatePresence>
@@ -894,6 +1055,96 @@ function PosInner({
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+/**
+ * Counting out a cash sale.
+ *
+ * The till used to charge cash the instant the button was pressed, with no record of what
+ * was handed over and no change figure anywhere -- the cashier did the subtraction in their
+ * head, every time, in front of the customer. The quick buttons are the notes somebody
+ * actually hands you for this total, so the common sale is still one tap.
+ */
+function CashPad({
+  total,
+  value,
+  onChange,
+  submitting,
+  onSettle,
+  onBack,
+}: {
+  total: number;
+  value: string;
+  onChange: (v: string) => void;
+  submitting: boolean;
+  onSettle: (tendered: number) => void;
+  onBack: () => void;
+}) {
+  const typed = value.trim() === '' ? null : Number(value);
+  const tendered = typed != null && Number.isFinite(typed) ? typed : null;
+  const change = tendered == null ? null : changeDue(tendered, total);
+  const short = change != null && change < 0;
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-3 gap-2">
+        {quickTender(total).map((amount, i) => (
+          <Button
+            key={amount}
+            variant="outline"
+            size="lg"
+            fullWidth
+            disabled={submitting}
+            onClick={() => onSettle(amount)}
+          >
+            {i === 0 ? 'Exact' : formatCurrency(amount)}
+          </Button>
+        ))}
+      </div>
+
+      <label className="block">
+        <span className="text-muted-foreground mb-1.5 block text-sm font-medium">
+          Or type what they handed over
+        </span>
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value.replace(/[^0-9.]/g, ''))}
+          inputMode="decimal"
+          placeholder={total.toFixed(2)}
+          aria-label="Cash received"
+          className="focus-ring border-border bg-background h-14 w-full rounded-xl border px-4 text-center font-display text-2xl font-bold tabular-nums"
+        />
+      </label>
+
+      {change != null && (
+        <p
+          className={`text-center text-lg font-semibold tabular-nums ${
+            short ? 'text-danger' : 'text-foreground'
+          }`}
+        >
+          {short
+            ? `${formatCurrency(Math.abs(change))} still to come`
+            : `Change ${formatCurrency(change)}`}
+        </p>
+      )}
+
+      <div className="flex gap-2">
+        <Button variant="ghost" size="xl" onClick={onBack} disabled={submitting}>
+          Back
+        </Button>
+        <Button
+          variant="gradient"
+          size="xl"
+          fullWidth
+          loading={submitting}
+          disabled={tendered == null || short}
+          onClick={() => tendered != null && onSettle(tendered)}
+        >
+          Complete sale
+        </Button>
+      </div>
     </div>
   );
 }
