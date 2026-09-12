@@ -19,8 +19,8 @@ import {
   type SelectedModifier,
 } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
-import { placeOrder } from '@favornoms/database/queries';
-import { Button, RiderIcon, Segmented, Sheet } from '@favornoms/ui';
+import { placeOrder, type ComboSet } from '@favornoms/database/queries';
+import { Button, RiderIcon, Segmented, Sheet, useConfirm } from '@favornoms/ui';
 import {
   changeDue,
   digitsOnly,
@@ -29,10 +29,14 @@ import {
   summariseSplit,
 } from './counter-math';
 import { CounterItemSheet } from './counter-item-sheet';
+import { CounterComboSheet } from './counter-combo-sheet';
 import { PrinterProvider, PrinterStatusButton, usePrinter } from './printer-control';
 
 interface Line {
   id: string;
+  /** Absent on carts parked before the till could sell a combo, which were all items. */
+  kind?: 'item' | 'combo';
+  /** The menu item id, or for a combo line the combo_set id. */
   menuItemId: string;
   name: string;
   /** Base price PLUS the chosen options, which is what this line actually sells for. */
@@ -44,7 +48,11 @@ interface Line {
   modifiers?: SelectedModifier[];
   /** Free text for the kitchen ticket. */
   notes?: string;
+  /** Combo lines only: the dishes inside, for the cart and the printed ticket. */
+  contents?: Array<{ name: string; quantity: number }>;
 }
+
+const isCombo = (l: Line) => l.kind === 'combo';
 type Channel = 'dine_in' | 'pickup' | 'delivery' | 'qr_ordering';
 type PayMethod = 'cash' | 'card';
 
@@ -64,6 +72,8 @@ interface Props {
   items: MenuItem[];
   /** Active tables at this branch. Empty for a branch that has never set any up. */
   tables?: CounterTable[];
+  /** The branch's live combos. Empty for a branch that sells none. */
+  combos?: ComboSet[];
   /** `card_payment` entitlement — default false so a missing prop cannot sell it. */
   canUseCard?: boolean;
   /** `delivery` entitlement — same. */
@@ -152,6 +162,7 @@ function PosInner({
   categories,
   items,
   tables = [],
+  combos = [],
   canUseCard = false,
   canDeliver = false,
   salesTaxRate = 0,
@@ -159,6 +170,9 @@ function PosInner({
   deliveryFeeFlat = 0,
 }: Props) {
   const { print, kickDrawer } = usePrinter();
+  // Named askConfirm, not confirm: this component already has confirmPark and its own
+  // park dialog, and a bare `confirm` here would read like one of those.
+  const askConfirm = useConfirm();
   const [activeCategory, setActiveCategory] = React.useState<string>('all');
   const [search, setSearch] = React.useState('');
   const [lines, setLines] = React.useState<Line[]>([]);
@@ -190,6 +204,15 @@ function PosInner({
   const [changeOwed, setChangeOwed] = React.useState<number | null>(null);
   /** The label being typed for a cart about to be parked, or null. */
   const [parkLabel, setParkLabel] = React.useState<string | null>(null);
+  /** The combo whose quantity is being picked, or null. */
+  const [configuringCombo, setConfiguringCombo] = React.useState<ComboSet | null>(null);
+  /**
+   * Who the order is for.
+   *
+   * Every counter order went in as "Walk-in" with a placeholder phone, so Recent orders was
+   * a column of identical names and a pickup could not be called out to anybody.
+   */
+  const [customerName, setCustomerName] = React.useState('');
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -239,17 +262,27 @@ function PosInner({
     persistParked([next, ...parked]);
     setParkLabel(null);
     setLines([]);
+    setCustomerName('');
     setTableNumber('');
     setTableId(null);
     setDiscountInput('');
     setSplitInput('');
   };
 
-  const resumeParked = (parkedId: string) => {
+  const resumeParked = async (parkedId: string) => {
     const target = parked.find((p) => p.id === parkedId);
     if (!target) return;
     if (lines.length > 0) {
-      if (!window.confirm('Replace current cart with this parked order?')) return;
+      if (
+        !(await askConfirm({
+          title: 'Replace the current cart?',
+          body: 'The items rung up now are cleared and this parked order takes their place.',
+          confirmLabel: 'Replace',
+          destructive: true,
+        }))
+      ) {
+        return;
+      }
     }
     setLines(target.lines);
     // Parked orders live in localStorage indefinitely, so one can outlive the
@@ -264,19 +297,38 @@ function PosInner({
     setShowParked(false);
   };
 
-  const discardParked = (parkedId: string) => {
-    if (!window.confirm('Discard this parked order?')) return;
+  const discardParked = async (parkedId: string) => {
+    if (
+      !(await askConfirm({
+        title: 'Discard this parked order?',
+        body: 'The saved cart is deleted and cannot be brought back.',
+        confirmLabel: 'Discard',
+        destructive: true,
+      }))
+    ) {
+      return;
+    }
     persistParked(parked.filter((p) => p.id !== parkedId));
   };
 
   const filtered = React.useMemo(() => {
     const q = search.trim().toLowerCase();
+    // 'combos' is a pseudo-category: combos are not menu items and have no category_id, so
+    // picking it hides the item grid entirely rather than filtering it.
+    if (activeCategory === 'combos') return [];
     return items.filter((i) => {
       if (activeCategory !== 'all' && i.categoryId !== activeCategory) return false;
       if (!q) return true;
       return i.name.toLowerCase().includes(q);
     });
   }, [items, activeCategory, search]);
+
+  const visibleCombos = React.useMemo(() => {
+    if (combos.length === 0) return [];
+    if (activeCategory !== 'all' && activeCategory !== 'combos') return [];
+    const q = search.trim().toLowerCase();
+    return q ? combos.filter((c) => c.name.toLowerCase().includes(q)) : combos;
+  }, [combos, activeCategory, search]);
 
   const subtotal = r2(lines.reduce((s, l) => s + l.unitPrice * l.quantity, 0));
   // A percentage of a DOLLAR amount, rounded to the cent. Rounding to whole dollars took
@@ -354,6 +406,43 @@ function PosInner({
     [],
   );
 
+  /**
+   * Add a combo to the cart.
+   *
+   * Keyed on the combo AND its note for the same reason items are: two of the same deal
+   * with different kitchen notes are two different tickets.
+   */
+  const addCombo = React.useCallback(
+    (args: { combo: ComboSet; quantity: number; notes: string }) => {
+      const { combo, quantity, notes } = args;
+      setLines((curr) => {
+        const existing = curr.find(
+          (l) => isCombo(l) && l.menuItemId === combo.id && (l.notes ?? '') === notes,
+        );
+        if (existing) {
+          return curr.map((l) =>
+            l.id === existing.id ? { ...l, quantity: l.quantity + quantity } : l,
+          );
+        }
+        return [
+          ...curr,
+          {
+            id: `combo-${combo.id}-${Date.now()}-${curr.length}`,
+            kind: 'combo' as const,
+            menuItemId: combo.id,
+            name: combo.name,
+            unitPrice: combo.total_price,
+            imageUrl: combo.image_url,
+            quantity,
+            notes: notes || undefined,
+            contents: combo.items.map((it) => ({ name: it.item_name, quantity: it.quantity })),
+          },
+        ];
+      });
+    },
+    [],
+  );
+
   const updateQty = (lineId: string, delta: number) => {
     setLines((curr) =>
       curr
@@ -374,6 +463,7 @@ function PosInner({
       if (e.key === 'Escape') {
         setPayOpen(false);
         setConfiguring(null);
+        setConfiguringCombo(null);
         return;
       }
       if ((e.key === 'p' || e.key === 'P') && (e.ctrlKey || e.metaKey)) {
@@ -401,7 +491,10 @@ function PosInner({
       const result = await placeOrder(supabase, {
         branch_id: branchId,
         channel,
-        customer_name: tableNumber ? `Table ${tableNumber}` : 'Walk-in',
+        // A typed name wins over the table, and the table over nothing: Recent orders and
+        // the pickup shout-out both read this field.
+        customer_name:
+          customerName.trim() || (tableNumber ? `Table ${tableNumber}` : 'Walk-in'),
         customer_phone: '+10000000000',
         customer_notes: tableNumber ? `Table ${tableNumber}` : undefined,
         // Staff surface: place-order exempts it from the storefront's
@@ -413,12 +506,20 @@ function PosInner({
         // The options and the note travel with the line. place-order has always accepted
         // both; the till simply never sent them, so every counter ticket reached the
         // kitchen stripped of whatever the customer actually asked for.
-        items: lines.map((l) => ({
-          menu_item_id: l.menuItemId,
-          quantity: l.quantity,
-          notes: l.notes,
-          modifier_option_ids: l.modifiers?.map((m) => m.option_id),
-        })),
+        items: lines
+          .filter((l) => !isCombo(l))
+          .map((l) => ({
+            menu_item_id: l.menuItemId,
+            quantity: l.quantity,
+            notes: l.notes,
+            modifier_option_ids: l.modifiers?.map((m) => m.option_id),
+          })),
+        // place-order prices a combo from combo_sets.total_price and refuses one that is
+        // not this branch's or no longer active, so the till sends the id and the count and
+        // nothing else.
+        combos: lines
+          .filter(isCombo)
+          .map((l) => ({ combo_id: l.menuItemId, quantity: l.quantity, notes: l.notes })),
       });
       // Everything past this point settles an order that already exists, so a failure here
       // is never "the sale did not happen". Two kinds of failure, kept apart because they
@@ -498,6 +599,7 @@ function PosInner({
       setPayOpen(false);
       setCashStep(false);
       setTenderedInput('');
+      setCustomerName('');
 
       // Fire-and-forget receipt print + cash drawer kick on cash payments
       void print({
@@ -514,6 +616,12 @@ function PosInner({
           notes:
             [
               l.modifiers?.length ? l.modifiers.map((m) => m.option_name).join(', ') : null,
+              // A combo prints as one priced line, so the dishes inside it have nowhere
+              // else to go; without this the customer's paper says "Burger Combo Deal"
+              // and nothing about what they are owed.
+              l.contents?.length
+                ? l.contents.map((c) => `${c.quantity}× ${c.name}`).join(', ')
+                : null,
               l.notes ?? null,
             ]
               .filter(Boolean)
@@ -526,6 +634,7 @@ function PosInner({
         taxAmount: (priced ? Number(priced.tax_amount) : taxAmount) || undefined,
         total: chargedTotal,
         paymentMethod: method,
+        customerName: customerName.trim() || null,
         // ReceiptInput has carried this field all along and the till never filled it, so a
         // cash receipt printed no record of what was handed over or given back.
         cashTendered: method === 'cash' ? tendered : undefined,
@@ -640,14 +749,14 @@ function PosInner({
                   <div className="flex gap-1">
                     <button
                       type="button"
-                      onClick={() => resumeParked(p.id)}
+                      onClick={() => void resumeParked(p.id)}
                       className="focus-ring rounded-lg bg-primary px-2 py-1 text-xs font-semibold text-primary-foreground"
                     >
                       Resume
                     </button>
                     <button
                       type="button"
-                      onClick={() => discardParked(p.id)}
+                      onClick={() => void discardParked(p.id)}
                       className="focus-ring rounded-lg bg-muted px-2 py-1 text-xs font-semibold text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                     >
                       ×
@@ -681,6 +790,18 @@ function PosInner({
             >
               All
             </button>
+            {combos.length > 0 && (
+              <button
+                onClick={() => setActiveCategory('combos')}
+                className={`focus-ring inline-flex h-10 items-center gap-2 rounded-full border px-3 text-sm font-semibold ${
+                  activeCategory === 'combos'
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-border bg-card'
+                }`}
+              >
+                <span aria-hidden>🎁</span> Combos
+              </button>
+            )}
             {categories.map((c) => (
               <button
                 key={c.id}
@@ -696,7 +817,49 @@ function PosInner({
             ))}
           </div>
           <div className="flex-1 overflow-y-auto p-4">
-            {filtered.length === 0 ? (
+            {/* Above the dishes, not mixed into them: a combo is a different kind of thing
+                and it is the one a customer asks for by the name on the poster. */}
+            {visibleCombos.length > 0 && (
+              <div className="mb-4">
+                <h2 className="text-muted-foreground mb-2 text-xs font-semibold uppercase tracking-wider">
+                  Combos
+                </h2>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                  {visibleCombos.map((c) => (
+                    <motion.button
+                      key={c.id}
+                      whileTap={{ scale: 0.96 }}
+                      onClick={() => setConfiguringCombo(c)}
+                      className="focus-ring border-primary/40 overflow-hidden rounded-2xl border bg-card text-left shadow-soft transition-shadow hover:shadow-warm"
+                    >
+                      <div className="relative aspect-square overflow-hidden">
+                        {c.image_url ? (
+                          <Image
+                            src={c.image_url}
+                            alt={c.name}
+                            fill
+                            sizes="(max-width:640px) 50vw, 20vw"
+                            className="object-cover"
+                          />
+                        ) : (
+                          <div className="bg-gradient-sunset absolute inset-0" aria-hidden />
+                        )}
+                      </div>
+                      <div className="p-2.5">
+                        <p className="line-clamp-2 text-sm font-semibold leading-tight">{c.name}</p>
+                        <p className="font-display text-primary mt-0.5 text-base font-bold">
+                          {formatCurrency(c.total_price)}
+                        </p>
+                        <p className="text-muted-foreground text-xs">
+                          {c.items.length} item{c.items.length === 1 ? '' : 's'}
+                        </p>
+                      </div>
+                    </motion.button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {filtered.length === 0 && visibleCombos.length === 0 ? (
               <div className="grid place-items-center py-20 text-center">
                 <div>
                   <Utensils className="mx-auto h-10 w-10 text-muted-foreground" />
@@ -780,6 +943,11 @@ function PosInner({
                             {line.modifiers.map((m) => m.option_name).join(', ')}
                           </p>
                         )}
+                        {line.contents && line.contents.length > 0 && (
+                          <p className="text-muted-foreground line-clamp-2 text-xs">
+                            {line.contents.map((c) => `${c.quantity}× ${c.name}`).join(', ')}
+                          </p>
+                        )}
                         {line.notes && (
                           <p className="text-warning line-clamp-2 text-xs">{line.notes}</p>
                         )}
@@ -809,6 +977,22 @@ function PosInner({
             )}
           </div>
           <div className="border-t border-border/60 p-4 space-y-3">
+            {/* Pickup and delivery are called out by name; dine-in is called out by table,
+                which the picker below already sets. Optional everywhere -- a queue does not
+                stop for a field nobody needs. */}
+            {channel !== 'dine_in' && (
+              <label className="block">
+                <span className="text-muted-foreground mb-1.5 block text-xs font-semibold uppercase tracking-wider">
+                  Customer name
+                </span>
+                <input
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value.slice(0, 60))}
+                  placeholder="Optional — who to call out"
+                  className="focus-ring border-border bg-card h-10 w-full rounded-xl border px-3 text-base"
+                />
+              </label>
+            )}
             {channel === 'dine_in' && (
               <div className="space-y-1.5">
                 {/* The picker used to carry an aria-label and nothing visible, so a closed
@@ -971,6 +1155,12 @@ function PosInner({
         item={configuring}
         onClose={() => setConfiguring(null)}
         onAdd={addConfigured}
+      />
+
+      <CounterComboSheet
+        combo={configuringCombo}
+        onClose={() => setConfiguringCombo(null)}
+        onAdd={addCombo}
       />
 
       <Sheet
