@@ -68,11 +68,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     // Branch-scoped manifest so an install from here opens this restaurant,
     // not the platform landing page the root manifest points at.
     manifest: `/r/${restaurant}/${branch}/manifest.webmanifest`,
-    applicationName: names.full,
+    // Our own install card reads this, so it offers the app under the name Chrome's dialog and
+    // the home screen will then show.
+    applicationName: names.app,
     // iOS ignores the manifest for A2HS naming and reads this instead, and it has to agree
-    // with the manifest's short_name or the same restaurant is installed under two labels
-    // depending on the phone. Short because iOS truncates around a dozen characters.
-    appleWebApp: { capable: true, statusBarStyle: 'default', title: names.short },
+    // with the manifest or the same restaurant is installed under two labels depending on
+    // the phone.
+    appleWebApp: { capable: true, statusBarStyle: 'default', title: names.app },
     // Sizes are declared only for the normalised icons the admin uploader produced —
     // those really are 192x192/512x512 PNGs. A legacy free-form favicon (uploaded
     // before normalisation existed) still gets no `sizes`, because claiming dimensions

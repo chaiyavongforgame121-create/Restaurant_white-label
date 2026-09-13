@@ -1,6 +1,6 @@
 'use client';
 
-// Logo and favicon, on the settings screen where a merchant looks for them.
+// App name, logo and icon, on the settings screen where a merchant looks for them.
 //
 // They were never missing — they live in the Brands page, inside an editor that only opens
 // once a brand exists. A restaurant that has never created one (Coastal Grill had not) sees
@@ -14,7 +14,7 @@
 
 import * as React from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Palette, Save } from 'lucide-react';
+import { Palette, Save, Store } from 'lucide-react';
 import { Button, Card } from '@favornoms/ui';
 import { getBrowserClient } from '@favornoms/database/client';
 import { storefrontBase } from '@/lib/site-url';
@@ -50,6 +50,7 @@ function askStorefrontToRefresh(branchId: string): void {
 export interface BrandingBrand {
   id: string;
   name: string;
+  theme?: Record<string, unknown> | null;
   logo_url: string | null;
   favicon_url: string | null;
   icon_192_url: string | null;
@@ -64,13 +65,27 @@ interface Props {
   brand: BrandingBrand | null;
 }
 
+/** Long enough for a real restaurant name; Chrome's dialog and every launcher cut far sooner. */
+const APP_NAME_MAX = 40;
+/** Android and iOS both start truncating under the icon at about this many characters. */
+const HOME_SCREEN_FITS = 12;
+
 function slugify(v: string): string {
   return v.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'default';
+}
+
+function storefrontHost(): string {
+  try {
+    return new URL(storefrontBase()).host;
+  } catch {
+    return '';
+  }
 }
 
 export function BrandingCard({ restaurantId, restaurantName, brand }: Props) {
   const router = useRouter();
   const { branchId } = useParams<{ branchId: string }>();
+  const [appName, setAppName] = React.useState<string>(brand?.name || restaurantName);
   const [logoUrl, setLogoUrl] = React.useState<string | null>(brand?.logo_url ?? null);
   const [icons, setIcons] = React.useState<IconSet>({
     faviconUrl: brand?.favicon_url ?? null,
@@ -81,12 +96,26 @@ export function BrandingCard({ restaurantId, restaurantName, brand }: Props) {
   const [saving, setSaving] = React.useState(false);
   const [savedAt, setSavedAt] = React.useState<number | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [host, setHost] = React.useState('');
+
+  // storefrontBase() may read window, so resolve it after mount rather than during render.
+  React.useEffect(() => setHost(storefrontHost()), []);
+
+  const trimmedName = appName.trim();
+  const previewIcon = icons.icon192Url ?? icons.faviconUrl;
 
   const save = async () => {
+    if (!trimmedName) {
+      setError('Give your app a name — it is what customers see under the icon.');
+      return;
+    }
     setSaving(true);
     setError(null);
     const supabase = getBrowserClient();
     const payload = {
+      // The storefront names the installed app after brands.name. theme.brandName is kept in
+      // step because the Brands page writes both, and an older reader may still look there.
+      name: trimmedName,
       logo_url: logoUrl,
       favicon_url: icons.faviconUrl,
       icon_192_url: icons.icon192Url,
@@ -100,7 +129,7 @@ export function BrandingCard({ restaurantId, restaurantName, brand }: Props) {
       // 'brand.edit' capability.
       const { data, error: updErr } = await supabase
         .from('brands')
-        .update(payload)
+        .update({ ...payload, theme: { ...(brand.theme ?? {}), brandName: trimmedName } })
         .eq('id', brand.id)
         .select('id');
       setSaving(false);
@@ -113,10 +142,9 @@ export function BrandingCard({ restaurantId, restaurantName, brand }: Props) {
         .from('brands')
         .insert({
           restaurant_id: restaurantId,
-          name: restaurantName,
-          slug: slugify(restaurantName),
+          slug: slugify(trimmedName),
           is_default: true,
-          theme: {},
+          theme: { brandName: trimmedName },
           ...payload,
         })
         .select('id');
@@ -137,10 +165,29 @@ export function BrandingCard({ restaurantId, restaurantName, brand }: Props) {
         <Palette className="h-5 w-5 text-primary" /> Branding
       </h2>
       <p className="text-sm text-muted-foreground">
-        Your logo and icon, as customers see them. The logo appears at the top of your
-        storefront on every page; the icon becomes the browser tab favicon and the app icon
-        when someone installs your menu to their phone.
+        Your app name, logo and icon, as customers see them. The logo appears at the top of your
+        storefront on every page; the name and icon are what customers get when they install
+        your menu to their phone or computer.
       </p>
+
+      <label className="mt-4 block">
+        <span className="mb-1.5 block text-sm font-medium">App name</span>
+        <input
+          value={appName}
+          maxLength={APP_NAME_MAX}
+          onChange={(e) => {
+            setAppName(e.target.value);
+            setSavedAt(null);
+          }}
+          placeholder={restaurantName}
+          className="input"
+        />
+        <span className="mt-1.5 block text-xs text-muted-foreground">
+          Shown in the install window, under the home-screen icon and on the desktop shortcut.
+          {trimmedName.length > HOME_SCREEN_FITS &&
+            ` Phones may shorten names longer than ${HOME_SCREEN_FITS} characters under the icon.`}
+        </span>
+      </label>
 
       <div className="mt-4 grid gap-5 sm:grid-cols-2">
         <div>
@@ -159,11 +206,49 @@ export function BrandingCard({ restaurantId, restaurantName, brand }: Props) {
         </div>
         <div>
           <span className="mb-2 block text-sm font-medium">Icon</span>
-          <IconUpload restaurantId={restaurantId} value={icons} onChange={setIcons} />
+          <IconUpload
+            restaurantId={restaurantId}
+            value={icons}
+            onChange={(next) => {
+              setIcons(next);
+              setSavedAt(null);
+            }}
+          />
           <span className="mt-1.5 block text-xs text-muted-foreground">
             Square, at least 192×192. Used for the browser tab and the installed app icon.
           </span>
         </div>
+      </div>
+
+      {/* The same name and icon the storefront manifest publishes, so what the merchant sees
+          here is what Chrome's install window and the home screen will show. */}
+      <div className="mt-5">
+        <span className="mb-2 block text-sm font-medium">What customers see when they install</span>
+        <div className="flex items-center gap-3 rounded-2xl border border-border bg-muted/30 p-3">
+          {previewIcon ? (
+            // eslint-disable-next-line @next/next/no-img-element -- a storage URL chosen at runtime
+            <img
+              src={previewIcon}
+              alt=""
+              width={48}
+              height={48}
+              className="h-12 w-12 shrink-0 rounded-xl object-cover"
+            />
+          ) : (
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-muted text-muted-foreground">
+              <Store className="h-6 w-6" />
+            </span>
+          )}
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold">{trimmedName || restaurantName}</p>
+            {host && <p className="truncate text-xs text-muted-foreground">{host}</p>}
+          </div>
+        </div>
+        <span className="mt-1.5 block text-xs text-muted-foreground">
+          {previewIcon
+            ? 'Save to publish. Someone who already installed the app gets the new name and icon the next time Chrome checks for updates, usually within a day — removing and reinstalling shows it straight away.'
+            : 'No icon yet — installs use the Favornoms icon until you upload one.'}
+        </span>
       </div>
 
       {!brand && (
@@ -180,7 +265,7 @@ export function BrandingCard({ restaurantId, restaurantName, brand }: Props) {
           Save branding
         </Button>
         {savedAt && !saving && (
-          <span className="text-sm text-success">Saved ✓ — customers see this within seconds</span>
+          <span className="text-sm text-success">Saved ✓ — customers see this within a minute</span>
         )}
       </div>
     </Card>
