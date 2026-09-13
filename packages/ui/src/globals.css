@@ -198,6 +198,48 @@
     @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background;
   }
 
+  /* The shared text field, in the theme's colours.
+     It used to exist only as copies inside individual components' <style jsx> blocks, and a
+     non-global styled-jsx rule reaches only that component's own elements. Any field rendered
+     by a child component — the Branding card's App name, for one — fell through to the
+     browser's default white box with near-white text in dark mode. Defining it once here gives
+     every app the same field whichever component draws it; the old copies still match and do
+     no harm. In the components layer, so a utility such as `h-24` still wins. */
+  .input {
+    width: 100%;
+    min-height: 48px;
+    padding: 0 1rem;
+    font-size: max(16px, 1rem);
+    border-radius: 0.875rem;
+    border: 1px solid hsl(var(--border));
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    transition:
+      border-color 150ms ease,
+      box-shadow 150ms ease;
+  }
+  textarea.input {
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+  }
+  .input::placeholder {
+    color: hsl(var(--muted-foreground));
+    opacity: 1;
+  }
+  .input:focus-visible {
+    outline: none;
+    border-color: hsl(var(--primary));
+    box-shadow: 0 0 0 3px hsl(var(--primary) / 0.18);
+  }
+  .input:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+  /* Native date/time pickers and number spinners follow the theme instead of staying light. */
+  .dark .input {
+    color-scheme: dark;
+  }
+
   .pb-safe {
     padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
   }
