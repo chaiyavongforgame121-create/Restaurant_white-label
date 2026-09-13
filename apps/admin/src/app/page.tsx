@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getServerClient } from '@favornoms/database/server';
+import { isPlatformAdmin } from '@favornoms/database/queries';
 
 // Each staff role lands on its own surface after sign-in.
 function landingPath(role: string, branchId: string): string {
@@ -37,7 +38,13 @@ export default async function RootPage() {
     .eq('user_id', userData.user.id)
     .eq('status', 'active');
 
-  if (!memberships || memberships.length === 0) redirect('/onboarding');
+  if (!memberships || memberships.length === 0) {
+    // The platform owner is staff of nobody, so this branch used to send them straight into
+    // the new-restaurant wizard on every sign-in — one press of Launch away from creating a
+    // real trial restaurant owned by the platform account, with no link to their console.
+    if (await isPlatformAdmin(supabase)) redirect('/platform');
+    redirect('/onboarding');
+  }
 
   const chosen = [...memberships].sort(
     (a, b) => ROLE_PRIORITY.indexOf(a.role) - ROLE_PRIORITY.indexOf(b.role),

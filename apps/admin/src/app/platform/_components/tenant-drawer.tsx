@@ -321,7 +321,8 @@ function Package({ row, health }: { row: TenantRow; health: TenantHealth }) {
           <dd className="font-semibold tabular-nums">{money(ent.monthlyTotal)}</dd>
         </div>
         <div>
-          <dt className="text-xs text-muted-foreground">{health.entitled ? 'Renews' : 'Lapsed'}</dt>
+          {/* Not "Renews": nothing renews by itself, the store goes dark on this date. */}
+          <dt className="text-xs text-muted-foreground">{health.entitled ? 'Paid through' : 'Lapsed'}</dt>
           <dd className="font-semibold tabular-nums">
             {fmtDate(ent.entitledThrough ?? ent.trialEndsAt)}
           </dd>

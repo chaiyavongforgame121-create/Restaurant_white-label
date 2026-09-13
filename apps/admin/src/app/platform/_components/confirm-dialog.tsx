@@ -170,34 +170,32 @@ export function reactivateCopy(
   planLabel: string,
   monthly: number | null,
   seats: number,
-  nowMs: number,
+  /** The exact paid-through date the write will produce (see extensionPeriodEnd). */
+  periodEnd: Date,
+  /** The current deadline when extending a store that has not lapsed yet, else null. */
+  extendsFrom: string | null,
 ): ConfirmCopy {
-  // Postgres `+ interval '1 month'` clamps to the end of the target month; JS
-  // setUTCMonth overflows (Jan 31 -> Mar 3). Left alone, the one sentence this
-  // dialog exists to make true would name a paid-through date the RPC will not
-  // write — on 7 calendar days a year, for a money write.
-  const periodEnd = new Date(nowMs);
-  const startDay = periodEnd.getUTCDate();
-  periodEnd.setUTCDate(1);
-  periodEnd.setUTCMonth(periodEnd.getUTCMonth() + 1);
-  const lastDay = new Date(
-    Date.UTC(periodEnd.getUTCFullYear(), periodEnd.getUTCMonth() + 1, 0),
-  ).getUTCDate();
-  periodEnd.setUTCDate(Math.min(startDay, lastDay));
   const stillSuspended = branches.filter((b) => !b.is_active).length;
+  const price = monthly === null ? '' : ` at ${money(monthly)}/mo`;
+  const seatText = `${seats} branch${seats === 1 ? '' : 'es'}`;
 
   return {
     titleText: kind === 'extend' ? `Extend ${row.name} by 1 month?` : `Put ${row.name} on ${planLabel}?`,
     confirmLabel: kind === 'extend' ? 'Extend' : `Charge ${planLabel}`,
     confirmVariant: 'primary',
-    body: (
+    body: extendsFrom ? (
+      <>
+        Adds 1 month to the {row.ent.planCode} package the tenant already has{price} for {seatText}:
+        paid through {fmtDate(extendsFrom)} becomes {fmtDate(periodEnd.toISOString())}. The store is
+        still live, so diners notice nothing.
+      </>
+    ) : (
       <>
         {kind === 'extend'
           ? `Re-bills the ${row.ent.planCode} package the tenant already has`
           : `Moves ${row.name} off ${row.ent.planCode} and onto ${planLabel}`}
-        {monthly === null ? '' : ` at ${money(monthly)}/mo`} for {seats} branch{seats === 1 ? '' : 'es'},
-        paid through {fmtDate(periodEnd.toISOString())}. The storefront comes back on the diner&apos;s
-        next request.
+        {price} for {seatText}, paid through {fmtDate(periodEnd.toISOString())}. The storefront comes
+        back on the diner&apos;s next request.
       </>
     ),
     warning:

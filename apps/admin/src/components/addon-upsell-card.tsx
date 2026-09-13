@@ -14,9 +14,16 @@ interface Props {
   price: number;
   description: string;
   bullets?: string[];
+  /** Catalog code of the add-on this card sells (e.g. 'delivery'), pre-ticked on the plan page. */
+  addon?: string;
 }
 
-export function AddonUpsellCard({ branchId, title, price, description, bullets = [] }: Props) {
+export function AddonUpsellCard({ branchId, title, price, description, bullets = [], addon }: Props) {
+  // The button used to open the plan page bare, so a merchant who pressed "Add to my
+  // package" on Delivery had to find and tick Delivery all over again. The plan page
+  // matches `add` against the catalog's codes and names, which is why the title is a
+  // safe fallback for a caller that does not pass the code.
+  const href = `/b/${branchId}/settings/plan?add=${encodeURIComponent(addon ?? title)}`;
   return (
     <Card className="border-dashed p-5">
       <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
@@ -35,7 +42,7 @@ export function AddonUpsellCard({ branchId, title, price, description, bullets =
           +${price}
           <span className="ml-1 text-sm font-normal text-muted-foreground">/month</span>
         </p>
-        <Link href={`/b/${branchId}/settings/plan`}>
+        <Link href={href}>
           <Button size="sm" variant="gradient" leftIcon={<Sparkles className="h-4 w-4" />}>
             Add to my package
           </Button>

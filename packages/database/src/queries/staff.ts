@@ -61,6 +61,44 @@ export async function inviteStaff(
 }
 
 /**
+ * True when inviteStaff failed because that email is already an active member of the
+ * restaurant. invite-staff keeps one row per restaurant and email and answers 409
+ * already_active, which is exactly what an owner hits when trying to "invite" a cashier to
+ * their second branch — that is a Branch access change, not an invite.
+ */
+export function isStaffAlreadyActiveError(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    err.message.startsWith('invite_staff_failed:409:') &&
+    err.message.includes('already_active')
+  );
+}
+
+/**
+ * Moves an existing team member between one branch and every branch (`branchId` null).
+ * Each staff row holds a single branch_id and nothing could change it after the invite, so a
+ * branch-only cashier could never work at a second branch short of being made
+ * restaurant-wide. The RPC enforces who may do this (owner rows are fixed, admin rows are
+ * owner-only, the branch must be in the same restaurant) and writes the audit row.
+ */
+export async function setStaffBranchScope(
+  supabase: FavornomsClient,
+  staffId: string,
+  branchId: string | null,
+): Promise<void> {
+  // set_staff_branch_scope is not in the generated types yet — thin typed escape.
+  const rpcAny = supabase.rpc.bind(supabase) as unknown as (
+    fn: string,
+    args?: Record<string, unknown>,
+  ) => Promise<{ error: { message: string } | null }>;
+  const { error } = await rpcAny('set_staff_branch_scope', {
+    p_staff_id: staffId,
+    p_branch_id: branchId,
+  });
+  if (error) throw new Error(error.message);
+}
+
+/**
  * Called from /invite/accept after the user signs in via magic link.
  * Links the auth user to the pending staff_members row.
  */

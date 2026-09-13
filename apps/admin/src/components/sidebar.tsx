@@ -7,9 +7,11 @@ import { motion } from 'framer-motion';
 import {
   BarChart3, Building2, ChefHat, ChevronDown, ClipboardList, Cog,
   CreditCard, Gift, Landmark, LayoutDashboard, Menu as MenuIcon, MicVocal, Monitor,
-  Network, Package, Palette, QrCode, Receipt, Star, Store, Tag, Tv, UserRound, Users,
-  Wallet, X,
+  Network, Package, Palette, QrCode, Receipt, ShieldCheck, Star, Store, Tag, Tv, UserRound,
+  Users, Wallet, X,
 } from 'lucide-react';
+import { getBrowserClient } from '@favornoms/database/client';
+import { isPlatformAdmin } from '@favornoms/database/queries';
 import { hasFeature, type Entitlements, type FeatureKey } from '@favornoms/shared';
 import { cn, RiderIcon } from '@favornoms/ui';
 import { ThemeToggle } from './theme-toggle';
@@ -58,7 +60,22 @@ export function Sidebar({
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
+  const [platformAdmin, setPlatformAdmin] = React.useState(false);
   const base = `/b/${branchId}`;
+
+  // The platform owner had no way back to /platform from a back office but typing it: the
+  // only link was the impersonation banner, which is not shown on a restaurant they are
+  // staff of. Asked once per mount; isPlatformAdmin fails closed, so any error hides the
+  // entry rather than showing it to a merchant.
+  React.useEffect(() => {
+    let cancelled = false;
+    void isPlatformAdmin(getBrowserClient()).then((yes) => {
+      if (!cancelled) setPlatformAdmin(yes);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Fails CLOSED, unlike the tier ladder this replaced: hasFeature() requires an
   // explicit `true` on a live subscription, so an unknown plan hides the add-on
@@ -304,7 +321,10 @@ export function Sidebar({
                 );
               })}
         </nav>
-        <div className="border-t border-border/60 px-3 py-3">
+        <div className="space-y-2 border-t border-border/60 px-3 py-3">
+          {platformAdmin && (
+            <ul>{renderItem({ href: '/platform', label: 'Platform console', icon: ShieldCheck })}</ul>
+          )}
           <ThemeToggle />
         </div>
       </aside>

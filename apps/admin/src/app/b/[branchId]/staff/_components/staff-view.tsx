@@ -6,7 +6,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle2, Mail, Plus, UserPlus, X } from 'lucide-react';
 import { Badge, Button, Card, EmptyState } from '@favornoms/ui';
 import { getBrowserClient } from '@favornoms/database/client';
-import { inviteStaff, type StaffRole } from '@favornoms/database/queries';
+import {
+  inviteStaff,
+  isStaffAlreadyActiveError,
+  setStaffBranchScope,
+  type StaffRole,
+} from '@favornoms/database/queries';
 
 interface StaffListItem {
   id: string;
@@ -19,11 +24,21 @@ interface StaffListItem {
   user_id: string | null;
 }
 
+interface BranchOption {
+  id: string;
+  name: string;
+  is_active: boolean;
+}
+
 interface Props {
   branchId: string;
   restaurantId: string;
   branchName: string;
   initialStaff: StaffListItem[];
+  /** Every branch of the restaurant, hidden ones included so a member's current branch
+   *  can still be named. */
+  branches: BranchOption[];
+  viewerIsOwner: boolean;
 }
 
 /** Assignable roles, in descending order of access. `owner` is absent on purpose —
@@ -83,9 +98,16 @@ const roleOptions: { value: AssignableRole; label: string; description: string }
   },
 ];
 
-export function StaffView({ branchId, restaurantId, branchName, initialStaff }: Props) {
+export function StaffView({
+  branchId,
+  restaurantId,
+  branchName,
+  initialStaff,
+  branches,
+  viewerIsOwner,
+}: Props) {
   const router = useRouter();
-  const [staff] = React.useState(initialStaff);
+  const [staff, setStaff] = React.useState(initialStaff);
   const [modalOpen, setModalOpen] = React.useState(false);
 
   return (
@@ -117,19 +139,29 @@ export function StaffView({ branchId, restaurantId, branchName, initialStaff }: 
         <ul className="space-y-2 px-2 lg:px-0">
           {staff.map((s) => (
             <li key={s.id}>
-              <Card className="flex items-center justify-between p-4">
-                <div className="flex items-center gap-3">
+              <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
+                <div className="flex min-w-0 items-center gap-3">
                   <div className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary">
                     <Mail className="h-5 w-5" />
                   </div>
-                  <div>
-                    <p className="font-semibold">{s.invited_email ?? 'Unnamed'}</p>
-                    <p className="text-xs capitalize text-muted-foreground">
-                      {s.role} {s.branch_id ? '· Branch' : '· All branches'}
-                    </p>
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold">{s.invited_email ?? 'Unnamed'}</p>
+                    <p className="text-xs capitalize text-muted-foreground">{s.role}</p>
                   </div>
                 </div>
-                <Badge variant={statusVariant(s.status)}>{s.status}</Badge>
+                <div className="flex items-center gap-3">
+                  <BranchAccess
+                    member={s}
+                    branches={branches}
+                    viewerIsOwner={viewerIsOwner}
+                    onChanged={(next) =>
+                      setStaff((prev) =>
+                        prev.map((m) => (m.id === s.id ? { ...m, branch_id: next } : m)),
+                      )
+                    }
+                  />
+                  <Badge variant={statusVariant(s.status)}>{s.status}</Badge>
+                </div>
               </Card>
             </li>
           ))}
@@ -149,6 +181,92 @@ export function StaffView({ branchId, restaurantId, branchName, initialStaff }: 
           />
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+/**
+ * Which branches one team member can work at. Each staff row holds a single branch_id, and
+ * re-inviting an active member is refused, so without this a branch-only cashier could never
+ * be given the second branch. The locks mirror set_staff_branch_scope: the owner row is
+ * fixed, and only the owner may move an admin.
+ */
+function BranchAccess({
+  member,
+  branches,
+  viewerIsOwner,
+  onChanged,
+}: {
+  member: StaffListItem;
+  branches: BranchOption[];
+  viewerIsOwner: boolean;
+  onChanged: (branchId: string | null) => void;
+}) {
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const current = member.branch_id ? branches.find((b) => b.id === member.branch_id) : undefined;
+
+  const lockedReason =
+    member.role === 'owner'
+      ? 'The owner always has every branch.'
+      : member.role === 'admin' && !viewerIsOwner
+        ? "Only the owner can change an admin's branch access."
+        : null;
+
+  if (lockedReason) {
+    // An owner row carries the first branch's id, but the owner reaches every branch through
+    // the restaurant itself; naming that one branch here would be wrong.
+    const label =
+      member.role === 'owner' || !member.branch_id ? 'All branches' : (current?.name ?? 'One branch');
+    return (
+      <span className="text-xs text-muted-foreground" title={lockedReason}>
+        {label}
+      </span>
+    );
+  }
+
+  const change = async (value: string) => {
+    const next = value === '' ? null : value;
+    if (next === member.branch_id) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await setStaffBranchScope(getBrowserClient(), member.id, next);
+      onChanged(next);
+    } catch (err) {
+      const message = (err as Error).message;
+      setError(
+        message.includes('not_authorized')
+          ? "Your role cannot change this person's branch access."
+          : message,
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <label className="flex items-center gap-2 text-xs text-muted-foreground">
+        Branch access
+        <select
+          value={member.branch_id ?? ''}
+          disabled={saving}
+          onChange={(e) => void change(e.target.value)}
+          className="focus-ring rounded-lg border border-border bg-background px-2 py-1.5 text-sm text-foreground disabled:opacity-60"
+        >
+          <option value="">All branches</option>
+          {branches
+            .filter((b) => b.is_active || b.id === member.branch_id)
+            .map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.is_active ? b.name : `${b.name} (hidden)`}
+              </option>
+            ))}
+          {member.branch_id && !current && <option value={member.branch_id}>One branch</option>}
+        </select>
+      </label>
+      {error && <p className="max-w-xs text-right text-xs text-danger">{error}</p>}
     </div>
   );
 }
@@ -194,7 +312,14 @@ function InviteModal({
       setResult({ emailed: res.emailed });
       onInvited();
     } catch (err) {
-      setError((err as Error).message);
+      // invite-staff keeps one row per restaurant and email, so inviting someone already on
+      // the team (usually to give them a second branch) came back as a raw
+      // "invite_staff_failed:409:..." with no way forward shown.
+      setError(
+        isStaffAlreadyActiveError(err)
+          ? `${email.trim()} is already on your team. To change which branches they can use, set their Branch access in the staff list instead of inviting them again.`
+          : (err as Error).message,
+      );
       setSubmitting(false);
     }
   };

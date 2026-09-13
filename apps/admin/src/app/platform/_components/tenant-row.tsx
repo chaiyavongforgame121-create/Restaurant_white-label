@@ -140,8 +140,9 @@ export function TenantIndexRow({
 
       {/* A broken tenant explains itself and offers its repair without a click;
           everything calmer stays two lines and button-free, so the button is the
-          alarm rather than furniture. */}
-      {health.severity >= 3 && health.reason && (
+          alarm rather than furniture. A paid store about to lapse counts as broken
+          here: the repair is only cheap BEFORE the storefront goes dark. */}
+      {(health.severity >= 3 || health.expiringSoon) && health.reason && (
         <div className="flex flex-col gap-2 px-5 pb-4 md:flex-row md:items-start md:justify-between">
           <p className="flex items-start gap-2 text-xs text-muted-foreground">
             <AlertTriangle

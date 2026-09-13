@@ -22,7 +22,13 @@ import {
   loadBranchDashboard,
   shiftDayKey,
 } from '@favornoms/database/queries';
-import { formatCurrency, hasFeature, trialDaysLeft } from '@favornoms/shared';
+import {
+  formatCurrency,
+  formatInZone,
+  hasFeature,
+  isTrialing,
+  trialDaysLeft,
+} from '@favornoms/shared';
 import { Card } from '@favornoms/ui';
 import { getBranchAccess } from '@/lib/capabilities';
 import { AccessDenied } from '@/components/access-denied';
@@ -37,6 +43,12 @@ import {
 import { ActionRequired, type ActionBucket } from './_components/action-required';
 import { AutoRefresh } from './_components/auto-refresh';
 import { OverviewTiles, type OverviewTile } from './_components/overview-tiles';
+import {
+  paymentMethodOn,
+  SetupChecklist,
+  type SetupStep,
+  type SetupWarning,
+} from './_components/setup-checklist';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,7 +64,10 @@ export default async function DashboardPage({ params }: Props) {
   // This page used to take a raw server client, so it had no capability set and no branch
   // name — it could neither hide a bucket a narrower role may not read nor say whose
   // branch it was reporting on.
-  const { supabase, branch, can } = await getBranchAccess(branchId, `/b/${branchId}/dashboard`);
+  const { supabase, branch, can, role } = await getBranchAccess(
+    branchId,
+    `/b/${branchId}/dashboard`,
+  );
   if (!can('dashboard.view')) {
     return (
       <AccessDenied
@@ -75,17 +90,118 @@ export default async function DashboardPage({ params }: Props) {
   // The capability set has to be resolved before the reads: it decides which of them are
   // issued at all, and firing everything at once on a freshly-expired token races the
   // refresh the awaits above have already settled.
-  const snapshot = await loadBranchDashboard(supabase, branchId, {
-    canViewPayments: can('payments.view'),
-    canRefund: can('orders.refund'),
-    canManageInventory: can('inventory.manage'),
-    canManageDrivers: can('drivers.manage'),
-    deliveryEnabled,
-    now,
-    scheduledWithinMs: SCHEDULED_SOON_MS,
-  });
+  // menu.manage is held by exactly owner, admin and manager: the people who can act on the
+  // setup checklist. A cashier or kitchen account has nothing to do with a map pin.
+  const showSetup = can('menu.manage');
+
+  const [snapshot, setup] = await Promise.all([
+    loadBranchDashboard(supabase, branchId, {
+      canViewPayments: can('payments.view'),
+      canRefund: can('orders.refund'),
+      canManageInventory: can('inventory.manage'),
+      canManageDrivers: can('drivers.manage'),
+      deliveryEnabled,
+      now,
+      scheduledWithinMs: SCHEDULED_SOON_MS,
+    }),
+    // Two head-only counts and one two-column row. This page auto-refreshes, and the
+    // checklist keeps asking on every refresh until the store is ready, so it must stay
+    // cheaper than the reads it sits next to.
+    showSetup
+      ? Promise.all([
+          supabase
+            .from('menu_items')
+            .select('id', { count: 'exact', head: true })
+            .eq('branch_id', branchId)
+            .eq('is_active', true),
+          supabase
+            .from('branch_hours')
+            .select('id', { count: 'exact', head: true })
+            .eq('branch_id', branchId),
+          supabase.from('branches').select('geo_lat, geo_lng').eq('id', branchId).maybeSingle(),
+        ])
+      : null,
+  ]);
 
   const { currency, settings, timezone: tz } = snapshot;
+
+  // A paid package runs for a fixed month and the expiry job switches the store off at the
+  // deadline, mid-service if that is when it falls. Nothing warned anyone before it
+  // happened, so this counts down the last week. Trials already have their own banner.
+  const EXPIRY_WARN_DAYS = 7;
+  const paidThroughMs = entitlements.entitledThrough
+    ? Date.parse(entitlements.entitledThrough)
+    : Number.NaN;
+  const expiryDaysLeft =
+    entitlements.entitled &&
+    !isTrialing(entitlements) &&
+    Number.isFinite(paidThroughMs) &&
+    paidThroughMs - now <= EXPIRY_WARN_DAYS * 86_400_000
+      ? Math.max(0, Math.ceil((paidThroughMs - now) / 86_400_000))
+      : null;
+  // Same rule as the plan page: billing.manage is owner-only in the matrix, but the owner's
+  // admin may file package requests too.
+  const canRenew = can('billing.manage') || role === 'admin';
+
+  const branchSettingsHref = `/b/${branchId}/branch`;
+  const [menuRes, hoursRes, geoRes] = setup ?? [null, null, null];
+  const hasPin = geoRes?.data?.geo_lat != null && geoRes.data.geo_lng != null;
+  const setupSteps: SetupStep[] =
+    menuRes && hoursRes && geoRes
+      ? [
+          {
+            id: 'menu',
+            label: 'Add at least one menu item',
+            why: 'Your storefront is already public, and customers see an empty menu until you add items.',
+            done: (menuRes.count ?? 0) > 0,
+            href: `/b/${branchId}/menu`,
+            hrefLabel: 'Menu',
+            error: menuRes.error?.message ?? null,
+          },
+          {
+            id: 'pin',
+            label: 'Set the map pin',
+            why: 'Delivery fees and rider dispatch are measured from the pin, not from the address text.',
+            done: hasPin,
+            href: branchSettingsHref,
+            hrefLabel: 'Location',
+            error: geoRes.error?.message ?? null,
+          },
+          {
+            id: 'hours',
+            label: 'Save your opening hours',
+            why: 'With no hours saved, the storefront treats this branch as open around the clock.',
+            done: (hoursRes.count ?? 0) > 0,
+            href: branchSettingsHref,
+            hrefLabel: 'Opening hours',
+            error: hoursRes.error?.message ?? null,
+          },
+          {
+            id: 'payment',
+            label: 'Switch on at least one payment method',
+            why: 'With every method off, customers cannot place delivery or pickup orders.',
+            done: paymentMethodOn(settings, hasFeature(entitlements, 'card_payment')),
+            href: branchSettingsHref,
+            hrefLabel: 'Payment methods',
+          },
+        ]
+      : [];
+  // Its own row, not just the unticked pin step: a store selling delivery with no pin takes
+  // orders that no rider will ever be offered, which costs a customer, not only a setup tick.
+  const setupWarnings: SetupWarning[] =
+    deliveryEnabled && geoRes && !geoRes.error && !hasPin
+      ? [
+          {
+            id: 'delivery-no-pin',
+            label: 'Delivery is on, but this branch has no map pin',
+            why: 'Riders cannot be dispatched to delivery orders from this branch until the pin is set.',
+            href: branchSettingsHref,
+            hrefLabel: 'Set the pin',
+          },
+        ]
+      : [];
+  const setupPending =
+    setupWarnings.length > 0 || setupSteps.some((s) => !s.done || Boolean(s.error));
   const selfDelivery = settings.delivery_mode === 'self';
   // place-order's own fallback order: the explicit lead time, then the prep time, then 15.
   const leadMs =
@@ -430,6 +546,40 @@ export default async function DashboardPage({ params }: Props) {
           </Link>
         </Card>
       )}
+
+      {expiryDaysLeft !== null && entitlements.entitledThrough && (
+        <Card className="mb-6 flex flex-wrap items-center justify-between gap-4 border-amber-500/40 bg-amber-500/5 p-4 px-2 lg:px-4">
+          <div className="flex items-center gap-3">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-amber-500/15 text-amber-600">
+              <CalendarClock className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold">
+                Your package is paid through {formatInZone(entitlements.entitledThrough, tz)}
+                {expiryDaysLeft <= 1
+                  ? ' — less than a day left'
+                  : ` — ${expiryDaysLeft} days left`}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                After that the storefront stops taking orders and the back office locks.{' '}
+                {canRenew
+                  ? 'Renewal is a request the Favornoms team approves, so send it before the date.'
+                  : 'Ask the restaurant owner to renew it; renewal is a request the Favornoms team approves.'}
+              </p>
+            </div>
+          </div>
+          {canRenew && (
+            <Link
+              href={`/b/${branchId}/settings/plan?renew=1`}
+              className="focus-ring inline-flex items-center rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white shadow-soft hover:bg-amber-600"
+            >
+              Renew package
+            </Link>
+          )}
+        </Card>
+      )}
+
+      {setupPending && <SetupChecklist steps={setupSteps} warnings={setupWarnings} />}
 
       <section>
         <h2 className="mb-3 px-2 font-display text-xl font-semibold lg:px-0">Business overview</h2>
