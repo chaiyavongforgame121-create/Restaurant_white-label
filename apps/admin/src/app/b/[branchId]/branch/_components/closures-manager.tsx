@@ -4,6 +4,7 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { CalendarX, Plus, Trash2 } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
+import { formatInZone, localInputToUtcIso } from '@favornoms/shared';
 import { Button, Card, IconButton, useConfirm } from '@favornoms/ui';
 
 interface Closure {
@@ -13,7 +14,7 @@ interface Closure {
   reason: string | null;
 }
 
-export function ClosuresManager({ branchId }: { branchId: string }) {
+export function ClosuresManager({ branchId, timezone }: { branchId: string; timezone: string }) {
   const router = useRouter();
   const confirm = useConfirm();
   const [list, setList] = React.useState<Closure[]>([]);
@@ -23,6 +24,12 @@ export function ClosuresManager({ branchId }: { branchId: string }) {
   const [reason, setReason] = React.useState('');
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  // Read after mount: the server renders in its own zone, so a clock printed during SSR is
+  // wrong and a hydration mismatch. The list itself loads client-side for the same reason.
+  const [shopNow, setShopNow] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    setShopNow(formatInZone(new Date().toISOString(), timezone));
+  }, [timezone]);
 
   React.useEffect(() => {
     void refresh();
@@ -39,13 +46,30 @@ export function ClosuresManager({ branchId }: { branchId: string }) {
   };
 
   const create = async () => {
+    // The pickers hand back wall-clock time with no zone. Sent raw, Postgres read it as UTC, so
+    // a Chicago shop's "Christmas Day 12:01 AM" closure started at 6:01 PM on Christmas Eve and
+    // customers could order through hours the merchant believed were blocked. These are the
+    // SHOP's times — the same zone Opening hours are in — converted here to the instants
+    // is_branch_open() compares against.
+    const startsIso = localInputToUtcIso(startsAt, timezone);
+    const endsIso = localInputToUtcIso(endsAt, timezone);
+    if (!startsIso || !endsIso) {
+      setError('Those times could not be read. Pick the start and end again.');
+      return;
+    }
+    // A closure that ends before it starts is accepted by the table and blocks nothing, which
+    // looks to the merchant exactly like a closure that was ignored.
+    if (Date.parse(endsIso) <= Date.parse(startsIso)) {
+      setError('The closure has to end after it starts.');
+      return;
+    }
     setBusy(true);
     setError(null);
     const supabase = getBrowserClient();
     const { error: insErr } = await supabase.from('branch_closures').insert({
       branch_id: branchId,
-      starts_at: startsAt,
-      ends_at: endsAt,
+      starts_at: startsIso,
+      ends_at: endsIso,
       reason: reason || null,
     });
     setBusy(false);
@@ -77,6 +101,12 @@ export function ClosuresManager({ branchId }: { branchId: string }) {
         <div>
           <h2 className="font-display text-lg font-semibold">Holiday hours / Closures</h2>
           <p className="text-sm text-muted-foreground">Block ordering during these periods.</p>
+          {/* Named for the same reason as Opening hours: a merchant setting these from another
+              country has no reason to suspect the fields mean a clock other than their own. */}
+          <p className="mt-1 text-xs text-muted-foreground">
+            Times are <strong>{timezone.replace(/_/g, ' ')}</strong>, the shop&apos;s clock.
+            {shopNow && ` It is ${shopNow} there now.`}
+          </p>
         </div>
         <Button onClick={() => setComposing((c) => !c)} variant={composing ? 'ghost' : 'soft'} size="md" leftIcon={<Plus className="h-4 w-4" />}>
           {composing ? 'Cancel' : 'Add closure'}
@@ -114,7 +144,19 @@ export function ClosuresManager({ branchId }: { branchId: string }) {
           <li key={c.id} className="flex items-center justify-between py-2">
             <div>
               <p className="font-medium">
-                {new Date(c.starts_at).toLocaleString()} → {new Date(c.ends_at).toLocaleString()}
+                {formatInZone(c.starts_at, timezone)} → {formatInZone(c.ends_at, timezone)}
+                {/* Whether the block is actually on right now is the question a merchant asks
+                    when a customer has just ordered through it. */}
+                {Date.parse(c.starts_at) <= Date.now() && Date.now() <= Date.parse(c.ends_at) && (
+                  <span className="ml-2 rounded-full bg-danger/10 px-2 py-0.5 text-xs font-semibold text-danger">
+                    Closed now
+                  </span>
+                )}
+                {Date.parse(c.ends_at) < Date.now() && (
+                  <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">
+                    Ended
+                  </span>
+                )}
               </p>
               {c.reason && <p className="text-xs text-muted-foreground">{c.reason}</p>}
             </div>

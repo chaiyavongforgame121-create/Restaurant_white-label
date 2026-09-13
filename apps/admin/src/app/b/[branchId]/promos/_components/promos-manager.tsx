@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { Plus, Tag, Trash2 } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
+import { formatInZone, localInputToUtcIso } from '@favornoms/shared';
 import { Badge, Button, Card, EmptyState, IconButton, useConfirm } from '@favornoms/ui';
 
 interface Promo {
@@ -20,7 +21,16 @@ interface Promo {
   is_active: boolean;
 }
 
-export function PromosManager({ branchId, initialPromos }: { branchId: string; initialPromos: Promo[] }) {
+export function PromosManager({
+  branchId,
+  timezone,
+  initialPromos,
+}: {
+  branchId: string;
+  /** The branch's zone — what the Ends at picker's wall-clock value means. */
+  timezone: string;
+  initialPromos: Promo[];
+}) {
   const [list, setList] = React.useState(initialPromos);
   const [composing, setComposing] = React.useState(false);
   const [code, setCode] = React.useState('');
@@ -40,6 +50,13 @@ export function PromosManager({ branchId, initialPromos }: { branchId: string; i
   };
 
   const create = async () => {
+    // Same trap as the Closures card: datetime-local has no zone, and a raw value was stored
+    // as UTC, so a promo set to end at 6:51 PM at the shop ended five or six hours early.
+    const endsAtIso = endsAt ? localInputToUtcIso(endsAt, timezone) : null;
+    if (endsAt && !endsAtIso) {
+      setError('That end time could not be read. Pick it again.');
+      return;
+    }
     setBusy(true);
     setError(null);
     const supabase = getBrowserClient();
@@ -50,7 +67,7 @@ export function PromosManager({ branchId, initialPromos }: { branchId: string; i
       value: Number(value),
       min_subtotal: Number(minSubtotal) || 0,
       max_redemptions: maxRedemptions ? Number(maxRedemptions) : null,
-      ends_at: endsAt || null,
+      ends_at: endsAtIso,
     });
     setBusy(false);
     if (insErr) { setError(insErr.message); return; }
@@ -123,7 +140,7 @@ export function PromosManager({ branchId, initialPromos }: { branchId: string; i
             <Field label="Max redemptions (optional)">
               <input value={maxRedemptions} onChange={(e) => setMaxRedemptions(e.target.value.replace(/\D/g, ''))} className="input" inputMode="numeric" placeholder="unlimited" />
             </Field>
-            <Field label="Ends at (optional)">
+            <Field label={`Ends at (optional, ${timezone.replace(/_/g, ' ')} time)`}>
               <input value={endsAt} onChange={(e) => setEndsAt(e.target.value)} type="datetime-local" className="input" />
             </Field>
           </div>
@@ -142,7 +159,7 @@ export function PromosManager({ branchId, initialPromos }: { branchId: string; i
                 <p className="font-mono text-lg font-bold">{p.code}</p>
                 <p className="text-xs text-muted-foreground">
                   {formatKind(p)} · min ${p.min_subtotal} · used {p.redemption_count}{p.max_redemptions ? `/${p.max_redemptions}` : ''}
-                  {p.ends_at && ` · ends ${new Date(p.ends_at).toLocaleDateString()}`}
+                  {p.ends_at && ` · ends ${formatInZone(p.ends_at, timezone)}`}
                 </p>
               </div>
               <div className="flex items-center gap-2">

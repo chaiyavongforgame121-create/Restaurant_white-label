@@ -17,6 +17,7 @@
 // live in branch_schedule_hours and arrive here as `scheduleWindows`; they NARROW opening
 // hours and never extend them, because is_branch_open() still has the final say at submit.
 
+import { wallTimeToUtc } from '@favornoms/shared';
 import {
   bookableRangesForDay,
   intersectRanges,
@@ -70,53 +71,6 @@ export interface BuildScheduleInput {
   slotMinutes: number;
   /** Injected so this is testable and so a single render uses one consistent clock. */
   now?: Date;
-}
-
-/** Offset of `tz` from UTC at `date`, in ms. Positive east of Greenwich. */
-function zoneOffsetMs(date: Date, tz: string): number {
-  const dtf = new Intl.DateTimeFormat('en-US', {
-    timeZone: tz,
-    hour12: false,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
-  const parts: Record<string, string> = {};
-  for (const p of dtf.formatToParts(date)) parts[p.type] = p.value;
-  // Intl renders midnight as hour "24" in some engines; normalise before arithmetic.
-  const asUtc = Date.UTC(
-    Number(parts.year),
-    Number(parts.month) - 1,
-    Number(parts.day),
-    Number(parts.hour) % 24,
-    Number(parts.minute),
-    Number(parts.second),
-  );
-  return asUtc - date.getTime();
-}
-
-/**
- * Branch-local wall time -> UTC instant.
- *
- * Two passes on purpose. The offset depends on the instant, and the instant is what we are
- * solving for, so a single pass is wrong on the two days a year the zone changes: an 8pm
- * slot the evening after a DST shift lands an hour out. The second pass re-reads the offset
- * at the corrected instant and converges.
- */
-function wallTimeToUtc(
-  y: number,
-  m: number,
-  d: number,
-  hh: number,
-  mm: number,
-  tz: string,
-): number {
-  const naive = Date.UTC(y, m - 1, d, hh, mm);
-  const firstPass = naive - zoneOffsetMs(new Date(naive), tz);
-  return naive - zoneOffsetMs(new Date(firstPass), tz);
 }
 
 /** The branch-local calendar date and weekday at a given instant. */
