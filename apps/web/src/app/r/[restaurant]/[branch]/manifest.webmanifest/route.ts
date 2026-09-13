@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { manifestIcons } from '@/lib/app-identity';
 import {
   DEFAULT_THEME_COLOR,
   hexOr,
@@ -22,9 +23,7 @@ interface Props {
  * restaurant on the production host, so Coastal Grill, Somtam Zab and the Favornoms marketing
  * site were one application. Whichever manifest Chrome saw first owned the home-screen icon,
  * a second restaurant could not install separately at all, and the icon that did get installed
- * opened the marketing page. That is the whole of the "the icon never changes" report: the
- * install dialog's NAME is re-parsed on every visit and was right, while the launcher icon is
- * baked into the WebAPK against the shared id and was whatever got there first.
+ * opened the marketing page.
  *
  * Two things fix it, and both are below: an `id` that belongs to this branch and nothing else,
  * and a start_url/scope that keep the installed app inside this restaurant.
@@ -76,8 +75,7 @@ export async function GET(request: Request, { params }: Props) {
   // this one (brooklyn / brooklyn-north) falls inside this scope — a containment quirk in the
   // window, not an identity one, because `id` below still keeps the two apps apart.
   const scope = base || '/';
-  // Same source as the tab, the apple title and the share card — they were four separate
-  // expressions producing four different answers for one restaurant.
+  // Same source as the tab, the apple title, the install card and the admin Branding preview.
   const names = storefrontNames(tenant);
 
   const manifest = {
@@ -88,11 +86,12 @@ export async function GET(request: Request, { params }: Props) {
     // installed on the old shared "/" identity keeps that one for good, which is what the
     // notice on the platform landing page exists to tell them.
     id: `/?app=${tenant.branch.id}`,
-    name: names.full,
-    // What Android prints under the home-screen icon, and what appleWebApp.title says on
-    // iOS. Both truncate around a dozen characters, so it is the brand the merchant typed
-    // rather than brand-and-branch, which would be cut off mid-word on either platform.
-    short_name: names.short,
+    // The App name from the admin Branding card and nothing added to it. Chrome's install
+    // dialog and the desktop shortcut print `name`; Android's launcher prints `short_name`.
+    // They were "Coastal Grill — Hamburger" and "Coastal Grill", so the merchant typed one name
+    // and customers installed another.
+    name: names.app,
+    short_name: names.app,
     description: `Order from ${names.full}`,
     // Where the home-screen icon lands. "/" is the marketing page on every host that is not
     // this merchant's own — the single most visible half of the bug.
@@ -104,7 +103,9 @@ export async function GET(request: Request, { params }: Props) {
     // Same value generateViewport paints the address bar with, from the same helper —
     // an installed app whose chrome changes colour on install looks broken.
     theme_color: hexOr(tenant.theme.primaryColor, DEFAULT_THEME_COLOR),
-    icons: tenantIcons(tenant),
+    // The merchant's icons alone, from this origin, or the platform's alone — never both.
+    // manifestIcons() explains why mixing them installed the wrong icon.
+    icons: manifestIcons(base, tenant),
     categories: ['food', 'lifestyle', 'shopping'],
     lang: 'en',
     dir: 'ltr',
@@ -135,56 +136,3 @@ export async function GET(request: Request, { params }: Props) {
  * is the half that decides how fast an already-installed app sees the change.
  */
 const MANIFEST_CACHE_CONTROL = 'public, max-age=0, s-maxage=60, stale-while-revalidate=300';
-
-interface ManifestIcon {
-  src: string;
-  sizes: string;
-  type: string;
-  purpose: string;
-}
-
-/**
- * Only the sizes the admin uploader guarantees. A tenant that has never set an icon gets
- * exactly the platform-only list.
- *
- * The tenant entries carry the uploader's URL verbatim, and that URL is
- * branding/{restaurantId}/{name}-{uuid}.png — a NEW path for every upload. That is what makes
- * a re-uploaded icon visible to Chrome's WebAPK update check, which compares manifest icon
- * URLs: a re-upload changes them, and nothing else does. (Stamping a storefront-version query
- * on top would change them on every menu edit too, and each change asks Google to re-mint and
- * silently reinstall the app.)
- *
- * The platform icons stay as an unconditional tail. They are a silent downgrade — identical
- * declared sizes and purposes, so a tenant icon that fails to download is replaced with no
- * signal to anyone — but the alternative without a same-origin fallback for the tenant bytes
- * is worse: a manifest whose only icons 404 loses the merchant Chrome's install button
- * outright. Serving these three from our own origin behind the tenant URL is the follow-up
- * that lets the tail go.
- */
-function tenantIcons(tenant: {
-  icon192Url: string | null;
-  icon512Url: string | null;
-  iconMaskable512Url: string | null;
-}): ManifestIcon[] {
-  const icons: ManifestIcon[] = [];
-  if (tenant.icon192Url) {
-    icons.push({ src: tenant.icon192Url, sizes: '192x192', type: 'image/png', purpose: 'any' });
-  }
-  if (tenant.icon512Url) {
-    icons.push({ src: tenant.icon512Url, sizes: '512x512', type: 'image/png', purpose: 'any' });
-  }
-  if (tenant.iconMaskable512Url) {
-    icons.push({
-      src: tenant.iconMaskable512Url,
-      sizes: '512x512',
-      type: 'image/png',
-      purpose: 'maskable',
-    });
-  }
-  icons.push(
-    { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-    { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-    { src: '/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
-  );
-  return icons;
-}

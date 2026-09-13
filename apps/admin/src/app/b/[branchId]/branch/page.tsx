@@ -23,12 +23,12 @@ export default async function BranchPage({ params }: Props) {
   const brandQuery = branch.brand_id
     ? supabase
         .from('brands')
-        .select('id, name, logo_url, favicon_url, icon_192_url, icon_512_url, icon_maskable_512_url')
+        .select('id, name, theme, logo_url, favicon_url, icon_192_url, icon_512_url, icon_maskable_512_url')
         .eq('id', branch.brand_id)
         .maybeSingle()
     : supabase
         .from('brands')
-        .select('id, name, logo_url, favicon_url, icon_192_url, icon_512_url, icon_maskable_512_url')
+        .select('id, name, theme, logo_url, favicon_url, icon_192_url, icon_512_url, icon_maskable_512_url')
         .eq('restaurant_id', branch.restaurant_id)
         .order('is_default', { ascending: false })
         .order('created_at', { ascending: true })
