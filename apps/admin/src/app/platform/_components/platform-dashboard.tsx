@@ -10,18 +10,23 @@
 // to the top without anyone clicking a filter.
 
 import * as React from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, Search } from 'lucide-react';
+import { AlertTriangle, Clock, Inbox, Search } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { setRestaurantPackage } from '@favornoms/database/queries';
 import { PLAN_BASE, formatCurrency, packageMonthlyTotal, type BillingProduct } from '@favornoms/shared';
 import { Button, Card, EmptyState } from '@favornoms/ui';
 import { PlatformNav } from './platform-nav';
+import { usePendingRequestCount } from './pending-requests';
 import { ConfirmDialog, reactivateCopy, suspendCopy, type ConfirmCopy } from './confirm-dialog';
 import { TenantDrawer } from './tenant-drawer';
 import { TenantIndexHeader, TenantIndexRow } from './tenant-row';
 import {
+  EXPIRY_WARN_DAYS,
+  addOneMonthUtc,
   conversionSelection,
+  extensionPeriodEnd,
   renewalSelection,
   resolvePrimaryAction,
   tenantHealth,
@@ -34,7 +39,7 @@ import {
 const INPUT_CLS =
   'h-11 w-full rounded-xl border border-border bg-background px-3 text-base outline-none transition-colors focus-visible:border-primary';
 
-type FilterKey = 'all' | 'attention' | 'offline' | 'live';
+type FilterKey = 'all' | 'attention' | 'expiring' | 'offline' | 'live';
 
 // Named after the two switches this page can prove from its own query. Whether a
 // diner can order right now also depends on hours, closures and the kitchen
@@ -43,12 +48,21 @@ type FilterKey = 'all' | 'attention' | 'offline' | 'live';
 const FILTERS: { value: FilterKey; label: string }[] = [
   { value: 'all', label: 'All' },
   { value: 'attention', label: 'Needs attention' },
+  { value: 'expiring', label: 'Expiring soon' },
   { value: 'offline', label: 'Billing or access off' },
   { value: 'live', label: 'Live' },
 ];
 
 const matchesFilter = (h: TenantHealth, f: FilterKey) =>
-  f === 'all' ? true : f === 'attention' ? h.severity > 0 : f === 'offline' ? h.offline : h.severity === 0;
+  f === 'all'
+    ? true
+    : f === 'attention'
+      ? h.severity > 0
+      : f === 'expiring'
+        ? h.expiringSoon
+        : f === 'offline'
+          ? h.offline
+          : h.severity === 0;
 
 export function PlatformDashboard({
   summary,
@@ -73,6 +87,7 @@ export function PlatformDashboard({
   loadError: string | null;
 }) {
   const router = useRouter();
+  const pendingRequests = usePendingRequestCount();
   const [search, setSearch] = React.useState('');
   const [filter, setFilter] = React.useState<FilterKey>('all');
   const [openId, setOpenId] = React.useState<string | null>(null);
@@ -128,9 +143,16 @@ export function PlatformDashboard({
   );
 
   const counts = React.useMemo(() => {
-    const c: Record<FilterKey, number> = { all: scored.length, attention: 0, offline: 0, live: 0 };
+    const c: Record<FilterKey, number> = {
+      all: scored.length,
+      attention: 0,
+      expiring: 0,
+      offline: 0,
+      live: 0,
+    };
     for (const s of scored) {
       if (s.health.severity > 0) c.attention += 1;
+      if (s.health.expiringSoon) c.expiring += 1;
       if (s.health.offline) c.offline += 1;
       if (s.health.severity === 0) c.live += 1;
     }
@@ -211,13 +233,17 @@ export function PlatformDashboard({
   };
 
   // Re-send a package with a fresh period. billing_set_package recomputes the
-  // dates from now(), which is the one thing a raw status flip cannot do — the
-  // cron would re-expire that within 10 minutes.
-  const applyPackage = async (row: TenantRow, selection: ReturnType<typeof renewalSelection>) => {
+  // dates from now() (or writes `periodEnd` when given), which is the one thing a
+  // raw status flip cannot do — the cron would re-expire that within 10 minutes.
+  const applyPackage = async (
+    row: TenantRow,
+    selection: ReturnType<typeof renewalSelection>,
+    periodEnd: string | null,
+  ) => {
     setActingId(row.id);
     setActedId(null);
     setRowError(null);
-    const res = await setRestaurantPackage(getBrowserClient(), row.id, selection, 'active', null);
+    const res = await setRestaurantPackage(getBrowserClient(), row.id, selection, 'active', periodEnd);
     setActingId(null);
     if (res.ok !== true) {
       const message = res.error ?? 'Could not reactivate the subscription.';
@@ -249,6 +275,10 @@ export function PlatformDashboard({
     // ent.monthlyTotal is what the tenant pays TODAY and misses any seat the
     // renewal has to add to cover branches opened since.
     const monthly = priceOf(selection);
+    // The click-time clock, not the render-time nowMs: a tab left open past the
+    // deadline must not add a month to a date that has already gone by.
+    const clickMs = Date.now();
+    const explicitEnd = action.kind === 'extend' ? extensionPeriodEnd(row, clickMs) : null;
     setConfirmError(null);
     setConfirm({
       copy: reactivateCopy(
@@ -258,10 +288,11 @@ export function PlatformDashboard({
         action.kind === 'extend' ? row.ent.planCode : PLAN_BASE,
         monthly,
         selection.branchSeats,
-        nowMs,
+        explicitEnd ? new Date(explicitEnd) : addOneMonthUtc(clickMs),
+        explicitEnd ? row.ent.entitledThrough : null,
       ),
       run: async () => {
-        if (await applyPackage(row, selection)) closeConfirm();
+        if (await applyPackage(row, selection, explicitEnd)) closeConfirm();
       },
     });
   };
@@ -311,6 +342,43 @@ export function PlatformDashboard({
         <Stat label="Revenue today" value={formatCurrency(Number(summary.revenue_today ?? 0))} />
         <Stat label="Drivers online" value={String(summary.drivers_online ?? 0)} />
       </div>
+
+      {/* The two things that turn a live store dark with nobody touching it: a
+          paid-through date running out, and a merchant's request sitting unread
+          while their lapsed store waits. Neither showed anywhere on this page. */}
+      {(counts.expiring > 0 || pendingRequests > 0) && (
+        <ul aria-label="Needs a decision" className="mb-6 space-y-2">
+          {counts.expiring > 0 && (
+            <li className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-warning/10 px-4 py-3 text-sm text-warning">
+              <span className="flex items-center gap-2">
+                <Clock className="h-4 w-4 shrink-0" aria-hidden />
+                {counts.expiring === 1
+                  ? `1 paying store goes dark within ${EXPIRY_WARN_DAYS} days.`
+                  : `${counts.expiring} paying stores go dark within ${EXPIRY_WARN_DAYS} days.`}
+              </span>
+              <Button size="sm" variant="ghost" onClick={() => setFilter('expiring')}>
+                Show them
+              </Button>
+            </li>
+          )}
+          {pendingRequests > 0 && (
+            <li className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-warning/10 px-4 py-3 text-sm text-warning">
+              <span className="flex items-center gap-2">
+                <Inbox className="h-4 w-4 shrink-0" aria-hidden />
+                {pendingRequests === 1
+                  ? '1 package request is waiting for a decision.'
+                  : `${pendingRequests} package requests are waiting for a decision.`}
+              </span>
+              <Link
+                href="/platform/subscriptions/requests"
+                className="rounded-lg px-3 py-1.5 text-sm font-medium underline-offset-2 hover:underline"
+              >
+                Review requests
+              </Link>
+            </li>
+          )}
+        </ul>
+      )}
 
       <div className="mb-4 space-y-3">
         <label className="relative block">

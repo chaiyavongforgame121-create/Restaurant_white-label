@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Palette, Plus, Save, Star } from 'lucide-react';
+import { ExternalLink, Palette, Plus, Save, Settings, Star } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import {
   MENU_CARD_STYLE_LABELS,
@@ -38,6 +38,10 @@ interface BranchRow {
   name: string;
   brand_id: string | null;
   is_active: boolean;
+  timezone: string;
+  /** The public menu address: the branch's custom domain when set, else
+   *  /r/<restaurant>/<branch>. Null when a slug is missing. */
+  storefront_url: string | null;
 }
 
 interface Props {
@@ -284,15 +288,49 @@ export function BrandsManager({
         )}
         <div className="mt-3 space-y-2">
           {branches.map((b) => (
-            <div key={b.id} className="flex items-center justify-between rounded-xl border border-border px-3 py-2 text-sm">
-              <span className="font-medium">{b.name}</span>
-              {!b.is_active && <Badge variant="muted">Hidden</Badge>}
+            <div
+              key={b.id}
+              className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border border-border px-3 py-2 text-sm"
+            >
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="font-medium">{b.name}</span>
+                {!b.is_active && <Badge variant="muted">Hidden</Badge>}
+              </div>
+              {/* The card promises every branch its own storefront URL, and a hidden branch
+                  was otherwise reachable only through Head office — so each row links to
+                  both the live menu and the branch's own settings. */}
+              <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                {b.is_active && b.storefront_url ? (
+                  <a
+                    href={b.storefront_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex min-w-0 max-w-[18rem] items-center gap-1 font-medium text-primary hover:underline"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{b.storefront_url.replace(/^https?:\/\//, '')}</span>
+                  </a>
+                ) : (
+                  <span className="text-muted-foreground">
+                    {b.is_active ? 'No storefront address yet' : 'Storefront offline while hidden'}
+                  </span>
+                )}
+                <Link
+                  href={`/b/${b.id}/branch`}
+                  className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
+                >
+                  <Settings className="h-3.5 w-3.5" />
+                  Settings
+                </Link>
+              </div>
             </div>
           ))}
           {branches.length === 0 && <p className="text-sm text-muted-foreground">No branches yet.</p>}
         </div>
         <p className="mt-3 text-xs text-muted-foreground">
-          After creating a branch, set its delivery location, hours, and menu in that branch&apos;s settings.
+          A new branch can copy the menu, opening hours and payment settings of an existing one.
+          Its map pin and table QR codes are never copied — set those in the new branch&apos;s
+          settings.
         </p>
       </Card>
 
@@ -366,6 +404,8 @@ export function BrandsManager({
         <BranchCreator
           restaurantId={restaurantId}
           brands={brands}
+          branches={branches}
+          currentBranchId={currentBranchId}
           onClose={() => setAddingBranch(false)}
           onSaved={() => {
             setAddingBranch(false);
@@ -387,34 +427,130 @@ const US_TIMEZONES: Array<{ tz: string; label: string }> = [
   { tz: 'Pacific/Honolulu', label: 'Hawaii (Honolulu)' },
 ];
 
+/** What copy_branch_setup reports back. Read defensively: the RPC is untyped here. */
+interface CopyResult {
+  categories_copied: number;
+  items_copied: number;
+  modifier_groups_copied: number;
+  hours_copied: number;
+  settings_copied: boolean;
+}
+
+function readCopyResult(data: unknown): CopyResult {
+  const row = (data && typeof data === 'object' ? data : {}) as Record<string, unknown>;
+  const count = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+  return {
+    categories_copied: count(row.categories_copied),
+    items_copied: count(row.items_copied),
+    modifier_groups_copied: count(row.modifier_groups_copied),
+    hours_copied: count(row.hours_copied),
+    settings_copied: row.settings_copied === true,
+  };
+}
+
+function describeCopyError(message: string): string {
+  // The RPC refuses to copy a menu into a branch that already has items rather than
+  // duplicating every dish. Name the box to untick instead of the bare exception.
+  if (message.includes('target_menu_not_empty')) {
+    return 'the new branch already has menu items. Untick "Copy menu" and retry to copy the rest.';
+  }
+  return message;
+}
+
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
 function BranchCreator({
   restaurantId,
   brands,
+  branches,
+  currentBranchId,
   onClose,
   onSaved,
 }: {
   restaurantId: string;
   brands: Brand[];
+  branches: BranchRow[];
+  currentBranchId: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const activeBranches = React.useMemo(() => branches.filter((b) => b.is_active), [branches]);
   const [name, setName] = React.useState('');
   const [slug, setSlug] = React.useState('');
   const [address, setAddress] = React.useState('');
-  const [timezone, setTimezone] = React.useState('America/New_York');
+  // A new branch used to start from nothing: an empty menu, no hours (which counts as open
+  // 24/7) and default payment settings, with the only copy tool hidden behind "Create a
+  // franchise group". Default to copying the branch the owner is standing in.
+  const [sourceId, setSourceId] = React.useState(
+    () => (activeBranches.find((b) => b.id === currentBranchId) ?? activeBranches[0])?.id ?? '',
+  );
+  const source = activeBranches.find((b) => b.id === sourceId) ?? null;
+  const [copyMenu, setCopyMenu] = React.useState(true);
+  const [copyHours, setCopyHours] = React.useState(true);
+  const [copySettings, setCopySettings] = React.useState(true);
+  // Opening hours and "today" in reports are read in the branch's own zone, and every new
+  // branch used to start on America/New_York: a second branch of a Los Angeles shop opened
+  // three hours early. Follow the source branch until the owner picks a zone themselves.
+  const [timezone, setTimezone] = React.useState(() => source?.timezone ?? 'America/New_York');
+  const [timezoneTouched, setTimezoneTouched] = React.useState(false);
   const [brandId, setBrandId] = React.useState('');
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  // Set once create_branch has committed. From then on the dialog can only retry the copy:
+  // pressing Create again would open a second branch and take a second seat.
+  const [created, setCreated] = React.useState<{ id: string | null } | null>(null);
+  const [copied, setCopied] = React.useState<CopyResult | null>(null);
 
   React.useEffect(() => {
     if (!slug && name) setSlug(slugify(name));
   }, [name, slug]);
 
+  const pickSource = (id: string) => {
+    setSourceId(id);
+    const next = activeBranches.find((b) => b.id === id);
+    // Once the branch exists its zone is fixed; picking another source for a retried copy
+    // must not change the locked field to a zone the branch was never given.
+    if (next && !timezoneTouched && !created) setTimezone(next.timezone);
+  };
+
+  const wantsCopy = !!source && (copyMenu || copyHours || copySettings);
+  // Once the branch exists, dismissing the dialog must still refresh the list behind it.
+  const close = created ? onSaved : onClose;
+
+  // Runs after create_branch has committed, so a failure here leaves a real branch behind
+  // with nothing in it. It is separate from create so the owner can retry only the copy.
+  const runCopy = async (targetId: string) => {
+    if (!source || !wantsCopy) {
+      onSaved();
+      return;
+    }
+    const supabase = getBrowserClient();
+    // copy_branch_setup is not in the generated types yet — thin typed escape.
+    const rpcAny = supabase.rpc.bind(supabase) as unknown as (
+      fn: string,
+      args?: Record<string, unknown>,
+    ) => Promise<{ data: unknown; error: { message: string } | null }>;
+    const { data, error: copyErr } = await rpcAny('copy_branch_setup', {
+      p_source_branch_id: source.id,
+      p_target_branch_id: targetId,
+      p_copy_menu: copyMenu,
+      p_copy_hours: copyHours,
+      p_copy_settings: copySettings,
+    });
+    if (copyErr) {
+      setError(
+        `The branch was created, but copying from ${source.name} failed: ${describeCopyError(copyErr.message)} You can retry the copy, or close this and set the branch up in its own settings.`,
+      );
+      return;
+    }
+    setCopied(readCopyResult(data));
+  };
+
   const create = async () => {
     setSaving(true);
     setError(null);
     const supabase = getBrowserClient();
-    const { error: rpcErr } = await supabase.rpc('create_branch', {
+    const { data, error: rpcErr } = await supabase.rpc('create_branch', {
       p_restaurant_id: restaurantId,
       p_name: name,
       p_slug: slug || slugify(name),
@@ -422,8 +558,8 @@ function BranchCreator({
       p_timezone: timezone,
       p_brand_id: brandId || undefined,
     });
-    setSaving(false);
     if (rpcErr) {
+      setSaving(false);
       // The BEFORE INSERT trigger on branches is the real gate; this arm only
       // ever runs if the UI let a stale seat count through (or two tabs raced).
       const billing = describeBillingError(rpcErr);
@@ -438,53 +574,182 @@ function BranchCreator({
       }
       return;
     }
-    onSaved();
+    const newId = (data as { branch_id?: unknown } | null)?.branch_id;
+    if (typeof newId !== 'string') {
+      setSaving(false);
+      if (!wantsCopy) {
+        onSaved();
+        return;
+      }
+      setCreated({ id: null });
+      setError(
+        'The branch was created, but the reply did not say which branch it was, so nothing was copied into it. Close this and set the branch up in its own settings.',
+      );
+      return;
+    }
+    setCreated({ id: newId });
+    await runCopy(newId);
+    setSaving(false);
+  };
+
+  const retryCopy = async () => {
+    const targetId = created?.id;
+    if (!targetId) return;
+    setSaving(true);
+    setError(null);
+    await runCopy(targetId);
+    setSaving(false);
   };
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-6"
-      onClick={onClose}
+      onClick={close}
     >
       <Card className="w-full max-w-lg space-y-4 overflow-y-auto p-6 sm:max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
-        <h2 className="font-display text-xl font-semibold">Add branch</h2>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Branch name">
-            <input value={name} onChange={(e) => setName(e.target.value)} className="input" placeholder="Downtown" autoFocus />
-          </Field>
-          <Field label="URL slug">
-            <input value={slug} onChange={(e) => setSlug(slugify(e.target.value))} className="input" placeholder="downtown" />
-          </Field>
-          <div className="sm:col-span-2">
-            <Field label="Address (optional)">
-              <input value={address} onChange={(e) => setAddress(e.target.value)} className="input" />
-            </Field>
-          </div>
-          <Field label="Timezone">
-            <select value={timezone} onChange={(e) => setTimezone(e.target.value)} className="input">
-              {US_TIMEZONES.map((z) => (
-                <option key={z.tz} value={z.tz}>{z.label}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Brand (optional)">
-            <select value={brandId} onChange={(e) => setBrandId(e.target.value)} className="input">
-              <option value="">— None —</option>
-              {brands.map((b) => (
-                <option key={b.id} value={b.id}>{b.name}</option>
-              ))}
-            </select>
-          </Field>
-        </div>
+        {created?.id && copied ? (
+          <>
+            <h2 className="font-display text-xl font-semibold">Branch created</h2>
+            <div className="space-y-1 text-sm">
+              <p>
+                Copied into {name} from {source?.name ?? 'the source branch'}:
+              </p>
+              <ul className="list-disc space-y-0.5 pl-5 text-muted-foreground">
+                {copyMenu && (
+                  <li>
+                    {plural(copied.categories_copied, 'category', 'categories')},{' '}
+                    {plural(copied.items_copied, 'menu item')} and{' '}
+                    {plural(copied.modifier_groups_copied, 'option group')}
+                  </li>
+                )}
+                {copyHours && <li>{plural(copied.hours_copied, 'opening-hours window')}</li>}
+                {copySettings && (
+                  <li>
+                    {copied.settings_copied
+                      ? 'Payment, delivery, tip and service fee settings'
+                      : 'No payment or delivery settings: the source branch has none saved'}
+                  </li>
+                )}
+              </ul>
+            </div>
+            <p className="rounded-xl bg-muted px-3 py-2 text-xs text-muted-foreground">
+              Still to do at the new branch: drop its map pin and set up its table QR codes.
+              Those are never copied.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={onSaved}>Done</Button>
+              <Link href={`/b/${created.id}/branch`}>
+                <Button variant="gradient">Open its settings</Button>
+              </Link>
+            </div>
+          </>
+        ) : (
+          <>
+            <h2 className="font-display text-xl font-semibold">Add branch</h2>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Branch name">
+                <input value={name} onChange={(e) => setName(e.target.value)} disabled={!!created} className="input disabled:opacity-60" placeholder="Downtown" autoFocus />
+              </Field>
+              <Field label="URL slug">
+                <input value={slug} onChange={(e) => setSlug(slugify(e.target.value))} disabled={!!created} className="input disabled:opacity-60" placeholder="downtown" />
+              </Field>
+              <div className="sm:col-span-2">
+                <Field label="Address (optional)">
+                  <input value={address} onChange={(e) => setAddress(e.target.value)} disabled={!!created} className="input disabled:opacity-60" />
+                </Field>
+              </div>
+              <Field label="Timezone">
+                <select
+                  value={timezone}
+                  onChange={(e) => {
+                    setTimezone(e.target.value);
+                    setTimezoneTouched(true);
+                  }}
+                  disabled={!!created}
+                  className="input disabled:opacity-60"
+                >
+                  {/* A source branch outside the US list keeps its own zone selectable, so
+                      defaulting to it never silently falls back to New York. */}
+                  {!US_TIMEZONES.some((z) => z.tz === timezone) && (
+                    <option value={timezone}>{timezone}</option>
+                  )}
+                  {US_TIMEZONES.map((z) => (
+                    <option key={z.tz} value={z.tz}>{z.label}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Brand (optional)">
+                <select value={brandId} onChange={(e) => setBrandId(e.target.value)} disabled={!!created} className="input disabled:opacity-60">
+                  <option value="">— None —</option>
+                  {brands.map((b) => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))}
+                </select>
+              </Field>
+              <div className="space-y-2 sm:col-span-2">
+                <Field label="Start from">
+                  <select value={sourceId} onChange={(e) => pickSource(e.target.value)} disabled={saving} className="input disabled:opacity-60">
+                    <option value="">Nothing (an empty branch)</option>
+                    {activeBranches.map((b) => (
+                      <option key={b.id} value={b.id}>{b.name}</option>
+                    ))}
+                  </select>
+                </Field>
+                {source && (
+                  <div className="space-y-2 rounded-xl bg-muted/40 p-3 text-sm">
+                    <label className="flex items-start gap-2">
+                      <input type="checkbox" checked={copyMenu} onChange={(e) => setCopyMenu(e.target.checked)} disabled={saving} className="mt-1" />
+                      <span>
+                        Copy menu
+                        <span className="block text-xs text-muted-foreground">Categories, items and their option groups</span>
+                      </span>
+                    </label>
+                    <label className="flex items-start gap-2">
+                      <input type="checkbox" checked={copyHours} onChange={(e) => setCopyHours(e.target.checked)} disabled={saving} className="mt-1" />
+                      <span>
+                        Copy opening hours
+                        <span className="block text-xs text-muted-foreground">The weekly hours, not one-off closures</span>
+                      </span>
+                    </label>
+                    <label className="flex items-start gap-2">
+                      <input type="checkbox" checked={copySettings} onChange={(e) => setCopySettings(e.target.checked)} disabled={saving} className="mt-1" />
+                      <span>
+                        Copy payment and delivery settings
+                        <span className="block text-xs text-muted-foreground">Payment methods, delivery, tips and service fee</span>
+                      </span>
+                    </label>
+                    <p className="text-xs text-muted-foreground">
+                      Address, map pin, colours and table QR codes are not copied.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
 
-        {error && <p className="rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p>}
+            {error && <p className="rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p>}
 
-        <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button variant="gradient" onClick={create} loading={saving} disabled={!name} leftIcon={<Plus className="h-4 w-4" />}>
-            Create branch
-          </Button>
-        </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={close}>{created ? 'Close' : 'Cancel'}</Button>
+              {created && !saving ? (
+                created.id ? (
+                  <Button variant="gradient" onClick={retryCopy} disabled={!wantsCopy}>
+                    Retry copy
+                  </Button>
+                ) : null
+              ) : (
+                <Button
+                  variant="gradient"
+                  onClick={create}
+                  loading={saving}
+                  disabled={!name || !!created}
+                  leftIcon={<Plus className="h-4 w-4" />}
+                >
+                  {created ? 'Copying…' : 'Create branch'}
+                </Button>
+              )}
+            </div>
+          </>
+        )}
 
         <style jsx>{`
           .input {

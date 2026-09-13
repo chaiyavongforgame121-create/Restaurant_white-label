@@ -3,18 +3,20 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@favornoms/ui';
+import { usePendingRequestCount } from './pending-requests';
 
 const TABS = [
   { href: '/platform', label: 'Dashboard' },
   { href: '/platform/reports', label: 'Reports' },
   { href: '/platform/subscriptions', label: 'Subscriptions', exact: true },
-  { href: '/platform/subscriptions/requests', label: 'Requests' },
+  { href: '/platform/subscriptions/requests', label: 'Requests', pendingBadge: true },
   { href: '/platform/plans', label: 'Catalog' },
   { href: '/platform/settings', label: 'Settings' },
 ];
 
 export function PlatformNav() {
   const pathname = usePathname();
+  const pending = usePendingRequestCount();
   return (
     // One scrolling row rather than flex-wrap: six tabs wrapped to three ragged
     // lines on a phone, and the border-b then cut through the middle of them.
@@ -45,6 +47,12 @@ export function PlatformNav() {
             )}
           >
             {t.label}
+            {t.pendingBadge && pending > 0 && (
+              <span className="ml-1.5 inline-flex min-w-5 items-center justify-center rounded-full bg-danger px-1.5 text-[11px] font-semibold leading-5 text-white tabular-nums">
+                {pending}
+                <span className="sr-only"> pending</span>
+              </span>
+            )}
           </Link>
         );
       })}

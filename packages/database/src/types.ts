@@ -479,6 +479,41 @@ export type Database = {
           },
         ]
       }
+      branch_schedule_hours: {
+        Row: {
+          branch_id: string
+          closes_at: string
+          created_at: string
+          day_of_week: number
+          id: string
+          opens_at: string
+        }
+        Insert: {
+          branch_id: string
+          closes_at: string
+          created_at?: string
+          day_of_week: number
+          id?: string
+          opens_at: string
+        }
+        Update: {
+          branch_id?: string
+          closes_at?: string
+          created_at?: string
+          day_of_week?: number
+          id?: string
+          opens_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "branch_schedule_hours_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       branches: {
         Row: {
           address: string | null
@@ -1036,8 +1071,96 @@ export type Database = {
           },
         ]
       }
+      delivery_assignments: {
+        Row: {
+          accepted_at: string | null
+          branch_id: string
+          created_at: string
+          delivery_id: string
+          driver_id: string
+          earnings: number | null
+          end_kind: string | null
+          end_reason: string | null
+          ended_at: string | null
+          id: string
+          offered_at: string
+          order_id: string
+          seq: number
+          status: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          branch_id: string
+          created_at?: string
+          delivery_id: string
+          driver_id: string
+          earnings?: number | null
+          end_kind?: string | null
+          end_reason?: string | null
+          ended_at?: string | null
+          id?: string
+          offered_at?: string
+          order_id: string
+          seq: number
+          status?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          branch_id?: string
+          created_at?: string
+          delivery_id?: string
+          driver_id?: string
+          earnings?: number | null
+          end_kind?: string | null
+          end_reason?: string | null
+          ended_at?: string | null
+          id?: string
+          offered_at?: string
+          order_id?: string
+          seq?: number
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "delivery_assignments_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_assignments_delivery_id_fkey"
+            columns: ["delivery_id"]
+            isOneToOne: false
+            referencedRelation: "deliveries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_assignments_delivery_id_fkey"
+            columns: ["delivery_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_customer_tracking"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_assignments_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_assignments_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       delivery_messages: {
         Row: {
+          assignment_id: string | null
           attachment_height: number | null
           attachment_path: string | null
           attachment_width: number | null
@@ -1050,6 +1173,7 @@ export type Database = {
           sender_user_id: string
         }
         Insert: {
+          assignment_id?: string | null
           attachment_height?: number | null
           attachment_path?: string | null
           attachment_width?: number | null
@@ -1062,6 +1186,7 @@ export type Database = {
           sender_user_id?: string
         }
         Update: {
+          assignment_id?: string | null
           attachment_height?: number | null
           attachment_path?: string | null
           attachment_width?: number | null
@@ -1075,10 +1200,24 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "delivery_messages_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_assignments"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "delivery_messages_delivery_id_fkey"
             columns: ["delivery_id"]
             isOneToOne: false
             referencedRelation: "deliveries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_messages_delivery_id_fkey"
+            columns: ["delivery_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_customer_tracking"
             referencedColumns: ["id"]
           },
         ]
@@ -1247,6 +1386,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "driver_earnings_ledger_delivery_id_fkey"
+            columns: ["delivery_id"]
+            isOneToOne: true
+            referencedRelation: "delivery_customer_tracking"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "driver_earnings_ledger_driver_id_fkey"
             columns: ["driver_id"]
             isOneToOne: false
@@ -1297,6 +1443,13 @@ export type Database = {
             columns: ["delivery_id"]
             isOneToOne: false
             referencedRelation: "deliveries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_penalty_events_delivery_id_fkey"
+            columns: ["delivery_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_customer_tracking"
             referencedColumns: ["id"]
           },
           {
@@ -2723,6 +2876,8 @@ export type Database = {
           schedule_window_minutes: number | null
           scheduled_for: string | null
           service_fee: number
+          session_id: string | null
+          session_seq: number | null
           source: string
           staff_id: string | null
           status: Database["public"]["Enums"]["order_status"]
@@ -2758,6 +2913,8 @@ export type Database = {
           schedule_window_minutes?: number | null
           scheduled_for?: string | null
           service_fee?: number
+          session_id?: string | null
+          session_seq?: number | null
           source?: string
           staff_id?: string | null
           status?: Database["public"]["Enums"]["order_status"]
@@ -2793,6 +2950,8 @@ export type Database = {
           schedule_window_minutes?: number | null
           scheduled_for?: string | null
           service_fee?: number
+          session_id?: string | null
+          session_seq?: number | null
           source?: string
           staff_id?: string | null
           status?: Database["public"]["Enums"]["order_status"]
@@ -2816,6 +2975,13 @@ export type Database = {
             columns: ["branch_id"]
             isOneToOne: false
             referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "table_sessions"
             referencedColumns: ["id"]
           },
           {
@@ -3558,6 +3724,32 @@ export type Database = {
           },
         ]
       }
+      storefront_versions: {
+        Row: {
+          branch_id: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          branch_id: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          branch_id?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "storefront_versions_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: true
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subscription_items: {
         Row: {
           created_at: string
@@ -3837,6 +4029,130 @@ export type Database = {
           },
         ]
       }
+      table_session_participants: {
+        Row: {
+          is_host: boolean
+          joined_at: string
+          session_id: string
+          user_id: string
+        }
+        Insert: {
+          is_host?: boolean
+          joined_at?: string
+          session_id: string
+          user_id: string
+        }
+        Update: {
+          is_host?: boolean
+          joined_at?: string
+          session_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "table_session_participants_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "table_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      table_sessions: {
+        Row: {
+          bill_requested_at: string | null
+          branch_id: string
+          closed_at: string | null
+          closed_by_staff: string | null
+          closed_by_user: string | null
+          closed_reason: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          last_activity_at: string
+          notes: string | null
+          opened_at: string
+          opened_by_staff: string | null
+          opened_by_user: string | null
+          opened_via: string
+          party_size: number | null
+          session_code: string
+          status: string
+          table_id: string
+        }
+        Insert: {
+          bill_requested_at?: string | null
+          branch_id: string
+          closed_at?: string | null
+          closed_by_staff?: string | null
+          closed_by_user?: string | null
+          closed_reason?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          last_activity_at?: string
+          notes?: string | null
+          opened_at?: string
+          opened_by_staff?: string | null
+          opened_by_user?: string | null
+          opened_via?: string
+          party_size?: number | null
+          session_code?: string
+          status?: string
+          table_id: string
+        }
+        Update: {
+          bill_requested_at?: string | null
+          branch_id?: string
+          closed_at?: string | null
+          closed_by_staff?: string | null
+          closed_by_user?: string | null
+          closed_reason?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          last_activity_at?: string
+          notes?: string | null
+          opened_at?: string
+          opened_by_staff?: string | null
+          opened_by_user?: string | null
+          opened_via?: string
+          party_size?: number | null
+          session_code?: string
+          status?: string
+          table_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "table_sessions_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "table_sessions_closed_by_staff_fkey"
+            columns: ["closed_by_staff"]
+            isOneToOne: false
+            referencedRelation: "staff_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "table_sessions_opened_by_staff_fkey"
+            columns: ["opened_by_staff"]
+            isOneToOne: false
+            referencedRelation: "staff_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "table_sessions_table_id_fkey"
+            columns: ["table_id"]
+            isOneToOne: false
+            referencedRelation: "tables"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tables: {
         Row: {
           branch_id: string
@@ -3851,8 +4167,10 @@ export type Database = {
           pos_y: number | null
           qr_code_token: string
           shape: string | null
+          sort_order: number
           status: string | null
           table_number: string
+          table_type: string
           zone: string | null
         }
         Insert: {
@@ -3868,8 +4186,10 @@ export type Database = {
           pos_y?: number | null
           qr_code_token?: string
           shape?: string | null
+          sort_order?: number
           status?: string | null
           table_number: string
+          table_type?: string
           zone?: string | null
         }
         Update: {
@@ -3885,8 +4205,10 @@ export type Database = {
           pos_y?: number | null
           qr_code_token?: string
           shape?: string | null
+          sort_order?: number
           status?: string | null
           table_number?: string
+          table_type?: string
           zone?: string | null
         }
         Relationships: [
@@ -4078,6 +4400,84 @@ export type Database = {
       }
     }
     Views: {
+      delivery_customer_tracking: {
+        Row: {
+          accepted_at: string | null
+          arriving_at: string | null
+          assigned_at: string | null
+          batch_seq: number | null
+          current_eta_min: number | null
+          delivered_at: string | null
+          distance_km: number | null
+          driver_id: string | null
+          driver_lat: number | null
+          driver_lng: number | null
+          driver_location_updated_at: string | null
+          dropoff_lat: number | null
+          dropoff_lng: number | null
+          estimated_duration_min: number | null
+          id: string | null
+          order_id: string | null
+          picked_up_at: string | null
+          status: Database["public"]["Enums"]["delivery_status"] | null
+        }
+        Insert: {
+          accepted_at?: string | null
+          arriving_at?: never
+          assigned_at?: string | null
+          batch_seq?: number | null
+          current_eta_min?: never
+          delivered_at?: string | null
+          distance_km?: number | null
+          driver_id?: string | null
+          driver_lat?: never
+          driver_lng?: never
+          driver_location_updated_at?: never
+          dropoff_lat?: number | null
+          dropoff_lng?: number | null
+          estimated_duration_min?: number | null
+          id?: string | null
+          order_id?: string | null
+          picked_up_at?: string | null
+          status?: Database["public"]["Enums"]["delivery_status"] | null
+        }
+        Update: {
+          accepted_at?: string | null
+          arriving_at?: never
+          assigned_at?: string | null
+          batch_seq?: number | null
+          current_eta_min?: never
+          delivered_at?: string | null
+          distance_km?: number | null
+          driver_id?: string | null
+          driver_lat?: never
+          driver_lng?: never
+          driver_location_updated_at?: never
+          dropoff_lat?: number | null
+          dropoff_lng?: number | null
+          estimated_duration_min?: number | null
+          id?: string | null
+          order_id?: string | null
+          picked_up_at?: string | null
+          status?: Database["public"]["Enums"]["delivery_status"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deliveries_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deliveries_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: true
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       v_active_combos: {
         Row: {
           branch_id: string | null
@@ -4179,6 +4579,8 @@ export type Database = {
           schedule_window_minutes: number | null
           scheduled_for: string | null
           service_fee: number
+          session_id: string | null
+          session_seq: number | null
           source: string
           staff_id: string | null
           status: Database["public"]["Enums"]["order_status"]
@@ -4226,10 +4628,12 @@ export type Database = {
         Returns: Json
       }
       billing_start_trial: { Args: { p_restaurant_id: string }; Returns: Json }
+      branch_schedule_policy: { Args: { p_branch_id: string }; Returns: Json }
       broadcast_franchise_menu: {
         Args: { p_source_branch_id: string; p_target_branch_ids: string[] }
         Returns: Json
       }
+      can_read_thread: { Args: { p_assignment_id: string }; Returns: boolean }
       cancel_order: {
         Args: { p_order_id: string; p_reason?: string }
         Returns: Json
@@ -4253,9 +4657,23 @@ export type Database = {
         Returns: string
       }
       clock_out: { Args: { p_shift_id?: string }; Returns: string }
+      close_table_session: {
+        Args: { p_note?: string; p_reason?: string; p_session_id: string }
+        Returns: undefined
+      }
       confirm_payment_proof: {
         Args: { p_order_id: string }
         Returns: undefined
+      }
+      copy_branch_setup: {
+        Args: {
+          p_copy_hours: boolean
+          p_copy_menu: boolean
+          p_copy_settings: boolean
+          p_source_branch_id: string
+          p_target_branch_id: string
+        }
+        Returns: Json
       }
       create_branch: {
         Args: {
@@ -4294,6 +4712,21 @@ export type Database = {
         Returns: undefined
       }
       delete_my_account: { Args: never; Returns: Json }
+      delivery_thread_history: {
+        Args: { p_delivery_id: string }
+        Returns: {
+          assignment_id: string
+          driver_id: string
+          driver_name: string
+          end_kind: string
+          end_reason: string
+          ended_at: string
+          message_count: number
+          offered_at: string
+          seq: number
+          status: string
+        }[]
+      }
       dispatch_candidate_diagnostics: {
         Args: { p_branch_id: string; p_radius_km?: number }
         Returns: Json
@@ -4305,6 +4738,25 @@ export type Database = {
       driver_cancel_delivery: {
         Args: { p_delivery_id: string; p_reason?: string }
         Returns: undefined
+      }
+      driver_job_history: {
+        Args: { p_limit?: number; p_since?: string }
+        Returns: {
+          accepted_at: string
+          assignment_id: string
+          branch_id: string
+          branch_name: string
+          delivery_id: string
+          earned: number
+          end_kind: string
+          end_reason: string
+          ended_at: string
+          ledger_status: string
+          offered_at: string
+          order_number: string
+          restaurant_name: string
+          status: string
+        }[]
       }
       driver_reapply_to_branch: { Args: { p_branch_id: string }; Returns: Json }
       driver_set_all_branches_online: {
@@ -4346,7 +4798,27 @@ export type Database = {
         }[]
       }
       forecast_orders: { Args: { p_branch_id: string }; Returns: Json }
+      get_branch_customers_report: {
+        Args: { p_branch_id: string; p_from: string; p_to: string }
+        Returns: Json
+      }
+      get_branch_delivery_report: {
+        Args: { p_branch_id: string; p_from: string; p_to: string }
+        Returns: Json
+      }
       get_branch_entitlements: { Args: { p_branch_id: string }; Returns: Json }
+      get_branch_menu_report: {
+        Args: { p_branch_id: string; p_from: string; p_to: string }
+        Returns: Json
+      }
+      get_branch_orders_report: {
+        Args: { p_branch_id: string; p_from: string; p_to: string }
+        Returns: Json
+      }
+      get_branch_payments_report: {
+        Args: { p_branch_id: string; p_from: string; p_to: string }
+        Returns: Json
+      }
       get_branch_payout_summary: {
         Args: { p_branch_id: string; p_weeks?: number }
         Returns: {
@@ -4369,6 +4841,10 @@ export type Database = {
       }
       get_branch_reviews: {
         Args: { p_branch_id: string; p_limit?: number }
+        Returns: Json
+      }
+      get_branch_sales_report: {
+        Args: { p_branch_id: string; p_from: string; p_to: string }
         Returns: Json
       }
       get_cohort_retention: {
@@ -4404,6 +4880,10 @@ export type Database = {
           name: string
           start_time: string
         }[]
+      }
+      get_latest_billing_decision: {
+        Args: { p_restaurant_id: string }
+        Returns: Json
       }
       get_loyalty_balance: {
         Args: { p_branch_id: string }
@@ -4443,6 +4923,7 @@ export type Database = {
         Args: { p_branch_id: string; p_from: string; p_to: string }
         Returns: Json
       }
+      get_table_session_bill: { Args: { p_session_id: string }; Returns: Json }
       get_top_customers_ltv: {
         Args: { p_branch_id: string; p_limit?: number }
         Returns: {
@@ -4472,6 +4953,10 @@ export type Database = {
         Returns: boolean
       }
       is_platform_admin: { Args: never; Returns: boolean }
+      is_schedule_window_open: {
+        Args: { p_at?: string; p_branch_id: string }
+        Returns: boolean
+      }
       issue_birthday_rewards: { Args: never; Returns: number }
       issue_gift_card: {
         Args: {
@@ -4531,7 +5016,28 @@ export type Database = {
         Args: { p_branch_id: string; p_menu_item_id: string }
         Returns: boolean
       }
+      join_table_session: {
+        Args: { p_code?: string; p_token: string }
+        Returns: Json
+      }
       list_billing_requests: { Args: { p_status?: string }; Returns: Json }
+      list_branch_riders: {
+        Args: { p_branch_id: string }
+        Returns: {
+          active_delivery_id: string
+          battery_level: number
+          cooling_down: boolean
+          driver_id: string
+          full_name: string
+          kyc_verified: boolean
+          lat: number
+          lng: number
+          location_updated_at: string
+          online: boolean
+          phone: string
+          vehicle_type: string
+        }[]
+      }
       list_loyalty_rewards: {
         Args: { p_branch_id: string }
         Returns: {
@@ -4590,7 +5096,15 @@ export type Database = {
         Args: { p_delivery_id: string }
         Returns: undefined
       }
+      mark_thread_read: {
+        Args: { p_assignment_id: string }
+        Returns: undefined
+      }
       my_capabilities: { Args: { p_branch_id: string }; Returns: string[] }
+      open_table_session: {
+        Args: { p_party_size?: number; p_table_id: string }
+        Returns: string
+      }
       pay_driver_withdrawal: {
         Args: { p_reference?: string; p_withdrawal_id: string }
         Returns: Json
@@ -4631,6 +5145,10 @@ export type Database = {
       record_arrival_override: {
         Args: { p_delivery_id: string; p_miles?: number; p_stage: string }
         Returns: undefined
+      }
+      record_counter_payment: {
+        Args: { p_order_id: string; p_tendered?: number }
+        Returns: string
       }
       redeem_gift_card: {
         Args: { p_code: string; p_max_amount: number; p_order_id: string }
@@ -4709,11 +5227,16 @@ export type Database = {
       resolve_table_qr: {
         Args: { p_token: string }
         Returns: {
+          accepting_orders: boolean
           branch_id: string
           branch_name: string
           branch_slug: string
           display_name: string
+          requires_join_code: boolean
           restaurant_slug: string
+          session_id: string
+          session_mode: string
+          session_status: string
           table_id: string
           table_number: string
         }[]
@@ -4735,6 +5258,10 @@ export type Database = {
           p_lng?: number
         }
         Returns: Json
+      }
+      set_branch_schedule_hours: {
+        Args: { p_branch_id: string; p_windows: Json }
+        Returns: undefined
       }
       set_driver_kyc_status: {
         Args: {
@@ -4775,6 +5302,10 @@ export type Database = {
         Args: { p_restaurant_id: string; p_suspended: boolean }
         Returns: undefined
       }
+      set_staff_branch_scope: {
+        Args: { p_branch_id: string; p_staff_id: string }
+        Returns: Json
+      }
       set_stock: {
         Args: {
           p_counted_qty: number
@@ -4786,6 +5317,14 @@ export type Database = {
       set_subscription_plan_active: {
         Args: { p_active: boolean; p_code: string }
         Returns: undefined
+      }
+      set_table_session_status: {
+        Args: { p_session_id: string; p_status: string }
+        Returns: undefined
+      }
+      settle_table_session: {
+        Args: { p_session_id: string; p_tendered?: number }
+        Returns: Json
       }
       staff_assign_driver: {
         Args: { p_delivery_id: string; p_driver_id: string }
@@ -4803,6 +5342,10 @@ export type Database = {
         Returns: number
       }
       storefront_status: { Args: { p_branch_id: string }; Returns: Json }
+      storefront_version: {
+        Args: { p_branch_slug: string; p_restaurant_slug: string }
+        Returns: number
+      }
       stripe_event_seen: {
         Args: { p_event_id: string; p_type?: string }
         Returns: boolean

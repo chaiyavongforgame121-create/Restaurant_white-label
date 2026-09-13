@@ -28,5 +28,7 @@ export default async function PlatformSubscriptionsPage({
     listBillingProducts(supabase),
   ]);
 
-  return <SubscriptionsManager rows={rows} catalog={catalog} initialQuery={q ?? ''} />;
+  return (
+    <SubscriptionsManager rows={rows} catalog={catalog} initialQuery={q ?? ''} nowMs={Date.now()} />
+  );
 }

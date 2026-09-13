@@ -12,7 +12,17 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, Check, Clock, Lock, Minus, Plus, Sparkles } from 'lucide-react';
+import {
+  AlertTriangle,
+  Check,
+  CheckCircle2,
+  Clock,
+  Minus,
+  Plus,
+  RotateCcw,
+  Sparkles,
+  XCircle,
+} from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import {
   createBillingCheckoutSession,
@@ -25,6 +35,7 @@ import {
   PRODUCT_EXTRA_BRANCH,
   currentSelection,
   featureLabel,
+  formatInZone,
   isTrialing,
   packageLines,
   packageMonthlyTotal,
@@ -33,7 +44,19 @@ import {
   type Entitlements,
   type PackageSelection,
 } from '@favornoms/shared';
-import { Badge, Button, Card } from '@favornoms/ui';
+import { Badge, Button, Card, useConfirm } from '@favornoms/ui';
+
+/** The restaurant's most recent approved or rejected request, as the plan page shows it. */
+export interface DecidedRequest {
+  id: string;
+  status: 'approved' | 'rejected';
+  planCode: string;
+  addons: string[];
+  branchSeats: number;
+  monthlyTotal: number;
+  decisionNote: string | null;
+  decidedAt: string;
+}
 
 interface Props {
   branchId: string;
@@ -41,11 +64,36 @@ interface Props {
   entitlements: Entitlements;
   catalog: BillingProduct[];
   pendingRequest: BillingRequest | null;
+  latestDecision: DecidedRequest | null;
+  /** The branch's zone, so a request "sent 9/12" means the merchant's 9/12. */
+  timezone: string;
   suspended: boolean;
+  /** An add-on code from `?add=`, already checked against the catalog. */
+  preselectAddon: string | null;
+  /** `?no_trial=1`: a second restaurant on an account that already used its trial. */
+  noTrial: boolean;
+  /** `?renew=1`: sent from the dashboard's expiry banner. */
+  renew: boolean;
 }
 
 const money = (n: number) =>
   `$${n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+
+function sameSelection(a: PackageSelection, b: PackageSelection): boolean {
+  return (
+    a.planCode === b.planCode &&
+    a.branchSeats === b.branchSeats &&
+    a.addons.length === b.addons.length &&
+    a.addons.every((code) => b.addons.includes(code))
+  );
+}
+
+/** "Base + Delivery, 2 branch seats" — what a request actually asks for, in catalog names. */
+function describeSelection(sel: PackageSelection, catalog: BillingProduct[]): string {
+  const name = (code: string) => catalog.find((p) => p.code === code)?.name ?? featureLabel(code);
+  const parts = [name(sel.planCode), ...sel.addons.map(name)];
+  return `${parts.join(' + ')}, ${sel.branchSeats} branch seat${sel.branchSeats === 1 ? '' : 's'}`;
+}
 
 export function PlanView({
   branchId,
@@ -53,15 +101,35 @@ export function PlanView({
   entitlements,
   catalog,
   pendingRequest,
+  latestDecision,
+  timezone,
   suspended,
+  preselectAddon,
+  noTrial,
+  renew,
 }: Props) {
   const router = useRouter();
-  const [sel, setSel] = React.useState<PackageSelection>(() => currentSelection(entitlements));
+  const confirm = useConfirm();
+  const [sel, setSel] = React.useState<PackageSelection>(() => {
+    const start = currentSelection(entitlements);
+    // The upsell card that sent the merchant here already said which add-on they wanted;
+    // making them find and tick it again is where that intent used to get lost.
+    return preselectAddon && !start.addons.includes(preselectAddon)
+      ? { ...start, addons: [...start.addons, preselectAddon] }
+      : start;
+  });
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const [queued, setQueued] = React.useState<string | null>(null);
-
-  const locked = pendingRequest !== null || queued !== null;
+  // What was just sent, held until router.refresh() brings the server's copy back. Without
+  // it the button briefly re-arms against the OLD pending request and a second click
+  // files the same request twice.
+  const [queued, setQueued] = React.useState<PackageSelection | null>(null);
+  // The refresh brings a new request id. Dropping the local copy then puts the banner back
+  // on the stored row; without this it kept the copy for good and never showed the sent date.
+  const pendingId = pendingRequest?.id ?? null;
+  React.useEffect(() => {
+    setQueued(null);
+  }, [pendingId]);
 
   const base = catalog.find((p) => p.code === PLAN_BASE);
   const seat = catalog.find((p) => p.code === PRODUCT_EXTRA_BRANCH);
@@ -75,8 +143,17 @@ export function PlanView({
   const trialDays = trialDaysLeft(entitlements);
   const onTrial = isTrialing(entitlements);
 
+  const serverPending: PackageSelection | null = pendingRequest
+    ? {
+        planCode: pendingRequest.plan_code,
+        addons: Array.isArray(pendingRequest.addons) ? pendingRequest.addons : [],
+        branchSeats: Number(pendingRequest.branch_seats ?? 1),
+      }
+    : null;
+  const pending = queued ?? serverPending;
+  const matchesPending = pending !== null && sameSelection(sel, pending);
+
   const toggleAddon = (code: string) => {
-    if (locked) return;
     setSel((s) => ({
       ...s,
       addons: s.addons.includes(code) ? s.addons.filter((a) => a !== code) : [...s.addons, code],
@@ -84,11 +161,24 @@ export function PlanView({
   };
 
   const setSeats = (n: number) => {
-    if (locked) return;
     setSel((s) => ({ ...s, branchSeats: Math.max(minSeats, Math.min(99, n)) }));
   };
 
   const submit = async () => {
+    // request_package_change cancels the older pending request itself, so replacing is one
+    // call. It is still asked about: the earlier request disappears from the platform
+    // owner's queue, and that should not happen on a stray click.
+    if (
+      pending &&
+      !(await confirm({
+        title: 'Replace your pending request?',
+        body: `Your earlier request (${describeSelection(pending, catalog)}) is withdrawn and this one goes to the Favornoms team instead.`,
+        confirmLabel: 'Replace request',
+      }))
+    ) {
+      return;
+    }
+
     setBusy(true);
     setError(null);
     try {
@@ -110,7 +200,7 @@ export function PlanView({
         setError(res.error ?? 'Could not send your request. Please try again.');
         return;
       }
-      setQueued(res.request_id ?? 'sent');
+      setQueued(sel);
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong.');
@@ -125,6 +215,22 @@ export function PlanView({
     sel.addons.length !== entitlements.addons.length ||
     sel.addons.some((a) => !entitlements.addons.includes(a));
 
+  // One ladder for label and state, so the two cannot disagree. A pending request no
+  // longer locks the page: an owner who asked for the wrong thing used to be stuck with it
+  // until the platform owner happened to decide, and approving it could remove add-ons
+  // they still pay for.
+  const action: { label: string; enabled: boolean } = matchesPending
+    ? { label: 'Request pending', enabled: false }
+    : pending
+      ? { label: 'Replace pending request', enabled: true }
+      : suspended
+        ? { label: noTrial ? 'Request activation' : 'Reactivate my account', enabled: true }
+        : dirty
+          ? { label: 'Confirm package', enabled: true }
+          : renew
+            ? { label: 'Request renewal', enabled: true }
+            : { label: 'Current package', enabled: false };
+
   return (
     <div className="container max-w-4xl py-8">
       <header className="mb-6 px-2 pl-16 lg:px-0 lg:pl-0">
@@ -134,10 +240,36 @@ export function PlanView({
         </p>
       </header>
 
-      {suspended && <SuspendedBanner />}
+      {suspended && noTrial && <NoTrialBanner />}
+      {suspended && !noTrial && <SuspendedBanner />}
       {!suspended && onTrial && <TrialBanner days={trialDays} />}
+      {!suspended && !onTrial && renew && (
+        <RenewBanner
+          paidThrough={
+            entitlements.entitledThrough
+              ? formatInZone(entitlements.entitledThrough, timezone)
+              : null
+          }
+        />
+      )}
 
-      {(pendingRequest || queued) && <PendingBanner request={pendingRequest} />}
+      {latestDecision && (
+        <DecisionBanner decision={latestDecision} catalog={catalog} timezone={timezone} />
+      )}
+
+      {pending && (
+        <PendingBanner
+          summary={describeSelection(pending, catalog)}
+          monthlyTotal={
+            queued ? packageMonthlyTotal(queued, catalog) : Number(pendingRequest?.monthly_total ?? 0)
+          }
+          sentOn={
+            !queued && pendingRequest?.created_at
+              ? formatInZone(pendingRequest.created_at, timezone, { dateOnly: true })
+              : null
+          }
+        />
+      )}
 
       {error && (
         <div className="mb-4 rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -178,7 +310,6 @@ export function PlanView({
                 key={addon.code}
                 product={addon}
                 selected={sel.addons.includes(addon.code)}
-                disabled={locked}
                 onToggle={() => toggleAddon(addon.code)}
               />
             ))}
@@ -202,7 +333,7 @@ export function PlanView({
                 <button
                   type="button"
                   aria-label="Remove a branch seat"
-                  disabled={locked || sel.branchSeats <= minSeats}
+                  disabled={sel.branchSeats <= minSeats}
                   onClick={() => setSeats(sel.branchSeats - 1)}
                   className="focus-ring grid h-10 w-10 place-items-center rounded-full border border-border disabled:opacity-40"
                 >
@@ -214,7 +345,7 @@ export function PlanView({
                 <button
                   type="button"
                   aria-label="Add a branch seat"
-                  disabled={locked || sel.branchSeats >= 99}
+                  disabled={sel.branchSeats >= 99}
                   onClick={() => setSeats(sel.branchSeats + 1)}
                   className="focus-ring grid h-10 w-10 place-items-center rounded-full border border-border disabled:opacity-40"
                 >
@@ -224,8 +355,9 @@ export function PlanView({
             </div>
             {sel.branchSeats <= minSeats && entitlements.branchesUsed > 1 && (
               <p className="mt-3 text-xs text-muted-foreground">
-                You already run {entitlements.branchesUsed} branches, so you cannot go below{' '}
-                {minSeats} seats. Close a branch first.
+                You run {entitlements.branchesUsed} active branches, so you cannot go below{' '}
+                {minSeats} seats. To give up a seat, hide a branch you no longer use: open its
+                Branch settings and set Status to Hidden. A hidden branch does not use a seat.
               </p>
             )}
           </Card>
@@ -264,17 +396,11 @@ export function PlanView({
             fullWidth
             className="mt-4"
             loading={busy}
-            disabled={locked || (!dirty && !suspended)}
+            disabled={!action.enabled}
             onClick={submit}
             leftIcon={<Sparkles className="h-4 w-4" />}
           >
-            {locked
-              ? 'Request pending'
-              : suspended
-                ? 'Reactivate my account'
-                : dirty
-                  ? 'Confirm package'
-                  : 'Current package'}
+            {action.label}
           </Button>
 
           <p className="mt-3 text-xs text-muted-foreground">
@@ -289,12 +415,10 @@ export function PlanView({
 function AddonCard({
   product,
   selected,
-  disabled,
   onToggle,
 }: {
   product: BillingProduct;
   selected: boolean;
-  disabled: boolean;
   onToggle: () => void;
 }) {
   const featureKeys = Object.keys(product.features ?? {});
@@ -327,7 +451,6 @@ function AddonCard({
         fullWidth
         size="sm"
         className="mt-4"
-        disabled={disabled}
         onClick={onToggle}
         aria-pressed={selected}
       >
@@ -387,17 +510,115 @@ function SuspendedBanner() {
   );
 }
 
-function PendingBanner({ request }: { request: BillingRequest | null }) {
+/**
+ * Onboarding sends a second restaurant here with ?no_trial=1. Without this the owner of a
+ * brand-new store met "Your account is not active … everything comes straight back", which
+ * describes a lapsed store and gives no hint why a new one never got its trial.
+ */
+function NoTrialBanner() {
+  return (
+    <div className="mb-4 flex items-start gap-3 rounded-xl bg-warning/15 px-4 py-3 text-sm">
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+      <div>
+        <p className="font-semibold">This restaurant starts without a free trial</p>
+        <p className="text-muted-foreground">
+          Your account already used its 14-day free trial on another restaurant. This one stays
+          offline until it has a package: choose one below and send the request, and the Favornoms
+          team activates it.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function RenewBanner({ paidThrough }: { paidThrough: string | null }) {
+  return (
+    <div className="mb-4 flex items-start gap-3 rounded-xl bg-primary/10 px-4 py-3 text-sm">
+      <RotateCcw className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+      <div>
+        <p className="font-semibold">Renew your package</p>
+        <p className="text-muted-foreground">
+          {paidThrough ? `Your package is paid through ${paidThrough}. ` : ''}Your current package
+          is selected below. Press Request renewal to send it to the Favornoms team — nothing
+          renews until they approve it. You can also change the package before sending.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function DecisionBanner({
+  decision,
+  catalog,
+  timezone,
+}: {
+  decision: DecidedRequest;
+  catalog: BillingProduct[];
+  timezone: string;
+}) {
+  const approved = decision.status === 'approved';
+  const on = formatInZone(decision.decidedAt, timezone, { dateOnly: true });
+  const summary = describeSelection(
+    { planCode: decision.planCode, addons: decision.addons, branchSeats: decision.branchSeats },
+    catalog,
+  );
+  return (
+    <div
+      className={`mb-4 flex items-start gap-3 rounded-xl px-4 py-3 text-sm ${
+        approved ? 'bg-success/10' : 'bg-destructive/10'
+      }`}
+    >
+      {approved ? (
+        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" />
+      ) : (
+        <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+      )}
+      <div className="min-w-0">
+        <p className="font-semibold">
+          {approved ? `Request approved on ${on}` : `Request declined on ${on}`}
+        </p>
+        <p className="text-muted-foreground">
+          {summary} — {money(decision.monthlyTotal)}/mo.
+        </p>
+        {decision.decisionNote ? (
+          <p className="mt-1 whitespace-pre-line break-words">
+            <span className="font-medium">Note from the Favornoms team:</span>{' '}
+            {decision.decisionNote}
+          </p>
+        ) : (
+          !approved && (
+            <p className="mt-1 text-muted-foreground">
+              No reason was given. You can choose a package below and send a new request.
+            </p>
+          )
+        )}
+      </div>
+      <Badge variant={approved ? 'success' : 'danger'} className="ml-auto shrink-0">
+        {approved ? 'Approved' : 'Declined'}
+      </Badge>
+    </div>
+  );
+}
+
+function PendingBanner({
+  summary,
+  monthlyTotal,
+  sentOn,
+}: {
+  summary: string;
+  monthlyTotal: number;
+  sentOn: string | null;
+}) {
   return (
     <div className="mb-4 flex items-start gap-3 rounded-xl bg-muted px-4 py-3 text-sm">
-      <Lock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-      <div>
-        <p className="font-semibold">Request sent</p>
+      <Clock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+      <div className="min-w-0">
+        <p className="font-semibold">
+          Request waiting for the Favornoms team{sentOn ? ` · sent ${sentOn}` : ''}
+        </p>
         <p className="text-muted-foreground">
-          {request
-            ? `We received your request for ${money(Number(request.monthly_total ?? 0))}/mo and are activating it.`
-            : 'We received your request and are activating it.'}{' '}
-          You will not be able to change the package again until it is processed.
+          {summary} — {money(monthlyTotal)}/mo. Nothing changes until it is approved. To ask for
+          something else, change the package below and press Replace pending request.
         </p>
       </div>
       <Badge variant="warning" className="ml-auto shrink-0">

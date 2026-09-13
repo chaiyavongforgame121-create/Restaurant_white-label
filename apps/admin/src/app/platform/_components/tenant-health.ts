@@ -81,10 +81,38 @@ export interface TenantHealth {
   severity: 0 | 1 | 2 | 3 | 4;
   /** Billing or platform access is off. Named after what it proves, not "dark". */
   offline: boolean;
+  /**
+   * A paid (non-trial) store that is still live but whose paid-through date is
+   * within EXPIRY_WARN_DAYS. Nothing renews by itself while Stripe is dormant, so
+   * this is the cohort that goes dark next unless the platform owner extends it.
+   */
+  expiringSoon: boolean;
   reason: string | null;
 }
 
 const DAY = 86_400_000;
+
+/** How far ahead a paid store's deadline starts warning on /platform. */
+export const EXPIRY_WARN_DAYS = 7;
+
+/** A plan somebody pays for. The trial and "no subscription" are not extendable. */
+export const isPaidPlan = (planCode: string) => planCode !== PLAN_TRIAL && planCode !== 'none';
+
+/**
+ * `ms + interval '1 month'` the way Postgres computes it: clamped to the last day
+ * of the target month. JS setUTCMonth overflows instead (Jan 31 -> Mar 3), so a
+ * naive date named a paid-through day the RPC would not write, on 7 calendar days
+ * a year, for a money write.
+ */
+export function addOneMonthUtc(ms: number): Date {
+  const d = new Date(ms);
+  const startDay = d.getUTCDate();
+  d.setUTCDate(1);
+  d.setUTCMonth(d.getUTCMonth() + 1);
+  const lastDay = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+  d.setUTCDate(Math.min(startDay, lastDay));
+  return d;
+}
 
 const DATE_FMT = new Intl.DateTimeFormat('en-US', {
   timeZone: 'UTC',
@@ -139,7 +167,12 @@ export function tenantHealth(row: TenantRow, branches: BranchLite[], nowMs: numb
   const suspended = total - active;
   const unpaid = branches.filter((b) => !branchEntitled(b, nowMs)).length;
 
-  const billing = billingChip(ent, row.cancelAtPeriodEnd, entitled, daysLeft);
+  // Trials are excluded on purpose: their end is the conversion conversation, and
+  // re-sending a trial plan would hand out another free period.
+  const expiringSoon =
+    entitled && isPaidPlan(ent.planCode) && ent.status !== 'trialing' && daysLeft <= EXPIRY_WARN_DAYS;
+
+  const billing = billingChip(ent, row.cancelAtPeriodEnd, entitled, daysLeft, expiringSoon);
   const access = accessChip(total, active);
 
   // Both switches off must show BOTH lamps — a single pill would hide one, and
@@ -178,13 +211,23 @@ export function tenantHealth(row: TenantRow, branches: BranchLite[], nowMs: numb
     billing,
     access,
     lamps,
-    clause: clauseFor(ent, entitled, daysLeft, total, active, row.cancelAtPeriodEnd),
+    clause: clauseFor(ent, entitled, daysLeft, total, active, row.cancelAtPeriodEnd, expiringSoon),
     branchCount: total === 0 ? 'No branches' : `${total} ${branchWord(total)}`,
     branchQualifier: qualifierFor(total, suspended, unpaid, paused),
     rail: platformSuspended || !entitled ? 'danger' : warned ? 'warning' : 'none',
     severity,
     offline: !entitled || platformSuspended,
-    reason: reasonFor(ent, entitled, daysLeft, total, active, paused),
+    expiringSoon,
+    reason: reasonFor(
+      ent,
+      entitled,
+      daysLeft,
+      total,
+      active,
+      paused,
+      row.cancelAtPeriodEnd,
+      expiringSoon,
+    ),
   };
 }
 
@@ -196,6 +239,7 @@ function billingChip(
   cancelAtPeriodEnd: boolean,
   entitled: boolean,
   daysLeft: number,
+  expiringSoon: boolean,
 ): HealthChip {
   if (!entitled) {
     return {
@@ -217,6 +261,11 @@ function billingChip(
   if (ent.status === 'cancelled' || cancelAtPeriodEnd) {
     return { label: `Cancelling · ${daysLeft}d`, variant: 'warning', icon: 'clock' };
   }
+  // A green "Live" a few days before the deadline is how a paying store went dark
+  // with nobody warned: the lamp only changed once diners were already turned away.
+  if (expiringSoon) {
+    return { label: `Expires in ${daysLeft} ${dayWord(daysLeft)}`, variant: 'warning', icon: 'clock' };
+  }
   return { label: 'Live', variant: 'success', icon: 'billing' };
 }
 
@@ -234,6 +283,7 @@ function clauseFor(
   total: number,
   active: number,
   cancelAtPeriodEnd: boolean,
+  expiringSoon: boolean,
 ): string {
   // No branches means no storefront, so every diner-facing clause below would be
   // a claim about a page that does not exist. Say what is actually true instead.
@@ -248,7 +298,10 @@ function clauseFor(
   }
   if (ent.status === 'past_due') return `${daysLeft} ${dayWord(daysLeft)} of grace left`;
   if (ent.status === 'cancelled' || cancelAtPeriodEnd) return `Ends ${fmtDate(ent.entitledThrough)}`;
-  return `renews ${fmtDate(ent.entitledThrough)}`;
+  // Not "renews": nothing renews on its own while there is no payment rail, and
+  // that word is what let an owner assume a store would carry on past its date.
+  if (expiringSoon) return `Goes dark ${fmtDate(ent.entitledThrough)}`;
+  return `paid through ${fmtDate(ent.entitledThrough)}`;
 }
 
 // Counts, never names, so nothing here can be truncated.
@@ -267,6 +320,8 @@ function reasonFor(
   total: number,
   active: number,
   paused: number,
+  cancelAtPeriodEnd: boolean,
+  expiringSoon: boolean,
 ): string | null {
   const parts: string[] = [];
 
@@ -296,6 +351,12 @@ function reasonFor(
     parts.push(daysLeft <= 0 ? 'Trial ends today.' : `Trial ends in ${daysLeft} ${dayWord(daysLeft)}.`);
   } else if (ent.status === 'past_due') {
     parts.push(`Payment is past due — ${daysLeft} ${dayWord(daysLeft)} of grace left.`);
+  } else if (expiringSoon && ent.status !== 'cancelled' && !cancelAtPeriodEnd) {
+    // Never for a cancelling store: resolvePrimaryAction offers it no Extend, so
+    // "unless you extend it" pointed the owner at a button that is not there.
+    parts.push(
+      `Paid through ${fmtDate(ent.entitledThrough)}. Nothing renews it automatically — after that date the storefront shows the suspended screen unless you extend it.`,
+    );
   }
 
   if (paused > 0) {
@@ -337,8 +398,15 @@ export function resolvePrimaryAction(
   convertPrice: number | null,
 ): PrimaryAction | null {
   if (health.total > 0 && health.active === 0) return { kind: 'restore', label: 'Restore' };
-  if (health.entitled) return null;
-  if (row.ent.planCode !== PLAN_TRIAL && row.ent.planCode !== 'none') {
+  if (health.entitled) {
+    // Offered BEFORE the deadline, not only after it: waiting for the lapse meant
+    // the button appeared once diners were already seeing the suspended screen.
+    // A cancellation is left alone — extending it would silently undo a decision
+    // somebody made on purpose.
+    const cancelling = row.ent.status === 'cancelled' || row.cancelAtPeriodEnd;
+    return health.expiringSoon && !cancelling ? { kind: 'extend', label: 'Extend 1 month' } : null;
+  }
+  if (isPaidPlan(row.ent.planCode)) {
     return { kind: 'extend', label: 'Extend 1 month' };
   }
   return {
@@ -354,6 +422,21 @@ export function conversionSelection(row: TenantRow, branchesUsed: number) {
     addons: [...row.ent.addons],
     branchSeats: Math.max(1, row.ent.branchSeats, row.ent.branchesUsed, branchesUsed),
   };
+}
+
+/**
+ * The paid-through date an Extend should send, or null to let the RPC use
+ * now() + 1 month.
+ *
+ * billing_set_package with a blank period restarts the month from now(), so
+ * extending a store paid through the 22nd on the 13th would have written the
+ * 13th of next month and thrown away the nine days it had already paid for. While
+ * the deadline is still ahead, the month is added to the deadline instead.
+ */
+export function extensionPeriodEnd(row: TenantRow, nowMs: number): string | null {
+  const deadline = row.ent.entitledThrough ? Date.parse(row.ent.entitledThrough) : NaN;
+  if (!Number.isFinite(deadline) || deadline <= nowMs) return null;
+  return addOneMonthUtc(deadline).toISOString();
 }
 
 /** The package a tenant already has, re-billed from now(). */

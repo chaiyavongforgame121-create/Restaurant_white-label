@@ -1,9 +1,11 @@
 'use client';
 
 import * as React from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Save } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
+import { describeBillingError } from '@favornoms/shared';
 import { Badge, Button, Card } from '@favornoms/ui';
 import { AddonUpsellCard } from '@/components/addon-upsell-card';
 import { ClosuresManager } from './closures-manager';
@@ -61,8 +63,15 @@ export function BranchSettings({
   const [accentColor, setAccentColor] = React.useState(
     (branch.theme_override?.accentColor as string) ?? '#F7B538',
   );
+  // Branch colours win over the brand's on the storefront, so a branch may only carry its own
+  // once someone picks them. The pickers start on the platform orange when the branch has
+  // none, and "Save changes" used to write that orange back every time: renaming a new
+  // branch repainted its storefront orange over the owner's brand colours.
+  const [primaryTouched, setPrimaryTouched] = React.useState(false);
+  const [accentTouched, setAccentTouched] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [seatLimit, setSeatLimit] = React.useState<{ used: number; seats: number } | null>(null);
 
   const save = async () => {
     const domain = normaliseCustomDomain(customDomain);
@@ -72,6 +81,7 @@ export function BranchSettings({
     }
     setSaving(true);
     setError(null);
+    setSeatLimit(null);
     const supabase = getBrowserClient();
     const parsedRate = salesTaxPercent.trim()
       ? Math.max(0, Math.min(50, Number(salesTaxPercent) || 0)) / 100
@@ -83,11 +93,25 @@ export function BranchSettings({
         is_active: isActive,
         custom_domain: domain.value,
         sales_tax_rate: parsedRate,
-        theme_override: { ...branch.theme_override, primaryColor, accentColor },
+        // Colours the branch already had stay as they are through the spread; only a picker
+        // the owner actually moved is written.
+        theme_override: {
+          ...branch.theme_override,
+          ...(primaryTouched ? { primaryColor } : {}),
+          ...(accentTouched ? { accentColor } : {}),
+        },
       })
       .eq('id', branch.id);
     setSaving(false);
     if (updateError) {
+      // Hiding a branch frees its seat, so switching it back on needs a free seat again and
+      // the database refuses with plan_limit_exceeded:branches:<used>/<seats>. The raw code
+      // told the owner nothing about what to do next.
+      const billing = describeBillingError(updateError);
+      if (billing?.kind === 'seats') {
+        setSeatLimit({ used: billing.current, seats: billing.limit });
+        return;
+      }
       setError(updateError.message);
       return;
     }
@@ -150,8 +174,22 @@ export function BranchSettings({
           <h2 className="font-display text-lg font-semibold">Brand theme</h2>
           <p className="text-sm text-muted-foreground">Customer site colors</p>
           <div className="mt-3 grid gap-4 sm:grid-cols-2">
-            <ColorField label="Primary color" value={primaryColor} onChange={setPrimaryColor} />
-            <ColorField label="Accent color" value={accentColor} onChange={setAccentColor} />
+            <ColorField
+              label="Primary color"
+              value={primaryColor}
+              onChange={(v) => {
+                setPrimaryColor(v);
+                setPrimaryTouched(true);
+              }}
+            />
+            <ColorField
+              label="Accent color"
+              value={accentColor}
+              onChange={(v) => {
+                setAccentColor(v);
+                setAccentTouched(true);
+              }}
+            />
           </div>
           <div
             className="mt-4 rounded-2xl p-6 text-white shadow-warm"
@@ -271,6 +309,21 @@ export function BranchSettings({
 
         {error && (
           <p className="rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p>
+        )}
+
+        {seatLimit && (
+          <p className="rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            Nothing was saved.{' '}
+            {seatLimit.seats === 1
+              ? 'Your one branch seat is'
+              : `All ${seatLimit.seats} of your branch seats are`}{' '}
+            already used by active branches, so this branch cannot be made active again. Add a
+            seat on{' '}
+            <Link href={`/b/${branch.id}/settings/plan`} className="font-medium underline">
+              Plan &amp; billing
+            </Link>
+            , or hide another branch first.
+          </p>
         )}
 
         <Button

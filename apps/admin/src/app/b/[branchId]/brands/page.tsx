@@ -1,20 +1,25 @@
-import { notFound } from 'next/navigation';
-import { getServerClient } from '@favornoms/database/server';
 import { getEntitlementsForBranch } from '@favornoms/database/queries';
+import { getBranchAccess } from '@/lib/capabilities';
+import { AccessDenied } from '@/components/access-denied';
+import { branchMenuLink } from '../qr/_lib/menu-url';
 import { BrandsManager } from './_components/brands-manager';
 
 interface Props { params: Promise<{ branchId: string }> }
 
 export default async function BrandsPage({ params }: Props) {
   const { branchId } = await params;
-  const supabase = await getServerClient();
-
-  const { data: branch } = await supabase
-    .from('branches')
-    .select('id, restaurant_id, brand_id')
-    .eq('id', branchId)
-    .maybeSingle();
-  if (!branch) notFound();
+  // Only the sidebar used to hide this page. A manager who typed the URL still got the brand
+  // editor and the Add branch button, which opens a paid branch seat. Ask for the same
+  // capability the sidebar and the brands RLS policies use.
+  const { supabase, branch, can } = await getBranchAccess(branchId, `/b/${branchId}/brands`);
+  if (!can('brand.edit')) {
+    return (
+      <AccessDenied
+        title="No branding access"
+        reason={`Only the owner or an admin can change the brand and branches of ${branch.name}.`}
+      />
+    );
+  }
 
   const [brandsRes, branchesRes, restaurantRes, entitlements] = await Promise.all([
     supabase
@@ -27,16 +32,28 @@ export default async function BrandsPage({ params }: Props) {
       .order('created_at', { ascending: true }),
     supabase
       .from('branches')
-      .select('id, name, brand_id, is_active')
+      .select('id, name, slug, brand_id, is_active, timezone, custom_domain')
       .eq('restaurant_id', branch.restaurant_id)
       .order('created_at', { ascending: true }),
     supabase
       .from('restaurants')
-      .select('id, name, loyalty_scope, storefront')
+      .select('id, name, slug, loyalty_scope, storefront')
       .eq('id', branch.restaurant_id)
       .maybeSingle(),
     getEntitlementsForBranch(supabase, branchId),
   ]);
+
+  const restaurantSlug = restaurantRes.data?.slug;
+  const branches = (branchesRes.data ?? []).map((b) => ({
+    id: b.id,
+    name: b.name,
+    brand_id: b.brand_id,
+    is_active: b.is_active,
+    timezone: b.timezone,
+    // The same builder the QR page prints from, so the link shown here and the printed code
+    // can never point at different places (a custom domain wins over /r/<restaurant>/<branch>).
+    storefront_url: branchMenuLink(b.slug, restaurantSlug, b.custom_domain).url,
+  }));
 
   return (
     <BrandsManager
@@ -49,7 +66,7 @@ export default async function BrandsPage({ params }: Props) {
       }
       currentBranchId={branchId}
       brands={(brandsRes.data ?? []) as never}
-      branches={(branchesRes.data ?? []) as never}
+      branches={branches}
       storefront={(restaurantRes.data?.storefront ?? {}) as Record<string, unknown>}
       entitlements={entitlements}
     />

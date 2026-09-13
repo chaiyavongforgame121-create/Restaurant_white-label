@@ -19,7 +19,6 @@ import {
 import {
   FEATURE_KEYS,
   PLAN_BASE,
-  PLAN_TRIAL,
   currentSelection,
   featureLabel,
   featureOverrideState,
@@ -31,12 +30,33 @@ import {
 } from '@favornoms/shared';
 import { Badge, Button, Card } from '@favornoms/ui';
 import { PlatformNav } from '../../_components/platform-nav';
+import { addOneMonthUtc, fmtDate } from '../../_components/tenant-health';
 
 const INPUT_CLS =
   'h-11 w-full rounded-xl border border-border bg-background px-3 text-base outline-none transition-colors focus-visible:border-primary';
 
 const STATUSES = ['active', 'trialing', 'past_due', 'cancelled', 'expired'] as const;
 type Status = (typeof STATUSES)[number];
+
+// billing_compute grants entitled_through = greatest(period_end, trial_end) to
+// past_due and cancelled exactly as it does to active, so picking either one to
+// close a store switched nothing off. The option text says so before it is chosen.
+const STATUS_LABEL: Record<Status, string> = {
+  active: 'active',
+  trialing: 'trialing',
+  past_due: 'past_due — keeps access',
+  cancelled: 'cancelled — keeps access',
+  expired: 'expired — access ends now',
+};
+
+const NOT_AN_OFF_SWITCH =
+  'is a label, not an off switch: the store keeps full access until the paid-through date. Suspend on the dashboard hides the store now; letting the date pass ends access.';
+
+const STATUS_HINT: Partial<Record<Status, string>> = {
+  past_due: `Past due ${NOT_AN_OFF_SWITCH}`,
+  cancelled: `Cancelled ${NOT_AN_OFF_SWITCH}`,
+  expired: 'Expired ends access as soon as you apply.',
+};
 
 const money = (n: number) => `$${Number(n).toFixed(0)}`;
 
@@ -50,12 +70,15 @@ export function SubscriptionsManager({
   rows,
   catalog,
   initialQuery = '',
+  nowMs,
 }: {
   rows: RestaurantSubscriptionRow[];
   catalog: BillingProduct[];
   /** A slug arriving from /platform's "Fix billing" — prefills the search and
    *  opens that restaurant's editor, so the deep link lands on the control. */
   initialQuery?: string;
+  /** The server clock, so the "blank = …" date renders identically on both sides. */
+  nowMs: number;
 }) {
   const [q, setQ] = React.useState(initialQuery);
   const focusSlug = initialQuery.trim().toLowerCase();
@@ -94,6 +117,7 @@ export function SubscriptionsManager({
             key={row.restaurant_id}
             row={row}
             catalog={catalog}
+            nowMs={nowMs}
             defaultOpen={focusSlug === row.restaurant_slug.toLowerCase()}
           />
         ))}
@@ -108,10 +132,12 @@ export function SubscriptionsManager({
 function SubscriptionCard({
   row,
   catalog,
+  nowMs,
   defaultOpen = false,
 }: {
   row: RestaurantSubscriptionRow;
   catalog: BillingProduct[];
+  nowMs: number;
   defaultOpen?: boolean;
 }) {
   const router = useRouter();
@@ -131,6 +157,16 @@ function SubscriptionCard({
   const plans = catalog.filter((p) => p.kind === 'plan');
   const total = packageMonthlyTotal(sel, catalog);
   const minSeats = Math.max(1, ent.branchesUsed);
+
+  // What a blank "Paid through" actually writes (billing_apply_selection): the
+  // period restarts at now() and ends after the plan's trial days or one month.
+  // "Blank = +1 month" read as "one more month on top", so adding an add-on to a
+  // store paid well ahead quietly handed back less time than it already had.
+  const trialDays = catalog.find((p) => p.code === sel.planCode)?.trial_days ?? 0;
+  const blankEnd = trialDays > 0 ? new Date(nowMs + trialDays * 86_400_000) : addOneMonthUtc(nowMs);
+  const currentEnd = ent.entitledThrough ? Date.parse(ent.entitledThrough) : NaN;
+  const blankShortens = !periodEnd && Number.isFinite(currentEnd) && currentEnd > blankEnd.getTime();
+  const statusHint = STATUS_HINT[status];
 
   const save = async () => {
     setSaving(true);
@@ -236,10 +272,13 @@ function SubscriptionCard({
               >
                 {STATUSES.map((s) => (
                   <option key={s} value={s}>
-                    {s}
+                    {STATUS_LABEL[s]}
                   </option>
                 ))}
               </select>
+              {statusHint && (
+                <span className="mt-1 block text-[11px] text-muted-foreground">{statusHint}</span>
+              )}
             </label>
 
             <label className="block">
@@ -253,9 +292,16 @@ function SubscriptionCard({
                 className={INPUT_CLS}
               />
               <span className="mt-1 block text-[11px] text-muted-foreground">
-                Blank = +1 month (or +{catalog.find((p) => p.code === PLAN_TRIAL)?.trial_days ?? 14}{' '}
-                days on trial).
+                {trialDays > 0
+                  ? `Leave blank to restart from today: a ${trialDays}-day trial, to ${fmtDate(blankEnd.toISOString())}.`
+                  : `Leave blank to restart the month from today: paid through becomes ${fmtDate(blankEnd.toISOString())}.`}
               </span>
+              {blankShortens && (
+                <span className="mt-1 block text-[11px] font-medium text-danger">
+                  That is earlier than the current {fmtDate(ent.entitledThrough)}. Pick a date to keep
+                  the time they already have.
+                </span>
+              )}
             </label>
           </div>
 

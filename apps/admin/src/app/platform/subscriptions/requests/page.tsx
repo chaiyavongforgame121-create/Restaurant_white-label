@@ -1,6 +1,12 @@
 import { redirect } from 'next/navigation';
 import { getServerClient } from '@favornoms/database/server';
-import { isPlatformAdmin, listBillingRequests } from '@favornoms/database/queries';
+import {
+  isPlatformAdmin,
+  listBillingProducts,
+  listBillingRequests,
+  listRestaurantSubscriptions,
+  type RestaurantSubscriptionRow,
+} from '@favornoms/database/queries';
 import { PlatformAccessDenied } from '../../_components/platform-nav';
 import { RequestsView } from './_components/requests-view';
 
@@ -21,7 +27,33 @@ export default async function BillingRequestsPage({ searchParams }: Props) {
   const { status } = await searchParams;
   // An explicit empty string means "all"; absent means the default queue.
   const filter = status === undefined ? 'pending' : status === '' ? null : status;
-  const requests = await listBillingRequests(supabase, filter);
+  // The current package is loaded next to each request because approving REPLACES
+  // it: decide_billing_request deletes every line item the request does not name,
+  // and a card that showed only the request let an old Base-only request strip
+  // Delivery and AI Suite from a store that was paying for both.
+  //
+  // Inactive products are included: billing_apply_selection does not check
+  // is_active, so an add-on retired from the catalog is still applied and charged
+  // on approval, and the diff has to price it the same way.
+  const [requests, subscriptions, catalog] = await Promise.all([
+    listBillingRequests(supabase, filter),
+    listRestaurantSubscriptions(supabase),
+    listBillingProducts(supabase, true),
+  ]);
 
-  return <RequestsView requests={requests} status={status ?? 'pending'} />;
+  const wanted = new Set(requests.map((r) => r.restaurant_id));
+  const packages: Record<string, RestaurantSubscriptionRow> = {};
+  for (const row of subscriptions) {
+    if (wanted.has(row.restaurant_id)) packages[row.restaurant_id] = row;
+  }
+
+  return (
+    <RequestsView
+      requests={requests}
+      status={status ?? 'pending'}
+      packages={packages}
+      catalog={catalog}
+      nowMs={Date.now()}
+    />
+  );
 }

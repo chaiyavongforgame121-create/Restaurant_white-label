@@ -93,7 +93,7 @@ export default async function PlatformReportsPage() {
           label="Pending requests"
           value={String(pending)}
           warn={pending > 0}
-          href={pending > 0 ? '/platform/requests' : undefined}
+          href={pending > 0 ? '/platform/subscriptions/requests' : undefined}
         />
       </div>
 
