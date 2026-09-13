@@ -6,10 +6,20 @@ interface Props { params: Promise<{ branchId: string }> }
 export default async function PromosPage({ params }: Props) {
   const { branchId } = await params;
   const supabase = await getServerClient();
-  const { data } = await supabase
-    .from('promos')
-    .select('*')
-    .eq('branch_id', branchId)
-    .order('created_at', { ascending: false });
-  return <PromosManager branchId={branchId} initialPromos={(data ?? []) as never} />;
+  const [{ data }, { data: branch }] = await Promise.all([
+    supabase
+      .from('promos')
+      .select('*')
+      .eq('branch_id', branchId)
+      .order('created_at', { ascending: false }),
+    supabase.from('branches').select('timezone').eq('id', branchId).maybeSingle(),
+  ]);
+  return (
+    <PromosManager
+      branchId={branchId}
+      // The same fallback is_branch_open() uses for a branch with no zone recorded.
+      timezone={branch?.timezone || 'America/New_York'}
+      initialPromos={(data ?? []) as never}
+    />
+  );
 }

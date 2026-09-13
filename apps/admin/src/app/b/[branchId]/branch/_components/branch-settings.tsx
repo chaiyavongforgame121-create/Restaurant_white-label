@@ -205,7 +205,7 @@ export function BranchSettings({
 
         <HoursEditor branchId={branch.id} timezone={branch.timezone} />
 
-        <ClosuresManager branchId={branch.id} />
+        <ClosuresManager branchId={branch.id} timezone={branch.timezone} />
 
 
         {/* Sits directly after Opening hours on purpose: the picker's available times

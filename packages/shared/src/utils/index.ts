@@ -87,3 +87,4 @@ export * from './driver-earnings';
 export * from './schedule-windows';
 export * from './modifiers';
 export * from './phone';
+export * from './zoned-time';
