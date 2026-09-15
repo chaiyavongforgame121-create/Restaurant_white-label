@@ -10,6 +10,7 @@ import {
   resolveTenant,
   storefrontNames,
 } from '@/lib/tenant';
+import { appleTouchIconUrl } from '@/lib/app-identity';
 import { TablePinProvider } from './_components/table-pin';
 
 interface Props {
@@ -93,7 +94,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
                 : []),
               ...(!tenant.icon192Url && tenant.faviconUrl ? [{ url: tenant.faviconUrl }] : []),
             ],
-            apple: tenant.icon192Url ?? tenant.faviconUrl ?? undefined,
+            // iOS paints transparency black, so it gets the merchant's opaque iPhone icon when
+            // there is one — the 192 may be transparent ("only the image, like a PNG").
+            apple:
+              appleTouchIconUrl(
+                tenant.appleIconUrl,
+                tenant.icon192Url ?? tenant.faviconUrl,
+                process.env.NEXT_PUBLIC_SUPABASE_URL,
+              ) ?? undefined,
           },
         }
       : {}),

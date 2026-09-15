@@ -140,9 +140,11 @@ export function useApplicationIcon(): string | null {
   const [src, setSrc] = React.useState<string | null>(null);
 
   React.useEffect(() => {
+    // The 192 first: it is the icon the merchant sees as "only my image", while the Apple one is
+    // the opaque iPhone copy. Older pages without a sized 192 still have the Apple link.
     const el =
-      document.querySelector('link[rel="apple-touch-icon"]') ??
-      document.querySelector('link[rel="icon"][sizes="192x192"]');
+      document.querySelector('link[rel="icon"][sizes="192x192"]') ??
+      document.querySelector('link[rel="apple-touch-icon"]');
     const href = el?.getAttribute('href')?.trim();
     // A tenant with no upload falls back to the platform icon in the root layout, and the
     // glyph is a better answer than the platform's mark on a merchant's card.

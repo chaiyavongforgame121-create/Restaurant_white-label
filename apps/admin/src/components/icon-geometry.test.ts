@@ -32,6 +32,10 @@ describe('iconDrawRect', () => {
     expect(r.x + r.w / 2).toBeCloseTo(256);
   });
 
+  it('draws the iPhone icon whole, never zoomed', () => {
+    expect(iconDrawRect(512, 512, 180, fill(1.5), 'apple')).toEqual({ x: 0, y: 0, w: 180, h: 180 });
+  });
+
   it('never zooms or crops the tab/iPhone/desktop icon', () => {
     expect(iconDrawRect(512, 512, 192, fill(1.5), 'any')).toEqual({ x: 0, y: 0, w: 192, h: 192 });
     // A wide wordmark is letterboxed in every style, never cut.
@@ -110,6 +114,17 @@ describe('style parsing', () => {
     expect(parseIconStyle({ removeBackground: 'yes' }).removeBackground).toBeUndefined();
     expect(sameIconStyle(fill(), { ...fill(), removeBackground: true })).toBe(false);
     expect(sameIconStyle({ ...fill(), removeBackground: false }, fill())).toBe(true);
+  });
+
+  it('carries transparency and the iPhone icon URL; only transparency is a look', () => {
+    const apple = 'https://abc.supabase.co/storage/v1/object/public/branding/r1/icon-apple-180-x.png';
+    const s = parseIconStyle({ fit: 'fill', zoom: 1, background: '#B1320C', transparent: true, appleUrl: apple });
+    expect(s.transparent).toBe(true);
+    expect(s.appleUrl).toBe(apple);
+    expect(parseIconStyle({ appleUrl: 'https://evil.example/a.png' }).appleUrl).toBeUndefined();
+    expect(parseIconStyle({ transparent: 'yes' }).transparent).toBeUndefined();
+    expect(sameIconStyle(fill(), { ...fill(), transparent: true })).toBe(false);
+    expect(sameIconStyle(fill(), { ...fill(), appleUrl: apple })).toBe(true);
   });
 
   it('compares what renders: zoom only in fill mode, never the source URL', () => {
