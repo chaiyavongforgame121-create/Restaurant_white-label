@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  appleTouchIconUrl,
   deriveStorefrontNames,
   isTrustedIconSource,
   manifestIcons,
@@ -122,6 +123,23 @@ describe('parseAppIconVariant', () => {
     expect(parseAppIconVariant('maskable-512')).toBe('maskable-512');
     expect(parseAppIconVariant('1024')).toBeNull();
     expect(parseAppIconVariant('../192')).toBeNull();
+  });
+});
+
+describe('appleTouchIconUrl', () => {
+  const apple = upload('icon-apple-180-aaa');
+  const fallback = upload('icon-192-aaa');
+
+  it('uses the opaque iPhone icon the admin saved', () => {
+    expect(appleTouchIconUrl(apple, fallback, SUPABASE)).toBe(apple);
+  });
+
+  it('falls back to the 192 for brands that have none, or an untrusted one', () => {
+    expect(appleTouchIconUrl(null, fallback, SUPABASE)).toBe(fallback);
+    expect(appleTouchIconUrl(undefined, fallback, SUPABASE)).toBe(fallback);
+    expect(appleTouchIconUrl('https://evil.example/a.png', fallback, SUPABASE)).toBe(fallback);
+    expect(appleTouchIconUrl(apple, fallback, undefined)).toBe(fallback);
+    expect(appleTouchIconUrl(null, null, SUPABASE)).toBeNull();
   });
 });
 

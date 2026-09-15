@@ -36,6 +36,23 @@ export interface ResolvedTenant {
   icon192Url: string | null;
   icon512Url: string | null;
   iconMaskable512Url: string | null;
+  /**
+   * The opaque 180px iPhone icon (brands.theme.appIcon.appleUrl) of the same brand the icon
+   * files above come from, or null. iOS paints transparency black, and the 192 may be transparent
+   * ("only the image, like a PNG"). Not validated here — the storefront checks it is a file in
+   * the branding bucket before using it.
+   *
+   * Read from the brand row, not from `theme`: an unlinked branch's theme is
+   * restaurants.brand_settings (colours deliberately do not fall back), which never holds it.
+   */
+  appleIconUrl: string | null;
+}
+
+/** brands.theme.appIcon.appleUrl, when the theme has one. */
+export function appIconAppleUrl(theme: unknown): string | null {
+  const appIcon = theme && typeof theme === 'object' ? (theme as Record<string, unknown>).appIcon : null;
+  const url = appIcon && typeof appIcon === 'object' ? (appIcon as Record<string, unknown>).appleUrl : null;
+  return typeof url === 'string' && url ? url : null;
 }
 
 /**
@@ -77,6 +94,7 @@ export async function resolveTenantBySlug(
   let brandIcon192: string | null = null;
   let brandIcon512: string | null = null;
   let brandIconMaskable: string | null = null;
+  let brandAppleIcon: string | null = null;
   if (b.brand_id) {
     const { data: brandRow } = await supabase
       .from('brands')
@@ -91,6 +109,7 @@ export async function resolveTenantBySlug(
       brandIcon192 = brandRow.icon_192_url ?? null;
       brandIcon512 = brandRow.icon_512_url ?? null;
       brandIconMaskable = brandRow.icon_maskable_512_url ?? null;
+      brandAppleIcon = appIconAppleUrl(brandRow.theme);
     }
   } else {
     // Fall back to the restaurant's default brand for the ASSETS only.
@@ -110,7 +129,8 @@ export async function resolveTenantBySlug(
     // restaurant's original name back at them.
     const { data: defaultBrand } = await supabase
       .from('brands')
-      .select('name, logo_url, favicon_url, icon_192_url, icon_512_url, icon_maskable_512_url')
+      // `theme` only for appIcon.appleUrl — it is NOT merged into the colours below.
+      .select('name, theme, logo_url, favicon_url, icon_192_url, icon_512_url, icon_maskable_512_url')
       .eq('restaurant_id', r.id)
       .order('is_default', { ascending: false })
       .order('created_at', { ascending: true })
@@ -123,6 +143,7 @@ export async function resolveTenantBySlug(
       brandIcon192 = db.icon_192_url ?? null;
       brandIcon512 = db.icon_512_url ?? null;
       brandIconMaskable = db.icon_maskable_512_url ?? null;
+      brandAppleIcon = appIconAppleUrl(db.theme);
     }
   }
 
@@ -170,6 +191,7 @@ export async function resolveTenantBySlug(
     icon192Url: brandIcon192,
     icon512Url: brandIcon512,
     iconMaskable512Url: brandIconMaskable,
+    appleIconUrl: brandAppleIcon,
   };
 }
 

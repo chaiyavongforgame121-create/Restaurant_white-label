@@ -12,7 +12,7 @@
 
 export type IconFit = 'fill' | 'padded';
 /** `any` is the desktop/iOS/tab icon; `maskable` is what Android launchers crop to a shape. */
-export type IconVariant = 'any' | 'maskable';
+export type IconVariant = 'any' | 'maskable' | 'apple';
 
 export interface IconStyle {
   fit: IconFit;
@@ -32,6 +32,18 @@ export interface IconStyle {
    * when false.
    */
   removeBackground?: boolean;
+  /**
+   * Leave the `any` icons (browser tab, computer install window and shortcut) transparent, so
+   * they show only the image — like the PNG the merchant uploaded. Phones cannot: iOS fills
+   * transparency with black and Android launchers with black or white, so the maskable and Apple
+   * icons still get `background`. Omitted when false.
+   */
+  transparent?: boolean;
+  /**
+   * The opaque 180px iPhone icon rendered alongside, used as apple-touch-icon so the transparent
+   * 192 never reaches iOS. A file, not a look: ignored by sameIconStyle.
+   */
+  appleUrl?: string;
 }
 
 export const ICON_ZOOM_MIN = 1;
@@ -90,6 +102,8 @@ export function parseIconStyle(raw: unknown): IconStyle {
   };
   if (isBrandingAssetUrl(r.sourceUrl)) style.sourceUrl = r.sourceUrl;
   if (r.removeBackground === true) style.removeBackground = true;
+  if (r.transparent === true) style.transparent = true;
+  if (isBrandingAssetUrl(r.appleUrl)) style.appleUrl = r.appleUrl;
   return normalizeIconStyle(style);
 }
 
@@ -102,6 +116,8 @@ export function normalizeIconStyle(style: IconStyle): IconStyle {
   };
   if (style.sourceUrl) out.sourceUrl = style.sourceUrl;
   if (style.removeBackground === true) out.removeBackground = true;
+  if (style.transparent === true) out.transparent = true;
+  if (style.appleUrl) out.appleUrl = style.appleUrl;
   return out;
 }
 
@@ -115,7 +131,8 @@ export function sameIconStyle(a: IconStyle | null | undefined, b: IconStyle | nu
     a.fit === b.fit &&
     (a.fit === 'padded' || clampZoom(a.zoom) === clampZoom(b.zoom)) &&
     a.background.toUpperCase() === b.background.toUpperCase() &&
-    (a.removeBackground === true) === (b.removeBackground === true)
+    (a.removeBackground === true) === (b.removeBackground === true) &&
+    (a.transparent === true) === (b.transparent === true)
   );
 }
 
@@ -143,7 +160,7 @@ export function iconDrawRect(
 ): DrawRect {
   if (!(srcW > 0) || !(srcH > 0) || !(size > 0)) return { x: 0, y: 0, w: size, h: size };
   let scale: number;
-  if (variant === 'any') {
+  if (variant === 'any' || variant === 'apple') {
     scale = Math.min(size / srcW, size / srcH);
   } else if (style.fit === 'fill') {
     scale = Math.max(size / srcW, size / srcH) * clampZoom(style.zoom);

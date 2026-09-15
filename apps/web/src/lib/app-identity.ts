@@ -149,6 +149,26 @@ export function manifestIcons(base: string, icons: TenantIconUrls): ManifestIcon
 }
 
 /**
+ * The iPhone home-screen icon (apple-touch-icon).
+ *
+ * iOS fills transparent pixels with black. When a merchant keeps their tab and computer icons
+ * transparent ("only the image, like a PNG"), the admin also renders an opaque 180px copy and
+ * saves it as brands.theme.appIcon.appleUrl; the tenant resolver hands it over as
+ * `tenant.appleIconUrl`, read from the brand row itself. (Reading it from `tenant.theme` missed
+ * every branch not linked to a brand, whose theme is the restaurant's colours — the usual case.)
+ * Brands without one fall back to `fallback` (the 192), which older uploads always rendered
+ * opaque. Only a file in the branding bucket is trusted.
+ */
+export function appleTouchIconUrl(
+  appleUrl: string | null | undefined,
+  fallback: string | null | undefined,
+  supabaseUrl: string | undefined,
+): string | null {
+  if (appleUrl && isTrustedIconSource(appleUrl, supabaseUrl)) return appleUrl;
+  return fallback || null;
+}
+
+/**
  * Only files the admin uploader could have written: the project's own public `branding` bucket.
  *
  * The URL comes from a brands row a merchant can edit, and the icon route fetches it from our

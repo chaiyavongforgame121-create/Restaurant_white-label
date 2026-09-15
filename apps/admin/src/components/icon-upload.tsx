@@ -42,6 +42,13 @@ const MAX_BYTES = 5 * 1024 * 1024;
 /** The kept original is re-encoded no larger than this: plenty for a 512 render, small to store. */
 const SOURCE_MAX_EDGE = 1024;
 const PREVIEW_PX = 128;
+/** Apple's home-screen icon size. */
+const APPLE_PX = 180;
+/** Transparency shown as a checkerboard in the computer preview. */
+const CHECKER: React.CSSProperties = {
+  backgroundImage: 'repeating-conic-gradient(hsl(var(--muted-foreground) / 0.22) 0% 25%, transparent 0% 50%)',
+  backgroundSize: '10px 10px',
+};
 const LOAD_FAILED = 'Could not load your current icon. Upload it again to change its style.';
 const FITS: readonly IconFit[] = ['fill', 'padded'];
 
@@ -60,10 +67,13 @@ function makeCanvas(width: number, height: number, readBack = false): Canvas2D {
 
 function drawIcon(src: ImageBitmap, size: number, style: IconStyle, variant: IconVariant): HTMLCanvasElement {
   const { canvas, ctx } = makeCanvas(size, size);
-  // iOS renders transparency as black on the home screen, so every variant gets an opaque
-  // ground rather than inheriting whatever alpha the merchant uploaded.
-  ctx.fillStyle = style.background;
-  ctx.fillRect(0, 0, size, size);
+  // Phones cannot show transparency — iOS fills it with black, Android launchers with black or
+  // white — so the maskable and Apple icons always get an opaque ground. The `any` icons (browser
+  // tab, computer install window and shortcut) keep the image's own transparency when asked.
+  if (!(variant === 'any' && style.transparent)) {
+    ctx.fillStyle = style.background;
+    ctx.fillRect(0, 0, size, size);
+  }
   const r = iconDrawRect(src.width, src.height, size, style, variant);
   ctx.drawImage(src, r.x, r.y, r.w, r.h);
   return canvas;
@@ -195,7 +205,7 @@ export function IconUpload({
   const [keyed, setKeyed] = React.useState<{ from: ImageBitmap; image: KeyedImage | null } | null>(null);
   const [touched, setTouched] = React.useState(false);
   const [swatches, setSwatches] = React.useState<string[]>([]);
-  const [previews, setPreviews] = React.useState<{ android: string; iphone: string } | null>(null);
+  const [previews, setPreviews] = React.useState<{ android: string; iphone: string; computer: string } | null>(null);
 
   const currentUrl = value.icon512Url ?? value.icon192Url;
 
@@ -270,13 +280,20 @@ export function IconUpload({
   // different colour would change nothing but the saved style — unless that background is being
   // removed, which is exactly what makes room for the colour.
   const canRecolour = sourceKind === 'original' || draft.fit === 'padded' || removing;
+  // Transparency needs pixels that are actually transparent: a kept original, or the plain
+  // background being removed. A rendered 512 is opaque, so asking for it there would change nothing.
+  // A rendered 512 that was itself left transparent (loaded because the original failed) counts
+  // too — treating it as opaque made every such icon look "not applied" and Apply strip it.
+  const canBeTransparent =
+    sourceKind === 'original' || removing || (sourceKind === 'flattened' && applied?.transparent === true);
   const effective = React.useMemo<IconStyle>(
     () =>
       normalizeIconStyle({
         ...(canRecolour ? draft : { ...draft, background: applied?.background ?? DEFAULT_ICON_STYLE.background }),
         removeBackground: removing,
+        transparent: draft.transparent === true && canBeTransparent,
       }),
-    [draft, canRecolour, applied, removing],
+    [draft, canRecolour, applied, removing, canBeTransparent],
   );
 
   React.useEffect(() => {
@@ -287,7 +304,8 @@ export function IconUpload({
     try {
       setPreviews({
         android: drawLauncherView(working, effective),
-        iphone: drawIcon(working, PREVIEW_PX, effective, 'any').toDataURL('image/png'),
+        iphone: drawIcon(working, PREVIEW_PX, effective, 'apple').toDataURL('image/png'),
+        computer: drawIcon(working, PREVIEW_PX, effective, 'any').toDataURL('image/png'),
       });
     } catch {
       setPreviews(null);
@@ -322,20 +340,24 @@ export function IconUpload({
     };
 
     // Uploaded in parallel — sequential round trips are a visible stall on a café's uplink.
-    const [b192, b512, bMask, bSource] = await Promise.all([
+    const [b192, b512, bMask, bApple, bSource] = await Promise.all([
       toPng(drawIcon(src, SIZES[0], style, 'any')),
       toPng(drawIcon(src, SIZES[1], style, 'any')),
       toPng(drawIcon(src, SIZES[1], style, 'maskable')),
+      // Always opaque, and always rendered: the storefront points apple-touch-icon at it, so iOS
+      // never gets the transparent 192 and paints its corners black.
+      toPng(drawIcon(src, APPLE_PX, style, 'apple')),
       original ? toPng(drawSource(original).canvas) : Promise.resolve(null),
     ]);
-    const [icon192Url, icon512Url, iconMaskable512Url, newSourceUrl] = await Promise.all([
+    const [icon192Url, icon512Url, iconMaskable512Url, appleUrl, newSourceUrl] = await Promise.all([
       put(b192, 'icon-192'),
       put(b512, 'icon-512'),
       put(bMask, 'icon-maskable-512'),
+      put(bApple, 'icon-apple-180'),
       bSource ? put(bSource, 'icon-source') : Promise.resolve(sourceUrl),
     ]);
 
-    const saved = normalizeIconStyle({ ...style, ...(newSourceUrl ? { sourceUrl: newSourceUrl } : {}) });
+    const saved = normalizeIconStyle({ ...style, appleUrl, ...(newSourceUrl ? { sourceUrl: newSourceUrl } : {}) });
     // The favicon points at the 192 so the tab icon and the installed icon can never
     // drift apart — they were two independent uploads before.
     onChange({ faviconUrl: icon192Url, icon192Url, icon512Url, iconMaskable512Url });
@@ -365,7 +387,9 @@ export function IconUpload({
       }
       // A fresh original can take any colour. Its background is removed now if that option is
       // on, and the untouched file is what gets kept.
-      const image = draft.removeBackground ? await keyOut(bmp) : null;
+      // "Only the image" needs a plain background gone just as much as the removal option does.
+      const wantsRemoval = draft.removeBackground === true || draft.transparent === true;
+      const image = wantsRemoval ? await keyOut(bmp) : null;
       const style: IconStyle = image
         ? {
             ...draft,
@@ -375,10 +399,10 @@ export function IconUpload({
         : { ...draft, removeBackground: false };
       await renderAndUpload(image?.bitmap ?? bmp, normalizeIconStyle(style), bmp);
       // The controls show what was actually rendered.
-      setDraft((d) => ({ ...d, background: style.background }));
+      setDraft((d) => ({ ...d, background: style.background, removeBackground: style.removeBackground }));
       setSource(bmp);
       setSourceKind('original');
-      setKeyed(draft.removeBackground ? { from: bmp, image } : null);
+      setKeyed(wantsRemoval ? { from: bmp, image } : null);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -440,8 +464,12 @@ export function IconUpload({
   const thumb = value.icon192Url ?? value.faviconUrl;
   const palette = mergeSwatches(removing ? keyedSwatches : swatches, ['#FFFFFF', '#000000']);
   // Removing a colour and painting the same colour back would upload three unchanged icons.
+  // Not when the `any` icons stay transparent: that is a real change even with the same phone colour.
   const repaintsRemoved =
-    removing && !!removedColour && colourDistance(effective.background, removedColour) <= SAME_AS_REMOVED;
+    removing &&
+    !effective.transparent &&
+    !!removedColour &&
+    colourDistance(effective.background, removedColour) <= SAME_AS_REMOVED;
 
   return (
     <div>
@@ -550,7 +578,9 @@ export function IconUpload({
                           removeBackground: true,
                           background: awayFromRemoved(d.background, removedColour, keyedSwatches),
                         }
-                      : { ...d, removeBackground: false },
+                      : // This box only shows when there is a plain background, and "only the image"
+                        // means nothing while it stays — so unticking removal ends transparency too.
+                        { ...d, removeBackground: false, transparent: false },
                   );
                 }}
                 className="mt-0.5 h-4 w-4 shrink-0"
@@ -561,6 +591,43 @@ export function IconUpload({
                 <span className="block text-[11px] text-muted-foreground">
                   The white (or other flat colour) outside your logo becomes the colour you pick
                   below — no white corners on any icon.
+                </span>
+              </span>
+            </label>
+          )}
+
+          {(canBeTransparent || canKnockOut) && (
+            <label className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                // What will actually render, so the box can never read ticked over an opaque result.
+                checked={effective.transparent === true}
+                onChange={(e) => {
+                  const on = e.target.checked;
+                  edit((d) => {
+                    if (!on) return { ...d, transparent: false };
+                    // Only-the-image needs the flat background gone first, if there is one.
+                    const needsRemoval = canKnockOut && d.removeBackground !== true;
+                    return {
+                      ...d,
+                      transparent: true,
+                      ...(needsRemoval
+                        ? {
+                            removeBackground: true,
+                            background: awayFromRemoved(d.background, removedColour, keyedSwatches),
+                          }
+                        : {}),
+                    };
+                  });
+                }}
+                className="mt-0.5 h-4 w-4 shrink-0"
+                style={{ accentColor: 'hsl(var(--primary))' }}
+              />
+              <span className="text-xs">
+                <span className="font-medium">Only the image, no background (like a PNG)</span>
+                <span className="block text-[11px] text-muted-foreground">
+                  For the browser tab and installing on a computer. Phones cannot show transparency —
+                  Android and iPhone always put a solid colour behind the image, so pick that colour below.
                 </span>
               </span>
             </label>
@@ -591,7 +658,7 @@ export function IconUpload({
           {canRecolour ? (
             <div>
               <span className="mb-1.5 block text-xs font-medium">
-                {draft.fit === 'fill' || removing ? 'Background' : 'Frame colour'}
+                {effective.transparent ? 'Phone background' : draft.fit === 'fill' || removing ? 'Background' : 'Frame colour'}
               </span>
               <div className="flex flex-wrap items-center gap-2">
                 {palette.map((hex) => (
@@ -650,11 +717,19 @@ export function IconUpload({
                   <img src={previews.iphone} alt="iPhone preview" className="h-14 w-14 rounded-[22%] shadow-sm" />
                   <figcaption className="mt-1 text-[10px] text-muted-foreground">iPhone</figcaption>
                 </figure>
+                <figure className="text-center">
+                  <span className="block h-14 w-14 rounded-md" style={CHECKER}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={previews.computer} alt="Computer and browser tab preview" className="h-14 w-14" />
+                  </span>
+                  <figcaption className="mt-1 text-[10px] text-muted-foreground">Computer</figcaption>
+                </figure>
               </>
             )}
             <p className="min-w-[10rem] flex-1 text-[11px] text-muted-foreground">
-              Roughly what phones show. Android crops to its own shape; iPhone shows your whole image
-              with rounded corners, so zoom does not apply there.
+              Roughly what each device shows. Android crops to its own shape and iPhone rounds the
+              corners — both need a solid colour, and zoom only applies to Android. Computers and
+              browser tabs can show just your image.
             </p>
           </div>
 
