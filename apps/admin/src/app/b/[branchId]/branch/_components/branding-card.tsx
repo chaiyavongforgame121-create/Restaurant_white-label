@@ -20,6 +20,7 @@ import { getBrowserClient } from '@favornoms/database/client';
 import { storefrontBase } from '@/lib/site-url';
 import { ImageUpload } from '@/components/image-upload';
 import { IconUpload, type IconSet } from '@/components/icon-upload';
+import { parseIconStyle, type IconStyle } from '@/components/icon-geometry';
 
 /**
  * Tell the storefront to drop its cached copy of this branch.
@@ -93,6 +94,16 @@ export function BrandingCard({ restaurantId, restaurantName, brand }: Props) {
     icon512Url: brand?.icon_512_url ?? null,
     iconMaskable512Url: brand?.icon_maskable_512_url ?? null,
   });
+  // The style the current icon files were rendered with. Null for an icon made before styles
+  // existed (always the old padded one), which is how the uploader knows to offer Apply.
+  const [iconStyle, setIconStyle] = React.useState<IconStyle | null>(() =>
+    brand?.theme && typeof brand.theme === 'object' && 'appIcon' in brand.theme
+      ? parseIconStyle(brand.theme.appIcon)
+      : null,
+  );
+  // A restyled icon that has not been applied yet. Saving now would publish the old files and
+  // report success, so Save waits until it is applied or set back.
+  const [iconPending, setIconPending] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [savedAt, setSavedAt] = React.useState<number | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -112,6 +123,13 @@ export function BrandingCard({ restaurantId, restaurantName, brand }: Props) {
     setSaving(true);
     setError(null);
     const supabase = getBrowserClient();
+    // appIcon travels with the icon files it describes, and leaves with them.
+    const withIconStyle = (theme: Record<string, unknown>): Record<string, unknown> => {
+      const next: Record<string, unknown> = { ...theme, brandName: trimmedName };
+      if (iconStyle && icons.icon512Url) next.appIcon = iconStyle;
+      else delete next.appIcon;
+      return next;
+    };
     const payload = {
       // The storefront names the installed app after brands.name. theme.brandName is kept in
       // step because the Brands page writes both, and an older reader may still look there.
@@ -129,7 +147,7 @@ export function BrandingCard({ restaurantId, restaurantName, brand }: Props) {
       // 'brand.edit' capability.
       const { data, error: updErr } = await supabase
         .from('brands')
-        .update({ ...payload, theme: { ...(brand.theme ?? {}), brandName: trimmedName } })
+        .update({ ...payload, theme: withIconStyle(brand.theme ?? {}) })
         .eq('id', brand.id)
         .select('id');
       setSaving(false);
@@ -144,7 +162,7 @@ export function BrandingCard({ restaurantId, restaurantName, brand }: Props) {
           restaurant_id: restaurantId,
           slug: slugify(trimmedName),
           is_default: true,
-          theme: { brandName: trimmedName },
+          theme: withIconStyle({}),
           ...payload,
         })
         .select('id');
@@ -195,8 +213,14 @@ export function BrandingCard({ restaurantId, restaurantName, brand }: Props) {
           <ImageUpload
             restaurantId={restaurantId}
             folder="logo"
+            removeBackground
             value={logoUrl}
-            onChange={setLogoUrl}
+            onChange={(url) => {
+              // Every logo change — upload, background removal, Undo, remove — is unsaved until
+              // Save, so the previous "Saved ✓" must not keep claiming otherwise.
+              setLogoUrl(url);
+              setSavedAt(null);
+            }}
             aspect="aspect-[3/1]"
             label="Upload logo"
           />
@@ -213,6 +237,9 @@ export function BrandingCard({ restaurantId, restaurantName, brand }: Props) {
               setIcons(next);
               setSavedAt(null);
             }}
+            appliedStyle={iconStyle}
+            onAppliedStyleChange={setIconStyle}
+            onPendingChange={setIconPending}
           />
           <span className="mt-1.5 block text-xs text-muted-foreground">
             Square, at least 192×192. Used for the browser tab and the installed app icon.
@@ -261,11 +288,23 @@ export function BrandingCard({ restaurantId, restaurantName, brand }: Props) {
       )}
 
       <div className="mt-4 flex items-center gap-3">
-        <Button onClick={save} loading={saving} leftIcon={<Save className="h-4 w-4" />}>
+        <Button
+          onClick={save}
+          loading={saving}
+          disabled={iconPending}
+          leftIcon={<Save className="h-4 w-4" />}
+        >
           Save branding
         </Button>
-        {savedAt && !saving && (
-          <span className="text-sm text-success">Saved ✓ — customers see this within a minute</span>
+        {iconPending ? (
+          <span className="text-sm text-muted-foreground">
+            Apply the new icon style first, or set it back.
+          </span>
+        ) : (
+          savedAt &&
+          !saving && (
+            <span className="text-sm text-success">Saved ✓ — customers see this within a minute</span>
+          )
         )}
       </div>
     </Card>

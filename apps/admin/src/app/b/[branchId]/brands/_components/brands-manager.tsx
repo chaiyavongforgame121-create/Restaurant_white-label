@@ -18,6 +18,7 @@ import {
 import { Badge, Button, Card, IconButton } from '@favornoms/ui';
 import { ImageUpload } from '@/components/image-upload';
 import { IconUpload, type IconSet } from '@/components/icon-upload';
+import { parseIconStyle, type IconStyle } from '@/components/icon-geometry';
 
 interface Brand {
   id: string;
@@ -800,6 +801,13 @@ function BrandEditor({
     icon512Url: brand.icon_512_url,
     iconMaskable512Url: brand.icon_maskable_512_url,
   });
+  // Same contract as the Branding card: the style the current icon files were rendered with,
+  // null for an icon made before styles existed.
+  const [iconStyle, setIconStyle] = React.useState<IconStyle | null>(() =>
+    brand.theme && 'appIcon' in brand.theme ? parseIconStyle(brand.theme.appIcon) : null,
+  );
+  // A restyled icon not applied yet: saving would keep the old files and close the dialog.
+  const [iconPending, setIconPending] = React.useState(false);
   const [isDefault, setIsDefault] = React.useState(brand.is_default);
   const [linkedBranchIds, setLinkedBranchIds] = React.useState<Set<string>>(
     () => new Set(branches.filter((b) => b.brand_id === brand.id).map((b) => b.id)),
@@ -812,11 +820,15 @@ function BrandEditor({
     setError(null);
     try {
       const supabase = getBrowserClient();
+      const theme: Record<string, unknown> = { ...brand.theme, primaryColor, accentColor, brandName: name };
+      // appIcon travels with the icon files it describes, and leaves with them.
+      if (iconStyle && icons.icon512Url) theme.appIcon = iconStyle;
+      else delete theme.appIcon;
       const payload = {
         restaurant_id: restaurantId,
         name,
         slug: slug || slugify(name),
-        theme: { ...brand.theme, primaryColor, accentColor, brandName: name },
+        theme,
         logo_url: logoUrl || null,
         favicon_url: icons.faviconUrl,
         icon_192_url: icons.icon192Url,
@@ -908,6 +920,7 @@ function BrandEditor({
               <ImageUpload
                 restaurantId={restaurantId}
                 folder="logo"
+                removeBackground
                 value={logoUrl || null}
                 onChange={(url) => setLogoUrl(url ?? '')}
                 aspect="aspect-[3/1]"
@@ -919,8 +932,19 @@ function BrandEditor({
             {/* Kept separate from the logo rather than derived from it: the logo is
                 a wide lockup that turns to mush at 32px, which reads as a broken
                 site rather than an unbranded one. */}
-            <Field label="App icon (optional)">
-              <IconUpload restaurantId={restaurantId} value={icons} onChange={setIcons} />
+            {/* A <div>, not Field's <label>: inside a label every click on the style panel's
+                previews, captions and gaps was forwarded to the hidden file input and opened
+                the file picker, and the Zoom label ended up nested inside another label. */}
+            <div>
+              <span className="mb-1.5 block text-sm font-medium">App icon (optional)</span>
+              <IconUpload
+                restaurantId={restaurantId}
+                value={icons}
+                onChange={setIcons}
+                appliedStyle={iconStyle}
+                onAppliedStyleChange={setIconStyle}
+                onPendingChange={setIconPending}
+              />
               <div className="mt-2 text-xs text-muted-foreground">
                 <p>
                   Used for the browser tab, and for the icon people see after installing your
@@ -934,7 +958,7 @@ function BrandEditor({
                   </div>
                 )}
               </div>
-            </Field>
+            </div>
           </div>
         </div>
 
@@ -978,13 +1002,18 @@ function BrandEditor({
 
         {error && <p className="rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p>}
 
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {iconPending && (
+            <span className="mr-auto text-sm text-muted-foreground">
+              Apply the new icon style first, or set it back.
+            </span>
+          )}
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button
             variant="gradient"
             onClick={save}
             loading={saving}
-            disabled={!name}
+            disabled={!name || iconPending}
             leftIcon={<Save className="h-4 w-4" />}
           >
             Save
