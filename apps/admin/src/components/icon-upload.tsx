@@ -10,8 +10,10 @@ import {
   ICON_ZOOM_MIN,
   MASKABLE_VISIBLE_FRACTION,
   clampZoom,
+  colourDistance,
   edgeSwatches,
   iconDrawRect,
+  knockOutBackground,
   mergeSwatches,
   normalizeIconStyle,
   sameIconStyle,
@@ -43,51 +45,79 @@ const PREVIEW_PX = 128;
 const LOAD_FAILED = 'Could not load your current icon. Upload it again to change its style.';
 const FITS: readonly IconFit[] = ['fill', 'padded'];
 
-function drawIcon(src: ImageBitmap, size: number, style: IconStyle, variant: IconVariant): HTMLCanvasElement {
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Your browser could not process the image (no canvas support).');
+type Canvas2D = { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D };
 
+function makeCanvas(width: number, height: number, readBack = false): Canvas2D {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d', readBack ? { willReadFrequently: true } : undefined);
+  if (!ctx) throw new Error('Your browser could not process the image (no canvas support).');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  return { canvas, ctx };
+}
+
+function drawIcon(src: ImageBitmap, size: number, style: IconStyle, variant: IconVariant): HTMLCanvasElement {
+  const { canvas, ctx } = makeCanvas(size, size);
   // iOS renders transparency as black on the home screen, so every variant gets an opaque
   // ground rather than inheriting whatever alpha the merchant uploaded.
   ctx.fillStyle = style.background;
   ctx.fillRect(0, 0, size, size);
-
   const r = iconDrawRect(src.width, src.height, size, style, variant);
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(src, r.x, r.y, r.w, r.h);
   return canvas;
 }
 
-/** The upload itself, transparency kept, capped at SOURCE_MAX_EDGE. */
-function drawSource(src: ImageBitmap): HTMLCanvasElement {
+/** An image as-is, transparency kept, capped at SOURCE_MAX_EDGE. */
+function drawSource(src: ImageBitmap, readBack = false): Canvas2D {
   const scale = Math.min(1, SOURCE_MAX_EDGE / Math.max(src.width, src.height));
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.max(1, Math.round(src.width * scale));
-  canvas.height = Math.max(1, Math.round(src.height * scale));
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Your browser could not process the image (no canvas support).');
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(src, 0, 0, canvas.width, canvas.height);
-  return canvas;
+  const out = makeCanvas(
+    Math.max(1, Math.round(src.width * scale)),
+    Math.max(1, Math.round(src.height * scale)),
+    readBack,
+  );
+  out.ctx.drawImage(src, 0, 0, out.canvas.width, out.canvas.height);
+  return out;
+}
+
+interface KeyedImage {
+  bitmap: ImageBitmap;
+  /** The colour that was removed, #RRGGBB. */
+  reference: string;
+}
+
+/** The image with its plain surrounding background made transparent, or null when it has none. */
+async function keyOut(src: ImageBitmap): Promise<KeyedImage | null> {
+  const { canvas, ctx } = drawSource(src, true);
+  const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const result = knockOutBackground(pixels.data, canvas.width, canvas.height);
+  if (result.removed === 0 || !result.reference) return null;
+  ctx.putImageData(pixels, 0, 0);
+  return { bitmap: await createImageBitmap(canvas), reference: result.reference };
+}
+
+/** Closer than this to the removed colour, a background would look like nothing was removed. */
+const SAME_AS_REMOVED = 40;
+
+/**
+ * A background that is not the colour being removed. White is the default background and the
+ * usual colour removed, so ticking the box used to knock the white corners out and paint them
+ * straight back in white. The first candidate that differs — the artwork's rim — wins.
+ */
+function awayFromRemoved(background: string, removed: string | null, candidates: string[]): string {
+  if (!removed || colourDistance(background, removed) > SAME_AS_REMOVED) return background;
+  return candidates.find((hex) => colourDistance(hex, removed) > SAME_AS_REMOVED) ?? background;
 }
 
 /** What an Android launcher shows: the centre MASKABLE_VISIBLE_FRACTION of the maskable tile. */
 function drawLauncherView(src: ImageBitmap, style: IconStyle): string {
   const full = Math.round(PREVIEW_PX / MASKABLE_VISIBLE_FRACTION);
   const tile = drawIcon(src, full, style, 'maskable');
-  const view = document.createElement('canvas');
-  view.width = PREVIEW_PX;
-  view.height = PREVIEW_PX;
-  const ctx = view.getContext('2d');
-  if (!ctx) throw new Error('no canvas');
+  const { canvas, ctx } = makeCanvas(PREVIEW_PX, PREVIEW_PX);
   const offset = (full - PREVIEW_PX) / 2;
   ctx.drawImage(tile, offset, offset, PREVIEW_PX, PREVIEW_PX, 0, 0, PREVIEW_PX, PREVIEW_PX);
-  return view.toDataURL('image/png');
+  return canvas.toDataURL('image/png');
 }
 
 function toPng(canvas: HTMLCanvasElement): Promise<Blob> {
@@ -109,13 +139,9 @@ async function loadBitmap(url: string): Promise<ImageBitmap> {
 
 function swatchesOf(src: ImageBitmap): string[] {
   const size = 96;
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  if (!ctx) return [];
-  ctx.drawImage(src, 0, 0, size, size);
   try {
+    const { ctx } = makeCanvas(size, size, true);
+    ctx.drawImage(src, 0, 0, size, size);
     return edgeSwatches(ctx.getImageData(0, 0, size, size).data, size, size);
   } catch {
     return [];
@@ -128,11 +154,12 @@ function swatchesOf(src: ImageBitmap): string[] {
  * maskable 512 for the Android home screen.
  *
  * The maskable icon used to be the image shrunk to 62.5% on white, which on a real phone is the
- * logo floating in a thick white frame. It now fills the tile by default, with a zoom and a
- * background picked from the image's own edge, previewed at the crop a launcher really applies.
- * The untouched upload is kept alongside, so the style can be changed later without uploading
- * again. Icons made before that have no original: they can still be zoomed or padded, but their
- * background is part of the image, so the colour choice is withheld where it would do nothing.
+ * logo floating in a thick white frame. It now fills the tile by default, with a zoom, a
+ * background picked from the image's own edge, and an option to remove the plain background
+ * around the artwork so no white corners are left anywhere — previewed at the crop a launcher
+ * really applies. The untouched upload is kept alongside, so the style can be changed later
+ * without uploading again. Icons made before that have no original: they can be zoomed, padded
+ * or have their background removed, but a colour choice is withheld where it would do nothing.
  */
 export function IconUpload({
   restaurantId,
@@ -164,6 +191,8 @@ export function IconUpload({
   const [source, setSource] = React.useState<ImageBitmap | null>(null);
   /** 'original' can be recoloured; 'flattened' is a rendered 512 with its background baked in. */
   const [sourceKind, setSourceKind] = React.useState<'original' | 'flattened' | null>(null);
+  /** `source` with its plain background removed; `image` null when it has no plain background. */
+  const [keyed, setKeyed] = React.useState<{ from: ImageBitmap; image: KeyedImage | null } | null>(null);
   const [touched, setTouched] = React.useState(false);
   const [swatches, setSwatches] = React.useState<string[]>([]);
   const [previews, setPreviews] = React.useState<{ android: string; iphone: string } | null>(null);
@@ -207,31 +236,63 @@ export function IconUpload({
     setSwatches(source ? swatchesOf(source) : []);
   }, [source]);
 
+  // Work out once per source whether it has a plain background that can be removed.
+  React.useEffect(() => {
+    if (!source) {
+      setKeyed(null);
+      return;
+    }
+    if (keyed?.from === source) return;
+    let cancelled = false;
+    keyOut(source)
+      .then((image) => {
+        if (!cancelled) setKeyed({ from: source, image });
+      })
+      .catch(() => {
+        if (!cancelled) setKeyed({ from: source, image: null });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [source, keyed]);
+
+  const keyedImage = keyed?.from === source ? keyed.image : null;
+  const keyedBitmap = keyedImage?.bitmap ?? null;
+  const removedColour = keyedImage?.reference ?? null;
+  const canKnockOut = !!keyedBitmap;
+  // The artwork's own colours once its background is gone: the rim comes first, not the white
+  // that is being removed (edgeSwatches skips transparent pixels).
+  const keyedSwatches = React.useMemo(() => (keyedBitmap ? swatchesOf(keyedBitmap) : []), [keyedBitmap]);
+  const removing = draft.removeBackground === true && canKnockOut;
+  const working = removing && keyedBitmap ? keyedBitmap : source;
+
   // A flattened source in fill mode covers the whole tile with its own baked-in background, so a
-  // different colour would change nothing but the saved style. Keep the colour it already has.
-  const canRecolour = sourceKind === 'original' || draft.fit === 'padded';
+  // different colour would change nothing but the saved style — unless that background is being
+  // removed, which is exactly what makes room for the colour.
+  const canRecolour = sourceKind === 'original' || draft.fit === 'padded' || removing;
   const effective = React.useMemo<IconStyle>(
     () =>
-      normalizeIconStyle(
-        canRecolour ? draft : { ...draft, background: applied?.background ?? DEFAULT_ICON_STYLE.background },
-      ),
-    [draft, canRecolour, applied],
+      normalizeIconStyle({
+        ...(canRecolour ? draft : { ...draft, background: applied?.background ?? DEFAULT_ICON_STYLE.background }),
+        removeBackground: removing,
+      }),
+    [draft, canRecolour, applied, removing],
   );
 
   React.useEffect(() => {
-    if (!source) {
+    if (!working) {
       setPreviews(null);
       return;
     }
     try {
       setPreviews({
-        android: drawLauncherView(source, effective),
-        iphone: drawIcon(source, PREVIEW_PX, effective, 'any').toDataURL('image/png'),
+        android: drawLauncherView(working, effective),
+        iphone: drawIcon(working, PREVIEW_PX, effective, 'any').toDataURL('image/png'),
       });
     } catch {
       setPreviews(null);
     }
-  }, [source, effective]);
+  }, [working, effective]);
 
   const stale = !!currentUrl && !sameIconStyle(applied, effective);
   const pending = touched && stale;
@@ -244,7 +305,11 @@ export function IconUpload({
     setDraft(fn);
   };
 
-  const renderAndUpload = async (src: ImageBitmap, style: IconStyle, keepOriginal: boolean) => {
+  /**
+   * Render and upload the three icons from `src`, and optionally `original` as the kept source.
+   * Returns the style as saved.
+   */
+  const renderAndUpload = async (src: ImageBitmap, style: IconStyle, original: ImageBitmap | null) => {
     const supabase = getBrowserClient();
     const stamp = crypto.randomUUID();
     const put = async (blob: Blob, name: string) => {
@@ -261,7 +326,7 @@ export function IconUpload({
       toPng(drawIcon(src, SIZES[0], style, 'any')),
       toPng(drawIcon(src, SIZES[1], style, 'any')),
       toPng(drawIcon(src, SIZES[1], style, 'maskable')),
-      keepOriginal ? toPng(drawSource(src)) : Promise.resolve(null),
+      original ? toPng(drawSource(original).canvas) : Promise.resolve(null),
     ]);
     const [icon192Url, icon512Url, iconMaskable512Url, newSourceUrl] = await Promise.all([
       put(b192, 'icon-192'),
@@ -278,6 +343,7 @@ export function IconUpload({
     setApplied(saved);
     setTouched(false);
     onAppliedStyleChange?.(saved);
+    return saved;
   };
 
   const upload = async (file: File) => {
@@ -297,10 +363,22 @@ export function IconUpload({
           `That image is ${bmp.width}×${bmp.height}. App icons need at least ${MIN_EDGE}×${MIN_EDGE} — a smaller one makes the install button disappear.`,
         );
       }
-      // A fresh original can take any colour, so render the draft as chosen, not as pinned.
-      await renderAndUpload(bmp, normalizeIconStyle(draft), true);
+      // A fresh original can take any colour. Its background is removed now if that option is
+      // on, and the untouched file is what gets kept.
+      const image = draft.removeBackground ? await keyOut(bmp) : null;
+      const style: IconStyle = image
+        ? {
+            ...draft,
+            removeBackground: true,
+            background: awayFromRemoved(draft.background, image.reference, swatchesOf(image.bitmap)),
+          }
+        : { ...draft, removeBackground: false };
+      await renderAndUpload(image?.bitmap ?? bmp, normalizeIconStyle(style), bmp);
+      // The controls show what was actually rendered.
+      setDraft((d) => ({ ...d, background: style.background }));
       setSource(bmp);
       setSourceKind('original');
+      setKeyed(draft.removeBackground ? { from: bmp, image } : null);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -309,11 +387,27 @@ export function IconUpload({
   };
 
   const apply = async () => {
-    if (!source) return;
+    if (!working || !source) return;
     setBusy(true);
     setError(null);
     try {
-      await renderAndUpload(source, effective, false);
+      if (removing && sourceKind === 'flattened' && keyedBitmap) {
+        // No original to come back to: the background-free version BECOMES the original, so a
+        // later restyle starts from it rather than removing a colour that is already gone.
+        const saved = await renderAndUpload(keyedBitmap, effective, keyedBitmap);
+        // The kept source is already background-free, so the saved style must not ask for the
+        // removal again — on reload there would be nothing left to remove and the icon would look
+        // permanently "not applied".
+        const baked = normalizeIconStyle({ ...saved, removeBackground: false });
+        setApplied(baked);
+        onAppliedStyleChange?.(baked);
+        setSource(keyedBitmap);
+        setSourceKind('original');
+        setKeyed({ from: keyedBitmap, image: null });
+        setDraft((d) => ({ ...d, removeBackground: false }));
+      } else {
+        await renderAndUpload(working, effective, null);
+      }
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -326,6 +420,7 @@ export function IconUpload({
     setSource(null);
     setSourceKind(null);
     setSourceUrl(null);
+    setKeyed(null);
     setApplied(null);
     setTouched(false);
     setError(null);
@@ -343,7 +438,10 @@ export function IconUpload({
   };
 
   const thumb = value.icon192Url ?? value.faviconUrl;
-  const palette = mergeSwatches(swatches, ['#FFFFFF', '#000000']);
+  const palette = mergeSwatches(removing ? keyedSwatches : swatches, ['#FFFFFF', '#000000']);
+  // Removing a colour and painting the same colour back would upload three unchanged icons.
+  const repaintsRemoved =
+    removing && !!removedColour && colourDistance(effective.background, removedColour) <= SAME_AS_REMOVED;
 
   return (
     <div>
@@ -438,6 +536,36 @@ export function IconUpload({
             </div>
           </div>
 
+          {canKnockOut && (
+            <label className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                checked={draft.removeBackground === true}
+                onChange={(e) => {
+                  const on = e.target.checked;
+                  edit((d) =>
+                    on
+                      ? {
+                          ...d,
+                          removeBackground: true,
+                          background: awayFromRemoved(d.background, removedColour, keyedSwatches),
+                        }
+                      : { ...d, removeBackground: false },
+                  );
+                }}
+                className="mt-0.5 h-4 w-4 shrink-0"
+                style={{ accentColor: 'hsl(var(--primary))' }}
+              />
+              <span className="text-xs">
+                <span className="font-medium">Remove the plain background around the image</span>
+                <span className="block text-[11px] text-muted-foreground">
+                  The white (or other flat colour) outside your logo becomes the colour you pick
+                  below — no white corners on any icon.
+                </span>
+              </span>
+            </label>
+          )}
+
           {draft.fit === 'fill' && (
             <label className="block">
               <span className="mb-1 flex justify-between text-xs font-medium">
@@ -455,7 +583,7 @@ export function IconUpload({
                 style={{ accentColor: 'hsl(var(--primary))' }}
               />
               <span className="mt-0.5 block text-[11px] text-muted-foreground">
-                Zoom in until the white around a round logo disappears from the previews.
+                Zoom in to make the artwork bigger on Android.
               </span>
             </label>
           )}
@@ -463,7 +591,7 @@ export function IconUpload({
           {canRecolour ? (
             <div>
               <span className="mb-1.5 block text-xs font-medium">
-                {draft.fit === 'fill' ? 'Background' : 'Frame colour'}
+                {draft.fit === 'fill' || removing ? 'Background' : 'Frame colour'}
               </span>
               <div className="flex flex-wrap items-center gap-2">
                 {palette.map((hex) => (
@@ -491,15 +619,16 @@ export function IconUpload({
                 />
               </div>
               <span className="mt-1 block text-[11px] text-muted-foreground">
-                {sourceKind === 'original'
+                {sourceKind === 'original' || removing
                   ? 'The first colours come from the edge of your image — picking the rim colour makes the tile look seamless.'
                   : 'Only the frame around your icon changes colour; the icon keeps the background it was made with.'}
               </span>
             </div>
           ) : (
             <p className="text-[11px] text-muted-foreground">
-              This icon&apos;s background is part of the image. To choose a different colour, upload
-              your original again — ideally a PNG with a transparent background.
+              {canKnockOut
+                ? 'Tick “Remove the plain background” to choose a colour for the area around your image.'
+                : 'This icon’s background is part of the image. To choose a different colour, upload your original again — ideally a PNG with a transparent background.'}
             </p>
           )}
 
@@ -531,13 +660,15 @@ export function IconUpload({
 
           {stale && (
             <div className="flex flex-wrap items-center gap-2">
-              <Button type="button" size="sm" onClick={apply} loading={busy}>
+              <Button type="button" size="sm" onClick={apply} loading={busy} disabled={repaintsRemoved}>
                 Apply to icon
               </Button>
               <span className="text-[11px] text-muted-foreground">
-                {applied
-                  ? 'Then save to publish.'
-                  : 'Your current icon still has the old white padding — apply, then save.'}
+                {repaintsRemoved
+                  ? 'The background colour is the same as the one being removed — pick another colour, or the corners will look unchanged.'
+                  : applied
+                    ? 'Then save to publish.'
+                    : 'Your current icon still has the old white padding — apply, then save.'}
               </span>
             </div>
           )}

@@ -920,6 +920,7 @@ function BrandEditor({
               <ImageUpload
                 restaurantId={restaurantId}
                 folder="logo"
+                removeBackground
                 value={logoUrl || null}
                 onChange={(url) => setLogoUrl(url ?? '')}
                 aspect="aspect-[3/1]"

@@ -213,8 +213,14 @@ export function BrandingCard({ restaurantId, restaurantName, brand }: Props) {
           <ImageUpload
             restaurantId={restaurantId}
             folder="logo"
+            removeBackground
             value={logoUrl}
-            onChange={setLogoUrl}
+            onChange={(url) => {
+              // Every logo change — upload, background removal, Undo, remove — is unsaved until
+              // Save, so the previous "Saved ✓" must not keep claiming otherwise.
+              setLogoUrl(url);
+              setSavedAt(null);
+            }}
             aspect="aspect-[3/1]"
             label="Upload logo"
           />

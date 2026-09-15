@@ -4,9 +4,11 @@ import {
   MASKABLE_VISIBLE_FRACTION,
   PADDED_MASKABLE_SCALE,
   clampZoom,
+  colourDistance,
   edgeSwatches,
   iconDrawRect,
   isBrandingAssetUrl,
+  knockOutBackground,
   mergeSwatches,
   normalizeIconStyle,
   parseIconStyle,
@@ -98,6 +100,18 @@ describe('style parsing', () => {
     });
   });
 
+  it('carries the remove-background choice through parse, normalise and compare', () => {
+    expect(parseIconStyle({ fit: 'fill', zoom: 1, background: '#18555B', removeBackground: true })).toEqual({
+      fit: 'fill',
+      zoom: 1,
+      background: '#18555B',
+      removeBackground: true,
+    });
+    expect(parseIconStyle({ removeBackground: 'yes' }).removeBackground).toBeUndefined();
+    expect(sameIconStyle(fill(), { ...fill(), removeBackground: true })).toBe(false);
+    expect(sameIconStyle({ ...fill(), removeBackground: false }, fill())).toBe(true);
+  });
+
   it('compares what renders: zoom only in fill mode, never the source URL', () => {
     expect(sameIconStyle(fill(1.1), { fit: 'fill', zoom: 1.1, background: '#ffffff' })).toBe(true);
     expect(sameIconStyle(fill(1.1), fill(1.15))).toBe(false);
@@ -145,6 +159,109 @@ describe('edgeSwatches', () => {
     ]);
     // #181818 is 12 away from #111111 — the same swatch; #333333 (~59 away) is a different one.
     expect(mergeSwatches(['#111111', '#181818', '#333333', '#F0F0F0'], [], 2)).toEqual(['#111111', '#333333']);
+  });
+
+  it('removes the white around a badge but keeps white enclosed by the artwork', () => {
+    const size = 96;
+    const data = badge(size);
+    const c = (size - 1) / 2;
+    // White "lettering" inside the orange face.
+    for (let y = 44; y < 52; y++) {
+      for (let x = 40; x < 56; x++) {
+        const i = (y * size + x) * 4;
+        data[i] = 255;
+        data[i + 1] = 255;
+        data[i + 2] = 255;
+      }
+    }
+    const result = knockOutBackground(data, size, size);
+    expect(result.reference).toBe('#FFFFFF');
+    expect(result.removed).toBeGreaterThan(0);
+    const alpha = (x: number, y: number) => data[(y * size + x) * 4 + 3];
+    expect(alpha(0, 0)).toBe(0); // corner
+    expect(alpha(size - 1, size - 1)).toBe(0);
+    expect(alpha(47, 47)).toBe(255); // enclosed white lettering survives
+    expect(alpha(Math.round(c), Math.round(c))).toBe(255); // face
+    // The teal rim stays opaque and teal.
+    const rimX = Math.round(c + (size / 2) * 0.91);
+    const rimY = Math.round(c);
+    expect(alpha(rimX, rimY)).toBe(255);
+    expect(data[(rimY * size + rimX) * 4]).toBe(26);
+  });
+
+  it('leaves photos and already-transparent images alone', () => {
+    const size = 32;
+    const noisy = new Uint8ClampedArray(size * size * 4);
+    for (let p = 0; p < size * size; p++) {
+      noisy[p * 4] = (p * 37) % 256;
+      noisy[p * 4 + 1] = (p * 91) % 256;
+      noisy[p * 4 + 2] = (p * 53) % 256;
+      noisy[p * 4 + 3] = 255;
+    }
+    const before = noisy.slice();
+    expect(knockOutBackground(noisy, size, size)).toEqual({ removed: 0, reference: null });
+    expect(noisy).toEqual(before);
+    expect(knockOutBackground(new Uint8ClampedArray(size * size * 4), size, size).removed).toBe(0);
+  });
+
+  it('softens the cut edge without leaving a pale halo', () => {
+    // A 1px light-teal antialiased ring between white background and the teal rim.
+    const w = 9;
+    const h = 9;
+    const data = new Uint8ClampedArray(w * h * 4);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = (y * w + x) * 4;
+        const inner = x >= 3 && x <= 5 && y >= 3 && y <= 5;
+        const ring = !inner && x >= 2 && x <= 6 && y >= 2 && y <= 6;
+        const [r, g, b] = inner ? [26, 107, 107] : ring ? [150, 190, 190] : [255, 255, 255];
+        data[i] = r;
+        data[i + 1] = g;
+        data[i + 2] = b;
+        data[i + 3] = 255;
+      }
+    }
+    knockOutBackground(data, w, h);
+    const ring = (2 * w + 4) * 4;
+    expect(data[ring + 3]).toBeGreaterThan(0);
+    expect(data[ring + 3]).toBeLessThan(255);
+    // Its colour is pulled away from white, toward the teal it was blended from.
+    expect(data[ring]).toBeLessThan(150);
+    expect(data[(4 * w + 4) * 4 + 3]).toBe(255);
+  });
+
+  it('treats a plain background sitting on a colour step as plain, and keeps the artwork', () => {
+    const w = 60;
+    const h = 20;
+    const make = (shade: (x: number, y: number) => number) => {
+      const d = new Uint8ClampedArray(w * h * 4);
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const i = (y * w + x) * 4;
+          const art = x >= 20 && x < 40 && y >= 5 && y < 15;
+          const v = art ? 20 : shade(x, y);
+          d[i] = v;
+          d[i + 1] = v;
+          d[i + 2] = v;
+          d[i + 3] = 255;
+        }
+      }
+      return d;
+    };
+    // 239/241 noise straddles the 240 step between two 16-level buckets.
+    const noisy = make((x, y) => ((x + y) % 2 ? 239 : 241));
+    expect(knockOutBackground(noisy, w, h).removed).toBeGreaterThan(0);
+    // A scanned-paper gradient from #FAFAFA down to #ECECEC.
+    const paper = make((_x, y) => Math.round(0xfa - (y / (h - 1)) * (0xfa - 0xec)));
+    expect(knockOutBackground(paper, w, h).removed).toBeGreaterThan(0);
+    expect(paper[(0 * w + 0) * 4 + 3]).toBe(0);
+    expect(paper[(10 * w + 30) * 4 + 3]).toBe(255);
+  });
+
+  it('measures colour distance, and treats junk as infinitely far', () => {
+    expect(colourDistance('#FFFFFF', '#FFFFFF')).toBe(0);
+    expect(colourDistance('#000000', '#FFFFFF')).toBeCloseTo(441.67, 1);
+    expect(colourDistance('red', '#FFFFFF')).toBe(Number.POSITIVE_INFINITY);
   });
 
   it('skips transparent pixels and rejects bad input', () => {
