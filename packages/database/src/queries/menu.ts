@@ -31,8 +31,14 @@ export async function listCategories(
 export async function listMenuItems(
   supabase: FavornomsClient,
   branchId: string,
+  /**
+   * Include dishes that are off sale. The storefront must never pass this; the back office
+   * must, or a duplicated dish — which duplicate_menu_item deliberately creates switched off —
+   * is written to the database and then never appears, which reads as "Copy does nothing".
+   */
+  options?: { includeInactive?: boolean },
 ): Promise<MenuItem[]> {
-  const { data, error } = await supabase
+  let query = supabase
     .from('menu_items')
     .select(
       `
@@ -40,12 +46,12 @@ export async function listMenuItems(
       description, description_translations, price, image_url,
       is_recommended, is_new, dietary_tags, allergens, rating, review_count,
       prep_time_minutes, calories, display_order, track_stock, stock_quantity,
-      sold_out_until
+      sold_out_until, is_active
     `,
     )
-    .eq('branch_id', branchId)
-    .eq('is_active', true)
-    .order('display_order', { ascending: true });
+    .eq('branch_id', branchId);
+  if (!options?.includeInactive) query = query.eq('is_active', true);
+  const { data, error } = await query.order('display_order', { ascending: true });
 
   if (error) throw error;
   return (data ?? []).map(mapItem);
@@ -114,6 +120,8 @@ function mapItem(row: Partial<RowItem>): MenuItem {
     outOfStock:
       (row.track_stock === true && (row.stock_quantity ?? 0) <= 0) ||
       (!!row.sold_out_until && new Date(row.sold_out_until).getTime() > Date.now()),
+    // Absent from the storefront's select, where every row is active by definition.
+    isActive: row.is_active ?? true,
   };
 }
 

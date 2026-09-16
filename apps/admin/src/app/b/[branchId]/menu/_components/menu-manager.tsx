@@ -297,7 +297,14 @@ export function MenuManager({
                             {formatCurrency(item.price)}
                           </span>
                         </div>
-                        <StockBadge stock={stock[item.id]} />
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {item.isActive === false && (
+                            <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
+                              Hidden
+                            </span>
+                          )}
+                          <StockBadge stock={stock[item.id]} />
+                        </div>
                         <div className="mt-auto flex items-center gap-1">
                           <IconButton label="Edit" size="sm" onClick={() => setEditing(item)}>
                             <Edit3 className="h-4 w-4" />

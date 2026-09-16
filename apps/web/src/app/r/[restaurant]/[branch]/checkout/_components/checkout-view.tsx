@@ -1819,16 +1819,20 @@ export function CheckoutView({
         <Card className="p-5">
           <dl className="space-y-2 text-sm">
             <Row label={t('cart.subtotal')} value={formatCurrency(subtotal)} />
-            <Row
-              label={t('cart.deliveryFee')}
-              value={
-                channel === 'delivery' && quoting
-                  ? 'Calculating…'
-                  : channel === 'delivery' && enteringNewAddress && !addressCoords
-                    ? '—'
-                    : formatCurrency(deliveryFee)
-              }
-            />
+            {/* Only on a delivery order. A pickup bill used to carry "Delivery fee $0.00", which
+                read as a delivery order whose address the checkout had simply failed to ask for. */}
+            {channel === 'delivery' && (
+              <Row
+                label={t('cart.deliveryFee')}
+                value={
+                  quoting
+                    ? 'Calculating…'
+                    : enteringNewAddress && !addressCoords
+                      ? '—'
+                      : formatCurrency(deliveryFee)
+                }
+              />
+            )}
             {/* Only where the branch actually charges them — a branch with no
                 service fee or no tax showing a $0.00 line is noise. Same labels
                 as the receipt. */}
