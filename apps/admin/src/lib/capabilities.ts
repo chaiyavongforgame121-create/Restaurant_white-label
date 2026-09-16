@@ -87,17 +87,28 @@ export async function getBranchAccess(
   // One RPC for the capability set, plus the membership row for its id and role
   // (needed for audit columns like driver_approvals.reviewed_by). Neither depends on
   // the other, so they go together — this sits in front of every back-office page.
-  const [{ data: caps }, { data: membership }] = await Promise.all([
+  const [{ data: caps }, { data: memberships }] = await Promise.all([
     supabase.rpc('my_capabilities', { p_branch_id: branchId }),
+    // An owner row covers every branch of its restaurant, whichever branch it was created at —
+    // the same rule my_capabilities applies. Without the owner arm the owner of a second branch
+    // had no row here, and the denial read "isn't a member of staff" to the restaurant's owner.
+    // A list, not maybeSingle(): someone can hold an owner row and a branch row at once, and
+    // maybeSingle() errors on two rows, which used to read as "no membership at all".
     supabase
       .from('staff_members')
       .select('id, role, branch_id')
       .eq('user_id', userData.user.id)
       .eq('restaurant_id', branch.restaurant_id)
       .eq('status', 'active')
-      .or(`branch_id.eq.${branchId},branch_id.is.null`)
-      .maybeSingle(),
+      .or(`branch_id.eq.${branchId},branch_id.is.null,role.eq.owner`),
   ]);
+  const rows = memberships ?? [];
+  // The row that best describes this person HERE: owner first, then this branch, then every-branch.
+  const membership =
+    rows.find((m) => m.role === 'owner') ??
+    rows.find((m) => m.branch_id === branchId) ??
+    rows.find((m) => m.branch_id === null) ??
+    null;
 
   const capabilities = new Set((caps ?? []) as Capability[]);
 
