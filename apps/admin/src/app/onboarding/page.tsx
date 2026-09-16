@@ -28,6 +28,11 @@ export default async function OnboardingPage() {
     // Same guard as the root page. The platform owner is staff of nobody, so without it a
     // typed or bookmarked /onboarding hands the platform account a real trial restaurant.
     if (await isPlatformAdmin(supabase)) redirect('/platform');
+    // Same as the root page: a typed or bookmarked /onboarding must not let an invitee create a
+    // restaurant of their own while their invitation waits (its owner membership would then
+    // outrank the invited role at every sign-in).
+    const { data: pendingInvite } = await supabase.rpc('my_pending_staff_invite');
+    if (pendingInvite) redirect(`/invite/accept?staff_id=${pendingInvite}`);
     return <OnboardingWizard existing={null} />;
   }
 

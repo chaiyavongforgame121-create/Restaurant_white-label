@@ -77,5 +77,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL(next, origin));
   }
 
+  // A staff invitation is sent with the Auth admin API, which has no PKCE verifier, so it comes
+  // back with the session in the URL FRAGMENT (#access_token=…) — or #error_code=… when the link
+  // is stale — and a fragment never reaches a server. Failing here sent the invitee to /login,
+  // and a browser already signed in as someone else then carried on to the accept page as the
+  // wrong person. The accept page reads the fragment itself, and a redirect keeps it: browsers
+  // carry the fragment across a 3xx whose Location has none.
+  if (next.startsWith('/invite/accept')) return NextResponse.redirect(new URL(next, origin));
+
   return fail('missing_code');
 }

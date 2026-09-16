@@ -43,6 +43,11 @@ export default async function RootPage() {
     // the new-restaurant wizard on every sign-in — one press of Launch away from creating a
     // real trial restaurant owned by the platform account, with no link to their console.
     if (await isPlatformAdmin(supabase)) redirect('/platform');
+    // Someone invited to a restaurant who signed in without the link (it was used up, or they
+    // reset their password) has no membership yet. They belong on their invitation, not in the
+    // wizard that creates a restaurant of their own.
+    const { data: pendingInvite } = await supabase.rpc('my_pending_staff_invite');
+    if (pendingInvite) redirect(`/invite/accept?staff_id=${pendingInvite}`);
     redirect('/onboarding');
   }
 

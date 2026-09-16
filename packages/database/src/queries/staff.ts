@@ -98,31 +98,50 @@ export async function setStaffBranchScope(
   if (error) throw new Error(error.message);
 }
 
-/**
- * Called from /invite/accept after the user signs in via magic link.
- * Links the auth user to the pending staff_members row.
- */
-export async function acceptStaffInvite(
+/** What an invitation link is for, readable before anyone is signed in. */
+export interface StaffInvite {
+  status: StaffStatus;
+  role: StaffRole;
+  /** Only while the invitation is still open. */
+  invitedEmail: string | null;
+  restaurantName: string;
+  branchName: string | null;
+}
+
+export async function getStaffInvite(
   supabase: FavornomsClient,
   staffId: string,
-) {
-  const { data: user } = await supabase.auth.getUser();
-  if (!user.user?.email) throw new Error('no_email_on_user');
+): Promise<StaffInvite | null> {
+  const { data, error } = await supabase.rpc('get_staff_invite', { p_staff_id: staffId });
+  if (error || !data || typeof data !== 'object') return null;
+  const d = data as Record<string, unknown>;
+  return {
+    status: d.status as StaffStatus,
+    role: d.role as StaffRole,
+    invitedEmail: typeof d.invited_email === 'string' ? d.invited_email : null,
+    restaurantName: String(d.restaurant_name ?? ''),
+    branchName: typeof d.branch_name === 'string' ? d.branch_name : null,
+  };
+}
 
-  const { data, error } = await supabase
-    .from('staff_members')
-    .update({
-      user_id: user.user.id,
-      accepted_at: new Date().toISOString(),
-      status: 'active',
-    })
-    .eq('id', staffId)
-    .eq('invited_email', user.user.email.toLowerCase())
-    .select('id, restaurant_id, branch_id, role')
-    .single();
-
+/**
+ * Called from /invite/accept once the invitee is signed in. Claims the pending staff_members row
+ * for this account through accept_staff_invite(), which checks the confirmed email against the
+ * invited address. It used to be a direct UPDATE from the browser, which RLS (no policy lets an
+ * invitee update a row) and the role-escalation trigger (no self status change) both refused, so
+ * it matched zero rows and failed with "Cannot coerce the result to a single JSON object".
+ */
+export async function acceptStaffInvite(supabase: FavornomsClient, staffId: string) {
+  const { data, error } = await supabase.rpc('accept_staff_invite', { p_staff_id: staffId });
   if (error) throw new Error(`accept_invite_failed:${error.message}`);
-  return data;
+  const d = (data ?? {}) as Record<string, unknown>;
+  return {
+    id: String(d.staff_id ?? staffId),
+    restaurant_id: String(d.restaurant_id ?? ''),
+    branch_id: typeof d.branch_id === 'string' ? d.branch_id : null,
+    role: d.role as StaffRole,
+    alreadyAccepted: d.already_accepted === true,
+  };
 }
 
 export async function getMyStaffMemberships(supabase: FavornomsClient) {
