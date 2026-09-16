@@ -90,7 +90,11 @@ export function MenuManager({
     return () => clearTimeout(timer);
   }, [notice]);
 
+  // Newest wins. A reload started before a change (a duplicate's refresh, say) can land after it
+  // and paint the old list back — the "Show on menu" tap then appeared to undo itself.
+  const refreshSeq = React.useRef(0);
   const refresh = async () => {
+    const seq = ++refreshSeq.current;
     const supabase = getBrowserClient();
     try {
       // Use the same query helpers as the server page so the refreshed rows are
@@ -98,15 +102,16 @@ export function MenuManager({
       // A raw snake_case select here left categoryId undefined, which filtered
       // every item out of its category and blanked the page after save.
       const [nextItems, nextCategories, stockRes] = await Promise.all([
-        listMenuItems(supabase, branchId),
+        // Hidden dishes included, as on first load: this is the screen that switches them back on.
+        listMenuItems(supabase, branchId, { includeInactive: true }),
         listCategories(supabase, branchId),
         supabase
           .from('menu_items')
           .select('id, track_stock, stock_quantity, low_stock_threshold')
-          .eq('branch_id', branchId)
-          .eq('is_active', true),
+          .eq('branch_id', branchId),
       ]);
       if (stockRes.error) throw stockRes.error;
+      if (seq !== refreshSeq.current) return;
       setItems(nextItems);
       setCategories(nextCategories);
       setStock(toStockMap((stockRes.data ?? []) as MenuItemStockRow[]));
@@ -173,7 +178,40 @@ export function MenuManager({
       return;
     }
     setProblem(null);
+    // duplicate_menu_item makes the copy hidden on purpose, so a half-edited "(Copy)" never
+    // reaches customers. Say so, and say how to publish it — the badge alone did not.
+    setNotice(
+      'Copied. The copy is hidden from customers, and option groups are not copied — add them in Edit, then switch on “Show on customer menu”.',
+    );
     await refresh();
+  };
+
+  // One tap from the grid. The update asks for the row back: an RLS-denied update matches no
+  // row and returns no error, which would look exactly like success.
+  const handleVisibility = async (target: MenuItem, visible: boolean) => {
+    const supabase = getBrowserClient();
+    const { data, error } = await supabase
+      .from('menu_items')
+      .update({ is_active: visible })
+      .eq('id', target.id)
+      .select('id')
+      .maybeSingle();
+    if (error || !data) {
+      setProblem(
+        error?.message ??
+          'Nothing was changed. This dish may have been deleted, or your role may not be allowed to edit the menu at this branch.',
+      );
+      return;
+    }
+    setProblem(null);
+    // Any reload already in flight read the row before this change; it must not paint over it.
+    refreshSeq.current += 1;
+    setItems((curr) => curr.map((i) => (i.id === target.id ? { ...i, isActive: visible } : i)));
+    setNotice(
+      visible
+        ? `“${target.name}” is now on the customer menu.`
+        : `“${target.name}” is hidden from customers.`,
+    );
   };
 
   return (
@@ -299,9 +337,21 @@ export function MenuManager({
                         </div>
                         <div className="flex flex-wrap items-center gap-1.5">
                           {item.isActive === false && (
-                            <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
-                              Hidden
-                            </span>
+                            <>
+                              <span
+                                className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground"
+                                title="Not on the customer menu. Combos that include it still sell it."
+                              >
+                                Hidden
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => void handleVisibility(item, true)}
+                                className="focus-ring rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary hover:bg-primary/20"
+                              >
+                                Show on menu
+                              </button>
+                            </>
                           )}
                           <StockBadge stock={stock[item.id]} />
                         </div>
@@ -392,6 +442,11 @@ function ItemEditor({
   const [categoryId, setCategoryId] = React.useState(item?.categoryId ?? categories[0]?.id ?? '');
   const [recommended, setRecommended] = React.useState(item?.isRecommended ?? false);
   const [isNew, setIsNew] = React.useState(item?.isNew ?? false);
+  // New dishes are visible by default, as the column's default has always made them.
+  const [visible, setVisible] = React.useState(item?.isActive ?? true);
+  // Written only when the merchant moves the box. This editor holds the page's copy of the dish,
+  // so saving a price change would otherwise put back a dish someone hid since the page loaded.
+  const visibleTouched = React.useRef(false);
   const [trackStock, setTrackStock] = React.useState(initialStock?.trackStock ?? false);
   const [stockQuantity, setStockQuantity] = React.useState(
     String(initialStock?.stockQuantity ?? 0),
@@ -526,6 +581,7 @@ function ItemEditor({
         image_url: imageUrl || null,
         is_recommended: recommended,
         is_new: isNew,
+        ...(item && !visibleTouched.current ? {} : { is_active: visible }),
         track_stock: trackStock,
         stock_quantity: trackStock ? Number(stockQuantity) : null,
         // low_stock_threshold is NOT NULL (default 5) — never send null, or inserts fail.
@@ -794,6 +850,24 @@ function ItemEditor({
         )}
       </div>
 
+      <label className="flex items-start gap-3 rounded-xl border border-border p-3 text-sm">
+        <input
+          type="checkbox"
+          checked={visible}
+          onChange={(e) => {
+            visibleTouched.current = true;
+            setVisible(e.target.checked);
+          }}
+          className="mt-0.5"
+        />
+        <span>
+          <span className="block font-medium">Show on customer menu</span>
+          <span className="block text-xs text-muted-foreground">
+            Off takes the dish off the customer menu without deleting it (combos that include it
+            still sell it). Copies start hidden, without option groups, so you can finish them first.
+          </span>
+        </span>
+      </label>
       <div className="flex gap-3">
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={recommended} onChange={(e) => setRecommended(e.target.checked)} />

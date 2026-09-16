@@ -11,14 +11,14 @@ import { useTablePin } from './table-pin';
 interface Props {
   branchId: string;
   branchName?: string;
-  /** Delivery is sellable right now. Defaults false so a missing prop cannot sell delivery. */
+  /**
+   * Schedule Delivery can be booked here (see resolveScheduleDelivery): sold, taking advance
+   * orders, not paused, and at least one bookable slot. Not "delivery is open this minute" —
+   * every storefront delivery is booked for later, so the tile no longer disappears outside
+   * delivery hours.
+   * Defaults false so a missing prop cannot sell delivery.
+   */
   canDeliver?: boolean;
-  /** The restaurant DOES sell delivery, it is just outside its hours at the moment.
-   *  Drives an explanation instead of silently hiding the tile — a diner who was
-   *  offered delivery yesterday and cannot find it today assumes the site is broken. */
-  deliveryClosedNow?: boolean;
-  /** Today's delivery windows, 'HH:MM' local, for that explanation. */
-  deliveryWindowsToday?: Array<{ opens_at: string; closes_at: string }>;
   /**
    * A table token in the URL resolved to a table at THIS branch, so a scan is being
    * seated right now.
@@ -52,8 +52,6 @@ export function OrderTypeGate({
   branchId,
   branchName,
   canDeliver = false,
-  deliveryClosedNow = false,
-  deliveryWindowsToday = [],
   seatingFromScan = false,
 }: Props) {
   const t = useTranslations();
@@ -153,7 +151,14 @@ export function OrderTypeGate({
     };
   }, [open]);
 
+  // Pickup first, then Schedule Delivery — the order checkout offers them in.
   const options: Array<{ value: OrderChannel; label: string; hint: string; icon: React.ReactNode }> = [
+    {
+      value: 'pickup',
+      label: t('channel.pickup'),
+      hint: t('orderType.pickupHint'),
+      icon: <ShoppingBag className="h-6 w-6" />,
+    },
     ...(canDeliver
       ? [
           {
@@ -164,12 +169,6 @@ export function OrderTypeGate({
           },
         ]
       : []),
-    {
-      value: 'pickup',
-      label: t('channel.pickup'),
-      hint: t('orderType.pickupHint'),
-      icon: <ShoppingBag className="h-6 w-6" />,
-    },
   ];
 
   return (
@@ -229,23 +228,6 @@ export function OrderTypeGate({
                   </span>
                 </button>
               ))}
-              {/* The restaurant sells delivery, just not at this hour. Saying so beats
-                  hiding the tile: a diner offered delivery yesterday reads its absence
-                  as a broken site, not as a schedule. */}
-              {deliveryClosedNow && (
-                <div className="rounded-2xl border border-dashed border-border bg-muted/40 px-4 py-3">
-                  <p className="flex items-center gap-2 text-sm font-semibold">
-                    <RiderIcon className="h-4 w-4 text-muted-foreground" /> Delivery is closed right now
-                  </p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {deliveryWindowsToday.length > 0
-                      ? `Today we deliver ${deliveryWindowsToday
-                          .map((w) => `${w.opens_at}–${w.closes_at}`)
-                          .join(' and ')}. Pickup is open now.`
-                      : 'No delivery today. Pickup is open now.'}
-                  </p>
-                </div>
-              )}
               <p className="px-1 text-center text-xs text-muted-foreground">{t('orderType.changeLater')}</p>
             </div>
           </motion.div>

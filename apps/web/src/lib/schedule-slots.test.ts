@@ -284,3 +284,76 @@ describe('buildScheduleDays with bookable windows', () => {
     expect(days).toEqual([]);
   });
 });
+
+describe('buildScheduleDays — delivery hours', () => {
+  const sundayNineToSix: OpeningWindow[] = [{ day_of_week: 0, opens_at: '09:00', closes_at: '18:00' }];
+
+  it('narrows a delivery booking to the delivery windows', () => {
+    const days = buildScheduleDays({
+      ...base,
+      timezone: 'America/Chicago',
+      openingHours: sundayNineToSix,
+      deliveryWindows: [{ day_of_week: 0, opens_at: '11:00', closes_at: '13:00' }],
+      now: SUNDAY_NOON_UTC,
+      maxDays: 0,
+    });
+    expect(days[0]!.slots.map((s) => s.label)).toEqual(['11:00 AM', '12:00 PM']);
+  });
+
+  it('offers nothing when delivery hours are switched on with no windows', () => {
+    const days = buildScheduleDays({
+      ...base,
+      timezone: 'America/Chicago',
+      openingHours: sundayNineToSix,
+      deliveryWindows: [],
+      now: SUNDAY_NOON_UTC,
+      maxDays: 0,
+    });
+    expect(days).toEqual([]);
+  });
+
+  it('leaves opening hours alone when delivery hours are not restricted', () => {
+    const days = buildScheduleDays({
+      ...base,
+      timezone: 'America/Chicago',
+      openingHours: sundayNineToSix,
+      deliveryWindows: null,
+      now: SUNDAY_NOON_UTC,
+      maxDays: 0,
+    });
+    // 09:00 … 17:00 hourly.
+    expect(days[0]!.slots).toHaveLength(9);
+  });
+
+  it('applies booking windows and delivery hours together', () => {
+    const days = buildScheduleDays({
+      ...base,
+      timezone: 'America/Chicago',
+      openingHours: [{ day_of_week: 0, opens_at: '09:00', closes_at: '20:00' }],
+      scheduleWindows: [
+        { day_of_week: 0, opens_at: '11:00', closes_at: '13:00' },
+        { day_of_week: 0, opens_at: '17:00', closes_at: '19:00' },
+      ],
+      deliveryWindows: [{ day_of_week: 0, opens_at: '12:00', closes_at: '18:00' }],
+      now: SUNDAY_NOON_UTC,
+      maxDays: 0,
+    });
+    expect(days[0]!.slots.map((s) => s.label)).toEqual(['12:00 PM', '5:00 PM']);
+  });
+
+  it('follows an overnight delivery window into the next morning, like is_delivery_available', () => {
+    // Sunday 22:00 -> Monday 02:00; opening hours unrestricted.
+    const days = buildScheduleDays({
+      ...base,
+      timezone: 'America/Chicago',
+      openingHours: [],
+      deliveryWindows: [{ day_of_week: 0, opens_at: '22:00', closes_at: '02:00' }],
+      now: SUNDAY_NOON_UTC,
+      maxDays: 1,
+    });
+    expect(days.map((d) => d.slots.map((s) => s.label))).toEqual([
+      ['10:00 PM', '11:00 PM'],
+      ['12:00 AM', '1:00 AM'],
+    ]);
+  });
+});

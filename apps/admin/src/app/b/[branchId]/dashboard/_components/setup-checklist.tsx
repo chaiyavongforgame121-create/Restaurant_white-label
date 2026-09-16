@@ -35,13 +35,20 @@ function asRecord(v: unknown): Record<string, unknown> | null {
  * card_payment entitlement, transfer needs a saved QR image), so this row and that card's
  * "no payment method enabled" warning cannot disagree.
  */
-export function paymentMethodOn(settings: Record<string, unknown>, canUseCard: boolean): boolean {
+export function paymentMethodOn(
+  settings: Record<string, unknown>,
+  canUseCard: boolean,
+  /** Customers can book deliveries here (delivery sold, scheduled orders on). Only then does the
+   *  booked column count: on the storefront it is the Schedule Delivery column, and a branch that
+   *  cannot take bookings leaves Pickup (the asap column) as the only way to order. */
+  deliveryBookable = true,
+): boolean {
   const matrix = asRecord(settings.payment_methods);
   const hasQr = (() => {
     const url = asRecord(settings.qr_transfer)?.image_url;
     return typeof url === 'string' && url.length > 0;
   })();
-  const modes: Mode[] = ['asap', 'scheduled'];
+  const modes: Mode[] = deliveryBookable ? ['asap', 'scheduled'] : ['asap'];
   return modes.some((mode) => {
     const row = asRecord(matrix?.[mode]);
     const readDefaultOn = (key: string) => {

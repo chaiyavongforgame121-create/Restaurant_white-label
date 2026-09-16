@@ -185,15 +185,14 @@ interface MenuViewProps {
   heroUrl?: string | null;
   heroTitle?: string;
   heroSubtitle?: string;
-  /** `delivery` entitlement. Defaults false so a missing prop cannot sell delivery. */
+  /** Schedule Delivery can be booked here (resolveScheduleDelivery). Defaults false so a missing prop
+   *  cannot sell delivery. */
   canDeliver?: boolean;
-  deliveryClosedNow?: boolean;
-  deliveryWindowsToday?: Array<{ opens_at: string; closes_at: string }>;
   /** A `?t=` token resolved to a table here, so the order type is already settled. */
   seatingFromScan?: boolean;
 }
 
-export function MenuView({ branch, categories, items, isOpen = true, reviews, combos = [], happyHours = [], menuLayout = 'grid4', menuCardStyle = 'standard', heroUrl, heroTitle, heroSubtitle, canDeliver = false, deliveryClosedNow = false, deliveryWindowsToday = [], seatingFromScan = false }: MenuViewProps) {
+export function MenuView({ branch, categories, items, isOpen = true, reviews, combos = [], happyHours = [], menuLayout = 'grid4', menuCardStyle = 'standard', heroUrl, heroTitle, heroSubtitle, canDeliver = false, seatingFromScan = false }: MenuViewProps) {
   const t = useTranslations();
   const params = useParams<{ restaurant: string; branch: string }>();
   const [search, setSearch] = React.useState('');
@@ -305,8 +304,6 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
         branchId={branch.id}
         branchName={branch.name}
         canDeliver={canDeliver}
-        deliveryClosedNow={deliveryClosedNow}
-        deliveryWindowsToday={deliveryWindowsToday}
         seatingFromScan={seatingFromScan}
       />
 
@@ -327,7 +324,14 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
       {!isOpen && (
         <div className="container mt-4">
           <div className="rounded-2xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning">
-            <strong>Currently closed.</strong> We&apos;re not taking new orders right now. Please check back during business hours.
+            <strong>Currently closed.</strong>{' '}
+            {/* Pickup is always prepared now, so it waits for opening hours — but a delivery is
+                booked for a later time, which a closed restaurant can still take. canDeliver is
+                only true with a bookable slot and orders not paused, so this never promises a
+                booking every slot would refuse. */}
+            {canDeliver
+              ? 'Pickup is available during business hours — you can still schedule a delivery now.'
+              : "We're not taking new orders right now. Please check back during business hours."}
           </div>
         </div>
       )}
@@ -482,7 +486,7 @@ function Hero({
 /* -------------------- Order type -------------------- */
 
 /**
- * Pickup / Delivery, straight under the hero.
+ * Pickup / Schedule Delivery, straight under the hero.
  *
  * It used to share a toolbar with the search box, below the rating strip, the combos and the
  * happy-hour sections — far enough down that a diner scrolling for food could pick a dish
@@ -508,11 +512,12 @@ function ChannelPicker({
   // Dine-in is not a tab at all: tapping it was a claim to be sitting at a table
   // that nothing had proved, and the round then had no session to land on. It is
   // the table QR that decides it, and the locked chip below is what it looks like.
+  // Pickup first, then Schedule Delivery — the order checkout offers them in.
   const options = [
+    { value: 'pickup' as const, label: t('channel.pickup'), icon: <ShoppingBag className="h-4 w-4" /> },
     ...(canDeliver
       ? [{ value: 'delivery' as const, label: t('channel.delivery'), icon: <RiderIcon className="h-4 w-4" /> }]
       : []),
-    { value: 'pickup' as const, label: t('channel.pickup'), icon: <ShoppingBag className="h-4 w-4" /> },
   ];
   return (
     <section className="container mt-4">

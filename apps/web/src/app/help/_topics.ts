@@ -22,7 +22,7 @@ export const TOPICS: Topic[] = [
       },
       {
         q: 'Can I schedule an order for later?',
-        a: 'Yes — on the checkout page choose "Schedule for later" and pick a time. The restaurant will start preparing it so it\'s ready right around your chosen time.',
+        a: 'Delivery is always booked ahead — choose "Schedule Delivery" and pick a day and time. The restaurant prepares your order to be ready at that time and sends it out straight after. Pickup orders are prepared as soon as you place them.',
       },
       {
         q: 'Can I customize an item (add toppings, no onions, etc)?',

@@ -63,6 +63,12 @@ export interface BuildScheduleInput {
    *  all week. Flattening those two would apply branch_hours' "no rows = always open" rule
    *  to a table whose whole purpose is the opposite. */
   scheduleWindows?: OpeningWindow[] | null;
+  /** Delivery hours (branch_delivery_hours), narrowing again for a delivery booking. The same
+   *  null/empty distinction as scheduleWindows: null = the merchant never restricted delivery
+   *  hours, an EMPTY ARRAY = restricted with no windows, so nothing is deliverable. The rows
+   *  follow is_delivery_available()'s overnight rules — the same three clauses as
+   *  is_schedule_window_open() — so the same range builder reads both. */
+  deliveryWindows?: OpeningWindow[] | null;
   /** Slots falling inside one of these are dropped, matching is_branch_open()'s
    *  `p_at between starts_at and ends_at` — inclusive at both ends. */
   closures?: ClosurePeriod[];
@@ -98,7 +104,8 @@ function iso(y: number, m: number, d: number): string {
 }
 
 export function buildScheduleDays(input: BuildScheduleInput): ScheduleDay[] {
-  const { timezone, openingHours, scheduleWindows, minLeadMinutes, maxDays, slotMinutes } = input;
+  const { timezone, openingHours, scheduleWindows, deliveryWindows, minLeadMinutes, maxDays, slotMinutes } =
+    input;
   const now = input.now ?? new Date();
   const earliest = now.getTime() + Math.max(0, minLeadMinutes) * 60_000;
   // No upper instant cutoff on purpose. The horizon is a number of branch-local DAYS, and
@@ -143,6 +150,11 @@ export function buildScheduleDays(input: BuildScheduleInput): ScheduleDay[] {
     // 21:00 gets 17:00-21:00, not an hour is_branch_open() would refuse at submit.
     if (scheduleWindows) {
       ranges = intersectRanges(ranges, bookableRangesForDay(scheduleWindows, parts.dow));
+    }
+    // Delivery hours last. orders_enforce_delivery_hours judges a booked delivery at its
+    // scheduled_for, so a slot outside them is one the database refuses at submit.
+    if (deliveryWindows) {
+      ranges = intersectRanges(ranges, bookableRangesForDay(deliveryWindows, parts.dow));
     }
     if (ranges.length === 0) continue;
 

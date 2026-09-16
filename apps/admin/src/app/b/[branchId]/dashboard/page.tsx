@@ -179,8 +179,12 @@ export default async function DashboardPage({ params }: Props) {
           {
             id: 'payment',
             label: 'Switch on at least one payment method',
-            why: 'With every method off, customers cannot place delivery or pickup orders.',
-            done: paymentMethodOn(settings, hasFeature(entitlements, 'card_payment')),
+            why: 'With every method off, customers cannot order pickup or schedule a delivery.',
+            done: paymentMethodOn(
+              settings,
+              hasFeature(entitlements, 'card_payment'),
+              deliveryEnabled && settings.scheduling_enabled !== false,
+            ),
             href: branchSettingsHref,
             hrefLabel: 'Payment methods',
           },

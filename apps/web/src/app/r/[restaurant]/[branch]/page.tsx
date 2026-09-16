@@ -1,5 +1,5 @@
 import { getServerClient } from '@favornoms/database/server';
-import { todaysDeliveryWindows } from '@/lib/delivery-windows';
+import { resolveScheduleDelivery } from '@/lib/schedule-delivery';
 import { listCategories, listMenuItems } from '@favornoms/database/queries';
 import { resolveStorefrontStatus, resolveTenant } from '@/lib/tenant';
 import { MenuView } from './_components/menu-view';
@@ -149,6 +149,7 @@ export default async function MenuPage({ params, searchParams }: Props) {
     })
     .filter((hh) => hh.appliesToAll || hh.items.length > 0);
 
+  const scheduleDelivery = await resolveScheduleDelivery(supabase, tenant.branch.id, status);
   const isOpen = openCheck.data !== false;
   const reviews = (reviewsCheck.data ?? null) as {
     summary: { rating: number | null; count: number };
@@ -187,9 +188,7 @@ export default async function MenuPage({ params, searchParams }: Props) {
         reviews={reviews}
         combos={combos}
         happyHours={happyHours}
-        canDeliver={status.delivery}
-        deliveryClosedNow={status.delivery_entitled && !status.delivery_available}
-        deliveryWindowsToday={todaysDeliveryWindows(status)}
+        canDeliver={scheduleDelivery.canDeliver}
         // The scan is being seated by <TableScanPin> above, which may be bouncing the diner
         // through sign-in. Until that lands there is no pin, and without this the gate would
         // open over somebody who is demonstrably sitting at a table.

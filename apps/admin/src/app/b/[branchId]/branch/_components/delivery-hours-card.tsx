@@ -189,8 +189,9 @@ export function DeliveryHoursCard({
               <Clock className="h-4 w-4 text-muted-foreground" /> Limit delivery to set hours
             </span>
             <span className="block text-xs text-muted-foreground">
-              Off: delivery is available whenever the branch is open. On: only during the
-              windows below — customers see them on the menu and cannot check out otherwise.
+              Off: deliveries can be booked for any time the branch is open. On: customers can
+              only book delivery times inside the windows below. Every delivery is booked ahead,
+              so delivery also needs <strong>Scheduled orders</strong> switched on.
             </span>
           </span>
         </label>
