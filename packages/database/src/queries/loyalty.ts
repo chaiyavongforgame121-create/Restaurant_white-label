@@ -131,3 +131,101 @@ export function loyaltyRewardDiscount(
       return 0;
   }
 }
+/** One rung of the ladder, in this restaurant's own words. */
+export interface LoyaltyProgramTier {
+  key: string;
+  threshold: number;
+  /** What the merchant calls this rung, or the platform's name when they haven't renamed it. */
+  label: string;
+  /**
+   * The merchant's own benefit lines. `null` means they never wrote any and the caller should show
+   * DEFAULT_TIER_PERKS; an empty array means they deliberately say nothing beyond the threshold.
+   * The "unlocked at N points" line is never stored here — it is drawn from `threshold`, so moving
+   * a tier can never leave a stale number in the copy.
+   */
+  perks: string[] | null;
+}
+
+/** The merchant's own programme: what a currency unit earns, and the tier ladder. */
+export interface LoyaltyProgram {
+  /** Hash of the stored settings. An editor sends back the one it loaded, so a stale tab cannot
+   *  overwrite a newer save. */
+  version: string;
+  pointsPerCurrency: number;
+  tiers: LoyaltyProgramTier[];
+  scope: 'branch' | 'brand';
+}
+
+/** What each tier says until the merchant writes their own line. Shared so the admin screen can
+ *  show the merchant the copy they are about to replace. */
+export const DEFAULT_TIER_PERKS: Record<string, string[]> = {
+  bronze: ['Spend your points on any reward the restaurant is offering.'],
+  // Deliberately name-free: a restaurant can rename every rung and leave these lines as they are,
+  // and a sheet titled with its own name must not go on to talk about "Silver" or "Gold".
+  silver: ['A member badge on your account, so the restaurant can send you member-only offers.'],
+  gold: [
+    'Member-only promotions and early access to campaigns the restaurant runs for its best regulars.',
+  ],
+  platinum: ['The top tier — the restaurant’s most exclusive offers land here first.'],
+};
+
+/** Platform defaults — what every restaurant had before the settings existed. */
+export const DEFAULT_LOYALTY_PROGRAM: LoyaltyProgram = {
+  version: '',
+  pointsPerCurrency: 1,
+  tiers: [
+    { key: 'bronze', threshold: 0, label: 'Bronze', perks: null },
+    { key: 'silver', threshold: 10000, label: 'Silver', perks: null },
+    { key: 'gold', threshold: 30000, label: 'Gold', perks: null },
+    { key: 'platinum', threshold: 100000, label: 'Platinum', perks: null },
+  ],
+  scope: 'brand',
+};
+
+const FALLBACK_LABEL: Record<string, string> = Object.fromEntries(
+  DEFAULT_LOYALTY_PROGRAM.tiers.map((t) => [t.key, t.label]),
+);
+
+/**
+ * Readable by anyone who can see the storefront: the customer page states the rate, draws the
+ * ladder and names each rung, so all three have to be the merchant's own rather than a copy in the
+ * client.
+ *
+ * Returns null when the read fails. It used to return DEFAULT_LOYALTY_PROGRAM instead, which made a
+ * failure indistinguishable from a restaurant on the platform's numbers: the customer page drew the
+ * platform ladder and told a Platinum member they were Bronze. Callers that only want names can
+ * fall back to DEFAULT_LOYALTY_PROGRAM themselves; callers that state numbers must not.
+ */
+export async function getLoyaltyProgram(
+  supabase: FavornomsClient,
+  branchId: string,
+): Promise<LoyaltyProgram | null> {
+  const { data, error } = await supabase.rpc('loyalty_program', { p_branch_id: branchId });
+  if (error || !data || typeof data !== 'object') return null;
+  const d = data as Record<string, unknown>;
+  const rate = Number(d.points_per_currency);
+  const tiers = Array.isArray(d.tiers)
+    ? (d.tiers as Array<Record<string, unknown>>)
+        .map((t) => {
+          const key = String(t.key ?? '');
+          return {
+            key,
+            threshold: Number(t.threshold),
+            label: String(t.label ?? '').trim() || FALLBACK_LABEL[key] || key,
+            // Only an array counts as "the merchant has written these"; anything else, including
+            // the json null the function returns for an untouched tier, means "use the stock line".
+            perks: Array.isArray(t.perks)
+              ? (t.perks as unknown[]).map((p) => String(p)).filter(Boolean)
+              : null,
+          };
+        })
+        .filter((t) => t.key && Number.isFinite(t.threshold))
+    : [];
+  if (!tiers.length || !Number.isFinite(rate) || rate <= 0) return null;
+  return {
+    version: typeof d.version === 'string' ? d.version : '',
+    pointsPerCurrency: rate,
+    tiers,
+    scope: d.scope === 'branch' ? 'branch' : 'brand',
+  };
+}

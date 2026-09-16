@@ -3438,6 +3438,7 @@ export type Database = {
           franchise_group_id: string | null
           id: string
           loyalty_scope: string
+          loyalty_settings: Json
           name: string
           owner_user_id: string
           slug: string
@@ -3453,6 +3454,7 @@ export type Database = {
           franchise_group_id?: string | null
           id?: string
           loyalty_scope?: string
+          loyalty_settings?: Json
           name: string
           owner_user_id: string
           slug: string
@@ -3468,6 +3470,7 @@ export type Database = {
           franchise_group_id?: string | null
           id?: string
           loyalty_scope?: string
+          loyalty_settings?: Json
           name?: string
           owner_user_id?: string
           slug?: string
@@ -5079,6 +5082,8 @@ export type Database = {
         }
       }
       list_restaurant_subscriptions: { Args: never; Returns: Json }
+      loyalty_program: { Args: { p_branch_id: string }; Returns: Json }
+      loyalty_settings_for: { Args: { p_restaurant_id: string }; Returns: Json }
       mark_delivery_arriving: {
         Args: { p_delivery_id: string }
         Returns: undefined
@@ -5285,6 +5290,19 @@ export type Database = {
         Args: { p_menu_item_id: string; p_sold_out: boolean; p_until?: string }
         Returns: Json
       }
+      set_loyalty_settings: {
+        Args: {
+          p_expected_version: string
+          p_gold: number
+          p_labels?: Json
+          p_perks?: Json
+          p_platinum: number
+          p_points_per_currency: number
+          p_restaurant_id: string
+          p_silver: number
+        }
+        Returns: Json
+      }
       set_menu_item_category: {
         Args: {
           p_branch_id: string
@@ -5374,6 +5392,10 @@ export type Database = {
       }
       sweep_abandoned_carts: { Args: never; Returns: number }
       tier_for_lifetime_points: { Args: { p_points: number }; Returns: string }
+      tier_for_points: {
+        Args: { p_points: number; p_restaurant_id: string }
+        Returns: string
+      }
       tip_pool_distribution: {
         Args: { p_branch_id: string; p_from: string; p_to: string }
         Returns: {

@@ -4,6 +4,8 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button, Card } from '@favornoms/ui';
+import { getBrowserClient } from '@favornoms/database/client';
+import { getLoyaltyProgram } from '@favornoms/database/queries';
 import { ExportButtons } from './export-buttons';
 import { RangePicker } from './range-picker';
 import { SectionSales } from './section-sales';
@@ -43,6 +45,14 @@ export function ReportsView({
   today,
   sections,
 }: Props) {
+  // The tier names are the restaurant’s to set, so the customers table has to ask for them
+  // rather than print the enum key a diner never sees.
+  const [tierLabels, setTierLabels] = React.useState<Record<string, string>>({});
+  React.useEffect(() => {
+    void getLoyaltyProgram(getBrowserClient(), branchId).then((p) => {
+      if (p) setTierLabels(Object.fromEntries(p.tiers.map((t) => [t.key, t.label])));
+    });
+  }, [branchId]);
   const router = useRouter();
   const results = Object.values(sections);
   const allFailed = results.every((r) => r.data === null);
@@ -156,7 +166,7 @@ export function ReportsView({
       <SectionOrders result={sections.orders} currency={currency} timezone={timezone} />
       <SectionMenu result={sections.menu} currency={currency} />
       <SectionDelivery result={sections.delivery} currency={currency} branchId={branchId} />
-      <SectionCustomers result={sections.customers} currency={currency} />
+      <SectionCustomers result={sections.customers} currency={currency} tierLabels={tierLabels} />
       <SectionPayments result={sections.payments} currency={currency} branchId={branchId} />
     </div>
   );

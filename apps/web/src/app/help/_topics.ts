@@ -79,7 +79,7 @@ export const TOPICS: Topic[] = [
     faqs: [
       {
         q: 'How do loyalty points work?',
-        a: 'You earn 1 point per $1 spent on completed orders. Each restaurant sets its own rewards — see them under Account → Loyalty & rewards, then pick one at checkout. One reward per order.',
+        a: 'You earn points on every completed order. Each restaurant sets its own earn rate, tiers and rewards — yours are shown under Account → Loyalty & rewards, where you also pick a reward to use at checkout. One reward per order.',
       },
       {
         q: 'How do I use a promo code?',

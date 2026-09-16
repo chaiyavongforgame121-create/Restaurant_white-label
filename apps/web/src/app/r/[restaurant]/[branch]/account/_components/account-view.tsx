@@ -8,7 +8,7 @@ import {
   ShieldCheck, Sparkles,
 } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
-import { getMyLoyalty, signOut } from '@favornoms/database/queries';
+import { getLoyaltyProgram, getMyLoyalty, signOut } from '@favornoms/database/queries';
 
 type LoyaltyBalance = NonNullable<Awaited<ReturnType<typeof getMyLoyalty>>>;
 import { Badge, Button, Card } from '@favornoms/ui';
@@ -18,6 +18,11 @@ import { InstallAppButton } from '@/components/install-app-button';
 // Phone-only diners are backed by a synthetic auth email they never chose. It is an
 // implementation detail of OTP-less sign-in and must never reach the screen.
 const SYNTHETIC_EMAIL_SUFFIX = '@customer.favornoms.local';
+
+/** The restaurant's name for a tier, falling back to the enum key until the programme loads. */
+function tierName(key: string, names: Record<string, string>): string {
+  return names[key] ?? key.replace(/^./, (c) => c.toUpperCase());
+}
 
 export function AccountView({
   base,
@@ -33,6 +38,10 @@ export function AccountView({
   const { user, loading } = useAuth();
   const router = useRouter();
   const [loyalty, setLoyalty] = React.useState<LoyaltyBalance | null>(null);
+  // Tiers carry the merchant's own names now, so this card asks for them rather than
+  // capitalising the enum key and showing a diner "Bronze" for a rung the restaurant
+  // renamed — the loyalty page beside it would say something else.
+  const [tierNames, setTierNames] = React.useState<Record<string, string>>({});
   // The `customers` row is the single source of truth for the diner's name and phone —
   // the same row settings writes and checkout prefills from. This card used to render
   // auth `user_metadata` instead, which is written once at signup and never updated
@@ -49,6 +58,10 @@ export function AccountView({
     if (!user) return;
     const supabase = getBrowserClient();
     void getMyLoyalty(supabase, branchId).then(setLoyalty);
+    void getLoyaltyProgram(supabase, branchId).then((p) => {
+      // A failed read leaves the names empty, and tierName() shows the enum key instead.
+      if (p) setTierNames(Object.fromEntries(p.tiers.map((t) => [t.key, t.label])));
+    });
   }, [user, branchId]);
 
   // Deliberately a plain scoped SELECT and not resolveMyCustomerId(): that helper calls
@@ -172,7 +185,7 @@ export function AccountView({
           <div className="grid grid-cols-3 divide-x divide-border text-center">
             {[
               { label: 'Points', value: (loyalty?.points_balance ?? 0).toLocaleString() },
-              { label: 'Tier', value: (loyalty?.tier ?? 'bronze').replace(/^./, (c) => c.toUpperCase()) },
+              { label: 'Tier', value: tierName(loyalty?.tier ?? 'bronze', tierNames) },
               { label: 'Lifetime', value: (loyalty?.lifetime_earned ?? 0).toLocaleString() },
             ].map((stat) => (
               <div key={stat.label} className="py-4">
@@ -192,8 +205,8 @@ export function AccountView({
           label="Loyalty & rewards"
           meta={
             loyalty
-              ? `${loyalty.tier.replace(/^./, (c) => c.toUpperCase())} · ${loyalty.points_balance.toLocaleString()} pts`
-              : 'Bronze · 0 pts'
+              ? `${tierName(loyalty.tier, tierNames)} · ${loyalty.points_balance.toLocaleString()} pts`
+              : `${tierName('bronze', tierNames)} · 0 pts`
           }
           href={`${base}/account/loyalty`}
         />
