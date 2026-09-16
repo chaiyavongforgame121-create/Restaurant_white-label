@@ -530,6 +530,25 @@ Deno.serve(async (req: Request) => {
   const staffPlaced = source !== 'web' && (await callerIsStaff());
   if (!staffPlaced && !authedUserId) return json(401, { error: 'login_required' });
 
+  // Customers order one of two ways: Pickup, prepared now, or Schedule Delivery, booked for a
+  // chosen time. The storefront only offers those two, but a tab opened before that change (or a
+  // hand-made request) can still send an ASAP delivery or a booked pickup, so the rule lives
+  // here as well. Staff are exempt, like the payment matrix and the booking window: the counter
+  // rings up walk-in deliveries for right now, and that is its job. Dine-in and QR table orders
+  // are untouched — the order type is the table's, not a choice.
+  //
+  // `hint` carries a code the checkout has matched for a long time. The checkout finds its copy by
+  // substring over the whole response body, so a tab opened before these two codes existed still
+  // reads "choose delivery or pickup and try again" instead of this body printed as raw JSON.
+  if (!staffPlaced) {
+    if (payload.channel === 'delivery' && !scheduledFor) {
+      return json(409, { error: 'delivery_must_be_scheduled', hint: 'invalid_channel' });
+    }
+    if (payload.channel === 'pickup' && scheduledFor) {
+      return json(409, { error: 'pickup_is_asap_only', hint: 'invalid_channel' });
+    }
+  }
+
   // Payment gating: settings.payment_methods = { asap: { cash, card }, scheduled: { cash, card } }.
   // Absent key/subkey => enabled (backward compatible); only an explicit false blocks.
   // The matrix governs what CUSTOMERS may pick — staff-placed orders (counter/POS
