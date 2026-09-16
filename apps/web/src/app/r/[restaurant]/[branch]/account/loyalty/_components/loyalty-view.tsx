@@ -5,9 +5,13 @@ import { Award, ChevronRight, Gift, History } from 'lucide-react';
 import { formatCurrency } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
 import {
+  DEFAULT_LOYALTY_PROGRAM,
+  DEFAULT_TIER_PERKS,
+  getLoyaltyProgram,
   getMyLoyalty,
   listLoyaltyRewards,
   listMyLoyaltyTransactions,
+  type LoyaltyProgram,
   type LoyaltyReward,
   type LoyaltyTxRow,
 } from '@favornoms/database/queries';
@@ -45,39 +49,61 @@ const TONES = {
   },
 } as const;
 
-/**
- * Tier thresholds are the DB's, measured against `lifetime_earned` — mirroring
- * them here keeps "X points to Gold" honest instead of guessed.
- */
-const TIERS = [
-  { key: 'bronze', label: 'Bronze', threshold: 0, emoji: '🥉', tone: TONES.bronze },
-  { key: 'silver', label: 'Silver', threshold: 10000, emoji: '🥈', tone: TONES.silver },
-  { key: 'gold', label: 'Gold', threshold: 30000, emoji: '🥇', tone: TONES.gold },
-  { key: 'platinum', label: 'Platinum', threshold: 100000, emoji: '💎', tone: TONES.platinum },
+/** The emoji and colour of each rung. Everything a diner reads — the name, the thresholds, the
+ *  benefit lines — comes from the restaurant; these labels are only the fallback. */
+const TIER_BASE = [
+  { key: 'bronze', label: 'Bronze', emoji: '🥉', tone: TONES.bronze },
+  { key: 'silver', label: 'Silver', emoji: '🥈', tone: TONES.silver },
+  { key: 'gold', label: 'Gold', emoji: '🥇', tone: TONES.gold },
+  { key: 'platinum', label: 'Platinum', emoji: '💎', tone: TONES.platinum },
 ] as const;
 
-type Tier = (typeof TIERS)[number];
+type TierKey = (typeof TIER_BASE)[number]['key'];
 
-const TIER_BENEFITS: Record<Tier['key'], string[]> = {
-  bronze: [
-    'Where every member starts — no minimum spend.',
-    'Spend your points on any reward the restaurant is offering.',
-  ],
-  silver: [
-    'Unlocked at 10,000 lifetime points.',
-    'A Silver badge on your account, so the restaurant can send you member-only offers.',
-  ],
-  gold: [
-    'Unlocked at 30,000 lifetime points.',
-    'Gold-only promotions and early access to campaigns the restaurant runs for its best regulars.',
-  ],
-  platinum: [
-    'Unlocked at 100,000 lifetime points.',
-    'The top tier — the restaurant’s most exclusive offers land here first.',
-  ],
-};
+interface Tier {
+  key: TierKey;
+  label: string;
+  emoji: string;
+  tone: (typeof TONES)[TierKey];
+  threshold: number;
+  /** The merchant's own lines, or null when they have never written any for this rung. */
+  perks: string[] | null;
+}
 
-/** Transaction kinds returned by `list_my_loyalty_transactions`. */
+/**
+ * The ladder this restaurant grants, measured against `lifetime_earned`. The thresholds, the name
+ * of each rung and the lines under it were all written here once, so a merchant who changed them
+ * would have had the page promising a tier the server never awarded — or naming it in a language
+ * their diners don't read. Only the emoji and the colour are still the platform's.
+ */
+function buildTiers(program: LoyaltyProgram): Tier[] {
+  const byKey = new Map(program.tiers.map((t) => [t.key, t]));
+  return TIER_BASE.map((base, i) => {
+    const t = byKey.get(base.key);
+    return {
+      ...base,
+      label: t?.label.trim() || base.label,
+      threshold:
+        t && Number.isFinite(t.threshold) ? t.threshold : DEFAULT_LOYALTY_PROGRAM.tiers[i]!.threshold,
+      perks: t?.perks ?? null,
+    };
+  });
+}
+
+/**
+ * What a rung promises. The first line is drawn from the threshold every time rather than stored,
+ * so moving a tier can never leave a stale number in the merchant's copy; the rest is theirs, or
+ * the platform's for a tier they have never touched. An empty array they saved means they chose to
+ * say nothing more, and is respected.
+ */
+function tierBenefits(tier: Tier): string[] {
+  const opening =
+    tier.threshold <= 0
+      ? 'Where every member starts — no minimum spend.'
+      : `Unlocked at ${tier.threshold.toLocaleString()} lifetime points.`;
+  return [opening, ...(tier.perks ?? DEFAULT_TIER_PERKS[tier.key] ?? [])];
+}
+
 const TX_META: Record<string, { label: string; variant: React.ComponentProps<typeof Badge>['variant'] }> = {
   earned: { label: 'Earned', variant: 'success' },
   redeemed: { label: 'Redeemed', variant: 'default' },
@@ -85,10 +111,10 @@ const TX_META: Record<string, { label: string; variant: React.ComponentProps<typ
   adjusted: { label: 'Adjusted', variant: 'warning' },
 };
 
-function tierIndexFor(lifetimeEarned: number): number {
+function tierIndexFor(lifetimeEarned: number, tiers: Tier[]): number {
   let idx = 0;
-  for (let i = 0; i < TIERS.length; i += 1) {
-    if (lifetimeEarned >= TIERS[i]!.threshold) idx = i;
+  for (let i = 0; i < tiers.length; i += 1) {
+    if (lifetimeEarned >= tiers[i]!.threshold) idx = i;
   }
   return idx;
 }
@@ -106,7 +132,24 @@ export function LoyaltyView({
   const [loyalty, setLoyalty] = React.useState<Loyalty | null>(null);
   const [txns, setTxns] = React.useState<LoyaltyTxRow[]>([]);
   const [rewards, setRewards] = React.useState<LoyaltyReward[]>([]);
+  // undefined = still loading, null = the read failed. Neither may be drawn as the platform's
+  // ladder: the page would tell a Platinum member they are Bronze, and quote a rate the restaurant
+  // does not use, while the Account screen one tap away shows the server's real grade.
+  const [program, setProgram] = React.useState<LoyaltyProgram | null | undefined>(undefined);
   const [busy, setBusy] = React.useState(true);
+
+  // The programme is public, so it loads whether or not the diner is signed in — the page shows
+  // the ladder and the rate to someone deciding whether to join.
+  React.useEffect(() => {
+    let cancelled = false;
+    setProgram(undefined);
+    void getLoyaltyProgram(getBrowserClient(), branchId).then((p) => {
+      if (!cancelled) setProgram(p);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [branchId]);
 
   React.useEffect(() => {
     if (!user) {
@@ -129,7 +172,12 @@ export function LoyaltyView({
 
   const balance = loyalty?.points_balance ?? 0;
   const lifetimeEarned = loyalty?.lifetime_earned ?? 0;
-  const currentTier = TIERS[tierIndexFor(lifetimeEarned)]!;
+  const tiers = React.useMemo(() => buildTiers(program ?? DEFAULT_LOYALTY_PROGRAM), [program]);
+  // The badge shows the tier the server graded (the one checkout and redemption act on), named in
+  // the restaurant's words — not a recomputation from thresholds that may not have loaded.
+  const badgeLabel =
+    tiers.find((t) => t.key === (loyalty?.tier ?? 'bronze'))?.label ??
+    (loyalty?.tier ?? 'bronze').replace(/^./, (c) => c.toUpperCase());
   // The catalog arrives sorted by the merchant's sort_order, then points_cost —
   // so the cheapest thing still out of reach is the first unaffordable one by
   // cost, not the first in display order.
@@ -151,7 +199,12 @@ export function LoyaltyView({
               <p className="font-display text-5xl font-bold leading-tight">{balance.toLocaleString()}</p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <Badge variant="solid" className="bg-white/25 text-white">
-                  <Award className="h-3 w-3" /> {currentTier.label} member
+                  <Award className="h-3 w-3" />{' '}
+                  {program === undefined ? (
+                    <span className="inline-block h-3 w-16 animate-pulse rounded bg-white/30" aria-label="Loading tier" />
+                  ) : (
+                    `${badgeLabel} member`
+                  )}
                 </Badge>
                 {/* Points buy named rewards now, not a floating dollar rate, so
                     quoting one would be a number the diner can never cash in. */}
@@ -172,17 +225,39 @@ export function LoyaltyView({
 
           <RewardsCatalog rewards={rewards} balance={balance} busy={busy} brandName={brandName} />
 
-          <TierTrack lifetimeEarned={lifetimeEarned} />
+          {program ? (
+            <TierTrack
+              lifetimeEarned={lifetimeEarned}
+              tiers={tiers}
+              pointsPerCurrency={program.pointsPerCurrency}
+            />
+          ) : (
+            <TierTrackPlaceholder failed={program === null} />
+          )}
 
           <Card className="p-5">
             <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
               <Gift className="h-5 w-5 text-primary" /> How points work
             </h2>
             <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-              <li>
-                Earn <strong className="text-foreground">1 point per {formatCurrency(1)}</strong> of your
-                order subtotal.
-              </li>
+              {program ? (
+                <li>
+                  Earn{' '}
+                  <strong className="text-foreground">
+                    {program.pointsPerCurrency === 1
+                      ? '1 point'
+                      : `${program.pointsPerCurrency.toLocaleString()} points`}{' '}
+                    per {formatCurrency(1)}
+                  </strong>{' '}
+                  of your order subtotal.
+                </li>
+              ) : program === undefined ? (
+                <li aria-busy="true">
+                  <span className="inline-block h-4 w-56 max-w-full animate-pulse rounded bg-muted" />
+                </li>
+              ) : (
+                <li>Earn points on the subtotal of every completed order.</li>
+              )}
               <li>
                 Points land{' '}
                 <strong className="text-foreground">once the order is completed</strong> — orders still
@@ -347,18 +422,26 @@ function RewardsCatalog({
  * Bronze → Platinum rail. The tier the customer is actually in is filled in and
  * lifted; every tier is tappable for a breakdown of what it unlocks.
  */
-function TierTrack({ lifetimeEarned }: { lifetimeEarned: number }) {
+function TierTrack({
+  lifetimeEarned,
+  tiers,
+  pointsPerCurrency,
+}: {
+  lifetimeEarned: number;
+  tiers: Tier[];
+  pointsPerCurrency: number;
+}) {
   const [openTier, setOpenTier] = React.useState<Tier | null>(null);
-  const currentIndex = tierIndexFor(lifetimeEarned);
-  const current = TIERS[currentIndex]!;
-  const next = TIERS[currentIndex + 1] ?? null;
+  const currentIndex = tierIndexFor(lifetimeEarned, tiers);
+  const current = tiers[currentIndex]!;
+  const next = tiers[currentIndex + 1] ?? null;
   const pointsToNext = next ? Math.max(next.threshold - lifetimeEarned, 0) : 0;
   // Fraction of the way through the current band, so the fill sits between the
   // two node centres instead of snapping tier to tier.
   const bandProgress = next
     ? Math.min(Math.max((lifetimeEarned - current.threshold) / (next.threshold - current.threshold), 0), 1)
     : 1;
-  const fillPercent = ((currentIndex + (next ? bandProgress : 0)) / (TIERS.length - 1)) * 100;
+  const fillPercent = ((currentIndex + (next ? bandProgress : 0)) / (tiers.length - 1)) * 100;
 
   return (
     <Card className="p-5">
@@ -376,7 +459,7 @@ function TierTrack({ lifetimeEarned }: { lifetimeEarned: number }) {
           style={{ width: `calc(${fillPercent}% * 0.75)` }}
         />
         <ul className="relative grid grid-cols-4 gap-1">
-          {TIERS.map((tier, i) => {
+          {tiers.map((tier, i) => {
             const reached = i <= currentIndex;
             const isCurrent = i === currentIndex;
             return (
@@ -386,7 +469,7 @@ function TierTrack({ lifetimeEarned }: { lifetimeEarned: number }) {
                   onClick={() => setOpenTier(tier)}
                   aria-label={`${tier.label} tier benefits`}
                   aria-current={isCurrent ? 'true' : undefined}
-                  className="focus-ring flex flex-col items-center gap-1.5 rounded-2xl px-1 py-1"
+                  className="focus-ring flex w-full min-w-0 flex-col items-center gap-1.5 rounded-2xl px-1 py-1"
                 >
                   <span
                     className={`relative z-10 grid h-11 w-11 place-items-center rounded-full text-lg transition ${
@@ -400,7 +483,7 @@ function TierTrack({ lifetimeEarned }: { lifetimeEarned: number }) {
                     {tier.emoji}
                   </span>
                   <span
-                    className={`text-[11px] font-semibold leading-tight ${
+                    className={`w-full break-words text-center text-[11px] font-semibold leading-tight ${
                       isCurrent ? tier.tone.label : 'text-muted-foreground'
                     }`}
                   >
@@ -445,8 +528,8 @@ function TierTrack({ lifetimeEarned }: { lifetimeEarned: number }) {
                 : `${(openTier.threshold - lifetimeEarned).toLocaleString()} more points to unlock.`}
             </p>
             <ul className="space-y-2 text-sm">
-              {TIER_BENEFITS[openTier.key].map((benefit) => (
-                <li key={benefit} className="flex gap-2">
+              {tierBenefits(openTier).map((benefit, i) => (
+                <li key={`${openTier.key}-${i}`} className="flex gap-2">
                   {/* Tinted to the tapped tier, so the sheet visibly belongs to it. */}
                   <ChevronRight className={`mt-0.5 h-4 w-4 shrink-0 ${openTier.tone.label}`} />
                   <span>{benefit}</span>
@@ -456,7 +539,8 @@ function TierTrack({ lifetimeEarned }: { lifetimeEarned: number }) {
             <div className="rounded-2xl border border-border bg-muted/40 p-4">
               <p className="font-display text-sm font-semibold">How you earn points</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                You earn 1 point for every {formatCurrency(1)} of an order&apos;s subtotal. Points are
+                You earn {pointsPerCurrency === 1 ? '1 point' : `${pointsPerCurrency.toLocaleString()} points`}{' '}
+                for every {formatCurrency(1)} of an order&apos;s subtotal. Points are
                 credited when the order is completed — nothing is added while an order is still
                 pending, being prepared, or on its way, and cancelled orders never earn.
               </p>
@@ -464,6 +548,29 @@ function TierTrack({ lifetimeEarned }: { lifetimeEarned: number }) {
           </div>
         )}
       </Sheet>
+    </Card>
+  );
+}
+
+function TierTrackPlaceholder({ failed }: { failed: boolean }) {
+  return (
+    <Card className="p-5">
+      <h2 className="font-display text-lg font-semibold">Your tier</h2>
+      {failed ? (
+        <p className="mt-2 text-sm text-muted-foreground">
+          The tier ladder couldn&apos;t be loaded just now. Your points and badge are unaffected —
+          reload the page to try again.
+        </p>
+      ) : (
+        <div className="mt-5 grid grid-cols-4 gap-1" aria-busy="true">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="flex flex-col items-center gap-1.5">
+              <span className="h-11 w-11 animate-pulse rounded-full bg-muted" />
+              <span className="h-3 w-10 animate-pulse rounded bg-muted" />
+            </div>
+          ))}
+        </div>
+      )}
     </Card>
   );
 }

@@ -45,12 +45,15 @@ export function RewardsManager({
   restaurantId,
   branchId,
   branchCount,
+  programCard,
   initialRewards,
   menuItems,
 }: {
   restaurantId: string;
   branchId: string;
   branchCount: number;
+  /** Rendered under this page’s heading: the two cards are one screen to the merchant. */
+  programCard?: React.ReactNode;
   initialRewards: Reward[];
   menuItems: MenuItem[];
 }) {
@@ -198,6 +201,8 @@ export function RewardsManager({
           {draft ? 'Cancel' : 'New reward'}
         </Button>
       </header>
+
+      {programCard}
 
       {branchCount > 1 && (
         <p className="mb-4 rounded-2xl bg-muted/50 px-4 py-3 text-sm text-muted-foreground">

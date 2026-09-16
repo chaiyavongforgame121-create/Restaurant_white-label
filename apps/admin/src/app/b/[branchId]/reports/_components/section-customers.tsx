@@ -11,9 +11,13 @@ import type { CustomersReport, SectionResult } from './report-queries';
 export function SectionCustomers({
   result,
   currency,
+  tierLabels,
 }: {
   result: SectionResult<CustomersReport>;
   currency: string;
+  /** The restaurant’s own names for its tiers, so this report agrees with the badge the
+   *  customer sees. Empty until the programme loads, and for a tier never renamed. */
+  tierLabels?: Record<string, string>;
 }) {
   const data = result.data;
   const money = (n: number) => formatCurrency(n, currency);
@@ -92,8 +96,11 @@ export function SectionCustomers({
                           <td className="max-w-[14rem] truncate py-1.5 pr-2 font-medium">
                             {c.name}
                             {c.tier ? (
-                              <Badge variant="muted" className="ml-2 capitalize">
-                                {c.tier}
+                              <Badge
+                                variant="muted"
+                                className={`ml-2${tierLabels?.[c.tier] ? '' : ' capitalize'}`}
+                              >
+                                {tierLabels?.[c.tier] ?? c.tier}
                               </Badge>
                             ) : null}
                           </td>
