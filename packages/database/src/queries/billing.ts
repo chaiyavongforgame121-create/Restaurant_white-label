@@ -64,7 +64,9 @@ export async function getEntitlementsForBranch(
 export interface StorefrontStatus {
   entitled: boolean;
   /** Delivery is sellable RIGHT NOW: the add-on is paid for AND the branch is inside
-   *  its delivery window. This is what gates the order-type picker. */
+   *  its delivery window. The storefront's order-type picker no longer gates on this — every
+   *  customer delivery is booked ahead, so it uses canScheduleDelivery (delivery_entitled and
+   *  scheduling_enabled) instead. */
   delivery: boolean;
   /** The add-on is paid for, regardless of the clock. Kept separate so the storefront
    *  can say "delivery opens at 5pm" instead of hiding delivery as if it were never

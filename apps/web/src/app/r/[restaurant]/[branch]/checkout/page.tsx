@@ -2,7 +2,7 @@ import { getServerClient } from '@favornoms/database/server';
 import { resolveStorefrontStatus, resolveTenant } from '@/lib/tenant';
 import { CheckoutView } from './_components/checkout-view';
 import { OrderTypeGate } from '../_components/order-type-gate';
-import { todaysDeliveryWindows } from '@/lib/delivery-windows';
+import { resolveScheduleDelivery } from '@/lib/schedule-delivery';
 import { SuspendedStorefront } from '../_components/suspended-storefront';
 
 interface Props {
@@ -20,11 +20,12 @@ export default async function CheckoutPage({ params }: Props) {
   // carry it. Read it here: the summary must show the tax place-order will charge
   // from the first paint, not discover it a round-trip later.
   const supabase = await getServerClient();
-  const { data: taxRow } = await supabase
-    .from('branches')
-    .select('sales_tax_rate')
-    .eq('id', tenant.branch.id)
-    .maybeSingle();
+  // Open right now: Pickup is always prepared immediately, so a closed branch cannot take one.
+  const [{ data: taxRow }, { data: openNow }, scheduleDelivery] = await Promise.all([
+    supabase.from('branches').select('sales_tax_rate').eq('id', tenant.branch.id).maybeSingle(),
+    supabase.rpc('is_branch_open', { p_branch_id: tenant.branch.id }),
+    resolveScheduleDelivery(supabase, tenant.branch.id, status),
+  ]);
   const base = `/r/${restaurant}/${branch}`;
   // Deep links reach checkout without passing the menu — same gate, same rules.
   return (
@@ -32,15 +33,17 @@ export default async function CheckoutPage({ params }: Props) {
       <OrderTypeGate
         branchId={tenant.branch.id}
         branchName={tenant.branch.name}
-        canDeliver={status.delivery}
-        deliveryClosedNow={status.delivery_entitled && !status.delivery_available}
-        deliveryWindowsToday={todaysDeliveryWindows(status)}
+        canDeliver={scheduleDelivery.canDeliver}
       />
       <CheckoutView
         branchId={tenant.branch.id}
         restaurantId={tenant.restaurant.id}
         base={base}
-        canDeliver={status.delivery}
+        canDeliver={scheduleDelivery.canDeliver}
+        // Only an explicit false: a failed read must not block ordering, and place-order still
+        // refuses a pickup at a closed branch.
+        pickupOpenNow={openNow !== false}
+        ordersPaused={scheduleDelivery.paused}
         canUseCard={status.card_payment}
         // Both money inputs mirror place-order's `?? 0` fallback: a branch with
         // neither configured is charged nothing, so it must be shown nothing.
@@ -55,6 +58,8 @@ export default async function CheckoutPage({ params }: Props) {
           minLeadMinutes: status.schedule_min_lead_min,
           maxDays: status.schedule_max_days,
           slotMinutes: status.schedule_slot_minutes,
+          // Every storefront delivery is booked, so its slots must sit inside delivery hours too.
+          deliveryWindows: status.delivery_hours_on ? status.delivery_windows : null,
         }}
       />
     </>

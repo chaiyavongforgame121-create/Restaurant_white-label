@@ -239,6 +239,17 @@
   .dark .input {
     color-scheme: dark;
   }
+  /* The open list of a native <select> is drawn by the operating system, not by the page. In
+     dark mode it stayed light while the options inherited the page's light text, so the admin
+     branch switcher showed white-on-white names. Every select gets the theme's scheme, and the
+     options its card colours, whether or not it carries .input. */
+  .dark select {
+    color-scheme: dark;
+  }
+  select option {
+    background-color: hsl(var(--card));
+    color: hsl(var(--card-foreground));
+  }
 
   .pb-safe {
     padding-bottom: max(0.75rem, env(safe-area-inset-bottom));

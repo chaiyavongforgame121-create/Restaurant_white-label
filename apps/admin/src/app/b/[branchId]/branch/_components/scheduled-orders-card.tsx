@@ -243,9 +243,11 @@ export function ScheduledOrdersCard({ branchId, settings }: Props) {
         <CalendarClock className="h-5 w-5 text-primary" /> Scheduled orders
       </h2>
       <p className="text-sm text-muted-foreground">
-        Pre-orders customers place for a later time. The times they can choose start from
-        this branch&apos;s <strong>Opening hours</strong> above, narrowed by the booking
-        windows below when you switch those on.
+        How customers book deliveries: on your storefront every delivery is booked for a day
+        and time, and pickup is always ordered for now. Bookable times start from this
+        branch&apos;s <strong>Opening hours</strong> above, narrowed by the booking windows below
+        when you switch those on, and by <strong>Delivery hours</strong> when those are limited.
+        A branch that does not sell delivery takes no bookings from customers.
       </p>
 
       <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-border p-3">
@@ -258,8 +260,8 @@ export function ScheduledOrdersCard({ branchId, settings }: Props) {
         <span>
           <span className="block text-sm font-semibold">Accept scheduled orders</span>
           <span className="block text-xs text-muted-foreground">
-            Off: customers can only order for as soon as possible, and &ldquo;Schedule for
-            later&rdquo; disappears from checkout.
+            Customers book every delivery for a day and time. Off: &ldquo;Schedule
+            Delivery&rdquo; disappears from your storefront and customers can only order Pickup.
           </span>
         </span>
       </label>

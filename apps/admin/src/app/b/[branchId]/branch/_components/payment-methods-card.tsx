@@ -42,8 +42,8 @@ type Mode = 'asap' | 'scheduled';
 type Method = 'cash' | 'card' | 'transfer';
 
 const MODES: Array<{ key: Mode; label: string }> = [
-  { key: 'asap', label: 'ASAP' },
-  { key: 'scheduled', label: 'Scheduled' },
+  { key: 'asap', label: 'Pickup (now)' },
+  { key: 'scheduled', label: 'Schedule Delivery' },
 ];
 
 const METHODS: Array<{ key: Method; label: string; hint: string }> = [
@@ -146,7 +146,8 @@ export function PaymentMethodsCard({ branchId, restaurantId, settings, canUseCar
         <Wallet className="h-5 w-5 text-primary" /> Payment methods
       </h2>
       <p className="text-sm text-muted-foreground">
-        Choose which payment methods customers can pick for ASAP and scheduled orders. Card
+        Choose which payment methods customers can pick for Pickup (prepared now) and Schedule
+        Delivery (booked ahead). Card
         payments are collected by you at handoff with your own reader — nothing is charged online
         yet. Orders your staff take at the counter or POS are not affected.
       </p>
@@ -291,7 +292,7 @@ export function PaymentMethodsCard({ branchId, restaurantId, settings, canUseCar
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
             <span>
               Your QR code is saved but <strong>QR transfer is still switched off</strong>, so
-              customers cannot choose it. Tick it under ASAP and/or Scheduled above, then save.
+              customers cannot choose it. Tick it under Pickup (now) and/or Schedule Delivery above, then save.
             </span>
           </p>
         )}
