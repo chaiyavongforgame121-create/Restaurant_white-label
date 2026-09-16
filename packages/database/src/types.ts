@@ -4555,6 +4555,7 @@ export type Database = {
     }
     Functions: {
       accept_dispatch: { Args: { p_delivery_id: string }; Returns: undefined }
+      accept_staff_invite: { Args: { p_staff_id: string }; Returns: Json }
       admin_edit_order_notes: {
         Args: { p_notes: string; p_order_id: string }
         Returns: {
@@ -4926,6 +4927,7 @@ export type Database = {
         Args: { p_branch_id: string; p_from: string; p_to: string }
         Returns: Json
       }
+      get_staff_invite: { Args: { p_staff_id: string }; Returns: Json }
       get_table_session_bill: { Args: { p_session_id: string }; Returns: Json }
       get_top_customers_ltv: {
         Args: { p_branch_id: string; p_limit?: number }
@@ -5106,6 +5108,7 @@ export type Database = {
         Returns: undefined
       }
       my_capabilities: { Args: { p_branch_id: string }; Returns: string[] }
+      my_pending_staff_invite: { Args: never; Returns: string }
       open_table_session: {
         Args: { p_party_size?: number; p_table_id: string }
         Returns: string

@@ -128,7 +128,7 @@ Deno.serve(async (req) => {
   // Idempotent: re-use existing pending row for same (restaurant, email)
   const existing = await admin
     .from('staff_members')
-    .select('id, status')
+    .select('id, status, role, user_id')
     .eq('restaurant_id', body.restaurant_id)
     .eq('invited_email', body.email.toLowerCase())
     .maybeSingle();
@@ -138,6 +138,29 @@ Deno.serve(async (req) => {
     staffId = existing.data.id;
     if (existing.data.status === 'active') {
       return json({ error: 'already_active', staff_id: staffId }, 409);
+    }
+    // Inviting the same address again is how an owner corrects a mistake (Cashier -> Manager,
+    // one branch -> all). The row used to be reused as it was, so the email went out, the modal
+    // said "Invitation sent", and the person joined with the old role. The newest invitation wins.
+    if (existing.data.status === 'pending' && !existing.data.user_id) {
+      if (existing.data.role === 'admin' && callerStaff.role !== 'owner') {
+        return json({ error: 'forbidden', reason: 'only the owner can change an admin invitation' }, 403);
+      }
+      const updated = await admin
+        .from('staff_members')
+        .update({
+          role: body.role,
+          branch_id: body.branch_id ?? null,
+          permissions: body.permissions ?? [],
+        })
+        .eq('id', staffId)
+        .eq('status', 'pending')
+        .is('user_id', null)
+        .select('id')
+        .single();
+      if (updated.error) {
+        return json({ error: 'update_failed', detail: updated.error.message }, 500);
+      }
     }
   } else {
     const insert = await admin
@@ -174,6 +197,17 @@ Deno.serve(async (req) => {
     return json({ ok: true, staff_id: staffId, emailed: true, redirect_to: redirectTo });
   }
 
+  // Supabase's built-in mailer allows a couple of emails an hour. Say so, instead of treating a
+  // refused send as "this person already has an account" and linking them with no email at all.
+  if (invite.error.status === 429 || invite.error.code === 'over_email_send_rate_limit') {
+    return json({ error: 'rate_limited', detail: invite.error.message }, 429);
+  }
+  const alreadyRegistered =
+    invite.error.code === 'email_exists' || /already (been )?registered/i.test(invite.error.message);
+  if (!alreadyRegistered) {
+    return json({ error: 'email_failed', detail: invite.error.message }, 500);
+  }
+
   // inviteUserByEmail refuses an address that already has an auth account. The old fallback
   // called generateLink() here and then returned ok:true — but generateLink only MINTS a
   // link, it never sends one, and nothing in this function sends it either. So inviting
@@ -189,9 +223,29 @@ Deno.serve(async (req) => {
     email: body.email,
     options: { redirectTo },
   });
-  const existingUserId = existingAuthUser.data?.user?.id;
+  const existingUser = existingAuthUser.data?.user;
+  const existingUserId = existingUser?.id;
   if (!existingUserId) {
     return json({ error: 'email_failed', detail: invite.error.message }, 500);
+  }
+
+  // Only someone who can actually sign in is linked without an email: an account they created
+  // themselves (no invited_at), or an invited one that has chosen a password. An earlier
+  // invitation opened once — by the person, or by a mail scanner — confirms the address, and
+  // inviteUserByEmail then refuses it; linking that account here told the owner "they can sign
+  // in with the password they already use" about someone who never had one. Send them a link to
+  // set a password and join instead, and leave the row pending until they do.
+  const canSignIn =
+    !existingUser?.invited_at || existingUser?.user_metadata?.password_set === true;
+  if (!canSignIn) {
+    const recovery = await admin.auth.resetPasswordForEmail(body.email, { redirectTo });
+    if (recovery.error) {
+      if (recovery.error.status === 429) {
+        return json({ error: 'rate_limited', detail: recovery.error.message }, 429);
+      }
+      return json({ error: 'email_failed', detail: recovery.error.message }, 500);
+    }
+    return json({ ok: true, staff_id: staffId, emailed: true, redirect_to: redirectTo });
   }
 
   const linked = await admin

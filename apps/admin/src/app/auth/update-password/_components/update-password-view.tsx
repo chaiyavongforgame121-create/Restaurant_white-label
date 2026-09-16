@@ -50,7 +50,9 @@ export function UpdatePasswordView({ welcome }: { welcome: boolean }) {
     }
     setSubmitting(true);
     const supabase = getBrowserClient();
-    const { error: updateError } = await supabase.auth.updateUser({ password });
+    // password_set tells the invitation page this account can already sign in, so it does not
+    // ask for a password a second time.
+    const { error: updateError } = await supabase.auth.updateUser({ password, data: { password_set: true } });
     setSubmitting(false);
     if (updateError) {
       setError(updateError.message);

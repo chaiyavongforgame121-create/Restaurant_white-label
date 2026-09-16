@@ -315,10 +315,13 @@ function InviteModal({
       // invite-staff keeps one row per restaurant and email, so inviting someone already on
       // the team (usually to give them a second branch) came back as a raw
       // "invite_staff_failed:409:..." with no way forward shown.
+      const message = (err as Error).message;
       setError(
         isStaffAlreadyActiveError(err)
           ? `${email.trim()} is already on your team. To change which branches they can use, set their Branch access in the staff list instead of inviting them again.`
-          : (err as Error).message,
+          : message.includes('rate_limited')
+            ? 'Too many emails were sent in the last hour. The built-in email service allows only a few per hour — try again later, or connect your own email service in Supabase (Authentication → SMTP).'
+            : message,
       );
       setSubmitting(false);
     }
