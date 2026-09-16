@@ -317,6 +317,13 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
         heroUrl={heroUrl}
       />
 
+      <ChannelPicker
+        channel={channel}
+        setChannel={(c) => setChannel(c, branch.id)}
+        canDeliver={canDeliver}
+        lockedTableLabel={pinnedTable?.label ?? null}
+      />
+
       {!isOpen && (
         <div className="container mt-4">
           <div className="rounded-2xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning">
@@ -338,14 +345,7 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
       )}
 
       <section className="container mt-6 space-y-6 lg:mt-8">
-        <ChannelAndSearch
-          channel={channel}
-          setChannel={(c) => setChannel(c, branch.id)}
-          search={search}
-          setSearch={setSearch}
-          canDeliver={canDeliver}
-          lockedTableLabel={pinnedTable?.label ?? null}
-        />
+        <MenuSearch search={search} setSearch={setSearch} />
 
         {!search && usuals.length > 0 && (
           <YourUsualsRow items={usuals} onOpen={setActiveItem} />
@@ -479,20 +479,24 @@ function Hero({
   );
 }
 
-/* -------------------- Channel + Search -------------------- */
+/* -------------------- Order type -------------------- */
 
-function ChannelAndSearch({
+/**
+ * Pickup / Delivery, straight under the hero.
+ *
+ * It used to share a toolbar with the search box, below the rating strip, the combos and the
+ * happy-hour sections — far enough down that a diner scrolling for food could pick a dish
+ * without ever seeing how the order would reach them. How it arrives is the first decision of
+ * an order, and the cart prices delivery from it, so it comes first on the page.
+ */
+function ChannelPicker({
   channel,
   setChannel,
-  search,
-  setSearch,
   canDeliver,
   lockedTableLabel = null,
 }: {
   channel: OrderChannel | null;
   setChannel: (c: OrderChannel) => void;
-  search: string;
-  setSearch: (s: string) => void;
   canDeliver: boolean;
   /** Set when the diner scanned a table code — the order type is no longer a choice. */
   lockedTableLabel?: string | null;
@@ -511,7 +515,7 @@ function ChannelAndSearch({
     { value: 'pickup' as const, label: t('channel.pickup'), icon: <ShoppingBag className="h-4 w-4" /> },
   ];
   return (
-    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+    <section className="container mt-4">
       {lockedTableLabel ? (
         <span className="inline-flex items-center gap-2 self-start rounded-full bg-primary/10 px-4 py-2.5 text-sm font-semibold text-primary">
           <Store className="h-4 w-4" aria-hidden />
@@ -526,6 +530,15 @@ function ChannelAndSearch({
           options={options}
         />
       )}
+    </section>
+  );
+}
+
+/* -------------------- Search -------------------- */
+
+function MenuSearch({ search, setSearch }: { search: string; setSearch: (s: string) => void }) {
+  const t = useTranslations();
+  return (
       <div className="relative w-full lg:max-w-md">
         <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <input
@@ -545,7 +558,6 @@ function ChannelAndSearch({
           </button>
         )}
       </div>
-    </div>
   );
 }
 

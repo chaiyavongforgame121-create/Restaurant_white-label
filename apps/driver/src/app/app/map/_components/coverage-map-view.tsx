@@ -26,6 +26,38 @@ import { useDriverSession } from '@/components/driver-session';
 const IN = '#16a34a';
 const OUT = '#9ca3af';
 
+/**
+ * The restaurant's name, under its pin.
+ *
+ * It used to be a Mapbox popup, which opens only on a tap and paints itself white while taking
+ * its text colour from the page — so on the rider's dark app it read as white on white, an empty
+ * box over the map. A rider looking at four circles could not tell which shop was which. This is
+ * a plain marker element instead: always on screen, in the app's own card colours.
+ */
+function labelElement(name: string): HTMLDivElement {
+  const el = document.createElement('div');
+  el.textContent = name;
+  el.style.cssText = [
+    'max-width:11rem',
+    'overflow:hidden',
+    'text-overflow:ellipsis',
+    'white-space:nowrap',
+    'padding:2px 8px',
+    'border-radius:9999px',
+    'font-size:12px',
+    'font-weight:600',
+    'line-height:1.4',
+    'background:hsl(var(--card))',
+    'color:hsl(var(--card-foreground))',
+    'border:1px solid hsl(var(--border))',
+    'box-shadow:0 1px 3px rgb(0 0 0 / 0.35)',
+  ].join(';');
+  // Mapbox writes its own inline styles onto a custom marker element, so the label's
+  // pointer-events has to be set with priority or a drag started on a name would not pan the map.
+  el.style.setProperty('pointer-events', 'none', 'important');
+  return el;
+}
+
 /** GeoJSON polygon approximating a circle of `radiusKm` around (lng,lat). */
 function circleFeature(lng: number, lat: number, radiusKm: number, inRange: boolean): GeoJSON.Feature {
   const points = 64;
@@ -132,9 +164,14 @@ export function CoverageMapView() {
         features.push(circleFeature(lng, lat, r.dispatchRadiusKm, r.inRange === true));
         const marker = new mapboxgl.Marker({ color: r.inRange === false ? OUT : IN })
           .setLngLat([lng, lat])
-          .setPopup(new mapboxgl.Popup({ offset: 24, closeButton: false }).setText(r.name))
           .addTo(map);
         markersRef.current.push(marker);
+        // Anchored by its top edge at the same point, so it hangs just under the pin's tip.
+        markersRef.current.push(
+          new mapboxgl.Marker({ element: labelElement(r.name), anchor: 'top', offset: [0, 6] })
+            .setLngLat([lng, lat])
+            .addTo(map),
+        );
       }
 
       if (rider) {

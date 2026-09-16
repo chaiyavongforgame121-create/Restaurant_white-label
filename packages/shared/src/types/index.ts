@@ -85,6 +85,11 @@ export interface MenuItem {
   saleLabel?: string;
   /** True when the stock counter has run out, or the branch has 86'd the item by hand. */
   outOfStock?: boolean;
+  /**
+   * False for a dish the merchant has taken off sale — a fresh duplicate, or one switched off.
+   * Only the back office asks for these; the storefront query filters them out entirely.
+   */
+  isActive?: boolean;
 }
 
 export type OrderChannel = 'dine_in' | 'pickup' | 'delivery' | 'qr_ordering';

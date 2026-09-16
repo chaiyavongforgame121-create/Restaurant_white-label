@@ -15,12 +15,12 @@ export default async function MenuPage({ params }: Props) {
   // extra select for the whole page, not one per card.
   const [categories, items, stock] = await Promise.all([
     listCategories(supabase, branchId),
-    listMenuItems(supabase, branchId),
+    // Hidden dishes included: this is the screen where the merchant switches them back on.
+    listMenuItems(supabase, branchId, { includeInactive: true }),
     supabase
       .from('menu_items')
       .select('id, track_stock, stock_quantity, low_stock_threshold')
-      .eq('branch_id', branchId)
-      .eq('is_active', true),
+      .eq('branch_id', branchId),
   ]);
   return (
     <MenuManager
