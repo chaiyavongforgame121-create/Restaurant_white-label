@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { menuErrorKey } from './menu-errors';
+import { categoryDeleteErrorKey, menuErrorKey } from './menu-errors';
 
 describe('menuErrorKey', () => {
   it('maps permission failures from codes, RPC raises and RLS text', () => {
@@ -31,5 +31,22 @@ describe('menuErrorKey', () => {
     expect(menuErrorKey(undefined)).toBe('generic');
     expect(menuErrorKey({ code: 'XX000', message: 'internal error' })).toBe('generic');
     expect(menuErrorKey(new Error('something odd'))).toBe('generic');
+  });
+});
+
+describe('categoryDeleteErrorKey', () => {
+  it('maps the refusals delete_menu_category raises', () => {
+    expect(categoryDeleteErrorKey({ code: 'P0001', message: 'category_not_empty' })).toBe('notEmpty');
+    expect(categoryDeleteErrorKey({ code: 'P0001', message: 'invalid_move_target' })).toBe('invalidTarget');
+    expect(
+      categoryDeleteErrorKey({ code: 'P0001', message: 'category_used_by_happy_hour', details: 'Lunch deal' }),
+    ).toBe('usedByHappyHour');
+    expect(categoryDeleteErrorKey({ code: 'P0002', message: 'category_not_found' })).toBe('notFound');
+  });
+
+  it('leaves every other failure to menuErrorKey', () => {
+    expect(categoryDeleteErrorKey({ code: '42501', message: 'not_authorized' })).toBeNull();
+    expect(categoryDeleteErrorKey(new TypeError('Failed to fetch'))).toBeNull();
+    expect(categoryDeleteErrorKey(null)).toBeNull();
   });
 });

@@ -51,3 +51,25 @@ export function menuErrorKey(err: unknown): MenuErrorKey {
   }
   return 'generic';
 }
+
+/** Refusals of delete_menu_category that have their own sentence under `menu.categories.errors`. */
+export type CategoryDeleteErrorKey = 'notEmpty' | 'invalidTarget' | 'usedByHappyHour' | 'notFound';
+
+/**
+ * The key for a refused category delete, or null for any other failure (translate those with
+ * menuErrorKey). usedByHappyHour's sentence names the happy hours, which the function sends in
+ * the error's `details`.
+ */
+export function categoryDeleteErrorKey(err: unknown): CategoryDeleteErrorKey | null {
+  const message =
+    typeof err === 'string'
+      ? err
+      : err && typeof err === 'object' && typeof (err as { message?: unknown }).message === 'string'
+        ? ((err as { message: string }).message)
+        : '';
+  if (message.includes('category_not_empty')) return 'notEmpty';
+  if (message.includes('invalid_move_target')) return 'invalidTarget';
+  if (message.includes('category_used_by_happy_hour')) return 'usedByHappyHour';
+  if (message.includes('category_not_found')) return 'notFound';
+  return null;
+}
