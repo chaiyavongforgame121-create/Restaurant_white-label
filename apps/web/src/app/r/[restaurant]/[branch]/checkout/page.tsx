@@ -1,5 +1,5 @@
 import { getServerClient } from '@favornoms/database/server';
-import { resolveStorefrontStatus, resolveTenant } from '@/lib/tenant';
+import { resolveStorefrontStatus, resolveTenant, storefrontNames } from '@/lib/tenant';
 import { CheckoutView } from './_components/checkout-view';
 import { OrderTypeGate } from '../_components/order-type-gate';
 import { resolveScheduleDelivery } from '@/lib/schedule-delivery';
@@ -14,7 +14,7 @@ export default async function CheckoutPage({ params }: Props) {
   const tenant = await resolveTenant(restaurant, branch);
   const status = await resolveStorefrontStatus(tenant.branch.id);
   if (!status.entitled) {
-    return <SuspendedStorefront brandName={tenant.theme.brandName ?? tenant.restaurant.name} />;
+    return <SuspendedStorefront brandName={storefrontNames(tenant).full} />;
   }
   // Sales tax is a branches COLUMN, not a settings key, so resolveTenant does not
   // carry it. Read it here: the summary must show the tax place-order will charge

@@ -131,9 +131,10 @@ export function ImageUpload({
   const put = async (body: Blob | File, ext: string, contentType?: string) => {
     const supabase = getBrowserClient();
     const path = `${restaurantId}/${folder}-${crypto.randomUUID()}.${ext}`;
+    // No upsert: the path is always new, and upserting needs UPDATE, which managers do not have.
     const { error: upErr } = await supabase.storage
       .from('branding')
-      .upload(path, body, { upsert: true, cacheControl: '3600', ...(contentType ? { contentType } : {}) });
+      .upload(path, body, { upsert: false, cacheControl: '3600', ...(contentType ? { contentType } : {}) });
     if (upErr) throw storageUploadError(upErr);
     return supabase.storage.from('branding').getPublicUrl(path).data.publicUrl;
   };

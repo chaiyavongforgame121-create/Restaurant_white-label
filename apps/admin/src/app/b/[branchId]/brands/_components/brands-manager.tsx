@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { ExternalLink, Palette, Plus, Save, Settings, Star } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
+import type { Json } from '@favornoms/database/types';
 import {
   DEFAULT_UI_LOCALE,
   canAddBranch,
@@ -22,6 +23,7 @@ import { Badge, Button, Card, IconButton } from '@favornoms/ui';
 import { ImageUpload } from '@/components/image-upload';
 import { IconUpload, type IconSet } from '@/components/icon-upload';
 import { parseIconStyle, type IconStyle } from '@/components/icon-geometry';
+import { storefrontAppName } from '../../branch/_components/branding-card';
 
 interface Brand {
   id: string;
@@ -48,9 +50,18 @@ interface BranchRow {
   storefront_url: string | null;
 }
 
+/** What the Create brand button inserts, worked out by the page from the restaurant row. */
+interface NewBrandSeed {
+  /** Merchant text (the restaurant's name), stored as brands.name, so never translated. */
+  name: string;
+  /** The restaurant's own theme (restaurants.brand_settings without brandName and logoUrl). */
+  theme: Record<string, unknown>;
+}
+
 interface Props {
   restaurantId: string;
   restaurantName: string;
+  newBrand: NewBrandSeed;
   loyaltyScope: 'branch' | 'brand';
   currentBranchId: string;
   brands: Brand[];
@@ -62,6 +73,9 @@ interface Props {
 const slugify = (s: string) =>
   s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 64);
 
+const BRAND_COLUMNS =
+  'id, slug, name, theme, logo_url, favicon_url, icon_192_url, icon_512_url, icon_maskable_512_url, is_default, created_at';
+
 /** A database error in words a merchant can use; the raw text only goes to the console. */
 function dbErrorKey(err: { message: string; code?: string }): 'errors.permissionDenied' | 'errors.generic' {
   console.error(err.message);
@@ -71,6 +85,7 @@ function dbErrorKey(err: { message: string; code?: string }): 'errors.permission
 export function BrandsManager({
   restaurantId,
   restaurantName,
+  newBrand,
   loyaltyScope: initialScope,
   currentBranchId,
   brands: initialBrands,
@@ -91,16 +106,87 @@ export function BrandsManager({
   const [storeSaving, setStoreSaving] = React.useState(false);
   const [storeSaved, setStoreSaved] = React.useState(false);
   const [addingBranch, setAddingBranch] = React.useState(false);
+  const [creatingBrand, setCreatingBrand] = React.useState(false);
+  const [createBrandError, setCreateBrandError] = React.useState<string | null>(null);
 
-  const refresh = async () => {
+  /** The restaurant's brands as the database has them now, or null when the read failed. */
+  const loadBrands = async (): Promise<Brand[] | null> => {
     const supabase = getBrowserClient();
-    const { data } = await supabase
+    const { data, error: readErr } = await supabase
       .from('brands')
-      .select('id, slug, name, theme, logo_url, favicon_url, icon_192_url, icon_512_url, icon_maskable_512_url, is_default, created_at')
+      .select(BRAND_COLUMNS)
       .eq('restaurant_id', restaurantId)
       .order('is_default', { ascending: false })
       .order('created_at', { ascending: true });
-    if (data) setBrands(data as Brand[]);
+    if (readErr) {
+      console.error(readErr.message);
+      return null;
+    }
+    return (data ?? []) as unknown as Brand[];
+  };
+
+  const refresh = async () => {
+    const next = await loadBrands();
+    if (next) setBrands(next);
+  };
+
+  /**
+   * The restaurant's one brand, for a restaurant that has none. Nothing else creates it:
+   * create_restaurant_with_branch never inserts a brands row, and the Branding card on Branch
+   * settings writes only its own branch (20260917150000_branch_own_identity). RLS
+   * (brands_default_brand_insert) lets the owner or a brand.edit holder insert the first brand
+   * and refuses any second one, so pressing this twice, or in two tabs, cannot make two.
+   */
+  const createBrand = async () => {
+    setCreatingBrand(true);
+    setCreateBrandError(null);
+    const supabase = getBrowserClient();
+    const name = newBrand.name.trim();
+    // A Thai or Vietnamese name has no a-z to make a slug from. The slug is only an identifier the
+    // editor lets the owner change, so a taken one is retried once with part of this restaurant's
+    // id rather than stopping the owner at a field they never saw.
+    const base = slugify(name) || 'brand';
+    const slugs = [base, `${base.slice(0, 55)}-${restaurantId.replace(/-/g, '').slice(0, 8)}`];
+    let failure: { message: string; code?: string } | null = null;
+    for (const slug of slugs) {
+      const { data, error: insErr } = await supabase
+        .from('brands')
+        .insert({
+          restaurant_id: restaurantId,
+          name,
+          slug,
+          is_default: true,
+          theme: newBrand.theme as Json,
+        })
+        .select(BRAND_COLUMNS)
+        .single();
+      if (!insErr && data) {
+        const created = data as unknown as Brand;
+        setCreatingBrand(false);
+        setBrands([created]);
+        setEditing(created);
+        router.refresh();
+        return;
+      }
+      failure = insErr;
+      if (!(insErr?.code === '23505' && insErr.message.includes('slug'))) break;
+    }
+
+    // Refused. The usual reason is that the brand exists already (another tab or another owner
+    // made it first), which RLS reports as 42501, exactly like a missing permission. Look before
+    // blaming the role, and open the brand that is there.
+    const current = await loadBrands();
+    setCreatingBrand(false);
+    if (current && current.length > 0) {
+      setBrands(current);
+      setEditing(current[0] ?? null);
+      router.refresh();
+      return;
+    }
+    if (failure) console.error(failure.message);
+    setCreateBrandError(
+      failure?.code === '42501' ? t('brandList.errors.notAllowed') : t('errors.generic'),
+    );
   };
 
   const saveScope = async (next: 'branch' | 'brand') => {
@@ -370,21 +456,40 @@ export function BrandsManager({
             </Card>
           );
         })}
-        {/* A restaurant starts with no brands row at all — create_restaurant_with_branch
-            writes restaurants.brand_settings and never a brand — so the first one is minted
-            by the Branding card on Branch settings. Say where, or this reads as a dead end. */}
+        {/* A restaurant starts with no brands row at all (create_restaurant_with_branch writes
+            restaurants.brand_settings and never a brand), and nothing else makes one now that the
+            Branding card writes only its own branch, so the first brand is created here. Until
+            then storefronts take the brand half of their name from restaurants.name. */}
         {brands.length === 0 && (
-          <Card className="p-6 text-center text-sm text-muted-foreground">
-            {t.rich('brandList.empty', {
-              link: (chunks) => (
-                <Link
-                  href={`/b/${currentBranchId}/branch`}
-                  className="font-medium text-primary hover:underline"
-                >
-                  {chunks}
-                </Link>
-              ),
-            })}
+          <Card className="space-y-3 p-6 text-center text-sm text-muted-foreground">
+            <p className="font-display text-lg font-semibold text-foreground">{t('brandList.emptyTitle')}</p>
+            <p>
+              {t.rich('brandList.empty', {
+                link: (chunks) => (
+                  <Link
+                    href={`/b/${currentBranchId}/branch`}
+                    className="font-medium text-primary hover:underline"
+                  >
+                    {chunks}
+                  </Link>
+                ),
+              })}
+            </p>
+            <p className="text-xs">{t('brandList.createHint', { name: newBrand.name })}</p>
+            {createBrandError && (
+              <p className="rounded-xl bg-destructive/10 px-4 py-3 text-destructive">{createBrandError}</p>
+            )}
+            <div className="flex justify-center">
+              <Button
+                variant="gradient"
+                onClick={createBrand}
+                loading={creatingBrand}
+                disabled={!newBrand.name.trim()}
+                leftIcon={<Plus className="h-4 w-4" />}
+              >
+                {t('brandList.create')}
+              </Button>
+            </div>
           </Card>
         )}
       </div>
@@ -825,13 +930,23 @@ function BrandEditor({
   );
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  // The brand name is the first half of every branch's storefront name, so the hint shows it
+  // joined to a real branch rather than describing the rule in the abstract — one named
+  // differently from the brand, or the example collapses to the brand alone.
+  const exampleBranch =
+    branches.find((b) => b.name.trim().toLocaleLowerCase() !== name.trim().toLocaleLowerCase())?.name ??
+    branches[0]?.name;
+  const exampleName = storefrontAppName(name || t('editor.nameFallback'), exampleBranch);
 
   const save = async () => {
     setSaving(true);
     setError(null);
     try {
       const supabase = getBrowserClient();
-      const theme: Record<string, unknown> = { ...brand.theme, primaryColor, accentColor, brandName: name };
+      // No theme.brandName: brands.name is the one source of the brand's name, and a copy in the
+      // theme is what a branch name once overwrote. Saving clears a stale one.
+      const theme: Record<string, unknown> = { ...brand.theme, primaryColor, accentColor };
+      delete theme.brandName;
       // appIcon travels with the icon files it describes, and leaves with them.
       if (iconStyle && icons.icon512Url) theme.appIcon = iconStyle;
       else delete theme.appIcon;
@@ -912,6 +1027,9 @@ function BrandEditor({
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label={t('editor.name')}>
             <input value={name} onChange={(e) => setName(e.target.value)} className="input" />
+            <span className="mt-1 block text-xs text-muted-foreground">
+              {t('editor.nameHint', { example: exampleName })}
+            </span>
           </Field>
           <Field label={t('editor.slug')}>
             <input
@@ -937,6 +1055,9 @@ function BrandEditor({
               className="h-12 w-full rounded-xl border border-border bg-background"
             />
           </Field>
+          {/* The brand's logo and icon are only the fallback for a branch with none of its own:
+              every branch owns its identity (20260917150000_branch_own_identity) and uploads it
+              under its own Branch settings, so changing these never repaints a branch that has. */}
           <div className="sm:col-span-2">
             <Field label={t('editor.logo')}>
               <ImageUpload
@@ -949,6 +1070,7 @@ function BrandEditor({
                 label={t('editor.uploadLogo')}
               />
             </Field>
+            <p className="mt-1.5 text-xs text-muted-foreground">{t('editor.logoHint')}</p>
           </div>
           <div className="sm:col-span-2">
             {/* Kept separate from the logo rather than derived from it: the logo is
@@ -973,7 +1095,10 @@ function BrandEditor({
                   <div className="mt-3 flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-2.5 py-1.5">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={icons.faviconUrl} alt="" className="h-4 w-4 rounded-sm object-cover" />
-                    <span className="truncate text-foreground">{name || t('editor.tabFallback')}</span>
+                    {/* The brand alone, never joined to a branch: a branch with an icon of its own
+                        does not show this one, so pairing it with a real branch name could preview
+                        a tab that no storefront has. */}
+                    <span className="truncate text-foreground">{name.trim() || t('editor.tabFallback')}</span>
                   </div>
                 )}
               </div>

@@ -28,33 +28,56 @@ export type PendingCartAdd =
     }
   | { kind: 'combo'; branchId: string; combo: ComboPick; quantity: number };
 
-const KEY = 'favornoms-pending-add-v1';
+/**
+ * One slot per branch, like the cart it feeds. A line parked at one branch is only ever
+ * replayed there: a sign-in that ends on another storefront neither drops it into that
+ * branch's cart nor throws it away.
+ */
+const pendingAddKey = (branchId: string) => `favornoms-pending-add-v2:${branchId}`;
+
+/** The single slot every storefront used to share. Taken only by the branch it was parked at. */
+const LEGACY_KEY = 'favornoms-pending-add-v1';
 
 export function stashPendingAdd(pending: PendingCartAdd): void {
   try {
-    sessionStorage.setItem(KEY, JSON.stringify(pending));
+    sessionStorage.setItem(pendingAddKey(pending.branchId), JSON.stringify(pending));
   } catch {
     // Private mode / storage disabled — the diner just re-picks, same as before.
   }
 }
 
-/** Read and clear in one step: a replay must never be able to run twice. */
-export function takePendingAdd(): PendingCartAdd | null {
+function parsePendingAdd(raw: string | null, branchId: string): PendingCartAdd | null {
+  if (!raw) return null;
   try {
-    const raw = sessionStorage.getItem(KEY);
-    if (!raw) return null;
-    sessionStorage.removeItem(KEY);
-    const parsed = JSON.parse(raw) as PendingCartAdd;
+    const parsed = JSON.parse(raw) as PendingCartAdd | null;
     if (parsed?.kind !== 'item' && parsed?.kind !== 'combo') return null;
-    return parsed;
+    return parsed.branchId === branchId ? parsed : null;
   } catch {
     return null;
   }
 }
 
-export function clearPendingAdd(): void {
+/** Read and clear this branch's parked add in one step: a replay must never be able to run twice. */
+export function takePendingAdd(branchId: string): PendingCartAdd | null {
   try {
-    sessionStorage.removeItem(KEY);
+    const key = pendingAddKey(branchId);
+    const raw = sessionStorage.getItem(key);
+    if (raw) {
+      sessionStorage.removeItem(key);
+      return parsePendingAdd(raw, branchId);
+    }
+    // Parked by the build before per-branch slots, mid sign-in across a deploy.
+    const legacy = parsePendingAdd(sessionStorage.getItem(LEGACY_KEY), branchId);
+    if (legacy) sessionStorage.removeItem(LEGACY_KEY);
+    return legacy;
+  } catch {
+    return null;
+  }
+}
+
+export function clearPendingAdd(branchId: string): void {
+  try {
+    sessionStorage.removeItem(pendingAddKey(branchId));
   } catch {
     /* ignore */
   }

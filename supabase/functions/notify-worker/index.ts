@@ -40,12 +40,57 @@ const MAX_ATTEMPTS = 5;
 
 interface OutboxRow {
   id: string;
+  /** Which branch the message is about. Written by every enqueue site that has one. */
+  branch_id: string | null;
   channel: string;
   recipient_type: string;
   recipient_id: string;
   template: string;
   variables: Record<string, unknown>;
   attempts: number;
+}
+
+/** Where an order lives on the storefront, and which branch it belongs to. */
+interface OrderRoute {
+  path: string | null;
+  branchId: string | null;
+}
+
+/** What a branch's storefront is called and looks like, as its installed app shows it. */
+interface StorefrontIdentity {
+  /** "<brand> - <branch>", or one of the two when they are the same. */
+  name: string;
+  /** /r/<restaurant>/<branch> */
+  path: string | null;
+  /**
+   * The branch's app icon (192px, else 512px), else its brand's, else the restaurant's default
+   * brand's. Only ever an https URL.
+   */
+  icon: string | null;
+}
+
+/** The parts of a brand row a notification wears. */
+interface BrandIdentityRow {
+  name?: string | null;
+  icon_192_url?: string | null;
+  icon_512_url?: string | null;
+}
+
+/**
+ * Variables only this worker derives. Whoever can queue a row controls `variables`, so a row that
+ * arrives carrying one of these is not believed: they are dropped and resolved from the database.
+ */
+const DERIVED_VARS = ['order_path', 'storefront_name', 'storefront_path', 'storefront_icon'] as const;
+
+/**
+ * Lookups shared by the rows of ONE invocation: a batch is usually many notifications about a
+ * handful of orders. Built per request rather than at module scope, because a warm isolate
+ * serves many invocations and a renamed brand or a new icon must not wait for a cold start.
+ * Promises rather than values so rows dispatched concurrently share one query.
+ */
+interface Lookups {
+  orders: Map<string, Promise<OrderRoute | null>>;
+  branches: Map<string, Promise<StorefrontIdentity | null>>;
 }
 
 interface PushSub {
@@ -66,7 +111,7 @@ Deno.serve(async (req) => {
 
   const { data: rows, error } = await supabase
     .from('notifications_outbox')
-    .select('id, channel, recipient_type, recipient_id, template, variables, attempts')
+    .select('id, branch_id, channel, recipient_type, recipient_id, template, variables, attempts')
     .in('status', ['pending', 'failed'])
     .lte('scheduled_for', new Date().toISOString())
     .lt('attempts', MAX_ATTEMPTS)
@@ -75,10 +120,11 @@ Deno.serve(async (req) => {
 
   if (error) return json({ error: error.message }, 500);
 
+  const lookups: Lookups = { orders: new Map(), branches: new Map() };
   const results = await Promise.all(
     (rows ?? []).map(async (row: OutboxRow) => {
       try {
-        await dispatch(supabase, row);
+        await dispatch(supabase, row, lookups);
         await supabase
           .from('notifications_outbox')
           .update({ status: 'sent', sent_at: new Date().toISOString() })
@@ -109,18 +155,22 @@ Deno.serve(async (req) => {
 async function dispatch(
   supabase: ReturnType<typeof createClient>,
   row: OutboxRow,
+  lookups: Lookups,
 ) {
+  // Nothing is delivered for in_app (staff and drivers read the outbox themselves), so there is
+  // nothing to render and no reason to look anything up for it.
+  if (row.channel === 'in_app') return;
+
   // Every order notification used to deep-link to `/orders/{uuid}`, which does not exist:
   // the customer app serves orders at /r/{restaurant}/{branch}/orders/{order_number} —
   // wrong prefix AND wrong identifier. So every "your order is ready" push landed on a
   // 404. The slugs are not in `variables` (the DB triggers never wrote them), so they are
   // resolved here, once per row, before anything is rendered. Doing it here rather than in
-  // the triggers also repairs rows already sitting in the queue.
-  row = { ...row, variables: await enrichVars(supabase, row.variables) };
+  // the triggers also repairs rows already sitting in the queue. The storefront's name and
+  // icon are resolved the same way, for the same reasons.
+  row = { ...row, variables: await enrichVars(supabase, row, lookups) };
 
   switch (row.channel) {
-    case 'in_app':
-      return;
     case 'sms':
       await sendSms(supabase, row);
       return;
@@ -189,7 +239,12 @@ function renderEmailHtml(template: string, vars: Record<string, unknown>): strin
 
   // Per-template body. Falls back to renderTemplate() if no rich template.
   const orderNum = escapeHtml(String(vars.order_number ?? ''));
-  const branchName = escapeHtml(String(vars.branch_name ?? 'your restaurant'));
+  // "Coastal Grill - Hamburger", as the storefront names itself: a diner who orders from two
+  // branches of one restaurant cannot tell the emails apart by the branch name alone, and the
+  // platform's name in the header was never the restaurant they ordered from.
+  const storefront = storefrontLabel(vars);
+  const branchName = escapeHtml(storefront ?? 'your restaurant');
+  const headerName = escapeHtml(storefront ?? 'Favornoms');
   const eta = String(vars.eta_minutes ?? 30);
   const total = vars.total ? `$${Number(vars.total).toFixed(2)}` : null;
   const distanceMi = vars.distance_km ? Number(vars.distance_km).toFixed(1) : null;
@@ -255,7 +310,7 @@ function renderEmailHtml(template: string, vars: Record<string, unknown>): strin
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,sans-serif;background:#faf6f2;margin:0;padding:24px;color:#1a1a1a">
   <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:20px;padding:0;box-shadow:0 4px 24px rgba(0,0,0,0.06);overflow:hidden">
     <div style="background:linear-gradient(135deg,#FF6B35,#F7B538);padding:28px 32px;color:#fff">
-      <p style="margin:0;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;opacity:0.9">Favornoms · ${branchName}</p>
+      <p style="margin:0;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;opacity:0.9">${headerName}</p>
       <h1 style="margin:8px 0 0;font-size:24px;font-weight:800;line-height:1.25">${escapeHtml(title)}</h1>
     </div>
     <div style="padding:32px">
@@ -327,19 +382,42 @@ async function sendPush(
   if (subErr) throw new Error(`sub_lookup_${subErr.code ?? 'err'}`);
   if (!subs || subs.length === 0) throw new Error('no_subscriptions');
 
+  // A diner's notifications speak as the storefront. Every branch of a restaurant on one host
+  // shares one service worker, so a device has one push subscription for all of them, and the
+  // customer row is shared by the restaurant's branches too: the platform's name and icon could
+  // not say whether this update came from the Hamburger branch or the Food Thai Thai one. The title is the
+  // storefront's name and the body says what happened (every order body already stands on its
+  // own). Drivers and staff are not diners of a storefront: their titles are unchanged, and the
+  // driver app's worker ignores the icon anyway.
+  const storefront = row.recipient_type === 'customer' ? cleanName(row.variables.storefront_name) : null;
+  const icon =
+    row.recipient_type === 'customer' && typeof row.variables.storefront_icon === 'string'
+      ? row.variables.storefront_icon
+      : null;
+  const orderId = typeof row.variables.order_id === 'string' ? row.variables.order_id : null;
+
   const payload = JSON.stringify({
-    title: renderTitle(row.template, row.variables),
-    body: renderTemplate(row.template, row.variables),
+    title: storefront ?? renderTitle(row.template, row.variables),
+    body: storefront
+      ? renderStorefrontPushBody(row.template, row.variables)
+      : renderTemplate(row.template, row.variables),
     url: renderUrl(row.template, row.variables),
+    ...(icon ? { icon } : {}),
     // One tag per template meant every dispatch offer carried the constant tag 'new_dispatch',
     // and a notification whose tag is already on the shade REPLACES it in silence — no sound,
     // no vibration, no banner. Offer #2 arrived invisibly while offer #1 was still showing, and
-    // the rider lost the work. Give each offer its own tag; order-status templates keep
-    // collapsing onto one, which is what you want there.
+    // the rider lost the work. Give each offer its own tag.
+    //
+    // The same was true of orders: "Delivered" for an order from one branch silently replaced
+    // "Delivered" for an order from another. Order notifications now collapse per ORDER — a
+    // repeat about the same order still replaces its predecessor, and each status of one order
+    // already has a tag of its own because the template differs.
     tag:
       row.template === 'new_dispatch' && typeof row.variables.delivery_id === 'string'
         ? `new_dispatch:${row.variables.delivery_id}`
-        : row.template,
+        : orderId
+          ? `${row.template}:${orderId}`
+          : row.template,
   });
 
   let okCount = 0;
@@ -382,54 +460,204 @@ function renderTitle(template: string, vars: Record<string, unknown>) {
   return dict[template] ?? template;
 }
 
-/** Resolve the storefront slugs an order URL needs. Cached for the lifetime of the
- *  invocation: a batch is usually many notifications about a handful of orders. */
-const orderPathCache = new Map<string, string | null>();
-
+/**
+ * Adds what the rendered message needs and the queued row does not carry:
+ *  - order_path: the order's page on its storefront (see dispatch()).
+ *  - storefront_name / storefront_path / storefront_icon: the branch's identity.
+ *
+ * The identity comes from the row's branch_id column whenever it has one. `variables.order_id`
+ * is whatever the enqueuer wrote, so it only lends the message a link when the order really
+ * belongs to that same branch; an order from anywhere else is ignored for the name, the icon and
+ * the links alike. Otherwise anyone able to queue a row for their own branch could send a push
+ * dressed as another restaurant, just by naming one of its orders. Only a row with no branch_id
+ * (a legacy trigger's) takes its branch from the order.
+ *
+ * A failed lookup never stops a notification: it goes out without the missing piece.
+ */
 async function enrichVars(
   supabase: ReturnType<typeof createClient>,
-  vars: Record<string, unknown>,
+  row: OutboxRow,
+  lookups: Lookups,
 ): Promise<Record<string, unknown>> {
+  const vars: Record<string, unknown> = { ...(row.variables ?? {}) };
+  for (const key of DERIVED_VARS) delete vars[key];
+
   const orderId = typeof vars.order_id === 'string' ? vars.order_id : null;
-  if (!orderId || vars.order_path) return vars;
+  const route = orderId
+    ? await cached(lookups.orders, orderId, () => loadOrderRoute(supabase, orderId))
+    : null;
+  const orderRoute = route && (!row.branch_id || route.branchId === row.branch_id) ? route : null;
+  const branchId = row.branch_id ?? orderRoute?.branchId ?? null;
 
-  if (!orderPathCache.has(orderId)) {
-    let path: string | null = null;
-    try {
-      const { data } = await supabase
-        .from('orders')
-        .select('order_number, branches(slug, restaurants(slug))')
-        .eq('id', orderId)
-        .maybeSingle();
-      const row = data as {
-        order_number?: string;
-        branches?: { slug?: string; restaurants?: { slug?: string } | { slug?: string }[] } | null;
-      } | null;
-      const branch = row?.branches ?? null;
-      const restaurant = Array.isArray(branch?.restaurants) ? branch?.restaurants[0] : branch?.restaurants;
-      if (row?.order_number && branch?.slug && restaurant?.slug) {
-        path = `/r/${restaurant.slug}/${branch.slug}/orders/${row.order_number}`;
-      }
-    } catch {
-      // A failed lookup must never stop the notification going out — it just falls back
-      // to the app root rather than a deep link.
-      path = null;
+  if (orderRoute?.path) vars.order_path = orderRoute.path;
+
+  if (branchId) {
+    const identity = await cached(lookups.branches, branchId, () => loadStorefrontIdentity(supabase, branchId));
+    if (identity) {
+      vars.storefront_name = identity.name;
+      if (identity.path) vars.storefront_path = identity.path;
+      if (identity.icon) vars.storefront_icon = identity.icon;
     }
-    orderPathCache.set(orderId, path);
   }
+  return vars;
+}
 
-  const resolved = orderPathCache.get(orderId) ?? null;
-  return resolved ? { ...vars, order_path: resolved } : vars;
+function cached<T>(map: Map<string, Promise<T>>, key: string, load: () => Promise<T>): Promise<T> {
+  let hit = map.get(key);
+  if (!hit) {
+    hit = load();
+    map.set(key, hit);
+  }
+  return hit;
+}
+
+async function loadOrderRoute(
+  supabase: ReturnType<typeof createClient>,
+  orderId: string,
+): Promise<OrderRoute | null> {
+  try {
+    const { data } = await supabase
+      .from('orders')
+      .select('order_number, branch_id, branches(slug, restaurants(slug))')
+      .eq('id', orderId)
+      .maybeSingle();
+    const row = data as {
+      order_number?: string;
+      branch_id?: string | null;
+      branches?: { slug?: string; restaurants?: { slug?: string } | { slug?: string }[] } | null;
+    } | null;
+    if (!row) return null;
+    const branch = row.branches ?? null;
+    const restaurant = Array.isArray(branch?.restaurants) ? branch?.restaurants[0] : branch?.restaurants;
+    return {
+      path: row.order_number && branch?.slug && restaurant?.slug
+        ? `/r/${restaurant.slug}/${branch.slug}/orders/${row.order_number}`
+        : null,
+      branchId: row.branch_id ?? null,
+    };
+  } catch {
+    // A failed lookup must never stop the notification going out — it just falls back
+    // to the storefront's root, or the app root, rather than a deep link.
+    return null;
+  }
+}
+
+/**
+ * The branch's storefront name and icon, resolved the way the storefront resolves them.
+ *  - Name: the brand the branch is linked to, else the restaurant's default brand (the one-brand-
+ *    per-restaurant invariant makes that THE brand), else the restaurant's own name.
+ *  - Icon: the branch's own (192, else 512), else the linked brand's, else the default brand's.
+ * Brands are only ever read within the branch's own restaurant. The database now refuses a
+ * brand_id that points at another restaurant's brand, but a row linked before that rule would
+ * otherwise still lend that restaurant's name and icon to this branch's messages.
+ */
+async function loadStorefrontIdentity(
+  supabase: ReturnType<typeof createClient>,
+  branchId: string,
+): Promise<StorefrontIdentity | null> {
+  try {
+    const { data } = await supabase
+      .from('branches')
+      .select('name, slug, brand_id, icon_192_url, icon_512_url, restaurant_id, restaurants(name, slug)')
+      .eq('id', branchId)
+      .maybeSingle();
+    const b = data as {
+      name?: string | null;
+      slug?: string | null;
+      brand_id?: string | null;
+      icon_192_url?: string | null;
+      icon_512_url?: string | null;
+      restaurant_id?: string | null;
+      restaurants?: { name?: string | null; slug?: string | null } | { name?: string | null; slug?: string | null }[] | null;
+    } | null;
+    if (!b) return null;
+    const restaurant = Array.isArray(b.restaurants) ? b.restaurants[0] : b.restaurants;
+
+    let linked: BrandIdentityRow | null = null;
+    if (b.brand_id && b.restaurant_id) {
+      const { data: row } = await supabase
+        .from('brands')
+        .select('name, icon_192_url, icon_512_url')
+        .eq('id', b.brand_id)
+        .eq('restaurant_id', b.restaurant_id)
+        .maybeSingle();
+      linked = row as BrandIdentityRow | null;
+    }
+
+    let brandName = cleanName(linked?.name);
+    let icon = appIcon(b) ?? appIcon(linked);
+    if ((!brandName || !icon) && b.restaurant_id) {
+      const { data: defaults } = await supabase
+        .from('brands')
+        .select('name, icon_192_url, icon_512_url')
+        .eq('restaurant_id', b.restaurant_id)
+        .order('is_default', { ascending: false })
+        .order('created_at', { ascending: true })
+        .limit(1);
+      const fallback = (defaults as BrandIdentityRow[] | null)?.[0] ?? null;
+      brandName ??= cleanName(fallback?.name);
+      icon ??= appIcon(fallback);
+    }
+    brandName ??= cleanName(restaurant?.name);
+
+    const name = storefrontDisplayName(brandName, cleanName(b.name));
+    if (!name) return null;
+    return {
+      name,
+      path: restaurant?.slug && b.slug ? `/r/${restaurant.slug}/${b.slug}` : null,
+      icon,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** A branch's or brand's installed-app icon: the 192px one, else the 512px one, https only. */
+function appIcon(source: { icon_192_url?: string | null; icon_512_url?: string | null } | null): string | null {
+  return httpsUrl(source?.icon_192_url) ?? httpsUrl(source?.icon_512_url);
+}
+
+function cleanName(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+/**
+ * "<brand> - <branch>" with an ASCII hyphen, as the storefront names itself. One of the two
+ * when they are the same (a single-branch restaurant often names its branch after itself) or
+ * when one is missing.
+ */
+function storefrontDisplayName(brand: string | null, branch: string | null): string | null {
+  if (!brand || !branch) return brand ?? branch;
+  if (brand.toLocaleLowerCase() === branch.toLocaleLowerCase()) return brand;
+  return `${brand} - ${branch}`;
+}
+
+function httpsUrl(value: unknown): string | null {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  try {
+    const u = new URL(value.trim());
+    return u.protocol === 'https:' ? u.href : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The storefront's name for a message, falling back to the branch name a trigger wrote. */
+function storefrontLabel(vars: Record<string, unknown>): string | null {
+  return cleanName(vars.storefront_name) ?? cleanName(vars.branch_name);
 }
 
 function renderUrl(template: string, vars: Record<string, unknown>) {
-  // order_path is set by enrichVars(); '/' is the honest fallback when the order could
-  // not be resolved, and is at least a page that exists.
+  // order_path is set by enrichVars(). When the order could not be resolved, the storefront's
+  // own root keeps the diner inside the branch the message is about; '/' is the last resort,
+  // and is at least a page that exists.
   const orderPath = typeof vars.order_path === 'string' ? vars.order_path : null;
-  if (template.startsWith('order_')) return orderPath ?? '/';
-  if (template === 'driver_assigned') return orderPath ?? '/';
+  const storefrontPath = typeof vars.storefront_path === 'string' ? vars.storefront_path : null;
+  const customerFallback = storefrontPath ?? '/';
+  if (template.startsWith('order_')) return orderPath ?? customerFallback;
+  if (template === 'driver_assigned') return orderPath ?? customerFallback;
   if (template === 'new_message') {
-    return (vars.sender as string) === 'driver' ? (orderPath ?? '/') : '/app/active';
+    return (vars.sender as string) === 'driver' ? (orderPath ?? customerFallback) : '/app/active';
   }
   // The driver app has no page at /app — only /app/home and its siblings — so the most
   // time-critical notification in the product opened a 404.
@@ -450,7 +678,7 @@ function renderTemplate(template: string, vars: Record<string, unknown>) {
         : 'New message';
   const dict: Record<string, string> = {
     order_confirmed: `Order ${vars.order_number} confirmed. ETA ${vars.eta_minutes ?? 30} min.`,
-    order_ready_pickup: `Order ${vars.order_number} is ready for pickup at ${vars.branch_name}.`,
+    order_ready_pickup: `Order ${vars.order_number} is ready for pickup at ${storefrontLabel(vars) ?? 'the restaurant'}.`,
     order_out_for_delivery: `Order ${vars.order_number} is on the way!`,
     order_delivered: `Order ${vars.order_number} delivered. Enjoy!`,
     driver_assigned: `A driver has taken your order ${vars.order_number}${vars.eta_minutes ? ` — about ${vars.eta_minutes} min away` : ''}.`,
@@ -465,6 +693,20 @@ function renderTemplate(template: string, vars: Record<string, unknown>) {
     promo: (vars.body as string) ?? '',
   };
   return dict[template] ?? `${template}: ${JSON.stringify(vars).slice(0, 200)}`;
+}
+
+/**
+ * The body of a diner's push when the title is the storefront's name. Every order template's
+ * body already says what happened; a promotion's does not — its headline was the title — so it
+ * leads the body instead of being lost.
+ */
+function renderStorefrontPushBody(template: string, vars: Record<string, unknown>) {
+  if (template === 'promo') {
+    const headline = cleanName(vars.title);
+    const text = cleanName(vars.body);
+    return headline && text ? `${headline}: ${text}` : (headline ?? text ?? '');
+  }
+  return renderTemplate(template, vars);
 }
 
 function json(body: unknown, status = 200) {

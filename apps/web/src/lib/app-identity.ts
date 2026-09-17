@@ -7,27 +7,49 @@
  */
 
 export interface StorefrontNames {
-  /** What the merchant set as the App name under Branding, else the restaurant's own name. */
+  /** The brand's name (the brands row), else the restaurant's own name. */
   brand: string;
   /** This branch. */
   branch: string;
-  /** Brand and branch together — the browser tab and the share card, where there is room. */
+  /**
+   * What this storefront is called: "<brand> - <branch>", e.g. "Coastal Grill - Hamburger" —
+   * the browser tab, the header, the share card, the account and sign-in pages, the receipt.
+   * An ASCII hyphen between spaces, because that is how the owner writes it and it survives
+   * every launcher, font and share sheet an em dash does not.
+   *
+   * Just one of the two when they are the same name (a restaurant whose only branch is called
+   * what the brand is) or when either is blank, so nothing ever reads "Somtam Zab - Somtam Zab"
+   * or " - Hamburger".
+   */
   full: string;
   /**
-   * The installed app's name, everywhere an app is named: Chrome's install dialog, the
-   * desktop shortcut, the Android launcher label, iOS's home screen and our own install card.
+   * The installed app's name wherever there is room for it: Chrome's install dialog, the desktop
+   * shortcut, the manifest `name`, <meta name="application-name"> and our own install card.
    *
-   * It is the brand alone. It used to be `full` in the manifest's `name` and the brand in
-   * `short_name`, so Chrome's dialog and the Windows shortcut said "Coastal Grill — Hamburger"
-   * while Android said "Coastal Grill" — and neither was a thing the merchant had typed as one
-   * name. The Branding card previews exactly this string.
+   * It is `full`. It used to be the brand alone, so two branches of one restaurant installed as
+   * two apps with the same name (and, before branches had icons of their own, the same icon) —
+   * a customer could not tell which one ordered from which kitchen.
    */
   app: string;
+  /**
+   * The label under a home-screen icon: the manifest `short_name` and iOS's
+   * apple-mobile-web-app-title.
+   *
+   * It is `full` too, because the owner wants "<brand> - <branch>" on every surface, the
+   * home screen included. Launchers may cut a long label down (roughly 12 characters on Android,
+   * so two branches can both read "Coastal Gril…"); that is accepted. It was briefly the branch
+   * name alone for a restaurant with several branches, which put a label on the home screen that
+   * named no restaurant at all.
+   */
+  short: string;
 }
 
 /**
- * `||` rather than `??`, after trimming: an empty or blank brand name is as absent as a missing
- * one, and letting it through produced " — Hamburger".
+ * `||` rather than `??`, after trimming: an empty or blank name is as absent as a missing one,
+ * and letting it through produced " - Hamburger".
+ *
+ * Depends on the three names alone — nothing about the restaurant's other branches — so a branch
+ * being added or retired never renames an app somebody already installed.
  */
 export function deriveStorefrontNames(input: {
   brandName?: string | null;
@@ -36,12 +58,9 @@ export function deriveStorefrontNames(input: {
 }): StorefrontNames {
   const brand = input.brandName?.trim() || input.restaurantName?.trim() || '';
   const branch = input.branchName?.trim() || '';
-  return {
-    brand,
-    branch,
-    full: branch && brand ? `${brand} — ${branch}` : brand || branch,
-    app: brand || branch,
-  };
+  const sameName = brand.toLowerCase() === branch.toLowerCase();
+  const full = brand && branch && !sameName ? `${brand} - ${branch}` : brand || branch;
+  return { brand, branch, full, app: full, short: full };
 }
 
 export type AppIconVariant = '192' | '512' | 'maskable-512';
@@ -153,11 +172,12 @@ export function manifestIcons(base: string, icons: TenantIconUrls): ManifestIcon
  *
  * iOS fills transparent pixels with black. When a merchant keeps their tab and computer icons
  * transparent ("only the image, like a PNG"), the admin also renders an opaque 180px copy and
- * saves it as brands.theme.appIcon.appleUrl; the tenant resolver hands it over as
- * `tenant.appleIconUrl`, read from the brand row itself. (Reading it from `tenant.theme` missed
- * every branch not linked to a brand, whose theme is the restaurant's colours — the usual case.)
- * Brands without one fall back to `fallback` (the 192), which older uploads always rendered
- * opaque. Only a file in the branding bucket is trusted.
+ * saves it as the icon style's appleUrl (branches.app_icon, or brands.theme.appIcon for a branch
+ * still on the brand's set); the tenant resolver hands it over as `tenant.appleIconUrl`, from the
+ * same source as the rest of the icon set. (Reading it from `tenant.theme` missed every branch
+ * not linked to a brand, whose theme is the restaurant's colours — the usual case.) Without one
+ * it falls back to `fallback` (the 192), which older uploads always rendered opaque. Only a file
+ * in the branding bucket is trusted.
  */
 export function appleTouchIconUrl(
   appleUrl: string | null | undefined,
@@ -171,7 +191,7 @@ export function appleTouchIconUrl(
 /**
  * Only files the admin uploader could have written: the project's own public `branding` bucket.
  *
- * The URL comes from a brands row a merchant can edit, and the icon route fetches it from our
+ * The URL comes from a branches or brands row a merchant can edit, and the icon route fetches it from our
  * server — without this check any merchant could point it at an arbitrary address and have the
  * storefront fetch that on their behalf.
  */

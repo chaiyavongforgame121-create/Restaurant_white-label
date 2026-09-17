@@ -62,7 +62,10 @@ function tenantCache(restaurantSlug: string, branchSlug: string) {
       const supabase = getAnonServerClient();
       return resolveTenantBySlug(supabase, r, b);
     },
-    ['tenant-by-slug', restaurantSlug, branchSlug],
+    // v2: ResolvedTenant gained brandName and branch-owned icons, and stopped trusting a brand_id
+    // that points at another restaurant's brand. An entry cached under the old key has neither
+    // field, would name every branch after the brand, and may carry that foreign brand.
+    ['tenant-by-slug-v2', restaurantSlug, branchSlug],
     {
       revalidate: TENANT_TTL_SECONDS,
       tags: ['tenant', tenantCacheTag(restaurantSlug, branchSlug)],
@@ -265,14 +268,17 @@ export const DEFAULT_DARK_THEME_COLOR = '#1a0e08';
  * disagree.
  *
  * They used to be built inline in four places and produced four different answers for the
- * same restaurant: the manifest said "Coastal Grill — Hamburger", the home-screen label
- * said "Coastal Grill", the browser tab said "Hamburger · Favornoms" — the platform's brand,
- * in a white-labelled tenant's tab — and iOS said "Hamburger". The rules live in
- * deriveStorefrontNames so they can be tested without a database.
+ * same restaurant: the manifest said one thing, the home-screen label another, the browser tab
+ * said "Hamburger · Favornoms" — the platform's brand, in a white-labelled tenant's tab — and
+ * iOS said "Hamburger". The rules live in deriveStorefrontNames so they can be tested without a
+ * database.
+ *
+ * The brand comes from `tenant.brandName` (the brands row), never from `tenant.theme.brandName`:
+ * the per-branch Branding card once wrote a branch's name there and renamed the whole restaurant.
  */
 export function storefrontNames(tenant: ResolvedTenant): StorefrontNames {
   return deriveStorefrontNames({
-    brandName: tenant.theme.brandName,
+    brandName: tenant.brandName,
     restaurantName: tenant.restaurant.name,
     branchName: tenant.branch.name,
   });

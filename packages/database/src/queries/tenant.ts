@@ -16,15 +16,36 @@ type RowBranch = Database['public']['Tables']['branches']['Row'];
 export interface ResolvedTenant {
   restaurant: Restaurant;
   branch: Branch;
+  /**
+   * Brand colours (the linked brand's theme, else restaurants.brand_settings) under the branch's
+   * theme_override. Never carries `brandName`: the per-branch Branding card once wrote a branch's
+   * name into the shared brand's theme there, and every branch then showed it. Read the name from
+   * `brandName` below.
+   *
+   * "Linked" means branches.brand_id names a brand OF THIS RESTAURANT. A brand_id pointing at
+   * another restaurant's brand is treated exactly like no link at all.
+   */
   theme: TenantTheme;
   /** Per-restaurant storefront appearance (menu layout + card style), shared by all branches. */
   storefront: StorefrontSettings;
-  /** Brand logo (from the branch's brand), shown on the storefront. */
+  /**
+   * The brand's own name: the branch's linked brand row (only when it belongs to this
+   * restaurant), else the restaurant's default brand, else restaurants.name. The storefront joins
+   * it with the branch name ("Coastal Grill - Hamburger") on every surface, the installed app's
+   * home-screen label included; see deriveStorefrontNames in apps/web.
+   */
+  brandName: string;
+  /** Storefront logo: the branch's own (branches.logo_url), else its brand's. */
   logoUrl: string | null;
   /**
-   * Brand favicon (browser tab icon). Deliberately separate from logoUrl — a
-   * wide storefront logo is an unreadable smudge at 32px, so falling back to it
-   * would look broken rather than unbranded. Null means "use the platform icon".
+   * Favicon (browser tab icon). Deliberately separate from logoUrl — a wide storefront logo is an
+   * unreadable smudge at 32px, so falling back to it would look broken rather than unbranded. Null
+   * means "use the platform icon".
+   *
+   * This and the four icon fields below are ONE set, taken whole from the branch when the branch
+   * has an installed-app icon of its own (branches.icon_192_url or icon_512_url), and otherwise
+   * whole from the brand. Mixing the two would put the brand's tab icon beside the branch's
+   * home-screen icon.
    */
   faviconUrl: string | null;
   /**
@@ -37,23 +58,44 @@ export interface ResolvedTenant {
   icon512Url: string | null;
   iconMaskable512Url: string | null;
   /**
-   * The opaque 180px iPhone icon (brands.theme.appIcon.appleUrl) of the same brand the icon
-   * files above come from, or null. iOS paints transparency black, and the 192 may be transparent
-   * ("only the image, like a PNG"). Not validated here — the storefront checks it is a file in
-   * the branding bucket before using it.
+   * The opaque 180px iPhone icon (the icon style's `appleUrl`) from the same source as the icon
+   * files above — branches.app_icon for a branch with its own set, the brand row's
+   * theme.appIcon otherwise — or null. iOS paints transparency black, and the 192 may be
+   * transparent ("only the image, like a PNG"). Not validated here — the storefront checks it is
+   * a file in the branding bucket before using it.
    *
-   * Read from the brand row, not from `theme`: an unlinked branch's theme is
-   * restaurants.brand_settings (colours deliberately do not fall back), which never holds it.
+   * Never read from `theme`: an unlinked branch's theme is restaurants.brand_settings (colours
+   * deliberately do not fall back), which never holds it.
    */
   appleIconUrl: string | null;
 }
 
-/** brands.theme.appIcon.appleUrl, when the theme has one. */
-export function appIconAppleUrl(theme: unknown): string | null {
-  const appIcon = theme && typeof theme === 'object' ? (theme as Record<string, unknown>).appIcon : null;
+/** The `appleUrl` of an icon style (branches.app_icon, brands.theme.appIcon), when it has one. */
+export function appIconStyleAppleUrl(appIcon: unknown): string | null {
   const url = appIcon && typeof appIcon === 'object' ? (appIcon as Record<string, unknown>).appleUrl : null;
   return typeof url === 'string' && url ? url : null;
 }
+
+/** brands.theme.appIcon.appleUrl, when the theme has one. */
+export function appIconAppleUrl(theme: unknown): string | null {
+  return appIconStyleAppleUrl(
+    theme && typeof theme === 'object' ? (theme as Record<string, unknown>).appIcon : null,
+  );
+}
+
+/**
+ * The theme without `brandName`. The name has one source now (ResolvedTenant.brandName); a stale
+ * key left in brands.theme, restaurants.brand_settings or a branch's theme_override must not ride
+ * into the storefront theme, where something could start reading it again.
+ */
+function withoutBrandName<T extends Partial<TenantTheme>>(theme: T): T {
+  if (!('brandName' in theme)) return theme;
+  const copy = { ...theme };
+  delete copy.brandName;
+  return copy;
+}
+
+const BRAND_COLUMNS = 'name, theme, logo_url, favicon_url, icon_192_url, icon_512_url, icon_maskable_512_url';
 
 /**
  * Resolve a `{restaurant_slug, branch_slug}` pair to full tenant data.
@@ -75,7 +117,7 @@ export async function resolveTenantBySlug(
   const { data: branchRow, error: bErr } = await supabase
     .from('branches')
     .select(
-      'id, restaurant_id, slug, name, address, timezone, theme_override, settings, is_active, custom_domain, brand_id, geo_lat, geo_lng, created_at, updated_at',
+      'id, restaurant_id, slug, name, address, timezone, theme_override, settings, is_active, custom_domain, brand_id, geo_lat, geo_lng, created_at, updated_at, logo_url, favicon_url, icon_192_url, icon_512_url, icon_maskable_512_url, app_icon',
     )
     .eq('restaurant_id', restaurantRow.id)
     .eq('slug', branchSlug)
@@ -86,66 +128,64 @@ export async function resolveTenantBySlug(
   const r = restaurantRow as unknown as RowRestaurant;
   const b = branchRow as unknown as RowBranch;
 
-  // Resolve theme base: brand (if attached) > restaurant.brand_settings.
-  let brandTheme: TenantTheme = (r.brand_settings ?? {}) as TenantTheme;
-  let brandName: string | undefined;
-  let brandLogo: string | null = null;
-  let brandFavicon: string | null = null;
-  let brandIcon192: string | null = null;
-  let brandIcon512: string | null = null;
-  let brandIconMaskable: string | null = null;
-  let brandAppleIcon: string | null = null;
-  if (b.brand_id) {
-    const { data: brandRow } = await supabase
-      .from('brands')
-      .select('name, theme, logo_url, favicon_url, icon_192_url, icon_512_url, icon_maskable_512_url')
-      .eq('id', b.brand_id)
-      .maybeSingle();
-    if (brandRow) {
-      brandTheme = (brandRow.theme ?? brandTheme) as TenantTheme;
-      brandName = brandRow.name;
-      brandLogo = brandRow.logo_url ?? null;
-      brandFavicon = brandRow.favicon_url ?? null;
-      brandIcon192 = brandRow.icon_192_url ?? null;
-      brandIcon512 = brandRow.icon_512_url ?? null;
-      brandIconMaskable = brandRow.icon_maskable_512_url ?? null;
-      brandAppleIcon = appIconAppleUrl(brandRow.theme);
-    }
-  } else {
-    // Fall back to the restaurant's default brand for the ASSETS only.
+  const [linkedResult, defaultResult] = await Promise.all([
+    // The linked brand, and only if it is this restaurant's. brand ids are publicly readable, so
+    // a brand_id pointing at another restaurant's brand (written before the
+    // branch_brand_other_restaurant trigger existed) would otherwise put that restaurant's name,
+    // colours and icons on this storefront. A miss is handled exactly like no link at all.
+    b.brand_id
+      ? supabase
+          .from('brands')
+          .select(BRAND_COLUMNS)
+          .eq('id', b.brand_id)
+          .eq('restaurant_id', r.id)
+          .limit(1)
+      : null,
+    // The restaurant's default brand, for the NAME and the fallback ASSETS when there is no
+    // (valid) link.
     //
-    // Linking a branch to a brand is optional in the admin UI and nothing
-    // prompts for it, so branches.brand_id is routinely null — which meant an
-    // uploaded logo or favicon was stored correctly and then never read,
-    // looking to the merchant like the upload had silently failed.
-    //
-    // The THEME still deliberately does not fall back: colours have a restaurant-level
-    // source (restaurants.brand_settings), so overriding them here would silently restyle
-    // a live storefront. The NAME does now, and that is a change from when this comment
-    // was written: migration 20260904132000 made one brand row per restaurant a hard
-    // invariant and removed "New brand" from the admin, so there is no longer a question
-    // of WHICH brand's name would win. Leaving it out meant a merchant renamed their brand
-    // and the install dialog, the home-screen label and the share card all kept saying the
-    // restaurant's original name back at them.
-    const { data: defaultBrand } = await supabase
+    // Linking a branch to a brand is optional in the admin UI and nothing prompts for it,
+    // so branches.brand_id is routinely null. The THEME still deliberately does not fall
+    // back: colours have a restaurant-level source (restaurants.brand_settings), so
+    // overriding them here would silently restyle a live storefront. The name does, because
+    // migration 20260904132000 made one brand row per restaurant a hard invariant — there is
+    // no question of WHICH brand's name would win. `theme` is read only for appIcon.appleUrl.
+    supabase
       .from('brands')
-      // `theme` only for appIcon.appleUrl — it is NOT merged into the colours below.
-      .select('name, theme, logo_url, favicon_url, icon_192_url, icon_512_url, icon_maskable_512_url')
+      .select(BRAND_COLUMNS)
       .eq('restaurant_id', r.id)
       .order('is_default', { ascending: false })
       .order('created_at', { ascending: true })
-      .limit(1);
-    const db = defaultBrand?.[0];
-    if (db) {
-      brandName = db.name ?? brandName;
-      brandLogo = db.logo_url ?? null;
-      brandFavicon = db.favicon_url ?? null;
-      brandIcon192 = db.icon_192_url ?? null;
-      brandIcon512 = db.icon_512_url ?? null;
-      brandIconMaskable = db.icon_maskable_512_url ?? null;
-      brandAppleIcon = appIconAppleUrl(db.theme);
-    }
-  }
+      .limit(1),
+  ]);
+  const linkedBrandRow = linkedResult?.data?.[0] ?? null;
+  const brandRow = linkedBrandRow ?? defaultResult.data?.[0] ?? null;
+
+  // Resolve theme base: linked brand of this restaurant (if attached) > restaurant.brand_settings.
+  const brandTheme = withoutBrandName(
+    (linkedBrandRow?.theme ? linkedBrandRow.theme : (r.brand_settings ?? {})) as TenantTheme,
+  );
+  const brandName = brandRow?.name?.trim() || r.name;
+
+  // The icon set is taken whole from one source. A branch owns its set once it has an
+  // installed-app icon of its own; until then (a branch created after 20260917150000's backfill
+  // that has never saved one) it renders exactly what the brand has.
+  const branchOwnsIcons = !!(b.icon_192_url || b.icon_512_url);
+  const icons = branchOwnsIcons
+    ? {
+        faviconUrl: b.favicon_url ?? null,
+        icon192Url: b.icon_192_url ?? null,
+        icon512Url: b.icon_512_url ?? null,
+        iconMaskable512Url: b.icon_maskable_512_url ?? null,
+        appleIconUrl: appIconStyleAppleUrl(b.app_icon),
+      }
+    : {
+        faviconUrl: brandRow?.favicon_url ?? null,
+        icon192Url: brandRow?.icon_192_url ?? null,
+        icon512Url: brandRow?.icon_512_url ?? null,
+        iconMaskable512Url: brandRow?.icon_maskable_512_url ?? null,
+        appleIconUrl: appIconAppleUrl(brandRow?.theme),
+      };
 
   const restaurant: Restaurant = {
     id: r.id,
@@ -161,7 +201,7 @@ export async function resolveTenantBySlug(
     name: b.name,
     address: b.address ?? '',
     geoLocation: { lat: b.geo_lat ?? 0, lng: b.geo_lng ?? 0 },
-    themeOverride: (b.theme_override ?? {}) as Partial<TenantTheme>,
+    themeOverride: withoutBrandName((b.theme_override ?? {}) as Partial<TenantTheme>),
     settings: parseSettings(b.settings),
     isActive: b.is_active,
   };
@@ -169,7 +209,6 @@ export async function resolveTenantBySlug(
   const theme: TenantTheme = {
     ...brandTheme,
     ...branch.themeOverride,
-    ...(brandName ? { brandName } : {}),
   };
 
   // Effective storefront = branch override (branches.settings.storefront_override)
@@ -186,12 +225,9 @@ export async function resolveTenantBySlug(
     branch,
     theme,
     storefront,
-    logoUrl: brandLogo,
-    faviconUrl: brandFavicon,
-    icon192Url: brandIcon192,
-    icon512Url: brandIcon512,
-    iconMaskable512Url: brandIconMaskable,
-    appleIconUrl: brandAppleIcon,
+    brandName,
+    logoUrl: b.logo_url || brandRow?.logo_url || null,
+    ...icons,
   };
 }
 

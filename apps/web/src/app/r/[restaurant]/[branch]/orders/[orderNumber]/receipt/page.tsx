@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { getServerClient } from '@favornoms/database/server';
-import { resolveTenant } from '@/lib/tenant';
+import { resolveTenant, storefrontNames } from '@/lib/tenant';
 import { CustomerReceipt } from './_components/customer-receipt';
 
 interface Props {
@@ -38,7 +38,7 @@ export default async function CustomerReceiptPage({ params }: Props) {
   return (
     <CustomerReceipt
       order={order as never}
-      branchName={tenant.branch.name}
+      storeName={storefrontNames(tenant).full}
       branchAddress={tenant.branch.address}
     />
   );

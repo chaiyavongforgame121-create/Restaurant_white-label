@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
-import { manifestIcons } from '@/lib/app-identity';
+import { manifestIcons, urlFingerprint } from '@/lib/app-identity';
 import {
   DEFAULT_THEME_COLOR,
   hexOr,
   hostIsOwnDomainFor,
   hostOf,
-  resolveStorefrontVersion,
   resolveTenantOptional,
   storefrontNames,
 } from '@/lib/tenant';
@@ -48,19 +47,6 @@ export async function GET(request: Request, { params }: Props) {
     branch,
   );
 
-  // Cheap enough to ask before doing the real work, and it turns the common case — a browser
-  // or CDN re-checking a manifest that has not changed — into a 304 with no body and no tenant
-  // read at all. `known: false` degrades to a time bucket, so the ETag still changes, just on
-  // a clock rather than on the merchant's save.
-  const version = await resolveStorefrontVersion(restaurant, branch);
-  const etag = `W/"${version.key}:${ownDomain ? 'own' : 'platform'}"`;
-  if (request.headers.get('if-none-match') === etag) {
-    return new NextResponse(null, {
-      status: 304,
-      headers: { ETag: etag, 'Cache-Control': MANIFEST_CACHE_CONTROL, Vary: 'Host' },
-    });
-  }
-
   // The version-keyed, cookie-LESS read the layout and the metadata already share. The old
   // cookie-backed one made this response vary by visitor while it was being served to a shared
   // cache under Vary: Host alone, and it let the body move without the ETag moving with it —
@@ -86,12 +72,13 @@ export async function GET(request: Request, { params }: Props) {
     // installed on the old shared "/" identity keeps that one for good, which is what the
     // notice on the platform landing page exists to tell them.
     id: `/?app=${tenant.branch.id}`,
-    // The App name from the admin Branding card and nothing added to it. Chrome's install
-    // dialog and the desktop shortcut print `name`; Android's launcher prints `short_name`.
-    // They were "Coastal Grill — Hamburger" and "Coastal Grill", so the merchant typed one name
-    // and customers installed another.
+    // "<brand> - <branch>", in both. Chrome's install dialog and the desktop shortcut print
+    // `name`, and it used to be the brand alone, so a restaurant's two branches installed as two
+    // apps with one name. Android's launcher and iOS print `short_name` (the apple title agrees
+    // with it); the owner wants the full name there as well, and a launcher cutting it at about
+    // 12 characters is accepted.
     name: names.app,
-    short_name: names.app,
+    short_name: names.short,
     description: `Order from ${names.full}`,
     // Where the home-screen icon lands. "/" is the marketing page on every host that is not
     // this merchant's own — the single most visible half of the bug.
@@ -104,14 +91,32 @@ export async function GET(request: Request, { params }: Props) {
     // an installed app whose chrome changes colour on install looks broken.
     theme_color: hexOr(tenant.theme.primaryColor, DEFAULT_THEME_COLOR),
     // The merchant's icons alone, from this origin, or the platform's alone — never both.
-    // manifestIcons() explains why mixing them installed the wrong icon.
+    // manifestIcons() explains why mixing them installed the wrong icon. They are THIS branch's
+    // set (the resolver takes it whole from the branch once it has one), under this branch's
+    // path, with `?v` fingerprinting this branch's upload URL — so a new upload on one branch
+    // re-icons that branch's installed app and no other.
     icons: manifestIcons(base, tenant),
     categories: ['food', 'lifestyle', 'shopping'],
     lang: 'en',
     dir: 'ltr',
   };
 
-  return new NextResponse(JSON.stringify(manifest), {
+  // The ETag is a fingerprint of the body itself, not of the storefront version. The version
+  // only moves when this branch's own rows do, and a deploy that changes what the manifest says
+  // changes this body without that (this one renamed every installed app, and a version-keyed
+  // ETag would have kept answering 304 to every browser holding the old name). The tenant read
+  // above is a warm cache hit keyed on the version, so hashing the real body costs next to
+  // nothing, and an unchanged manifest is still a 304 with no body.
+  const body = JSON.stringify(manifest);
+  const etag = `W/"${urlFingerprint(body)}"`;
+  if (request.headers.get('if-none-match') === etag) {
+    return new NextResponse(null, {
+      status: 304,
+      headers: { ETag: etag, 'Cache-Control': MANIFEST_CACHE_CONTROL, Vary: 'Host' },
+    });
+  }
+
+  return new NextResponse(body, {
     headers: {
       'Content-Type': 'application/manifest+json; charset=utf-8',
       'Cache-Control': MANIFEST_CACHE_CONTROL,

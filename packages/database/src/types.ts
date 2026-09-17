@@ -517,15 +517,21 @@ export type Database = {
       branches: {
         Row: {
           address: string | null
+          app_icon: Json | null
           brand_id: string | null
           created_at: string
           custom_domain: string | null
           entitled_through: string | null
+          favicon_url: string | null
           geo_lat: number | null
           geo_lng: number | null
           geo_location: unknown
+          icon_192_url: string | null
+          icon_512_url: string | null
+          icon_maskable_512_url: string | null
           id: string
           is_active: boolean
+          logo_url: string | null
           name: string
           open_hours: Json
           restaurant_id: string
@@ -538,15 +544,21 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          app_icon?: Json | null
           brand_id?: string | null
           created_at?: string
           custom_domain?: string | null
           entitled_through?: string | null
+          favicon_url?: string | null
           geo_lat?: number | null
           geo_lng?: number | null
           geo_location?: unknown
+          icon_192_url?: string | null
+          icon_512_url?: string | null
+          icon_maskable_512_url?: string | null
           id?: string
           is_active?: boolean
+          logo_url?: string | null
           name: string
           open_hours?: Json
           restaurant_id: string
@@ -559,15 +571,21 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          app_icon?: Json | null
           brand_id?: string | null
           created_at?: string
           custom_domain?: string | null
           entitled_through?: string | null
+          favicon_url?: string | null
           geo_lat?: number | null
           geo_lng?: number | null
           geo_location?: unknown
+          icon_192_url?: string | null
+          icon_512_url?: string | null
+          icon_maskable_512_url?: string | null
           id?: string
           is_active?: boolean
+          logo_url?: string | null
           name?: string
           open_hours?: Json
           restaurant_id?: string

@@ -6,7 +6,7 @@
   "restaurantFallback": "Restaurante",
   "header": {
     "title": "Marca y sucursales",
-    "subtitle": "La imagen de {restaurant} (logo, ícono de la app y colores) y las sucursales que la usan."
+    "subtitle": "El nombre de marca, los colores y las imágenes predeterminadas de {restaurant}, y sus sucursales. Cada sucursal pone su propio logo e ícono de la app en su Configuración de sucursal."
   },
   "loyalty": {
     "title": "Fondo de puntos",
@@ -52,7 +52,13 @@
     "default": "Predeterminada",
     "meta": "{slug} · {count, plural, one {# sucursal} other {# sucursales}}",
     "edit": "Editar",
-    "empty": "Aún no hay marca. Sube tu logo en <link>Configuración de sucursal → Imagen de marca</link> y se creará automáticamente."
+    "emptyTitle": "Aún no hay marca",
+    "empty": "La marca guarda el nombre con el que empieza el nombre de cada tienda, sus colores y un logo e ícono de la app predeterminados para las sucursales que no tienen los suyos. Cada sucursal sube su propio logo e ícono en <link>Configuración de sucursal</link>.",
+    "createHint": "La marca empieza con el nombre “{name}”. Justo después puedes cambiar el nombre, los colores y las imágenes predeterminadas.",
+    "create": "Crear marca",
+    "errors": {
+      "notAllowed": "Solo el propietario del restaurante o un administrador puede crear la marca."
+    }
   },
   "creator": {
     "title": "Agregar sucursal",
@@ -84,7 +90,7 @@
       "hoursHint": "El horario semanal, no los cierres puntuales",
       "settings": "Copiar configuración de pagos y entregas",
       "settingsHint": "Métodos de pago, entregas, propinas y cargo por servicio",
-      "notCopied": "No se copian la dirección, el pin del mapa, los colores ni los códigos QR de mesas."
+      "notCopied": "No se copian la dirección, el pin del mapa, el logo, el ícono de la app, los colores ni los códigos QR de mesas."
     },
     "close": "Cerrar",
     "cancel": "Cancelar",
@@ -118,14 +124,16 @@
   "editor": {
     "title": "Editar marca",
     "name": "Nombre de la marca",
+    "nameHint": "Es la primera parte del nombre de la tienda y de la app de cada sucursal, como en “{example}”.",
     "slug": "Slug",
     "slugPlaceholder": "mi-marca",
     "primaryColor": "Color principal",
     "accentColor": "Color de acento",
-    "logo": "Logo (opcional)",
+    "logo": "Logo predeterminado (opcional)",
     "uploadLogo": "Subir logo",
-    "appIcon": "Ícono de la app (opcional)",
-    "appIconHint": "Se usa en la pestaña del navegador y como ícono que ven las personas al instalar tu tienda en la pantalla de inicio de su teléfono. Déjalo vacío para usar el ícono de Favornoms.",
+    "logoHint": "Solo lo usan las sucursales sin logo propio. Cada sucursal sube el suyo en Configuración de sucursal → Imagen de marca de esta sucursal.",
+    "appIcon": "Ícono de la app predeterminado (opcional)",
+    "appIconHint": "Solo lo usan las sucursales sin ícono propio, en la pestaña del navegador y como ícono que ven las personas al instalar. Cada sucursal sube el suyo en Configuración de sucursal. Déjalo vacío para usar el ícono de Favornoms.",
     "tabFallback": "Tu tienda",
     "preview": "Vista previa",
     "nameFallback": "Nombre de la marca",

@@ -20,33 +20,79 @@ const FULL_SET = {
 const NO_ICONS = { icon192Url: null, icon512Url: null, iconMaskable512Url: null };
 
 describe('deriveStorefrontNames', () => {
-  it('names the installed app after the brand alone, and keeps brand — branch for the tab', () => {
+  it('names every surface "<brand> - <branch>" with an ASCII hyphen, the installed app and its label included', () => {
     const names = deriveStorefrontNames({
       brandName: 'Coastal Grill',
       restaurantName: 'Coastal Grill LLC',
       branchName: 'Hamburger',
     });
-    expect(names.app).toBe('Coastal Grill');
-    expect(names.full).toBe('Coastal Grill — Hamburger');
+    expect(names.full).toBe('Coastal Grill - Hamburger');
+    expect(names.app).toBe('Coastal Grill - Hamburger');
+    expect(names.short).toBe('Coastal Grill - Hamburger');
     expect(names.brand).toBe('Coastal Grill');
     expect(names.branch).toBe('Hamburger');
+    expect(names.full).not.toContain('—');
+  });
+
+  it('gives two branches of one restaurant different names, home-screen labels included', () => {
+    const hamburger = deriveStorefrontNames({ brandName: 'Coastal Grill', branchName: 'Hamburger' });
+    const thai = deriveStorefrontNames({ brandName: 'Coastal Grill', branchName: 'Food Thai Thai' });
+    expect(thai.full).toBe('Coastal Grill - Food Thai Thai');
+    expect(thai.app).not.toBe(hamburger.app);
+    // The owner wants the full name under the icon too; a launcher truncating it is accepted.
+    expect(hamburger.short).toBe('Coastal Grill - Hamburger');
+    expect(thai.short).toBe('Coastal Grill - Food Thai Thai');
+    expect(thai.short).not.toBe(hamburger.short);
+  });
+
+  it('always uses the full name as the short label, never the branch alone', () => {
+    for (const input of [
+      { brandName: 'Coastal Grill', branchName: 'Hamburger' },
+      { brandName: 'Coastal Grill', restaurantName: 'Coastal Grill LLC', branchName: 'Hamburger' },
+      { brandName: null, restaurantName: 'Coastal Grill', branchName: 'Hamburger' },
+    ]) {
+      const names = deriveStorefrontNames(input);
+      expect(names.short).toBe(names.full);
+      expect(names.short).toBe('Coastal Grill - Hamburger');
+    }
+  });
+
+  it('says a name once when the brand and the branch are the same, ignoring case and spaces', () => {
+    expect(deriveStorefrontNames({ brandName: 'Somtam Zab', branchName: 'Somtam Zab' })).toEqual({
+      brand: 'Somtam Zab',
+      branch: 'Somtam Zab',
+      full: 'Somtam Zab',
+      app: 'Somtam Zab',
+      short: 'Somtam Zab',
+    });
+    expect(deriveStorefrontNames({ brandName: 'Somtam Zab', branchName: '  somtam zab ' }).full).toBe('Somtam Zab');
+    expect(deriveStorefrontNames({ brandName: 'Somtam Zab', branchName: 'SOMTAM ZAB' }).short).toBe('Somtam Zab');
   });
 
   it('treats a blank brand as absent and falls back to the restaurant, then the branch', () => {
-    expect(deriveStorefrontNames({ brandName: '   ', restaurantName: 'Somtam Zab', branchName: 'Main' }).app).toBe(
-      'Somtam Zab',
-    );
+    expect(
+      deriveStorefrontNames({ brandName: '   ', restaurantName: 'Somtam Zab', branchName: 'Main' }).full,
+    ).toBe('Somtam Zab - Main');
     expect(deriveStorefrontNames({ brandName: '', restaurantName: '', branchName: 'Main' })).toEqual({
       brand: '',
       branch: 'Main',
       full: 'Main',
       app: 'Main',
+      short: 'Main',
     });
+  });
+
+  it('never leaves a dangling separator when the branch is blank', () => {
+    const names = deriveStorefrontNames({ brandName: 'Coastal Grill', branchName: '  ' });
+    expect(names.full).toBe('Coastal Grill');
+    expect(names.short).toBe('Coastal Grill');
+    expect(deriveStorefrontNames({}).full).toBe('');
+    expect(deriveStorefrontNames({}).short).toBe('');
   });
 
   it('trims what the merchant typed', () => {
     expect(deriveStorefrontNames({ brandName: '  Burger Joint ', branchName: ' Downtown ' }).full).toBe(
-      'Burger Joint — Downtown',
+      'Burger Joint - Downtown',
     );
   });
 });

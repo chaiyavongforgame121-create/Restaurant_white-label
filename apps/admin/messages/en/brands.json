@@ -6,7 +6,7 @@
   "restaurantFallback": "Restaurant",
   "header": {
     "title": "Brand & branches",
-    "subtitle": "Your look for {restaurant} — logo, app icon and colors — plus the branches that use it."
+    "subtitle": "The brand name, colors and default images for {restaurant}, plus its branches. Each branch sets its own logo and app icon in its Branch settings."
   },
   "loyalty": {
     "title": "Loyalty pool",
@@ -52,7 +52,13 @@
     "default": "Default",
     "meta": "{slug} · {count, plural, one {# branch} other {# branches}}",
     "edit": "Edit",
-    "empty": "No brand yet. Upload your logo under <link>Branch settings → Branding</link> and it is created for you."
+    "emptyTitle": "No brand yet",
+    "empty": "A brand holds the name that starts every storefront name, its colors, and a default logo and app icon for branches without their own. Each branch sets its own logo and app icon in <link>Branch settings</link>.",
+    "createHint": "The brand starts with the name “{name}”. You can change the name, colors and default images right after.",
+    "create": "Create brand",
+    "errors": {
+      "notAllowed": "Only the restaurant owner or an admin can create the brand."
+    }
   },
   "creator": {
     "title": "Add branch",
@@ -84,7 +90,7 @@
       "hoursHint": "The weekly hours, not one-off closures",
       "settings": "Copy payment and delivery settings",
       "settingsHint": "Payment methods, delivery, tips and service fee",
-      "notCopied": "Address, map pin, colours and table QR codes are not copied."
+      "notCopied": "Address, map pin, logo, app icon, colours and table QR codes are not copied."
     },
     "close": "Close",
     "cancel": "Cancel",
@@ -118,14 +124,16 @@
   "editor": {
     "title": "Edit brand",
     "name": "Brand name",
+    "nameHint": "The first half of every branch’s storefront and app name, as in “{example}”.",
     "slug": "Slug",
     "slugPlaceholder": "my-brand",
     "primaryColor": "Primary color",
     "accentColor": "Accent color",
-    "logo": "Logo (optional)",
+    "logo": "Default logo (optional)",
     "uploadLogo": "Upload logo",
-    "appIcon": "App icon (optional)",
-    "appIconHint": "Used for the browser tab, and for the icon people see after installing your store to their phone’s home screen. Leave empty to use the Favornoms icon.",
+    "logoHint": "Used only by branches without a logo of their own. Each branch uploads its own under Branch settings → Branding for this branch.",
+    "appIcon": "Default app icon (optional)",
+    "appIconHint": "Used only by branches without an app icon of their own, for the browser tab and the icon people see after installing. Each branch uploads its own under Branch settings. Leave empty to use the Favornoms icon.",
     "tabFallback": "Your store",
     "preview": "Preview",
     "nameFallback": "Brand name",
