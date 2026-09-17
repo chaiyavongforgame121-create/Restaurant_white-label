@@ -107,6 +107,16 @@
     "addOption": "Agregar opción",
     "decrease": "Disminuir",
     "increase": "Aumentar",
+    "move": {
+      "groupUp": "Subir {name}",
+      "groupDown": "Bajar {name}",
+      "unnamedGroupUp": "Subir este grupo",
+      "unnamedGroupDown": "Bajar este grupo",
+      "optionUp": "Subir {name}",
+      "optionDown": "Bajar {name}",
+      "unnamedOptionUp": "Subir esta opción",
+      "unnamedOptionDown": "Bajar esta opción"
+    },
     "groupSaveFailed": "No se pudo guardar el grupo de opciones.",
     "groupCreateFailed": "No se pudo crear el grupo.",
     "validation": {

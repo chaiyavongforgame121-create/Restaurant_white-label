@@ -26,6 +26,12 @@
     "active": "Active",
     "remove": "Remove",
     "addOption": "Add option",
+    "move": {
+      "optionUp": "Move {name} up",
+      "optionDown": "Move {name} down",
+      "unnamedOptionUp": "Move this option up",
+      "unnamedOptionDown": "Move this option down"
+    },
     "createPrompt": {
       "title": "Name the modifier group",
       "body": "This is the heading customers see above the choices, like Size or Add-ons.",

@@ -10,6 +10,7 @@ describe('menuErrorKey', () => {
 
   it('maps database constraint codes', () => {
     expect(menuErrorKey({ code: 'P0001', message: 'item_not_found' })).toBe('notFound');
+    expect(menuErrorKey({ code: 'P0002', message: 'group_not_found' })).toBe('notFound');
     expect(menuErrorKey({ code: '23503', message: 'update or delete violates foreign key constraint' })).toBe('inUse');
     expect(menuErrorKey({ code: '23505', message: 'duplicate key value' })).toBe('duplicate');
     expect(menuErrorKey({ code: '22P02', message: 'invalid input syntax for type numeric' })).toBe('invalidValue');

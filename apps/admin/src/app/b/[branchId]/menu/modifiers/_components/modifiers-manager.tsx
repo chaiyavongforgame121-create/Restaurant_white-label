@@ -6,7 +6,9 @@ import { useTranslations } from 'next-intl';
 import { ChevronDown, ChevronUp, Link2, Plus, Trash2 } from 'lucide-react';
 import { formatCurrency } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
+import { compareByPosition } from '@favornoms/database/queries';
 import { Badge, Button, Card, useConfirm, usePrompt } from '@favornoms/ui';
+import { MoveButtons, moveEntry, nextPosition, restoreOrder } from '../../_components/item-modifier-editor';
 
 interface Option {
   id: string;
@@ -15,6 +17,8 @@ interface Option {
   is_default: boolean;
   is_active: boolean;
   display_order: number;
+  /** Breaks position ties the way the storefront does. */
+  created_at?: string | null;
 }
 
 interface Group {
@@ -25,6 +29,7 @@ interface Group {
   is_required: boolean;
   selection_type: 'single' | 'multiple';
   display_order: number;
+  created_at?: string | null;
   modifier_options: Option[];
 }
 
@@ -53,12 +58,27 @@ function dbErrorKey(err: { code?: string; message?: string }): DbErrorKey {
   return 'generic';
 }
 
+/** Options in the order customers see them. */
+function byPosition(options: readonly Option[]): Option[] {
+  return options.slice().sort(compareByPosition);
+}
+
+/** Groups in a stable order: position, then age, then id, as everywhere else. */
+function sortGroups(groups: readonly Group[]): Group[] {
+  return groups.slice().sort(compareByPosition);
+}
+
+/** A thrown value in the shape dbError reads. */
+function asDbError(err: unknown): { code?: string; message?: string } {
+  return err && typeof err === 'object' ? (err as { code?: string; message?: string }) : { message: String(err) };
+}
+
 export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) {
   const t = useTranslations('menuExtras');
   const router = useRouter();
   const confirm = useConfirm();
   const prompt = usePrompt();
-  const [groups, setGroups] = React.useState(initialGroups);
+  const [groups, setGroups] = React.useState(() => sortGroups(initialGroups));
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -67,43 +87,89 @@ export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) 
     return t(`errors.${dbErrorKey(err)}`);
   };
 
+  // A move swaps two options on screen at once, then saves the group's whole list in its new order
+  // with one call that renumbers every option 0..n-1 in a single statement (options deleted
+  // meanwhile are skipped). One move saves at a time: clicks while it is saving are ignored.
+  const movingRef = React.useRef(false);
+  // Reads and moves overlap (every edit reads the list back): a read sent before a move was stored
+  // can still hold the old order, and applying it would put the options back although the move
+  // saved. So only the latest read is applied, and only if no move was saving at any point while
+  // it was out; otherwise the list is read again once the move has settled.
+  const readSeq = React.useRef(0);
+  const movesSettled = React.useRef(0);
+  const readAfterMove = React.useRef(false);
+
   const refetch = async () => {
     const supabase = getBrowserClient();
-    const { data } = await supabase
-      .from('modifier_groups')
-      .select(
-        `id, name, min_select, max_select, is_required, selection_type, display_order,
-         modifier_options(id, name, price_delta, is_default, is_active, display_order)`,
-      )
-      .eq('branch_id', branchId)
-      .order('display_order');
-    setGroups((data ?? []) as Group[]);
-  };
-
-  const createGroup = async () => {
-    const name = await prompt({
-      title: t('modifiers.createPrompt.title'),
-      body: t('modifiers.createPrompt.body'),
-      placeholder: t('modifiers.createPrompt.placeholder'),
-      confirmLabel: t('modifiers.createPrompt.confirm'),
-      required: true,
-    });
-    if (!name) return;
-    const supabase = getBrowserClient();
-    const { error: insErr } = await supabase.from('modifier_groups').insert({
-      branch_id: branchId,
-      name,
-      min_select: 0,
-      max_select: 1,
-      is_required: false,
-      selection_type: 'single',
-      display_order: groups.length,
-    });
-    if (insErr) {
-      setError(dbError('create group', insErr));
+    for (;;) {
+      const read = ++readSeq.current;
+      const settledBefore = movesSettled.current;
+      const { data, error: readErr } = await supabase
+        .from('modifier_groups')
+        .select(
+          `id, name, min_select, max_select, is_required, selection_type, display_order, created_at,
+           modifier_options(id, name, price_delta, is_default, is_active, display_order, created_at)`,
+        )
+        .eq('branch_id', branchId)
+        .order('display_order');
+      // A later read answers instead.
+      if (read !== readSeq.current) return;
+      if (movingRef.current) {
+        readAfterMove.current = true;
+        return;
+      }
+      // A move was stored while this read was out, so its answer may predate the move.
+      if (movesSettled.current !== settledBefore) continue;
+      if (readErr) {
+        // Keep the list on screen rather than blank it.
+        const message = dbError('load groups', readErr);
+        setError((current) => current ?? message);
+        return;
+      }
+      setGroups(sortGroups((data ?? []) as Group[]));
       return;
     }
-    await refetch();
+  };
+
+  // One add at a time, until the list is read back: a second click before that would give the new
+  // row the same position as the first. Held from the first prompt, so a double click asks once.
+  const creatingGroupRef = React.useRef(false);
+  const [creatingGroup, setCreatingGroup] = React.useState(false);
+  const addingOptionRef = React.useRef(new Set<string>());
+  const [addingOptionTo, setAddingOptionTo] = React.useState<ReadonlySet<string>>(() => new Set());
+
+  const createGroup = async () => {
+    if (creatingGroupRef.current) return;
+    creatingGroupRef.current = true;
+    setCreatingGroup(true);
+    try {
+      const name = await prompt({
+        title: t('modifiers.createPrompt.title'),
+        body: t('modifiers.createPrompt.body'),
+        placeholder: t('modifiers.createPrompt.placeholder'),
+        confirmLabel: t('modifiers.createPrompt.confirm'),
+        required: true,
+      });
+      if (!name) return;
+      const supabase = getBrowserClient();
+      const { error: insErr } = await supabase.from('modifier_groups').insert({
+        branch_id: branchId,
+        name,
+        min_select: 0,
+        max_select: 1,
+        is_required: false,
+        selection_type: 'single',
+        display_order: nextPosition(groups),
+      });
+      if (insErr) {
+        setError(dbError('create group', insErr));
+        return;
+      }
+      await refetch();
+    } finally {
+      creatingGroupRef.current = false;
+      setCreatingGroup(false);
+    }
   };
 
   const updateGroup = async (id: string, patch: Partial<Group>) => {
@@ -137,41 +203,53 @@ export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) 
   };
 
   const addOption = async (groupId: string) => {
-    const name = await prompt({
-      title: t('modifiers.optionPrompt.title'),
-      body: t('modifiers.optionPrompt.body'),
-      placeholder: t('modifiers.optionPrompt.placeholder'),
-      confirmLabel: t('modifiers.optionPrompt.confirm'),
-      required: true,
-    });
-    if (!name) return;
-    const priceStr = await prompt({
-      title: t('modifiers.pricePrompt.title'),
-      body: t('modifiers.pricePrompt.body'),
-      defaultValue: '0',
-      confirmLabel: t('modifiers.pricePrompt.confirm'),
-    });
-    if (priceStr === null) return;
-    const price = Number(priceStr);
-    if (!Number.isFinite(price)) {
-      setError(t('errors.invalidPrice'));
-      return;
+    const adding = addingOptionRef.current;
+    if (adding.has(groupId)) return;
+    const markAdding = (on: boolean) => {
+      if (on) adding.add(groupId);
+      else adding.delete(groupId);
+      setAddingOptionTo(new Set(adding));
+    };
+    markAdding(true);
+    try {
+      const name = await prompt({
+        title: t('modifiers.optionPrompt.title'),
+        body: t('modifiers.optionPrompt.body'),
+        placeholder: t('modifiers.optionPrompt.placeholder'),
+        confirmLabel: t('modifiers.optionPrompt.confirm'),
+        required: true,
+      });
+      if (!name) return;
+      const priceStr = await prompt({
+        title: t('modifiers.pricePrompt.title'),
+        body: t('modifiers.pricePrompt.body'),
+        defaultValue: '0',
+        confirmLabel: t('modifiers.pricePrompt.confirm'),
+      });
+      if (priceStr === null) return;
+      const price = Number(priceStr);
+      if (!Number.isFinite(price)) {
+        setError(t('errors.invalidPrice'));
+        return;
+      }
+      const supabase = getBrowserClient();
+      const grp = groups.find((g) => g.id === groupId);
+      const { error: insErr } = await supabase.from('modifier_options').insert({
+        group_id: groupId,
+        name,
+        price_delta: price,
+        is_default: false,
+        is_active: true,
+        display_order: nextPosition(grp?.modifier_options ?? []),
+      });
+      if (insErr) {
+        setError(dbError('add option', insErr));
+        return;
+      }
+      await refetch();
+    } finally {
+      markAdding(false);
     }
-    const supabase = getBrowserClient();
-    const grp = groups.find((g) => g.id === groupId);
-    const { error: insErr } = await supabase.from('modifier_options').insert({
-      group_id: groupId,
-      name,
-      price_delta: price,
-      is_default: false,
-      is_active: true,
-      display_order: grp?.modifier_options.length ?? 0,
-    });
-    if (insErr) {
-      setError(dbError('add option', insErr));
-      return;
-    }
-    await refetch();
   };
 
   const updateOption = async (optionId: string, patch: Partial<Option>) => {
@@ -204,6 +282,45 @@ export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) 
     await refetch();
   };
 
+  const moveOption = async (groupId: string, optionId: string, dir: -1 | 1) => {
+    if (movingRef.current) return;
+    const group = groups.find((g) => g.id === groupId);
+    if (!group) return;
+    const before = byPosition(group.modifier_options);
+    const after = moveEntry(before, optionId, dir);
+    if (!after) return;
+    const setOptions = (update: (options: Option[]) => Option[]) =>
+      setGroups((curr) =>
+        curr.map((g) => (g.id === groupId ? { ...g, modifier_options: update(g.modifier_options) } : g)),
+      );
+    setOptions(() => after);
+    movingRef.current = true;
+    setError(null);
+    let failure: { code?: string; message?: string } | null = null;
+    try {
+      const { error: rpcErr } = await getBrowserClient().rpc('reorder_modifier_options', {
+        p_group_id: groupId,
+        p_option_ids: after.map((o) => o.id),
+      });
+      failure = rpcErr;
+    } catch (err) {
+      failure = asDbError(err);
+    } finally {
+      movingRef.current = false;
+      movesSettled.current += 1;
+    }
+    // The call is one statement, so a failure stored nothing: put the previous order back.
+    if (failure) {
+      setOptions((curr) => restoreOrder(curr, before));
+      setError(dbError('reorder options', failure));
+    }
+    // Show what is really stored after a failure, or when a read was held back while this saved.
+    if (failure || readAfterMove.current) {
+      readAfterMove.current = false;
+      await refetch();
+    }
+  };
+
   const linkToItems = async (groupId: string, itemIds: Set<string>) => {
     const supabase = getBrowserClient();
     // Remove existing links not in the new set
@@ -216,20 +333,33 @@ export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) 
     );
 
     if (toRemove.length > 0) {
-      await supabase
+      const { error: delErr } = await supabase
         .from('menu_item_modifiers')
         .delete()
         .eq('modifier_group_id', groupId)
         .in('menu_item_id', toRemove);
+      if (delErr) setError(dbError('unlink items', delErr));
     }
     if (toAdd.length > 0) {
-      await supabase.from('menu_item_modifiers').insert(
-        toAdd.map((mid, idx) => ({
-          menu_item_id: mid,
-          modifier_group_id: groupId,
-          display_order: idx,
-        })),
-      );
+      // A link's position orders the groups of that one item, so the group goes after the groups
+      // each item already has. Read by branch rather than by item id: a long id list can outgrow the URL.
+      const { data: items, error: posErr } = await supabase
+        .from('menu_items')
+        .select('id, menu_item_modifiers(display_order)')
+        .eq('branch_id', branchId);
+      if (posErr) {
+        setError(dbError('read item option positions', posErr));
+      } else {
+        const nextByItem = new Map((items ?? []).map((m) => [m.id, nextPosition(m.menu_item_modifiers ?? [])]));
+        const { error: insErr } = await supabase.from('menu_item_modifiers').insert(
+          toAdd.map((mid) => ({
+            menu_item_id: mid,
+            modifier_group_id: groupId,
+            display_order: nextByItem.get(mid) ?? 0,
+          })),
+        );
+        if (insErr) setError(dbError('link items', insErr));
+      }
     }
     router.refresh();
   };
@@ -241,7 +371,12 @@ export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) 
           <h1 className="font-display text-3xl font-bold">{t('modifiers.title')}</h1>
           <p className="mt-1 text-muted-foreground">{t('modifiers.subtitle')}</p>
         </div>
-        <Button variant="gradient" onClick={createGroup} leftIcon={<Plus className="h-4 w-4" />}>
+        <Button
+          variant="gradient"
+          onClick={createGroup}
+          disabled={creatingGroup}
+          leftIcon={<Plus className="h-4 w-4" />}
+        >
           {t('modifiers.newGroup')}
         </Button>
       </header>
@@ -308,9 +443,10 @@ export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) 
                           {t('modifiers.options')}
                         </p>
                         <ul className="space-y-2">
-                          {g.modifier_options
-                            .sort((a, b) => a.display_order - b.display_order)
-                            .map((opt) => (
+                          {byPosition(g.modifier_options).map((opt, index, list) => {
+                            // Option names are the merchant's own words and go into the labels untouched.
+                            const optionName = opt.name.trim();
+                            return (
                               <li key={opt.id}>
                                 <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-3">
                                   <input
@@ -341,23 +477,42 @@ export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) 
                                       onChange={(e) => updateOption(opt.id, { is_active: e.target.checked })}
                                     /> {t('modifiers.active')}
                                   </label>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => deleteOption(opt.id)}
-                                    leftIcon={<Trash2 className="h-3.5 w-3.5" />}
-                                  >
-                                    {t('modifiers.remove')}
-                                  </Button>
+                                  <div className="flex items-center gap-1">
+                                    <MoveButtons
+                                      upLabel={
+                                        optionName
+                                          ? t('modifiers.move.optionUp', { name: optionName })
+                                          : t('modifiers.move.unnamedOptionUp')
+                                      }
+                                      downLabel={
+                                        optionName
+                                          ? t('modifiers.move.optionDown', { name: optionName })
+                                          : t('modifiers.move.unnamedOptionDown')
+                                      }
+                                      canMoveUp={index > 0}
+                                      canMoveDown={index < list.length - 1}
+                                      onMove={(dir) => void moveOption(g.id, opt.id, dir)}
+                                    />
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => deleteOption(opt.id)}
+                                      leftIcon={<Trash2 className="h-3.5 w-3.5" />}
+                                    >
+                                      {t('modifiers.remove')}
+                                    </Button>
+                                  </div>
                                 </div>
                               </li>
-                            ))}
+                            );
+                          })}
                         </ul>
                         <Button
                           variant="outline"
                           size="sm"
                           className="mt-2"
                           onClick={() => addOption(g.id)}
+                          disabled={addingOptionTo.has(g.id)}
                           leftIcon={<Plus className="h-4 w-4" />}
                         >
                           {t('modifiers.addOption')}
@@ -456,11 +611,18 @@ function LinkPicker({
 }) {
   const t = useTranslations('menuExtras.modifiers.links');
   const [open, setOpen] = React.useState(false);
-  const [selected, setSelected] = React.useState<Set<string>>(new Set(linked.map((m) => m.id)));
+  const [selected, setSelected] = React.useState<Set<string>>(() => new Set(linked.map((m) => m.id)));
 
+  // `linked` is a new array on every render of the page (a move, an edit, a read coming back), so
+  // the ticks are reset only when the linked items themselves change -- not while the merchant is
+  // still choosing.
+  const linkedKey = linked
+    .map((m) => m.id)
+    .sort()
+    .join(' ');
   React.useEffect(() => {
-    setSelected(new Set(linked.map((m) => m.id)));
-  }, [linked]);
+    setSelected(new Set(linkedKey ? linkedKey.split(' ') : []));
+  }, [linkedKey]);
 
   // Item names are the merchant's own words, so they go into the sentence untouched.
   const names = linked.slice(0, 3).map((m) => m.name).join(', ');
@@ -478,7 +640,11 @@ function LinkPicker({
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => setOpen((o) => !o)}
+          onClick={() => {
+            // Cancel drops the unsaved ticks, so the next Edit starts from what is linked.
+            if (open) setSelected(new Set(linked.map((m) => m.id)));
+            setOpen(!open);
+          }}
           leftIcon={<Link2 className="h-3.5 w-3.5" />}
         >
           {open ? t('cancel') : t('edit')}

@@ -26,6 +26,12 @@
     "active": "Activa",
     "remove": "Quitar",
     "addOption": "Agregar opción",
+    "move": {
+      "optionUp": "Subir {name}",
+      "optionDown": "Bajar {name}",
+      "unnamedOptionUp": "Subir esta opción",
+      "unnamedOptionDown": "Bajar esta opción"
+    },
     "createPrompt": {
       "title": "Nombra el grupo de opciones",
       "body": "Es el encabezado que ven los clientes sobre las opciones, como Tamaño o Extras.",

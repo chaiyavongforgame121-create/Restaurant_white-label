@@ -107,6 +107,16 @@
     "addOption": "Thêm tùy chọn",
     "decrease": "Giảm",
     "increase": "Tăng",
+    "move": {
+      "groupUp": "Chuyển {name} lên",
+      "groupDown": "Chuyển {name} xuống",
+      "unnamedGroupUp": "Chuyển nhóm này lên",
+      "unnamedGroupDown": "Chuyển nhóm này xuống",
+      "optionUp": "Chuyển {name} lên",
+      "optionDown": "Chuyển {name} xuống",
+      "unnamedOptionUp": "Chuyển tùy chọn này lên",
+      "unnamedOptionDown": "Chuyển tùy chọn này xuống"
+    },
     "groupSaveFailed": "Không lưu được nhóm tùy chọn.",
     "groupCreateFailed": "Không tạo được nhóm.",
     "validation": {

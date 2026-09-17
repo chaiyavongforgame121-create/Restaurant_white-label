@@ -107,6 +107,16 @@
     "addOption": "Add option",
     "decrease": "Decrease",
     "increase": "Increase",
+    "move": {
+      "groupUp": "Move {name} up",
+      "groupDown": "Move {name} down",
+      "unnamedGroupUp": "Move this group up",
+      "unnamedGroupDown": "Move this group down",
+      "optionUp": "Move {name} up",
+      "optionDown": "Move {name} down",
+      "unnamedOptionUp": "Move this option up",
+      "unnamedOptionDown": "Move this option down"
+    },
     "groupSaveFailed": "Could not save option group.",
     "groupCreateFailed": "Could not create group.",
     "validation": {
