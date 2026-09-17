@@ -5194,12 +5194,20 @@ export type Database = {
         Args: { p_reason?: string; p_withdrawal_id: string }
         Returns: Json
       }
+      reorder_item_modifier_groups: {
+        Args: { p_group_ids: string[]; p_menu_item_id: string }
+        Returns: undefined
+      }
       reorder_menu_categories: {
         Args: { p_branch_id: string; p_orders: Json }
         Returns: undefined
       }
       reorder_menu_items: {
         Args: { p_branch_id: string; p_orders: Json }
+        Returns: undefined
+      }
+      reorder_modifier_options: {
+        Args: { p_group_id: string; p_option_ids: string[] }
         Returns: undefined
       }
       request_driver_withdrawal: {

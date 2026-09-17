@@ -8,6 +8,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { formatCurrency, validateSelections, type MenuItem, type UiLocale } from '@favornoms/shared';
 import { Badge, Button, DietaryBadge, QuantityStepper, Sheet } from '@favornoms/ui';
 import { getBrowserClient } from '@favornoms/database/client';
+import { listItemModifierGroups } from '@favornoms/database/queries';
 import { useCart, type CartLineModifier } from '@/store/cart';
 import { useRequireAuth } from '@/components/auth/require-auth';
 import { stashPendingAdd } from '@/lib/pending-cart';
@@ -81,38 +82,14 @@ export function MenuItemSheet({ item, onClose, items, onOpenItem }: Props) {
       setLoadingGroups(true);
       void (async () => {
         const supabase = getBrowserClient();
-        const { data } = await supabase
-          .from('menu_item_modifiers')
-          .select(
-            `display_order,
-             modifier_group_id,
-             modifier_groups!inner(
-               id, name, min_select, max_select, is_required, selection_type, display_order,
-               modifier_options(id, name, price_delta, is_default, is_active)
-             )`,
-          )
-          .eq('menu_item_id', item.id)
-          .order('display_order');
+        // The same reader as the counter's item sheet, so both show the options in the order the
+        // merchant arranged them. This copy sorted them by price, which shuffled a group whose
+        // options all cost the same. A failed read shows no options, as the inline query did.
+        const groupRows: ModifierGroup[] = await listItemModifierGroups(supabase, item.id).catch((err) => {
+          console.error('[menu-item-sheet] loading option groups failed', err);
+          return [];
+        });
         if (cancelled) return;
-        const groupRows = (data ?? [])
-          .map((row) => {
-            const g = Array.isArray(row.modifier_groups) ? row.modifier_groups[0] : row.modifier_groups;
-            if (!g) return null;
-            const options = (g.modifier_options ?? [])
-              .filter((o) => o.is_active)
-              .sort((a, b) => Number(a.price_delta) - Number(b.price_delta));
-            return {
-              id: g.id,
-              name: g.name,
-              min_select: g.min_select ?? 0,
-              max_select: g.max_select ?? 1,
-              is_required: !!g.is_required,
-              selection_type: (g.selection_type as 'single' | 'multiple') ?? 'single',
-              display_order: g.display_order ?? 0,
-              options,
-            } as ModifierGroup;
-          })
-          .filter((x): x is ModifierGroup => x !== null);
         setGroups(groupRows);
         // Pre-select defaults
         const init: Record<string, Set<string>> = {};

@@ -35,7 +35,7 @@ export function menuErrorKey(err: unknown): MenuErrorKey {
   ) {
     return 'permission';
   }
-  if (lower.includes('item_not_found')) return 'notFound';
+  if (lower.includes('item_not_found') || lower.includes('group_not_found')) return 'notFound';
   if (code === '23503' || lower.includes('foreign key')) return 'inUse';
   if (code === '23505' || lower.includes('duplicate key')) return 'duplicate';
   if (

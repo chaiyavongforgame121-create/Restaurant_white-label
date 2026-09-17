@@ -26,6 +26,12 @@
     "active": "Đang bật",
     "remove": "Gỡ",
     "addOption": "Thêm tùy chọn",
+    "move": {
+      "optionUp": "Chuyển {name} lên",
+      "optionDown": "Chuyển {name} xuống",
+      "unnamedOptionUp": "Chuyển tùy chọn này lên",
+      "unnamedOptionDown": "Chuyển tùy chọn này xuống"
+    },
     "createPrompt": {
       "title": "Đặt tên nhóm tùy chọn",
       "body": "Đây là tiêu đề khách thấy phía trên các lựa chọn, ví dụ Kích cỡ hoặc Món thêm.",

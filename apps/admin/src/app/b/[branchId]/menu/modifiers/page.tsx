@@ -19,8 +19,8 @@ export default async function ModifiersPage({ params }: Props) {
     supabase
       .from('modifier_groups')
       .select(
-        `id, name, min_select, max_select, is_required, selection_type, display_order,
-         modifier_options(id, name, price_delta, is_default, is_active, display_order)`,
+        `id, name, min_select, max_select, is_required, selection_type, display_order, created_at,
+         modifier_options(id, name, price_delta, is_default, is_active, display_order, created_at)`,
       )
       .eq('branch_id', branchId)
       .order('display_order'),

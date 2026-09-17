@@ -107,6 +107,16 @@
     "addOption": "เพิ่มตัวเลือก",
     "decrease": "ลด",
     "increase": "เพิ่ม",
+    "move": {
+      "groupUp": "เลื่อน {name} ขึ้น",
+      "groupDown": "เลื่อน {name} ลง",
+      "unnamedGroupUp": "เลื่อนกลุ่มนี้ขึ้น",
+      "unnamedGroupDown": "เลื่อนกลุ่มนี้ลง",
+      "optionUp": "เลื่อน {name} ขึ้น",
+      "optionDown": "เลื่อน {name} ลง",
+      "unnamedOptionUp": "เลื่อนตัวเลือกนี้ขึ้น",
+      "unnamedOptionDown": "เลื่อนตัวเลือกนี้ลง"
+    },
     "groupSaveFailed": "บันทึกกลุ่มตัวเลือกไม่สำเร็จ",
     "groupCreateFailed": "สร้างกลุ่มไม่สำเร็จ",
     "validation": {

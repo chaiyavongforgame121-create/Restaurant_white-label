@@ -125,6 +125,33 @@ function mapItem(row: Partial<RowItem>): MenuItem {
   };
 }
 
+/** Where a row sits in a list the merchant arranges: a position, and the row's age and id for ties. */
+export interface PositionedRow {
+  display_order?: number | null;
+  created_at?: string | null;
+  id: string;
+}
+
+/** Plain code-unit order, which is Postgres's order for ISO timestamps in one zone and for uuids. */
+function compareText(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/**
+ * The order of option groups and options everywhere they are listed: position, then creation
+ * time, then id -- the same keys, in the same order, as the database's reorder functions use.
+ * Positions are unique after any move, but a row added while another was being added can share
+ * one, and the storefront, the counter and the back office must still agree on which comes first.
+ * Code-unit rather than locale comparison: collation may weigh the punctuation in a timestamp
+ * differently from Postgres, and a uuid's order must not depend on the viewer's language.
+ */
+export function compareByPosition(a: PositionedRow, b: PositionedRow): number {
+  return (
+    (a.display_order ?? 0) - (b.display_order ?? 0) ||
+    compareText(a.created_at ?? '', b.created_at ?? '') ||
+    compareText(a.id, b.id)
+  );
+}
 
 /**
  * The option groups attached to one menu item, ordered, with dead options dropped.
@@ -134,6 +161,13 @@ function mapItem(row: Partial<RowItem>): MenuItem {
  * phone at the table is a till that prices the same burger differently. `price_delta` is a
  * postgres numeric, which arrives as a string over PostgREST -- coercing it here is what
  * keeps `modifierDelta` doing arithmetic instead of string concatenation.
+ *
+ * Order is the merchant's, as arranged in the back office: groups by their position on this
+ * item, options by their position in the group. Options used to be sorted cheapest first, and
+ * PostgREST returns an embedded list in no particular order, so a group whose options all cost
+ * the same (Not Spicy / Mild / Medium / Thai Hot) came out shuffled on the storefront. Ties
+ * (two rows saved with the same position) fall back to creation time and id (compareByPosition),
+ * so the order is stable and matches the back office.
  */
 export async function listItemModifierGroups(
   supabase: FavornomsClient,
@@ -145,8 +179,8 @@ export async function listItemModifierGroups(
       `display_order,
        modifier_group_id,
        modifier_groups!inner(
-         id, name, min_select, max_select, is_required, selection_type, display_order,
-         modifier_options(id, name, price_delta, is_default, is_active)
+         id, name, min_select, max_select, is_required, selection_type, display_order, created_at,
+         modifier_options(id, name, price_delta, is_default, is_active, display_order, created_at)
        )`,
     )
     .eq('menu_item_id', menuItemId)
@@ -166,12 +200,15 @@ export async function listItemModifierGroups(
             is_required: boolean | null;
             selection_type: string | null;
             display_order: number | null;
+            created_at: string | null;
             modifier_options: Array<{
               id: string;
               name: string;
               price_delta: number | string | null;
               is_default: boolean | null;
               is_active: boolean | null;
+              display_order: number | null;
+              created_at: string | null;
             }> | null;
           }
         | null
@@ -187,19 +224,21 @@ export async function listItemModifierGroups(
         display_order: g.display_order ?? 0,
         options: (g.modifier_options ?? [])
           .filter((o) => o.is_active)
+          .sort(compareByPosition)
           .map((o) => ({
             id: o.id,
             name: o.name,
             price_delta: Number(o.price_delta ?? 0),
             is_default: !!o.is_default,
             is_active: true,
-          }))
-          // Cheapest first, so "no cheese" sits above "add bacon" the way a menu reads.
-          .sort((a, b) => a.price_delta - b.price_delta),
+          })),
       };
-      return group;
+      return { group, link: row.display_order ?? 0, own: g };
     })
-    .filter((g): g is ModifierGroup => g !== null);
+    .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+    // Position on this item first; the group's own order and age only break ties.
+    .sort((a, b) => a.link - b.link || compareByPosition(a.own, b.own))
+    .map((entry) => entry.group);
 }
 
 /** A combo as the till and the storefront both need it: the deal, and what is in it. */
