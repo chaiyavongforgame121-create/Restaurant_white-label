@@ -16,4 +16,5 @@ export * from './components/ui-strings';
 export * from './components/language-switcher';
 export * from './components/chat-thread';
 export * from './components/rider-icon';
+export * from './components/google-mark';
 export * from './components/dialogs';

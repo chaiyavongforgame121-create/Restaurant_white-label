@@ -35,21 +35,23 @@
     },
     "needsLink": {
       "expiredTitle": "This invitation link has expired",
-      "openTitle": "Open the link from your email",
-      "expiredBody": "Invitation links work only once. We can email <strong>{email}</strong> a new link to set your password and join — open it in this browser.",
-      "openBody": "Open the invitation link in the email sent to <strong>{email}</strong>, or get a new link below.",
-      "sent": "Sent. Check {email} and open the newest email in this browser.",
+      "expiredBody": "Links in invitation emails work only once and stop working after a while. You can still join — sign in below.",
+      "title": "Join {workplace} as {role}",
+      "googleHint": "Use the Google account for <strong>{email}</strong>.",
+      "signIn": "I already have an account with this email — sign in",
+      "noGoogle": "No Google account? <googleSignup>Create a free one</googleSignup> with this same address, <strong>{email}</strong> — Google lets you use an email you already have, not just Gmail. Then come back here and continue with Google, or ask the restaurant for help.",
+      "emailInvited": "Invited by email and never set a password?",
       "sendLink": "Email me a link to set my password",
-      "signIn": "Already created your password? Sign in"
+      "sent": "If {email} was invited by email, a link to set your password is on its way. Nothing after a few minutes? Continue with Google above."
     },
     "wrongAccount": {
       "title": "This invitation is for someone else",
-      "body": "It was sent to <strong>{invited}</strong>, but this browser is signed in as <strong>{current}</strong>. Sign out here, then open the invitation link from that email again.",
+      "body": "This invitation is for <strong>{invited}</strong>, but you’re signed in as <strong>{current}</strong>. Sign out here, then sign in with {invited} — or ask the restaurant to invite the address you use.",
       "signOut": "Sign out on this browser"
     },
     "failed": {
       "title": "Couldn’t accept invite",
-      "used": "This invitation has already been used. If it was yours, sign in — or use “Forgot password?” if you never chose one.",
+      "used": "This invitation has already been used. If it was yours, sign in with Google or your password — or use “Forgot password?” if you never chose one.",
       "notFound": "This invitation link is incomplete or no longer exists. Ask the restaurant to invite you again.",
       "goToSignIn": "Go to sign in"
     },
@@ -60,8 +62,11 @@
     "errors": {
       "alreadyUsed": "This invitation has already been used.",
       "notFound": "This invitation no longer exists. Ask the restaurant to invite you again.",
-      "confirmEmail": "Open the invitation link from your email again to confirm your address.",
+      "confirmEmail": "Your email address isn’t confirmed yet. Continue with Google, or confirm it from the email we sent you, then open this invitation link again.",
+      "signedOut": "You were signed out. Sign in again, then open this invitation link again.",
       "alreadyStaff": "You already work at this restaurant with this account, at the same branch. Sign in to continue.",
+      "emailMismatch": "This invitation is for a different email address. Sign in with <strong>{email}</strong> to accept it.",
+      "emailMismatchUnknown": "This invitation is for a different email address. Sign in with the address the restaurant invited.",
       "joinFailed": "Something went wrong joining the restaurant. Please try again.",
       "tooManyEmails": "Too many emails were sent in the last hour. Please try again later.",
       "emailFailed": "We could not send the email. Please try again, or ask the restaurant to invite you again.",

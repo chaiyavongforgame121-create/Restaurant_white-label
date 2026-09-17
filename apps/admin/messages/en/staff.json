@@ -75,14 +75,47 @@
       "generic": "Branch access could not be changed. Try again."
     }
   },
+  "pendingInvite": {
+    "copyLink": "Copy invite link",
+    "copyLinkFor": "Copy invite link for {email}",
+    "copied": "Link copied",
+    "copyFailed": "Couldn’t copy automatically. Copy this link by hand:",
+    "cancel": "Cancel invitation",
+    "cancelFor": "Cancel invitation for {email}",
+    "cancelDialog": {
+      "title": "Cancel the invitation for {email}?",
+      "body": "The link stops working right away. You can invite them again later.",
+      "confirm": "Cancel invitation",
+      "keep": "Keep invitation"
+    },
+    "cancelled": "The invitation for {email} was cancelled.",
+    "alreadyCancelled": "The invitation for {email} had already been cancelled.",
+    "alreadyJoined": "{email} has already joined the team, so there is no invitation to cancel.",
+    "errors": {
+      "notAuthorized": "Your role cannot cancel this invitation.",
+      "generic": "The invitation could not be cancelled. Try again."
+    }
+  },
   "invite": {
     "title": "Invite staff member",
     "close": "Close",
+    "linkReadyTitle": "Invite link ready",
+    "linkReadyBody": "Send this link to <strong>{email}</strong>. They open it and continue with Google using exactly that address, or sign in if they already have an account with it.",
     "sentTitle": "Invitation sent",
     "sentBody": "We emailed <strong>{email}</strong> a link. Opening it adds them to the team and asks them to choose a password.",
-    "addedTitle": "Added to the team",
-    "addedBody": "<strong>{email}</strong> already had an account, so no email was needed — they can sign in here right now with the password they already use.",
+    "existingAccountTitle": "Send them the invite link",
+    "existingAccountBody": "<strong>{email}</strong> already has an account, so no email was sent. Send them this link. They join once they open it and press “Join the team”.",
     "done": "Done",
+    "link": {
+      "label": "Invite link",
+      "copy": "Copy",
+      "copied": "Copied",
+      "copyFailed": "Couldn’t copy automatically. The link is selected, so copy it by hand.",
+      "shareLine": "Share on LINE",
+      "share": "Share…",
+      "shareText": "You’re invited to join our team. Open this link and sign in with {email}:",
+      "emailFallback": "If the email doesn’t arrive, send them this link instead."
+    },
     "email": "Email",
     "role": "Role",
     "scope": "Scope",
@@ -90,7 +123,10 @@
     "thisBranchHint": "Access limited to this location",
     "allBranches": "All branches",
     "allBranchesHint": "Full restaurant access (managers)",
+    "alsoEmail": "Also send an email invitation",
+    "alsoEmailHint": "Email delivery is limited for now. The invite link is the reliable way to reach them.",
     "cancel": "Cancel",
+    "createLink": "Create invite link",
     "send": "Send invite",
     "errors": {
       "alreadyActive": "{email} is already on your team. To change which branches they can use, set their Branch access in the staff list instead of inviting them again.",
@@ -98,7 +134,8 @@
       "onlyOwnerAdmin": "Only the owner can invite or change an admin.",
       "notAllowed": "Only the owner or an admin can invite staff.",
       "emailFailed": "The invitation email could not be sent. Try again later.",
-      "generic": "The invitation could not be sent. Try again."
+      "emailNotSent": "The invitation email to {email} could not be sent, but the invitation is saved in your staff list. Untick “Also send an email invitation” and create an invite link to share instead.",
+      "generic": "The invitation could not be created. Try again."
     }
   }
 }

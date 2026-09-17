@@ -1,11 +1,27 @@
-// Invite a staff member by email. Creates a `staff_members` row in 'pending' state, then
-// takes one of two paths depending on whether that address already has an auth account:
+// Invite a staff member. Creates a `staff_members` row in 'pending' state, then delivers it one
+// of two ways, chosen by the caller:
+//
+//   delivery 'link'   -> nothing is sent. The response carries `accept_url`, which the owner copies
+//                        or shares over LINE. The invitee opens it and signs in as the invited
+//                        address (Google, or an existing email/password account), and
+//                        accept_staff_invite checks the confirmed email matches before joining.
+//                        The link is not a credential: the staff id alone lets nobody in. This is
+//                        the default in the back office, because Supabase's built-in mailer sends
+//                        about two emails an hour and only to the project's own team.
+//
+//   delivery 'email'  -> the original flow below, which takes one of two paths depending on
+//                        whether that address already has an auth account. Also the default when
+//                        a caller sends no `delivery`, so an older back office keeps working.
 //
 //   new address       -> inviteUserByEmail. The mail lands on /auth/callback, which
 //                        exchanges the code and hands off to /invite/accept, which links
 //                        the row and asks them to choose a password.
-//   existing account  -> linked here, server-side, and no mail is sent. They already have
-//                        a way in; sending them anything would just be a second password.
+//   existing account  -> no mail, and the row stays PENDING: the response carries accept_url
+//                        (already_registered: true) for the owner to send, and the person joins
+//                        by pressing Join on it, or is taken there by my_pending_staff_invite the
+//                        next time they sign in. This used to make the row active on the spot,
+//                        which let any restaurant owner (a free trial is one Google click away)
+//                        put an existing user on their team, as admin even, without asking them.
 //
 // The response says which happened (`emailed`), because the admin UI has to word those two
 // outcomes differently — see staff-view.tsx.
@@ -61,6 +77,7 @@ interface Body {
   restaurant_id: string;
   branch_id?: string | null;
   permissions?: string[];
+  delivery?: 'link' | 'email';
 }
 
 Deno.serve(async (req) => {
@@ -181,6 +198,17 @@ Deno.serve(async (req) => {
     staffId = insert.data.id;
   }
 
+  // Opened straight on the accept page; openExternalBrowser=1 makes LINE hand it to the phone's
+  // browser, because Google refuses to sign anyone in inside LINE's in-app browser.
+  const acceptUrl = `${PUBLIC_ADMIN_URL}/invite/accept?staff_id=${staffId}&openExternalBrowser=1`;
+
+  if (body.delivery === 'link') {
+    // Nothing is linked server-side here either, even for an address that already has an account:
+    // the person joins by opening the link (or is sent to it by my_pending_staff_invite when they
+    // next sign in), so nobody lands on a team without saying yes.
+    return json({ ok: true, staff_id: staffId, emailed: false, delivery: 'link', accept_url: acceptUrl });
+  }
+
   // Send the magic link.
   //
   // Via /auth/callback, not straight to /invite/accept: the invitation comes back as a PKCE
@@ -194,7 +222,7 @@ Deno.serve(async (req) => {
     data: { signup_type: 'staff', staff_id: staffId },
   });
   if (!invite.error) {
-    return json({ ok: true, staff_id: staffId, emailed: true, redirect_to: redirectTo });
+    return json({ ok: true, staff_id: staffId, emailed: true, delivery: 'email', redirect_to: redirectTo, accept_url: acceptUrl });
   }
 
   // Supabase's built-in mailer allows a couple of emails an hour. Say so, instead of treating a
@@ -229,14 +257,15 @@ Deno.serve(async (req) => {
     return json({ error: 'email_failed', detail: invite.error.message }, 500);
   }
 
-  // Only someone who can actually sign in is linked without an email: an account they created
-  // themselves (no invited_at), or an invited one that has chosen a password. An earlier
-  // invitation opened once — by the person, or by a mail scanner — confirms the address, and
-  // inviteUserByEmail then refuses it; linking that account here told the owner "they can sign
-  // in with the password they already use" about someone who never had one. Send them a link to
-  // set a password and join instead, and leave the row pending until they do.
+  // Someone who can already sign in needs no email: an account they created themselves (no
+  // invited_at), an invited one that has chosen a password, or one with a Google (any non-email)
+  // identity. Someone who cannot (an earlier invitation opened once, by the person or a mail
+  // scanner, confirms the address and inviteUserByEmail then refuses it) is sent a link to set a
+  // password. Either way the row stays pending until they press Join.
   const canSignIn =
-    !existingUser?.invited_at || existingUser?.user_metadata?.password_set === true;
+    !existingUser?.invited_at ||
+    existingUser?.user_metadata?.password_set === true ||
+    (existingUser?.identities ?? []).some((identity) => identity.provider !== 'email');
   if (!canSignIn) {
     const recovery = await admin.auth.resetPasswordForEmail(body.email, { redirectTo });
     if (recovery.error) {
@@ -245,29 +274,17 @@ Deno.serve(async (req) => {
       }
       return json({ error: 'email_failed', detail: recovery.error.message }, 500);
     }
-    return json({ ok: true, staff_id: staffId, emailed: true, redirect_to: redirectTo });
-  }
-
-  const linked = await admin
-    .from('staff_members')
-    .update({
-      user_id: existingUserId,
-      accepted_at: new Date().toISOString(),
-      status: 'active',
-    })
-    .eq('id', staffId)
-    .select('id')
-    .single();
-  if (linked.error) {
-    return json({ error: 'link_failed', detail: linked.error.message }, 500);
+    return json({ ok: true, staff_id: staffId, emailed: true, delivery: 'email', redirect_to: redirectTo, accept_url: acceptUrl });
   }
 
   return json({
     ok: true,
     staff_id: staffId,
     emailed: false,
+    delivery: 'email',
     already_registered: true,
     redirect_to: redirectTo,
+    accept_url: acceptUrl,
   });
 });
 

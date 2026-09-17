@@ -11,6 +11,12 @@
     "continueAnyway": "Continue anyway",
     "goToDashboard": "Go to my dashboard"
   },
+  "account": {
+    "signedInAs": "Signed in as <strong>{email}</strong>.",
+    "differentAccountHint": "Already have a restaurant? You may be signed in with a different account.",
+    "useDifferentAccount": "Use a different account",
+    "signOutFailed": "We couldn’t sign you out. Check your connection and try again."
+  },
   "wizard": {
     "step": "Step {current} / {total}",
     "restaurantTitle": "Tell us about your restaurant",

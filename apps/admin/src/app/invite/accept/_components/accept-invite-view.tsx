@@ -2,7 +2,13 @@
 
 // Where a staff invitation lands, and where the invitee creates their account.
 //
-// Invitations are sent with the Auth admin API, so the email link comes back with the new
+// Most invitations are now a link the restaurant shares itself (over LINE, say), because
+// Supabase's mailer sends about two emails an hour and only to the project's team. Such a link
+// carries nothing but the staff id, which grants nothing: the invitee signs in — with Google,
+// whose addresses are already confirmed, or an existing account — and accept_staff_invite checks
+// that the confirmed email is the invited one.
+//
+// Invitations sent by email use the Auth admin API, so that link comes back with the new
 // session in the URL FRAGMENT (#access_token=…&refresh_token=…) — or, when the link is stale or
 // already used, with #error_code=…. No server sees a fragment, so this page reads it itself.
 //
@@ -12,7 +18,7 @@
 // nothing is joined without a click either. Otherwise a crafted link could sign a merchant into an
 // attacker's account on their own device.
 //
-// A new invitee has no password — the invitation created the account without one — so they
+// An emailed invitee has no password — the invitation created the account without one — so they
 // choose it here, next to the address it belongs to, before joining.
 
 import * as React from 'react';
@@ -24,6 +30,7 @@ import { CheckCircle2, ChefHat, KeyRound, Mail, ShieldAlert } from 'lucide-react
 import { Button, Card } from '@favornoms/ui';
 import { getBrowserClient } from '@favornoms/database/client';
 import { acceptStaffInvite, getStaffInvite, type StaffInvite } from '@favornoms/database/queries';
+import { AuthDivider, ContinueWithGoogle, isInAppBrowser } from '@/components/auth/continue-with-google';
 import { LocaleSwitcher } from '@/components/locale-switcher';
 import { authErrorKey } from '../../../auth/_lib/auth-error';
 
@@ -40,12 +47,25 @@ type AcceptErrorKey =
   | 'accept.errors.alreadyUsed'
   | 'accept.errors.notFound'
   | 'accept.errors.confirmEmail'
+  | 'accept.errors.signedOut'
   | 'accept.errors.alreadyStaff'
+  | 'accept.errors.emailMismatch'
+  | 'accept.errors.emailMismatchUnknown'
   | 'accept.errors.joinFailed'
   | 'accept.errors.tooManyEmails'
   | 'accept.errors.emailFailed';
 
 type LinkTokens = { accessToken: string; refreshToken: string; email: string };
+
+/** The parts of the signed-in Supabase user this page reads. Structural rather than imported,
+ *  like EmailOtpType in /auth/callback: apps/admin reaches supabase-js only transitively. */
+type InviteeUser = {
+  email?: string;
+  invited_at?: string | null;
+  user_metadata?: Record<string, unknown>;
+  identities?: { provider: string }[] | null;
+  app_metadata?: { providers?: string[] };
+};
 
 type State =
   | { kind: 'loading' }
@@ -61,17 +81,33 @@ type State =
   | { kind: 'done'; invite: StaffInvite }
   | { kind: 'error'; invite: StaffInvite | null; messageKey: AcceptErrorKey };
 
-function describeAcceptError(message: string): AcceptErrorKey {
+function describeAcceptError(message: string, invitedEmail: string | null): AcceptErrorKey {
   if (message.includes('invite_not_pending')) return 'accept.errors.alreadyUsed';
   if (message.includes('invite_not_found')) return 'accept.errors.notFound';
-  if (message.includes('email_not_confirmed') || message.includes('sign_in_required'))
-    return 'accept.errors.confirmEmail';
+  if (message.includes('email_not_confirmed')) return 'accept.errors.confirmEmail';
+  // The session ended between opening the page and pressing Join (expired, or signed out in
+  // another tab); the address itself is fine, so talking about confirming it would mislead.
+  if (message.includes('sign_in_required')) return 'accept.errors.signedOut';
   if (message.includes('already_staff_here')) return 'accept.errors.alreadyStaff';
+  // The database compares addresses exactly, so a Gmail account spelled with or without dots
+  // is "someone else" here; naming the invited address is the only useful hint.
+  if (message.includes('invite_email_mismatch'))
+    return invitedEmail ? 'accept.errors.emailMismatch' : 'accept.errors.emailMismatchUnknown';
   return 'accept.errors.joinFailed';
 }
 
-/** Created by an invitation and never given a password (the flag is written wherever one is set). */
-function needsPassword(user: { invited_at?: string | null; user_metadata?: Record<string, unknown> }): boolean {
+/** Signs in some other way than an email and password (Google today). */
+function hasOtherSignIn(user: InviteeUser): boolean {
+  if (user.identities?.some((identity) => identity.provider !== 'email')) return true;
+  const providers = user.app_metadata?.providers;
+  return Array.isArray(providers) && providers.some((provider) => provider !== 'email');
+}
+
+/** Created by an invitation and never given a password (the flag is written wherever one is set).
+ *  Someone who already signs in with Google has a way back in, and making them invent a password
+ *  first would only stand between them and the Join button. */
+function needsPassword(user: InviteeUser): boolean {
+  if (hasOtherSignIn(user)) return false;
   return !!user.invited_at && user.user_metadata?.password_set !== true;
 }
 
@@ -104,6 +140,23 @@ function readFragment(): { tokens: LinkTokens | null; error: string | null; pres
   return { tokens: { accessToken, refreshToken, email: claims.email.toLowerCase() }, error, present: true };
 }
 
+/** This page's URL with openExternalBrowser=1, when it is open inside LINE's own browser (where
+ *  Google refuses to sign anyone in) and has not been sent out once already. LINE hands a URL
+ *  carrying that flag to the phone's real browser, and the flag stops a second attempt, so this can
+ *  never loop. Only LINE: Facebook and Instagram ignore the flag, so for them it would be a
+ *  pointless reload (the Google button still warns there). The fragment goes along: an emailed
+ *  invitation's tokens are needed wherever the page ends up. */
+function externalBrowserUrl(): string | null {
+  if (!/\bLine\//i.test(window.navigator.userAgent)) return null;
+  const url = new URL(window.location.href);
+  if (url.searchParams.get('openExternalBrowser') === '1') return null;
+  url.searchParams.set('openExternalBrowser', '1');
+  return url.toString();
+}
+
+/** How long a page that asked to leave an in-app browser waits before carrying on where it is. */
+const EXTERNAL_BROWSER_GRACE_MS = 2500;
+
 export function AcceptInviteView({ staffId }: { staffId?: string }) {
   const router = useRouter();
   const t = useTranslations('invite');
@@ -122,7 +175,7 @@ export function AcceptInviteView({ staffId }: { staffId?: string }) {
       await acceptStaffInvite(getBrowserClient(), staffId!);
       setState({ kind: 'done', invite });
     } catch (err) {
-      const messageKey = describeAcceptError((err as Error).message);
+      const messageKey = describeAcceptError((err as Error).message, invite.invitedEmail);
       if (messageKey === 'accept.errors.joinFailed') console.error('[invite] accept failed:', (err as Error).message);
       setState({ kind: 'error', invite, messageKey });
     }
@@ -130,7 +183,7 @@ export function AcceptInviteView({ staffId }: { staffId?: string }) {
 
   /** With the invitee's own session in place: ask for a password if they have none, else confirm. */
   const nextStepFor = React.useCallback(
-    (invite: StaffInvite, user: { email?: string; invited_at?: string | null; user_metadata?: Record<string, unknown> }) => {
+    (invite: StaffInvite, user: InviteeUser) => {
       const email = user.email ?? invite.invitedEmail ?? '';
       if (needsPassword(user)) setState({ kind: 'create_account', invite, email });
       else setState({ kind: 'confirm_join', invite, email });
@@ -164,7 +217,7 @@ export function AcceptInviteView({ staffId }: { staffId?: string }) {
       setState({ kind: 'not_found' });
       return;
     }
-    void (async () => {
+    const open = async () => {
       const supabase = getBrowserClient();
       const fragment = readFragment();
       if (fragment.present) {
@@ -226,7 +279,54 @@ export function AcceptInviteView({ staffId }: { staffId?: string }) {
         return;
       }
       setState({ kind: 'needs_link', invite, expired: !!fragment.error || fragment.present });
-    })();
+    };
+
+    // A shared link is usually tapped inside LINE, whose own browser cannot finish a Google
+    // sign-in. Nothing is cleaned up first, so the page that loads outside starts afresh.
+    const external = externalBrowserUrl();
+    if (!external) {
+      void open();
+      return;
+    }
+
+    // The session check below is asynchronous, so this effect can be cleaned up (unmounted, or
+    // re-run by Strict Mode) before it answers. `cancelled` keeps a stale answer from redirecting or
+    // setting state, and `started` keeps any one run from opening the invitation twice.
+    let cancelled = false;
+    let started = false;
+    let timer: number | undefined;
+    const openOnce = () => {
+      if (cancelled || started) return;
+      started = true;
+      void open();
+    };
+
+    // Someone already signed in inside LINE would arrive signed OUT in the real browser, which
+    // shares no cookies with it, and be asked to sign in again for nothing: they need no Google
+    // sign-in, so they stay. getSession only reads this browser's stored session; the fragment is
+    // left in place (the client is PKCE, so it never takes tokens from it) for open() to read.
+    getBrowserClient()
+      .auth.getSession()
+      .then(
+        ({ data }) => {
+          if (cancelled) return;
+          if (data.session) {
+            openOnce();
+            return;
+          }
+          window.location.replace(external);
+          // LINE opens the real browser but can leave this page showing behind it, and a navigation
+          // that did happen unloads the page before the timer fires. Either way nobody is left on
+          // "Opening your invitation…", and the sign-in screen there warns about in-app browsers.
+          timer = window.setTimeout(openOnce, EXTERNAL_BROWSER_GRACE_MS);
+        },
+        // Unable to tell: carry on here rather than risk moving a signed-in person out.
+        () => openOnce(),
+      );
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
   }, [staffId, router, nextStepFor, adoptLinkSession]);
 
   // Straight to the right screen once joined: the landing route picks the dashboard, the kitchen
@@ -431,36 +531,84 @@ export function AcceptInviteView({ staffId }: { staffId?: string }) {
         )}
 
         {state.kind === 'needs_link' && (
-          <Card className="p-6 text-center">
-            <ShieldAlert className="mx-auto h-10 w-10 text-warning" />
-            <p className="mt-3 font-display text-xl font-semibold">
-              {state.expired ? t('accept.needsLink.expiredTitle') : t('accept.needsLink.openTitle')}
-            </p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {t.rich(state.expired ? 'accept.needsLink.expiredBody' : 'accept.needsLink.openBody', {
-                email: state.invite.invitedEmail,
-                strong,
-              })}
-            </p>
-            {linkSent ? (
-              <p className="mt-4 rounded-xl bg-success/10 px-4 py-3 text-sm text-success">
-                {t('accept.needsLink.sent', { email: state.invite.invitedEmail })}
-              </p>
-            ) : (
-              <Button
-                variant="gradient"
-                size="lg"
-                className="mt-5"
-                fullWidth
-                loading={sendingLink}
-                onClick={() => void emailPasswordLink(state.invite)}
-              >
-                {t('accept.needsLink.sendLink')}
-              </Button>
+          <Card className="p-6">
+            {state.expired && (
+              <div className="mb-5 flex gap-3 rounded-xl bg-warning/10 px-4 py-3">
+                <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
+                <div>
+                  <p className="text-sm font-semibold">{t('accept.needsLink.expiredTitle')}</p>
+                  <p className="mt-0.5 text-sm text-muted-foreground">{t('accept.needsLink.expiredBody')}</p>
+                </div>
+              </div>
             )}
-            <Link href={loginHref} className="mt-4 inline-block text-sm font-medium text-primary underline underline-offset-2">
+            <h1 className="text-center font-display text-2xl font-bold">
+              {t('accept.needsLink.title', { workplace, role: roleLabel(state.invite.role) })}
+            </h1>
+            <p className="mt-1 text-center text-sm text-muted-foreground">
+              {t.rich('accept.needsLink.googleHint', { email: state.invite.invitedEmail, strong })}
+            </p>
+            {/* Google first: it needs no email from us, and its addresses arrive already confirmed,
+                which is what accept_staff_invite requires. login_hint only pre-selects the
+                account; the invited address is still checked when joining. */}
+            <ContinueWithGoogle
+              className="mt-5"
+              next={`/invite/accept?staff_id=${staffId ?? ''}`}
+              loginHint={state.invite.invitedEmail}
+            />
+            <AuthDivider />
+            <Link
+              href={loginHref}
+              className="focus-ring flex min-h-12 w-full items-center justify-center rounded-xl border border-border px-4 py-2.5 text-center text-sm font-medium transition-colors hover:bg-muted"
+            >
               {t('accept.needsLink.signIn')}
             </Link>
+            <p className="mt-4 text-center text-xs text-muted-foreground">
+              {t.rich('accept.needsLink.noGoogle', {
+                email: state.invite.invitedEmail,
+                strong,
+                // Google, not our /signup: that one needs a confirmation email, and Supabase's mailer
+                // reaches almost nobody. Google accepts an existing non-Gmail address and confirms it
+                // itself, which is what joining checks. A new tab keeps this invitation open.
+                googleSignup: (c) => (
+                  <a
+                    href="https://accounts.google.com/signup"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-primary underline underline-offset-2"
+                  >
+                    {c}
+                  </a>
+                ),
+              })}
+            </p>
+            {/* Only an invitation sent by email created an account to set a password on. For a
+                shared link there is no account yet, and GoTrue quietly sends nothing while reporting
+                success — so the notice below says what happens IF they were emailed, never "sent",
+                and points back to Google, which stays on the screen above it. */}
+            <div className="mt-5 border-t border-border pt-4 text-center">
+              <p className="text-xs text-muted-foreground">{t('accept.needsLink.emailInvited')}</p>
+              {linkSent ? (
+                <p role="status" className="mt-2 rounded-xl bg-muted px-4 py-3 text-sm text-foreground">
+                  {t('accept.needsLink.sent', { email: state.invite.invitedEmail })}
+                </p>
+              ) : (
+                <button
+                  type="button"
+                  disabled={sendingLink}
+                  aria-busy={sendingLink}
+                  onClick={() => void emailPasswordLink(state.invite)}
+                  className="focus-ring mt-1 inline-flex items-center gap-2 rounded-lg px-2 py-1 text-sm font-medium text-primary underline underline-offset-2 disabled:opacity-60"
+                >
+                  {sendingLink && (
+                    <span
+                      aria-hidden
+                      className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-r-transparent"
+                    />
+                  )}
+                  {t('accept.needsLink.sendLink')}
+                </button>
+              )}
+            </div>
           </Card>
         )}
 
@@ -483,6 +631,7 @@ export function AcceptInviteView({ staffId }: { staffId?: string }) {
               onClick={async () => {
                 // This browser only: the person pressing it is, by construction, not that account's
                 // holder, and a global sign-out would end their sessions on every other device.
+                // The sign-in choices come next, and Google always asks which account to use.
                 await getBrowserClient().auth.signOut({ scope: 'local' });
                 setState({ kind: 'needs_link', invite: state.invite, expired: false });
               }}
@@ -501,7 +650,7 @@ export function AcceptInviteView({ staffId }: { staffId?: string }) {
                 ? t('accept.failed.used')
                 : state.kind === 'not_found'
                   ? t('accept.failed.notFound')
-                  : t(state.messageKey)}
+                  : t.rich(state.messageKey, { email: state.invite?.invitedEmail ?? '', strong })}
             </p>
             <Link href={loginHref} className="mt-4 inline-block text-sm font-medium text-primary underline underline-offset-2">
               {t('accept.failed.goToSignIn')}

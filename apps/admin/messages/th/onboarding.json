@@ -11,6 +11,12 @@
     "continueAnyway": "ยืนยันดำเนินการต่อ",
     "goToDashboard": "ไปที่แดชบอร์ดของฉัน"
   },
+  "account": {
+    "signedInAs": "เข้าสู่ระบบอยู่ในชื่อ <strong>{email}</strong>",
+    "differentAccountHint": "หากคุณมีร้านอาหารอยู่แล้ว คุณอาจเข้าสู่ระบบด้วยบัญชีอื่นอยู่",
+    "useDifferentAccount": "ใช้บัญชีอื่น",
+    "signOutFailed": "ออกจากระบบไม่สำเร็จ โปรดตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง"
+  },
   "wizard": {
     "step": "ขั้นตอนที่ {current} / {total}",
     "restaurantTitle": "บอกเราเกี่ยวกับร้านอาหารของคุณ",

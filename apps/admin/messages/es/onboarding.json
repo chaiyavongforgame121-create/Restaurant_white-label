@@ -11,6 +11,12 @@
     "continueAnyway": "Continuar de todos modos",
     "goToDashboard": "Ir a mi panel"
   },
+  "account": {
+    "signedInAs": "Sesión iniciada como <strong>{email}</strong>.",
+    "differentAccountHint": "¿Ya tienes un restaurante? Puede que hayas iniciado sesión con otra cuenta.",
+    "useDifferentAccount": "Usar otra cuenta",
+    "signOutFailed": "No pudimos cerrar tu sesión. Revisa tu conexión e inténtalo de nuevo."
+  },
   "wizard": {
     "step": "Paso {current} de {total}",
     "restaurantTitle": "Cuéntanos sobre tu restaurante",

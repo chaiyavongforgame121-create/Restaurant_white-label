@@ -33,7 +33,9 @@ export default async function OnboardingPage() {
     // outrank the invited role at every sign-in).
     const { data: pendingInvite } = await supabase.rpc('my_pending_staff_invite');
     if (pendingInvite) redirect(`/invite/accept?staff_id=${pendingInvite}`);
-    return <OnboardingWizard existing={null} />;
+    // Passed from here rather than read in the browser, so the notice is in the server HTML and
+    // hydrates without a flash or a mismatch.
+    return <OnboardingWizard existing={null} signedInEmail={userData.user.email ?? null} />;
   }
 
   // Someone who already runs a restaurant and opens this page almost always wants another

@@ -27,6 +27,8 @@ export async function inviteStaff(
     restaurant_id: string;
     branch_id?: string | null;
     permissions?: string[];
+    /** 'link' sends nothing and returns accept_url to share; 'email' mails the invitation. */
+    delivery?: 'link' | 'email';
   },
 ) {
   const { data: session } = await supabase.auth.getSession();
@@ -54,10 +56,28 @@ export async function inviteStaff(
   return (await res.json()) as {
     ok: true;
     staff_id: string;
-    redirect_to: string;
+    /** Only on email delivery. */
+    redirect_to?: string;
     emailed: boolean;
     already_registered?: boolean;
+    delivery?: 'link' | 'email';
+    /** The invitation page to share. Missing only from an invite-staff deployed before links. */
+    accept_url?: string;
   };
+}
+
+/** The invitation page for a pending row, built on this origin (the back office that shows it). */
+export function staffInviteUrl(origin: string, staffId: string): string {
+  return `${origin.replace(/\/$/, '')}/invite/accept?staff_id=${staffId}&openExternalBrowser=1`;
+}
+
+/**
+ * Deletes a pending, unclaimed invitation. Owner or admin of the restaurant only, and only the
+ * owner may cancel an admin invitation. Throws `cancel_invite_failed:<reason>`.
+ */
+export async function cancelStaffInvite(supabase: FavornomsClient, staffId: string): Promise<void> {
+  const { error } = await supabase.rpc('cancel_staff_invite', { p_staff_id: staffId });
+  if (error) throw new Error(`cancel_invite_failed:${error.message}`);
 }
 
 /**

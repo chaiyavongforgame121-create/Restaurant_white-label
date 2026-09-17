@@ -15,6 +15,12 @@
 // the only exit. The card now resends, says out loud when the mail server refused, and
 // offers the two other ways forward (sign in, or correct the address).
 //
+// That mailer is Supabase's built-in one: about two emails an hour, delivered only to the
+// project's team members, so for a real owner the confirmation mail effectively never comes.
+// Continue with Google therefore sits above the form and again on the confirm card. Google has
+// already verified the address, so the owner lands on /onboarding with no email at all, and
+// /onboarding starts the trial exactly as it does for a password account.
+//
 // /login deliberately passes `shouldCreateUser: false` so that a typo in an email address
 // cannot mint an empty account and silently swallow the sign-in. This route is the
 // deliberate way in. create_restaurant_with_branch starts the trial from /onboarding.
@@ -27,6 +33,7 @@ import { useTranslations } from 'next-intl';
 import { Check, KeyRound, Mail, RefreshCw, ShieldCheck, Sparkles } from 'lucide-react';
 import { Button, Card } from '@favornoms/ui';
 import { getBrowserClient } from '@favornoms/database/client';
+import { AuthDivider, ContinueWithGoogle } from '@/components/auth/continue-with-google';
 import { LocaleSwitcher } from '@/components/locale-switcher';
 import { authErrorKey } from '../../auth/_lib/auth-error';
 
@@ -211,6 +218,15 @@ export function SignupView() {
                 {cooldown > 0 ? t('signup.resendIn', { seconds: cooldown }) : t('signup.resend')}
               </Button>
 
+              {/* The resend above goes through the same capped mailer, so it is not a real way
+                  out. Google with the address they typed is: GoTrue treats a Google-verified
+                  email as confirmed. login_hint pre-selects that account in Google's chooser. */}
+              <AuthDivider />
+              <p className="text-sm text-muted-foreground">
+                {t.rich('signup.googleInstead', { email, strong: (c) => <strong>{c}</strong> })}
+              </p>
+              <ContinueWithGoogle next="/onboarding" loginHint={email.trim()} className="mt-3" />
+
               <p className="mt-4 text-sm text-muted-foreground">
                 {t.rich('signup.alreadyOpened', { link: signInLink })}
               </p>
@@ -236,6 +252,11 @@ export function SignupView() {
                   </li>
                 ))}
               </ul>
+              <ContinueWithGoogle next="/onboarding" />
+              <p className="mt-2 text-center text-xs text-muted-foreground">
+                {t('signup.googleFastest')}
+              </p>
+              <AuthDivider />
               <form className="space-y-4" onSubmit={submit}>
                 <label className="block">
                   <span className="mb-2 block text-sm font-medium">{t('fields.workEmail')}</span>
