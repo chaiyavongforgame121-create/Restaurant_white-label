@@ -1,0 +1,105 @@
+{
+  "online": "Online",
+  "offline": "Offline",
+  "goOnline": "Go online",
+  "goOffline": "Go offline",
+  "readyToReceive": "Ready to receive orders",
+  "currentlyOffline": "You're offline — go online to start earning",
+  "statusOnline": "You're online",
+  "statusOffline": "You're offline",
+  "subOffline": "Go online to start earning",
+  "today": "Today",
+  "week": "This week",
+  "deliveries": "Deliveries",
+  "rating": "Rating",
+  "lastDispatch": "Recent activity",
+  "tips": "Tips for higher earnings",
+  "tip1": "Stay in busy neighborhoods like Williamsburg & Bushwick during lunch",
+  "tip2": "Accept dispatches within 10 seconds for bonus points",
+  "tip3": "Maintain 4.5+ rating to unlock Gold tier",
+  "greeting": "Hey {name} 👋",
+  "onlineNoLocation": "Online — but we cannot see where you are",
+  "reconnecting": "Reconnecting — you may not receive offers until this clears.",
+  "location": {
+    "denied": "Location is off. Turn it on for this app in your phone settings — restaurants can only offer you jobs when we can see where you are.",
+    "insecure": "Location only works over https. Open the app from its installed icon, or an https address.",
+    "stale": "We last saw you {age}. Keep this app open with location allowed — you will not be offered jobs until your position updates.",
+    "waiting": "Waiting for a GPS fix — you are not being offered jobs yet."
+  },
+  "paused": "Paused · {countdown}",
+  "onlineFor": "Online for {restaurants}",
+  "tapToGoOnline": "Tap to go online",
+  "statusUpdateFailed": "Couldn’t update your status — check your connection and try again.",
+  "noApproval": "No restaurant has approved you yet — apply below first, then you can go online.",
+  "cooldown": "Too many declined offers — you can go back online in {countdown}.",
+  "restaurant": "Restaurant",
+  "restaurants": {
+    "title": "Your restaurants & hours",
+    "onlineFor": "Online for {restaurants} · tap to change",
+    "onlineForAll": "Online for your restaurants · tap to change",
+    "offline": "Choose restaurants & set your hours"
+  },
+  "apply": {
+    "title": "Apply to restaurants",
+    "approved": "{approved} approved · tap to see all",
+    "approvedWaiting": "{approved} approved · {pending} waiting · tap to see all",
+    "waiting": "{pending} waiting for review · tap to see",
+    "none": "Get approved to start receiving orders"
+  },
+  "recent": {
+    "summary": "{items} · {distance} mi · {earnings}",
+    "empty": "No deliveries yet"
+  },
+  "performance": {
+    "title": "Last 30 days",
+    "earnings": "Earnings",
+    "acceptance": "Acceptance",
+    "onTime": "On-time",
+    "ratingCount": "Rating · {count}"
+  },
+  "sheet": {
+    "tabNow": "Online now",
+    "tabSchedule": "Schedule",
+    "intro": "Choose which restaurants can send you orders. A restaurant you leave off won’t dispatch to you.",
+    "selectAll": "Select all",
+    "clearAll": "Clear all",
+    "update": "Update restaurants",
+    "cooldown": "You’re in a cooldown after too many missed offers — try again shortly.",
+    "pickOne": "Pick at least one restaurant."
+  },
+  "schedule": {
+    "title": "My schedule",
+    "intro": "Set the hours you want to work at each restaurant. You go online automatically when a window starts and offline when it ends — toggle a restaurant off anytime to override.",
+    "noRestaurants": "No restaurants yet",
+    "noRestaurantsHint": "Get approved to a restaurant before setting your hours.",
+    "addHours": "Add hours",
+    "days": "Days",
+    "opens": "Opens",
+    "closes": "Closes",
+    "repeatFor": "Repeat for",
+    "weeks": "{count, plural, one {# week} other {# weeks}}",
+    "repeatHint": "Creates a window on each selected day for the coming weeks.",
+    "addToSchedule": "Add to schedule",
+    "upcoming": "Upcoming",
+    "loading": "Loading…",
+    "empty": "No hours set",
+    "emptyHint": "Add the hours you want to work above and you’ll go online automatically.",
+    "remove": "Remove window",
+    "added": "{count, plural, one {Added # window.} other {Added # windows.}}",
+    "status": {
+      "active": "Active",
+      "completed": "Completed",
+      "cancelled": "Cancelled"
+    },
+    "errors": {
+      "pickRestaurant": "Pick a restaurant.",
+      "pickDay": "Pick at least one day of the week.",
+      "closeAfterOpen": "Close time must be after open time.",
+      "nothingToAdd": "Nothing to add — those days have already passed.",
+      "duplicate": "Those windows are already on your schedule.",
+      "overlap": "Those hours overlap hours already on your schedule.",
+      "saveFailed": "Couldn’t add your hours — check your connection and try again.",
+      "removeFailed": "Couldn’t remove that window — check your connection and try again."
+    }
+  }
+}

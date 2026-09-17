@@ -1,0 +1,156 @@
+{
+  "title": "Seguimiento del pedido",
+  "orderNumber": "Pedido {number}",
+  "back": "Atrás",
+  "statuses": {
+    "confirmed": "Pedido confirmado",
+    "preparing": "En preparación",
+    "ready": "Listo para recoger",
+    "readyDineIn": "Listo para servir",
+    "out_for_delivery": "En camino",
+    "completed": "Entregado",
+    "completedDineIn": "Servido",
+    "completedPickup": "Recogido"
+  },
+  "driverAssigned": "{name} lleva tu pedido",
+  "callDriver": "Llamar",
+  "rateOrder": "Calificar pedido",
+  "reconnecting": "Reconectando… esta página puede ir un poco atrasada.",
+  "arrivingNow": "🛵 Llegando",
+  "lastSeen": "Última ubicación {age}",
+  "closed": {
+    "refunded": "Este pedido fue reembolsado",
+    "cancelled": "Este pedido fue cancelado",
+    "contactRestaurant": "Si no esperabas esto, comunícate con el restaurante."
+  },
+  "driver": {
+    "almostThere": "¡Tu repartidor está por llegar!",
+    "finishingOtherDelivery": "Tu repartidor termina primero otra entrega cercana",
+    "collecting": "Tu repartidor está recogiendo tu pedido",
+    "onTheWay": "Tu repartidor va en camino",
+    "distance": "{miles} mi",
+    "waitingForLocation": "Esperando la ubicación de tu repartidor…",
+    "locationStale": "Ubicación actualizada {age}: el mapa y el tiempo estimado pueden estar atrasados",
+    "etaUpdated": "A {minutes} min de ti · actualizado {age}",
+    "updated": "Actualizado {age}",
+    "includesOtherStop": "incluye su otra parada"
+  },
+  "items": {
+    "title": "Productos",
+    "viewReceipt": "Ver recibo completo →"
+  },
+  "cardPayment": {
+    "title": "Aquí no se puede pagar con tarjeta",
+    "body": "Este pedido se hizo con pago con tarjeta, pero aún no podemos cobrar tarjetas en línea. Paga directamente al restaurante: pueden cobrarte cuando recojas tu pedido o cuando llegue. Tu pedido no está cancelado.",
+    "devNote": "Solo en desarrollo: marca el pedido como pagado para probar el resto del flujo.",
+    "devConfirm": "Confirmar de prueba (solo desarrollo)"
+  },
+  "transfer": {
+    "confirmedTitle": "Transferencia confirmada",
+    "confirmedBody": "El restaurante revisó tu comprobante y comenzó tu pedido.",
+    "rejectedTitle": "Tu comprobante de transferencia no fue aceptado",
+    "waitingTitle": "Esperando que el restaurante revise tu comprobante",
+    "reviewTitle": "Revisa tu comprobante y confirma",
+    "payTitle": "Paga {amount} para continuar",
+    "rejectedReason": "Motivo: {reason}",
+    "rejectedNoReason": "Sube una foto más clara de la transferencia.",
+    "waitingBody": "Comenzaremos tu pedido en cuanto lo confirmen. Suele tardar unos minutos.",
+    "reviewBody": "Revisa la foto de abajo. Cámbiala si no es la correcta y luego confirma que pagaste: así se envía al restaurante.",
+    "payBody": "Escanea el código, transfiere el total y sube una foto del comprobante.",
+    "qrAlt": "Código QR de pago",
+    "slipAlt": "Tu comprobante de transferencia",
+    "replacePhoto": "Subir otra foto",
+    "choosePhoto": "Elegir foto",
+    "confirmPaid": "Ya pagué: enviar al restaurante",
+    "errors": {
+      "fileType": "Sube una foto PNG, JPEG o WebP de tu comprobante.",
+      "tooLarge": "La imagen pesa más de 10 MB.",
+      "uploadFailed": "No se pudo subir la foto. Revisa tu conexión e inténtalo de nuevo.",
+      "notYourOrder": "No encontramos esta transferencia en tu cuenta. Inicia sesión con la cuenta con la que hiciste el pedido.",
+      "slipRequired": "Sube una foto de tu transferencia antes de confirmar.",
+      "generic": "Algo salió mal. Inténtalo de nuevo."
+    }
+  },
+  "actions": {
+    "cancelPrompt": "¿Cambiaste de opinión? Aún no se ha preparado nada: el restaurante no ha confirmado tu transferencia, así que todavía puedes cancelar este pedido.",
+    "cancelOrder": "Cancelar este pedido",
+    "contactToChange": "¿Necesitas cambiar o cancelar este pedido? Comunícate directamente con el restaurante: pueden modificarlo mientras aún se esté preparando.",
+    "cancelErrors": {
+      "signIn": "Inicia sesión con la cuenta con la que hiciste el pedido para cancelarlo.",
+      "otherAccount": "Este pedido pertenece a otra cuenta. Comunícate con el restaurante para cancelarlo.",
+      "tooLate": "Este pedido ya avanzó y no se puede cancelar aquí. Comunícate con el restaurante.",
+      "generic": "No se pudo completar. Inténtalo de nuevo o comunícate con el restaurante."
+    }
+  },
+  "rating": {
+    "thanksTitle": "¡Gracias!",
+    "thanksBody": "Tu opinión ayuda al restaurante a mejorar aún más.",
+    "driverTitle": "¿Qué tal tu repartidor?",
+    "foodTitle": "¿Qué tal la comida?",
+    "driverFirst": "Primero califica a tu repartidor; luego sigue el restaurante.",
+    "driverOnly": "Califica al repartidor que te trajo el pedido.",
+    "foodLast": "Último paso: ¿qué tal la comida?",
+    "foodOnly": "Califica la comida para terminar.",
+    "step": "Paso {current} de {total}",
+    "driverLabel": "Tu repartidor",
+    "foodLabel": "Comida",
+    "driverPlaceholder": "¿Algo que decir sobre tu repartidor? (opcional)",
+    "foodPlaceholder": "¿Algo que decir sobre la comida? (opcional)",
+    "next": "Siguiente: califica el restaurante",
+    "submit": "Enviar calificación",
+    "driverRequired": "Las estrellas del repartidor son obligatorias.",
+    "foodRequired": "Las estrellas de la comida son obligatorias.",
+    "skip": "Omitir por ahora",
+    "submittedTitle": "¡Gracias por tu opinión!",
+    "onDriver": "Sobre tu repartidor: “{comment}”",
+    "onFood": "Sobre la comida: “{comment}”",
+    "starsSummary": "{label}: {value} de 5 estrellas",
+    "starButton": "{label}: {count, plural, one {# estrella} other {# estrellas}}",
+    "errors": {
+      "signIn": "Inicia sesión con la cuenta con la que hiciste el pedido para calificarlo.",
+      "noAccount": "Este pedido no está vinculado a una cuenta, así que no se puede calificar.",
+      "saveFailed": "No se pudo guardar tu calificación. Inténtalo de nuevo."
+    }
+  },
+  "issue": {
+    "report": "Reportar un problema",
+    "cancel": "Cancelar",
+    "categories": {
+      "missing_item": "Falta un producto",
+      "wrong_item": "Recibí un producto equivocado",
+      "quality": "Problema con la calidad de la comida",
+      "delivery": "Problema con la entrega",
+      "payment": "Pago / cobro",
+      "other": "Otro"
+    },
+    "placeholder": "Cuéntanos qué pasó…",
+    "describe": "Describe el problema.",
+    "sent": "Gracias. Ya avisamos al restaurante.",
+    "submit": "Enviar",
+    "sendFailed": "No se pudo enviar tu reporte. Inténtalo de nuevo."
+  },
+  "chat": {
+    "button": "Chat",
+    "title": "Chatea con tu repartidor",
+    "guestBody": "El chat en la app está disponible cuando haces el pedido con una cuenta. En este pedido como invitado, toca <strong>Llamar</strong> para comunicarte directamente con tu repartidor.",
+    "unread": "{count, plural, one {# mensaje sin leer} other {# mensajes sin leer}}",
+    "earlier": "Antes, con un repartidor anterior ({count})",
+    "pastRiderGone": "Ese repartidor ya no está en tu pedido.",
+    "nothingSaid": "No hubo mensajes.",
+    "loading": "Cargando…",
+    "closesWhenDone": "El chat se cierra cuando termina la entrega.",
+    "archiveError": "No se pudo cargar la conversación anterior.",
+    "quickReplies": {
+      "whereAreYou": "¿Dónde estás?",
+      "leaveAtDoor": "Déjalo en la puerta",
+      "comingDown": "Ya bajo"
+    },
+    "photoErrors": {
+      "unsupportedType": "Ese archivo no es una foto que podamos enviar. Usa una imagen JPG, PNG o WebP.",
+      "tooLarge": "La foto es demasiado grande. Intenta tomar otra.",
+      "prepareFailed": "Tu navegador no pudo preparar esa foto. Prueba con otra.",
+      "uploadFailed": "La foto no se subió. Revisa tu señal y toca para reintentar.",
+      "generic": "No se pudo enviar esa foto. Toca para reintentar."
+    }
+  }
+}

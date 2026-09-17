@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Save } from 'lucide-react';
 import {
   DELIVERY_SETTING_DEFAULTS,
@@ -43,8 +44,9 @@ type NumericKey =
 
 const FIELDS: Array<{
   key: NumericKey;
-  label: string;
-  hint?: string;
+  /** Message key under branchOps delivery.fields.<msg> — `.label`, and `.hint` when `hint` is set. */
+  msg: string;
+  hint?: true;
   step?: string;
   /** 'surge' is rendered by hand next to the multiplier slider, not by the group loop. */
   group: 'fees' | 'timing' | 'dispatch' | 'pay' | 'surge';
@@ -71,8 +73,8 @@ const FIELDS: Array<{
    */
   integer?: boolean;
 }> = [
-  { key: 'delivery_base_fee', label: 'Base fee ($)', group: 'fees', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.deliveryBaseFee, max: 100 },
-  { key: 'delivery_per_km_fee', label: 'Per mile ($)', group: 'fees', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.deliveryPerKmFee, convert: 'rate', max: 50 },
+  { key: 'delivery_base_fee', msg: 'baseFee', group: 'fees', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.deliveryBaseFee, max: 100 },
+  { key: 'delivery_per_km_fee', msg: 'perMile', group: 'fees', step: '0.01', fallback: DELIVERY_SETTING_DEFAULTS.deliveryPerKmFee, convert: 'rate', max: 50 },
   // Was capped at 50 mi. Opened at the owner's request (2026-08-29) for long-distance
   // testing, on the same reasoning as the two dispatch fields below — with one caveat that
   // is NOT true of those, and that the hint now states: 50 mi was not an arbitrary number.
@@ -83,43 +85,45 @@ const FIELDS: Array<{
   // the owner's request (2026-08-31) and quote_delivery no longer clamps, so a long delivery
   // now charges base + per-mile in full. Rider pay still stops at driver_max_pay, which is
   // why that one stayed.
-  { key: 'delivery_radius_km', label: 'Delivery radius (mi)', hint: 'Orders beyond this distance are rejected at checkout. Above ~50 mi, raise "Driver max pay" too or drivers are capped at $50 no matter how far they drive.', group: 'timing', step: '0.5', fallback: DELIVERY_SETTING_DEFAULTS.deliveryRadiusKm, convert: 'dist', max: 9_999_999_999 },
+  { key: 'delivery_radius_km', msg: 'radius', hint: true, group: 'timing', step: '0.5', fallback: DELIVERY_SETTING_DEFAULTS.deliveryRadiusKm, convert: 'dist', max: 9_999_999_999 },
     // group 'surge', not 'fees': this and the multiplier are one setting, and they were two
   // sections apart — the merchant read "Surge multiplier" with no distance beside it and
   // reported the distance field as missing. They now sit together.
-  { key: 'delivery_surge_from_mi', label: 'Surge starts at (mi)', hint: 'Below this distance the multiplier is not applied at all. 0 surges every order, including a half-mile hop.', group: 'surge', step: '0.5', fallback: 0, max: 9_999_999_999 },
-  { key: 'prep_time_min', label: 'Prep time (min)', hint: 'Baseline kitchen time used in customer ETAs', group: 'timing', step: '1', fallback: DELIVERY_SETTING_DEFAULTS.prepTimeMin, max: 240, integer: true },
+  { key: 'delivery_surge_from_mi', msg: 'surgeFrom', hint: true, group: 'surge', step: '0.5', fallback: 0, max: 9_999_999_999 },
+  { key: 'prep_time_min', msg: 'prepTime', hint: true, group: 'timing', step: '1', fallback: DELIVERY_SETTING_DEFAULTS.prepTimeMin, max: 240, integer: true },
   // These two are deliberately near-unbounded (owner's call): a huge search radius and a
   // huge attempt count are how you force every driver to be a candidate while testing
   // dispatch. They are safe to leave open because neither charges anyone money — unlike
   // the fee fields above, which stay tightly capped.
-  { key: 'driver_search_radius_km', label: 'Driver search radius (mi)', hint: 'How far from the branch to look for drivers. Set it very high to reach every driver (useful when testing dispatch).', group: 'dispatch', step: '0.5', fallback: 3 * KM_PER_MILE, convert: 'dist', max: 9_999_999_999 },
-  { key: 'driver_max_attempts', label: 'Max dispatch attempts', hint: 'Staff get alerted after this many failed rounds. Set it very high to keep retrying (useful when testing dispatch).', group: 'dispatch', step: '1', fallback: 3, max: 9_999_999_999, integer: true },
+  { key: 'driver_search_radius_km', msg: 'searchRadius', hint: true, group: 'dispatch', step: '0.5', fallback: 3 * KM_PER_MILE, convert: 'dist', max: 9_999_999_999 },
+  { key: 'driver_max_attempts', msg: 'maxAttempts', hint: true, group: 'dispatch', step: '1', fallback: 3, max: 9_999_999_999, integer: true },
   // find_dispatch_candidates refuses a rider whose last GPS fix is older than this. It was
   // a hardcoded 5 minutes, and the rider app only pings while it is OPEN and in the
   // foreground — so a rider who locks their phone becomes undispatchable in five minutes
   // while every screen still shows them online. That is what produced "No rider found" with
   // five riders online.
-  { key: 'dispatch_max_gps_age_min', label: 'Max rider GPS age (min)', hint: 'How stale a last known rider location may be and still be offered work. Raise it while testing — riders only send GPS while the app is open in the foreground.', group: 'dispatch', step: '1', fallback: 5, max: 9_999_999_999, integer: true },
-  { key: 'offer_ttl_seconds', label: 'Offer timeout (sec)', hint: 'How long a driver has to accept an offer', group: 'dispatch', step: '5', fallback: DELIVERY_SETTING_DEFAULTS.offerTtlSeconds, max: 300, integer: true },
+  { key: 'dispatch_max_gps_age_min', msg: 'gpsAge', hint: true, group: 'dispatch', step: '1', fallback: 5, max: 9_999_999_999, integer: true },
+  { key: 'offer_ttl_seconds', msg: 'offerTimeout', hint: true, group: 'dispatch', step: '5', fallback: DELIVERY_SETTING_DEFAULTS.offerTtlSeconds, max: 300, integer: true },
   // Stored directly in miles (unlike the km-stored keys above) — the SQL pairing fn
   // claim_batch_sibling reads settings->>'batch_max_detour_mi' as miles.
-  { key: 'batch_max_detour_mi', label: 'Stacked-order max detour (mi)', hint: 'Pair two ready orders only when the second is on the way — this caps the extra driving the second customer accepts. Lower = only near-perfect same-route pairs (needs stacking enabled below)', group: 'dispatch', step: '0.25', fallback: 1.0, max: 10 },
+  { key: 'batch_max_detour_mi', msg: 'stackDetour', hint: true, group: 'dispatch', step: '0.25', fallback: 1.0, max: 10 },
   // branch_driver_pay_cap reads this key and falls back to $50. It had no editor, so the
   // ceiling that silently truncates a long delivery's pay could not be seen or moved from
   // the back office — which only became reachable once the radius above was opened.
-  { key: 'driver_max_pay', label: 'Driver max pay ($)', hint: 'Hard ceiling on what one delivery can pay a driver, before tips. Must be raised alongside a large delivery radius, or long runs are truncated to this amount.', group: 'pay', step: '1', fallback: 50, max: 9_999_999_999 },
+  { key: 'driver_max_pay', msg: 'maxPay', hint: true, group: 'pay', step: '1', fallback: 50, max: 9_999_999_999 },
 ];
 
 /** Rendered by hand beside the multiplier slider, not by the group loop. */
 const SURGE_FIELDS = FIELDS.filter((f) => f.group === 'surge');
 
-const GROUP_TITLES: Record<string, string> = {
-  fees: 'Customer delivery fee',
-  timing: 'Radius & timing',
-  dispatch: 'Dispatch',
-  pay: 'Driver pay',
-};
+/** Raw database text never reaches the merchant: a known refusal gets its own message,
+ *  anything else the generic one. */
+function saveErrorKey(err: { message: string; code?: string }): string {
+  if (err.code === '42501' || err.message === 'forbidden' || err.message.includes('branch_manager_required')) {
+    return 'errors.noPermission';
+  }
+  return 'errors.generic';
+}
 
 // US market shows/enters distances in MILES and rates in $/mile, but everything is
 // stored in km / $-per-km so the SQL quote_delivery() and find_dispatch_candidates
@@ -166,6 +170,7 @@ function buildPatch(
 }
 
 export function DeliverySettingsCard({ branchId, settings }: Props) {
+  const t = useTranslations('branchOps');
   const router = useRouter();
   const [values, setValues] = React.useState<Record<NumericKey, string>>(() => {
     const out = {} as Record<NumericKey, string>;
@@ -230,7 +235,8 @@ export function DeliverySettingsCard({ branchId, settings }: Props) {
       .eq('id', branchId);
     setSaving(false);
     if (updateError) {
-      setError(updateError.message);
+      console.error('Saving delivery settings failed', updateError);
+      setError(t(saveErrorKey(updateError)));
       return;
     }
     setSavedAt(Date.now());
@@ -240,21 +246,21 @@ export function DeliverySettingsCard({ branchId, settings }: Props) {
   return (
     <Card className="p-5">
       <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
-        <RiderIcon className="h-5 w-5 text-primary" /> Delivery
+        <RiderIcon className="h-5 w-5 text-primary" /> {t('delivery.title')}
       </h2>
-      <p className="text-sm text-muted-foreground">
-        Distance-based pricing, delivery radius, and dispatch behavior for this branch. Distances and per-distance rates are in miles.
-      </p>
+      <p className="text-sm text-muted-foreground">{t('delivery.description')}</p>
 
       {(['fees', 'timing', 'dispatch', 'pay'] as const).map((group) => (
         <div key={group} className="mt-4">
           <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            {GROUP_TITLES[group]}
+            {t(`delivery.groups.${group}`)}
           </h3>
           <div className="mt-2 grid gap-3 sm:grid-cols-2">
             {FIELDS.filter((f) => f.group === group).map((f) => (
               <label key={f.key} className="block">
-                <span className="mb-1.5 block text-sm font-medium">{f.label}</span>
+                <span className="mb-1.5 block text-sm font-medium">
+                  {t(`delivery.fields.${f.msg}.label`)}
+                </span>
                 <input
                   type="number"
                   min={0}
@@ -265,7 +271,11 @@ export function DeliverySettingsCard({ branchId, settings }: Props) {
                   onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
                   className={INPUT_CLS}
                 />
-                {f.hint && <span className="mt-1 block text-xs text-muted-foreground">{f.hint}</span>}
+                {f.hint && (
+                  <span className="mt-1 block text-xs text-muted-foreground">
+                    {t(`delivery.fields.${f.msg}.hint`)}
+                  </span>
+                )}
               </label>
             ))}
           </div>
@@ -274,15 +284,13 @@ export function DeliverySettingsCard({ branchId, settings }: Props) {
 
       <div className="mt-4">
         <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Availability
+          {t('delivery.availability')}
         </h3>
         <div className="mt-2 space-y-3 rounded-xl border border-border p-3">
           <label className="flex items-center justify-between gap-3">
             <span>
-              <span className="block text-sm font-medium">Pause new orders</span>
-              <span className="block text-xs text-muted-foreground">
-                Customers see the branch as closed until you resume.
-              </span>
+              <span className="block text-sm font-medium">{t('delivery.pause.label')}</span>
+              <span className="block text-xs text-muted-foreground">{t('delivery.pause.hint')}</span>
             </span>
             <input
               type="checkbox"
@@ -293,12 +301,8 @@ export function DeliverySettingsCard({ branchId, settings }: Props) {
           </label>
           <label className="flex items-center justify-between gap-3">
             <span>
-              <span className="block text-sm font-medium">Stack same-route orders (งานพ่วง)</span>
-              <span className="block text-xs text-muted-foreground">
-                When two orders are ready together and the second is on the same route (little extra
-                driving), offer both to one driver as a single trip. Each order still pays the driver
-                in full.
-              </span>
+              <span className="block text-sm font-medium">{t('delivery.stacking.label')}</span>
+              <span className="block text-xs text-muted-foreground">{t('delivery.stacking.hint')}</span>
             </span>
             <input
               type="checkbox"
@@ -308,7 +312,7 @@ export function DeliverySettingsCard({ branchId, settings }: Props) {
             />
           </label>
           <label className="block">
-            <span className="mb-1.5 block text-sm font-medium">Busy mode — extra prep time (min)</span>
+            <span className="mb-1.5 block text-sm font-medium">{t('delivery.busy.label')}</span>
             <input
               type="number"
               min={0}
@@ -318,23 +322,20 @@ export function DeliverySettingsCard({ branchId, settings }: Props) {
               onChange={(e) => setBusyExtra(e.target.value)}
               className={INPUT_CLS}
             />
-            <span className="mt-1 block text-xs text-muted-foreground">
-              Added to every customer ETA while the kitchen is slammed. 0 = off.
-            </span>
+            <span className="mt-1 block text-xs text-muted-foreground">{t('delivery.busy.hint')}</span>
           </label>
           {/* Surge is two numbers — how much, and from how far — and they only make sense
               read together. The distance used to live up in "Customer delivery fee", two
               sections away, each half pointing at the other with "above" and "below". */}
           <div className="rounded-xl border border-border/70 p-3">
-            <span className="block text-sm font-medium">Surge pricing</span>
+            <span className="block text-sm font-medium">{t('delivery.surge.title')}</span>
             <span className="mt-0.5 block text-xs text-muted-foreground">
-              Charges more for the long deliveries that cost more to run, and leaves short
-              ones alone.
+              {t('delivery.surge.description')}
             </span>
 
             <label className="mt-3 block">
               <span className="mb-1.5 flex items-center justify-between text-sm font-medium">
-                <span>Surge multiplier</span>
+                <span>{t('delivery.surge.multiplier')}</span>
                 <span className="font-display text-base font-bold text-primary">×{surge.toFixed(2)}</span>
               </span>
               <input
@@ -347,13 +348,15 @@ export function DeliverySettingsCard({ branchId, settings }: Props) {
                 className="h-2 w-full accent-primary"
               />
               <span className="mt-1 block text-xs text-muted-foreground">
-                1.00 = off, and nothing below is charged extra.
+                {t('delivery.surge.multiplierHint')}
               </span>
             </label>
 
             {SURGE_FIELDS.map((f) => (
               <label key={f.key} className="mt-3 block">
-                <span className="mb-1.5 block text-sm font-medium">{f.label}</span>
+                <span className="mb-1.5 block text-sm font-medium">
+                  {t(`delivery.fields.${f.msg}.label`)}
+                </span>
                 <input
                   type="number"
                   min={0}
@@ -364,20 +367,22 @@ export function DeliverySettingsCard({ branchId, settings }: Props) {
                   onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
                   className={INPUT_CLS}
                 />
-                {f.hint && <span className="mt-1 block text-xs text-muted-foreground">{f.hint}</span>}
+                {f.hint && (
+                  <span className="mt-1 block text-xs text-muted-foreground">
+                    {t(`delivery.fields.${f.msg}.hint`)}
+                  </span>
+                )}
               </label>
             ))}
 
             <p className="mt-3 text-xs text-muted-foreground">
               {surge <= 1
-                ? 'Surge is off — every order is charged base + per-mile.'
-                : `Under ${surgeFromMi} mi: base + per mile. From ${surgeFromMi} mi: ×${surge.toFixed(2)} on the whole fee.`}
+                ? t('delivery.surge.off')
+                : t('delivery.surge.on', { distance: surgeFromMi, multiplier: surge.toFixed(2) })}
             </p>
             {surgeDead && (
               <p className="mt-2 text-xs font-medium text-warning" role="status">
-                This multiplier never applies: it starts at {surgeFromMi} mi, and nothing past
-                your {radiusMi} mi delivery radius can be ordered. Lower the surge distance or
-                raise the radius.
+                {t('delivery.surge.unreachable', { distance: surgeFromMi, radius: radiusMi })}
               </p>
             )}
           </div>
@@ -386,7 +391,7 @@ export function DeliverySettingsCard({ branchId, settings }: Props) {
 
       <div className="mt-4 rounded-xl bg-muted/50 p-3">
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Fee preview
+          {t('delivery.preview.title')}
         </p>
         <div
           className={`mt-2 grid gap-2 text-center text-sm ${
@@ -399,11 +404,15 @@ export function DeliverySettingsCard({ branchId, settings }: Props) {
         >
           {preview.map((p) => (
             <div key={p.mi} className="rounded-lg bg-card p-2">
-              <p className="text-xs text-muted-foreground">{p.mi} mi</p>
+              <p className="text-xs text-muted-foreground">
+                {t('delivery.preview.distance', { distance: p.mi })}
+              </p>
               {p.deliverable ? (
                 <>
                   <p className="font-display text-base font-bold text-primary">${p.fee.toFixed(2)}</p>
-                  <p className="text-xs text-muted-foreground">~{p.etaMin} min</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t('delivery.preview.eta', { minutes: p.etaMin })}
+                  </p>
                   <p
                     className={
                       p.surge > 1
@@ -411,19 +420,20 @@ export function DeliverySettingsCard({ branchId, settings }: Props) {
                         : 'mt-0.5 text-[11px] text-muted-foreground'
                     }
                   >
-                    {p.surge > 1 ? `×${p.surge.toFixed(2)} surge` : 'no surge'}
+                    {p.surge > 1
+                      ? t('delivery.preview.surge', { multiplier: p.surge.toFixed(2) })
+                      : t('delivery.preview.noSurge')}
                   </p>
                 </>
               ) : (
-                <p className="mt-1 text-xs font-medium text-muted-foreground">Out of range</p>
+                <p className="mt-1 text-xs font-medium text-muted-foreground">
+                  {t('delivery.preview.outOfRange')}
+                </p>
               )}
             </div>
           ))}
         </div>
-        <p className="mt-2 text-[11px] text-muted-foreground">
-          Sample distances picked from your own surge distance and delivery radius, priced by
-          the same formula the storefront and the order server use.
-        </p>
+        <p className="mt-2 text-[11px] text-muted-foreground">{t('delivery.preview.footnote')}</p>
       </div>
 
       {error && (
@@ -432,9 +442,9 @@ export function DeliverySettingsCard({ branchId, settings }: Props) {
 
       <div className="mt-4 flex items-center gap-3">
         <Button onClick={save} loading={saving} leftIcon={<Save className="h-4 w-4" />}>
-          Save delivery settings
+          {t('delivery.save')}
         </Button>
-        {savedAt && !saving && <span className="text-sm text-success">Saved ✓</span>}
+        {savedAt && !saving && <span className="text-sm text-success">{t('common.saved')}</span>}
       </div>
     </Card>
   );

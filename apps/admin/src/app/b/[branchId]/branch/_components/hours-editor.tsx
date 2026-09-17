@@ -1,14 +1,14 @@
 'use client';
 
 import * as React from 'react';
+import { useLocale, useTranslations } from 'next-intl';
 import { Clock, Globe, Plus, Save, Trash2 } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
+import { DEFAULT_UI_LOCALE, intlLocaleFor, isUiLocale } from '@favornoms/shared';
 import { Button, Card } from '@favornoms/ui';
 
 // Weekly opening hours (branch_hours). No rows = always open (back-compat).
 // A window whose close time is ≤ its open time crosses midnight (e.g. 22:00–02:00).
-
-const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 interface Window {
   opens_at: string; // 'HH:MM'
@@ -21,12 +21,24 @@ const INPUT_CLS =
   'h-10 rounded-lg border border-border bg-background px-2 text-sm outline-none transition-colors focus-visible:border-primary';
 
 /**
+ * Weekday names in the interface language, Sunday first to match day_of_week (0 = Sunday).
+ * 1 January 2023 was a Sunday; UTC keeps the device's zone out of it.
+ */
+function weekdayNames(intlLocale: string): string[] {
+  const fmt = new Intl.DateTimeFormat(intlLocale, { weekday: 'long', timeZone: 'UTC' });
+  return Array.from({ length: 7 }, (_, d) => {
+    const name = fmt.format(new Date(Date.UTC(2023, 0, 1 + d)));
+    return name.charAt(0).toLocaleUpperCase(intlLocale) + name.slice(1);
+  });
+}
+
+/**
  * Reads the wall clock at a named IANA zone. Returns null for a zone the browser cannot
  * resolve rather than throwing -- branches.timezone is free text at the database level.
  */
-function clockAt(timezone: string): string | null {
+function clockAt(timezone: string, intlLocale: string): string | null {
   try {
-    return new Date().toLocaleString('en-US', {
+    return new Date().toLocaleString(intlLocale, {
       timeZone: timezone,
       weekday: 'short',
       hour: 'numeric',
@@ -38,6 +50,10 @@ function clockAt(timezone: string): string | null {
 }
 
 export function HoursEditor({ branchId, timezone }: { branchId: string; timezone: string }) {
+  const t = useTranslations('branch.hours');
+  const rawLocale = useLocale();
+  const intlLocale = intlLocaleFor(isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE);
+  const days = React.useMemo(() => weekdayNames(intlLocale), [intlLocale]);
   const [week, setWeek] = React.useState<WeekHours>({});
   const [loaded, setLoaded] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
@@ -48,11 +64,11 @@ export function HoursEditor({ branchId, timezone }: { branchId: string; timezone
   const [branchNow, setBranchNow] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    const tick = () => setBranchNow(clockAt(timezone));
+    const tick = () => setBranchNow(clockAt(timezone, intlLocale));
     tick();
     const id = window.setInterval(tick, 30_000);
     return () => window.clearInterval(id);
-  }, [timezone]);
+  }, [timezone, intlLocale]);
 
   React.useEffect(() => {
     const supabase = getBrowserClient();
@@ -114,12 +130,16 @@ export function HoursEditor({ branchId, timezone }: { branchId: string; timezone
     // failed insert can no longer leave the branch with zero rows (which means "always open").
     const { error: rpcErr } = await (
       supabase as unknown as {
-        rpc: (fn: string, args: Record<string, unknown>) => Promise<{ error: { message: string } | null }>;
+        rpc: (
+          fn: string,
+          args: Record<string, unknown>,
+        ) => Promise<{ error: { message: string; code?: string } | null }>;
       }
     ).rpc('set_branch_hours', { p_branch_id: branchId, p_windows: windows });
     setSaving(false);
     if (rpcErr) {
-      setError(rpcErr.message);
+      console.error('Saving opening hours failed', rpcErr);
+      setError(rpcErr.code === '42501' ? t('noPermission') : t('saveFailed'));
       return;
     }
     setSavedAt(Date.now());
@@ -130,12 +150,9 @@ export function HoursEditor({ branchId, timezone }: { branchId: string; timezone
   return (
     <Card className="p-5">
       <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
-        <Clock className="h-5 w-5 text-primary" /> Opening hours
+        <Clock className="h-5 w-5 text-primary" /> {t('title')}
       </h2>
-      <p className="text-sm text-muted-foreground">
-        Ordering opens and closes automatically. No hours set = always open. A window ending at or
-        before its start time crosses midnight (late-night service).
-      </p>
+      <p className="text-sm text-muted-foreground">{t('description')}</p>
 
       {/* is_branch_open() reads these times in the BRANCH's timezone, and the card never said
           so. A merchant setting 10:00-21:00 from a different country watched their storefront
@@ -144,18 +161,21 @@ export function HoursEditor({ branchId, timezone }: { branchId: string; timezone
       <p className="bg-muted/50 mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl px-3 py-2 text-sm">
         <Globe aria-hidden className="text-primary h-4 w-4 shrink-0" />
         <span>
-          These are <strong>{timezone.replace(/_/g, ' ')}</strong> times, not your device&apos;s.
+          {t.rich('zoneNotice', {
+            zone: timezone.replace(/_/g, ' '),
+            strong: (chunks) => <strong>{chunks}</strong>,
+          })}
         </span>
         {branchNow && (
-          <span className="text-muted-foreground">It is {branchNow} at the shop right now.</span>
+          <span className="text-muted-foreground">{t('shopClock', { time: branchNow })}</span>
         )}
       </p>
 
       {!loaded ? (
-        <p className="mt-4 text-sm text-muted-foreground">Loading…</p>
+        <p className="mt-4 text-sm text-muted-foreground">{t('loading')}</p>
       ) : (
         <div className="mt-4 space-y-3">
-          {DAYS.map((name, day) => (
+          {days.map((name, day) => (
             <div key={day} className="rounded-xl border border-border p-3">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold">{name}</p>
@@ -166,7 +186,7 @@ export function HoursEditor({ branchId, timezone }: { branchId: string; timezone
                       onClick={() => copyToAll(day)}
                       className="focus-ring text-xs text-muted-foreground underline"
                     >
-                      Copy to all days
+                      {t('copyToAll')}
                     </button>
                   )}
                   <button
@@ -174,12 +194,12 @@ export function HoursEditor({ branchId, timezone }: { branchId: string; timezone
                     onClick={() => addWindow(day)}
                     className="focus-ring inline-flex items-center gap-1 text-xs font-medium text-primary"
                   >
-                    <Plus className="h-3.5 w-3.5" /> Add hours
+                    <Plus className="h-3.5 w-3.5" /> {t('addHours')}
                   </button>
                 </div>
               </div>
               {(week[day]?.length ?? 0) === 0 ? (
-                <p className="mt-1 text-xs text-muted-foreground">Closed all day</p>
+                <p className="mt-1 text-xs text-muted-foreground">{t('closedAllDay')}</p>
               ) : (
                 <div className="mt-2 space-y-2">
                   {(week[day] ?? []).map((win, idx) => (
@@ -190,7 +210,7 @@ export function HoursEditor({ branchId, timezone }: { branchId: string; timezone
                         onChange={(e) => setWindow(day, idx, { opens_at: e.target.value })}
                         className={INPUT_CLS}
                       />
-                      <span className="text-xs text-muted-foreground">to</span>
+                      <span className="text-xs text-muted-foreground">{t('to')}</span>
                       <input
                         type="time"
                         value={win.closes_at}
@@ -198,13 +218,13 @@ export function HoursEditor({ branchId, timezone }: { branchId: string; timezone
                         className={INPUT_CLS}
                       />
                       {win.closes_at <= win.opens_at && (
-                        <span className="text-xs text-muted-foreground">(overnight)</span>
+                        <span className="text-xs text-muted-foreground">{t('overnight')}</span>
                       )}
                       <button
                         type="button"
                         onClick={() => removeWindow(day, idx)}
                         className="focus-ring ml-auto text-muted-foreground hover:text-danger"
-                        aria-label="Remove window"
+                        aria-label={t('removeWindow')}
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -222,11 +242,11 @@ export function HoursEditor({ branchId, timezone }: { branchId: string; timezone
       )}
       <div className="mt-4 flex items-center gap-3">
         <Button onClick={save} loading={saving} leftIcon={<Save className="h-4 w-4" />}>
-          Save hours
+          {t('save')}
         </Button>
-        {savedAt && !saving && <span className="text-sm text-success">Saved ✓</span>}
+        {savedAt && !saving && <span className="text-sm text-success">{t('saved')}</span>}
         {loaded && totalWindows === 0 && (
-          <span className="text-xs text-muted-foreground">Currently: always open</span>
+          <span className="text-xs text-muted-foreground">{t('alwaysOpen')}</span>
         )}
       </div>
     </Card>

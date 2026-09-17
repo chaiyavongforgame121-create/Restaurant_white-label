@@ -4,6 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import {
   BarChart3, Building2, ChefHat, ChevronDown, ClipboardList, Cog,
   CreditCard, Gift, Landmark, LayoutDashboard, Menu as MenuIcon, MicVocal, Monitor,
@@ -14,6 +15,7 @@ import { getBrowserClient } from '@favornoms/database/client';
 import { isPlatformAdmin } from '@favornoms/database/queries';
 import { hasFeature, type Entitlements, type FeatureKey } from '@favornoms/shared';
 import { cn, RiderIcon } from '@favornoms/ui';
+import { LocaleSwitcher } from '@/components/locale-switcher';
 import { ThemeToggle } from './theme-toggle';
 
 interface Props {
@@ -45,7 +47,8 @@ type NavItem = {
   /** Hover text for an entry whose label alone does not say what the screen is for. */
   description?: string;
 };
-type NavGroup = { title: string; feature?: FeatureKey; items: NavItem[] };
+/** `id` is the stable React key; `title` is translated. */
+type NavGroup = { id: string; title: string; feature?: FeatureKey; items: NavItem[] };
 
 export function Sidebar({
   branchId,
@@ -56,6 +59,7 @@ export function Sidebar({
   logoUrl = null,
   brandName = null,
 }: Props) {
+  const t = useTranslations('shell');
   const pathname = usePathname();
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = React.useState(false);
@@ -88,69 +92,74 @@ export function Sidebar({
   const permitted = (capability?: string) => !capability || capSet.has(capability);
 
   const core: NavItem[] = [
-    { href: `${base}/dashboard`, label: 'Dashboard', icon: LayoutDashboard, capability: 'dashboard.view' },
-    { href: `${base}/orders`, label: 'Orders', icon: Receipt, capability: 'orders.view' },
+    { href: `${base}/dashboard`, label: t('nav.dashboard'), icon: LayoutDashboard, capability: 'dashboard.view' },
+    { href: `${base}/orders`, label: t('nav.orders'), icon: Receipt, capability: 'orders.view' },
     // "Live deliveries" alone read as a report of past deliveries to more than one
     // merchant; the hover says which of the two screens this is.
-    { href: `${base}/deliveries`, label: 'Live deliveries', icon: RiderIcon, feature: 'delivery', capability: 'delivery.manage', description: 'Where your riders and live orders are right now' },
-    { href: `${base}/menu`, label: 'Menu', icon: ChefHat, capability: 'menu.manage' },
-    { href: `/kitchen/${branchId}`, label: 'Kitchen display', icon: Monitor, capability: 'kitchen.access' },
-    { href: `/counter/${branchId}`, label: 'Counter', icon: Store, capability: 'counter.access' },
-    { href: `${base}/qr`, label: 'QR code', icon: QrCode },
-    { href: `${base}/reports`, label: 'Reports', icon: BarChart3, capability: 'reports.view' },
+    { href: `${base}/deliveries`, label: t('nav.liveDeliveries'), icon: RiderIcon, feature: 'delivery', capability: 'delivery.manage', description: t('nav.liveDeliveriesHint') },
+    { href: `${base}/menu`, label: t('nav.menu'), icon: ChefHat, capability: 'menu.manage' },
+    { href: `/kitchen/${branchId}`, label: t('nav.kitchenDisplay'), icon: Monitor, capability: 'kitchen.access' },
+    { href: `/counter/${branchId}`, label: t('nav.counter'), icon: Store, capability: 'counter.access' },
+    { href: `${base}/qr`, label: t('nav.qrCode'), icon: QrCode },
+    { href: `${base}/reports`, label: t('nav.reports'), icon: BarChart3, capability: 'reports.view' },
     // Shown for single-branch restaurants too: it is the only screen that puts
     // driver payouts and the subscription next to revenue, which the per-branch
     // Reports page never does.
-    { href: `${base}/hq`, label: 'Head office', icon: Landmark, capability: 'hq.view' },
+    { href: `${base}/hq`, label: t('nav.headOffice'), icon: Landmark, capability: 'hq.view' },
     // Kept in core, not under Advanced: merchants were reporting "I can't see my
     // ratings anywhere", and Advanced is collapsed by default.
-    { href: `${base}/ratings`, label: 'Ratings', icon: Star },
+    { href: `${base}/ratings`, label: t('nav.ratings'), icon: Star },
   ];
 
   const advanced: NavGroup[] = [
     {
-      title: 'Operations',
+      id: 'operations',
+      title: t('sections.operations'),
       items: [
-        { href: `${base}/inventory`, label: 'Inventory', icon: Package, capability: 'inventory.manage' },
+        { href: `${base}/inventory`, label: t('nav.inventory'), icon: Package, capability: 'inventory.manage' },
       ],
     },
     {
-      title: 'AI Suite',
+      id: 'ai-suite',
+      title: t('sections.aiSuite'),
       feature: 'ai_suite',
       items: [
-        { href: `${base}/signage`, label: 'Digital Signage', icon: Tv, feature: 'digital_signage' },
-        { href: `${base}/ai-voice`, label: 'AI Voice', icon: MicVocal, feature: 'ai_voice' },
+        { href: `${base}/signage`, label: t('nav.digitalSignage'), icon: Tv, feature: 'digital_signage' },
+        { href: `${base}/ai-voice`, label: t('nav.aiVoice'), icon: MicVocal, feature: 'ai_voice' },
       ],
     },
     {
-      title: 'People & growth',
+      id: 'people',
+      title: t('sections.peopleGrowth'),
       items: [
-        { href: `${base}/staff`, label: 'Staff', icon: Users, capability: 'staff.manage' },
-        { href: `${base}/drivers`, label: 'Drivers', icon: RiderIcon, feature: 'delivery', capability: 'drivers.manage' },
-        { href: `${base}/payouts`, label: 'Driver payouts', icon: Wallet, feature: 'delivery', capability: 'drivers.manage' },
-        { href: `${base}/customers`, label: 'Customers', icon: UserRound, capability: 'customers.view' },
-        { href: `${base}/promos`, label: 'Promos', icon: Tag, capability: 'promos.manage' },
+        { href: `${base}/staff`, label: t('nav.staff'), icon: Users, capability: 'staff.manage' },
+        { href: `${base}/drivers`, label: t('nav.drivers'), icon: RiderIcon, feature: 'delivery', capability: 'drivers.manage' },
+        { href: `${base}/payouts`, label: t('nav.driverPayouts'), icon: Wallet, feature: 'delivery', capability: 'drivers.manage' },
+        { href: `${base}/customers`, label: t('nav.customers'), icon: UserRound, capability: 'customers.view' },
+        { href: `${base}/promos`, label: t('nav.promos'), icon: Tag, capability: 'promos.manage' },
         // Owner-only for the same reason as Head office: the catalog is
         // restaurant-scoped, so a reward a branch manager creates is redeemable
         // at every other branch. Writes are refused by RLS regardless.
-        { href: `${base}/loyalty`, label: 'Loyalty rewards', icon: Gift, capability: 'loyalty.manage' },
+        { href: `${base}/loyalty`, label: t('nav.loyaltyRewards'), icon: Gift, capability: 'loyalty.manage' },
       ],
     },
     {
-      title: 'Records',
+      id: 'records',
+      title: t('sections.records'),
       items: [
-        { href: `${base}/receipts`, label: 'Receipts', icon: Receipt, capability: 'orders.view' },
-        { href: `${base}/activity`, label: 'Activity log', icon: ClipboardList, capability: 'reports.view' },
+        { href: `${base}/receipts`, label: t('nav.receipts'), icon: Receipt, capability: 'orders.view' },
+        { href: `${base}/activity`, label: t('nav.activityLog'), icon: ClipboardList, capability: 'reports.view' },
       ],
     },
     {
-      title: 'Setup',
+      id: 'setup',
+      title: t('sections.setup'),
       items: [
-        { href: `${base}/branch`, label: 'Branch settings', icon: Building2, capability: 'branch.settings' },
-        { href: `${base}/brands`, label: 'Brand & branches', icon: Palette, capability: 'brand.edit' },
-        { href: `${base}/franchise`, label: 'Franchise', icon: Network, capability: 'hq.view' },
-        { href: `${base}/settings/plan`, label: 'Plan & billing', icon: CreditCard, capability: 'billing.manage' },
-        { href: `${base}/settings`, label: 'Preferences', icon: Cog, capability: 'branch.settings' },
+        { href: `${base}/branch`, label: t('nav.branchSettings'), icon: Building2, capability: 'branch.settings' },
+        { href: `${base}/brands`, label: t('nav.brandAndBranches'), icon: Palette, capability: 'brand.edit' },
+        { href: `${base}/franchise`, label: t('nav.franchise'), icon: Network, capability: 'hq.view' },
+        { href: `${base}/settings/plan`, label: t('nav.planBilling'), icon: CreditCard, capability: 'billing.manage' },
+        { href: `${base}/settings`, label: t('nav.preferences'), icon: Cog, capability: 'branch.settings' },
       ],
     },
   ];
@@ -192,7 +201,7 @@ export function Sidebar({
           value={branchId}
           onChange={(e) => router.push(`/b/${e.target.value}/dashboard`)}
           className="focus-ring -ml-1 max-w-[150px] truncate rounded-md bg-transparent py-0.5 font-display text-base font-semibold"
-          aria-label="Switch branch"
+          aria-label={t('sidebar.switchBranch')}
         >
           {branches.map((b) => (
             <option key={b.id} value={b.id}>
@@ -203,7 +212,7 @@ export function Sidebar({
       ) : (
         <p className="truncate font-display text-base font-semibold">{branchName}</p>
       )}
-      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Merchant</p>
+      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{t('sidebar.merchant')}</p>
     </>
   );
 
@@ -213,7 +222,7 @@ export function Sidebar({
       <button
         onClick={() => setMobileOpen(true)}
         className="focus-ring fixed left-3 top-3 z-30 grid h-11 w-11 place-items-center rounded-full bg-card shadow-warm lg:hidden"
-        aria-label="Open menu"
+        aria-label={t('sidebar.openMenu')}
       >
         <MenuIcon className="h-5 w-5" />
       </button>
@@ -221,7 +230,7 @@ export function Sidebar({
       {/* Backdrop */}
       {mobileOpen && (
         <button
-          aria-label="Close menu"
+          aria-label={t('sidebar.closeMenu')}
           onClick={() => setMobileOpen(false)}
           className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm lg:hidden"
         />
@@ -270,7 +279,7 @@ export function Sidebar({
                 href={`${base}/dashboard`}
                 onClick={() => setMobileOpen(false)}
                 className="focus-ring shrink-0"
-                aria-label={`${branchName} dashboard`}
+                aria-label={t('sidebar.branchDashboard', { branch: branchName })}
               >
                 <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-warm text-white shadow-warm">
                   <ChefHat className="h-5 w-5" />
@@ -282,7 +291,7 @@ export function Sidebar({
           <button
             onClick={() => setMobileOpen(false)}
             className="focus-ring grid h-9 w-9 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-muted lg:hidden"
-            aria-label="Close menu"
+            aria-label={t('sidebar.closeMenu')}
           >
             <X className="h-5 w-5" />
           </button>
@@ -299,7 +308,7 @@ export function Sidebar({
             className="focus-ring mt-2 flex w-full items-center justify-between rounded-xl px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:bg-muted"
             aria-expanded={advancedOpen}
           >
-            Advanced
+            {t('sections.advanced')}
             <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', advancedOpen && 'rotate-180')} />
           </button>
 
@@ -312,7 +321,7 @@ export function Sidebar({
                 );
                 if (items.length === 0) return null;
                 return (
-                  <div key={section.title} className="pt-1">
+                  <div key={section.id} className="pt-1">
                     <p className="px-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
                       {section.title}
                     </p>
@@ -323,8 +332,9 @@ export function Sidebar({
         </nav>
         <div className="space-y-2 border-t border-border/60 px-3 py-3">
           {platformAdmin && (
-            <ul>{renderItem({ href: '/platform', label: 'Platform console', icon: ShieldCheck })}</ul>
+            <ul>{renderItem({ href: '/platform', label: t('nav.platformConsole'), icon: ShieldCheck })}</ul>
           )}
+          <LocaleSwitcher className="w-full" />
           <ThemeToggle />
         </div>
       </aside>

@@ -1,0 +1,113 @@
+{
+  "title": "Head office",
+  "subtitle": "Every branch, last {months, plural, one {# month} other {# months}}",
+  "subtitleWithRestaurant": "{restaurant} · Every branch, last {months, plural, one {# month} other {# months}}",
+  "rangeShort": "{months}m",
+  "tryAgain": "Try again",
+  "goToBranchReports": "Go to branch reports",
+  "errorBoundary": {
+    "title": "Something broke while drawing this rollup",
+    "body": "Your orders and sales data are untouched. Try again — if it keeps failing, contact support.",
+    "reference": "Reference: {digest}"
+  },
+  "ownerOnly": {
+    "title": "Owner access only",
+    "body": "This page rolls up sales and costs for <em>every</em> branch, so it is limited to the restaurant owner. Managers can still see their own branch under Reports. Ask the owner to change your staff role if you need it."
+  },
+  "loadError": {
+    "title": "Head office data could not be loaded",
+    "body": "Your sales data is safe — this is a problem reading it. Reload the page; if it keeps happening, contact support."
+  },
+  "empty": {
+    "title": "Nothing to roll up in the last {months, plural, one {# month} other {# months}}",
+    "body": "The rollup loaded fine — your {count, plural, one {branch has} other {# branches have}} just not taken an order in this window. Try a wider range above."
+  },
+  "kpi": {
+    "revenue": "Revenue",
+    "orders": "Orders",
+    "branch": "Branch",
+    "branches": "Branches",
+    "avgOrder": "Avg order {amount}",
+    "knownCosts": "Known costs",
+    "knownCostsHint": "Driver payouts + subscription"
+  },
+  "chart": {
+    "title": "Revenue vs known costs",
+    "timezone": "Months are bucketed in head-office time ({timezone}).",
+    "revenue": "Revenue",
+    "driverPayouts": "Driver payouts",
+    "subscription": "Subscription"
+  },
+  "branches": {
+    "title": "Branches",
+    "ranked": "Ranked by revenue",
+    "columns": {
+      "branch": "Branch",
+      "orders": "Orders",
+      "revenue": "Revenue",
+      "avgOrder": "Avg order",
+      "payouts": "Payouts",
+      "share": "Share"
+    },
+    "inactive": "Inactive",
+    "open": "Open"
+  },
+  "costs": {
+    "title": "Costs we can see",
+    "driverPayouts": "Driver payouts",
+    "subscription": "Favornoms subscription",
+    "noInvoicesWithPlan": "No invoices recorded yet. Your current rate is <strong>{rate}/month</strong> on the <planName>{plan}</planName> plan.",
+    "noInvoices": "No invoices recorded yet. Your current rate is <strong>{rate}/month</strong>.",
+    "totalKnown": "Total known costs",
+    "afterCosts": "Revenue after them",
+    "disclaimer": "These are the only costs Favornoms records. Food, staff wages, rent and card fees are not included, so this is not your profit."
+  },
+  "monthly": {
+    "title": "Month by month",
+    "columns": {
+      "month": "Month",
+      "orders": "Orders",
+      "revenue": "Revenue",
+      "payouts": "Payouts",
+      "subscription": "Subscription",
+      "afterCosts": "After costs"
+    }
+  },
+  "channels": {
+    "title": "By channel",
+    "subtitle": "All branches combined",
+    "empty": "No orders yet.",
+    "orders": "{count, plural, one {# order} other {# orders}}",
+    "names": {
+      "dine_in": "Dine-in",
+      "pickup": "Pickup",
+      "delivery": "Delivery",
+      "qr_ordering": "QR ordering"
+    }
+  },
+  "stacked": {
+    "title": "Revenue by branch, by month"
+  },
+  "franchise": {
+    "title": "Franchise",
+    "subtitle": "Manage HQ-to-branch menu broadcasts.",
+    "createTitle": "Create a franchise group",
+    "createBody": "Group multiple restaurants together to broadcast menu changes from one source.",
+    "createGroup": "Create group",
+    "namePlaceholder": "My franchise",
+    "create": "Create",
+    "groupSummary": "{restaurants, plural, one {# restaurant} other {# restaurants}} · {branches, plural, one {# branch} other {# branches}}",
+    "broadcastTitle": "Broadcast this branch’s menu to:",
+    "broadcastBody": "Categories and items missing in target branches will be inserted.",
+    "noOtherBranches": "No other branches in this group yet.",
+    "broadcast": "Broadcast menu",
+    "broadcastDone": "Broadcast complete. Items added: {inserted}, updated: {updated}.",
+    "errors": {
+      "nameTaken": "A franchise group with that name already exists.",
+      "notAllowed": "You don’t have permission to do this.",
+      "signedOut": "Your session has ended. Sign in again.",
+      "createFailed": "The group could not be created. Try again.",
+      "broadcastFailed": "The menu could not be broadcast. Try again."
+    }
+  }
+}

@@ -6,7 +6,15 @@
 // working either way; only the suggestions and coordinates disappear.
 
 import * as React from 'react';
+import { resolveMapsLocale, type MapsLocale } from './locale';
 import { getMapboxToken } from './token';
+
+const STREET_ADDRESS_PLACEHOLDER: Record<MapsLocale, string> = {
+  en: 'Street address',
+  es: 'Calle y número',
+  vi: 'Số nhà, tên đường',
+  th: 'บ้านเลขที่ ถนน',
+};
 
 export interface ResolvedAddress {
   line1: string;
@@ -23,7 +31,10 @@ export interface AddressAutofillInputProps {
   onChange: (text: string) => void;
   /** Fired when the user picks a suggestion — full address + coordinates. */
   onResolved?: (address: ResolvedAddress) => void;
+  /** Defaults to "Street address" in `locale`. */
   placeholder?: string;
+  /** Language of the default placeholder (English when omitted). Pass the app's UiLocale. */
+  locale?: MapsLocale;
   className?: string;
   inputClassName?: string;
   disabled?: boolean;
@@ -48,13 +59,15 @@ export function AddressAutofillInput({
   value,
   onChange,
   onResolved,
-  placeholder = 'Street address',
+  placeholder,
+  locale,
   className,
   inputClassName,
   disabled,
   required,
   ...rest
 }: AddressAutofillInputProps) {
+  const shownPlaceholder = placeholder ?? STREET_ADDRESS_PLACEHOLDER[resolveMapsLocale(locale)];
   const token = getMapboxToken();
   const [Autofill, setAutofill] = React.useState<AutofillComponent | null>(null);
 
@@ -100,7 +113,7 @@ export function AddressAutofillInput({
       autoComplete="address-line1"
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
+      placeholder={shownPlaceholder}
       className={inputClassName}
       disabled={disabled}
       required={required}

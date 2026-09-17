@@ -1,0 +1,8 @@
+{
+  "generic": "Algo salió mal. Inténtalo de nuevo.",
+  "network": "No se pudo conectar con el servidor. Revisa tu conexión e inténtalo de nuevo.",
+  "permissionDenied": "No tienes permiso para hacer esto.",
+  "uploadFailed": "No se pudo subir el archivo. Inténtalo de nuevo.",
+  "fileTooLarge": "El archivo es demasiado grande para subirlo.",
+  "fileTypeNotAllowed": "Este tipo de archivo no se puede subir."
+}

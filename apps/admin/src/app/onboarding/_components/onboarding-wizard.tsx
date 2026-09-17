@@ -3,6 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { ChefHat, ChevronRight, Sparkles, Store } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { describeBillingError, isValidTimeZone } from '@favornoms/shared';
@@ -15,22 +16,23 @@ const slugify = (s: string) =>
 // reaches create_restaurant_with_branch and comes back as a raw Postgres message under the
 // Launch button. slugify() already forces the shape as you type, but it happily reduces a
 // name made only of punctuation (or a cleared field) to '', which is what has to be caught.
-const SLUG_HINT = 'Letters and numbers only — this becomes part of your web address.';
+// The hint shown for it is `onboarding.fields.slugHint`.
 const isUsableSlug = (s: string) => s.length > 0;
 
 /** What create_restaurant_with_branch uses when no zone is sent. */
 const DEFAULT_TIME_ZONE = 'America/New_York';
 
 /** The US zones the Location card offers (b/[branchId]/branch/_components/location-card.tsx,
- *  where the list is not exported). Keep the two in step. */
-const US_TIMEZONES: Array<{ value: string; label: string }> = [
-  { value: 'America/New_York', label: 'Eastern — New York, Miami, Atlanta' },
-  { value: 'America/Chicago', label: 'Central — Chicago, Houston, Dallas' },
-  { value: 'America/Denver', label: 'Mountain — Denver, Salt Lake City' },
-  { value: 'America/Phoenix', label: 'Arizona — Phoenix (no daylight saving)' },
-  { value: 'America/Los_Angeles', label: 'Pacific — Los Angeles, Seattle' },
-  { value: 'America/Anchorage', label: 'Alaska — Anchorage' },
-  { value: 'Pacific/Honolulu', label: 'Hawaii — Honolulu' },
+ *  where the list is not exported). Keep the two in step. `key` names the label under
+ *  `onboarding.timezones.*`; `value` is what is saved. */
+const US_TIMEZONES: Array<{ value: string; key: string }> = [
+  { value: 'America/New_York', key: 'eastern' },
+  { value: 'America/Chicago', key: 'central' },
+  { value: 'America/Denver', key: 'mountain' },
+  { value: 'America/Phoenix', key: 'arizona' },
+  { value: 'America/Los_Angeles', key: 'pacific' },
+  { value: 'America/Anchorage', key: 'alaska' },
+  { value: 'Pacific/Honolulu', key: 'hawaii' },
 ];
 
 /** The signed-in user's existing place in the product, when they have one. */
@@ -45,10 +47,12 @@ export interface ExistingMembership {
 
 export function OnboardingWizard({ existing }: { existing: ExistingMembership | null }) {
   const router = useRouter();
+  const t = useTranslations('onboarding');
   const [continuedPastNotice, setContinuedPastNotice] = React.useState(false);
   const [step, setStep] = React.useState<0 | 1 | 2>(0);
   const [restaurantName, setRestaurantName] = React.useState('');
   const [restaurantSlug, setRestaurantSlug] = React.useState('');
+  // Sent to create_restaurant_with_branch as the branch's name, so it stays as it has always been.
   const [branchName, setBranchName] = React.useState('Main');
   const [branchSlug, setBranchSlug] = React.useState('main');
   const [branchAddress, setBranchAddress] = React.useState('');
@@ -81,14 +85,15 @@ export function OnboardingWizard({ existing }: { existing: ExistingMembership | 
   }, []);
 
   const zoneOptions = React.useMemo(() => {
-    const options = US_TIMEZONES.map((z) =>
-      z.value === deviceZone ? { ...z, label: `${z.label} (this device)` } : z,
-    );
+    const options = US_TIMEZONES.map((z) => {
+      const label = t(`timezones.${z.key}`);
+      return { value: z.value, label: z.value === deviceZone ? t('timezones.thisDevice', { zone: label }) : label };
+    });
     if (deviceZone && !US_TIMEZONES.some((z) => z.value === deviceZone)) {
-      options.unshift({ value: deviceZone, label: `${deviceZone.replace(/_/g, ' ')} (this device)` });
+      options.unshift({ value: deviceZone, label: t('timezones.thisDevice', { zone: deviceZone.replace(/_/g, ' ') }) });
     }
     return options;
-  }, [deviceZone]);
+  }, [deviceZone, t]);
 
   const create = async () => {
     // Step 2 has no slug fields of its own, so a slug can only be empty here if someone
@@ -96,7 +101,7 @@ export function OnboardingWizard({ existing }: { existing: ExistingMembership | 
     // thing that discovers it.
     if (!isUsableSlug(restaurantSlug) || !isUsableSlug(branchSlug)) {
       setStep(isUsableSlug(restaurantSlug) ? 1 : 0);
-      setError('Give your restaurant and branch a web address before launching.');
+      setError(t('errors.slugMissing'));
       return;
     }
     setBusy(true);
@@ -132,14 +137,20 @@ export function OnboardingWizard({ existing }: { existing: ExistingMembership | 
           ? 'branch'
           : 'restaurant'
         : null;
+      if (!billing && !takenField) {
+        // Anything else is database text a new owner cannot act on; keep it for the console.
+        console.error('[onboarding] create_restaurant_with_branch failed:', rpcErr.message);
+      }
       setError(
         billing?.kind === 'seats'
-          ? `You are using all ${billing.limit} of your branch seats. Add a seat on the Plan page first.`
+          ? t('errors.seatsFull', { limit: billing.limit })
           : billing?.kind === 'inactive'
-            ? 'Your subscription is not active. Choose a package before adding another restaurant.'
-            : takenField
-              ? `That ${takenField} web address is already taken. Go back and pick another one.`
-              : rpcErr.message,
+            ? t('errors.subscriptionInactive')
+            : takenField === 'branch'
+              ? t('errors.branchSlugTaken')
+              : takenField === 'restaurant'
+                ? t('errors.restaurantSlugTaken')
+                : t('errors.generic'),
       );
       if (takenField) setStep(takenField === 'branch' ? 1 : 0);
       return;
@@ -149,10 +160,7 @@ export function OnboardingWizard({ existing }: { existing: ExistingMembership | 
     // restaurant that may well have been created.
     const r = data as { branch_id?: string; trial_granted?: boolean } | null;
     if (!r?.branch_id) {
-      setError(
-        'Your restaurant may have been created, but we could not open it. Sign in again to ' +
-          'check before trying a second time.',
-      );
+      setError(t('errors.notOpened'));
       return;
     }
     // An owner's second restaurant gets no trial, and the back office would bounce them to
@@ -168,6 +176,17 @@ export function OnboardingWizard({ existing }: { existing: ExistingMembership | 
 
   if (existing && !continuedPastNotice) {
     const name = existing.restaurantName;
+    const addBranchLink = (c: React.ReactNode) =>
+      existing.addBranchHref ? (
+        <Link
+          href={existing.addBranchHref}
+          className="font-medium text-primary underline underline-offset-2 hover:no-underline"
+        >
+          {c}
+        </Link>
+      ) : (
+        <span className="font-medium">{c}</span>
+      );
     return (
       <div className="grid min-h-dynamic-screen place-items-center bg-gradient-to-br from-background to-muted/40 p-6">
         <Card className="w-full max-w-xl space-y-5 p-7">
@@ -176,47 +195,31 @@ export function OnboardingWizard({ existing }: { existing: ExistingMembership | 
               <Store className="h-6 w-6" />
             </div>
             <h1 className="font-display text-2xl font-bold">
-              {existing.canAddBranch ? 'You already have a restaurant' : 'You are already on a team'}
+              {existing.canAddBranch ? t('notice.ownerTitle') : t('notice.teamTitle')}
             </h1>
           </div>
 
           <div className="space-y-3 text-sm">
             {existing.canAddBranch ? (
               <p>
-                {name ?? 'Your restaurant'} is already set up on this account. To open another
-                location, add it as a branch in{' '}
-                {existing.addBranchHref ? (
-                  <Link
-                    href={existing.addBranchHref}
-                    className="font-medium text-primary underline underline-offset-2 hover:no-underline"
-                  >
-                    Brand &amp; branches &gt; Add branch
-                  </Link>
-                ) : (
-                  <span className="font-medium">Brand &amp; branches &gt; Add branch</span>
-                )}
-                .
+                {name
+                  ? t.rich('notice.ownerBody', { name, link: addBranchLink })
+                  : t.rich('notice.ownerBodyUnnamed', { link: addBranchLink })}
               </p>
             ) : (
-              <p>
-                You are on the team at {name ?? 'another restaurant'}. New locations for it are
-                added by its owner or an admin.
-              </p>
+              <p>{name ? t('notice.teamBody', { name }) : t('notice.teamBodyUnnamed')}</p>
             )}
             <p className="text-muted-foreground">
-              {existing.ownsRestaurant
-                ? 'Continuing creates a separate restaurant with its own menu and billing, and no ' +
-                  'free trial. It stays closed to customers until a package is approved for it.'
-                : 'Continuing creates a separate restaurant of your own, with its own menu and billing.'}
+              {existing.ownsRestaurant ? t('notice.ownsRestaurant') : t('notice.separateRestaurant')}
             </p>
           </div>
 
           <div className="flex flex-wrap justify-between gap-2">
             <Button variant="ghost" onClick={() => setContinuedPastNotice(true)}>
-              Continue anyway
+              {t('notice.continueAnyway')}
             </Button>
             <Link href="/" className={buttonVariants({ variant: 'gradient' })}>
-              Go to my dashboard
+              {t('notice.goToDashboard')}
             </Link>
           </div>
         </Card>
@@ -232,21 +235,27 @@ export function OnboardingWizard({ existing }: { existing: ExistingMembership | 
             <ChefHat className="h-6 w-6" />
           </div>
           <div>
-            <p className="text-xs uppercase tracking-wider text-muted-foreground">Step {step + 1} / 3</p>
+            <p className="text-xs uppercase tracking-wider text-muted-foreground">
+              {t('wizard.step', { current: step + 1, total: 3 })}
+            </p>
             <h1 className="font-display text-2xl font-bold">
-              {step === 0 ? 'Tell us about your restaurant' : step === 1 ? 'Set up your first branch' : 'Pick your brand colors'}
+              {step === 0
+                ? t('wizard.restaurantTitle')
+                : step === 1
+                  ? t('wizard.branchTitle')
+                  : t('wizard.colorsTitle')}
             </h1>
           </div>
         </div>
 
         {step === 0 && (
           <div className="space-y-3">
-            <Field label="Restaurant name">
-              <input value={restaurantName} onChange={(e) => setRestaurantName(e.target.value)} className="input" placeholder="Coastal Grill" autoFocus />
+            <Field label={t('fields.restaurantName')}>
+              <input value={restaurantName} onChange={(e) => setRestaurantName(e.target.value)} className="input" placeholder={t('fields.restaurantNamePlaceholder')} autoFocus />
             </Field>
             <Field
-              label="URL slug (becomes /r/your-slug/…)"
-              hint={restaurantName && !isUsableSlug(restaurantSlug) ? SLUG_HINT : null}
+              label={t('fields.restaurantSlug')}
+              hint={restaurantName && !isUsableSlug(restaurantSlug) ? t('fields.slugHint') : null}
             >
               <input value={restaurantSlug} onChange={(e) => setRestaurantSlug(slugify(e.target.value))} className="input font-mono" placeholder="somtam-zab" />
             </Field>
@@ -255,22 +264,19 @@ export function OnboardingWizard({ existing }: { existing: ExistingMembership | 
 
         {step === 1 && (
           <div className="space-y-3">
-            <Field label="Branch name">
-              <input value={branchName} onChange={(e) => setBranchName(e.target.value)} className="input" placeholder="Sukhumvit branch" />
+            <Field label={t('fields.branchName')}>
+              <input value={branchName} onChange={(e) => setBranchName(e.target.value)} className="input" placeholder={t('fields.branchNamePlaceholder')} />
             </Field>
             <Field
-              label="Branch URL slug"
-              hint={branchName && !isUsableSlug(branchSlug) ? SLUG_HINT : null}
+              label={t('fields.branchSlug')}
+              hint={branchName && !isUsableSlug(branchSlug) ? t('fields.slugHint') : null}
             >
               <input value={branchSlug} onChange={(e) => setBranchSlug(slugify(e.target.value))} className="input font-mono" placeholder="sukhumvit" />
             </Field>
-            <Field label="Address (optional)">
+            <Field label={t('fields.address')}>
               <input value={branchAddress} onChange={(e) => setBranchAddress(e.target.value)} className="input" />
             </Field>
-            <Field
-              label="Time zone"
-              hint="Opening hours, reports and scheduled orders run on this time zone."
-            >
+            <Field label={t('fields.timezone')} hint={t('fields.timezoneHint')}>
               <select value={timezone} onChange={(e) => setTimezone(e.target.value)} className="input">
                 {zoneOptions.map((z) => (
                   <option key={z.value} value={z.value}>
@@ -285,10 +291,10 @@ export function OnboardingWizard({ existing }: { existing: ExistingMembership | 
         {step === 2 && (
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Primary color">
+              <Field label={t('fields.primaryColor')}>
                 <input type="color" value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)} className="h-12 w-full rounded-xl border border-border" />
               </Field>
-              <Field label="Accent color">
+              <Field label={t('fields.accentColor')}>
                 <input type="color" value={accentColor} onChange={(e) => setAccentColor(e.target.value)} className="h-12 w-full rounded-xl border border-border" />
               </Field>
             </div>
@@ -296,8 +302,8 @@ export function OnboardingWizard({ existing }: { existing: ExistingMembership | 
               className="rounded-2xl p-6 text-white"
               style={{ background: `linear-gradient(135deg, ${primaryColor}, ${accentColor})` }}
             >
-              <p className="text-xs uppercase tracking-wider text-white/80">Preview</p>
-              <p className="mt-1 font-display text-2xl font-bold">{restaurantName || 'Your restaurant'}</p>
+              <p className="text-xs uppercase tracking-wider text-white/80">{t('fields.preview')}</p>
+              <p className="mt-1 font-display text-2xl font-bold">{restaurantName || t('fields.previewFallbackName')}</p>
             </div>
           </div>
         )}
@@ -308,9 +314,9 @@ export function OnboardingWizard({ existing }: { existing: ExistingMembership | 
           </p>
         )}
 
-        <div className="flex justify-between">
+        <div className="flex justify-between gap-2">
           {step > 0 ? (
-            <Button variant="ghost" onClick={() => setStep((s) => (s - 1) as 0 | 1 | 2)}>Back</Button>
+            <Button variant="ghost" onClick={() => setStep((s) => (s - 1) as 0 | 1 | 2)}>{t('wizard.back')}</Button>
           ) : <span />}
           {step < 2 ? (
             <Button
@@ -323,11 +329,11 @@ export function OnboardingWizard({ existing }: { existing: ExistingMembership | 
               }
               rightIcon={<ChevronRight className="h-4 w-4" />}
             >
-              Continue
+              {t('wizard.continue')}
             </Button>
           ) : (
             <Button variant="gradient" onClick={create} loading={busy} leftIcon={<Sparkles className="h-4 w-4" />}>
-              Launch my restaurant
+              {t('wizard.launch')}
             </Button>
           )}
         </div>

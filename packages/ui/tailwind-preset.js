@@ -87,8 +87,11 @@ module.exports = {
         '3xl': 'calc(var(--radius) + 16px)',
       },
       fontFamily: {
-        sans: ['var(--font-sans)', 'Inter', 'system-ui', 'sans-serif'],
-        display: ['var(--font-display)', 'Playfair Display', 'serif'],
+        // Thai sits after the Latin faces: Inter and Playfair have no Thai glyphs, so the browser
+        // falls through to Noto Sans Thai for Thai characters only, and a merchant theme that
+        // replaces --font-sans still keeps it.
+        sans: ['var(--font-sans)', 'Inter', 'var(--font-thai, "Noto Sans Thai")', 'system-ui', 'sans-serif'],
+        display: ['var(--font-display)', 'Playfair Display', 'var(--font-thai, "Noto Sans Thai")', 'serif'],
         thai: ['var(--font-thai)', '"Noto Sans Thai"', 'sans-serif'],
       },
       fontSize: {

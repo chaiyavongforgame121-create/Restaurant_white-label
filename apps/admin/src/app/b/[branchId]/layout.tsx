@@ -1,5 +1,6 @@
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import { getEntitlementsForBranch, isPlatformAdmin } from '@favornoms/database/queries';
 import type { TenantTheme } from '@favornoms/shared';
 import { getBranchAccess, type BranchAccess } from '@/lib/capabilities';
@@ -7,6 +8,9 @@ import { PATHNAME_HEADER } from '@favornoms/database/middleware';
 import { Sidebar } from '@/components/sidebar';
 import { AccessDenied } from '@/components/access-denied';
 import { PlatformAdminBanner } from '@/components/platform-admin-banner';
+
+/** staff_role values with a translated name under shell.branchAccess.roles. */
+const STAFF_ROLES: readonly string[] = ['owner', 'admin', 'manager', 'cashier', 'server', 'kitchen', 'staff', 'driver'];
 
 interface Props {
   params: Promise<{ branchId: string }>;
@@ -76,16 +80,14 @@ export default async function BranchLayout({ params, children }: Props) {
   const platformAdmin = await isPlatformAdmin(supabase);
 
   if (!can('backoffice.access')) {
-    return (
-      <AccessDenied
-        title="No admin access"
-        reason={
-          role
-            ? `A ${role} account cannot open the back office for ${branch.name}. Your work is on the counter or kitchen screen.`
-            : `Your account isn't a member of staff at ${branch.name}.`
-        }
-      />
-    );
+    const t = await getTranslations('shell.branchAccess');
+    // The role is a stored staff_role value: only a known one has a name to show.
+    const reason = !role
+      ? t('notStaff', { branch: branch.name })
+      : STAFF_ROLES.includes(role)
+        ? t('roleCannotOpen', { role: t(`roles.${role}`), branch: branch.name })
+        : t('accountCannotOpen', { branch: branch.name });
+    return <AccessDenied title={t('title')} reason={reason} />;
   }
 
   // Sibling branches (for the switcher) + entitlements (for nav gating and the

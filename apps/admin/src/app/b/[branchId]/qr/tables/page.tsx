@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import { getBranchAccess } from '@/lib/capabilities';
 import { AccessDenied } from '@/components/access-denied';
 import { branchMenuLink } from '../_lib/menu-url';
@@ -15,10 +16,11 @@ export default async function TableQrPage({ params }: Props) {
   const { supabase, branch, can } = await getBranchAccess(branchId, `/b/${branchId}/qr/tables`);
 
   if (!can('branch.settings')) {
+    const t = await getTranslations('qr');
     return (
       <AccessDenied
-        title="No table access"
-        reason={`Only the owner or an admin can set up tables at ${branch.name}.`}
+        title={t('tables.accessDenied.title')}
+        reason={t('tables.accessDenied.reason', { branch: branch.name })}
       />
     );
   }

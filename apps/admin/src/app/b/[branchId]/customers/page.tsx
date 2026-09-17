@@ -1,9 +1,13 @@
 import Link from 'next/link';
+import { getLocale, getTranslations } from 'next-intl/server';
 import { listBranchCustomers } from '@favornoms/database/queries';
 import { formatPhone,
   customerSortQuery,
+  DEFAULT_UI_LOCALE,
   defaultDirFor,
   formatCurrency,
+  intlLocaleFor,
+  isUiLocale,
   parseCustomerSort,
   type CustomerSort,
   type CustomerSortKey,
@@ -20,12 +24,13 @@ interface Props {
   searchParams: Promise<{ sort?: string; dir?: string; page?: string }>;
 }
 
-const fmtDate = (iso: string) =>
-  new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-
 export default async function CustomersPage({ params, searchParams }: Props) {
   const { branchId } = await params;
   const { sort, dir, page } = parseCustomerSort(await searchParams);
+  const [t, locale] = await Promise.all([getTranslations('customers'), getLocale()]);
+  const intlLocale = intlLocaleFor(isUiLocale(locale) ? locale : DEFAULT_UI_LOCALE);
+  const fmtDate = (iso: string) =>
+    new Date(iso).toLocaleDateString(intlLocale, { month: 'short', day: 'numeric', year: 'numeric' });
 
   // RLS already hides the rows from a cook or a server, but without this the page
   // answers them with "No customers yet", which reads as an empty branch rather
@@ -34,8 +39,8 @@ export default async function CustomersPage({ params, searchParams }: Props) {
   if (!can('customers.view')) {
     return (
       <AccessDenied
-        title="No customer access"
-        reason={`Only owners, admins, managers and cashiers can see the customer list at ${branch.name}.`}
+        title={t('accessDenied.title')}
+        reason={t('accessDenied.reason', { branch: branch.name })}
       />
     );
   }
@@ -45,6 +50,8 @@ export default async function CustomersPage({ params, searchParams }: Props) {
     dir,
     page,
   });
+  // The raw database text is for the logs; the merchant gets a translated explanation.
+  if (error) console.error('listBranchCustomers failed', error);
 
   const basePath = `/b/${branchId}/customers`;
   const state: CustomerSort = { sort, dir };
@@ -52,10 +59,8 @@ export default async function CustomersPage({ params, searchParams }: Props) {
   return (
     <div className="container max-w-5xl py-8">
       <header className="mb-6 px-2 pl-16 lg:px-0">
-        <h1 className="font-display text-3xl font-bold">Customers</h1>
-        <p className="mt-1 text-muted-foreground">
-          {total} customer{total === 1 ? '' : 's'} at this branch
-        </p>
+        <h1 className="font-display text-3xl font-bold">{t('title')}</h1>
+        <p className="mt-1 text-muted-foreground">{t('summary', { count: total })}</p>
       </header>
 
       <div className="mb-4 px-2 lg:px-0">
@@ -65,29 +70,29 @@ export default async function CustomersPage({ params, searchParams }: Props) {
       {error ? (
         <Card className="mx-2 p-5 lg:mx-0">
           <h2 className="flex items-center gap-2 font-display text-lg font-semibold text-danger">
-            <AlertTriangle className="h-5 w-5" /> Customers could not be loaded
+            <AlertTriangle className="h-5 w-5" /> {t('loadError.title')}
           </h2>
-          <p className="mt-3 break-words rounded-xl bg-danger/10 px-4 py-3 font-mono text-xs text-danger">
-            {error}
+          <p className="mt-3 break-words rounded-xl bg-danger/10 px-4 py-3 text-sm text-danger">
+            {t('loadError.body')}
           </p>
         </Card>
       ) : total === 0 ? (
         <EmptyState
           icon={<UserRound className="h-7 w-7" />}
-          title="No customers yet"
-          description="Once people order via the customer web app they'll appear here."
+          title={t('empty.title')}
+          description={t('empty.description')}
         />
       ) : customers.length === 0 ? (
         <EmptyState
           icon={<UserRound className="h-7 w-7" />}
-          title="Nothing on this page"
-          description={`This branch has ${total} customers, but none on page ${page}.`}
+          title={t('emptyPage.title')}
+          description={t('emptyPage.description', { total, page })}
           action={
             <Link
               href={`${basePath}${customerSortQuery(state)}`}
               className="focus-ring text-sm font-semibold text-primary hover:underline"
             >
-              Back to the first page
+              {t('emptyPage.action')}
             </Link>
           }
         />
@@ -96,17 +101,17 @@ export default async function CustomersPage({ params, searchParams }: Props) {
           <div className="overflow-x-auto"><table className="w-full min-w-[900px] text-sm">
             <thead className="bg-muted/50 text-left text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
-                <SortHeader label="Name" column="name" state={state} basePath={basePath} />
-                <th scope="col" className="px-5 py-3">Phone</th>
+                <SortHeader label={t('columns.name')} column="name" state={state} basePath={basePath} />
+                <th scope="col" className="px-5 py-3">{t('columns.phone')}</th>
                 {/* Deliberately not a SortHeader: every sort key is a real customers
                     column, which is what lets the database page the list. Address is
                     assembled from two other tables, so sorting on it would either be a
                     lie about the whole branch or force the paging into JavaScript. */}
-                <th scope="col" className="px-5 py-3">Address</th>
-                <SortHeader label="Orders" column="orders" state={state} basePath={basePath} align="right" />
-                <SortHeader label="Lifetime spend" column="spent" state={state} basePath={basePath} align="right" />
-                <SortHeader label="Last seen" column="last_seen" state={state} basePath={basePath} />
-                <SortHeader label="Joined" column="joined" state={state} basePath={basePath} />
+                <th scope="col" className="px-5 py-3">{t('columns.address')}</th>
+                <SortHeader label={t('columns.orders')} column="orders" state={state} basePath={basePath} align="right" />
+                <SortHeader label={t('columns.spent')} column="spent" state={state} basePath={basePath} align="right" />
+                <SortHeader label={t('columns.lastSeen')} column="last_seen" state={state} basePath={basePath} />
+                <SortHeader label={t('columns.joined')} column="joined" state={state} basePath={basePath} />
               </tr>
             </thead>
             <tbody>
@@ -126,10 +131,10 @@ export default async function CustomersPage({ params, searchParams }: Props) {
                         </span>
                         <span className="block truncate text-xs text-muted-foreground">
                           {c.address_source === 'delivered' && c.address_at
-                            ? `Last delivered ${fmtDate(c.address_at)}`
-                            : 'Saved address'}
+                            ? t('address.lastDelivered', { date: fmtDate(c.address_at) })
+                            : t('address.saved')}
                           {c.saved_address_count > 1
-                            ? ` · +${c.saved_address_count - 1} more saved`
+                            ? ` · ${t('address.moreSaved', { count: c.saved_address_count - 1 })}`
                             : ''}
                         </span>
                       </div>
@@ -142,7 +147,7 @@ export default async function CustomersPage({ params, searchParams }: Props) {
                     {formatCurrency(c.total_spent)}
                   </td>
                   <td className="px-5 py-3 text-muted-foreground">
-                    {c.last_order_at ? fmtDate(c.last_order_at) : 'Never'}
+                    {c.last_order_at ? fmtDate(c.last_order_at) : t('never')}
                   </td>
                   <td className="px-5 py-3 text-muted-foreground">{fmtDate(c.created_at)}</td>
                 </tr>

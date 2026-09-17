@@ -10,6 +10,8 @@
  * costs.
  */
 
+import { DEFAULT_UI_LOCALE, isUiLocale, type UiLocale } from '../i18n';
+
 export interface ModifierOption {
   id: string;
   name: string;
@@ -78,21 +80,48 @@ export function modifierDelta(
   return Math.round(sum * 100) / 100;
 }
 
+interface SelectionCopy {
+  atLeast: (count: number, group: string) => string;
+  atMost: (count: number, group: string) => string;
+}
+
+// The group name is the merchant's own words and goes in untranslated.
+const SELECTION_COPY: Record<UiLocale, SelectionCopy> = {
+  en: {
+    atLeast: (n, group) => `Pick at least ${n} option${n === 1 ? '' : 's'} for ${group}`,
+    atMost: (n, group) => `Pick at most ${n} option${n === 1 ? '' : 's'} for ${group}`,
+  },
+  es: {
+    atLeast: (n, group) => `Elige al menos ${n} ${n === 1 ? 'opción' : 'opciones'} para ${group}`,
+    atMost: (n, group) => `Elige como máximo ${n} ${n === 1 ? 'opción' : 'opciones'} para ${group}`,
+  },
+  vi: {
+    atLeast: (n, group) => `Chọn ít nhất ${n} tùy chọn cho ${group}`,
+    atMost: (n, group) => `Chọn tối đa ${n} tùy chọn cho ${group}`,
+  },
+  th: {
+    atLeast: (n, group) => `เลือกอย่างน้อย ${n} ตัวเลือกสำหรับ ${group}`,
+    atMost: (n, group) => `เลือกได้ไม่เกิน ${n} ตัวเลือกสำหรับ ${group}`,
+  },
+};
+
 /**
- * The first rule the selection breaks, phrased for whoever is looking at the screen, or
- * null when it is good to add.
+ * The first rule the selection breaks, phrased for whoever is looking at the screen in
+ * `locale` (English when omitted), or null when it is good to add.
  */
 export function validateSelections(
   groups: readonly ModifierGroup[],
   selections: ModifierSelections,
+  locale: UiLocale = DEFAULT_UI_LOCALE,
 ): string | null {
+  const copy = SELECTION_COPY[isUiLocale(locale) ? locale : DEFAULT_UI_LOCALE];
   for (const g of groups) {
     const count = idsOf(selections[g.id]).length;
     if (g.is_required && count < g.min_select) {
-      return `Pick at least ${g.min_select} option${g.min_select === 1 ? '' : 's'} for ${g.name}`;
+      return copy.atLeast(g.min_select, g.name);
     }
     if (count > g.max_select) {
-      return `Pick at most ${g.max_select} option${g.max_select === 1 ? '' : 's'} for ${g.name}`;
+      return copy.atMost(g.max_select, g.name);
     }
   }
   return null;

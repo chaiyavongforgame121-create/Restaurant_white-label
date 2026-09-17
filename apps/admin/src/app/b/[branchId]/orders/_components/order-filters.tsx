@@ -2,8 +2,10 @@
 
 import * as React from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Bookmark, Search, Trash2, X } from 'lucide-react';
 import { usePrompt } from '@favornoms/ui';
+import { ORDER_CHANNELS, ORDER_STATUSES, useOrderLabels } from './order-labels';
 
 interface Props {
   defaultQ: string;
@@ -30,35 +32,27 @@ interface SavedView {
 }
 
 const SAVED_VIEW_KEY = 'admin-orders-saved-views';
-const STATUSES = ['all', 'pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'completed', 'cancelled', 'refunded'];
-const CHANNELS = ['all', 'dine_in', 'pickup', 'delivery', 'qr_ordering'];
+const STATUSES = ['all', ...ORDER_STATUSES];
+const CHANNELS = ['all', ...ORDER_CHANNELS];
 // Pre-orders are the one thing this page could not show: everything was sorted newest-first
 // by created_at, so a booking for next week sank out of sight the day after it was taken.
-const WHENS: Array<{ value: string; label: string }> = [
-  { value: 'all', label: 'All orders' },
-  { value: 'scheduled', label: 'Scheduled — upcoming' },
-  { value: 'held', label: 'Scheduled — not yet in kitchen' },
+// `value` goes into the URL; `labelKey` is under orders.filters.when.
+const WHENS: Array<{ value: string; labelKey: string }> = [
+  { value: 'all', labelKey: 'all' },
+  { value: 'scheduled', labelKey: 'scheduled' },
+  { value: 'held', labelKey: 'held' },
 ];
 // Resolved against the branch's own calendar on the server, so "Today" means the day the
 // merchant is standing in rather than the day the host machine happens to be having. Under
 // a scheduled view the same window runs forwards, because that list is ordered by when the
 // food is due rather than when the order was taken — so the labels say so.
-const rangesFor = (when: string): Array<{ value: string; label: string }> =>
-  when === 'all'
-    ? [
-        { value: 'all', label: 'All time' },
-        { value: 'today', label: 'Today' },
-        { value: '7d', label: 'Last 7 days' },
-        { value: '30d', label: 'Last 30 days' },
-        { value: 'custom', label: 'Custom…' },
-      ]
-    : [
-        { value: 'all', label: 'Any date' },
-        { value: 'today', label: 'Due today' },
-        { value: '7d', label: 'Due within 7 days' },
-        { value: '30d', label: 'Due within 30 days' },
-        { value: 'custom', label: 'Custom…' },
-      ];
+const RANGES: Array<{ value: string; labelKey: string }> = [
+  { value: 'all', labelKey: 'all' },
+  { value: 'today', labelKey: 'today' },
+  { value: '7d', labelKey: 'days7' },
+  { value: '30d', labelKey: 'days30' },
+  { value: 'custom', labelKey: 'custom' },
+];
 
 export function OrderFilters({
   defaultQ,
@@ -69,6 +63,8 @@ export function OrderFilters({
   defaultFrom,
   defaultTo,
 }: Props) {
+  const t = useTranslations('orders');
+  const labels = useOrderLabels();
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -96,10 +92,10 @@ export function OrderFilters({
 
   const saveCurrentView = async () => {
     const name = await prompt({
-      title: 'Name this view',
-      body: 'The filters set right now are kept on this device, ready to reapply in one click.',
-      placeholder: "Today's deliveries",
-      confirmLabel: 'Save view',
+      title: t('filters.savePrompt.title'),
+      body: t('filters.savePrompt.body'),
+      placeholder: t('filters.savePrompt.placeholder'),
+      confirmLabel: t('filters.savePrompt.confirm'),
       required: true,
     });
     if (!name) return;
@@ -157,16 +153,19 @@ export function OrderFilters({
   // Debounced search
   React.useEffect(() => {
     if (q === defaultQ) return;
-    const t = setTimeout(() => pushParams({ q }), 300);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => pushParams({ q }), 300);
+    return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
+
+  // A scheduled list runs forwards from today, so its windows are worded as "due".
+  const rangeGroup = defaultWhen === 'all' ? 'range' : 'dueRange';
 
   return (
     <div className="space-y-2">
       {savedViews.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-xs font-semibold text-muted-foreground">Saved:</span>
+          <span className="text-xs font-semibold text-muted-foreground">{t('filters.saved')}</span>
           {savedViews.map((v) => (
             <span key={v.id} className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-xs">
               <button
@@ -180,7 +179,7 @@ export function OrderFilters({
                 type="button"
                 onClick={() => removeView(v.id)}
                 className="focus-ring text-muted-foreground hover:text-destructive"
-                aria-label={`Remove saved view ${v.name}`}
+                aria-label={t('filters.removeSavedView', { name: v.name })}
               >
                 <Trash2 className="h-3 w-3" />
               </button>
@@ -194,7 +193,7 @@ export function OrderFilters({
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search order # / customer / phone…"
+          placeholder={t('filters.searchPlaceholder')}
           className="focus-ring w-full rounded-xl border border-border bg-background px-9 py-2 text-sm"
         />
         {q && (
@@ -202,7 +201,7 @@ export function OrderFilters({
             type="button"
             onClick={() => { setQ(''); pushParams({ q: '' }); }}
             className="focus-ring absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 hover:bg-muted"
-            aria-label="Clear search"
+            aria-label={t('filters.clearSearch')}
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -214,7 +213,7 @@ export function OrderFilters({
         className="focus-ring rounded-xl border border-border bg-background px-3 py-2 text-sm"
       >
         {STATUSES.map((s) => (
-          <option key={s} value={s}>{s === 'all' ? 'All statuses' : s.replace('_', ' ')}</option>
+          <option key={s} value={s}>{s === 'all' ? t('filters.allStatuses') : labels.status(s)}</option>
         ))}
       </select>
       <select
@@ -223,17 +222,17 @@ export function OrderFilters({
         className="focus-ring rounded-xl border border-border bg-background px-3 py-2 text-sm"
       >
         {CHANNELS.map((c) => (
-          <option key={c} value={c}>{c === 'all' ? 'All channels' : c.replace('_', ' ')}</option>
+          <option key={c} value={c}>{c === 'all' ? t('filters.allChannels') : labels.channel(c)}</option>
         ))}
       </select>
       <select
         value={defaultWhen}
         onChange={(e) => pushParams({ when: e.target.value })}
         className="focus-ring rounded-xl border border-border bg-background px-3 py-2 text-sm"
-        aria-label="Scheduled orders"
+        aria-label={t('filters.scheduledLabel')}
       >
         {WHENS.map((w) => (
-          <option key={w.value} value={w.value}>{w.label}</option>
+          <option key={w.value} value={w.value}>{t(`filters.when.${w.labelKey}`)}</option>
         ))}
       </select>
       <select
@@ -248,10 +247,10 @@ export function OrderFilters({
           )
         }
         className="focus-ring rounded-xl border border-border bg-background px-3 py-2 text-sm"
-        aria-label="Date range"
+        aria-label={t('filters.rangeLabel')}
       >
-        {rangesFor(defaultWhen).map((r) => (
-          <option key={r.value} value={r.value}>{r.label}</option>
+        {RANGES.map((r) => (
+          <option key={r.value} value={r.value}>{t(`filters.${rangeGroup}.${r.labelKey}`)}</option>
         ))}
       </select>
       {defaultRange === 'custom' && (
@@ -262,16 +261,16 @@ export function OrderFilters({
             max={defaultTo || undefined}
             onChange={(e) => pushParams({ from: e.target.value })}
             className="focus-ring rounded-xl border border-border bg-background px-2 py-2 text-sm"
-            aria-label="From date"
+            aria-label={t('filters.fromDate')}
           />
-          <span className="text-xs text-muted-foreground">to</span>
+          <span className="text-xs text-muted-foreground">{t('filters.dateSeparator')}</span>
           <input
             type="date"
             value={defaultTo}
             min={defaultFrom || undefined}
             onChange={(e) => pushParams({ to: e.target.value })}
             className="focus-ring rounded-xl border border-border bg-background px-2 py-2 text-sm"
-            aria-label="To date"
+            aria-label={t('filters.toDate')}
           />
         </span>
       )}
@@ -280,7 +279,7 @@ export function OrderFilters({
         onClick={saveCurrentView}
         className="focus-ring inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2 text-xs font-semibold hover:bg-muted"
       >
-        <Bookmark className="h-3.5 w-3.5" /> Save view
+        <Bookmark className="h-3.5 w-3.5" /> {t('filters.saveView')}
       </button>
       </div>
     </div>

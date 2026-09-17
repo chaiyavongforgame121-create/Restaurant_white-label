@@ -1,0 +1,105 @@
+{
+  "online": "Conectado",
+  "offline": "Desconectado",
+  "goOnline": "Conectarse",
+  "goOffline": "Desconectarse",
+  "readyToReceive": "Listo para recibir pedidos",
+  "currentlyOffline": "Estás desconectado: conéctate para empezar a ganar",
+  "statusOnline": "Estás conectado",
+  "statusOffline": "Estás desconectado",
+  "subOffline": "Conéctate para empezar a ganar",
+  "today": "Hoy",
+  "week": "Esta semana",
+  "deliveries": "Entregas",
+  "rating": "Calificación",
+  "lastDispatch": "Actividad reciente",
+  "tips": "Consejos para ganar más",
+  "tip1": "Quédate en barrios concurridos como Williamsburg y Bushwick a la hora del almuerzo",
+  "tip2": "Acepta las solicitudes en menos de 10 segundos para ganar puntos extra",
+  "tip3": "Mantén una calificación de 4.5 o más para desbloquear el nivel Oro",
+  "greeting": "Hola, {name} 👋",
+  "onlineNoLocation": "Conectado, pero no podemos ver dónde estás",
+  "reconnecting": "Reconectando: puede que no recibas solicitudes hasta que se restablezca la conexión.",
+  "location": {
+    "denied": "La ubicación está desactivada. Actívala para esta app en los ajustes del teléfono: los restaurantes solo pueden ofrecerte entregas cuando vemos dónde estás.",
+    "insecure": "La ubicación solo funciona con https. Abre la app desde su ícono instalado o desde una dirección https.",
+    "stale": "Te vimos por última vez {age}. Mantén esta app abierta con la ubicación permitida: no recibirás entregas hasta que se actualice tu posición.",
+    "waiting": "Esperando señal GPS: todavía no te están ofreciendo entregas."
+  },
+  "paused": "En pausa · {countdown}",
+  "onlineFor": "Disponible para {restaurants}",
+  "tapToGoOnline": "Toca para conectarte",
+  "statusUpdateFailed": "No se pudo actualizar tu estado. Revisa tu conexión e inténtalo de nuevo.",
+  "noApproval": "Ningún restaurante te ha aprobado todavía. Primero postúlate abajo y luego podrás conectarte.",
+  "cooldown": "Rechazaste demasiadas solicitudes: podrás volver a conectarte en {countdown}.",
+  "restaurant": "Restaurante",
+  "restaurants": {
+    "title": "Tus restaurantes y horarios",
+    "onlineFor": "Disponible para {restaurants} · toca para cambiar",
+    "onlineForAll": "Disponible para tus restaurantes · toca para cambiar",
+    "offline": "Elige restaurantes y define tu horario"
+  },
+  "apply": {
+    "title": "Postúlate a restaurantes",
+    "approved": "{approved, plural, one {# aprobado} other {# aprobados}} · toca para ver todos",
+    "approvedWaiting": "{approved, plural, one {# aprobado} other {# aprobados}} · {pending} en espera · toca para ver todos",
+    "waiting": "{pending} en revisión · toca para ver",
+    "none": "Consigue una aprobación para empezar a recibir pedidos"
+  },
+  "recent": {
+    "summary": "{items} · {distance} mi · {earnings}",
+    "empty": "Aún no hay entregas"
+  },
+  "performance": {
+    "title": "Últimos 30 días",
+    "earnings": "Ganancias",
+    "acceptance": "Aceptación",
+    "onTime": "Puntualidad",
+    "ratingCount": "Calificación · {count}"
+  },
+  "sheet": {
+    "tabNow": "Conectarse ya",
+    "tabSchedule": "Programar",
+    "intro": "Elige qué restaurantes pueden enviarte pedidos. Los que no marques no te asignarán entregas.",
+    "selectAll": "Seleccionar todos",
+    "clearAll": "Quitar todos",
+    "update": "Actualizar restaurantes",
+    "cooldown": "Estás en pausa por perder demasiadas solicitudes. Inténtalo de nuevo en un rato.",
+    "pickOne": "Elige al menos un restaurante."
+  },
+  "schedule": {
+    "title": "Mi horario",
+    "intro": "Define las horas en que quieres trabajar en cada restaurante. Te conectas automáticamente cuando empieza una franja y te desconectas cuando termina. Desactiva un restaurante cuando quieras para anularlo.",
+    "noRestaurants": "Aún no tienes restaurantes",
+    "noRestaurantsHint": "Consigue la aprobación de un restaurante antes de definir tu horario.",
+    "addHours": "Agregar horario",
+    "days": "Días",
+    "opens": "Inicio",
+    "closes": "Fin",
+    "repeatFor": "Repetir durante",
+    "weeks": "{count, plural, one {# semana} other {# semanas}}",
+    "repeatHint": "Crea una franja en cada día seleccionado durante las próximas semanas.",
+    "addToSchedule": "Agregar al horario",
+    "upcoming": "Próximos",
+    "loading": "Cargando…",
+    "empty": "No tienes horario",
+    "emptyHint": "Agrega arriba las horas en que quieres trabajar y te conectarás automáticamente.",
+    "remove": "Eliminar franja",
+    "added": "{count, plural, one {Se agregó # franja.} other {Se agregaron # franjas.}}",
+    "status": {
+      "active": "Activa",
+      "completed": "Completada",
+      "cancelled": "Cancelada"
+    },
+    "errors": {
+      "pickRestaurant": "Elige un restaurante.",
+      "pickDay": "Elige al menos un día de la semana.",
+      "closeAfterOpen": "La hora de fin debe ser posterior a la de inicio.",
+      "nothingToAdd": "No hay nada que agregar: esos días ya pasaron.",
+      "duplicate": "Esas franjas ya están en tu horario.",
+      "overlap": "Ese horario se superpone con otro que ya tienes.",
+      "saveFailed": "No se pudo agregar tu horario. Revisa tu conexión e inténtalo de nuevo.",
+      "removeFailed": "No se pudo eliminar esa franja. Revisa tu conexión e inténtalo de nuevo."
+    }
+  }
+}

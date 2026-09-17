@@ -1,4 +1,5 @@
 export { MAPBOX_GL_VERSION, ensureMapboxCss, getMapboxToken, hasMapboxToken } from './token';
+export { resolveMapsLocale, type MapsLocale } from './locale';
 export { bearingDeg, formatMiles, haversineKm, isValidLatLng, kmToMiles, type LatLng } from './geo';
 export { MapView, type MapViewProps } from './map-view';
 export { fetchRoute } from './directions';

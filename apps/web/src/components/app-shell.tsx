@@ -8,6 +8,7 @@ import { motion } from 'framer-motion';
 import { Home, Receipt, ShoppingBag, UserRound } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { cn } from '@favornoms/ui';
+import { LocaleSwitcher } from '@/components/locale-switcher';
 import { useCart } from '@/store/cart';
 import { ThemeToggle } from './theme-toggle';
 
@@ -107,6 +108,7 @@ export function AppShell({
             )}
           </Link>
           <div className="flex items-center gap-1">
+            <LocaleSwitcher compact />
             <ThemeToggle />
           </div>
         </div>
@@ -115,7 +117,7 @@ export function AppShell({
       <main className="flex-1 pb-24 lg:pb-8">{children}</main>
 
       <nav
-        aria-label="Primary"
+        aria-label={t('primary')}
         className="fixed inset-x-0 bottom-0 z-40 border-t border-border/40 bg-background/95 pb-safe backdrop-blur-xl lg:hidden"
       >
         <ul className="container grid h-16 grid-cols-4">

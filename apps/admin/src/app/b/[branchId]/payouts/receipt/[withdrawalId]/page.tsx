@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { getLocale, getTranslations } from 'next-intl/server';
 import { getServerClient } from '@favornoms/database/server';
-import { formatCurrency } from '@favornoms/shared';
+import { DEFAULT_UI_LOCALE, formatCurrency, intlLocaleFor, isUiLocale } from '@favornoms/shared';
 import { Card } from '@favornoms/ui';
 import { PayoutAttachments } from '../../_components/payout-attachments';
 import { fetchPayoutMedia } from '../../_components/payout-media';
@@ -14,6 +15,8 @@ interface Props {
 export default async function WithdrawalReceiptPage({ params }: Props) {
   const { branchId, withdrawalId } = await params;
   const supabase = await getServerClient();
+  const [t, locale] = await Promise.all([getTranslations('payouts'), getLocale()]);
+  const intlLocale = intlLocaleFor(isUiLocale(locale) ? locale : DEFAULT_UI_LOCALE);
 
   const { data: withdrawal } = await supabase
     .from('driver_withdrawals')
@@ -26,7 +29,8 @@ export default async function WithdrawalReceiptPage({ params }: Props) {
   // PostgREST returns the to-one `drivers` embed as an object at runtime; normalize
   // against the array fallback typing (same idiom as kitchen/live-ops views).
   const embed = withdrawal.drivers as { full_name: string } | { full_name: string }[] | null;
-  const driverName = (Array.isArray(embed) ? embed[0]?.full_name : embed?.full_name) ?? 'Driver';
+  const driverName =
+    (Array.isArray(embed) ? embed[0]?.full_name : embed?.full_name) ?? t('driverFallback');
 
   const media = await fetchPayoutMedia(supabase, [withdrawalId]);
   const [{ data: branch }, { data: items }] = await Promise.all([
@@ -54,7 +58,7 @@ export default async function WithdrawalReceiptPage({ params }: Props) {
           href={`/b/${branchId}/payouts`}
           className="focus-ring text-sm font-medium text-primary underline-offset-2 hover:underline"
         >
-          ← Back to payouts
+          {t('receipt.back')}
         </Link>
         <PrintButton />
       </div>
@@ -62,22 +66,32 @@ export default async function WithdrawalReceiptPage({ params }: Props) {
       <Card id="withdrawal-receipt" className="mx-2 bg-card p-6 lg:mx-0 lg:p-8">
         <header className="mb-6 flex items-start justify-between gap-4">
           <div>
-            <h1 className="font-display text-2xl font-bold">Payout receipt</h1>
-            <p className="mt-1 text-sm text-muted-foreground">Receipt {withdrawal.receipt_number ?? '—'}</p>
+            <h1 className="font-display text-2xl font-bold">{t('receipt.title')}</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {t('receiptNumber', { number: withdrawal.receipt_number ?? '—' })}
+            </p>
           </div>
           <div className="text-right text-sm text-muted-foreground">
-            <p>Paid {withdrawal.paid_at ? new Date(withdrawal.paid_at).toLocaleString() : '—'}</p>
+            <p>
+              {t('receipt.paidAt', {
+                date: withdrawal.paid_at ? new Date(withdrawal.paid_at).toLocaleString(intlLocale) : '—',
+              })}
+            </p>
           </div>
         </header>
 
         <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Paid by</p>
-            <p className="mt-1 font-medium">{branch?.name ?? 'Branch'}</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {t('receipt.paidBy')}
+            </p>
+            <p className="mt-1 font-medium">{branch?.name ?? t('receipt.branchFallback')}</p>
             {branch?.address && <p className="text-sm text-muted-foreground">{branch.address}</p>}
           </div>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Paid to</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {t('receipt.paidTo')}
+            </p>
             <p className="mt-1 font-medium">{driverName}</p>
             <p className="text-sm text-muted-foreground">
               {withdrawal.bank_name} ··{withdrawal.account_number.slice(-4)} · {withdrawal.account_name}
@@ -96,17 +110,17 @@ export default async function WithdrawalReceiptPage({ params }: Props) {
         <table className="mt-6 w-full text-sm">
           <thead>
             <tr className="border-b border-border text-left text-xs uppercase tracking-wider text-muted-foreground">
-              <th className="py-2 pr-2 font-semibold">Delivered</th>
-              <th className="py-2 pr-2 text-right font-semibold">Base</th>
-              <th className="py-2 pr-2 text-right font-semibold">Distance</th>
-              <th className="py-2 pr-2 text-right font-semibold">Tip</th>
-              <th className="py-2 text-right font-semibold">Total</th>
+              <th className="py-2 pr-2 font-semibold">{t('receipt.columns.delivered')}</th>
+              <th className="py-2 pr-2 text-right font-semibold">{t('receipt.columns.base')}</th>
+              <th className="py-2 pr-2 text-right font-semibold">{t('receipt.columns.distance')}</th>
+              <th className="py-2 pr-2 text-right font-semibold">{t('receipt.columns.tip')}</th>
+              <th className="py-2 text-right font-semibold">{t('receipt.columns.total')}</th>
             </tr>
           </thead>
           <tbody>
             {lines.map((l) => (
               <tr key={l.id} className="border-b border-border/50">
-                <td className="py-2 pr-2">{new Date(l.delivered_at).toLocaleString()}</td>
+                <td className="py-2 pr-2">{new Date(l.delivered_at).toLocaleString(intlLocale)}</td>
                 <td className="py-2 pr-2 text-right">{formatCurrency(Number(l.base_pay))}</td>
                 <td className="py-2 pr-2 text-right">{formatCurrency(Number(l.distance_pay))}</td>
                 <td className="py-2 pr-2 text-right">{formatCurrency(Number(l.tip_net))}</td>
@@ -118,7 +132,7 @@ export default async function WithdrawalReceiptPage({ params }: Props) {
             {lines.length === 0 && (
               <tr>
                 <td colSpan={5} className="py-4 text-center text-muted-foreground">
-                  No line items recorded.
+                  {t('receipt.noLines')}
                 </td>
               </tr>
             )}
@@ -126,7 +140,7 @@ export default async function WithdrawalReceiptPage({ params }: Props) {
           <tfoot>
             <tr>
               <td colSpan={4} className="py-3 pr-2 text-right font-display text-base font-semibold">
-                Grand total
+                {t('receipt.grandTotal')}
               </td>
               <td className="py-3 text-right font-display text-base font-bold">
                 {formatCurrency(Number(withdrawal.amount))}

@@ -1,0 +1,23 @@
+{
+  "newOrder": "มีงานส่งใหม่",
+  "stacked": "งานพ่วง · 2 ออร์เดอร์",
+  "headline": "{amount} · {miles} mi",
+  "from": "จุดรับอาหาร",
+  "to": "จุดส่งของ",
+  "toStop": "จุดส่งของ · จุดที่ {stop}",
+  "distance": "ระยะทาง",
+  "distanceValue": "{miles} mi",
+  "eta": "เวลา",
+  "etaValue": "{minutes} นาที",
+  "base": "ค่ารอบ",
+  "baseBatch": "ค่ารอบ ×2",
+  "tip": "ทิป",
+  "tipYourShare": "(ส่วนของคุณจาก {amount})",
+  "tipAllYours": "(ของคุณทั้งหมด)",
+  "note": "หมายเหตุ:",
+  "deliveryNote": "หมายเหตุการจัดส่ง:",
+  "orderStop": "{orderNumber} · จุดที่ {stop}",
+  "accept": "รับงาน",
+  "reject": "ปฏิเสธ",
+  "unnamedBranch": "ร้านอาหาร"
+}

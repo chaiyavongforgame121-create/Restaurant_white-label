@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle2, Mail, Plus, UserPlus, X } from 'lucide-react';
 import { Badge, Button, Card, EmptyState } from '@favornoms/ui';
@@ -43,8 +44,8 @@ interface Props {
 
 /** Assignable roles, in descending order of access. `owner` is absent on purpose —
  *  it is created by restaurant onboarding and cannot be handed out here. The
- *  description is what a non-technical merchant needs to pick correctly, so it names
- *  the boundary rather than listing screens. */
+ *  description (staff.roles.<role>.description) is what a non-technical merchant needs to
+ *  pick correctly, so it names the boundary rather than listing screens. */
 export type AssignableRole =
   | 'admin'
   | 'manager'
@@ -54,49 +55,29 @@ export type AssignableRole =
   | 'driver'
   | 'staff';
 
-const roleOptions: { value: AssignableRole; label: string; description: string }[] = [
-  {
-    value: 'admin',
-    label: 'Admin',
-    description:
-      'Everything you can do, except billing and adding another admin. For a business partner or general manager.',
-  },
-  {
-    value: 'manager',
-    label: 'Manager',
-    description:
-      'Runs the day to day: orders, refunds, menu, stock, promos, drivers, reports and staff hours. No billing, branding or staff invites.',
-  },
-  {
-    value: 'cashier',
-    label: 'Cashier',
-    description:
-      'Counter and payments. Takes orders and money, applies discounts, reprints receipts, cancels before payment. Refunds need a manager.',
-  },
-  {
-    value: 'server',
-    label: 'Server',
-    description:
-      'Dine-in only. Builds a table order, sends it to the kitchen and watches its progress. Sees only their own orders — no takings, no reports.',
-  },
-  {
-    value: 'kitchen',
-    label: 'Kitchen',
-    description:
-      'The kitchen display only. Accept, cooking, ready, plus marking items low or sold out. No customer or payment details.',
-  },
-  {
-    value: 'driver',
-    label: 'Driver',
-    description:
-      'Appears in your staff list but has no back-office access at all — riders work in the Driver app, where they see only their own jobs and earnings.',
-  },
-  {
-    value: 'staff',
-    label: 'Staff (general)',
-    description: 'Counter access only. The original catch-all role, kept for existing team members.',
-  },
+const roleOptions: AssignableRole[] = [
+  'admin',
+  'manager',
+  'cashier',
+  'server',
+  'kitchen',
+  'driver',
+  'staff',
 ];
+
+/** Roles with a label in staff.roleNames; anything else is shown as stored. */
+const KNOWN_ROLES = new Set<string>([
+  'owner',
+  'admin',
+  'manager',
+  'cashier',
+  'server',
+  'kitchen',
+  'driver',
+  'staff',
+]);
+
+const KNOWN_STATUSES = new Set<string>(['pending', 'active', 'suspended', 'removed']);
 
 export function StaffView({
   branchId,
@@ -106,6 +87,7 @@ export function StaffView({
   branches,
   viewerIsOwner,
 }: Props) {
+  const t = useTranslations('staff');
   const router = useRouter();
   const [staff, setStaff] = React.useState(initialStaff);
   const [modalOpen, setModalOpen] = React.useState(false);
@@ -114,24 +96,24 @@ export function StaffView({
     <div className="container max-w-4xl py-8">
       <header className="mb-6 flex flex-wrap items-center justify-between gap-4 px-2 pl-16 lg:px-0">
         <div>
-          <h1 className="font-display text-3xl font-bold">Staff</h1>
+          <h1 className="font-display text-3xl font-bold">{t('title')}</h1>
           <p className="mt-1 text-muted-foreground">
-            {staff.length} {staff.length === 1 ? 'member' : 'members'} at {branchName}
+            {t('summary', { count: staff.length, branch: branchName })}
           </p>
         </div>
         <Button variant="gradient" leftIcon={<Plus className="h-4 w-4" />} onClick={() => setModalOpen(true)}>
-          Invite staff
+          {t('inviteStaff')}
         </Button>
       </header>
 
       {staff.length === 0 ? (
         <EmptyState
           icon={<UserPlus className="h-7 w-7" />}
-          title="No staff yet"
-          description="Invite cashiers, kitchen staff and managers to share access to the dashboard, POS and KDS."
+          title={t('empty.title')}
+          description={t('empty.description')}
           action={
             <Button variant="gradient" leftIcon={<Plus className="h-4 w-4" />} onClick={() => setModalOpen(true)}>
-              Invite first member
+              {t('empty.action')}
             </Button>
           }
         />
@@ -145,8 +127,10 @@ export function StaffView({
                     <Mail className="h-5 w-5" />
                   </div>
                   <div className="min-w-0">
-                    <p className="truncate font-semibold">{s.invited_email ?? 'Unnamed'}</p>
-                    <p className="text-xs capitalize text-muted-foreground">{s.role}</p>
+                    <p className="truncate font-semibold">{s.invited_email ?? t('unnamed')}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {KNOWN_ROLES.has(s.role) ? t(`roleNames.${s.role}`) : s.role}
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -160,7 +144,9 @@ export function StaffView({
                       )
                     }
                   />
-                  <Badge variant={statusVariant(s.status)}>{s.status}</Badge>
+                  <Badge variant={statusVariant(s.status)}>
+                    {KNOWN_STATUSES.has(s.status) ? t(`statuses.${s.status}`) : s.status}
+                  </Badge>
                 </div>
               </Card>
             </li>
@@ -202,22 +188,25 @@ function BranchAccess({
   viewerIsOwner: boolean;
   onChanged: (branchId: string | null) => void;
 }) {
+  const t = useTranslations('staff');
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const current = member.branch_id ? branches.find((b) => b.id === member.branch_id) : undefined;
 
   const lockedReason =
     member.role === 'owner'
-      ? 'The owner always has every branch.'
+      ? t('branchAccess.ownerLocked')
       : member.role === 'admin' && !viewerIsOwner
-        ? "Only the owner can change an admin's branch access."
+        ? t('branchAccess.adminLocked')
         : null;
 
   if (lockedReason) {
     // An owner row carries the first branch's id, but the owner reaches every branch through
     // the restaurant itself; naming that one branch here would be wrong.
     const label =
-      member.role === 'owner' || !member.branch_id ? 'All branches' : (current?.name ?? 'One branch');
+      member.role === 'owner' || !member.branch_id
+        ? t('branchAccess.allBranches')
+        : (current?.name ?? t('branchAccess.oneBranch'));
     return (
       <span className="text-xs text-muted-foreground" title={lockedReason}>
         {label}
@@ -234,12 +223,23 @@ function BranchAccess({
       await setStaffBranchScope(getBrowserClient(), member.id, next);
       onChanged(next);
     } catch (err) {
+      // set_staff_branch_scope raises plain codes; anything else is raw database text that
+      // belongs in the console, not in front of the merchant.
       const message = (err as Error).message;
-      setError(
-        message.includes('not_authorized')
-          ? "Your role cannot change this person's branch access."
-          : message,
-      );
+      if (message.includes('not_authorized')) {
+        setError(t('branchAccess.errors.notAuthorized'));
+      } else if (message.includes('owner_scope_fixed')) {
+        setError(t('branchAccess.ownerLocked'));
+      } else if (message.includes('invalid_branch')) {
+        setError(t('branchAccess.errors.invalidBranch'));
+      } else if (message.includes('staff_not_found')) {
+        setError(t('branchAccess.errors.notFound'));
+      } else if (message.includes('auth_required')) {
+        setError(t('errors.signedOut'));
+      } else {
+        console.error('set_staff_branch_scope failed', message);
+        setError(t('branchAccess.errors.generic'));
+      }
     } finally {
       setSaving(false);
     }
@@ -248,22 +248,24 @@ function BranchAccess({
   return (
     <div className="flex flex-col items-end gap-1">
       <label className="flex items-center gap-2 text-xs text-muted-foreground">
-        Branch access
+        {t('branchAccess.label')}
         <select
           value={member.branch_id ?? ''}
           disabled={saving}
           onChange={(e) => void change(e.target.value)}
           className="focus-ring rounded-lg border border-border bg-background px-2 py-1.5 text-sm text-foreground disabled:opacity-60"
         >
-          <option value="">All branches</option>
+          <option value="">{t('branchAccess.allBranches')}</option>
           {branches
             .filter((b) => b.is_active || b.id === member.branch_id)
             .map((b) => (
               <option key={b.id} value={b.id}>
-                {b.is_active ? b.name : `${b.name} (hidden)`}
+                {b.is_active ? b.name : t('branchAccess.hiddenBranch', { name: b.name })}
               </option>
             ))}
-          {member.branch_id && !current && <option value={member.branch_id}>One branch</option>}
+          {member.branch_id && !current && (
+            <option value={member.branch_id}>{t('branchAccess.oneBranch')}</option>
+          )}
         </select>
       </label>
       {error && <p className="max-w-xs text-right text-xs text-danger">{error}</p>}
@@ -289,6 +291,7 @@ function InviteModal({
   onClose: () => void;
   onInvited: () => void;
 }) {
+  const t = useTranslations('staff');
   const [email, setEmail] = React.useState('');
   const [role, setRole] = React.useState<AssignableRole>('cashier');
   const [scope, setScope] = React.useState<'branch' | 'restaurant'>('branch');
@@ -314,15 +317,26 @@ function InviteModal({
     } catch (err) {
       // invite-staff keeps one row per restaurant and email, so inviting someone already on
       // the team (usually to give them a second branch) came back as a raw
-      // "invite_staff_failed:409:..." with no way forward shown.
+      // "invite_staff_failed:409:..." with no way forward shown. The edge function answers
+      // with error codes; anything unrecognised is logged and shown as a generic failure.
       const message = (err as Error).message;
-      setError(
-        isStaffAlreadyActiveError(err)
-          ? `${email.trim()} is already on your team. To change which branches they can use, set their Branch access in the staff list instead of inviting them again.`
-          : message.includes('rate_limited')
-            ? 'Too many emails were sent in the last hour. The built-in email service allows only a few per hour — try again later, or connect your own email service in Supabase (Authentication → SMTP).'
-            : message,
-      );
+      if (isStaffAlreadyActiveError(err)) {
+        setError(t('invite.errors.alreadyActive', { email: email.trim() }));
+      } else if (message.includes('rate_limited')) {
+        setError(t('invite.errors.rateLimited'));
+      } else if (message.includes('only the owner')) {
+        setError(t('invite.errors.onlyOwnerAdmin'));
+      } else if (message.includes('"forbidden"')) {
+        setError(t('invite.errors.notAllowed'));
+      } else if (message.includes('not_authenticated') || message.includes('"unauthorized"')) {
+        setError(t('errors.signedOut'));
+      } else if (message.includes('email_failed')) {
+        console.error('invite-staff failed', message);
+        setError(t('invite.errors.emailFailed'));
+      } else {
+        console.error('invite-staff failed', message);
+        setError(t('invite.errors.generic'));
+      }
       setSubmitting(false);
     }
   };
@@ -346,8 +360,13 @@ function InviteModal({
         className="w-full max-w-md rounded-2xl bg-card p-6 shadow-2xl"
       >
         <header className="mb-4 flex items-center justify-between">
-          <h2 className="font-display text-xl font-bold">Invite staff member</h2>
-          <button type="button" onClick={onClose} className="focus-ring rounded-full p-1.5 hover:bg-muted">
+          <h2 className="font-display text-xl font-bold">{t('invite.title')}</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={t('invite.close')}
+            className="focus-ring rounded-full p-1.5 hover:bg-muted"
+          >
             <X className="h-5 w-5" />
           </button>
         </header>
@@ -357,33 +376,37 @@ function InviteModal({
             <CheckCircle2 className="mx-auto h-10 w-10 text-success" />
             {result.emailed ? (
               <>
-                <p className="mt-3 font-display text-lg font-semibold">Invitation sent</p>
+                <p className="mt-3 font-display text-lg font-semibold">{t('invite.sentTitle')}</p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  We emailed <strong>{email}</strong> a link. Opening it adds them to the
-                  team and asks them to choose a password.
+                  {t.rich('invite.sentBody', {
+                    email,
+                    strong: (chunks) => <strong>{chunks}</strong>,
+                  })}
                 </p>
               </>
             ) : (
               <>
-                <p className="mt-3 font-display text-lg font-semibold">Added to the team</p>
+                <p className="mt-3 font-display text-lg font-semibold">{t('invite.addedTitle')}</p>
                 {/* The old code reported plain success here and sent no email at all, so an
                     owner inviting an existing account waited forever for a message that was
                     never going to arrive. Say what actually happened instead. */}
                 <p className="mt-1 text-sm text-muted-foreground">
-                  <strong>{email}</strong> already had an account, so no email was needed —
-                  they can sign in here right now with the password they already use.
+                  {t.rich('invite.addedBody', {
+                    email,
+                    strong: (chunks) => <strong>{chunks}</strong>,
+                  })}
                 </p>
               </>
             )}
             <Button variant="gradient" className="mt-5" fullWidth onClick={onClose}>
-              Done
+              {t('invite.done')}
             </Button>
           </div>
         ) : (
           <>
         <div className="space-y-4">
           <label className="block">
-            <span className="mb-1 block text-sm font-medium">Email</span>
+            <span className="mb-1 block text-sm font-medium">{t('invite.email')}</span>
             <input
               type="email"
               value={email}
@@ -396,15 +419,15 @@ function InviteModal({
           </label>
 
           <label className="block">
-            <span className="mb-1 block text-sm font-medium">Role</span>
+            <span className="mb-1 block text-sm font-medium">{t('invite.role')}</span>
             <select
               value={role}
               onChange={(e) => setRole(e.target.value as typeof role)}
               className="focus-ring w-full rounded-xl border border-border bg-background px-4 py-3 text-base"
             >
-              {roleOptions.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
+              {roleOptions.map((value) => (
+                <option key={value} value={value}>
+                  {t(`roles.${value}.label`)}
                 </option>
               ))}
             </select>
@@ -412,12 +435,12 @@ function InviteModal({
                 difference between a considered decision and everyone being made a
                 manager. */}
             <span className="mt-1.5 block text-xs text-muted-foreground">
-              {roleOptions.find((o) => o.value === role)?.description}
+              {t(`roles.${role}.description`)}
             </span>
           </label>
 
           <fieldset className="space-y-2">
-            <legend className="mb-1 block text-sm font-medium">Scope</legend>
+            <legend className="mb-1 block text-sm font-medium">{t('invite.scope')}</legend>
             <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border p-3">
               <input
                 type="radio"
@@ -428,8 +451,8 @@ function InviteModal({
                 className="mt-1"
               />
               <div>
-                <p className="text-sm font-semibold">This branch only</p>
-                <p className="text-xs text-muted-foreground">Access limited to this location</p>
+                <p className="text-sm font-semibold">{t('invite.thisBranch')}</p>
+                <p className="text-xs text-muted-foreground">{t('invite.thisBranchHint')}</p>
               </div>
             </label>
             <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border p-3">
@@ -442,8 +465,8 @@ function InviteModal({
                 className="mt-1"
               />
               <div>
-                <p className="text-sm font-semibold">All branches</p>
-                <p className="text-xs text-muted-foreground">Full restaurant access (managers)</p>
+                <p className="text-sm font-semibold">{t('invite.allBranches')}</p>
+                <p className="text-xs text-muted-foreground">{t('invite.allBranchesHint')}</p>
               </div>
             </label>
           </fieldset>
@@ -453,10 +476,10 @@ function InviteModal({
 
         <footer className="mt-5 flex gap-2">
           <Button type="button" variant="ghost" onClick={onClose} fullWidth>
-            Cancel
+            {t('invite.cancel')}
           </Button>
           <Button type="submit" variant="gradient" fullWidth loading={submitting}>
-            Send invite
+            {t('invite.send')}
           </Button>
         </footer>
           </>

@@ -17,7 +17,7 @@
 // live in branch_schedule_hours and arrive here as `scheduleWindows`; they NARROW opening
 // hours and never extend them, because is_branch_open() still has the final say at submit.
 
-import { wallTimeToUtc } from '@favornoms/shared';
+import { intlLocaleFor, isUiLocale, wallTimeToUtc, type UiLocale } from '@favornoms/shared';
 import {
   bookableRangesForDay,
   intersectRanges,
@@ -40,7 +40,7 @@ export interface ClosurePeriod {
 export interface ScheduleSlot {
   /** UTC ISO instant — what gets sent as scheduled_for. */
   iso: string;
-  /** Branch-local wall time, e.g. "5:30 PM". */
+  /** Branch-local wall time in the interface language, e.g. "5:30 PM" / "17:30 น.". */
   label: string;
 }
 
@@ -77,10 +77,38 @@ export interface BuildScheduleInput {
   slotMinutes: number;
   /** Injected so this is testable and so a single render uses one consistent clock. */
   now?: Date;
+  /** Interface language of the day and time labels. English (en-US) when omitted, and for
+   *  anything that is not a UiLocale — a caller that only counts the days need not care. Only
+   *  the labels change: the dates, the instants and which slots exist are the same in every
+   *  language. */
+  locale?: UiLocale;
+  /** What the first two days are called, already translated by the caller. 'Today' and
+   *  'Tomorrow' when omitted. */
+  dayLabels?: { today: string; tomorrow: string };
+}
+
+const ENGLISH_DAY_LABELS = { today: 'Today', tomorrow: 'Tomorrow' } as const;
+
+// How each interface language reads a clock time, matching describeRanges() in
+// @favornoms/shared so a diner's slot list and a merchant's hours read alike: English and Latin
+// American Spanish on the 12-hour clock, Vietnamese and Thai on the 24-hour one, Thai with น.
+const TIME_OPTIONS: Record<UiLocale, Intl.DateTimeFormatOptions> = {
+  en: { hour: 'numeric', minute: '2-digit' },
+  es: { hour: 'numeric', minute: '2-digit', hour12: true },
+  vi: { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' },
+  th: { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' },
+};
+const TIME_SUFFIX: Record<UiLocale, string> = { en: '', es: '', vi: '', th: ' น.' };
+
+/** Newer ICU puts a narrow no-break space before AM/PM (and plain no-break spaces inside
+ *  Spanish "p. m."); normalised so every label wraps and compares like the rest of the page. */
+function plainSpaces(text: string): string {
+  return text.replace(/[  ]/g, ' ');
 }
 
 /** The branch-local calendar date and weekday at a given instant. */
 function branchDateParts(date: Date, tz: string): { y: number; m: number; d: number; dow: number } {
+  // Always en-US: these parts are parsed back into numbers and weekday keys, never shown.
   const dtf = new Intl.DateTimeFormat('en-US', {
     timeZone: tz,
     year: 'numeric',
@@ -107,6 +135,8 @@ export function buildScheduleDays(input: BuildScheduleInput): ScheduleDay[] {
   const { timezone, openingHours, scheduleWindows, deliveryWindows, minLeadMinutes, maxDays, slotMinutes } =
     input;
   const now = input.now ?? new Date();
+  const locale: UiLocale = isUiLocale(input.locale) ? input.locale : 'en';
+  const dayLabels = input.dayLabels ?? ENGLISH_DAY_LABELS;
   const earliest = now.getTime() + Math.max(0, minLeadMinutes) * 60_000;
   // No upper instant cutoff on purpose. The horizon is a number of branch-local DAYS, and
   // the day loop below already stops at the last of them. A `now + maxDays * 24h` cutoff
@@ -122,12 +152,13 @@ export function buildScheduleDays(input: BuildScheduleInput): ScheduleDay[] {
     .filter(([start, end]) => Number.isFinite(start) && Number.isFinite(end));
   const insideClosure = (ms: number) => closureBounds.some(([start, end]) => ms >= start && ms <= end);
 
-  const timeFmt = new Intl.DateTimeFormat('en-US', {
+  const intlLocale = intlLocaleFor(locale);
+  const timeFmt = new Intl.DateTimeFormat(intlLocale, {
     timeZone: timezone,
-    hour: 'numeric',
-    minute: '2-digit',
+    ...TIME_OPTIONS[locale],
   });
-  const dayFmt = new Intl.DateTimeFormat('en-US', {
+  const formatTime = (date: Date) => `${plainSpaces(timeFmt.format(date))}${TIME_SUFFIX[locale]}`;
+  const dayFmt = new Intl.DateTimeFormat(intlLocale, {
     timeZone: timezone,
     weekday: 'short',
     month: 'short',
@@ -172,7 +203,7 @@ export function buildScheduleDays(input: BuildScheduleInput): ScheduleDay[] {
         if (insideClosure(ms)) continue;
         if (seen.has(ms)) continue; // overlapping windows must not double up
         seen.add(ms);
-        slots.push({ iso: new Date(ms).toISOString(), label: timeFmt.format(new Date(ms)) });
+        slots.push({ iso: new Date(ms).toISOString(), label: formatTime(new Date(ms)) });
       }
     }
     if (slots.length === 0) continue;
@@ -180,7 +211,12 @@ export function buildScheduleDays(input: BuildScheduleInput): ScheduleDay[] {
     slots.sort((a, b) => a.iso.localeCompare(b.iso));
     days.push({
       date: iso(parts.y, parts.m, parts.d),
-      label: offset === 0 ? 'Today' : offset === 1 ? 'Tomorrow' : dayFmt.format(probe),
+      label:
+        offset === 0
+          ? dayLabels.today
+          : offset === 1
+            ? dayLabels.tomorrow
+            : plainSpaces(dayFmt.format(probe)),
       slots,
     });
   }

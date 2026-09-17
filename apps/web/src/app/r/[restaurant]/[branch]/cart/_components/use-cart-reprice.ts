@@ -8,8 +8,18 @@ import { useCart, type CurrentPrice } from '@/store/cart';
 const RECHECK_MIN_GAP_MS = 30_000;
 
 /**
- * Re-validates the cart against the live menu, and returns a plain-English notice when
- * something moved.
+ * What the last check moved, for the cart to say in the diner's language (cart.priceNotice.*).
+ * Never both zero: nothing moved is `null`.
+ */
+export interface CartPriceNotice {
+  /** Lines taken out because the item or combo can no longer be ordered. */
+  removed: number;
+  /** Lines whose price was updated to the current one. */
+  changed: number;
+}
+
+/**
+ * Re-validates the cart against the live menu, and reports what moved when something did.
  *
  * The cart stores the price each line was added at. place-order re-reads menu_items and
  * get_effective_prices on the server and prices the order from those rows — so a diner whose
@@ -21,14 +31,14 @@ const RECHECK_MIN_GAP_MS = 30_000;
  * Re-runs on mount (opening the cart is exactly the moment to check), whenever the storefront
  * version changes, whenever the set of lines changes, and when a backgrounded view comes back.
  */
-export function useCartReprice(branchId: string, storefrontVersion: number): string | null {
+export function useCartReprice(branchId: string, storefrontVersion: number): CartPriceNotice | null {
   const lines = useCart((s) => s.lines);
   const reprice = useCart((s) => s.reprice);
   // One cart is persisted per origin, not per restaurant, so a diner can be looking at this
   // storefront's cart page holding a cart built at a different branch. Every id would then miss
   // and the cart would be wiped for being "unavailable" — check nothing rather than that.
   const cartBranchId = useCart((s) => s.branchId);
-  const [notice, setNotice] = React.useState<string | null>(null);
+  const [notice, setNotice] = React.useState<CartPriceNotice | null>(null);
   const [wake, setWake] = React.useState(0);
   const lastCheck = React.useRef(0);
 
@@ -118,18 +128,8 @@ export function useCartReprice(branchId: string, storefrontVersion: number): str
 
       const { changed, removed } = reprice(live);
       if (cancelled) return;
-      if (removed > 0) {
-        const what = removed === 1 ? 'One item is' : `${removed} items are`;
-        const verb = removed === 1 ? 'it has' : 'they have';
-        setNotice(
-          `${what} no longer available, so ${verb} been removed from your cart.` +
-            (changed > 0 ? ' Some prices have changed too.' : ''),
-        );
-      } else if (changed > 0) {
-        setNotice("The restaurant's prices have changed — your cart now shows the current ones.");
-      } else {
-        setNotice(null);
-      }
+      // The words are the cart view's: a hook has no business picking a language.
+      setNotice(removed > 0 || changed > 0 ? { removed, changed } : null);
     })();
 
     return () => {

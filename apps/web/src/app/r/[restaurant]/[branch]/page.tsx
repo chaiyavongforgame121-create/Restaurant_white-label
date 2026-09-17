@@ -1,3 +1,4 @@
+import { getTranslations } from 'next-intl/server';
 import { getServerClient } from '@favornoms/database/server';
 import { resolveScheduleDelivery } from '@/lib/schedule-delivery';
 import { listCategories, listMenuItems } from '@favornoms/database/queries';
@@ -42,6 +43,7 @@ export default async function MenuPage({ params, searchParams }: Props) {
   }
 
   const supabase = await getServerClient();
+  const t = await getTranslations();
 
   // get_happy_hours_for_menu and resolve_table_qr aren't in the generated types yet —
   // thin typed escape.
@@ -105,7 +107,8 @@ export default async function MenuPage({ params, searchParams }: Props) {
     const eff = priceMap.get(item.id);
     if (eff && eff.effective < eff.list) {
       item.listPrice = eff.list;
-      item.saleLabel = eff.label ?? 'Happy hour';
+      // Display only — nothing compares or sends saleLabel.
+      item.saleLabel = eff.label ?? t('storefront.happyHour.saleLabel');
       item.price = eff.effective;
     }
   }
@@ -171,7 +174,10 @@ export default async function MenuPage({ params, searchParams }: Props) {
           table={{
             id: scannedHere.table_id,
             number: scannedHere.table_number,
-            label: scannedHere.display_name?.trim() || `Table ${scannedHere.table_number}`,
+            // Only ever displayed by TableScanPin; the pin itself takes join_table_session's label.
+            label:
+              scannedHere.display_name?.trim() ||
+              t('table.tableNumber', { number: scannedHere.table_number }),
           }}
           sessionMode={scannedHere.session_mode}
           requiresJoinCode={scannedHere.requires_join_code}

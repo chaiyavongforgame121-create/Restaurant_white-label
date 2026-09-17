@@ -2,12 +2,14 @@
 
 import { AnimatePresence, motion } from 'framer-motion';
 import { Moon, Sun } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { IconButton, useTheme } from '@favornoms/ui';
 
 export function ThemeToggle() {
+  const t = useTranslations('common');
   const { mode, toggleMode } = useTheme();
   return (
-    <IconButton label={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} onClick={toggleMode}>
+    <IconButton label={mode === 'dark' ? t('switchToLight') : t('switchToDark')} onClick={toggleMode}>
       <AnimatePresence mode="wait" initial={false}>
         <motion.span
           key={mode}

@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { useLocale, useTranslations } from 'next-intl';
 import { Receipt, Send, Store, TrendingUp } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import {
@@ -12,22 +13,32 @@ import {
 } from '@favornoms/database/queries';
 import {
   branchSubtitle,
+  displayRestaurantName,
+  intlLocaleFor,
   restaurantLabel,
   summariseDriverEarnings,
   type DriverEarningsSummary,
   type RestaurantEarnings,
+  type UiLocale,
 } from '@favornoms/shared';
 import { Badge, Button, Card, EmptyState, Sheet } from '@favornoms/ui';
 import { useDriverSession } from '@/components/driver-session';
 import { driverPayoutQrPath } from './_components/payout-media';
 import { PayoutQrCard } from './_components/payout-qr-card';
 
-// RPC raises these as bare exception messages; anything else falls through raw.
-const RPC_ERROR_COPY: Record<string, string> = {
-  bank_details_required: 'Please fill in all bank details.',
-  withdrawal_already_pending: 'You already have a pending request for this restaurant.',
-  nothing_to_withdraw: 'Nothing to withdraw for this restaurant yet.',
-};
+// RPC raises these as bare exception messages; each maps to a key under earnings.errors.
+// Anything else gets the translated generic message rather than the raw server text.
+const RPC_ERROR_KEYS = {
+  bank_details_required: 'bankDetailsRequired',
+  withdrawal_already_pending: 'withdrawalAlreadyPending',
+  nothing_to_withdraw: 'nothingToWithdraw',
+} as const;
+
+// Withdrawal statuses with a translated badge; anything else is shown as stored.
+const WITHDRAWAL_STATUSES = ['pending', 'paid', 'rejected'] as const;
+type WithdrawalStatus = (typeof WITHDRAWAL_STATUSES)[number];
+const isWithdrawalStatus = (s: string): s is WithdrawalStatus =>
+  (WITHDRAWAL_STATUSES as readonly string[]).includes(s);
 
 const EMPTY_SUMMARY: DriverEarningsSummary = {
   restaurants: [],
@@ -47,13 +58,13 @@ const EMPTY_SUMMARY: DriverEarningsSummary = {
 
 const money = (n: number) => `$${n.toFixed(2)}`;
 
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
-
 export default function EarningsPage() {
+  const t = useTranslations('earnings');
+  const locale = useLocale() as UiLocale;
   const { driver } = useDriverSession();
   const [withdrawals, setWithdrawals] = React.useState<DriverWithdrawalRow[]>([]);
   const [summary, setSummary] = React.useState<DriverEarningsSummary>(EMPTY_SUMMARY);
-  const [loadError, setLoadError] = React.useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = React.useState(false);
   const [requesting, setRequesting] = React.useState<RestaurantEarnings | null>(null);
   const [bankName, setBankName] = React.useState('');
   const [accountNumber, setAccountNumber] = React.useState('');
@@ -75,11 +86,11 @@ export default function EarningsPage() {
       ]);
       setSummary(summariseDriverEarnings(ledger));
       setWithdrawals(requests);
-      setLoadError(null);
+      setLoadFailed(false);
     } catch {
       // Whatever is already on screen stays: a read that never landed is not "you earned
       // nothing", and a rider deciding whether to chase a restaurant must not be told it is.
-      setLoadError('Could not load your earnings just now — check your signal and reopen.');
+      setLoadFailed(true);
     }
   }, [driver.id]);
 
@@ -120,8 +131,10 @@ export default function EarningsPage() {
     });
     setBusy(false);
     if (rpcErr) {
-      const key = Object.keys(RPC_ERROR_COPY).find((k) => rpcErr.message.includes(k));
-      setError((key && RPC_ERROR_COPY[key]) || rpcErr.message);
+      const code = (Object.keys(RPC_ERROR_KEYS) as Array<keyof typeof RPC_ERROR_KEYS>).find((k) =>
+        rpcErr.message.includes(k),
+      );
+      setError(code ? t(`errors.${RPC_ERROR_KEYS[code]}`) : t('errors.generic'));
       return;
     }
     setRequesting(null);
@@ -133,17 +146,15 @@ export default function EarningsPage() {
   return (
     <div className="container max-w-xl py-6">
       <header className="mb-5 px-1">
-        <h1 className="font-display text-2xl font-bold">Earnings</h1>
+        <h1 className="font-display text-2xl font-bold">{t('title')}</h1>
         {manyRestaurants && (
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Every restaurant pays you separately — each figure below says which one it is.
-          </p>
+          <p className="mt-0.5 text-sm text-muted-foreground">{t('separatePay')}</p>
         )}
       </header>
 
-      {loadError && (
+      {loadFailed && (
         <p role="alert" className="mb-4 rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">
-          {loadError}
+          {t('loadError')}
         </p>
       )}
 
@@ -152,15 +163,21 @@ export default function EarningsPage() {
           <TrendingUp className="h-6 w-6 shrink-0" />
           <div className="min-w-0">
             <p className="text-xs uppercase tracking-wider text-white/80">
-              {manyRestaurants ? 'All restaurants · lifetime' : 'Lifetime earnings'}
+              {manyRestaurants ? t('lifetime.allLabel') : t('lifetime.label')}
             </p>
             <p className="font-display text-3xl font-bold">{money(totals.lifetime)}</p>
             <p className="truncate text-xs text-white/80">
               {restaurantCount === 0
-                ? 'No deliveries yet'
+                ? t('lifetime.noDeliveries')
                 : manyRestaurants
-                  ? `${plural(restaurantCount, 'restaurant', 'restaurants')} · ${plural(totals.deliveries, 'delivery', 'deliveries')}`
-                  : `${restaurants[0]?.restaurantName} · ${plural(totals.deliveries, 'delivery', 'deliveries')}`}
+                  ? t('lifetime.many', {
+                      restaurants: restaurantCount,
+                      deliveries: totals.deliveries,
+                    })
+                  : t('lifetime.one', {
+                      restaurant: displayRestaurantName(restaurants[0]?.restaurantName ?? '', locale),
+                      deliveries: totals.deliveries,
+                    })}
             </p>
           </div>
         </div>
@@ -168,17 +185,17 @@ export default function EarningsPage() {
 
       <div className="mb-3 grid grid-cols-2 gap-3">
         <Card className="p-4">
-          <p className="text-xs uppercase tracking-wider text-muted-foreground">Unpaid</p>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">{t('unpaid.label')}</p>
           <p className="font-display text-2xl font-bold">{money(unpaid)}</p>
           <p className="mt-0.5 text-[11px] text-muted-foreground">
-            {manyRestaurants ? 'all restaurants — withdraw one at a time' : 'waiting to be paid'}
+            {manyRestaurants ? t('unpaid.many') : t('unpaid.one')}
           </p>
         </Card>
         <Card className="p-4">
-          <p className="text-xs uppercase tracking-wider text-muted-foreground">Paid</p>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">{t('paid.label')}</p>
           <p className="font-display text-2xl font-bold">{money(totals.paid)}</p>
           <p className="mt-0.5 text-[11px] text-muted-foreground">
-            {manyRestaurants ? 'all restaurants, settled' : 'settled by the restaurant'}
+            {manyRestaurants ? t('paid.many') : t('paid.one')}
           </p>
         </Card>
       </div>
@@ -188,19 +205,19 @@ export default function EarningsPage() {
       {manyRestaurants && (
         <Card className="mb-5 p-4">
           <p className="mb-2 text-[11px] uppercase tracking-wider text-muted-foreground">
-            All restaurants
+            {t('breakdown.allRestaurants')}
           </p>
           <div className="grid grid-cols-3 divide-x divide-border text-center">
             <div>
-              <p className="text-[11px] uppercase text-muted-foreground">Base</p>
+              <p className="text-[11px] uppercase text-muted-foreground">{t('breakdown.base')}</p>
               <p className="font-semibold">{money(totals.base)}</p>
             </div>
             <div>
-              <p className="text-[11px] uppercase text-muted-foreground">Distance</p>
+              <p className="text-[11px] uppercase text-muted-foreground">{t('breakdown.distance')}</p>
               <p className="font-semibold">{money(totals.distance)}</p>
             </div>
             <div>
-              <p className="text-[11px] uppercase text-muted-foreground">Tips</p>
+              <p className="text-[11px] uppercase text-muted-foreground">{t('breakdown.tips')}</p>
               <p className="font-semibold">{money(totals.tip)}</p>
             </div>
           </div>
@@ -209,13 +226,13 @@ export default function EarningsPage() {
 
       <PayoutQrCard qrPath={qrPath} onChange={setQrPath} />
 
-      <h2 className="mb-2 px-1 font-display text-lg font-semibold">Balance by restaurant</h2>
+      <h2 className="mb-2 px-1 font-display text-lg font-semibold">{t('balances.title')}</h2>
       {restaurants.length === 0 ? (
         <EmptyState
           className="mb-5 rounded-xl border border-dashed border-border bg-card"
           icon={<Store className="h-6 w-6" />}
-          title="No earnings yet"
-          description="Once you deliver for a restaurant it gets its own card here, with its own balance and its own withdrawals."
+          title={t('balances.emptyTitle')}
+          description={t('balances.emptyDescription')}
         />
       ) : (
         <ul className="mb-5 space-y-2">
@@ -223,6 +240,7 @@ export default function EarningsPage() {
             const pending = pendingBranchIds.has(r.branchId);
             const subtitle = branchSubtitle(r);
             const canRequest = !pending && r.available > 0;
+            const restaurantName = displayRestaurantName(r.restaurantName, locale);
             return (
               <li key={r.branchId}>
                 <Card className="p-4">
@@ -231,17 +249,17 @@ export default function EarningsPage() {
                       <Store className="h-5 w-5" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-semibold">{r.restaurantName}</p>
+                      <p className="truncate font-semibold">{restaurantName}</p>
                       {subtitle && (
                         <p className="truncate text-sm text-muted-foreground">{subtitle}</p>
                       )}
                       <p className="text-xs text-muted-foreground">
-                        {plural(r.deliveries, 'delivery', 'deliveries')}
+                        {t('balances.deliveries', { count: r.deliveries })}
                       </p>
                     </div>
                     <div className="shrink-0 text-right">
                       <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
-                        To withdraw
+                        {t('balances.toWithdraw')}
                       </p>
                       <p className="font-display text-xl font-bold text-primary">
                         {money(r.available)}
@@ -251,36 +269,42 @@ export default function EarningsPage() {
 
                   <div className="mt-3 grid grid-cols-3 divide-x divide-border rounded-xl bg-muted/40 py-2 text-center">
                     <div>
-                      <p className="text-[10px] uppercase text-muted-foreground">Base</p>
+                      <p className="text-[10px] uppercase text-muted-foreground">{t('breakdown.base')}</p>
                       <p className="text-sm font-semibold">{money(r.base)}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] uppercase text-muted-foreground">Distance</p>
+                      <p className="text-[10px] uppercase text-muted-foreground">{t('breakdown.distance')}</p>
                       <p className="text-sm font-semibold">{money(r.distance)}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] uppercase text-muted-foreground">Tips</p>
+                      <p className="text-[10px] uppercase text-muted-foreground">{t('breakdown.tips')}</p>
                       <p className="text-sm font-semibold">{money(r.tip)}</p>
                     </div>
                   </div>
 
                   <dl className="mt-2 flex justify-between text-xs text-muted-foreground">
                     <div className="flex gap-1.5">
-                      <dt>Paid by this restaurant</dt>
+                      <dt>{t('balances.paidByRestaurant')}</dt>
                       <dd className="font-semibold text-foreground">{money(r.paid)}</dd>
                     </div>
                     <div className="flex gap-1.5">
-                      <dt>Lifetime</dt>
+                      <dt>{t('balances.lifetime')}</dt>
                       <dd className="font-semibold text-foreground">{money(r.lifetime)}</dd>
                     </div>
                   </dl>
 
                   {pending && (
                     <p className="mt-2 rounded-xl bg-warning/10 px-3 py-2 text-xs text-warning">
-                      {money(r.requested)} already requested — waiting for {r.restaurantName}.
                       {r.available > 0
-                        ? ` The ${money(r.available)} you have earned since goes into your next request.`
-                        : ' You can request again once they pay it.'}
+                        ? t('balances.pendingWithNew', {
+                            requested: money(r.requested),
+                            restaurant: restaurantName,
+                            available: money(r.available),
+                          })
+                        : t('balances.pendingNothingNew', {
+                            requested: money(r.requested),
+                            restaurant: restaurantName,
+                          })}
                     </p>
                   )}
 
@@ -293,14 +317,14 @@ export default function EarningsPage() {
                     leftIcon={<Send className="h-4 w-4" />}
                   >
                     {pending
-                      ? 'Request pending'
+                      ? t('balances.requestPending')
                       : r.available > 0
-                        ? `Request ${money(r.available)}`
-                        : 'Nothing to withdraw yet'}
+                        ? t('balances.request', { amount: money(r.available) })
+                        : t('balances.nothingToWithdraw')}
                   </Button>
                   {canRequest && manyRestaurants && (
                     <p className="mt-2 text-center text-xs text-muted-foreground">
-                      Settles {r.restaurantName} only
+                      {t('balances.settlesOnly', { restaurant: restaurantName })}
                     </p>
                   )}
                 </Card>
@@ -310,13 +334,11 @@ export default function EarningsPage() {
         </ul>
       )}
 
-      <h2 className="mb-1 px-1 font-display text-lg font-semibold">Withdrawal requests</h2>
-      <p className="mb-2 px-1 text-xs text-muted-foreground">
-        Each request covers one restaurant&apos;s balance only.
-      </p>
+      <h2 className="mb-1 px-1 font-display text-lg font-semibold">{t('withdrawals.title')}</h2>
+      <p className="mb-2 px-1 text-xs text-muted-foreground">{t('withdrawals.oneRestaurantEach')}</p>
       {withdrawals.length === 0 ? (
         <p className="rounded-xl border border-dashed border-border bg-card p-6 text-center text-sm text-muted-foreground">
-          No withdrawal requests yet.
+          {t('withdrawals.empty')}
         </p>
       ) : (
         <ul className="space-y-2">
@@ -328,13 +350,15 @@ export default function EarningsPage() {
                 <Card className="p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="truncate font-semibold">{label.restaurantName}</p>
+                      <p className="truncate font-semibold">
+                        {displayRestaurantName(label.restaurantName, locale)}
+                      </p>
                       {subtitle && (
                         <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
                       )}
                       <p className="mt-0.5 text-xs text-muted-foreground">
                         {w.bank_name} · ··{w.account_number.slice(-4)} ·{' '}
-                        {new Date(w.created_at).toLocaleDateString()}
+                        {new Date(w.created_at).toLocaleDateString(intlLocaleFor(locale))}
                       </p>
                     </div>
                     <div className="shrink-0 text-right">
@@ -348,7 +372,7 @@ export default function EarningsPage() {
                               : 'warning'
                         }
                       >
-                        {w.status}
+                        {isWithdrawalStatus(w.status) ? t(`withdrawals.status.${w.status}`) : w.status}
                       </Badge>
                     </div>
                   </div>
@@ -362,7 +386,7 @@ export default function EarningsPage() {
                       href={`/app/earnings/receipt/${w.id}`}
                       className="focus-ring mt-2 inline-flex items-center gap-1.5 rounded-lg text-sm font-semibold text-primary"
                     >
-                      <Receipt className="h-4 w-4" /> View receipt
+                      <Receipt className="h-4 w-4" /> {t('withdrawals.viewReceipt')}
                     </Link>
                   )}
                 </Card>
@@ -372,19 +396,20 @@ export default function EarningsPage() {
         </ul>
       )}
 
-      <Sheet open={requesting !== null} onClose={() => setRequesting(null)} title="Request withdrawal">
+      <Sheet open={requesting !== null} onClose={() => setRequesting(null)} title={t('request.title')}>
         {requesting && (
           <div className="space-y-3 px-5 pb-8 pt-1">
             <Card className="bg-muted/40 p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="truncate font-semibold">{requesting.restaurantName}</p>
+                  <p className="truncate font-semibold">
+                    {displayRestaurantName(requesting.restaurantName, locale)}
+                  </p>
                   {requestingSubtitle && (
                     <p className="truncate text-xs text-muted-foreground">{requestingSubtitle}</p>
                   )}
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    {plural(requesting.availableDeliveries, 'delivery', 'deliveries')} · final
-                    amount confirmed by the restaurant
+                    {t('request.summary', { deliveries: requesting.availableDeliveries })}
                   </p>
                 </div>
                 <p className="shrink-0 font-display text-2xl font-bold text-primary">
@@ -392,23 +417,24 @@ export default function EarningsPage() {
                 </p>
               </div>
               <p className="mt-2 border-t border-dashed border-border pt-2 text-xs text-muted-foreground">
-                This request settles {requesting.restaurantName} only — anything your other
-                restaurants owe you stays where it is.
+                {t('request.settlesOnly', {
+                  restaurant: displayRestaurantName(requesting.restaurantName, locale),
+                })}
               </p>
             </Card>
             <PayoutQrCard qrPath={qrPath} onChange={setQrPath} compact />
             <label className="block">
-              <span className="mb-1 block text-sm font-medium">Bank</span>
+              <span className="mb-1 block text-sm font-medium">{t('request.bank')}</span>
               <input
                 value={bankName}
                 onChange={(e) => setBankName(e.target.value)}
                 className="input"
-                placeholder="Chase / Bank of America / etc."
+                placeholder={t('request.bankPlaceholder')}
                 maxLength={80}
               />
             </label>
             <label className="block">
-              <span className="mb-1 block text-sm font-medium">Account number</span>
+              <span className="mb-1 block text-sm font-medium">{t('request.accountNumber')}</span>
               <input
                 value={accountNumber}
                 onChange={(e) => setAccountNumber(e.target.value)}
@@ -417,7 +443,7 @@ export default function EarningsPage() {
               />
             </label>
             <label className="block">
-              <span className="mb-1 block text-sm font-medium">Account holder name</span>
+              <span className="mb-1 block text-sm font-medium">{t('request.accountName')}</span>
               <input
                 value={accountName}
                 onChange={(e) => setAccountName(e.target.value)}
@@ -437,7 +463,7 @@ export default function EarningsPage() {
               loading={busy}
               disabled={!bankName.trim() || !accountNumber.trim() || !accountName.trim()}
             >
-              Request {money(requesting.available)}
+              {t('request.submit', { amount: money(requesting.available) })}
             </Button>
           </div>
         )}

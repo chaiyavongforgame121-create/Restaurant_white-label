@@ -1,0 +1,41 @@
+{
+  "metaDescription": "Đặt món từ {name}",
+  "hero": {
+    "defaultTitle": "Chào mừng bạn — đặt ngay món ngon",
+    "defaultSubtitle": "Đang phục vụ tại {branch}",
+    "nowServing": "Đang phục vụ"
+  },
+  "closed": {
+    "title": "Hiện đang đóng cửa.",
+    "canSchedule": "Tự đến lấy chỉ có trong giờ mở cửa — bạn vẫn có thể hẹn giờ giao hàng ngay bây giờ.",
+    "notTaking": "Hiện chúng tôi chưa nhận đơn mới. Vui lòng quay lại trong giờ mở cửa."
+  },
+  "reviews": {
+    "count": "{count, plural, other {# đánh giá của khách hàng}}"
+  },
+  "combos": {
+    "title": "🔥 Combo và ưu đãi",
+    "available": "Có {count} ưu đãi",
+    "more": "… và {count} món khác",
+    "save": "Tiết kiệm {amount}",
+    "viewDeal": "Xem ưu đãi"
+  },
+  "happyHour": {
+    "percentOff": "Giảm {value}%",
+    "amountOff": "Giảm {amount}",
+    "liveNow": "Đang diễn ra",
+    "daily": "Hằng ngày",
+    "window": "{days} · {start}–{end}",
+    "everythingLive": "{discount} cho mọi món trong thực đơn ngay bây giờ 🍽️",
+    "everythingWindow": "{discount} cho mọi món trong thực đơn trong khung giờ này 🍽️",
+    "saleLabel": "Giờ vàng"
+  },
+  "usuals": {
+    "title": "👋 Món quen của bạn",
+    "subtitle": "{count, plural, other {# món bạn hay gọi nhất}}"
+  },
+  "suspended": {
+    "title": "{brand} hiện chưa nhận đơn hàng",
+    "body": "Tạm thời chưa thể đặt hàng trực tuyến tại chi nhánh này. Vui lòng quay lại sau hoặc liên hệ trực tiếp với nhà hàng để đặt món."
+  }
+}

@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { Bike, Crosshair, Phone, Receipt, RotateCcw, Search, UserRound, XCircle } from 'lucide-react';
 import {
   MapView,
@@ -23,26 +24,28 @@ import { formatPhone } from '@favornoms/shared';
 import { Badge, Button, Card, EmptyState } from '@favornoms/ui';
 import { AssignRiderSheet } from './assign-rider-sheet';
 import {
-  ageLabel,
+  ageSpan,
   boardCounts,
   canAssign,
   canCancelDelivery,
   canFindRider,
   describeDelivery,
   describeDispatchFailure,
+  detailQuote,
   dropoffPosition,
   formatCountdown,
   lastEndedWithReason,
   mergeRefetch,
   offerOpen,
   partitionStale,
-  readableRpcError,
   riderMapPosition,
   riderPinState,
   riderPosition,
   type DeliveryAssignmentRef,
   type DispatchFailure,
+  type DispatchFailureText,
 } from './live-ops-model';
+import { useLiveOpsText } from './live-ops-text';
 
 // Live delivery operations board. Two questions, one screen: where is every order that has
 // not been handed over yet, and where are the riders who could take it. The map draws both;
@@ -52,13 +55,16 @@ import {
  * What a merchant is actually cancelling for. This screen used to send the literal string
  * 'Cancelled from Live deliveries' with no input at all, and the diner's tracking page — which
  * has always rendered orders.cancellation_reason — showed its generic fallback instead.
+ *
+ * `value` is what cancel_order stores and the diner's page reads, so it stays exactly as it
+ * was; only `labelKey` (under deliveries.cancel.reasons) is translated for the merchant.
  */
 const CANCEL_REASONS = [
-  'Kitchen cannot make it',
-  'Customer asked to cancel',
-  'No rider available',
-  'Duplicate order',
-];
+  { value: 'Kitchen cannot make it', labelKey: 'kitchenCannotMake' },
+  { value: 'Customer asked to cancel', labelKey: 'customerAsked' },
+  { value: 'No rider available', labelKey: 'noRider' },
+  { value: 'Duplicate order', labelKey: 'duplicate' },
+] as const;
 const CANCEL_OTHER = 'Other';
 /** Matches the server-side cap in cancel_order. */
 const CANCEL_REASON_MAX = 300;
@@ -101,14 +107,15 @@ function markerEl(
 
 /** Ticks once a second, and only where a second actually matters. */
 function OfferCountdown({ expiresAt }: { expiresAt: string }) {
+  const t = useTranslations('deliveries');
   const [now, setNow] = React.useState(() => Date.now());
   React.useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
   const left = new Date(expiresAt).getTime() - now;
-  if (!Number.isFinite(left) || left <= 0) return <>Offer expired — returning to the pool</>;
-  return <>Expires in {formatCountdown(left)}</>;
+  if (!Number.isFinite(left) || left <= 0) return <>{t('detail.offerExpired')}</>;
+  return <>{t('detail.expiresIn', { countdown: formatCountdown(left) })}</>;
 }
 
 /** Ages, overdue flags and staleness only need to move at walking pace. */
@@ -129,6 +136,8 @@ function RedispatchButton({
   deliveryId: string;
   onDone: () => void | Promise<void>;
 }) {
+  const text = useLiveOpsText();
+  const { t } = text;
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
   const run = async () => {
@@ -140,7 +149,7 @@ function RedispatchButton({
     } as never);
     setBusy(false);
     if (error) {
-      setErr(readableRpcError(error.message));
+      setErr(text.rpcError(error.message));
       return;
     }
     void onDone();
@@ -154,7 +163,7 @@ function RedispatchButton({
         loading={busy}
         leftIcon={<RotateCcw className="h-3.5 w-3.5" />}
       >
-        Re-dispatch
+        {t('card.redispatch')}
       </Button>
       {err && (
         <p role="alert" className="mt-1 basis-full text-xs text-danger">
@@ -180,6 +189,8 @@ function SelfDeliveryButtons({
   status: string;
   onDone: () => void | Promise<void>;
 }) {
+  const text = useLiveOpsText();
+  const { t } = text;
   const [busy, setBusy] = React.useState<string | null>(null);
   const [err, setErr] = React.useState<string | null>(null);
 
@@ -193,7 +204,7 @@ function SelfDeliveryButtons({
     } as never);
     setBusy(null);
     if (error) {
-      setErr(readableRpcError(error.message));
+      setErr(text.rpcError(error.message));
       return;
     }
     void onDone();
@@ -201,9 +212,9 @@ function SelfDeliveryButtons({
 
   const next =
     status === 'picked_up'
-      ? ({ to: 'delivered', label: 'Mark delivered' } as const)
+      ? ({ to: 'delivered', label: t('card.markDelivered') } as const)
       : (['assigned', 'dispatching', 'pending'] as string[]).includes(status)
-        ? ({ to: 'picked_up', label: 'Out for delivery' } as const)
+        ? ({ to: 'picked_up', label: t('card.outForDelivery') } as const)
         : null;
 
   if (!next) return null;
@@ -227,13 +238,14 @@ function SelfDeliveryButtons({
   );
 }
 
-function StatPill({ label, value, tone }: { label: string; value: number; tone?: string }) {
+/** A count with its words already around it; hidden while the count is zero. */
+function StatPill({ text, value, tone }: { text: string; value: number; tone?: string }) {
   if (value === 0) return null;
   return (
     <span
       className={`rounded-full px-2.5 py-1 text-xs font-semibold ${tone ?? 'bg-muted text-muted-foreground'}`}
     >
-      {value} {label}
+      {text}
     </span>
   );
 }
@@ -274,12 +286,15 @@ function DeliveryCard({
   onFindRider,
   onRefresh,
 }: CardProps) {
+  const text = useLiveOpsText();
+  const { t } = text;
   const info = describeDelivery(d, nowMs, selfDelivery, assignments);
   const walked = lastEndedWithReason(assignments);
   // Suppressed when describeDelivery already put those exact words on the card — the point is
   // that the reason is visible once, not that it is visible twice.
+  const quoted = detailQuote(info.detail);
   const lastRiderNote =
-    walked && walked.end_reason && !info.detail.includes(walked.end_reason)
+    walked && walked.end_reason && !(quoted ?? '').includes(walked.end_reason)
       ? walked.end_reason
       : null;
   const order = d.order;
@@ -289,6 +304,7 @@ function DeliveryCard({
   // before it knows the name; the polled rider list fills that second-long gap.
   const rider = d.driver?.full_name ?? riderName;
   const withRider = d.status === 'picked_up' || d.status === 'in_transit';
+  const placedAge = text.age(ageSpan(d.created_at, nowMs));
 
   return (
     <li
@@ -300,12 +316,14 @@ function DeliveryCard({
       <div className="flex flex-wrap items-center justify-between gap-1.5">
         <p className="font-mono text-xs text-muted-foreground">{order?.order_number ?? '—'}</p>
         <div className="flex items-center gap-1.5">
-          {info.overdue && <Badge variant="danger">Waiting {ageLabel(d.created_at, nowMs)}</Badge>}
-          <Badge variant={info.variant}>{info.label}</Badge>
+          {info.overdue && (
+            <Badge variant="danger">{t('card.waiting', { age: placedAge })}</Badge>
+          )}
+          <Badge variant={info.variant}>{text.label(info.label)}</Badge>
         </div>
       </div>
 
-      <p className="mt-1 text-sm font-medium">{order?.customer_name ?? 'Customer'}</p>
+      <p className="mt-1 text-sm font-medium">{order?.customer_name ?? t('card.customer')}</p>
 
       {order?.customer_phone && (
         <a
@@ -324,7 +342,7 @@ function DeliveryCard({
         {offerOpen(d, nowMs) && d.offer_expires_at ? (
           <OfferCountdown expiresAt={d.offer_expires_at} />
         ) : (
-          info.detail
+          text.detail(info.detail)
         )}
       </p>
 
@@ -333,7 +351,7 @@ function DeliveryCard({
           <>
             <UserRound className="mr-1 inline h-3 w-3" />
             {rider}
-            {d.driver?.vehicle_type ? ` · ${d.driver.vehicle_type}` : ''}
+            {d.driver?.vehicle_type ? ` · ${text.vehicle(d.driver.vehicle_type)}` : ''}
             {d.driver?.phone && (
               <>
                 {' · '}
@@ -342,19 +360,21 @@ function DeliveryCard({
                   onClick={(e) => e.stopPropagation()}
                   className="focus-ring text-primary hover:underline"
                 >
-                  Call rider
+                  {t('card.callRider')}
                 </a>
               </>
             )}
           </>
         ) : (
-          'No rider yet'
+          t('card.noRider')
         )}
-        {' · placed '}
-        {ageLabel(d.created_at, nowMs)} ago
+        {' · '}
+        {t('card.placed', { age: placedAge })}
       </p>
 
-      {lastRiderNote && <p className="mt-1 text-xs text-danger">Last rider: “{lastRiderNote}”</p>}
+      {lastRiderNote && (
+        <p className="mt-1 text-xs text-danger">{t('card.lastRider', { note: lastRiderNote })}</p>
+      )}
 
       <div className="mt-2 flex flex-wrap items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
         {canFindRider(d, selfDelivery) && (
@@ -365,7 +385,7 @@ function DeliveryCard({
             onClick={() => onFindRider(false)}
             leftIcon={<Search className="h-3.5 w-3.5" />}
           >
-            Find a rider
+            {t('card.findRider')}
           </Button>
         )}
         {canAssign(d, selfDelivery) && (
@@ -375,7 +395,7 @@ function DeliveryCard({
             onClick={onAssign}
             leftIcon={<UserRound className="h-3.5 w-3.5" />}
           >
-            {d.driver_id ? 'Reassign' : 'Assign to a rider'}
+            {d.driver_id ? t('card.reassign') : t('card.assign')}
           </Button>
         )}
         {d.status === 'failed' && !selfDelivery && (
@@ -391,7 +411,7 @@ function DeliveryCard({
             onClick={onCancel}
             leftIcon={<XCircle className="h-3.5 w-3.5" />}
           >
-            Cancel order
+            {t('card.cancelOrder')}
           </Button>
         )}
         {order && (
@@ -399,7 +419,7 @@ function DeliveryCard({
             href={`/b/${branchId}/orders?q=${encodeURIComponent(order.order_number)}`}
             className="focus-ring inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-muted-foreground hover:bg-muted"
           >
-            <Receipt className="h-3.5 w-3.5" /> View order
+            <Receipt className="h-3.5 w-3.5" /> {t('card.viewOrder')}
           </Link>
         )}
       </div>
@@ -407,9 +427,7 @@ function DeliveryCard({
       {/* The food has already left the shop: cancelling here would leave a rider holding a
           meal nobody is paying for, so point at where the refund actually lives. */}
       {withRider && canCancel && (
-        <p className="mt-1.5 text-xs text-muted-foreground">
-          Food is with the rider — refund it from Orders if it cannot be delivered.
-        </p>
+        <p className="mt-1.5 text-xs text-muted-foreground">{t('card.withRider')}</p>
       )}
 
       {error && (
@@ -424,7 +442,7 @@ function DeliveryCard({
               }}
               className="focus-ring ml-2 rounded font-semibold underline"
             >
-              Retry from scratch
+              {t('card.retryFromScratch')}
             </button>
           )}
         </div>
@@ -454,6 +472,8 @@ export function LiveOpsView({
   /** branches.settings.dispatch_max_gps_age_min: past this, dispatch stops trusting a fix. */
   maxGpsAgeMin?: number;
 }) {
+  const text = useLiveOpsText();
+  const { t } = text;
   const [deliveries, setDeliveries] = React.useState<LiveDelivery[]>([]);
   const [riders, setRiders] = React.useState<BranchRider[]>([]);
   const [loadError, setLoadError] = React.useState<string | null>(null);
@@ -518,7 +538,10 @@ export function LiveOpsView({
       if (seq !== refreshSeq.current) return;
       // A read that failed used to arrive as an empty array and render as "no active
       // deliveries" — the one answer this screen must never give when it does not know.
-      setLoadError(e instanceof Error ? e.message.replace(/^\w+_read_failed:\s*/, '') : String(e));
+      // The database's own words go to the log; the merchant gets a sentence.
+      const raw = e instanceof Error ? e.message.replace(/^\w+_read_failed:\s*/, '') : String(e);
+      console.error('Live deliveries: could not load deliveries:', raw);
+      setLoadError(raw);
     } finally {
       if (seq === refreshSeq.current) setLoaded(true);
     }
@@ -531,9 +554,9 @@ export function LiveOpsView({
       setRiders(await listBranchRiders(supabase, branchId));
       setRidersError(null);
     } catch (e) {
-      setRidersError(
-        e instanceof Error ? e.message.replace(/^\w+_read_failed:\s*/, '') : String(e),
-      );
+      const raw = e instanceof Error ? e.message.replace(/^\w+_read_failed:\s*/, '') : String(e);
+      console.error('Live deliveries: could not load riders:', raw);
+      setRidersError(raw);
     }
   }, [branchId, selfDelivery]);
 
@@ -693,7 +716,7 @@ export function LiveOpsView({
               new mapboxgl.Marker({
                 element: markerEl('🏠', '#2D936C', 24, {
                   label: d.order?.order_number.slice(-6) ?? '',
-                  title: `${d.order?.order_number ?? ''} · ${d.order?.customer_name ?? 'Customer'}`,
+                  title: `${d.order?.order_number ?? ''} · ${d.order?.customer_name ?? t('map.customer')}`,
                   onClick: () => setSelectedId(d.id),
                 }),
               })
@@ -713,8 +736,8 @@ export function LiveOpsView({
             () =>
               new mapboxgl.Marker({
                 element: markerEl('🛵', '#1F6FEB', 30, {
-                  label: d.driver?.full_name.split(' ')[0] ?? 'Rider',
-                  title: `${d.driver?.full_name ?? 'Rider'} · ${d.order?.order_number ?? ''}`,
+                  label: d.driver?.full_name.split(' ')[0] ?? t('map.rider'),
+                  title: `${d.driver?.full_name ?? t('map.rider')} · ${d.order?.order_number ?? ''}`,
                   onClick: () => setSelectedId(d.id),
                 }),
               })
@@ -738,7 +761,10 @@ export function LiveOpsView({
             new mapboxgl.Marker({
               element: markerEl('🛵', RIDER_COLOR[state], 26, {
                 label: r.full_name.split(' ')[0] ?? '',
-                title: `${r.full_name} · GPS ${ageLabel(r.location_updated_at, nowMs)} old`,
+                title: t('map.riderGpsAge', {
+                  name: r.full_name,
+                  age: text.age(ageSpan(r.location_updated_at, nowMs)),
+                }),
               }),
             })
               .setLngLat([p.lng, p.lat])
@@ -759,7 +785,7 @@ export function LiveOpsView({
         void fitAll();
       }
     })();
-  }, [live, riders, mapReady, nowMs, maxGpsAgeMin, fitAll]);
+  }, [live, riders, mapReady, nowMs, maxGpsAgeMin, fitAll, t, text]);
 
   const handleMapReady = React.useCallback(
     (map: MapboxMap) => {
@@ -809,25 +835,28 @@ export function LiveOpsView({
         // dispatch-driver carries which gate emptied the candidate list, and that reason is
         // the only useful thing here — "no rider found" alone had merchants chasing riders
         // who were online the whole time.
-        let reason = '';
+        let failure: DispatchFailureText | null = null;
         try {
           const ctx = (error as unknown as { context?: Response }).context;
           if (ctx && typeof ctx.json === 'function') {
-            reason = describeDispatchFailure((await ctx.json()) as DispatchFailure);
+            failure = describeDispatchFailure((await ctx.json()) as DispatchFailure);
           }
         } catch {
-          /* body unreadable — fall through to the bare error */
+          /* body unreadable — fall through to the generic sentence */
+        }
+        if (!failure || failure.key === 'failed') {
+          console.error('dispatch-driver failed:', failure?.code ?? error.message);
         }
         setActionError({
           id: d.id,
-          message: reason || error.message,
-          canReset: !reset && /Tried every rider/i.test(reason),
+          message: failure ? text.dispatchFailure(failure) : t('dispatch.failed'),
+          canReset: !reset && failure?.key === 'maxAttempts',
         });
         return;
       }
       await refresh();
     },
-    [refresh],
+    [refresh, t, text],
   );
 
   // "Other" is only a reason once somebody types one, and this string is what the diner reads
@@ -849,12 +878,12 @@ export function LiveOpsView({
     });
     setCancelBusy(false);
     if (error) {
-      setCancelError(readableRpcError(error.message));
+      setCancelError(text.rpcError(error.message));
       return;
     }
     setCancelFor(null);
     await refresh();
-  }, [cancelFor, finalCancelReason, refresh]);
+  }, [cancelFor, finalCancelReason, refresh, text]);
 
   const assignmentsByDelivery = React.useMemo(() => {
     const m = new Map<string, DeliveryAssignmentRef[]>();
@@ -900,35 +929,54 @@ export function LiveOpsView({
     />
   );
 
+  const cancelChoices = [...CANCEL_REASONS, { value: CANCEL_OTHER, labelKey: 'other' } as const];
+
   return (
     <div className="container max-w-6xl py-8">
       <header className="mb-6 px-2 pl-16 lg:px-0">
         <h1 className="flex items-center gap-2 font-display text-3xl font-bold">
-          <Bike className="h-7 w-7 text-primary" /> Live deliveries
+          <Bike className="h-7 w-7 text-primary" /> {t('header.title')}
         </h1>
-        <p className="mt-1 font-medium text-foreground">
-          Where your riders and live orders are right now.
-        </p>
+        <p className="mt-1 font-medium text-foreground">{t('header.subtitle')}</p>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
           {selfDelivery
-            ? `Every delivery order at ${branchName} from the moment it is placed until it is handed over. You deliver these yourself — move each one along with the buttons on its card.`
-            : `Every delivery order at ${branchName} from the moment it is placed until it is handed over: where the rider is, how long until it arrives, and who is waiting. Riders approved here also appear on the map whenever they are online, even between jobs.`}
+            ? t('header.introSelf', { branch: branchName })
+            : t('header.introPlatform', { branch: branchName })}
         </p>
 
         <div className="mt-3 flex flex-wrap items-center gap-1.5">
-          <StatPill label="waiting on the kitchen" value={counts.waitingKitchen} />
           <StatPill
-            label="finding a rider"
+            text={t('stats.waitingKitchen', { count: counts.waitingKitchen })}
+            value={counts.waitingKitchen}
+          />
+          <StatPill
+            text={t('stats.findingRider', { count: counts.findingRider })}
             value={counts.findingRider}
             tone="bg-warning/15 text-warning"
           />
-          <StatPill label="offered" value={counts.offered} tone="bg-warning/15 text-warning" />
-          <StatPill label="accepted" value={counts.accepted} tone="bg-info/15 text-info" />
-          <StatPill label="on the way" value={counts.onTheWay} tone="bg-primary/15 text-primary" />
-          <StatPill label="failed" value={counts.failed} tone="bg-danger/15 text-danger" />
+          <StatPill
+            text={t('stats.offered', { count: counts.offered })}
+            value={counts.offered}
+            tone="bg-warning/15 text-warning"
+          />
+          <StatPill
+            text={t('stats.accepted', { count: counts.accepted })}
+            value={counts.accepted}
+            tone="bg-info/15 text-info"
+          />
+          <StatPill
+            text={t('stats.onTheWay', { count: counts.onTheWay })}
+            value={counts.onTheWay}
+            tone="bg-primary/15 text-primary"
+          />
+          <StatPill
+            text={t('stats.failed', { count: counts.failed })}
+            value={counts.failed}
+            tone="bg-danger/15 text-danger"
+          />
           {!selfDelivery && (
             <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
-              {ridersReady} of {riders.length} approved riders ready
+              {t('stats.ridersReady', { ready: ridersReady, total: riders.length })}
             </span>
           )}
           <span
@@ -937,7 +985,7 @@ export function LiveOpsView({
               liveHealthy ? 'bg-success/15 text-success' : 'bg-warning/15 text-warning'
             }`}
           >
-            {liveHealthy ? 'Live' : 'Reconnecting…'}
+            {liveHealthy ? t('stats.live') : t('stats.reconnecting')}
           </span>
         </div>
       </header>
@@ -960,32 +1008,34 @@ export function LiveOpsView({
                     onClick={() => void fitAll()}
                     leftIcon={<Crosshair className="h-3.5 w-3.5" />}
                   >
-                    Fit all
+                    {t('map.fitAll')}
                   </Button>
                 </div>
               </div>
               <p className="flex flex-wrap gap-x-3 gap-y-1 border-t border-border/60 px-3 py-2 text-xs text-muted-foreground">
-                <span>🏪 your shop</span>
-                <span>🏠 drop-off</span>
-                <span>🛵 blue: on a job</span>
-                <span>🛵 green: ready</span>
-                <span>🛵 amber: online, GPS stale</span>
+                <span>🏪 {t('map.legendShop')}</span>
+                <span>🏠 {t('map.legendDropoff')}</span>
+                <span>🛵 {t('map.legendOnJob')}</span>
+                <span>🛵 {t('map.legendReady')}</span>
+                <span>🛵 {t('map.legendStale')}</span>
               </p>
             </>
           ) : (
             <div className="grid h-[480px] place-items-center px-6 text-center text-sm text-muted-foreground">
               {!hasMapboxToken() ? (
-                <p>Map unavailable — set NEXT_PUBLIC_MAPBOX_TOKEN.</p>
+                <p>{t('map.noToken')}</p>
               ) : (
                 <p>
-                  This branch has no map pin yet, so there is nothing to draw riders against.{' '}
-                  <Link
-                    href={`/b/${branchId}/branch`}
-                    className="font-medium text-primary hover:underline"
-                  >
-                    Set it in Branch settings
-                  </Link>
-                  .
+                  {t.rich('map.noPin', {
+                    link: (chunks) => (
+                      <Link
+                        href={`/b/${branchId}/branch`}
+                        className="font-medium text-primary hover:underline"
+                      >
+                        {chunks}
+                      </Link>
+                    ),
+                  })}
                 </p>
               )}
             </div>
@@ -993,29 +1043,37 @@ export function LiveOpsView({
         </Card>
 
         <Card className="max-h-[560px] overflow-y-auto p-4 lg:col-span-2">
-          <h2 className="font-display text-base font-semibold">In flight</h2>
+          <h2 className="font-display text-base font-semibold">{t('list.title')}</h2>
 
           {loadError && (
             <p role="alert" className="mt-3 rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">
-              Could not load deliveries: {loadError}
+              {t('list.loadError')}
             </p>
           )}
           {ridersError && (
             <p role="alert" className="mt-2 rounded-xl bg-warning/10 px-3 py-2 text-xs text-warning">
-              Could not load riders: {ridersError}
+              {t('list.ridersError')}
             </p>
           )}
 
           {!loadError && loaded && live.length === 0 && (
             <EmptyState
               icon={<Bike className="h-7 w-7" />}
-              title="No deliveries in flight"
+              title={t('list.emptyTitle')}
               description={
                 selfDelivery
-                  ? `A card appears the moment someone places a delivery order at ${branchName}, and stays until you mark it delivered.`
-                  : `A card appears the moment someone places a delivery order at ${branchName}, and stays until the food is handed over. ${ridersReady} of ${riders.length} approved riders are ready right now${
-                      riders.length === 0 ? ' — no rider is approved for this branch yet' : ''
-                    }.`
+                  ? t('list.emptySelf', { branch: branchName })
+                  : riders.length === 0
+                    ? t('list.emptyPlatformNoRiders', {
+                        branch: branchName,
+                        ready: ridersReady,
+                        total: riders.length,
+                      })
+                    : t('list.emptyPlatform', {
+                        branch: branchName,
+                        ready: ridersReady,
+                        total: riders.length,
+                      })
               }
               action={
                 !selfDelivery && (riders.length === 0 || ridersReady === 0) ? (
@@ -1023,7 +1081,7 @@ export function LiveOpsView({
                     href={`/b/${branchId}/drivers`}
                     className="focus-ring inline-flex items-center gap-1 rounded-xl bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
                   >
-                    <Bike className="h-4 w-4" /> Open Drivers
+                    <Bike className="h-4 w-4" /> {t('list.openDrivers')}
                   </Link>
                 ) : undefined
               }
@@ -1042,22 +1100,19 @@ export function LiveOpsView({
                 onClick={() => setShowStale((s) => !s)}
                 className="focus-ring flex w-full items-center justify-between rounded-lg px-1 py-1 text-left text-sm font-medium"
               >
-                <span>
-                  {stale.length} stalled {stale.length === 1 ? 'order' : 'orders'}
+                <span>{t('list.stalled', { count: stale.length })}</span>
+                <span className="text-xs text-muted-foreground">
+                  {showStale ? t('list.hide') : t('list.show')}
                 </span>
-                <span className="text-xs text-muted-foreground">{showStale ? 'Hide' : 'Show'}</span>
               </button>
-              <p className="px-1 pb-2 text-xs text-muted-foreground">
-                Older than 12 hours and still waiting. Kept off the map — cancel or assign them
-                from here.
-              </p>
+              <p className="px-1 pb-2 text-xs text-muted-foreground">{t('list.stalledHint')}</p>
               {showStale && <ul className="space-y-2">{stale.map(cardFor)}</ul>}
             </div>
           )}
 
           {!selfDelivery && riders.length > 0 && (
             <div className="mt-4 border-t border-border/60 pt-3">
-              <h3 className="text-sm font-medium">Riders</h3>
+              <h3 className="text-sm font-medium">{t('list.riders')}</h3>
               <ul className="mt-1.5 space-y-1">
                 {riders.map((r) => {
                   const state = riderPinState(r, nowMs, maxGpsAgeMin);
@@ -1077,10 +1132,12 @@ export function LiveOpsView({
                       <span className="min-w-0 flex-1 truncate font-medium">{r.full_name}</span>
                       <span className="shrink-0 text-muted-foreground">
                         {state === 'busy'
-                          ? 'On a job'
+                          ? t('list.riderOnJob')
                           : state === 'offline'
-                            ? 'Offline'
-                            : `GPS ${ageLabel(r.location_updated_at, nowMs)}`}
+                            ? t('list.riderOffline')
+                            : t('list.riderGps', {
+                                age: text.age(ageSpan(r.location_updated_at, nowMs)),
+                              })}
                         {r.battery_level != null ? ` · ${r.battery_level}%` : ''}
                       </span>
                     </li>
@@ -1112,32 +1169,29 @@ export function LiveOpsView({
         >
           <Card className="w-full max-w-sm space-y-3 p-5" onClick={(e) => e.stopPropagation()}>
             <h2 className="font-display text-lg font-semibold">
-              Cancel {cancelFor.order?.order_number ?? 'this order'}?
+              {cancelFor.order?.order_number
+                ? t('cancel.title', { number: cancelFor.order.order_number })
+                : t('cancel.titleNoNumber')}
             </h2>
-            <p className="text-sm text-muted-foreground">
-              This cancels the order, restores stock and takes the delivery off the board. It
-              can&apos;t be undone.
-            </p>
+            <p className="text-sm text-muted-foreground">{t('cancel.body')}</p>
             <fieldset className="space-y-1.5">
-              <legend className="text-sm font-medium">
-                Why? The customer sees this on their order page.
-              </legend>
-              {[...CANCEL_REASONS, CANCEL_OTHER].map((r) => (
-                <label key={r} className="flex items-center gap-2 text-sm">
+              <legend className="text-sm font-medium">{t('cancel.why')}</legend>
+              {cancelChoices.map((r) => (
+                <label key={r.value} className="flex items-center gap-2 text-sm">
                   <input
                     type="radio"
                     name="cancel-reason"
-                    checked={cancelReason === r}
-                    onChange={() => setCancelReason(r)}
+                    checked={cancelReason === r.value}
+                    onChange={() => setCancelReason(r.value)}
                   />
-                  {r}
+                  {t(`cancel.reasons.${r.labelKey}`)}
                 </label>
               ))}
             </fieldset>
             {cancelReason === CANCEL_OTHER && (
               <div>
                 <label htmlFor="cancel-other" className="sr-only">
-                  What happened
+                  {t('cancel.otherLabel')}
                 </label>
                 <textarea
                   id="cancel-other"
@@ -1145,7 +1199,7 @@ export function LiveOpsView({
                   onChange={(e) => setCancelOther(e.target.value)}
                   rows={3}
                   maxLength={CANCEL_REASON_MAX}
-                  placeholder="Tell the customer what happened"
+                  placeholder={t('cancel.otherPlaceholder')}
                   className="focus-ring w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none"
                 />
                 <p className="mt-1 text-right text-[11px] text-muted-foreground">
@@ -1160,7 +1214,7 @@ export function LiveOpsView({
             )}
             <div className="flex justify-end gap-2">
               <Button variant="ghost" onClick={() => setCancelFor(null)} disabled={cancelBusy}>
-                Keep order
+                {t('cancel.keep')}
               </Button>
               <Button
                 variant="danger"
@@ -1168,7 +1222,7 @@ export function LiveOpsView({
                 loading={cancelBusy}
                 disabled={!finalCancelReason}
               >
-                Yes, cancel
+                {t('cancel.confirm')}
               </Button>
             </div>
           </Card>

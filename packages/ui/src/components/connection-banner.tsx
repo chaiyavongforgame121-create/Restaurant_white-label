@@ -3,8 +3,10 @@
 import * as React from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { CloudOff, RefreshCcw, Wifi } from 'lucide-react';
+import { useUiStrings } from './ui-strings';
 
 export function ConnectionBanner() {
+  const strings = useUiStrings();
   const [online, setOnline] = React.useState(true);
   const [justReconnected, setJustReconnected] = React.useState(false);
 
@@ -39,7 +41,7 @@ export function ConnectionBanner() {
           className="fixed inset-x-0 top-0 z-[200] flex items-center justify-center gap-2 bg-warning px-3 py-2 text-sm font-medium text-white shadow-soft"
         >
           <CloudOff className="h-4 w-4" />
-          You're offline — viewing cached data
+          {strings.offlineBanner}
         </motion.div>
       )}
       {online && justReconnected && (
@@ -51,7 +53,7 @@ export function ConnectionBanner() {
           className="fixed inset-x-0 top-0 z-[200] flex items-center justify-center gap-2 bg-success px-3 py-2 text-sm font-medium text-white shadow-soft"
         >
           <Wifi className="h-4 w-4" />
-          Back online <RefreshCcw className="h-3.5 w-3.5 animate-spin" />
+          {strings.backOnline} <RefreshCcw className="h-3.5 w-3.5 animate-spin" />
         </motion.div>
       )}
     </AnimatePresence>

@@ -1,0 +1,91 @@
+{
+  "actions": {
+    "copied": "Copied",
+    "copyLink": "Copy link"
+  },
+  "noLink": {
+    "title": "Can’t build a menu link yet",
+    "branchBody": {
+      "both": "This restaurant and this branch have no URL slug, so there is no public address to point a QR code at. A slug is the short name in your menu link, e.g. <code>/r/coastal-grill/brooklyn</code>.",
+      "restaurant": "This restaurant has no URL slug, so there is no public address to point a QR code at. A slug is the short name in your menu link, e.g. <code>/r/coastal-grill/brooklyn</code>.",
+      "branch": "This branch has no URL slug, so there is no public address to point a QR code at. A slug is the short name in your menu link, e.g. <code>/r/coastal-grill/brooklyn</code>."
+    },
+    "branchHelp": "Slugs are created during onboarding. If yours is blank, set a <strong>custom domain</strong> in Branch settings instead — that also gives this branch a scannable address — or ask support to fill the slug in.",
+    "tableBody": {
+      "both": "This restaurant and this branch have no URL slug, so there is no public address for a table code to point at. A slug is the short name in your menu link, e.g. <code>/r/coastal-grill/brooklyn</code>.",
+      "restaurant": "This restaurant has no URL slug, so there is no public address for a table code to point at. A slug is the short name in your menu link, e.g. <code>/r/coastal-grill/brooklyn</code>.",
+      "branch": "This branch has no URL slug, so there is no public address for a table code to point at. A slug is the short name in your menu link, e.g. <code>/r/coastal-grill/brooklyn</code>."
+    },
+    "tableHelp": "Set a <strong>custom domain</strong> in Branch settings, or ask support to fill the slug in. Your tables are safe either way — the codes appear here as soon as the branch has an address.",
+    "openBranchSettings": "Open Branch settings"
+  },
+  "branch": {
+    "title": "Branch QR code",
+    "introWithTables": "One code for the whole branch — the counter, the window, a takeaway flyer. Guests scan it to open {branch}’s menu and pick how they want to order. Tables have their own codes.",
+    "intro": "Print this and place it at the counter or on a flyer. Guests scan it to open {branch}’s menu and order from their phone.",
+    "tableCodes": "Table QR codes ({count})",
+    "setUpTableCodes": "Set up table QR codes",
+    "downloadPng": "Download PNG",
+    "print": "Print",
+    "pngHint": "PNG is {size}×{size}px — big enough for table tents and posters."
+  },
+  "tables": {
+    "accessDenied": {
+      "title": "No table access",
+      "reason": "Only the owner or an admin can set up tables at {branch}."
+    },
+    "title": "Table QR codes",
+    "intro": "One code per table. Scanning it opens {branch}’s menu with dine-in and that table already chosen — the guest never picks a branch or types a table number.",
+    "printSheet": "Print sheet",
+    "cancel": "Cancel",
+    "addTable": "Add table",
+    "editingNote": "Editing this table. Its QR code is untouched — every tent already on the floor keeps working.",
+    "fields": {
+      "tableNumber": "Table number",
+      "name": "Name (optional)",
+      "namePlaceholder": "Window booth",
+      "type": "Type",
+      "seats": "Seats (optional)",
+      "zone": "Zone (optional)",
+      "zonePlaceholder": "Terrace",
+      "sortOrder": "Sort order (optional)"
+    },
+    "sortHint": "Sort order is what puts table 2 before table 10 — table numbers are text, so left to themselves they sort alphabetically. Leave it blank and the digits in the number are used.",
+    "saveChanges": "Save changes",
+    "empty": {
+      "title": "No tables yet",
+      "description": "Add your tables and each one gets its own QR code to print and stand on the table.",
+      "bulk": "Add tables 1–{count}"
+    },
+    "codePending": "Code pending",
+    "editTable": "Edit table",
+    "rotate": "Issue a new code",
+    "deleteTable": "Delete table",
+    "turnOff": "Turn off",
+    "turnOn": "Turn on",
+    "retired": {
+      "title": "Turned off",
+      "description": "Their codes stop pinning a table — a guest scanning one lands on the ordinary menu. Past orders still show the table.",
+      "badge": "Off"
+    },
+    "footer": "PNG is {size}×{size}px. “Print sheet” lays every active table out two-up for cutting.",
+    "tableLabel": "Table {number}",
+    "rotateConfirm": {
+      "title": "Issue a new code for {table}?",
+      "body": "Every printed copy of this table’s QR stops working immediately.",
+      "confirm": "Issue new code"
+    },
+    "deleteConfirm": {
+      "title": "Delete {table}?",
+      "body": "Its code is destroyed for good — to retire a table but keep past orders readable, turn it off instead.",
+      "confirm": "Delete"
+    },
+    "errors": {
+      "duplicateNumber": "A table with that number already exists at this branch.",
+      "hasOrders": "This table still has orders or sittings linked to it, so it can’t be deleted. Turn it off instead.",
+      "tableNotFound": "That table no longer exists.",
+      "notPermitted": "Your account can’t change tables at this branch.",
+      "generic": "Something went wrong. Please try again."
+    }
+  }
+}

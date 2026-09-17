@@ -1,0 +1,122 @@
+{
+  "title": "Phần thưởng tích điểm",
+  "ownerOnly": {
+    "title": "Chỉ dành cho chủ sở hữu",
+    "body": "Phần thưởng trong danh sách này có thể đổi ở <em>mọi</em> chi nhánh của nhà hàng và được trừ vào lợi nhuận của chính nhà hàng, nên chỉ chủ sở hữu mới quản lý được. Hãy nhờ chủ sở hữu thêm hoặc sửa phần thưởng cho bạn."
+  },
+  "program": {
+    "title": "Điểm và hạng",
+    "loadFailed": "Không tải được chương trình hiện tại nên chương trình không hiển thị ở đây — sửa từ một biểu mẫu trống sẽ ghi đè tỷ lệ tích điểm và các hạng thật của bạn. Hãy tải lại trang để thử lại.",
+    "description": "Tốc độ khách tích điểm, mức điểm cho từng huy hiệu và tên gọi của chúng. Áp dụng cho mọi chi nhánh của nhà hàng.",
+    "rateLabel": "Điểm cho mỗi $1 tạm tính",
+    "rateExample": "Đơn hàng $20 được {count, plural, other {<strong>#</strong> điểm}}.",
+    "rateExampleEmpty": "Đơn hàng $20 được <strong>—</strong> điểm.",
+    "rateBasis": "Điểm được tính trên tạm tính, trước thuế, phí và tiền tip.",
+    "thresholdLabel": {
+      "silver": "Silver từ",
+      "gold": "Gold từ",
+      "platinum": "Platinum từ"
+    },
+    "thresholdHint": "Tổng điểm đã tích lũy, không phải số dư hiện tại — dùng điểm không bao giờ làm mất huy hiệu. Mọi người đều bắt đầu từ Bronze.",
+    "wordsTitle": "Tên hạng và quyền lợi",
+    "wordsBody": "Tên của từng huy hiệu trên trang tích điểm của khách và quyền lợi đi kèm — mỗi dòng một quyền lợi, bằng ngôn ngữ nào cũng được. Dòng “mở khóa khi đạt” được tự động viết từ các con số ở trên, nên khi đổi mức điểm của một hạng, nội dung của bạn không bao giờ bị sai số.",
+    "starter": "Hạng khởi đầu của mọi thành viên — không yêu cầu chi tiêu tối thiểu.",
+    "unlockedAt": "{points, plural, other {Mở khóa khi đạt # điểm tích lũy.}}",
+    "tierNameLabel": {
+      "bronze": "Hạng Bronze — tên",
+      "silver": "Hạng Silver — tên",
+      "gold": "Hạng Gold — tên",
+      "platinum": "Hạng Platinum — tên"
+    },
+    "benefitsLabel": "Quyền lợi — mỗi dòng một mục",
+    "alwaysFirst": "Luôn hiển thị đầu tiên: <line>{opening}</line>",
+    "alwaysFirstOnly": "Luôn hiển thị đầu tiên: <line>{opening}</line> — và chỉ có vậy khi ô này còn trống.",
+    "standardWording": "Đang dùng nội dung chuẩn — sẽ tự cập nhật nếu chúng tôi cải thiện.",
+    "standardWordingTranslated": "Nội dung được hiển thị bằng tiếng Anh ở đây; khách hàng sẽ đọc bằng ngôn ngữ của họ.",
+    "useStandard": "Dùng nội dung chuẩn",
+    "save": "Lưu chương trình",
+    "saved": "Đã lưu ✓ — huy hiệu của mọi khách hàng đã được kiểm tra lại theo các hạng mới",
+    "errors": {
+      "notAuthorized": "Chỉ chủ nhà hàng mới có thể thay đổi chương trình tích điểm.",
+      "stale": "Chương trình đã được thay đổi ở nơi khác (tab khác, thiết bị khác hoặc người khác) sau khi trang này được mở. Chưa có gì được lưu — hãy tải lại trang để xem phiên bản mới nhất rồi thực hiện lại thay đổi.",
+      "badRate": "Số điểm cho mỗi $1 phải từ 0.01 đến 100.",
+      "badTiers": "Các hạng phải tăng dần và mỗi hạng phải từ 1 đến {max, number} điểm.",
+      "labelTooLong": "Tên hạng tối đa {max} ký tự.",
+      "tooManyPerks": "Mỗi hạng có tối đa {max} quyền lợi.",
+      "perkInvalid": "Mỗi quyền lợi phải là một dòng văn bản tối đa {max} ký tự.",
+      "perkLineTooLong": "Mỗi dòng quyền lợi tối đa {max} ký tự.",
+      "wholeNumber": "Mỗi hạng cần một số điểm nguyên.",
+      "thresholdTooHigh": "Mỗi hạng tối đa {max, number} điểm.",
+      "mustClimb": "Các hạng phải tăng dần: Silver thấp hơn Gold, Gold thấp hơn Platinum.",
+      "saveFailed": "Không lưu được chương trình. Vui lòng thử lại."
+    }
+  },
+  "rewards": {
+    "subtitle": "Những gì khách có thể đổi bằng điểm. Điểm chỉ đổi được lấy phần thưởng bạn thêm ở đây.",
+    "new": "Thêm phần thưởng",
+    "cancel": "Hủy",
+    "multiBranch": "Các phần thưởng này áp dụng cho mọi chi nhánh của nhà hàng. Phần thưởng <strong>món miễn phí</strong> chỉ xuất hiện ở chi nhánh có món đó trong thực đơn.",
+    "fields": {
+      "name": "Tên phần thưởng",
+      "namePlaceholder": "Tráng miệng miễn phí",
+      "points": "Số điểm để đổi",
+      "kind": "Loại phần thưởng",
+      "percent": "Phần trăm (1–100)",
+      "amount": "Số tiền USD",
+      "cap": "Giảm tối đa (USD, không bắt buộc)",
+      "capPlaceholder": "không giới hạn",
+      "item": "Món nào",
+      "itemPlaceholder": "Chọn một món…",
+      "itemOption": "{name} — {price}",
+      "itemOptionHidden": "{name} — {price} (đã ẩn)",
+      "minSubtotal": "Tạm tính tối thiểu của đơn (USD)",
+      "sortOrder": "Thứ tự hiển thị",
+      "description": "Mô tả (không bắt buộc)",
+      "descriptionPlaceholder": "Hiển thị cho khách bên dưới tên phần thưởng"
+    },
+    "kinds": {
+      "percent_off": "Giảm % trên đơn hàng",
+      "fixed_off": "Giảm số tiền cố định (USD)",
+      "free_item": "Món miễn phí",
+      "free_delivery": "Miễn phí giao hàng"
+    },
+    "saveChanges": "Lưu thay đổi",
+    "create": "Tạo phần thưởng",
+    "empty": {
+      "title": "Chưa có phần thưởng",
+      "description": "Khi chưa có phần thưởng, khách vẫn tích điểm nhưng không có gì để đổi."
+    },
+    "line": "{points, plural, other {# điểm}} · {reward}",
+    "lineWithMinimum": "{points, plural, other {# điểm}} · {reward} · tối thiểu {min}",
+    "describe": {
+      "percentOff": "Giảm {value}%",
+      "percentOffCapped": "Giảm {value}% (tối đa {max})",
+      "fixedOff": "Giảm {amount}",
+      "freeItem": "Miễn phí {item}",
+      "freeItemElsewhere": "Món miễn phí từ chi nhánh khác",
+      "freeDelivery": "Miễn phí giao hàng"
+    },
+    "status": {
+      "active": "Đang bật",
+      "paused": "Tạm dừng"
+    },
+    "pause": "Tạm dừng",
+    "activate": "Bật",
+    "edit": "Sửa",
+    "delete": "Xóa",
+    "deleteDialog": {
+      "title": "Xóa phần thưởng “{name}”?",
+      "body": "Khách sẽ không còn thấy phần thưởng này khi thanh toán.",
+      "confirm": "Xóa"
+    },
+    "footer": "Khách thấy các phần thưởng này trên trang Tích điểm và chọn một phần thưởng khi thanh toán. Mục <link>Khách hàng</link> cho biết ai đủ điểm để đổi.",
+    "errors": {
+      "denied": "Chưa lưu được thay đổi — chỉ chủ nhà hàng mới có thể sửa danh sách phần thưởng.",
+      "menuItemForeign": "Món này thuộc về nhà hàng khác. Hãy chọn một món trong thực đơn của bạn.",
+      "kindShape": "Kết hợp này không hợp lệ — phần thưởng theo % cần giá trị 1–100, phần thưởng cố định cần số tiền lớn hơn 0, và món miễn phí cần chọn một món.",
+      "pointsCost": "Số điểm để đổi phải lớn hơn 0.",
+      "permission": "Bạn không có quyền thay đổi phần thưởng của nhà hàng này.",
+      "saveFailed": "Không lưu được phần thưởng. Vui lòng thử lại."
+    }
+  }
+}

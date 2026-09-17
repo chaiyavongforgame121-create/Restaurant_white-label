@@ -8,11 +8,36 @@ import type { ReportRange } from './report-range';
 
 type ReportClient = BranchAccess['supabase'];
 
+/** What went wrong, as a stable code the screen translates under `reports.errors`. */
+export type SectionErrorCode =
+  | 'forbidden'
+  | 'rangeTooWide'
+  | 'rangeRequired'
+  | 'emptyResponse'
+  | 'unknown';
+
+export interface SectionError {
+  code: SectionErrorCode;
+  /** The database's own error code (42501, P0001, PGRST…), shown so support can match it to
+   *  the server log. Never the database's text, which is English and not for merchants. */
+  ref: string | null;
+}
+
 export interface SectionResult<T> {
   data: T | null;
-  /** Real failure text, already carrying the Postgres code. null when the RPC succeeded —
-   *  even when the branch simply took no orders. */
-  error: string | null;
+  /** null when the RPC succeeded — even when the branch simply took no orders. */
+  error: SectionError | null;
+}
+
+/** The six RPCs raise 42501 for a caller without reports.view and name their P0001s. */
+export function sectionErrorCode(error: {
+  code?: string | null;
+  message?: string | null;
+}): SectionErrorCode {
+  if (error.code === '42501') return 'forbidden';
+  if (error.message === 'range_too_wide') return 'rangeTooWide';
+  if (error.message === 'range_required') return 'rangeRequired';
+  return 'unknown';
 }
 
 interface SectionWindow {
@@ -92,7 +117,14 @@ export interface MenuReport extends SectionWindow {
     revenue: number;
     orders: number;
   }[];
-  by_category: { category: string; quantity: number; revenue: number }[];
+  by_category: {
+    category: string;
+    /** Set only on the two bands the report names itself ('Combos' / 'Uncategorised'); a
+     *  category row with null band is the merchant's own name, whatever it says. */
+    band?: 'combos' | 'uncategorised' | null;
+    quantity: number;
+    revenue: number;
+  }[];
   by_combo: {
     combo_id: string | null;
     name: string;
@@ -126,6 +158,8 @@ export interface DeliveryReport extends SectionWindow {
   by_driver: {
     driver_id: string;
     name: string;
+    /** False when name is the report's placeholder ('Rider'), not the rider's real name. */
+    has_name?: boolean;
     delivered: number;
     avg_ride_min: number;
     tips: number;
@@ -154,6 +188,8 @@ export interface CustomersReport extends SectionWindow {
   top_customers: {
     customer_id: string;
     name: string;
+    /** False when name is the report's placeholder ('Guest'), not the customer's real name. */
+    has_name?: boolean;
     orders: number;
     spend: number;
     last_at: string | null;
@@ -198,7 +234,8 @@ export interface ReportSections {
 
 /**
  * A failure is never collapsed into `null` here. A merchant staring at "No data" cannot
- * tell a broken session from a quiet week, so the caller gets the database's own words.
+ * tell a broken session from a quiet week, so the caller gets a coded error plus the
+ * database's code, and the database's own words go to the server log.
  */
 async function callSection<T>(
   supabase: ReportClient,
@@ -215,9 +252,13 @@ async function callSection<T>(
   } as never);
   if (error) {
     const parts = [error.message, error.hint, error.details].filter(Boolean);
-    return { data: null, error: `${parts.join(' — ')}${error.code ? ` (${error.code})` : ''}` };
+    console.error(`[reports] ${fn}: ${parts.join(' — ')}${error.code ? ` (${error.code})` : ''}`);
+    return { data: null, error: { code: sectionErrorCode(error), ref: error.code || null } };
   }
-  if (!data) return { data: null, error: 'The reports service returned an empty response.' };
+  if (!data) {
+    console.error(`[reports] ${fn}: empty response`);
+    return { data: null, error: { code: 'emptyResponse', ref: null } };
+  }
   return { data: data as unknown as T, error: null };
 }
 

@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Badge, Button, Card, useConfirm, usePrompt } from '@favornoms/ui';
@@ -30,14 +31,34 @@ interface Props {
   categories: Category[];
 }
 
-const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+/** Index = days_of_week value (0 = Sunday); the key picks the translated short name. */
+const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
+
+type DbErrorKey = 'permissionDenied' | 'network' | 'duplicate' | 'inUse' | 'invalidValue' | 'generic';
+
+/** Raw PostgREST text never reaches the merchant: known codes get a translated sentence. */
+function dbErrorKey(err: { code?: string; message?: string }): DbErrorKey {
+  const message = err.message ?? '';
+  if (err.code === '42501' || /row-level security|permission denied/i.test(message)) return 'permissionDenied';
+  if (/failed to fetch|networkerror|network request failed/i.test(message)) return 'network';
+  if (err.code === '23505') return 'duplicate';
+  if (err.code === '23503') return 'inUse';
+  if (err.code && /^(22|23)/.test(err.code)) return 'invalidValue';
+  return 'generic';
+}
 
 export function HappyHoursManager({ branchId, initialHours, menuItems, categories }: Props) {
+  const t = useTranslations('menuExtras');
   const router = useRouter();
   const confirm = useConfirm();
   const prompt = usePrompt();
   const [hours, setHours] = React.useState(initialHours);
   const [error, setError] = React.useState<string | null>(null);
+
+  const dbError = (context: string, err: { code?: string; message?: string }) => {
+    console.error(`[happy-hours] ${context}`, err);
+    return t(`errors.${dbErrorKey(err)}`);
+  };
 
   const refetch = async () => {
     const supabase = getBrowserClient();
@@ -53,10 +74,10 @@ export function HappyHoursManager({ branchId, initialHours, menuItems, categorie
 
   const createNew = async () => {
     const name = await prompt({
-      title: 'Name this promotion',
-      body: 'For example "Happy hour" or "Lunch special".',
-      placeholder: 'Happy hour',
-      confirmLabel: 'Create',
+      title: t('happyHours.namePrompt.title'),
+      body: t('happyHours.namePrompt.body'),
+      placeholder: t('happyHours.namePrompt.placeholder'),
+      confirmLabel: t('happyHours.namePrompt.confirm'),
       required: true,
     });
     if (!name) return;
@@ -74,7 +95,7 @@ export function HappyHoursManager({ branchId, initialHours, menuItems, categorie
       display_order: hours.reduce((m, h) => Math.max(m, h.display_order ?? 0), -1) + 1,
     });
     if (insErr) {
-      setError(insErr.message);
+      setError(dbError('create', insErr));
       return;
     }
     refetch();
@@ -84,7 +105,7 @@ export function HappyHoursManager({ branchId, initialHours, menuItems, categorie
     const supabase = getBrowserClient();
     const { error: upErr } = await supabase.from('happy_hours').update(patch).eq('id', id);
     if (upErr) {
-      setError(upErr.message);
+      setError(dbError('update', upErr));
       return;
     }
     setHours((curr) => curr.map((h) => (h.id === id ? { ...h, ...patch } : h)));
@@ -93,9 +114,9 @@ export function HappyHoursManager({ branchId, initialHours, menuItems, categorie
   const remove = async (id: string) => {
     if (
       !(await confirm({
-        title: 'Delete this happy hour?',
-        body: 'The discount stops applying on the customer menu right away.',
-        confirmLabel: 'Delete',
+        title: t('happyHours.deleteConfirm.title'),
+        body: t('happyHours.deleteConfirm.body'),
+        confirmLabel: t('happyHours.deleteConfirm.confirm'),
         destructive: true,
       }))
     ) {
@@ -127,7 +148,7 @@ export function HappyHoursManager({ branchId, initialHours, menuItems, categorie
       supabase.from('happy_hours').update({ display_order: newNeighbor.display_order }).eq('id', neighbor.id),
     ]);
     if (e1 || e2) {
-      setError((e1 ?? e2)!.message);
+      setError(dbError('reorder', (e1 ?? e2)!));
       refetch();
     }
   };
@@ -143,13 +164,11 @@ export function HappyHoursManager({ branchId, initialHours, menuItems, categorie
     <div className="container max-w-5xl py-8">
       <header className="mb-6 flex flex-wrap items-center justify-between gap-3 px-2 pl-16 lg:px-0">
         <div>
-          <h1 className="font-display text-3xl font-bold">Happy hours</h1>
-          <p className="mt-1 text-muted-foreground">
-            Time-windowed discounts on items or whole categories.
-          </p>
+          <h1 className="font-display text-3xl font-bold">{t('happyHours.title')}</h1>
+          <p className="mt-1 text-muted-foreground">{t('happyHours.subtitle')}</p>
         </div>
         <Button variant="gradient" onClick={createNew} leftIcon={<Plus className="h-4 w-4" />}>
-          New happy hour
+          {t('happyHours.newHappyHour')}
         </Button>
       </header>
 
@@ -158,7 +177,7 @@ export function HappyHoursManager({ branchId, initialHours, menuItems, categorie
       )}
 
       {hours.length === 0 ? (
-        <Card className="p-10 text-center text-muted-foreground">No happy hours yet.</Card>
+        <Card className="p-10 text-center text-muted-foreground">{t('happyHours.empty')}</Card>
       ) : (
         <ul className="space-y-3 px-2 lg:px-0">
           {hours.map((h, index) => {
@@ -176,7 +195,9 @@ export function HappyHoursManager({ branchId, initialHours, menuItems, categorie
                           onChange={(e) => update(h.id, { name: e.target.value })}
                           className="focus-ring rounded-lg border border-border bg-background px-2 py-1 font-display text-lg font-bold"
                         />
-                        <Badge variant={h.is_active ? 'success' : 'muted'}>{h.is_active ? 'Active' : 'Paused'}</Badge>
+                        <Badge variant={h.is_active ? 'success' : 'muted'}>
+                          {h.is_active ? t('happyHours.active') : t('happyHours.paused')}
+                        </Badge>
                       </div>
 
                       <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
@@ -186,8 +207,8 @@ export function HappyHoursManager({ branchId, initialHours, menuItems, categorie
                             onChange={(e) => update(h.id, { discount_type: e.target.value as 'percent' | 'fixed' })}
                             className="focus-ring rounded-lg border border-border bg-background px-2 py-1"
                           >
-                            <option value="percent">% off</option>
-                            <option value="fixed">$ off</option>
+                            <option value="percent">{t('happyHours.percentOff')}</option>
+                            <option value="fixed">{t('happyHours.fixedOff')}</option>
                           </select>
                           <input
                             type="number"
@@ -198,7 +219,7 @@ export function HappyHoursManager({ branchId, initialHours, menuItems, categorie
                           />
                         </label>
                         <label className="flex items-center gap-1">
-                          <span className="text-xs text-muted-foreground">From</span>
+                          <span className="text-xs text-muted-foreground">{t('happyHours.from')}</span>
                           <input
                             type="time"
                             value={h.start_time.slice(0, 5)}
@@ -207,7 +228,7 @@ export function HappyHoursManager({ branchId, initialHours, menuItems, categorie
                           />
                         </label>
                         <label className="flex items-center gap-1">
-                          <span className="text-xs text-muted-foreground">to</span>
+                          <span className="text-xs text-muted-foreground">{t('happyHours.to')}</span>
                           <input
                             type="time"
                             value={h.end_time.slice(0, 5)}
@@ -220,12 +241,12 @@ export function HappyHoursManager({ branchId, initialHours, menuItems, categorie
                             type="checkbox"
                             checked={h.is_active}
                             onChange={(e) => update(h.id, { is_active: e.target.checked })}
-                          /> Active
+                          /> {t('happyHours.active')}
                         </label>
                       </div>
 
                       <div className="mt-3 flex items-center gap-1">
-                        {DAY_LABELS.map((lbl, i) => (
+                        {DAY_KEYS.map((key, i) => (
                           <button
                             key={i}
                             type="button"
@@ -236,21 +257,19 @@ export function HappyHoursManager({ branchId, initialHours, menuItems, categorie
                                 : 'bg-muted text-muted-foreground'
                             }`}
                           >
-                            {lbl}
+                            {t(`happyHours.days.${key}`)}
                           </button>
                         ))}
                       </div>
 
                       <div className="mt-3 text-xs text-muted-foreground">
-                        Applies to:{' '}
-                        {appliesToAll ? (
-                          <strong>all menu items</strong>
-                        ) : (
-                          <>
-                            {appliedItems.length > 0 && <span>{appliedItems.length} item{appliedItems.length === 1 ? '' : 's'}</span>}
-                            {appliedCats.length > 0 && <span>{appliedItems.length > 0 ? ', ' : ''}{appliedCats.length} categor{appliedCats.length === 1 ? 'y' : 'ies'}</span>}
-                          </>
-                        )}
+                        {appliesToAll
+                          ? t.rich('happyHours.appliesToAll', { strong: (chunks) => <strong>{chunks}</strong> })
+                          : appliedCats.length > 0 && appliedItems.length > 0
+                            ? t('happyHours.appliesToBoth', { items: appliedItems.length, categories: appliedCats.length })
+                            : appliedCats.length > 0
+                              ? t('happyHours.appliesToCategories', { categories: appliedCats.length })
+                              : t('happyHours.appliesToItems', { items: appliedItems.length })}
                         <ScopePicker h={h} menuItems={menuItems} categories={categories} onChange={update} />
                       </div>
                     </div>
@@ -258,7 +277,7 @@ export function HappyHoursManager({ branchId, initialHours, menuItems, categorie
                       <div className="flex flex-col overflow-hidden rounded-lg border border-border">
                         <button
                           type="button"
-                          aria-label="Move up"
+                          aria-label={t('happyHours.moveUp')}
                           disabled={index === 0}
                           onClick={() => move(index, -1)}
                           className="focus-ring grid h-6 w-8 place-items-center hover:bg-muted disabled:cursor-not-allowed disabled:opacity-30"
@@ -267,7 +286,7 @@ export function HappyHoursManager({ branchId, initialHours, menuItems, categorie
                         </button>
                         <button
                           type="button"
-                          aria-label="Move down"
+                          aria-label={t('happyHours.moveDown')}
                           disabled={index === hours.length - 1}
                           onClick={() => move(index, 1)}
                           className="focus-ring grid h-6 w-8 place-items-center border-t border-border hover:bg-muted disabled:cursor-not-allowed disabled:opacity-30"
@@ -281,7 +300,7 @@ export function HappyHoursManager({ branchId, initialHours, menuItems, categorie
                         onClick={() => remove(h.id)}
                         leftIcon={<Trash2 className="h-4 w-4" />}
                       >
-                        Delete
+                        {t('happyHours.delete')}
                       </Button>
                     </div>
                   </div>
@@ -306,6 +325,7 @@ function ScopePicker({
   categories: Category[];
   onChange: (id: string, patch: Partial<HappyHour>) => void;
 }) {
+  const t = useTranslations('menuExtras.happyHours.scope');
   const [open, setOpen] = React.useState(false);
   return (
     <>
@@ -314,12 +334,12 @@ function ScopePicker({
         onClick={() => setOpen((o) => !o)}
         className="focus-ring ml-2 text-primary underline"
       >
-        {open ? 'Hide' : 'Edit'}
+        {open ? t('hide') : t('edit')}
       </button>
       {open && (
         <div className="mt-2 grid gap-2 sm:grid-cols-2">
           <div>
-            <p className="mb-1 font-semibold text-foreground">Items</p>
+            <p className="mb-1 font-semibold text-foreground">{t('items')}</p>
             <div className="max-h-32 overflow-y-auto rounded-lg border border-border bg-card p-1">
               {menuItems.map((m) => (
                 <label key={m.id} className="flex items-center gap-2 px-2 py-1 text-xs hover:bg-muted">
@@ -340,7 +360,7 @@ function ScopePicker({
             </div>
           </div>
           <div>
-            <p className="mb-1 font-semibold text-foreground">Categories</p>
+            <p className="mb-1 font-semibold text-foreground">{t('categories')}</p>
             <div className="rounded-lg border border-border bg-card p-1">
               {categories.map((c) => (
                 <label key={c.id} className="flex items-center gap-2 px-2 py-1 text-xs hover:bg-muted">

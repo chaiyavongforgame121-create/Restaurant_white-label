@@ -1,0 +1,240 @@
+{
+  "perMonth": "{amount}<unit>/mo</unit>",
+  "subscriptionStatus": {
+    "active": "active",
+    "trialing": "trialing",
+    "past_due": "past_due",
+    "cancelled": "cancelled",
+    "expired": "expired"
+  },
+  "errors": {
+    "saveFailed": "Could not save.",
+    "decisionFailed": "Could not save that decision.",
+    "permission": "You don’t have permission to do that.",
+    "network": "Couldn’t reach the server. Check your connection and try again."
+  },
+  "plans": {
+    "metaTitle": "Product catalog · Favornoms",
+    "title": "Product catalog",
+    "subtitle": "What restaurants can buy. Prices are monthly USD.",
+    "newProduct": "New product",
+    "stripeDormant": "<strong>Stripe is dormant.</strong> {count, plural, one {# active product has} other {# active products have}} no Stripe price ID ({codes}). Until every one is filled in, merchants are activated manually from Subscriptions instead of paying by card.",
+    "newProductCode": "new product",
+    "inactive": "Inactive",
+    "noStripePrice": "No Stripe price",
+    "markInactive": "Mark inactive",
+    "markActive": "Mark active",
+    "kinds": {
+      "plan": "plan",
+      "addon": "addon",
+      "seat": "seat"
+    },
+    "fields": {
+      "code": "Code (slug)",
+      "name": "Name",
+      "monthlyPrice": "Monthly price ($)",
+      "kind": "Kind",
+      "includedSeats": "Seats included",
+      "includedSeatsHint": "Seats the plan grants on its own.",
+      "seatsPerUnit": "Seats per unit",
+      "seatsPerUnitHint": "For quantity products (extra_branch = 1).",
+      "trialDays": "Trial days",
+      "sortOrder": "Sort order",
+      "stripePriceId": "Stripe price ID",
+      "stripePriceIdHint": "price_… — required before Stripe can go live.",
+      "description": "Description",
+      "isQuantity": "Quantity product (billed per unit — needs quantity pricing on the Stripe price)",
+      "features": "Features granted"
+    },
+    "createProduct": "Create product",
+    "save": "Save",
+    "cancel": "Cancel",
+    "codeRequired": "Product code is required."
+  },
+  "reports": {
+    "title": "Financial reports",
+    "subtitle": "Subscription revenue (your platform income) and platform-wide activity.",
+    "stats": {
+      "mrr": "MRR",
+      "arr": "ARR (run-rate)",
+      "payingRestaurants": "Paying restaurants",
+      "arpa": "ARPA",
+      "trialPipeline": "Trial pipeline",
+      "servingCustomers": "Serving customers",
+      "branchSeats": "Branch seats",
+      "branchSeatsValue": "{used} used / {sold} sold",
+      "pendingRequests": "Pending requests",
+      "active": "Active",
+      "trialing": "Trialing",
+      "pastDue": "Past due",
+      "expired": "Expired",
+      "cancelled": "Cancelled"
+    },
+    "mrrByPlan": "MRR by plan",
+    "noSubscriptions": "No subscriptions yet.",
+    "mrrByAddon": "MRR by add-on",
+    "noAddons": "No add-ons sold yet.",
+    "barDetail": "{count} · {amount}/mo",
+    "activityTitle": "Platform activity (30 days)",
+    "orders": "Orders",
+    "gmv": "GMV (completed)",
+    "payoutsUnpaid": "Driver payouts — unpaid",
+    "payoutsPaid": "Driver payouts — paid",
+    "activityNote": "GMV flows to restaurants (they take payment); driver payouts are settled by restaurants. Your revenue is the subscription MRR above.",
+    "table": {
+      "restaurant": "Restaurant",
+      "status": "Status",
+      "addons": "Add-ons",
+      "branches": "Branches",
+      "mrr": "MRR"
+    },
+    "suspended": "suspended",
+    "trialEnds": "ends {date}"
+  },
+  "settings": {
+    "title": "Platform settings",
+    "subtitle": "Global configuration for every restaurant on the platform.",
+    "penalty": {
+      "title": "Driver penalty",
+      "description": "When a driver racks up too many rejects/timeouts in the rolling window, they’re blocked from going online for the cooldown period.",
+      "threshold": "Threshold (events)",
+      "thresholdHint": "Events in the window before a block",
+      "window": "Window (hours)",
+      "windowHint": "Rolling lookback period",
+      "cooldown": "Cooldown (minutes)",
+      "cooldownHint": "How long the block lasts",
+      "countRejects": "Count explicit rejects",
+      "countTimeouts": "Count offer timeouts (no action)"
+    },
+    "tips": {
+      "title": "Delivery tip visibility",
+      "description": "Controls what a driver sees about the tip on a delivery offer.",
+      "hidden": "Hidden (net only)",
+      "transparent": "Transparent",
+      "legalTitle": "Legal review recommended",
+      "legalBody": "Hiding the restaurant’s tip cut from drivers may conflict with US tip law (FLSA) and tip-transparency rules in states/cities such as CA, NY, and Seattle, especially for W-2 drivers. Confirm with counsel before enabling in production."
+    },
+    "defaults": {
+      "title": "New-branch delivery defaults",
+      "description": "Seed values applied when a new branch is created. Branches can override these later. All distances/rates are in miles.",
+      "deliveryRadius": "Delivery radius (mi)",
+      "driverSearchRadius": "Driver search radius (mi)",
+      "driverBasePay": "Driver base pay ($)",
+      "driverPerMile": "Driver per mile ($)"
+    },
+    "flags": {
+      "title": "Feature flags",
+      "description": "Turn platform features on or off globally.",
+      "combos": "Combos",
+      "giftCards": "Gift cards"
+    },
+    "save": "Save platform settings",
+    "saved": "Saved ✓",
+    "reset": "Reset to defaults"
+  },
+  "subscriptions": {
+    "metaTitle": "Subscriptions · Favornoms",
+    "title": "Subscriptions",
+    "subtitle": "Set a restaurant’s package directly. Changes take effect immediately.",
+    "searchPlaceholder": "Search restaurants",
+    "noMatches": "No restaurants match.",
+    "live": "Live",
+    "suspended": "Suspended",
+    "stats": {
+      "monthly": "Monthly",
+      "seats": "Seats",
+      "paidThrough": "Paid through",
+      "trialEnds": "Trial ends"
+    },
+    "close": "Close",
+    "changePackage": "Change package",
+    "featureSwitches": "Feature switches",
+    "plan": "Plan",
+    "status": "Status",
+    "statusOption": {
+      "active": "active",
+      "trialing": "trialing",
+      "past_due": "past_due — keeps access",
+      "cancelled": "cancelled — keeps access",
+      "expired": "expired — access ends now"
+    },
+    "statusHint": {
+      "past_due": "Past due is a label, not an off switch: the store keeps full access until the paid-through date. Suspend on the dashboard hides the store now; letting the date pass ends access.",
+      "cancelled": "Cancelled is a label, not an off switch: the store keeps full access until the paid-through date. Suspend on the dashboard hides the store now; letting the date pass ends access.",
+      "expired": "Expired ends access as soon as you apply."
+    },
+    "paidThrough": "Paid through",
+    "blankTrial": "Leave blank to restart from today: a {days}-day trial, to {date}.",
+    "blankMonth": "Leave blank to restart the month from today: paid through becomes {date}.",
+    "blankShortens": "That is earlier than the current {date}. Pick a date to keep the time they already have.",
+    "addons": "Add-ons",
+    "branchSeats": "Branch seats",
+    "removeSeat": "Remove a seat",
+    "addSeat": "Add a seat",
+    "minSeats": "min {count} (branches open)",
+    "applyPackage": "Apply package",
+    "saved": "Saved"
+  },
+  "switches": {
+    "intro": "Show or hide a feature for this restaurant only. <strong>Plan</strong> follows the package above; <strong>On</strong> and <strong>Off</strong> ignore it. Hiding a feature removes it from the merchant’s sidebar; if they open the URL directly they get the locked page instead of the feature.",
+    "states": {
+      "plan": "Plan",
+      "on": "On",
+      "off": "Off"
+    },
+    "visible": "Merchant sees it",
+    "visibleOverridden": "Merchant sees it · overridden",
+    "hiddenOverridden": "Hidden from the merchant · overridden",
+    "hiddenNotInPackage": "Hidden from the merchant · not in their package",
+    "groupLabel": "{feature} availability"
+  },
+  "requests": {
+    "metaTitle": "Package requests · Favornoms",
+    "title": "Package requests",
+    "subtitle": "Merchants who chose a package and are waiting to be switched on.",
+    "filters": {
+      "pending": "Pending",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "all": "All"
+    },
+    "status": {
+      "pending": "pending",
+      "approved": "approved",
+      "rejected": "rejected"
+    },
+    "empty": "Nothing here.",
+    "thisRestaurant": "this restaurant",
+    "requested": "Requested",
+    "seatCount": "{count, plural, one {# seat} other {# seats}}",
+    "decisionNote": "Decision note: {note}",
+    "loadFailed": "Could not load {name}’s current package, so this card cannot show what approving removes. Approving replaces whatever they have now.",
+    "notePlaceholder": "Note (optional)",
+    "approve": "Approve & activate",
+    "reject": "Reject",
+    "currently": "Currently",
+    "paidThroughDate": "Paid through {date}",
+    "notLive": "Not live — the storefront is dark right now",
+    "approving": "Approving",
+    "removes": "This removes: {items}",
+    "adds": "This adds: {items}",
+    "planChange": "Plan: {from} → {to}",
+    "seatsSame": "Seats: {count} (no change)",
+    "seatsChange": "Seats: {from} → {to}",
+    "newTotal": "New total: <b>{to}/mo</b> (now {from}/mo)",
+    "newTotalRequested": "New total: <b>{to}/mo</b> (now {from}/mo) · requested at {requested}/mo, today’s catalog prices apply",
+    "paidThroughChange": "Paid through: {from} → {to}, counted from when you approve",
+    "paidThroughChangeFewer": "Paid through: {from} → {to}, counted from when you approve ({days, plural, one {# paid day fewer} other {# paid days fewer}})",
+    "lapsed": "lapsed",
+    "noPackage": "No package",
+    "confirm": {
+      "blindTitle": "Approve without seeing {name}’s current package?",
+      "blindBody": "Their current package could not be loaded. Approving replaces it entirely with this request, removing any add-on or seat the request does not include.",
+      "approveAnyway": "Approve anyway",
+      "removeTitle": "Approve and remove {items}?",
+      "smallerTitle": "Approve a smaller package?",
+      "body": "Approving replaces {name}’s whole package with this request.{removes, select, yes { It removes {items}.} other {}}{seats, select, yes { It cuts branch seats from {seatsFrom} to {seatsTo}.} other {}}{shortens, select, yes { It moves paid through back from {paidFrom} to {paidTo} ({days, plural, one {# day fewer} other {# days fewer}}).} other {}} They lose that as soon as you approve, and getting it back means setting the package again on Subscriptions.",
+      "approveRemove": "Approve & remove"
+    }
+  }
+}

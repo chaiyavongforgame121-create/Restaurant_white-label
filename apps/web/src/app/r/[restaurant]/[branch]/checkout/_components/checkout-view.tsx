@@ -5,19 +5,21 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Banknote, ChevronLeft, CreditCard, LocateFixed, Map as MapIcon, MapPin, QrCode, ShoppingBag, Tag } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import {
   computeSalesTax,
   computeServiceFee,
   computeTipAmount,
   DELIVERY_SETTING_DEFAULTS,
   formatCurrency,
+  isUiLocale,
   kmToMi,
   parseDeliverySettings,
   parseTipConfig,
   tipPresetsForChannel,
   TIP_CONFIG_DEFAULTS,
   type TipConfig,
+  type UiLocale,
 } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
 import {
@@ -127,7 +129,9 @@ function withCollectableCard(matrix: PaymentMatrix): PaymentMatrix {
 // keep both in sync with EMAIL_DOMAIN in supabase/functions/customer-auth/index.ts.
 const SYNTHETIC_CUSTOMER_EMAIL_SUFFIX = '@customer.favornoms.local';
 
-// place-order's error codes, rendered for a customer.
+// place-order's error codes, rendered for a customer: each code maps to the message key that
+// says it (the sentences are errors.order.* in messages/<locale>/errors.json). A message that
+// carries none of these codes shows errors.generic, never the raw server text.
 //
 // The billing codes (402 billing_inactive / 403 feature_not_entitled) are
 // deliberately phrased as restaurant availability: the customer is not the
@@ -135,71 +139,103 @@ const SYNTHETIC_CUSTOMER_EMAIL_SUFFIX = '@customer.favornoms.local';
 // reputational hit we have no right to inflict. Order is significant —
 // `dropoff_other_required` contains `dropoff_required` as a substring.
 const ORDER_ERRORS: Array<[string, string]> = [
-  ['billing_inactive', 'This restaurant is not taking online orders right now. Please try again later.'],
-  ['feature_not_entitled:delivery', 'This restaurant is not offering delivery right now. Please choose pickup instead.'],
-  ['delivery_not_entitled', 'This restaurant is not offering delivery right now. Please choose pickup instead.'],
-  ['feature_not_entitled:card_payment', 'Card payment is not available here right now. Please pay with cash.'],
+  ['billing_inactive', 'errors.order.billingInactive'],
+  ['feature_not_entitled:delivery', 'errors.order.deliveryNotOffered'],
+  ['delivery_not_entitled', 'errors.order.deliveryNotOffered'],
+  ['feature_not_entitled:card_payment', 'errors.order.cardNotAvailable'],
   // Must precede `branch_closed` — it contains it as a substring, and the
   // generic "currently closed" line is wrong here: the restaurant may well be
   // open now, it's the time they picked that isn't served.
-  ['branch_closed_at_scheduled_time', 'The restaurant is closed at the delivery time you picked. Please choose another time.'],
+  ['branch_closed_at_scheduled_time', 'errors.order.closedAtScheduledTime'],
   // Distinct from being closed: the restaurant may well be open then, it just does not take
   // advance orders at that hour. Saying "closed" would send the diner to look at opening
   // hours that already agree with them.
-  ['outside_scheduling_window', 'This restaurant only takes orders in advance at certain times. Please pick one of the times offered.'],
+  ['outside_scheduling_window', 'errors.order.outsideSchedulingWindow'],
   // Channel-neutral on purpose: a seated dine-in round reaches this too.
-  ['branch_closed', 'This restaurant is currently closed. Please try again during opening hours.'],
+  ['branch_closed', 'errors.order.branchClosed'],
   // No fixed numbers here any more: how soon and how far ahead are per-branch settings, so
   // quoting "10 minutes" and "14 days" would state someone else's policy as fact. The
   // picker only offers times inside the real one, so reaching these is already unusual.
-  ['scheduled_too_soon', 'That time is too soon for this restaurant. Please pick a later slot.'],
-  ['scheduled_too_far', 'That time is further ahead than this restaurant takes bookings.'],
-  ['scheduling_disabled', 'This restaurant is not taking delivery bookings right now. Pickup may still be available.'],
-  ['invalid_scheduled_for', 'That scheduled time could not be read. Please pick it again.'],
-  ['delivery_out_of_range', 'Sorry, this address is outside the delivery area.'],
-  ['payment_method_not_accepted', 'That payment method is not available for this order type. Please pick another.'],
-  ['transfer_not_configured', 'This restaurant has not finished setting up QR transfers. Please pick another payment method.'],
-  ['delivery_not_available_at_that_time', 'The restaurant does not deliver at that time. Please pick another delivery time, or choose Pickup.'],
-  ['dropoff_other_required', 'Please describe where we should leave your order.'],
-  ['dropoff_required', 'Please choose where we should leave your order.'],
+  ['scheduled_too_soon', 'errors.order.scheduledTooSoon'],
+  ['scheduled_too_far', 'errors.order.scheduledTooFar'],
+  ['scheduling_disabled', 'errors.order.schedulingDisabled'],
+  ['invalid_scheduled_for', 'errors.order.invalidScheduledFor'],
+  ['delivery_out_of_range', 'errors.order.deliveryOutOfRange'],
+  ['payment_method_not_accepted', 'errors.order.paymentMethodNotAccepted'],
+  ['transfer_not_configured', 'errors.order.transferNotConfigured'],
+  ['delivery_not_available_at_that_time', 'errors.order.deliveryNotAvailableAtThatTime'],
+  ['dropoff_other_required', 'errors.order.dropoffOtherRequired'],
+  ['dropoff_required', 'errors.order.dropoffRequired'],
   // Dine-in is a sitting now, so the ways it can be refused are about the table's session
   // rather than about a number the diner typed. Every one of these is a server decision —
   // the phone cannot know a bill was settled while the diner was still choosing dessert.
-  ['table_session_closed', "This table's bill has been settled. Scan the code on your table to start a new one."],
-  ['table_session_changed', 'This table has been settled and re-seated. Scan the code again to start a new bill.'],
-  ['table_not_seated', 'Ask a member of staff to open your table, then try again.'],
-  ['not_at_this_table', 'Scan the code on your table again to join its bill.'],
-  ['table_not_in_branch', "That table isn't at this restaurant. Scan the code on your own table."],
-  ['sign_in_required', 'Please sign in again to order at your table.'],
+  ['table_session_closed', 'errors.order.tableSessionClosed'],
+  ['table_session_changed', 'errors.order.tableSessionChanged'],
+  ['table_not_seated', 'errors.order.tableNotSeated'],
+  ['not_at_this_table', 'errors.order.notAtThisTable'],
+  ['table_not_in_branch', 'errors.order.tableNotInBranch'],
+  ['sign_in_required', 'errors.order.signInRequired'],
   // There is no table field to send them back to any more — the order reached the server
   // without a table because the pin was gone by the time they pressed the button.
-  ['table_required', 'Scan the code on your table to start your order.'],
+  ['table_required', 'errors.order.tableRequired'],
   // The two ways to order, enforced by place-order for customer orders. Reached only from a tab
   // opened before the change, since this page no longer offers either combination. They must
   // come before invalid_channel: place-order puts that code in the same body as a `hint`, so a
   // tab older than these entries still finds a sentence instead of printing raw JSON.
-  ['delivery_must_be_scheduled', 'Delivery orders need a booked day and time. Please choose one under Schedule Delivery.'],
-  ['pickup_is_asap_only', 'Pickup orders are prepared right away and cannot be booked for later. Choose Schedule Delivery to book a time.'],
-  ['invalid_channel', 'Please choose Pickup or Schedule Delivery and try again.'],
+  ['delivery_must_be_scheduled', 'errors.order.deliveryMustBeScheduled'],
+  ['pickup_is_asap_only', 'errors.order.pickupIsAsapOnly'],
+  ['invalid_channel', 'errors.order.invalidChannel'],
   // Wire code is still `google_link_required` (other surfaces match on it), but the
   // rule is "prove who you are", and a verified email proves it just as well as
-  // Google. Copy mirrors `checkout.loyalty.verifyRequired` in messages/en.json.
-  ['google_link_required', 'To spend loyalty points, verify your email or link your Google account first — it keeps your points safe. You can still order without redeeming.'],
+  // Google. Same sentence as the loyalty card's own notice, so it is the same message.
+  ['google_link_required', 'checkout.loyalty.verifyRequired'],
   // Reward redemption. The server re-prices every reward from the catalog, so
   // these fire when the catalog moved under a checkout that was already open.
-  ['stale_client_refresh_required', 'Rewards changed while you were ordering. Please refresh this page and try again.'],
-  ['reward_min_subtotal', 'Your order is below the minimum for that reward. Add a little more, or pick another one.'],
-  ['reward_item_not_in_cart', "That reward's free item is no longer in your cart. Add it back, or pick another reward."],
-  ['reward_not_applicable', "That reward doesn't apply to this order. Please pick another one."],
-  ['reward_unavailable', 'That reward is no longer available. Please pick another one.'],
-  ['insufficient_points', "You don't have enough points for that reward any more. Please pick another one."],
+  ['stale_client_refresh_required', 'errors.order.staleClientRefreshRequired'],
+  ['reward_min_subtotal', 'errors.order.rewardMinSubtotal'],
+  ['reward_item_not_in_cart', 'errors.order.rewardItemNotInCart'],
+  ['reward_not_applicable', 'errors.order.rewardNotApplicable'],
+  ['reward_unavailable', 'errors.order.rewardUnavailable'],
+  ['insufficient_points', 'errors.order.insufficientPoints'],
+  // The cart moved under the diner: something sold out, ran low or left the menu between the
+  // cart page and this button. "Try again" alone would fail the same way every time.
+  ['item_sold_out', 'errors.order.itemSoldOut'],
+  ['insufficient_stock', 'errors.order.insufficientStock'],
+  ['item_inactive', 'errors.order.itemUnavailable'],
+  ['item_not_in_branch', 'errors.order.itemUnavailable'],
+  ['combo_inactive', 'errors.order.itemUnavailable'],
+  ['modifier_inactive', 'errors.order.itemUnavailable'],
+  ['modifier_branch_mismatch', 'errors.order.itemUnavailable'],
+  // 429 with retry_after_seconds 600: an immediate retry is exactly what will not work.
+  ['rate_limited', 'errors.order.rateLimited'],
+  ['redeem_requires_auth', 'errors.order.signInToOrder'],
+  ['login_required', 'errors.order.signInToOrder'],
+  ['empty_order', 'errors.order.emptyOrder'],
+  ['customer_phone_required', 'errors.order.phoneRequired'],
+  ['delivery_address_required', 'errors.order.addressRequired'],
+  // Same sentence as billing_inactive: to the diner both mean "not taking orders online now".
+  ['branch_not_found_or_inactive', 'errors.order.billingInactive'],
 ];
 
-function describeOrderError(msg: string): string {
-  for (const [code, text] of ORDER_ERRORS) {
-    if (msg.includes(code)) return text;
+/** The message key for a place-order failure, or null when it carries no code we know. */
+function orderErrorKey(msg: string): string | null {
+  // placeOrder throws `place_order_failed:<status>:<body>`. An entitlement refusal names its
+  // feature in a separate field ({"error":"feature_not_entitled","feature":"delivery"}), so it is
+  // matched as `feature_not_entitled:delivery`; everything else is matched on the text as sent.
+  let subject = msg;
+  const body = msg.replace(/^place_order_failed:\d+:/, '');
+  try {
+    const parsed = JSON.parse(body) as { error?: unknown; feature?: unknown };
+    if (parsed.error === 'feature_not_entitled' && typeof parsed.feature === 'string') {
+      subject = `feature_not_entitled:${parsed.feature} ${msg}`;
+    }
+  } catch {
+    // Not JSON (a network failure, a gateway page): match the text as it is.
   }
-  return msg;
+  for (const [code, key] of ORDER_ERRORS) {
+    if (subject.includes(code)) return key;
+  }
+  return null;
 }
 
 // `datetime-local` reads its value/min/max as LOCAL wall-clock time, so they must
@@ -217,12 +253,9 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 
 type DropoffPref = 'leave_at_door' | 'hand_to_me' | 'at_desk' | 'other';
 
-const DROPOFF_OPTIONS: Array<{ value: DropoffPref; label: string }> = [
-  { value: 'leave_at_door', label: 'Leave at the door' },
-  { value: 'hand_to_me', label: 'Hand it to me' },
-  { value: 'at_desk', label: 'At the desk / reception' },
-  { value: 'other', label: 'Other' },
-];
+// The values are what place-order stores as delivery_address.dropoff_pref; the words shown for
+// them are checkout.dropoff.options.<value>.
+const DROPOFF_OPTIONS: DropoffPref[] = ['leave_at_door', 'hand_to_me', 'at_desk', 'other'];
 
 interface Props {
   branchId: string;
@@ -285,6 +318,8 @@ export function CheckoutView({
   ordersPaused = false,
 }: Props) {
   const t = useTranslations();
+  const rawLocale = useLocale();
+  const locale: UiLocale = isUiLocale(rawLocale) ? rawLocale : 'en';
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
 
@@ -459,6 +494,9 @@ export function CheckoutView({
     };
   }, [branchId, scheduling?.enabled]);
 
+  // Plain strings, so the slot list is rebuilt when the language changes and not on every render.
+  const todayLabel = t('checkout.schedule.today');
+  const tomorrowLabel = t('checkout.schedule.tomorrow');
   const scheduleDays = React.useMemo(() => {
     if (!scheduling?.enabled) return [];
     // Nothing until the policy lands. Showing the un-narrowed list first and pulling times
@@ -474,8 +512,10 @@ export function CheckoutView({
       maxDays: scheduling.maxDays,
       slotMinutes: scheduling.slotMinutes,
       now: slotClock,
+      locale,
+      dayLabels: { today: todayLabel, tomorrow: tomorrowLabel },
     });
-  }, [scheduling, bookingPolicy, slotClock]);
+  }, [scheduling, bookingPolicy, slotClock, locale, todayLabel, tomorrowLabel]);
 
   const selectedDay = scheduleDays.find((d) => d.date === scheduleDate) ?? scheduleDays[0];
 
@@ -495,18 +535,20 @@ export function CheckoutView({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scheduleDays]);
 
+  // Errors hold the server's CODE (validate_promo_code's `error`, check_gift_card's `reason`),
+  // not a sentence: the words are chosen at render, in the diner's language.
   const [promoState, setPromoState] = React.useState<
     | { status: 'idle' }
     | { status: 'validating' }
     | { status: 'applied'; amount_off: number; free_delivery: boolean; promo_id: string }
-    | { status: 'error'; message: string }
+    | { status: 'error'; code: string; minSubtotal?: number }
   >({ status: 'idle' });
   const [giftCardCode, setGiftCardCode] = React.useState('');
   const [giftCardState, setGiftCardState] = React.useState<
     | { status: 'idle' }
     | { status: 'checking' }
     | { status: 'valid'; balance: number }
-    | { status: 'error'; message: string }
+    | { status: 'error'; code: string }
   >({ status: 'idle' });
 
   // Distance-based quote when the address has coordinates (server-authoritative —
@@ -587,21 +629,24 @@ export function CheckoutView({
   const rewardBlocker = React.useCallback(
     (r: LoyaltyReward): string | null => {
       if (r.points_cost > pointsBalance)
-        return `Needs ${(r.points_cost - pointsBalance).toLocaleString()} more points`;
+        return t('checkout.rewards.needsMore', { count: r.points_cost - pointsBalance });
       if (subtotal < Number(r.min_subtotal))
-        return `Spend ${formatCurrency(Number(r.min_subtotal))} to unlock`;
+        return t('checkout.rewards.spendToUnlock', { amount: formatCurrency(Number(r.min_subtotal)) });
       // Combo lines reuse menuItemId to carry the combo id, so they must not
       // satisfy a free-item reward for a menu item that merely shares the slot.
       if (
         r.kind === 'free_item' &&
         !lines.some((l) => !l.comboId && l.menuItemId === r.menu_item_id)
       )
-        return `Add ${r.menu_item_name ?? 'the item'} to your cart`;
+        // The item name is the merchant's, shown exactly as they typed it.
+        return r.menu_item_name
+          ? t('checkout.rewards.addItem', { item: r.menu_item_name })
+          : t('checkout.rewards.addTheItem');
       if (r.kind === 'free_delivery' && (channel !== 'delivery' || deliveryFeeBase <= 0))
-        return 'Delivery orders only';
+        return t('checkout.rewards.deliveryOnly');
       return null;
     },
-    [pointsBalance, subtotal, lines, channel, deliveryFeeBase],
+    [pointsBalance, subtotal, lines, channel, deliveryFeeBase, t],
   );
   const selectedReward = rewards.find((r) => r.id === rewardId) ?? null;
   // Zero without a verified identity, and zero the moment the cart changes out
@@ -640,12 +685,14 @@ export function CheckoutView({
     const supabase = getBrowserClient();
     const { data, error } = await supabase.rpc('check_gift_card', { p_code: giftCardCode.trim() });
     if (error) {
-      setGiftCardState({ status: 'error', message: error.message });
+      // The raw text is for us, not the diner.
+      console.error('check_gift_card_failed', error.message);
+      setGiftCardState({ status: 'error', code: 'request_failed' });
       return;
     }
     const r = data as { valid?: boolean; reason?: string; balance?: number };
     if (!r?.valid) {
-      setGiftCardState({ status: 'error', message: r?.reason ?? 'invalid' });
+      setGiftCardState({ status: 'error', code: r?.reason ?? 'invalid' });
       return;
     }
     setGiftCardState({ status: 'valid', balance: Number(r.balance ?? 0) });
@@ -906,10 +953,8 @@ export function CheckoutView({
         <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-primary/10 text-primary">
           <ShoppingBag className="h-7 w-7" />
         </div>
-        <h1 className="mt-4 font-display text-2xl font-bold">Please sign in to check out</h1>
-        <p className="mt-1 text-muted-foreground">
-          You need an account to place an order — it only takes a moment.
-        </p>
+        <h1 className="mt-4 font-display text-2xl font-bold">{t('checkout.signIn.title')}</h1>
+        <p className="mt-1 text-muted-foreground">{t('checkout.signIn.body')}</p>
         <Button
           variant="gradient"
           size="lg"
@@ -918,7 +963,7 @@ export function CheckoutView({
             router.replace(`${base}/sign-in?next=${encodeURIComponent(`${base}/checkout`)}`)
           }
         >
-          Sign in to continue
+          {t('checkout.signIn.cta')}
         </Button>
       </div>
     );
@@ -931,8 +976,8 @@ export function CheckoutView({
     return (
       <div className="container max-w-2xl pt-16 text-center">
         <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-primary/25 border-t-primary" />
-        <h1 className="mt-5 font-display text-2xl font-bold">Order placed!</h1>
-        <p className="mt-1 text-muted-foreground">Taking you to your order…</p>
+        <h1 className="mt-5 font-display text-2xl font-bold">{t('checkout.placed.title')}</h1>
+        <p className="mt-1 text-muted-foreground">{t('checkout.placed.redirecting')}</p>
       </div>
     );
   }
@@ -942,10 +987,10 @@ export function CheckoutView({
         <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-primary/10 text-primary">
           <ShoppingBag className="h-7 w-7" />
         </div>
-        <h1 className="mt-4 font-display text-2xl font-bold">Your cart is empty</h1>
-        <p className="mt-1 text-muted-foreground">Add a few items from the menu to check out.</p>
+        <h1 className="mt-4 font-display text-2xl font-bold">{t('checkout.empty.title')}</h1>
+        <p className="mt-1 text-muted-foreground">{t('checkout.empty.body')}</p>
         <Button variant="gradient" size="lg" className="mt-5" onClick={() => router.push(base)}>
-          Browse the menu
+          {t('checkout.empty.cta')}
         </Button>
       </div>
     );
@@ -961,18 +1006,25 @@ export function CheckoutView({
       p_subtotal: subtotal,
     });
     if (error) {
-      setPromoState({ status: 'error', message: error.message });
+      // The raw text is for us, not the diner.
+      console.error('validate_promo_code_failed', error.message);
+      setPromoState({ status: 'error', code: 'request_failed' });
       return;
     }
     const r = data as {
       valid: boolean;
       error?: string;
+      min_subtotal?: number;
       amount_off?: number;
       free_delivery?: boolean;
       promo_id?: string;
     };
     if (!r.valid) {
-      setPromoState({ status: 'error', message: r.error ?? 'invalid' });
+      setPromoState({
+        status: 'error',
+        code: r.error ?? 'invalid',
+        minSubtotal: r.min_subtotal != null ? Number(r.min_subtotal) : undefined,
+      });
       return;
     }
     setPromoState({
@@ -982,6 +1034,44 @@ export function CheckoutView({
       promo_id: r.promo_id ?? '',
     });
   };
+
+  // validate_promo_code's refusal codes. Anything else — a failed request included — is the
+  // generic error rather than a raw code on screen.
+  const promoErrorText = (state: { code: string; minSubtotal?: number }): string => {
+    switch (state.code) {
+      case 'invalid':
+      case 'invalid_code':
+        return t('checkout.promo.errors.invalidCode');
+      case 'promo_exhausted':
+        return t('checkout.promo.errors.exhausted');
+      case 'min_subtotal_not_met':
+        return state.minSubtotal != null && Number.isFinite(state.minSubtotal)
+          ? t('checkout.promo.errors.minSubtotal', { amount: formatCurrency(state.minSubtotal) })
+          : t('checkout.promo.errors.minSubtotalUnknown');
+      case 'per_customer_limit_reached':
+        return t('checkout.promo.errors.perCustomerLimit');
+      default:
+        return t('errors.generic');
+    }
+  };
+
+  // check_gift_card's refusal codes, likewise.
+  const giftCardErrorText = (code: string): string => {
+    switch (code) {
+      case 'invalid':
+      case 'invalid_or_redeemed':
+        return t('checkout.giftCard.errors.invalidOrRedeemed');
+      case 'expired':
+        return t('checkout.giftCard.errors.expired');
+      default:
+        return t('errors.generic');
+    }
+  };
+
+  // "(optional)" after a field label, quieter than the label itself.
+  const optionalHint = (chunks: React.ReactNode) => (
+    <span className="font-normal text-muted-foreground">{chunks}</span>
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -996,7 +1086,7 @@ export function CheckoutView({
     // against the wrong payment matrix. Block it here. Dine-in never reaches
     // this: effectiveScheduleMode pins it to 'asap' and the card is hidden.
     if (effectiveScheduleMode === 'later' && !scheduledFor)
-      errs.schedule = 'Please pick a day and time for your delivery.';
+      errs.schedule = t('checkout.errors.scheduleRequired');
     // The list was measured when delivery was chosen, and filling in an address can take long
     // enough for the picked slot to fall inside the minimum lead time. Refresh the list (the
     // preselect effect re-points to the next valid slot) and ask the diner to confirm it, rather
@@ -1007,7 +1097,7 @@ export function CheckoutView({
       Date.parse(scheduledFor) < Date.now() + Math.max(0, scheduling.minLeadMinutes) * 60_000
     ) {
       setSlotClock(new Date());
-      errs.schedule = 'That delivery time is no longer available. Please check the new time and place your order again.';
+      errs.schedule = t('checkout.errors.scheduleStale');
     }
     if (!name.trim()) errs.name = t('checkout.errors.nameRequired');
     const phoneDigits = phone.replace(/\D/g, '');
@@ -1019,9 +1109,9 @@ export function CheckoutView({
       if (!address.trim()) errs.address = t('checkout.errors.addressRequired');
       else if (enteringNewAddress && !addressCoords)
         errs.address = t('checkout.errors.addressUnconfirmed');
-      if (!dropoffPref) errs.dropoff = 'Please choose where the driver should leave your order.';
+      if (!dropoffPref) errs.dropoff = t('checkout.errors.dropoffRequired');
       else if (dropoffPref === 'other' && !dropoffOther.trim())
-        errs.dropoff = 'Please describe the drop-off spot.';
+        errs.dropoff = t('checkout.errors.dropoffOtherRequired');
     }
     if (Object.keys(errs).length > 0) {
       setFieldErrors(errs);
@@ -1045,24 +1135,24 @@ export function CheckoutView({
     setFieldErrors({});
 
     if (outOfRange) {
-      setError('This address is outside the delivery area.');
+      setError(t('checkout.errors.outOfRange'));
       return;
     }
     if (deliveryNotSold) {
-      setError("This branch isn't taking delivery orders right now. Try pickup instead.");
+      setError(t('checkout.errors.deliveryNotSold'));
       return;
     }
     if (channel === 'delivery' && !deliveryBookable) {
-      setError('This restaurant is not taking delivery bookings right now. Pickup may still be available.');
+      setError(t('errors.order.schedulingDisabled'));
       return;
     }
     if (channel === 'pickup' && !openNow) {
       setError(
         ordersPaused
-          ? 'This restaurant is not taking orders right now. Please check back soon.'
+          ? t('checkout.orderType.paused')
           : deliveryOfferable
-            ? 'This restaurant is closed right now, so pickup is not available. You can schedule a delivery instead.'
-            : 'This restaurant is closed right now, so pickup is not available. Please order during opening hours.',
+            ? t('checkout.errors.pickupClosedScheduleInstead')
+            : t('checkout.orderType.pickupClosed'),
       );
       return;
     }
@@ -1192,7 +1282,12 @@ export function CheckoutView({
       router.refresh();
       router.push(`${base}/orders/${result.order_number}`);
     } catch (err) {
-      setError(describeOrderError((err as Error).message));
+      const raw = (err as Error).message;
+      const key = orderErrorKey(raw);
+      // A failure with no code we know is logged as it came and shown as the generic line —
+      // a raw status and JSON body is no use to a diner.
+      if (!key) console.error('place_order_failed', raw);
+      setError(key ? t(key) : t('errors.generic'));
       setSubmitting(false);
     }
   };
@@ -1250,47 +1345,47 @@ export function CheckoutView({
             </div>
             {channel === 'pickup' && !openNow && (
               <p className="mt-2 text-xs text-muted-foreground">
-                {ordersPaused ? (
-                  'This restaurant is not taking orders right now. Please check back soon.'
-                ) : (
-                  <>
-                    This restaurant is closed right now, so pickup is not available
-                    {deliveryOfferable ? ' — you can still schedule a delivery.' : '. Please order during opening hours.'}
-                  </>
-                )}
+                {ordersPaused
+                  ? t('checkout.orderType.paused')
+                  : deliveryOfferable
+                    ? t('checkout.orderType.pickupClosedCanSchedule')
+                    : t('checkout.orderType.pickupClosed')}
               </p>
             )}
             {channel === 'pickup' && openNow && !asapPayable && (
               <p className="mt-2 text-xs text-muted-foreground">
-                Pickup is not available with this restaurant&apos;s current payment options
-                {deliveryOfferable ? ' — you can still schedule a delivery.' : '.'}
+                {deliveryOfferable
+                  ? t('checkout.orderType.pickupNoPaymentCanSchedule')
+                  : t('checkout.orderType.pickupNoPayment')}
               </p>
             )}
             {channel === 'pickup' && pickupAvailable && (
               <p className="mt-2 text-xs text-muted-foreground">
-                Prepared right away once your order is confirmed.
+                {t('checkout.orderType.pickupReady')}
               </p>
             )}
             {channel === 'delivery' && !canDeliver && (
               <p className="mt-2 text-xs text-muted-foreground">
-                This restaurant is not taking delivery bookings right now
-                {pickupAvailable ? ' — pickup is still available.' : '.'}
+                {pickupAvailable
+                  ? t('checkout.orderType.deliveryUnavailablePickupOpen')
+                  : t('checkout.orderType.deliveryUnavailable')}
               </p>
             )}
             {channel === 'delivery' && canDeliver && !scheduledPayable && (
               <p className="mt-2 text-xs text-muted-foreground">
-                Scheduled delivery is not available with this restaurant&apos;s current payment options
-                {pickupAvailable ? ' — pickup is still available.' : '.'}
+                {pickupAvailable
+                  ? t('checkout.orderType.deliveryNoPaymentPickupOpen')
+                  : t('checkout.orderType.deliveryNoPayment')}
               </p>
             )}
             {/* A greyed-out Pickup with no reason reads as a broken button. */}
             {channel === 'delivery' && !pickupAvailable && (
               <p className="mt-2 text-xs text-muted-foreground">
                 {openNow
-                  ? 'Pickup is not available with this restaurant’s current payment options.'
+                  ? t('checkout.orderType.pickupNoPayment')
                   : ordersPaused
-                    ? 'Pickup is not available right now — the restaurant has paused orders.'
-                    : 'Pickup is not available right now — the restaurant is closed.'}
+                    ? t('checkout.orderType.pickupPaused')
+                    : t('checkout.orderType.pickupClosedNow')}
               </p>
             )}
             {/* Day and time, drawn from the branch's opening hours, booking windows, closures and
@@ -1300,18 +1395,17 @@ export function CheckoutView({
               <div ref={scheduleSectionRef} className="mt-3">
                 {!bookingPolicy ? (
                   <p role="status" className="rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">
-                    Loading the times this restaurant takes bookings…
+                    {t('checkout.schedule.loading')}
                   </p>
                 ) : scheduleDays.length === 0 ? (
                   <p className="rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">
-                    No delivery times are available to book right now. Choose Pickup, or check
-                    back later.
+                    {t('checkout.schedule.none')}
                   </p>
                 ) : (
                   <>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <label className="block">
-                        <span className="mb-1 block text-sm font-medium">Day</span>
+                        <span className="mb-1 block text-sm font-medium">{t('checkout.schedule.day')}</span>
                         <select
                           value={selectedDay?.date ?? ''}
                           onChange={(e) => {
@@ -1330,7 +1424,7 @@ export function CheckoutView({
                         </select>
                       </label>
                       <label className="block">
-                        <span className="mb-1 block text-sm font-medium">Time</span>
+                        <span className="mb-1 block text-sm font-medium">{t('checkout.schedule.time')}</span>
                         <select
                           value={scheduledFor}
                           onChange={(e) => { setScheduledFor(e.target.value); clearFieldError('schedule'); }}
@@ -1348,9 +1442,7 @@ export function CheckoutView({
                       <p className="mt-1 text-xs text-danger">{fieldErrors.schedule}</p>
                     )}
                     <p className="mt-2 text-xs text-muted-foreground">
-                      Only times this restaurant delivers are shown, in the restaurant&apos;s
-                      local time. Your order is prepared to be ready at that time and sent out
-                      to you straight after.
+                      {t('checkout.schedule.hint')}
                     </p>
                   </>
                 )}
@@ -1441,8 +1533,8 @@ export function CheckoutView({
                     <div className="flex-1">
                       <p className="flex items-center gap-2 font-medium">
                         <MapPin className="h-4 w-4 text-muted-foreground" />
-                        {a.label ?? 'Address'}
-                        {a.is_default && <Badge variant="muted">Default</Badge>}
+                        {a.label ?? t('checkout.address')}
+                        {a.is_default && <Badge variant="muted">{t('checkout.addresses.default')}</Badge>}
                       </p>
                       <p className="text-sm text-muted-foreground">
                         {[a.address_line1, a.address_line2, a.city, a.state].filter(Boolean).join(', ')}
@@ -1465,7 +1557,7 @@ export function CheckoutView({
                       : 'border-border text-muted-foreground'
                   }`}
                 >
-                  + Use a new address
+                  {t('checkout.addresses.useNew')}
                 </button>
               </div>
             )}
@@ -1500,6 +1592,7 @@ export function CheckoutView({
                     }}
                     required
                     placeholder={t('checkout.addressPlaceholder')}
+                    locale={locale}
                     inputClassName="input"
                     aria-label={t('checkout.address')}
                   />
@@ -1531,50 +1624,53 @@ export function CheckoutView({
                 )}
                 {addressCoords && resolvedAddressRef.current && (
                   <p className="mt-2 flex items-center gap-1 text-xs font-medium text-success">
-                    <MapPin className="h-3.5 w-3.5" /> Location pinned
+                    <MapPin className="h-3.5 w-3.5" /> {t('checkout.addresses.pinned')}
                   </p>
                 )}
               </div>
             )}
             {quoting && (
-              <p className="mt-2 text-xs text-muted-foreground">Calculating delivery…</p>
+              <p className="mt-2 text-xs text-muted-foreground">{t('checkout.quote.calculating')}</p>
             )}
             {!quoting && quote?.deliverable && (
               <p className="mt-2 text-xs text-muted-foreground">
                 {/* No "ready in N min": every storefront delivery is booked for a chosen time,
                     and the quote's ETA is measured from now. */}
-                {kmToMi(quote.distance_km).toFixed(1)} mi away · delivery {formatCurrency(quote.fee)}
+                {t('checkout.quote.distanceFee', {
+                  distance: kmToMi(quote.distance_km).toFixed(1),
+                  fee: formatCurrency(quote.fee),
+                })}
               </p>
             )}
             {outOfRange && (
               <p className="mt-2 text-sm font-medium text-danger">
-                Sorry, this address is outside the delivery area
-                {!quote.deliverable && quote.radius_km ? ` (max ${kmToMi(quote.radius_km).toFixed(1)} mi)` : ''}.
+                {!quote.deliverable && quote.radius_km
+                  ? t('checkout.quote.outOfRangeMax', { max: kmToMi(quote.radius_km).toFixed(1) })
+                  : t('errors.order.deliveryOutOfRange')}
               </p>
             )}
             {deliveryNotSold && (
               <p className="mt-2 text-sm font-medium text-danger" role="alert">
-                Sorry, this branch isn&apos;t taking delivery orders right now. Pickup is still
-                available.
+                {t('checkout.quote.notSold')}
               </p>
             )}
             {enteringNewAddress && !addressCoords && !quoting && address.trim().length > 3 && (
               <p className="mt-2 text-xs font-medium text-warning">
-                Select your address from the suggestions to confirm delivery and see the exact fee.
+                {t('checkout.quote.pickSuggestion')}
               </p>
             )}
 
             <div className="mt-4" ref={dropoffSectionRef}>
-              <label className="mb-1 block text-sm font-medium">Where should we leave it?</label>
+              <label className="mb-1 block text-sm font-medium">{t('checkout.dropoff.title')}</label>
               <div className="grid grid-cols-2 gap-2">
-                {DROPOFF_OPTIONS.map((opt) => (
+                {DROPOFF_OPTIONS.map((value) => (
                   <button
-                    key={opt.value}
+                    key={value}
                     type="button"
-                    onClick={() => { setDropoffPref(opt.value); clearFieldError('dropoff'); }}
-                    aria-pressed={dropoffPref === opt.value}
+                    onClick={() => { setDropoffPref(value); clearFieldError('dropoff'); }}
+                    aria-pressed={dropoffPref === value}
                     className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${
-                      dropoffPref === opt.value
+                      dropoffPref === value
                         ? 'border-primary bg-primary/10 text-primary'
                         : 'border-border bg-card'
                     }`}
@@ -1584,7 +1680,7 @@ export function CheckoutView({
                         : undefined
                     }
                   >
-                    {opt.label}
+                    {t(`checkout.dropoff.options.${value}`)}
                   </button>
                 ))}
               </div>
@@ -1592,7 +1688,7 @@ export function CheckoutView({
                 <input
                   value={dropoffOther}
                   onChange={(e) => { setDropoffOther(e.target.value); clearFieldError('dropoff'); }}
-                  placeholder="Tell the driver where to leave it"
+                  placeholder={t('checkout.dropoff.otherPlaceholder')}
                   maxLength={120}
                   aria-invalid={!!fieldErrors.dropoff}
                   className="input mt-2"
@@ -1605,25 +1701,25 @@ export function CheckoutView({
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <label className="block">
                   <span className="mb-1 block text-sm font-medium">
-                    Front gate code <span className="font-normal text-muted-foreground">(optional)</span>
+                    {t.rich('checkout.dropoff.gateCode', { optional: optionalHint })}
                   </span>
                   <input
                     value={gateCode}
                     onChange={(e) => setGateCode(e.target.value)}
                     maxLength={40}
-                    placeholder="e.g. #1234"
+                    placeholder={t('checkout.dropoff.gateCodePlaceholder')}
                     className="input"
                   />
                 </label>
                 <label className="block">
                   <span className="mb-1 block text-sm font-medium">
-                    Room / unit <span className="font-normal text-muted-foreground">(optional)</span>
+                    {t.rich('checkout.dropoff.room', { optional: optionalHint })}
                   </span>
                   <input
                     value={room}
                     onChange={(e) => setRoom(e.target.value)}
                     maxLength={40}
-                    placeholder="e.g. Apt 203"
+                    placeholder={t('checkout.dropoff.roomPlaceholder')}
                     className="input"
                   />
                 </label>
@@ -1632,18 +1728,18 @@ export function CheckoutView({
 
             <div className="mt-4">
               <label className="mb-1 block text-sm font-medium">
-                Delivery instructions <span className="font-normal text-muted-foreground">(optional)</span>
+                {t.rich('checkout.dropoff.instructions', { optional: optionalHint })}
               </label>
               <textarea
                 value={addressNotes}
                 onChange={(e) => setAddressNotes(e.target.value)}
-                placeholder="e.g. Blue house behind the bakery · call on arrival"
+                placeholder={t('checkout.dropoff.instructionsPlaceholder')}
                 rows={2}
                 maxLength={300}
                 className="focus-ring w-full resize-none rounded-2xl border border-border bg-background px-4 py-3 text-base placeholder:text-muted-foreground"
               />
               <p className="mt-1 text-xs text-muted-foreground">
-                Anything that helps the driver find you — useful when the map isn&apos;t exact.
+                {t('checkout.dropoff.instructionsHint')}
               </p>
             </div>
           </Card>
@@ -1656,20 +1752,22 @@ export function CheckoutView({
             gate reopening. */}
         {atTable && (
           <Card className="p-5">
-            <h2 className="font-display text-lg font-semibold">Dine-in</h2>
+            <h2 className="font-display text-lg font-semibold">{t('channel.dineIn')}</h2>
             <p className="mt-3 rounded-xl bg-primary/10 px-3 py-2 font-display text-lg font-semibold text-primary">
               {pinnedTable!.label}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Scanned from the QR code on your table — nothing to type.
+              {t('checkout.dineIn.scanned')}
             </p>
             {/* Which round this is, and what the table already owes. The number is the
                 whole party's, not this phone's: everyone who scanned the same tent is
                 adding to one bill, and that is the figure they will be asked to pay. */}
             {tableBill && tableBill.order_count > 0 && (
               <p className="mt-1 text-xs text-muted-foreground">
-                Round {tableBill.order_count + 1} · Table total so far{' '}
-                {formatCurrency(Number(tableBill.running_total))}
+                {t('checkout.dineIn.roundTotal', {
+                  round: tableBill.order_count + 1,
+                  amount: formatCurrency(Number(tableBill.running_total)),
+                })}
               </p>
             )}
             {/* The last point at which a wrong table is still cheap to fix. After this
@@ -1709,21 +1807,19 @@ export function CheckoutView({
                 the tracking screen a moment later. */}
             {method === 'transfer' && (
               <p className="mt-3 rounded-2xl border border-border bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
-                Place your order first. The QR code and the slip upload appear on the order
-                page straight after — nothing is charged until you confirm you have paid.
+                {t('checkout.payment.transferNote')}
               </p>
             )}
             {cardWithheld && (
               <p role="status" className="mt-3 rounded-2xl bg-warning/10 px-4 py-3 text-xs text-warning">
-                Card payment isn&apos;t available on this site yet.{' '}
                 {enabledMethods.length > 0
-                  ? 'Choose one of the options above — you can still pay the restaurant by card in person.'
-                  : 'It is the only method this restaurant has switched on, so this order cannot be placed online right now. Please call them to order.'}
+                  ? t('checkout.payment.cardWithheldChooseOther')
+                  : t('checkout.payment.cardWithheldOnly')}
               </p>
             )}
             {enabledMethods.length === 0 && !cardWithheld && (
               <p className="mt-3 text-sm text-muted-foreground">
-                This restaurant has no payment options available right now.
+                {t('checkout.payment.noneAvailable')}
               </p>
             )}
           </Card>
@@ -1731,19 +1827,27 @@ export function CheckoutView({
 
         <Card className="p-5">
           <h2 className="font-display text-lg font-semibold flex items-center gap-2">
-            <Tag className="h-4 w-4" /> Promo code
+            <Tag className="h-4 w-4" /> {t('checkout.promo.title')}
           </h2>
           {promoState.status === 'applied' ? (
             <div className="mt-3 flex items-center justify-between rounded-xl bg-success/10 px-3 py-2">
               <span className="text-sm text-success font-medium">
-                {promoCode} — saved {formatCurrency(promoState.amount_off)}{promoState.free_delivery ? ' + free delivery' : ''}
+                {promoState.free_delivery
+                  ? t('checkout.promo.appliedFreeDelivery', {
+                      code: promoCode,
+                      amount: formatCurrency(promoState.amount_off),
+                    })
+                  : t('checkout.promo.applied', {
+                      code: promoCode,
+                      amount: formatCurrency(promoState.amount_off),
+                    })}
               </span>
               <button
                 type="button"
                 onClick={() => { setPromoCode(''); setPromoState({ status: 'idle' }); }}
                 className="text-xs text-muted-foreground underline"
               >
-                Remove
+                {t('checkout.remove')}
               </button>
             </div>
           ) : (
@@ -1755,30 +1859,34 @@ export function CheckoutView({
                 className="input flex-1"
               />
               <Button type="button" variant="ghost" onClick={applyPromo} loading={promoState.status === 'validating'}>
-                Apply
+                {t('checkout.apply')}
               </Button>
             </div>
           )}
           {promoState.status === 'error' && (
-            <p className="mt-2 text-xs text-destructive">{promoState.message}</p>
+            <p className="mt-2 text-xs text-destructive">{promoErrorText(promoState)}</p>
           )}
         </Card>
 
         <Card className="p-5">
           <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
-            🎁 Gift card
+            {t('checkout.giftCard.title')}
           </h2>
           {giftCardState.status === 'valid' ? (
             <div className="mt-3 flex items-center justify-between rounded-xl bg-success/10 px-3 py-2">
               <span className="text-sm font-medium text-success">
-                {giftCardCode} — applies {formatCurrency(giftCardCredit)} (balance {formatCurrency(giftCardState.balance)})
+                {t('checkout.giftCard.applied', {
+                  code: giftCardCode,
+                  amount: formatCurrency(giftCardCredit),
+                  balance: formatCurrency(giftCardState.balance),
+                })}
               </span>
               <button
                 type="button"
                 onClick={() => { setGiftCardCode(''); setGiftCardState({ status: 'idle' }); }}
                 className="text-xs text-muted-foreground underline"
               >
-                Remove
+                {t('checkout.remove')}
               </button>
             </div>
           ) : (
@@ -1786,24 +1894,29 @@ export function CheckoutView({
               <input
                 value={giftCardCode}
                 onChange={(e) => setGiftCardCode(e.target.value.toUpperCase())}
-                placeholder="Gift card code"
+                placeholder={t('checkout.giftCard.placeholder')}
                 className="input flex-1"
               />
               <Button type="button" variant="ghost" onClick={checkGiftCard} loading={giftCardState.status === 'checking'}>
-                Apply
+                {t('checkout.apply')}
               </Button>
             </div>
           )}
           {giftCardState.status === 'error' && (
-            <p className="mt-2 text-xs text-destructive">{giftCardState.message}</p>
+            <p className="mt-2 text-xs text-destructive">{giftCardErrorText(giftCardState.code)}</p>
           )}
         </Card>
 
         <Card className="p-5">
-          <h2 className="font-display text-lg font-semibold">Add a tip</h2>
+          <h2 className="font-display text-lg font-semibold">{t('checkout.tip.title')}</h2>
           <p className="text-xs text-muted-foreground">
-            {tipWorkerPct}% goes to your {channel === 'delivery' ? 'driver' : 'kitchen & staff team'}
-            {tipWorkerPct < 100 ? ' (the rest supports the restaurant).' : '.'}
+            {channel === 'delivery'
+              ? tipWorkerPct < 100
+                ? t('checkout.tip.driverPartial', { percent: tipWorkerPct })
+                : t('checkout.tip.driverAll', { percent: tipWorkerPct })
+              : tipWorkerPct < 100
+                ? t('checkout.tip.teamPartial', { percent: tipWorkerPct })
+                : t('checkout.tip.teamAll', { percent: tipWorkerPct })}
           </p>
           {/* Exactly five choices, one grid. On a phone the three percentages
               share the first row; Custom and "No tip" split the second, with No
@@ -1845,7 +1958,7 @@ export function CheckoutView({
                 tipCustom ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-card'
               }`}
             >
-              Custom
+              {t('checkout.tip.custom')}
             </button>
             <button
               type="button"
@@ -1861,16 +1974,16 @@ export function CheckoutView({
                   : 'border-transparent bg-transparent text-muted-foreground hover:border-border'
               }`}
             >
-              No tip
+              {t('checkout.tip.none')}
             </button>
           </div>
           {tipCustom && (
             <input
               value={customTip}
               onChange={(e) => setCustomTip(e.target.value.replace(/[^0-9.]/g, ''))}
-              placeholder="Custom amount in USD"
+              placeholder={t('checkout.tip.customPlaceholder')}
               inputMode="decimal"
-              aria-label="Custom tip amount in USD"
+              aria-label={t('checkout.tip.customLabel')}
               className="input mt-2"
             />
           )}
@@ -1879,13 +1992,16 @@ export function CheckoutView({
         {rewards.length > 0 && (
           <Card className="p-5">
             <div className="flex items-baseline justify-between">
-              <h2 className="font-display text-lg font-semibold">Redeem points</h2>
+              <h2 className="font-display text-lg font-semibold">{t('checkout.rewards.title')}</h2>
               <span className="text-sm text-muted-foreground">
-                Balance: <strong>{pointsBalance.toLocaleString()}</strong>
+                {t.rich('checkout.rewards.balance', {
+                  balance: pointsBalance,
+                  strong: (chunks) => <strong>{chunks}</strong>,
+                })}
               </span>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              Pick one reward per order.
+              {t('checkout.rewards.onePerOrder')}
             </p>
             <div className="mt-3 space-y-2">
               {rewards.map((r) => {
@@ -1917,13 +2033,13 @@ export function CheckoutView({
                     <span className="min-w-0 flex-1">
                       <span className="block truncate font-medium">{r.name}</span>
                       <span className="block truncate text-xs text-muted-foreground">
-                        {r.points_cost.toLocaleString()} pts
+                        {t('checkout.rewards.cost', { points: r.points_cost })}
                         {r.description ? ` · ${r.description}` : ''}
                         {blocker ? ` · ${blocker}` : ''}
                       </span>
                     </span>
                     <span className="shrink-0 text-right font-display text-sm font-bold text-primary tabular-nums">
-                      {r.kind === 'free_delivery' ? 'Free delivery' : `-${formatCurrency(off)}`}
+                      {r.kind === 'free_delivery' ? t('checkout.rewards.freeDelivery') : `-${formatCurrency(off)}`}
                     </span>
                   </button>
                 );
@@ -1953,7 +2069,7 @@ export function CheckoutView({
                 label={t('cart.deliveryFee')}
                 value={
                   quoting
-                    ? 'Calculating…'
+                    ? t('checkout.summary.calculating')
                     : enteringNewAddress && !addressCoords
                       ? '—'
                       : formatCurrency(deliveryFee)
@@ -1964,18 +2080,18 @@ export function CheckoutView({
                 service fee or no tax showing a $0.00 line is noise. Same labels
                 as the receipt. */}
             {serviceFee > 0 && <Row label={t('cart.serviceFee')} value={formatCurrency(serviceFee)} />}
-            {salesTaxRate > 0 && <Row label="Sales tax" value={formatCurrency(taxAmount)} />}
-            {tipAmount > 0 && <Row label="Tip" value={formatCurrency(tipAmount)} />}
-            {promoDiscount > 0 && <Row label={`Promo (${promoCode})`} value={`-${formatCurrency(promoDiscount)}`} />}
+            {salesTaxRate > 0 && <Row label={t('checkout.summary.salesTax')} value={formatCurrency(taxAmount)} />}
+            {tipAmount > 0 && <Row label={t('checkout.summary.tip')} value={formatCurrency(tipAmount)} />}
+            {promoDiscount > 0 && <Row label={t('checkout.summary.promo', { code: promoCode })} value={`-${formatCurrency(promoDiscount)}`} />}
             {appliedReward && (
               <Row
-                label={`Reward (${appliedReward.name})`}
+                label={t('checkout.summary.reward', { name: appliedReward.name })}
                 value={
                   loyaltyDollarsOff > 0
                     ? `-${formatCurrency(loyaltyDollarsOff)}`
                     : // free_delivery zeroes the delivery fee row above rather than
                       // discounting the food, so a -$ figure here would double-count it.
-                      'Delivery free'
+                      t('checkout.summary.deliveryFree')
                 }
               />
             )}
@@ -1986,7 +2102,10 @@ export function CheckoutView({
 
         {error && (
           <Card className="border-danger/30 bg-danger/5 p-4 text-sm text-danger">
-            <strong>Couldn&apos;t place order:</strong> {error}
+            {t.rich('checkout.submitError', {
+              error,
+              strong: (chunks) => <strong>{chunks}</strong>,
+            })}
           </Card>
         )}
 
@@ -2020,7 +2139,7 @@ export function CheckoutView({
                 the bill is settled with a server at the end of the meal. "Place order" read
                 as the last step of a transaction that has not happened yet. */}
             {atTable
-              ? `Send to kitchen · ${formatCurrency(total)}`
+              ? t('checkout.sendToKitchen', { amount: formatCurrency(total) })
               : t('checkout.placeOrder', { amount: formatCurrency(total) })}
           </Button>
         </motion.div>
@@ -2041,6 +2160,7 @@ export function CheckoutView({
             setPickerOpen(false);
           }}
           labels={pickerLabels(t)}
+          locale={locale}
         />
       </Sheet>
 

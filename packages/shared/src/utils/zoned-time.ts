@@ -13,6 +13,8 @@
  * picker already did this correctly. It is shared now so the admin forms do the same thing.
  */
 
+import { DEFAULT_UI_LOCALE, intlLocaleFor, isUiLocale, type UiLocale } from '../i18n';
+
 /** Offset of `tz` from UTC at `date`, in ms. Positive east of Greenwich. */
 export function zoneOffsetMs(date: Date, tz: string): number {
   const dtf = new Intl.DateTimeFormat('en-US', {
@@ -132,11 +134,19 @@ export function utcToLocalInput(iso: string, tz: string): string {
  * from another country showed times the merchant never typed. Newer ICU puts a narrow
  * no-break space before AM/PM; it is normalised to a plain space so the text copies, wraps
  * and compares like the rest of the page.
+ *
+ * `locale` picks the interface language's date order and clock (English, en-US, when omitted);
+ * Thai stays on the Gregorian calendar via intlLocaleFor.
  */
-export function formatInZone(iso: string, tz: string, opts: { dateOnly?: boolean } = {}): string {
+export function formatInZone(
+  iso: string,
+  tz: string,
+  opts: { dateOnly?: boolean } = {},
+  locale: UiLocale = DEFAULT_UI_LOCALE,
+): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime()) || !isValidTimeZone(tz)) return iso;
-  const text = new Intl.DateTimeFormat('en-US', {
+  const text = new Intl.DateTimeFormat(intlLocaleFor(isUiLocale(locale) ? locale : DEFAULT_UI_LOCALE), {
     timeZone: tz,
     year: 'numeric',
     month: 'numeric',

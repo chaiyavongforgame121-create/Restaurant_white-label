@@ -2,8 +2,9 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
+import { useFormatter, useTranslations } from 'next-intl';
 import { ChevronLeft, ShieldAlert, Store } from 'lucide-react';
-import { Badge, Button, Card } from '@favornoms/ui';
+import { Badge, Button, Card, useUiLocale } from '@favornoms/ui';
 import { getBrowserClient } from '@favornoms/database/client';
 import {
   applyToBranch,
@@ -13,8 +14,7 @@ import {
 } from '@favornoms/database/queries';
 import { useDriverSession } from '@/components/driver-session';
 import {
-  APPLICATION_BADGE,
-  APPLICATION_EXPLANATION,
+  APPLICATION_BADGE_VARIANT,
   applicationAction,
   compareApplications,
   formatApplicationDate,
@@ -29,20 +29,21 @@ interface BranchRow {
 }
 
 // KYC docs a driver must upload before they may apply to a restaurant
-// (mirrors DOC_TYPES in profile-view). A verified driver already has them.
+// (mirrors DOC_KEYS in profile/_components/documents). A verified driver already has them.
+// These are storage object names, not labels: the names shown for them are
+// `profile.docs.{key}` in the catalogue.
 const REQUIRED_DOCS = ['license', 'vehicle_reg', 'selfie'] as const;
-
-const DOC_LABEL: Record<(typeof REQUIRED_DOCS)[number], string> = {
-  license: 'Driver licence',
-  vehicle_reg: 'Vehicle registration',
-  selfie: 'Selfie with licence',
-};
+type RequiredDoc = (typeof REQUIRED_DOCS)[number];
 
 // How long the "tap again" confirmation stays armed before it reverts.
 const CONFIRM_WINDOW_MS = 4000;
 
 export function ApplyView() {
   const router = useRouter();
+  const t = useTranslations('onboarding');
+  const tDocs = useTranslations('profile.docs');
+  const format = useFormatter();
+  const locale = useUiLocale();
   const { driver, refresh } = useDriverSession();
   const [branches, setBranches] = React.useState<BranchRow[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -59,7 +60,7 @@ export function ApplyView() {
   // Naming the missing documents is the difference between a rider finishing signup and a
   // rider quietly giving up: an application is never created until all three are uploaded,
   // so an incomplete rider is invisible to every restaurant and nobody can tell them why.
-  const [missingDocs, setMissingDocs] = React.useState<string[]>([]);
+  const [missingDocs, setMissingDocs] = React.useState<RequiredDoc[]>([]);
   const [notice, setNotice] = React.useState(false);
   const noticeTimer = React.useRef<number | null>(null);
 
@@ -94,7 +95,7 @@ export function ApplyView() {
         if (cancelled) return;
         const uploaded = new Set((data ?? []).map((f) => f.name.split('.')[0]));
         const missing = REQUIRED_DOCS.filter((k) => !uploaded.has(k));
-        setMissingDocs(missing.map((k) => DOC_LABEL[k]));
+        setMissingDocs(missing);
         setDocsComplete(missing.length === 0);
       });
     return () => {
@@ -141,6 +142,13 @@ export function ApplyView() {
 
   const clearError = (branchId: string) => setRowError((m) => ({ ...m, [branchId]: '' }));
 
+  // A server message nobody mapped is not shown to the rider as-is: it is in whatever
+  // language the database speaks. Keep it for the console, show a translated line.
+  const setUnknownError = (branchId: string, raw: string) => {
+    console.error('[apply]', raw);
+    setError(branchId, t('apply.errors.generic'));
+  };
+
   const armConfirm = (branchId: string) => {
     setConfirming(branchId);
     if (confirmTimer.current) window.clearTimeout(confirmTimer.current);
@@ -165,7 +173,7 @@ export function ApplyView() {
     const { error } = await applyToBranch(getBrowserClient(), driver.id, branchId);
     // A unique-violation just means we already applied — refresh shows the status.
     if (error && !/duplicate|unique/i.test(error.message)) {
-      setError(branchId, error.message);
+      setUnknownError(branchId, error.message);
     }
     if ('vibrate' in navigator) navigator.vibrate(30);
     await refresh();
@@ -178,11 +186,11 @@ export function ApplyView() {
     const { data, error } = await withdrawDriverApplication(getBrowserClient(), approval.id);
     setConfirming(null);
     if (error) {
-      setError(approval.branch_id, error.message);
+      setUnknownError(approval.branch_id, error.message);
     } else if (!data || data.length === 0) {
       // Zero rows under RLS is reported as success, not an error: the policy only matches
       // pending rows, so the merchant decided while the rider was tapping.
-      setError(approval.branch_id, 'Too late to withdraw — the restaurant has already decided.');
+      setError(approval.branch_id, t('apply.errors.tooLateToWithdraw'));
     }
     await refresh();
     setBusy(null);
@@ -194,14 +202,13 @@ export function ApplyView() {
     clearError(branchId);
     const { error } = await reapplyToBranch(getBrowserClient(), branchId);
     if (error) {
-      setError(
-        branchId,
-        /reapply_too_soon/.test(error.message)
-          ? `You can apply here again ${REAPPLY_COOLDOWN_DAYS} days after the decision.`
-          : /not_rejected/.test(error.message)
-            ? 'This application has changed — pull down to refresh.'
-            : error.message,
-      );
+      if (/reapply_too_soon/.test(error.message)) {
+        setError(branchId, t('apply.errors.reapplyTooSoon', { days: REAPPLY_COOLDOWN_DAYS }));
+      } else if (/not_rejected/.test(error.message)) {
+        setError(branchId, t('apply.errors.changed'));
+      } else {
+        setUnknownError(branchId, error.message);
+      }
     } else if ('vibrate' in navigator) {
       navigator.vibrate(30);
     }
@@ -221,7 +228,7 @@ export function ApplyView() {
           loading={busy === approval.branch_id}
           onClick={() => (armed ? void withdraw(approval) : armConfirm(approval.branch_id))}
         >
-          {armed ? 'Confirm withdraw' : 'Withdraw'}
+          {armed ? t('apply.confirmWithdraw') : t('apply.withdraw')}
         </Button>
       );
     }
@@ -235,11 +242,11 @@ export function ApplyView() {
           loading={busy === approval.branch_id}
           onClick={() => void reapply(approval.branch_id)}
         >
-          Apply again
+          {t('apply.applyAgain')}
         </Button>
         {availableAt && (
           <span className="text-[11px] text-muted-foreground">
-            From {formatApplicationDate(availableAt)}
+            {t('apply.availableFrom', { date: formatApplicationDate(availableAt, locale) })}
           </span>
         )}
       </div>
@@ -252,19 +259,26 @@ export function ApplyView() {
         <button
           type="button"
           onClick={() => router.back()}
-          aria-label="Back"
+          aria-label={t('apply.back')}
           className="focus-ring grid h-10 w-10 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-muted"
         >
           <ChevronLeft className="h-5 w-5" />
         </button>
         <div className="min-w-0">
-          <h1 className="font-display text-2xl font-bold">Restaurants</h1>
+          <h1 className="font-display text-2xl font-bold">{t('apply.title')}</h1>
           <p className="truncate text-sm text-muted-foreground">
             {applications.length === 0
-              ? 'Apply to deliver — they review & approve you'
-              : `${applications.length} applied · ${approvedCount} approved${
-                  pendingCount > 0 ? ` · ${pendingCount} waiting` : ''
-                }`}
+              ? t('apply.subtitleEmpty')
+              : pendingCount > 0
+                ? t('apply.subtitleCountsWaiting', {
+                    applied: applications.length,
+                    approved: approvedCount,
+                    waiting: pendingCount,
+                  })
+                : t('apply.subtitleCounts', {
+                    applied: applications.length,
+                    approved: approvedCount,
+                  })}
           </p>
         </div>
       </header>
@@ -278,16 +292,18 @@ export function ApplyView() {
           <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0" />
           <span className="flex-1 text-sm">
             <span className="block font-semibold">
-              {missingDocs.length === 1
-                ? '1 document still needed'
-                : `${missingDocs.length || 3} documents still needed`}
+              {t('apply.docsBanner.title', { count: missingDocs.length || 3 })}
             </span>
             <span className="block text-xs">
-              Restaurants cannot see you until you upload{' '}
-              {missingDocs.length > 0
-                ? missingDocs.join(', ').toLowerCase()
-                : 'your driver licence, vehicle registration and selfie'}
-              . Tap to upload.
+              {t('apply.docsBanner.body', {
+                docs:
+                  missingDocs.length > 0
+                    ? format.list(
+                        missingDocs.map((k) => tDocs(`${k}.inline`)),
+                        { type: 'conjunction' },
+                      )
+                    : t('apply.docsBanner.allDocs'),
+              })}
             </span>
           </span>
         </button>
@@ -298,10 +314,11 @@ export function ApplyView() {
           silently dropping it is how a rider loses a restaurant with no explanation. */}
       {applications.length > 0 && (
         <section className="mt-5 px-4">
-          <h2 className="px-1 pb-2 font-display text-lg font-semibold">Your applications</h2>
+          <h2 className="px-1 pb-2 font-display text-lg font-semibold">
+            {t('apply.yourApplications')}
+          </h2>
           <div className="space-y-3">
             {applications.map((a) => {
-              const badge = APPLICATION_BADGE[a.status];
               const error = rowError[a.branch_id];
               return (
                 <Card key={a.id} className="p-4">
@@ -313,27 +330,37 @@ export function ApplyView() {
                       <p className="truncate font-semibold">
                         {a.branch?.restaurant?.name ??
                           a.branch?.name ??
-                          'This restaurant is no longer listed'}
+                          t('apply.noLongerListed')}
                       </p>
                       {a.branch && (
                         <p className="truncate text-sm text-muted-foreground">{a.branch.name}</p>
                       )}
                       <p className="mt-1 text-xs text-muted-foreground">
-                        Applied {formatApplicationDate(a.applied_at)}
-                        {a.reviewed_at && ` · decided ${formatApplicationDate(a.reviewed_at)}`}
+                        {a.reviewed_at
+                          ? t('apply.appliedDecided', {
+                              applied: formatApplicationDate(a.applied_at, locale),
+                              decided: formatApplicationDate(a.reviewed_at, locale),
+                            })
+                          : t('apply.applied', {
+                              applied: formatApplicationDate(a.applied_at, locale),
+                            })}
                       </p>
                     </div>
-                    <Badge variant={badge.variant} className="shrink-0">
-                      {badge.label}
+                    <Badge variant={APPLICATION_BADGE_VARIANT[a.status]} className="shrink-0">
+                      {t(`apply.status.${a.status}`)}
                     </Badge>
                   </div>
                   <p className="mt-2 text-xs text-muted-foreground">
-                    {APPLICATION_EXPLANATION[a.status]}
+                    {t(`apply.explanation.${a.status}`)}
                   </p>
                   {a.notes && (
                     <p className="mt-2 line-clamp-4 rounded-xl bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
-                      <span className="font-semibold text-foreground">What they said: </span>
-                      {a.notes}
+                      {t.rich('apply.whatTheySaid', {
+                        notes: a.notes,
+                        label: (chunks) => (
+                          <span className="font-semibold text-foreground">{chunks}</span>
+                        ),
+                      })}
                     </p>
                   )}
                   {error && (
@@ -351,14 +378,12 @@ export function ApplyView() {
 
       <div className="mt-5 space-y-3 px-4">
         {applications.length > 0 && !loading && branches.length > 0 && (
-          <h2 className="px-1 font-display text-lg font-semibold">All restaurants</h2>
+          <h2 className="px-1 font-display text-lg font-semibold">{t('apply.allRestaurants')}</h2>
         )}
         {loading ? (
-          <p className="px-1 text-sm text-muted-foreground">Loading…</p>
+          <p className="px-1 text-sm text-muted-foreground">{t('apply.loading')}</p>
         ) : branches.length === 0 ? (
-          <Card className="p-6 text-center text-sm text-muted-foreground">
-            No restaurants available right now.
-          </Card>
+          <Card className="p-6 text-center text-sm text-muted-foreground">{t('apply.empty')}</Card>
         ) : (
           branches.map((b) => {
             const approval = approvalFor(b.id);
@@ -370,13 +395,15 @@ export function ApplyView() {
                     <Store className="h-5 w-5" />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-semibold">{b.restaurant?.name ?? 'Restaurant'}</p>
+                    <p className="truncate font-semibold">
+                      {b.restaurant?.name ?? t('apply.restaurantFallback')}
+                    </p>
                     <p className="truncate text-sm text-muted-foreground">{b.name}</p>
                   </div>
                   {approval ? (
                     <div className="flex shrink-0 flex-col items-end gap-1.5">
-                      <Badge variant={APPLICATION_BADGE[approval.status].variant}>
-                        {APPLICATION_BADGE[approval.status].label}
+                      <Badge variant={APPLICATION_BADGE_VARIANT[approval.status]}>
+                        {t(`apply.status.${approval.status}`)}
                       </Badge>
                       {actionsFor(approval)}
                     </div>
@@ -387,7 +414,7 @@ export function ApplyView() {
                       loading={busy === b.id}
                       onClick={() => void apply(b.id)}
                     >
-                      Apply
+                      {t('apply.apply')}
                     </Button>
                   )}
                 </div>
@@ -406,7 +433,7 @@ export function ApplyView() {
 
       {notice && (
         <div className="fixed inset-x-4 bottom-24 z-50 rounded-2xl bg-warning px-4 py-3 text-center text-sm font-semibold text-white shadow-warm">
-          📄 Upload all required documents first — taking you to your documents…
+          {t('apply.docsNotice')}
         </div>
       )}
     </div>

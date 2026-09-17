@@ -1,0 +1,8 @@
+{
+  "title": "¿Cómo quieres pedir?",
+  "subtitle": "Elige una opción para empezar tu pedido.",
+  "subtitleNamed": "Elige una opción para empezar tu pedido en {branch}.",
+  "deliveryHint": "Elige día y hora, y te lo llevamos a tu dirección",
+  "pickupHint": "Recógelo en el restaurante mientras esté abierto",
+  "changeLater": "Puedes cambiarlo cuando quieras desde el menú."
+}

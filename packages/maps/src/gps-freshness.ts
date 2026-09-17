@@ -5,6 +5,8 @@
 // (backgrounded app, denied permission, dead spot). Both the customer's map and the rider's
 // own screens answer that question, so the arithmetic lives in one place.
 
+import { resolveMapsLocale, type MapsLocale } from './locale';
+
 /** Seconds since a GPS fix timestamp, or null when there has never been one. */
 export function fixAgeSeconds(updatedAt: string | null | undefined, nowMs: number): number | null {
   if (!updatedAt) return null;
@@ -24,10 +26,31 @@ export function isFixStale(ageSec: number | null, thresholdSec = GPS_STALE_AFTER
   return ageSec == null || ageSec > thresholdSec;
 }
 
-/** "45s ago" / "2 min ago" / "3 hr ago" — short enough for a map chip. */
-export function formatFixAge(ageSec: number): string {
-  if (ageSec < 60) return `${ageSec}s ago`;
-  if (ageSec < 3600) return `${Math.floor(ageSec / 60)} min ago`;
-  if (ageSec < 86_400) return `${Math.floor(ageSec / 3600)} hr ago`;
-  return `${Math.floor(ageSec / 86_400)} d ago`;
+const FIX_AGE_COPY: Record<
+  MapsLocale,
+  { s: (n: number) => string; min: (n: number) => string; hr: (n: number) => string; d: (n: number) => string }
+> = {
+  en: { s: (n) => `${n}s ago`, min: (n) => `${n} min ago`, hr: (n) => `${n} hr ago`, d: (n) => `${n} d ago` },
+  es: { s: (n) => `hace ${n} s`, min: (n) => `hace ${n} min`, hr: (n) => `hace ${n} h`, d: (n) => `hace ${n} d` },
+  vi: {
+    s: (n) => `${n} giây trước`,
+    min: (n) => `${n} phút trước`,
+    hr: (n) => `${n} giờ trước`,
+    d: (n) => `${n} ngày trước`,
+  },
+  th: {
+    s: (n) => `${n} วินาทีที่แล้ว`,
+    min: (n) => `${n} นาทีที่แล้ว`,
+    hr: (n) => `${n} ชั่วโมงที่แล้ว`,
+    d: (n) => `${n} วันที่แล้ว`,
+  },
+};
+
+/** "45s ago" / "2 min ago" / "3 hr ago" — short enough for a map chip. In `locale` (English when omitted). */
+export function formatFixAge(ageSec: number, locale: MapsLocale = 'en'): string {
+  const copy = FIX_AGE_COPY[resolveMapsLocale(locale)];
+  if (ageSec < 60) return copy.s(ageSec);
+  if (ageSec < 3600) return copy.min(Math.floor(ageSec / 60));
+  if (ageSec < 86_400) return copy.hr(Math.floor(ageSec / 3600));
+  return copy.d(Math.floor(ageSec / 86_400));
 }

@@ -1,0 +1,103 @@
+{
+  "apply": {
+    "metaTitle": "Restaurantes",
+    "back": "Atrás",
+    "title": "Restaurantes",
+    "subtitleEmpty": "Postúlate para repartir: ellos te revisan y aprueban",
+    "subtitleCounts": "{applied, plural, one {# postulación} other {# postulaciones}} · {approved, plural, one {# aprobada} other {# aprobadas}}",
+    "subtitleCountsWaiting": "{applied, plural, one {# postulación} other {# postulaciones}} · {approved, plural, one {# aprobada} other {# aprobadas}} · {waiting} en espera",
+    "docsBanner": {
+      "title": "{count, plural, one {Falta # documento} other {Faltan # documentos}}",
+      "body": "Para que los restaurantes te vean, falta subir: {docs}. Toca para subirlos.",
+      "allDocs": "licencia de conducir, registro del vehículo y selfie con tu licencia"
+    },
+    "yourApplications": "Tus postulaciones",
+    "allRestaurants": "Todos los restaurantes",
+    "noLongerListed": "Este restaurante ya no está disponible",
+    "restaurantFallback": "Restaurante",
+    "applied": "Te postulaste el {applied}",
+    "appliedDecided": "Te postulaste el {applied} · decidieron el {decided}",
+    "whatTheySaid": "<label>Lo que dijeron:</label> {notes}",
+    "loading": "Cargando…",
+    "empty": "No hay restaurantes disponibles por ahora.",
+    "apply": "Postularme",
+    "applyAgain": "Volver a postular",
+    "availableFrom": "Desde el {date}",
+    "withdraw": "Retirar",
+    "confirmWithdraw": "Sí, retirar",
+    "docsNotice": "📄 Primero sube todos los documentos requeridos. Te llevamos a tus documentos…",
+    "status": {
+      "pending": "En revisión",
+      "approved": "✓ Aprobado",
+      "rejected": "No aceptado",
+      "suspended": "En pausa"
+    },
+    "explanation": {
+      "pending": "Aún no deciden. No puedes conectarte aquí hasta que te aprueben.",
+      "approved": "Puedes conectarte y recibir los pedidos de este restaurante.",
+      "rejected": "Rechazaron esta postulación. Puedes volver a postularte más adelante.",
+      "suspended": "Te pusieron en pausa aquí y no recibirás pedidos. Contacta al restaurante."
+    },
+    "errors": {
+      "tooLateToWithdraw": "Ya no puedes retirarla: el restaurante ya decidió.",
+      "reapplyTooSoon": "Podrás volver a postularte aquí {days, plural, one {# día} other {# días}} después de la decisión.",
+      "changed": "Esta postulación cambió. Desliza hacia abajo para actualizar.",
+      "generic": "Algo salió mal. Inténtalo de nuevo."
+    }
+  },
+  "training": {
+    "metaTitle": "Capacitación",
+    "title": "Capacitación para repartidores",
+    "completedOn": "Completada el {date}",
+    "required": "Obligatoria para recibir tu primera entrega.",
+    "done": "Hecho",
+    "submit": "Enviar y terminar la capacitación",
+    "answerAll": "Responde bien todas las preguntas para continuar",
+    "modules": {
+      "safety": {
+        "title": "1 · Seguridad al conducir",
+        "description": "Lo básico de seguridad en moto y auto",
+        "reading": "Usa siempre casco. Nunca mires el teléfono mientras conduces. Estaciónate antes de abrir la app. Confirma siempre la dirección antes de salir del restaurante.",
+        "question": "¿Cuándo debes mirar la app?",
+        "choices": {
+          "a": "Mientras conduces",
+          "b": "Después de estacionarte",
+          "c": "En los semáforos en rojo"
+        }
+      },
+      "pickup": {
+        "title": "2 · En el restaurante",
+        "description": "Qué revisar al recoger",
+        "reading": "Muestra tu identificación de repartidor. Confirma el número de pedido con el personal. Revisa que la bolsa tenga todos los productos y esté sellada. Toca “Recogido” solo después de confirmar.",
+        "question": "¿Qué debes verificar al recoger?",
+        "choices": {
+          "a": "Solo el número de pedido",
+          "b": "Número de pedido + productos + sello",
+          "c": "Nada, solo tomar la bolsa"
+        }
+      },
+      "delivery": {
+        "title": "3 · Buenas prácticas de entrega",
+        "description": "Trato con el cliente",
+        "reading": "Saluda al cliente por su nombre. Confirma el pedido. Entrega la bolsa con las dos manos. Si es sin contacto, toma una foto como prueba de entrega. Nunca exijas propina.",
+        "question": "¿Qué comprueba una entrega sin contacto?",
+        "choices": {
+          "a": "Tocar la puerta",
+          "b": "Una foto en la puerta",
+          "c": "Enviarle un mensaje al cliente"
+        }
+      },
+      "issues": {
+        "title": "4 · Cómo resolver problemas",
+        "description": "Qué hacer cuando algo sale mal",
+        "reading": "Si el cliente no está o no contesta: llama dos veces y luego envíale un mensaje. Espera 5 minutos. Después marca “no contesta” en la app. Nunca dejes comida sin vigilancia en un lugar público.",
+        "question": "¿Cuánto debes esperar si el cliente no contesta?",
+        "choices": {
+          "a": "1 minuto",
+          "b": "5 minutos",
+          "c": "20 minutos"
+        }
+      }
+    }
+  }
+}

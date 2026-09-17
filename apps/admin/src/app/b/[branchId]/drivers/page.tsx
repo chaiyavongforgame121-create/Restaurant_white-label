@@ -1,4 +1,5 @@
-import { formatPhone } from '@favornoms/shared';
+import { getLocale, getTranslations } from 'next-intl/server';
+import { DEFAULT_UI_LOCALE, formatPhone, intlLocaleFor, isUiLocale } from '@favornoms/shared';
 import { Badge, Card } from '@favornoms/ui';
 import { getBranchAccess } from '@/lib/capabilities';
 import { AccessDenied } from '@/components/access-denied';
@@ -25,21 +26,17 @@ const STATUS_VARIANT: Record<string, 'success' | 'danger' | 'warning' | 'muted'>
   pending: 'muted',
 };
 
+/** Values with a label under drivers.approval / drivers.kycStatus / drivers.vehicle. */
+const APPROVAL_STATUSES = ['pending', 'approved', 'rejected', 'suspended'];
+const KYC_STATUSES = ['pending', 'verified', 'rejected', 'suspended'];
+const VEHICLE_TYPES = ['motorcycle', 'car', 'bicycle', 'scooter'];
+
 const EMPTY_DOCS: DriverDocSummary = {
   entries: [],
   received: 0,
   lastReceivedAt: null,
   error: null,
 };
-
-function fmt(ts: string | null): string | null {
-  if (!ts) return null;
-  return new Date(ts).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-}
 
 /**
  * Whether the rider's documents arrived at all, and when, is only knowable by listing
@@ -65,6 +62,15 @@ async function loadDocsByDriver(
 
 export default async function DriversPage({ params }: Props) {
   const { branchId } = await params;
+  const [t, requestLocale] = await Promise.all([getTranslations('drivers'), getLocale()]);
+  const locale = isUiLocale(requestLocale) ? requestLocale : DEFAULT_UI_LOCALE;
+  const dateFormat = new Intl.DateTimeFormat(intlLocaleFor(locale), {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+  const fmt = (ts: string | null): string | null => (ts ? dateFormat.format(new Date(ts)) : null);
+
   // Every other back-office page asks for its capability; this one only ever leaned on the
   // layout's backoffice.access gate, so a role that cannot manage riders still saw the
   // roster (and the sidebar link that hid it from them was the only thing saying otherwise).
@@ -76,8 +82,8 @@ export default async function DriversPage({ params }: Props) {
   if (!can('drivers.manage')) {
     return (
       <AccessDenied
-        title="No driver access"
-        reason={`Your role cannot review riders at ${branch.name}.`}
+        title={t('accessDenied.title')}
+        reason={t('accessDenied.reason', { branch: branch.name })}
       />
     );
   }
@@ -93,6 +99,7 @@ export default async function DriversPage({ params }: Props) {
     )
     .eq('branch_id', branchId)
     .order('applied_at', { ascending: false });
+  if (error) console.error('Drivers: could not load driver applications:', error.message);
 
   const rows = approvals ?? [];
   const drivers = rows.map(
@@ -126,33 +133,41 @@ export default async function DriversPage({ params }: Props) {
     );
   }).length;
 
+  // Separate facts, one short phrase each, joined like a list.
+  const summary = [
+    t('header.applied', { count: rows.length }),
+    pendingCount > 0 ? t('header.awaitingDecision', { count: pendingCount }) : null,
+    kycWaiting > 0 ? t('header.documentsToReview', { count: kycWaiting }) : null,
+    changedCount > 0 ? t('header.changedAfterReview', { count: changedCount }) : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  const kycLabel = (status: string | undefined) =>
+    status == null
+      ? t('kycStatus.unknown')
+      : KYC_STATUSES.includes(status)
+        ? t(`kycStatus.${status}`)
+        : status;
+
   return (
     <div className="container max-w-4xl py-8">
       <header className="mb-6 px-2 pl-16 lg:px-0">
-        <h1 className="font-display text-3xl font-bold">Drivers</h1>
-        <p className="mt-1 text-muted-foreground">
-          {rows.length} {rows.length === 1 ? 'driver has' : 'drivers have'} applied to this branch
-          {pendingCount > 0 && ` · ${pendingCount} awaiting your decision`}
-          {kycWaiting > 0 && ` · ${kycWaiting} with documents to review`}
-          {changedCount > 0 && ` · ${changedCount} changed a document after review`}
-        </p>
+        <h1 className="font-display text-3xl font-bold">{t('header.title')}</h1>
+        <p className="mt-1 text-muted-foreground">{summary}</p>
       </header>
 
       {/* A failed read used to render as the friendly empty state, so an RLS denial or a 500
           was indistinguishable from "nobody has applied". */}
       {error ? (
         <Card className="border-danger/40 bg-danger/5 p-6">
-          <p className="font-semibold text-danger">Could not load driver applications</p>
-          <p className="mt-1 text-sm text-muted-foreground">{error.message}</p>
+          <p className="font-semibold text-danger">{t('loadError.title')}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{t('loadError.body')}</p>
         </Card>
       ) : rows.length === 0 ? (
         <Card className="p-8 text-center">
-          <p className="font-semibold">No driver applications yet</p>
-          <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-            Riders apply from the Driver app. They can only apply after uploading all three
-            KYC documents (licence, vehicle registration and a selfie), so a rider who has
-            signed up but not finished uploading will not appear here yet.
-          </p>
+          <p className="font-semibold">{t('empty.title')}</p>
+          <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">{t('empty.body')}</p>
         </Card>
       ) : (
         <ul className="space-y-3 px-2 lg:px-0">
@@ -161,26 +176,38 @@ export default async function DriversPage({ params }: Props) {
             const docs = d ? (docsByDriver.get(d.id) ?? EMPTY_DOCS) : EMPTY_DOCS;
             const applied = fmt(a.applied_at);
             const reviewed = fmt(a.reviewed_at);
-            const received = formatReceived(docs.lastReceivedAt);
+            const received = formatReceived(docs.lastReceivedAt, locale);
             const changedSinceVerify = decidedBeforeUpload(
               d?.kyc_verified_at ?? null,
               docs.lastReceivedAt,
             );
             const changedSinceDecision = decidedBeforeUpload(a.reviewed_at, docs.lastReceivedAt);
+            const vehicle = d?.vehicle_type
+              ? VEHICLE_TYPES.includes(d.vehicle_type)
+                ? t(`vehicle.${d.vehicle_type}`)
+                : d.vehicle_type
+              : '';
+            const timeline = [
+              t('card.applied', { date: applied ?? '' }),
+              reviewed ? t('card.reviewed', { date: reviewed }) : null,
+              received ? t('card.documentsReceived', { date: received }) : null,
+            ]
+              .filter(Boolean)
+              .join(' · ');
             return (
               <li key={a.id}>
                 <Card className="p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="font-display text-lg font-semibold">
-                        {d?.full_name ?? 'Unknown driver'}
+                        {d?.full_name ?? t('card.unknownDriver')}
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        {d?.phone ? formatPhone(d.phone) : ''} · {d?.vehicle_type} {d?.vehicle_plate ?? ''}
+                        {d?.phone ? formatPhone(d.phone) : ''} · {vehicle} {d?.vehicle_plate ?? ''}
                       </p>
                       <div className="mt-1.5 flex flex-wrap items-center gap-2">
                         <Badge variant={d?.kyc_status === 'verified' ? 'success' : 'warning'}>
-                          KYC: {d?.kyc_status ?? 'unknown'}
+                          {t('card.kyc', { status: kycLabel(d?.kyc_status) })}
                         </Badge>
                         {/* Received is not the same question as verified, and it is the one
                             a rider keeps asking. A read that failed says so rather than
@@ -195,21 +222,23 @@ export default async function DriversPage({ params }: Props) {
                           }
                         >
                           {docs.error
-                            ? 'Documents: could not read'
-                            : `Documents: ${docs.received}/${DOC_TYPES.length} received`}
+                            ? t('card.documentsUnreadable')
+                            : t('card.documentsCount', {
+                                received: docs.received,
+                                total: DOC_TYPES.length,
+                              })}
                         </Badge>
                         {d?.average_rating != null && (
                           <Badge variant="muted">⭐ {Number(d.average_rating).toFixed(1)}</Badge>
                         )}
                       </div>
-                      <p className="mt-1.5 text-xs text-muted-foreground">
-                        Applied {applied}
-                        {reviewed && ` · reviewed ${reviewed}`}
-                        {received && ` · documents last received ${received}`}
-                      </p>
+                      <p className="mt-1.5 text-xs text-muted-foreground">{timeline}</p>
                       {a.notes && (
                         <p className="mt-1.5 rounded-lg bg-muted/50 px-2.5 py-1.5 text-xs text-muted-foreground">
-                          <span className="font-semibold">Note:</span> {a.notes}
+                          {t.rich('card.note', {
+                            note: a.notes,
+                            label: (chunks) => <span className="font-semibold">{chunks}</span>,
+                          })}
                         </p>
                       )}
                       {/* Approving the application and verifying the documents are two separate
@@ -217,26 +246,31 @@ export default async function DriversPage({ params }: Props) {
                           reads as "done" unless we say otherwise. */}
                       {a.status === 'approved' && d?.kyc_status === 'pending' && (
                         <p className="mt-1.5 text-xs font-semibold text-warning">
-                          Approved, but their documents still need reviewing — use Review
-                          documents.
+                          {t('card.approvedNeedsDocuments')}
                         </p>
                       )}
                       {changedSinceVerify ? (
                         <p className="mt-1.5 text-xs font-semibold text-warning">
-                          They replaced a document {received}, after it was verified on{' '}
-                          {fmt(d?.kyc_verified_at ?? null)} — look again.
+                          {t('card.replacedAfterVerify', {
+                            received: received ?? '',
+                            verified: fmt(d?.kyc_verified_at ?? null) ?? '',
+                          })}
                         </p>
                       ) : (
                         changedSinceDecision && (
                           <p className="mt-1.5 text-xs font-semibold text-warning">
-                            They replaced a document {received}, after your decision on{' '}
-                            {reviewed}.
+                            {t('card.replacedAfterDecision', {
+                              received: received ?? '',
+                              reviewed: reviewed ?? '',
+                            })}
                           </p>
                         )
                       )}
                     </div>
                     <div className="flex flex-col items-end gap-2">
-                      <Badge variant={STATUS_VARIANT[a.status] ?? 'muted'}>{a.status}</Badge>
+                      <Badge variant={STATUS_VARIANT[a.status] ?? 'muted'}>
+                        {APPROVAL_STATUSES.includes(a.status) ? t(`approval.${a.status}`) : a.status}
+                      </Badge>
                       {d?.id && (
                         <KycReviewButton
                           driverId={d.id}

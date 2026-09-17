@@ -1,0 +1,33 @@
+{
+  "title": "ยินดีต้อนรับกลับมา",
+  "registerTitle": "สมัครเป็นคนขับ",
+  "subtitle": "เข้าสู่ระบบด้วยเบอร์โทรศัพท์และรหัสผ่านเพื่อเริ่มรับงานส่ง",
+  "registerSubtitle": "สมัครด้วยเบอร์โทรศัพท์เพื่อเริ่มรับงานส่ง",
+  "trustedBy": "คนขับกว่า 2,300 คนไว้วางใจ",
+  "tabLogin": "เข้าสู่ระบบ",
+  "tabRegister": "ลงทะเบียน",
+  "phone": "เบอร์โทรศัพท์",
+  "countryCode": "รหัสประเทศ",
+  "password": "รหัสผ่าน",
+  "passwordNewPlaceholder": "อย่างน้อย 8 ตัวอักษร",
+  "passwordPlaceholder": "รหัสผ่านของคุณ",
+  "firstName": "ชื่อ",
+  "firstNamePlaceholder": "สมชาย",
+  "lastName": "นามสกุล",
+  "lastNamePlaceholder": "ใจดี",
+  "vehicle": "ยานพาหนะ",
+  "vehicleTypes": {
+    "motorcycle": "มอเตอร์ไซค์",
+    "car": "รถยนต์",
+    "bicycle": "จักรยาน",
+    "scooter": "สกู๊ตเตอร์"
+  },
+  "plate": "ทะเบียนรถ <muted>(ไม่บังคับ)</muted>",
+  "platePlaceholder": "1กข 1234",
+  "email": "อีเมล <muted>(ไม่บังคับ)</muted>",
+  "emailPlaceholder": "name@example.com",
+  "submitLogin": "เข้าสู่ระบบ",
+  "submitRegister": "สร้างบัญชี",
+  "byContinuing": "การดำเนินการต่อถือว่าคุณยอมรับข้อกำหนดและนโยบายความเป็นส่วนตัวของเรา",
+  "nameRequired": "กรุณากรอกชื่อ"
+}

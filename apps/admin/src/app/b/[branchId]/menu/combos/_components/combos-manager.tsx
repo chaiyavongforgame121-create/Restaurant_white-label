@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Plus, Trash2 } from 'lucide-react';
 import { formatCurrency } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
@@ -36,13 +37,32 @@ interface Props {
   menuItems: MenuItem[];
 }
 
+type DbErrorKey = 'permissionDenied' | 'network' | 'duplicate' | 'inUse' | 'invalidValue' | 'generic';
+
+/** Raw PostgREST text never reaches the merchant: known codes get a translated sentence. */
+function dbErrorKey(err: { code?: string; message?: string }): DbErrorKey {
+  const message = err.message ?? '';
+  if (err.code === '42501' || /row-level security|permission denied/i.test(message)) return 'permissionDenied';
+  if (/failed to fetch|networkerror|network request failed/i.test(message)) return 'network';
+  if (err.code === '23505') return 'duplicate';
+  if (err.code === '23503') return 'inUse';
+  if (err.code && /^(22|23)/.test(err.code)) return 'invalidValue';
+  return 'generic';
+}
+
 export function CombosManager({ branchId, initialCombos, menuItems }: Props) {
+  const t = useTranslations('menuExtras');
   const router = useRouter();
   const confirm = useConfirm();
   const prompt = usePrompt();
   const [combos, setCombos] = React.useState(initialCombos);
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+
+  const dbError = (context: string, err: { code?: string; message?: string }) => {
+    console.error(`[combos] ${context}`, err);
+    return t(`errors.${dbErrorKey(err)}`);
+  };
 
   const refetch = async () => {
     const supabase = getBrowserClient();
@@ -59,23 +79,23 @@ export function CombosManager({ branchId, initialCombos, menuItems }: Props) {
 
   const createCombo = async () => {
     const name = await prompt({
-      title: 'Name this combo',
-      body: 'Customers see this in the featured combo row above the menu.',
-      placeholder: 'e.g. "Burger Combo", "Family Meal"',
-      confirmLabel: 'Next',
+      title: t('combos.namePrompt.title'),
+      body: t('combos.namePrompt.body'),
+      placeholder: t('combos.namePrompt.placeholder'),
+      confirmLabel: t('combos.namePrompt.confirm'),
       required: true,
     });
     if (!name) return;
     const priceStr = await prompt({
-      title: 'Total price (USD)',
-      body: 'What the customer pays for the whole bundle. You can change it later.',
+      title: t('combos.pricePrompt.title'),
+      body: t('combos.pricePrompt.body'),
       defaultValue: '0',
-      confirmLabel: 'Create combo',
+      confirmLabel: t('combos.pricePrompt.confirm'),
     });
     if (priceStr === null) return;
     const price = Number(priceStr);
     if (!Number.isFinite(price) || price <= 0) {
-      setError('Invalid price');
+      setError(t('errors.invalidPrice'));
       return;
     }
     const supabase = getBrowserClient();
@@ -86,7 +106,7 @@ export function CombosManager({ branchId, initialCombos, menuItems }: Props) {
       is_active: true,
     });
     if (insErr) {
-      setError(insErr.message);
+      setError(dbError('create combo', insErr));
       return;
     }
     refetch();
@@ -96,7 +116,7 @@ export function CombosManager({ branchId, initialCombos, menuItems }: Props) {
     const supabase = getBrowserClient();
     const { error: upErr } = await supabase.from('combo_sets').update(patch).eq('id', id);
     if (upErr) {
-      setError(upErr.message);
+      setError(dbError('update combo', upErr));
       return;
     }
     setCombos((curr) => curr.map((c) => (c.id === id ? { ...c, ...patch } : c)));
@@ -105,9 +125,9 @@ export function CombosManager({ branchId, initialCombos, menuItems }: Props) {
   const deleteCombo = async (id: string) => {
     if (
       !(await confirm({
-        title: 'Delete this combo?',
-        body: 'Existing orders are not affected.',
-        confirmLabel: 'Delete',
+        title: t('combos.deleteConfirm.title'),
+        body: t('combos.deleteConfirm.body'),
+        confirmLabel: t('combos.deleteConfirm.confirm'),
         destructive: true,
       }))
     ) {
@@ -124,7 +144,7 @@ export function CombosManager({ branchId, initialCombos, menuItems }: Props) {
       .from('combo_items')
       .insert({ combo_id: comboId, menu_item_id: menuItemId, quantity: 1, is_swappable: false });
     if (insErr) {
-      setError(insErr.message);
+      setError(dbError('add item', insErr));
       return;
     }
     refetch();
@@ -152,13 +172,11 @@ export function CombosManager({ branchId, initialCombos, menuItems }: Props) {
     <div className="container max-w-5xl py-8">
       <header className="mb-6 flex flex-wrap items-center justify-between gap-3 px-2 pl-16 lg:px-0">
         <div>
-          <h1 className="font-display text-3xl font-bold">Combo meals</h1>
-          <p className="mt-1 text-muted-foreground">
-            Bundle items at a discount. Customers see combos in a featured row above the menu.
-          </p>
+          <h1 className="font-display text-3xl font-bold">{t('combos.title')}</h1>
+          <p className="mt-1 text-muted-foreground">{t('combos.subtitle')}</p>
         </div>
         <Button variant="gradient" onClick={createCombo} leftIcon={<Plus className="h-4 w-4" />}>
-          New combo
+          {t('combos.newCombo')}
         </Button>
       </header>
 
@@ -168,7 +186,7 @@ export function CombosManager({ branchId, initialCombos, menuItems }: Props) {
 
       {combos.length === 0 ? (
         <Card className="p-10 text-center text-muted-foreground">
-          No combos yet. Click <strong>New combo</strong> to create your first bundle deal.
+          {t.rich('combos.empty', { strong: (chunks) => <strong>{chunks}</strong> })}
         </Card>
       ) : (
         <ul className="space-y-3 px-2 lg:px-0">
@@ -194,12 +212,12 @@ export function CombosManager({ branchId, initialCombos, menuItems }: Props) {
                           className="focus-ring rounded-lg border border-border bg-background px-2 py-1 font-display text-lg font-bold"
                         />
                         <Badge variant={combo.is_active ? 'success' : 'muted'}>
-                          {combo.is_active ? 'Active' : 'Hidden'}
+                          {combo.is_active ? t('combos.active') : t('combos.hidden')}
                         </Badge>
                       </div>
                       <div className="mt-2 flex items-center gap-3 text-sm">
                         <label className="flex items-center gap-1">
-                          <span className="text-muted-foreground">Price</span>
+                          <span className="text-muted-foreground">{t('combos.price')}</span>
                           <input
                             type="number"
                             step="0.01"
@@ -210,7 +228,7 @@ export function CombosManager({ branchId, initialCombos, menuItems }: Props) {
                         </label>
                         {savings > 0 && (
                           <span className="text-xs font-semibold text-success">
-                            Saves {formatCurrency(savings)}
+                            {t('combos.saves', { amount: formatCurrency(savings) })}
                           </span>
                         )}
                         <label className="ml-auto flex items-center gap-1 text-xs">
@@ -218,7 +236,7 @@ export function CombosManager({ branchId, initialCombos, menuItems }: Props) {
                             type="checkbox"
                             checked={combo.is_active}
                             onChange={(e) => updateCombo(combo.id, { is_active: e.target.checked })}
-                          /> Active
+                          /> {t('combos.active')}
                         </label>
                       </div>
                     </div>
@@ -228,7 +246,7 @@ export function CombosManager({ branchId, initialCombos, menuItems }: Props) {
                       onClick={() => deleteCombo(combo.id)}
                       leftIcon={<Trash2 className="h-4 w-4" />}
                     >
-                      Delete
+                      {t('combos.delete')}
                     </Button>
                   </div>
 
@@ -237,20 +255,24 @@ export function CombosManager({ branchId, initialCombos, menuItems }: Props) {
                     onClick={() => setExpandedId((c) => (c === combo.id ? null : combo.id))}
                     className="focus-ring mt-3 text-xs font-semibold text-primary underline"
                   >
-                    {expandedId === combo.id ? 'Hide contents' : `${childItems.length} item${childItems.length === 1 ? '' : 's'} in this combo →`}
+                    {expandedId === combo.id
+                      ? t('combos.hideContents')
+                      : t('combos.showContents', { count: childItems.length })}
                   </button>
 
                   {expandedId === combo.id && (
                     <div className="mt-3 space-y-2 border-t border-border/60 pt-3">
                       {childItems.length === 0 ? (
-                        <p className="text-xs text-muted-foreground">No items yet — add some below.</p>
+                        <p className="text-xs text-muted-foreground">{t('combos.noItems')}</p>
                       ) : (
                         <ul className="space-y-1.5">
                           {childItems.map((ci) => (
                             <li key={ci.menu_item_id} className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2 text-sm">
                               <span>{ci.name}</span>
                               <span className="flex items-center gap-3">
-                                <span className="text-xs text-muted-foreground">{formatCurrency(ci.price)} each</span>
+                                <span className="text-xs text-muted-foreground">
+                                  {t('combos.each', { price: formatCurrency(ci.price) })}
+                                </span>
                                 <input
                                   type="number"
                                   min={0}
@@ -287,6 +309,7 @@ function AddItemPicker({
   menuItems: MenuItem[];
   onPick: (id: string) => void;
 }) {
+  const t = useTranslations('menuExtras.combos');
   const [value, setValue] = React.useState('');
 
   return (
@@ -302,7 +325,7 @@ function AddItemPicker({
         }}
         className="focus-ring flex-1 rounded-lg border border-border bg-background px-2 py-1.5 text-sm"
       >
-        <option value="">Add an item…</option>
+        <option value="">{t('addItem')}</option>
         {menuItems.map((m) => (
           <option key={m.id} value={m.id}>
             {m.name} ({formatCurrency(Number(m.price))})

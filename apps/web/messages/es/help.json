@@ -1,0 +1,160 @@
+{
+  "meta": {
+    "title": "Centro de ayuda",
+    "description": "Preguntas frecuentes sobre pedidos, reembolsos, pagos, tu cuenta y privacidad.",
+    "topicTitle": "{topic} · Ayuda",
+    "fallbackTitle": "Ayuda"
+  },
+  "index": {
+    "title": "Centro de ayuda",
+    "subtitle": "Respuestas rápidas a las preguntas más comunes. ¿No encuentras lo que buscas? Escríbenos.",
+    "stillNeedHelp": "¿Aún necesitas ayuda?",
+    "emailUs": "Escribe a <link>{email}</link>. Solemos responder en pocas horas."
+  },
+  "topic": {
+    "allTopics": "Todos los temas",
+    "stillNeedHelp": "¿No encontraste lo que buscabas? Escribe a <link>{email}</link>."
+  },
+  "topics": {
+    "placingAnOrder": {
+      "title": "Hacer un pedido",
+      "intro": "Cómo funcionan los pedidos, la programación y los cambios.",
+      "faqs": {
+        "howToOrder": {
+          "q": "¿Cómo hago un pedido?",
+          "a": "Explora el menú, toca los platos para agregarlos al carrito y luego toca el botón para ir a pagar. Puedes pedir como invitado o iniciar sesión para volver a pedir más rápido y acumular puntos."
+        },
+        "scheduleLater": {
+          "q": "¿Puedo programar un pedido para más tarde?",
+          "a": "La entrega a domicilio siempre se reserva con anticipación: elige “Programar entrega” y selecciona el día y la hora. El restaurante prepara tu pedido para que esté listo a esa hora y lo envía enseguida. Los pedidos para recoger en tienda se preparan en cuanto los haces."
+        },
+        "customizeItem": {
+          "q": "¿Puedo personalizar un plato (agregar ingredientes, sin cebolla, etc.)?",
+          "a": "Si el plato tiene opciones, las verás al tocarlo. Elige tus opciones, agrega notas si hace falta y luego agrégalo al carrito."
+        },
+        "kitchenInstructions": {
+          "q": "¿Puedo dejar instrucciones especiales para la cocina?",
+          "a": "Sí. Cada plato tiene un campo de notas y el carrito tiene uno para notas generales. La cocina las ve en la comanda."
+        }
+      }
+    },
+    "cancelOrRefund": {
+      "title": "Cancelaciones y reembolsos",
+      "intro": "Cancelar un pedido pendiente y solicitar reembolsos.",
+      "faqs": {
+        "howToCancel": {
+          "q": "¿Cómo cancelo un pedido?",
+          "a": "Comunícate directamente con el restaurante y pídele que lo cancele. Es el restaurante, y no la app, quien cancela los pedidos, así puede detener la cocina al mismo tiempo. Cuanto antes llames, más probable es que todavía se pueda detener."
+        },
+        "refundTime": {
+          "q": "¿Cuánto tarda un reembolso?",
+          "a": "Los reembolsos a tarjeta suelen reflejarse en un plazo de 5 a 10 días hábiles. Los pagos en efectivo se resuelven directamente con el restaurante."
+        },
+        "partialRefund": {
+          "q": "¿Puedo obtener un reembolso parcial si falta un plato?",
+          "a": "Sí. Comunícate con el restaurante o escribe a support@favornoms.com con tu número de pedido y lo que salió mal. Coordinaremos con el restaurante el reembolso de los platos afectados."
+        }
+      }
+    },
+    "deliveryIssues": {
+      "title": "Problemas con la entrega",
+      "intro": "Entregas tardías, dirección incorrecta, contactar al repartidor.",
+      "faqs": {
+        "orderLate": {
+          "q": "Mi pedido está retrasado, ¿qué hago?",
+          "a": "Consulta la página de seguimiento para ver en tiempo real la hora estimada de llegada del repartidor. Si ya llegó pero no lo encuentras, toca el botón para llamarlo."
+        },
+        "wrongAddress": {
+          "q": "Ingresé una dirección incorrecta",
+          "a": "Si el repartidor todavía no recogió el pedido, aún puedes editarlo desde la página de seguimiento. Después de que lo recoja, llama directamente al repartidor."
+        },
+        "coldOrDamaged": {
+          "q": "Mi comida llegó fría o dañada",
+          "a": "Escribe a support@favornoms.com con tu número de pedido y una foto. Tramitaremos un reembolso."
+        }
+      }
+    },
+    "promosAndLoyalty": {
+      "title": "Promociones y puntos",
+      "intro": "Códigos promocionales, puntos y referidos.",
+      "faqs": {
+        "loyaltyPoints": {
+          "q": "¿Cómo funcionan los puntos?",
+          "a": "Ganas puntos con cada pedido completado. Cada restaurante define cuántos puntos se ganan, sus niveles y sus recompensas; los tuyos aparecen en Cuenta → Puntos y recompensas, donde también eliges la recompensa que usarás al pagar. Una recompensa por pedido."
+        },
+        "usePromoCode": {
+          "q": "¿Cómo uso un código promocional?",
+          "a": "En la página de pago, escribe el código en el campo “Código promocional” y toca Aplicar. Los códigos promocionales no se pueden combinar, salvo que el restaurante indique lo contrario."
+        },
+        "promoExpired": {
+          "q": "Mi promoción aparece como vencida",
+          "a": "Cada promoción tiene una fecha de vencimiento y un número máximo de usos. Si crees que es un error, escribe a support@favornoms.com."
+        }
+      }
+    },
+    "accountAndPrivacy": {
+      "title": "Cuenta y privacidad",
+      "intro": "Inicio de sesión, datos y eliminación.",
+      "faqs": {
+        "signIn": {
+          "q": "¿Cómo inicio sesión?",
+          "a": "En la página de inicio de sesión, continúa con Google o escribe tu número de teléfono y entras al instante, sin esperar ningún código. También puedes usar un enlace de acceso por correo electrónico. No usamos contraseñas."
+        },
+        "downloadData": {
+          "q": "¿Cómo descargo mis datos?",
+          "a": "Ve a /account y toca “Descargar mis datos”. Recibirás un archivo JSON con tus pedidos, direcciones e información de la cuenta."
+        },
+        "deleteAccount": {
+          "q": "¿Cómo elimino mi cuenta?",
+          "a": "Ve a /account y toca “Eliminar cuenta”. Anonimizaremos tu información personal, pero conservaremos el registro de tus pedidos por obligaciones fiscales."
+        },
+        "paymentSafety": {
+          "q": "¿Mi información de pago está segura?",
+          "a": "Nunca guardamos los datos de tu tarjeta: los pagos los procesa Stripe, que cuenta con la certificación PCI-DSS de nivel 1."
+        }
+      }
+    },
+    "contactUs": {
+      "title": "Contáctanos",
+      "intro": "Correo electrónico, horario de atención y casos urgentes.",
+      "faqs": {
+        "bestWay": {
+          "q": "¿Cuál es la mejor forma de contactarlos?",
+          "a": "Escribe a support@favornoms.com por problemas con pedidos, dudas de facturación o cualquier otra cosa. Respondemos en pocas horas (lunes a viernes, de 9 a. m. a 9 p. m., hora del Este de EE. UU.)."
+        },
+        "pressPartnership": {
+          "q": "Tengo una consulta de prensa o de alianzas",
+          "a": "Escribe a hello@favornoms.com para temas de prensa, alianzas comerciales o para sumar tu restaurante."
+        },
+        "privacyConcern": {
+          "q": "Quiero reportar un problema de privacidad",
+          "a": "Escribe a privacy@favornoms.com. Consulta tus derechos en nuestras páginas /privacy y /ccpa (disponibles en inglés)."
+        }
+      }
+    }
+  },
+  "account": {
+    "metaTitle": "Tu cuenta",
+    "title": "Tu cuenta",
+    "subtitle": "Administra tus datos y tu configuración de privacidad.",
+    "export": {
+      "title": "Descarga tus datos",
+      "body": "Exporta una copia de todo lo que tenemos sobre ti (pedidos, direcciones e información de la cuenta) en un archivo JSON.",
+      "button": "Descargar mis datos (JSON)",
+      "failed": "No se pudieron descargar tus datos. Verifica que hayas iniciado sesión e inténtalo de nuevo."
+    },
+    "delete": {
+      "title": "Eliminar mi cuenta",
+      "body": "Anonimiza tu cuenta de forma permanente. Tu historial de pedidos se conserva para los registros fiscales, pero toda tu información personal (nombre, teléfono, direcciones y saldo de puntos) se elimina y no se puede recuperar.",
+      "button": "Eliminar cuenta",
+      "prompt": "Escribe {word} para anonimizar tu cuenta de forma permanente. No se puede deshacer.",
+      "done": "Tu cuenta se anonimizó. Ahora se cerrará tu sesión.",
+      "failed": "No se pudo eliminar tu cuenta. Verifica que hayas iniciado sesión e inténtalo de nuevo."
+    },
+    "links": {
+      "privacy": "Política de privacidad",
+      "terms": "Términos del servicio",
+      "ccpa": "Derechos en California"
+    }
+  }
+}

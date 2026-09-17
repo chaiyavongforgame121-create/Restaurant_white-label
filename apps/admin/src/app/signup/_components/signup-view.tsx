@@ -23,15 +23,15 @@ import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import { Check, KeyRound, Mail, RefreshCw, ShieldCheck, Sparkles } from 'lucide-react';
 import { Button, Card } from '@favornoms/ui';
 import { getBrowserClient } from '@favornoms/database/client';
+import { LocaleSwitcher } from '@/components/locale-switcher';
+import { authErrorKey } from '../../auth/_lib/auth-error';
 
-const TRIAL_BULLETS = [
-  'Every feature unlocked — delivery, AI Suite, the lot',
-  'One branch, no menu-item or order limits',
-  'No credit card, no charge if you walk away',
-];
+/** `auth.signup.trial.*` keys. */
+const TRIAL_BULLETS = ['everyFeature', 'oneBranch', 'noCard'] as const;
 
 /** Matches /auth/update-password. Kept in step by hand rather than shared: this is a UX
  *  hint, and the real floor is the project's own password policy. */
@@ -42,6 +42,7 @@ const RESEND_COOLDOWN_SECONDS = 60;
 
 export function SignupView() {
   const router = useRouter();
+  const t = useTranslations('auth');
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [sent, setSent] = React.useState(false);
@@ -61,7 +62,7 @@ export function SignupView() {
     e.preventDefault();
     setError(null);
     if (password.length < MIN_LENGTH) {
-      setError(`Use at least ${MIN_LENGTH} characters for your password.`);
+      setError(t('signup.errors.passwordTooShort', { min: MIN_LENGTH }));
       return;
     }
     setSubmitting(true);
@@ -77,7 +78,8 @@ export function SignupView() {
     });
     setSubmitting(false);
     if (signUpError) {
-      setError(signUpError.message);
+      console.error('[signup] signUp failed:', signUpError.message);
+      setError(t(authErrorKey(signUpError)));
       return;
     }
     if (data.session) {
@@ -91,7 +93,7 @@ export function SignupView() {
     // up before sat waiting for a confirmation mail that is never sent to a confirmed
     // address. Sending them to sign in is the only move that actually gets them in.
     if (data.user && (data.user.identities?.length ?? 0) === 0) {
-      setError('That email already has an account. Sign in instead, or reset the password.');
+      setError(t('errors.accountExists'));
       return;
     }
     setResendNotice(null);
@@ -112,7 +114,7 @@ export function SignupView() {
     });
     setResending(false);
     if (!resendErr) {
-      setResendNotice(`Sent again to ${email.trim()}.`);
+      setResendNotice(t('signup.sentAgain', { email: email.trim() }));
       setCooldown(RESEND_COOLDOWN_SECONDS);
       return;
     }
@@ -127,13 +129,11 @@ export function SignupView() {
     if (tooSoon) {
       const wait = Number(/(\d+)\s*second/i.exec(resendErr.message)?.[1] ?? RESEND_COOLDOWN_SECONDS);
       setCooldown(Number.isFinite(wait) && wait > 0 ? wait : RESEND_COOLDOWN_SECONDS);
-      setResendError(
-        'Our mail server is over its sending limit right now. The first link may still ' +
-          'arrive — otherwise try again in a moment.',
-      );
+      setResendError(t('signup.errors.mailLimit'));
       return;
     }
-    setResendError(resendErr.message);
+    console.error('[signup] resend failed:', resendErr.message);
+    setResendError(t(authErrorKey(resendErr)));
   };
 
   React.useEffect(() => {
@@ -153,8 +153,17 @@ export function SignupView() {
     return () => sub.subscription.unsubscribe();
   }, [router]);
 
+  const signInLink = (c: React.ReactNode) => (
+    <Link href="/login" className="font-semibold text-primary hover:underline">
+      {c}
+    </Link>
+  );
+
   return (
-    <div className="grid min-h-dynamic-screen place-items-center bg-background px-4 py-10">
+    <div className="relative grid min-h-dynamic-screen place-items-center bg-background px-4 pb-10 pt-16">
+      <div className="absolute right-4 top-4">
+        <LocaleSwitcher />
+      </div>
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
@@ -163,19 +172,16 @@ export function SignupView() {
         <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-gradient-warm text-white shadow-warm">
           <Sparkles className="h-8 w-8" />
         </div>
-        <h1 className="mt-5 text-center font-display text-3xl font-bold">Start your 14-day trial</h1>
-        <p className="mt-1 text-center text-sm text-muted-foreground">
-          Full access to everything. No card required.
-        </p>
+        <h1 className="mt-5 text-center font-display text-3xl font-bold">{t('signup.title')}</h1>
+        <p className="mt-1 text-center text-sm text-muted-foreground">{t('signup.subtitle')}</p>
 
         <Card className="mt-6 p-5">
           {sent ? (
             <div className="text-center">
               <ShieldCheck className="mx-auto h-10 w-10 text-success" />
-              <p className="mt-3 font-display text-lg font-semibold">Confirm your email</p>
+              <p className="mt-3 font-display text-lg font-semibold">{t('signup.confirmTitle')}</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                We sent a link to <strong>{email}</strong>. Open it to finish setting up your
-                restaurant — then sign in with the password you just chose.
+                {t.rich('signup.confirmBody', { email, strong: (c) => <strong>{c}</strong> })}
               </p>
 
               {resendNotice && (
@@ -202,14 +208,11 @@ export function SignupView() {
                 disabled={cooldown > 0}
                 leftIcon={<RefreshCw className="h-4 w-4" />}
               >
-                {cooldown > 0 ? `Send it again in ${cooldown}s` : 'Send it again'}
+                {cooldown > 0 ? t('signup.resendIn', { seconds: cooldown }) : t('signup.resend')}
               </Button>
 
               <p className="mt-4 text-sm text-muted-foreground">
-                Already opened it?{' '}
-                <Link href="/login" className="font-semibold text-primary hover:underline">
-                  Sign in
-                </Link>
+                {t.rich('signup.alreadyOpened', { link: signInLink })}
               </p>
               <button
                 type="button"
@@ -220,7 +223,7 @@ export function SignupView() {
                 }}
                 className="mt-1 text-sm text-muted-foreground underline hover:text-foreground"
               >
-                Use a different email
+                {t('signup.differentEmail')}
               </button>
             </div>
           ) : (
@@ -229,13 +232,13 @@ export function SignupView() {
                 {TRIAL_BULLETS.map((b) => (
                   <li key={b} className="flex items-start gap-2 text-sm text-muted-foreground">
                     <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
-                    {b}
+                    {t(`signup.trial.${b}`)}
                   </li>
                 ))}
               </ul>
               <form className="space-y-4" onSubmit={submit}>
                 <label className="block">
-                  <span className="mb-2 block text-sm font-medium">Work email</span>
+                  <span className="mb-2 block text-sm font-medium">{t('fields.workEmail')}</span>
                   <div className="relative">
                     <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
                     <input
@@ -250,7 +253,7 @@ export function SignupView() {
                   </div>
                 </label>
                 <label className="block">
-                  <span className="mb-2 block text-sm font-medium">Password</span>
+                  <span className="mb-2 block text-sm font-medium">{t('fields.password')}</span>
                   <div className="relative">
                     <KeyRound className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
                     <input
@@ -264,7 +267,7 @@ export function SignupView() {
                     />
                   </div>
                   <span className="mt-1 block text-xs text-muted-foreground">
-                    At least {MIN_LENGTH} characters.
+                    {t('fields.minLength', { min: MIN_LENGTH })}
                   </span>
                 </label>
                 {error && (
@@ -273,7 +276,7 @@ export function SignupView() {
                   </p>
                 )}
                 <Button type="submit" variant="gradient" size="xl" fullWidth loading={submitting}>
-                  Create my account
+                  {t('signup.submit')}
                 </Button>
               </form>
             </>
@@ -281,10 +284,7 @@ export function SignupView() {
         </Card>
 
         <p className="mt-4 text-center text-sm text-muted-foreground">
-          Already have an account?{' '}
-          <Link href="/login" className="font-semibold text-primary hover:underline">
-            Sign in
-          </Link>
+          {t.rich('signup.haveAccount', { link: signInLink })}
         </p>
       </motion.div>
     </div>

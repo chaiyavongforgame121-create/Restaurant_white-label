@@ -1,16 +1,18 @@
 'use client';
 
 import * as React from 'react';
+import { useTranslations } from 'next-intl';
 import { AlertTriangle, Armchair, ChevronDown, MapPin, MessageSquareText } from 'lucide-react';
 import { formatPhone, formatCurrency } from '@favornoms/shared';
 import { Badge, Card, cn } from '@favornoms/ui';
 import { OrderReceiptButton } from './order-receipt-sheet';
 import { OrderRowActions } from './order-row-actions';
+import { useIntlLocale, useOrderLabels } from './order-labels';
 import {
   ALLERGY_RE,
+  countItems,
   hasSpecialRequests,
   isRemovedOption,
-  itemsLabel,
   modifierLabel,
   parseLineModifiers,
   summarizeLines,
@@ -53,19 +55,20 @@ export interface OrderRowContext {
   canPrintReceipt: boolean;
 }
 
-const fmtWhen = (iso: string) =>
-  new Date(iso).toLocaleString('en-US', {
+/** `intlLocale` is the reader's language as an Intl tag (see useIntlLocale). */
+const fmtWhen = (iso: string, intlLocale: string) =>
+  new Date(iso).toLocaleString(intlLocale, {
     hour: 'numeric',
     minute: '2-digit',
     month: 'short',
     day: 'numeric',
   });
 
-const fmtDay = (iso: string) =>
-  new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric' });
+const fmtDay = (iso: string, intlLocale: string) =>
+  new Date(iso).toLocaleString(intlLocale, { month: 'short', day: 'numeric' });
 
-const fmtTime = (iso: string) =>
-  new Date(iso).toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' });
+const fmtTime = (iso: string, intlLocale: string) =>
+  new Date(iso).toLocaleString(intlLocale, { hour: 'numeric', minute: '2-digit' });
 
 const statusVariant = (status: string): React.ComponentProps<typeof Badge>['variant'] => {
   if (status === 'pending') return 'muted';
@@ -78,15 +81,16 @@ const statusVariant = (status: string): React.ComponentProps<typeof Badge>['vari
 // A QR order is invisible to the kitchen until the money is confirmed, so say so here
 // rather than leaving it looking like an untouched ticket.
 function AwaitingPill() {
+  const t = useTranslations('orders');
   // One word, one line. The sentence this used to spell out broke into four stacked
   // fragments in a column narrow enough to fit the rest of the table, and the full
   // meaning is a hover away.
   return (
     <span
-      title="Waiting for the customer to confirm payment"
+      title={t('row.unpaidHint')}
       className="bg-warning/15 text-warning mt-1 inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold"
     >
-      Unpaid
+      {t('row.unpaid')}
     </span>
   );
 }
@@ -102,7 +106,9 @@ function ItemsToggle({
   onToggle: () => void;
   panelId: string;
 }) {
-  const summary = summarizeLines(o.lines);
+  const t = useTranslations('orders');
+  const { shown, more } = summarizeLines(o.lines);
+  const summary = more > 0 ? t('row.summaryMore', { items: shown, count: more }) : shown;
   const flagged = hasSpecialRequests(o.lines, [
     o.customer_notes,
     o.kitchen_notes,
@@ -125,17 +131,17 @@ function ItemsToggle({
       />
       <span className="min-w-0">
         <span className="flex items-center gap-1.5 font-medium">
-          {itemsLabel(o.lines)}
+          {t('row.items', { count: countItems(o.lines) })}
           {flagged && (
             <MessageSquareText
               role="img"
-              aria-label="Has options or notes"
+              aria-label={t('row.hasRequests')}
               className="text-warning h-3.5 w-3.5"
             />
           )}
         </span>
         <span className="text-muted-foreground block truncate text-xs" title={summary}>
-          {summary || 'No line items'}
+          {summary || t('row.noLineItems')}
         </span>
       </span>
     </button>
@@ -144,25 +150,41 @@ function ItemsToggle({
 
 /** The full breakdown: every line with its options and note, then the order-level notes. */
 export function OrderLinesPanel({ order: o, currency }: { order: OrderRowData; currency: string }) {
-  const notes: Array<{ label: string; text: string; Icon: typeof MessageSquareText }> = [];
-  if (o.table_label) notes.push({ label: 'Table', text: o.table_label, Icon: Armchair });
+  const t = useTranslations('orders');
+  const notes: Array<{ id: string; label: string; text: string; Icon: typeof MessageSquareText }> = [];
+  if (o.table_label) {
+    notes.push({ id: 'table', label: t('row.notes.table'), text: o.table_label, Icon: Armchair });
+  }
   if (o.customer_notes?.trim()) {
-    notes.push({ label: 'Customer note', text: o.customer_notes.trim(), Icon: MessageSquareText });
+    notes.push({
+      id: 'customer',
+      label: t('row.notes.customer'),
+      text: o.customer_notes.trim(),
+      Icon: MessageSquareText,
+    });
   }
   if (o.kitchen_notes?.trim()) {
-    notes.push({ label: 'Kitchen note', text: o.kitchen_notes.trim(), Icon: MessageSquareText });
+    notes.push({
+      id: 'kitchen',
+      label: t('row.notes.kitchen'),
+      text: o.kitchen_notes.trim(),
+      Icon: MessageSquareText,
+    });
   }
   if (o.delivery_notes?.trim()) {
-    notes.push({ label: 'Delivery instructions', text: o.delivery_notes.trim(), Icon: MapPin });
+    notes.push({
+      id: 'delivery',
+      label: t('row.notes.delivery'),
+      text: o.delivery_notes.trim(),
+      Icon: MapPin,
+    });
   }
 
   return (
     <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_18rem]">
       <ul className="divide-border/50 border-border/60 bg-card divide-y rounded-xl border">
         {o.lines.length === 0 && (
-          <li className="text-muted-foreground px-3 py-3 text-sm">
-            No line items were recorded for this order.
-          </li>
+          <li className="text-muted-foreground px-3 py-3 text-sm">{t('row.noLinesRecorded')}</li>
         )}
         {o.lines.map((l) => {
           const mods = parseLineModifiers(l.modifiers);
@@ -177,7 +199,7 @@ export function OrderLinesPanel({ order: o, currency }: { order: OrderRowData; c
                   {l.item_name}
                   {l.combo_id && (
                     <Badge variant="outline" className="ml-2">
-                      Combo
+                      {t('row.combo')}
                     </Badge>
                   )}
                 </p>
@@ -224,7 +246,7 @@ export function OrderLinesPanel({ order: o, currency }: { order: OrderRowData; c
             const Icon = allergy ? AlertTriangle : n.Icon;
             return (
               <div
-                key={n.label}
+                key={n.id}
                 className={cn(
                   'rounded-xl px-3 py-2',
                   allergy ? 'bg-danger/10 text-danger' : 'bg-warning/10 text-foreground',
@@ -244,13 +266,16 @@ export function OrderLinesPanel({ order: o, currency }: { order: OrderRowData; c
 }
 
 export function OrderTableRow({ order: o, ctx }: { order: OrderRowData; ctx: OrderRowContext }) {
+  const t = useTranslations('orders');
+  const labels = useOrderLabels();
+  const intlLocale = useIntlLocale();
   const [open, setOpen] = React.useState(false);
   const panelId = `order-lines-${o.id}`;
   return (
     <>
       <tr className="border-border/40 hover:bg-muted/30 border-t">
         <td className="px-3 py-3 font-mono text-xs">{o.order_number}</td>
-        <td className="px-3 py-3 capitalize">{o.channel.replace('_', ' ')}</td>
+        <td className="px-3 py-3">{labels.channel(o.channel)}</td>
         <td className="px-3 py-3">
           <p className="font-medium">{o.customer_name ?? '—'}</p>
           <p className="text-muted-foreground text-xs">{o.customer_phone ? formatPhone(o.customer_phone) : ''}</p>
@@ -268,17 +293,19 @@ export function OrderTableRow({ order: o, ctx }: { order: OrderRowData; ctx: Ord
               the third-widest column in a table with no room left for its own buttons,
               and letting it wrap broke the date after the comma, which reads as two
               separate facts. */}
-          <span className="block whitespace-nowrap">{fmtDay(o.created_at)}</span>
-          <span className="block whitespace-nowrap">{fmtTime(o.created_at)}</span>
+          <span className="block whitespace-nowrap">{fmtDay(o.created_at, intlLocale)}</span>
+          <span className="block whitespace-nowrap">{fmtTime(o.created_at, intlLocale)}</span>
           {o.awaiting_payment && <AwaitingPill />}
           {/* Without this a pre-order looks like it needs cooking now:
               it sits at pending/confirmed and only its created_at showed. */}
           {o.scheduled_for && (
             <span className="text-foreground mt-0.5 block text-xs font-medium">
               <span className="block whitespace-nowrap">
-                {o.held ? 'Scheduled' : 'Due'} {fmtDay(o.scheduled_for)}
+                {t(o.held ? 'row.scheduledOn' : 'row.dueOn', {
+                  date: fmtDay(o.scheduled_for, intlLocale),
+                })}
               </span>
-              <span className="block whitespace-nowrap">{fmtTime(o.scheduled_for)}</span>
+              <span className="block whitespace-nowrap">{fmtTime(o.scheduled_for, intlLocale)}</span>
             </span>
           )}
         </td>
@@ -286,7 +313,7 @@ export function OrderTableRow({ order: o, ctx }: { order: OrderRowData; ctx: Ord
           {formatCurrency(o.total, ctx.currency)}
         </td>
         <td className="px-3 py-3 text-center">
-          <Badge variant={statusVariant(o.status)}>{o.status.replace('_', ' ')}</Badge>
+          <Badge variant={statusVariant(o.status)}>{labels.status(o.status)}</Badge>
         </td>
         <td className="bg-card border-border/40 sticky right-0 z-10 w-px whitespace-nowrap border-l px-3 py-3">
           <div className="flex items-center justify-end gap-1">
@@ -321,6 +348,9 @@ export function OrderTableRow({ order: o, ctx }: { order: OrderRowData; ctx: Ord
 }
 
 export function OrderMobileCard({ order: o, ctx }: { order: OrderRowData; ctx: OrderRowContext }) {
+  const t = useTranslations('orders');
+  const labels = useOrderLabels();
+  const intlLocale = useIntlLocale();
   const [open, setOpen] = React.useState(false);
   const panelId = `order-lines-m-${o.id}`;
   return (
@@ -328,12 +358,14 @@ export function OrderMobileCard({ order: o, ctx }: { order: OrderRowData; ctx: O
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-muted-foreground font-mono text-xs">{o.order_number}</p>
-          <p className="mt-1 font-semibold">{o.customer_name ?? 'Walk-in'}</p>
-          <p className="text-muted-foreground text-xs capitalize">{o.channel.replace('_', ' ')}</p>
+          <p className="mt-1 font-semibold">{o.customer_name ?? t('row.walkIn')}</p>
+          <p className="text-muted-foreground text-xs">{labels.channel(o.channel)}</p>
           {o.awaiting_payment && <AwaitingPill />}
           {o.scheduled_for && (
             <p className="mt-1 text-xs font-medium">
-              {o.held ? 'Scheduled' : 'Due'} {fmtWhen(o.scheduled_for)}
+              {t(o.held ? 'row.scheduledOn' : 'row.dueOn', {
+                date: fmtWhen(o.scheduled_for, intlLocale),
+              })}
             </p>
           )}
         </div>
@@ -342,7 +374,7 @@ export function OrderMobileCard({ order: o, ctx }: { order: OrderRowData; ctx: O
             {formatCurrency(o.total, ctx.currency)}
           </p>
           <Badge variant={statusVariant(o.status)} className="mt-1">
-            {o.status.replace('_', ' ')}
+            {labels.status(o.status)}
           </Badge>
         </div>
       </div>

@@ -1,0 +1,6 @@
+{
+  "delivery": "Programar entrega",
+  "pickup": "Recoger en tienda",
+  "dineIn": "Comer en el local",
+  "dineInAt": "Comer en el local · {table}"
+}

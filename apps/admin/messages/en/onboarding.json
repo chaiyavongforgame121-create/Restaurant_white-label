@@ -1,0 +1,58 @@
+{
+  "notice": {
+    "ownerTitle": "You already have a restaurant",
+    "teamTitle": "You are already on a team",
+    "ownerBody": "{name} is already set up on this account. To open another location, add it as a branch in <link>Brand & branches > Add branch</link>.",
+    "ownerBodyUnnamed": "Your restaurant is already set up on this account. To open another location, add it as a branch in <link>Brand & branches > Add branch</link>.",
+    "teamBody": "You are on the team at {name}. New locations for it are added by its owner or an admin.",
+    "teamBodyUnnamed": "You are on the team at another restaurant. New locations for it are added by its owner or an admin.",
+    "ownsRestaurant": "Continuing creates a separate restaurant with its own menu and billing, and no free trial. It stays closed to customers until a package is approved for it.",
+    "separateRestaurant": "Continuing creates a separate restaurant of your own, with its own menu and billing.",
+    "continueAnyway": "Continue anyway",
+    "goToDashboard": "Go to my dashboard"
+  },
+  "wizard": {
+    "step": "Step {current} / {total}",
+    "restaurantTitle": "Tell us about your restaurant",
+    "branchTitle": "Set up your first branch",
+    "colorsTitle": "Pick your brand colors",
+    "back": "Back",
+    "continue": "Continue",
+    "launch": "Launch my restaurant"
+  },
+  "fields": {
+    "restaurantName": "Restaurant name",
+    "restaurantNamePlaceholder": "Coastal Grill",
+    "restaurantSlug": "URL slug (becomes /r/your-slug/…)",
+    "slugHint": "Letters and numbers only — this becomes part of your web address.",
+    "branchName": "Branch name",
+    "branchNamePlaceholder": "Sukhumvit branch",
+    "branchSlug": "Branch URL slug",
+    "address": "Address (optional)",
+    "timezone": "Time zone",
+    "timezoneHint": "Opening hours, reports and scheduled orders run on this time zone.",
+    "primaryColor": "Primary color",
+    "accentColor": "Accent color",
+    "preview": "Preview",
+    "previewFallbackName": "Your restaurant"
+  },
+  "timezones": {
+    "eastern": "Eastern — New York, Miami, Atlanta",
+    "central": "Central — Chicago, Houston, Dallas",
+    "mountain": "Mountain — Denver, Salt Lake City",
+    "arizona": "Arizona — Phoenix (no daylight saving)",
+    "pacific": "Pacific — Los Angeles, Seattle",
+    "alaska": "Alaska — Anchorage",
+    "hawaii": "Hawaii — Honolulu",
+    "thisDevice": "{zone} (this device)"
+  },
+  "errors": {
+    "slugMissing": "Give your restaurant and branch a web address before launching.",
+    "seatsFull": "{limit, plural, one {You are using your only branch seat.} other {You are using all # of your branch seats.}} Add a seat on the Plan page first.",
+    "subscriptionInactive": "Your subscription is not active. Choose a package before adding another restaurant.",
+    "restaurantSlugTaken": "That restaurant web address is already taken. Go back and pick another one.",
+    "branchSlugTaken": "That branch web address is already taken. Go back and pick another one.",
+    "notOpened": "Your restaurant may have been created, but we could not open it. Sign in again to check before trying a second time.",
+    "generic": "We couldn’t create your restaurant. Please try again."
+  }
+}

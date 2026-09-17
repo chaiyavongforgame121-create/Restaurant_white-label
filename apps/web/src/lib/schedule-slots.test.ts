@@ -357,3 +357,61 @@ describe('buildScheduleDays — delivery hours', () => {
     ]);
   });
 });
+
+// The labels follow the interface language; nothing else may. A diner reading the slots in
+// Thai must be booking exactly the instants an English reader would.
+describe('buildScheduleDays — interface language', () => {
+  const allWeek = {
+    ...base,
+    timezone: 'America/Chicago',
+    openingHours: [] as OpeningWindow[],
+    now: SUNDAY_NOON_UTC,
+    maxDays: 2,
+  };
+
+  it('writes English when no locale is given, as before', () => {
+    const days = buildScheduleDays(allWeek);
+    expect(days.map((d) => d.label)).toEqual(['Today', 'Tomorrow', 'Tue, Sep 1']);
+    expect(days[0]!.slots[0]!.label).toBe('7:00 AM');
+    expect(buildScheduleDays({ ...allWeek, locale: 'en' })).toEqual(days);
+  });
+
+  it('uses the day words the caller passes for today and tomorrow', () => {
+    const days = buildScheduleDays({
+      ...allWeek,
+      locale: 'es',
+      dayLabels: { today: 'Hoy', tomorrow: 'Mañana' },
+    });
+    expect(days[0]!.label).toBe('Hoy');
+    expect(days[1]!.label).toBe('Mañana');
+    // The third day is dated in Spanish, not in English.
+    expect(days[2]!.label).not.toBe('Tue, Sep 1');
+    expect(days[2]!.label).toContain('1');
+  });
+
+  it('reads the 12-hour clock in Spanish and the 24-hour clock in Vietnamese and Thai', () => {
+    const at = (locale: 'es' | 'vi' | 'th') =>
+      buildScheduleDays({ ...allWeek, locale, maxDays: 0 })[0]!.slots.map((s) => s.label);
+    const es = at('es');
+    expect(es[0]).toBe('7:00 a. m.');
+    expect(es.at(-1)).toBe('11:00 p. m.');
+    expect(at('vi')[0]).toBe('07:00');
+    expect(at('vi').at(-1)).toBe('23:00');
+    expect(at('th')[0]).toBe('07:00 น.');
+    expect(at('th').at(-1)).toBe('23:00 น.');
+  });
+
+  it('offers the same instants in every language', () => {
+    const isoList = (locale?: 'en' | 'es' | 'vi' | 'th') =>
+      buildScheduleDays({ ...allWeek, locale }).map((d) => [d.date, d.slots.map((s) => s.iso)]);
+    const english = isoList();
+    expect(isoList('es')).toEqual(english);
+    expect(isoList('vi')).toEqual(english);
+    expect(isoList('th')).toEqual(english);
+  });
+
+  it('falls back to English for a value that is not an interface language', () => {
+    const days = buildScheduleDays({ ...allWeek, locale: 'fr' as never, maxDays: 0 });
+    expect(days[0]!.slots[0]!.label).toBe('7:00 AM');
+  });
+});

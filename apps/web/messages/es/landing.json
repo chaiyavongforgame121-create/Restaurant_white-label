@@ -1,0 +1,96 @@
+{
+  "meta": {
+    "title": "Favornoms — Plataforma de pedidos todo en uno para restaurantes",
+    "description": "Gestiona entregas a domicilio, pedidos para recoger, consumo en el local, pantalla de cocina, POS y despacho de repartidores desde una sola plataforma. $199/mes, prueba gratuita de 14 días. Hecha para restaurantes de EE. UU."
+  },
+  "site": {
+    "description": "Gestiona pedidos en línea, pantalla de cocina, POS, despacho de repartidores y pagos con Stripe desde una sola plataforma. Hecha para restaurantes de EE. UU.",
+    "ogDescription": "Gestiona pedidos en línea, pantalla de cocina, POS, despacho de repartidores y pagos con Stripe desde una sola plataforma.",
+    "twitterDescription": "Plataforma de pedidos todo en uno para restaurantes de EE. UU.: pagos con Stripe, pantalla de cocina y despacho de repartidores."
+  },
+  "legacyInstall": "<strong>¿Instalaste esta app desde el menú de un restaurante?</strong> Se instaló antes de que cada restaurante tuviera su propia app, así que solo puede abrir esta página. Abre el menú de ese restaurante en tu navegador e instálala de nuevo: la nueva lleva su nombre y su logotipo, y se abre directamente en su menú. Después puedes eliminar esta.",
+  "hero": {
+    "badge": "Listo para EE. UU.",
+    "titleLine1": "Tu restaurante.",
+    "titleLine2": "En línea, en un solo lugar.",
+    "body": "Recibe pedidos en línea, gestiona tu cocina, despacha repartidores, cobra con tarjeta y haz crecer tu clientela fiel, sin hacer malabares con cinco herramientas distintas.",
+    "startTrial": "Prueba 14 días gratis",
+    "seeLiveMenu": "Ver un menú real",
+    "noCard": "Sin tarjeta de crédito · todas las funciones desbloqueadas durante la prueba",
+    "mockCheckout": "Pagar · {total}"
+  },
+  "trustedBy": "Restaurantes independientes de Brooklyn a Brentwood confían en nosotros",
+  "features": {
+    "title": "Todo lo que necesitas para atender",
+    "subtitle": "Cinco apps. Una base de datos. Cero traspasos.",
+    "storefront": {
+      "title": "Tienda en línea para clientes",
+      "description": "Menús con tu marca en tu propio dominio. Carrito, pago y canje de puntos."
+    },
+    "kitchen": {
+      "title": "Pantalla de cocina",
+      "description": "Comandas en tiempo real, envío por estación y mantén presionado para marcar un plato como agotado: la cocina nunca se detiene."
+    },
+    "payments": {
+      "title": "Pago con tarjeta",
+      "description": "Cobra con tarjeta en línea y en el mostrador. Reembolsos y recibos que cumplen con el impuesto sobre ventas desde un solo panel."
+    },
+    "dispatch": {
+      "title": "Despacho de repartidores",
+      "description": "Asignación automática al repartidor conectado más cercano. Seguimiento por GPS que tus clientes ven en vivo."
+    },
+    "marketing": {
+      "title": "Herramientas de marketing",
+      "description": "Envíos masivos por push, SMS y correo. Puntos. Códigos promocionales. Haz que tus clientes vuelvan."
+    },
+    "reports": {
+      "title": "Informes y análisis",
+      "description": "Ingresos, horas pico, platos más vendidos, valor de vida del cliente (LTV), sin exportar a Excel."
+    }
+  },
+  "pricing": {
+    "title": "Un plan base. Agrega lo que necesites.",
+    "subtitle": "Sin límite de platos en el menú. Sin tope de pedidos. Cancela cuando quieras.",
+    "baseName": "Base",
+    "perMonth": "{price}<unit>/mes</unit>",
+    "baseSummary": "Todo lo que necesitas para operar un local, incluido el pago con tarjeta.",
+    "includes": {
+      "storefront": "Tienda con tu marca en tu propio dominio",
+      "payments": "Pagos con tarjeta y en efectivo al pagar",
+      "kitchen": "Pantalla de cocina, POS y pedidos en mostrador",
+      "growth": "Puntos, promociones, tarjetas de regalo e informes",
+      "aiImport": "Importación de menú con IA: toma una foto del menú y listo"
+    },
+    "trialNote": "Gratis por 14 días con todos los complementos incluidos. Sin tarjeta hasta que lo decidas.",
+    "addOnsTitle": "Agrega complementos cuando los necesites",
+    "addOns": {
+      "delivery": {
+        "name": "Entrega a domicilio",
+        "description": "Tus propios repartidores, asignación automática y seguimiento en vivo."
+      },
+      "aiSuite": {
+        "name": "AI Suite",
+        "description": "Señalización digital y el asistente de voz con IA."
+      },
+      "extraBranch": {
+        "name": "Sucursal adicional",
+        "description": "Cada local adicional, con todas las funciones de tu sucursal principal."
+      }
+    }
+  },
+  "footer": {
+    "help": "Ayuda",
+    "privacy": "Privacidad",
+    "terms": "Términos",
+    "account": "Cuenta",
+    "contact": "Contacto"
+  },
+  "notFound": {
+    "metaTitle": "Página no encontrada",
+    "title": "No encontramos esa página",
+    "body": "El restaurante o la página que buscas se movió o nunca existió. Vuelve al inicio o prueba la demo.",
+    "backHome": "Volver al inicio",
+    "seeDemo": "Ver la demo"
+  },
+  "loading": "Cargando…"
+}

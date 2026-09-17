@@ -1,0 +1,96 @@
+{
+  "meta": {
+    "title": "Favornoms — All-in-one ordering platform for restaurants",
+    "description": "Run delivery, pickup, dine-in, KDS, POS, and driver dispatch from one platform. $199/mo, 14-day free trial. Built for US restaurants."
+  },
+  "site": {
+    "description": "Run online ordering, kitchen display, POS, driver dispatch, and Stripe payments from one platform. Built for US restaurants.",
+    "ogDescription": "Run online ordering, kitchen display, POS, driver dispatch, and Stripe payments from one platform.",
+    "twitterDescription": "All-in-one ordering platform for US restaurants — Stripe payments, kitchen display, driver dispatch."
+  },
+  "legacyInstall": "<strong>Installed this from a restaurant’s menu?</strong> It was installed before each restaurant had an app of its own, so it can only ever open this page. Open that restaurant’s menu in your browser and install it again — the new one carries their name and logo and starts on their menu. You can remove this one afterwards.",
+  "hero": {
+    "badge": "US-launch ready",
+    "titleLine1": "Your restaurant.",
+    "titleLine2": "Online, in one place.",
+    "body": "Take orders online, run your kitchen, dispatch drivers, take card payments, and grow your loyal customer base — without juggling five different tools.",
+    "startTrial": "Start 14 days free",
+    "seeLiveMenu": "See a live menu",
+    "noCard": "No credit card required · every feature unlocked during the trial",
+    "mockCheckout": "Checkout · {total}"
+  },
+  "trustedBy": "Trusted by independent restaurants from Brooklyn to Brentwood",
+  "features": {
+    "title": "Everything you need to run service",
+    "subtitle": "Five apps. One database. Zero hand-offs.",
+    "storefront": {
+      "title": "Customer storefront",
+      "description": "Branded menus on your custom domain. Cart, checkout, loyalty redemption."
+    },
+    "kitchen": {
+      "title": "Kitchen Display",
+      "description": "Realtime tickets, station routing, long-press to 86 an item — keep the line moving."
+    },
+    "payments": {
+      "title": "Card payment",
+      "description": "Take cards online and at the counter. Refunds and sales-tax compliant receipts from one dashboard."
+    },
+    "dispatch": {
+      "title": "Driver dispatch",
+      "description": "Auto-route to your nearest online driver. GPS tracking customers can watch live."
+    },
+    "marketing": {
+      "title": "Marketing tools",
+      "description": "Push, SMS, email blasts. Loyalty points. Promo codes. Bring guests back."
+    },
+    "reports": {
+      "title": "Reports & insights",
+      "description": "Revenue, peak hours, top items, customer LTV — without exporting to Excel."
+    }
+  },
+  "pricing": {
+    "title": "One base plan. Add what you need.",
+    "subtitle": "No menu-item limits. No cap on orders. Cancel any time.",
+    "baseName": "Base",
+    "perMonth": "{price}<unit>/mo</unit>",
+    "baseSummary": "Everything you need to run one location, including card payment.",
+    "includes": {
+      "storefront": "Branded storefront on your own domain",
+      "payments": "Card and cash payments at checkout",
+      "kitchen": "Kitchen Display, POS and counter ordering",
+      "growth": "Loyalty, promos, gift cards and reports",
+      "aiImport": "AI menu import — photograph a menu, get a menu"
+    },
+    "trialNote": "Free for 14 days with every add-on included. No card until you decide.",
+    "addOnsTitle": "Add on when you need it",
+    "addOns": {
+      "delivery": {
+        "name": "Delivery",
+        "description": "Your own riders, automatic dispatch and live tracking."
+      },
+      "aiSuite": {
+        "name": "AI Suite",
+        "description": "Digital Signage and the AI Voice Assistant."
+      },
+      "extraBranch": {
+        "name": "Extra branch",
+        "description": "Each additional location, with the full feature set of your main branch."
+      }
+    }
+  },
+  "footer": {
+    "help": "Help",
+    "privacy": "Privacy",
+    "terms": "Terms",
+    "account": "Account",
+    "contact": "Contact"
+  },
+  "notFound": {
+    "metaTitle": "Not found",
+    "title": "We couldn’t find that page",
+    "body": "The restaurant or page you’re looking for moved or never existed. Head home or try the demo.",
+    "backHome": "Back home",
+    "seeDemo": "See the demo"
+  },
+  "loading": "Loading…"
+}

@@ -1,0 +1,22 @@
+{
+  "title": "Giỏ hàng của bạn",
+  "empty": "Giỏ hàng trống",
+  "emptyDescription": "Thêm vài món ngon để bắt đầu",
+  "browseMenu": "Xem thực đơn",
+  "subtotal": "Tạm tính",
+  "deliveryFee": "Phí giao hàng",
+  "serviceFee": "Phí dịch vụ",
+  "total": "Tổng cộng",
+  "feesAtCheckout": "Phí giao hàng và thuế được tính khi thanh toán",
+  "checkout": "Thanh toán",
+  "itemCount": "{count, plural, other {# món}}",
+  "notes": "Ghi chú (không bắt buộc)",
+  "notesPlaceholder": "Dị ứng, độ cay, thêm nước sốt…",
+  "remove": "Xóa",
+  "lineNoteLabel": "Ghi chú cho {name}",
+  "priceNotice": {
+    "removed": "{count, plural, other {# món không còn bán nên đã được xóa khỏi giỏ hàng của bạn.}}",
+    "removedAndChanged": "{count, plural, other {# món không còn bán nên đã được xóa khỏi giỏ hàng của bạn. Một số giá cũng đã thay đổi.}}",
+    "changed": "Nhà hàng đã thay đổi giá — giỏ hàng của bạn đã cập nhật theo giá hiện tại."
+  }
+}

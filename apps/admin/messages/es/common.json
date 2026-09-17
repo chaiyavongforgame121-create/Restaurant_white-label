@@ -1,0 +1,16 @@
+{
+  "loading": "Cargando…",
+  "cancel": "Cancelar",
+  "save": "Guardar",
+  "back": "Atrás",
+  "saveChanges": "Guardar cambios",
+  "close": "Cerrar",
+  "continue": "Continuar",
+  "edit": "Editar",
+  "delete": "Eliminar",
+  "add": "Agregar",
+  "search": "Buscar",
+  "retry": "Reintentar",
+  "saved": "Guardado",
+  "signOut": "Cerrar sesión"
+}

@@ -1,0 +1,105 @@
+{
+  "title": "รายได้",
+  "separatePay": "แต่ละร้านจ่ายเงินให้คุณแยกกัน ตัวเลขด้านล่างทุกตัวระบุว่าเป็นของร้านไหน",
+  "loadError": "ตอนนี้โหลดรายได้ไม่สำเร็จ โปรดตรวจสอบสัญญาณแล้วเปิดหน้านี้ใหม่",
+  "lifetime": {
+    "allLabel": "ทุกร้าน · ทั้งหมด",
+    "label": "รายได้ทั้งหมด",
+    "noDeliveries": "ยังไม่มีงานส่ง",
+    "many": "{restaurants, plural, other {# ร้าน}} · {deliveries, plural, other {ส่ง # ครั้ง}}",
+    "one": "{restaurant} · {deliveries, plural, other {ส่ง # ครั้ง}}"
+  },
+  "unpaid": {
+    "label": "ยังไม่ได้รับ",
+    "many": "ทุกร้าน ถอนได้ทีละร้าน",
+    "one": "รอรับเงิน"
+  },
+  "paid": {
+    "label": "ได้รับแล้ว",
+    "many": "ทุกร้าน ชำระแล้ว",
+    "one": "ร้านชำระแล้ว"
+  },
+  "breakdown": {
+    "allRestaurants": "ทุกร้าน",
+    "base": "ค่าพื้นฐาน",
+    "distance": "ค่าระยะทาง",
+    "tips": "ทิป"
+  },
+  "balances": {
+    "title": "ยอดคงเหลือแยกตามร้าน",
+    "emptyTitle": "ยังไม่มีรายได้",
+    "emptyDescription": "เมื่อคุณส่งอาหารให้ร้านใด ร้านนั้นจะมีการ์ดของตัวเองที่นี่ พร้อมยอดคงเหลือและการถอนเงินแยกกัน",
+    "deliveries": "{count, plural, other {ส่ง # ครั้ง}}",
+    "toWithdraw": "ถอนได้",
+    "paidByRestaurant": "ร้านนี้จ่ายแล้ว",
+    "lifetime": "ทั้งหมด",
+    "pendingWithNew": "ขอถอน {requested} แล้ว กำลังรอ {restaurant} ส่วน {available} ที่คุณได้หลังจากนั้นจะรวมอยู่ในคำขอครั้งถัดไป",
+    "pendingNothingNew": "ขอถอน {requested} แล้ว กำลังรอ {restaurant} คุณขอถอนอีกครั้งได้เมื่อร้านจ่ายยอดนี้แล้ว",
+    "requestPending": "รอดำเนินการ",
+    "request": "ขอถอน {amount}",
+    "nothingToWithdraw": "ยังไม่มียอดให้ถอน",
+    "settlesOnly": "ชำระเฉพาะ {restaurant}"
+  },
+  "withdrawals": {
+    "title": "คำขอถอนเงิน",
+    "oneRestaurantEach": "คำขอแต่ละครั้งครอบคลุมยอดของร้านเดียวเท่านั้น",
+    "empty": "ยังไม่มีคำขอถอนเงิน",
+    "status": {
+      "pending": "รอดำเนินการ",
+      "paid": "จ่ายแล้ว",
+      "rejected": "ถูกปฏิเสธ"
+    },
+    "viewReceipt": "ดูใบเสร็จ"
+  },
+  "request": {
+    "title": "ขอถอนเงิน",
+    "summary": "{deliveries, plural, other {ส่ง # ครั้ง}} · ร้านเป็นผู้ยืนยันยอดสุดท้าย",
+    "settlesOnly": "คำขอนี้ชำระเฉพาะ {restaurant} เท่านั้น ยอดที่ร้านอื่นค้างจ่ายคุณยังคงอยู่เหมือนเดิม",
+    "bank": "ธนาคาร",
+    "bankPlaceholder": "Chase / Bank of America / ฯลฯ",
+    "accountNumber": "เลขที่บัญชี",
+    "accountName": "ชื่อเจ้าของบัญชี",
+    "submit": "ขอถอน {amount}"
+  },
+  "errors": {
+    "bankDetailsRequired": "โปรดกรอกข้อมูลธนาคารให้ครบ",
+    "withdrawalAlreadyPending": "คุณมีคำขอที่รอดำเนินการของร้านนี้อยู่แล้ว",
+    "nothingToWithdraw": "ยังไม่มียอดให้ถอนจากร้านนี้",
+    "generic": "ส่งคำขอไม่สำเร็จ โปรดลองอีกครั้ง"
+  },
+  "receipt": {
+    "loading": "กำลังโหลดใบเสร็จ…",
+    "notFound": "ไม่พบใบเสร็จนี้ อาจเป็นของบัญชีอื่น",
+    "back": "กลับไปที่รายได้",
+    "notPaid": "การถอนเงินนี้ยังไม่ได้รับการจ่าย ใบเสร็จจะแสดงที่นี่เมื่อร้านจ่ายแล้ว",
+    "title": "ใบเสร็จการจ่ายเงิน",
+    "paidBy": "จ่ายโดย {restaurant}",
+    "restaurant": "ร้านอาหาร",
+    "branch": "สาขา",
+    "driver": "คนขับ",
+    "paid": "วันที่จ่าย",
+    "bank": "ธนาคาร",
+    "transferSlip": "สลิปโอนเงิน",
+    "transferSlipAlt": "สลิปโอนเงินจากร้าน",
+    "deliveries": "{count, plural, other {ส่ง # ครั้ง}}",
+    "lineBreakdown": "ค่าพื้นฐาน {base} · ค่าระยะทาง {distance} · ทิป {tip}",
+    "totalPaid": "ยอดที่จ่ายทั้งหมด"
+  },
+  "qr": {
+    "title": "QR รับเงิน",
+    "description": "ร้านจะเห็น QR นี้ข้างคำขอถอนเงินของคุณ จึงสแกนจ่ายได้เลยโดยไม่ต้องพิมพ์เลขบัญชี",
+    "compactSaved": "ร้านสแกน QR นี้เพื่อจ่ายเงินให้คุณได้",
+    "compactMissing": "ถ้าไม่มี ร้านต้องพิมพ์เลขบัญชีของคุณเอง",
+    "alt": "QR รับเงินของคุณ",
+    "saving": "กำลังบันทึก…",
+    "replace": "เปลี่ยน",
+    "upload": "อัปโหลด QR",
+    "remove": "ลบ",
+    "errors": {
+      "wrongType": "โปรดเลือกรูป QR ที่เป็นไฟล์ PNG, JPEG หรือ WebP",
+      "tooLarge": "รูปนี้ใหญ่เกิน 10 MB ใช้ภาพหน้าจอของ QR ก็พอ",
+      "busy": "เซิร์ฟเวอร์ไม่ว่างในขณะนี้ โปรดรอสักครู่แล้วลองอีกครั้ง ({detail})",
+      "updateFailed": "อัปเดต QR รับเงินไม่สำเร็จ โปรดลองอีกครั้ง"
+    }
+  }
+}

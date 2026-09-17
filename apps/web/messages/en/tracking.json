@@ -1,0 +1,156 @@
+{
+  "title": "Tracking order",
+  "orderNumber": "Order {number}",
+  "back": "Back",
+  "statuses": {
+    "confirmed": "Order confirmed",
+    "preparing": "Kitchen is preparing",
+    "ready": "Ready for pickup",
+    "readyDineIn": "Ready for serving",
+    "out_for_delivery": "On the way",
+    "completed": "Delivered",
+    "completedDineIn": "Served",
+    "completedPickup": "Picked up"
+  },
+  "driverAssigned": "{name} is bringing your order",
+  "callDriver": "Call driver",
+  "rateOrder": "Rate order",
+  "reconnecting": "Reconnecting… this page may be a moment behind.",
+  "arrivingNow": "🛵 Arriving now",
+  "lastSeen": "Last seen {age}",
+  "closed": {
+    "refunded": "This order was refunded",
+    "cancelled": "This order was cancelled",
+    "contactRestaurant": "Please contact the restaurant if you were not expecting this."
+  },
+  "driver": {
+    "almostThere": "Your driver is almost there!",
+    "finishingOtherDelivery": "Your driver is finishing one nearby delivery first",
+    "collecting": "Your driver is collecting your order",
+    "onTheWay": "Your driver is on the way",
+    "distance": "{miles} mi",
+    "waitingForLocation": "Waiting for your driver’s location…",
+    "locationStale": "Location last updated {age} — the map and ETA may be behind",
+    "etaUpdated": "{minutes} min to you · updated {age}",
+    "updated": "Updated {age}",
+    "includesOtherStop": "includes their other stop"
+  },
+  "items": {
+    "title": "Items",
+    "viewReceipt": "View full receipt →"
+  },
+  "cardPayment": {
+    "title": "Card payment isn’t available here",
+    "body": "This order was placed as a card payment, but we can’t take the card online yet. Please pay the restaurant directly — they can take it when you collect your order or when it arrives. Your order is not cancelled.",
+    "devNote": "Development build only: mark the order paid so the rest of the flow can be tested.",
+    "devConfirm": "Mock confirm (dev only)"
+  },
+  "transfer": {
+    "confirmedTitle": "Transfer confirmed",
+    "confirmedBody": "The restaurant has checked your slip and started your order.",
+    "rejectedTitle": "Your transfer slip was not accepted",
+    "waitingTitle": "Waiting for the restaurant to check your slip",
+    "reviewTitle": "Check your slip, then confirm",
+    "payTitle": "Pay {amount} to continue",
+    "rejectedReason": "Reason: {reason}",
+    "rejectedNoReason": "Please upload a clearer photo of the transfer.",
+    "waitingBody": "We will start your order as soon as they confirm it. This usually takes a few minutes.",
+    "reviewBody": "Have a look at the photo below. Replace it if it is not right, then confirm you have paid — that is what sends it to the restaurant.",
+    "payBody": "Scan the code, transfer the total, then upload a photo of the confirmation.",
+    "qrAlt": "Payment QR code",
+    "slipAlt": "Your transfer slip",
+    "replacePhoto": "Upload a different photo",
+    "choosePhoto": "Choose photo",
+    "confirmPaid": "I’ve paid — send to the restaurant",
+    "errors": {
+      "fileType": "Please upload a PNG, JPEG or WebP photo of your slip.",
+      "tooLarge": "That image is larger than 10 MB.",
+      "uploadFailed": "The photo did not upload. Check your connection and try again.",
+      "notYourOrder": "We couldn’t find this transfer on your account. Sign in with the account you ordered with.",
+      "slipRequired": "Upload a photo of your transfer before confirming.",
+      "generic": "Something went wrong. Please try again."
+    }
+  },
+  "actions": {
+    "cancelPrompt": "Changed your mind? Nothing has been prepared yet — the restaurant has not confirmed your transfer, so you can still call this order off.",
+    "cancelOrder": "Cancel this order",
+    "contactToChange": "Need to change or cancel this order? Please contact the restaurant directly — they can update it for you while it’s still being prepared.",
+    "cancelErrors": {
+      "signIn": "Please sign in with the account you ordered with to cancel this order.",
+      "otherAccount": "This order belongs to a different account. Please contact the restaurant to cancel it.",
+      "tooLate": "This order has moved on and can no longer be cancelled here — please contact the restaurant.",
+      "generic": "That didn’t go through. Please try again, or contact the restaurant."
+    }
+  },
+  "rating": {
+    "thanksTitle": "Thank you!",
+    "thanksBody": "Your feedback helps the restaurant get even better.",
+    "driverTitle": "How was your driver?",
+    "foodTitle": "How was the food?",
+    "driverFirst": "Rate your rider first — the restaurant is next.",
+    "driverOnly": "Rate the rider who brought your order.",
+    "foodLast": "Last step — how was the food itself?",
+    "foodOnly": "Rate the food to finish up.",
+    "step": "Step {current} of {total}",
+    "driverLabel": "Your driver",
+    "foodLabel": "Food",
+    "driverPlaceholder": "Anything to say about your driver? (optional)",
+    "foodPlaceholder": "Anything to say about the food? (optional)",
+    "next": "Next — rate the restaurant",
+    "submit": "Submit rating",
+    "driverRequired": "Driver stars are required.",
+    "foodRequired": "Food stars are required.",
+    "skip": "Skip for now",
+    "submittedTitle": "Thanks for your feedback!",
+    "onDriver": "On your driver: “{comment}”",
+    "onFood": "On the food: “{comment}”",
+    "starsSummary": "{label}: {value} out of 5 stars",
+    "starButton": "{label}: {count, plural, one {# star} other {# stars}}",
+    "errors": {
+      "signIn": "Please sign in with the account you ordered with to rate this order.",
+      "noAccount": "This order isn’t linked to an account, so it can’t be rated.",
+      "saveFailed": "Couldn’t save your rating. Please try again."
+    }
+  },
+  "issue": {
+    "report": "Report an issue",
+    "cancel": "Cancel",
+    "categories": {
+      "missing_item": "Missing an item",
+      "wrong_item": "Wrong item received",
+      "quality": "Food quality issue",
+      "delivery": "Delivery problem",
+      "payment": "Payment / billing",
+      "other": "Other"
+    },
+    "placeholder": "Tell us what happened…",
+    "describe": "Please describe the issue.",
+    "sent": "Thanks — the restaurant has been notified.",
+    "submit": "Submit",
+    "sendFailed": "Couldn’t send your report. Please try again."
+  },
+  "chat": {
+    "button": "Chat",
+    "title": "Chat with your driver",
+    "guestBody": "In-app chat is available when you order with an account. For this guest order, tap <strong>Call</strong> to reach your driver directly.",
+    "unread": "{count, plural, one {# unread message} other {# unread messages}}",
+    "earlier": "Earlier, with a previous rider ({count})",
+    "pastRiderGone": "That rider is no longer on your order.",
+    "nothingSaid": "Nothing was said.",
+    "loading": "Loading…",
+    "closesWhenDone": "Chat closes when the delivery ends.",
+    "archiveError": "Could not load the earlier conversation.",
+    "quickReplies": {
+      "whereAreYou": "Where are you?",
+      "leaveAtDoor": "Leave it at the door",
+      "comingDown": "Coming down now"
+    },
+    "photoErrors": {
+      "unsupportedType": "That file is not a photo we can send. Use a JPG, PNG or WebP image.",
+      "tooLarge": "That photo is too big. Try taking a new one.",
+      "prepareFailed": "Your browser could not prepare that photo. Try another one.",
+      "uploadFailed": "The photo did not upload. Check your signal and tap to retry.",
+      "generic": "Could not send that photo. Tap to retry."
+    }
+  }
+}

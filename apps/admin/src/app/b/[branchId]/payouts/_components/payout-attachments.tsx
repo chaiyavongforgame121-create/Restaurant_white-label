@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { FileText, QrCode, Upload } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import {
@@ -22,10 +23,11 @@ interface Props {
   canAttach: boolean;
 }
 
+/** attach_driver_payout_slip's error codes → payouts.attachments.errors.<key>. */
 const RPC_ERRORS: Record<string, string> = {
-  not_authorized: "You don't have permission to file a slip for this payout.",
-  not_pending: 'This request was rejected — there is nothing to file.',
-  not_found: 'That payout no longer exists.',
+  not_authorized: 'notAuthorized',
+  not_pending: 'notPending',
+  not_found: 'notFound',
 };
 
 /**
@@ -35,6 +37,7 @@ const RPC_ERRORS: Record<string, string> = {
  * rather than a public link, the same way diner transfer slips are shown on the orders screen.
  */
 export function PayoutAttachments({ withdrawalId, qrPath, slipPath, canAttach }: Props) {
+  const t = useTranslations('payouts.attachments');
   const router = useRouter();
   const [qrUrl, setQrUrl] = React.useState<string | null>(null);
   const [slipUrl, setSlipUrl] = React.useState<string | null>(null);
@@ -82,11 +85,11 @@ export function PayoutAttachments({ withdrawalId, qrPath, slipPath, canAttach }:
   const upload = async (file: File) => {
     setError(null);
     if (!PAYOUT_SLIP_MIME.includes(file.type)) {
-      setError('Attach a PNG, JPEG, WebP or PDF of the transfer slip.');
+      setError(t('errors.fileType'));
       return;
     }
     if (file.size > PAYOUT_SLIP_MAX_BYTES) {
-      setError('That file is over 10 MB.');
+      setError(t('errors.tooLarge'));
       return;
     }
     const path = payoutSlipPath(withdrawalId, file.type, crypto.randomUUID());
@@ -99,13 +102,16 @@ export function PayoutAttachments({ withdrawalId, qrPath, slipPath, canAttach }:
       .upload(path, file, { contentType: file.type, upsert: false });
     if (upErr) {
       setBusy(false);
-      setError(upErr.message);
+      console.error('payout slip upload failed', upErr.message);
+      setError(t('errors.uploadFailed'));
       return;
     }
     const message = await attachPayoutSlip(supabase, withdrawalId, path);
     setBusy(false);
     if (message) {
-      setError(RPC_ERRORS[message] ?? message);
+      const key = RPC_ERRORS[message];
+      if (!key) console.error('attach_driver_payout_slip failed', message);
+      setError(t(`errors.${key ?? 'generic'}`));
       return;
     }
     setUploadedPath(path);
@@ -116,7 +122,7 @@ export function PayoutAttachments({ withdrawalId, qrPath, slipPath, canAttach }:
     <div className="border-border mt-3 grid gap-3 border-t pt-3 sm:grid-cols-2">
       <div>
         <p className="text-muted-foreground text-xs font-semibold uppercase tracking-wider">
-          Rider&apos;s QR
+          {t('riderQr')}
         </p>
         {qrUrl ? (
           <a
@@ -128,21 +134,21 @@ export function PayoutAttachments({ withdrawalId, qrPath, slipPath, canAttach }:
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={qrUrl}
-              alt="Rider's payout QR"
+              alt={t('riderQrAlt')}
               className="border-border bg-background max-h-48 rounded-xl border object-contain"
             />
           </a>
         ) : (
           <p className="text-muted-foreground mt-1 flex items-center gap-1.5 text-sm">
             <QrCode className="h-4 w-4" />
-            {qrPath ? 'Could not load the QR.' : 'No QR saved — pay to the account number above.'}
+            {qrPath ? t('qrLoadFailed') : t('noQr')}
           </p>
         )}
       </div>
 
       <div>
         <p className="text-muted-foreground text-xs font-semibold uppercase tracking-wider">
-          Transfer slip
+          {t('slip')}
         </p>
         {currentSlip && isPdfPath(currentSlip) ? (
           <a
@@ -151,7 +157,7 @@ export function PayoutAttachments({ withdrawalId, qrPath, slipPath, canAttach }:
             rel="noopener noreferrer"
             className="focus-ring text-primary mt-1 inline-flex items-center gap-1.5 text-sm font-medium underline-offset-2 hover:underline"
           >
-            <FileText className="h-4 w-4" /> View slip (PDF)
+            <FileText className="h-4 w-4" /> {t('viewPdf')}
           </a>
         ) : slipUrl ? (
           <a
@@ -163,13 +169,13 @@ export function PayoutAttachments({ withdrawalId, qrPath, slipPath, canAttach }:
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={slipUrl}
-              alt="Transfer slip"
+              alt={t('slip')}
               className="border-border bg-background max-h-48 rounded-xl border object-contain"
             />
           </a>
         ) : (
           <p className="text-muted-foreground mt-1 text-sm">
-            {currentSlip ? 'Could not load the slip.' : 'Not attached yet.'}
+            {currentSlip ? t('slipLoadFailed') : t('notAttached')}
           </p>
         )}
 
@@ -180,7 +186,7 @@ export function PayoutAttachments({ withdrawalId, qrPath, slipPath, canAttach }:
             }`}
           >
             <Upload className="h-3.5 w-3.5" />
-            {busy ? 'Uploading…' : currentSlip ? 'Replace slip' : 'Attach slip'}
+            {busy ? t('uploading') : currentSlip ? t('replace') : t('attach')}
             <input
               type="file"
               accept="image/png,image/jpeg,image/webp,application/pdf"

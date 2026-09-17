@@ -4,6 +4,8 @@
 // anybody can ever be paid — it has to be folded into per-restaurant piles that match what a
 // request would actually move. Every rider screen that shows money folds it here.
 
+import { DEFAULT_UI_LOCALE, isUiLocale, type UiLocale } from '../i18n';
+
 /** What the rider screens select off a branch so a row can name the brand, not just the shop. */
 export interface EarningsBranchRef {
   name: string;
@@ -58,6 +60,28 @@ export interface DriverEarningsSummary {
  * deactivated gets a null embed and their money would otherwise lose its name entirely.
  */
 export const UNKNOWN_RESTAURANT_LABEL = 'Restaurant no longer listed';
+
+// UNKNOWN_RESTAURANT_LABEL stays English and is what summaries carry and compare against;
+// these are only what a rider reads in place of it.
+const UNKNOWN_RESTAURANT_LABELS: Record<UiLocale, string> = {
+  en: UNKNOWN_RESTAURANT_LABEL,
+  es: 'Restaurante ya no disponible',
+  vi: 'Nhà hàng không còn trên hệ thống',
+  th: 'ร้านอาหารนี้ไม่อยู่ในระบบแล้ว',
+};
+
+/** The "restaurant no longer listed" wording in `locale` (English when omitted). Display only. */
+export function unknownRestaurantLabel(locale: UiLocale = DEFAULT_UI_LOCALE): string {
+  return UNKNOWN_RESTAURANT_LABELS[isUiLocale(locale) ? locale : DEFAULT_UI_LOCALE];
+}
+
+/**
+ * A summary's restaurantName ready for the screen: the placeholder for a delisted restaurant
+ * becomes its translation, a real name (merchant content) comes back untouched.
+ */
+export function displayRestaurantName(restaurantName: string, locale: UiLocale = DEFAULT_UI_LOCALE): string {
+  return restaurantName === UNKNOWN_RESTAURANT_LABEL ? unknownRestaurantLabel(locale) : restaurantName;
+}
 
 /**
  * Brand first, shop second — the same order /app/apply uses, so a rider recognises the row

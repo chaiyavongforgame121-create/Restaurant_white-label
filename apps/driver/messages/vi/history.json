@@ -1,0 +1,31 @@
+{
+  "title": "Lịch sử",
+  "range": "{days, plural, other {# ngày}}",
+  "allRestaurants": "Tất cả nhà hàng",
+  "loadError": "Không tải được lịch sử — hãy kiểm tra sóng điện thoại và mở lại.",
+  "summary": {
+    "single": "{jobs, plural, other {# đơn}} · {delivered} đã giao · <amount>{total}</amount>",
+    "all": "{jobs, plural, other {# đơn}} · {delivered} đã giao · <amount>{total}</amount> từ tất cả nhà hàng",
+    "restaurant": "{jobs, plural, other {# đơn}} · {delivered} đã giao · <amount>{total}</amount> từ {restaurant}"
+  },
+  "empty": {
+    "all": "Không có đơn nào trong {days, plural, other {# ngày qua}}.",
+    "restaurant": "Không có đơn nào của {restaurant} trong {days, plural, other {# ngày qua}}."
+  },
+  "noPayment": "Không có thu nhập",
+  "outcome": {
+    "inProgress": "Đang thực hiện",
+    "delivered": "Đã giao",
+    "youCancelled": "Bạn đã hủy",
+    "couldNotDeliver": "Không giao được",
+    "restaurantCancelled": "Nhà hàng đã hủy",
+    "reassigned": "Đã chuyển cho tài xế khác",
+    "offerExpired": "Hết hạn nhận đơn",
+    "youDeclined": "Bạn đã từ chối",
+    "ended": "Đã kết thúc"
+  },
+  "ledger": {
+    "paid": "Đã chi trả",
+    "awaitingPayout": "Chờ chi trả"
+  }
+}

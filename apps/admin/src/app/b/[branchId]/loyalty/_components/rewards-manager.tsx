@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useTranslations } from 'next-intl';
 import { Gift, Pencil, Plus, Trash2 } from 'lucide-react';
 import { formatCurrency } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
@@ -24,6 +25,8 @@ interface Reward {
 }
 
 interface MenuItem { id: string; name: string; price: number; is_active: boolean }
+
+type RewardsT = ReturnType<typeof useTranslations>;
 
 /** Blank form. Kept as a factory so "New reward" always starts clean. */
 const emptyDraft = () => ({
@@ -57,6 +60,7 @@ export function RewardsManager({
   initialRewards: Reward[];
   menuItems: MenuItem[];
 }) {
+  const t = useTranslations('loyalty');
   const [list, setList] = React.useState(initialRewards);
   const [draft, setDraft] = React.useState<Draft | null>(null);
   const [busy, setBusy] = React.useState(false);
@@ -103,11 +107,11 @@ export function RewardsManager({
       : await supabase.from('loyalty_rewards').insert(row).select('id');
     setBusy(false);
     if (err) {
-      setError(describeError(err.message));
+      setError(describeError(err.message, t));
       return;
     }
     if (!data?.length) {
-      setError(DENIED);
+      setError(t('rewards.errors.denied'));
       return;
     }
     setDraft(null);
@@ -126,8 +130,8 @@ export function RewardsManager({
       .update({ is_active: !r.is_active })
       .eq('id', r.id)
       .select('id');
-    if (err) return setError(describeError(err.message));
-    if (!data?.length) return setError(DENIED);
+    if (err) return setError(describeError(err.message, t));
+    if (!data?.length) return setError(t('rewards.errors.denied'));
     setError(null);
     void refresh();
   };
@@ -135,9 +139,9 @@ export function RewardsManager({
   const remove = async (r: Reward) => {
     if (
       !(await confirm({
-        title: `Delete the reward "${r.name}"?`,
-        body: 'Customers will stop seeing it at checkout.',
-        confirmLabel: 'Delete',
+        title: t('rewards.deleteDialog.title', { name: r.name }),
+        body: t('rewards.deleteDialog.body'),
+        confirmLabel: t('rewards.deleteDialog.confirm'),
         destructive: true,
       }))
     ) {
@@ -149,8 +153,8 @@ export function RewardsManager({
       .delete()
       .eq('id', r.id)
       .select('id');
-    if (err) return setError(describeError(err.message));
-    if (!data?.length) return setError(DENIED);
+    if (err) return setError(describeError(err.message, t));
+    if (!data?.length) return setError(t('rewards.errors.denied'));
     setError(null);
     void refresh();
   };
@@ -169,15 +173,23 @@ export function RewardsManager({
       sort_order: String(r.sort_order ?? 0),
     });
 
-  const itemName = (id: string | null) =>
-    menuItems.find((m) => m.id === id)?.name ?? 'an item from another branch';
-
   const describeReward = (r: Reward) => {
     if (r.kind === 'percent_off')
-      return `${r.value}% off${r.max_discount ? ` (max ${formatCurrency(Number(r.max_discount))})` : ''}`;
-    if (r.kind === 'fixed_off') return `${formatCurrency(Number(r.value))} off`;
-    if (r.kind === 'free_item') return `Free ${itemName(r.menu_item_id)}`;
-    return 'Free delivery';
+      return r.max_discount
+        ? t('rewards.describe.percentOffCapped', {
+            value: r.value,
+            max: formatCurrency(Number(r.max_discount)),
+          })
+        : t('rewards.describe.percentOff', { value: r.value });
+    if (r.kind === 'fixed_off')
+      return t('rewards.describe.fixedOff', { amount: formatCurrency(Number(r.value)) });
+    if (r.kind === 'free_item') {
+      const item = menuItems.find((m) => m.id === r.menu_item_id)?.name;
+      return item
+        ? t('rewards.describe.freeItem', { item })
+        : t('rewards.describe.freeItemElsewhere');
+    }
+    return t('rewards.describe.freeDelivery');
   };
 
   const nameMissing = !draft?.name.trim();
@@ -187,18 +199,15 @@ export function RewardsManager({
     <div className="container max-w-5xl py-8">
       <header className="mb-6 flex flex-wrap items-center justify-between gap-3 px-2 pl-16 lg:px-0">
         <div>
-          <h1 className="font-display text-3xl font-bold">Loyalty rewards</h1>
-          <p className="mt-1 text-muted-foreground">
-            What customers can spend their points on. Points can only be redeemed for a reward you
-            list here.
-          </p>
+          <h1 className="font-display text-3xl font-bold">{t('title')}</h1>
+          <p className="mt-1 text-muted-foreground">{t('rewards.subtitle')}</p>
         </div>
         <Button
           onClick={() => setDraft((d) => (d ? null : emptyDraft()))}
           variant={draft ? 'ghost' : 'gradient'}
           leftIcon={<Plus className="h-4 w-4" />}
         >
-          {draft ? 'Cancel' : 'New reward'}
+          {draft ? t('rewards.cancel') : t('rewards.new')}
         </Button>
       </header>
 
@@ -206,24 +215,23 @@ export function RewardsManager({
 
       {branchCount > 1 && (
         <p className="mb-4 rounded-2xl bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
-          These rewards apply to every branch of this restaurant. A <strong>free item</strong> reward
-          only appears at branches whose menu actually has that item.
+          {t.rich('rewards.multiBranch', { strong: (chunks) => <strong>{chunks}</strong> })}
         </p>
       )}
 
       {draft && (
         <Card className="mb-6 space-y-3 p-5">
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Reward name">
+            <Field label={t('rewards.fields.name')}>
               <input
                 value={draft.name}
                 onChange={(e) => set('name', e.target.value)}
                 className="input"
-                placeholder="Free dessert"
+                placeholder={t('rewards.fields.namePlaceholder')}
                 maxLength={80}
               />
             </Field>
-            <Field label="Points to redeem">
+            <Field label={t('rewards.fields.points')}>
               <input
                 value={draft.points_cost}
                 onChange={(e) => set('points_cost', e.target.value.replace(/\D/g, ''))}
@@ -231,20 +239,26 @@ export function RewardsManager({
                 inputMode="numeric"
               />
             </Field>
-            <Field label="Reward type">
+            <Field label={t('rewards.fields.kind')}>
               <select
                 value={draft.kind}
                 onChange={(e) => set('kind', e.target.value as Kind)}
                 className="input"
               >
-                <option value="percent_off">% off the order</option>
-                <option value="fixed_off">Fixed USD off</option>
-                <option value="free_item">Free menu item</option>
-                <option value="free_delivery">Free delivery</option>
+                <option value="percent_off">{t('rewards.kinds.percent_off')}</option>
+                <option value="fixed_off">{t('rewards.kinds.fixed_off')}</option>
+                <option value="free_item">{t('rewards.kinds.free_item')}</option>
+                <option value="free_delivery">{t('rewards.kinds.free_delivery')}</option>
               </select>
             </Field>
             {(draft.kind === 'percent_off' || draft.kind === 'fixed_off') && (
-              <Field label={draft.kind === 'percent_off' ? 'Percent (1–100)' : 'USD amount'}>
+              <Field
+                label={
+                  draft.kind === 'percent_off'
+                    ? t('rewards.fields.percent')
+                    : t('rewards.fields.amount')
+                }
+              >
                 <input
                   value={draft.value}
                   onChange={(e) => set('value', e.target.value.replace(/[^0-9.]/g, ''))}
@@ -254,34 +268,41 @@ export function RewardsManager({
               </Field>
             )}
             {draft.kind === 'percent_off' && (
-              <Field label="Cap the discount at (USD, optional)">
+              <Field label={t('rewards.fields.cap')}>
                 <input
                   value={draft.max_discount}
                   onChange={(e) => set('max_discount', e.target.value.replace(/[^0-9.]/g, ''))}
                   className="input"
                   inputMode="decimal"
-                  placeholder="no cap"
+                  placeholder={t('rewards.fields.capPlaceholder')}
                 />
               </Field>
             )}
             {draft.kind === 'free_item' && (
-              <Field label="Which item">
+              <Field label={t('rewards.fields.item')}>
                 <select
                   value={draft.menu_item_id}
                   onChange={(e) => set('menu_item_id', e.target.value)}
                   className="input"
                 >
-                  <option value="">Choose an item…</option>
+                  <option value="">{t('rewards.fields.itemPlaceholder')}</option>
                   {menuItems.map((m) => (
                     <option key={m.id} value={m.id}>
-                      {m.name} — {formatCurrency(Number(m.price))}
-                      {m.is_active ? '' : ' (hidden)'}
+                      {m.is_active
+                        ? t('rewards.fields.itemOption', {
+                            name: m.name,
+                            price: formatCurrency(Number(m.price)),
+                          })
+                        : t('rewards.fields.itemOptionHidden', {
+                            name: m.name,
+                            price: formatCurrency(Number(m.price)),
+                          })}
                     </option>
                   ))}
                 </select>
               </Field>
             )}
-            <Field label="Minimum order subtotal (USD)">
+            <Field label={t('rewards.fields.minSubtotal')}>
               <input
                 value={draft.min_subtotal}
                 onChange={(e) => set('min_subtotal', e.target.value.replace(/[^0-9.]/g, ''))}
@@ -289,7 +310,7 @@ export function RewardsManager({
                 inputMode="decimal"
               />
             </Field>
-            <Field label="Sort order">
+            <Field label={t('rewards.fields.sortOrder')}>
               <input
                 value={draft.sort_order}
                 onChange={(e) => set('sort_order', e.target.value.replace(/[^0-9-]/g, ''))}
@@ -298,12 +319,12 @@ export function RewardsManager({
               />
             </Field>
             <div className="sm:col-span-2">
-              <Field label="Description (optional)">
+              <Field label={t('rewards.fields.description')}>
                 <input
                   value={draft.description}
                   onChange={(e) => set('description', e.target.value)}
                   className="input"
-                  placeholder="Shown to customers under the reward name"
+                  placeholder={t('rewards.fields.descriptionPlaceholder')}
                   maxLength={280}
                 />
               </Field>
@@ -315,7 +336,7 @@ export function RewardsManager({
             <p className="rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>
           )}
           <Button variant="gradient" onClick={save} disabled={nameMissing || itemMissing} loading={busy}>
-            {draft.id ? 'Save changes' : 'Create reward'}
+            {draft.id ? t('rewards.saveChanges') : t('rewards.create')}
           </Button>
         </Card>
       )}
@@ -323,8 +344,8 @@ export function RewardsManager({
       {list.length === 0 ? (
         <EmptyState
           icon={<Gift className="h-7 w-7" />}
-          title="No rewards yet"
-          description="Until you add one, customers earn points but have nothing to spend them on."
+          title={t('rewards.empty.title')}
+          description={t('rewards.empty.description')}
         />
       ) : (
         <Card className="divide-y divide-border/40">
@@ -333,8 +354,13 @@ export function RewardsManager({
               <div className="min-w-0">
                 <p className="truncate font-display text-lg font-semibold">{r.name}</p>
                 <p className="text-xs text-muted-foreground">
-                  {r.points_cost.toLocaleString()} pts · {describeReward(r)}
-                  {Number(r.min_subtotal) > 0 && ` · min ${formatCurrency(Number(r.min_subtotal))}`}
+                  {Number(r.min_subtotal) > 0
+                    ? t('rewards.lineWithMinimum', {
+                        points: r.points_cost,
+                        reward: describeReward(r),
+                        min: formatCurrency(Number(r.min_subtotal)),
+                      })
+                    : t('rewards.line', { points: r.points_cost, reward: describeReward(r) })}
                 </p>
                 {r.description && (
                   <p className="mt-0.5 truncate text-xs text-muted-foreground">{r.description}</p>
@@ -342,18 +368,18 @@ export function RewardsManager({
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 <Badge variant={r.is_active ? 'success' : 'muted'}>
-                  {r.is_active ? 'Active' : 'Paused'}
+                  {r.is_active ? t('rewards.status.active') : t('rewards.status.paused')}
                 </Badge>
                 <button
                   onClick={() => toggleActive(r)}
                   className="text-xs text-muted-foreground underline"
                 >
-                  {r.is_active ? 'Pause' : 'Activate'}
+                  {r.is_active ? t('rewards.pause') : t('rewards.activate')}
                 </button>
-                <IconButton label="Edit" size="sm" onClick={() => edit(r)}>
+                <IconButton label={t('rewards.edit')} size="sm" onClick={() => edit(r)}>
                   <Pencil className="h-4 w-4" />
                 </IconButton>
-                <IconButton label="Delete" size="sm" className="text-danger" onClick={() => remove(r)}>
+                <IconButton label={t('rewards.delete')} size="sm" className="text-danger" onClick={() => remove(r)}>
                   <Trash2 className="h-4 w-4" />
                 </IconButton>
               </div>
@@ -363,11 +389,13 @@ export function RewardsManager({
       )}
 
       <p className="mt-4 px-2 text-xs text-muted-foreground lg:px-0">
-        Customers see these on their Loyalty page and pick one at checkout.{' '}
-        <a className="underline" href={`/b/${branchId}/customers`}>
-          Customers
-        </a>{' '}
-        shows who has enough points to redeem.
+        {t.rich('rewards.footer', {
+          link: (chunks) => (
+            <a className="underline" href={`/b/${branchId}/customers`}>
+              {chunks}
+            </a>
+          ),
+        })}
       </p>
 
       <style jsx>{`
@@ -378,25 +406,22 @@ export function RewardsManager({
   );
 }
 
-/** Shown when a write affects zero rows — the shape an RLS refusal takes on an
- *  UPDATE or DELETE, where the row is filtered out rather than the write raising. */
-const DENIED =
-  'That change was not saved — only the restaurant owner can edit the reward catalog.';
-
 /**
  * The database constraints are the real validation, so their names are what a
- * merchant would otherwise be shown. Translate the ones they can actually hit.
+ * merchant would otherwise be shown. Translate the ones they can actually hit;
+ * anything else gets a plain retry message and the raw text goes to the console.
  */
-function describeError(message: string): string {
+function describeError(message: string, t: RewardsT): string {
   if (message.includes('loyalty_reward_menu_item_foreign'))
-    return 'That menu item belongs to a different restaurant. Pick an item from your own menu.';
+    return t('rewards.errors.menuItemForeign');
   if (message.includes('loyalty_rewards_kind_shape'))
-    return 'That combination is not valid — a % reward needs 1–100, a fixed reward needs an amount above 0, and a free item needs an item.';
+    return t('rewards.errors.kindShape');
   if (message.includes('loyalty_rewards_points_cost_check'))
-    return 'Points to redeem must be above 0.';
+    return t('rewards.errors.pointsCost');
   if (message.includes('row-level security') || message.includes('42501'))
-    return 'You do not have permission to change this restaurant’s rewards.';
-  return message;
+    return t('rewards.errors.permission');
+  console.error('Saving a loyalty reward failed', message);
+  return t('rewards.errors.saveFailed');
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {

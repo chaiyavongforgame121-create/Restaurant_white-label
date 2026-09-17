@@ -1,0 +1,33 @@
+{
+  "title": "Hola de nuevo",
+  "registerTitle": "Hazte repartidor",
+  "subtitle": "Inicia sesión con tu número de teléfono y contraseña para empezar a aceptar entregas.",
+  "registerSubtitle": "Regístrate con tu número de teléfono para empezar a aceptar entregas.",
+  "trustedBy": "Más de 2,300 repartidores confían en nosotros",
+  "tabLogin": "Iniciar sesión",
+  "tabRegister": "Registrarse",
+  "phone": "Número de teléfono",
+  "countryCode": "Código de país",
+  "password": "Contraseña",
+  "passwordNewPlaceholder": "Mínimo 8 caracteres",
+  "passwordPlaceholder": "Tu contraseña",
+  "firstName": "Nombre",
+  "firstNamePlaceholder": "Ana",
+  "lastName": "Apellido",
+  "lastNamePlaceholder": "García",
+  "vehicle": "Vehículo",
+  "vehicleTypes": {
+    "motorcycle": "Moto",
+    "car": "Auto",
+    "bicycle": "Bicicleta",
+    "scooter": "Scooter"
+  },
+  "plate": "Placa <muted>(opcional)</muted>",
+  "platePlaceholder": "ABC-1234",
+  "email": "Correo electrónico <muted>(opcional)</muted>",
+  "emailPlaceholder": "tu@example.com",
+  "submitLogin": "Iniciar sesión",
+  "submitRegister": "Crear cuenta",
+  "byContinuing": "Al continuar, aceptas nuestros Términos y la Política de privacidad.",
+  "nameRequired": "Ingresa tu nombre."
+}

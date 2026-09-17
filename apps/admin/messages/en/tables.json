@@ -1,0 +1,90 @@
+{
+  "accessDenied": {
+    "title": "No table access",
+    "reason": "Your account can’t work the floor at {branch}."
+  },
+  "header": {
+    "title": "Tables",
+    "intro": "Who is sitting where at {branch}, and what each table owes. A table stays open for round after round until you take the money — settling the bill is what stops its QR code ordering again.",
+    "qrCodes": "Table QR codes"
+  },
+  "reconnecting": "Reconnecting — the board may be a moment behind.",
+  "empty": {
+    "title": "No tables set up yet",
+    "description": "Add your tables and print their QR codes, and this board fills in as guests scan them.",
+    "action": "Set up tables"
+  },
+  "counts": {
+    "seated": "{count} seated",
+    "free": "{count} free",
+    "billRequested": "{count} waiting for the bill",
+    "outstanding": "On the floor {amount}"
+  },
+  "label": {
+    "number": "Table {number}"
+  },
+  "badge": {
+    "billRequested": "Bill requested",
+    "seated": "Seated · {elapsed}",
+    "needsClearing": "Needs clearing",
+    "reserved": "Reserved",
+    "free": "Free"
+  },
+  "elapsed": {
+    "unknown": "—",
+    "minutes": "{minutes}m",
+    "hoursMinutes": "{hours}h {minutes}m"
+  },
+  "detail": {
+    "seats": "{count, plural, one {# seat} other {# seats}}",
+    "party": "party of {size}"
+  },
+  "types": {
+    "standard": "Standard",
+    "booth": "Booth",
+    "bar": "Bar",
+    "high_top": "High top",
+    "private_room": "Private room",
+    "outdoor": "Outdoor",
+    "counter": "Counter"
+  },
+  "card": {
+    "sessionSummary": "· {rounds, plural, one {# round} other {# rounds}} · code {code}",
+    "settledNeedsClearing": "Settled — clear it for the next party.",
+    "empty": "Nobody sitting here.",
+    "bill": "Bill",
+    "reopen": "Reopen",
+    "askForBill": "Ask for bill",
+    "seat": "Seat",
+    "clear": "Clear"
+  },
+  "sheet": {
+    "titleFallback": "Table",
+    "openFor": "Open {elapsed} · code <strong>{code}</strong> — read it out when a second phone is asked to join this table.",
+    "readingBill": "Reading the bill…",
+    "round": "Round {round} · {number}",
+    "paid": "Paid",
+    "tableTotal": "Table total",
+    "stillToCollect": "Still to collect",
+    "takePayment": "Take payment",
+    "closeWithoutPayment": "Close without payment",
+    "paymentHint": "Taking payment records every round as received, closes the table and stops its QR code ordering until the next party is seated."
+  },
+  "settle": {
+    "done": "{table} settled — {rounds, plural, one {# round} other {# rounds}}, {total}.",
+    "skipped": "Closed, but {count, plural, one {order {orders} could not be settled here. Approve it in Payments.} other {orders {orders} could not be settled here. Approve them in Payments.}}"
+  },
+  "void": {
+    "title": "Close {table} without taking payment?",
+    "body": "The rounds stay on the books as unpaid.",
+    "placeholder": "Say why",
+    "confirm": "Close unpaid"
+  },
+  "errors": {
+    "unpaidNeedsManager": "This bill still has money on it. Ask a manager to write it off.",
+    "forbidden": "Your account cannot do that at this branch.",
+    "sessionAlreadyClosed": "That table has already been closed.",
+    "tableNotFound": "That table is no longer set up here.",
+    "generic": "Something went wrong. Please try again."
+  }
+}

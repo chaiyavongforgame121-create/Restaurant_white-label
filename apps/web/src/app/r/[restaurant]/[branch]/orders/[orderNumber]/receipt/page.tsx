@@ -1,4 +1,6 @@
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import { getServerClient } from '@favornoms/database/server';
 import { resolveTenant } from '@/lib/tenant';
 import { CustomerReceipt } from './_components/customer-receipt';
@@ -10,7 +12,10 @@ interface Props {
 // Plain 'Receipt', with `absolute` so the root layout's '%s · Favornoms' template does not
 // put the platform's brand on a white-labelled restaurant's receipt. The restaurant names
 // itself inside the document.
-export const metadata = { title: { absolute: 'Receipt' } };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('orders');
+  return { title: { absolute: t('receipt.title') } };
+}
 
 export default async function CustomerReceiptPage({ params }: Props) {
   const { restaurant, branch, orderNumber } = await params;

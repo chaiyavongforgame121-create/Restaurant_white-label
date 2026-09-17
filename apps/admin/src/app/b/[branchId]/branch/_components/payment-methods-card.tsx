@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { AlertTriangle, Lock, Save, Wallet } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Button, Card } from '@favornoms/ui';
@@ -41,22 +42,21 @@ interface QrTransfer {
 type Mode = 'asap' | 'scheduled';
 type Method = 'cash' | 'card' | 'transfer';
 
-const MODES: Array<{ key: Mode; label: string }> = [
-  { key: 'asap', label: 'Pickup (now)' },
-  { key: 'scheduled', label: 'Schedule Delivery' },
-];
+// Labels live in the branchOps catalogue under payments.modes.<key> / payments.methods.<key>.
+const MODES: Array<{ key: Mode }> = [{ key: 'asap' }, { key: 'scheduled' }];
 
-const METHODS: Array<{ key: Method; label: string; hint: string }> = [
-  { key: 'cash', label: 'Cash', hint: 'Paid to the driver or at the counter' },
-  { key: 'card', label: 'Card', hint: 'Collected at handoff with your own reader' },
-  {
-    key: 'transfer',
-    label: 'QR transfer',
-    hint: 'Customer scans your QR, transfers, and uploads the slip for you to approve',
-  },
-];
+const METHODS: Array<{ key: Method }> = [{ key: 'cash' }, { key: 'card' }, { key: 'transfer' }];
 
 type PaymentMatrix = Record<Mode, Record<Method, boolean>>;
+
+/** Raw database text never reaches the merchant: a known refusal gets its own message,
+ *  anything else the generic one. */
+function saveErrorKey(err: { message: string; code?: string }): string {
+  if (err.code === '42501' || err.message === 'forbidden' || err.message.includes('branch_manager_required')) {
+    return 'errors.noPermission';
+  }
+  return 'errors.generic';
+}
 
 function seedFromSettings(settings: Record<string, unknown>): PaymentMatrix {
   const raw = settings?.payment_methods as
@@ -90,6 +90,7 @@ function seedQr(settings: Record<string, unknown>): QrTransfer {
 }
 
 export function PaymentMethodsCard({ branchId, restaurantId, settings, canUseCard }: Props) {
+  const t = useTranslations('branchOps');
   const router = useRouter();
   const [matrix, setMatrix] = React.useState<PaymentMatrix>(() => {
     const seeded = seedFromSettings(settings);
@@ -133,7 +134,8 @@ export function PaymentMethodsCard({ branchId, restaurantId, settings, canUseCar
       .eq('id', branchId);
     setSaving(false);
     if (updateError) {
-      setError(updateError.message);
+      console.error('Saving payment methods failed', updateError);
+      setError(t(saveErrorKey(updateError)));
       return;
     }
     setSavedAt(Date.now());
@@ -143,18 +145,10 @@ export function PaymentMethodsCard({ branchId, restaurantId, settings, canUseCar
   return (
     <Card className="p-5">
       <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
-        <Wallet className="h-5 w-5 text-primary" /> Payment methods
+        <Wallet className="h-5 w-5 text-primary" /> {t('payments.title')}
       </h2>
-      <p className="text-sm text-muted-foreground">
-        Choose which payment methods customers can pick for Pickup (prepared now) and Schedule
-        Delivery (booked ahead). Card
-        payments are collected by you at handoff with your own reader — nothing is charged online
-        yet. Orders your staff take at the counter or POS are not affected.
-      </p>
-      <p className="mt-2 text-sm text-muted-foreground">
-        This covers delivery and pickup only. Dine-in customers skip the payment step entirely and
-        settle with you at the restaurant.
-      </p>
+      <p className="text-sm text-muted-foreground">{t('payments.description')}</p>
+      <p className="mt-2 text-sm text-muted-foreground">{t('payments.dineInNote')}</p>
 
       <div className="mt-4 rounded-xl border border-border p-3">
         <div className="grid grid-cols-[1fr_auto_auto] items-center gap-x-6 gap-y-3">
@@ -164,33 +158,37 @@ export function PaymentMethodsCard({ branchId, restaurantId, settings, canUseCar
               key={m.key}
               className="text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground"
             >
-              {m.label}
+              {t(`payments.modes.${m.key}`)}
             </span>
           ))}
           {METHODS.map((method) => {
             const locked =
               (method.key === 'card' && !canUseCard) ||
               (method.key === 'transfer' && !canUseTransfer);
+            const methodLabel = t(`payments.methods.${method.key}.label`);
             return (
               <React.Fragment key={method.key}>
                 <span className={locked ? 'opacity-60' : undefined}>
                   <span className="flex items-center gap-1.5 text-sm font-medium">
-                    {method.label}
+                    {methodLabel}
                     {locked && <Lock className="h-3.5 w-3.5 text-muted-foreground" />}
                   </span>
                   <span className="block text-xs text-muted-foreground">
                     {locked
                       ? method.key === 'transfer'
-                        ? 'Upload your QR code below to enable'
-                        : 'Not included in your package'
-                      : method.hint}
+                        ? t('payments.lockedTransfer')
+                        : t('payments.lockedPackage')
+                      : t(`payments.methods.${method.key}.hint`)}
                   </span>
                 </span>
                 {MODES.map((m) => (
                   <span key={m.key} className="text-center">
                     <input
                       type="checkbox"
-                      aria-label={`${method.label} for ${m.label} orders`}
+                      aria-label={t('payments.toggleAria', {
+                        method: methodLabel,
+                        mode: t(`payments.modes.${m.key}`),
+                      })}
                       checked={matrix[m.key][method.key]}
                       disabled={locked}
                       onChange={() => toggle(m.key, method.key)}
@@ -207,12 +205,12 @@ export function PaymentMethodsCard({ branchId, restaurantId, settings, canUseCar
       {!canUseCard && (
         <p className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-muted px-4 py-3 text-sm">
           <Lock className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <span>Card payment is not included in your current package.</span>
+          <span>{t('payments.cardLocked')}</span>
           <Link
             href={`/b/${branchId}/settings/plan`}
             className="font-medium text-primary underline-offset-2 hover:underline"
           >
-            View packages
+            {t('payments.viewPackages')}
           </Link>
         </p>
       )}
@@ -221,19 +219,19 @@ export function PaymentMethodsCard({ branchId, restaurantId, settings, canUseCar
         <p className="mt-3 flex items-start gap-2 rounded-xl bg-warning/10 px-4 py-3 text-sm text-foreground">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
           <span>
-            {deadModes.map((m) => m.label).join(' and ')} orders have no payment method enabled —
-            customers won&apos;t be able to place delivery or pickup orders{' '}
-            {deadModes.length > 1 ? 'either way' : 'that way'}. Dine-in is not affected.
+            {t('payments.noMethod', {
+              which: deadModes.length > 1 ? 'both' : (deadModes[0]?.key ?? 'both'),
+            })}
           </span>
         </p>
       )}
 
       <div className="mt-5 rounded-xl border border-border p-4">
-        <h3 className="font-display text-base font-semibold">Your QR code</h3>
+        <h3 className="font-display text-base font-semibold">{t('payments.qr.title')}</h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          Customers see this at checkout, transfer the total, then upload a photo of the slip.
-          Nothing is charged automatically — the order waits in{' '}
-          <span className="font-medium">Orders</span> until you approve the slip.
+          {t.rich('payments.qr.description', {
+            b: (chunks) => <span className="font-medium">{chunks}</span>,
+          })}
         </p>
         <div className="mt-3 grid gap-4 sm:grid-cols-[10rem_1fr]">
           <ImageUpload
@@ -242,25 +240,25 @@ export function PaymentMethodsCard({ branchId, restaurantId, settings, canUseCar
             value={qr.image_url}
             onChange={(url) => setQr((v) => ({ ...v, image_url: url }))}
             aspect="aspect-square"
-            label="Upload QR"
+            label={t('payments.qr.upload')}
           />
           <div className="space-y-3">
             <div>
               <label htmlFor="qr-account" className="text-sm font-medium">
-                Account name
+                {t('payments.qr.accountName')}
               </label>
               <input
                 id="qr-account"
                 value={qr.account_name}
                 onChange={(e) => setQr((v) => ({ ...v, account_name: e.target.value }))}
                 maxLength={120}
-                placeholder="Name shown on your bank account"
+                placeholder={t('payments.qr.accountNamePlaceholder')}
                 className="focus-ring mt-1 w-full rounded-xl border border-border bg-card px-3 py-2 text-sm"
               />
             </div>
             <div>
               <label htmlFor="qr-instructions" className="text-sm font-medium">
-                Instructions (optional)
+                {t('payments.qr.instructions')}
               </label>
               <textarea
                 id="qr-instructions"
@@ -268,7 +266,7 @@ export function PaymentMethodsCard({ branchId, restaurantId, settings, canUseCar
                 onChange={(e) => setQr((v) => ({ ...v, instructions: e.target.value }))}
                 rows={2}
                 maxLength={280}
-                placeholder="e.g. Include your order number in the transfer note"
+                placeholder={t('payments.qr.instructionsPlaceholder')}
                 className="focus-ring mt-1 w-full resize-none rounded-xl border border-border bg-card px-3 py-2 text-sm"
               />
             </div>
@@ -277,10 +275,7 @@ export function PaymentMethodsCard({ branchId, restaurantId, settings, canUseCar
         {transferOn && !qr.image_url && (
           <p className="mt-3 flex items-start gap-2 rounded-xl bg-warning/10 px-4 py-3 text-sm">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
-            <span>
-              QR transfer is switched on but no QR image is saved. Customers will be refused at
-              checkout until you upload one.
-            </span>
+            <span>{t('payments.qr.onWithoutImage')}</span>
           </p>
         )}
         {/* The opposite trap, and the one that actually bites: the merchant uploads their QR,
@@ -291,8 +286,9 @@ export function PaymentMethodsCard({ branchId, restaurantId, settings, canUseCar
           <p className="mt-3 flex items-start gap-2 rounded-xl bg-warning/10 px-4 py-3 text-sm">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
             <span>
-              Your QR code is saved but <strong>QR transfer is still switched off</strong>, so
-              customers cannot choose it. Tick it under Pickup (now) and/or Schedule Delivery above, then save.
+              {t.rich('payments.qr.savedButOff', {
+                strong: (chunks) => <strong>{chunks}</strong>,
+              })}
             </span>
           </p>
         )}
@@ -304,9 +300,9 @@ export function PaymentMethodsCard({ branchId, restaurantId, settings, canUseCar
 
       <div className="mt-4 flex items-center gap-3">
         <Button onClick={save} loading={saving} leftIcon={<Save className="h-4 w-4" />}>
-          Save payment methods
+          {t('payments.save')}
         </Button>
-        {savedAt && !saving && <span className="text-sm text-success">Saved ✓</span>}
+        {savedAt && !saving && <span className="text-sm text-success">{t('common.saved')}</span>}
       </div>
     </Card>
   );

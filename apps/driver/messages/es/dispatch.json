@@ -1,0 +1,23 @@
+{
+  "newOrder": "Nueva solicitud de entrega",
+  "stacked": "Agrupado · 2 pedidos",
+  "headline": "{amount} · {miles} mi",
+  "from": "Recogida",
+  "to": "Lugar de entrega",
+  "toStop": "Lugar de entrega · parada {stop}",
+  "distance": "Distancia",
+  "distanceValue": "{miles} mi",
+  "eta": "Tiempo",
+  "etaValue": "{minutes} min",
+  "base": "Base",
+  "baseBatch": "Base ×2",
+  "tip": "Propina",
+  "tipYourShare": "(tu parte de {amount})",
+  "tipAllYours": "(toda para ti)",
+  "note": "Nota:",
+  "deliveryNote": "Nota de entrega:",
+  "orderStop": "{orderNumber} · parada {stop}",
+  "accept": "Aceptar",
+  "reject": "Rechazar",
+  "unnamedBranch": "Restaurante"
+}

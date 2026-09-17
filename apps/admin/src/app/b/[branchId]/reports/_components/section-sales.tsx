@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useTranslations } from 'next-intl';
 import {
   Bar,
   BarChart,
@@ -25,60 +26,61 @@ export function SectionSales({
   result: SectionResult<SalesReport>;
   currency: string;
 }) {
+  const t = useTranslations('reports.sales');
   const data = result.data;
   const money = (n: number) => formatCurrency(n, currency);
 
   return (
     <SectionFrame
       id="sales"
-      title="Sales & revenue"
+      title={t('title')}
       icon={<TrendingUp className="h-5 w-5" />}
-      caption="Gross is what the food sold for. Net takes off discounts and refunds."
-      error={result.error ?? (data ? null : 'No sales payload was returned.')}
+      caption={t('caption')}
+      error={result.error ?? (data ? null : { code: 'emptyResponse', ref: null })}
     >
       {data ? (
         <>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
             <Kpi
               icon={<TrendingUp className="h-5 w-5" />}
-              label="Gross sales"
+              label={t('grossSales')}
               value={money(data.totals.gross_sales)}
-              hint="Menu price after options"
+              hint={t('grossSalesHint')}
             />
             <Kpi
               icon={<Percent className="h-5 w-5" />}
-              label="Discounts"
+              label={t('discounts')}
               value={money(data.totals.discounts)}
-              hint={`${money(data.totals.promo_discounts)} promo`}
+              hint={t('discountsHint', { amount: money(data.totals.promo_discounts) })}
               tone="warning"
             />
             <Kpi
               icon={<Undo2 className="h-5 w-5" />}
-              label="Refunds"
+              label={t('refunds')}
               value={money(data.totals.refunds)}
-              hint={`${data.totals.refund_count} refunded`}
+              hint={t('refundsHint', { count: data.totals.refund_count })}
               tone="danger"
             />
             <Kpi
               icon={<Coins className="h-5 w-5" />}
-              label="Net sales"
+              label={t('netSales')}
               value={money(data.totals.net_sales)}
-              hint="Gross − discounts − refunds"
+              hint={t('netSalesHint')}
               tone="success"
             />
             <Kpi
               icon={<BarChart3 className="h-5 w-5" />}
-              label="Average order"
+              label={t('averageOrder')}
               value={money(data.totals.avg_order_value)}
-              hint={`${data.totals.orders} orders`}
+              hint={t('ordersCount', { count: data.totals.orders })}
             />
           </div>
 
           <div className="mt-4 grid gap-4 lg:grid-cols-3">
             <Card className="p-5 lg:col-span-2">
-              <h3 className="font-display text-lg font-semibold">Sales by day</h3>
+              <h3 className="font-display text-lg font-semibold">{t('byDay')}</h3>
               {data.daily.length === 0 ? (
-                <EmptyNote>No sales in this range.</EmptyNote>
+                <EmptyNote>{t('byDayEmpty')}</EmptyNote>
               ) : (
                 <div className="mt-3 h-64">
                   <ResponsiveContainer width="100%" height="100%">
@@ -106,13 +108,13 @@ export function SectionSales({
                       <Legend wrapperStyle={{ fontSize: 12 }} />
                       <Bar
                         dataKey="gross_sales"
-                        name="Gross sales"
+                        name={t('grossSales')}
                         fill="hsl(var(--primary))"
                         radius={[8, 8, 0, 0]}
                       />
                       <Bar
                         dataKey="refunds"
-                        name="Refunds"
+                        name={t('refunds')}
                         fill="hsl(var(--danger))"
                         radius={[8, 8, 0, 0]}
                       />
@@ -120,38 +122,35 @@ export function SectionSales({
                   </ResponsiveContainer>
                 </div>
               )}
-              <Caption>
-                Refunds sit on the day the money went back out, which may not be the day the
-                order was taken.
-              </Caption>
+              <Caption>{t('byDayCaption')}</Caption>
             </Card>
 
             <Card className="p-5">
-              <h3 className="font-display text-lg font-semibold">What made up the total</h3>
+              <h3 className="font-display text-lg font-semibold">{t('breakdown')}</h3>
               <dl className="mt-3 space-y-1.5 text-sm">
-                <Row label="Gross sales" value={money(data.totals.gross_sales)} />
-                <Row label="Promo discounts" value={`− ${money(data.totals.promo_discounts)}`} />
+                <Row label={t('grossSales')} value={money(data.totals.gross_sales)} />
                 <Row
-                  label="Loyalty & till discounts"
+                  label={t('promoDiscounts')}
+                  value={`− ${money(data.totals.promo_discounts)}`}
+                />
+                <Row
+                  label={t('otherDiscounts')}
                   value={`− ${money(data.totals.other_discounts)}`}
                 />
-                <Row label="Refunds" value={`− ${money(data.totals.refunds)}`} />
-                <Row label="Net sales" value={money(data.totals.net_sales)} emphasise />
+                <Row label={t('refunds')} value={`− ${money(data.totals.refunds)}`} />
+                <Row label={t('netSales')} value={money(data.totals.net_sales)} emphasise />
                 <div className="my-2 border-t border-border" />
-                <Row label="Tax" value={money(data.totals.tax)} />
-                <Row label="Delivery fees" value={money(data.totals.delivery_fees)} />
-                <Row label="Service fees (card only)" value={money(data.totals.service_fees)} />
-                <Row label="Tips" value={money(data.totals.tips)} />
+                <Row label={t('tax')} value={money(data.totals.tax)} />
+                <Row label={t('deliveryFees')} value={money(data.totals.delivery_fees)} />
+                <Row label={t('serviceFees')} value={money(data.totals.service_fees)} />
+                <Row label={t('tips')} value={money(data.totals.tips)} />
                 <Row
-                  label="Gross receipts"
+                  label={t('grossReceipts')}
                   value={money(data.totals.gross_receipts)}
                   emphasise
                 />
               </dl>
-              <Caption>
-                Gross receipts is every dollar that changed hands, tax, fees and tips
-                included — the figure this screen used to call &ldquo;Revenue&rdquo;.
-              </Caption>
+              <Caption>{t('breakdownCaption')}</Caption>
             </Card>
           </div>
         </>

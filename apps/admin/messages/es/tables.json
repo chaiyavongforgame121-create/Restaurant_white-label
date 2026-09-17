@@ -1,0 +1,90 @@
+{
+  "accessDenied": {
+    "title": "Sin acceso a las mesas",
+    "reason": "Tu cuenta no puede atender el salón de {branch}."
+  },
+  "header": {
+    "title": "Mesas",
+    "intro": "Quién está sentado en cada mesa de {branch} y cuánto debe cada una. Una mesa sigue abierta ronda tras ronda hasta que cobras: cerrar la cuenta es lo que impide que su código QR siga haciendo pedidos.",
+    "qrCodes": "Códigos QR de mesas"
+  },
+  "reconnecting": "Reconectando: el tablero puede ir un poco atrasado.",
+  "empty": {
+    "title": "Aún no hay mesas configuradas",
+    "description": "Agrega tus mesas e imprime sus códigos QR; este tablero se irá llenando a medida que los clientes los escaneen.",
+    "action": "Configurar mesas"
+  },
+  "counts": {
+    "seated": "{count, plural, one {# ocupada} other {# ocupadas}}",
+    "free": "{count, plural, one {# libre} other {# libres}}",
+    "billRequested": "{count, plural, one {# espera la cuenta} other {# esperan la cuenta}}",
+    "outstanding": "En el salón {amount}"
+  },
+  "label": {
+    "number": "Mesa {number}"
+  },
+  "badge": {
+    "billRequested": "Pidió la cuenta",
+    "seated": "Ocupada · {elapsed}",
+    "needsClearing": "Por limpiar",
+    "reserved": "Reservada",
+    "free": "Libre"
+  },
+  "elapsed": {
+    "unknown": "—",
+    "minutes": "{minutes} min",
+    "hoursMinutes": "{hours} h {minutes} min"
+  },
+  "detail": {
+    "seats": "{count, plural, one {# asiento} other {# asientos}}",
+    "party": "grupo de {size}"
+  },
+  "types": {
+    "standard": "Estándar",
+    "booth": "Gabinete",
+    "bar": "Barra",
+    "high_top": "Mesa alta",
+    "private_room": "Salón privado",
+    "outdoor": "Exterior",
+    "counter": "Mostrador"
+  },
+  "card": {
+    "sessionSummary": "· {rounds, plural, one {# ronda} other {# rondas}} · código {code}",
+    "settledNeedsClearing": "Cuenta cerrada: límpiala para el próximo grupo.",
+    "empty": "No hay nadie en esta mesa.",
+    "bill": "Cuenta",
+    "reopen": "Reabrir",
+    "askForBill": "Pedir cuenta",
+    "seat": "Abrir mesa",
+    "clear": "Limpiar"
+  },
+  "sheet": {
+    "titleFallback": "Mesa",
+    "openFor": "Abierta hace {elapsed} · código <strong>{code}</strong>: dilo en voz alta cuando otro teléfono pida unirse a esta mesa.",
+    "readingBill": "Leyendo la cuenta…",
+    "round": "Ronda {round} · {number}",
+    "paid": "Pagado",
+    "tableTotal": "Total de la mesa",
+    "stillToCollect": "Por cobrar",
+    "takePayment": "Cobrar",
+    "closeWithoutPayment": "Cerrar sin cobrar",
+    "paymentHint": "Al cobrar, todas las rondas quedan registradas como pagadas, la mesa se cierra y su código QR deja de aceptar pedidos hasta que se siente el próximo grupo."
+  },
+  "settle": {
+    "done": "Cuenta de {table} cerrada: {rounds, plural, one {# ronda} other {# rondas}}, {total}.",
+    "skipped": "Mesa cerrada, pero {count, plural, one {el pedido {orders} no se pudo cobrar aquí. Apruébalo en Pagos.} other {los pedidos {orders} no se pudieron cobrar aquí. Apruébalos en Pagos.}}"
+  },
+  "void": {
+    "title": "¿Cerrar {table} sin cobrar?",
+    "body": "Las rondas quedan registradas como no pagadas.",
+    "placeholder": "Indica el motivo",
+    "confirm": "Cerrar sin pago"
+  },
+  "errors": {
+    "unpaidNeedsManager": "Esta cuenta todavía tiene saldo pendiente. Pide a un gerente que lo dé por perdido.",
+    "forbidden": "Tu cuenta no puede hacer eso en esta sucursal.",
+    "sessionAlreadyClosed": "Esa mesa ya se cerró.",
+    "tableNotFound": "Esa mesa ya no está configurada aquí.",
+    "generic": "Algo salió mal. Inténtalo de nuevo."
+  }
+}

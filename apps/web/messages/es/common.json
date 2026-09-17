@@ -1,0 +1,46 @@
+{
+  "back": "Atrás",
+  "close": "Cerrar",
+  "save": "Guardar",
+  "cancel": "Cancelar",
+  "continue": "Continuar",
+  "loading": "Cargando…",
+  "languageLabel": "Idioma",
+  "themeLight": "Modo claro",
+  "themeDark": "Modo oscuro",
+  "installApp": "Instalar app",
+  "switchToLight": "Cambiar a modo claro",
+  "switchToDark": "Cambiar a modo oscuro",
+  "dismiss": "Descartar",
+  "cookies": {
+    "title": "Usamos cookies",
+    "body": "Usamos cookies esenciales para iniciar sesión y hacer pedidos, además de analíticas opcionales para mejorar el producto. Consulta nuestra <link>política de privacidad</link>.",
+    "acceptAll": "Aceptar todas",
+    "essentialOnly": "Solo esenciales",
+    "rejectAndClose": "Rechazar y cerrar"
+  },
+  "update": {
+    "ready": "Hay una nueva versión de la app",
+    "reload": "Recargar"
+  },
+  "install": {
+    "title": "Instalar {name}",
+    "install": "Instalar",
+    "iosHint": "Toca <icon></icon> en Safari y luego <strong>Agregar a inicio</strong> para volver a pedir con un toque.",
+    "promptBody": "Agrégala a tu pantalla de inicio para volver a pedir más rápido y recibir avisos de tus pedidos.",
+    "installed": "Instalada: ábrela desde tu pantalla de inicio o escritorio",
+    "benefits": "Vuelve a pedir más rápido y recibe avisos de tus pedidos",
+    "howTo": "Agrégala a tu pantalla de inicio: toca para ver cómo",
+    "alreadyInstalled": "¿Ya la instalaste? Tu navegador no volverá a ofrecerla: abre {name} desde tu pantalla de inicio o escritorio.",
+    "steps": {
+      "iosSafari": "Toca el botón Compartir en la parte inferior de Safari y elige Agregar a inicio.",
+      "iosOtherBrowser": "Toca el botón Compartir y elige Agregar a inicio. Si no aparece, abre esta página en Safari y haz lo mismo.",
+      "inAppBrowser": "El navegador dentro de otra app no puede instalar apps. Abre el menú (⋯ o ⋮), elige Abrir en el navegador e instálala desde ahí.",
+      "android": "Toca el menú ⋮ arriba a la derecha del navegador y elige Instalar app o Agregar a la pantalla principal.",
+      "desktopChromium": "Haz clic en el ícono de instalar al final de la barra de direcciones, o abre el menú ⋮ y elige Transmitir, guardar y compartir › Instalar página como app.",
+      "desktopSafari": "En la barra de menús de Safari, elige Archivo › Agregar al Dock.",
+      "desktopFirefox": "Firefox en computadora no puede instalar apps. Abre esta página en Chrome, Edge o Safari para instalarla.",
+      "unknown": "Abre el menú del navegador y busca Instalar app o Agregar a la pantalla principal."
+    }
+  }
+}

@@ -1,3 +1,4 @@
+import { getTranslations } from 'next-intl/server';
 import { getBranchAccess } from '@/lib/capabilities';
 import { AccessDenied } from '@/components/access-denied';
 
@@ -11,10 +12,11 @@ export default async function CounterLayout({ params, children }: Props) {
   const { branch, can } = await getBranchAccess(branchId, `/counter/${branchId}`);
 
   if (!can('counter.access')) {
+    const t = await getTranslations('counter');
     return (
       <AccessDenied
-        title="No counter access"
-        reason={`Your account doesn't have counter access for ${branch.name}. Ask your manager to invite you as a cashier, server or manager.`}
+        title={t('access.title')}
+        reason={t('access.reason', { branch: branch.name })}
       />
     );
   }

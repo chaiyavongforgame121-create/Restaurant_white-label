@@ -4,39 +4,71 @@ import type { FloorSession, FloorTable } from '@favornoms/database/queries';
 // card says, which sitting belongs to it, what it owes, and the order the zones come in.
 // Kept pure because these are the rules that go wrong quietly — a cancelled round counted
 // into a bill, a settled table still reading "Seated", zone-less tables vanishing.
+//
+// Nothing here is worded: labels, badges and details come back as codes and numbers, and the
+// board turns them into words in the viewer's language.
 
 export type FloorBadgeVariant = 'muted' | 'success' | 'warning' | 'neutral' | 'info';
 
 /** Rounds in these states are not part of what the table owes. */
 const VOID_ORDER_STATES = new Set(['cancelled', 'refunded']);
 
+/** How long a party has been sitting, in whole minutes split for display. */
+export interface Elapsed {
+  hours: number;
+  /** 0–59 once `hours` is above zero; the whole count below an hour. */
+  minutes: number;
+}
+
+/** What the floor calls a table: the merchant's name for it, else its number. */
+export type TableLabel = { kind: 'name'; name: string } | { kind: 'number'; number: string };
+
+export type FloorBadgeCode = 'billRequested' | 'seated' | 'needsClearing' | 'reserved' | 'free';
+
+export interface FloorBadge {
+  code: FloorBadgeCode;
+  variant: FloorBadgeVariant;
+  /** Only on `seated`: how long the sitting has been open (null when the clock is unreadable). */
+  elapsed?: Elapsed | null;
+}
+
+/** One piece of the card's detail line, in the order it is shown. */
+export type FloorDetailPart =
+  | { kind: 'type'; tableType: string }
+  | { kind: 'seats'; count: number }
+  | { kind: 'party'; size: number };
+
 export interface FloorTableState {
   table: FloorTable;
   /** The open or locked sitting at this table, if any. */
   session: FloorSession | null;
   /** What the floor calls it. */
-  label: string;
-  badge: { text: string; variant: FloorBadgeVariant };
-  /** Kind, seats and party size as one line. Empty when there is nothing worth saying. */
-  detail: string;
+  label: TableLabel;
+  badge: FloorBadge;
+  /** Kind, seats and party size, in that order. Empty when there is nothing worth saying. */
+  detail: FloorDetailPart[];
   /** Rounds ordered in this sitting, cancellations excluded. */
   rounds: number;
   /** What the sitting has run up so far. */
   total: number;
 }
 
-export function tableLabel(table: Pick<FloorTable, 'display_name' | 'table_number'>): string {
-  return table.display_name?.trim() || `Table ${table.table_number}`;
+export function tableLabel(table: Pick<FloorTable, 'display_name' | 'table_number'>): TableLabel {
+  const name = table.display_name?.trim();
+  return name ? { kind: 'name', name } : { kind: 'number', number: table.table_number };
 }
 
-/** '42m', '1h 05m', '—'. Never negative: a clock skew must not read as a nine-hour sitting. */
-export function elapsedLabel(iso: string | null | undefined, nowMs: number): string {
-  if (!iso) return '—';
+/**
+ * Whole minutes since `iso`, as hours and minutes. Null for a missing or unparseable
+ * timestamp. Never negative: a clock skew must not read as a nine-hour sitting.
+ */
+export function elapsedTime(iso: string | null | undefined, nowMs: number): Elapsed | null {
+  if (!iso) return null;
   const started = new Date(iso).getTime();
-  if (!Number.isFinite(started)) return '—';
+  if (!Number.isFinite(started)) return null;
   const min = Math.max(0, Math.floor((nowMs - started) / 60_000));
-  if (min < 60) return `${min}m`;
-  return `${Math.floor(min / 60)}h ${String(min % 60).padStart(2, '0')}m`;
+  if (min < 60) return { hours: 0, minutes: min };
+  return { hours: Math.floor(min / 60), minutes: min % 60 };
 }
 
 /** What the sitting owes, and over how many rounds. */
@@ -49,28 +81,26 @@ export function sessionTotals(session: FloorSession | null): { rounds: number; t
   };
 }
 
-function badgeFor(
-  table: FloorTable,
-  session: FloorSession | null,
-  nowMs: number,
-): { text: string; variant: FloorBadgeVariant } {
-  if (session?.status === 'locked') return { text: 'Bill requested', variant: 'warning' };
-  if (session) return { text: `Seated · ${elapsedLabel(session.opened_at, nowMs)}`, variant: 'success' };
+function badgeFor(table: FloorTable, session: FloorSession | null, nowMs: number): FloorBadge {
+  if (session?.status === 'locked') return { code: 'billRequested', variant: 'warning' };
+  if (session) {
+    return { code: 'seated', variant: 'success', elapsed: elapsedTime(session.opened_at, nowMs) };
+  }
   // tables.status is only meaningful once a sitting has written it, which is why a table
   // that has never been seated reads Free rather than falling through to a blank badge.
-  if (table.status === 'dirty') return { text: 'Needs clearing', variant: 'neutral' };
-  if (table.status === 'reserved') return { text: 'Reserved', variant: 'info' };
-  return { text: 'Free', variant: 'muted' };
+  if (table.status === 'dirty') return { code: 'needsClearing', variant: 'neutral' };
+  if (table.status === 'reserved') return { code: 'reserved', variant: 'info' };
+  return { code: 'free', variant: 'muted' };
 }
 
-function detailFor(table: FloorTable, session: FloorSession | null): string {
-  const kind =
-    table.table_type && table.table_type !== 'standard'
-      ? table.table_type.replace(/_/g, ' ')
-      : null;
-  const seats = table.capacity ? `${table.capacity} seats` : null;
-  const party = session?.party_size ? `party of ${session.party_size}` : null;
-  return [kind, seats, party].filter(Boolean).join(' · ');
+function detailFor(table: FloorTable, session: FloorSession | null): FloorDetailPart[] {
+  const parts: FloorDetailPart[] = [];
+  if (table.table_type && table.table_type !== 'standard') {
+    parts.push({ kind: 'type', tableType: table.table_type });
+  }
+  if (table.capacity) parts.push({ kind: 'seats', count: table.capacity });
+  if (session?.party_size) parts.push({ kind: 'party', size: session.party_size });
+  return parts;
 }
 
 /**

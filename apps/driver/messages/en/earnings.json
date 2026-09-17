@@ -1,0 +1,105 @@
+{
+  "title": "Earnings",
+  "separatePay": "Every restaurant pays you separately — each figure below says which one it is.",
+  "loadError": "Could not load your earnings just now — check your signal and reopen.",
+  "lifetime": {
+    "allLabel": "All restaurants · lifetime",
+    "label": "Lifetime earnings",
+    "noDeliveries": "No deliveries yet",
+    "many": "{restaurants, plural, one {# restaurant} other {# restaurants}} · {deliveries, plural, one {# delivery} other {# deliveries}}",
+    "one": "{restaurant} · {deliveries, plural, one {# delivery} other {# deliveries}}"
+  },
+  "unpaid": {
+    "label": "Unpaid",
+    "many": "all restaurants — withdraw one at a time",
+    "one": "waiting to be paid"
+  },
+  "paid": {
+    "label": "Paid",
+    "many": "all restaurants, settled",
+    "one": "settled by the restaurant"
+  },
+  "breakdown": {
+    "allRestaurants": "All restaurants",
+    "base": "Base",
+    "distance": "Distance",
+    "tips": "Tips"
+  },
+  "balances": {
+    "title": "Balance by restaurant",
+    "emptyTitle": "No earnings yet",
+    "emptyDescription": "Once you deliver for a restaurant it gets its own card here, with its own balance and its own withdrawals.",
+    "deliveries": "{count, plural, one {# delivery} other {# deliveries}}",
+    "toWithdraw": "To withdraw",
+    "paidByRestaurant": "Paid by this restaurant",
+    "lifetime": "Lifetime",
+    "pendingWithNew": "{requested} already requested — waiting for {restaurant}. The {available} you have earned since goes into your next request.",
+    "pendingNothingNew": "{requested} already requested — waiting for {restaurant}. You can request again once they pay it.",
+    "requestPending": "Request pending",
+    "request": "Request {amount}",
+    "nothingToWithdraw": "Nothing to withdraw yet",
+    "settlesOnly": "Settles {restaurant} only"
+  },
+  "withdrawals": {
+    "title": "Withdrawal requests",
+    "oneRestaurantEach": "Each request covers one restaurant’s balance only.",
+    "empty": "No withdrawal requests yet.",
+    "status": {
+      "pending": "Pending",
+      "paid": "Paid",
+      "rejected": "Rejected"
+    },
+    "viewReceipt": "View receipt"
+  },
+  "request": {
+    "title": "Request withdrawal",
+    "summary": "{deliveries, plural, one {# delivery} other {# deliveries}} · final amount confirmed by the restaurant",
+    "settlesOnly": "This request settles {restaurant} only — anything your other restaurants owe you stays where it is.",
+    "bank": "Bank",
+    "bankPlaceholder": "Chase / Bank of America / etc.",
+    "accountNumber": "Account number",
+    "accountName": "Account holder name",
+    "submit": "Request {amount}"
+  },
+  "errors": {
+    "bankDetailsRequired": "Please fill in all bank details.",
+    "withdrawalAlreadyPending": "You already have a pending request for this restaurant.",
+    "nothingToWithdraw": "Nothing to withdraw for this restaurant yet.",
+    "generic": "Could not send your request — please try again."
+  },
+  "receipt": {
+    "loading": "Loading receipt…",
+    "notFound": "We couldn’t find this receipt. It may belong to another account.",
+    "back": "Back to earnings",
+    "notPaid": "This withdrawal hasn’t been paid yet — the receipt appears here once the restaurant pays it.",
+    "title": "Payout receipt",
+    "paidBy": "Paid by {restaurant}",
+    "restaurant": "Restaurant",
+    "branch": "Branch",
+    "driver": "Driver",
+    "paid": "Paid",
+    "bank": "Bank",
+    "transferSlip": "Transfer slip",
+    "transferSlipAlt": "Transfer slip from the restaurant",
+    "deliveries": "{count, plural, one {# delivery} other {# deliveries}}",
+    "lineBreakdown": "Base {base} · Distance {distance} · Tip {tip}",
+    "totalPaid": "Total paid"
+  },
+  "qr": {
+    "title": "Payout QR",
+    "description": "Restaurants see this next to your withdrawal request, so they can scan instead of typing your account number.",
+    "compactSaved": "The restaurant can scan this to pay you.",
+    "compactMissing": "Without one, they type your account number by hand.",
+    "alt": "Your payout QR",
+    "saving": "Saving…",
+    "replace": "Replace",
+    "upload": "Upload QR",
+    "remove": "Remove",
+    "errors": {
+      "wrongType": "Please pick a PNG, JPEG or WebP image of your QR.",
+      "tooLarge": "That image is over 10 MB — a screenshot of the QR is plenty.",
+      "busy": "The server is busy right now — please wait a moment and try again. ({detail})",
+      "updateFailed": "Could not update your payout QR — please try again."
+    }
+  }
+}

@@ -1,3 +1,4 @@
+import { getTranslations } from 'next-intl/server';
 import { branchDayKey, shiftDayKey, startOfBranchDayUtc } from '@favornoms/database/queries';
 import { Card } from '@favornoms/ui';
 import { getBranchAccess } from '@/lib/capabilities';
@@ -29,6 +30,7 @@ export default async function OrdersPage({ params, searchParams }: Props) {
   const { branchId } = await params;
   const { q, status, channel, when, range, from, to } = await searchParams;
   const { supabase, branch, can } = await getBranchAccess(branchId, `/b/${branchId}/orders`);
+  const t = await getTranslations('orders');
 
   // Two capabilities decide the receipt drawer. orders.view is who may read the order at
   // all; receipt.reprint is the counter's named right to put one on paper. The matrix
@@ -127,7 +129,7 @@ export default async function OrdersPage({ params, searchParams }: Props) {
   const rows: OrderRowData[] = (orders ?? []).map((o) => {
     // tables is a many-to-one embed, so PostgREST hands back one object (or null), but the
     // loosened client type cannot promise that — normalise the same way the kitchen does.
-    const t = (Array.isArray(o.tables) ? o.tables[0] : o.tables) as {
+    const tbl = (Array.isArray(o.tables) ? o.tables[0] : o.tables) as {
       table_number: string;
       display_name: string | null;
     } | null;
@@ -148,7 +150,9 @@ export default async function OrdersPage({ params, searchParams }: Props) {
       awaiting_payment: !!o.awaiting_payment,
       customer_notes: o.customer_notes,
       kitchen_notes: o.kitchen_notes,
-      table_label: t ? t.display_name || `Table ${t.table_number}` : null,
+      // display_name is the merchant's own name for the table and is shown as typed; only
+      // the fallback built from the number is interface text.
+      table_label: tbl ? tbl.display_name || t('page.tableLabel', { number: tbl.table_number }) : null,
       delivery_notes: deliveryNotes,
       lines: (o.order_items ?? []) as OrderLine[],
     };
@@ -225,13 +229,16 @@ export default async function OrdersPage({ params, searchParams }: Props) {
     };
   });
 
+  const matching = count ?? rows.length;
+
   return (
     <div className="container max-w-7xl py-8">
       <header className="mb-6 px-2 pl-16 lg:px-0">
-        <h1 className="font-display text-3xl font-bold">Orders</h1>
+        <h1 className="font-display text-3xl font-bold">{t('page.title')}</h1>
         <p className="mt-1 text-muted-foreground">
-          {count ?? rows.length} matching
-          {(count ?? 0) > rows.length && ` · showing the first ${rows.length}`}
+          {(count ?? 0) > rows.length
+            ? t('page.countCapped', { count: matching, shown: rows.length })
+            : t('page.count', { count: matching })}
         </p>
       </header>
 
@@ -257,15 +264,15 @@ export default async function OrdersPage({ params, searchParams }: Props) {
         <table className="w-full text-sm">
           <thead className="bg-muted text-left text-xs uppercase tracking-wider text-muted-foreground">
             <tr>
-              <th className="px-3 py-3">Order #</th>
-              <th className="px-3 py-3">Channel</th>
-              <th className="px-3 py-3">Customer</th>
-              <th className="px-3 py-3">Items</th>
-              <th className="px-3 py-3">Created</th>
-              <th className="px-3 py-3 text-right">Total</th>
-              <th className="px-3 py-3 text-center">Status</th>
+              <th className="px-3 py-3">{t('page.columns.orderNumber')}</th>
+              <th className="px-3 py-3">{t('page.columns.channel')}</th>
+              <th className="px-3 py-3">{t('page.columns.customer')}</th>
+              <th className="px-3 py-3">{t('page.columns.items')}</th>
+              <th className="px-3 py-3">{t('page.columns.created')}</th>
+              <th className="px-3 py-3 text-right">{t('page.columns.total')}</th>
+              <th className="px-3 py-3 text-center">{t('page.columns.status')}</th>
               <th className="bg-muted sticky right-0 z-20 w-px whitespace-nowrap px-3 py-3 text-right">
-                Actions
+                {t('page.columns.actions')}
               </th>
             </tr>
           </thead>
@@ -276,7 +283,7 @@ export default async function OrdersPage({ params, searchParams }: Props) {
             {rows.length === 0 && (
               <tr>
                 <td colSpan={8} className="px-3 py-12 text-center text-muted-foreground">
-                  No orders match your filters
+                  {t('page.empty')}
                 </td>
               </tr>
             )}

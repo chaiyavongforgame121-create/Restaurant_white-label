@@ -1,0 +1,41 @@
+{
+  "metaDescription": "Pide en {name}",
+  "hero": {
+    "defaultTitle": "Bienvenido: pide algo delicioso",
+    "defaultSubtitle": "Ahora atendiendo desde {branch}",
+    "nowServing": "Ahora atendiendo"
+  },
+  "closed": {
+    "title": "Cerrado por ahora.",
+    "canSchedule": "Recoger en tienda solo está disponible en horario de atención, pero ya puedes programar una entrega.",
+    "notTaking": "No estamos recibiendo pedidos en este momento. Vuelve durante el horario de atención."
+  },
+  "reviews": {
+    "count": "{count, plural, one {# reseña de clientes} other {# reseñas de clientes}}"
+  },
+  "combos": {
+    "title": "🔥 Combos y ofertas",
+    "available": "{count, plural, one {# disponible} other {# disponibles}}",
+    "more": "… y {count} más",
+    "save": "Ahorra {amount}",
+    "viewDeal": "Ver oferta"
+  },
+  "happyHour": {
+    "percentOff": "{value}% de descuento",
+    "amountOff": "{amount} de descuento",
+    "liveNow": "Activo ahora",
+    "daily": "Todos los días",
+    "window": "{days} · {start}–{end}",
+    "everythingLive": "{discount} en todo el menú ahora mismo 🍽️",
+    "everythingWindow": "{discount} en todo el menú durante este horario 🍽️",
+    "saleLabel": "Happy hour"
+  },
+  "usuals": {
+    "title": "👋 Lo de siempre",
+    "subtitle": "{count, plural, one {# producto que más pides} other {# productos que más pides}}"
+  },
+  "suspended": {
+    "title": "{brand} no está recibiendo pedidos en este momento",
+    "body": "Los pedidos en línea de esta sucursal no están disponibles por ahora. Vuelve pronto o comunícate directamente con el restaurante para hacer tu pedido."
+  }
+}

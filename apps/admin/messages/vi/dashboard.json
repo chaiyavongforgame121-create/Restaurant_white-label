@@ -1,0 +1,164 @@
+{
+  "accessDenied": {
+    "title": "Không có quyền xem tổng quan",
+    "reason": "Vai trò của bạn không được xem trang tổng quan của {branch}."
+  },
+  "header": {
+    "title": "Tổng quan hôm nay",
+    "subtitle": "Số liệu trực tiếp từ {branch}"
+  },
+  "trial": {
+    "endsToday": "Thời gian dùng thử miễn phí kết thúc hôm nay",
+    "daysLeft": "{days, plural, other {Còn # ngày dùng thử miễn phí}}",
+    "body": "Mọi tính năng đều đã mở. Chọn một gói để tiếp tục sử dụng — chưa cần thẻ cho đến lúc đó.",
+    "cta": "Chọn gói"
+  },
+  "expiry": {
+    "titleUnderDay": "Gói của bạn đã thanh toán đến {date} — còn chưa đến một ngày",
+    "titleDays": "Gói của bạn đã thanh toán đến {date} — {days, plural, other {còn # ngày}}",
+    "body": "Sau thời điểm đó, cửa hàng trực tuyến ngừng nhận đơn và trang quản trị bị khóa.",
+    "renewHint": "Gia hạn là yêu cầu do đội ngũ Favornoms duyệt, vì vậy hãy gửi trước ngày này.",
+    "askOwner": "Hãy nhờ chủ nhà hàng gia hạn; gia hạn là yêu cầu do đội ngũ Favornoms duyệt.",
+    "cta": "Gia hạn gói"
+  },
+  "setup": {
+    "title": "Sẵn sàng nhận đơn",
+    "progress": "Đã xong {done}/{total}",
+    "checkFailed": "Chưa kiểm tra được lúc này. Hệ thống sẽ thử lại ở lần làm mới tiếp theo.",
+    "menu": {
+      "label": "Thêm ít nhất một món vào thực đơn",
+      "why": "Cửa hàng trực tuyến của bạn đã công khai, và khách sẽ thấy thực đơn trống cho đến khi bạn thêm món.",
+      "link": "Thực đơn"
+    },
+    "pin": {
+      "label": "Đặt ghim trên bản đồ",
+      "why": "Phí giao hàng và việc điều phối tài xế được tính từ ghim, không phải từ địa chỉ dạng chữ.",
+      "link": "Vị trí"
+    },
+    "hours": {
+      "label": "Lưu giờ mở cửa",
+      "why": "Khi chưa lưu giờ, cửa hàng trực tuyến coi chi nhánh này mở cửa suốt 24 giờ.",
+      "link": "Giờ mở cửa"
+    },
+    "payment": {
+      "label": "Bật ít nhất một phương thức thanh toán",
+      "why": "Khi mọi phương thức đều tắt, khách không thể đặt đơn tự đến lấy hoặc hẹn giờ giao hàng.",
+      "link": "Phương thức thanh toán"
+    },
+    "noPin": {
+      "label": "Đã bật giao hàng nhưng chi nhánh này chưa có ghim bản đồ",
+      "why": "Không thể điều phối tài xế cho đơn giao hàng của chi nhánh này cho đến khi đặt ghim.",
+      "link": "Đặt ghim"
+    }
+  },
+  "overview": {
+    "title": "Tình hình kinh doanh",
+    "vsYesterday": "so với cùng giờ hôm qua",
+    "sales": {
+      "label": "Doanh thu hôm nay",
+      "failed": "Không đọc được doanh thu"
+    },
+    "orders": {
+      "label": "Đơn hàng hôm nay",
+      "failed": "Không đọc được đơn hàng"
+    },
+    "kitchen": {
+      "label": "Hàng chờ bếp",
+      "failed": "Không đọc được dữ liệu bếp",
+      "sub": "{waiting} đang chờ · {cooking} đang nấu",
+      "subStalled": "{waiting} đang chờ · {cooking} đang nấu · {stalled} bị treo"
+    },
+    "deliveries": {
+      "label": "Đơn đang giao",
+      "notOnPlan": "Gói của bạn chưa có giao hàng",
+      "failed": "Không đọc được đơn giao",
+      "stalled": "{count} bị treo"
+    }
+  },
+  "action": {
+    "title": "Cần xử lý",
+    "allClear": "Đã kiểm tra tất cả, không có việc tồn đọng",
+    "checksFailed": "{count, plural, other {# mục kiểm tra không chạy được}}",
+    "waiting": "{count, plural, other {# việc đang chờ bạn}}",
+    "emptyTitle": "Hiện không có việc nào cần bạn",
+    "checkedList": "Đã kiểm tra: {list}.",
+    "checkedNothing": "Không có gì để kiểm tra.",
+    "checkedAt": "Kiểm tra lúc {time}",
+    "checkFailed": "Không chạy được mục kiểm tra này. Hệ thống sẽ thử lại ở lần làm mới tiếp theo.",
+    "seeAll": {
+      "orders": "Xem tất cả {count} trong Đơn hàng →",
+      "deliveries": "Xem tất cả {count} trong Đơn đang giao →",
+      "kitchen": "Xem tất cả {count} trên màn hình bếp →",
+      "inventory": "Xem tất cả {count} trong Tồn kho →",
+      "drivers": "Xem tất cả {count} trong Tài xế →",
+      "payouts": "Xem tất cả {count} trong Chi trả tài xế →"
+    }
+  },
+  "buckets": {
+    "proofs": "Biên lai chuyển khoản cần duyệt",
+    "refunds": "Khoản cần hoàn tiền",
+    "deliveryFailed": "Tài xế báo có sự cố",
+    "deliveryUnaccepted": "Đơn giao chưa ai nhận",
+    "customersWaiting": "Khách đang chờ",
+    "kitchenLate": "Bếp đang trễ",
+    "scheduled": "Đơn hẹn giờ sắp đến hạn",
+    "stock": "Món hết hàng hoặc sắp hết",
+    "riders": "Tài xế đang chờ bạn",
+    "withdrawals": "Yêu cầu rút tiền cần chi trả",
+    "stalled": "Phiếu bếp bị treo"
+  },
+  "rows": {
+    "deliveryTitle": "Giao hàng",
+    "proof": "Biên lai {amount} đang chờ — bếp chưa thể bắt đầu cho đến khi bạn quyết định",
+    "refund": "Đã hủy nhưng vẫn còn thu {amount}",
+    "soldOut": "Hết hàng — khách không thể đặt",
+    "lowStock": "Còn {left} (cảnh báo khi còn {threshold})",
+    "riderDecision": "Đã đăng ký — chờ bạn quyết định",
+    "riderDocuments": "Đã đăng ký — giấy tờ chưa được xác minh",
+    "riderBoth": "Đã đăng ký — chờ bạn quyết định · giấy tờ chưa được xác minh",
+    "withdrawal": "Yêu cầu rút {amount}",
+    "orderNotAccepted": "Chưa có ai nhận đơn này",
+    "cookingLong": "Nấu lâu hơn {minutes} phút",
+    "acceptedNotStarted": "Đã nhận nhưng chưa bắt đầu",
+    "readyNotCollected": "Đã xong ở quầy ra món, chưa được lấy",
+    "deliveryWaitingKitchen": "Đang chờ bếp",
+    "deliveryKitchenReady": "Bếp báo đã xong — chưa hỏi tài xế nào",
+    "deliveryKitchenStatus": "Bếp: {status}",
+    "deliveryLookingForRider": "Đang tìm tài xế",
+    "deliveryAskedRiders": "{count, plural, other {Đã hỏi # tài xế}}",
+    "deliveryOwnStaff": "Nhân viên của bạn tự giao đơn này",
+    "deliveryNoRiderHolds": "Chưa có tài xế nào nhận",
+    "deliveryOfferExpired": "Lời mời đã hết hạn — đang trả về hàng chờ",
+    "deliveryFailed": "{reason} · báo trên đơn giao bắt đầu {age} trước",
+    "noReason": "Không ghi lý do",
+    "bookingNotAccepted": "Chưa có ai nhận đơn hẹn giờ này",
+    "bookingStillHeld": "Lẽ ra đã phải vào bếp — vẫn đang giữ"
+  },
+  "orderStatus": {
+    "pending": "đang chờ",
+    "confirmed": "đã xác nhận",
+    "preparing": "đang chuẩn bị",
+    "ready": "đã xong",
+    "out_for_delivery": "đang giao",
+    "completed": "hoàn tất",
+    "cancelled": "đã hủy",
+    "refunded": "đã hoàn tiền"
+  },
+  "age": {
+    "unknown": "—",
+    "underMinute": "<1 phút",
+    "minutes": "{minutes} phút",
+    "hours": "{hours} giờ",
+    "hoursMinutes": "{hours} giờ {minutes} phút",
+    "days": "{days} ngày",
+    "dueIn": "còn {span}"
+  },
+  "trend": {
+    "title": "Xu hướng doanh thu",
+    "subtitle": "7 ngày qua",
+    "today": "Hôm nay",
+    "bar": "{day} · {amount}",
+    "failed": "Không đọc được doanh thu của chi nhánh này. Hệ thống sẽ thử lại ở lần làm mới tiếp theo.",
+    "empty": "Chưa có doanh thu trong 7 ngày qua."
+  }
+}

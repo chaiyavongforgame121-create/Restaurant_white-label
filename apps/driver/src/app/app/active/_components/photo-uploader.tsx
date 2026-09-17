@@ -2,29 +2,15 @@
 
 import * as React from 'react';
 import { Camera, CheckCircle2, ChevronDown, Image as ImageIcon } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { getBrowserClient } from '@favornoms/database/client';
 
 type Mode = 'pickup' | 'delivery';
 
-const MODE_COPY: Record<Mode, { prompt: string; success: string; tips: string[] }> = {
-  pickup: {
-    prompt: '📸 Required — snap a photo of the order at the restaurant before you continue.',
-    success: 'Pickup photo uploaded',
-    tips: [
-      'Show the WHOLE order — every bag and drink in one frame.',
-      'Keep the receipt visible so the order number can be checked.',
-      'Set it on a flat surface in good light — no blur, nothing cut off.',
-    ],
-  },
-  delivery: {
-    prompt: '📸 Required — snap a photo of the delivered order before you finish.',
-    success: 'Delivery photo uploaded',
-    tips: [
-      'Show the food AT the drop-off spot the customer asked for.',
-      'Include the door, desk or unit number so the spot is recognizable.',
-      'Step back and use good light — no blur, nothing cut off.',
-    ],
-  },
+/** Tip keys under active.photo.<mode>.tips, in the order they are shown. */
+const MODE_TIPS: Record<Mode, string[]> = {
+  pickup: ['wholeOrder', 'receipt', 'surface'],
+  delivery: ['spot', 'landmark', 'light'],
 };
 
 /**
@@ -44,11 +30,12 @@ export function PhotoUploader({
   uploadedUrl: string | null;
   onUploaded: (url: string) => void;
 }) {
+  const t = useTranslations('active');
   const [uploading, setUploading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const cameraRef = React.useRef<HTMLInputElement>(null);
   const galleryRef = React.useRef<HTMLInputElement>(null);
-  const copy = MODE_COPY[mode];
+  const success = t(`photo.${mode}.success`);
 
   const upload = async (file: File) => {
     setUploading(true);
@@ -73,7 +60,8 @@ export function PhotoUploader({
       if (updErr) throw updErr;
       onUploaded(pub.publicUrl);
     } catch (err) {
-      setError((err as Error).message);
+      console.error('[photo-uploader] upload failed', err);
+      setError(t('photo.uploadFailed'));
     } finally {
       setUploading(false);
     }
@@ -105,12 +93,12 @@ export function PhotoUploader({
       {uploadedUrl ? (
         <div>
           <div className="flex items-center gap-2 text-sm text-success">
-            <CheckCircle2 className="h-4 w-4" /> {copy.success}
+            <CheckCircle2 className="h-4 w-4" /> {success}
           </div>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={uploadedUrl}
-            alt={copy.success}
+            alt={success}
             className="mt-2 max-h-56 w-full rounded-xl border border-border object-cover"
           />
           <div className="mt-2 flex gap-2">
@@ -120,7 +108,7 @@ export function PhotoUploader({
               disabled={uploading}
               className="focus-ring flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-card px-3 py-2 text-sm font-semibold"
             >
-              <Camera className="h-4 w-4 shrink-0" /> {uploading ? 'Uploading…' : 'Retake'}
+              <Camera className="h-4 w-4 shrink-0" /> {uploading ? t('photo.uploading') : t('photo.retake')}
             </button>
             <button
               type="button"
@@ -128,13 +116,13 @@ export function PhotoUploader({
               disabled={uploading}
               className="focus-ring flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-card px-3 py-2 text-sm font-semibold"
             >
-              <ImageIcon className="h-4 w-4 shrink-0" /> Choose another
+              <ImageIcon className="h-4 w-4 shrink-0" /> {t('photo.chooseAnother')}
             </button>
           </div>
         </div>
       ) : (
         <>
-          <p className="mb-2 text-xs font-medium">{copy.prompt}</p>
+          <p className="mb-2 text-xs font-medium">📸 {t(`photo.${mode}.prompt`)}</p>
           <PhotoGuide mode={mode} />
           <div className="flex gap-2">
             <button
@@ -143,7 +131,7 @@ export function PhotoUploader({
               disabled={uploading}
               className="focus-ring flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-card px-3 py-2 text-sm font-semibold"
             >
-              <Camera className="h-4 w-4 shrink-0" /> {uploading ? 'Uploading…' : 'Take photo'}
+              <Camera className="h-4 w-4 shrink-0" /> {uploading ? t('photo.uploading') : t('photo.takePhoto')}
             </button>
             <button
               type="button"
@@ -151,7 +139,7 @@ export function PhotoUploader({
               disabled={uploading}
               className="focus-ring flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-card px-3 py-2 text-sm font-semibold"
             >
-              <ImageIcon className="h-4 w-4 shrink-0" /> Choose from gallery
+              <ImageIcon className="h-4 w-4 shrink-0" /> {t('photo.chooseFromGallery')}
             </button>
           </div>
         </>
@@ -162,6 +150,7 @@ export function PhotoUploader({
 }
 
 function PhotoGuide({ mode }: { mode: Mode }) {
+  const t = useTranslations('active');
   const [open, setOpen] = React.useState(false);
   return (
     <div className="mb-2">
@@ -171,7 +160,7 @@ function PhotoGuide({ mode }: { mode: Mode }) {
         aria-expanded={open}
         className="focus-ring flex w-full items-center justify-between text-xs font-medium text-primary"
       >
-        💡 How to take a good photo
+        💡 {t('photo.guide.toggle')}
         <ChevronDown className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
@@ -179,35 +168,35 @@ function PhotoGuide({ mode }: { mode: Mode }) {
           <div className="grid grid-cols-2 gap-2">
             {mode === 'pickup' ? (
               <>
-                <ExampleTile good label="Whole order, good light">
+                <ExampleTile good label={t('photo.guide.wholeOrder')}>
                   <SvgGoodBag />
                 </ExampleTile>
-                <ExampleTile good label="Receipt visible">
+                <ExampleTile good label={t('photo.guide.receiptVisible')}>
                   <SvgGoodReceipt />
                 </ExampleTile>
               </>
             ) : (
               <>
-                <ExampleTile good label="At the drop-off spot">
+                <ExampleTile good label={t('photo.guide.dropoffSpot')}>
                   <SvgGoodDoor />
                 </ExampleTile>
-                <ExampleTile good label="Whole order, good light">
+                <ExampleTile good label={t('photo.guide.wholeOrder')}>
                   <SvgGoodBag />
                 </ExampleTile>
               </>
             )}
-            <ExampleTile good={false} label="Blurry or dark">
+            <ExampleTile good={false} label={t('photo.guide.blurry')}>
               <SvgBadBlurry />
             </ExampleTile>
-            <ExampleTile good={false} label="Cut off at the edge">
+            <ExampleTile good={false} label={t('photo.guide.cutOff')}>
               <SvgBadCropped />
             </ExampleTile>
           </div>
           <ul className="space-y-1 text-xs text-muted-foreground">
-            {MODE_COPY[mode].tips.map((tip) => (
+            {MODE_TIPS[mode].map((tip) => (
               <li key={tip} className="flex gap-1.5">
                 <span>•</span>
-                {tip}
+                {t(`photo.${mode}.tips.${tip}`)}
               </li>
             ))}
           </ul>

@@ -2,8 +2,9 @@
 
 import * as React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import {
-  REPORT_PRESET_LABELS,
+  REPORT_PRESETS,
   presetRange,
   reportRangeQuery,
   type ReportPreset,
@@ -19,6 +20,7 @@ import {
  * make the rendered `max` depend on the reader's clock and mismatch on hydration.
  */
 export function RangePicker({ range, today }: { range: ReportRange; today: string }) {
+  const t = useTranslations('reports.range');
   const router = useRouter();
   const pathname = usePathname();
   const [draft, setDraft] = React.useState({ from: range.from, to: range.to });
@@ -45,19 +47,19 @@ export function RangePicker({ range, today }: { range: ReportRange; today: strin
   return (
     <div className="flex flex-wrap items-center gap-2">
       <div className="inline-flex rounded-full border border-border bg-card p-1">
-        {REPORT_PRESET_LABELS.map((p) => (
+        {REPORT_PRESETS.map((p) => (
           <button
-            key={p.value}
+            key={p}
             type="button"
-            onClick={() => choose(p.value)}
-            aria-pressed={range.preset === p.value}
+            onClick={() => choose(p)}
+            aria-pressed={range.preset === p}
             className={`focus-ring rounded-full px-4 py-1.5 text-xs font-semibold transition-colors ${
-              range.preset === p.value
+              range.preset === p
                 ? 'bg-primary text-primary-foreground'
                 : 'text-foreground hover:bg-muted'
             }`}
           >
-            {p.label}
+            {t(`preset.${p}`)}
           </button>
         ))}
       </div>
@@ -65,7 +67,7 @@ export function RangePicker({ range, today }: { range: ReportRange; today: strin
       {range.preset === 'custom' ? (
         <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5">
           <label className="sr-only" htmlFor="report-from">
-            From date
+            {t('fromDate')}
           </label>
           <input
             id="report-from"
@@ -75,9 +77,9 @@ export function RangePicker({ range, today }: { range: ReportRange; today: strin
             onChange={(e) => commit(e.target.value, draft.to)}
             className="focus-ring rounded-lg bg-transparent px-1 py-0.5 text-xs tabular-nums"
           />
-          <span className="text-xs text-muted-foreground">to</span>
+          <span className="text-xs text-muted-foreground">{t('between')}</span>
           <label className="sr-only" htmlFor="report-to">
-            To date
+            {t('toDate')}
           </label>
           <input
             id="report-to"

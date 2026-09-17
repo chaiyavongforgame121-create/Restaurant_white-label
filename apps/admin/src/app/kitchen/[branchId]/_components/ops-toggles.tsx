@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useTranslations } from 'next-intl';
 import { Flame, Pause, Play } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 
@@ -13,6 +14,7 @@ import { getBrowserClient } from '@favornoms/database/client';
 const BUSY_OPTIONS = [0, 10, 20, 30];
 
 export function OpsToggles({ branchId, onPaused }: { branchId: string; onPaused?: (paused: boolean) => void }) {
+  const t = useTranslations('kitchen');
   const [settings, setSettings] = React.useState<Record<string, unknown> | null>(null);
   const [saving, setSaving] = React.useState(false);
   const [busyOpen, setBusyOpen] = React.useState(false);
@@ -55,9 +57,9 @@ export function OpsToggles({ branchId, onPaused }: { branchId: string; onPaused?
           onClick={() => setBusyOpen((o) => !o)}
           className={pill}
           style={busy > 0 ? { background: '#fff', color: '#C2491F' } : { background: 'rgba(255,255,255,.22)', color: '#fff' }}
-          title="Adds prep time to every customer ETA"
+          title={t('ops.busyHint')}
         >
-          <Flame className="h-4 w-4" />{busy > 0 ? `Busy +${busy}m` : 'Busy'}
+          <Flame className="h-4 w-4" />{busy > 0 ? t('ops.busyMinutes', { minutes: busy }) : t('ops.busy')}
         </button>
         {busyOpen && (
           <>
@@ -68,10 +70,10 @@ export function OpsToggles({ branchId, onPaused }: { branchId: string; onPaused?
                   key={m}
                   type="button"
                   onClick={() => { void patch({ busy_extra_prep_min: m }); setBusyOpen(false); }}
-                  className="rounded-lg px-3 py-1.5 text-xs font-medium"
+                  className="whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium"
                   style={m === busy ? { background: '#FF6B2C', color: '#fff' } : { background: '#F3E9E0', color: '#5A4636' }}
                 >
-                  {m === 0 ? 'Off' : `+${m}m`}
+                  {m === 0 ? t('ops.off') : t('ops.plusMinutes', { minutes: m })}
                 </button>
               ))}
             </div>
@@ -85,9 +87,9 @@ export function OpsToggles({ branchId, onPaused }: { branchId: string; onPaused?
         onClick={() => void patch({ orders_paused: !paused })}
         className={pill}
         style={paused ? { background: '#fff', color: '#C0382F' } : { background: 'rgba(255,255,255,.22)', color: '#fff' }}
-        title="Customers see the branch as closed while paused"
+        title={t('ops.pauseHint')}
       >
-        {paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}{paused ? 'Resume' : 'Pause'}
+        {paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}{paused ? t('ops.resume') : t('ops.pause')}
       </button>
     </>
   );

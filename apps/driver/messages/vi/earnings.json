@@ -1,0 +1,105 @@
+{
+  "title": "Thu nhập",
+  "separatePay": "Mỗi nhà hàng trả tiền cho bạn riêng — mỗi con số bên dưới đều ghi rõ của nhà hàng nào.",
+  "loadError": "Hiện không tải được thu nhập — hãy kiểm tra sóng điện thoại và mở lại.",
+  "lifetime": {
+    "allLabel": "Tất cả nhà hàng · từ trước đến nay",
+    "label": "Tổng thu nhập",
+    "noDeliveries": "Chưa có đơn giao nào",
+    "many": "{restaurants, plural, other {# nhà hàng}} · {deliveries, plural, other {# đơn giao}}",
+    "one": "{restaurant} · {deliveries, plural, other {# đơn giao}}"
+  },
+  "unpaid": {
+    "label": "Chưa được trả",
+    "many": "tất cả nhà hàng — rút lần lượt từng nơi",
+    "one": "đang chờ được trả"
+  },
+  "paid": {
+    "label": "Đã được trả",
+    "many": "tất cả nhà hàng, đã thanh toán",
+    "one": "nhà hàng đã thanh toán"
+  },
+  "breakdown": {
+    "allRestaurants": "Tất cả nhà hàng",
+    "base": "Cơ bản",
+    "distance": "Quãng đường",
+    "tips": "Tiền tip"
+  },
+  "balances": {
+    "title": "Số dư theo nhà hàng",
+    "emptyTitle": "Chưa có thu nhập",
+    "emptyDescription": "Khi bạn giao hàng cho một nhà hàng, nhà hàng đó sẽ có thẻ riêng ở đây, với số dư và các lần rút tiền riêng.",
+    "deliveries": "{count, plural, other {# đơn giao}}",
+    "toWithdraw": "Có thể rút",
+    "paidByRestaurant": "Nhà hàng này đã trả",
+    "lifetime": "Tổng cộng",
+    "pendingWithNew": "Đã yêu cầu {requested} — đang chờ {restaurant}. Khoản {available} bạn kiếm được sau đó sẽ vào yêu cầu tiếp theo.",
+    "pendingNothingNew": "Đã yêu cầu {requested} — đang chờ {restaurant}. Bạn có thể yêu cầu lại sau khi nhà hàng trả khoản này.",
+    "requestPending": "Đang chờ xử lý",
+    "request": "Rút {amount}",
+    "nothingToWithdraw": "Chưa có gì để rút",
+    "settlesOnly": "Chỉ thanh toán với {restaurant}"
+  },
+  "withdrawals": {
+    "title": "Yêu cầu rút tiền",
+    "oneRestaurantEach": "Mỗi yêu cầu chỉ áp dụng cho số dư của một nhà hàng.",
+    "empty": "Chưa có yêu cầu rút tiền nào.",
+    "status": {
+      "pending": "Đang chờ",
+      "paid": "Đã trả",
+      "rejected": "Bị từ chối"
+    },
+    "viewReceipt": "Xem biên nhận"
+  },
+  "request": {
+    "title": "Yêu cầu rút tiền",
+    "summary": "{deliveries, plural, other {# đơn giao}} · số tiền cuối cùng do nhà hàng xác nhận",
+    "settlesOnly": "Yêu cầu này chỉ thanh toán với {restaurant} — khoản các nhà hàng khác còn nợ bạn vẫn giữ nguyên.",
+    "bank": "Ngân hàng",
+    "bankPlaceholder": "Chase / Bank of America / v.v.",
+    "accountNumber": "Số tài khoản",
+    "accountName": "Tên chủ tài khoản",
+    "submit": "Rút {amount}"
+  },
+  "errors": {
+    "bankDetailsRequired": "Vui lòng điền đầy đủ thông tin ngân hàng.",
+    "withdrawalAlreadyPending": "Bạn đã có một yêu cầu đang chờ cho nhà hàng này.",
+    "nothingToWithdraw": "Chưa có gì để rút từ nhà hàng này.",
+    "generic": "Không gửi được yêu cầu — vui lòng thử lại."
+  },
+  "receipt": {
+    "loading": "Đang tải biên nhận…",
+    "notFound": "Không tìm thấy biên nhận này. Có thể nó thuộc về tài khoản khác.",
+    "back": "Quay lại thu nhập",
+    "notPaid": "Khoản rút này chưa được trả — biên nhận sẽ hiện ở đây khi nhà hàng thanh toán.",
+    "title": "Biên nhận chi trả",
+    "paidBy": "{restaurant} đã trả",
+    "restaurant": "Nhà hàng",
+    "branch": "Chi nhánh",
+    "driver": "Tài xế",
+    "paid": "Thời gian trả",
+    "bank": "Ngân hàng",
+    "transferSlip": "Biên lai chuyển khoản",
+    "transferSlipAlt": "Biên lai chuyển khoản từ nhà hàng",
+    "deliveries": "{count, plural, other {# đơn giao}}",
+    "lineBreakdown": "Cơ bản {base} · Quãng đường {distance} · Tiền tip {tip}",
+    "totalPaid": "Tổng đã trả"
+  },
+  "qr": {
+    "title": "Mã QR nhận tiền",
+    "description": "Nhà hàng sẽ thấy mã này cạnh yêu cầu rút tiền của bạn, để quét thay vì nhập số tài khoản.",
+    "compactSaved": "Nhà hàng có thể quét mã này để trả tiền cho bạn.",
+    "compactMissing": "Nếu không có, nhà hàng phải tự nhập số tài khoản của bạn.",
+    "alt": "Mã QR nhận tiền của bạn",
+    "saving": "Đang lưu…",
+    "replace": "Thay mã",
+    "upload": "Tải QR lên",
+    "remove": "Xóa",
+    "errors": {
+      "wrongType": "Vui lòng chọn ảnh mã QR dạng PNG, JPEG hoặc WebP.",
+      "tooLarge": "Ảnh này lớn hơn 10 MB — chỉ cần ảnh chụp màn hình mã QR là đủ.",
+      "busy": "Máy chủ đang bận — vui lòng đợi một lát rồi thử lại. ({detail})",
+      "updateFailed": "Không cập nhật được mã QR nhận tiền — vui lòng thử lại."
+    }
+  }
+}

@@ -5,7 +5,8 @@ import { Loader2, UserRound } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import type { BranchRider } from '@favornoms/database/queries';
 import { Button, Sheet } from '@favornoms/ui';
-import { ageLabel, readableRpcError, riderPinState, type RiderPinState } from './live-ops-model';
+import { ageSpan, riderPinState, type RiderPinState } from './live-ops-model';
+import { useLiveOpsText } from './live-ops-text';
 
 // Put a named rider on a delivery by hand. This is the way out of a dispatch that never
 // finds anyone: auto-dispatch skips riders whose last GPS fix is older than the branch's
@@ -14,11 +15,12 @@ import { ageLabel, readableRpcError, riderPinState, type RiderPinState } from '.
 
 const STATE_ORDER: Record<RiderPinState, number> = { available: 0, stale: 1, offline: 2, busy: 3 };
 
-const STATE_PILL: Record<RiderPinState, { text: string; className: string }> = {
-  available: { text: 'GPS fresh', className: 'bg-success/15 text-success' },
-  stale: { text: 'GPS stale', className: 'bg-warning/15 text-warning' },
-  offline: { text: 'Offline', className: 'bg-muted text-muted-foreground' },
-  busy: { text: 'On a job', className: 'bg-info/15 text-info' },
+/** The pill's words live under deliveries.assign.pill.<state>. */
+const STATE_PILL_CLASS: Record<RiderPinState, string> = {
+  available: 'bg-success/15 text-success',
+  stale: 'bg-warning/15 text-warning',
+  offline: 'bg-muted text-muted-foreground',
+  busy: 'bg-info/15 text-info',
 };
 
 const DOT: Record<RiderPinState, string> = {
@@ -45,6 +47,8 @@ export function AssignRiderSheet({
   maxGpsAgeMin: number;
   onAssigned: () => void | Promise<void>;
 }) {
+  const text = useLiveOpsText();
+  const { t } = text;
   const [busyId, setBusyId] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -79,7 +83,7 @@ export function AssignRiderSheet({
     if (rpcErr) {
       // The RPC raises bare exception names ('driver_busy', 'already_accepted'). Left alone
       // they read as a crash rather than as the rule they are.
-      setError(readableRpcError(rpcErr.message));
+      setError(text.rpcError(rpcErr.message));
       return;
     }
     await onAssigned();
@@ -91,14 +95,11 @@ export function AssignRiderSheet({
       open={open}
       onClose={onClose}
       side="right"
-      title={orderNumber ? `Assign ${orderNumber} to a rider` : 'Assign to a rider'}
-      ariaLabel="Assign to a rider"
+      title={orderNumber ? t('assign.title', { number: orderNumber }) : t('assign.titleNoNumber')}
+      ariaLabel={t('assign.titleNoNumber')}
       className="w-full max-w-sm"
     >
-      <p className="text-sm text-muted-foreground">
-        The rider gets a normal offer they can still decline — it just goes to the one you
-        pick instead of whoever auto-dispatch scores highest.
-      </p>
+      <p className="text-sm text-muted-foreground">{t('assign.intro')}</p>
 
       {error && (
         <p role="alert" className="mt-3 rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">
@@ -107,20 +108,17 @@ export function AssignRiderSheet({
       )}
 
       {ordered.length === 0 ? (
-        <p className="mt-6 text-sm text-muted-foreground">
-          No rider is approved for this branch yet, so there is nobody to offer this to.
-        </p>
+        <p className="mt-6 text-sm text-muted-foreground">{t('assign.noRiders')}</p>
       ) : (
         <ul className="mt-4 space-y-1">
           {ordered.map(({ rider, state }) => {
-            const pill = STATE_PILL[state];
             const blocked =
               state === 'busy'
-                ? 'On another delivery'
+                ? t('assign.blockedBusy')
                 : !rider.kyc_verified
-                  ? 'Documents not verified'
+                  ? t('assign.blockedDocs')
                   : rider.cooling_down
-                    ? 'In a rejection cool-down'
+                    ? t('assign.blockedCooldown')
                     : null;
             return (
               <li key={rider.driver_id}>
@@ -133,17 +131,21 @@ export function AssignRiderSheet({
                   <span className={`h-2 w-2 shrink-0 rounded-full ${DOT[state]}`} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium">{rider.full_name}</span>
-                    <span className="block truncate text-xs capitalize text-muted-foreground">
-                      {blocked ?? `${rider.vehicle_type} · last seen ${ageLabel(rider.location_updated_at, nowMs)} ago`}
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {blocked ??
+                        t('assign.lastSeen', {
+                          vehicle: text.vehicle(rider.vehicle_type),
+                          age: text.age(ageSpan(rider.location_updated_at, nowMs)),
+                        })}
                     </span>
                   </span>
                   {busyId === rider.driver_id ? (
                     <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
                   ) : (
                     <span
-                      className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${pill.className}`}
+                      className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${STATE_PILL_CLASS[state]}`}
                     >
-                      {pill.text}
+                      {t(`assign.pill.${state}`)}
                     </span>
                   )}
                 </button>
@@ -155,7 +157,7 @@ export function AssignRiderSheet({
 
       <div className="mt-5 flex justify-end">
         <Button variant="ghost" size="sm" onClick={onClose} leftIcon={<UserRound className="h-4 w-4" />}>
-          Close
+          {t('assign.close')}
         </Button>
       </div>
     </Sheet>

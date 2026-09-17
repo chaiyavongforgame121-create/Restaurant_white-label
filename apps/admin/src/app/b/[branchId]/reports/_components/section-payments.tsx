@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { Banknote, CreditCard, QrCode, Undo2, Wallet } from 'lucide-react';
 import { Card } from '@favornoms/ui';
 import { formatCurrency } from '@favornoms/shared';
@@ -10,20 +11,8 @@ import { Caption, EmptyNote, SectionFrame } from './section-frame';
 import type { PaymentsReport, SectionResult } from './report-queries';
 
 // "QR transfer" is the merchant's own word for the bank-transfer-with-a-slip flow that
-// decide_payment_proof settles. `transfer` is only ever the column name.
-const METHOD_LABELS: Record<string, string> = {
-  card: 'Card',
-  cash: 'Cash',
-  transfer: 'QR transfer',
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  completed: 'Success',
-  pending: 'Pending',
-  failed: 'Failed',
-  refunded: 'Refunded',
-  voided: 'Voided',
-};
+// decide_payment_proof settles. `transfer` is only ever the column name. Method and status
+// names live in reports.payments.method / .status; a code with no entry shows as-is.
 
 // Reading order for the grid. Anything payment_status gains later falls in at the end
 // rather than being dropped, which is why the columns come from the rows and not a literal.
@@ -38,8 +27,11 @@ export function SectionPayments({
   currency: string;
   branchId: string;
 }) {
+  const t = useTranslations('reports.payments');
   const data = result.data;
   const money = (n: number) => formatCurrency(n, currency);
+  const methodName = (method: string) => (t.has(`method.${method}`) ? t(`method.${method}`) : method);
+  const statusName = (status: string) => (t.has(`status.${status}`) ? t(`status.${status}`) : status);
 
   const statuses = React.useMemo(() => {
     const seen = Array.from(new Set((data?.by_method_status ?? []).map((c) => c.status)));
@@ -61,59 +53,59 @@ export function SectionPayments({
   return (
     <SectionFrame
       id="payments"
-      title="Payments & refunds"
+      title={t('title')}
       icon={<Wallet className="h-5 w-5" />}
-      caption="Every payment attached to an order taken in this range, by method and state."
-      error={result.error ?? (data ? null : 'No payments payload was returned.')}
+      caption={t('caption')}
+      error={result.error ?? (data ? null : { code: 'emptyResponse', ref: null })}
     >
       {data ? (
         <>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <Kpi
               icon={<Wallet className="h-5 w-5" />}
-              label="Settled"
+              label={t('settled')}
               value={money(data.totals.settled)}
-              hint={`${data.totals.payments} payments`}
+              hint={t('paymentCount', { count: data.totals.payments })}
               tone="success"
             />
             <Kpi
               icon={<CreditCard className="h-5 w-5" />}
-              label="Pending"
+              label={t('pending')}
               value={money(data.totals.pending)}
-              hint="Not charged yet, not lost"
+              hint={t('pendingHint')}
               tone="warning"
             />
             <Kpi
               icon={<Banknote className="h-5 w-5" />}
-              label="Failed"
+              label={t('failed')}
               value={money(data.totals.failed)}
               tone={data.totals.failed > 0 ? 'danger' : 'neutral'}
             />
             <Kpi
               icon={<Undo2 className="h-5 w-5" />}
-              label="Refunded"
+              label={t('refunded')}
               value={money(data.totals.refunds)}
-              hint={`${data.totals.refund_count} refunds`}
+              hint={t('refundCount', { count: data.totals.refund_count })}
               tone="danger"
             />
           </div>
 
           <Card className="mt-4 p-5">
-            <h3 className="font-display text-lg font-semibold">By method and state</h3>
+            <h3 className="font-display text-lg font-semibold">{t('grid')}</h3>
             {methods.length === 0 ? (
-              <EmptyNote>No payment was taken in this range.</EmptyNote>
+              <EmptyNote>{t('gridEmpty')}</EmptyNote>
             ) : (
               <div className="mt-3 overflow-x-auto">
                 <table className="w-full min-w-[36rem] text-sm">
                   <thead>
                     <tr className="text-left text-xs text-muted-foreground">
-                      <th className="pb-2 font-normal">Method</th>
+                      <th className="pb-2 font-normal">{t('col.method')}</th>
                       {statuses.map((s) => (
                         <th key={s} className="pb-2 text-right font-normal">
-                          {STATUS_LABELS[s] ?? s}
+                          {statusName(s)}
                         </th>
                       ))}
-                      <th className="pb-2 text-right font-normal">Total</th>
+                      <th className="pb-2 text-right font-normal">{t('col.total')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -130,7 +122,7 @@ export function SectionPayments({
                               ) : (
                                 <CreditCard className="h-4 w-4 text-muted-foreground" />
                               )}
-                              {METHOD_LABELS[m] ?? m}
+                              {methodName(m)}
                             </span>
                           </td>
                           {statuses.map((s) => {
@@ -146,7 +138,7 @@ export function SectionPayments({
                                   {money(c?.amount ?? 0)}
                                 </span>
                                 <span className="block text-[11px] text-muted-foreground">
-                                  {count} payment{count === 1 ? '' : 's'}
+                                  {t('paymentCount', { count })}
                                 </span>
                               </td>
                             );
@@ -161,54 +153,45 @@ export function SectionPayments({
                 </table>
               </div>
             )}
-            <Caption>
-              A card payment sitting in Pending has not been charged — no card gateway key is
-              configured yet, so those rows are waiting rather than failing.
-            </Caption>
+            <Caption>{t('gridCaption')}</Caption>
           </Card>
 
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
             <Card className="p-5">
-              <h3 className="font-display text-lg font-semibold">Refunds</h3>
+              <h3 className="font-display text-lg font-semibold">{t('refunds')}</h3>
               <dl className="mt-3 space-y-1.5 text-sm">
-                <PayRow label="Refunded to diners" value={money(data.totals.refunds)} />
-                <PayRow label="Refund events" value={data.totals.refund_count.toString()} />
+                <PayRow label={t('refundedToDiners')} value={money(data.totals.refunds)} />
+                <PayRow label={t('refundEvents')} value={data.totals.refund_count.toString()} />
                 <PayRow
-                  label="Marked refunded on the payment"
+                  label={t('markedRefunded')}
                   value={money(data.totals.refunded_on_payments)}
                 />
-                <PayRow label="Voided payments" value={money(data.totals.voided_on_payments)} />
+                <PayRow label={t('voided')} value={money(data.totals.voided_on_payments)} />
               </dl>
-              <Caption>
-                A refund is recorded against the order, not against the payment, so the
-                Refunded column in the grid above reads zero by design. The figure to trust is
-                the first line here.
-              </Caption>
+              <Caption>{t('refundsCaption')}</Caption>
             </Card>
 
             <Card className="p-5">
-              <h3 className="font-display text-lg font-semibold">Awaiting settlement</h3>
+              <h3 className="font-display text-lg font-semibold">{t('awaiting')}</h3>
               <p className="mt-3 font-display text-3xl font-bold tabular-nums">
                 {money(data.totals.unsettled_on_completed_orders)}
               </p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Orders already handed to the diner whose payment is still pending.
-              </p>
+              <p className="mt-1 text-sm text-muted-foreground">{t('awaitingBody')}</p>
               <p className="mt-3 text-sm">
                 <Link
                   href={`/counter/${branchId}/recent`}
                   className="focus-ring font-semibold underline"
                 >
-                  Settle these at the counter
+                  {t('settleLink')}
                 </Link>
               </p>
               <dl className="mt-4 space-y-1.5 text-sm">
                 <PayRow
-                  label="Service fees collected"
+                  label={t('serviceFees')}
                   value={money(data.totals.service_fee_collected)}
                 />
                 <PayRow
-                  label="Settled by the historical backfill"
+                  label={t('backfilled')}
                   value={data.totals.backfilled_settlements.toString()}
                 />
               </dl>

@@ -1,3 +1,5 @@
+import { useTranslations } from 'next-intl';
+
 /**
  * Every route under this segment is dynamic (resolveTenant reads cookies), so Next paints
  * this on every tap of the bottom tab bar. It used to be an eight-tile *menu* skeleton,
@@ -7,6 +9,7 @@
  * — nearly all of them — show no interstitial at all.
  */
 export default function BranchLoading() {
+  const t = useTranslations('common');
   return (
     <div
       className="grid min-h-[60vh] animate-fade-in place-items-center"
@@ -14,7 +17,7 @@ export default function BranchLoading() {
     >
       <span
         role="status"
-        aria-label="Loading"
+        aria-label={t('loading')}
         className="h-10 w-10 animate-spin rounded-full border-4 border-muted border-t-primary"
       />
     </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useTranslations } from 'next-intl';
 import {
   Bar,
   BarChart,
@@ -26,10 +27,24 @@ export function SectionMenu({
   result: SectionResult<MenuReport>;
   currency: string;
 }) {
+  const t = useTranslations('reports.menu');
   const data = result.data;
   const money = (n: number) => formatCurrency(n, currency);
   const [sort, setSort] = React.useState<ItemSort>('revenue');
   const [asc, setAsc] = React.useState(false);
+
+  // get_branch_menu_report flags the two bands it names itself when a line has no category to
+  // join on. Every other category name is the merchant's and is shown exactly as typed, even one
+  // called "Combos".
+  const categoryRows = (data?.by_category ?? []).map((c) => ({
+    ...c,
+    label:
+      c.band === 'combos'
+        ? t('categoryBand.Combos')
+        : c.band === 'uncategorised'
+          ? t('categoryBand.Uncategorised')
+          : c.category,
+  }));
 
   const items = React.useMemo(() => {
     const rows = [...(data?.by_item ?? [])];
@@ -54,55 +69,55 @@ export function SectionMenu({
   return (
     <SectionFrame
       id="menu"
-      title="Menu"
+      title={t('title')}
       icon={<UtensilsCrossed className="h-5 w-5" />}
-      caption="What sold, by dish, category and combo — plus what promotions gave away."
-      error={result.error ?? (data ? null : 'No menu payload was returned.')}
+      caption={t('caption')}
+      error={result.error ?? (data ? null : { code: 'emptyResponse', ref: null })}
     >
       {data ? (
         <>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <Kpi
               icon={<UtensilsCrossed className="h-5 w-5" />}
-              label="Items sold"
+              label={t('itemsSold')}
               value={data.totals.items_sold.toString()}
-              hint={`${data.totals.distinct_items} different items`}
+              hint={t('itemsSoldHint', { count: data.totals.distinct_items })}
             />
             <Kpi
               icon={<Layers className="h-5 w-5" />}
-              label="Item revenue"
+              label={t('itemRevenue')}
               value={money(data.totals.item_revenue)}
-              hint={`${money(data.totals.modifier_revenue)} from options`}
+              hint={t('itemRevenueHint', { amount: money(data.totals.modifier_revenue) })}
             />
             <Kpi
               icon={<Layers className="h-5 w-5" />}
-              label="Combo revenue"
+              label={t('comboRevenue')}
               value={money(data.totals.combo_revenue)}
-              hint="Was missing from By category entirely"
+              hint={t('comboRevenueHint')}
             />
             <Kpi
               icon={<Tag className="h-5 w-5" />}
-              label="Promo giveaway"
+              label={t('promoGiveaway')}
               value={money(data.totals.promo_discount)}
-              hint={`${data.totals.promo_orders} orders used a code`}
+              hint={t('promoGiveawayHint', { count: data.totals.promo_orders })}
               tone="warning"
             />
           </div>
 
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
             <Card className="p-5">
-              <h3 className="font-display text-lg font-semibold">Sales by item</h3>
+              <h3 className="font-display text-lg font-semibold">{t('byItem')}</h3>
               {items.length === 0 ? (
-                <EmptyNote>Nothing sold in this range.</EmptyNote>
+                <EmptyNote>{t('byItemEmpty')}</EmptyNote>
               ) : (
                 <div className="mt-3 max-h-96 overflow-auto">
                   <table className="w-full text-sm">
                     <thead className="sticky top-0 bg-card">
                       <tr className="text-left text-xs text-muted-foreground">
-                        <SortHeader label="Item" active={sort === 'name'} asc={asc} onClick={() => toggle('name')} />
-                        <SortHeader label="Qty" align="right" active={sort === 'quantity'} asc={asc} onClick={() => toggle('quantity')} />
-                        <SortHeader label="Orders" align="right" active={sort === 'orders'} asc={asc} onClick={() => toggle('orders')} />
-                        <SortHeader label="Revenue" align="right" active={sort === 'revenue'} asc={asc} onClick={() => toggle('revenue')} />
+                        <SortHeader label={t('col.item')} active={sort === 'name'} asc={asc} onClick={() => toggle('name')} />
+                        <SortHeader label={t('col.qty')} align="right" active={sort === 'quantity'} asc={asc} onClick={() => toggle('quantity')} />
+                        <SortHeader label={t('col.orders')} align="right" active={sort === 'orders'} asc={asc} onClick={() => toggle('orders')} />
+                        <SortHeader label={t('col.revenue')} align="right" active={sort === 'revenue'} asc={asc} onClick={() => toggle('revenue')} />
                       </tr>
                     </thead>
                     <tbody>
@@ -124,17 +139,17 @@ export function SectionMenu({
                   </table>
                 </div>
               )}
-              <Caption>Top 100 items by revenue; click a heading to re-sort.</Caption>
+              <Caption>{t('byItemCaption')}</Caption>
             </Card>
 
             <Card className="p-5">
-              <h3 className="font-display text-lg font-semibold">By category</h3>
+              <h3 className="font-display text-lg font-semibold">{t('byCategory')}</h3>
               {data.by_category.length === 0 ? (
-                <EmptyNote>No category data.</EmptyNote>
+                <EmptyNote>{t('byCategoryEmpty')}</EmptyNote>
               ) : (
                 <div className="mt-3 h-72">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={data.by_category} layout="vertical">
+                    <BarChart data={categoryRows} layout="vertical">
                       <CartesianGrid
                         strokeDasharray="3 3"
                         stroke="hsl(var(--border))"
@@ -143,7 +158,7 @@ export function SectionMenu({
                       <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={12} />
                       <YAxis
                         type="category"
-                        dataKey="category"
+                        dataKey="label"
                         stroke="hsl(var(--muted-foreground))"
                         fontSize={12}
                         width={110}
@@ -156,23 +171,25 @@ export function SectionMenu({
                         }}
                         formatter={(v: number) => money(v)}
                       />
-                      <Bar dataKey="revenue" fill="hsl(var(--accent))" radius={[0, 8, 8, 0]} />
+                      <Bar
+                        dataKey="revenue"
+                        name={t('col.revenue')}
+                        fill="hsl(var(--accent))"
+                        radius={[0, 8, 8, 0]}
+                      />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               )}
-              <Caption>
-                Combos land in their own band now. They used to disappear here, because a
-                combo line carries no menu item to join a category on.
-              </Caption>
+              <Caption>{t('byCategoryCaption')}</Caption>
             </Card>
           </div>
 
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
             <Card className="p-5">
-              <h3 className="font-display text-lg font-semibold">Best-selling combos</h3>
+              <h3 className="font-display text-lg font-semibold">{t('topCombos')}</h3>
               {data.by_combo.length === 0 ? (
-                <EmptyNote>No combo sold in this range.</EmptyNote>
+                <EmptyNote>{t('topCombosEmpty')}</EmptyNote>
               ) : (
                 <ul className="mt-3 space-y-1.5 text-sm">
                   {data.by_combo.map((c, idx) => (
@@ -197,25 +214,25 @@ export function SectionMenu({
             </Card>
 
             <Card className="p-5">
-              <h3 className="font-display text-lg font-semibold">Promotions</h3>
+              <h3 className="font-display text-lg font-semibold">{t('promotions')}</h3>
               <dl className="mt-3 space-y-1.5 text-sm">
-                <PromoRow label="Orders with a code" value={data.totals.promo_orders.toString()} />
-                <PromoRow label="Discount given" value={money(data.totals.promo_discount)} />
+                <PromoRow label={t('ordersWithCode')} value={data.totals.promo_orders.toString()} />
+                <PromoRow label={t('discountGiven')} value={money(data.totals.promo_discount)} />
                 <PromoRow
-                  label="Sales those orders brought in"
+                  label={t('promoSales')}
                   value={money(data.totals.promo_attributed_revenue)}
                 />
               </dl>
               {data.by_promo.length === 0 ? (
-                <EmptyNote>No promo code was used in this range.</EmptyNote>
+                <EmptyNote>{t('promosEmpty')}</EmptyNote>
               ) : (
                 <table className="mt-3 w-full text-sm">
                   <thead>
                     <tr className="text-left text-xs text-muted-foreground">
-                      <th className="pb-1 font-normal">Code</th>
-                      <th className="pb-1 text-right font-normal">Orders</th>
-                      <th className="pb-1 text-right font-normal">Given away</th>
-                      <th className="pb-1 text-right font-normal">Sales</th>
+                      <th className="pb-1 font-normal">{t('col.code')}</th>
+                      <th className="pb-1 text-right font-normal">{t('col.orders')}</th>
+                      <th className="pb-1 text-right font-normal">{t('col.givenAway')}</th>
+                      <th className="pb-1 text-right font-normal">{t('col.sales')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -234,10 +251,7 @@ export function SectionMenu({
                   </tbody>
                 </table>
               )}
-              <Caption>
-                Counted from the code stamped on each order, so a guest who used a code is
-                included — the redemption ledger only records signed-in diners.
-              </Caption>
+              <Caption>{t('promosCaption')}</Caption>
             </Card>
           </div>
         </>

@@ -1,9 +1,10 @@
 import type { BranchRider, LiveDelivery } from '@favornoms/database/queries';
 
 // Everything the Live deliveries board decides without touching React or the network:
-// what a card says, whether a row is stale, which rider positions are real, which
-// actions apply. Kept pure so the rules can be tested against the shapes that
-// actually broke the screen (a "ETA 37104 min" card, a scooter with no rider).
+// what a card says (as keys and values — the view words it in the reader's language),
+// whether a row is stale, which rider positions are real, which actions apply. Kept pure so
+// the rules can be tested against the shapes that actually broke the screen (a "ETA 37104
+// min" card, a scooter with no rider).
 
 export type BadgeVariant = 'muted' | 'warning' | 'info' | 'default' | 'success' | 'danger';
 
@@ -53,12 +54,73 @@ export function lastEndedWithReason(
   return best;
 }
 
+/**
+ * A duration in the parts the board writes it with: '<1 min', '3 min', '2 h 10 min', '3 d'.
+ * `unknown` is drawn as '—'.
+ */
+export type AgeSpan =
+  | { unit: 'unknown' }
+  | { unit: 'underMinute' }
+  | { unit: 'minutes'; minutes: number }
+  | { unit: 'hours'; hours: number; minutes: number }
+  | { unit: 'days'; days: number };
+
+/** The badge on a card, as a key under `deliveries.status`. */
+export type StatusLabelKey =
+  | 'waitingKitchen'
+  | 'findingRider'
+  | 'readyToGo'
+  | 'riderAccepted'
+  | 'offered'
+  | 'pickedUp'
+  | 'arriving'
+  | 'onTheWay'
+  | 'failed'
+  | 'unknown';
+
+export interface StatusLabel {
+  key: StatusLabelKey;
+  /** The raw delivery status, only for `unknown`. */
+  status?: string;
+}
+
+/**
+ * The second line on a card, as a key under `deliveries.detail` plus what the sentence needs.
+ * `reason` is always text somebody typed (a rider, a failed drop) and is shown as written.
+ */
+export type DeliveryDetail =
+  /** Nothing worth saying. */
+  | { key: 'none' }
+  | { key: 'kitchenReady' }
+  /** `status` is the order's own status code (orders.status). */
+  | { key: 'kitchenStatus'; status: string }
+  | { key: 'riderCancelled'; reason: string }
+  | { key: 'askedRiders'; count: number }
+  | { key: 'lookingForRider' }
+  | { key: 'selfStaff' }
+  | { key: 'noRiderHolds' }
+  | { key: 'acceptedAgo'; age: AgeSpan }
+  | { key: 'expiresIn'; countdown: string }
+  | { key: 'offerExpired' }
+  | { key: 'eta'; minutes: number }
+  | { key: 'pickedUpAgo'; age: AgeSpan }
+  | { key: 'atDoor' }
+  | { key: 'etaUnknown' }
+  /** A recorded failure reason, printed as written. */
+  | { key: 'reason'; reason: string }
+  | { key: 'noReason' };
+
 export interface DeliveryDescription {
-  label: string;
+  label: StatusLabel;
   variant: BadgeVariant;
-  /** Second line under the badge. Empty when there is nothing worth saying. */
-  detail: string;
+  /** Second line under the badge. `none` when there is nothing worth saying. */
+  detail: DeliveryDetail;
   overdue: boolean;
+}
+
+/** The typed words a detail line already quotes, so the card does not print them twice. */
+export function detailQuote(detail: DeliveryDetail): string | null {
+  return detail.key === 'riderCancelled' || detail.key === 'reason' ? detail.reason : null;
 }
 
 function msSince(iso: string | null | undefined, nowMs: number): number | null {
@@ -68,19 +130,16 @@ function msSince(iso: string | null | undefined, nowMs: number): number | null {
   return nowMs - t;
 }
 
-/** '<1 min', '3 min', '2 h 10 min', '3 d'. Never negative. */
-export function ageLabel(iso: string | null | undefined, nowMs: number): string {
+/** How long ago an ISO stamp was, in the units a person would use. Never negative. */
+export function ageSpan(iso: string | null | undefined, nowMs: number): AgeSpan {
   const ms = msSince(iso, nowMs);
-  if (ms == null) return '—';
+  if (ms == null) return { unit: 'unknown' };
   const min = Math.max(0, Math.floor(ms / 60_000));
-  if (min < 1) return '<1 min';
-  if (min < 60) return `${min} min`;
+  if (min < 1) return { unit: 'underMinute' };
+  if (min < 60) return { unit: 'minutes', minutes: min };
   const h = Math.floor(min / 60);
-  if (h < 24) {
-    const rem = min % 60;
-    return rem ? `${h} h ${rem} min` : `${h} h`;
-  }
-  return `${Math.floor(h / 24)} d`;
+  if (h < 24) return { unit: 'hours', hours: h, minutes: min % 60 };
+  return { unit: 'days', days: Math.floor(h / 24) };
 }
 
 /** 'm:ss' for a countdown; clamps at 0:00. */
@@ -149,13 +208,13 @@ export function describeDelivery(
 
   switch (d.status) {
     case 'pending': {
-      const detail =
+      const detail: DeliveryDetail =
         kitchen === 'ready'
-          ? 'Kitchen says ready — no rider has been asked yet'
+          ? { key: 'kitchenReady' }
           : kitchen
-            ? `Kitchen: ${kitchen.replace(/_/g, ' ')}`
-            : '';
-      return { label: 'Waiting for the kitchen', variant: 'muted', detail, overdue: age > OVERDUE_AFTER_MS };
+            ? { key: 'kitchenStatus', status: kitchen }
+            : { key: 'none' };
+      return { label: { key: 'waitingKitchen' }, variant: 'muted', detail, overdue: age > OVERDUE_AFTER_MS };
     }
     case 'dispatching': {
       const n = d.dispatch_attempts;
@@ -163,53 +222,83 @@ export function describeDelivery(
       // answered yet, and "Asked 3 riders so far" said nothing about which one it was. The
       // rider's own words win over the attempt count whenever there are any.
       const walked = lastEndedWithReason(assignments);
-      const detail =
-        walked && walked.end_kind?.startsWith('driver_cancelled')
-          ? `Rider cancelled: ${walked.end_reason}`
+      const detail: DeliveryDetail =
+        walked?.end_reason && walked.end_kind?.startsWith('driver_cancelled')
+          ? { key: 'riderCancelled', reason: walked.end_reason }
           : n > 0
-            ? `Asked ${n} rider${n === 1 ? '' : 's'} so far`
-            : 'Looking for a rider';
-      return { label: 'Finding a rider', variant: 'warning', detail, overdue: age > OVERDUE_AFTER_MS };
+            ? { key: 'askedRiders', count: n }
+            : { key: 'lookingForRider' };
+      return { label: { key: 'findingRider' }, variant: 'warning', detail, overdue: age > OVERDUE_AFTER_MS };
     }
     case 'assigned': {
       if (!d.driver_id) {
         return selfDelivery
-          ? { label: 'Ready to go out', variant: 'info', detail: 'Your own staff deliver this one', overdue: age > OVERDUE_AFTER_MS }
-          : { label: 'Finding a rider', variant: 'warning', detail: 'No rider holds this yet', overdue: age > OVERDUE_AFTER_MS };
+          ? { label: { key: 'readyToGo' }, variant: 'info', detail: { key: 'selfStaff' }, overdue: age > OVERDUE_AFTER_MS }
+          : { label: { key: 'findingRider' }, variant: 'warning', detail: { key: 'noRiderHolds' }, overdue: age > OVERDUE_AFTER_MS };
       }
       if (d.accepted_at) {
-        return { label: 'Rider accepted · heading to shop', variant: 'info', detail: `Accepted ${ageLabel(d.accepted_at, nowMs)} ago`, overdue: false };
+        return {
+          label: { key: 'riderAccepted' },
+          variant: 'info',
+          detail: { key: 'acceptedAgo', age: ageSpan(d.accepted_at, nowMs) },
+          overdue: false,
+        };
       }
       const exp = d.offer_expires_at ? new Date(d.offer_expires_at).getTime() : NaN;
       if (Number.isFinite(exp) && exp > nowMs) {
-        return { label: 'Offered to rider', variant: 'warning', detail: `Expires in ${formatCountdown(exp - nowMs)}`, overdue: false };
+        return {
+          label: { key: 'offered' },
+          variant: 'warning',
+          detail: { key: 'expiresIn', countdown: formatCountdown(exp - nowMs) },
+          overdue: false,
+        };
       }
-      return { label: 'Offered to rider', variant: 'warning', detail: 'Offer expired — returning to the pool', overdue: true };
+      return { label: { key: 'offered' }, variant: 'warning', detail: { key: 'offerExpired' }, overdue: true };
     }
     case 'picked_up': {
       const eta = saneEta(d.current_eta_min, d.driver_location_updated_at, nowMs);
-      return { label: 'Picked up', variant: 'default', detail: eta != null ? `ETA ${eta} min` : `Picked up ${ageLabel(d.picked_up_at ?? d.created_at, nowMs)} ago`, overdue: false };
+      return {
+        label: { key: 'pickedUp' },
+        variant: 'default',
+        detail:
+          eta != null
+            ? { key: 'eta', minutes: eta }
+            : { key: 'pickedUpAgo', age: ageSpan(d.picked_up_at ?? d.created_at, nowMs) },
+        overdue: false,
+      };
     }
     case 'in_transit': {
       const arriving = msSince(d.arriving_at, nowMs);
       if (arriving != null && arriving >= 0 && arriving < ARRIVING_WINDOW_MS) {
-        return { label: 'Arriving now', variant: 'success', detail: 'Rider is at the door', overdue: false };
+        return { label: { key: 'arriving' }, variant: 'success', detail: { key: 'atDoor' }, overdue: false };
       }
       const eta = saneEta(d.current_eta_min, d.driver_location_updated_at, nowMs);
-      return { label: 'On the way', variant: 'default', detail: eta != null ? `ETA ${eta} min` : 'ETA unknown — waiting for the rider’s GPS', overdue: false };
+      return {
+        label: { key: 'onTheWay' },
+        variant: 'default',
+        detail: eta != null ? { key: 'eta', minutes: eta } : { key: 'etaUnknown' },
+        overdue: false,
+      };
     }
     case 'failed': {
       // failed_reason is cleared by requeue_failed_delivery; the turn keeps what was said.
       const ended = lastEndedWithReason(assignments);
+      const reason = d.failed_reason ?? ended?.end_reason ?? null;
       return {
-        label: 'Failed — needs you',
+        label: { key: 'failed' },
         variant: 'danger',
-        detail: d.failed_reason ?? ended?.end_reason ?? 'No reason recorded',
+        detail: reason ? { key: 'reason', reason } : { key: 'noReason' },
         overdue: true,
       };
     }
     default:
-      return { label: String(d.status), variant: 'muted', detail: '', overdue: false };
+      // LIVE_DELIVERY_STATUSES has no other value; a new one is shown as its raw code.
+      return {
+        label: { key: 'unknown', status: String(d.status) },
+        variant: 'muted',
+        detail: { key: 'none' },
+        overdue: false,
+      };
   }
 }
 
@@ -340,50 +429,90 @@ export interface DispatchFailure {
   } | null;
 }
 
+export type DispatchFailureKey =
+  | 'maxAttempts'
+  | 'notEntitled'
+  | 'notDispatchable'
+  | 'failed'
+  | 'noneAvailable'
+  | 'noPin'
+  | 'noneApproved'
+  | 'noneOnline'
+  | 'noLocation'
+  | 'gpsStale'
+  | 'allBusy'
+  | 'outOfRangeMiles'
+  | 'outOfRange';
+
+/** A sentence to show, as a key under `deliveries.dispatch` plus its values. */
+export interface DispatchFailureText {
+  key: DispatchFailureKey;
+  values?: Record<string, number>;
+  /** The server's own code when this screen does not know it — for the log, never the screen. */
+  code?: string;
+}
+
 /** Turn dispatch-driver's gate counts into the one sentence that tells the merchant where
  *  to look. Ordered from "nothing is set up" to "everyone is busy", so the first failing
  *  gate is the one reported. Mirrors the kitchen display's reading of the same payload. */
-export function describeDispatchFailure(body: DispatchFailure): string {
+export function describeDispatchFailure(body: DispatchFailure): DispatchFailureText {
   if (body?.error && body.error !== 'no_drivers_available') {
-    if (body.error === 'max_attempts_reached') return 'Tried every rider — raise "Max dispatch attempts" or assign one by hand.';
-    if (body.error === 'delivery_not_dispatchable') return 'This delivery is no longer waiting for a rider.';
-    return body.error.replace(/_/g, ' ');
+    if (body.error === 'max_attempts_reached') return { key: 'maxAttempts' };
+    if (body.error === 'feature_not_entitled') return { key: 'notEntitled' };
+    if (body.error === 'delivery_not_dispatchable') return { key: 'notDispatchable' };
+    // Any other code is server vocabulary, not a sentence for the merchant.
+    return { key: 'failed', code: body.error };
   }
   const d = body?.diagnostics;
-  if (!d) return 'No rider available right now.';
-  if (d.branch_has_pin === false) return 'This branch has no map pin yet — set it in Branch settings.';
-  if (!d.approved) return 'No rider is approved for this branch yet.';
-  if (!d.online) return `No rider is online right now (${d.approved} approved).`;
-  if (!d.has_location) {
-    return `${d.online} online, but none have shared a location — the rider app must be open with location permission granted.`;
-  }
+  if (!d) return { key: 'noneAvailable' };
+  if (d.branch_has_pin === false) return { key: 'noPin' };
+  if (!d.approved) return { key: 'noneApproved' };
+  if (!d.online) return { key: 'noneOnline', values: { approved: d.approved } };
+  if (!d.has_location) return { key: 'noLocation', values: { online: d.online } };
   if (!d.gps_fresh) {
-    return `${d.online} online, but no location newer than ${d.max_gps_age_min ?? 5} min. The rider app only sends GPS while it is open in the foreground.`;
+    return { key: 'gpsStale', values: { online: d.online, minutes: d.max_gps_age_min ?? 5 } };
   }
-  if (!d.not_busy) return `${d.online} online, all already on a delivery.`;
+  if (!d.not_busy) return { key: 'allBusy', values: { online: d.online } };
   if (!d.in_radius) {
     const mi = d.radius_km != null ? Math.round(d.radius_km / 1.609344) : null;
-    return `${d.online} online, but none within${mi != null ? ` ${mi} mi` : ' the search radius'} — raise "Driver search radius".`;
+    return mi != null
+      ? { key: 'outOfRangeMiles', values: { online: d.online, miles: mi } }
+      : { key: 'outOfRange', values: { online: d.online } };
   }
-  return 'No rider available right now.';
+  return { key: 'noneAvailable' };
 }
 
-/** The RPCs raise bare exception names; left alone they read as crashes, not rules. */
-export const ASSIGN_ERRORS: Record<string, string> = {
-  driver_busy: 'That rider is already on a delivery.',
-  driver_not_eligible: 'That rider is not approved here or their documents are not verified.',
-  already_accepted: 'The rider has already accepted — they must hand it back from their app before you can reassign.',
-  not_assignable: 'This delivery can no longer be assigned by hand.',
-  not_found: 'That delivery no longer exists.',
-  forbidden: 'Your account cannot manage deliveries at this branch.',
-  auth_required: 'Your session has expired — sign in again.',
-  not_failed: 'Only a failed delivery can be re-dispatched.',
-  not_self_delivery: 'This branch uses platform riders; the rider moves the delivery from their app.',
-  bad_transition: 'That step is not available for this delivery any more.',
-};
+/**
+ * The RPCs raise bare exception names; left alone they read as crashes, not rules. Each maps
+ * to a sentence under `deliveries.rpcErrors`. The first code found in the message wins.
+ */
+export const RPC_ERRORS = {
+  driver_busy: 'driverBusy',
+  driver_not_eligible: 'driverNotEligible',
+  already_accepted: 'alreadyAccepted',
+  not_assignable: 'notAssignable',
+  not_found: 'notFound',
+  forbidden: 'forbidden',
+  auth_required: 'authRequired',
+  not_failed: 'notFailed',
+  not_self_delivery: 'notSelfDelivery',
+  bad_transition: 'badTransition',
+  // advance_self_delivery and cancel_order name the same situations in their own words.
+  delivery_not_found: 'notFound',
+  order_not_found: 'orderNotFound',
+  not_authorized: 'notAuthorized',
+  cannot_cancel_status: 'cannotCancelStatus',
+} as const;
 
-/** A Postgres error message may carry the bare code or wrap it; match the code anywhere. */
-export function readableRpcError(message: string): string {
-  const code = Object.keys(ASSIGN_ERRORS).find((k) => new RegExp(`\\b${k}\\b`).test(message));
-  return code ? ASSIGN_ERRORS[code]! : message;
+export type RpcErrorKey = (typeof RPC_ERRORS)[keyof typeof RPC_ERRORS];
+
+/**
+ * A Postgres error message may carry the bare code or wrap it; match the code anywhere.
+ * Null when the message is none of ours: the caller shows a generic sentence and logs the raw one.
+ */
+export function rpcErrorKey(message: string): RpcErrorKey | null {
+  const code = (Object.keys(RPC_ERRORS) as (keyof typeof RPC_ERRORS)[]).find((k) =>
+    new RegExp(`\\b${k}\\b`).test(message),
+  );
+  return code ? RPC_ERRORS[code] : null;
 }

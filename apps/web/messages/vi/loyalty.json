@@ -1,0 +1,67 @@
+{
+  "loading": "Đang tải…",
+  "signInPrompt": "Đăng nhập để xem điểm và phần thưởng của bạn tại {brandName}.",
+  "yourPoints": "Điểm của bạn",
+  "loadingTier": "Đang tải hạng",
+  "memberBadge": "Thành viên {tier}",
+  "rewardsReady": "{count, plural, other {# phần thưởng có thể đổi}}",
+  "pointsForReward": "{points, plural, other {Còn # điểm nữa để nhận {reward}}}",
+  "keepOrdering": "Tiếp tục đặt hàng để tích thêm điểm",
+  "lifetimeEarned": "Tổng điểm đã tích",
+  "lifetimeRedeemed": "Tổng điểm đã đổi",
+  "howPoints": {
+    "title": "Cách tích điểm",
+    "earnRate": "Nhận <strong>{points, plural, other {# điểm}} cho mỗi {amount}</strong> trong tạm tính đơn hàng.",
+    "earnFallback": "Tích điểm trên tạm tính của mọi đơn hàng đã hoàn tất.",
+    "landing": "Điểm được cộng <strong>khi đơn hàng hoàn tất</strong> — đơn đang chuẩn bị hoặc đang giao chưa được tính.",
+    "checkout": "Khi thanh toán, chọn <strong>một phần thưởng</strong> trong danh sách trên — số điểm tương ứng sẽ được trừ khỏi số dư và đơn hàng đó được giảm giá.",
+    "redeemed": "Điểm đã đổi được trừ khỏi số dư ngay, nhưng giao dịch chỉ hiện trong <strong>Hoạt động gần đây</strong> khi đơn hàng đó hoàn tất.",
+    "climb": "Tiếp tục đặt hàng để lên hạng và mở khóa thêm ưu đãi."
+  },
+  "activity": {
+    "title": "Hoạt động gần đây",
+    "empty": "Chưa có hoạt động điểm nào — đơn hàng đầu tiên sẽ bắt đầu tích điểm.",
+    "types": {
+      "earned": "Đã tích",
+      "redeemed": "Đã đổi",
+      "expired": "Hết hạn",
+      "adjusted": "Điều chỉnh"
+    }
+  },
+  "rewards": {
+    "title": "Phần thưởng có thể đổi",
+    "empty": "{brandName} chưa có phần thưởng nào. Trong lúc chờ, điểm của bạn vẫn tiếp tục được cộng dồn và không hết hạn.",
+    "percentOff": "Giảm {percent}%",
+    "percentOffCapped": "Giảm {percent}% (tối đa {max})",
+    "fixedOff": "Giảm {amount}",
+    "freeItem": "Miễn phí {item}",
+    "freeItemGeneric": "Món miễn phí",
+    "freeDelivery": "Miễn phí giao hàng",
+    "withMinimum": "{value} · cho đơn trên {amount}",
+    "ready": "có thể đổi",
+    "toGo": "{points, plural, other {còn #}}",
+    "pickAtCheckout": "Chọn khi thanh toán — mỗi đơn một phần thưởng."
+  },
+  "tiers": {
+    "title": "Hạng của bạn",
+    "lifetimePoints": "{points, plural, other {# điểm tích lũy}}",
+    "benefitsAria": "Quyền lợi hạng {tier}",
+    "toNext": "<strong>{points, plural, other {Còn # điểm}}</strong> nữa để lên hạng {tier}.",
+    "top": "Bạn đang ở hạng cao nhất — tận hưởng nhé! 🎉",
+    "tapHint": "Chạm vào một hạng để xem quyền lợi.",
+    "current": "Đây là hạng hiện tại của bạn.",
+    "passed": "Bạn đã vượt qua hạng này.",
+    "toUnlock": "{points, plural, other {Còn # điểm nữa để mở khóa.}}",
+    "earnTitle": "Cách bạn tích điểm",
+    "earnBody": "Bạn nhận {points, plural, other {# điểm}} cho mỗi {amount} trong tạm tính của đơn hàng. Điểm được cộng khi đơn hàng hoàn tất — không cộng điểm khi đơn còn đang chờ, đang chuẩn bị hoặc đang giao, và đơn đã hủy sẽ không được tích điểm.",
+    "starter": "Hạng khởi đầu của mọi thành viên — không yêu cầu chi tiêu tối thiểu.",
+    "unlockedAt": "Mở khóa khi đạt {points, plural, other {# điểm tích lũy}}.",
+    "failed": "Hiện không thể tải các hạng thành viên. Điểm và huy hiệu của bạn không bị ảnh hưởng — hãy tải lại trang để thử lại."
+  },
+  "defaultPerks": {
+    "bronze": "Dùng điểm để đổi bất kỳ phần thưởng nào nhà hàng đang có.",
+    "silver": "Huy hiệu thành viên trên tài khoản, để nhà hàng có thể gửi bạn ưu đãi dành riêng cho thành viên.",
+    "gold": "Khuyến mãi dành riêng cho thành viên và quyền tham gia sớm các chương trình nhà hàng dành cho những khách quen thân thiết nhất.",
+    "platinum": "Hạng cao nhất — những ưu đãi độc quyền nhất của nhà hàng sẽ đến đây trước."
+  }
+}

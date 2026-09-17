@@ -2,18 +2,19 @@ import { describe, expect, it } from 'vitest';
 import type { BranchRider, LiveDelivery } from '@favornoms/database/queries';
 import type { DeliveryAssignmentRef } from './live-ops-model';
 import {
-  ageLabel,
+  ageSpan,
   boardCounts,
   canAssign,
   canCancelDelivery,
   canFindRider,
   describeDelivery,
   describeDispatchFailure,
+  detailQuote,
   lastEndedWithReason,
   isStale,
   mergeRefetch,
   partitionStale,
-  readableRpcError,
+  rpcErrorKey,
   riderPinState,
   riderPosition,
   saneEta,
@@ -111,8 +112,8 @@ describe('lastEndedWithReason', () => {
 describe('describeDelivery', () => {
   it('says the kitchen still has it while the delivery is pending', () => {
     const d = describeDelivery(delivery({ status: 'pending' }), NOW, false);
-    expect(d.label).toBe('Waiting for the kitchen');
-    expect(d.detail).toBe('Kitchen: preparing');
+    expect(d.label).toEqual({ key: 'waitingKitchen' });
+    expect(d.detail).toEqual({ key: 'kitchenStatus', status: 'preparing' });
     expect(d.overdue).toBe(false);
   });
 
@@ -127,8 +128,8 @@ describe('describeDelivery', () => {
       NOW,
       false,
     );
-    expect(d.label).toBe('Finding a rider');
-    expect(d.detail).toBe('Asked 3 riders so far');
+    expect(d.label).toEqual({ key: 'findingRider' });
+    expect(d.detail).toEqual({ key: 'askedRiders', count: 3 });
   });
 
   it('prefers the rider’s own cancellation reason over the attempt count', () => {
@@ -138,8 +139,9 @@ describe('describeDelivery', () => {
       false,
       [assignment({ end_kind: 'driver_cancelled', end_reason: 'Bike chain snapped on Silom' })],
     );
-    expect(d.label).toBe('Finding a rider');
-    expect(d.detail).toBe('Rider cancelled: Bike chain snapped on Silom');
+    expect(d.label).toEqual({ key: 'findingRider' });
+    expect(d.detail).toEqual({ key: 'riderCancelled', reason: 'Bike chain snapped on Silom' });
+    expect(detailQuote(d.detail)).toBe('Bike chain snapped on Silom');
   });
 
   it('falls back to the attempt count when the turn ended without words', () => {
@@ -149,15 +151,15 @@ describe('describeDelivery', () => {
       false,
       [assignment({ end_kind: 'offer_expired', end_reason: null })],
     );
-    expect(d.detail).toBe('Asked 3 riders so far');
+    expect(d.detail).toEqual({ key: 'askedRiders', count: 3 });
   });
 
   it('still explains a failed row after requeue nulled failed_reason', () => {
     const d = describeDelivery(delivery({ status: 'failed', failed_reason: null }), NOW, false, [
       assignment({ end_kind: 'failed_at_door', end_reason: 'Nobody answered the door' }),
     ]);
-    expect(d.label).toBe('Failed — needs you');
-    expect(d.detail).toBe('Nobody answered the door');
+    expect(d.label).toEqual({ key: 'failed' });
+    expect(d.detail).toEqual({ key: 'reason', reason: 'Nobody answered the door' });
   });
 
   it('counts down an open offer', () => {
@@ -170,8 +172,8 @@ describe('describeDelivery', () => {
       NOW,
       false,
     );
-    expect(d.label).toBe('Offered to rider');
-    expect(d.detail).toBe('Expires in 1:14');
+    expect(d.label).toEqual({ key: 'offered' });
+    expect(d.detail).toEqual({ key: 'expiresIn', countdown: '1:14' });
   });
 
   it('does not keep saying "Offered" once the rider has accepted', () => {
@@ -180,7 +182,8 @@ describe('describeDelivery', () => {
       NOW,
       false,
     );
-    expect(d.label).toBe('Rider accepted · heading to shop');
+    expect(d.label).toEqual({ key: 'riderAccepted' });
+    expect(d.detail).toEqual({ key: 'acceptedAgo', age: { unit: 'minutes', minutes: 2 } });
   });
 
   it('marks an expired offer as going back to the pool', () => {
@@ -193,13 +196,14 @@ describe('describeDelivery', () => {
       NOW,
       false,
     );
-    expect(d.detail).toBe('Offer expired — returning to the pool');
+    expect(d.detail).toEqual({ key: 'offerExpired' });
     expect(d.overdue).toBe(true);
   });
 
   it('reads a self-delivery parked at assigned as ready to go out, not as an offer', () => {
     const d = describeDelivery(delivery({ status: 'assigned', driver_id: null }), NOW, true);
-    expect(d.label).toBe('Ready to go out');
+    expect(d.label).toEqual({ key: 'readyToGo' });
+    expect(d.detail).toEqual({ key: 'selfStaff' });
   });
 
   it('never prints an ETA computed from a week-old fix', () => {
@@ -213,8 +217,8 @@ describe('describeDelivery', () => {
       NOW,
       false,
     );
-    expect(d.detail).not.toContain('37104');
-    expect(d.detail).toBe('ETA unknown — waiting for the rider’s GPS');
+    expect(JSON.stringify(d.detail)).not.toContain('37104');
+    expect(d.detail).toEqual({ key: 'etaUnknown' });
   });
 
   it('prints a fresh ETA', () => {
@@ -228,7 +232,7 @@ describe('describeDelivery', () => {
       NOW,
       false,
     );
-    expect(d.detail).toBe('ETA 12 min');
+    expect(d.detail).toEqual({ key: 'eta', minutes: 12 });
   });
 
   it('surfaces the recorded reason on a failed delivery', () => {
@@ -237,8 +241,24 @@ describe('describeDelivery', () => {
       NOW,
       false,
     );
-    expect(d.label).toBe('Failed — needs you');
-    expect(d.detail).toBe('Customer never answered');
+    expect(d.label).toEqual({ key: 'failed' });
+    expect(d.detail).toEqual({ key: 'reason', reason: 'Customer never answered' });
+  });
+
+  it('says so when a failed delivery carries no reason at all', () => {
+    const d = describeDelivery(delivery({ status: 'failed', failed_reason: null }), NOW, false);
+    expect(d.detail).toEqual({ key: 'noReason' });
+    expect(detailQuote(d.detail)).toBeNull();
+  });
+
+  it('keeps an unexpected status as the raw code for the view to show', () => {
+    const d = describeDelivery(
+      delivery({ status: 'mystery' as unknown as LiveDelivery['status'] }),
+      NOW,
+      false,
+    );
+    expect(d.label).toEqual({ key: 'unknown', status: 'mystery' });
+    expect(d.detail).toEqual({ key: 'none' });
   });
 });
 
@@ -395,21 +415,26 @@ describe('mergeRefetch', () => {
   });
 });
 
-describe('ageLabel', () => {
+describe('ageSpan', () => {
   it('reads in the units a person would use', () => {
-    expect(ageLabel(minsAgo(0.2), NOW)).toBe('<1 min');
-    expect(ageLabel(minsAgo(3), NOW)).toBe('3 min');
-    expect(ageLabel(minsAgo(130), NOW)).toBe('2 h 10 min');
-    expect(ageLabel(new Date(NOW - 3 * 864e5).toISOString(), NOW)).toBe('3 d');
-    expect(ageLabel(null, NOW)).toBe('—');
+    expect(ageSpan(minsAgo(0.2), NOW)).toEqual({ unit: 'underMinute' });
+    expect(ageSpan(minsAgo(3), NOW)).toEqual({ unit: 'minutes', minutes: 3 });
+    expect(ageSpan(minsAgo(130), NOW)).toEqual({ unit: 'hours', hours: 2, minutes: 10 });
+    expect(ageSpan(minsAgo(120), NOW)).toEqual({ unit: 'hours', hours: 2, minutes: 0 });
+    expect(ageSpan(new Date(NOW - 3 * 864e5).toISOString(), NOW)).toEqual({ unit: 'days', days: 3 });
+    expect(ageSpan(null, NOW)).toEqual({ unit: 'unknown' });
+  });
+
+  it('never goes negative for a stamp slightly in the future', () => {
+    expect(ageSpan(new Date(NOW + 30_000).toISOString(), NOW)).toEqual({ unit: 'underMinute' });
   });
 });
 
 describe('describeDispatchFailure', () => {
   it('points at the setting when every rider has been tried', () => {
-    expect(describeDispatchFailure({ error: 'max_attempts_reached' })).toContain(
-      'Max dispatch attempts',
-    );
+    expect(describeDispatchFailure({ error: 'max_attempts_reached' })).toEqual({
+      key: 'maxAttempts',
+    });
   });
 
   it('reports the first gate that emptied the candidate list', () => {
@@ -417,23 +442,53 @@ describe('describeDispatchFailure', () => {
       describeDispatchFailure({
         diagnostics: { branch_has_pin: true, approved: 8, online: 4, has_location: 0 },
       }),
-    ).toContain('none have shared a location');
+    ).toEqual({ key: 'noLocation', values: { online: 4 } });
   });
 
   it('sends the merchant to Branch settings when there is no pin', () => {
-    expect(describeDispatchFailure({ diagnostics: { branch_has_pin: false } })).toContain(
-      'no map pin',
-    );
+    expect(describeDispatchFailure({ diagnostics: { branch_has_pin: false } })).toEqual({
+      key: 'noPin',
+    });
+  });
+
+  it('converts the search radius to miles', () => {
+    expect(
+      describeDispatchFailure({
+        diagnostics: {
+          branch_has_pin: true,
+          approved: 3,
+          online: 2,
+          has_location: 2,
+          gps_fresh: 2,
+          not_busy: 2,
+          in_radius: 0,
+          radius_km: 8,
+        },
+      }),
+    ).toEqual({ key: 'outOfRangeMiles', values: { online: 2, miles: 5 } });
+  });
+
+  it('keeps an unknown server code for the log instead of printing it', () => {
+    expect(describeDispatchFailure({ error: 'something_new' })).toEqual({
+      key: 'failed',
+      code: 'something_new',
+    });
   });
 });
 
-describe('readableRpcError', () => {
+describe('rpcErrorKey', () => {
   it('turns a bare postgres exception into the rule it stands for', () => {
-    expect(readableRpcError('already_accepted')).toContain('hand it back');
-    expect(readableRpcError('driver_busy')).toBe('That rider is already on a delivery.');
+    expect(rpcErrorKey('already_accepted')).toBe('alreadyAccepted');
+    expect(rpcErrorKey('driver_busy')).toBe('driverBusy');
   });
 
-  it('leaves an unrecognised message alone', () => {
-    expect(readableRpcError('connection reset')).toBe('connection reset');
+  it('finds the code inside a wrapped message', () => {
+    expect(rpcErrorKey('cannot_cancel_status:picked_up')).toBe('cannotCancelStatus');
+    expect(rpcErrorKey('P0001: order_not_found')).toBe('orderNotFound');
+    expect(rpcErrorKey('delivery_not_found')).toBe('notFound');
+  });
+
+  it('does not recognise a message that is none of ours', () => {
+    expect(rpcErrorKey('connection reset')).toBeNull();
   });
 });

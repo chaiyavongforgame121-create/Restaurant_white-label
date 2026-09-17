@@ -17,7 +17,7 @@ import {
   isFixStale,
   type LatLng,
 } from '@favornoms/maps';
-import { Badge, Button, Card, IconButton } from '@favornoms/ui';
+import { Badge, Button, Card, IconButton, useUiLocale } from '@favornoms/ui';
 import { DeliveryChat } from './delivery-chat';
 import { OrderActions, type ExistingRating } from './order-actions';
 
@@ -166,6 +166,7 @@ function pickTrackedFields(row: Record<string, unknown>): Partial<DeliveryRow> {
 
 export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransfer }: Props) {
   const t = useTranslations('tracking');
+  const locale = useUiLocale();
   const router = useRouter();
   const pathname = usePathname();
   const [order, setOrder] = React.useState<OrderRow>(() => ({
@@ -401,7 +402,7 @@ export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransf
   return (
     <div className="container max-w-xl pt-4">
       <header className="mb-5 flex items-center gap-3">
-        <IconButton label="Back" onClick={() => router.back()}>
+        <IconButton label={t('back')} onClick={() => router.back()}>
           <ChevronLeft className="h-5 w-5" />
         </IconButton>
         <div>
@@ -457,7 +458,7 @@ export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransf
             role="status"
             className="mx-5 mt-4 rounded-xl bg-warning/10 px-3 py-2 text-center text-xs text-foreground"
           >
-            Reconnecting… this page may be a moment behind.
+            {t('reconnecting')}
           </p>
         )}
 
@@ -518,12 +519,13 @@ export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransf
           {(order.status === 'cancelled' || order.status === 'refunded') && (
             <Card className="mt-6 border-danger/40 bg-danger/5 p-4">
               <p className="font-semibold text-danger">
-                {order.status === 'refunded' ? 'This order was refunded' : 'This order was cancelled'}
+                {order.status === 'refunded' ? t('closed.refunded') : t('closed.cancelled')}
               </p>
               <p className="mt-1 text-sm text-muted-foreground">
+                {/* The merchant's or the diner's own words — shown exactly as written. */}
                 {order.cancellation_reason
                   ? order.cancellation_reason
-                  : 'Please contact the restaurant if you were not expecting this.'}
+                  : t('closed.contactRestaurant')}
               </p>
             </Card>
           )}
@@ -557,34 +559,41 @@ export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransf
                 <div>
                   <p className="font-display text-base font-semibold">
                     {arriving
-                      ? 'Your driver is almost there!'
+                      ? t('driver.almostThere')
                       : // Stop-2 of a stacked trip: honest while the driver is still on the
                         // first drop (assigned/picked_up). Once THIS leg is in_transit the
                         // driver is genuinely heading here — back to the normal copy.
                         liveDelivery.batch_seq === 2 &&
                           ['assigned', 'picked_up'].includes(liveDelivery.status)
-                        ? 'Your driver is finishing one nearby delivery first'
+                        ? t('driver.finishingOtherDelivery')
                         : // 'assigned' means they are riding to the RESTAURANT. Calling that
                           // "on the way" and printing a minutes figure beside it is how the
                           // number came to be read as time-to-you when it was not.
                           liveDelivery.status === 'assigned'
-                          ? 'Your driver is collecting your order'
-                          : 'Your driver is on the way'}
+                          ? t('driver.collecting')
+                          : t('driver.onTheWay')}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {liveDelivery.distance_km != null &&
-                      `${kmToMi(liveDelivery.distance_km).toFixed(1)} mi · `}
-                    {fixAge == null
-                      ? 'Waiting for your driver’s location…'
-                      : fixStale
-                        ? `Location last updated ${formatFixAge(fixAge)} — the map and ETA may be behind`
-                        : etaMin != null
-                          ? `${etaMin} min to you · updated ${formatFixAge(fixAge)}`
-                          : `Updated ${formatFixAge(fixAge)}`}
-                    {liveDelivery.batch_seq === 2 &&
+                    {/* Independent facts separated by a middot; each one is a whole message. */}
+                    {[
+                      liveDelivery.distance_km != null
+                        ? t('driver.distance', { miles: kmToMi(liveDelivery.distance_km).toFixed(1) })
+                        : null,
+                      fixAge == null
+                        ? t('driver.waitingForLocation')
+                        : fixStale
+                          ? t('driver.locationStale', { age: formatFixAge(fixAge, locale) })
+                          : etaMin != null
+                            ? t('driver.etaUpdated', { minutes: etaMin, age: formatFixAge(fixAge, locale) })
+                            : t('driver.updated', { age: formatFixAge(fixAge, locale) }),
+                      liveDelivery.batch_seq === 2 &&
                       !arriving &&
-                      ['assigned', 'picked_up'].includes(liveDelivery.status) &&
-                      ' · includes their other stop'}
+                      ['assigned', 'picked_up'].includes(liveDelivery.status)
+                        ? t('driver.includesOtherStop')
+                        : null,
+                    ]
+                      .filter((part): part is string => !!part)
+                      .join(' · ')}
                   </p>
                 </div>
               </div>
@@ -607,7 +616,7 @@ export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransf
           {/* Order items summary */}
           <div className="mt-6 space-y-2 rounded-2xl bg-muted/40 p-4">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Items
+              {t('items.title')}
             </p>
             <ul className="space-y-1.5 text-sm">
               {order.order_items.map((item, i) => (
@@ -623,7 +632,7 @@ export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransf
               className="focus-ring mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-primary underline"
             >
               <Receipt className="h-3.5 w-3.5" />
-              View full receipt →
+              {t('items.viewReceipt')}
             </a>
           </div>
         </div>
@@ -658,6 +667,8 @@ function TrackingMap({
   stale: boolean;
   fixAge: number | null;
 }) {
+  const t = useTranslations('tracking');
+  const locale = useUiLocale();
   const dropoff =
     delivery.dropoff_lat != null && delivery.dropoff_lng != null
       ? { lat: delivery.dropoff_lat, lng: delivery.dropoff_lng }
@@ -706,7 +717,7 @@ function TrackingMap({
           both: it sends the diner to the door for a rider who may still be streets away. */}
       {arriving && !stale && (
         <span className="absolute left-3 top-3 z-10 rounded-full bg-success px-3 py-1.5 text-xs font-bold text-white shadow-lg">
-          🛵 Arriving now
+          {t('arrivingNow')}
         </span>
       )}
       {stale && fixAge != null && (
@@ -714,7 +725,7 @@ function TrackingMap({
           role="status"
           className="absolute right-3 top-3 z-10 rounded-full bg-card/90 px-3 py-1.5 text-xs font-semibold text-muted-foreground shadow"
         >
-          Last seen {formatFixAge(fixAge)}
+          {t('lastSeen', { age: formatFixAge(fixAge, locale) })}
         </span>
       )}
     </div>
@@ -766,6 +777,7 @@ function CallDriverButton({ deliveryId, label }: { deliveryId: string; label: st
 const ALLOW_MOCK_PAY = process.env.NODE_ENV !== 'production';
 
 function CardPaymentNotice({ orderId }: { orderId: string }) {
+  const t = useTranslations('tracking');
   const [confirming, setConfirming] = React.useState(false);
 
   const mockConfirm = async () => {
@@ -786,16 +798,12 @@ function CardPaymentNotice({ orderId }: { orderId: string }) {
       role="status"
       className="mt-6 rounded-2xl border border-warning/40 bg-warning/5 p-4"
     >
-      <p className="text-sm font-semibold text-warning">Card payment isn&apos;t available here</p>
-      <p className="mt-1 text-xs text-muted-foreground">
-        This order was placed as a card payment, but we can&apos;t take the card online yet.
-        Please pay the restaurant directly — they can take it when you collect your order or
-        when it arrives. Your order is not cancelled.
-      </p>
+      <p className="text-sm font-semibold text-warning">{t('cardPayment.title')}</p>
+      <p className="mt-1 text-xs text-muted-foreground">{t('cardPayment.body')}</p>
       {ALLOW_MOCK_PAY && (
         <div className="mt-3 space-y-2">
           <p className="text-xs text-muted-foreground">
-            Development build only: mark the order paid so the rest of the flow can be tested.
+            {t('cardPayment.devNote')}
           </p>
           <Button
             variant="outline"
@@ -804,7 +812,7 @@ function CardPaymentNotice({ orderId }: { orderId: string }) {
             loading={confirming}
             onClick={mockConfirm}
           >
-            Mock confirm (dev only)
+            {t('cardPayment.devConfirm')}
           </Button>
         </div>
       )}
@@ -835,6 +843,7 @@ function TransferProof({
   total: number;
   qr: QrTransfer | null;
 }) {
+  const t = useTranslations('tracking');
   const router = useRouter();
   const inputRef = React.useRef<HTMLInputElement>(null);
   const [busy, setBusy] = React.useState(false);
@@ -862,7 +871,14 @@ function TransferProof({
     const { error: rpcErr } = await supabase.rpc('confirm_payment_proof', { p_order_id: orderId });
     setConfirming(false);
     if (rpcErr) {
-      setError(rpcErr.hint ?? rpcErr.message);
+      // confirm_payment_proof raises bare codes; a raw server message is never shown.
+      setError(
+        rpcErr.message.includes('slip_required')
+          ? t('transfer.errors.slipRequired')
+          : rpcErr.message.includes('payment_not_found')
+            ? t('transfer.errors.notYourOrder')
+            : t('transfer.errors.generic'),
+      );
       return;
     }
     setJustConfirmed(true);
@@ -896,21 +912,27 @@ function TransferProof({
     setError(null);
     try {
       if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
-        throw new Error('Please upload a PNG, JPEG or WebP photo of your slip.');
+        throw new Error(t('transfer.errors.fileType'));
       }
-      if (file.size > 10 * 1024 * 1024) throw new Error('That image is larger than 10 MB.');
+      if (file.size > 10 * 1024 * 1024) throw new Error(t('transfer.errors.tooLarge'));
       const supabase = getBrowserClient();
       const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
       const path = `${orderId}/${crypto.randomUUID()}.${ext}`;
       const { error: upErr } = await supabase.storage
         .from('payment-proofs')
         .upload(path, file, { contentType: file.type, upsert: false });
-      if (upErr) throw new Error(upErr.message);
+      if (upErr) throw new Error(t('transfer.errors.uploadFailed'));
       const { error: rpcErr } = await supabase.rpc('submit_payment_proof', {
         p_order_id: orderId,
         p_path: path,
       });
-      if (rpcErr) throw new Error(rpcErr.message);
+      if (rpcErr) {
+        throw new Error(
+          rpcErr.message.includes('payment_not_found')
+            ? t('transfer.errors.notYourOrder')
+            : t('transfer.errors.generic'),
+        );
+      }
       setJustUploaded(path);
       router.refresh();
     } catch (e) {
@@ -924,11 +946,9 @@ function TransferProof({
     return (
       <Card className="mt-6 border-success/40 bg-success/5 p-4">
         <p className="flex items-center gap-2 font-semibold text-success">
-          <CheckCircle2 className="h-5 w-5" /> Transfer confirmed
+          <CheckCircle2 className="h-5 w-5" /> {t('transfer.confirmedTitle')}
         </p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          The restaurant has checked your slip and started your order.
-        </p>
+        <p className="mt-1 text-sm text-muted-foreground">{t('transfer.confirmedBody')}</p>
       </Card>
     );
   }
@@ -939,23 +959,23 @@ function TransferProof({
     <Card className={`mt-6 p-4 ${rejected ? 'border-danger/40 bg-danger/5' : ''}`}>
       <p className="font-semibold">
         {rejected
-          ? 'Your transfer slip was not accepted'
+          ? t('transfer.rejectedTitle')
           : confirmed
-            ? 'Waiting for the restaurant to check your slip'
+            ? t('transfer.waitingTitle')
             : submitted
-              ? 'Check your slip, then confirm'
-              : `Pay ${formatCurrency(total)} to continue`}
+              ? t('transfer.reviewTitle')
+              : t('transfer.payTitle', { amount: formatCurrency(total) })}
       </p>
       <p className="mt-1 text-sm text-muted-foreground">
         {rejected
           ? note
-            ? `Reason: ${note}`
-            : 'Please upload a clearer photo of the transfer.'
+            ? t('transfer.rejectedReason', { reason: note })
+            : t('transfer.rejectedNoReason')
           : confirmed
-            ? 'We will start your order as soon as they confirm it. This usually takes a few minutes.'
+            ? t('transfer.waitingBody')
             : submitted
-              ? 'Have a look at the photo below. Replace it if it is not right, then confirm you have paid — that is what sends it to the restaurant.'
-              : 'Scan the code, transfer the total, then upload a photo of the confirmation.'}
+              ? t('transfer.reviewBody')
+              : t('transfer.payBody')}
       </p>
 
       {/* The QR lives here rather than at checkout: the diner now has a real order number to
@@ -965,7 +985,7 @@ function TransferProof({
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={qr.image_url}
-            alt="Payment QR code"
+            alt={t('transfer.qrAlt')}
             className="mx-auto h-48 w-48 rounded-xl bg-white object-contain p-2"
           />
           {qr.account_name && <p className="mt-2 text-sm font-medium">{qr.account_name}</p>}
@@ -992,7 +1012,7 @@ function TransferProof({
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={slipUrl}
-          alt="Your transfer slip"
+          alt={t('transfer.slipAlt')}
           className="mt-3 max-h-64 w-full rounded-xl border border-border object-contain"
         />
       )}
@@ -1007,12 +1027,12 @@ function TransferProof({
           loading={busy}
           onClick={() => inputRef.current?.click()}
         >
-          {submitted ? 'Upload a different photo' : 'Choose photo'}
+          {submitted ? t('transfer.replacePhoto') : t('transfer.choosePhoto')}
         </Button>
       )}
       {submitted && (!confirmed || rejected) && (
         <Button className="mt-2" fullWidth loading={confirming} onClick={confirmPaid}>
-          I&apos;ve paid — send to the restaurant
+          {t('transfer.confirmPaid')}
         </Button>
       )}
       {error && <p className="mt-2 text-sm text-danger">{error}</p>}

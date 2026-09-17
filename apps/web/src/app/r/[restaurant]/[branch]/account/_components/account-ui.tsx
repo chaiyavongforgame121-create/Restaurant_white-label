@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { ChevronLeft, LogIn } from 'lucide-react';
 import { Button, IconButton } from '@favornoms/ui';
 
@@ -10,9 +11,10 @@ import { Button, IconButton } from '@favornoms/ui';
 
 export function AccountHeader({ base, title }: { base: string; title: string }) {
   const router = useRouter();
+  const t = useTranslations('account');
   return (
     <header className="mb-5 flex items-center gap-3">
-      <IconButton label="Back" onClick={() => router.push(`${base}/account`)}>
+      <IconButton label={t('back')} onClick={() => router.push(`${base}/account`)}>
         <ChevronLeft className="h-5 w-5" />
       </IconButton>
       <h1 className="font-display text-2xl font-bold">{title}</h1>
@@ -21,6 +23,7 @@ export function AccountHeader({ base, title }: { base: string; title: string }) 
 }
 
 export function SignInGate({ base, message }: { base: string; message: string }) {
+  const t = useTranslations('account');
   return (
     <div className="rounded-2xl border border-border bg-card p-8 text-center">
       <p className="text-muted-foreground">{message}</p>
@@ -29,7 +32,7 @@ export function SignInGate({ base, message }: { base: string; message: string })
         className="mt-4 inline-block"
       >
         <Button variant="gradient" leftIcon={<LogIn className="h-4 w-4" />}>
-          Sign in
+          {t('signIn')}
         </Button>
       </Link>
     </div>

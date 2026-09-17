@@ -1,0 +1,8 @@
+{
+  "generic": "Something went wrong. Please try again.",
+  "network": "Couldn’t reach the server. Check your connection and try again.",
+  "permissionDenied": "You don’t have permission to do that.",
+  "uploadFailed": "The upload didn’t go through. Please try again.",
+  "fileTooLarge": "That file is too large to upload.",
+  "fileTypeNotAllowed": "That file type can’t be uploaded."
+}

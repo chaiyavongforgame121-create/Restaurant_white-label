@@ -11,10 +11,17 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
+import { useLocale, useTranslations } from 'next-intl';
 import { Plus, Save } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { upsertBillingProduct } from '@favornoms/database/queries';
-import { FEATURE_KEYS, featureLabel, type BillingProduct } from '@favornoms/shared';
+import {
+  DEFAULT_UI_LOCALE,
+  FEATURE_KEYS,
+  featureLabel,
+  isUiLocale,
+  type BillingProduct,
+} from '@favornoms/shared';
 import { Badge, Button, Card } from '@favornoms/ui';
 import { PlatformNav } from '../../_components/platform-nav';
 
@@ -37,8 +44,27 @@ const EMPTY: BillingProduct = {
   description: null,
 };
 
+/** billing_products.kind values. The value is stored; only the label is translated. */
+const KINDS = ['plan', 'addon', 'seat'] as const;
+const isKnownKind = (kind: string): kind is (typeof KINDS)[number] =>
+  (KINDS as readonly string[]).includes(kind);
+
+/** Raw PostgREST text is for the logs, never the screen. */
+function saveErrorKey(raw: string | undefined): string {
+  if (!raw) return 'errors.saveFailed';
+  console.error('[platform/plans] upsert_billing_product failed:', raw);
+  if (/forbidden|not[ _]authori[sz]ed|permission denied|platform[ _]admin/i.test(raw)) {
+    return 'errors.permission';
+  }
+  if (/failed to fetch|fetch failed|networkerror|network request failed/i.test(raw)) {
+    return 'errors.network';
+  }
+  return 'errors.saveFailed';
+}
+
 export function PlansManager({ products }: { products: BillingProduct[] }) {
   const router = useRouter();
+  const t = useTranslations('platformBilling');
   const [error, setError] = React.useState<string | null>(null);
   const [creating, setCreating] = React.useState(false);
 
@@ -50,14 +76,12 @@ export function PlansManager({ products }: { products: BillingProduct[] }) {
     <div className="container max-w-5xl py-8">
       <header className="mb-2 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-display text-3xl font-bold">Product catalog</h1>
-          <p className="mt-1 text-muted-foreground">
-            What restaurants can buy. Prices are monthly USD.
-          </p>
+          <h1 className="font-display text-3xl font-bold">{t('plans.title')}</h1>
+          <p className="mt-1 text-muted-foreground">{t('plans.subtitle')}</p>
         </div>
         {!creating && (
           <Button leftIcon={<Plus className="h-4 w-4" />} onClick={() => setCreating(true)}>
-            New product
+            {t('plans.newProduct')}
           </Button>
         )}
       </header>
@@ -65,10 +89,11 @@ export function PlansManager({ products }: { products: BillingProduct[] }) {
 
       {missingPrices.length > 0 && (
         <p className="mb-4 rounded-xl bg-warning/15 px-4 py-3 text-sm">
-          <strong>Stripe is dormant.</strong> {missingPrices.length} active product
-          {missingPrices.length === 1 ? ' has' : 's have'} no Stripe price ID (
-          {missingPrices.map((p) => p.code).join(', ')}). Until every one is filled in, merchants
-          are activated manually from Subscriptions instead of paying by card.
+          {t.rich('plans.stripeDormant', {
+            count: missingPrices.length,
+            codes: missingPrices.map((p) => p.code).join(', '),
+            strong: (chunks) => <strong>{chunks}</strong>,
+          })}
         </p>
       )}
 
@@ -118,6 +143,9 @@ function ProductEditor({
   onError: (msg: string | null) => void;
   onCancel?: () => void;
 }) {
+  const t = useTranslations('platformBilling');
+  const rawLocale = useLocale();
+  const locale = isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE;
   const [d, setD] = React.useState<BillingProduct>(initial);
   const [saving, setSaving] = React.useState(false);
   const set = (patch: Partial<BillingProduct>) => setD((v) => ({ ...v, ...patch }));
@@ -134,7 +162,7 @@ function ProductEditor({
     onError(null);
     const code = d.code.trim().toLowerCase();
     if (!code) {
-      onError('Product code is required.');
+      onError(t('plans.codeRequired'));
       return;
     }
     setSaving(true);
@@ -149,7 +177,7 @@ function ProductEditor({
     });
     setSaving(false);
     if (res.ok !== true) {
-      onError(res.error ?? 'Could not save.');
+      onError(t(saveErrorKey(res.error)));
       return;
     }
     onSaved();
@@ -187,11 +215,13 @@ function ProductEditor({
     <Card className={`p-5 ${!d.is_active ? 'opacity-70' : ''}`}>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <span className="font-mono text-sm font-semibold">{isNew ? 'new product' : d.code}</span>
-          <Badge variant="muted">{d.kind}</Badge>
-          {!d.is_active && <Badge variant="muted">Inactive</Badge>}
+          <span className="font-mono text-sm font-semibold">
+            {isNew ? t('plans.newProductCode') : d.code}
+          </span>
+          <Badge variant="muted">{isKnownKind(d.kind) ? t(`plans.kinds.${d.kind}`) : d.kind}</Badge>
+          {!d.is_active && <Badge variant="muted">{t('plans.inactive')}</Badge>}
           {d.is_active && d.code !== 'trial' && !d.stripe_price_id && (
-            <Badge variant="warning">No Stripe price</Badge>
+            <Badge variant="warning">{t('plans.noStripePrice')}</Badge>
           )}
         </div>
         <button
@@ -199,35 +229,41 @@ function ProductEditor({
           onClick={() => set({ is_active: !d.is_active })}
           className="text-sm text-muted-foreground underline-offset-2 hover:underline"
         >
-          {d.is_active ? 'Mark inactive' : 'Mark active'}
+          {d.is_active ? t('plans.markInactive') : t('plans.markActive')}
         </button>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {isNew && text('Code (slug)', 'code')}
-        {text('Name', 'name')}
-        {num('Monthly price ($)', 'monthly_price')}
+        {isNew && text(t('plans.fields.code'), 'code')}
+        {text(t('plans.fields.name'), 'name')}
+        {num(t('plans.fields.monthlyPrice'), 'monthly_price')}
         <label className="block">
-          <span className="mb-1 block text-xs font-medium text-muted-foreground">Kind</span>
+          <span className="mb-1 block text-xs font-medium text-muted-foreground">
+            {t('plans.fields.kind')}
+          </span>
           <select
             value={d.kind}
             onChange={(e) => set({ kind: e.target.value })}
             className={INPUT_CLS}
           >
-            <option value="plan">plan</option>
-            <option value="addon">addon</option>
-            <option value="seat">seat</option>
+            {KINDS.map((kind) => (
+              <option key={kind} value={kind}>
+                {t(`plans.kinds.${kind}`)}
+              </option>
+            ))}
           </select>
         </label>
-        {num('Seats included', 'included_seats', 'Seats the plan grants on its own.')}
-        {num('Seats per unit', 'seats_per_unit', 'For quantity products (extra_branch = 1).')}
-        {num('Trial days', 'trial_days')}
-        {num('Sort order', 'sort_order')}
-        {text('Stripe price ID', 'stripe_price_id', 'price_… — required before Stripe can go live.')}
+        {num(t('plans.fields.includedSeats'), 'included_seats', t('plans.fields.includedSeatsHint'))}
+        {num(t('plans.fields.seatsPerUnit'), 'seats_per_unit', t('plans.fields.seatsPerUnitHint'))}
+        {num(t('plans.fields.trialDays'), 'trial_days')}
+        {num(t('plans.fields.sortOrder'), 'sort_order')}
+        {text(t('plans.fields.stripePriceId'), 'stripe_price_id', t('plans.fields.stripePriceIdHint'))}
       </div>
 
       <label className="mt-3 block">
-        <span className="mb-1 block text-xs font-medium text-muted-foreground">Description</span>
+        <span className="mb-1 block text-xs font-medium text-muted-foreground">
+          {t('plans.fields.description')}
+        </span>
         <input
           type="text"
           value={d.description ?? ''}
@@ -243,12 +279,12 @@ function ProductEditor({
           onChange={(e) => set({ is_quantity: e.target.checked })}
           className="h-4 w-4 rounded border-border"
         />
-        Quantity product (billed per unit — needs quantity pricing on the Stripe price)
+        {t('plans.fields.isQuantity')}
       </label>
 
       <fieldset className="mt-4">
         <legend className="mb-2 text-xs font-medium text-muted-foreground">
-          Features granted
+          {t('plans.fields.features')}
         </legend>
         <div className="flex flex-wrap gap-2">
           {FEATURE_KEYS.map((k) => {
@@ -265,7 +301,7 @@ function ProductEditor({
                     : 'border-border text-muted-foreground hover:bg-muted'
                 }`}
               >
-                {featureLabel(k)}
+                {featureLabel(k, locale)}
               </button>
             );
           })}
@@ -274,7 +310,7 @@ function ProductEditor({
 
       <div className="mt-4 flex items-center gap-3">
         <Button size="sm" onClick={save} loading={saving} leftIcon={<Save className="h-4 w-4" />}>
-          {isNew ? 'Create product' : 'Save'}
+          {isNew ? t('plans.createProduct') : t('plans.save')}
         </Button>
         {isNew && onCancel && (
           <button
@@ -282,7 +318,7 @@ function ProductEditor({
             onClick={onCancel}
             className="text-sm text-muted-foreground underline-offset-2 hover:underline"
           >
-            Cancel
+            {t('plans.cancel')}
           </button>
         )}
       </div>

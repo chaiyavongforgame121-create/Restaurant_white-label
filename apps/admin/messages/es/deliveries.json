@@ -1,0 +1,180 @@
+{
+  "accessDenied": {
+    "title": "Sin acceso a entregas",
+    "reason": "Tu rol no puede gestionar entregas en {branch}."
+  },
+  "header": {
+    "title": "Entregas en curso",
+    "subtitle": "Dónde están ahora tus repartidores y pedidos en curso.",
+    "introSelf": "Cada pedido a domicilio de {branch}, desde que se hace hasta que se entrega. Estas entregas las hace tu equipo: avanza cada una con los botones de su tarjeta.",
+    "introPlatform": "Cada pedido a domicilio de {branch}, desde que se hace hasta que se entrega: dónde está el repartidor, cuánto falta para que llegue y quién está esperando. Los repartidores aprobados aquí también aparecen en el mapa mientras están conectados, incluso entre entregas."
+  },
+  "stats": {
+    "waitingKitchen": "{count} esperando a cocina",
+    "findingRider": "{count} buscando repartidor",
+    "offered": "{count, plural, one {# ofrecido} other {# ofrecidos}}",
+    "accepted": "{count, plural, one {# aceptado} other {# aceptados}}",
+    "onTheWay": "{count} en camino",
+    "failed": "{count, plural, one {# fallido} other {# fallidos}}",
+    "ridersReady": "{ready} de {total} repartidores aprobados listos",
+    "live": "En vivo",
+    "reconnecting": "Reconectando…"
+  },
+  "map": {
+    "fitAll": "Ver todo",
+    "legendShop": "tu local",
+    "legendDropoff": "lugar de entrega",
+    "legendOnJob": "azul: en una entrega",
+    "legendReady": "verde: disponible",
+    "legendStale": "ámbar: conectado, GPS antiguo",
+    "customer": "Cliente",
+    "rider": "Repartidor",
+    "riderGpsAge": "{name} · GPS de hace {age}",
+    "noToken": "Mapa no disponible: configura NEXT_PUBLIC_MAPBOX_TOKEN.",
+    "noPin": "Esta sucursal aún no tiene ubicación en el mapa, así que no hay dónde mostrar a los repartidores. <link>Agrégala en Configuración de sucursal</link>."
+  },
+  "list": {
+    "title": "En curso",
+    "loadError": "No se pudieron cargar las entregas. Actualiza la página para reintentar.",
+    "ridersError": "No se pudieron cargar los repartidores. Se reintenta cada 15 segundos.",
+    "emptyTitle": "No hay entregas en curso",
+    "emptySelf": "Aparece una tarjeta en cuanto alguien hace un pedido a domicilio en {branch}, y se queda hasta que lo marques como entregado.",
+    "emptyPlatform": "Aparece una tarjeta en cuanto alguien hace un pedido a domicilio en {branch}, y se queda hasta que se entrega la comida. {ready} de {total} repartidores aprobados están listos ahora.",
+    "emptyPlatformNoRiders": "Aparece una tarjeta en cuanto alguien hace un pedido a domicilio en {branch}, y se queda hasta que se entrega la comida. {ready} de {total} repartidores aprobados están listos ahora: aún no hay repartidores aprobados para esta sucursal.",
+    "openDrivers": "Abrir Repartidores",
+    "stalled": "{count, plural, one {# pedido estancado} other {# pedidos estancados}}",
+    "hide": "Ocultar",
+    "show": "Mostrar",
+    "stalledHint": "Llevan más de 12 horas esperando. No se muestran en el mapa: cancélalos o asígnalos desde aquí.",
+    "riders": "Repartidores",
+    "riderOnJob": "En una entrega",
+    "riderOffline": "Desconectado",
+    "riderGps": "GPS {age}"
+  },
+  "card": {
+    "waiting": "Esperando {age}",
+    "customer": "Cliente",
+    "callRider": "Llamar al repartidor",
+    "noRider": "Aún sin repartidor",
+    "placed": "hecho hace {age}",
+    "lastRider": "Último repartidor: “{note}”",
+    "findRider": "Buscar repartidor",
+    "reassign": "Reasignar",
+    "assign": "Asignar a un repartidor",
+    "redispatch": "Volver a buscar",
+    "markDelivered": "Marcar como entregado",
+    "outForDelivery": "Salió a entregar",
+    "cancelOrder": "Cancelar pedido",
+    "viewOrder": "Ver pedido",
+    "withRider": "El repartidor ya tiene la comida: si no se puede entregar, reembólsala desde Pedidos.",
+    "retryFromScratch": "Reintentar desde cero"
+  },
+  "status": {
+    "waitingKitchen": "Esperando a cocina",
+    "findingRider": "Buscando repartidor",
+    "readyToGo": "Listo para salir",
+    "riderAccepted": "Repartidor aceptó · va al local",
+    "offered": "Ofrecido a repartidor",
+    "pickedUp": "Recogido",
+    "arriving": "Llegando",
+    "onTheWay": "En camino",
+    "failed": "Fallido: requiere atención",
+    "unknown": "{status}"
+  },
+  "detail": {
+    "kitchenReady": "Cocina lo marcó listo: aún no se ha ofrecido a ningún repartidor",
+    "kitchenStatus": "{status, select, pending {Cocina: pendiente} confirmed {Cocina: confirmado} preparing {Cocina: en preparación} ready {Cocina: listo} out_for_delivery {Cocina: en camino} completed {Cocina: completado} cancelled {Cocina: cancelado} refunded {Cocina: reembolsado} other {Cocina: {status}}}",
+    "riderCancelled": "El repartidor canceló: {reason}",
+    "askedRiders": "{count, plural, one {Ofrecido a # repartidor hasta ahora} other {Ofrecido a # repartidores hasta ahora}}",
+    "lookingForRider": "Buscando repartidor",
+    "selfStaff": "Este lo entrega tu propio personal",
+    "noRiderHolds": "Ningún repartidor lo tiene aún",
+    "acceptedAgo": "Aceptado hace {age}",
+    "expiresIn": "Vence en {countdown}",
+    "offerExpired": "Oferta vencida: vuelve a la cola",
+    "eta": "Llega en {minutes} min",
+    "pickedUpAgo": "Recogido hace {age}",
+    "atDoor": "El repartidor está en la puerta",
+    "etaUnknown": "Llegada desconocida: esperando el GPS del repartidor",
+    "noReason": "Sin motivo registrado"
+  },
+  "age": {
+    "unknown": "—",
+    "underMinute": "<1 min",
+    "minutes": "{minutes} min",
+    "hours": "{hours} h",
+    "hoursMinutes": "{hours} h {minutes} min",
+    "days": "{days} d"
+  },
+  "dispatch": {
+    "maxAttempts": "Se probó con todos los repartidores: sube “Máximo de intentos de asignación” o asigna uno manualmente.",
+    "notEntitled": "La entrega a domicilio no está incluida en el plan de este restaurante.",
+    "notDispatchable": "Esta entrega ya no está esperando repartidor.",
+    "failed": "No se pudo buscar repartidor. Inténtalo de nuevo.",
+    "noneAvailable": "No hay repartidores disponibles ahora.",
+    "noPin": "Esta sucursal aún no tiene ubicación en el mapa: agrégala en Configuración de sucursal.",
+    "noneApproved": "Aún no hay repartidores aprobados para esta sucursal.",
+    "noneOnline": "No hay repartidores conectados ahora ({approved, plural, one {# aprobado} other {# aprobados}}).",
+    "noLocation": "{online, plural, one {# conectado} other {# conectados}}, pero ninguno ha compartido su ubicación: la app de repartidor debe estar abierta y con permiso de ubicación.",
+    "gpsStale": "{online, plural, one {# conectado} other {# conectados}}, pero sin ubicaciones de menos de {minutes} min. La app de repartidor solo envía el GPS mientras está abierta en pantalla.",
+    "allBusy": "{online, plural, one {# conectado, ya en una entrega} other {# conectados, todos ya en una entrega}}.",
+    "outOfRangeMiles": "{online, plural, one {# conectado} other {# conectados}}, pero ninguno a menos de {miles} mi: sube “Radio de búsqueda de repartidores”.",
+    "outOfRange": "{online, plural, one {# conectado} other {# conectados}}, pero ninguno dentro del radio de búsqueda: sube “Radio de búsqueda de repartidores”."
+  },
+  "rpcErrors": {
+    "driverBusy": "Ese repartidor ya está en otra entrega.",
+    "driverNotEligible": "Ese repartidor no está aprobado aquí o sus documentos no están verificados.",
+    "alreadyAccepted": "El repartidor ya aceptó: debe devolver la entrega desde su app antes de que puedas reasignarla.",
+    "notAssignable": "Esta entrega ya no se puede asignar manualmente.",
+    "notFound": "Esa entrega ya no existe.",
+    "forbidden": "Tu cuenta no puede gestionar entregas en esta sucursal.",
+    "authRequired": "Tu sesión expiró: vuelve a iniciar sesión.",
+    "notFailed": "Solo se puede volver a buscar repartidor para una entrega fallida.",
+    "notSelfDelivery": "Esta sucursal usa repartidores de la plataforma; el repartidor avanza la entrega desde su app.",
+    "badTransition": "Ese paso ya no está disponible para esta entrega.",
+    "orderNotFound": "Ese pedido ya no existe.",
+    "notAuthorized": "Tu cuenta no puede cancelar este pedido.",
+    "cannotCancelStatus": "Este pedido ya no se puede cancelar.",
+    "generic": "Algo salió mal. Inténtalo de nuevo."
+  },
+  "assign": {
+    "title": "Asignar {number} a un repartidor",
+    "titleNoNumber": "Asignar a un repartidor",
+    "intro": "El repartidor recibe una oferta normal que aún puede rechazar; la diferencia es que va a quien elijas, no a quien mejor puntúe la asignación automática.",
+    "noRiders": "Aún no hay repartidores aprobados para esta sucursal, así que no hay a quién ofrecerla.",
+    "pill": {
+      "available": "GPS reciente",
+      "stale": "GPS antiguo",
+      "offline": "Desconectado",
+      "busy": "En una entrega"
+    },
+    "blockedBusy": "En otra entrega",
+    "blockedDocs": "Documentos sin verificar",
+    "blockedCooldown": "En pausa por rechazos",
+    "lastSeen": "{vehicle} · visto hace {age}",
+    "close": "Cerrar"
+  },
+  "vehicle": {
+    "motorcycle": "Moto",
+    "car": "Auto",
+    "bicycle": "Bicicleta",
+    "scooter": "Scooter"
+  },
+  "cancel": {
+    "title": "¿Cancelar {number}?",
+    "titleNoNumber": "¿Cancelar este pedido?",
+    "body": "Esto cancela el pedido, repone el inventario y quita la entrega del tablero. No se puede deshacer.",
+    "why": "¿Por qué? El cliente lo verá en la página de su pedido.",
+    "reasons": {
+      "kitchenCannotMake": "La cocina no puede prepararlo",
+      "customerAsked": "El cliente pidió cancelar",
+      "noRider": "No hay repartidor disponible",
+      "duplicate": "Pedido duplicado",
+      "other": "Otro"
+    },
+    "otherLabel": "Qué pasó",
+    "otherPlaceholder": "Cuéntale al cliente qué pasó",
+    "keep": "Mantener pedido",
+    "confirm": "Sí, cancelar"
+  }
+}

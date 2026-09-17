@@ -16,6 +16,8 @@
 // host clock is precisely how a shop in Asia/Bangkok ends up judged on a UTC runner's
 // weekday, seven hours out.
 
+import { DEFAULT_UI_LOCALE, isUiLocale, type UiLocale } from '../i18n';
+
 export interface WeekdayWindow {
   /** 0 = Sunday, matching Postgres extract(dow). */
   day_of_week: number;
@@ -121,21 +123,49 @@ export function effectiveBookableRanges(
   return mergeRanges(intersectRanges(open, bookableRangesForDay(bookable, dow)));
 }
 
-function to12Hour(minutes: number): string {
+function to12Hour(minutes: number, am: string, pm: string): string {
   const total = minutes % DAY_MINUTES;
   const h24 = Math.floor(total / 60);
-  const suffix = h24 < 12 ? 'AM' : 'PM';
+  const suffix = h24 < 12 ? am : pm;
   const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
   return `${h12}:${String(total % 60).padStart(2, '0')} ${suffix}`;
 }
 
-/** Human-readable ranges for a merchant reading their own week back. Not built with
- *  Intl.DateTimeFormat on purpose: a minute-of-day has no date, and inventing one to format
- *  it would drag the host's timezone into a calculation that has none. */
-export function describeRanges(ranges: MinuteRange[], emptyLabel = 'Nothing bookable'): string {
+function to24Hour(minutes: number): string {
+  const total = minutes % DAY_MINUTES;
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
+interface RangeCopy {
+  time: (minutes: number) => string;
+  /** The end of a range that runs to the end of the day. */
+  midnight: string;
+  empty: string;
+}
+
+// How each language writes a clock time on a shop's hours: English and Latin American Spanish
+// read the 12-hour clock, Vietnamese and Thai the 24-hour one (Thai adds น.).
+const RANGE_COPY: Record<UiLocale, RangeCopy> = {
+  en: { time: (m) => to12Hour(m, 'AM', 'PM'), midnight: 'midnight', empty: 'Nothing bookable' },
+  es: { time: (m) => to12Hour(m, 'a. m.', 'p. m.'), midnight: 'medianoche', empty: 'Sin horarios para reservar' },
+  vi: { time: to24Hour, midnight: 'nửa đêm', empty: 'Không có khung giờ đặt trước' },
+  th: { time: (m) => `${to24Hour(m)} น.`, midnight: 'เที่ยงคืน', empty: 'ไม่มีช่วงเวลาที่จองได้' },
+};
+
+/** Human-readable ranges for a merchant reading their own week back, in `locale` (English
+ *  when omitted). `emptyLabel` replaces the "Nothing bookable" wording; leave it undefined to
+ *  get that wording in `locale`. Not built with Intl.DateTimeFormat on purpose: a
+ *  minute-of-day has no date, and inventing one to format it would drag the host's timezone
+ *  into a calculation that has none. */
+export function describeRanges(
+  ranges: MinuteRange[],
+  emptyLabel?: string,
+  locale: UiLocale = DEFAULT_UI_LOCALE,
+): string {
+  const copy = RANGE_COPY[isUiLocale(locale) ? locale : DEFAULT_UI_LOCALE];
   const merged = mergeRanges(ranges);
-  if (merged.length === 0) return emptyLabel;
+  if (merged.length === 0) return emptyLabel ?? copy.empty;
   return merged
-    .map(([start, end]) => `${to12Hour(start)} – ${end >= DAY_MINUTES ? 'midnight' : to12Hour(end)}`)
+    .map(([start, end]) => `${copy.time(start)} – ${end >= DAY_MINUTES ? copy.midnight : copy.time(end)}`)
     .join(', ');
 }

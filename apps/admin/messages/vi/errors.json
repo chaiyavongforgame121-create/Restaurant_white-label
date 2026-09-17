@@ -1,0 +1,8 @@
+{
+  "generic": "Đã xảy ra lỗi. Vui lòng thử lại.",
+  "network": "Không kết nối được máy chủ. Hãy kiểm tra kết nối mạng và thử lại.",
+  "permissionDenied": "Bạn không có quyền thực hiện thao tác này.",
+  "uploadFailed": "Tải lên không thành công. Vui lòng thử lại.",
+  "fileTooLarge": "Tệp quá lớn, không thể tải lên.",
+  "fileTypeNotAllowed": "Không thể tải lên loại tệp này."
+}

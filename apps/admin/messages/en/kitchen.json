@@ -1,0 +1,143 @@
+{
+  "accessDenied": {
+    "title": "No kitchen access",
+    "reason": "Your account can’t open the kitchen display for {branch}."
+  },
+  "header": {
+    "title": "{branch} · Kitchen",
+    "statusLive": "{count} active · live",
+    "statusReconnecting": "{count} active · reconnecting…",
+    "scheduled": "{count} scheduled",
+    "mute": "Mute",
+    "unmute": "Unmute",
+    "fullscreen": "Fullscreen",
+    "connectionLost": "Connection lost — reconnecting. New tickets may not appear until this clears.",
+    "ordersPaused": "Orders paused — customers cannot order while this is on."
+  },
+  "stations": {
+    "all": "All",
+    "hot": "Hot",
+    "cold": "Cold",
+    "bar": "Bar",
+    "dessert": "Dessert",
+    "expo": "Expo"
+  },
+  "batch": {
+    "toggle": "Batch view",
+    "empty": "Nothing cooking to batch right now."
+  },
+  "lanes": {
+    "new": "New",
+    "cooking": "Cooking",
+    "ready": "Ready",
+    "empty": "All clear, chef."
+  },
+  "channel": {
+    "dine_in": "Dine-in",
+    "pickup": "Pickup",
+    "delivery": "Delivery",
+    "qr_ordering": "QR table"
+  },
+  "action": {
+    "pending": "Accept order",
+    "confirmed": "Start cooking",
+    "preparing": "Mark ready",
+    "ready": "Bump"
+  },
+  "card": {
+    "table": "Table {table}",
+    "moreActions": "More actions",
+    "reject": "Reject order",
+    "recall": "Recall to kitchen",
+    "redispatch": "Re-dispatch (start over)",
+    "eightySixHeading": "86 an item",
+    "stacked": "🔗 Stacked · stop {stop} — pack both bags for one rider",
+    "allergyNote": "Allergy / note: {note}"
+  },
+  "timer": {
+    "hoursMinutes": "{hours}h {minutes}m"
+  },
+  "rider": {
+    "finding": "Finding a rider…",
+    "assigned": "Rider assigned ✓",
+    "offered": "Rider offered…",
+    "onTheWay": "Rider on the way",
+    "notFound": "No rider found — tap to retry",
+    "searching": "Searching for a rider…",
+    "find": "Find a rider",
+    "assign": "Assign to a rider",
+    "noneApproved": "No approved riders for this branch.",
+    "gpsNow": "GPS now",
+    "gpsAge": "GPS {minutes}m",
+    "gpsStale": "GPS stale",
+    "gpsStaleHint": "No GPS ping in the last 5 min — auto-dispatch skips this rider; a targeted offer still works",
+    "offline": "Offline"
+  },
+  "vehicle": {
+    "motorcycle": "Motorcycle",
+    "car": "Car",
+    "bicycle": "Bicycle",
+    "scooter": "Scooter"
+  },
+  "toast": {
+    "advanced": {
+      "confirmed": "#{ticket} → Accepted",
+      "preparing": "#{ticket} → Cooking",
+      "ready": "#{ticket} → Ready",
+      "completed": "#{ticket} → Bumped"
+    },
+    "updateFailed": "Couldn’t update #{ticket}. Try again.",
+    "updateUnpaid": "#{ticket} can’t move on until its transfer payment is confirmed.",
+    "updateNotAllowed": "That step isn’t allowed for #{ticket} right now.",
+    "rejected": "#{ticket} rejected",
+    "rejectFailed": "Couldn’t reject #{ticket}. Try again.",
+    "rejectClosed": "#{ticket} is already closed.",
+    "rejectForbidden": "Your account can’t reject orders.",
+    "recalled": "#{ticket} recalled to kitchen",
+    "recallTooFar": "Couldn’t recall #{ticket} — it’s too far along.",
+    "recallWindowPassed": "Couldn’t recall #{ticket} — the recall window has passed.",
+    "recallFailed": "Couldn’t recall #{ticket}. Try again.",
+    "eightySixNotFound": "Couldn’t find “{item}” — may already be 86’d",
+    "eightySixFailed": "Couldn’t 86 {item}. Try again.",
+    "eightySixDone": "86’d {item} until tomorrow",
+    "assignFailed": "Couldn’t assign the rider. Try again.",
+    "assignTooLate": "This delivery can’t be reassigned any more.",
+    "assignNotEligible": "That rider isn’t approved for this branch.",
+    "assignBusy": "That rider is already on a delivery.",
+    "assignForbidden": "Your account can’t assign riders.",
+    "offeredTo": "Offered to {name}",
+    "offeredToRider": "Offered to rider",
+    "undo": "Undo",
+    "dismiss": "Dismiss"
+  },
+  "dispatch": {
+    "maxAttempts": "Tried every rider — raise “Max dispatch attempts” or assign one by hand.",
+    "notEntitled": "Delivery isn’t included in this restaurant’s plan.",
+    "notDispatchable": "This delivery can’t be dispatched any more.",
+    "failed": "Couldn’t search for a rider. Try again.",
+    "noneAvailable": "No rider available right now.",
+    "noPin": "This branch has no map pin yet — set it in Branch settings.",
+    "noneApproved": "No rider is approved for this branch yet.",
+    "noneOnline": "No rider is online right now ({approved} approved).",
+    "noLocation": "{online} online, but none have shared a location — the rider app must be open with location permission granted.",
+    "gpsStale": "{online} online, but no location newer than {minutes} min. The rider app only sends GPS while it is open in the foreground.",
+    "allBusy": "{online} online, all already on a delivery.",
+    "outOfRangeMiles": "{online} online, but none within {miles} mi — raise “Driver search radius”.",
+    "outOfRange": "{online} online, but none within the search radius — raise “Driver search radius”."
+  },
+  "ops": {
+    "busy": "Busy",
+    "busyMinutes": "Busy +{minutes}m",
+    "busyHint": "Adds prep time to every customer ETA",
+    "off": "Off",
+    "plusMinutes": "+{minutes}m",
+    "pause": "Pause",
+    "resume": "Resume",
+    "pauseHint": "Customers see the branch as closed while paused"
+  },
+  "scheduled": {
+    "title": "Scheduled · {count}",
+    "close": "Close",
+    "releasesIn": "Releases in {minutes}m"
+  }
+}

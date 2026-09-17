@@ -4,6 +4,7 @@ import * as React from 'react';
 import { motion } from 'framer-motion';
 import { Minus, Plus } from 'lucide-react';
 import { cn } from '../lib/cn';
+import { useUiStrings } from './ui-strings';
 
 interface QuantityStepperProps {
   value: number;
@@ -29,6 +30,7 @@ export function QuantityStepper({
   className,
 }: QuantityStepperProps) {
   const s = sizes[size];
+  const strings = useUiStrings();
   return (
     <div
       className={cn(
@@ -39,7 +41,7 @@ export function QuantityStepper({
       <motion.button
         whileTap={{ scale: 0.9 }}
         type="button"
-        aria-label="Decrease"
+        aria-label={strings.decrease}
         disabled={value <= min}
         onClick={() => onChange(Math.max(min, value - 1))}
         className={cn(
@@ -61,7 +63,7 @@ export function QuantityStepper({
       <motion.button
         whileTap={{ scale: 0.9 }}
         type="button"
-        aria-label="Increase"
+        aria-label={strings.increase}
         disabled={value >= max}
         onClick={() => onChange(Math.min(max, value + 1))}
         className={cn(

@@ -1,6 +1,11 @@
+import type { Metadata } from 'next';
+import { getTranslations } from 'next-intl/server';
 import { UpdatePasswordView } from './_components/update-password-view';
 
-export const metadata = { title: 'Choose a password' };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('auth');
+  return { title: t('metadata.updatePasswordTitle') };
+}
 
 interface Props {
   searchParams: Promise<{ welcome?: string }>;

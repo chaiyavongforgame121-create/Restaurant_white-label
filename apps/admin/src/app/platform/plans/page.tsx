@@ -1,10 +1,15 @@
+import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import { getServerClient } from '@favornoms/database/server';
 import { isPlatformAdmin, listBillingProducts } from '@favornoms/database/queries';
 import { PlatformAccessDenied } from '../_components/platform-nav';
 import { PlansManager } from './_components/plans-manager';
 
-export const metadata = { title: 'Product catalog · Favornoms' };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('platformBilling');
+  return { title: t('plans.metaTitle') };
+}
 
 export default async function PlatformPlansPage() {
   const supabase = await getServerClient();

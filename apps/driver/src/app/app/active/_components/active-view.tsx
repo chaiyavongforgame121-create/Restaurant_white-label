@@ -24,6 +24,8 @@ import {
 import { DriverDeliveryChat } from './delivery-chat';
 import { PhotoUploader } from './photo-uploader';
 
+type ActiveT = ReturnType<typeof useTranslations<'active'>>;
+
 /** How close the rider must be before "I'm at the restaurant" / "I've arrived" unlock.
  *  Owner's number. Wide enough for GPS drift and a car park, tight enough that it cannot be
  *  pressed from the other side of town. */
@@ -34,16 +36,16 @@ const ARRIVAL_RADIUS_MI = 0.2;
  * here as raw Postgres text. Name the ones a rider can act on; for the rest say plainly that
  * it is not their fault and not worth retrying, and show the reason so it can be reported.
  */
-function advanceErrorMessage(e: unknown): string {
+function advanceErrorMessage(e: unknown, t: ActiveT): string {
   const raw = e instanceof Error ? e.message : String(e ?? '');
-  if (raw.includes('pod_photo_required')) return 'Take a delivery photo before you finish.';
-  if (raw.includes('pickup_photo_required')) return 'Take a pickup photo before you continue.';
-  if (raw.includes('not_accepted')) return 'Accept the job before moving it on.';
+  if (raw.includes('pod_photo_required')) return t('errors.podPhotoRequired');
+  if (raw.includes('pickup_photo_required')) return t('errors.pickupPhotoRequired');
+  if (raw.includes('not_accepted')) return t('errors.notAccepted');
   if (raw.includes('illegal_transition')) {
-    return 'This job has already moved on — pull down to refresh.';
+    return t('errors.alreadyMoved');
   }
-  if (raw.includes('forbidden')) return 'This job is no longer assigned to you.';
-  return `Couldn't update this delivery. Tell support: ${raw.slice(0, 120)}`;
+  if (raw.includes('forbidden')) return t('errors.forbidden');
+  return t('errors.unknown', { reason: raw.slice(0, 120) });
 }
 
 type StageKey = 'heading_to_pickup' | 'at_pickup' | 'picked_up' | 'in_transit' | 'at_customer';
@@ -51,8 +53,8 @@ type StageKey = 'heading_to_pickup' | 'at_pickup' | 'picked_up' | 'in_transit' |
 const stageMeta: Record<
   StageKey,
   {
-    titleKey: string;
-    ctaKey: string;
+    titleKey: 'headToPickup' | 'atPickup' | 'onTheWay' | 'atCustomer';
+    ctaKey: 'atPickup' | 'pickedUp' | 'atCustomer' | 'delivered';
     icon: React.ComponentType<{ className?: string }>;
     color: string;
     /** What delivery_status to transition to when CTA is tapped. null = soft state only. */
@@ -235,17 +237,19 @@ export function ActiveDeliveryView() {
             <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-success text-white shadow-warm">
               <CheckCircle2 className="h-10 w-10" />
             </div>
-            <h1 className="mt-5 font-display text-2xl font-bold">Delivery complete! 🎉</h1>
+            <h1 className="mt-5 font-display text-2xl font-bold">{t('complete.title')}</h1>
             <p className="mt-1 text-sm text-muted-foreground">{completed.orderNumber}</p>
             <div className="mt-5 rounded-2xl bg-muted/50 px-5 py-4">
-              <p className="text-xs uppercase tracking-wider text-muted-foreground">Earnings added</p>
+              <p className="text-xs uppercase tracking-wider text-muted-foreground">
+                {t('complete.earningsAdded')}
+              </p>
               <p className="font-display text-3xl font-bold text-primary">
                 {formatCurrency(completed.earnings)}
               </p>
             </div>
             <Link href="/app/home" className="mt-6 block">
               <Button variant="gradient" size="xl" fullWidth onClick={() => setCompleted(null)}>
-                Find next order
+                {t('complete.findNext')}
               </Button>
             </Link>
           </motion.div>
@@ -262,7 +266,7 @@ export function ActiveDeliveryView() {
           action={
             <Link href="/app/home">
               <Button variant="gradient" size="lg">
-                Go home
+                {t('goHome')}
               </Button>
             </Link>
           }
@@ -281,8 +285,8 @@ export function ActiveDeliveryView() {
   // fix yet — which must read as "we cannot tell", never as "you have arrived".
   const arrivalTarget =
     stage === 'heading_to_pickup'
-      ? { lat: active.branchLat, lng: active.branchLng, what: 'the restaurant' }
-      : { lat: active.dropoffLat, lng: active.dropoffLng, what: 'the drop-off' };
+      ? { lat: active.branchLat, lng: active.branchLng, kind: 'restaurant' as const }
+      : { lat: active.dropoffLat, lng: active.dropoffLng, kind: 'dropoff' as const };
   const milesToTarget =
     driverPos && arrivalTarget.lat != null && arrivalTarget.lng != null
       ? kmToMi(
@@ -323,15 +327,15 @@ export function ActiveDeliveryView() {
     // without the pickup photo, nor finish without the delivery photo
     // (progress_delivery also enforces both server-side).
     if (meta.transition === 'picked_up' && !hasPickupPhoto) {
-      setAdvanceError('Take a pickup photo before you continue.');
+      setAdvanceError(t('errors.pickupPhotoRequired'));
       return;
     }
     if (meta.transition === 'picked_up' && needsMatePickupPhoto) {
-      setAdvanceError('Take a pickup photo for BOTH orders before you continue.');
+      setAdvanceError(t('errors.pickupPhotoBoth'));
       return;
     }
     if (meta.transition === 'delivered' && !hasPodPhoto) {
-      setAdvanceError('Take a delivery photo before you finish.');
+      setAdvanceError(t('errors.podPhotoRequired'));
       return;
     }
     if ('vibrate' in navigator) navigator.vibrate(40);
@@ -405,7 +409,7 @@ export function ActiveDeliveryView() {
       // The reason used to be thrown away for a flat "please try again", which is exactly
       // wrong when the cause is not transient: a broken earnings trigger made every
       // "Mark as delivered" fail, and the message invited a retry that could never work.
-      setAdvanceError(advanceErrorMessage(e));
+      setAdvanceError(advanceErrorMessage(e, t));
     } finally {
       setAdvancing(false);
     }
@@ -443,14 +447,17 @@ export function ActiveDeliveryView() {
         ) : (
           <div className="grid h-full place-items-center bg-gradient-to-b from-primary/10 to-card/80 text-center text-sm text-muted-foreground">
             <p className="px-6">
-              {hasMapboxToken() ? 'Live map unavailable for this order.' : 'Map unavailable'}
+              {hasMapboxToken() ? t('map.liveUnavailable') : t('map.unavailable')}
             </p>
           </div>
         )}
 
         <div className="pointer-events-none absolute left-4 right-4 top-4 flex items-center justify-between [&>*]:pointer-events-auto">
           <span className="rounded-full bg-card/90 px-3 py-1.5 text-xs font-semibold backdrop-blur">
-            {kmToMi(active.distanceKm).toFixed(1)} mi · {active.estimatedDurationMin} min
+            {t('map.tripSummary', {
+              miles: kmToMi(active.distanceKm).toFixed(1),
+              minutes: String(active.estimatedDurationMin),
+            })}
           </span>
           <NavigateMenu
             lat={isHeading ? active.branchLat : active.dropoffLat}
@@ -474,11 +481,15 @@ export function ActiveDeliveryView() {
               </div>
               <div>
                 <p className="text-xs uppercase tracking-wider text-white/80">
-                  {active.orderNumber}
-                  {active.batchSeq != null && ` · stop ${active.batchSeq} of 2`}
+                  {active.batchSeq != null
+                    ? t('headerWithStop', {
+                        orderNumber: active.orderNumber,
+                        seq: String(active.batchSeq),
+                      })
+                    : active.orderNumber}
                 </p>
                 <h2 className="font-display text-xl font-bold leading-tight">
-                  {t(meta.titleKey as never)}
+                  {t(meta.titleKey)}
                 </h2>
               </div>
             </div>
@@ -491,30 +502,27 @@ export function ActiveDeliveryView() {
                 className="rounded-2xl border border-warning/40 bg-warning/10 px-4 py-2.5 text-xs font-medium text-warning"
               >
                 📍{' '}
-                {gps === 'insecure'
-                  ? 'Location only works over https. Open the app from its installed icon so the customer can track you.'
-                  : 'Location is off. Turn it on so the customer can track you and you keep receiving offers.'}
+                {gps === 'insecure' ? t('location.insecure') : t('location.off')}
               </div>
             ) : (
               // A browser cannot report GPS from the background, and Navigate below sends the
               // rider into Google Maps for the drive. Say so once, here, rather than leaving
               // the customer's pin frozen with nobody able to explain it.
               <p className="rounded-2xl bg-muted/50 px-4 py-2.5 text-xs text-muted-foreground">
-                📍 Your position is shared while this app is on screen. Navigating in another app
-                pauses it — come back here and it catches up straight away.
+                📍 {t('location.sharedWhileOpen')}
               </p>
             )}
             <Step
               done={isInTransit}
               icon={<Coffee className="h-5 w-5" />}
-              title="Pickup"
+              title={t('steps.pickup')}
               primary={active.branchName}
               secondary={active.branchAddress}
             />
             <Step
               done={stage === 'at_customer'}
               icon={<MapPin className="h-5 w-5" />}
-              title={mate ? 'Drop-off · stop 1' : 'Drop-off'}
+              title={mate ? t('steps.dropoffStop1') : t('steps.dropoff')}
               primary={active.customerName}
               secondary={active.customerAddress}
             />
@@ -522,7 +530,7 @@ export function ActiveDeliveryView() {
               <Step
                 done={false}
                 icon={<MapPin className="h-5 w-5" />}
-                title="Drop-off · stop 2 (after this one)"
+                title={t('steps.dropoffStop2')}
                 primary={mate.customerName}
                 secondary={mate.customerAddress}
               />
@@ -533,7 +541,7 @@ export function ActiveDeliveryView() {
             ) : (
               active.dropoffNotes && (
                 <div className="rounded-2xl border border-primary/30 bg-primary/5 px-4 py-2.5 text-sm">
-                  <span className="font-semibold">📍 Delivery note:</span> {active.dropoffNotes}
+                  <span className="font-semibold">📍 {t('deliveryNote')}</span> {active.dropoffNotes}
                 </div>
               )
             )}
@@ -541,7 +549,7 @@ export function ActiveDeliveryView() {
             <div className="flex items-center justify-between rounded-2xl bg-muted/40 px-4 py-3">
               <div>
                 <p className="text-xs text-muted-foreground">
-                  {mate ? 'Earning (2 orders)' : 'Earning'}
+                  {mate ? t('earningBatch') : t('earning')}
                 </p>
                 <p className="font-display text-xl font-bold text-primary">
                   {formatCurrency(active.driverEarnings + (mate?.driverEarnings ?? 0))}
@@ -572,7 +580,7 @@ export function ActiveDeliveryView() {
               <>
                 {mate && matePendingPickup && (
                   <p className="text-xs font-semibold text-muted-foreground">
-                    📦 Order 1 · {active.orderNumber}
+                    📦 {t('pickupOrder1', { orderNumber: active.orderNumber })}
                   </p>
                 )}
                 <PhotoUploader
@@ -584,7 +592,7 @@ export function ActiveDeliveryView() {
                 {mate && matePendingPickup && (
                   <>
                     <p className="text-xs font-semibold text-muted-foreground">
-                      📦 Order 2 · {mate.orderNumber} — photograph this bag separately
+                      📦 {t('pickupOrder2', { orderNumber: mate.orderNumber })}
                     </p>
                     <PhotoUploader
                       mode="pickup"
@@ -612,7 +620,7 @@ export function ActiveDeliveryView() {
               loading={advancing}
               disabled={advancing || needsPickupPhoto || needsPodPhoto || needsMatePickupPhoto || blockedByDistance}
             >
-              {t(meta.ctaKey as never)}
+              {t(meta.ctaKey)}
             </Button>
             {/* Why the button is dead, in the rider's own terms. Silently disabling it is
                 how "the app is broken" reports start. */}
@@ -621,9 +629,12 @@ export function ActiveDeliveryView() {
                 <p className="mt-2 text-center text-xs text-muted-foreground">
                   {milesToTarget == null
                     ? geoDenied
-                      ? `Turn on location to confirm you're at ${arrivalTarget.what}.`
-                      : `Waiting for your location to confirm you're at ${arrivalTarget.what}…`
-                    : `You're ${milesToTarget.toFixed(1)} mi away — get within ${ARRIVAL_RADIUS_MI} mi of ${arrivalTarget.what} to continue.`}
+                      ? t(`arrival.turnOnLocation.${arrivalTarget.kind}`)
+                      : t(`arrival.waiting.${arrivalTarget.kind}`)
+                    : t(`arrival.tooFar.${arrivalTarget.kind}`, {
+                        miles: milesToTarget.toFixed(1),
+                        radius: String(ARRIVAL_RADIUS_MI),
+                      })}
                 </p>
                 {/* GPS does fail — indoors, in a canyon of buildings, or when the branch pin
                     itself is wrong — and a rider standing at the counter with a dead button
@@ -634,27 +645,28 @@ export function ActiveDeliveryView() {
                   onClick={() => setArrivalOverride(stage)}
                   className="focus-ring mx-auto mt-1 block rounded-lg px-2 py-1 text-xs font-medium text-muted-foreground underline underline-offset-4"
                 >
-                  My GPS is wrong — I&apos;m at {arrivalTarget.what}
+                  {t(`arrival.override.${arrivalTarget.kind}`)}
                 </button>
               </>
             )}
             {tooFarToArrive && arrivalOverridden && (
               <p className="mt-2 text-center text-xs text-muted-foreground">
-                Distance check skipped. This is recorded on the delivery.
+                {t('arrival.skipped')}
               </p>
             )}
             {(needsPickupPhoto || needsMatePickupPhoto) && (
               <p className="text-center text-xs text-muted-foreground">
+                📸{' '}
                 {needsMatePickupPhoto && !needsPickupPhoto
-                  ? '📸 Upload a pickup photo for order 2 to continue.'
+                  ? t('photoNeeded.secondOrder')
                   : mate
-                    ? '📸 Upload a pickup photo for each order to continue.'
-                    : '📸 Upload a pickup photo to continue.'}
+                    ? t('photoNeeded.eachOrder')
+                    : t('photoNeeded.pickup')}
               </p>
             )}
             {needsPodPhoto && (
               <p className="text-center text-xs text-muted-foreground">
-                📸 Upload a delivery photo to finish.
+                📸 {t('photoNeeded.delivery')}
               </p>
             )}
             {advanceError && (
@@ -681,43 +693,67 @@ function TakenAwayNotice({
   notice: EndedJobNotice;
   onDismiss: () => void;
 }) {
+  const t = useTranslations('active');
   const what =
     notice.endKind === 'order_cancelled'
-      ? 'The restaurant cancelled this order'
+      ? t('takenAway.orderCancelled')
       : notice.endKind === 'reassigned_by_staff'
-        ? 'The restaurant gave this job to another rider'
+        ? t('takenAway.reassigned')
         : notice.endKind === 'requeued_by_staff'
-          ? 'The restaurant sent this job back to dispatch'
+          ? t('takenAway.requeued')
           : notice.endKind === 'offer_expired'
-            ? 'The offer expired before you answered'
-            : 'This job is no longer yours';
+            ? t('takenAway.offerExpired')
+            : t('takenAway.other');
 
   return (
     <div
       role="status"
       className="mb-4 rounded-2xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm"
     >
-      <p className="font-semibold">{notice.orderNumber} was taken off your list</p>
+      <p className="font-semibold">{t('takenAway.title', { orderNumber: notice.orderNumber })}</p>
       <p className="mt-0.5 text-xs text-muted-foreground">{what}</p>
+      {/* Typed by a person (staff) — shown exactly as written. */}
       {notice.endReason && (
         <p className="mt-1 text-xs italic text-muted-foreground">“{notice.endReason}”</p>
       )}
       <Button variant="outline" size="sm" className="mt-2.5" onClick={onDismiss}>
-        Got it
+        {t('takenAway.gotIt')}
       </Button>
     </div>
   );
 }
 
+// These English strings are SENT to the server and stored as delivery_assignments.end_reason,
+// which the merchant's board and the diner's cancelled card print. They stay English whatever
+// language the rider reads; only the label on the chip is translated (REASON_LABEL_KEYS).
 const PRE_PICKUP_REASONS = ['Vehicle problem', 'Personal emergency', 'Wait at restaurant too long'];
 const AT_DOOR_REASONS = ['Customer unreachable', "Can't find the address", 'Customer refused the order'];
 /** Kept out of the arrays above because it is not a reason — it is the promise of one. The
  *  word "Other" used to be sent verbatim as the cancellation reason and shown to nobody. */
 const OTHER = 'Other';
+/** Stored reason → its label key under active.issue.reasons. */
+const REASON_LABEL_KEYS: Record<string, string> = {
+  'Vehicle problem': 'vehicleProblem',
+  'Personal emergency': 'personalEmergency',
+  'Wait at restaurant too long': 'waitTooLong',
+  'Customer unreachable': 'customerUnreachable',
+  "Can't find the address": 'cantFindAddress',
+  'Customer refused the order': 'customerRefused',
+  [OTHER]: 'other',
+};
 /** Matches the server-side cap in driver_cancel_delivery / fail_delivery. */
 const REASON_MAX = 300;
 
+/** driver_cancel_delivery / fail_delivery raise bare codes; name the ones a rider can act on. */
+function issueErrorMessage(raw: string, t: ActiveT): string {
+  if (raw.includes('not_cancellable')) return t('issue.errors.notCancellable');
+  if (raw.includes('not_failable')) return t('issue.errors.notFailable');
+  if (raw.includes('forbidden')) return t('errors.forbidden');
+  return t('issue.errors.generic');
+}
+
 function DeliveryIssuePanel({ active }: { active: ActiveDeliveryUI }) {
+  const t = useTranslations('active');
   const { clearActive } = useDelivery();
   const [open, setOpen] = React.useState(false);
   const [reason, setReason] = React.useState<string | null>(null);
@@ -745,7 +781,8 @@ function DeliveryIssuePanel({ active }: { active: ActiveDeliveryUI }) {
       const { data: pub } = supabase.storage.from('branch-assets').getPublicUrl(path);
       setPhotoUrl(pub.publicUrl);
     } catch (err) {
-      setError((err as Error).message);
+      console.error('[delivery-issue] photo upload failed', err);
+      setError(t('photo.uploadFailed'));
     } finally {
       setUploading(false);
     }
@@ -766,7 +803,8 @@ function DeliveryIssuePanel({ active }: { active: ActiveDeliveryUI }) {
       : await failDelivery(supabase, active.id, finalReason, photoUrl);
     setSubmitting(false);
     if (err) {
-      setError(err.message);
+      console.error('[delivery-issue] submit failed', err.message);
+      setError(issueErrorMessage(err.message ?? '', t));
       return;
     }
     // The comment that used to sit here said Realtime would clear the job. It cannot:
@@ -785,7 +823,7 @@ function DeliveryIssuePanel({ active }: { active: ActiveDeliveryUI }) {
         onClick={() => setOpen(true)}
         className="focus-ring w-full text-center text-xs font-medium text-muted-foreground underline"
       >
-        Having a problem with this delivery?
+        {t('issue.open')}
       </button>
     );
   }
@@ -793,25 +831,23 @@ function DeliveryIssuePanel({ active }: { active: ActiveDeliveryUI }) {
   return (
     <div className="rounded-2xl border border-danger/30 bg-danger/5 p-4">
       <p className="text-sm font-semibold">
-        {prePickup ? 'Cancel this delivery?' : "Can't complete the drop-off?"}
+        {prePickup ? t('issue.cancelTitle') : t('issue.failTitle')}
       </p>
       <p className="mt-0.5 text-xs text-muted-foreground">
-        {prePickup
-          ? 'The job goes back to dispatch and you get a short cooldown.'
-          : 'The restaurant will be alerted to sort out the order.'}
+        {prePickup ? t('issue.cancelHint') : t('issue.failHint')}
       </p>
       <div className="mt-3 space-y-1.5">
         {[...reasons, OTHER].map((r) => (
           <label key={r} className="flex items-center gap-2 text-sm">
             <input type="radio" name="issue-reason" checked={reason === r} onChange={() => setReason(r)} />
-            {r}
+            {t(`issue.reasons.${REASON_LABEL_KEYS[r]}`)}
           </label>
         ))}
       </div>
       {reason === OTHER && (
         <div className="mt-2">
           <label htmlFor="issue-other" className="sr-only">
-            What happened
+            {t('issue.otherLabel')}
           </label>
           <textarea
             id="issue-other"
@@ -819,7 +855,7 @@ function DeliveryIssuePanel({ active }: { active: ActiveDeliveryUI }) {
             onChange={(e) => setOtherText(e.target.value)}
             rows={3}
             maxLength={REASON_MAX}
-            placeholder="Tell the restaurant what happened"
+            placeholder={t('issue.otherPlaceholder')}
             className="focus-ring w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none"
           />
           <p className="mt-1 text-right text-[11px] text-muted-foreground">
@@ -842,7 +878,7 @@ function DeliveryIssuePanel({ active }: { active: ActiveDeliveryUI }) {
           />
           {photoUrl ? (
             <p className="flex items-center gap-1.5 text-xs text-success">
-              <CheckCircle2 className="h-3.5 w-3.5" /> Photo attached
+              <CheckCircle2 className="h-3.5 w-3.5" /> {t('issue.photoAttached')}
             </p>
           ) : (
             <button
@@ -851,7 +887,7 @@ function DeliveryIssuePanel({ active }: { active: ActiveDeliveryUI }) {
               disabled={uploading}
               className="focus-ring text-xs font-medium text-primary underline"
             >
-              📸 {uploading ? 'Uploading…' : 'Attach a photo (recommended)'}
+              📸 {uploading ? t('photo.uploading') : t('issue.attachPhoto')}
             </button>
           )}
         </div>
@@ -859,7 +895,7 @@ function DeliveryIssuePanel({ active }: { active: ActiveDeliveryUI }) {
       {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
       <div className="mt-3 flex gap-2">
         <Button variant="outline" size="md" fullWidth onClick={() => setOpen(false)}>
-          Keep delivering
+          {t('issue.keepDelivering')}
         </Button>
         <Button
           variant="danger"
@@ -869,7 +905,7 @@ function DeliveryIssuePanel({ active }: { active: ActiveDeliveryUI }) {
           loading={submitting}
           disabled={!finalReason}
         >
-          {prePickup ? 'Cancel delivery' : 'Mark as failed'}
+          {prePickup ? t('issue.cancelDelivery') : t('issue.markFailed')}
         </Button>
       </div>
     </div>
@@ -947,29 +983,31 @@ function NavRow({ children, onClick }: { children: React.ReactNode; onClick: () 
   );
 }
 
-const DROPOFF_PREF_LABELS = {
-  leave_at_door: 'Leave at the door',
-  hand_to_me: 'Hand it to me',
-  at_desk: 'At the desk / reception',
+/** delivery_address.dropoff_pref → its label key under active.dropoff.prefs. */
+const DROPOFF_PREF_LABEL_KEYS = {
+  leave_at_door: 'leaveAtDoor',
+  hand_to_me: 'handToMe',
+  at_desk: 'atDesk',
 } as const;
 
 // Structured drop-off card for the delivery leg. Orders placed before
 // dropoff_pref existed degrade to a notes-only card, or nothing at all.
 function DropoffInstructionsCard({ active }: { active: ActiveDeliveryUI }) {
+  const t = useTranslations('active');
   const { dropoffPref, dropoffOther, gateCode, room, dropoffNotes } = active;
   if (!dropoffPref && !gateCode && !room && !dropoffNotes) return null;
   const prefLabel =
     dropoffPref === 'other'
       ? dropoffOther
-        ? `Other: ${dropoffOther}`
-        : 'Other'
+        ? t('dropoff.otherWithText', { text: dropoffOther })
+        : t('dropoff.other')
       : dropoffPref
-        ? DROPOFF_PREF_LABELS[dropoffPref]
+        ? t(`dropoff.prefs.${DROPOFF_PREF_LABEL_KEYS[dropoffPref]}`)
         : null;
   return (
     <div className="rounded-2xl border-2 border-primary/40 bg-primary/10 p-4">
       <p className="text-xs font-semibold uppercase tracking-wider text-primary">
-        📍 Drop-off instructions
+        📍 {t('dropoff.title')}
       </p>
       {prefLabel && (
         <p className="mt-1 font-display text-lg font-bold leading-tight">{prefLabel}</p>
@@ -978,17 +1016,17 @@ function DropoffInstructionsCard({ active }: { active: ActiveDeliveryUI }) {
         <div className="mt-1.5 space-y-1 text-sm">
           {gateCode && (
             <p>
-              <span className="font-semibold">Gate code:</span> {gateCode}
+              <span className="font-semibold">{t('dropoff.gateCode')}</span> {gateCode}
             </p>
           )}
           {room && (
             <p>
-              <span className="font-semibold">Room:</span> {room}
+              <span className="font-semibold">{t('dropoff.room')}</span> {room}
             </p>
           )}
           {dropoffNotes && (
             <p>
-              <span className="font-semibold">Note:</span> {dropoffNotes}
+              <span className="font-semibold">{t('dropoff.note')}</span> {dropoffNotes}
             </p>
           )}
         </div>

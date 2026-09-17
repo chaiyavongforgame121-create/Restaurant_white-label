@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { AlertTriangle, CheckCircle2, ChevronRight, Circle } from 'lucide-react';
 import { Card } from '@favornoms/ui';
 
@@ -10,7 +11,10 @@ export interface SetupStep {
   done: boolean;
   href: string;
   hrefLabel: string;
-  /** A read that failed. Shown as "could not check", never as done or not done. */
+  /**
+   * A read that failed. Shown as "could not check", never as done or not done. The raw text
+   * stays in the server log; it is not printed on the card.
+   */
   error?: string | null;
 }
 
@@ -79,15 +83,16 @@ export function SetupChecklist({
   steps: SetupStep[];
   warnings: SetupWarning[];
 }) {
+  const t = useTranslations('dashboard');
   const done = steps.filter((s) => s.done && !s.error).length;
 
   return (
     <section className="mb-6 px-2 lg:px-0">
       <Card className="overflow-hidden">
         <header className="flex flex-wrap items-baseline justify-between gap-2 px-4 pb-2 pt-4">
-          <h2 className="font-display text-lg font-semibold">Get ready to take orders</h2>
+          <h2 className="font-display text-lg font-semibold">{t('setup.title')}</h2>
           <p className="text-sm text-muted-foreground">
-            {done} of {steps.length} done
+            {t('setup.progress', { done, total: steps.length })}
           </p>
         </header>
         <ul className="border-t border-border">
@@ -127,7 +132,7 @@ export function SetupChecklist({
                   </span>
                   {s.error ? (
                     <span role="alert" className="block text-sm text-warning">
-                      Couldn’t check — {s.error}
+                      {t('setup.checkFailed')}
                     </span>
                   ) : (
                     !s.done && <span className="block text-sm text-muted-foreground">{s.why}</span>

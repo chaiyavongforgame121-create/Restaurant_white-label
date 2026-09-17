@@ -3,12 +3,14 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useLocale, useTranslations } from 'next-intl';
 import {
   Award, Check, ChevronRight, LogOut, MapPin, Receipt, Settings,
   ShieldCheck, Sparkles,
 } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { getLoyaltyProgram, getMyLoyalty, signOut } from '@favornoms/database/queries';
+import { DEFAULT_UI_LOCALE, intlLocaleFor, isUiLocale } from '@favornoms/shared';
 
 type LoyaltyBalance = NonNullable<Awaited<ReturnType<typeof getMyLoyalty>>>;
 import { Badge, Button, Card } from '@favornoms/ui';
@@ -19,7 +21,11 @@ import { InstallAppButton } from '@/components/install-app-button';
 // implementation detail of OTP-less sign-in and must never reach the screen.
 const SYNTHETIC_EMAIL_SUFFIX = '@customer.favornoms.local';
 
-/** The restaurant's name for a tier, falling back to the enum key until the programme loads. */
+/**
+ * The restaurant's name for a tier, falling back to the enum key until the programme loads.
+ * Deliberately not translated: once loaded, an untouched tier comes back from the server with the
+ * same English name, and the two must not disagree.
+ */
 function tierName(key: string, names: Record<string, string>): string {
   return names[key] ?? key.replace(/^./, (c) => c.toUpperCase());
 }
@@ -37,6 +43,9 @@ export function AccountView({
 }) {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const t = useTranslations('account');
+  const rawLocale = useLocale();
+  const numberLocale = intlLocaleFor(isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE);
   const [loyalty, setLoyalty] = React.useState<LoyaltyBalance | null>(null);
   // Tiers carry the merchant's own names now, so this card asks for them rather than
   // capitalising the enum key and showing a diner "Bronze" for a rung the restaurant
@@ -136,7 +145,12 @@ export function AccountView({
     // On success the browser is already navigating to Google — leave the spinner up.
     if (error) {
       setLinking(false);
-      setLinkError(error.message);
+      // The auth server's own message is English and technical: keep it for the console and
+      // name the one case a diner can act on.
+      console.error('[account] linking Google failed', error);
+      setLinkError(
+        error.code === 'identity_already_exists' ? t('home.googleAlreadyLinked') : t('home.linkGoogleFailed'),
+      );
     }
   };
 
@@ -153,27 +167,27 @@ export function AccountView({
                   stale signup metadata for a beat before correcting itself, which looks
                   exactly like the bug this is fixing. */}
               {loading || (user && !profileLoaded) ? (
-                <p className="text-sm text-white/80">Loading…</p>
+                <p className="text-sm text-white/80">{t('loading')}</p>
               ) : user ? (
                 <>
                   <p className="text-sm text-white/80">{displayPhone ?? realEmail}</p>
                   <h1 className="font-display text-2xl font-bold">
-                    {displayName ?? 'Welcome back'}
+                    {displayName ?? t('home.welcomeBack')}
                   </h1>
                   <Badge variant="solid" className="mt-1 bg-white/25 text-white">
-                    <Sparkles className="h-3 w-3" /> Member at {brandName}
+                    <Sparkles className="h-3 w-3" /> {t('home.memberAt', { brandName })}
                   </Badge>
                 </>
               ) : (
                 <>
-                  <p className="text-sm text-white/80">Welcome to {brandName}</p>
-                  <h1 className="font-display text-2xl font-bold">Sign in to earn points</h1>
+                  <p className="text-sm text-white/80">{t('home.welcomeTo', { brandName })}</p>
+                  <h1 className="font-display text-2xl font-bold">{t('home.signInToEarn')}</h1>
                   <Link
                     href={`${base}/sign-in?next=${encodeURIComponent(`${base}/account`)}`}
                     className="mt-2 inline-block"
                   >
                     <Button variant="glass" size="sm">
-                      Sign in
+                      {t('signIn')}
                     </Button>
                   </Link>
                 </>
@@ -184,11 +198,19 @@ export function AccountView({
         {user && (
           <div className="grid grid-cols-3 divide-x divide-border text-center">
             {[
-              { label: 'Points', value: (loyalty?.points_balance ?? 0).toLocaleString() },
-              { label: 'Tier', value: tierName(loyalty?.tier ?? 'bronze', tierNames) },
-              { label: 'Lifetime', value: (loyalty?.lifetime_earned ?? 0).toLocaleString() },
+              {
+                key: 'points',
+                label: t('home.statPoints'),
+                value: (loyalty?.points_balance ?? 0).toLocaleString(numberLocale),
+              },
+              { key: 'tier', label: t('home.statTier'), value: tierName(loyalty?.tier ?? 'bronze', tierNames) },
+              {
+                key: 'lifetime',
+                label: t('home.statLifetime'),
+                value: (loyalty?.lifetime_earned ?? 0).toLocaleString(numberLocale),
+              },
             ].map((stat) => (
-              <div key={stat.label} className="py-4">
+              <div key={stat.key} className="py-4">
                 <p className="font-display text-xl font-bold text-primary">{stat.value}</p>
                 <p className="text-xs text-muted-foreground">{stat.label}</p>
               </div>
@@ -198,15 +220,20 @@ export function AccountView({
       </Card>
 
       <ul className="space-y-2">
-        <Row icon={Receipt} label="Order history" href={`${base}/orders`} />
-        <Row icon={MapPin} label="Delivery addresses" meta="Manage saved addresses" href={`${base}/account/addresses`} />
+        <Row icon={Receipt} label={t('sections.orderHistory')} href={`${base}/orders`} />
+        <Row
+          icon={MapPin}
+          label={t('sections.addresses')}
+          meta={t('home.addressesMeta')}
+          href={`${base}/account/addresses`}
+        />
         <Row
           icon={Award}
-          label="Loyalty & rewards"
+          label={t('sections.loyalty')}
           meta={
             loyalty
-              ? `${tierName(loyalty.tier, tierNames)} · ${loyalty.points_balance.toLocaleString()} pts`
-              : `${tierName('bronze', tierNames)} · 0 pts`
+              ? t('home.loyaltyMeta', { tier: tierName(loyalty.tier, tierNames), points: loyalty.points_balance })
+              : t('home.loyaltyMeta', { tier: tierName('bronze', tierNames), points: 0 })
           }
           href={`${base}/account/loyalty`}
         />
@@ -217,28 +244,26 @@ export function AccountView({
                 <ShieldCheck className="h-5 w-5" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="font-semibold">Google account</p>
+                <p className="font-semibold">{t('home.googleAccount')}</p>
                 {googleEmail !== null ? (
                   <p className="flex items-center gap-1 truncate text-xs text-success">
                     <Check className="h-3 w-3 shrink-0" />
-                    {googleEmail || 'Linked'}
+                    {googleEmail || t('home.googleLinked')}
                   </p>
                 ) : (
-                  <p className="text-xs text-muted-foreground">
-                    Link Google to redeem your points.
-                  </p>
+                  <p className="text-xs text-muted-foreground">{t('home.googleLinkHint')}</p>
                 )}
                 {linkError && <p className="mt-1 text-xs text-danger">{linkError}</p>}
               </div>
               {googleEmail === null && (
                 <Button variant="outline" size="sm" onClick={linkGoogle} loading={linking}>
-                  Link Google
+                  {t('home.linkGoogle')}
                 </Button>
               )}
             </div>
           </li>
         )}
-        <Row icon={Settings} label="Settings & preferences" href={`${base}/account/settings`} />
+        <Row icon={Settings} label={t('sections.settings')} href={`${base}/account/settings`} />
         {/* Renders its own <li>, or nothing when already installed / no install path. */}
         <InstallAppButton />
       </ul>
@@ -252,7 +277,7 @@ export function AccountView({
             <LogOut className="h-5 w-5" />
           </div>
           <div className="flex-1">
-            <p className="font-semibold">Sign out</p>
+            <p className="font-semibold">{t('home.signOut')}</p>
           </div>
         </button>
       )}

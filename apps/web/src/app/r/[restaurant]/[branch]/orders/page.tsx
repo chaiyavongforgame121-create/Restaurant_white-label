@@ -1,4 +1,5 @@
 import { Receipt } from 'lucide-react';
+import { getTranslations } from 'next-intl/server';
 import { EmptyState } from '@favornoms/ui';
 import { getServerClient } from '@favornoms/database/server';
 import { resolveTenant } from '@/lib/tenant';
@@ -12,6 +13,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function OrdersPage({ params }: Props) {
   const { restaurant, branch } = await params;
+  const t = await getTranslations('orders');
   const tenant = await resolveTenant(restaurant, branch);
   const base = `/r/${restaurant}/${branch}`;
 
@@ -60,11 +62,11 @@ export default async function OrdersPage({ params }: Props) {
   if (ordersError) {
     return (
       <div className="container pt-6">
-        <h1 className="font-display text-2xl font-bold">Your orders</h1>
+        <h1 className="font-display text-2xl font-bold">{t('title')}</h1>
         <EmptyState
           icon={<Receipt className="h-7 w-7" />}
-          title="Couldn’t load your orders"
-          description="Something went wrong fetching your orders. Refresh the page or try again in a moment."
+          title={t('loadError.title')}
+          description={t('loadError.description')}
         />
       </div>
     );
@@ -73,13 +75,11 @@ export default async function OrdersPage({ params }: Props) {
   if (!orders || orders.length === 0) {
     return (
       <div className="container pt-6">
-        <h1 className="font-display text-2xl font-bold">Your orders</h1>
+        <h1 className="font-display text-2xl font-bold">{t('title')}</h1>
         <EmptyState
           icon={<Receipt className="h-7 w-7" />}
-          title="No orders yet"
-          description={user
-            ? 'Order something tasty and it will show up here'
-            : 'Your past and active orders will appear here once you sign in'}
+          title={t('empty.title')}
+          description={user ? t('empty.signedIn') : t('empty.guest')}
         />
       </div>
     );

@@ -1,0 +1,37 @@
+{
+  "tableNumber": "Bàn {number}",
+  "scan": {
+    "notSeatedStaff": "Nhờ nhân viên mở bàn cho bạn, rồi quét lại.",
+    "notSeatedAuto": "Bàn này chưa mở để gọi món. Hãy nhờ nhân viên xếp bàn cho bạn.",
+    "locked": "Bàn này đã yêu cầu tính tiền. Nếu muốn gọi thêm, hãy nhờ nhân viên mở lại bàn.",
+    "error": "Không thể mở bàn này.",
+    "codeRequired": "Đã có người gọi món ở bàn này. Nhập mã bốn số mà nhân viên phục vụ đưa cho bạn để vào chung hóa đơn.",
+    "codeEnter": "Nhập mã bốn số của bàn này để vào chung hóa đơn.",
+    "codeLabel": "Mã bàn",
+    "join": "Vào bàn"
+  },
+  "notice": {
+    "orderingAt": "Đang gọi món tại {table}",
+    "rounds": "· {count, plural, other {# lượt gọi}} · {total}",
+    "yourTable": "Bàn của bạn"
+  },
+  "bill": {
+    "loading": "Đang tải thông tin bàn…",
+    "empty": "Bàn này chưa gọi món nào. Mọi món bạn và cả nhóm gọi sẽ vào chung một hóa đơn.",
+    "round": "Lượt {round}",
+    "yours": "Của bạn",
+    "paid": "Đã thanh toán",
+    "total": "Tổng cộng của bàn",
+    "stillToPay": "Còn phải trả {amount}",
+    "locked": "Đã yêu cầu nhân viên tính tiền. Không thể gửi thêm lượt gọi món vào bếp cho đến khi bàn được mở lại.",
+    "readyToPay": "Chúng tôi muốn thanh toán",
+    "payAtRestaurant": "Bạn thanh toán tại nhà hàng. Bàn sẽ đóng khi hóa đơn được thanh toán xong.",
+    "askFailed": "Không thể yêu cầu tính tiền. Vui lòng thử lại.",
+    "alreadyClosed": "Bàn này đã được đóng."
+  },
+  "leave": {
+    "button": "Không ngồi tại {table}?",
+    "confirmOwed": "Ngừng gọi món tại {table}?\n\nHóa đơn vẫn mở — còn {amount} cần thanh toán tại nhà hàng.",
+    "confirm": "Ngừng gọi món tại {table}?\n\nHóa đơn vẫn mở; bạn chỉ không gọi món cho bàn này từ điện thoại này nữa."
+  }
+}

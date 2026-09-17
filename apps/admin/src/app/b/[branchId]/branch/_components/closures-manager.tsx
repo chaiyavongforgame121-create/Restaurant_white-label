@@ -2,9 +2,10 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
+import { useLocale, useTranslations } from 'next-intl';
 import { CalendarX, Plus, Trash2 } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
-import { formatInZone, localInputToUtcIso } from '@favornoms/shared';
+import { DEFAULT_UI_LOCALE, formatInZone, isUiLocale, localInputToUtcIso } from '@favornoms/shared';
 import { Button, Card, IconButton, useConfirm } from '@favornoms/ui';
 
 interface Closure {
@@ -15,6 +16,9 @@ interface Closure {
 }
 
 export function ClosuresManager({ branchId, timezone }: { branchId: string; timezone: string }) {
+  const t = useTranslations('branch.closures');
+  const rawLocale = useLocale();
+  const locale = isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE;
   const router = useRouter();
   const confirm = useConfirm();
   const [list, setList] = React.useState<Closure[]>([]);
@@ -28,8 +32,8 @@ export function ClosuresManager({ branchId, timezone }: { branchId: string; time
   // wrong and a hydration mismatch. The list itself loads client-side for the same reason.
   const [shopNow, setShopNow] = React.useState<string | null>(null);
   React.useEffect(() => {
-    setShopNow(formatInZone(new Date().toISOString(), timezone));
-  }, [timezone]);
+    setShopNow(formatInZone(new Date().toISOString(), timezone, {}, locale));
+  }, [timezone, locale]);
 
   React.useEffect(() => {
     void refresh();
@@ -54,13 +58,13 @@ export function ClosuresManager({ branchId, timezone }: { branchId: string; time
     const startsIso = localInputToUtcIso(startsAt, timezone);
     const endsIso = localInputToUtcIso(endsAt, timezone);
     if (!startsIso || !endsIso) {
-      setError('Those times could not be read. Pick the start and end again.');
+      setError(t('unreadableTimes'));
       return;
     }
     // A closure that ends before it starts is accepted by the table and blocks nothing, which
     // looks to the merchant exactly like a closure that was ignored.
     if (Date.parse(endsIso) <= Date.parse(startsIso)) {
-      setError('The closure has to end after it starts.');
+      setError(t('endBeforeStart'));
       return;
     }
     setBusy(true);
@@ -73,7 +77,11 @@ export function ClosuresManager({ branchId, timezone }: { branchId: string; time
       reason: reason || null,
     });
     setBusy(false);
-    if (insErr) { setError(insErr.message); return; }
+    if (insErr) {
+      console.error('Creating a closure failed', insErr);
+      setError(insErr.code === '42501' ? t('noPermission') : t('saveFailed'));
+      return;
+    }
     setStartsAt(''); setEndsAt(''); setReason(''); setComposing(false);
     await refresh();
     router.refresh();
@@ -82,9 +90,9 @@ export function ClosuresManager({ branchId, timezone }: { branchId: string; time
   const remove = async (id: string) => {
     if (
       !(await confirm({
-        title: 'Remove this closure?',
-        body: 'Ordering opens again during this period.',
-        confirmLabel: 'Remove',
+        title: t('removeTitle'),
+        body: t('removeBody'),
+        confirmLabel: t('removeConfirm'),
         destructive: true,
       }))
     ) {
@@ -99,37 +107,40 @@ export function ClosuresManager({ branchId, timezone }: { branchId: string; time
     <Card className="p-5">
       <div className="flex items-start justify-between">
         <div>
-          <h2 className="font-display text-lg font-semibold">Holiday hours / Closures</h2>
-          <p className="text-sm text-muted-foreground">Block ordering during these periods.</p>
+          <h2 className="font-display text-lg font-semibold">{t('title')}</h2>
+          <p className="text-sm text-muted-foreground">{t('description')}</p>
           {/* Named for the same reason as Opening hours: a merchant setting these from another
               country has no reason to suspect the fields mean a clock other than their own. */}
           <p className="mt-1 text-xs text-muted-foreground">
-            Times are <strong>{timezone.replace(/_/g, ' ')}</strong>, the shop&apos;s clock.
-            {shopNow && ` It is ${shopNow} there now.`}
+            {t.rich('zoneNotice', {
+              zone: timezone.replace(/_/g, ' '),
+              strong: (chunks) => <strong>{chunks}</strong>,
+            })}
+            {shopNow && <> {t('shopClock', { time: shopNow })}</>}
           </p>
         </div>
         <Button onClick={() => setComposing((c) => !c)} variant={composing ? 'ghost' : 'soft'} size="md" leftIcon={<Plus className="h-4 w-4" />}>
-          {composing ? 'Cancel' : 'Add closure'}
+          {composing ? t('cancel') : t('add')}
         </Button>
       </div>
 
       {composing && (
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
           <label className="block sm:col-span-1">
-            <span className="mb-1.5 block text-sm font-medium">Starts</span>
+            <span className="mb-1.5 block text-sm font-medium">{t('starts')}</span>
             <input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} className="input" />
           </label>
           <label className="block sm:col-span-1">
-            <span className="mb-1.5 block text-sm font-medium">Ends</span>
+            <span className="mb-1.5 block text-sm font-medium">{t('ends')}</span>
             <input type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} className="input" />
           </label>
           <label className="block sm:col-span-2">
-            <span className="mb-1.5 block text-sm font-medium">Reason</span>
-            <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Songkran holiday" className="input" />
+            <span className="mb-1.5 block text-sm font-medium">{t('reason')}</span>
+            <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t('reasonPlaceholder')} className="input" />
           </label>
           {error && <p className="sm:col-span-2 rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
           <Button onClick={create} variant="gradient" loading={busy} disabled={!startsAt || !endsAt} className="sm:col-span-2">
-            Create
+            {t('create')}
           </Button>
         </div>
       )}
@@ -137,30 +148,30 @@ export function ClosuresManager({ branchId, timezone }: { branchId: string; time
       <ul className="mt-3 divide-y divide-border/40">
         {list.length === 0 && (
           <li className="py-6 text-center text-sm text-muted-foreground flex flex-col items-center gap-2">
-            <CalendarX className="h-6 w-6" /> No upcoming closures.
+            <CalendarX className="h-6 w-6" /> {t('empty')}
           </li>
         )}
         {list.map((c) => (
           <li key={c.id} className="flex items-center justify-between py-2">
             <div>
               <p className="font-medium">
-                {formatInZone(c.starts_at, timezone)} → {formatInZone(c.ends_at, timezone)}
+                {formatInZone(c.starts_at, timezone, {}, locale)} → {formatInZone(c.ends_at, timezone, {}, locale)}
                 {/* Whether the block is actually on right now is the question a merchant asks
                     when a customer has just ordered through it. */}
                 {Date.parse(c.starts_at) <= Date.now() && Date.now() <= Date.parse(c.ends_at) && (
                   <span className="ml-2 rounded-full bg-danger/10 px-2 py-0.5 text-xs font-semibold text-danger">
-                    Closed now
+                    {t('closedNow')}
                   </span>
                 )}
                 {Date.parse(c.ends_at) < Date.now() && (
                   <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">
-                    Ended
+                    {t('ended')}
                   </span>
                 )}
               </p>
               {c.reason && <p className="text-xs text-muted-foreground">{c.reason}</p>}
             </div>
-            <IconButton label="Delete" size="sm" className="text-danger" onClick={() => remove(c.id)}>
+            <IconButton label={t('delete')} size="sm" className="text-danger" onClick={() => remove(c.id)}>
               <Trash2 className="h-4 w-4" />
             </IconButton>
           </li>

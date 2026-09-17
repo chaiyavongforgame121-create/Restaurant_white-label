@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import { getServerClient } from '@favornoms/database/server';
 import { getEntitlementsForBranch } from '@favornoms/database/queries';
 import { hasFeature } from '@favornoms/shared';
@@ -35,16 +36,17 @@ export default async function BranchPage({ params }: Props) {
         .limit(1)
         .maybeSingle();
 
-  const [{ data: restaurant }, entitlements, { data: brand }] = await Promise.all([
+  const [{ data: restaurant }, entitlements, { data: brand }, t] = await Promise.all([
     supabase.from('restaurants').select('name, storefront').eq('id', branch.restaurant_id).maybeSingle(),
     getEntitlementsForBranch(supabase, branchId),
     brandQuery,
+    getTranslations('branch'),
   ]);
   return (
     <BranchSettings
       branch={branch as never}
       restaurantStorefront={(restaurant?.storefront ?? null) as Record<string, unknown> | null}
-      restaurantName={restaurant?.name ?? 'My restaurant'}
+      restaurantName={restaurant?.name ?? t('defaultRestaurantName')}
       brand={(brand ?? null) as never}
       canUseDelivery={hasFeature(entitlements, 'delivery')}
       canUseCard={hasFeature(entitlements, 'card_payment')}

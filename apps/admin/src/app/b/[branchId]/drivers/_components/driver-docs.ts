@@ -11,10 +11,16 @@
  * three keys, the same filtering and the same staleness rule.
  */
 
+import { intlLocaleFor, type UiLocale } from '@favornoms/shared';
+
+/**
+ * The three documents, by the object-name prefix the rider app uploads them under. Their
+ * names are words for the screen, so they live under drivers.docs.<labelKey>.
+ */
 export const DOC_TYPES = [
-  { key: 'license', label: 'Driver licence' },
-  { key: 'vehicle_reg', label: 'Vehicle registration' },
-  { key: 'selfie', label: 'Selfie with licence' },
+  { key: 'license', labelKey: 'license' },
+  { key: 'vehicle_reg', labelKey: 'vehicleReg' },
+  { key: 'selfie', labelKey: 'selfie' },
 ] as const;
 
 export type DocKey = (typeof DOC_TYPES)[number]['key'];
@@ -110,12 +116,15 @@ export function decidedBeforeUpload(
   return new Date(lastReceivedAt).getTime() > new Date(decidedAt).getTime();
 }
 
-/** Short, absolute and with a time — the whole point is comparing two moments. */
-export function formatReceived(ts: string | null): string | null {
+/**
+ * Short, absolute and with a time — the whole point is comparing two moments. In the
+ * reader's interface language (English when omitted).
+ */
+export function formatReceived(ts: string | null, locale: UiLocale = 'en'): string | null {
   if (!ts) return null;
   const d = new Date(ts);
   if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleString('en-US', {
+  return d.toLocaleString(intlLocaleFor(locale), {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',

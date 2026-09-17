@@ -1,0 +1,195 @@
+{
+  "title": "Thanh toán",
+  "deliveryAddress": "Địa chỉ giao hàng",
+  "contactInfo": "Thông tin liên hệ",
+  "paymentMethod": "Phương thức thanh toán",
+  "dineInPayAtRestaurant": "Chưa cần thanh toán lúc này — bạn sẽ thanh toán tại nhà hàng.",
+  "name": "Họ và tên",
+  "namePlaceholder": "VD: Nguyễn Văn An",
+  "phone": "Số điện thoại",
+  "phonePlaceholder": "(555) 234-5678",
+  "emailLabel": "Email (để nhận hóa đơn)",
+  "emailPlaceholder": "ban@example.com",
+  "address": "Địa chỉ",
+  "addressPlaceholder": "Bắt đầu nhập địa chỉ của bạn…",
+  "addNote": "Thêm ghi chú giao hàng",
+  "setOnMap": "Chọn trên bản đồ",
+  "useCurrentLocation": "Dùng vị trí hiện tại",
+  "locating": "Đang định vị…",
+  "remove": "Xóa",
+  "apply": "Áp dụng",
+  "picker": {
+    "title": "Chọn vị trí giao hàng",
+    "confirm": "Xác nhận vị trí này",
+    "useCurrentLocation": "Dùng vị trí hiện tại của tôi",
+    "locating": "Đang tìm vị trí của bạn…",
+    "searching": "Đang tìm địa chỉ…",
+    "dragHint": "Tìm kiếm hoặc kéo bản đồ để chọn đúng vị trí",
+    "searchPlaceholder": "Tìm địa chỉ hoặc địa điểm",
+    "unavailable": "Bản đồ hiện không khả dụng."
+  },
+  "geo": {
+    "unsupported": "Trình duyệt của bạn không hỗ trợ định vị.",
+    "insecure": "Cần kết nối bảo mật (https) để lấy vị trí hiện tại — hãy kéo bản đồ.",
+    "denied": "Quyền truy cập vị trí đã bị từ chối — hãy kéo bản đồ để chọn vị trí.",
+    "unavailable": "Không tìm được vị trí của bạn — hãy kéo bản đồ.",
+    "timeout": "Hết thời gian định vị — hãy thử lại hoặc kéo bản đồ."
+  },
+  "loyalty": {
+    "verifyRequired": "Để dùng điểm tích lũy, hãy xác minh email hoặc liên kết tài khoản Google trước — để giữ an toàn cho điểm của bạn. Bạn vẫn có thể đặt hàng mà không đổi điểm.",
+    "verifyHint": "Xác minh email hoặc liên kết Google để dùng điểm — nhờ đó điểm luôn là của bạn.",
+    "verifyCta": "Xác minh hoặc liên kết tài khoản"
+  },
+  "errors": {
+    "nameRequired": "Vui lòng nhập tên của bạn.",
+    "phoneRequired": "Vui lòng nhập số điện thoại.",
+    "phoneInvalid": "Vui lòng nhập số điện thoại hợp lệ.",
+    "emailInvalid": "Vui lòng nhập địa chỉ email hợp lệ.",
+    "addressRequired": "Vui lòng nhập địa chỉ giao hàng.",
+    "addressUnconfirmed": "Hãy chọn địa chỉ từ gợi ý hoặc trên bản đồ để chúng tôi xác định vị trí của bạn.",
+    "scheduleRequired": "Vui lòng chọn ngày và giờ giao hàng.",
+    "scheduleStale": "Giờ giao hàng đó không còn nữa. Vui lòng kiểm tra giờ mới và đặt hàng lại.",
+    "dropoffRequired": "Vui lòng chọn nơi tài xế để đơn hàng của bạn.",
+    "dropoffOtherRequired": "Vui lòng mô tả nơi giao.",
+    "outOfRange": "Địa chỉ này nằm ngoài khu vực giao hàng.",
+    "deliveryNotSold": "Chi nhánh này hiện không nhận đơn giao hàng. Hãy thử Tự đến lấy.",
+    "pickupClosedScheduleInstead": "Nhà hàng hiện đã đóng cửa nên không thể Tự đến lấy. Bạn có thể hẹn giờ giao hàng."
+  },
+  "promoCode": "Bạn có mã khuyến mãi?",
+  "placeOrder": "Đặt hàng — {amount}",
+  "sendToKitchen": "Gửi xuống bếp · {amount}",
+  "estimatedDelivery": "Dự kiến đến lúc: {time}",
+  "submitError": "<strong>Không thể đặt hàng:</strong> {error}",
+  "payment": {
+    "card": "Thẻ tín dụng / ghi nợ",
+    "cash": "Tiền mặt khi nhận hàng",
+    "transfer": "Chuyển khoản QR",
+    "cardFeeNote": "Phí dịch vụ {percent}% chỉ áp dụng khi thanh toán bằng thẻ — tiền mặt và chuyển khoản QR không mất phí.",
+    "transferNote": "Hãy đặt hàng trước. Mã QR và mục tải ảnh biên lai sẽ hiện ngay trên trang đơn hàng — bạn không bị tính tiền cho đến khi xác nhận đã thanh toán.",
+    "cardWithheldChooseOther": "Trang này chưa hỗ trợ thanh toán bằng thẻ. Hãy chọn một phương thức ở trên — bạn vẫn có thể trả bằng thẻ trực tiếp tại nhà hàng.",
+    "cardWithheldOnly": "Trang này chưa hỗ trợ thanh toán bằng thẻ. Đây là phương thức duy nhất nhà hàng đang bật, nên hiện chưa thể đặt đơn này trực tuyến. Vui lòng gọi điện cho nhà hàng để đặt.",
+    "noneAvailable": "Nhà hàng hiện không có phương thức thanh toán nào."
+  },
+  "signIn": {
+    "title": "Vui lòng đăng nhập để thanh toán",
+    "body": "Bạn cần có tài khoản để đặt hàng — chỉ mất một chút thôi.",
+    "cta": "Đăng nhập để tiếp tục"
+  },
+  "placed": {
+    "title": "Đã đặt hàng!",
+    "redirecting": "Đang chuyển đến đơn hàng của bạn…"
+  },
+  "empty": {
+    "title": "Giỏ hàng trống",
+    "body": "Thêm vài món từ thực đơn để thanh toán.",
+    "cta": "Xem thực đơn"
+  },
+  "orderType": {
+    "paused": "Nhà hàng tạm thời không nhận đơn. Vui lòng quay lại sau.",
+    "pickupClosedCanSchedule": "Nhà hàng hiện đã đóng cửa nên không thể Tự đến lấy — bạn vẫn có thể hẹn giờ giao hàng.",
+    "pickupClosed": "Nhà hàng hiện đã đóng cửa nên không thể Tự đến lấy. Vui lòng đặt hàng trong giờ mở cửa.",
+    "pickupNoPaymentCanSchedule": "Không thể Tự đến lấy với các phương thức thanh toán hiện tại của nhà hàng — bạn vẫn có thể hẹn giờ giao hàng.",
+    "pickupNoPayment": "Không thể Tự đến lấy với các phương thức thanh toán hiện tại của nhà hàng.",
+    "pickupReady": "Được chuẩn bị ngay khi đơn hàng được xác nhận.",
+    "deliveryUnavailablePickupOpen": "Nhà hàng hiện không nhận hẹn giờ giao hàng — bạn vẫn có thể Tự đến lấy.",
+    "deliveryUnavailable": "Nhà hàng hiện không nhận hẹn giờ giao hàng.",
+    "deliveryNoPaymentPickupOpen": "Không thể hẹn giờ giao hàng với các phương thức thanh toán hiện tại của nhà hàng — bạn vẫn có thể Tự đến lấy.",
+    "deliveryNoPayment": "Không thể hẹn giờ giao hàng với các phương thức thanh toán hiện tại của nhà hàng.",
+    "pickupPaused": "Hiện không thể Tự đến lấy — nhà hàng đang tạm dừng nhận đơn.",
+    "pickupClosedNow": "Hiện không thể Tự đến lấy — nhà hàng đã đóng cửa."
+  },
+  "schedule": {
+    "loading": "Đang tải các khung giờ nhà hàng nhận đặt trước…",
+    "none": "Hiện không còn giờ giao hàng nào để đặt. Hãy chọn Tự đến lấy hoặc quay lại sau.",
+    "day": "Ngày",
+    "time": "Giờ",
+    "today": "Hôm nay",
+    "tomorrow": "Ngày mai",
+    "hint": "Chỉ hiển thị các giờ nhà hàng có giao hàng, theo giờ địa phương của nhà hàng. Đơn hàng sẽ được chuẩn bị xong vào giờ đó và giao đến bạn ngay sau đó."
+  },
+  "addresses": {
+    "default": "Mặc định",
+    "useNew": "+ Dùng địa chỉ mới",
+    "pinned": "Đã ghim vị trí"
+  },
+  "quote": {
+    "calculating": "Đang tính phí giao hàng…",
+    "distanceFee": "Cách {distance} mi · phí giao {fee}",
+    "outOfRangeMax": "Rất tiếc, địa chỉ này nằm ngoài khu vực giao hàng (tối đa {max} mi).",
+    "notSold": "Rất tiếc, chi nhánh này hiện không nhận đơn giao hàng. Bạn vẫn có thể Tự đến lấy.",
+    "pickSuggestion": "Hãy chọn địa chỉ từ gợi ý để xác nhận giao hàng và xem phí chính xác."
+  },
+  "dropoff": {
+    "title": "Để đơn hàng ở đâu?",
+    "options": {
+      "leave_at_door": "Để trước cửa",
+      "hand_to_me": "Giao tận tay",
+      "at_desk": "Tại quầy lễ tân",
+      "other": "Khác"
+    },
+    "otherPlaceholder": "Cho tài xế biết nơi để đơn hàng",
+    "gateCode": "Mã cổng <optional>(không bắt buộc)</optional>",
+    "gateCodePlaceholder": "VD: #1234",
+    "room": "Phòng / căn hộ <optional>(không bắt buộc)</optional>",
+    "roomPlaceholder": "VD: Căn 203",
+    "instructions": "Hướng dẫn giao hàng <optional>(không bắt buộc)</optional>",
+    "instructionsPlaceholder": "VD: Nhà màu xanh sau tiệm bánh · gọi khi đến",
+    "instructionsHint": "Thông tin giúp tài xế tìm thấy bạn — hữu ích khi bản đồ không chính xác."
+  },
+  "dineIn": {
+    "scanned": "Đã quét từ mã QR trên bàn — không cần nhập gì.",
+    "roundTotal": "Lượt {round} · Tổng của bàn đến giờ {amount}"
+  },
+  "promo": {
+    "title": "Mã khuyến mãi",
+    "applied": "{code} — tiết kiệm {amount}",
+    "appliedFreeDelivery": "{code} — tiết kiệm {amount} + miễn phí giao hàng",
+    "errors": {
+      "invalidCode": "Mã khuyến mãi không hợp lệ.",
+      "exhausted": "Mã khuyến mãi này đã hết lượt sử dụng.",
+      "minSubtotal": "Đơn hàng cần tối thiểu {amount} để dùng mã này.",
+      "minSubtotalUnknown": "Đơn hàng chưa đạt mức tối thiểu để dùng mã này.",
+      "perCustomerLimit": "Bạn đã dùng mã này đủ số lần cho phép."
+    }
+  },
+  "giftCard": {
+    "title": "🎁 Thẻ quà tặng",
+    "placeholder": "Mã thẻ quà tặng",
+    "applied": "{code} — áp dụng {amount} (số dư {balance})",
+    "errors": {
+      "invalidOrRedeemed": "Mã thẻ quà tặng không hợp lệ hoặc đã được sử dụng.",
+      "expired": "Thẻ quà tặng này đã hết hạn."
+    }
+  },
+  "tip": {
+    "title": "Thêm tiền tip",
+    "driverAll": "{percent}% dành cho tài xế của bạn.",
+    "driverPartial": "{percent}% dành cho tài xế của bạn (phần còn lại hỗ trợ nhà hàng).",
+    "teamAll": "{percent}% dành cho đội bếp và nhân viên.",
+    "teamPartial": "{percent}% dành cho đội bếp và nhân viên (phần còn lại hỗ trợ nhà hàng).",
+    "custom": "Tùy chỉnh",
+    "none": "Không tip",
+    "customPlaceholder": "Số tiền tùy chỉnh (USD)",
+    "customLabel": "Số tiền tip tùy chỉnh (USD)"
+  },
+  "rewards": {
+    "title": "Đổi điểm",
+    "balance": "Số dư: <strong>{balance, number}</strong>",
+    "onePerOrder": "Mỗi đơn hàng chọn một phần thưởng.",
+    "cost": "{points, number} điểm",
+    "freeDelivery": "Miễn phí giao hàng",
+    "needsMore": "{count, plural, other {Cần thêm # điểm}}",
+    "spendToUnlock": "Đặt từ {amount} để mở khóa",
+    "addItem": "Thêm {item} vào giỏ hàng",
+    "addTheItem": "Thêm món đó vào giỏ hàng",
+    "deliveryOnly": "Chỉ áp dụng cho đơn giao hàng"
+  },
+  "summary": {
+    "calculating": "Đang tính…",
+    "salesTax": "Thuế",
+    "tip": "Tiền tip",
+    "promo": "Khuyến mãi ({code})",
+    "reward": "Phần thưởng ({name})",
+    "deliveryFree": "Miễn phí giao hàng"
+  }
+}

@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react';
 import { Check, Copy, Download, Printer, QrCode, Settings2 } from 'lucide-react';
 import { Button, Card } from '@favornoms/ui';
@@ -28,35 +29,32 @@ export function BranchQr({
   missingSlugs = [],
   tableCount = 0,
 }: Props) {
+  const t = useTranslations('qr');
   const [copied, setCopied] = React.useState(false);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
 
   if (!url) {
-    const what =
-      missingSlugs.length === 2
-        ? 'This restaurant and this branch have no URL slug'
-        : missingSlugs[0] === 'restaurant'
-          ? 'This restaurant has no URL slug'
-          : 'This branch has no URL slug';
+    const missing =
+      missingSlugs.length === 2 ? 'both' : missingSlugs[0] === 'restaurant' ? 'restaurant' : 'branch';
     return (
       <div className="container max-w-xl py-8">
-        <h1 className="font-display text-2xl font-bold">Branch QR code</h1>
+        <h1 className="font-display text-2xl font-bold">{t('branch.title')}</h1>
         <Card className="mt-5 p-6">
-          <h2 className="font-display text-lg font-semibold">Can&apos;t build a menu link yet</h2>
+          <h2 className="font-display text-lg font-semibold">{t('noLink.title')}</h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            {what}, so there is no public address to point a QR code at. A slug is the short
-            name in your menu link, e.g.{' '}
-            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">/r/coastal-grill/brooklyn</code>.
+            {t.rich(`noLink.branchBody.${missing}`, {
+              code: (chunks) => (
+                <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{chunks}</code>
+              ),
+            })}
           </p>
           <p className="mt-2 text-sm text-muted-foreground">
-            Slugs are created during onboarding. If yours is blank, set a{' '}
-            <strong>custom domain</strong> in Branch settings instead — that also gives this
-            branch a scannable address — or ask support to fill the slug in.
+            {t.rich('noLink.branchHelp', { strong: (chunks) => <strong>{chunks}</strong> })}
           </p>
           <div className="mt-4">
             <Link href={`/b/${branchId}/branch`}>
               <Button variant="outline" leftIcon={<Settings2 className="h-4 w-4" />}>
-                Open Branch settings
+                {t('noLink.openBranchSettings')}
               </Button>
             </Link>
           </div>
@@ -88,20 +86,11 @@ export function BranchQr({
 
   return (
     <div className="container max-w-xl py-8">
-      <h1 className="font-display text-2xl font-bold">Branch QR code</h1>
+      <h1 className="font-display text-2xl font-bold">{t('branch.title')}</h1>
       <p className="mt-1 text-sm text-muted-foreground">
-        {tableCount > 0 ? (
-          <>
-            One code for the whole branch — the counter, the window, a takeaway flyer. Guests
-            scan it to open {branchName}&apos;s menu and pick how they want to order. Tables have
-            their own codes.
-          </>
-        ) : (
-          <>
-            Print this and place it at the counter or on a flyer. Guests scan it to open{' '}
-            {branchName}&apos;s menu and order from their phone.
-          </>
-        )}
+        {tableCount > 0
+          ? t('branch.introWithTables', { branch: branchName })
+          : t('branch.intro', { branch: branchName })}
       </p>
 
       {/* The two codes do different jobs and the difference is easy to miss, so the
@@ -109,7 +98,9 @@ export function BranchQr({
       <div className="mt-4 print:hidden">
         <Link href={`/b/${branchId}/qr/tables`}>
           <Button variant="outline" leftIcon={<QrCode className="h-4 w-4" />}>
-            {tableCount > 0 ? `Table QR codes (${tableCount})` : 'Set up table QR codes'}
+            {tableCount > 0
+              ? t('branch.tableCodes', { count: tableCount })
+              : t('branch.setUpTableCodes')}
           </Button>
         </Link>
       </div>
@@ -121,6 +112,7 @@ export function BranchQr({
           </div>
           <div>
             <p className="font-display text-xl font-bold">{restaurantName || branchName}</p>
+            {/* Printed for diners, and the print has no language of its own: stays English. */}
             <p className="text-sm text-muted-foreground">Scan to order · {branchName}</p>
           </div>
         </div>
@@ -134,7 +126,7 @@ export function BranchQr({
             leftIcon={copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
             onClick={copy}
           >
-            {copied ? 'Copied' : 'Copy link'}
+            {copied ? t('actions.copied') : t('actions.copyLink')}
           </Button>
           <Button
             variant="outline"
@@ -142,7 +134,7 @@ export function BranchQr({
             leftIcon={<Download className="h-4 w-4" />}
             onClick={downloadPng}
           >
-            Download PNG
+            {t('branch.downloadPng')}
           </Button>
           <Button
             variant="gradient"
@@ -150,11 +142,11 @@ export function BranchQr({
             leftIcon={<Printer className="h-4 w-4" />}
             onClick={() => window.print()}
           >
-            Print
+            {t('branch.print')}
           </Button>
         </div>
         <p className="mt-2 text-center text-xs text-muted-foreground">
-          PNG is {PNG_SIZE}×{PNG_SIZE}px — big enough for table tents and posters.
+          {t('branch.pngHint', { size: PNG_SIZE })}
         </p>
       </Card>
 

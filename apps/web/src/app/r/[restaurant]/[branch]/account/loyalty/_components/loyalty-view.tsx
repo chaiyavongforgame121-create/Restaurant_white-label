@@ -1,12 +1,12 @@
 'use client';
 
 import * as React from 'react';
+import { useLocale, useTranslations } from 'next-intl';
 import { Award, ChevronRight, Gift, History } from 'lucide-react';
-import { formatCurrency } from '@favornoms/shared';
+import { DEFAULT_UI_LOCALE, formatCurrency, intlLocaleFor, isUiLocale } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
 import {
   DEFAULT_LOYALTY_PROGRAM,
-  DEFAULT_TIER_PERKS,
   getLoyaltyProgram,
   getMyLoyalty,
   listLoyaltyRewards,
@@ -20,6 +20,7 @@ import { useAuth } from '@/components/auth/use-auth';
 import { AccountHeader, SignInGate } from '../../_components/account-ui';
 
 type Loyalty = NonNullable<Awaited<ReturnType<typeof getMyLoyalty>>>;
+type LoyaltyT = ReturnType<typeof useTranslations<'loyalty'>>;
 
 /**
  * Every tier used to render in the same brand orange, so a Bronze member's bar
@@ -50,7 +51,8 @@ const TONES = {
 } as const;
 
 /** The emoji and colour of each rung. Everything a diner reads — the name, the thresholds, the
- *  benefit lines — comes from the restaurant; these labels are only the fallback. */
+ *  benefit lines — comes from the restaurant; these labels are only the fallback, and stay in the
+ *  platform's English because an untouched tier comes back from the server with the same name. */
 const TIER_BASE = [
   { key: 'bronze', label: 'Bronze', emoji: '🥉', tone: TONES.bronze },
   { key: 'silver', label: 'Silver', emoji: '🥈', tone: TONES.silver },
@@ -92,23 +94,26 @@ function buildTiers(program: LoyaltyProgram): Tier[] {
 
 /**
  * What a rung promises. The first line is drawn from the threshold every time rather than stored,
- * so moving a tier can never leave a stale number in the merchant's copy; the rest is theirs, or
- * the platform's for a tier they have never touched. An empty array they saved means they chose to
- * say nothing more, and is respected.
+ * so moving a tier can never leave a stale number in the merchant's copy; the rest is theirs, shown
+ * exactly as written, or the platform's for a tier they have never touched. The platform's lines are
+ * DEFAULT_TIER_PERKS in @favornoms/database; `loyalty.defaultPerks.*` carries them in each language
+ * (English identical — see default-perks.test.ts). An empty array they saved means they chose to say
+ * nothing more, and is respected.
  */
-function tierBenefits(tier: Tier): string[] {
+function tierBenefits(tier: Tier, t: LoyaltyT): string[] {
   const opening =
-    tier.threshold <= 0
-      ? 'Where every member starts — no minimum spend.'
-      : `Unlocked at ${tier.threshold.toLocaleString()} lifetime points.`;
-  return [opening, ...(tier.perks ?? DEFAULT_TIER_PERKS[tier.key] ?? [])];
+    tier.threshold <= 0 ? t('tiers.starter') : t('tiers.unlockedAt', { points: tier.threshold });
+  return [opening, ...(tier.perks ?? [t(`defaultPerks.${tier.key}`)])];
 }
 
-const TX_META: Record<string, { label: string; variant: React.ComponentProps<typeof Badge>['variant'] }> = {
-  earned: { label: 'Earned', variant: 'success' },
-  redeemed: { label: 'Redeemed', variant: 'default' },
-  expired: { label: 'Expired', variant: 'muted' },
-  adjusted: { label: 'Adjusted', variant: 'warning' },
+const TX_META: Record<
+  string,
+  { labelKey: 'earned' | 'redeemed' | 'expired' | 'adjusted'; variant: React.ComponentProps<typeof Badge>['variant'] }
+> = {
+  earned: { labelKey: 'earned', variant: 'success' },
+  redeemed: { labelKey: 'redeemed', variant: 'default' },
+  expired: { labelKey: 'expired', variant: 'muted' },
+  adjusted: { labelKey: 'adjusted', variant: 'warning' },
 };
 
 function tierIndexFor(lifetimeEarned: number, tiers: Tier[]): number {
@@ -117,6 +122,12 @@ function tierIndexFor(lifetimeEarned: number, tiers: Tier[]): number {
     if (lifetimeEarned >= tiers[i]!.threshold) idx = i;
   }
   return idx;
+}
+
+/** The Intl locale for numbers and dates in the current interface language. */
+function useIntlLocale(): string {
+  const raw = useLocale();
+  return intlLocaleFor(isUiLocale(raw) ? raw : DEFAULT_UI_LOCALE);
 }
 
 export function LoyaltyView({
@@ -128,6 +139,9 @@ export function LoyaltyView({
   brandName: string;
   branchId: string;
 }) {
+  const t = useTranslations('loyalty');
+  const tAccount = useTranslations('account');
+  const intlLocale = useIntlLocale();
   const { user, loading } = useAuth();
   const [loyalty, setLoyalty] = React.useState<Loyalty | null>(null);
   const [txns, setTxns] = React.useState<LoyaltyTxRow[]>([]);
@@ -185,41 +199,45 @@ export function LoyaltyView({
   const nextReward = rewards
     .filter((r) => r.points_cost > balance)
     .reduce<LoyaltyReward | null>((best, r) => (!best || r.points_cost < best.points_cost ? r : best), null);
+  const strong = (chunks: React.ReactNode) => <strong className="text-foreground">{chunks}</strong>;
 
   return (
     <div className="container max-w-2xl pb-24 pt-4">
-      <AccountHeader base={base} title="Loyalty & rewards" />
+      <AccountHeader base={base} title={tAccount('sections.loyalty')} />
       {loading ? null : !user ? (
-        <SignInGate base={base} message={`Sign in to see your ${brandName} points and rewards.`} />
+        <SignInGate base={base} message={t('signInPrompt', { brandName })} />
       ) : (
         <div className="space-y-5">
           <Card className="overflow-hidden p-0">
             <div className="bg-gradient-warm p-6 text-white">
-              <p className="text-sm text-white/80">Your points</p>
-              <p className="font-display text-5xl font-bold leading-tight">{balance.toLocaleString()}</p>
+              <p className="text-sm text-white/80">{t('yourPoints')}</p>
+              <p className="font-display text-5xl font-bold leading-tight">{balance.toLocaleString(intlLocale)}</p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <Badge variant="solid" className="bg-white/25 text-white">
                   <Award className="h-3 w-3" />{' '}
                   {program === undefined ? (
-                    <span className="inline-block h-3 w-16 animate-pulse rounded bg-white/30" aria-label="Loading tier" />
+                    <span
+                      className="inline-block h-3 w-16 animate-pulse rounded bg-white/30"
+                      aria-label={t('loadingTier')}
+                    />
                   ) : (
-                    `${badgeLabel} member`
+                    t('memberBadge', { tier: badgeLabel })
                   )}
                 </Badge>
                 {/* Points buy named rewards now, not a floating dollar rate, so
                     quoting one would be a number the diner can never cash in. */}
                 <span className="text-xs text-white/80">
                   {affordable.length > 0
-                    ? `${affordable.length} reward${affordable.length === 1 ? '' : 's'} ready to redeem`
+                    ? t('rewardsReady', { count: affordable.length })
                     : nextReward
-                      ? `${(nextReward.points_cost - balance).toLocaleString()} more points for ${nextReward.name}`
-                      : 'Keep ordering to earn more'}
+                      ? t('pointsForReward', { points: nextReward.points_cost - balance, reward: nextReward.name })
+                      : t('keepOrdering')}
                 </span>
               </div>
             </div>
             <div className="grid grid-cols-2 divide-x divide-border text-center">
-              <Stat label="Lifetime earned" value={(loyalty?.lifetime_earned ?? 0).toLocaleString()} />
-              <Stat label="Lifetime redeemed" value={(loyalty?.lifetime_spent ?? 0).toLocaleString()} />
+              <Stat label={t('lifetimeEarned')} value={(loyalty?.lifetime_earned ?? 0).toLocaleString(intlLocale)} />
+              <Stat label={t('lifetimeRedeemed')} value={(loyalty?.lifetime_spent ?? 0).toLocaleString(intlLocale)} />
             </div>
           </Card>
 
@@ -237,90 +255,76 @@ export function LoyaltyView({
 
           <Card className="p-5">
             <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
-              <Gift className="h-5 w-5 text-primary" /> How points work
+              <Gift className="h-5 w-5 text-primary" /> {t('howPoints.title')}
             </h2>
             <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
               {program ? (
                 <li>
-                  Earn{' '}
-                  <strong className="text-foreground">
-                    {program.pointsPerCurrency === 1
-                      ? '1 point'
-                      : `${program.pointsPerCurrency.toLocaleString()} points`}{' '}
-                    per {formatCurrency(1)}
-                  </strong>{' '}
-                  of your order subtotal.
+                  {t.rich('howPoints.earnRate', {
+                    points: program.pointsPerCurrency,
+                    amount: formatCurrency(1),
+                    strong,
+                  })}
                 </li>
               ) : program === undefined ? (
                 <li aria-busy="true">
                   <span className="inline-block h-4 w-56 max-w-full animate-pulse rounded bg-muted" />
                 </li>
               ) : (
-                <li>Earn points on the subtotal of every completed order.</li>
+                <li>{t('howPoints.earnFallback')}</li>
               )}
-              <li>
-                Points land{' '}
-                <strong className="text-foreground">once the order is completed</strong> — orders still
-                being prepared or on their way don&apos;t count yet.
-              </li>
-              <li>
-                At checkout, pick{' '}
-                <strong className="text-foreground">one reward</strong> from the list above — its points
-                come off your balance and the discount comes off that order.
-              </li>
-              <li>
-                Redeemed points leave your balance right away, but the entry shows in{' '}
-                <strong className="text-foreground">Recent activity</strong> once that order is
-                completed.
-              </li>
-              <li>Keep ordering to climb tiers and unlock more perks.</li>
+              <li>{t.rich('howPoints.landing', { strong })}</li>
+              <li>{t.rich('howPoints.checkout', { strong })}</li>
+              <li>{t.rich('howPoints.redeemed', { strong })}</li>
+              <li>{t('howPoints.climb')}</li>
             </ul>
           </Card>
 
           <Card className="p-5">
             <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
-              <History className="h-5 w-5 text-primary" /> Recent activity
+              <History className="h-5 w-5 text-primary" /> {t('activity.title')}
             </h2>
             {busy ? (
-              <p className="mt-3 text-sm text-muted-foreground">Loading…</p>
+              <p className="mt-3 text-sm text-muted-foreground">{t('loading')}</p>
             ) : txns.length === 0 ? (
-              <p className="mt-3 text-sm text-muted-foreground">
-                No points activity yet — your first order will start earning.
-              </p>
+              <p className="mt-3 text-sm text-muted-foreground">{t('activity.empty')}</p>
             ) : (
               <ul className="mt-2 divide-y divide-border">
-                {txns.map((t) => (
-                  <li key={t.id} className="flex items-center justify-between gap-3 py-3">
-                    <div className="min-w-0">
-                      {/* The kind of movement is spelled out so nobody reads a
-                          redemption or an adjustment as "points I earned". Only
-                          completed orders ever produce an `earned` row. */}
-                      <div className="flex items-center gap-2">
-                        <Badge variant={TX_META[t.type]?.variant ?? 'muted'}>
-                          {TX_META[t.type]?.label ?? t.type.replace(/_/g, ' ')}
-                        </Badge>
-                        {t.description && (
-                          <p className="truncate text-sm font-medium">{t.description}</p>
-                        )}
+                {txns.map((tx) => {
+                  const txMeta = TX_META[tx.type];
+                  return (
+                    <li key={tx.id} className="flex items-center justify-between gap-3 py-3">
+                      <div className="min-w-0">
+                        {/* The kind of movement is spelled out so nobody reads a
+                            redemption or an adjustment as "points I earned". Only
+                            completed orders ever produce an `earned` row. */}
+                        <div className="flex items-center gap-2">
+                          <Badge variant={txMeta?.variant ?? 'muted'}>
+                            {txMeta ? t(`activity.types.${txMeta.labelKey}`) : tx.type.replace(/_/g, ' ')}
+                          </Badge>
+                          {tx.description && (
+                            <p className="truncate text-sm font-medium">{tx.description}</p>
+                          )}
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {new Date(tx.created_at).toLocaleDateString(intlLocale, {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                          })}
+                        </p>
                       </div>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {new Date(t.created_at).toLocaleDateString(undefined, {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric',
-                        })}
-                      </p>
-                    </div>
-                    <span
-                      className={`shrink-0 font-display text-base font-bold tabular-nums ${
-                        t.points >= 0 ? 'text-success' : 'text-muted-foreground'
-                      }`}
-                    >
-                      {t.points >= 0 ? '+' : ''}
-                      {t.points.toLocaleString()}
-                    </span>
-                  </li>
-                ))}
+                      <span
+                        className={`shrink-0 font-display text-base font-bold tabular-nums ${
+                          tx.points >= 0 ? 'text-success' : 'text-muted-foreground'
+                        }`}
+                      >
+                        {tx.points >= 0 ? '+' : ''}
+                        {tx.points.toLocaleString(intlLocale)}
+                      </span>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </Card>
@@ -330,19 +334,24 @@ export function LoyaltyView({
   );
 }
 
-/** What a reward gives, in the diner's words. */
-function rewardValueLabel(r: LoyaltyReward): string {
+/** What a reward gives, in the diner's words. The item name is the merchant's, shown as typed. */
+function rewardValueLabel(r: LoyaltyReward, t: LoyaltyT): string {
   switch (r.kind) {
     case 'percent_off':
-      return `${Number(r.value)}% off${
-        r.max_discount ? ` (up to ${formatCurrency(Number(r.max_discount))})` : ''
-      }`;
+      return r.max_discount
+        ? t('rewards.percentOffCapped', {
+            percent: Number(r.value),
+            max: formatCurrency(Number(r.max_discount)),
+          })
+        : t('rewards.percentOff', { percent: Number(r.value) });
     case 'fixed_off':
-      return `${formatCurrency(Number(r.value))} off`;
+      return t('rewards.fixedOff', { amount: formatCurrency(Number(r.value)) });
     case 'free_item':
-      return `Free ${r.menu_item_name ?? 'item'}`;
+      return r.menu_item_name
+        ? t('rewards.freeItem', { item: r.menu_item_name })
+        : t('rewards.freeItemGeneric');
     default:
-      return 'Free delivery';
+      return t('rewards.freeDelivery');
   }
 }
 
@@ -362,22 +371,22 @@ function RewardsCatalog({
   busy: boolean;
   brandName: string;
 }) {
+  const t = useTranslations('loyalty');
+  const intlLocale = useIntlLocale();
   return (
     <Card className="p-5">
       <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
-        <Gift className="h-5 w-5 text-primary" /> Rewards you can redeem
+        <Gift className="h-5 w-5 text-primary" /> {t('rewards.title')}
       </h2>
       {busy ? (
-        <p className="mt-3 text-sm text-muted-foreground">Loading…</p>
+        <p className="mt-3 text-sm text-muted-foreground">{t('loading')}</p>
       ) : rewards.length === 0 ? (
-        <p className="mt-3 text-sm text-muted-foreground">
-          {brandName} hasn&apos;t published any rewards yet. Your points keep adding up in the
-          meantime — they don&apos;t expire while you&apos;re waiting.
-        </p>
+        <p className="mt-3 text-sm text-muted-foreground">{t('rewards.empty', { brandName })}</p>
       ) : (
         <ul className="mt-3 space-y-2">
           {rewards.map((r) => {
             const short = Math.max(0, r.points_cost - balance);
+            const value = rewardValueLabel(r, t);
             return (
               <li
                 key={r.id}
@@ -388,9 +397,9 @@ function RewardsCatalog({
                 <div className="min-w-0">
                   <p className="truncate font-semibold">{r.name}</p>
                   <p className="text-xs text-muted-foreground">
-                    {rewardValueLabel(r)}
-                    {Number(r.min_subtotal) > 0 &&
-                      ` · on orders over ${formatCurrency(Number(r.min_subtotal))}`}
+                    {Number(r.min_subtotal) > 0
+                      ? t('rewards.withMinimum', { value, amount: formatCurrency(Number(r.min_subtotal)) })
+                      : value}
                   </p>
                   {r.description && (
                     <p className="mt-0.5 text-xs text-muted-foreground">{r.description}</p>
@@ -398,10 +407,10 @@ function RewardsCatalog({
                 </div>
                 <div className="shrink-0 text-right">
                   <p className="font-display text-base font-bold tabular-nums">
-                    {r.points_cost.toLocaleString()}
+                    {r.points_cost.toLocaleString(intlLocale)}
                   </p>
                   <p className="text-[11px] leading-none text-muted-foreground">
-                    {short === 0 ? 'ready' : `${short.toLocaleString()} to go`}
+                    {short === 0 ? t('rewards.ready') : t('rewards.toGo', { points: short })}
                   </p>
                 </div>
               </li>
@@ -410,9 +419,7 @@ function RewardsCatalog({
         </ul>
       )}
       {rewards.length > 0 && (
-        <p className="mt-3 text-xs text-muted-foreground">
-          Pick one at checkout — one reward per order.
-        </p>
+        <p className="mt-3 text-xs text-muted-foreground">{t('rewards.pickAtCheckout')}</p>
       )}
     </Card>
   );
@@ -431,6 +438,8 @@ function TierTrack({
   tiers: Tier[];
   pointsPerCurrency: number;
 }) {
+  const t = useTranslations('loyalty');
+  const intlLocale = useIntlLocale();
   const [openTier, setOpenTier] = React.useState<Tier | null>(null);
   const currentIndex = tierIndexFor(lifetimeEarned, tiers);
   const current = tiers[currentIndex]!;
@@ -446,9 +455,9 @@ function TierTrack({
   return (
     <Card className="p-5">
       <div className="flex items-baseline justify-between gap-3">
-        <h2 className="font-display text-lg font-semibold">Your tier</h2>
+        <h2 className="font-display text-lg font-semibold">{t('tiers.title')}</h2>
         <span className="text-xs text-muted-foreground">
-          {lifetimeEarned.toLocaleString()} lifetime points
+          {t('tiers.lifetimePoints', { points: lifetimeEarned })}
         </span>
       </div>
 
@@ -467,7 +476,7 @@ function TierTrack({
                 <button
                   type="button"
                   onClick={() => setOpenTier(tier)}
-                  aria-label={`${tier.label} tier benefits`}
+                  aria-label={t('tiers.benefitsAria', { tier: tier.label })}
                   aria-current={isCurrent ? 'true' : undefined}
                   className="focus-ring flex w-full min-w-0 flex-col items-center gap-1.5 rounded-2xl px-1 py-1"
                 >
@@ -490,7 +499,7 @@ function TierTrack({
                     {tier.label}
                   </span>
                   <span className="text-[10px] leading-none text-muted-foreground">
-                    {tier.threshold.toLocaleString()}
+                    {tier.threshold.toLocaleString(intlLocale)}
                   </span>
                 </button>
               </li>
@@ -502,15 +511,16 @@ function TierTrack({
       <div className="mt-4 rounded-2xl bg-muted/40 px-4 py-3">
         {next ? (
           <p className="text-sm">
-            <strong className="font-semibold">{pointsToNext.toLocaleString()} more points</strong> to
-            reach {next.label}.
+            {t.rich('tiers.toNext', {
+              points: pointsToNext,
+              tier: next.label,
+              strong: (chunks) => <strong className="font-semibold">{chunks}</strong>,
+            })}
           </p>
         ) : (
-          <p className="text-sm font-semibold">You&apos;re at the top tier — enjoy it! 🎉</p>
+          <p className="text-sm font-semibold">{t('tiers.top')}</p>
         )}
-        <p className="mt-1 text-xs text-muted-foreground">
-          Tap any tier to see what it unlocks.
-        </p>
+        <p className="mt-1 text-xs text-muted-foreground">{t('tiers.tapHint')}</p>
       </div>
 
       <Sheet
@@ -523,12 +533,12 @@ function TierTrack({
             <p className="text-sm text-muted-foreground">
               {lifetimeEarned >= openTier.threshold
                 ? openTier.key === current.key
-                  ? 'This is your tier right now.'
-                  : 'You have already passed this tier.'
-                : `${(openTier.threshold - lifetimeEarned).toLocaleString()} more points to unlock.`}
+                  ? t('tiers.current')
+                  : t('tiers.passed')
+                : t('tiers.toUnlock', { points: openTier.threshold - lifetimeEarned })}
             </p>
             <ul className="space-y-2 text-sm">
-              {tierBenefits(openTier).map((benefit, i) => (
+              {tierBenefits(openTier, t).map((benefit, i) => (
                 <li key={`${openTier.key}-${i}`} className="flex gap-2">
                   {/* Tinted to the tapped tier, so the sheet visibly belongs to it. */}
                   <ChevronRight className={`mt-0.5 h-4 w-4 shrink-0 ${openTier.tone.label}`} />
@@ -537,12 +547,9 @@ function TierTrack({
               ))}
             </ul>
             <div className="rounded-2xl border border-border bg-muted/40 p-4">
-              <p className="font-display text-sm font-semibold">How you earn points</p>
+              <p className="font-display text-sm font-semibold">{t('tiers.earnTitle')}</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                You earn {pointsPerCurrency === 1 ? '1 point' : `${pointsPerCurrency.toLocaleString()} points`}{' '}
-                for every {formatCurrency(1)} of an order&apos;s subtotal. Points are
-                credited when the order is completed — nothing is added while an order is still
-                pending, being prepared, or on its way, and cancelled orders never earn.
+                {t('tiers.earnBody', { points: pointsPerCurrency, amount: formatCurrency(1) })}
               </p>
             </div>
           </div>
@@ -553,14 +560,12 @@ function TierTrack({
 }
 
 function TierTrackPlaceholder({ failed }: { failed: boolean }) {
+  const t = useTranslations('loyalty');
   return (
     <Card className="p-5">
-      <h2 className="font-display text-lg font-semibold">Your tier</h2>
+      <h2 className="font-display text-lg font-semibold">{t('tiers.title')}</h2>
       {failed ? (
-        <p className="mt-2 text-sm text-muted-foreground">
-          The tier ladder couldn&apos;t be loaded just now. Your points and badge are unaffected —
-          reload the page to try again.
-        </p>
+        <p className="mt-2 text-sm text-muted-foreground">{t('tiers.failed')}</p>
       ) : (
         <div className="mt-5 grid grid-cols-4 gap-1" aria-busy="true">
           {[0, 1, 2, 3].map((i) => (

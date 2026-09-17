@@ -1,0 +1,19 @@
+{
+  "title": "Coverage",
+  "subtitle": "You only get a restaurant’s orders while you’re inside its circle.",
+  "locate": "Locate",
+  "locationOff": "Turn on location access to see whether you’re in range.",
+  "empty": {
+    "title": "No restaurants yet",
+    "description": "Get approved to a restaurant to see your coverage.",
+    "apply": "Apply to restaurants"
+  },
+  "mapUnavailable": "Map unavailable — see the range list below.",
+  "loadingMap": "Loading map…",
+  "inRangeSummary": "In range of <count>{inRange}</count> of {total, plural, one {# restaurant} other {# restaurants}}.",
+  "noLocation": "No location set",
+  "withinRadius": "within {radius} mi to get orders",
+  "distanceAndRange": "{distance} mi away · range {radius} mi",
+  "inRange": "In range",
+  "outOfRange": "Out of range"
+}

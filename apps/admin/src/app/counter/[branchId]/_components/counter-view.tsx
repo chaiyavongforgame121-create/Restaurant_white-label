@@ -3,16 +3,20 @@
 import * as React from 'react';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useLocale, useTranslations } from 'next-intl';
 import {
   Banknote, CreditCard, Minus, Plus, Search, ShoppingBag, Store,
   Trash2, Utensils, X,
 } from 'lucide-react';
 import {
+  DEFAULT_UI_LOCALE,
   billingErrorMessage,
   computeSalesTax,
   computeServiceFee,
   describeBillingError,
   formatCurrency,
+  intlLocaleFor,
+  isUiLocale,
   lineSignature,
   type MenuCategory,
   type MenuItem,
@@ -21,6 +25,7 @@ import {
 import { getBrowserClient } from '@favornoms/database/client';
 import { placeOrder, type ComboSet } from '@favornoms/database/queries';
 import { Badge, Button, RiderIcon, Segmented, Sheet, useConfirm } from '@favornoms/ui';
+import { LocaleSwitcher } from '@/components/locale-switcher';
 import {
   changeDue,
   digitsOnly,
@@ -92,49 +97,54 @@ interface Props {
 // screen and the server charges its own, so the two have to land on the same cent.
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
+/** Message keys under `counter.errors`. */
+type CounterErrorKey =
+  | 'branchClosedAtTime'
+  | 'branchClosed'
+  | 'rateLimited'
+  | 'itemSoldOut'
+  | 'insufficientStock'
+  | 'itemInactive'
+  | 'itemNotInBranch'
+  | 'staleClient'
+  | 'paymentMethodNotAccepted'
+  | 'invalidPaymentMethod'
+  | 'tableRequired'
+  | 'deliveryOutOfRange'
+  | 'emptyOrder'
+  | 'invalidChannel'
+  | 'refused'
+  | 'generic';
+
 // place-order's wire codes, in words a cashier can act on with a customer waiting. The
 // storefront keeps its own table for the same codes phrased for a diner; this one names
 // the till's remedies — the Pause switch on the kitchen board, an 86'd item — instead.
 // Order is significant: `branch_closed_at_scheduled_time` contains `branch_closed`.
-const COUNTER_ERRORS: Array<[string, string]> = [
-  ['branch_closed_at_scheduled_time', 'The branch is closed at that time.'],
-  [
-    'branch_closed',
-    'Orders are paused, or the branch is outside its opening hours. Un-pause on the kitchen board, or check the hours in Branch settings.',
-  ],
-  ['rate_limited', 'Too many orders in a row from this till. Wait a moment, then charge again.'],
-  [
-    'item_sold_out',
-    'Something in this order is marked sold out. Take it off, or put it back in stock on the kitchen board.',
-  ],
-  ['insufficient_stock', 'There is not enough stock left for one of these items.'],
-  ['item_inactive', 'Something in this order is no longer on the menu. Take it off and charge again.'],
-  [
-    'item_not_in_branch',
-    'Something in this order belongs to another branch. Clear the cart and ring it up again.',
-  ],
-  [
-    'stale_client_refresh_required',
-    'The menu changed while this order was open. Refresh the page and ring it up again.',
-  ],
-  ['payment_method_not_accepted', 'This branch does not take that payment method for this order type.'],
-  ['invalid_payment_method', 'That is not a payment method this branch accepts.'],
-  ['table_required', 'Enter a table number for a dine-in order.'],
-  ['delivery_out_of_range', 'That address is outside the delivery area.'],
-  ['empty_order', 'There is nothing in the cart.'],
-  ['invalid_channel', 'Pick dine-in, pickup or delivery, then charge again.'],
+const COUNTER_ERRORS: Array<[string, CounterErrorKey]> = [
+  ['branch_closed_at_scheduled_time', 'branchClosedAtTime'],
+  ['branch_closed', 'branchClosed'],
+  ['rate_limited', 'rateLimited'],
+  ['item_sold_out', 'itemSoldOut'],
+  ['insufficient_stock', 'insufficientStock'],
+  ['item_inactive', 'itemInactive'],
+  ['item_not_in_branch', 'itemNotInBranch'],
+  ['stale_client_refresh_required', 'staleClient'],
+  ['payment_method_not_accepted', 'paymentMethodNotAccepted'],
+  ['invalid_payment_method', 'invalidPaymentMethod'],
+  ['table_required', 'tableRequired'],
+  ['delivery_out_of_range', 'deliveryOutOfRange'],
+  ['empty_order', 'emptyOrder'],
+  ['invalid_channel', 'invalidChannel'],
 ];
 
-function describeCounterError(raw: string): string {
-  for (const [code, text] of COUNTER_ERRORS) {
-    if (raw.includes(code)) return text;
+function describeCounterError(raw: string): CounterErrorKey {
+  for (const [code, key] of COUNTER_ERRORS) {
+    if (raw.includes(code)) return key;
   }
   // placeOrder throws `place_order_failed:<status>:<body>`. A raw wire string in front of a
   // queue is not a message, so anything unrecognised at least says what to do next.
-  if (raw.includes('place_order_failed')) {
-    return 'That order was refused. Try again, or take it in the back office.';
-  }
-  return raw;
+  if (raw.includes('place_order_failed')) return 'refused';
+  return 'generic';
 }
 
 export function CounterView(props: Props) {
@@ -169,6 +179,9 @@ function PosInner({
   serviceFeePercent = 0,
   deliveryFeeFlat = 0,
 }: Props) {
+  const t = useTranslations('counter');
+  const rawLocale = useLocale();
+  const locale = isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE;
   const { print, kickDrawer } = usePrinter();
   // Named askConfirm, not confirm: this component already has confirmPark and its own
   // park dialog, and a bare `confirm` here would read like one of those.
@@ -185,7 +198,7 @@ function PosInner({
   // the id to attach this order to whatever sitting is already open there.
   const [tableId, setTableId] = React.useState<string | null>(null);
   const pickedTable = React.useMemo(
-    () => tables.find((t) => t.id === tableId) ?? null,
+    () => tables.find((tb) => tb.id === tableId) ?? null,
     [tables, tableId],
   );
   const [discountInput, setDiscountInput] = React.useState('');
@@ -233,8 +246,12 @@ function PosInner({
     }
   };
 
+  // Only a suggestion the cashier can overwrite, kept in this browser: it is never sent to
+  // the server, so it is written in the language on screen.
   const suggestedParkLabel = () =>
-    tableNumber ? `Table ${tableNumber}` : `Order at ${new Date().toLocaleTimeString('en-US')}`;
+    tableNumber
+      ? t('tableLabel', { number: tableNumber })
+      : t('park.defaultTime', { time: new Date().toLocaleTimeString(intlLocaleFor(locale)) });
 
   /**
    * Park used to ask for its label with window.prompt, which Chrome refuses outright in a
@@ -275,9 +292,9 @@ function PosInner({
     if (lines.length > 0) {
       if (
         !(await askConfirm({
-          title: 'Replace the current cart?',
-          body: 'The items rung up now are cleared and this parked order takes their place.',
-          confirmLabel: 'Replace',
+          title: t('parked.replaceTitle'),
+          body: t('parked.replaceBody'),
+          confirmLabel: t('parked.replaceConfirm'),
           destructive: true,
         }))
       ) {
@@ -292,7 +309,7 @@ function PosInner({
     setTableNumber(target.tableNumber);
     // Re-resolved from the current floor rather than carried in the parked order: a cart
     // parked before lunch can be resumed after the table it named was renumbered or retired.
-    setTableId(tables.find((t) => t.number === target.tableNumber)?.id ?? null);
+    setTableId(tables.find((tb) => tb.number === target.tableNumber)?.id ?? null);
     persistParked(parked.filter((p) => p.id !== parkedId));
     setShowParked(false);
   };
@@ -300,9 +317,9 @@ function PosInner({
   const discardParked = async (parkedId: string) => {
     if (
       !(await askConfirm({
-        title: 'Discard this parked order?',
-        body: 'The saved cart is deleted and cannot be brought back.',
-        confirmLabel: 'Discard',
+        title: t('parked.discardTitle'),
+        body: t('parked.discardBody'),
+        confirmLabel: t('parked.discardConfirm'),
         destructive: true,
       }))
     ) {
@@ -494,7 +511,8 @@ function PosInner({
         branch_id: branchId,
         channel,
         // A typed name wins over the table, and the table over nothing: Recent orders and
-        // the pickup shout-out both read this field.
+        // the pickup shout-out both read this field. The fallbacks are stored data, so they
+        // stay in English whatever language the till is showing.
         customer_name:
           customerName.trim() || (tableNumber ? `Table ${tableNumber}` : 'Walk-in'),
         customer_phone: '+10000000000',
@@ -525,12 +543,14 @@ function PosInner({
       });
       // Everything past this point settles an order that already exists, so a failure here
       // is never "the sale did not happen". Two kinds of failure, kept apart because they
-      // call for opposite things: `paperWrong` means the receipt would not match the row,
-      // and no paper beats wrong paper; `booksWrong` means the customer's copy is right but
-      // the ledger is not, and that has to be said out loud without stranding a customer at
-      // the counter with no receipt. Both used to be discarded and printed over.
-      const paperWrong: string[] = [];
-      let booksWrong: string | null = null;
+      // call for opposite things: a quote mismatch or a failed discount means the receipt
+      // would not match the row, and no paper beats wrong paper; `notSettled` means the
+      // customer's copy is right but the ledger is not, and that has to be said out loud
+      // without stranding a customer at the counter with no receipt. Both used to be
+      // discarded and printed over.
+      let quoteMismatch: { quoted: string; priced: string } | null = null;
+      let discountFailed = false;
+      let notSettled = false;
 
       // place-order is the only thing that prices an order, so the row is still the truth
       // the paper has to match. It is read FIRST and used as the assertion on the quote the
@@ -545,9 +565,10 @@ function PosInner({
       const serverTotal = priced ? Number(priced.total) : Number(result.total);
       const chargedTotal = r2(Math.max(0, serverTotal - discountAmount));
       if (Math.abs(chargedTotal - expected.total) > 0.005) {
-        paperWrong.push(
-          `the till quoted ${formatCurrency(expected.total)} and the order priced ${formatCurrency(chargedTotal)}`,
-        );
+        quoteMismatch = {
+          quoted: formatCurrency(expected.total),
+          priced: formatCurrency(chargedTotal),
+        };
       }
 
       // The discount lands before the payment is settled, because record_counter_payment
@@ -557,7 +578,7 @@ function PosInner({
           .from('orders')
           .update({ discount_amount: discountAmount, total: chargedTotal })
           .eq('id', result.order_id);
-        if (discountErr) paperWrong.push('the discount was not applied to the order');
+        if (discountErr) discountFailed = true;
       }
 
       // Cash in the drawer is money received, and nothing used to say so: place-order
@@ -569,8 +590,7 @@ function PosInner({
         p_order_id: result.order_id,
       } as never);
       if (settleErr) {
-        booksWrong =
-          'the payment was not recorded as taken — settle it from the back office before the cash-up';
+        notSettled = true;
         // The RPC also promotes a card sale out of 'pending'. If it could not run, the
         // ticket still has to reach the kitchen, so fall back to the plain status write.
         await supabase
@@ -580,17 +600,22 @@ function PosInner({
           .eq('status', 'pending');
       }
 
-      if (paperWrong.length > 0) {
+      if (quoteMismatch || discountFailed) {
         // No receipt and no success toast. The cart is cleared anyway because the order is
         // real — ringing it again would charge the customer twice.
+        const number = result.order_number;
         setPayError(
-          `Order ${result.order_number} was placed, but ${paperWrong.join(', and ')}. Sort it out in Recent orders before handing over a receipt.`,
+          quoteMismatch && discountFailed
+            ? t('pay.placedQuoteAndDiscount', { number, ...quoteMismatch })
+            : quoteMismatch
+              ? t('pay.placedQuoteMismatch', { number, ...quoteMismatch })
+              : t('pay.placedDiscountFailed', { number }),
         );
         clear();
         return;
       }
 
-      if (booksWrong) setPayError(`Order ${result.order_number} was placed, but ${booksWrong}.`);
+      if (notSettled) setPayError(t('pay.placedNotSettled', { number: result.order_number }));
       setSuccess(result.order_number);
       // Held until dismissed, not for four seconds: the cashier is counting notes out of a
       // drawer and the number has to still be there when they look up.
@@ -651,9 +676,14 @@ function PosInner({
       // Suspension makes place-order refuse every new order here, and the fix for that one
       // is on the Plan page, not at the till.
       const billing = describeBillingError(err);
-      setPayError(
-        billing ? billingErrorMessage(billing) : describeCounterError((err as Error).message),
-      );
+      if (billing) {
+        setPayError(billingErrorMessage(billing, locale));
+      } else {
+        const raw = (err as Error)?.message ?? String(err);
+        const key = describeCounterError(raw);
+        if (key === 'refused' || key === 'generic') console.error('counter: place order failed', raw);
+        setPayError(t(`errors.${key}`));
+      }
     } finally {
       setSubmitting(false);
     }
@@ -667,77 +697,80 @@ function PosInner({
             <Store className="h-5 w-5" />
           </div>
           <div>
-            <p className="text-xs text-muted-foreground">Counter · {branchName}</p>
-            <h1 className="font-display text-lg font-bold">Take new order</h1>
+            <p className="text-xs text-muted-foreground">{t('header.eyebrow', { branch: branchName })}</p>
+            <h1 className="font-display text-lg font-bold">{t('header.title')}</h1>
           </div>
         </div>
-        <div className="hidden items-center gap-3 md:flex">
-          <ClockButton branchId={branchId} />
-          <button
-            type="button"
-            onClick={() => setShowParked((s) => !s)}
-            className="focus-ring relative inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-xs font-semibold hover:bg-muted/70"
-          >
-            Parked ({parked.length})
-          </button>
-          <button
-            type="button"
-            onClick={parkCurrent}
-            disabled={lines.length === 0}
-            className="focus-ring inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-xs font-semibold disabled:opacity-40 hover:bg-muted/70"
-          >
-            Park order
-          </button>
-          <a
-            href={`/counter/${branchId}/tables`}
-            className="focus-ring inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-xs font-semibold hover:bg-muted/70"
-          >
-            Tables →
-          </a>
-          <a
-            href={`/counter/${branchId}/recent`}
-            className="focus-ring inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-xs font-semibold hover:bg-muted/70"
-          >
-            Recent orders →
-          </a>
-          <PrinterStatusButton />
-          <Segmented
-            value={channel}
-            onChange={(c) => {
-              setChannel(c as Channel);
-              // The table picker is hidden off dine-in but its state survives.
-              // Leaving it set would stamp a pickup order with a real table.
-              if (c !== 'dine_in') {
-                setTableNumber('');
-                setTableId(null);
-              }
-            }}
-            options={[
-              { value: 'dine_in', label: 'Dine-in', icon: <Store className="h-4 w-4" /> },
-              { value: 'pickup', label: 'Pickup', icon: <ShoppingBag className="h-4 w-4" /> },
-              ...(canDeliver
-                ? [{ value: 'delivery', label: 'Delivery', icon: <RiderIcon className="h-4 w-4" /> }]
-                : []),
-            ]}
-          />
+        <div className="flex items-center gap-3">
+          <div className="hidden items-center gap-3 md:flex">
+            <ClockButton branchId={branchId} />
+            <button
+              type="button"
+              onClick={() => setShowParked((s) => !s)}
+              className="focus-ring relative inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-xs font-semibold hover:bg-muted/70"
+            >
+              {t('header.parked', { count: parked.length })}
+            </button>
+            <button
+              type="button"
+              onClick={parkCurrent}
+              disabled={lines.length === 0}
+              className="focus-ring inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-xs font-semibold disabled:opacity-40 hover:bg-muted/70"
+            >
+              {t('header.park')}
+            </button>
+            <a
+              href={`/counter/${branchId}/tables`}
+              className="focus-ring inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-xs font-semibold hover:bg-muted/70"
+            >
+              {t('header.tables')} →
+            </a>
+            <a
+              href={`/counter/${branchId}/recent`}
+              className="focus-ring inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-xs font-semibold hover:bg-muted/70"
+            >
+              {t('header.recent')} →
+            </a>
+            <PrinterStatusButton />
+            <Segmented
+              value={channel}
+              onChange={(c) => {
+                setChannel(c as Channel);
+                // The table picker is hidden off dine-in but its state survives.
+                // Leaving it set would stamp a pickup order with a real table.
+                if (c !== 'dine_in') {
+                  setTableNumber('');
+                  setTableId(null);
+                }
+              }}
+              options={[
+                { value: 'dine_in', label: t('channel.dine_in'), icon: <Store className="h-4 w-4" /> },
+                { value: 'pickup', label: t('channel.pickup'), icon: <ShoppingBag className="h-4 w-4" /> },
+                ...(canDeliver
+                  ? [{ value: 'delivery', label: t('channel.delivery'), icon: <RiderIcon className="h-4 w-4" /> }]
+                  : []),
+              ]}
+            />
+          </div>
+          <LocaleSwitcher compact />
         </div>
       </header>
 
       {showParked && (
         <div className="border-b border-border/60 bg-muted/40 px-4 py-3">
           <div className="flex items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold">Parked orders ({parked.length})</h3>
+            <h3 className="text-sm font-semibold">{t('parked.title', { count: parked.length })}</h3>
             <button
               type="button"
               onClick={() => setShowParked(false)}
               className="focus-ring rounded-full p-1 text-muted-foreground hover:bg-muted"
-              aria-label="Close parked"
+              aria-label={t('parked.close')}
             >
               <X className="h-4 w-4" />
             </button>
           </div>
           {parked.length === 0 ? (
-            <p className="mt-2 text-xs text-muted-foreground">No parked orders. Tap "Park order" to save the current cart.</p>
+            <p className="mt-2 text-xs text-muted-foreground">{t('parked.empty')}</p>
           ) : (
             <ul className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {parked.map((p) => (
@@ -745,7 +778,10 @@ function PosInner({
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold">{p.label}</p>
                     <p className="text-xs text-muted-foreground">
-                      {p.lines.length} item{p.lines.length === 1 ? '' : 's'} · {new Date(p.parkedAt).toLocaleTimeString('en-US')}
+                      {t('parked.meta', {
+                        count: p.lines.length,
+                        time: new Date(p.parkedAt).toLocaleTimeString(intlLocaleFor(locale)),
+                      })}
                     </p>
                   </div>
                   <div className="flex gap-1">
@@ -754,7 +790,7 @@ function PosInner({
                       onClick={() => void resumeParked(p.id)}
                       className="focus-ring rounded-lg bg-primary px-2 py-1 text-xs font-semibold text-primary-foreground"
                     >
-                      Resume
+                      {t('parked.resume')}
                     </button>
                     <button
                       type="button"
@@ -780,7 +816,7 @@ function PosInner({
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search…"
+                placeholder={t('menu.search')}
                 className="focus-ring h-11 w-full rounded-full border border-border bg-card pl-10 pr-4 text-base"
               />
             </div>
@@ -790,7 +826,7 @@ function PosInner({
                 activeCategory === 'all' ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card'
               }`}
             >
-              All
+              {t('menu.all')}
             </button>
             {combos.length > 0 && (
               <button
@@ -801,7 +837,7 @@ function PosInner({
                     : 'border-border bg-card'
                 }`}
               >
-                <span aria-hidden>🎁</span> Combos
+                <span aria-hidden>🎁</span> {t('menu.combos')}
               </button>
             )}
             {categories.map((c) => (
@@ -824,7 +860,7 @@ function PosInner({
             {visibleCombos.length > 0 && (
               <div className="mb-4">
                 <h2 className="text-muted-foreground mb-2 text-xs font-semibold uppercase tracking-wider">
-                  Combos
+                  {t('menu.combos')}
                 </h2>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                   {visibleCombos.map((c) => (
@@ -853,7 +889,7 @@ function PosInner({
                           {formatCurrency(c.total_price)}
                         </p>
                         <p className="text-muted-foreground text-xs">
-                          {c.items.length} item{c.items.length === 1 ? '' : 's'}
+                          {t('menu.comboItems', { count: c.items.length })}
                         </p>
                       </div>
                     </motion.button>
@@ -865,7 +901,7 @@ function PosInner({
               <div className="grid place-items-center py-20 text-center">
                 <div>
                   <Utensils className="mx-auto h-10 w-10 text-muted-foreground" />
-                  <p className="mt-2 text-muted-foreground">No items match</p>
+                  <p className="mt-2 text-muted-foreground">{t('menu.noMatch')}</p>
                 </div>
               </div>
             ) : (
@@ -881,7 +917,7 @@ function PosInner({
                       disabled={soldOut}
                       whileTap={soldOut ? undefined : { scale: 0.96 }}
                       onClick={() => setConfiguring(item)}
-                      aria-label={soldOut ? `${item.name} — out of stock` : undefined}
+                      aria-label={soldOut ? t('menu.soldOutAria', { name: item.name }) : undefined}
                       className={`focus-ring overflow-hidden rounded-2xl bg-card text-left shadow-soft transition-shadow ${
                         soldOut ? 'cursor-not-allowed opacity-50 grayscale' : 'hover:shadow-warm'
                       }`}
@@ -901,7 +937,7 @@ function PosInner({
                         {soldOut && (
                           <span className="absolute inset-0 grid place-items-center bg-background/70">
                             <Badge variant="neutral" className="text-xs">
-                              Out of stock
+                              {t('menu.soldOut')}
                             </Badge>
                           </span>
                         )}
@@ -923,13 +959,13 @@ function PosInner({
         {/* Right — cart pane */}
         <aside className="flex w-[360px] flex-col border-l border-border/60 bg-card">
           <div className="flex items-center justify-between border-b border-border/60 px-5 py-3">
-            <h2 className="font-display text-lg font-semibold">Order</h2>
+            <h2 className="font-display text-lg font-semibold">{t('cart.title')}</h2>
             {lines.length > 0 && (
               <button
                 onClick={clear}
                 className="focus-ring inline-flex items-center gap-1 text-sm font-medium text-danger"
               >
-                <Trash2 className="h-4 w-4" /> Clear
+                <Trash2 className="h-4 w-4" /> {t('cart.clear')}
               </button>
             )}
           </div>
@@ -938,7 +974,7 @@ function PosInner({
               <div className="grid h-full place-items-center text-center">
                 <div>
                   <ShoppingBag className="mx-auto h-10 w-10 text-muted-foreground" />
-                  <p className="mt-2 text-sm text-muted-foreground">Tap items to add</p>
+                  <p className="mt-2 text-sm text-muted-foreground">{t('cart.empty')}</p>
                 </div>
               </div>
             ) : (
@@ -970,13 +1006,15 @@ function PosInner({
                         {line.notes && (
                           <p className="text-warning line-clamp-2 text-xs">{line.notes}</p>
                         )}
-                        <p className="text-xs text-muted-foreground">{formatCurrency(line.unitPrice)} ea</p>
+                        <p className="text-xs text-muted-foreground">
+                          {t('cart.each', { price: formatCurrency(line.unitPrice) })}
+                        </p>
                       </div>
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => updateQty(line.id, -1)}
                           className="focus-ring grid h-8 w-8 place-items-center rounded-full bg-muted"
-                          aria-label="Decrease"
+                          aria-label={t('cart.decrease')}
                         >
                           <Minus className="h-3.5 w-3.5" />
                         </button>
@@ -984,7 +1022,7 @@ function PosInner({
                         <button
                           onClick={() => updateQty(line.id, 1)}
                           className="focus-ring grid h-8 w-8 place-items-center rounded-full bg-primary text-primary-foreground"
-                          aria-label="Increase"
+                          aria-label={t('cart.increase')}
                         >
                           <Plus className="h-3.5 w-3.5" />
                         </button>
@@ -1002,12 +1040,12 @@ function PosInner({
             {channel !== 'dine_in' && (
               <label className="block">
                 <span className="text-muted-foreground mb-1.5 block text-xs font-semibold uppercase tracking-wider">
-                  Customer name
+                  {t('cart.customerName')}
                 </span>
                 <input
                   value={customerName}
                   onChange={(e) => setCustomerName(e.target.value.slice(0, 60))}
-                  placeholder="Optional — who to call out"
+                  placeholder={t('cart.customerNamePlaceholder')}
                   className="focus-ring border-border bg-card h-10 w-full rounded-xl border px-3 text-base"
                 />
               </label>
@@ -1022,10 +1060,10 @@ function PosInner({
                   htmlFor="counter-table"
                   className="text-muted-foreground flex items-center justify-between text-xs font-semibold uppercase tracking-wider"
                 >
-                  <span>Table</span>
+                  <span>{t('cart.table')}</span>
                   {tables.length > 0 && (
                     <span className="font-normal normal-case tracking-normal">
-                      {tables.length} on the floor
+                      {t('cart.tablesOnFloor', { count: tables.length })}
                     </span>
                   )}
                 </label>
@@ -1035,17 +1073,16 @@ function PosInner({
                       id="counter-table"
                       value={tableId ?? ''}
                       onChange={(e) => {
-                        const picked = tables.find((t) => t.id === e.target.value) ?? null;
+                        const picked = tables.find((tb) => tb.id === e.target.value) ?? null;
                         setTableId(picked?.id ?? null);
                         setTableNumber(picked?.number ?? '');
                       }}
                       className="focus-ring h-10 w-full rounded-xl border border-border bg-card px-3 text-base"
                     >
-                      <option value="">No table (walk-in)</option>
-                      {tables.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.label}
-                          {t.seated ? ' · seated' : ''}
+                      <option value="">{t('cart.noTable')}</option>
+                      {tables.map((tb) => (
+                        <option key={tb.id} value={tb.id}>
+                          {tb.seated ? t('cart.tableSeated', { label: tb.label }) : tb.label}
                         </option>
                       ))}
                     </select>
@@ -1054,12 +1091,12 @@ function PosInner({
                         already adding to. Worth saying out loud before Charge is pressed. */}
                     {pickedTable?.seated && (
                       <p className="text-warning text-xs">
-                        {pickedTable.label} has an open bill — this round is added to it.
+                        {t('cart.openBill', { label: pickedTable.label })}
                       </p>
                     )}
                     {pickedTable && !pickedTable.seated && (
                       <p className="text-muted-foreground text-xs">
-                        Seats {pickedTable.label} and starts its bill.
+                        {t('cart.seatsTable', { label: pickedTable.label })}
                       </p>
                     )}
                   </>
@@ -1070,7 +1107,7 @@ function PosInner({
                     id="counter-table"
                     value={tableNumber}
                     onChange={(e) => setTableNumber(e.target.value)}
-                    placeholder="Table no."
+                    placeholder={t('cart.tableNumberPlaceholder')}
                     inputMode="numeric"
                     className="focus-ring h-10 w-full rounded-xl border border-border bg-card px-3 text-base"
                   />
@@ -1079,26 +1116,26 @@ function PosInner({
             )}
             <div className="flex items-center gap-2">
               <label className="flex flex-1 items-center gap-2 text-xs text-muted-foreground">
-                Discount %
+                {t('cart.discount')}
                 <input
                   inputMode="numeric"
                   value={discountInput}
                   onChange={(e) => setDiscountInput(digitsOnly(e.target.value).slice(0, 3))}
                   onBlur={() => setDiscountInput(discountInput === '' ? '' : String(discountPercent))}
                   placeholder="0"
-                  aria-label="Discount percent"
+                  aria-label={t('cart.discountAria')}
                   className="focus-ring h-9 w-16 rounded-lg border border-border bg-card px-2 text-base"
                 />
               </label>
               <label className="flex flex-1 items-center gap-2 text-xs text-muted-foreground">
-                Split
+                {t('cart.split')}
                 <input
                   inputMode="numeric"
                   value={splitInput}
                   onChange={(e) => setSplitInput(digitsOnly(e.target.value).slice(0, 2))}
                   onBlur={() => setSplitInput(splitInput === '' ? '' : String(splitN))}
                   placeholder="1"
-                  aria-label="Split how many ways"
+                  aria-label={t('cart.splitAria')}
                   className="focus-ring h-9 w-16 rounded-lg border border-border bg-card px-2 text-base"
                 />
               </label>
@@ -1107,25 +1144,30 @@ function PosInner({
                 number that left out tax and the card fee, so the cashier could not see
                 what the customer was actually being asked for. */}
             <dl className="space-y-1 text-sm">
-              <TotalRow label="Subtotal" value={formatCurrency(subtotal)} />
+              <TotalRow label={t('totals.subtotal')} value={formatCurrency(subtotal)} />
               {discountAmount > 0 && (
                 <TotalRow
-                  label={`Discount ${discountPercent}%`}
+                  label={t('totals.discount', { percent: discountPercent })}
                   value={`−${formatCurrency(discountAmount)}`}
                 />
               )}
-              {deliveryFee > 0 && <TotalRow label="Delivery" value={formatCurrency(deliveryFee)} />}
-              {taxAmount > 0 && <TotalRow label="Sales tax" value={formatCurrency(taxAmount)} />}
+              {deliveryFee > 0 && (
+                <TotalRow label={t('totals.delivery')} value={formatCurrency(deliveryFee)} />
+              )}
+              {taxAmount > 0 && <TotalRow label={t('totals.tax')} value={formatCurrency(taxAmount)} />}
             </dl>
             <div className="flex items-baseline justify-between">
-              <span className="text-sm font-medium text-muted-foreground">Total</span>
+              <span className="text-sm font-medium text-muted-foreground">{t('totals.total')}</span>
               <span className="font-display text-3xl font-bold text-primary">
                 {formatCurrency(total)}
               </span>
             </div>
             {canUseCard && cardQuote.serviceFee > 0 && (
               <p className="text-right text-xs text-muted-foreground">
-                Card adds a {serviceFeePercent}% service fee — {formatCurrency(cardQuote.total)}
+                {t('totals.cardFee', {
+                  percent: serviceFeePercent,
+                  total: formatCurrency(cardQuote.total),
+                })}
               </p>
             )}
             {splitN > 1 && (
@@ -1134,18 +1176,17 @@ function PosInner({
               // "$1.21 each" for a bill that needs two of them at $1.20 does not add up in
               // front of the table.
               <p className="text-right text-xs text-muted-foreground">
-                {split.even ? (
-                  <>
-                    {formatCurrency(split.tiers[0]?.amount ?? 0)} each ({splitN} ways)
-                  </>
-                ) : (
-                  <>
-                    {split.tiers
-                      .map((t) => `${t.people} × ${formatCurrency(t.amount)}`)
-                      .join('  +  ')}{' '}
-                    ({splitN} ways)
-                  </>
-                )}
+                {split.even
+                  ? t('totals.splitEven', {
+                      amount: formatCurrency(split.tiers[0]?.amount ?? 0),
+                      ways: splitN,
+                    })
+                  : t('totals.splitUneven', {
+                      parts: split.tiers
+                        .map((tier) => `${tier.people} × ${formatCurrency(tier.amount)}`)
+                        .join('  +  '),
+                      ways: splitN,
+                    })}
               </p>
             )}
             {payError && (
@@ -1163,7 +1204,7 @@ function PosInner({
                 setPayOpen(true);
               }}
             >
-              Charge {formatCurrency(total)}
+              {t('totals.charge', { amount: formatCurrency(total) })}
             </Button>
           </div>
         </aside>
@@ -1189,7 +1230,7 @@ function PosInner({
           setCashStep(false);
           setTenderedInput('');
         }}
-        title={cashStep ? 'Cash' : 'Take payment'}
+        title={cashStep ? t('pay.cashTitle') : t('pay.title')}
         side="bottom"
       >
         <div className="space-y-3 p-5">
@@ -1230,7 +1271,7 @@ function PosInner({
                 onClick={() => setCashStep(true)}
                 leftIcon={<Banknote className="h-5 w-5" />}
               >
-                Cash · {formatCurrency(cashQuote.total)}
+                {t('pay.cash', { amount: formatCurrency(cashQuote.total) })}
               </Button>
               {canUseCard && (
                 <Button
@@ -1241,7 +1282,7 @@ function PosInner({
                   onClick={() => void handlePay('card')}
                   leftIcon={<CreditCard className="h-5 w-5" />}
                 >
-                  Card · {formatCurrency(cardQuote.total)}
+                  {t('pay.card', { amount: formatCurrency(cardQuote.total) })}
                 </Button>
               )}
             </div>
@@ -1258,10 +1299,8 @@ function PosInner({
             className="bg-card w-full max-w-sm space-y-3 rounded-3xl p-6 shadow-warm"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="font-display text-lg font-semibold">Park this order</h2>
-            <p className="text-muted-foreground text-sm">
-              Name it so you can find it again — a table, or who it is for.
-            </p>
+            <h2 className="font-display text-lg font-semibold">{t('park.title')}</h2>
+            <p className="text-muted-foreground text-sm">{t('park.body')}</p>
             <input
               value={parkLabel}
               onChange={(e) => setParkLabel(e.target.value)}
@@ -1270,15 +1309,15 @@ function PosInner({
                 if (e.key === 'Escape') setParkLabel(null);
               }}
               autoFocus
-              placeholder='e.g. "Table 5", "Sarah pickup"'
+              placeholder={t('park.placeholder')}
               className="focus-ring border-border bg-background h-12 w-full rounded-xl border px-3 text-base"
             />
             <div className="flex justify-end gap-2">
               <Button variant="ghost" onClick={() => setParkLabel(null)}>
-                Cancel
+                {t('park.cancel')}
               </Button>
               <Button variant="gradient" onClick={confirmPark}>
-                Park order
+                {t('header.park')}
               </Button>
             </div>
           </div>
@@ -1291,13 +1330,13 @@ function PosInner({
         <div className="fixed inset-0 z-[60] grid place-items-center bg-black/50 p-4">
           <div className="bg-card w-full max-w-sm rounded-3xl p-6 text-center shadow-warm">
             <p className="text-muted-foreground text-sm font-medium uppercase tracking-wider">
-              Change due
+              {t('pay.changeDue')}
             </p>
             <p className="font-display text-primary my-2 text-5xl font-bold tabular-nums">
               {formatCurrency(changeOwed)}
             </p>
             <Button variant="gradient" size="xl" fullWidth onClick={() => setChangeOwed(null)}>
-              Handed over
+              {t('pay.handedOver')}
             </Button>
           </div>
         </div>
@@ -1312,7 +1351,7 @@ function PosInner({
             exit={{ y: 100, opacity: 0 }}
             className="fixed inset-x-0 bottom-6 z-50 mx-auto w-fit rounded-2xl bg-success px-5 py-3 text-white shadow-warm"
           >
-            <span className="font-semibold">✓ Order {success} sent to kitchen</span>
+            <span className="font-semibold">✓ {t('pay.success', { number: success })}</span>
           </motion.div>
         )}
       </AnimatePresence>
@@ -1343,6 +1382,7 @@ function CashPad({
   onSettle: (tendered: number) => void;
   onBack: () => void;
 }) {
+  const t = useTranslations('counter');
   const typed = value.trim() === '' ? null : Number(value);
   const tendered = typed != null && Number.isFinite(typed) ? typed : null;
   const change = tendered == null ? null : changeDue(tendered, total);
@@ -1360,21 +1400,21 @@ function CashPad({
             disabled={submitting}
             onClick={() => onSettle(amount)}
           >
-            {i === 0 ? 'Exact' : formatCurrency(amount)}
+            {i === 0 ? t('pay.exact') : formatCurrency(amount)}
           </Button>
         ))}
       </div>
 
       <label className="block">
         <span className="text-muted-foreground mb-1.5 block text-sm font-medium">
-          Or type what they handed over
+          {t('pay.tenderedLabel')}
         </span>
         <input
           value={value}
           onChange={(e) => onChange(e.target.value.replace(/[^0-9.]/g, ''))}
           inputMode="decimal"
           placeholder={total.toFixed(2)}
-          aria-label="Cash received"
+          aria-label={t('pay.tenderedAria')}
           className="focus-ring border-border bg-background h-14 w-full rounded-xl border px-4 text-center font-display text-2xl font-bold tabular-nums"
         />
       </label>
@@ -1386,14 +1426,14 @@ function CashPad({
           }`}
         >
           {short
-            ? `${formatCurrency(Math.abs(change))} still to come`
-            : `Change ${formatCurrency(change)}`}
+            ? t('pay.short', { amount: formatCurrency(Math.abs(change)) })
+            : t('pay.change', { amount: formatCurrency(change) })}
         </p>
       )}
 
       <div className="flex gap-2">
         <Button variant="ghost" size="xl" onClick={onBack} disabled={submitting}>
-          Back
+          {t('pay.back')}
         </Button>
         <Button
           variant="gradient"
@@ -1403,7 +1443,7 @@ function CashPad({
           disabled={tendered == null || short}
           onClick={() => tendered != null && onSettle(tendered)}
         >
-          Complete sale
+          {t('pay.complete')}
         </Button>
       </div>
     </div>
@@ -1420,6 +1460,7 @@ function TotalRow({ label, value }: { label: string; value: string }) {
 }
 
 function ClockButton({ branchId }: { branchId: string }) {
+  const t = useTranslations('counter');
   const [openShiftId, setOpenShiftId] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -1452,14 +1493,19 @@ function ClockButton({ branchId }: { branchId: string }) {
     setLoading(true);
     setError(null);
     const supabase = getBrowserClient();
+    // The database's own wording is not shown: it is logged, and the tooltip says what to do.
     if (openShiftId) {
       const { error: rpcErr } = await supabase.rpc('clock_out', { p_shift_id: openShiftId });
-      if (rpcErr) setError(rpcErr.message);
-      else setOpenShiftId(null);
+      if (rpcErr) {
+        console.error('counter: clock_out failed', rpcErr.message);
+        setError(t('header.clockError'));
+      } else setOpenShiftId(null);
     } else {
       const { data, error: rpcErr } = await supabase.rpc('clock_in', { p_branch_id: branchId, p_shift_role: 'cashier' });
-      if (rpcErr) setError(rpcErr.message);
-      else setOpenShiftId(data as string);
+      if (rpcErr) {
+        console.error('counter: clock_in failed', rpcErr.message);
+        setError(t('header.clockError'));
+      } else setOpenShiftId(data as string);
     }
     setLoading(false);
   };
@@ -1476,7 +1522,7 @@ function ClockButton({ branchId }: { branchId: string }) {
           : 'bg-muted hover:bg-muted/70'
       }`}
     >
-      {openShiftId ? '🕒 Clock out' : '🕒 Clock in'}
+      🕒 {openShiftId ? t('header.clockOut') : t('header.clockIn')}
     </button>
   );
 }

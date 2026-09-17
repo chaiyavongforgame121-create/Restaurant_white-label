@@ -1,30 +1,25 @@
 import type { DriverApproval, DriverApprovalStatus } from '@favornoms/database/queries';
+import { intlLocaleFor, type UiLocale } from '@favornoms/shared';
 
 // The rider-facing vocabulary for a driver_approvals row. Two surfaces on this screen have
 // to agree on it — the applications list at the top and the restaurant cards below it — so
-// the copy lives in one place rather than being re-typed per branch of a ternary.
+// it lives in one place rather than being re-typed per branch of a ternary. The words
+// themselves are in the `onboarding` catalogue, keyed by status
+// (`apply.status.{status}` for the badge, `apply.explanation.{status}` for the line under it).
 
 /**
- * Badge copy + @favornoms/ui Badge variant. `pending` is `info`, not `warning`: waiting for
+ * @favornoms/ui Badge variant per status. `pending` is `info`, not `warning`: waiting for
  * a decision and being paused by the restaurant are opposite outcomes, and they used to
  * render as the same amber pill. The admin side already separates them.
  */
-export const APPLICATION_BADGE: Record<
+export const APPLICATION_BADGE_VARIANT: Record<
   DriverApprovalStatus,
-  { label: string; variant: 'success' | 'warning' | 'danger' | 'info' }
+  'success' | 'warning' | 'danger' | 'info'
 > = {
-  pending: { label: 'Waiting for review', variant: 'info' },
-  approved: { label: '✓ Approved', variant: 'success' },
-  rejected: { label: 'Not accepted', variant: 'danger' },
-  suspended: { label: 'Paused', variant: 'warning' },
-};
-
-/** One line saying what the status means for the rider's ability to actually work. */
-export const APPLICATION_EXPLANATION: Record<DriverApprovalStatus, string> = {
-  pending: 'They have not decided yet. You cannot go online here until they approve you.',
-  approved: 'You can go online and receive this restaurant’s orders.',
-  rejected: 'They turned this application down. You can apply again later.',
-  suspended: 'They have paused you here — you will not receive orders. Contact the restaurant.',
+  pending: 'info',
+  approved: 'success',
+  rejected: 'danger',
+  suspended: 'warning',
 };
 
 export type ApplicationAction = 'withdraw' | 'reapply' | 'none';
@@ -68,7 +63,7 @@ export function compareApplications(a: DriverApproval, b: DriverApproval): numbe
 }
 
 /** Short, absolute date — riders compare "applied" against "decided", so no relative fuzz. */
-export function formatApplicationDate(when: string | Date): string {
+export function formatApplicationDate(when: string | Date, locale: UiLocale): string {
   const d = typeof when === 'string' ? new Date(when) : when;
-  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  return d.toLocaleDateString(intlLocaleFor(locale), { day: 'numeric', month: 'short' });
 }

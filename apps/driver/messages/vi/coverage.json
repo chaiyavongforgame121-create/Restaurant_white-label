@@ -1,0 +1,19 @@
+{
+  "title": "Khu vực nhận đơn",
+  "subtitle": "Bạn chỉ nhận đơn của một nhà hàng khi đang ở trong vòng tròn của nhà hàng đó.",
+  "locate": "Định vị",
+  "locationOff": "Bật quyền truy cập vị trí để xem bạn có ở trong phạm vi không.",
+  "empty": {
+    "title": "Chưa có nhà hàng nào",
+    "description": "Hãy được một nhà hàng duyệt để xem khu vực nhận đơn của bạn.",
+    "apply": "Đăng ký với nhà hàng"
+  },
+  "mapUnavailable": "Không hiển thị được bản đồ — xem danh sách phạm vi bên dưới.",
+  "loadingMap": "Đang tải bản đồ…",
+  "inRangeSummary": "Trong phạm vi <count>{inRange}</count> trên {total, plural, other {# nhà hàng}}.",
+  "noLocation": "Chưa đặt vị trí",
+  "withinRadius": "trong vòng {radius} mi để nhận đơn",
+  "distanceAndRange": "cách {distance} mi · phạm vi {radius} mi",
+  "inRange": "Trong phạm vi",
+  "outOfRange": "Ngoài phạm vi"
+}

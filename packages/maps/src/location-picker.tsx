@@ -21,6 +21,7 @@ import {
   isGeolocationAvailable,
   type GeolocationFailure,
 } from './geolocation';
+import { resolveMapsLocale, type MapsLocale } from './locale';
 
 export interface LocationPickerLabels {
   confirm: string;
@@ -31,6 +32,8 @@ export interface LocationPickerLabels {
   searchPlaceholder: string;
   unavailable: string;
   geoErrors: Record<GeolocationFailure, string>;
+  /** Screen-reader name of the button that empties the search box. */
+  clear?: string;
 }
 
 export interface LocationPickerProps {
@@ -40,7 +43,10 @@ export interface LocationPickerProps {
   fallbackCenter?: LatLng | null;
   onConfirm: (address: ResolvedAddress) => void;
   className?: string;
+  /** Overrides for any of the default wording below. */
   labels?: Partial<LocationPickerLabels>;
+  /** Language of the default wording (English when omitted). Pass the app's UiLocale. */
+  locale?: MapsLocale;
 }
 
 const DEFAULT_CENTER: LatLng = { lat: 40.7128, lng: -74.006 };
@@ -49,20 +55,74 @@ function coordLabel({ lat, lng }: LatLng): string {
   return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
 }
 
-const DEFAULT_LABELS: LocationPickerLabels = {
-  confirm: 'Confirm this location',
-  useCurrentLocation: 'Use my current location',
-  locating: 'Finding your location…',
-  searching: 'Finding address…',
-  dragHint: 'Search or drag the map to set the exact spot',
-  searchPlaceholder: 'Search address or place',
-  unavailable: 'The map is unavailable right now.',
-  geoErrors: {
-    unsupported: "Your browser doesn't support location.",
-    insecure_context: 'Current location needs a secure (https) connection — drag the map instead.',
-    denied: 'Location permission was denied — drag the map to set your spot.',
-    unavailable: "Couldn't find your location — drag the map instead.",
-    timeout: 'Locating timed out — try again or drag the map.',
+const DEFAULT_LABELS: Record<MapsLocale, Required<LocationPickerLabels>> = {
+  en: {
+    confirm: 'Confirm this location',
+    useCurrentLocation: 'Use my current location',
+    locating: 'Finding your location…',
+    searching: 'Finding address…',
+    dragHint: 'Search or drag the map to set the exact spot',
+    searchPlaceholder: 'Search address or place',
+    unavailable: 'The map is unavailable right now.',
+    clear: 'Clear',
+    geoErrors: {
+      unsupported: "Your browser doesn't support location.",
+      insecure_context: 'Current location needs a secure (https) connection — drag the map instead.',
+      denied: 'Location permission was denied — drag the map to set your spot.',
+      unavailable: "Couldn't find your location — drag the map instead.",
+      timeout: 'Locating timed out — try again or drag the map.',
+    },
+  },
+  es: {
+    confirm: 'Confirmar esta ubicación',
+    useCurrentLocation: 'Usar mi ubicación actual',
+    locating: 'Buscando tu ubicación…',
+    searching: 'Buscando la dirección…',
+    dragHint: 'Busca o mueve el mapa para marcar el punto exacto',
+    searchPlaceholder: 'Buscar dirección o lugar',
+    unavailable: 'El mapa no está disponible en este momento.',
+    clear: 'Borrar',
+    geoErrors: {
+      unsupported: 'Tu navegador no permite usar la ubicación.',
+      insecure_context: 'Para usar tu ubicación actual se necesita una conexión segura (https). Mueve el mapa.',
+      denied: 'No se dio permiso de ubicación. Mueve el mapa para marcar tu punto.',
+      unavailable: 'No pudimos encontrar tu ubicación. Mueve el mapa.',
+      timeout: 'Se agotó el tiempo para ubicarte. Reintenta o mueve el mapa.',
+    },
+  },
+  vi: {
+    confirm: 'Xác nhận vị trí này',
+    useCurrentLocation: 'Dùng vị trí hiện tại',
+    locating: 'Đang tìm vị trí của bạn…',
+    searching: 'Đang tìm địa chỉ…',
+    dragHint: 'Tìm kiếm hoặc kéo bản đồ để chọn đúng vị trí',
+    searchPlaceholder: 'Tìm địa chỉ hoặc địa điểm',
+    unavailable: 'Bản đồ hiện không khả dụng.',
+    clear: 'Xóa',
+    geoErrors: {
+      unsupported: 'Trình duyệt của bạn không hỗ trợ định vị.',
+      insecure_context: 'Cần kết nối bảo mật (https) để lấy vị trí hiện tại — hãy kéo bản đồ.',
+      denied: 'Quyền truy cập vị trí bị từ chối — hãy kéo bản đồ để chọn vị trí.',
+      unavailable: 'Không tìm được vị trí của bạn — hãy kéo bản đồ.',
+      timeout: 'Hết thời gian định vị — hãy thử lại hoặc kéo bản đồ.',
+    },
+  },
+  th: {
+    confirm: 'ยืนยันตำแหน่งนี้',
+    useCurrentLocation: 'ใช้ตำแหน่งปัจจุบัน',
+    locating: 'กำลังค้นหาตำแหน่งของคุณ…',
+    searching: 'กำลังค้นหาที่อยู่…',
+    dragHint: 'ค้นหาหรือเลื่อนแผนที่เพื่อปักหมุดให้ตรงตำแหน่ง',
+    searchPlaceholder: 'ค้นหาที่อยู่หรือสถานที่',
+    unavailable: 'ขณะนี้ไม่สามารถใช้แผนที่ได้',
+    clear: 'ล้าง',
+    geoErrors: {
+      unsupported: 'เบราว์เซอร์ของคุณไม่รองรับการระบุตำแหน่ง',
+      insecure_context: 'การใช้ตำแหน่งปัจจุบันต้องใช้การเชื่อมต่อที่ปลอดภัย (https) — โปรดเลื่อนแผนที่แทน',
+      denied: 'ไม่ได้รับอนุญาตให้เข้าถึงตำแหน่ง — โปรดเลื่อนแผนที่เพื่อปักหมุด',
+      unavailable: 'ไม่พบตำแหน่งของคุณ — โปรดเลื่อนแผนที่แทน',
+      timeout: 'ระบุตำแหน่งนานเกินไป — ลองอีกครั้งหรือเลื่อนแผนที่',
+    },
   },
 };
 
@@ -72,11 +132,14 @@ export function LocationPicker({
   onConfirm,
   className,
   labels,
+  locale,
 }: LocationPickerProps) {
-  const L: LocationPickerLabels = {
-    ...DEFAULT_LABELS,
+  const defaults = DEFAULT_LABELS[resolveMapsLocale(locale)];
+  const L: Required<LocationPickerLabels> = {
+    ...defaults,
     ...labels,
-    geoErrors: { ...DEFAULT_LABELS.geoErrors, ...labels?.geoErrors },
+    clear: labels?.clear ?? defaults.clear,
+    geoErrors: { ...defaults.geoErrors, ...labels?.geoErrors },
   };
   const token = getMapboxToken();
   const containerRef = React.useRef<HTMLDivElement | null>(null);
@@ -322,7 +385,7 @@ export function LocationPicker({
                   setQuery('');
                   setSuggestions([]);
                 }}
-                aria-label="Clear"
+                aria-label={L.clear}
                 style={{
                   border: 'none',
                   background: 'transparent',

@@ -1,0 +1,203 @@
+{
+  "errors": {
+    "generic": "Something went wrong. Please try again.",
+    "network": "Couldn’t reach the server. Check your connection and try again.",
+    "permissionDenied": "You don’t have permission to change this.",
+    "duplicate": "That already exists.",
+    "inUse": "It’s still in use, so it can’t be changed.",
+    "invalidValue": "That value isn’t valid. Check it and try again.",
+    "invalidPrice": "Enter a valid price."
+  },
+  "modifiers": {
+    "metaTitle": "Modifiers · Favornoms admin",
+    "title": "Modifier groups",
+    "subtitle": "Size, add-ons, prep options — anything customers customize on an item.",
+    "newGroup": "New group",
+    "empty": "No modifier groups yet. Create one (e.g. “Size” with Small / Medium / Large) and link it to menu items.",
+    "required": "Required",
+    "optional": "Optional",
+    "pickOne": "pick 1",
+    "pickUpTo": "pick up to {max}",
+    "optionCount": "{count, plural, one {# option} other {# options}}",
+    "linkedCount": "linked to {count, plural, one {# item} other {# items}}",
+    "delete": "Delete",
+    "options": "Options",
+    "default": "Default",
+    "active": "Active",
+    "remove": "Remove",
+    "addOption": "Add option",
+    "createPrompt": {
+      "title": "Name the modifier group",
+      "body": "This is the heading customers see above the choices, like Size or Add-ons.",
+      "placeholder": "Size",
+      "confirm": "Create group"
+    },
+    "deleteGroupConfirm": {
+      "title": "Delete this modifier group?",
+      "body": "Its options go with it, and every menu item linked to the group loses those choices.",
+      "confirm": "Delete"
+    },
+    "optionPrompt": {
+      "title": "Name the option",
+      "body": "One of the choices in this group, like Large or Extra cheese.",
+      "placeholder": "Large",
+      "confirm": "Next"
+    },
+    "pricePrompt": {
+      "title": "Price delta for this option",
+      "body": "Added to the item price in USD. Use 0 for no change, or a negative number to take money off.",
+      "confirm": "Add option"
+    },
+    "deleteOptionConfirm": {
+      "title": "Delete this option?",
+      "body": "Customers can no longer pick it on any item using this group.",
+      "confirm": "Delete"
+    },
+    "settings": {
+      "name": "Name",
+      "type": "Type",
+      "single": "Single (radio)",
+      "multiple": "Multiple (checkbox)",
+      "min": "Min",
+      "max": "Max",
+      "required": "Required (customer must pick at least min)"
+    },
+    "links": {
+      "linkedTo": "Linked to {names}",
+      "linkedToMore": "Linked to {names} + {count} more",
+      "none": "Linked to <muted>no items yet</muted>",
+      "cancel": "Cancel",
+      "edit": "Edit links",
+      "linked": "linked",
+      "noItems": "No active menu items in this branch.",
+      "save": "Save links"
+    }
+  },
+  "combos": {
+    "metaTitle": "Combos · Favornoms admin",
+    "title": "Combo meals",
+    "subtitle": "Bundle items at a discount. Customers see combos in a featured row above the menu.",
+    "newCombo": "New combo",
+    "empty": "No combos yet. Click <strong>New combo</strong> to create your first bundle deal.",
+    "namePrompt": {
+      "title": "Name this combo",
+      "body": "Customers see this in the featured combo row above the menu.",
+      "placeholder": "e.g. “Burger Combo”, “Family Meal”",
+      "confirm": "Next"
+    },
+    "pricePrompt": {
+      "title": "Total price (USD)",
+      "body": "What the customer pays for the whole bundle. You can change it later.",
+      "confirm": "Create combo"
+    },
+    "deleteConfirm": {
+      "title": "Delete this combo?",
+      "body": "Existing orders are not affected.",
+      "confirm": "Delete"
+    },
+    "active": "Active",
+    "hidden": "Hidden",
+    "price": "Price",
+    "saves": "Saves {amount}",
+    "delete": "Delete",
+    "hideContents": "Hide contents",
+    "showContents": "{count, plural, one {# item in this combo →} other {# items in this combo →}}",
+    "noItems": "No items yet — add some below.",
+    "each": "{price} each",
+    "addItem": "Add an item…"
+  },
+  "happyHours": {
+    "metaTitle": "Happy hours · Favornoms admin",
+    "title": "Happy hours",
+    "subtitle": "Time-windowed discounts on items or whole categories.",
+    "newHappyHour": "New happy hour",
+    "empty": "No happy hours yet.",
+    "namePrompt": {
+      "title": "Name this promotion",
+      "body": "For example “Happy hour” or “Lunch special”.",
+      "placeholder": "Happy hour",
+      "confirm": "Create"
+    },
+    "deleteConfirm": {
+      "title": "Delete this happy hour?",
+      "body": "The discount stops applying on the customer menu right away.",
+      "confirm": "Delete"
+    },
+    "active": "Active",
+    "paused": "Paused",
+    "percentOff": "% off",
+    "fixedOff": "$ off",
+    "from": "From",
+    "to": "to",
+    "days": {
+      "sun": "Sun",
+      "mon": "Mon",
+      "tue": "Tue",
+      "wed": "Wed",
+      "thu": "Thu",
+      "fri": "Fri",
+      "sat": "Sat"
+    },
+    "appliesToAll": "Applies to: <strong>all menu items</strong>",
+    "appliesToItems": "Applies to: {items, plural, one {# item} other {# items}}",
+    "appliesToCategories": "Applies to: {categories, plural, one {# category} other {# categories}}",
+    "appliesToBoth": "Applies to: {items, plural, one {# item} other {# items}}, {categories, plural, one {# category} other {# categories}}",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "delete": "Delete",
+    "scope": {
+      "edit": "Edit",
+      "hide": "Hide",
+      "items": "Items",
+      "categories": "Categories"
+    }
+  },
+  "import": {
+    "title": "Import menu with AI",
+    "subtitle": "Upload a photo of a printed menu — Claude extracts items, prices, and categories for review.",
+    "menuImage": "Menu image",
+    "upload": "Upload",
+    "hint": "Hint to AI (optional)",
+    "hintPlaceholder": "e.g. American casual, prices in USD",
+    "uploaded": "Image uploaded. Click Analyze to extract menu items.",
+    "analyze": "Analyze with AI",
+    "analyzing": "Analyzing image with Claude…",
+    "imported": "{count, plural, one {Imported # item.} other {Imported # items.}}",
+    "selected": "{selected} of {total} items selected",
+    "importSelected": "Import selected",
+    "descriptionPlaceholder": "Description",
+    "remove": "Remove",
+    "stations": {
+      "hot": "Hot",
+      "cold": "Cold",
+      "bar": "Bar",
+      "dessert": "Dessert",
+      "expo": "Expo"
+    },
+    "errors": {
+      "uploadFailed": "The upload didn’t go through. Please try again.",
+      "fileTooLarge": "That image is too large to upload.",
+      "fileTypeNotAllowed": "That file type can’t be uploaded. Choose an image.",
+      "signedOut": "Your session has ended. Sign in again and try once more.",
+      "notAllowed": "Only owners and managers can import a menu at this branch.",
+      "aiUnavailable": "AI menu import isn’t available right now.",
+      "rateLimited": "This branch has reached its hourly import limit. Try again in an hour.",
+      "analyzeFailed": "We couldn’t read a menu from that image. Try a clearer photo."
+    },
+    "csv": {
+      "title": "CSV bulk import",
+      "columns": "Columns: <code>{columns}</code> (station optional). First row must be headers.",
+      "downloadTemplate": "Download template",
+      "valid": "{count} valid",
+      "errorCount": "{count, plural, one {# error} other {# errors}}",
+      "rowErrors": {
+        "missingCategory": "Row {row}: missing category",
+        "missingName": "Row {row}: missing name",
+        "invalidPrice": "Row {row}: invalid price “{value}”"
+      },
+      "moreErrors": "… and {count} more.",
+      "import": "{count, plural, one {Import # item} other {Import # items}}",
+      "noValidRows": "No valid rows to import."
+    }
+  }
+}

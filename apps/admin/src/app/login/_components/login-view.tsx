@@ -20,26 +20,28 @@ import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import { Building2, KeyRound, Mail, ShieldCheck } from 'lucide-react';
 import { Button, Card } from '@favornoms/ui';
 import { getBrowserClient } from '@favornoms/database/client';
 import { currentOrigin, safeNext } from '@favornoms/shared';
+import { LocaleSwitcher } from '@/components/locale-switcher';
+import { authErrorKey } from '../../auth/_lib/auth-error';
 
-/** GoTrue's own error codes plus the ones /auth/callback raises, in the words a restaurant
- *  manager can act on. An unmapped code still renders — as itself — rather than vanishing. */
-const ERROR_COPY: Record<string, string> = {
-  otp_expired:
-    'That sign-in link has expired or was already used. Links work only once, and some mail apps open them automatically. Sign in with your password below.',
-  access_denied:
-    'That sign-in link is no longer valid. Sign in with your password below, or request a new link.',
-  exchange_failed:
-    'That link was opened in a different browser from the one that requested it. Sign in with your password below.',
-  missing_code: 'That link was incomplete. Sign in with your password below.',
-  link: 'That access link is no longer valid.',
+/** GoTrue's own error codes plus the ones /auth/callback raises, as `auth.login.errors.*` keys in
+ *  the words a restaurant manager can act on. An unmapped code still renders — as itself, inside
+ *  a translated sentence — rather than vanishing. */
+const ERROR_KEYS: Record<string, string> = {
+  otp_expired: 'login.errors.otpExpired',
+  access_denied: 'login.errors.accessDenied',
+  exchange_failed: 'login.errors.exchangeFailed',
+  missing_code: 'login.errors.missingCode',
+  link: 'login.errors.link',
 };
 
 export function LoginView({ next, error: initialError }: { next: string; error: string | null }) {
   const router = useRouter();
+  const t = useTranslations('auth');
   // Shared open-redirect guard — see @favornoms/shared. `next` feeds router.replace() on
   // SIGNED_IN and the magic-link emailRedirectTo below, so a hostile value would hand a
   // freshly-minted *staff* session to an attacker's page. Falls back to the dashboard root.
@@ -51,9 +53,11 @@ export function LoginView({ next, error: initialError }: { next: string; error: 
   const [password, setPassword] = React.useState('');
   const [sent, setSent] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(
-    initialError ? (ERROR_COPY[initialError] ?? `Sign-in failed (${initialError}).`) : null,
-  );
+  const [error, setError] = React.useState<string | null>(() => {
+    if (!initialError) return null;
+    const key = ERROR_KEYS[initialError];
+    return key ? t(key) : t('login.errors.unknown', { code: initialError });
+  });
 
   const signInWithPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,11 +73,12 @@ export function LoginView({ next, error: initialError }: { next: string; error: 
       // GoTrue says "Invalid login credentials" both for a wrong password and for an account
       // that has never had one set — a real case here, since every account created before
       // this screen existed was magic-link only. Name that second possibility.
-      setError(
-        authError.message === 'Invalid login credentials'
-          ? 'Wrong email or password. If you have never set a password, use "Forgot password?" to create one.'
-          : authError.message,
-      );
+      if (authError.message === 'Invalid login credentials') {
+        setError(t('login.errors.wrongPassword'));
+      } else {
+        console.error('[login] signInWithPassword failed:', authError.message);
+        setError(t(authErrorKey(authError)));
+      }
       return;
     }
     router.replace(target);
@@ -99,7 +104,8 @@ export function LoginView({ next, error: initialError }: { next: string; error: 
     });
     setSubmitting(false);
     if (otpError) {
-      setError(otpError.message);
+      console.error('[login] signInWithOtp failed:', otpError.message);
+      setError(t(authErrorKey(otpError)));
       return;
     }
     setSent(true);
@@ -117,7 +123,10 @@ export function LoginView({ next, error: initialError }: { next: string; error: 
   }, [router, target]);
 
   return (
-    <div className="grid min-h-dynamic-screen place-items-center bg-background px-4 py-10">
+    <div className="relative grid min-h-dynamic-screen place-items-center bg-background px-4 pb-10 pt-16">
+      <div className="absolute right-4 top-4">
+        <LocaleSwitcher />
+      </div>
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
@@ -126,19 +135,17 @@ export function LoginView({ next, error: initialError }: { next: string; error: 
         <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-gradient-warm text-white shadow-warm">
           <Building2 className="h-8 w-8" />
         </div>
+        {/* Product name, the same in every language. */}
         <h1 className="mt-5 text-center font-display text-3xl font-bold">Favornoms Merchant</h1>
-        <p className="mt-1 text-center text-sm text-muted-foreground">
-          Sign in to manage your restaurant
-        </p>
+        <p className="mt-1 text-center text-sm text-muted-foreground">{t('login.subtitle')}</p>
 
         <Card className="mt-6 p-5">
           {sent ? (
             <div className="text-center">
               <ShieldCheck className="mx-auto h-10 w-10 text-success" />
-              <p className="mt-3 font-display text-lg font-semibold">Check your inbox</p>
+              <p className="mt-3 font-display text-lg font-semibold">{t('login.checkInbox')}</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                We sent a sign-in link to <strong>{email}</strong>. It works once, and only in
-                this browser.
+                {t.rich('login.linkSent', { email, strong: (c) => <strong>{c}</strong> })}
               </p>
               <Button
                 variant="ghost"
@@ -149,7 +156,7 @@ export function LoginView({ next, error: initialError }: { next: string; error: 
                   setMode('password');
                 }}
               >
-                Use a password instead
+                {t('login.usePassword')}
               </Button>
             </div>
           ) : (
@@ -158,7 +165,7 @@ export function LoginView({ next, error: initialError }: { next: string; error: 
               onSubmit={mode === 'password' ? signInWithPassword : sendLink}
             >
               <label className="block">
-                <span className="mb-2 block text-sm font-medium">Email</span>
+                <span className="mb-2 block text-sm font-medium">{t('fields.email')}</span>
                 <div className="relative">
                   <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
                   <input
@@ -175,7 +182,7 @@ export function LoginView({ next, error: initialError }: { next: string; error: 
 
               {mode === 'password' && (
                 <label className="block">
-                  <span className="mb-2 block text-sm font-medium">Password</span>
+                  <span className="mb-2 block text-sm font-medium">{t('fields.password')}</span>
                   <div className="relative">
                     <KeyRound className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
                     <input
@@ -184,7 +191,7 @@ export function LoginView({ next, error: initialError }: { next: string; error: 
                       onChange={(e) => setPassword(e.target.value)}
                       required
                       autoComplete="current-password"
-                      placeholder="Your password"
+                      placeholder={t('fields.passwordPlaceholder')}
                       className="focus-ring w-full rounded-xl border border-border bg-background py-3 pl-11 pr-4 text-base"
                     />
                   </div>
@@ -194,25 +201,25 @@ export function LoginView({ next, error: initialError }: { next: string; error: 
               {error && <p className="text-sm text-danger">{error}</p>}
 
               <Button type="submit" variant="gradient" size="xl" fullWidth loading={submitting}>
-                {mode === 'password' ? 'Sign in' : 'Send sign-in link'}
+                {mode === 'password' ? t('login.signIn') : t('login.sendLink')}
               </Button>
 
-              <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center justify-between gap-3 text-sm">
                 <button
                   type="button"
-                  className="font-medium text-muted-foreground hover:text-foreground"
+                  className="text-left font-medium text-muted-foreground hover:text-foreground"
                   onClick={() => {
                     setMode(mode === 'password' ? 'link' : 'password');
                     setError(null);
                   }}
                 >
-                  {mode === 'password' ? 'Email me a link instead' : 'Use a password instead'}
+                  {mode === 'password' ? t('login.emailLink') : t('login.usePassword')}
                 </button>
                 <Link
                   href="/forgot-password"
-                  className="font-medium text-muted-foreground hover:text-foreground"
+                  className="text-right font-medium text-muted-foreground hover:text-foreground"
                 >
-                  Forgot password?
+                  {t('login.forgotPassword')}
                 </Link>
               </div>
             </form>
@@ -223,10 +230,13 @@ export function LoginView({ next, error: initialError }: { next: string; error: 
             rather than silently creating an empty account. /signup is the
             deliberate way in. */}
         <p className="mt-4 text-center text-sm text-muted-foreground">
-          New to Favornoms?{' '}
-          <Link href="/signup" className="font-semibold text-primary hover:underline">
-            Start a free 14-day trial
-          </Link>
+          {t.rich('login.newHere', {
+            link: (c) => (
+              <Link href="/signup" className="font-semibold text-primary hover:underline">
+                {c}
+              </Link>
+            ),
+          })}
         </p>
       </motion.div>
     </div>

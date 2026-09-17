@@ -1,0 +1,37 @@
+{
+  "tableNumber": "Table {number}",
+  "scan": {
+    "notSeatedStaff": "Ask a member of staff to open your table, then scan again.",
+    "notSeatedAuto": "This table is not open for ordering yet. Ask a member of staff to seat you.",
+    "locked": "This table has asked for the bill. Ask a member of staff to reopen it if you would like to order more.",
+    "error": "That table could not be opened.",
+    "codeRequired": "Someone is already ordering at this table. Enter the four-digit code your server gave you to join their bill.",
+    "codeEnter": "Enter the four-digit code for this table to join the bill.",
+    "codeLabel": "Table code",
+    "join": "Join table"
+  },
+  "notice": {
+    "orderingAt": "Ordering at {table}",
+    "rounds": "· {count, plural, one {# round} other {# rounds}} · {total}",
+    "yourTable": "Your table"
+  },
+  "bill": {
+    "loading": "Reading your table…",
+    "empty": "Nothing ordered at this table yet. Everything you and the rest of your party order lands on one bill.",
+    "round": "Round {round}",
+    "yours": "Yours",
+    "paid": "Paid",
+    "total": "Table total",
+    "stillToPay": "Still to pay {amount}",
+    "locked": "Your server has been asked for the bill. No more rounds can go to the kitchen until they reopen the table.",
+    "readyToPay": "We're ready to pay",
+    "payAtRestaurant": "You pay at the restaurant. The table closes when your bill is settled.",
+    "askFailed": "Could not ask for the bill. Please try again.",
+    "alreadyClosed": "This table has already been closed."
+  },
+  "leave": {
+    "button": "Not at {table}?",
+    "confirmOwed": "Stop ordering at {table}?\n\nThe bill stays open — {amount} is still to pay at the restaurant.",
+    "confirm": "Stop ordering at {table}?\n\nThe bill stays open; you just won't be ordering to this table from this phone."
+  }
+}

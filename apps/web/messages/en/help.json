@@ -1,0 +1,160 @@
+{
+  "meta": {
+    "title": "Help center",
+    "description": "Common questions about ordering, refunds, payments, account, and privacy.",
+    "topicTitle": "{topic} · Help",
+    "fallbackTitle": "Help"
+  },
+  "index": {
+    "title": "Help center",
+    "subtitle": "Quick answers to the most common questions. Can’t find what you need? Email us.",
+    "stillNeedHelp": "Still need help?",
+    "emailUs": "Email <link>{email}</link> — we usually reply within a few hours."
+  },
+  "topic": {
+    "allTopics": "All topics",
+    "stillNeedHelp": "Didn’t find what you needed? Email <link>{email}</link>."
+  },
+  "topics": {
+    "placingAnOrder": {
+      "title": "Placing an order",
+      "intro": "How ordering works, scheduling, modifications.",
+      "faqs": {
+        "howToOrder": {
+          "q": "How do I place an order?",
+          "a": "Browse the menu, tap items to add them to your cart, then tap “Proceed to checkout”. You can order as a guest or sign in for faster reorders and loyalty points."
+        },
+        "scheduleLater": {
+          "q": "Can I schedule an order for later?",
+          "a": "Delivery is always booked ahead — choose “Schedule Delivery” and pick a day and time. The restaurant prepares your order to be ready at that time and sends it out straight after. Pickup orders are prepared as soon as you place them."
+        },
+        "customizeItem": {
+          "q": "Can I customize an item (add toppings, no onions, etc)?",
+          "a": "If the item has options, you’ll see them when you tap it. Pick your modifiers, add notes if needed, then add to cart."
+        },
+        "kitchenInstructions": {
+          "q": "Can I add special instructions for the kitchen?",
+          "a": "Yes — every item has a notes field, and the cart has a general note field. The kitchen sees them on the order ticket."
+        }
+      }
+    },
+    "cancelOrRefund": {
+      "title": "Cancel or refund",
+      "intro": "Canceling a pending order, refund requests.",
+      "faqs": {
+        "howToCancel": {
+          "q": "How do I cancel an order?",
+          "a": "Contact the restaurant directly and ask them to cancel it. Orders are cancelled by the restaurant rather than from the app, so they can stop the kitchen at the same time — the sooner you call, the more likely it can still be stopped."
+        },
+        "refundTime": {
+          "q": "How long do refunds take?",
+          "a": "Card refunds typically appear within 5–10 business days. Cash payments are settled directly with the restaurant."
+        },
+        "partialRefund": {
+          "q": "Can I get a partial refund for one missing item?",
+          "a": "Yes — contact the restaurant or email support@favornoms.com with your order number and what was wrong. We’ll work with the restaurant to refund the affected items."
+        }
+      }
+    },
+    "deliveryIssues": {
+      "title": "Delivery issues",
+      "intro": "Late deliveries, wrong address, contact driver.",
+      "faqs": {
+        "orderLate": {
+          "q": "My order is late — what do I do?",
+          "a": "Check the tracking page for the driver’s live ETA. If they’ve arrived but you can’t find them, tap “Call driver”."
+        },
+        "wrongAddress": {
+          "q": "I entered the wrong address",
+          "a": "If the driver hasn’t picked up the order yet, you can still edit the order from the tracking page. After pickup, call the driver directly."
+        },
+        "coldOrDamaged": {
+          "q": "My food arrived cold or damaged",
+          "a": "Email support@favornoms.com with your order number and a photo. We’ll process a refund."
+        }
+      }
+    },
+    "promosAndLoyalty": {
+      "title": "Promos & loyalty",
+      "intro": "Promo codes, points, referrals.",
+      "faqs": {
+        "loyaltyPoints": {
+          "q": "How do loyalty points work?",
+          "a": "You earn points on every completed order. Each restaurant sets its own earn rate, tiers and rewards — yours are shown under Account → Loyalty & rewards, where you also pick a reward to use at checkout. One reward per order."
+        },
+        "usePromoCode": {
+          "q": "How do I use a promo code?",
+          "a": "On the checkout page, enter the code in the “Promo code” field and tap Apply. Promo codes can’t be combined unless the restaurant says otherwise."
+        },
+        "promoExpired": {
+          "q": "My promo says expired",
+          "a": "Each promo has an expiration date and a maximum number of redemptions. If you think this is an error, email support@favornoms.com."
+        }
+      }
+    },
+    "accountAndPrivacy": {
+      "title": "Account & privacy",
+      "intro": "Sign-in, data, deletion.",
+      "faqs": {
+        "signIn": {
+          "q": "How do I sign in?",
+          "a": "From the sign-in page, continue with Google, or enter your phone number and you’re straight in — no code to wait for. You can also use an email magic link. We don’t use passwords."
+        },
+        "downloadData": {
+          "q": "How do I download my data?",
+          "a": "Go to /account and tap “Download my data”. You’ll get a JSON file with your orders, addresses, and account info."
+        },
+        "deleteAccount": {
+          "q": "How do I delete my account?",
+          "a": "Go to /account and tap “Delete account”. We’ll anonymize your personal info but keep order records for tax compliance."
+        },
+        "paymentSafety": {
+          "q": "Is my payment info safe?",
+          "a": "We never store card details — payments are processed by Stripe, which is PCI-DSS Level 1 certified."
+        }
+      }
+    },
+    "contactUs": {
+      "title": "Contact us",
+      "intro": "Email, support hours, escalation.",
+      "faqs": {
+        "bestWay": {
+          "q": "What’s the best way to reach you?",
+          "a": "Email support@favornoms.com for order issues, billing questions, or anything else. We respond within a few hours (M-F 9am-9pm ET)."
+        },
+        "pressPartnership": {
+          "q": "I have a press / partnership inquiry",
+          "a": "Email hello@favornoms.com for press, business partnerships, or restaurant onboarding."
+        },
+        "privacyConcern": {
+          "q": "I need to report a privacy concern",
+          "a": "Email privacy@favornoms.com — see our /privacy and /ccpa pages for your rights."
+        }
+      }
+    }
+  },
+  "account": {
+    "metaTitle": "Your account",
+    "title": "Your account",
+    "subtitle": "Manage your data and privacy settings.",
+    "export": {
+      "title": "Download your data",
+      "body": "Export a copy of everything we have about you — orders, addresses, and account info — as a JSON file.",
+      "button": "Download my data (JSON)",
+      "failed": "Couldn’t download your data. Make sure you’re signed in, then try again."
+    },
+    "delete": {
+      "title": "Delete my account",
+      "body": "Permanently anonymize your account. Your order history is retained for tax records, but all personal information (name, phone, addresses, loyalty balance) is removed and cannot be recovered.",
+      "button": "Delete account",
+      "prompt": "Type {word} to permanently anonymize your account. This cannot be undone.",
+      "done": "Your account has been anonymized. You will now be signed out.",
+      "failed": "Couldn’t delete your account. Make sure you’re signed in, then try again."
+    },
+    "links": {
+      "privacy": "Privacy policy",
+      "terms": "Terms of service",
+      "ccpa": "California rights"
+    }
+  }
+}

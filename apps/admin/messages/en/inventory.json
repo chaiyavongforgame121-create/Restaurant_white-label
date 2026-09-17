@@ -1,0 +1,70 @@
+{
+  "metaTitle": "Inventory · Favornoms admin",
+  "title": "Inventory",
+  "subtitle": "Track stock, log restocks, record waste.",
+  "stats": {
+    "tracked": "Tracked items",
+    "lowStock": "Low stock"
+  },
+  "errors": {
+    "generic": "Something went wrong. Please try again.",
+    "network": "Couldn’t reach the server. Check your connection and try again.",
+    "permissionDenied": "You don’t have permission to change this.",
+    "invalidValue": "That value isn’t valid. Check it and try again.",
+    "positiveQuantity": "Enter a positive quantity"
+  },
+  "tracking": {
+    "failed": "Couldn’t change stock tracking for “{name}”. {reason}",
+    "notSaved": "Nothing was saved for “{name}”. It may have been deleted, or your role may not be allowed to edit the menu at this branch.",
+    "off": "Stock tracking is off for “{name}” — the storefront will no longer mark it sold out, and its count is cleared, so ticking the box again starts it at 0.",
+    "on": "Tracking stock for “{name}” — {count} left.",
+    "onEmpty": "Tracking stock for “{name}”, but it has 0 left, so customers see it as sold out right away. Log a restock to put it back on sale."
+  },
+  "lowStock": {
+    "title": "Low stock alerts",
+    "detail": "{left} left · threshold {threshold}"
+  },
+  "actions": {
+    "restock": "Restock",
+    "waste": "Waste"
+  },
+  "table": {
+    "item": "Item",
+    "trackStock": "Track stock",
+    "stock": "Stock",
+    "threshold": "Threshold"
+  },
+  "restocks": {
+    "title": "Recent restocks",
+    "empty": "No restocks logged yet."
+  },
+  "waste": {
+    "title": "Recent waste",
+    "empty": "No waste logged yet."
+  },
+  "reasons": {
+    "expired": "Expired",
+    "spoiled": "Spoiled",
+    "spilled": "Spilled",
+    "damaged": "Damaged",
+    "staffMeal": "Staff meal",
+    "other": "Other"
+  },
+  "restockDialog": {
+    "title": "Restock {name}",
+    "quantity": "Quantity",
+    "cost": "Cost per unit (USD, optional)",
+    "supplier": "Supplier (optional)",
+    "notes": "Notes (optional)",
+    "cancel": "Cancel",
+    "submit": "Log restock"
+  },
+  "wasteDialog": {
+    "title": "Log waste — {name}",
+    "quantity": "Quantity",
+    "reason": "Reason",
+    "notes": "Notes (optional)",
+    "cancel": "Cancel",
+    "submit": "Log waste"
+  }
+}

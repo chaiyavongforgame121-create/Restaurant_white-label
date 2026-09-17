@@ -4,8 +4,8 @@ import * as React from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Battery, CalendarDays, ChevronRight, Coffee, MapPin, Power, Star, Store, Wallet, Zap } from 'lucide-react';
-import { useTranslations } from 'next-intl';
-import { formatCurrency, kmToMi } from '@favornoms/shared';
+import { useLocale, useTranslations } from 'next-intl';
+import { DEFAULT_UI_LOCALE, formatCurrency, isUiLocale, kmToMi } from '@favornoms/shared';
 import { formatFixAge, GPS_DISPATCH_MAX_AGE_SEC } from '@favornoms/maps';
 import { getBrowserClient } from '@favornoms/database/client';
 import { setDriverAllBranchesOnline, setDriverBranchOnline } from '@favornoms/database/queries';
@@ -18,6 +18,8 @@ import { AvailabilitySheet } from './availability-sheet';
 
 export function HomeView() {
   const t = useTranslations('home');
+  const localeValue = useLocale();
+  const locale = isUiLocale(localeValue) ? localeValue : DEFAULT_UI_LOCALE;
   const { driver, refresh: refreshDriver } = useDriverSession();
   const status = useDriver((s) => s.status);
   const setStatus = useDriver((s) => s.setStatus);
@@ -26,6 +28,8 @@ export function HomeView() {
   const [sheetOpen, setSheetOpen] = React.useState(false);
   const { active, liveHealthy } = useDelivery();
 
+  // Shown only when a branch has no name; a plain string so the memo below keeps its identity.
+  const restaurantFallback = t('restaurant');
   const approved = React.useMemo(
     () => (driver.approvals ?? []).filter((a) => a.status === 'approved'),
     [driver.approvals],
@@ -36,12 +40,12 @@ export function HomeView() {
   // so the rider's ticks were wiped and the sheet snapped back to the "Online now" tab
   // under their thumb.
   const approvedForSheet = React.useMemo(
-    () => approved.map((a) => ({ branch_id: a.branch_id, name: a.branch?.name ?? 'Restaurant' })),
-    [approved],
+    () => approved.map((a) => ({ branch_id: a.branch_id, name: a.branch?.name ?? restaurantFallback })),
+    [approved, restaurantFallback],
   );
   // Short label of the restaurants the driver is (or will be) online for.
   const scopeNames = (scope.length ? approved.filter((a) => scope.includes(a.branch_id)) : approved).map(
-    (a) => a.branch?.name ?? 'Restaurant',
+    (a) => a.branch?.name ?? restaurantFallback,
   );
   const scopeLabel =
     scopeNames.length === 0
@@ -122,13 +126,13 @@ export function HomeView() {
               : null;
   const locationMessage =
     locationProblem === 'denied'
-      ? 'Location is off. Turn it on for this app in your phone settings — restaurants can only offer you jobs when we can see where you are.'
+      ? t('location.denied')
       : locationProblem === 'insecure'
-        ? 'Location only works over https. Open the app from its installed icon, or an https address.'
+        ? t('location.insecure')
         : locationProblem === 'stale'
-          ? `We last saw you ${formatFixAge(fixAgeSec ?? 0)}. Keep this app open with location allowed — you will not be offered jobs until your position updates.`
+          ? t('location.stale', { age: formatFixAge(fixAgeSec ?? 0, locale) })
           : locationProblem === 'waiting'
-            ? 'Waiting for a GPS fix — you are not being offered jobs yet.'
+            ? t('location.waiting')
             : null;
 
   // Server is the source of truth for online state on load — the persisted store
@@ -256,7 +260,7 @@ export function HomeView() {
             </div>
           )}
           <p className="text-sm font-medium text-white/75">
-            Hey {driver.full_name.split(' ')[0]} 👋
+            {t('greeting', { name: driver.full_name.split(' ')[0] ?? '' })}
           </p>
           <h1 className="mt-1 font-display text-3xl font-bold leading-tight drop-shadow-sm">
             {isOnline ? t('statusOnline') : t('statusOffline')}
@@ -264,7 +268,7 @@ export function HomeView() {
           <p className="mt-1.5 text-sm text-white/80">
             {isOnline
               ? locationProblem
-                ? 'Online — but we cannot see where you are'
+                ? t('onlineNoLocation')
                 : t('readyToReceive')
               : t('subOffline')}
           </p>
@@ -276,7 +280,7 @@ export function HomeView() {
               role="status"
               className="mx-auto mt-3 max-w-xs rounded-xl bg-black/35 px-3 py-2 text-xs font-medium text-white"
             >
-              Reconnecting — you may not receive offers until this clears.
+              {t('reconnecting')}
             </p>
           )}
           {locationMessage && (
@@ -297,7 +301,7 @@ export function HomeView() {
                 onDelivery
                   ? t('online')
                   : inCooldown
-                    ? `Paused · ${formatCountdown(cooldownRemainingSec)}`
+                    ? t('paused', { countdown: formatCountdown(cooldownRemainingSec) })
                     : isOnline
                       ? t('goOffline')
                       : t('goOnline')
@@ -306,24 +310,28 @@ export function HomeView() {
           </div>
 
           <p className="mt-10 text-xs text-white/70">
-            {isOnline ? (scopeLabel ? `Online for ${scopeLabel}` : 'Online') : 'Tap to go online'}
+            {isOnline
+              ? scopeLabel
+                ? t('onlineFor', { restaurants: scopeLabel })
+                : t('online')
+              : t('tapToGoOnline')}
           </p>
           <div className="mt-3 flex justify-center">
             <StatusPill online={isOnline} label={isOnline ? t('online') : t('offline')} />
           </div>
           {onlineError && (
             <p className="mx-auto mt-3 inline-block rounded-full bg-danger/90 px-4 py-1.5 text-sm font-medium text-white">
-              Couldn&apos;t update your status — check your connection and try again.
+              {t('statusUpdateFailed')}
             </p>
           )}
           {noApprovalError && (
             <p className="mx-auto mt-3 inline-block rounded-full bg-danger/90 px-4 py-1.5 text-sm font-medium text-white">
-              No restaurant has approved you yet — apply below first, then you can go online.
+              {t('noApproval')}
             </p>
           )}
           {inCooldown && (
             <p className="mx-auto mt-3 inline-block rounded-full bg-white/15 px-4 py-1.5 text-sm font-medium text-white ring-1 ring-white/25">
-              Too many declined offers &mdash; you can go back online in {formatCountdown(cooldownRemainingSec)}.
+              {t('cooldown', { countdown: formatCountdown(cooldownRemainingSec) })}
             </p>
           )}
         </div>
@@ -359,11 +367,13 @@ export function HomeView() {
                 <Store className="h-5 w-5" />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="font-semibold">Your restaurants &amp; hours</p>
+                <p className="font-semibold">{t('restaurants.title')}</p>
                 <p className="truncate text-sm text-muted-foreground">
                   {isOnline
-                    ? `Online for ${scopeLabel || 'your restaurants'} · tap to change`
-                    : 'Choose restaurants & set your hours'}
+                    ? scopeLabel
+                      ? t('restaurants.onlineFor', { restaurants: scopeLabel })
+                      : t('restaurants.onlineForAll')
+                    : t('restaurants.offline')}
                 </p>
               </div>
               <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
@@ -380,13 +390,15 @@ export function HomeView() {
               <Store className="h-5 w-5" />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="font-semibold">Apply to restaurants</p>
+              <p className="font-semibold">{t('apply.title')}</p>
               <p className="text-sm text-muted-foreground">
                 {approvedCount > 0
-                  ? `${approvedCount} approved${pendingCount > 0 ? ` · ${pendingCount} waiting` : ''} · tap to see all`
+                  ? pendingCount > 0
+                    ? t('apply.approvedWaiting', { approved: approvedCount, pending: pendingCount })
+                    : t('apply.approved', { approved: approvedCount })
                   : pendingCount > 0
-                    ? `${pendingCount} waiting for review · tap to see`
-                    : 'Get approved to start receiving orders'}
+                    ? t('apply.waiting', { pending: pendingCount })
+                    : t('apply.none')}
               </p>
             </div>
             <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
@@ -436,8 +448,12 @@ export function HomeView() {
               <p className="font-semibold">{active ? active.branchName : '—'}</p>
               <p className="text-sm text-muted-foreground">
                 {active
-                  ? `${active.itemsSummary} · ${kmToMi(active.distanceKm).toFixed(1)} mi · ${formatCurrency(active.driverEarnings)}`
-                  : 'No deliveries yet'}
+                  ? t('recent.summary', {
+                      items: active.itemsSummary,
+                      distance: kmToMi(active.distanceKm).toFixed(1),
+                      earnings: formatCurrency(active.driverEarnings),
+                    })
+                  : t('recent.empty')}
               </p>
             </div>
             <MapPin className="h-5 w-5 text-muted-foreground" />
@@ -559,6 +575,7 @@ interface DriverStats {
 }
 
 function PerformanceCard() {
+  const t = useTranslations('home');
   const [stats, setStats] = React.useState<DriverStats | null>(null);
 
   React.useEffect(() => {
@@ -577,23 +594,27 @@ function PerformanceCard() {
 
   return (
     <Card className="p-5">
-      <h2 className="font-display text-lg font-semibold">Last 30 days</h2>
+      <h2 className="font-display text-lg font-semibold">{t('performance.title')}</h2>
       <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Tile label="Deliveries" value={String(stats.completed)} />
-        <Tile label="Earnings" value={formatCurrency(stats.total_earnings_usd)} />
+        <Tile label={t('deliveries')} value={String(stats.completed)} />
+        <Tile label={t('performance.earnings')} value={formatCurrency(stats.total_earnings_usd)} />
         <Tile
-          label="Acceptance"
+          label={t('performance.acceptance')}
           value={stats.acceptance_rate != null ? `${stats.acceptance_rate}%` : '—'}
         />
         <Tile
-          label="On-time"
+          label={t('performance.onTime')}
           value={stats.on_time_rate != null ? `${stats.on_time_rate}%` : '—'}
         />
         {/* Customers have been rating riders all along (order_ratings.delivery_stars); the
             number simply had nowhere to appear. '—' now means genuinely unrated, not
             "we never looked". */}
         <Tile
-          label={stats.rating_count > 0 ? `Rating · ${stats.rating_count}` : 'Rating'}
+          label={
+            stats.rating_count > 0
+              ? t('performance.ratingCount', { count: stats.rating_count })
+              : t('rating')
+          }
           value={stats.avg_rating != null ? `${stats.avg_rating.toFixed(2)} ★` : '—'}
         />
       </div>
@@ -616,4 +637,3 @@ function formatCountdown(totalSec: number): string {
   const r = s % 60;
   return `${m}:${String(r).padStart(2, '0')}`;
 }
-

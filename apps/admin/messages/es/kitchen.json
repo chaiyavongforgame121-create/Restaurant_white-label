@@ -1,0 +1,143 @@
+{
+  "accessDenied": {
+    "title": "Sin acceso a la cocina",
+    "reason": "Tu cuenta no puede abrir la pantalla de cocina de {branch}."
+  },
+  "header": {
+    "title": "{branch} · Cocina",
+    "statusLive": "{count, plural, one {# activo} other {# activos}} · en vivo",
+    "statusReconnecting": "{count, plural, one {# activo} other {# activos}} · reconectando…",
+    "scheduled": "{count, plural, one {# programado} other {# programados}}",
+    "mute": "Silenciar",
+    "unmute": "Activar sonido",
+    "fullscreen": "Pantalla completa",
+    "connectionLost": "Se perdió la conexión. Reconectando… Puede que las comandas nuevas no aparezcan hasta que se restablezca.",
+    "ordersPaused": "Pedidos en pausa: los clientes no pueden pedir mientras esté activado."
+  },
+  "stations": {
+    "all": "Todas",
+    "hot": "Caliente",
+    "cold": "Fría",
+    "bar": "Bar",
+    "dessert": "Postres",
+    "expo": "Pase"
+  },
+  "batch": {
+    "toggle": "Agrupar",
+    "empty": "No hay nada cocinándose para agrupar."
+  },
+  "lanes": {
+    "new": "Nuevos",
+    "cooking": "Cocinando",
+    "ready": "Listos",
+    "empty": "Todo al día, chef."
+  },
+  "channel": {
+    "dine_in": "En local",
+    "pickup": "Recoger",
+    "delivery": "A domicilio",
+    "qr_ordering": "Mesa QR"
+  },
+  "action": {
+    "pending": "Aceptar pedido",
+    "confirmed": "Empezar a cocinar",
+    "preparing": "Marcar como listo",
+    "ready": "Despachar"
+  },
+  "card": {
+    "table": "Mesa {table}",
+    "moreActions": "Más acciones",
+    "reject": "Rechazar pedido",
+    "recall": "Devolver a cocina",
+    "redispatch": "Buscar repartidor de nuevo",
+    "eightySixHeading": "Marcar agotado",
+    "stacked": "🔗 Agrupado · parada {stop}: empaca ambas bolsas para un solo repartidor",
+    "allergyNote": "Alergia / nota: {note}"
+  },
+  "timer": {
+    "hoursMinutes": "{hours} h {minutes} min"
+  },
+  "rider": {
+    "finding": "Buscando repartidor…",
+    "assigned": "Repartidor asignado ✓",
+    "offered": "Ofrecido a repartidor…",
+    "onTheWay": "Repartidor en camino",
+    "notFound": "Sin repartidor: toca para reintentar",
+    "searching": "Buscando repartidor…",
+    "find": "Buscar repartidor",
+    "assign": "Asignar a un repartidor",
+    "noneApproved": "No hay repartidores aprobados para esta sucursal.",
+    "gpsNow": "GPS ahora",
+    "gpsAge": "GPS {minutes} min",
+    "gpsStale": "GPS antiguo",
+    "gpsStaleHint": "Sin señal GPS en los últimos 5 min: la asignación automática omite a este repartidor, pero una oferta directa sí funciona",
+    "offline": "Desconectado"
+  },
+  "vehicle": {
+    "motorcycle": "Moto",
+    "car": "Auto",
+    "bicycle": "Bicicleta",
+    "scooter": "Scooter"
+  },
+  "toast": {
+    "advanced": {
+      "confirmed": "#{ticket} → Aceptado",
+      "preparing": "#{ticket} → Cocinando",
+      "ready": "#{ticket} → Listo",
+      "completed": "#{ticket} → Despachado"
+    },
+    "updateFailed": "No se pudo actualizar #{ticket}. Inténtalo de nuevo.",
+    "updateUnpaid": "#{ticket} no puede avanzar hasta que se confirme el pago por transferencia.",
+    "updateNotAllowed": "Ese paso no está permitido para #{ticket} ahora.",
+    "rejected": "#{ticket} rechazado",
+    "rejectFailed": "No se pudo rechazar #{ticket}. Inténtalo de nuevo.",
+    "rejectClosed": "#{ticket} ya está cerrado.",
+    "rejectForbidden": "Tu cuenta no puede rechazar pedidos.",
+    "recalled": "#{ticket} devuelto a cocina",
+    "recallTooFar": "No se pudo devolver #{ticket}: ya está demasiado avanzado.",
+    "recallWindowPassed": "No se pudo devolver #{ticket}: ya pasó el tiempo para hacerlo.",
+    "recallFailed": "No se pudo devolver #{ticket}. Inténtalo de nuevo.",
+    "eightySixNotFound": "No se encontró “{item}”; puede que ya esté agotado",
+    "eightySixFailed": "No se pudo marcar {item} como agotado. Inténtalo de nuevo.",
+    "eightySixDone": "{item} agotado hasta mañana",
+    "assignFailed": "No se pudo asignar el repartidor. Inténtalo de nuevo.",
+    "assignTooLate": "Esta entrega ya no se puede reasignar.",
+    "assignNotEligible": "Ese repartidor no está aprobado para esta sucursal.",
+    "assignBusy": "Ese repartidor ya está en otra entrega.",
+    "assignForbidden": "Tu cuenta no puede asignar repartidores.",
+    "offeredTo": "Ofrecido a {name}",
+    "offeredToRider": "Ofrecido a un repartidor",
+    "undo": "Deshacer",
+    "dismiss": "Cerrar"
+  },
+  "dispatch": {
+    "maxAttempts": "Se probó con todos los repartidores: sube “Máximo de intentos de asignación” o asigna uno manualmente.",
+    "notEntitled": "La entrega a domicilio no está incluida en el plan de este restaurante.",
+    "notDispatchable": "Ya no se puede buscar repartidor para esta entrega.",
+    "failed": "No se pudo buscar repartidor. Inténtalo de nuevo.",
+    "noneAvailable": "No hay repartidores disponibles ahora.",
+    "noPin": "Esta sucursal aún no tiene ubicación en el mapa: agrégala en Configuración de la sucursal.",
+    "noneApproved": "Aún no hay repartidores aprobados para esta sucursal.",
+    "noneOnline": "No hay repartidores conectados ahora ({approved, plural, one {# aprobado} other {# aprobados}}).",
+    "noLocation": "{online, plural, one {# conectado} other {# conectados}}, pero ninguno ha compartido su ubicación: la app de repartidor debe estar abierta y con permiso de ubicación.",
+    "gpsStale": "{online, plural, one {# conectado} other {# conectados}}, pero sin ubicaciones de menos de {minutes} min. La app de repartidor solo envía el GPS mientras está abierta en pantalla.",
+    "allBusy": "{online, plural, one {# conectado, ya en una entrega} other {# conectados, todos ya en una entrega}}.",
+    "outOfRangeMiles": "{online, plural, one {# conectado} other {# conectados}}, pero ninguno a menos de {miles} mi: sube “Radio de búsqueda de repartidores”.",
+    "outOfRange": "{online, plural, one {# conectado} other {# conectados}}, pero ninguno dentro del radio de búsqueda: sube “Radio de búsqueda de repartidores”."
+  },
+  "ops": {
+    "busy": "Ocupado",
+    "busyMinutes": "Ocupado +{minutes} min",
+    "busyHint": "Suma tiempo de preparación al tiempo estimado de cada cliente",
+    "off": "Apagado",
+    "plusMinutes": "+{minutes} min",
+    "pause": "Pausar",
+    "resume": "Reanudar",
+    "pauseHint": "Los clientes ven la sucursal cerrada mientras está en pausa"
+  },
+  "scheduled": {
+    "title": "Programados · {count}",
+    "close": "Cerrar",
+    "releasesIn": "Pasa a cocina en {minutes} min"
+  }
+}

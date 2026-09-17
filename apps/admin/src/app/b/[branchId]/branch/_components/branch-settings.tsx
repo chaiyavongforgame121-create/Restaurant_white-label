@@ -3,9 +3,10 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useLocale, useTranslations } from 'next-intl';
 import { Save } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
-import { describeBillingError } from '@favornoms/shared';
+import { DEFAULT_UI_LOCALE, billingErrorMessage, describeBillingError, isUiLocale } from '@favornoms/shared';
 import { Badge, Button, Card } from '@favornoms/ui';
 import { AddonUpsellCard } from '@/components/addon-upsell-card';
 import { ClosuresManager } from './closures-manager';
@@ -50,6 +51,9 @@ export function BranchSettings({
   canUseDelivery: boolean;
   canUseCard: boolean;
 }) {
+  const t = useTranslations('branch');
+  const rawLocale = useLocale();
+  const locale = isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE;
   const router = useRouter();
   const [name, setName] = React.useState(branch.name);
   const [isActive, setIsActive] = React.useState(branch.is_active);
@@ -75,8 +79,8 @@ export function BranchSettings({
 
   const save = async () => {
     const domain = normaliseCustomDomain(customDomain);
-    if (domain.error) {
-      setError(domain.error);
+    if (domain.invalid != null) {
+      setError(t('settings.domain.invalid', { input: domain.invalid }));
       return;
     }
     setSaving(true);
@@ -112,7 +116,20 @@ export function BranchSettings({
         setSeatLimit({ used: billing.current, seats: billing.limit });
         return;
       }
-      setError(updateError.message);
+      console.error('Saving branch settings failed', updateError);
+      if (billing) {
+        setError(billingErrorMessage(billing, locale));
+      } else if (updateError.message.includes('branch_privileged_column_forbidden')) {
+        setError(t('errors.ownerOnlyDomain'));
+      } else if (updateError.message.includes('branch_manager_required')) {
+        setError(t('errors.managerRequired'));
+      } else if (updateError.code === '23505' && /custom_domain/.test(updateError.message)) {
+        setError(t('errors.domainTaken'));
+      } else if (updateError.code === '42501') {
+        setError(t('errors.noPermission'));
+      } else {
+        setError(t('errors.generic'));
+      }
       return;
     }
     router.refresh();
@@ -121,18 +138,18 @@ export function BranchSettings({
   return (
     <div className="container max-w-3xl py-8">
       <header className="mb-6 px-2 pl-16 lg:px-0">
-        <h1 className="font-display text-3xl font-bold">Branch settings</h1>
-        <p className="mt-1 text-muted-foreground">Identity, theme, and operating parameters</p>
+        <h1 className="font-display text-3xl font-bold">{t('settings.title')}</h1>
+        <p className="mt-1 text-muted-foreground">{t('settings.subtitle')}</p>
       </header>
 
       <div className="space-y-5 px-2 lg:px-0">
         <Card className="p-5">
-          <h2 className="font-display text-lg font-semibold">Identity</h2>
+          <h2 className="font-display text-lg font-semibold">{t('settings.identity.title')}</h2>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <Field label="Branch name">
+            <Field label={t('settings.identity.branchName')}>
               <input value={name} onChange={(e) => setName(e.target.value)} className="input" />
             </Field>
-            <Field label="Status">
+            <Field label={t('settings.identity.status')}>
               <label className="flex h-12 items-center gap-2 rounded-xl border border-border bg-background px-4">
                 <input
                   type="checkbox"
@@ -140,9 +157,9 @@ export function BranchSettings({
                   onChange={(e) => setIsActive(e.target.checked)}
                   className="h-4 w-4"
                 />
-                <span>{isActive ? 'Active' : 'Hidden'}</span>
+                <span>{isActive ? t('settings.identity.active') : t('settings.identity.hidden')}</span>
                 <Badge variant={isActive ? 'success' : 'muted'} className="ml-auto">
-                  {isActive ? 'Online' : 'Closed'}
+                  {isActive ? t('settings.identity.online') : t('settings.identity.closed')}
                 </Badge>
               </label>
             </Field>
@@ -171,11 +188,11 @@ export function BranchSettings({
         />
 
         <Card className="p-5">
-          <h2 className="font-display text-lg font-semibold">Brand theme</h2>
-          <p className="text-sm text-muted-foreground">Customer site colors</p>
+          <h2 className="font-display text-lg font-semibold">{t('settings.theme.title')}</h2>
+          <p className="text-sm text-muted-foreground">{t('settings.theme.subtitle')}</p>
           <div className="mt-3 grid gap-4 sm:grid-cols-2">
             <ColorField
-              label="Primary color"
+              label={t('settings.theme.primary')}
               value={primaryColor}
               onChange={(v) => {
                 setPrimaryColor(v);
@@ -183,7 +200,7 @@ export function BranchSettings({
               }}
             />
             <ColorField
-              label="Accent color"
+              label={t('settings.theme.accent')}
               value={accentColor}
               onChange={(v) => {
                 setAccentColor(v);
@@ -197,22 +214,19 @@ export function BranchSettings({
               background: `linear-gradient(135deg, ${primaryColor}, ${accentColor})`,
             }}
           >
-            <p className="text-xs uppercase tracking-wider text-white/80">Preview</p>
+            <p className="text-xs uppercase tracking-wider text-white/80">{t('settings.theme.preview')}</p>
             <p className="mt-1 font-display text-2xl font-bold">{name}</p>
-            <p className="text-sm text-white/85">
-              This is how your hero gradient and primary CTAs will look.
-            </p>
+            <p className="text-sm text-white/85">{t('settings.theme.previewHint')}</p>
           </div>
         </Card>
 
         <Card className="p-5">
-          <h2 className="font-display text-lg font-semibold">Sales tax</h2>
+          <h2 className="font-display text-lg font-semibold">{t('settings.tax.title')}</h2>
           <p className="text-sm text-muted-foreground">
-            US state + local sales tax applied to taxable items. Enter as a percent
-            (e.g. <code>8.875</code> for NYC, <code>9.5</code> for LA).
+            {t.rich('settings.tax.description', { code: (chunks) => <code>{chunks}</code> })}
           </p>
           <div className="mt-3 max-w-xs">
-            <Field label="Tax rate (%)">
+            <Field label={t('settings.tax.rate')}>
               <input
                 value={salesTaxPercent}
                 onChange={(e) => setSalesTaxPercent(e.target.value.replace(/[^0-9.]/g, ''))}
@@ -225,12 +239,10 @@ export function BranchSettings({
         </Card>
 
         <Card className="p-5">
-          <h2 className="font-display text-lg font-semibold">Custom domain</h2>
-          <p className="text-sm text-muted-foreground">
-            Point your DNS A/CNAME to the Favornoms hosting target, then enter the hostname here.
-          </p>
+          <h2 className="font-display text-lg font-semibold">{t('settings.domain.title')}</h2>
+          <p className="text-sm text-muted-foreground">{t('settings.domain.description')}</p>
           <div className="mt-3">
-            <Field label="Hostname (e.g. order.myrestaurant.com)">
+            <Field label={t('settings.domain.label')}>
               <input
                 value={customDomain}
                 onChange={(e) => setCustomDomain(e.target.value)}
@@ -262,13 +274,14 @@ export function BranchSettings({
         ) : (
           <AddonUpsellCard
             branchId={branch.id}
-            title="Delivery"
+            title={t('settings.delivery.title')}
+            addon="delivery"
             price={49}
-            description="Your own riders, live tracking and automatic dispatch. Not included in your current package."
+            description={t('settings.delivery.description')}
             bullets={[
-              'Delivery fees, radius and prep time',
-              'Automatic driver dispatch with offer timeouts',
-              'Live customer tracking map',
+              t('settings.delivery.bulletFees'),
+              t('settings.delivery.bulletDispatch'),
+              t('settings.delivery.bulletTracking'),
             ]}
           />
         )}
@@ -296,14 +309,12 @@ export function BranchSettings({
         <Card className="p-5">
           <details>
             <summary className="cursor-pointer font-display text-lg font-semibold">
-              Advanced: raw settings JSON
+              {t('settings.advanced.title')}
             </summary>
             <pre className="mt-3 overflow-x-auto rounded-xl bg-muted p-3 text-xs">
               {JSON.stringify(branch.settings, null, 2)}
             </pre>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Read-only snapshot of branches.settings — edit via the cards above.
-            </p>
+            <p className="mt-2 text-xs text-muted-foreground">{t('settings.advanced.hint')}</p>
           </details>
         </Card>
 
@@ -313,16 +324,14 @@ export function BranchSettings({
 
         {seatLimit && (
           <p className="rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            Nothing was saved.{' '}
-            {seatLimit.seats === 1
-              ? 'Your one branch seat is'
-              : `All ${seatLimit.seats} of your branch seats are`}{' '}
-            already used by active branches, so this branch cannot be made active again. Add a
-            seat on{' '}
-            <Link href={`/b/${branch.id}/settings/plan`} className="font-medium underline">
-              Plan &amp; billing
-            </Link>
-            , or hide another branch first.
+            {t.rich('settings.seatLimit', {
+              seats: seatLimit.seats,
+              link: (chunks) => (
+                <Link href={`/b/${branch.id}/settings/plan`} className="font-medium underline">
+                  {chunks}
+                </Link>
+              ),
+            })}
           </p>
         )}
 
@@ -333,7 +342,7 @@ export function BranchSettings({
           loading={saving}
           leftIcon={<Save className="h-4 w-4" />}
         >
-          Save changes
+          {t('settings.save')}
         </Button>
       </div>
 
@@ -364,10 +373,13 @@ export function BranchSettings({
  * per-branch manifest now decides a PWA's identity from the same answer, junk here stops
  * being cosmetic. Paste-tolerant: a merchant copying from their browser bar sends
  * "https://order.example.com/" and means order.example.com.
+ *
+ * `invalid` carries what the merchant typed when it is not a hostname; the caller words the
+ * message in the interface language.
  */
-function normaliseCustomDomain(raw: string): { value: string | null; error: string | null } {
+function normaliseCustomDomain(raw: string): { value: string | null; invalid: string | null } {
   const trimmed = raw.trim();
-  if (!trimmed) return { value: null, error: null };
+  if (!trimmed) return { value: null, invalid: null };
   const host = trimmed
     .toLowerCase()
     .replace(/^[a-z][a-z0-9+.-]*:\/\//, '')
@@ -375,12 +387,9 @@ function normaliseCustomDomain(raw: string): { value: string | null; error: stri
     .replace(/:\d+$/, '')
     .replace(/\.$/, '');
   if (!/^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/.test(host)) {
-    return {
-      value: null,
-      error: `"${trimmed}" is not a hostname. Enter the address customers will type, like order.myrestaurant.com — not your restaurant's name.`,
-    };
+    return { value: null, invalid: trimmed };
   }
-  return { value: host, error: null };
+  return { value: host, invalid: null };
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {

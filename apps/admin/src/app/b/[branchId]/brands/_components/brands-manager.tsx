@@ -3,13 +3,16 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useLocale, useTranslations } from 'next-intl';
 import { ExternalLink, Palette, Plus, Save, Settings, Star } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import {
-  MENU_CARD_STYLE_LABELS,
-  MENU_LAYOUT_LABELS,
+  DEFAULT_UI_LOCALE,
   canAddBranch,
   describeBillingError,
+  isUiLocale,
+  menuCardStyleLabel,
+  menuLayoutLabel,
   parseStorefront,
   serializeStorefront,
   type Entitlements,
@@ -59,6 +62,12 @@ interface Props {
 const slugify = (s: string) =>
   s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 64);
 
+/** A database error in words a merchant can use; the raw text only goes to the console. */
+function dbErrorKey(err: { message: string; code?: string }): 'errors.permissionDenied' | 'errors.generic' {
+  console.error(err.message);
+  return err.code === '42501' ? 'errors.permissionDenied' : 'errors.generic';
+}
+
 export function BrandsManager({
   restaurantId,
   restaurantName,
@@ -69,6 +78,9 @@ export function BrandsManager({
   storefront,
   entitlements,
 }: Props) {
+  const t = useTranslations('brands');
+  const rawLocale = useLocale();
+  const locale = isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE;
   const router = useRouter();
   const [brands, setBrands] = React.useState(initialBrands);
   const [scope, setScope] = React.useState(initialScope);
@@ -101,7 +113,7 @@ export function BrandsManager({
       .eq('id', restaurantId);
     setScopeSaving(false);
     if (upErr) {
-      setError(upErr.message);
+      setError(t(dbErrorKey(upErr)));
       return;
     }
     setScope(next);
@@ -119,7 +131,7 @@ export function BrandsManager({
       .eq('id', restaurantId);
     setStoreSaving(false);
     if (upErr) {
-      setError(upErr.message);
+      setError(t(dbErrorKey(upErr)));
       return;
     }
     setStoreSaved(true);
@@ -140,19 +152,16 @@ export function BrandsManager({
     <div className="container max-w-5xl py-8">
       <header className="mb-6 flex flex-wrap items-start justify-between gap-3 px-2 pl-16 lg:px-0">
         <div>
-          <h1 className="font-display text-3xl font-bold">Brand &amp; branches</h1>
+          <h1 className="font-display text-3xl font-bold">{t('header.title')}</h1>
           <p className="mt-1 text-muted-foreground">
-            Your look for {restaurantName} — logo, app icon and colors — plus the branches
-            that use it.
+            {t('header.subtitle', { restaurant: restaurantName })}
           </p>
         </div>
       </header>
 
       <Card className="mb-6 p-5">
-        <h2 className="font-display text-lg font-semibold">Loyalty pool</h2>
-        <p className="text-sm text-muted-foreground">
-          Choose whether loyalty points are shared across all branches (default) or scoped to one branch.
-        </p>
+        <h2 className="font-display text-lg font-semibold">{t('loyalty.title')}</h2>
+        <p className="text-sm text-muted-foreground">{t('loyalty.description')}</p>
         <div className="mt-3 flex gap-2">
           {(['brand', 'branch'] as const).map((mode) => (
             <button
@@ -164,12 +173,8 @@ export function BrandsManager({
                 scope === mode ? 'border-primary bg-primary/5' : 'border-border bg-card'
               }`}
             >
-              <p className="font-medium capitalize">{mode}</p>
-              <p className="text-xs text-muted-foreground">
-                {mode === 'branch'
-                  ? 'Points are earned and redeemed within a single branch.'
-                  : 'Points pool across all branches of this restaurant.'}
-              </p>
+              <p className="font-medium">{t(`loyalty.modes.${mode}`)}</p>
+              <p className="text-xs text-muted-foreground">{t(`loyalty.modeHints.${mode}`)}</p>
             </button>
           ))}
         </div>
@@ -177,15 +182,13 @@ export function BrandsManager({
 
       <Card className="mb-6 p-5">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="font-display text-lg font-semibold">Storefront appearance</h2>
-          {storeSaved && <span className="text-sm text-success">Saved ✓</span>}
+          <h2 className="font-display text-lg font-semibold">{t('storefront.title')}</h2>
+          {storeSaved && <span className="text-sm text-success">{t('storefront.saved')}</span>}
         </div>
-        <p className="text-sm text-muted-foreground">
-          How the menu looks to customers. Applies to every branch of this restaurant.
-        </p>
+        <p className="text-sm text-muted-foreground">{t('storefront.description')}</p>
         <div className="mt-4 space-y-4">
           <div>
-            <p className="mb-1.5 text-sm font-medium">Menu layout</p>
+            <p className="mb-1.5 text-sm font-medium">{t('storefront.menuLayout')}</p>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {(['list', 'grid2', 'grid3', 'grid4'] as const).map((opt) => (
                 <button
@@ -197,13 +200,13 @@ export function BrandsManager({
                     store.menuLayout === opt ? 'border-primary bg-primary/5 font-medium' : 'border-border bg-card'
                   }`}
                 >
-                  {MENU_LAYOUT_LABELS[opt]}
+                  {menuLayoutLabel(opt, locale)}
                 </button>
               ))}
             </div>
           </div>
           <div>
-            <p className="mb-1.5 text-sm font-medium">Card style</p>
+            <p className="mb-1.5 text-sm font-medium">{t('storefront.cardStyle')}</p>
             <div className="grid grid-cols-2 gap-2">
               {(['standard', 'compact'] as const).map((opt) => (
                 <button
@@ -215,42 +218,42 @@ export function BrandsManager({
                     store.menuCardStyle === opt ? 'border-primary bg-primary/5 font-medium' : 'border-border bg-card'
                   }`}
                 >
-                  {MENU_CARD_STYLE_LABELS[opt]}
+                  {menuCardStyleLabel(opt, locale)}
                 </button>
               ))}
             </div>
           </div>
           <div>
-            <p className="mb-1.5 text-sm font-medium">Hero headline</p>
+            <p className="mb-1.5 text-sm font-medium">{t('storefront.heroTitle')}</p>
             <input
               value={store.heroTitle}
               onChange={(e) => setStore({ ...store, heroTitle: e.target.value })}
               onBlur={(e) => saveStorefront({ ...store, heroTitle: e.target.value })}
-              placeholder="Welcome — order something delicious"
+              placeholder={t('storefront.heroTitlePlaceholder')}
               className="h-11 w-full rounded-xl border border-border bg-background px-3 text-base outline-none focus-visible:border-primary"
             />
-            <p className="mt-1 text-xs text-muted-foreground">Leave empty to use the default headline.</p>
+            <p className="mt-1 text-xs text-muted-foreground">{t('storefront.heroTitleHint')}</p>
           </div>
           <div>
-            <p className="mb-1.5 text-sm font-medium">Hero tagline</p>
+            <p className="mb-1.5 text-sm font-medium">{t('storefront.heroSubtitle')}</p>
             <input
               value={store.heroSubtitle}
               onChange={(e) => setStore({ ...store, heroSubtitle: e.target.value })}
               onBlur={(e) => saveStorefront({ ...store, heroSubtitle: e.target.value })}
-              placeholder="Now serving from your city"
+              placeholder={t('storefront.heroSubtitlePlaceholder')}
               className="h-11 w-full rounded-xl border border-border bg-background px-3 text-base outline-none focus-visible:border-primary"
             />
-            <p className="mt-1 text-xs text-muted-foreground">Leave empty to show &ldquo;Now serving from {`{branch}`}&rdquo;.</p>
+            <p className="mt-1 text-xs text-muted-foreground">{t('storefront.heroSubtitleHint')}</p>
           </div>
           <div>
-            <p className="mb-1.5 text-sm font-medium">Hero image</p>
+            <p className="mb-1.5 text-sm font-medium">{t('storefront.heroImage')}</p>
             <ImageUpload
               restaurantId={restaurantId}
               folder="hero"
               value={store.heroUrl}
               onChange={(url) => saveStorefront({ ...store, heroUrl: url })}
               aspect="aspect-video"
-              label="Upload hero image"
+              label={t('storefront.uploadHero')}
             />
           </div>
         </div>
@@ -259,9 +262,9 @@ export function BrandsManager({
       <Card className="mb-6 p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="font-display text-lg font-semibold">Branches</h2>
+            <h2 className="font-display text-lg font-semibold">{t('branches.title')}</h2>
             <p className="text-sm text-muted-foreground">
-              Locations under {restaurantName}. Each gets its own storefront URL + QR code.
+              {t('branches.description', { restaurant: restaurantName })}
             </p>
           </div>
           {/* Pay first, then create (owner decision 2026-07-25). The branches
@@ -270,21 +273,22 @@ export function BrandsManager({
               refused on submit. */}
           {canAddBranch(entitlements) ? (
             <Button variant="gradient" leftIcon={<Plus className="h-4 w-4" />} onClick={() => setAddingBranch(true)}>
-              Add branch
+              {t('branches.add')}
             </Button>
           ) : (
             <Link href={`/b/${currentBranchId}/settings/plan`}>
               <Button variant="outline" leftIcon={<Plus className="h-4 w-4" />}>
-                Add a branch seat +$99/mo
+                {t('branches.addSeat')}
               </Button>
             </Link>
           )}
         </div>
         {!canAddBranch(entitlements) && (
           <p className="mt-3 rounded-xl bg-muted px-3 py-2 text-xs text-muted-foreground">
-            You are using {entitlements.branchesUsed} of {entitlements.branchSeats} branch seat
-            {entitlements.branchSeats === 1 ? '' : 's'}. Add a seat to open another location — it
-            gets the full feature set of your main branch.
+            {t('branches.seatsUsed', {
+              used: entitlements.branchesUsed,
+              seats: entitlements.branchSeats,
+            })}
           </p>
         )}
         <div className="mt-3 space-y-2">
@@ -295,7 +299,7 @@ export function BrandsManager({
             >
               <div className="flex min-w-0 items-center gap-2">
                 <span className="font-medium">{b.name}</span>
-                {!b.is_active && <Badge variant="muted">Hidden</Badge>}
+                {!b.is_active && <Badge variant="muted">{t('branches.hidden')}</Badge>}
               </div>
               {/* The card promises every branch its own storefront URL, and a hidden branch
                   was otherwise reachable only through Head office — so each row links to
@@ -313,7 +317,7 @@ export function BrandsManager({
                   </a>
                 ) : (
                   <span className="text-muted-foreground">
-                    {b.is_active ? 'No storefront address yet' : 'Storefront offline while hidden'}
+                    {b.is_active ? t('branches.noStorefront') : t('branches.offlineHidden')}
                   </span>
                 )}
                 <Link
@@ -321,18 +325,14 @@ export function BrandsManager({
                   className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
                 >
                   <Settings className="h-3.5 w-3.5" />
-                  Settings
+                  {t('branches.settings')}
                 </Link>
               </div>
             </div>
           ))}
-          {branches.length === 0 && <p className="text-sm text-muted-foreground">No branches yet.</p>}
+          {branches.length === 0 && <p className="text-sm text-muted-foreground">{t('branches.empty')}</p>}
         </div>
-        <p className="mt-3 text-xs text-muted-foreground">
-          A new branch can copy the menu, opening hours and payment settings of an existing one.
-          Its map pin and table QR codes are never copied — set those in the new branch&apos;s
-          settings.
-        </p>
+        <p className="mt-3 text-xs text-muted-foreground">{t('branches.copyNote')}</p>
       </Card>
 
       {error && <p className="mb-3 rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p>}
@@ -355,15 +355,15 @@ export function BrandsManager({
                     <h3 className="font-display text-lg font-semibold">{brand.name}</h3>
                     {brand.is_default && (
                       <Badge variant="muted" className="gap-1">
-                        <Star className="h-3 w-3" /> Default
+                        <Star className="h-3 w-3" /> {t('brandList.default')}
                       </Badge>
                     )}
                   </div>
                   <p className="truncate text-xs text-muted-foreground">
-                    {brand.slug} · {branchCount} branch{branchCount === 1 ? '' : 'es'}
+                    {t('brandList.meta', { slug: brand.slug, count: branchCount })}
                   </p>
                 </div>
-                <IconButton label="Edit" onClick={() => setEditing(brand)}>
+                <IconButton label={t('brandList.edit')} onClick={() => setEditing(brand)}>
                   <Palette className="h-4 w-4" />
                 </IconButton>
               </div>
@@ -375,14 +375,16 @@ export function BrandsManager({
             by the Branding card on Branch settings. Say where, or this reads as a dead end. */}
         {brands.length === 0 && (
           <Card className="p-6 text-center text-sm text-muted-foreground">
-            No brand yet. Upload your logo under{' '}
-            <Link
-              href={`/b/${currentBranchId}/branch`}
-              className="font-medium text-primary hover:underline"
-            >
-              Branch settings → Branding
-            </Link>{' '}
-            and it is created for you.
+            {t.rich('brandList.empty', {
+              link: (chunks) => (
+                <Link
+                  href={`/b/${currentBranchId}/branch`}
+                  className="font-medium text-primary hover:underline"
+                >
+                  {chunks}
+                </Link>
+              ),
+            })}
           </Card>
         )}
       </div>
@@ -418,14 +420,14 @@ export function BrandsManager({
   );
 }
 
-const US_TIMEZONES: Array<{ tz: string; label: string }> = [
-  { tz: 'America/New_York', label: 'Eastern (New York)' },
-  { tz: 'America/Chicago', label: 'Central (Chicago)' },
-  { tz: 'America/Denver', label: 'Mountain (Denver)' },
-  { tz: 'America/Phoenix', label: 'Mountain — no DST (Phoenix)' },
-  { tz: 'America/Los_Angeles', label: 'Pacific (Los Angeles)' },
-  { tz: 'America/Anchorage', label: 'Alaska (Anchorage)' },
-  { tz: 'Pacific/Honolulu', label: 'Hawaii (Honolulu)' },
+const US_TIMEZONES: Array<{ tz: string; key: string }> = [
+  { tz: 'America/New_York', key: 'eastern' },
+  { tz: 'America/Chicago', key: 'central' },
+  { tz: 'America/Denver', key: 'mountain' },
+  { tz: 'America/Phoenix', key: 'mountainNoDst' },
+  { tz: 'America/Los_Angeles', key: 'pacific' },
+  { tz: 'America/Anchorage', key: 'alaska' },
+  { tz: 'Pacific/Honolulu', key: 'hawaii' },
 ];
 
 /** What copy_branch_setup reports back. Read defensively: the RPC is untyped here. */
@@ -449,16 +451,20 @@ function readCopyResult(data: unknown): CopyResult {
   };
 }
 
-function describeCopyError(message: string): string {
-  // The RPC refuses to copy a menu into a branch that already has items rather than
-  // duplicating every dish. Name the box to untick instead of the bare exception.
-  if (message.includes('target_menu_not_empty')) {
-    return 'the new branch already has menu items. Untick "Copy menu" and retry to copy the rest.';
-  }
-  return message;
-}
+// The RPC refuses to copy a menu into a branch that already has items rather than
+// duplicating every dish. Name the box to untick instead of the bare exception.
+const isMenuNotEmpty = (message: string) => message.includes('target_menu_not_empty');
 
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+type CreateErrorCode = 'notAuthorized' | 'nameRequired' | 'slugTaken' | 'generic';
+
+/** create_branch refusals that are not billing ones; anything unrecognised is logged. */
+function createErrorCode(err: { message: string; code?: string }): CreateErrorCode {
+  if (err.message.includes('not_authorized')) return 'notAuthorized';
+  if (err.message.includes('name_and_slug_required')) return 'nameRequired';
+  if (err.code === '23505' && err.message.includes('slug')) return 'slugTaken';
+  console.error(err.message);
+  return 'generic';
+}
 
 function BranchCreator({
   restaurantId,
@@ -475,6 +481,7 @@ function BranchCreator({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const t = useTranslations('brands');
   const activeBranches = React.useMemo(() => branches.filter((b) => b.is_active), [branches]);
   const [name, setName] = React.useState('');
   const [slug, setSlug] = React.useState('');
@@ -539,8 +546,11 @@ function BranchCreator({
       p_copy_settings: copySettings,
     });
     if (copyErr) {
+      console.error(copyErr.message);
       setError(
-        `The branch was created, but copying from ${source.name} failed: ${describeCopyError(copyErr.message)} You can retry the copy, or close this and set the branch up in its own settings.`,
+        isMenuNotEmpty(copyErr.message)
+          ? t('creator.errors.copyMenuNotEmpty', { source: source.name })
+          : t('creator.errors.copyFailed', { source: source.name }),
       );
       return;
     }
@@ -565,13 +575,11 @@ function BranchCreator({
       // ever runs if the UI let a stale seat count through (or two tabs raced).
       const billing = describeBillingError(rpcErr);
       if (billing?.kind === 'seats') {
-        setError(
-          `You are using all ${billing.limit} of your branch seats. Add a seat (+$99/mo) on the Plan page, then create the branch.`,
-        );
+        setError(t('creator.errors.seats', { limit: billing.limit }));
       } else if (billing?.kind === 'inactive') {
-        setError('Your subscription is not active. Choose a package on the Plan page to continue.');
+        setError(t('creator.errors.inactive'));
       } else {
-        setError(rpcErr.message);
+        setError(t(`creator.errors.${createErrorCode(rpcErr)}`));
       }
       return;
     }
@@ -583,9 +591,7 @@ function BranchCreator({
         return;
       }
       setCreated({ id: null });
-      setError(
-        'The branch was created, but the reply did not say which branch it was, so nothing was copied into it. Close this and set the branch up in its own settings.',
-      );
+      setError(t('creator.errors.noBranchId'));
       return;
     }
     setCreated({ id: newId });
@@ -610,56 +616,59 @@ function BranchCreator({
       <Card className="w-full max-w-lg space-y-4 overflow-y-auto p-6 sm:max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
         {created?.id && copied ? (
           <>
-            <h2 className="font-display text-xl font-semibold">Branch created</h2>
+            <h2 className="font-display text-xl font-semibold">{t('created.title')}</h2>
             <div className="space-y-1 text-sm">
               <p>
-                Copied into {name} from {source?.name ?? 'the source branch'}:
+                {source
+                  ? t('created.copiedFrom', { name, source: source.name })
+                  : t('created.copiedFromUnknown', { name })}
               </p>
               <ul className="list-disc space-y-0.5 pl-5 text-muted-foreground">
                 {copyMenu && (
                   <li>
-                    {plural(copied.categories_copied, 'category', 'categories')},{' '}
-                    {plural(copied.items_copied, 'menu item')} and{' '}
-                    {plural(copied.modifier_groups_copied, 'option group')}
+                    {t('created.menu', {
+                      categories: copied.categories_copied,
+                      items: copied.items_copied,
+                      groups: copied.modifier_groups_copied,
+                    })}
                   </li>
                 )}
-                {copyHours && <li>{plural(copied.hours_copied, 'opening-hours window')}</li>}
+                {copyHours && <li>{t('created.hours', { count: copied.hours_copied })}</li>}
                 {copySettings && (
                   <li>
                     {copied.settings_copied
-                      ? 'Payment, delivery, tip and service fee settings'
-                      : 'No payment or delivery settings: the source branch has none saved'}
+                      ? t('created.settingsCopied')
+                      : t('created.settingsNone')}
                   </li>
                 )}
               </ul>
             </div>
             <p className="rounded-xl bg-muted px-3 py-2 text-xs text-muted-foreground">
-              Still to do at the new branch: drop its map pin and set up its table QR codes.
-              Those are never copied.
+              {t('created.todo')}
             </p>
             <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={onSaved}>Done</Button>
+              <Button variant="ghost" onClick={onSaved}>{t('created.done')}</Button>
               <Link href={`/b/${created.id}/branch`}>
-                <Button variant="gradient">Open its settings</Button>
+                <Button variant="gradient">{t('created.openSettings')}</Button>
               </Link>
             </div>
           </>
         ) : (
           <>
-            <h2 className="font-display text-xl font-semibold">Add branch</h2>
+            <h2 className="font-display text-xl font-semibold">{t('creator.title')}</h2>
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Branch name">
-                <input value={name} onChange={(e) => setName(e.target.value)} disabled={!!created} className="input disabled:opacity-60" placeholder="Downtown" autoFocus />
+              <Field label={t('creator.fields.name')}>
+                <input value={name} onChange={(e) => setName(e.target.value)} disabled={!!created} className="input disabled:opacity-60" placeholder={t('creator.fields.namePlaceholder')} autoFocus />
               </Field>
-              <Field label="URL slug">
-                <input value={slug} onChange={(e) => setSlug(slugify(e.target.value))} disabled={!!created} className="input disabled:opacity-60" placeholder="downtown" />
+              <Field label={t('creator.fields.slug')}>
+                <input value={slug} onChange={(e) => setSlug(slugify(e.target.value))} disabled={!!created} className="input disabled:opacity-60" placeholder={t('creator.fields.slugPlaceholder')} />
               </Field>
               <div className="sm:col-span-2">
-                <Field label="Address (optional)">
+                <Field label={t('creator.fields.address')}>
                   <input value={address} onChange={(e) => setAddress(e.target.value)} disabled={!!created} className="input disabled:opacity-60" />
                 </Field>
               </div>
-              <Field label="Timezone">
+              <Field label={t('creator.fields.timezone')}>
                 <select
                   value={timezone}
                   onChange={(e) => {
@@ -675,22 +684,22 @@ function BranchCreator({
                     <option value={timezone}>{timezone}</option>
                   )}
                   {US_TIMEZONES.map((z) => (
-                    <option key={z.tz} value={z.tz}>{z.label}</option>
+                    <option key={z.tz} value={z.tz}>{t(`creator.timezones.${z.key}`)}</option>
                   ))}
                 </select>
               </Field>
-              <Field label="Brand (optional)">
+              <Field label={t('creator.fields.brand')}>
                 <select value={brandId} onChange={(e) => setBrandId(e.target.value)} disabled={!!created} className="input disabled:opacity-60">
-                  <option value="">— None —</option>
+                  <option value="">{t('creator.fields.brandNone')}</option>
                   {brands.map((b) => (
                     <option key={b.id} value={b.id}>{b.name}</option>
                   ))}
                 </select>
               </Field>
               <div className="space-y-2 sm:col-span-2">
-                <Field label="Start from">
+                <Field label={t('creator.fields.startFrom')}>
                   <select value={sourceId} onChange={(e) => pickSource(e.target.value)} disabled={saving} className="input disabled:opacity-60">
-                    <option value="">Nothing (an empty branch)</option>
+                    <option value="">{t('creator.fields.startFromNothing')}</option>
                     {activeBranches.map((b) => (
                       <option key={b.id} value={b.id}>{b.name}</option>
                     ))}
@@ -701,27 +710,25 @@ function BranchCreator({
                     <label className="flex items-start gap-2">
                       <input type="checkbox" checked={copyMenu} onChange={(e) => setCopyMenu(e.target.checked)} disabled={saving} className="mt-1" />
                       <span>
-                        Copy menu
-                        <span className="block text-xs text-muted-foreground">Categories, items and their option groups</span>
+                        {t('creator.copy.menu')}
+                        <span className="block text-xs text-muted-foreground">{t('creator.copy.menuHint')}</span>
                       </span>
                     </label>
                     <label className="flex items-start gap-2">
                       <input type="checkbox" checked={copyHours} onChange={(e) => setCopyHours(e.target.checked)} disabled={saving} className="mt-1" />
                       <span>
-                        Copy opening hours
-                        <span className="block text-xs text-muted-foreground">The weekly hours, not one-off closures</span>
+                        {t('creator.copy.hours')}
+                        <span className="block text-xs text-muted-foreground">{t('creator.copy.hoursHint')}</span>
                       </span>
                     </label>
                     <label className="flex items-start gap-2">
                       <input type="checkbox" checked={copySettings} onChange={(e) => setCopySettings(e.target.checked)} disabled={saving} className="mt-1" />
                       <span>
-                        Copy payment and delivery settings
-                        <span className="block text-xs text-muted-foreground">Payment methods, delivery, tips and service fee</span>
+                        {t('creator.copy.settings')}
+                        <span className="block text-xs text-muted-foreground">{t('creator.copy.settingsHint')}</span>
                       </span>
                     </label>
-                    <p className="text-xs text-muted-foreground">
-                      Address, map pin, colours and table QR codes are not copied.
-                    </p>
+                    <p className="text-xs text-muted-foreground">{t('creator.copy.notCopied')}</p>
                   </div>
                 )}
               </div>
@@ -730,11 +737,11 @@ function BranchCreator({
             {error && <p className="rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p>}
 
             <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={close}>{created ? 'Close' : 'Cancel'}</Button>
+              <Button variant="ghost" onClick={close}>{created ? t('creator.close') : t('creator.cancel')}</Button>
               {created && !saving ? (
                 created.id ? (
                   <Button variant="gradient" onClick={retryCopy} disabled={!wantsCopy}>
-                    Retry copy
+                    {t('creator.retryCopy')}
                   </Button>
                 ) : null
               ) : (
@@ -745,7 +752,7 @@ function BranchCreator({
                   disabled={!name || !!created}
                   leftIcon={<Plus className="h-4 w-4" />}
                 >
-                  {created ? 'Copying…' : 'Create branch'}
+                  {created ? t('creator.copying') : t('creator.create')}
                 </Button>
               )}
             </div>
@@ -773,6 +780,9 @@ function BranchCreator({
   );
 }
 
+/** A failure already worded for the merchant, as opposed to an unexpected exception. */
+class ShownError extends Error {}
+
 function BrandEditor({
   restaurantId,
   brand,
@@ -786,6 +796,7 @@ function BrandEditor({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const t = useTranslations('brands');
   const [name, setName] = React.useState(brand.name);
   const [slug, setSlug] = React.useState(brand.slug);
   const [primaryColor, setPrimaryColor] = React.useState(
@@ -845,9 +856,15 @@ function BrandEditor({
         .update(payload)
         .eq('id', brand.id)
         .select('id');
-      if (upErr) throw new Error(upErr.message);
+      if (upErr) {
+        throw new ShownError(
+          upErr.code === '23505' && upErr.message.includes('slug')
+            ? t('editor.errors.slugTaken')
+            : t(dbErrorKey(upErr)),
+        );
+      }
       if (!updated || updated.length === 0) {
-        throw new Error("That didn't save — your role may not be allowed to change branding.");
+        throw new ShownError(t('editor.errors.notSaved'));
       }
       const brandId = brand.id;
 
@@ -870,7 +887,12 @@ function BrandEditor({
       await Promise.all(linkUpdates);
       onSaved();
     } catch (err) {
-      setError((err as Error).message);
+      if (err instanceof ShownError) {
+        setError(err.message);
+      } else {
+        console.error(err);
+        setError(t('errors.generic'));
+      }
     } finally {
       setSaving(false);
     }
@@ -885,21 +907,21 @@ function BrandEditor({
         className="w-full max-w-2xl space-y-4 overflow-y-auto p-6 sm:max-h-[85vh]"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="font-display text-xl font-semibold">Edit brand</h2>
+        <h2 className="font-display text-xl font-semibold">{t('editor.title')}</h2>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Brand name">
+          <Field label={t('editor.name')}>
             <input value={name} onChange={(e) => setName(e.target.value)} className="input" />
           </Field>
-          <Field label="Slug">
+          <Field label={t('editor.slug')}>
             <input
               value={slug}
               onChange={(e) => setSlug(slugify(e.target.value))}
               className="input"
-              placeholder="my-brand"
+              placeholder={t('editor.slugPlaceholder')}
             />
           </Field>
-          <Field label="Primary color">
+          <Field label={t('editor.primaryColor')}>
             <input
               type="color"
               value={primaryColor}
@@ -907,7 +929,7 @@ function BrandEditor({
               className="h-12 w-full rounded-xl border border-border bg-background"
             />
           </Field>
-          <Field label="Accent color">
+          <Field label={t('editor.accentColor')}>
             <input
               type="color"
               value={accentColor}
@@ -916,7 +938,7 @@ function BrandEditor({
             />
           </Field>
           <div className="sm:col-span-2">
-            <Field label="Logo (optional)">
+            <Field label={t('editor.logo')}>
               <ImageUpload
                 restaurantId={restaurantId}
                 folder="logo"
@@ -924,7 +946,7 @@ function BrandEditor({
                 value={logoUrl || null}
                 onChange={(url) => setLogoUrl(url ?? '')}
                 aspect="aspect-[3/1]"
-                label="Upload logo"
+                label={t('editor.uploadLogo')}
               />
             </Field>
           </div>
@@ -936,7 +958,7 @@ function BrandEditor({
                 previews, captions and gaps was forwarded to the hidden file input and opened
                 the file picker, and the Zoom label ended up nested inside another label. */}
             <div>
-              <span className="mb-1.5 block text-sm font-medium">App icon (optional)</span>
+              <span className="mb-1.5 block text-sm font-medium">{t('editor.appIcon')}</span>
               <IconUpload
                 restaurantId={restaurantId}
                 value={icons}
@@ -946,15 +968,12 @@ function BrandEditor({
                 onPendingChange={setIconPending}
               />
               <div className="mt-2 text-xs text-muted-foreground">
-                <p>
-                  Used for the browser tab, and for the icon people see after installing your
-                  store to their phone&apos;s home screen. Leave empty to use the Favornoms icon.
-                </p>
+                <p>{t('editor.appIconHint')}</p>
                 {icons.faviconUrl && (
                   <div className="mt-3 flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-2.5 py-1.5">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={icons.faviconUrl} alt="" className="h-4 w-4 rounded-sm object-cover" />
-                    <span className="truncate text-foreground">{name || 'Your store'}</span>
+                    <span className="truncate text-foreground">{name || t('editor.tabFallback')}</span>
                   </div>
                 )}
               </div>
@@ -966,15 +985,13 @@ function BrandEditor({
           className="rounded-2xl p-6 text-white"
           style={{ background: `linear-gradient(135deg, ${primaryColor}, ${accentColor})` }}
         >
-          <p className="text-xs uppercase tracking-wider text-white/80">Preview</p>
-          <p className="mt-1 font-display text-2xl font-bold">{name || 'Brand name'}</p>
+          <p className="text-xs uppercase tracking-wider text-white/80">{t('editor.preview')}</p>
+          <p className="mt-1 font-display text-2xl font-bold">{name || t('editor.nameFallback')}</p>
         </div>
 
         <Card className="bg-muted/30 p-4">
-          <p className="text-sm font-medium">Linked branches</p>
-          <p className="mb-2 text-xs text-muted-foreground">
-            Choose which branches use this brand&apos;s theme.
-          </p>
+          <p className="text-sm font-medium">{t('editor.linkedBranches')}</p>
+          <p className="mb-2 text-xs text-muted-foreground">{t('editor.linkedHint')}</p>
           <div className="space-y-1">
             {branches.map((b) => (
               <label key={b.id} className="flex items-center gap-2 text-sm">
@@ -989,7 +1006,7 @@ function BrandEditor({
                   }}
                 />
                 {b.name}
-                {!b.is_active && <Badge variant="muted">Hidden</Badge>}
+                {!b.is_active && <Badge variant="muted">{t('branches.hidden')}</Badge>}
               </label>
             ))}
           </div>
@@ -997,18 +1014,16 @@ function BrandEditor({
 
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={isDefault} onChange={(e) => setIsDefault(e.target.checked)} />
-          Set as default brand for this restaurant
+          {t('editor.setDefault')}
         </label>
 
         {error && <p className="rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p>}
 
         <div className="flex flex-wrap items-center justify-end gap-2">
           {iconPending && (
-            <span className="mr-auto text-sm text-muted-foreground">
-              Apply the new icon style first, or set it back.
-            </span>
+            <span className="mr-auto text-sm text-muted-foreground">{t('editor.iconPending')}</span>
           )}
-          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button variant="ghost" onClick={onClose}>{t('editor.cancel')}</Button>
           <Button
             variant="gradient"
             onClick={save}
@@ -1016,7 +1031,7 @@ function BrandEditor({
             disabled={!name || iconPending}
             leftIcon={<Save className="h-4 w-4" />}
           >
-            Save
+            {t('editor.save')}
           </Button>
         </div>
 

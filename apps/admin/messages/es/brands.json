@@ -1,0 +1,147 @@
+{
+  "accessDenied": {
+    "title": "Sin acceso a la imagen de marca",
+    "reason": "Solo el propietario o un administrador pueden cambiar la marca y las sucursales de {branch}."
+  },
+  "restaurantFallback": "Restaurante",
+  "header": {
+    "title": "Marca y sucursales",
+    "subtitle": "La imagen de {restaurant} (logo, ícono de la app y colores) y las sucursales que la usan."
+  },
+  "loyalty": {
+    "title": "Fondo de puntos",
+    "description": "Elige si los puntos se comparten entre todas las sucursales (predeterminado) o se limitan a una sola sucursal.",
+    "modes": {
+      "brand": "Marca",
+      "branch": "Sucursal"
+    },
+    "modeHints": {
+      "brand": "Los puntos se acumulan entre todas las sucursales de este restaurante.",
+      "branch": "Los puntos se ganan y se canjean dentro de una sola sucursal."
+    }
+  },
+  "storefront": {
+    "title": "Apariencia de la tienda en línea",
+    "saved": "Guardado ✓",
+    "description": "Cómo ven el menú los clientes. Se aplica a todas las sucursales de este restaurante.",
+    "menuLayout": "Diseño del menú",
+    "cardStyle": "Estilo de tarjeta",
+    "heroTitle": "Título de portada",
+    "heroTitlePlaceholder": "Bienvenido: pide algo delicioso",
+    "heroTitleHint": "Déjalo vacío para usar el título predeterminado.",
+    "heroSubtitle": "Lema de portada",
+    "heroSubtitlePlaceholder": "Ahora atendiendo en tu ciudad",
+    "heroSubtitleHint": "Déjalo vacío para mostrar “Ahora atendiendo desde '{branch}'”.",
+    "heroImage": "Imagen de portada",
+    "uploadHero": "Subir imagen de portada"
+  },
+  "branches": {
+    "title": "Sucursales",
+    "description": "Locales de {restaurant}. Cada uno tiene su propia URL de tienda y su código QR.",
+    "add": "Agregar sucursal",
+    "addSeat": "Agregar cupo de sucursal +$99/mes",
+    "seatsUsed": "Usas {used} de {seats, plural, one {# cupo de sucursal} other {# cupos de sucursal}}. Agrega un cupo para abrir otro local: tendrá todas las funciones de tu sucursal principal.",
+    "hidden": "Oculta",
+    "noStorefront": "Aún no tiene dirección de tienda",
+    "offlineHidden": "Tienda fuera de línea mientras está oculta",
+    "settings": "Configuración",
+    "empty": "Aún no hay sucursales.",
+    "copyNote": "Una sucursal nueva puede copiar el menú, el horario de atención y la configuración de pagos de otra existente. El pin del mapa y los códigos QR de mesas nunca se copian: configúralos en los ajustes de la nueva sucursal."
+  },
+  "brandList": {
+    "default": "Predeterminada",
+    "meta": "{slug} · {count, plural, one {# sucursal} other {# sucursales}}",
+    "edit": "Editar",
+    "empty": "Aún no hay marca. Sube tu logo en <link>Configuración de sucursal → Imagen de marca</link> y se creará automáticamente."
+  },
+  "creator": {
+    "title": "Agregar sucursal",
+    "fields": {
+      "name": "Nombre de la sucursal",
+      "namePlaceholder": "Centro",
+      "slug": "Slug de URL",
+      "slugPlaceholder": "centro",
+      "address": "Dirección (opcional)",
+      "timezone": "Zona horaria",
+      "brand": "Marca (opcional)",
+      "brandNone": "— Ninguna —",
+      "startFrom": "Partir de",
+      "startFromNothing": "Nada (una sucursal vacía)"
+    },
+    "timezones": {
+      "eastern": "Hora del Este (Nueva York)",
+      "central": "Hora del Centro (Chicago)",
+      "mountain": "Hora de la Montaña (Denver)",
+      "mountainNoDst": "Hora de la Montaña, sin horario de verano (Phoenix)",
+      "pacific": "Hora del Pacífico (Los Ángeles)",
+      "alaska": "Alaska (Anchorage)",
+      "hawaii": "Hawái (Honolulu)"
+    },
+    "copy": {
+      "menu": "Copiar menú",
+      "menuHint": "Categorías, productos y sus grupos de opciones",
+      "hours": "Copiar horario de atención",
+      "hoursHint": "El horario semanal, no los cierres puntuales",
+      "settings": "Copiar configuración de pagos y entregas",
+      "settingsHint": "Métodos de pago, entregas, propinas y cargo por servicio",
+      "notCopied": "No se copian la dirección, el pin del mapa, los colores ni los códigos QR de mesas."
+    },
+    "close": "Cerrar",
+    "cancel": "Cancelar",
+    "retryCopy": "Reintentar copia",
+    "copying": "Copiando…",
+    "create": "Crear sucursal",
+    "errors": {
+      "seats": "{limit, plural, one {Ya usas tu único cupo de sucursal.} other {Ya usas los # cupos de sucursal.}} Agrega un cupo (+$99/mes) en la página del plan y luego crea la sucursal.",
+      "inactive": "Tu suscripción no está activa. Elige un paquete en la página del plan para continuar.",
+      "notAuthorized": "Solo el propietario o un administrador pueden agregar una sucursal.",
+      "nameRequired": "Escribe un nombre de sucursal y un slug de URL.",
+      "slugTaken": "Otra sucursal ya usa ese slug de URL. Elige uno diferente.",
+      "noBranchId": "La sucursal se creó, pero la respuesta no indicó cuál era, así que no se copió nada. Cierra esto y configura la sucursal en sus propios ajustes.",
+      "copyMenuNotEmpty": "La sucursal se creó, pero falló la copia desde {source}: la nueva sucursal ya tiene productos en el menú. Desmarca “Copiar menú” y reintenta para copiar el resto, o cierra esto y configura la sucursal en sus propios ajustes.",
+      "copyFailed": "La sucursal se creó, pero falló la copia desde {source}. Puedes reintentar la copia, o cerrar esto y configurar la sucursal en sus propios ajustes.",
+      "generic": "Algo salió mal. Inténtalo de nuevo."
+    }
+  },
+  "created": {
+    "title": "Sucursal creada",
+    "copiedFrom": "Se copió a {name} desde {source}:",
+    "copiedFromUnknown": "Se copió a {name} desde la sucursal de origen:",
+    "menu": "{categories, plural, one {# categoría} other {# categorías}}, {items, plural, one {# producto} other {# productos}} y {groups, plural, one {# grupo de opciones} other {# grupos de opciones}}",
+    "hours": "{count, plural, one {# franja de horario de atención} other {# franjas de horario de atención}}",
+    "settingsCopied": "Configuración de pagos, entregas, propinas y cargo por servicio",
+    "settingsNone": "Sin configuración de pagos ni entregas: la sucursal de origen no tiene ninguna guardada",
+    "todo": "Pendiente en la nueva sucursal: colocar su pin en el mapa y configurar los códigos QR de sus mesas. Eso nunca se copia.",
+    "done": "Listo",
+    "openSettings": "Abrir su configuración"
+  },
+  "editor": {
+    "title": "Editar marca",
+    "name": "Nombre de la marca",
+    "slug": "Slug",
+    "slugPlaceholder": "mi-marca",
+    "primaryColor": "Color principal",
+    "accentColor": "Color de acento",
+    "logo": "Logo (opcional)",
+    "uploadLogo": "Subir logo",
+    "appIcon": "Ícono de la app (opcional)",
+    "appIconHint": "Se usa en la pestaña del navegador y como ícono que ven las personas al instalar tu tienda en la pantalla de inicio de su teléfono. Déjalo vacío para usar el ícono de Favornoms.",
+    "tabFallback": "Tu tienda",
+    "preview": "Vista previa",
+    "nameFallback": "Nombre de la marca",
+    "linkedBranches": "Sucursales vinculadas",
+    "linkedHint": "Elige qué sucursales usan el tema de esta marca.",
+    "setDefault": "Usar como marca predeterminada de este restaurante",
+    "iconPending": "Primero aplica el nuevo estilo del ícono o deshaz el cambio.",
+    "cancel": "Cancelar",
+    "save": "Guardar",
+    "errors": {
+      "notSaved": "No se guardó: es posible que tu rol no tenga permiso para cambiar la imagen de marca.",
+      "slugTaken": "Otra marca ya usa ese slug."
+    }
+  },
+  "errors": {
+    "generic": "Algo salió mal. Inténtalo de nuevo.",
+    "permissionDenied": "No tienes permiso para hacer eso."
+  }
+}

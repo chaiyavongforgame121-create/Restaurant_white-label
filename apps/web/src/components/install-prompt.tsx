@@ -4,6 +4,7 @@ import * as React from 'react';
 import { usePathname } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Download, Share, X } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 /**
  * Dismissal is session-scoped: quiet for the rest of this visit, offered again
@@ -155,6 +156,7 @@ export function useApplicationIcon(): string | null {
 }
 
 export function InstallPrompt() {
+  const t = useTranslations('common');
   const { canInstall, isIosSafari, isStandalone, install } = useInstallAvailability();
   const appName = useApplicationName();
   const appIcon = useApplicationIcon();
@@ -225,7 +227,7 @@ export function InstallPrompt() {
         >
           <button
             onClick={dismiss}
-            aria-label="Dismiss"
+            aria-label={t('dismiss')}
             className="focus-ring absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-full text-muted-foreground hover:bg-muted"
           >
             <X className="h-4 w-4" />
@@ -247,22 +249,22 @@ export function InstallPrompt() {
               </span>
             )}
             <div className="flex-1">
-              <p className="font-display text-sm font-semibold">Install {appName}</p>
+              <p className="font-display text-sm font-semibold">{t('install.title', { name: appName })}</p>
               {isIosSafari && !canInstall ? (
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Tap <Share className="inline h-3.5 w-3.5 align-text-bottom" /> in Safari, then{' '}
-                  <strong>Add to Home Screen</strong> for one-tap reordering.
+                  {t.rich('install.iosHint', {
+                    icon: () => <Share className="inline h-3.5 w-3.5 align-text-bottom" />,
+                    strong: (chunks) => <strong>{chunks}</strong>,
+                  })}
                 </p>
               ) : (
                 <>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Add to your home screen for faster reordering and order notifications.
-                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">{t('install.promptBody')}</p>
                   <button
                     onClick={onInstallClick}
                     className="focus-ring mt-2 inline-flex h-8 items-center rounded-xl bg-primary px-3 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
                   >
-                    Install
+                    {t('install.install')}
                   </button>
                 </>
               )}

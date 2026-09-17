@@ -1,0 +1,164 @@
+{
+  "accessDenied": {
+    "title": "No dashboard access",
+    "reason": "Your role cannot see the dashboard for {branch}."
+  },
+  "header": {
+    "title": "Today at a glance",
+    "subtitle": "Live metrics from {branch}"
+  },
+  "trial": {
+    "endsToday": "Your free trial ends today",
+    "daysLeft": "{days, plural, one {# day left in your free trial} other {# days left in your free trial}}",
+    "body": "Everything is unlocked. Choose a package to keep it — no card needed until then.",
+    "cta": "Choose a package"
+  },
+  "expiry": {
+    "titleUnderDay": "Your package is paid through {date} — less than a day left",
+    "titleDays": "Your package is paid through {date} — {days, plural, one {# day left} other {# days left}}",
+    "body": "After that the storefront stops taking orders and the back office locks.",
+    "renewHint": "Renewal is a request the Favornoms team approves, so send it before the date.",
+    "askOwner": "Ask the restaurant owner to renew it; renewal is a request the Favornoms team approves.",
+    "cta": "Renew package"
+  },
+  "setup": {
+    "title": "Get ready to take orders",
+    "progress": "{done} of {total} done",
+    "checkFailed": "Couldn’t check this right now. It will try again on the next refresh.",
+    "menu": {
+      "label": "Add at least one menu item",
+      "why": "Your storefront is already public, and customers see an empty menu until you add items.",
+      "link": "Menu"
+    },
+    "pin": {
+      "label": "Set the map pin",
+      "why": "Delivery fees and rider dispatch are measured from the pin, not from the address text.",
+      "link": "Location"
+    },
+    "hours": {
+      "label": "Save your opening hours",
+      "why": "With no hours saved, the storefront treats this branch as open around the clock.",
+      "link": "Opening hours"
+    },
+    "payment": {
+      "label": "Switch on at least one payment method",
+      "why": "With every method off, customers cannot order pickup or schedule a delivery.",
+      "link": "Payment methods"
+    },
+    "noPin": {
+      "label": "Delivery is on, but this branch has no map pin",
+      "why": "Riders cannot be dispatched to delivery orders from this branch until the pin is set.",
+      "link": "Set the pin"
+    }
+  },
+  "overview": {
+    "title": "Business overview",
+    "vsYesterday": "vs same time yesterday",
+    "sales": {
+      "label": "Today’s Sales",
+      "failed": "Could not read sales"
+    },
+    "orders": {
+      "label": "Orders Today",
+      "failed": "Could not read orders"
+    },
+    "kitchen": {
+      "label": "Kitchen Queue",
+      "failed": "Could not read the kitchen",
+      "sub": "{waiting} waiting · {cooking} cooking",
+      "subStalled": "{waiting} waiting · {cooking} cooking · {stalled} stalled"
+    },
+    "deliveries": {
+      "label": "Active Deliveries",
+      "notOnPlan": "Delivery isn’t on your plan",
+      "failed": "Could not read deliveries",
+      "stalled": "{count} stalled"
+    }
+  },
+  "action": {
+    "title": "Action required",
+    "allClear": "Everything checked, nothing outstanding",
+    "checksFailed": "{count, plural, one {# check could not run} other {# checks could not run}}",
+    "waiting": "{count, plural, one {# thing waiting on you} other {# things waiting on you}}",
+    "emptyTitle": "Nothing needs you right now",
+    "checkedList": "Checked {list}.",
+    "checkedNothing": "Nothing to check.",
+    "checkedAt": "Checked at {time}",
+    "checkFailed": "Couldn’t run this check. It will try again on the next refresh.",
+    "seeAll": {
+      "orders": "See all {count} in Orders →",
+      "deliveries": "See all {count} in Live deliveries →",
+      "kitchen": "See all {count} on the kitchen display →",
+      "inventory": "See all {count} in Inventory →",
+      "drivers": "See all {count} in Drivers →",
+      "payouts": "See all {count} in Driver payouts →"
+    }
+  },
+  "buckets": {
+    "proofs": "Payment slips to approve",
+    "refunds": "Refunds owed",
+    "deliveryFailed": "Riders reporting a problem",
+    "deliveryUnaccepted": "Deliveries nobody has taken",
+    "customersWaiting": "Customers waiting",
+    "kitchenLate": "Kitchen running late",
+    "scheduled": "Pre-orders due soon",
+    "stock": "Menu items out or running low",
+    "riders": "Riders waiting on you",
+    "withdrawals": "Withdrawals to pay",
+    "stalled": "Stalled kitchen tickets"
+  },
+  "rows": {
+    "deliveryTitle": "Delivery",
+    "proof": "{amount} slip waiting — the kitchen cannot start until you decide",
+    "refund": "Cancelled with {amount} still taken",
+    "soldOut": "Sold out — diners cannot order it",
+    "lowStock": "{left} left (alerts at {threshold})",
+    "riderDecision": "Applied — waiting for your decision",
+    "riderDocuments": "Applied — documents not verified yet",
+    "riderBoth": "Applied — waiting for your decision · documents not verified yet",
+    "withdrawal": "Requested {amount}",
+    "orderNotAccepted": "Nobody has accepted this order yet",
+    "cookingLong": "Cooking longer than {minutes} min",
+    "acceptedNotStarted": "Accepted but not started",
+    "readyNotCollected": "Ready on the pass, not collected",
+    "deliveryWaitingKitchen": "Waiting for the kitchen",
+    "deliveryKitchenReady": "Kitchen says ready — no rider has been asked yet",
+    "deliveryKitchenStatus": "Kitchen: {status}",
+    "deliveryLookingForRider": "Looking for a rider",
+    "deliveryAskedRiders": "{count, plural, one {Asked # rider so far} other {Asked # riders so far}}",
+    "deliveryOwnStaff": "Your own staff deliver this one",
+    "deliveryNoRiderHolds": "No rider holds this yet",
+    "deliveryOfferExpired": "Offer expired — returning to the pool",
+    "deliveryFailed": "{reason} · raised on a delivery started {age} ago",
+    "noReason": "No reason recorded",
+    "bookingNotAccepted": "Nobody has accepted this booking yet",
+    "bookingStillHeld": "Should already be in the kitchen — still held"
+  },
+  "orderStatus": {
+    "pending": "pending",
+    "confirmed": "confirmed",
+    "preparing": "preparing",
+    "ready": "ready",
+    "out_for_delivery": "out for delivery",
+    "completed": "completed",
+    "cancelled": "cancelled",
+    "refunded": "refunded"
+  },
+  "age": {
+    "unknown": "—",
+    "underMinute": "<1 min",
+    "minutes": "{minutes} min",
+    "hours": "{hours} h",
+    "hoursMinutes": "{hours} h {minutes} min",
+    "days": "{days} d",
+    "dueIn": "due in {span}"
+  },
+  "trend": {
+    "title": "Sales trend",
+    "subtitle": "Last 7 days",
+    "today": "Today",
+    "bar": "{day} · {amount}",
+    "failed": "Couldn’t read this branch’s sales. It will try again on the next refresh.",
+    "empty": "No sales in the last 7 days yet."
+  }
+}

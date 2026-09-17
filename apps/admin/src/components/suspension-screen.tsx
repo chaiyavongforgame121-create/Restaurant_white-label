@@ -1,6 +1,10 @@
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { Lock } from 'lucide-react';
 import { Button, Card } from '@favornoms/ui';
+
+/** What is locked. Each has its own whole sentence, because the surface is the subject. */
+export type SuspensionSurface = 'counter' | 'screen';
 
 /**
  * Shown on back-office surfaces that create new business (the till) when the
@@ -12,28 +16,32 @@ import { Button, Card } from '@favornoms/ui';
 export function SuspensionScreen({
   branchId,
   branchName,
-  surface = 'This screen',
+  surface = 'screen',
 }: {
   branchId: string;
   branchName?: string;
-  /** What is locked, e.g. "The counter". Used as the sentence subject. */
-  surface?: string;
+  /**
+   * What is locked, as a code: pass 'counter' for the till. The surface is the subject of the
+   * sentence, so a translated noun cannot be slotted in; any other string (including the old
+   * English 'The counter', still read as the counter) falls back to "This screen".
+   */
+  surface?: SuspensionSurface | (string & {});
 }) {
+  const t = useTranslations('shell.suspension');
+  const subject: SuspensionSurface = surface === 'counter' || surface === 'The counter' ? 'counter' : 'screen';
   return (
     <div className="grid min-h-dynamic-screen place-items-center bg-background px-4">
       <Card className="w-full max-w-md p-6 text-center">
         <Lock className="mx-auto h-12 w-12 text-warning" />
-        <h1 className="mt-3 font-display text-2xl font-bold">Subscription inactive</h1>
+        <h1 className="mt-3 font-display text-2xl font-bold">{t('title')}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          {surface} is locked for {branchName ?? 'this branch'} because the subscription has lapsed. No
-          data has been deleted — choosing a package restores everything immediately.
+          {branchName ? t(`locked.${subject}`, { branch: branchName }) : t(`lockedHere.${subject}`)}{' '}
+          {t('nothingDeleted')}
         </p>
-        <p className="mt-3 text-sm text-muted-foreground">
-          Orders already placed can still be cooked and completed from the kitchen display.
-        </p>
+        <p className="mt-3 text-sm text-muted-foreground">{t('kitchenStillWorks')}</p>
         <Link href={`/b/${branchId}/settings/plan`} className="mt-5 block">
           <Button variant="gradient" fullWidth>
-            Go to billing
+            {t('goToBilling')}
           </Button>
         </Link>
       </Card>

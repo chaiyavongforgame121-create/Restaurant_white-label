@@ -1,0 +1,31 @@
+{
+  "title": "Reseñas",
+  "subtitle": "Lo que dijeron los clientes después de sus pedidos",
+  "loadError": {
+    "title": "No se pudieron cargar las reseñas",
+    "generic": "Recarga la página para intentarlo de nuevo. Si sigue pasando, contacta a soporte.",
+    "permission": "Tu cuenta no puede ver las reseñas de esta sucursal. Pide al propietario que revise tu acceso de personal a esta sucursal."
+  },
+  "score": {
+    "food": "Calificación de la comida",
+    "delivery": "Calificación de la entrega",
+    "count": "{count, plural, one {# calificación} other {# calificaciones}}",
+    "total": "Total de reseñas"
+  },
+  "riders": {
+    "title": "Repartidores",
+    "fallbackName": "Repartidor {id}",
+    "rated": "{count, plural, one {# entrega calificada} other {# entregas calificadas}}",
+    "more": "+{count} más"
+  },
+  "empty": {
+    "title": "Aún no hay reseñas",
+    "description": "Cuando un pedido se completa, se le pide al cliente que lo califique: sus estrellas y comentarios aparecen aquí."
+  },
+  "stars": {
+    "food": "Comida",
+    "delivery": "Entrega",
+    "outOfFive": "{value} de 5"
+  },
+  "aboutRider": "— sobre {name}"
+}

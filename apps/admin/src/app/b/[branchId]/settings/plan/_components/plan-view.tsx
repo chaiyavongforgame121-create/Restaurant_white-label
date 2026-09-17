@@ -12,6 +12,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
+import { useLocale, useTranslations } from 'next-intl';
 import {
   AlertTriangle,
   Check,
@@ -31,18 +32,23 @@ import {
 } from '@favornoms/database/queries';
 import {
   ADDON_AI_SUITE,
+  DEFAULT_UI_LOCALE,
   PLAN_BASE,
   PRODUCT_EXTRA_BRANCH,
+  billingErrorMessage,
   currentSelection,
+  describeBillingError,
   featureLabel,
   formatInZone,
   isTrialing,
+  isUiLocale,
   packageLines,
   packageMonthlyTotal,
   trialDaysLeft,
   type BillingProduct,
   type Entitlements,
   type PackageSelection,
+  type UiLocale,
 } from '@favornoms/shared';
 import { Badge, Button, Card, useConfirm } from '@favornoms/ui';
 
@@ -76,8 +82,16 @@ interface Props {
   renew: boolean;
 }
 
+type PlanT = ReturnType<typeof useTranslations>;
+
+// Money stays in the restaurant's US format in every interface language.
 const money = (n: number) =>
   `$${n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+
+function usePlanLocale(): UiLocale {
+  const raw = useLocale();
+  return isUiLocale(raw) ? raw : DEFAULT_UI_LOCALE;
+}
 
 function sameSelection(a: PackageSelection, b: PackageSelection): boolean {
   return (
@@ -89,10 +103,34 @@ function sameSelection(a: PackageSelection, b: PackageSelection): boolean {
 }
 
 /** "Base + Delivery, 2 branch seats" — what a request actually asks for, in catalog names. */
-function describeSelection(sel: PackageSelection, catalog: BillingProduct[]): string {
-  const name = (code: string) => catalog.find((p) => p.code === code)?.name ?? featureLabel(code);
+function describeSelection(
+  sel: PackageSelection,
+  catalog: BillingProduct[],
+  t: PlanT,
+  locale: UiLocale,
+): string {
+  const name = (code: string) =>
+    catalog.find((p) => p.code === code)?.name ?? featureLabel(code, locale);
   const parts = [name(sel.planCode), ...sel.addons.map(name)];
-  return `${parts.join(' + ')}, ${sel.branchSeats} branch seat${sel.branchSeats === 1 ? '' : 's'}`;
+  return t('selection', { products: parts.join(' + '), seats: sel.branchSeats });
+}
+
+/**
+ * What the merchant reads when a request could not be sent. The RPC and the edge function
+ * answer with codes and raw database text; neither is shown as it is.
+ */
+function requestErrorMessage(raw: string | undefined, t: PlanT, locale: UiLocale): string {
+  if (!raw) return t('errors.sendFailed');
+  const billing = describeBillingError(raw);
+  if (billing) return billingErrorMessage(billing, locale);
+  if (raw.includes('auth_required') || raw.includes('not_signed_in')) return t('errors.signedOut');
+  if (raw.includes('forbidden') || raw.includes('not_authorized') || raw.includes('42501')) {
+    return t('errors.forbidden');
+  }
+  if (raw.includes('unknown_plan') || raw.includes('plan_not_purchasable')) {
+    return t('errors.planUnavailable');
+  }
+  return t('errors.sendFailed');
 }
 
 export function PlanView({
@@ -108,6 +146,8 @@ export function PlanView({
   noTrial,
   renew,
 }: Props) {
+  const t = useTranslations('settings.plan');
+  const locale = usePlanLocale();
   const router = useRouter();
   const confirm = useConfirm();
   const [sel, setSel] = React.useState<PackageSelection>(() => {
@@ -171,9 +211,9 @@ export function PlanView({
     if (
       pending &&
       !(await confirm({
-        title: 'Replace your pending request?',
-        body: `Your earlier request (${describeSelection(pending, catalog)}) is withdrawn and this one goes to the Favornoms team instead.`,
-        confirmLabel: 'Replace request',
+        title: t('replaceDialog.title'),
+        body: t('replaceDialog.body', { summary: describeSelection(pending, catalog, t, locale) }),
+        confirmLabel: t('replaceDialog.confirm'),
       }))
     ) {
       return;
@@ -197,13 +237,19 @@ export function PlanView({
 
       const res = await requestPackageChange(supabase, restaurantId, sel);
       if (res.ok !== true) {
-        setError(res.error ?? 'Could not send your request. Please try again.');
+        if (res.error) console.error('request_package_change failed', res.error);
+        setError(requestErrorMessage(res.error, t, locale));
         return;
       }
       setQueued(sel);
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Something went wrong.');
+      console.error('Sending the package request failed', e);
+      setError(
+        e instanceof Error && e.message
+          ? requestErrorMessage(e.message, t, locale)
+          : t('errors.generic'),
+      );
     } finally {
       setBusy(false);
     }
@@ -220,24 +266,25 @@ export function PlanView({
   // until the platform owner happened to decide, and approving it could remove add-ons
   // they still pay for.
   const action: { label: string; enabled: boolean } = matchesPending
-    ? { label: 'Request pending', enabled: false }
+    ? { label: t('action.pending'), enabled: false }
     : pending
-      ? { label: 'Replace pending request', enabled: true }
+      ? { label: t('action.replace'), enabled: true }
       : suspended
-        ? { label: noTrial ? 'Request activation' : 'Reactivate my account', enabled: true }
+        ? {
+            label: noTrial ? t('action.requestActivation') : t('action.reactivate'),
+            enabled: true,
+          }
         : dirty
-          ? { label: 'Confirm package', enabled: true }
+          ? { label: t('action.confirm'), enabled: true }
           : renew
-            ? { label: 'Request renewal', enabled: true }
-            : { label: 'Current package', enabled: false };
+            ? { label: t('action.renew'), enabled: true }
+            : { label: t('action.current'), enabled: false };
 
   return (
     <div className="container max-w-4xl py-8">
       <header className="mb-6 px-2 pl-16 lg:px-0 lg:pl-0">
-        <h1 className="font-display text-3xl font-bold">Plan &amp; billing</h1>
-        <p className="mt-1 text-muted-foreground">
-          Choose what your restaurant runs on. Change it any time.
-        </p>
+        <h1 className="font-display text-3xl font-bold">{t('title')}</h1>
+        <p className="mt-1 text-muted-foreground">{t('subtitle')}</p>
       </header>
 
       {suspended && noTrial && <NoTrialBanner />}
@@ -247,7 +294,7 @@ export function PlanView({
         <RenewBanner
           paidThrough={
             entitlements.entitledThrough
-              ? formatInZone(entitlements.entitledThrough, timezone)
+              ? formatInZone(entitlements.entitledThrough, timezone, {}, locale)
               : null
           }
         />
@@ -259,13 +306,13 @@ export function PlanView({
 
       {pending && (
         <PendingBanner
-          summary={describeSelection(pending, catalog)}
+          summary={describeSelection(pending, catalog, t, locale)}
           monthlyTotal={
             queued ? packageMonthlyTotal(queued, catalog) : Number(pendingRequest?.monthly_total ?? 0)
           }
           sentOn={
             !queued && pendingRequest?.created_at
-              ? formatInZone(pendingRequest.created_at, timezone, { dateOnly: true })
+              ? formatInZone(pendingRequest.created_at, timezone, { dateOnly: true }, locale)
               : null
           }
         />
@@ -283,23 +330,23 @@ export function PlanView({
           <Card className="border-primary/40 p-5">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <div>
-                <h2 className="font-display text-xl font-bold">{base?.name ?? 'Base'}</h2>
+                <h2 className="font-display text-xl font-bold">{base?.name ?? t('base.name')}</h2>
                 <p className="text-sm text-muted-foreground">
-                  {base?.description ?? 'Everything you need to run one branch.'}
+                  {base?.description ?? t('base.description')}
                 </p>
               </div>
               <p className="font-display text-2xl font-bold">
                 {money(base?.monthly_price ?? 199)}
-                <span className="ml-1 text-sm font-normal text-muted-foreground">/mo</span>
+                <span className="ml-1 text-sm font-normal text-muted-foreground">{t('perMonth')}</span>
               </p>
             </div>
             <ul className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
-              <Included>Card payment at checkout</Included>
-              <Included>AI menu import</Included>
-              <Included>Online ordering &amp; QR</Included>
-              <Included>Kitchen display &amp; counter</Included>
-              <Included>Reports &amp; loyalty</Included>
-              <Included>1 branch included</Included>
+              <Included>{t('base.included.cardPayment')}</Included>
+              <Included>{t('base.included.aiMenuImport')}</Included>
+              <Included>{t('base.included.onlineOrdering')}</Included>
+              <Included>{t('base.included.kitchenCounter')}</Included>
+              <Included>{t('base.included.reportsLoyalty')}</Included>
+              <Included>{t('base.included.oneBranch')}</Included>
             </ul>
           </Card>
 
@@ -319,20 +366,21 @@ export function PlanView({
           <Card className="p-5">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
-                <h3 className="font-display text-lg font-bold">Branches</h3>
+                <h3 className="font-display text-lg font-bold">{t('seats.title')}</h3>
                 <p className="text-sm text-muted-foreground">
-                  1 included. Each extra branch is {money(seat?.monthly_price ?? 99)}/mo with the
-                  full feature set of your main branch.
+                  {t('seats.body', { price: money(seat?.monthly_price ?? 99) })}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Using {entitlements.branchesUsed} of {entitlements.branchSeats} seat
-                  {entitlements.branchSeats === 1 ? '' : 's'}.
+                  {t('seats.usage', {
+                    used: entitlements.branchesUsed,
+                    seats: entitlements.branchSeats,
+                  })}
                 </p>
               </div>
               <div className="flex items-center gap-3">
                 <button
                   type="button"
-                  aria-label="Remove a branch seat"
+                  aria-label={t('seats.remove')}
                   disabled={sel.branchSeats <= minSeats}
                   onClick={() => setSeats(sel.branchSeats - 1)}
                   className="focus-ring grid h-10 w-10 place-items-center rounded-full border border-border disabled:opacity-40"
@@ -344,7 +392,7 @@ export function PlanView({
                 </span>
                 <button
                   type="button"
-                  aria-label="Add a branch seat"
+                  aria-label={t('seats.add')}
                   disabled={sel.branchSeats >= 99}
                   onClick={() => setSeats(sel.branchSeats + 1)}
                   className="focus-ring grid h-10 w-10 place-items-center rounded-full border border-border disabled:opacity-40"
@@ -355,9 +403,7 @@ export function PlanView({
             </div>
             {sel.branchSeats <= minSeats && entitlements.branchesUsed > 1 && (
               <p className="mt-3 text-xs text-muted-foreground">
-                You run {entitlements.branchesUsed} active branches, so you cannot go below{' '}
-                {minSeats} seats. To give up a seat, hide a branch you no longer use: open its
-                Branch settings and set Status to Hidden. A hidden branch does not use a seat.
+                {t('seats.floor', { count: entitlements.branchesUsed, min: minSeats })}
               </p>
             )}
           </Card>
@@ -365,7 +411,7 @@ export function PlanView({
 
         {/* Summary */}
         <Card className="p-5 lg:sticky lg:top-6">
-          <h3 className="font-display text-lg font-bold">Your package</h3>
+          <h3 className="font-display text-lg font-bold">{t('summary.title')}</h3>
           <ul className="mt-3 space-y-2 text-sm">
             {lines.map((l) => (
               <li key={l.code} className="flex items-baseline justify-between gap-3">
@@ -378,16 +424,16 @@ export function PlanView({
             ))}
           </ul>
           <div className="mt-4 flex items-baseline justify-between border-t border-border pt-3">
-            <span className="font-semibold">Total</span>
+            <span className="font-semibold">{t('summary.total')}</span>
             <span className="font-display text-2xl font-bold tabular-nums">
               {money(total)}
-              <span className="ml-1 text-sm font-normal text-muted-foreground">/mo</span>
+              <span className="ml-1 text-sm font-normal text-muted-foreground">{t('perMonth')}</span>
             </span>
           </div>
 
           {onTrial && (
             <p className="mt-3 rounded-xl bg-muted px-3 py-2 text-xs text-muted-foreground">
-              You are on the free trial. Nothing is charged until it ends.
+              {t('summary.trialNote')}
             </p>
           )}
 
@@ -403,9 +449,7 @@ export function PlanView({
             {action.label}
           </Button>
 
-          <p className="mt-3 text-xs text-muted-foreground">
-            Your request goes to the Favornoms team for activation. You will be invoiced monthly.
-          </p>
+          <p className="mt-3 text-xs text-muted-foreground">{t('summary.footnote')}</p>
         </Card>
       </div>
     </div>
@@ -421,6 +465,8 @@ function AddonCard({
   selected: boolean;
   onToggle: () => void;
 }) {
+  const t = useTranslations('settings.plan');
+  const locale = usePlanLocale();
   const featureKeys = Object.keys(product.features ?? {});
   return (
     <Card
@@ -432,7 +478,7 @@ function AddonCard({
         <h3 className="font-display text-lg font-bold">{product.name}</h3>
         <p className="font-display text-xl font-bold">
           +{money(product.monthly_price)}
-          <span className="ml-0.5 text-xs font-normal text-muted-foreground">/mo</span>
+          <span className="ml-0.5 text-xs font-normal text-muted-foreground">{t('perMonth')}</span>
         </p>
       </div>
       {product.description && (
@@ -440,11 +486,11 @@ function AddonCard({
       )}
       <ul className="mt-3 flex-1 space-y-1.5 text-sm">
         {featureKeys.map((k) => (
-          <Included key={k}>{featureLabel(k)}</Included>
+          <Included key={k}>{featureLabel(k, locale)}</Included>
         ))}
       </ul>
       {product.code === ADDON_AI_SUITE && (
-        <p className="mt-2 text-xs text-muted-foreground">Signage &amp; AI Voice — coming soon.</p>
+        <p className="mt-2 text-xs text-muted-foreground">{t('addon.aiSuiteComingSoon')}</p>
       )}
       <Button
         variant={selected ? 'soft' : 'outline'}
@@ -454,7 +500,7 @@ function AddonCard({
         onClick={onToggle}
         aria-pressed={selected}
       >
-        {selected ? 'Added' : 'Add'}
+        {selected ? t('addon.added') : t('addon.add')}
       </Button>
     </Card>
   );
@@ -470,6 +516,7 @@ function Included({ children }: { children: React.ReactNode }) {
 }
 
 function TrialBanner({ days }: { days: number | null }) {
+  const t = useTranslations('settings.plan.trial');
   const urgent = days !== null && days <= 3;
   return (
     <div
@@ -481,30 +528,25 @@ function TrialBanner({ days }: { days: number | null }) {
       <div>
         <p className="font-semibold">
           {days === null
-            ? 'Free trial active'
+            ? t('active')
             : days === 0
-              ? 'Your free trial ends today'
-              : `${days} day${days === 1 ? '' : 's'} left in your free trial`}
+              ? t('endsToday')
+              : t('daysLeft', { days })}
         </p>
-        <p className="text-muted-foreground">
-          Everything is unlocked. Choose a package below to keep it after the trial — no card needed
-          until then.
-        </p>
+        <p className="text-muted-foreground">{t('body')}</p>
       </div>
     </div>
   );
 }
 
 function SuspendedBanner() {
+  const t = useTranslations('settings.plan.suspended');
   return (
     <div className="mb-4 flex items-start gap-3 rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
       <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
       <div>
-        <p className="font-semibold">Your account is not active</p>
-        <p className="opacity-90">
-          Your storefront is offline and new orders are blocked. Nothing has been deleted — choose a
-          package below and everything comes straight back.
-        </p>
+        <p className="font-semibold">{t('title')}</p>
+        <p className="opacity-90">{t('body')}</p>
       </div>
     </div>
   );
@@ -516,31 +558,28 @@ function SuspendedBanner() {
  * describes a lapsed store and gives no hint why a new one never got its trial.
  */
 function NoTrialBanner() {
+  const t = useTranslations('settings.plan.noTrial');
   return (
     <div className="mb-4 flex items-start gap-3 rounded-xl bg-warning/15 px-4 py-3 text-sm">
       <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
       <div>
-        <p className="font-semibold">This restaurant starts without a free trial</p>
-        <p className="text-muted-foreground">
-          Your account already used its 14-day free trial on another restaurant. This one stays
-          offline until it has a package: choose one below and send the request, and the Favornoms
-          team activates it.
-        </p>
+        <p className="font-semibold">{t('title')}</p>
+        <p className="text-muted-foreground">{t('body')}</p>
       </div>
     </div>
   );
 }
 
 function RenewBanner({ paidThrough }: { paidThrough: string | null }) {
+  const t = useTranslations('settings.plan.renew');
   return (
     <div className="mb-4 flex items-start gap-3 rounded-xl bg-primary/10 px-4 py-3 text-sm">
       <RotateCcw className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
       <div>
-        <p className="font-semibold">Renew your package</p>
+        <p className="font-semibold">{t('title')}</p>
         <p className="text-muted-foreground">
-          {paidThrough ? `Your package is paid through ${paidThrough}. ` : ''}Your current package
-          is selected below. Press Request renewal to send it to the Favornoms team — nothing
-          renews until they approve it. You can also change the package before sending.
+          {paidThrough && <>{t('paidThrough', { date: paidThrough })} </>}
+          {t('body')}
         </p>
       </div>
     </div>
@@ -556,11 +595,15 @@ function DecisionBanner({
   catalog: BillingProduct[];
   timezone: string;
 }) {
+  const t = useTranslations('settings.plan');
+  const locale = usePlanLocale();
   const approved = decision.status === 'approved';
-  const on = formatInZone(decision.decidedAt, timezone, { dateOnly: true });
+  const on = formatInZone(decision.decidedAt, timezone, { dateOnly: true }, locale);
   const summary = describeSelection(
     { planCode: decision.planCode, addons: decision.addons, branchSeats: decision.branchSeats },
     catalog,
+    t,
+    locale,
   );
   return (
     <div
@@ -575,26 +618,26 @@ function DecisionBanner({
       )}
       <div className="min-w-0">
         <p className="font-semibold">
-          {approved ? `Request approved on ${on}` : `Request declined on ${on}`}
+          {approved
+            ? t('decision.approvedOn', { date: on })
+            : t('decision.declinedOn', { date: on })}
         </p>
         <p className="text-muted-foreground">
-          {summary} — {money(decision.monthlyTotal)}/mo.
+          {t('pricedSummary', { summary, price: money(decision.monthlyTotal) })}
         </p>
         {decision.decisionNote ? (
           <p className="mt-1 whitespace-pre-line break-words">
-            <span className="font-medium">Note from the Favornoms team:</span>{' '}
+            <span className="font-medium">{t('decision.noteLabel')}</span>{' '}
             {decision.decisionNote}
           </p>
         ) : (
           !approved && (
-            <p className="mt-1 text-muted-foreground">
-              No reason was given. You can choose a package below and send a new request.
-            </p>
+            <p className="mt-1 text-muted-foreground">{t('decision.noReason')}</p>
           )
         )}
       </div>
       <Badge variant={approved ? 'success' : 'danger'} className="ml-auto shrink-0">
-        {approved ? 'Approved' : 'Declined'}
+        {approved ? t('decision.approved') : t('decision.declined')}
       </Badge>
     </div>
   );
@@ -609,20 +652,20 @@ function PendingBanner({
   monthlyTotal: number;
   sentOn: string | null;
 }) {
+  const t = useTranslations('settings.plan');
   return (
     <div className="mb-4 flex items-start gap-3 rounded-xl bg-muted px-4 py-3 text-sm">
       <Clock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
       <div className="min-w-0">
         <p className="font-semibold">
-          Request waiting for the Favornoms team{sentOn ? ` · sent ${sentOn}` : ''}
+          {sentOn ? t('pending.titleSent', { date: sentOn }) : t('pending.title')}
         </p>
         <p className="text-muted-foreground">
-          {summary} — {money(monthlyTotal)}/mo. Nothing changes until it is approved. To ask for
-          something else, change the package below and press Replace pending request.
+          {t('pricedSummary', { summary, price: money(monthlyTotal) })} {t('pending.body')}
         </p>
       </div>
       <Badge variant="warning" className="ml-auto shrink-0">
-        Pending
+        {t('pending.badge')}
       </Badge>
     </div>
   );

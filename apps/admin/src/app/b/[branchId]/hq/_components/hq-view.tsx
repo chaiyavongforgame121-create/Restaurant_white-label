@@ -3,6 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { useLocale, useTranslations } from 'next-intl';
 import {
   Bar,
   BarChart,
@@ -28,7 +29,7 @@ import {
   Wallet,
 } from 'lucide-react';
 import { Button, Card, RiderIcon } from '@favornoms/ui';
-import { formatCurrency } from '@favornoms/shared';
+import { DEFAULT_UI_LOCALE, formatCurrency, intlLocaleFor, isUiLocale } from '@favornoms/shared';
 import type { RestaurantReports } from '@favornoms/database/queries';
 
 interface Props {
@@ -38,22 +39,42 @@ interface Props {
   error?: string | null;
 }
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** Order channels with a label in hq.channels.names; anything else is shown as stored. */
+const KNOWN_CHANNELS = new Set(['dine_in', 'pickup', 'delivery', 'qr_ordering']);
 
-/** '2026-03-01' → "Mar 26". Sliced by hand on purpose: `new Date('2026-03-01')`
- *  is parsed as UTC midnight, which renders as *February* for every merchant
- *  west of Greenwich — i.e. all of them, this being a US-only product. */
-function monthLabel(iso: string) {
+/** '2026-03-01' → "Mar 26" (in the viewer's language). Built from the year and month by hand
+ *  and formatted in UTC on purpose: `new Date('2026-03-01')` is parsed as UTC midnight, which
+ *  renders as *February* for every merchant west of Greenwich — i.e. all of them, this being a
+ *  US-only product. */
+function monthLabel(iso: string, format: Intl.DateTimeFormat) {
+  const y = Number(iso.slice(0, 4));
   const m = Number(iso.slice(5, 7));
-  return `${MONTHS[m - 1] ?? iso} ${iso.slice(2, 4)}`;
+  if (!y || !m || m < 1 || m > 12) return iso;
+  return format.format(new Date(Date.UTC(y, m - 1, 1)));
 }
 
 const BRANCH_COLORS = ['#FF6B35', '#F7B538', '#2EC4B6', '#C73E1D', '#7B5EA7', '#3A86FF'];
 
 export function HqView({ branchId, initialMonths, reports, error }: Props) {
+  const t = useTranslations('hq');
+  const rawLocale = useLocale();
+  const intlLocale = intlLocaleFor(isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE);
+  const monthFormat = React.useMemo(
+    () => new Intl.DateTimeFormat(intlLocale, { month: 'short', year: '2-digit', timeZone: 'UTC' }),
+    [intlLocale],
+  );
   const router = useRouter();
   const pathname = usePathname();
   const [months, setMonths] = React.useState(initialMonths);
+
+  // get_restaurant_reports raises 42501 rather than returning an empty rollup, so a manager
+  // who lacks head-office access is told that in words; any other failure is raw database
+  // text, which belongs in the console rather than in front of the merchant.
+  React.useEffect(() => {
+    if (!reports && error && !error.includes('42501')) {
+      console.error('get_restaurant_reports failed', error);
+    }
+  }, [reports, error]);
 
   const setRange = (n: number) => {
     setMonths(n);
@@ -64,11 +85,12 @@ export function HqView({ branchId, initialMonths, reports, error }: Props) {
     <header className="mb-6 flex flex-wrap items-end justify-between gap-3 px-2 pl-16 lg:px-0">
       <div>
         <h1 className="flex items-center gap-2 font-display text-3xl font-bold">
-          <Landmark className="h-7 w-7 text-primary" /> Head office
+          <Landmark className="h-7 w-7 text-primary" /> {t('title')}
         </h1>
         <p className="mt-1 text-muted-foreground">
-          {reports ? `${reports.restaurant_name} · ` : ''}
-          Every branch, last {months} months
+          {reports
+            ? t('subtitleWithRestaurant', { restaurant: reports.restaurant_name, months })
+            : t('subtitle', { months })}
         </p>
       </div>
       <div className="inline-flex rounded-full border border-border bg-card p-1">
@@ -80,7 +102,7 @@ export function HqView({ branchId, initialMonths, reports, error }: Props) {
               months === n ? 'bg-primary text-primary-foreground' : 'text-foreground hover:bg-muted'
             }`}
           >
-            {n}m
+            {t('rangeShort', { months: n })}
           </button>
         ))}
       </div>
@@ -98,24 +120,14 @@ export function HqView({ branchId, initialMonths, reports, error }: Props) {
         <Card className="p-6">
           <h2 className="flex items-center gap-2 font-display text-lg font-semibold text-destructive">
             {ownerOnly ? <Lock className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
-            {ownerOnly ? 'Owner access only' : 'Head office data could not be loaded'}
+            {ownerOnly ? t('ownerOnly.title') : t('loadError.title')}
           </h2>
           {ownerOnly ? (
             <p className="mt-2 text-sm text-muted-foreground">
-              This page rolls up sales and costs for <em>every</em> branch, so it is limited to the
-              restaurant owner. Managers can still see their own branch under Reports. Ask the owner
-              to change your staff role if you need it.
+              {t.rich('ownerOnly.body', { em: (chunks) => <em>{chunks}</em> })}
             </p>
           ) : (
-            <>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Your sales data is safe — this is a problem reading it. Reload the page; if it keeps
-                happening, send the message below to support.
-              </p>
-              <p className="mt-3 break-words rounded-xl bg-destructive/10 px-4 py-3 font-mono text-xs text-destructive">
-                {error ?? 'Unknown error from get_restaurant_reports.'}
-              </p>
-            </>
+            <p className="mt-2 text-sm text-muted-foreground">{t('loadError.body')}</p>
           )}
           <div className="mt-4 flex flex-wrap gap-2">
             {!ownerOnly && (
@@ -124,11 +136,11 @@ export function HqView({ branchId, initialMonths, reports, error }: Props) {
                 leftIcon={<RefreshCw className="h-4 w-4" />}
                 onClick={() => router.refresh()}
               >
-                Try again
+                {t('tryAgain')}
               </Button>
             )}
             <Link href={`/b/${branchId}/reports`}>
-              <Button variant="outline">Go to branch reports</Button>
+              <Button variant="outline">{t('goToBranchReports')}</Button>
             </Link>
           </div>
         </Card>
@@ -163,44 +175,49 @@ export function HqView({ branchId, initialMonths, reports, error }: Props) {
       <div className="container max-w-6xl py-8">
         {header}
         <Card className="p-6 text-center">
-          <h2 className="font-display text-lg font-semibold">
-            Nothing to roll up in the last {months} months
-          </h2>
+          <h2 className="font-display text-lg font-semibold">{t('empty.title', { months })}</h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            The rollup loaded fine — your {reports.branch_count === 1 ? 'branch has' : `${reports.branch_count} branches have`}{' '}
-            just not taken an order in this window. Try a wider range above.
+            {t('empty.body', { count: reports.branch_count })}
           </p>
         </Card>
       </div>
     );
   }
 
+  const revenueName = t('chart.revenue');
+  const payoutsName = t('chart.driverPayouts');
+  const subscriptionName = t('chart.subscription');
+
   return (
     <div className="container max-w-6xl py-8">
       {header}
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Kpi icon={<TrendingUp className="h-5 w-5" />} label="Revenue" value={formatCurrency(totals.revenue)} />
-        <Kpi icon={<ShoppingBag className="h-5 w-5" />} label="Orders" value={totals.orders.toLocaleString()} />
+        <Kpi icon={<TrendingUp className="h-5 w-5" />} label={t('kpi.revenue')} value={formatCurrency(totals.revenue)} />
+        <Kpi
+          icon={<ShoppingBag className="h-5 w-5" />}
+          label={t('kpi.orders')}
+          value={totals.orders.toLocaleString(intlLocale)}
+        />
         <Kpi
           icon={<Store className="h-5 w-5" />}
-          label={reports.branch_count === 1 ? 'Branch' : 'Branches'}
+          label={reports.branch_count === 1 ? t('kpi.branch') : t('kpi.branches')}
           value={reports.branch_count.toString()}
-          hint={`Avg order ${formatCurrency(totals.avg_order_value)}`}
+          hint={t('kpi.avgOrder', { amount: formatCurrency(totals.avg_order_value) })}
         />
         <Kpi
           icon={<Wallet className="h-5 w-5" />}
-          label="Known costs"
+          label={t('kpi.knownCosts')}
           value={formatCurrency(knownCosts)}
-          hint="Driver payouts + subscription"
+          hint={t('kpi.knownCostsHint')}
         />
       </section>
 
       <section className="mt-6">
         <Card className="p-5">
-          <h2 className="font-display text-lg font-semibold">Revenue vs known costs</h2>
+          <h2 className="font-display text-lg font-semibold">{t('chart.title')}</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            Months are bucketed in head-office time ({reports.timezone}).
+            {t('chart.timezone', { timezone: reports.timezone })}
           </p>
           <div className="mt-3 h-72">
             <ResponsiveContainer width="100%" height="100%">
@@ -210,7 +227,7 @@ export function HqView({ branchId, initialMonths, reports, error }: Props) {
                   dataKey="month"
                   stroke="hsl(var(--muted-foreground))"
                   fontSize={12}
-                  tickFormatter={monthLabel}
+                  tickFormatter={(v: string) => monthLabel(v, monthFormat)}
                 />
                 <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
                 <Tooltip
@@ -219,13 +236,13 @@ export function HqView({ branchId, initialMonths, reports, error }: Props) {
                     border: '1px solid hsl(var(--border))',
                     borderRadius: 12,
                   }}
-                  labelFormatter={(v) => (typeof v === 'string' ? monthLabel(v) : v)}
+                  labelFormatter={(v) => (typeof v === 'string' ? monthLabel(v, monthFormat) : v)}
                   formatter={(v: number, name: string) => [formatCurrency(v), name]}
                 />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Bar name="Revenue" dataKey="revenue" fill="hsl(var(--primary))" radius={[8, 8, 0, 0]} />
+                <Bar name={revenueName} dataKey="revenue" fill="hsl(var(--primary))" radius={[8, 8, 0, 0]} />
                 <Line
-                  name="Driver payouts"
+                  name={payoutsName}
                   type="monotone"
                   dataKey="driver_payouts"
                   stroke="#2EC4B6"
@@ -233,7 +250,7 @@ export function HqView({ branchId, initialMonths, reports, error }: Props) {
                   dot={false}
                 />
                 <Line
-                  name="Subscription"
+                  name={subscriptionName}
                   type="monotone"
                   dataKey="subscription"
                   stroke="#C73E1D"
@@ -250,19 +267,19 @@ export function HqView({ branchId, initialMonths, reports, error }: Props) {
       <section className="mt-6 grid gap-4 lg:grid-cols-3">
         <Card className="p-5 lg:col-span-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="font-display text-lg font-semibold">Branches</h2>
-            <p className="text-xs text-muted-foreground">Ranked by revenue</p>
+            <h2 className="font-display text-lg font-semibold">{t('branches.title')}</h2>
+            <p className="text-xs text-muted-foreground">{t('branches.ranked')}</p>
           </div>
           <div className="mt-3 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                  <th className="py-2 pr-3 font-medium">Branch</th>
-                  <th className="py-2 pr-3 text-right font-medium">Orders</th>
-                  <th className="py-2 pr-3 text-right font-medium">Revenue</th>
-                  <th className="py-2 pr-3 text-right font-medium">Avg order</th>
-                  <th className="py-2 pr-3 text-right font-medium">Payouts</th>
-                  <th className="py-2 pr-3 text-right font-medium">Share</th>
+                  <th className="py-2 pr-3 font-medium">{t('branches.columns.branch')}</th>
+                  <th className="py-2 pr-3 text-right font-medium">{t('branches.columns.orders')}</th>
+                  <th className="py-2 pr-3 text-right font-medium">{t('branches.columns.revenue')}</th>
+                  <th className="py-2 pr-3 text-right font-medium">{t('branches.columns.avgOrder')}</th>
+                  <th className="py-2 pr-3 text-right font-medium">{t('branches.columns.payouts')}</th>
+                  <th className="py-2 pr-3 text-right font-medium">{t('branches.columns.share')}</th>
                   <th className="py-2" />
                 </tr>
               </thead>
@@ -280,7 +297,7 @@ export function HqView({ branchId, initialMonths, reports, error }: Props) {
                           <span className="font-semibold">{b.name}</span>
                           {!b.is_active && (
                             <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-                              Inactive
+                              {t('branches.inactive')}
                             </span>
                           )}
                         </span>
@@ -311,7 +328,7 @@ export function HqView({ branchId, initialMonths, reports, error }: Props) {
                           href={`/b/${b.branch_id}/reports`}
                           className="focus-ring inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-primary hover:bg-primary/10"
                         >
-                          Open <ArrowUpRight className="h-3.5 w-3.5" />
+                          {t('branches.open')} <ArrowUpRight className="h-3.5 w-3.5" />
                         </Link>
                       </td>
                     </tr>
@@ -323,17 +340,17 @@ export function HqView({ branchId, initialMonths, reports, error }: Props) {
         </Card>
 
         <Card className="p-5">
-          <h2 className="font-display text-lg font-semibold">Costs we can see</h2>
+          <h2 className="font-display text-lg font-semibold">{t('costs.title')}</h2>
           <ul className="mt-3 space-y-2 text-sm">
             <li className="flex items-start justify-between gap-3">
               <span className="flex items-center gap-2">
-                <RiderIcon className="h-4 w-4 text-muted-foreground" /> Driver payouts
+                <RiderIcon className="h-4 w-4 text-muted-foreground" /> {t('costs.driverPayouts')}
               </span>
               <span className="font-semibold tabular-nums">{formatCurrency(totals.driver_payouts)}</span>
             </li>
             <li className="flex items-start justify-between gap-3">
               <span className="flex items-center gap-2">
-                <CreditCard className="h-4 w-4 text-muted-foreground" /> Favornoms subscription
+                <CreditCard className="h-4 w-4 text-muted-foreground" /> {t('costs.subscription')}
               </span>
               <span className="font-semibold tabular-nums">
                 {reports.has_invoices ? formatCurrency(totals.subscription_billed) : '—'}
@@ -344,55 +361,54 @@ export function HqView({ branchId, initialMonths, reports, error }: Props) {
             // Multiplying the current rate by the number of months would invent a
             // billing history that does not exist. State the rate instead.
             <p className="mt-2 rounded-xl bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-              No invoices recorded yet. Your current rate is{' '}
-              <strong className="text-foreground">{formatCurrency(reports.subscription_monthly)}/month</strong>
-              {reports.subscription_plan ? (
-                <>
-                  {' '}
-                  on the <span className="capitalize">{reports.subscription_plan}</span> plan
-                </>
-              ) : null}
-              .
+              {reports.subscription_plan
+                ? t.rich('costs.noInvoicesWithPlan', {
+                    rate: formatCurrency(reports.subscription_monthly),
+                    plan: reports.subscription_plan,
+                    strong: (chunks) => <strong className="text-foreground">{chunks}</strong>,
+                    planName: (chunks) => <span className="capitalize">{chunks}</span>,
+                  })
+                : t.rich('costs.noInvoices', {
+                    rate: formatCurrency(reports.subscription_monthly),
+                    strong: (chunks) => <strong className="text-foreground">{chunks}</strong>,
+                  })}
             </p>
           )}
           <div className="mt-3 space-y-1.5 border-t border-border pt-3 text-sm">
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Total known costs</span>
+              <span className="text-muted-foreground">{t('costs.totalKnown')}</span>
               <span className="font-semibold tabular-nums">{formatCurrency(knownCosts)}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Revenue after them</span>
+              <span className="text-muted-foreground">{t('costs.afterCosts')}</span>
               <span className="font-display text-lg font-bold tabular-nums">
                 {formatCurrency(afterCosts)}
               </span>
             </div>
           </div>
-          <p className="mt-3 text-xs text-muted-foreground">
-            These are the only costs Favornoms records. Food, staff wages, rent and card fees are
-            not included, so this is not your profit.
-          </p>
+          <p className="mt-3 text-xs text-muted-foreground">{t('costs.disclaimer')}</p>
         </Card>
       </section>
 
       <section className="mt-6 grid gap-4 lg:grid-cols-3">
         <Card className="p-5 lg:col-span-2">
-          <h2 className="font-display text-lg font-semibold">Month by month</h2>
+          <h2 className="font-display text-lg font-semibold">{t('monthly.title')}</h2>
           <div className="mt-3 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                  <th className="py-2 pr-3 font-medium">Month</th>
-                  <th className="py-2 pr-3 text-right font-medium">Orders</th>
-                  <th className="py-2 pr-3 text-right font-medium">Revenue</th>
-                  <th className="py-2 pr-3 text-right font-medium">Payouts</th>
-                  <th className="py-2 pr-3 text-right font-medium">Subscription</th>
-                  <th className="py-2 text-right font-medium">After costs</th>
+                  <th className="py-2 pr-3 font-medium">{t('monthly.columns.month')}</th>
+                  <th className="py-2 pr-3 text-right font-medium">{t('monthly.columns.orders')}</th>
+                  <th className="py-2 pr-3 text-right font-medium">{t('monthly.columns.revenue')}</th>
+                  <th className="py-2 pr-3 text-right font-medium">{t('monthly.columns.payouts')}</th>
+                  <th className="py-2 pr-3 text-right font-medium">{t('monthly.columns.subscription')}</th>
+                  <th className="py-2 text-right font-medium">{t('monthly.columns.afterCosts')}</th>
                 </tr>
               </thead>
               <tbody>
                 {[...monthly].reverse().map((m) => (
                   <tr key={m.month} className="border-b border-border/50 last:border-0">
-                    <td className="py-2.5 pr-3 font-semibold">{monthLabel(m.month)}</td>
+                    <td className="py-2.5 pr-3 font-semibold">{monthLabel(m.month, monthFormat)}</td>
                     <td className="py-2.5 pr-3 text-right tabular-nums">{m.orders}</td>
                     <td className="py-2.5 pr-3 text-right font-semibold tabular-nums">
                       {formatCurrency(m.revenue)}
@@ -414,18 +430,21 @@ export function HqView({ branchId, initialMonths, reports, error }: Props) {
         </Card>
 
         <Card className="p-5">
-          <h2 className="font-display text-lg font-semibold">By channel</h2>
-          <p className="mt-1 text-xs text-muted-foreground">All branches combined</p>
+          <h2 className="font-display text-lg font-semibold">{t('channels.title')}</h2>
+          <p className="mt-1 text-xs text-muted-foreground">{t('channels.subtitle')}</p>
           {by_channel.length === 0 ? (
-            <p className="mt-3 text-sm text-muted-foreground">No orders yet.</p>
+            <p className="mt-3 text-sm text-muted-foreground">{t('channels.empty')}</p>
           ) : (
             <ul className="mt-3 space-y-2 text-sm">
               {by_channel.map((c) => {
                 const share = totals.revenue > 0 ? c.revenue / totals.revenue : 0;
+                const known = KNOWN_CHANNELS.has(c.channel);
                 return (
                   <li key={c.channel}>
                     <div className="flex items-center justify-between">
-                      <span className="capitalize">{c.channel.replace('_', ' ')}</span>
+                      <span className={known ? undefined : 'capitalize'}>
+                        {known ? t(`channels.names.${c.channel}`) : c.channel.replace('_', ' ')}
+                      </span>
                       <span className="font-semibold tabular-nums">{formatCurrency(c.revenue)}</span>
                     </div>
                     <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted">
@@ -434,7 +453,9 @@ export function HqView({ branchId, initialMonths, reports, error }: Props) {
                         style={{ width: `${Math.round(share * 100)}%` }}
                       />
                     </div>
-                    <p className="mt-0.5 text-xs text-muted-foreground">{c.orders} orders</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {t('channels.orders', { count: c.orders })}
+                    </p>
                   </li>
                 );
               })}
@@ -446,7 +467,7 @@ export function HqView({ branchId, initialMonths, reports, error }: Props) {
       {multi && (
         <section className="mt-6">
           <Card className="p-5">
-            <h2 className="font-display text-lg font-semibold">Revenue by branch, by month</h2>
+            <h2 className="font-display text-lg font-semibold">{t('stacked.title')}</h2>
             <div className="mt-3 h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={stacked}>
@@ -455,7 +476,7 @@ export function HqView({ branchId, initialMonths, reports, error }: Props) {
                     dataKey="month"
                     stroke="hsl(var(--muted-foreground))"
                     fontSize={12}
-                    tickFormatter={(v) => (typeof v === 'string' ? monthLabel(v) : v)}
+                    tickFormatter={(v) => (typeof v === 'string' ? monthLabel(v, monthFormat) : v)}
                   />
                   <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
                   <Tooltip
@@ -464,7 +485,7 @@ export function HqView({ branchId, initialMonths, reports, error }: Props) {
                       border: '1px solid hsl(var(--border))',
                       borderRadius: 12,
                     }}
-                    labelFormatter={(v) => (typeof v === 'string' ? monthLabel(v) : v)}
+                    labelFormatter={(v) => (typeof v === 'string' ? monthLabel(v, monthFormat) : v)}
                     formatter={(v: number) => formatCurrency(v)}
                   />
                   <Legend wrapperStyle={{ fontSize: 12 }} />

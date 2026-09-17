@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useTranslations } from 'next-intl';
 import { ImagePlus, X } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Button } from '@favornoms/ui';
@@ -21,6 +22,7 @@ import {
   type IconStyle,
   type IconVariant,
 } from './icon-geometry';
+import { KeyedError, errorMessageRef, storageUploadError, type MessageRef } from './keyed-error';
 
 export type { IconStyle } from './icon-geometry';
 
@@ -49,7 +51,7 @@ const CHECKER: React.CSSProperties = {
   backgroundImage: 'repeating-conic-gradient(hsl(var(--muted-foreground) / 0.22) 0% 25%, transparent 0% 50%)',
   backgroundSize: '10px 10px',
 };
-const LOAD_FAILED = 'Could not load your current icon. Upload it again to change its style.';
+const LOAD_FAILED: MessageRef = { key: 'shell.iconUpload.errors.loadFailed' };
 const FITS: readonly IconFit[] = ['fill', 'padded'];
 
 type Canvas2D = { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D };
@@ -59,7 +61,7 @@ function makeCanvas(width: number, height: number, readBack = false): Canvas2D {
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext('2d', readBack ? { willReadFrequently: true } : undefined);
-  if (!ctx) throw new Error('Your browser could not process the image (no canvas support).');
+  if (!ctx) throw new KeyedError('shell.upload.noCanvas');
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
   return { canvas, ctx };
@@ -133,7 +135,7 @@ function drawLauncherView(src: ImageBitmap, style: IconStyle): string {
 function toPng(canvas: HTMLCanvasElement): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob(
-      (blob) => (blob ? resolve(blob) : reject(new Error('Could not encode the resized icon.'))),
+      (blob) => (blob ? resolve(blob) : reject(new KeyedError('shell.iconUpload.errors.encodeFailed'))),
       'image/png',
     );
   });
@@ -143,7 +145,7 @@ function toPng(canvas: HTMLCanvasElement): Promise<Blob> {
  *  taint the canvas it is drawn on. */
 async function loadBitmap(url: string): Promise<ImageBitmap> {
   const res = await fetch(url, { cache: 'no-store' });
-  if (!res.ok) throw new Error(LOAD_FAILED);
+  if (!res.ok) throw new KeyedError(LOAD_FAILED.key);
   return createImageBitmap(await res.blob());
 }
 
@@ -190,11 +192,13 @@ export function IconUpload({
   /** True while the merchant has changed the style but not applied it — Save would drop it. */
   onPendingChange?: (pending: boolean) => void;
 }) {
+  const t = useTranslations('shell.iconUpload');
+  const tRoot = useTranslations();
   const inputRef = React.useRef<HTMLInputElement>(null);
   const fitRefs = React.useRef<Record<IconFit, HTMLButtonElement | null>>({ fill: null, padded: null });
   const fitLabelId = React.useId();
   const [busy, setBusy] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<MessageRef | null>(null);
   const [draft, setDraft] = React.useState<IconStyle>(() => normalizeIconStyle(appliedStyle ?? DEFAULT_ICON_STYLE));
   const [applied, setApplied] = React.useState<IconStyle | null>(appliedStyle);
   const [sourceUrl, setSourceUrl] = React.useState<string | null>(appliedStyle?.sourceUrl ?? null);
@@ -335,7 +339,7 @@ export function IconUpload({
       const { error: upErr } = await supabase.storage
         .from('branding')
         .upload(path, blob, { upsert: true, cacheControl: '3600', contentType: 'image/png' });
-      if (upErr) throw new Error(upErr.message);
+      if (upErr) throw storageUploadError(upErr);
       return supabase.storage.from('branding').getPublicUrl(path).data.publicUrl;
     };
 
@@ -373,17 +377,22 @@ export function IconUpload({
     setError(null);
     try {
       if (!ACCEPTED.includes(file.type)) {
-        throw new Error('Use a PNG, JPEG or WebP image. SVG cannot be used as an app icon.');
+        throw new KeyedError('shell.iconUpload.errors.wrongType');
       }
-      if (file.size > MAX_BYTES) throw new Error('That image is larger than 5 MB.');
+      if (file.size > MAX_BYTES) {
+        throw new KeyedError('shell.iconUpload.errors.tooLarge', { megabytes: String(MAX_BYTES / (1024 * 1024)) });
+      }
 
       // createImageBitmap gives the true pixel dimensions; the file name and the declared
       // MIME both lie often enough that neither can gate installability.
       const bmp = await createImageBitmap(file);
       if (Math.min(bmp.width, bmp.height) < MIN_EDGE) {
-        throw new Error(
-          `That image is ${bmp.width}×${bmp.height}. App icons need at least ${MIN_EDGE}×${MIN_EDGE} — a smaller one makes the install button disappear.`,
-        );
+        // Strings, not numbers: a pixel size is not a quantity to group with thousands separators.
+        throw new KeyedError('shell.iconUpload.errors.tooSmall', {
+          width: String(bmp.width),
+          height: String(bmp.height),
+          min: String(MIN_EDGE),
+        });
       }
       // A fresh original can take any colour. Its background is removed now if that option is
       // on, and the untouched file is what gets kept.
@@ -404,7 +413,7 @@ export function IconUpload({
       setSourceKind('original');
       setKeyed(wantsRemoval ? { from: bmp, image } : null);
     } catch (e) {
-      setError((e as Error).message);
+      setError(errorMessageRef(e));
     } finally {
       setBusy(false);
     }
@@ -433,7 +442,7 @@ export function IconUpload({
         await renderAndUpload(working, effective, null);
       }
     } catch (e) {
-      setError((e as Error).message);
+      setError(errorMessageRef(e));
     } finally {
       setBusy(false);
     }
@@ -495,7 +504,7 @@ export function IconUpload({
               onClick={clear}
               disabled={busy}
               className="absolute right-1 top-1 rounded-full bg-black/60 p-0.5 text-white disabled:opacity-40"
-              aria-label="Remove icon"
+              aria-label={t('remove')}
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -511,10 +520,7 @@ export function IconUpload({
           </button>
         )}
         <div className="min-w-0">
-          <p className="text-sm text-muted-foreground">
-            Square PNG, JPEG or WebP, at least 192×192. A PNG with a transparent background gives
-            you the most choice. We resize it into every size the browser and the installed app need.
-          </p>
+          <p className="text-sm text-muted-foreground">{t('requirements')}</p>
           <Button
             type="button"
             variant="ghost"
@@ -523,17 +529,17 @@ export function IconUpload({
             onClick={() => inputRef.current?.click()}
             disabled={busy}
           >
-            {busy ? 'Processing…' : thumb ? 'Replace icon' : 'Choose icon'}
+            {busy ? t('processing') : thumb ? t('replace') : t('choose')}
           </Button>
         </div>
       </div>
-      {error && <p className="mt-1.5 text-xs text-danger">{error}</p>}
+      {error && <p className="mt-1.5 text-xs text-danger">{tRoot(error.key, error.values)}</p>}
 
       {currentUrl && source && (
         <div className="mt-4 space-y-3 rounded-2xl border border-border bg-muted/20 p-3">
           <div>
             <span id={fitLabelId} className="mb-1.5 block text-xs font-medium">
-              Android home-screen icon
+              {t('androidIcon')}
             </span>
             <div
               role="radiogroup"
@@ -558,7 +564,7 @@ export function IconUpload({
                       : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
-                  {fit === 'fill' ? 'Fill the tile' : 'Keep padding'}
+                  {fit === 'fill' ? t('fitFill') : t('fitPadded')}
                 </button>
               ))}
             </div>
@@ -587,11 +593,8 @@ export function IconUpload({
                 style={{ accentColor: 'hsl(var(--primary))' }}
               />
               <span className="text-xs">
-                <span className="font-medium">Remove the plain background around the image</span>
-                <span className="block text-[11px] text-muted-foreground">
-                  The white (or other flat colour) outside your logo becomes the colour you pick
-                  below — no white corners on any icon.
-                </span>
+                <span className="font-medium">{t('removeBackground.label')}</span>
+                <span className="block text-[11px] text-muted-foreground">{t('removeBackground.hint')}</span>
               </span>
             </label>
           )}
@@ -624,11 +627,8 @@ export function IconUpload({
                 style={{ accentColor: 'hsl(var(--primary))' }}
               />
               <span className="text-xs">
-                <span className="font-medium">Only the image, no background (like a PNG)</span>
-                <span className="block text-[11px] text-muted-foreground">
-                  For the browser tab and installing on a computer. Phones cannot show transparency —
-                  Android and iPhone always put a solid colour behind the image, so pick that colour below.
-                </span>
+                <span className="font-medium">{t('transparent.label')}</span>
+                <span className="block text-[11px] text-muted-foreground">{t('transparent.hint')}</span>
               </span>
             </label>
           )}
@@ -636,7 +636,7 @@ export function IconUpload({
           {draft.fit === 'fill' && (
             <label className="block">
               <span className="mb-1 flex justify-between text-xs font-medium">
-                <span>Zoom</span>
+                <span>{t('zoom')}</span>
                 <span className="text-muted-foreground">{Math.round(draft.zoom * 100)}%</span>
               </span>
               <input
@@ -649,23 +649,25 @@ export function IconUpload({
                 className="w-full"
                 style={{ accentColor: 'hsl(var(--primary))' }}
               />
-              <span className="mt-0.5 block text-[11px] text-muted-foreground">
-                Zoom in to make the artwork bigger on Android.
-              </span>
+              <span className="mt-0.5 block text-[11px] text-muted-foreground">{t('zoomHint')}</span>
             </label>
           )}
 
           {canRecolour ? (
             <div>
               <span className="mb-1.5 block text-xs font-medium">
-                {effective.transparent ? 'Phone background' : draft.fit === 'fill' || removing ? 'Background' : 'Frame colour'}
+                {effective.transparent
+                  ? t('colour.phoneBackground')
+                  : draft.fit === 'fill' || removing
+                    ? t('colour.background')
+                    : t('colour.frame')}
               </span>
               <div className="flex flex-wrap items-center gap-2">
                 {palette.map((hex) => (
                   <button
                     key={hex}
                     type="button"
-                    aria-label={`Colour ${hex}`}
+                    aria-label={t('colour.swatch', { hex })}
                     aria-pressed={draft.background === hex}
                     onClick={() => edit((d) => ({ ...d, background: hex }))}
                     className={`h-7 w-7 rounded-full border border-border ${
@@ -676,7 +678,7 @@ export function IconUpload({
                 ))}
                 <input
                   type="color"
-                  aria-label="Custom colour"
+                  aria-label={t('colour.custom')}
                   value={draft.background}
                   onChange={(e) => {
                     const hex = e.target.value.toUpperCase();
@@ -686,16 +688,12 @@ export function IconUpload({
                 />
               </div>
               <span className="mt-1 block text-[11px] text-muted-foreground">
-                {sourceKind === 'original' || removing
-                  ? 'The first colours come from the edge of your image — picking the rim colour makes the tile look seamless.'
-                  : 'Only the frame around your icon changes colour; the icon keeps the background it was made with.'}
+                {sourceKind === 'original' || removing ? t('colour.hintFromEdge') : t('colour.hintFrameOnly')}
               </span>
             </div>
           ) : (
             <p className="text-[11px] text-muted-foreground">
-              {canKnockOut
-                ? 'Tick “Remove the plain background” to choose a colour for the area around your image.'
-                : 'This icon’s background is part of the image. To choose a different colour, upload your original again — ideally a PNG with a transparent background.'}
+              {canKnockOut ? t('colour.tickRemoveFirst') : t('colour.backgroundBakedIn')}
             </p>
           )}
 
@@ -704,46 +702,38 @@ export function IconUpload({
               <>
                 <figure className="text-center">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={previews.android} alt="Android rounded-square preview" className="h-14 w-14 rounded-[28%] shadow-sm" />
+                  <img src={previews.android} alt={t('preview.androidSquircleAlt')} className="h-14 w-14 rounded-[28%] shadow-sm" />
                   <figcaption className="mt-1 text-[10px] text-muted-foreground">Android</figcaption>
                 </figure>
                 <figure className="text-center">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={previews.android} alt="Android circle preview" className="h-14 w-14 rounded-full shadow-sm" />
+                  <img src={previews.android} alt={t('preview.androidCircleAlt')} className="h-14 w-14 rounded-full shadow-sm" />
                   <figcaption className="mt-1 text-[10px] text-muted-foreground">Android</figcaption>
                 </figure>
                 <figure className="text-center">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={previews.iphone} alt="iPhone preview" className="h-14 w-14 rounded-[22%] shadow-sm" />
+                  <img src={previews.iphone} alt={t('preview.iphoneAlt')} className="h-14 w-14 rounded-[22%] shadow-sm" />
                   <figcaption className="mt-1 text-[10px] text-muted-foreground">iPhone</figcaption>
                 </figure>
                 <figure className="text-center">
                   <span className="block h-14 w-14 rounded-md" style={CHECKER}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={previews.computer} alt="Computer and browser tab preview" className="h-14 w-14" />
+                    <img src={previews.computer} alt={t('preview.computerAlt')} className="h-14 w-14" />
                   </span>
-                  <figcaption className="mt-1 text-[10px] text-muted-foreground">Computer</figcaption>
+                  <figcaption className="mt-1 text-[10px] text-muted-foreground">{t('preview.computer')}</figcaption>
                 </figure>
               </>
             )}
-            <p className="min-w-[10rem] flex-1 text-[11px] text-muted-foreground">
-              Roughly what each device shows. Android crops to its own shape and iPhone rounds the
-              corners — both need a solid colour, and zoom only applies to Android. Computers and
-              browser tabs can show just your image.
-            </p>
+            <p className="min-w-[10rem] flex-1 text-[11px] text-muted-foreground">{t('preview.hint')}</p>
           </div>
 
           {stale && (
             <div className="flex flex-wrap items-center gap-2">
               <Button type="button" size="sm" onClick={apply} loading={busy} disabled={repaintsRemoved}>
-                Apply to icon
+                {t('apply')}
               </Button>
               <span className="text-[11px] text-muted-foreground">
-                {repaintsRemoved
-                  ? 'The background colour is the same as the one being removed — pick another colour, or the corners will look unchanged.'
-                  : applied
-                    ? 'Then save to publish.'
-                    : 'Your current icon still has the old white padding — apply, then save.'}
+                {repaintsRemoved ? t('repaintsRemoved') : applied ? t('thenSave') : t('oldPadding')}
               </span>
             </div>
           )}
@@ -751,9 +741,7 @@ export function IconUpload({
       )}
 
       {value.icon512Url && !stale && (
-        <p className="mt-1.5 text-xs text-success">
-          Ready — 192, 512 and maskable icons generated.
-        </p>
+        <p className="mt-1.5 text-xs text-success">{t('ready')}</p>
       )}
     </div>
   );

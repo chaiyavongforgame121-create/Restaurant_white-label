@@ -17,11 +17,22 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
+import { useLocale, useTranslations } from 'next-intl';
 import { AlertTriangle, MapPin, Pencil } from 'lucide-react';
+import { DEFAULT_UI_LOCALE, isUiLocale } from '@favornoms/shared';
 import { Button, Card } from '@favornoms/ui';
 import dynamic from 'next/dynamic';
 import { hasMapboxToken, type ResolvedAddress } from '@favornoms/maps';
 import { getBrowserClient } from '@favornoms/database/client';
+
+function MapLoading() {
+  const t = useTranslations('branch.location');
+  return (
+    <div className="grid h-full place-items-center text-sm text-muted-foreground">
+      {t('loadingMap')}
+    </div>
+  );
+}
 
 // The picker is behind a button most visits never press, and /branch is already the
 // heaviest screen in the back office. Loading it on demand keeps the cost of adding this
@@ -30,11 +41,7 @@ const LocationPicker = dynamic(
   () => import('@favornoms/maps').then((m) => m.LocationPicker),
   {
     ssr: false,
-    loading: () => (
-      <div className="grid h-full place-items-center text-sm text-muted-foreground">
-        Loading map…
-      </div>
-    ),
+    loading: () => <MapLoading />,
   },
 );
 
@@ -48,16 +55,24 @@ export interface BranchLocation {
 
 /** The zones a US restaurant can be in. `timezone` decides when the branch counts as open
  *  and when a delivery window starts, so a Texas store left on America/New_York closes an
- *  hour early every single day — silently, because nothing else contradicts it. */
-const US_TIMEZONES: Array<{ value: string; label: string }> = [
-  { value: 'America/New_York', label: 'Eastern — New York, Miami, Atlanta' },
-  { value: 'America/Chicago', label: 'Central — Chicago, Houston, Dallas' },
-  { value: 'America/Denver', label: 'Mountain — Denver, Salt Lake City' },
-  { value: 'America/Phoenix', label: 'Arizona — Phoenix (no daylight saving)' },
-  { value: 'America/Los_Angeles', label: 'Pacific — Los Angeles, Seattle' },
-  { value: 'America/Anchorage', label: 'Alaska — Anchorage' },
-  { value: 'Pacific/Honolulu', label: 'Hawaii — Honolulu' },
-];
+ *  hour early every single day — silently, because nothing else contradicts it.
+ *  `key` names the label in branch.location.timezones; `value` is what is stored. */
+const US_TIMEZONES = [
+  { value: 'America/New_York', key: 'eastern' },
+  { value: 'America/Chicago', key: 'central' },
+  { value: 'America/Denver', key: 'mountain' },
+  { value: 'America/Phoenix', key: 'arizona' },
+  { value: 'America/Los_Angeles', key: 'pacific' },
+  { value: 'America/Anchorage', key: 'alaska' },
+  { value: 'Pacific/Honolulu', key: 'hawaii' },
+] as const;
+
+/** set_branch_location's hints for invalid_location, compared (never shown) to pick a message. */
+const INVALID_LOCATION_HINTS: Record<string, 'bothRequired' | 'outOfRange' | 'dropPin'> = {
+  'Latitude and longitude must be supplied together.': 'bothRequired',
+  'Coordinates are out of range.': 'outOfRange',
+  'Drop the pin on the store.': 'dropPin',
+};
 
 function formatResolved(a: ResolvedAddress): string {
   const tail = [a.state, a.postal_code].filter(Boolean).join(' ');
@@ -65,6 +80,9 @@ function formatResolved(a: ResolvedAddress): string {
 }
 
 export function LocationCard({ branch }: { branch: BranchLocation }) {
+  const t = useTranslations('branch');
+  const rawLocale = useLocale();
+  const locale = isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE;
   const router = useRouter();
   const [picking, setPicking] = React.useState(false);
   const [timezone, setTimezone] = React.useState(branch.timezone);
@@ -91,9 +109,24 @@ export function LocationCard({ branch }: { branch: BranchLocation }) {
     });
     setSaving(false);
     if (rpcError) {
-      // The RPC's own hints are written for a merchant to read, so pass them through rather
-      // than replacing them with something vaguer.
-      setError(rpcError.hint ?? rpcError.message);
+      // The RPC raises stable codes with English hints for a merchant; each known one has its
+      // own message here, so the merchant still learns what to do next in their language.
+      console.error('Saving the branch location failed', rpcError);
+      const code = rpcError.message;
+      if (code.includes('invalid_location')) {
+        const which = rpcError.hint ? INVALID_LOCATION_HINTS[rpcError.hint] : undefined;
+        setError(t(`location.errors.${which ?? 'invalid'}`));
+      } else if (code.includes('location_pin_required')) {
+        setError(t('location.errors.pinRequired'));
+      } else if (code.includes('not_authorized')) {
+        setError(t('location.errors.notAuthorized'));
+      } else if (code.includes('auth_required')) {
+        setError(t('location.errors.signedOut'));
+      } else if (code.includes('branch_not_found')) {
+        setError(t('location.errors.branchNotFound'));
+      } else {
+        setError(t('errors.generic'));
+      }
       return;
     }
     setPicking(false);
@@ -105,7 +138,7 @@ export function LocationCard({ branch }: { branch: BranchLocation }) {
     const lat = Number(manualLat);
     const lng = Number(manualLng);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-      setError('Enter both latitude and longitude as numbers.');
+      setError(t('location.errors.notNumbers'));
       return;
     }
     await commit(manualAddress.trim(), lat, lng);
@@ -122,7 +155,14 @@ export function LocationCard({ branch }: { branch: BranchLocation }) {
       .eq('id', branch.id);
     setSaving(false);
     if (updateError) {
-      setError(updateError.message);
+      console.error('Saving the branch time zone failed', updateError);
+      setError(
+        updateError.message.includes('branch_manager_required')
+          ? t('errors.managerRequired')
+          : updateError.code === '42501'
+            ? t('errors.noPermission')
+            : t('errors.generic'),
+      );
       return;
     }
     setSaved(true);
@@ -131,21 +171,15 @@ export function LocationCard({ branch }: { branch: BranchLocation }) {
 
   return (
     <Card className="p-5">
-      <h2 className="font-display text-lg font-semibold">Location</h2>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Where this branch actually is. Delivery fees, rider dispatch and order batching are
-        all measured from this pin — not from the address text.
-      </p>
+      <h2 className="font-display text-lg font-semibold">{t('location.title')}</h2>
+      <p className="mt-1 text-sm text-muted-foreground">{t('location.description')}</p>
 
       {!hasPin && (
         <div className="mt-4 flex items-start gap-3 rounded-xl border border-danger/40 bg-danger/10 p-3">
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-danger" />
           <div className="text-sm">
-            <p className="font-semibold text-danger">No pin set — delivery cannot dispatch</p>
-            <p className="mt-0.5 text-muted-foreground">
-              find_dispatch_candidates needs a location, so no rider will ever be offered an
-              order from this branch until one is set.
-            </p>
+            <p className="font-semibold text-danger">{t('location.noPinTitle')}</p>
+            <p className="mt-0.5 text-muted-foreground">{t('location.noPinBody')}</p>
           </div>
         </div>
       )}
@@ -154,21 +188,21 @@ export function LocationCard({ branch }: { branch: BranchLocation }) {
         <div className="rounded-xl border border-border p-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs font-medium text-muted-foreground">Address</p>
+              <p className="text-xs font-medium text-muted-foreground">{t('location.address')}</p>
               <p className="mt-0.5 break-words text-sm font-semibold">
-                {branch.address || <span className="text-muted-foreground">Not set</span>}
+                {branch.address || <span className="text-muted-foreground">{t('location.notSet')}</span>}
               </p>
               <p className="mt-2 text-xs text-muted-foreground">
                 <MapPin className="mr-1 inline h-3.5 w-3.5" />
                 {hasPin
                   ? `${branch.geo_lat!.toFixed(5)}, ${branch.geo_lng!.toFixed(5)}`
-                  : 'no coordinates'}
+                  : t('location.noCoordinates')}
               </p>
             </div>
             {mapAvailable && (
               <Button variant="outline" size="sm" onClick={() => setPicking(true)}>
                 <Pencil className="mr-1.5 h-4 w-4" />
-                {hasPin ? 'Move' : 'Set'}
+                {hasPin ? t('location.move') : t('location.set')}
               </Button>
             )}
           </div>
@@ -179,12 +213,8 @@ export function LocationCard({ branch }: { branch: BranchLocation }) {
             keeps the feature reachable rather than rendering a dead card. */}
         {!mapAvailable && (
           <div className="rounded-xl border border-border p-3">
-            <p className="text-sm font-medium">Enter the location manually</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              The map needs NEXT_PUBLIC_MAPBOX_TOKEN, which is not set here. Coordinates can
-              be copied from Google Maps: right-click the store, and the first item is
-              &ldquo;latitude, longitude&rdquo;.
-            </p>
+            <p className="text-sm font-medium">{t('location.manualTitle')}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{t('location.manualHint')}</p>
             <input
               value={manualAddress}
               onChange={(e) => setManualAddress(e.target.value)}
@@ -196,14 +226,14 @@ export function LocationCard({ branch }: { branch: BranchLocation }) {
                 value={manualLat}
                 onChange={(e) => setManualLat(e.target.value)}
                 inputMode="decimal"
-                placeholder="Latitude"
+                placeholder={t('location.latitude')}
                 className="focus-ring w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
               />
               <input
                 value={manualLng}
                 onChange={(e) => setManualLng(e.target.value)}
                 inputMode="decimal"
-                placeholder="Longitude"
+                placeholder={t('location.longitude')}
                 className="focus-ring w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
               />
             </div>
@@ -214,14 +244,14 @@ export function LocationCard({ branch }: { branch: BranchLocation }) {
               loading={saving}
               onClick={saveManual}
             >
-              Save location
+              {t('location.saveLocation')}
             </Button>
           </div>
         )}
 
         <div className="rounded-xl border border-border p-3">
           <label className="block">
-            <span className="text-xs font-medium text-muted-foreground">Time zone</span>
+            <span className="text-xs font-medium text-muted-foreground">{t('location.timezone')}</span>
             <select
               value={timezone}
               onChange={(e) => setTimezone(e.target.value)}
@@ -229,30 +259,27 @@ export function LocationCard({ branch }: { branch: BranchLocation }) {
             >
               {/* Keep whatever is stored selectable even when it is not in the US list, so
                   opening this card can never silently rewrite a branch's zone. */}
-              {!US_TIMEZONES.some((t) => t.value === branch.timezone) && (
+              {!US_TIMEZONES.some((z) => z.value === branch.timezone) && (
                 <option value={branch.timezone}>{branch.timezone}</option>
               )}
-              {US_TIMEZONES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
+              {US_TIMEZONES.map((z) => (
+                <option key={z.value} value={z.value}>
+                  {t(`location.timezones.${z.key}`)}
                 </option>
               ))}
             </select>
           </label>
-          <p className="mt-1.5 text-xs text-muted-foreground">
-            Opening hours and delivery windows are read in this zone. Set it to the zone the
-            store is physically in, not head office.
-          </p>
+          <p className="mt-1.5 text-xs text-muted-foreground">{t('location.timezoneHint')}</p>
           {timezone !== branch.timezone && (
             <Button variant="outline" size="sm" className="mt-3" loading={saving} onClick={saveTimezone}>
-              Save time zone
+              {t('location.saveTimezone')}
             </Button>
           )}
         </div>
       </div>
 
       {error && <p className="mt-3 text-sm text-danger">{error}</p>}
-      {saved && !error && <p className="mt-3 text-sm text-success">Saved.</p>}
+      {saved && !error && <p className="mt-3 text-sm text-success">{t('location.saved')}</p>}
 
       {picking && mapAvailable && (
         <div
@@ -266,9 +293,9 @@ export function LocationCard({ branch }: { branch: BranchLocation }) {
             onClick={(e) => e.stopPropagation()}
           >
             <header className="flex items-center justify-between border-b border-border p-4">
-              <h3 className="font-display text-lg font-semibold">Set branch location</h3>
+              <h3 className="font-display text-lg font-semibold">{t('location.pickerTitle')}</h3>
               <Button variant="ghost" size="sm" onClick={() => setPicking(false)}>
-                Cancel
+                {t('location.cancel')}
               </Button>
             </header>
             <div className="h-[60vh]">
@@ -277,10 +304,11 @@ export function LocationCard({ branch }: { branch: BranchLocation }) {
                 onConfirm={(addr: ResolvedAddress) =>
                   void commit(formatResolved(addr), addr.lat, addr.lng)
                 }
+                locale={locale}
                 labels={{
-                  confirm: 'Use this as the branch address',
-                  dragHint: 'Search for the store, or drag the map so the pin sits on it',
-                  searchPlaceholder: 'Search for the restaurant address',
+                  confirm: t('location.pickerConfirm'),
+                  dragHint: t('location.pickerDragHint'),
+                  searchPlaceholder: t('location.pickerSearch'),
                 }}
               />
             </div>

@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Button, useConfirm } from '@favornoms/ui';
 
@@ -12,12 +13,16 @@ interface Props {
   slipAttached: boolean;
 }
 
+/** pay_/reject_driver_withdrawal error codes → payouts.actions.errors.<key>. */
 const RPC_ERRORS: Record<string, string> = {
-  not_pending: 'This request was already settled.',
-  not_authorized: "You don't have permission to settle this request.",
+  not_pending: 'notPending',
+  not_authorized: 'notAuthorized',
+  not_found: 'notFound',
+  auth_required: 'signedOut',
 };
 
 export function WithdrawalActions({ withdrawalId, amount, driverName, slipAttached }: Props) {
+  const t = useTranslations('payouts.actions');
   const router = useRouter();
   const confirm = useConfirm();
   const [busy, setBusy] = React.useState(false);
@@ -26,14 +31,19 @@ export function WithdrawalActions({ withdrawalId, amount, driverName, slipAttach
   const [rejecting, setRejecting] = React.useState(false);
   const [reason, setReason] = React.useState('');
 
+  const rpcError = (message: string) => {
+    const key = RPC_ERRORS[message];
+    if (!key) console.error('driver withdrawal RPC failed', message);
+    return t(`errors.${key ?? 'generic'}`);
+  };
+
   const markPaid = async () => {
     // Not a hard block: merchants transfer first and screenshot second, and the slip can be
     // filed against a paid payout afterwards.
-    const missingSlip = slipAttached ? '' : ' No transfer slip is attached yet.';
     const confirmed = await confirm({
-      title: `Pay $${amount.toFixed(2)} to ${driverName}?`,
-      body: `Confirm only after the transfer is sent.${missingSlip}`,
-      confirmLabel: 'Mark as paid',
+      title: t('payTitle', { amount: `$${amount.toFixed(2)}`, name: driverName }),
+      body: slipAttached ? t('payBody') : t('payBodyNoSlip'),
+      confirmLabel: t('markPaid'),
       destructive: true,
     });
     if (!confirmed) return;
@@ -45,7 +55,7 @@ export function WithdrawalActions({ withdrawalId, amount, driverName, slipAttach
     });
     setBusy(false);
     if (rpcErr) {
-      setError(RPC_ERRORS[rpcErr.message] ?? rpcErr.message);
+      setError(rpcError(rpcErr.message));
       return;
     }
     setPaidReceipt((data as { receipt_number?: string } | null)?.receipt_number ?? '—');
@@ -63,14 +73,18 @@ export function WithdrawalActions({ withdrawalId, amount, driverName, slipAttach
     );
     setBusy(false);
     if (rpcErr) {
-      setError(RPC_ERRORS[rpcErr.message] ?? rpcErr.message);
+      setError(rpcError(rpcErr.message));
       return;
     }
     router.refresh();
   };
 
   if (paidReceipt) {
-    return <span className="text-sm font-medium text-success">Paid · Receipt {paidReceipt}</span>;
+    return (
+      <span className="text-sm font-medium text-success">
+        {t('paidReceipt', { number: paidReceipt })}
+      </span>
+    );
   }
 
   return (
@@ -81,25 +95,25 @@ export function WithdrawalActions({ withdrawalId, amount, driverName, slipAttach
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             maxLength={200}
-            placeholder="Reason (optional)"
+            placeholder={t('reasonPlaceholder')}
             className="focus-ring h-9 w-56 rounded-md border border-border bg-background px-3 text-sm"
           />
           <div className="flex gap-2">
             <Button size="sm" variant="ghost" disabled={busy} onClick={() => setRejecting(false)}>
-              Cancel
+              {t('cancel')}
             </Button>
             <Button size="sm" variant="danger" loading={busy} onClick={reject}>
-              Confirm reject
+              {t('confirmReject')}
             </Button>
           </div>
         </div>
       ) : (
         <div className="flex gap-2">
           <Button size="sm" variant="outline" disabled={busy} onClick={() => setRejecting(true)}>
-            Reject
+            {t('reject')}
           </Button>
           <Button size="sm" variant="gradient" loading={busy} onClick={markPaid}>
-            Mark as paid
+            {t('markPaid')}
           </Button>
         </div>
       )}

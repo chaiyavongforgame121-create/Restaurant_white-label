@@ -2,9 +2,17 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
+import { useLocale, useTranslations } from 'next-intl';
 import { CalendarClock, Clock, Plus, Save, Trash2 } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
-import { describeRanges, effectiveBookableRanges, type WeekdayWindow } from '@favornoms/shared';
+import {
+  DEFAULT_UI_LOCALE,
+  describeRanges,
+  effectiveBookableRanges,
+  intlLocaleFor,
+  isUiLocale,
+  type WeekdayWindow,
+} from '@favornoms/shared';
 import { Button, Card } from '@favornoms/ui';
 
 // Scheduling policy for this branch. Merges its own keys into branches.settings and never
@@ -44,7 +52,26 @@ const TIME_INPUT_CLS =
 
 const SLOT_CHOICES = [5, 10, 15, 20, 30, 60];
 
-const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+/**
+ * Weekday names in the interface language, Sunday first to match day_of_week (0 = Sunday).
+ * 1 January 2023 was a Sunday; UTC keeps the device's zone out of it.
+ */
+function weekdayNames(intlLocale: string): string[] {
+  const fmt = new Intl.DateTimeFormat(intlLocale, { weekday: 'long', timeZone: 'UTC' });
+  return Array.from({ length: 7 }, (_, d) => {
+    const name = fmt.format(new Date(Date.UTC(2023, 0, 1 + d)));
+    return name.charAt(0).toLocaleUpperCase(intlLocale) + name.slice(1);
+  });
+}
+
+/** Raw database text never reaches the merchant: a known refusal gets its own message,
+ *  anything else the generic one. */
+function saveErrorKey(err: { message: string; code?: string }): string {
+  if (err.code === '42501' || err.message === 'forbidden' || err.message.includes('branch_manager_required')) {
+    return 'errors.noPermission';
+  }
+  return 'errors.generic';
+}
 
 interface Window {
   opens_at: string; // 'HH:MM'
@@ -65,7 +92,7 @@ interface UntypedClient {
   rpc: (
     fn: string,
     args: Record<string, unknown>,
-  ) => PromiseLike<{ error: { message: string } | null }>;
+  ) => PromiseLike<{ error: { message: string; code?: string } | null }>;
 }
 
 /** Mirrors storefront_status's defaults exactly. If these two drift, the picker offers
@@ -108,6 +135,10 @@ function flatten(week: WeekHours): WeekdayWindow[] {
 }
 
 export function ScheduledOrdersCard({ branchId, settings }: Props) {
+  const t = useTranslations('branchOps');
+  const rawLocale = useLocale();
+  const locale = isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE;
+  const days = React.useMemo(() => weekdayNames(intlLocaleFor(locale)), [locale]);
   const router = useRouter();
   const [enabled, setEnabled] = React.useState<boolean>(
     settings?.scheduling_enabled === undefined
@@ -209,7 +240,8 @@ export function ScheduledOrdersCard({ branchId, settings }: Props) {
       );
       if (rpcErr) {
         setSaving(false);
-        setError(rpcErr.message);
+        console.error('Saving booking windows failed', rpcErr);
+        setError(t(saveErrorKey(rpcErr)));
         return;
       }
     }
@@ -230,25 +262,22 @@ export function ScheduledOrdersCard({ branchId, settings }: Props) {
       .eq('id', branchId);
     setSaving(false);
     if (updateError) {
-      setError(updateError.message);
+      console.error('Saving scheduling settings failed', updateError);
+      setError(t(saveErrorKey(updateError)));
       return;
     }
     setSavedAt(Date.now());
     router.refresh();
   };
 
+  const strong = (chunks: React.ReactNode) => <strong>{chunks}</strong>;
+
   return (
     <Card className="p-5">
       <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
-        <CalendarClock className="h-5 w-5 text-primary" /> Scheduled orders
+        <CalendarClock className="h-5 w-5 text-primary" /> {t('scheduling.title')}
       </h2>
-      <p className="text-sm text-muted-foreground">
-        How customers book deliveries: on your storefront every delivery is booked for a day
-        and time, and pickup is always ordered for now. Bookable times start from this
-        branch&apos;s <strong>Opening hours</strong> above, narrowed by the booking windows below
-        when you switch those on, and by <strong>Delivery hours</strong> when those are limited.
-        A branch that does not sell delivery takes no bookings from customers.
-      </p>
+      <p className="text-sm text-muted-foreground">{t.rich('scheduling.description', { strong })}</p>
 
       <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-border p-3">
         <input
@@ -258,17 +287,14 @@ export function ScheduledOrdersCard({ branchId, settings }: Props) {
           className="mt-1 h-4 w-4"
         />
         <span>
-          <span className="block text-sm font-semibold">Accept scheduled orders</span>
-          <span className="block text-xs text-muted-foreground">
-            Customers book every delivery for a day and time. Off: &ldquo;Schedule
-            Delivery&rdquo; disappears from your storefront and customers can only order Pickup.
-          </span>
+          <span className="block text-sm font-semibold">{t('scheduling.accept')}</span>
+          <span className="block text-xs text-muted-foreground">{t('scheduling.acceptHint')}</span>
         </span>
       </label>
 
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <label className="block">
-          <span className="mb-1.5 block text-sm font-medium">Earliest booking (minutes ahead)</span>
+          <span className="mb-1.5 block text-sm font-medium">{t('scheduling.minLead')}</span>
           <input
             type="number"
             min={0}
@@ -279,13 +305,11 @@ export function ScheduledOrdersCard({ branchId, settings }: Props) {
             onChange={(e) => setMinLead(e.target.value)}
             className={INPUT_CLS}
           />
-          <span className="mt-1 block text-xs text-muted-foreground">
-            How far in advance a customer must book. Slots sooner than this are not offered.
-          </span>
+          <span className="mt-1 block text-xs text-muted-foreground">{t('scheduling.minLeadHint')}</span>
         </label>
 
         <label className="block">
-          <span className="mb-1.5 block text-sm font-medium">Furthest booking (days ahead)</span>
+          <span className="mb-1.5 block text-sm font-medium">{t('scheduling.maxDays')}</span>
           <input
             type="number"
             min={0}
@@ -296,13 +320,11 @@ export function ScheduledOrdersCard({ branchId, settings }: Props) {
             onChange={(e) => setMaxDays(e.target.value)}
             className={INPUT_CLS}
           />
-          <span className="mt-1 block text-xs text-muted-foreground">
-            0 turns scheduling into same-day only.
-          </span>
+          <span className="mt-1 block text-xs text-muted-foreground">{t('scheduling.maxDaysHint')}</span>
         </label>
 
         <label className="block">
-          <span className="mb-1.5 block text-sm font-medium">Time slot size</span>
+          <span className="mb-1.5 block text-sm font-medium">{t('scheduling.slot')}</span>
           <select
             value={slot}
             onChange={(e) => setSlot(e.target.value)}
@@ -310,17 +332,15 @@ export function ScheduledOrdersCard({ branchId, settings }: Props) {
           >
             {SLOT_CHOICES.map((m) => (
               <option key={m} value={m}>
-                Every {m} minutes
+                {t('scheduling.slotOption', { minutes: m })}
               </option>
             ))}
           </select>
-          <span className="mt-1 block text-xs text-muted-foreground">
-            Rounds the offered times. Bigger slots mean fewer, tidier choices.
-          </span>
+          <span className="mt-1 block text-xs text-muted-foreground">{t('scheduling.slotHint')}</span>
         </label>
 
         <label className="block">
-          <span className="mb-1.5 block text-sm font-medium">Send to kitchen (minutes before)</span>
+          <span className="mb-1.5 block text-sm font-medium">{t('scheduling.kitchenLead')}</span>
           <input
             type="number"
             min={0}
@@ -335,9 +355,7 @@ export function ScheduledOrdersCard({ branchId, settings }: Props) {
               prep_time_min, so a caterer who needed a day of lead time had to quote a
               one-day ETA to every walk-up customer to get it. */}
           <span className="mt-1 block text-xs text-muted-foreground">
-            A booking stays out of the kitchen display until this long before its time. This
-            is <strong>not</strong> the prep time shown in customer ETAs — that stays on the
-            Delivery card.
+            {t.rich('scheduling.kitchenLeadHint', { strong })}
           </span>
         </label>
       </div>
@@ -348,10 +366,11 @@ export function ScheduledOrdersCard({ branchId, settings }: Props) {
           and there was no way to notice it before placing the order. */}
       {enabled && intOr(kitchenLead, 15) > intOr(minLead, DEFAULTS.schedule_min_lead_min) && (
         <p role="status" className="mt-3 rounded-xl bg-warning/10 px-4 py-3 text-sm">
-          Customers can book {intOr(minLead, DEFAULTS.schedule_min_lead_min)} minutes ahead,
-          but you asked for {intOr(kitchenLead, 15)} minutes of kitchen notice. Anything
-          booked inside that gap reaches the kitchen straight away, with less notice than
-          you wanted. Raise <strong>Earliest booking</strong> to match if that matters.
+          {t.rich('scheduling.leadGap', {
+            bookMinutes: intOr(minLead, DEFAULTS.schedule_min_lead_min),
+            kitchenMinutes: intOr(kitchenLead, 15),
+            strong,
+          })}
         </p>
       )}
 
@@ -369,13 +388,10 @@ export function ScheduledOrdersCard({ branchId, settings }: Props) {
               />
               <span>
                 <span className="flex items-center gap-1.5 text-sm font-medium">
-                  <Clock className="h-4 w-4 text-muted-foreground" /> Limit the times
-                  customers can book
+                  <Clock className="h-4 w-4 text-muted-foreground" /> {t('scheduling.limit')}
                 </span>
                 <span className="block text-xs text-muted-foreground">
-                  Off: customers can book any time the branch is open. On: only inside the
-                  windows below — set a different one per day, so you can take bookings from
-                  5pm all week and only 10am–2pm on Sunday.
+                  {t('scheduling.limitHint')}
                 </span>
               </span>
             </label>
@@ -384,7 +400,7 @@ export function ScheduledOrdersCard({ branchId, settings }: Props) {
           {windowsEnabled && (
             <>
               {!loaded ? (
-                <p className="mt-4 text-sm text-muted-foreground">Loading…</p>
+                <p className="mt-4 text-sm text-muted-foreground">{t('common.loading')}</p>
               ) : (
                 <div className="mt-4 space-y-3">
                   <div className="flex justify-end">
@@ -393,10 +409,10 @@ export function ScheduledOrdersCard({ branchId, settings }: Props) {
                       onClick={sameAsOpeningHours}
                       className="focus-ring text-xs font-medium text-primary underline"
                     >
-                      Same as opening hours
+                      {t('scheduling.sameAsOpening')}
                     </button>
                   </div>
-                  {DAYS.map((name, day) => (
+                  {days.map((name, day) => (
                     <div key={day} className="rounded-xl border border-border p-3">
                       <div className="flex items-center justify-between">
                         <p className="text-sm font-semibold">{name}</p>
@@ -407,7 +423,7 @@ export function ScheduledOrdersCard({ branchId, settings }: Props) {
                               onClick={() => copyToAll(day)}
                               className="focus-ring text-xs text-muted-foreground underline"
                             >
-                              Copy to all days
+                              {t('common.copyToAll')}
                             </button>
                           )}
                           <button
@@ -415,13 +431,13 @@ export function ScheduledOrdersCard({ branchId, settings }: Props) {
                             onClick={() => addWindow(day)}
                             className="focus-ring inline-flex items-center gap-1 text-xs font-medium text-primary"
                           >
-                            <Plus className="h-3.5 w-3.5" /> Add window
+                            <Plus className="h-3.5 w-3.5" /> {t('common.addWindow')}
                           </button>
                         </div>
                       </div>
                       {(week[day]?.length ?? 0) === 0 ? (
                         <p className="mt-1 text-xs text-muted-foreground">
-                          No advance orders this day
+                          {t('scheduling.noBookings')}
                         </p>
                       ) : (
                         <div className="mt-2 space-y-2">
@@ -433,7 +449,7 @@ export function ScheduledOrdersCard({ branchId, settings }: Props) {
                                 onChange={(e) => setWindow(day, idx, { opens_at: e.target.value })}
                                 className={TIME_INPUT_CLS}
                               />
-                              <span className="text-xs text-muted-foreground">to</span>
+                              <span className="text-xs text-muted-foreground">{t('common.to')}</span>
                               <input
                                 type="time"
                                 value={win.closes_at}
@@ -441,13 +457,13 @@ export function ScheduledOrdersCard({ branchId, settings }: Props) {
                                 className={TIME_INPUT_CLS}
                               />
                               {win.closes_at <= win.opens_at && (
-                                <span className="text-xs text-muted-foreground">(overnight)</span>
+                                <span className="text-xs text-muted-foreground">{t('common.overnight')}</span>
                               )}
                               <button
                                 type="button"
                                 onClick={() => removeWindow(day, idx)}
                                 className="focus-ring ml-auto text-muted-foreground hover:text-danger"
-                                aria-label="Remove window"
+                                aria-label={t('common.removeWindow')}
                               >
                                 <Trash2 className="h-4 w-4" />
                               </button>
@@ -456,11 +472,13 @@ export function ScheduledOrdersCard({ branchId, settings }: Props) {
                           {/* The answer to "why can nobody book at 10pm?": the branch is
                               shut then, and a booking window cannot open a closed kitchen. */}
                           <p className="text-xs text-muted-foreground">
-                            Customers will see:{' '}
-                            {describeRanges(
-                              effectiveBookableRanges(openingHours, draftWindows, day),
-                              'nothing — the branch is closed during these hours',
-                            )}
+                            {t('scheduling.customersSee', {
+                              ranges: describeRanges(
+                                effectiveBookableRanges(openingHours, draftWindows, day),
+                                t('scheduling.closedDuringWindows'),
+                                locale,
+                              ),
+                            })}
                           </p>
                         </div>
                       )}
@@ -471,8 +489,7 @@ export function ScheduledOrdersCard({ branchId, settings }: Props) {
 
               {armedButEmpty && (
                 <p className="mt-3 rounded-xl bg-warning/10 px-4 py-3 text-sm">
-                  Booking windows are switched on but none are set — customers cannot
-                  schedule an order at all. Add a window, or switch this off.
+                  {t('scheduling.armedButEmpty')}
                 </p>
               )}
             </>
@@ -486,9 +503,9 @@ export function ScheduledOrdersCard({ branchId, settings }: Props) {
 
       <div className="mt-4 flex items-center gap-3">
         <Button onClick={save} loading={saving} leftIcon={<Save className="h-4 w-4" />}>
-          Save scheduling
+          {t('scheduling.save')}
         </Button>
-        {savedAt && !saving && <span className="text-sm text-success">Saved ✓</span>}
+        {savedAt && !saving && <span className="text-sm text-success">{t('common.saved')}</span>}
       </div>
     </Card>
   );

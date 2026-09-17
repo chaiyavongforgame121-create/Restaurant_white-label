@@ -1,0 +1,55 @@
+{
+  "title": "Códigos promocionales",
+  "subtitle": "Códigos de descuento que los clientes pueden ingresar al pagar.",
+  "new": "Nueva promoción",
+  "cancel": "Cancelar",
+  "create": "Crear promoción",
+  "fields": {
+    "code": "Código",
+    "codePlaceholder": "BIENVENIDA10",
+    "kind": "Tipo",
+    "percent": "Porcentaje (1–100)",
+    "amount": "Monto en USD",
+    "minSubtotal": "Subtotal mínimo (USD)",
+    "maxRedemptions": "Máximo de usos (opcional)",
+    "maxRedemptionsPlaceholder": "ilimitado",
+    "endsAt": "Termina (opcional, hora de {zone})"
+  },
+  "kinds": {
+    "percent_off": "% de descuento",
+    "fixed_off": "Descuento fijo en USD",
+    "free_delivery": "Envío gratis"
+  },
+  "describe": {
+    "percentOff": "{value}% de descuento",
+    "fixedOff": "${value} de descuento",
+    "freeDelivery": "Envío gratis",
+    "minimum": "mín. ${amount}",
+    "used": "usos: {used}",
+    "usedOf": "usos: {used}/{max}",
+    "ends": "termina {date}"
+  },
+  "status": {
+    "active": "Activa",
+    "paused": "En pausa"
+  },
+  "pause": "Pausar",
+  "activate": "Activar",
+  "delete": "Eliminar",
+  "deleteDialog": {
+    "title": "¿Eliminar la promoción {code}?",
+    "body": "Los clientes ya no podrán canjear este código al pagar.",
+    "confirm": "Eliminar"
+  },
+  "empty": {
+    "title": "Aún no hay promociones",
+    "description": "Crea un código promocional para empezar a lanzar campañas."
+  },
+  "errors": {
+    "unreadableEnd": "No se pudo leer la hora de finalización. Elígela de nuevo.",
+    "duplicateCode": "Esta sucursal ya tiene una promoción con ese código. Elige otro código.",
+    "invalid": "Algunos valores no son válidos. Revisa el monto, el subtotal mínimo y el máximo de usos.",
+    "permission": "No tienes permiso para crear promociones en esta sucursal.",
+    "saveFailed": "No se pudo crear la promoción. Inténtalo de nuevo."
+  }
+}

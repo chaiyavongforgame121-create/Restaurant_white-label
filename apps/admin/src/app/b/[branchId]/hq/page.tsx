@@ -39,6 +39,16 @@ export default async function HqPage({ params, searchParams }: Props) {
       monthsBack,
     ));
   }
+  // The card shows a translated sentence, never this text, so the server log is where support
+  // finds out what actually failed.
+  if (error && !error.includes('42501')) {
+    console.error('[hq] get_restaurant_reports failed after a retry', {
+      branchId,
+      restaurantId: branch.restaurant_id,
+      monthsBack,
+      error,
+    });
+  }
 
   return (
     <HqView branchId={branchId} initialMonths={monthsBack} reports={reports} error={error} />

@@ -2,8 +2,9 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { useLocale, useTranslations } from 'next-intl';
 import { ArrowLeft, RefreshCcw, Undo2 } from 'lucide-react';
-import { formatCurrency } from '@favornoms/shared';
+import { DEFAULT_UI_LOCALE, formatCurrency, intlLocaleFor, isUiLocale } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Badge, Button, Card, useAlert, usePrompt } from '@favornoms/ui';
 // The one receipt drawer in the product. It loads the order itself and prints the same
@@ -34,6 +35,31 @@ interface Props {
   canPrintReceipt: boolean;
 }
 
+// Statuses and channels are stored codes; only these have a label under `counter.status` /
+// `counter.channel`. Anything newer shows its code rather than a missing-key path.
+const STATUS_LABELS = new Set([
+  'pending',
+  'confirmed',
+  'preparing',
+  'ready',
+  'out_for_delivery',
+  'completed',
+  'cancelled',
+  'refunded',
+]);
+const CHANNEL_LABELS = new Set(['dine_in', 'pickup', 'delivery', 'qr_ordering']);
+
+// refund_order's raised codes, keyed to `counter.recent.*` messages.
+const REFUND_ERRORS: Array<[string, string]> = [
+  ['not_authorized', 'recent.refundNotAuthorized'],
+  ['invalid_refund_amount', 'recent.refundInvalidAmount'],
+  ['order_not_found', 'recent.refundNotFound'],
+  ['auth_required', 'recent.refundAuthRequired'],
+];
+
+/** The placeholder the till writes when nobody gave a name. Stored in English. */
+const WALK_IN = 'Walk-in';
+
 export function RecentOrders({
   branchId,
   orders: initial,
@@ -42,6 +68,9 @@ export function RecentOrders({
   currency,
   canPrintReceipt,
 }: Props) {
+  const t = useTranslations('counter');
+  const rawLocale = useLocale();
+  const intlLocale = intlLocaleFor(isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE);
   const [orders, setOrders] = React.useState(initial);
   const [refundingId, setRefundingId] = React.useState<string | null>(null);
   const prompt = usePrompt();
@@ -49,17 +78,17 @@ export function RecentOrders({
 
   const refund = async (order: OrderRow) => {
     const raw = await prompt({
-      title: `Refund order ${order.order_number}`,
-      body: `Enter an amount in USD, up to $${Number(order.total).toFixed(2)}. Leave it blank to refund in full.`,
+      title: t('recent.refundTitle', { number: order.order_number }),
+      body: t('recent.refundBody', { max: `$${Number(order.total).toFixed(2)}` }),
       defaultValue: String(Number(order.total).toFixed(2)),
-      confirmLabel: 'Continue',
+      confirmLabel: t('recent.continue'),
     });
     if (raw === null) return;
     const amount = raw.trim() ? Number(raw) : Number(order.total);
     if (!Number.isFinite(amount) || amount <= 0) {
       await notify({
-        title: 'Invalid amount',
-        body: 'Enter a number greater than zero, or leave the field blank to refund in full.',
+        title: t('recent.invalidAmount'),
+        body: t('recent.invalidAmountBody'),
       });
       return;
     }
@@ -69,7 +98,7 @@ export function RecentOrders({
     // coalesced that to "no reason" and refunded anyway, which was survivable when the
     // buttons were the browser's; it is not when this dialog's own buttons read Cancel and
     // Refund. An empty reason is still fine — that is the Refund button with nothing typed.
-    const reason = await prompt({ title: 'Reason (optional)', confirmLabel: 'Refund' });
+    const reason = await prompt({ title: t('recent.reasonTitle'), confirmLabel: t('recent.refund') });
     if (reason === null) return;
     setRefundingId(order.id);
     try {
@@ -80,7 +109,13 @@ export function RecentOrders({
         p_reason: reason.trim() || null,
       });
       if (error) {
-        await notify({ title: 'Refund failed', body: error.message });
+        // The database's wording is logged; the cashier gets a sentence they can act on.
+        const known = REFUND_ERRORS.find(([code]) => error.message.includes(code));
+        if (!known) console.error('counter: refund_order failed', error.message);
+        await notify({
+          title: t('recent.refundFailed'),
+          body: known ? t(known[1]) : t('errors.generic'),
+        });
         return;
       }
       setOrders((curr) =>
@@ -98,65 +133,78 @@ export function RecentOrders({
           href={`/counter/${branchId}`}
           className="focus-ring inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium hover:bg-muted"
         >
-          <ArrowLeft className="h-4 w-4" /> Back to counter
+          <ArrowLeft className="h-4 w-4" /> {t('recent.back')}
         </Link>
-        <h1 className="font-display text-2xl font-bold">Recent orders</h1>
+        <h1 className="font-display text-2xl font-bold">{t('recent.title')}</h1>
       </header>
 
       {orders.length === 0 ? (
         <Card className="p-10 text-center text-muted-foreground">
           <RefreshCcw className="mx-auto h-10 w-10 opacity-40" />
-          <p className="mt-3 text-sm">No orders in the last 24 hours.</p>
+          <p className="mt-3 text-sm">{t('recent.empty')}</p>
         </Card>
       ) : (
         <div className="space-y-3">
-          {orders.map((o) => (
-            <Card key={o.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <p className="font-display text-lg font-bold">{o.order_number}</p>
-                  <Badge variant={o.status === 'refunded' ? 'danger' : o.status === 'completed' ? 'success' : 'muted'}>
-                    {o.status}
-                  </Badge>
-                  <span className="text-xs text-muted-foreground">· {o.channel}</span>
-                  {o.scheduled_for && (
-                    <Badge variant="warning">
-                      {o.held ? 'Scheduled' : 'Due now'}
+          {orders.map((o) => {
+            const customer =
+              o.customer_name == null || o.customer_name === WALK_IN
+                ? t('recent.walkIn')
+                : o.customer_name;
+            return (
+              <Card key={o.id} className="flex flex-wrap items-center justify-between gap-3 p-4">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="font-display text-lg font-bold">{o.order_number}</p>
+                    <Badge variant={o.status === 'refunded' ? 'danger' : o.status === 'completed' ? 'success' : 'muted'}>
+                      {STATUS_LABELS.has(o.status) ? t(`status.${o.status}`) : o.status}
                     </Badge>
-                  )}
+                    <span className="text-xs text-muted-foreground">
+                      · {CHANNEL_LABELS.has(o.channel) ? t(`channel.${o.channel}`) : o.channel}
+                    </span>
+                    {o.scheduled_for && (
+                      <Badge variant="warning">
+                        {o.held ? t('recent.scheduled') : t('recent.dueNow')}
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {o.scheduled_for
+                      ? t('recent.metaScheduled', {
+                          customer,
+                          date: new Date(o.scheduled_for).toLocaleString(intlLocale),
+                        })
+                      : t('recent.meta', {
+                          customer,
+                          date: new Date(o.created_at).toLocaleString(intlLocale),
+                        })}
+                  </p>
                 </div>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {o.customer_name ?? 'Walk-in'} ·{' '}
-                  {o.scheduled_for
-                    ? `for ${new Date(o.scheduled_for).toLocaleString('en-US')}`
-                    : new Date(o.created_at).toLocaleString('en-US')}
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="font-display text-xl font-bold text-primary tabular-nums">
-                  {formatCurrency(Number(o.total), currency)}
-                </span>
-                <OrderReceiptButton
-                  orderId={o.id}
-                  orderNumber={o.order_number}
-                  branchName={branchName}
-                  branchAddress={branchAddress}
-                  canPrint={canPrintReceipt}
-                  currency={currency}
-                />
-                <Button
-                  variant="outline"
-                  size="md"
-                  loading={refundingId === o.id}
-                  disabled={o.status === 'refunded' || o.status === 'cancelled'}
-                  onClick={() => refund(o)}
-                  leftIcon={<Undo2 className="h-4 w-4" />}
-                >
-                  Refund
-                </Button>
-              </div>
-            </Card>
-          ))}
+                <div className="flex items-center gap-3">
+                  <span className="font-display text-xl font-bold text-primary tabular-nums">
+                    {formatCurrency(Number(o.total), currency)}
+                  </span>
+                  <OrderReceiptButton
+                    orderId={o.id}
+                    orderNumber={o.order_number}
+                    branchName={branchName}
+                    branchAddress={branchAddress}
+                    canPrint={canPrintReceipt}
+                    currency={currency}
+                  />
+                  <Button
+                    variant="outline"
+                    size="md"
+                    loading={refundingId === o.id}
+                    disabled={o.status === 'refunded' || o.status === 'cancelled'}
+                    onClick={() => refund(o)}
+                    leftIcon={<Undo2 className="h-4 w-4" />}
+                  >
+                    {t('recent.refund')}
+                  </Button>
+                </div>
+              </Card>
+            );
+          })}
         </div>
       )}
     </div>

@@ -4,8 +4,8 @@ import * as React from 'react';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { AlertTriangle, Clock, Flame, Star } from 'lucide-react';
-import { useTranslations } from 'next-intl';
-import { formatCurrency, type MenuItem } from '@favornoms/shared';
+import { useLocale, useTranslations } from 'next-intl';
+import { formatCurrency, validateSelections, type MenuItem, type UiLocale } from '@favornoms/shared';
 import { Badge, Button, DietaryBadge, QuantityStepper, Sheet } from '@favornoms/ui';
 import { getBrowserClient } from '@favornoms/database/client';
 import { useCart, type CartLineModifier } from '@/store/cart';
@@ -45,6 +45,8 @@ interface ModifierOption {
 
 export function MenuItemSheet({ item, onClose, items, onOpenItem }: Props) {
   const t = useTranslations();
+  // A value that is not a UiLocale gives English in validateSelections.
+  const locale = useLocale() as UiLocale;
   const [qty, setQty] = React.useState(1);
   const [notes, setNotes] = React.useState('');
   const [groups, setGroups] = React.useState<ModifierGroup[]>([]);
@@ -151,18 +153,12 @@ export function MenuItemSheet({ item, onClose, items, onOpenItem }: Props) {
     return sum;
   }, [groups, selections]);
 
-  const validation = React.useMemo(() => {
-    for (const g of groups) {
-      const count = (selections[g.id] ?? new Set()).size;
-      if (g.is_required && count < g.min_select) {
-        return `Pick at least ${g.min_select} option${g.min_select === 1 ? '' : 's'} for ${g.name}`;
-      }
-      if (count > g.max_select) {
-        return `Pick at most ${g.max_select} option${g.max_select === 1 ? '' : 's'} for ${g.name}`;
-      }
-    }
-    return null;
-  }, [groups, selections]);
+  // Same rules as before (required minimum, then the maximum), phrased in the interface
+  // language with the group name exactly as the merchant typed it.
+  const validation = React.useMemo(
+    () => validateSelections(groups, selections, locale),
+    [groups, selections, locale],
+  );
 
   const openableRecs = React.useMemo(
     () => resolveRecommendations(recommended, items, view?.id),
@@ -250,7 +246,7 @@ export function MenuItemSheet({ item, onClose, items, onOpenItem }: Props) {
         <div className="absolute inset-0 bg-gradient-to-t from-card via-card/20 to-transparent" />
         <button
           onClick={onClose}
-          aria-label="Close"
+          aria-label={t('common.close')}
           className="focus-ring absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-full bg-card/85 text-foreground shadow-soft backdrop-blur"
         >
           <span className="text-lg leading-none">×</span>
@@ -316,8 +312,11 @@ export function MenuItemSheet({ item, onClose, items, onOpenItem }: Props) {
           <div className="mt-3 flex items-start gap-2 rounded-2xl border border-warning/40 bg-warning/10 px-3 py-2.5">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
             <p className="text-sm text-warning">
-              <span className="font-semibold">Allergen info — contains:</span>{' '}
-              {view.allergens.join(', ')}
+              {/* The allergens themselves are the merchant's words and stay as entered. */}
+              {t.rich('menu.allergens', {
+                list: view.allergens.join(', '),
+                b: (chunks) => <span className="font-semibold">{chunks}</span>,
+              })}
             </p>
           </div>
         )}
@@ -332,10 +331,12 @@ export function MenuItemSheet({ item, onClose, items, onOpenItem }: Props) {
                   <legend className="flex items-baseline justify-between gap-3">
                     <span className="font-display text-base font-semibold">
                       {g.name}
-                      {g.is_required && <span className="ml-1 text-xs font-normal text-destructive">required</span>}
+                      {g.is_required && (
+                        <span className="ml-1 text-xs font-normal text-destructive">{t('menu.required')}</span>
+                      )}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      {g.max_select === 1 ? 'Pick 1' : `Pick up to ${g.max_select}`}
+                      {g.max_select === 1 ? t('menu.pickOne') : t('menu.pickUpTo', { max: g.max_select })}
                     </span>
                   </legend>
                   <div className="space-y-1.5">
@@ -413,7 +414,7 @@ export function MenuItemSheet({ item, onClose, items, onOpenItem }: Props) {
                   key={target.id}
                   type="button"
                   onClick={() => onOpenItem(target)}
-                  aria-label={`Open ${target.name}`}
+                  aria-label={t('menu.openItem', { name: target.name })}
                   className="focus-ring mr-2 inline-flex w-32 shrink-0 snap-start flex-col overflow-hidden rounded-xl border border-border bg-card text-left transition-shadow hover:shadow-warm"
                 >
                   <div
@@ -427,7 +428,7 @@ export function MenuItemSheet({ item, onClose, items, onOpenItem }: Props) {
                     {target.outOfStock && (
                       <span className="absolute inset-0 grid place-items-center bg-background/60">
                         <Badge variant="muted" className="text-xs">
-                          Sold out
+                          {t('menu.soldOut')}
                         </Badge>
                       </span>
                     )}
@@ -462,7 +463,7 @@ export function MenuItemSheet({ item, onClose, items, onOpenItem }: Props) {
             onClick={handleAdd}
             disabled={!!validation || soldOut}
           >
-            {soldOut ? 'Sold out' : `${t('menu.addToCart')} · ${formatCurrency(total)}`}
+            {soldOut ? t('menu.soldOut') : t('menu.addWithPrice', { price: formatCurrency(total) })}
           </Button>
         </div>
       </motion.div>

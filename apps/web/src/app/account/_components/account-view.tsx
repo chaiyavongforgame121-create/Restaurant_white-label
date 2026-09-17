@@ -1,11 +1,16 @@
 'use client';
 
 import * as React from 'react';
+import { useTranslations } from 'next-intl';
 import { Download, ShieldAlert, Trash2 } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Button, Card } from '@favornoms/ui';
 
+/** What the person must type to confirm deletion. Compared below, so it is never translated. */
+const DELETE_CONFIRMATION_WORD = 'DELETE';
+
 export function AccountView() {
+  const t = useTranslations('help.account');
   const [exporting, setExporting] = React.useState(false);
   const [deleting, setDeleting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -18,7 +23,9 @@ export function AccountView() {
       const supabase = getBrowserClient();
       const { data, error: rpcErr } = await supabase.rpc('export_my_data');
       if (rpcErr) {
-        setError(rpcErr.message);
+        // The server's own wording is not shown to the person; keep it for debugging.
+        console.error('export_my_data failed', rpcErr);
+        setError(t('export.failed'));
         return;
       }
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -36,10 +43,8 @@ export function AccountView() {
   };
 
   const deleteAccount = async () => {
-    const confirmation = window.prompt(
-      'Type DELETE to permanently anonymize your account. This cannot be undone.',
-    );
-    if (confirmation !== 'DELETE') return;
+    const confirmation = window.prompt(t('delete.prompt', { word: DELETE_CONFIRMATION_WORD }));
+    if (confirmation !== DELETE_CONFIRMATION_WORD) return;
     setDeleting(true);
     setError(null);
     setInfo(null);
@@ -47,11 +52,12 @@ export function AccountView() {
       const supabase = getBrowserClient();
       const { error: rpcErr } = await supabase.rpc('delete_my_account');
       if (rpcErr) {
-        setError(rpcErr.message);
+        console.error('delete_my_account failed', rpcErr);
+        setError(t('delete.failed'));
         return;
       }
       await supabase.auth.signOut();
-      setInfo('Your account has been anonymized. You will now be signed out.');
+      setInfo(t('delete.done'));
       setTimeout(() => {
         window.location.href = '/';
       }, 2500);
@@ -63,15 +69,14 @@ export function AccountView() {
   return (
     <main className="container max-w-2xl py-10">
       <header>
-        <h1 className="font-display text-3xl font-bold">Your account</h1>
-        <p className="mt-1 text-muted-foreground">Manage your data and privacy settings.</p>
+        <h1 className="font-display text-3xl font-bold">{t('title')}</h1>
+        <p className="mt-1 text-muted-foreground">{t('subtitle')}</p>
       </header>
 
       <Card className="mt-6 space-y-4 p-5">
-        <h2 className="font-display text-lg font-semibold">Download your data</h2>
+        <h2 className="font-display text-lg font-semibold">{t('export.title')}</h2>
         <p className="text-sm text-muted-foreground">
-          Export a copy of everything we have about you — orders, addresses, and account info — as
-          a JSON file.
+          {t('export.body')}
         </p>
         <Button
           variant="outline"
@@ -79,18 +84,16 @@ export function AccountView() {
           loading={exporting}
           leftIcon={<Download className="h-4 w-4" />}
         >
-          Download my data (JSON)
+          {t('export.button')}
         </Button>
       </Card>
 
       <Card className="mt-4 space-y-4 border-destructive/40 p-5">
         <h2 className="flex items-center gap-2 font-display text-lg font-semibold text-destructive">
-          <ShieldAlert className="h-5 w-5" /> Delete my account
+          <ShieldAlert className="h-5 w-5" /> {t('delete.title')}
         </h2>
         <p className="text-sm text-muted-foreground">
-          Permanently anonymize your account. Your order history is retained for tax records, but
-          all personal information (name, phone, addresses, loyalty balance) is removed and cannot
-          be recovered.
+          {t('delete.body')}
         </p>
         <Button
           variant="ghost"
@@ -99,17 +102,18 @@ export function AccountView() {
           leftIcon={<Trash2 className="h-4 w-4" />}
           className="text-destructive hover:bg-destructive/10"
         >
-          Delete account
+          {t('delete.button')}
         </Button>
       </Card>
 
       {info && <p className="mt-4 rounded-xl bg-success/10 px-4 py-3 text-sm text-success">{info}</p>}
       {error && <p className="mt-4 rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p>}
 
+      {/* The pages themselves stay in English; only the link labels follow the interface. */}
       <div className="mt-8 flex flex-wrap gap-4 text-xs text-muted-foreground">
-        <a className="text-primary underline" href="/privacy">Privacy policy</a>
-        <a className="text-primary underline" href="/terms">Terms of service</a>
-        <a className="text-primary underline" href="/ccpa">California rights</a>
+        <a className="text-primary underline" href="/privacy">{t('links.privacy')}</a>
+        <a className="text-primary underline" href="/terms">{t('links.terms')}</a>
+        <a className="text-primary underline" href="/ccpa">{t('links.ccpa')}</a>
       </div>
     </main>
   );

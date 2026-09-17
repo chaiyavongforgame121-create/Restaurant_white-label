@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { RefreshCcw } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { Button } from '@favornoms/ui';
 
 /** Ask the server what build it is serving at most this often. */
@@ -31,6 +32,7 @@ const CHECK_MIN_GAP_MS = 60 * 1000;
  *     mid-address-form, with no warning and no way to decline.
  */
 export function ServiceWorkerRegistrar() {
+  const t = useTranslations('common');
   const [updateReady, setUpdateReady] = React.useState(false);
 
   React.useEffect(() => {
@@ -134,14 +136,14 @@ export function ServiceWorkerRegistrar() {
           // Clear of the bottom tab bar on mobile, out of the way entirely on desktop.
           className="fixed inset-x-3 bottom-20 z-[150] flex items-center justify-between gap-3 rounded-2xl border border-border bg-card/95 p-3 pl-4 shadow-warm backdrop-blur-xl lg:bottom-4 lg:left-auto lg:right-4 lg:max-w-sm"
         >
-          <p className="text-sm font-medium">A new version of the app is ready</p>
+          <p className="text-sm font-medium">{t('update.ready')}</p>
           <Button
             size="sm"
             variant="gradient"
             leftIcon={<RefreshCcw className="h-4 w-4" />}
             onClick={() => window.location.reload()}
           >
-            Reload
+            {t('update.reload')}
           </Button>
         </motion.div>
       )}

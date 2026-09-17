@@ -1,14 +1,31 @@
 'use client';
 
 import * as React from 'react';
+import { useTranslations } from 'next-intl';
 import { Bell, Moon, Save, Sun, User } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Button, Card, useTheme } from '@favornoms/ui';
 import { useAuth } from '@/components/auth/use-auth';
-import { resolveMyCustomerId } from '@/lib/customer';
+import { customerErrorKey, resolveMyCustomerId } from '@/lib/customer';
 import { AccountHeader, SignInGate } from '../../_components/account-ui';
 
+/** The `account.*` messages this page can show for a failed load or save. */
+type SettingsErrorKey =
+  | 'settings.saveFailed'
+  | 'settings.phoneTaken'
+  | 'errors.sessionExpired'
+  | 'errors.branchNotFound'
+  | 'errors.profileUnavailable'
+  | 'errors.generic';
+
+/** An identity failure we can name, else a generic line — never the raw database message. */
+function settingsErrorKey(err: unknown): SettingsErrorKey {
+  const customer = customerErrorKey(err);
+  return customer ? `errors.${customer}` : 'errors.generic';
+}
+
 export function SettingsView({ base, branchId }: { base: string; branchId: string }) {
+  const t = useTranslations('account');
   const { user, loading } = useAuth();
   const { mode, toggleMode } = useTheme();
 
@@ -20,7 +37,8 @@ export function SettingsView({ base, branchId }: { base: string; branchId: strin
   const [loadingData, setLoadingData] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
   const [saved, setSaved] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+  // Held as a message key and translated at render.
+  const [error, setError] = React.useState<SettingsErrorKey | null>(null);
 
   React.useEffect(() => {
     if (!user) {
@@ -50,7 +68,10 @@ export function SettingsView({ base, branchId }: { base: string; branchId: strin
           setMarketing(!!data.marketing_consent);
         }
       } catch (err) {
-        if (!cancelled) setError((err as Error).message);
+        if (!cancelled) {
+          console.error('[settings] loading the profile failed', err);
+          setError(settingsErrorKey(err));
+        }
       } finally {
         if (!cancelled) setLoadingData(false);
       }
@@ -81,12 +102,17 @@ export function SettingsView({ base, branchId }: { base: string; branchId: strin
       .select('id, full_name, phone, email, marketing_consent');
     setSaving(false);
     if (dbErr) {
-      setError(dbErr.message);
+      console.error('[settings] saving the profile failed', dbErr);
+      // customers_restaurant_phone_uidx: one profile per phone number per restaurant, so the
+      // number already belongs to another profile here (often a walk-in order under that phone).
+      // Retrying cannot help; say which field to change.
+      const phoneTaken = dbErr.code === '23505' && dbErr.message.includes('customers_restaurant_phone_uidx');
+      setError(phoneTaken ? 'settings.phoneTaken' : settingsErrorKey(dbErr.message));
       return;
     }
     const row = data?.[0];
     if (!row) {
-      setError("We couldn't save your profile. Please sign in again and retry.");
+      setError('settings.saveFailed');
       return;
     }
     // Round-trip what the database actually stored, so the form can never show
@@ -101,26 +127,26 @@ export function SettingsView({ base, branchId }: { base: string; branchId: strin
 
   return (
     <div className="container max-w-2xl pb-24 pt-4">
-      <AccountHeader base={base} title="Settings & preferences" />
+      <AccountHeader base={base} title={t('sections.settings')} />
       {loading ? null : !user ? (
-        <SignInGate base={base} message="Sign in to manage your profile and preferences." />
+        <SignInGate base={base} message={t('settings.signInPrompt')} />
       ) : (
         <form className="space-y-5" onSubmit={save}>
           <Card className="p-5">
             <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
-              <User className="h-5 w-5 text-primary" /> Your profile
+              <User className="h-5 w-5 text-primary" /> {t('settings.profileTitle')}
             </h2>
             <div className="mt-3 space-y-3">
-              <Field label="Full name">
+              <Field label={t('settings.fullName')}>
                 <input
                   className="input"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  placeholder="e.g. Jordan Smith"
+                  placeholder={t('settings.fullNamePlaceholder')}
                   autoComplete="name"
                 />
               </Field>
-              <Field label="Phone">
+              <Field label={t('settings.phone')}>
                 <input
                   className="input"
                   value={phone}
@@ -131,7 +157,7 @@ export function SettingsView({ base, branchId }: { base: string; branchId: strin
                   autoComplete="tel"
                 />
               </Field>
-              <Field label="Email">
+              <Field label={t('settings.email')}>
                 <input
                   className="input"
                   value={email}
@@ -147,36 +173,35 @@ export function SettingsView({ base, branchId }: { base: string; branchId: strin
 
           <Card className="p-5">
             <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
-              <Bell className="h-5 w-5 text-primary" /> Notifications
+              <Bell className="h-5 w-5 text-primary" /> {t('settings.notificationsTitle')}
             </h2>
             <div className="mt-3 flex items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-medium">Promotions &amp; offers</p>
-                <p className="text-xs text-muted-foreground">Get deals, rewards and news by email.</p>
+                <p className="text-sm font-medium">{t('settings.promotions')}</p>
+                <p className="text-xs text-muted-foreground">{t('settings.promotionsHint')}</p>
               </div>
-              <Toggle on={marketing} onClick={() => setMarketing((m) => !m)} label="Promotions and offers" />
+              <Toggle on={marketing} onClick={() => setMarketing((m) => !m)} label={t('settings.promotions')} />
             </div>
           </Card>
 
           <Card className="p-5">
-            <h2 className="font-display text-lg font-semibold">Appearance</h2>
+            <h2 className="font-display text-lg font-semibold">{t('settings.appearanceTitle')}</h2>
             <div className="mt-3 flex items-center justify-between gap-3">
               <span className="flex items-center gap-2 text-sm font-medium">
                 {mode === 'dark' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-                {mode === 'dark' ? 'Dark mode' : 'Light mode'}
+                {mode === 'dark' ? t('settings.darkMode') : t('settings.lightMode')}
               </span>
-              <Toggle on={mode === 'dark'} onClick={toggleMode} label="Dark mode" />
+              <Toggle on={mode === 'dark'} onClick={toggleMode} label={t('settings.darkMode')} />
             </div>
           </Card>
 
           {error && (
-            <Card className="border-danger/30 bg-danger/5 p-4 text-sm text-danger">{error}</Card>
+            <Card className="border-danger/30 bg-danger/5 p-4 text-sm text-danger">{t(error)}</Card>
           )}
 
           {!loadingData && !customerId && (
             <Card className="border-warning/30 bg-warning/5 p-4 text-sm text-muted-foreground">
-              We couldn&apos;t find your profile yet — place your first order to set it up. Your
-              appearance preference above still saves.
+              {t('settings.noProfile')}
             </Card>
           )}
 
@@ -189,7 +214,7 @@ export function SettingsView({ base, branchId }: { base: string; branchId: strin
             leftIcon={<Save className="h-4 w-4" />}
             disabled={!customerId || loadingData}
           >
-            {saved ? 'Saved ✓' : 'Save changes'}
+            {saved ? t('settings.saved') : t('settings.saveChanges')}
           </Button>
         </form>
       )}

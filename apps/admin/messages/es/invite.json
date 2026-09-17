@@ -1,0 +1,72 @@
+{
+  "roles": {
+    "owner": "Propietario",
+    "admin": "Administrador",
+    "manager": "Gerente",
+    "cashier": "Cajero",
+    "server": "Mesero",
+    "kitchen": "Cocina",
+    "staff": "Personal",
+    "driver": "Repartidor"
+  },
+  "accept": {
+    "opening": "Abriendo tu invitación…",
+    "joining": "Uniéndote al equipo…",
+    "oneMoment": "Un momento.",
+    "anotherAccount": "otra cuenta",
+    "createAccount": {
+      "invited": "Te invitaron a unirte a <strong>{workplace}</strong> con el rol <strong>{role}</strong>.",
+      "title": "Crea tu cuenta",
+      "email": "Correo electrónico",
+      "password": "Contraseña",
+      "passwordHint": "Mínimo {min} caracteres. La usarás para iniciar sesión en los dispositivos del restaurante.",
+      "confirmPassword": "Confirmar contraseña",
+      "submit": "Crear cuenta y unirme"
+    },
+    "confirmJoin": {
+      "title": "¿Unirte a {workplace}?",
+      "body": "Te unirás con el rol <strong>{role}</strong> usando <strong>{email}</strong>.",
+      "submit": "Unirme al equipo"
+    },
+    "switchAccount": {
+      "title": "¿Cambiar de cuenta?",
+      "body": "Esta invitación es para <strong>{invited}</strong>, pero este navegador tiene la sesión iniciada como <strong>{current}</strong>. Si continúas, este navegador cerrará la sesión de {current} e iniciará sesión como {invited}.",
+      "submit": "Continuar como {invited}"
+    },
+    "needsLink": {
+      "expiredTitle": "Este enlace de invitación venció",
+      "openTitle": "Abre el enlace de tu correo",
+      "expiredBody": "Los enlaces de invitación funcionan una sola vez. Podemos enviar a <strong>{email}</strong> un enlace nuevo para crear tu contraseña y unirte; ábrelo en este navegador.",
+      "openBody": "Abre el enlace de invitación del correo enviado a <strong>{email}</strong> o pide un enlace nuevo aquí abajo.",
+      "sent": "Enviado. Revisa {email} y abre el correo más reciente en este navegador.",
+      "sendLink": "Enviarme un enlace para crear mi contraseña",
+      "signIn": "¿Ya creaste tu contraseña? Inicia sesión"
+    },
+    "wrongAccount": {
+      "title": "Esta invitación es para otra persona",
+      "body": "Se envió a <strong>{invited}</strong>, pero este navegador tiene la sesión iniciada como <strong>{current}</strong>. Cierra sesión aquí y vuelve a abrir el enlace de invitación desde ese correo.",
+      "signOut": "Cerrar sesión en este navegador"
+    },
+    "failed": {
+      "title": "No se pudo aceptar la invitación",
+      "used": "Esta invitación ya se usó. Si era tuya, inicia sesión, o usa “¿Olvidaste tu contraseña?” si nunca elegiste una.",
+      "notFound": "Este enlace de invitación está incompleto o ya no existe. Pide al restaurante que te invite de nuevo.",
+      "goToSignIn": "Ir a iniciar sesión"
+    },
+    "done": {
+      "title": "¡Ya eres parte del equipo!",
+      "body": "Te damos la bienvenida a {workplace}. Te llevamos a tu pantalla…"
+    },
+    "errors": {
+      "alreadyUsed": "Esta invitación ya se usó.",
+      "notFound": "Esta invitación ya no existe. Pide al restaurante que te invite de nuevo.",
+      "confirmEmail": "Vuelve a abrir el enlace de invitación de tu correo para confirmar tu dirección.",
+      "alreadyStaff": "Ya trabajas en este restaurante con esta cuenta, en la misma sucursal. Inicia sesión para continuar.",
+      "joinFailed": "Algo salió mal al unirte al restaurante. Inténtalo de nuevo.",
+      "tooManyEmails": "Se enviaron demasiados correos en la última hora. Inténtalo más tarde.",
+      "emailFailed": "No pudimos enviar el correo. Inténtalo de nuevo o pide al restaurante que te invite otra vez.",
+      "passwordTooShort": "Usa al menos {min} caracteres.",
+      "passwordsDontMatch": "Las contraseñas no coinciden."
+    }
+  }
+}

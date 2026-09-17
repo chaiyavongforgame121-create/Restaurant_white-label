@@ -1,0 +1,141 @@
+{
+  "header": {
+    "title": "Thực đơn",
+    "summary": "{items, plural, other {# món}} trong {categories, plural, other {# danh mục}}",
+    "modeEdit": "Sửa",
+    "modeReorder": "Sắp xếp",
+    "modifiers": "Tùy chọn",
+    "combos": "Combo",
+    "happyHours": "Giờ vàng",
+    "aiImport": "Nhập bằng AI",
+    "addItem": "Thêm món"
+  },
+  "card": {
+    "hidden": "Đã ẩn",
+    "hiddenHint": "Không hiện trên thực đơn của khách. Combo có món này vẫn bán bình thường.",
+    "showOnMenu": "Hiện trên thực đơn",
+    "edit": "Sửa",
+    "duplicate": "Nhân bản",
+    "delete": "Xóa",
+    "soldOut": "Hết hàng",
+    "stockLeft": "Còn {count}"
+  },
+  "notices": {
+    "savedTracking": "Đã lưu “{name}” — đang theo dõi tồn kho, còn {count}.",
+    "savedUntracked": "Đã lưu “{name}” — đã tắt theo dõi tồn kho, nên trang đặt món sẽ không báo hết hàng.",
+    "copied": "Đã nhân bản. Bản sao đang ẩn với khách và không kèm nhóm tùy chọn — hãy thêm trong phần Sửa, rồi bật “Hiện trên thực đơn của khách”.",
+    "nowVisible": "“{name}” đã hiện trên thực đơn của khách.",
+    "nowHidden": "Đã ẩn “{name}” với khách.",
+    "visibilityUnchanged": "Chưa có gì thay đổi. Món này có thể đã bị xóa, hoặc vai trò của bạn không được sửa thực đơn ở chi nhánh này.",
+    "reloadFailed": "Đã lưu, nhưng không tải lại được danh sách này. {reason}"
+  },
+  "deleteConfirm": {
+    "title": "Xóa món này khỏi thực đơn?",
+    "body": "Món sẽ biến mất khỏi thực đơn của khách và không thể hoàn tác.",
+    "confirm": "Xóa"
+  },
+  "sheet": {
+    "editTitle": "Sửa món",
+    "addTitle": "Thêm món vào thực đơn"
+  },
+  "editor": {
+    "name": "Tên",
+    "category": "Danh mục",
+    "newCategory": "+ Mới",
+    "cancelNewCategory": "Hủy",
+    "categoryIcon": "Biểu tượng danh mục",
+    "categoryNamePlaceholder": "Tên danh mục (vd: Tráng miệng)",
+    "createCategory": "Tạo danh mục",
+    "createCategoryFailed": "Không tạo được danh mục.",
+    "price": "Giá (USD)",
+    "description": "Mô tả",
+    "allergens": "Chất gây dị ứng / Lưu ý",
+    "allergenPlaceholder": "Nhập chất gây dị ứng, nhấn Enter (vd: Đậu phộng)",
+    "addAllergen": "Thêm",
+    "removeAllergen": "Bỏ {allergen}",
+    "allergenHint": "Hiện cho khách trên trang món để người bị dị ứng kiểm tra trước khi đặt.",
+    "image": "Hình ảnh",
+    "uploading": "Đang tải lên…",
+    "imageUrlPlaceholder": "…hoặc dán URL",
+    "trackStock": "Theo dõi tồn kho",
+    "trackStockOnHint": "Trang đặt món sẽ báo món này hết hàng khi số lượng về 0.",
+    "trackStockOffHint": "Không đếm tồn kho. Trang đặt món luôn bán món này.",
+    "currentStock": "Tồn kho hiện tại",
+    "lowStockAt": "Cảnh báo sắp hết khi còn",
+    "showOnMenu": "Hiện trên thực đơn của khách",
+    "showOnMenuHint": "Tắt để gỡ món khỏi thực đơn của khách mà không xóa (combo có món này vẫn bán). Bản sao ban đầu sẽ ẩn và không có nhóm tùy chọn, để bạn hoàn thiện trước.",
+    "recommended": "Đầu bếp đề xuất",
+    "isNew": "Mới",
+    "save": "Lưu",
+    "stockReadFailed": "Không đọc được cài đặt tồn kho của món này. {reason}",
+    "planLimit": "Bạn đã đạt giới hạn của gói ({current}/{limit} món). Nâng cấp gói đăng ký trong Cài đặt chung → Gói và thanh toán để thêm món.",
+    "nothingSaved": "Chưa lưu được gì. Món này có thể đã bị xóa, hoặc vai trò của bạn không được sửa thực đơn ở chi nhánh này.",
+    "optionsWarning": "Đã lưu “{name}”, nhưng một nhóm tùy chọn của món không lưu được. {reason} Các nhóm đã lưu vẫn được giữ — hãy mở lại món để hoàn tất tùy chọn."
+  },
+  "allergenPresets": {
+    "peanuts": "Đậu phộng",
+    "treeNuts": "Các loại hạt",
+    "milk": "Sữa",
+    "eggs": "Trứng",
+    "fish": "Cá",
+    "shellfish": "Hải sản có vỏ",
+    "soy": "Đậu nành",
+    "wheatGluten": "Lúa mì / Gluten",
+    "sesame": "Mè"
+  },
+  "modifiers": {
+    "title": "Tùy chọn",
+    "subtitle": "Kích cỡ, món thêm, cách chế biến để khách chọn",
+    "addGroup": "Thêm nhóm",
+    "loading": "Đang tải tùy chọn…",
+    "emptyTitle": "Thêm nhóm tùy chọn",
+    "emptyExample": "vd: <strong>Kích cỡ</strong> (chọn 1) hoặc <strong>Món thêm</strong> (chọn nhiều)",
+    "groupNamePlaceholder": "Tên nhóm (vd: Kích cỡ)",
+    "removeGroupTitle": "Gỡ nhóm",
+    "remove": "Gỡ",
+    "pickOne": "Chọn 1",
+    "pickMany": "Chọn nhiều",
+    "upTo": "tối đa",
+    "required": "Bắt buộc",
+    "optional": "Tùy ý",
+    "optionNamePlaceholder": "Tên tùy chọn (vd: Lớn)",
+    "deleteOption": "Xóa tùy chọn",
+    "default": "Mặc định",
+    "active": "Đang hiện",
+    "hidden": "Đã ẩn",
+    "addOption": "Thêm tùy chọn",
+    "decrease": "Giảm",
+    "increase": "Tăng",
+    "groupSaveFailed": "Không lưu được nhóm tùy chọn.",
+    "groupCreateFailed": "Không tạo được nhóm.",
+    "validation": {
+      "groupName": "Hãy đặt tên cho mọi nhóm tùy chọn (vd: Kích cỡ) trước khi lưu.",
+      "noOptions": "Thêm ít nhất một tùy chọn vào nhóm “{group}”, hoặc gỡ nhóm này.",
+      "blankOptions": "Đặt tên cho mọi tùy chọn trong “{group}”, hoặc gỡ các tùy chọn trống."
+    },
+    "removeConfirm": {
+      "title": "Gỡ nhóm tùy chọn này?",
+      "body": "Nhóm sẽ không hiện ở món này nữa, và bị xóa hẳn nếu không món nào khác dùng.",
+      "confirm": "Gỡ"
+    }
+  },
+  "reorder": {
+    "unsavedHint": "Có thay đổi chưa lưu — kéo món sang danh mục khác hoặc lên/xuống để sắp xếp.",
+    "idleHint": "Kéo tay nắm để sắp xếp danh mục và món.",
+    "saveLayout": "Lưu thứ tự",
+    "dragCategory": "Kéo danh mục",
+    "dragItem": "Kéo món",
+    "emptyCategory": "Thả món vào đây để thêm vào danh mục này"
+  },
+  "errors": {
+    "generic": "Đã xảy ra lỗi. Vui lòng thử lại.",
+    "network": "Không kết nối được máy chủ. Kiểm tra kết nối rồi thử lại.",
+    "permission": "Vai trò của bạn không được sửa thực đơn ở chi nhánh này.",
+    "notFound": "Món này không còn nữa. Có thể món đã bị xóa.",
+    "inUse": "Món vẫn liên kết với dữ liệu khác, như đơn hàng cũ hoặc combo, nên không thể xóa. Hãy ẩn món khỏi thực đơn.",
+    "duplicate": "Mục này đã tồn tại.",
+    "invalidValue": "Một số giá trị không hợp lệ. Kiểm tra lại các ô rồi thử lại.",
+    "fileTooLarge": "Ảnh quá lớn, không tải lên được.",
+    "fileType": "Không tải lên được loại tệp này. Hãy chọn một tệp ảnh."
+  }
+}

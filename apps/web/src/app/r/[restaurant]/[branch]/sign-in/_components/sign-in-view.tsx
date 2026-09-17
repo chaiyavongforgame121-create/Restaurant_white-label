@@ -2,15 +2,18 @@
 
 import * as React from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useLocale, useTranslations } from 'next-intl';
 import { motion } from 'framer-motion';
 import { ChefHat, Lock, Phone, ShieldCheck } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Button, Card } from '@favornoms/ui';
 import {
-  COUNTRY_DIALS,
+  countryDialsFor,
   countryForIso,
   currentOrigin,
   DEFAULT_COUNTRY_ISO,
+  DEFAULT_UI_LOCALE,
+  isUiLocale,
   safeNext,
   toE164,
 } from '@favornoms/shared';
@@ -44,10 +47,11 @@ interface AuthResult {
   error?: string;
 }
 
-// Errors handed back by /auth/callback, mapped to something a diner can act on.
-const CALLBACK_ERRORS: Record<string, string> = {
-  oauth_failed: 'Google sign-in didn’t complete. Please try again.',
-  missing_code: 'That sign-in link has expired. Please try again.',
+// Errors handed back by /auth/callback (the `error` query code), mapped to the `auth.errors.*`
+// message a diner can act on.
+const CALLBACK_ERRORS: Record<string, 'errors.oauthFailed' | 'errors.missingCode'> = {
+  oauth_failed: 'errors.oauthFailed',
+  missing_code: 'errors.missingCode',
 };
 
 export function SignInView({
@@ -55,6 +59,9 @@ export function SignInView({
   brandName,
   defaultCountryIso = DEFAULT_COUNTRY_ISO,
 }: Props) {
+  const t = useTranslations('auth');
+  const rawLocale = useLocale();
+  const locale = isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE;
   const router = useRouter();
   const searchParams = useSearchParams();
   // Shared open-redirect guard — see @favornoms/shared. `next` feeds router.replace() and
@@ -79,13 +86,16 @@ export function SignInView({
   const [phoneMode, setPhoneMode] = React.useState<'login' | 'register'>('login');
   const [countryIso, setCountryIso] = React.useState(defaultCountryIso);
   const country = React.useMemo(() => countryForIso(countryIso), [countryIso]);
+  // Same entries as COUNTRY_DIALS with the country names in the interface language; the option
+  // value stays the ISO code, and countryForIso() above still decides the number rules.
+  const countryOptions = React.useMemo(() => countryDialsFor(locale), [locale]);
   const [phone, setPhone] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [fullName, setFullName] = React.useState('');
   const [loading, setLoading] = React.useState(false);
   const [googleLoading, setGoogleLoading] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(
-    callbackError ? (CALLBACK_ERRORS[callbackError] ?? 'We couldn’t finish that sign-in. Please try again.') : null,
+  const [error, setError] = React.useState<string | null>(() =>
+    callbackError ? t(CALLBACK_ERRORS[callbackError] ?? 'errors.callbackFailed') : null,
   );
 
   // Already signed in — e.g. a Google OAuth round-trip landed back here because its
@@ -121,7 +131,7 @@ export function SignInView({
     // Guard as well as `required`: the attribute is trivially bypassed and a blank
     // name leaves the restaurant with an order it cannot call out.
     if (phoneMode === 'register' && !fullName.trim()) {
-      setError('Please enter your name.');
+      setError(t('errors.nameRequired'));
       return;
     }
     setLoading(true);
@@ -141,11 +151,7 @@ export function SignInView({
       // The edge function answers 200 for every expected outcome, so a transport error
       // here is either the rate limiter (429) or a genuine fault.
       const status = (fnErr as { context?: { status?: number } }).context?.status;
-      setError(
-        status === 429
-          ? 'Too many attempts. Please wait a few minutes and try again.'
-          : 'Something went wrong. Please try again.',
-      );
+      setError(status === 429 ? t('errors.tooManyAttempts') : t('errors.generic'));
       return;
     }
     const res = data as AuthResult;
@@ -157,7 +163,7 @@ export function SignInView({
       // Was swallowed. A failure here left `loading` true forever with nothing on screen.
       if (sessErr) {
         setLoading(false);
-        setError('We signed you in but couldn’t start your session. Please try again.');
+        setError(t('errors.sessionFailed'));
         return;
       }
       // The spinner ends when the document unloads — the one exit that does not reset it.
@@ -170,26 +176,26 @@ export function SignInView({
       case 'signup':
         // 200 with the right status but no tokens. It used to reach `default` by accident;
         // being explicit keeps that from silently changing meaning.
-        setError('Signed in, but no session was returned. Please try again.');
+        setError(t('errors.noSession'));
         return;
       case 'weak_password':
-        setError('Password must be at least 8 characters.');
+        setError(t('errors.weakPassword'));
         return;
       case 'invalid_credentials':
         // Login only: do not reveal whether it was the phone or the password that was wrong.
-        setError('Wrong phone number or password.');
+        setError(t('errors.invalidCredentials'));
         return;
       case 'account_exists':
-        setError('You already have an account — please log in.');
+        setError(t('errors.accountExists'));
         return;
       case 'invalid_phone':
-        setError('That phone number doesn’t look right. Please check and try again.');
+        setError(t('errors.invalidPhone'));
         return;
       case 'invalid_branch':
-        setError('This location isn’t available right now. Please refresh and try again.');
+        setError(t('errors.invalidBranch'));
         return;
       default:
-        setError('Couldn’t sign you in. Please try again.');
+        setError(t('errors.signInFailed'));
     }
   };
 
@@ -207,7 +213,9 @@ export function SignInView({
     // On success the browser is already navigating to Google — leave the spinner up.
     if (oauthErr) {
       setGoogleLoading(false);
-      setError(oauthErr.message);
+      // The auth server's message is English and technical; keep it for the console only.
+      console.error('[sign-in] Google OAuth failed', oauthErr);
+      setError(t('errors.googleUnavailable'));
     }
   };
 
@@ -222,10 +230,8 @@ export function SignInView({
         <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-gradient-warm text-white shadow-warm">
           <ChefHat className="h-8 w-8" />
         </div>
-        <h1 className="mt-4 font-display text-3xl font-bold">Welcome to {brandName}</h1>
-        <p className="mt-1 text-muted-foreground">
-          Sign in with your phone to track orders and earn points
-        </p>
+        <h1 className="mt-4 font-display text-3xl font-bold">{t('signIn.welcome', { brandName })}</h1>
+        <p className="mt-1 text-muted-foreground">{t('signIn.subtitle')}</p>
       </motion.div>
 
       <Card className="mt-6 p-5">
@@ -236,10 +242,10 @@ export function SignInView({
           className="focus-ring flex h-14 w-full items-center justify-center gap-3 rounded-xl border border-border bg-card text-base font-semibold shadow-soft transition-shadow hover:shadow-warm disabled:opacity-60"
         >
           <GoogleMark className="h-5 w-5" />
-          {googleLoading ? 'Opening Google…' : 'Continue with Google'}
+          {googleLoading ? t('signIn.openingGoogle') : t('signIn.continueWithGoogle')}
         </button>
         <div className="my-4 flex items-center gap-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          <span className="h-px flex-1 bg-border" /> or <span className="h-px flex-1 bg-border" />
+          <span className="h-px flex-1 bg-border" /> {t('signIn.or')} <span className="h-px flex-1 bg-border" />
         </div>
         <form onSubmit={submitPhone} className="space-y-4">
             <div className="flex rounded-full bg-muted p-1 text-sm font-semibold">
@@ -250,7 +256,7 @@ export function SignInView({
                   phoneMode === 'login' ? 'bg-card text-foreground shadow-soft' : 'text-muted-foreground'
                 }`}
               >
-                Log in
+                {t('signIn.logIn')}
               </button>
               <button
                 type="button"
@@ -259,32 +265,32 @@ export function SignInView({
                   phoneMode === 'register' ? 'bg-card text-foreground shadow-soft' : 'text-muted-foreground'
                 }`}
               >
-                Register
+                {t('signIn.register')}
               </button>
             </div>
             {phoneMode === 'register' && (
               <label className="block">
-                <span className="mb-2 block text-sm font-medium">Full name</span>
+                <span className="mb-2 block text-sm font-medium">{t('signIn.fullName')}</span>
                 <input
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   autoComplete="name"
                   required
-                  placeholder="Your name"
+                  placeholder={t('signIn.fullNamePlaceholder')}
                   className="focus-ring w-full rounded-xl border border-border bg-background px-4 py-3 text-base"
                 />
               </label>
             )}
             <label className="block">
-              <span className="mb-2 block text-sm font-medium">Phone number</span>
+              <span className="mb-2 block text-sm font-medium">{t('signIn.phoneNumber')}</span>
               <div className="flex gap-2">
                 <select
                   value={countryIso}
                   onChange={(e) => setCountryIso(e.target.value)}
-                  aria-label="Country calling code"
+                  aria-label={t('signIn.countryCode')}
                   className="focus-ring w-32 shrink-0 rounded-xl border border-border bg-background px-2 py-3 text-base"
                 >
-                  {COUNTRY_DIALS.map((c) => (
+                  {countryOptions.map((c) => (
                     <option key={c.iso} value={c.iso}>
                       {c.label}
                     </option>
@@ -306,7 +312,7 @@ export function SignInView({
               </div>
             </label>
             <label className="block">
-              <span className="mb-2 block text-sm font-medium">Password</span>
+              <span className="mb-2 block text-sm font-medium">{t('signIn.password')}</span>
               <div className="relative">
                 <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
                 <input
@@ -316,26 +322,39 @@ export function SignInView({
                   autoComplete={phoneMode === 'register' ? 'new-password' : 'current-password'}
                   minLength={8}
                   required
-                  placeholder={phoneMode === 'register' ? 'At least 8 characters' : 'Your password'}
+                  placeholder={
+                    phoneMode === 'register'
+                      ? t('signIn.passwordPlaceholderNew')
+                      : t('signIn.passwordPlaceholderCurrent')
+                  }
                   className="focus-ring w-full rounded-xl border border-border bg-background py-3 pl-11 pr-4 text-base"
                 />
               </div>
             </label>
             {error && <p className="text-sm text-danger">{error}</p>}
             <Button type="submit" variant="gradient" size="xl" fullWidth loading={loading}>
-              {phoneMode === 'register' ? 'Create account' : 'Log in'}
+              {phoneMode === 'register' ? t('signIn.createAccount') : t('signIn.logIn')}
             </Button>
             <p className="text-center text-xs text-muted-foreground">
-              By continuing you agree to our{' '}
-              <a href="/terms" className="text-primary underline">Terms</a> and{' '}
-              <a href="/privacy" className="text-primary underline">Privacy</a>.
+              {t.rich('signIn.legal', {
+                terms: (chunks) => (
+                  <a href="/terms" className="text-primary underline">
+                    {chunks}
+                  </a>
+                ),
+                privacy: (chunks) => (
+                  <a href="/privacy" className="text-primary underline">
+                    {chunks}
+                  </a>
+                ),
+              })}
             </p>
         </form>
       </Card>
 
       <div className="mt-6 flex items-center gap-2 rounded-2xl bg-muted/50 p-4 text-xs text-muted-foreground">
         <ShieldCheck className="h-4 w-4 shrink-0 text-success" />
-        Your phone number and password keep your orders and points private to {brandName}.
+        {t('signIn.privacyNote', { brandName })}
       </div>
     </div>
   );

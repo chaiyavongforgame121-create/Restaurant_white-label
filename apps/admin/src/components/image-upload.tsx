@@ -1,10 +1,12 @@
 'use client';
 
 import * as React from 'react';
+import { useTranslations } from 'next-intl';
 import { Eraser, ImagePlus, Undo2, X } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Button } from '@favornoms/ui';
 import { knockOutBackground } from './icon-geometry';
+import { KeyedError, errorMessageRef, storageUploadError, type MessageRef } from './keyed-error';
 
 /** A cleaned logo is re-encoded no larger than this — the storefront draws it about 176px wide. */
 const CLEAN_MAX_EDGE = 1600;
@@ -71,7 +73,7 @@ async function decodeForCanvas(
       const bmp = await createImageBitmap(blob);
       return { src: bmp, w: bmp.width, h: bmp.height, done: () => bmp.close() };
     } catch {
-      throw new Error('This image format cannot be processed here. Upload the logo as a PNG or JPEG.');
+      throw new KeyedError('shell.imageUpload.errors.formatUnsupported');
     }
   }
   const objectUrl = URL.createObjectURL(blob);
@@ -81,7 +83,7 @@ async function decodeForCanvas(
     await img.decode();
   } catch {
     URL.revokeObjectURL(objectUrl);
-    throw new Error('Could not read this SVG. Remove the background inside the SVG file, or upload a PNG.');
+    throw new KeyedError('shell.imageUpload.errors.svgUnreadable');
   }
   const nw = img.naturalWidth || 300;
   const nh = img.naturalHeight || 150;
@@ -98,7 +100,7 @@ export function ImageUpload({
   value,
   onChange,
   aspect = 'aspect-video',
-  label = 'Upload image',
+  label,
   removeBackground = false,
 }: {
   restaurantId: string;
@@ -106,6 +108,7 @@ export function ImageUpload({
   value: string | null;
   onChange: (url: string | null) => void;
   aspect?: string;
+  /** Already translated by the caller; defaults to a translated "Upload image". */
   label?: string;
   /**
    * Offer "Remove white background": the plain colour around the image (a logo exported on
@@ -115,13 +118,15 @@ export function ImageUpload({
    */
   removeBackground?: boolean;
 }) {
+  const t = useTranslations('shell.imageUpload');
+  const tRoot = useTranslations();
   const inputRef = React.useRef<HTMLInputElement>(null);
   const [busy, setBusy] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<MessageRef | null>(null);
   /** The URL before the background was removed, for Undo. */
   const [previous, setPrevious] = React.useState<string | null>(null);
   /** A cleaned logo that will be hard to see on one of the storefront's grounds. */
-  const [notice, setNotice] = React.useState<string | null>(null);
+  const [notice, setNotice] = React.useState<'darkLogo' | 'lightLogo' | null>(null);
 
   const put = async (body: Blob | File, ext: string, contentType?: string) => {
     const supabase = getBrowserClient();
@@ -129,7 +134,7 @@ export function ImageUpload({
     const { error: upErr } = await supabase.storage
       .from('branding')
       .upload(path, body, { upsert: true, cacheControl: '3600', ...(contentType ? { contentType } : {}) });
-    if (upErr) throw new Error(upErr.message);
+    if (upErr) throw storageUploadError(upErr);
     return supabase.storage.from('branding').getPublicUrl(path).data.publicUrl;
   };
 
@@ -142,7 +147,7 @@ export function ImageUpload({
       setPrevious(null);
       setNotice(null);
     } catch (e) {
-      setError((e as Error).message);
+      setError(errorMessageRef(e));
     } finally {
       setBusy(false);
     }
@@ -154,7 +159,7 @@ export function ImageUpload({
     setError(null);
     try {
       const res = await fetch(value, { cache: 'no-store' });
-      if (!res.ok) throw new Error('Could not load your image.');
+      if (!res.ok) throw new KeyedError('shell.imageUpload.errors.loadFailed');
       // From a blob, so the canvas is not tainted and its pixels can be read back.
       const { src, w, h, done } = await decodeForCanvas(await res.blob(), value);
       let pixels: ImageData;
@@ -164,20 +169,23 @@ export function ImageUpload({
         canvas.width = Math.max(1, Math.round(w * scale));
         canvas.height = Math.max(1, Math.round(h * scale));
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        if (!ctx) throw new Error('Your browser could not process the image (no canvas support).');
+        if (!ctx) throw new KeyedError('shell.upload.noCanvas');
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(src, 0, 0, canvas.width, canvas.height);
         pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
         if (knockOutBackground(pixels.data, canvas.width, canvas.height).removed === 0) {
-          throw new Error('There is no plain background around this image to remove.');
+          throw new KeyedError('shell.imageUpload.errors.noPlainBackground');
         }
         ctx.putImageData(pixels, 0, 0);
       } finally {
         done();
       }
       const blob = await new Promise<Blob>((resolve, reject) =>
-        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Could not encode the image.'))), 'image/png'),
+        canvas.toBlob(
+          (b) => (b ? resolve(b) : reject(new KeyedError('shell.imageUpload.errors.encodeFailed'))),
+          'image/png',
+        ),
       );
       const url = await put(blob, 'png', 'image/png');
 
@@ -185,16 +193,16 @@ export function ImageUpload({
       // light storefront. Say so, but keep the result: it is right for the other theme.
       const lum = visibleLuminance(pixels.data);
       if (lum !== null && contrast(lum, DARK_LUMINANCE) < MIN_LOGO_CONTRAST) {
-        setNotice('This logo is dark and will be hard to see for customers using dark mode. Undo, or upload a light version.');
+        setNotice('darkLogo');
       } else if (lum !== null && contrast(lum, LIGHT_LUMINANCE) < MIN_LOGO_CONTRAST) {
-        setNotice('This logo is light and will be hard to see on the light storefront. Undo, or upload a darker version.');
+        setNotice('lightLogo');
       } else {
         setNotice(null);
       }
       setPrevious(value);
       onChange(url);
     } catch (e) {
-      setError((e as Error).message);
+      setError(errorMessageRef(e));
     } finally {
       setBusy(false);
     }
@@ -217,7 +225,7 @@ export function ImageUpload({
       }}
       disabled={busy}
       className="absolute right-2 top-2 rounded-full bg-black/60 p-1 text-white disabled:opacity-40"
-      aria-label="Remove image"
+      aria-label={t('remove')}
     >
       <X className="h-4 w-4" />
     </button>
@@ -241,13 +249,13 @@ export function ImageUpload({
           <div className={`relative grid w-full grid-cols-2 overflow-hidden rounded-xl border border-border ${aspect}`}>
             <div className="relative" style={checkerboard(STOREFRONT_LIGHT, 'rgb(0 0 0 / 0.05)')}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={value} alt="Logo on the light storefront" className="h-full w-full object-contain p-2" />
-              <span className="absolute bottom-1 left-2 text-[10px] font-medium text-neutral-500">Light</span>
+              <img src={value} alt={t('previewLightAlt')} className="h-full w-full object-contain p-2" />
+              <span className="absolute bottom-1 left-2 text-[10px] font-medium text-neutral-500">{t('light')}</span>
             </div>
             <div className="relative" style={checkerboard(STOREFRONT_DARK, 'rgb(255 255 255 / 0.05)')}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={value} alt="Logo on the dark storefront" className="h-full w-full object-contain p-2" />
-              <span className="absolute bottom-1 left-2 text-[10px] font-medium text-neutral-400">Dark</span>
+              <img src={value} alt={t('previewDarkAlt')} className="h-full w-full object-contain p-2" />
+              <span className="absolute bottom-1 left-2 text-[10px] font-medium text-neutral-400">{t('dark')}</span>
             </div>
             {removeButton}
           </div>
@@ -266,7 +274,7 @@ export function ImageUpload({
           className={`flex w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-muted/30 text-sm text-muted-foreground transition hover:border-primary ${aspect}`}
         >
           <ImagePlus className="h-6 w-6" />
-          {busy ? 'Uploading…' : label}
+          {busy ? t('uploading') : (label ?? t('upload'))}
         </button>
       )}
       {value && (
@@ -278,7 +286,7 @@ export function ImageUpload({
             onClick={() => inputRef.current?.click()}
             disabled={busy}
           >
-            {busy ? 'Working…' : 'Replace image'}
+            {busy ? t('working') : t('replace')}
           </Button>
           {removeBackground &&
             (previous ? (
@@ -290,7 +298,7 @@ export function ImageUpload({
                 disabled={busy}
                 leftIcon={<Undo2 className="h-4 w-4" />}
               >
-                Undo background removal
+                {t('undoBackgroundRemoval')}
               </Button>
             ) : (
               <Button
@@ -301,13 +309,13 @@ export function ImageUpload({
                 disabled={busy}
                 leftIcon={<Eraser className="h-4 w-4" />}
               >
-                Remove white background
+                {t('removeWhiteBackground')}
               </Button>
             ))}
         </div>
       )}
-      {notice && <p className="mt-1 text-xs text-warning">{notice}</p>}
-      {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
+      {notice && <p className="mt-1 text-xs text-warning">{t(`notice.${notice}`)}</p>}
+      {error && <p className="mt-1 text-xs text-destructive">{tRoot(error.key, error.values)}</p>}
     </div>
   );
 }

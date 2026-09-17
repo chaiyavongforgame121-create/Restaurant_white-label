@@ -1,9 +1,11 @@
 'use client';
 
 import * as React from 'react';
+import { useTranslations } from 'next-intl';
 import { Check, Minus, Plus, Trash2 } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Button, cn, useConfirm } from '@favornoms/ui';
+import { menuErrorKey } from './menu-errors';
 
 // Per-item modifier editor — manage this menu item's option groups (Size, Add-ons, …)
 // and their options right inside the item editor. Groups created here are linked to this
@@ -39,8 +41,9 @@ const GROUP_SELECT = `display_order, modifier_groups!inner(
 // groups once a brand-new menu item has been inserted and finally has an id to
 // link against.
 export interface ItemModifierEditorHandle {
-  /** Returns a user-facing message if the draft is half-filled, else null. */
+  /** Returns a translated, user-facing message if the draft is half-filled, else null. */
   validateDraft: () => string | null;
+  /** `error` is a translated, user-facing reason; the raw failure is logged. */
   persistDraft: (newItemId: string) => Promise<{ error?: string }>;
 }
 
@@ -67,6 +70,7 @@ export const ItemModifierEditor = React.forwardRef<
   ItemModifierEditorHandle,
   { branchId: string; itemId: string | null }
 >(function ItemModifierEditor({ branchId, itemId }, ref) {
+  const t = useTranslations('menu');
   const isDraft = !itemId;
   const [groups, setGroups] = React.useState<MGroup[]>([]);
   const [loading, setLoading] = React.useState(!isDraft);
@@ -75,6 +79,15 @@ export const ItemModifierEditor = React.forwardRef<
   const confirm = useConfirm();
   const tmpCounter = React.useRef(0);
   const newTmpId = () => `tmp_${tmpCounter.current++}`;
+
+  /** Logs the raw failure; the merchant gets a translated message instead of database text. */
+  const errorText = React.useCallback(
+    (context: string, err: unknown) => {
+      console.error(`[menu] ${context} failed`, err);
+      return t(`errors.${menuErrorKey(err)}`);
+    },
+    [t],
+  );
 
   const fetchGroups = React.useCallback(async () => {
     if (!itemId) return;
@@ -121,12 +134,12 @@ export const ItemModifierEditor = React.forwardRef<
       const blanks = g.options.filter((o) => !String(o.name).trim());
       // A completely empty group (no name, no options) is silently dropped later.
       if (!gname && g.options.length === 0) continue;
-      if (!gname) return 'Give every option group a name (e.g. Size) before saving.';
-      if (named.length === 0) return `Add at least one option to the "${gname}" group, or remove the group.`;
-      if (blanks.length > 0) return `Name every option in "${gname}", or remove the blank ones.`;
+      if (!gname) return t('modifiers.validation.groupName');
+      if (named.length === 0) return t('modifiers.validation.noOptions', { group: gname });
+      if (blanks.length > 0) return t('modifiers.validation.blankOptions', { group: gname });
     }
     return null;
-  }, [groups]);
+  }, [groups, t]);
 
   // Flush all locally-built groups/options to the DB for a freshly-created item.
   // Order per group: insert the group, then its options, then the item link LAST,
@@ -150,7 +163,9 @@ export const ItemModifierEditor = React.forwardRef<
           })
           .select('id')
           .single();
-        if (ge || !gRow) return { error: ge?.message ?? 'Could not save option group' };
+        if (ge || !gRow) {
+          return { error: ge ? errorText('save option group', ge) : t('modifiers.groupSaveFailed') };
+        }
         if (g.options.length) {
           const { error: oe } = await supabase.from('modifier_options').insert(
             g.options.map((o, oi) => ({
@@ -162,16 +177,16 @@ export const ItemModifierEditor = React.forwardRef<
               display_order: oi,
             })),
           );
-          if (oe) return { error: oe.message };
+          if (oe) return { error: errorText('save options', oe) };
         }
         const { error: le } = await supabase
           .from('menu_item_modifiers')
           .insert({ menu_item_id: newItemId, modifier_group_id: gRow.id, display_order: gi });
-        if (le) return { error: le.message };
+        if (le) return { error: errorText('link option group', le) };
       }
       return {};
     },
-    [groups, branchId],
+    [groups, branchId, errorText, t],
   );
 
   React.useImperativeHandle(ref, () => ({ validateDraft, persistDraft }), [validateDraft, persistDraft]);
@@ -211,7 +226,7 @@ export const ItemModifierEditor = React.forwardRef<
       .single();
     if (e || !g) {
       setBusy(false);
-      setError(e?.message ?? 'Could not create group');
+      setError(e ? errorText('create option group', e) : t('modifiers.groupCreateFailed'));
       return;
     }
     const { error: le } = await supabase
@@ -219,7 +234,7 @@ export const ItemModifierEditor = React.forwardRef<
       .insert({ menu_item_id: itemId, modifier_group_id: g.id, display_order: groups.length });
     setBusy(false);
     if (le) {
-      setError(le.message);
+      setError(errorText('link option group', le));
       return;
     }
     await fetchGroups();
@@ -230,15 +245,15 @@ export const ItemModifierEditor = React.forwardRef<
     if (isDraft) return;
     const supabase = getBrowserClient();
     const { error: e } = await supabase.from('modifier_groups').update(patch).eq('id', id);
-    if (e) setError(e.message);
+    if (e) setError(errorText('update option group', e));
   };
 
   const removeGroup = async (id: string) => {
     if (
       !(await confirm({
-        title: 'Remove this option group?',
-        body: 'It stops showing on this item, and is deleted entirely if no other item uses it.',
-        confirmLabel: 'Remove',
+        title: t('modifiers.removeConfirm.title'),
+        body: t('modifiers.removeConfirm.body'),
+        confirmLabel: t('modifiers.removeConfirm.confirm'),
         destructive: true,
       }))
     ) {
@@ -297,7 +312,7 @@ export const ItemModifierEditor = React.forwardRef<
       display_order: grp?.options.length ?? 0,
     });
     if (e) {
-      setError(e.message);
+      setError(errorText('add option', e));
       return;
     }
     await fetchGroups();
@@ -314,7 +329,7 @@ export const ItemModifierEditor = React.forwardRef<
     if (isDraft) return;
     const supabase = getBrowserClient();
     const { error: e } = await supabase.from('modifier_options').update(patch).eq('id', optId);
-    if (e) setError(e.message);
+    if (e) setError(errorText('update option', e));
   };
 
   // "Default" behaves like a radio in single-select groups: turning one on clears the others.
@@ -362,18 +377,18 @@ export const ItemModifierEditor = React.forwardRef<
     <div className="space-y-3" onKeyDown={noEnterSubmit}>
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-semibold">Options</p>
-          <p className="text-xs text-muted-foreground">Size, add-ons, prep choices customers pick</p>
+          <p className="text-sm font-semibold">{t('modifiers.title')}</p>
+          <p className="text-xs text-muted-foreground">{t('modifiers.subtitle')}</p>
         </div>
         <Button type="button" variant="soft" size="sm" onClick={addGroup} loading={busy} leftIcon={<Plus className="h-4 w-4" />}>
-          Add group
+          {t('modifiers.addGroup')}
         </Button>
       </div>
 
       {error && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</p>}
 
       {loading ? (
-        <p className="text-xs text-muted-foreground">Loading options…</p>
+        <p className="text-xs text-muted-foreground">{t('modifiers.loading')}</p>
       ) : groups.length === 0 ? (
         <button
           type="button"
@@ -383,9 +398,9 @@ export const ItemModifierEditor = React.forwardRef<
           <span className="grid h-9 w-9 place-items-center rounded-full bg-primary/10 text-primary">
             <Plus className="h-5 w-5" />
           </span>
-          <span className="text-sm font-semibold text-foreground">Add an option group</span>
+          <span className="text-sm font-semibold text-foreground">{t('modifiers.emptyTitle')}</span>
           <span className="text-xs text-muted-foreground">
-            e.g. <strong>Size</strong> (pick 1) or <strong>Add-ons</strong> (pick many)
+            {t.rich('modifiers.emptyExample', { strong: (chunks) => <strong>{chunks}</strong> })}
           </span>
         </button>
       ) : (
@@ -425,6 +440,7 @@ function ModifierGroupCard({
   onRemoveOption: (optId: string) => void;
   onAddOption: () => void;
 }) {
+  const t = useTranslations('menu');
   const isMulti = g.selection_type === 'multiple';
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
@@ -433,16 +449,16 @@ function ModifierGroupCard({
         <input
           value={g.name}
           onChange={(e) => onGroupChange({ name: e.target.value })}
-          placeholder="Group name (e.g. Size)"
+          placeholder={t('modifiers.groupNamePlaceholder')}
           className="focus-ring min-w-0 flex-1 rounded-lg bg-transparent px-1.5 py-1 font-display text-base font-bold placeholder:font-sans placeholder:font-normal placeholder:text-muted-foreground"
         />
         <button
           type="button"
           onClick={onRemoveGroup}
-          title="Remove group"
+          title={t('modifiers.removeGroupTitle')}
           className="focus-ring inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-danger/10 hover:text-danger"
         >
-          <Trash2 className="h-3.5 w-3.5" /> Remove
+          <Trash2 className="h-3.5 w-3.5" /> {t('modifiers.remove')}
         </button>
       </div>
 
@@ -450,16 +466,16 @@ function ModifierGroupCard({
       <div className="flex flex-wrap items-center gap-2 px-3 py-2.5">
         <div className="inline-flex rounded-full bg-muted p-0.5">
           <SegBtn active={!isMulti} onClick={() => onGroupChange({ selection_type: 'single', max_select: 1, min_select: g.is_required ? 1 : 0 })}>
-            Pick 1
+            {t('modifiers.pickOne')}
           </SegBtn>
           <SegBtn active={isMulti} onClick={() => onGroupChange({ selection_type: 'multiple', max_select: Math.max(2, g.max_select) })}>
-            Pick many
+            {t('modifiers.pickMany')}
           </SegBtn>
         </div>
 
         {isMulti && (
           <div className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2 py-1 text-xs">
-            <span className="text-muted-foreground">up to</span>
+            <span className="text-muted-foreground">{t('modifiers.upTo')}</span>
             <Stepper
               value={g.max_select}
               min={1}
@@ -469,7 +485,7 @@ function ModifierGroupCard({
         )}
 
         <TogglePill on={g.is_required} onClick={() => onGroupChange({ is_required: !g.is_required, min_select: !g.is_required ? Math.max(1, g.min_select) : 0 })}>
-          {g.is_required ? 'Required' : 'Optional'}
+          {g.is_required ? t('modifiers.required') : t('modifiers.optional')}
         </TogglePill>
       </div>
 
@@ -487,13 +503,13 @@ function ModifierGroupCard({
               <input
                 value={opt.name}
                 onChange={(e) => onOptionChange(opt.id, { name: e.target.value })}
-                placeholder="Option name (e.g. Large)"
+                placeholder={t('modifiers.optionNamePlaceholder')}
                 className="focus-ring min-w-0 flex-1 rounded-lg border border-border bg-card px-2.5 py-1.5 text-sm font-medium"
               />
               <button
                 type="button"
                 onClick={() => onRemoveOption(opt.id)}
-                title="Delete option"
+                title={t('modifiers.deleteOption')}
                 className="focus-ring grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-danger/10 hover:text-danger"
               >
                 <Trash2 className="h-4 w-4" />
@@ -511,10 +527,10 @@ function ModifierGroupCard({
                 />
               </div>
               <TogglePill on={opt.is_default} onClick={() => onToggleDefault(opt.id)}>
-                Default
+                {t('modifiers.default')}
               </TogglePill>
               <TogglePill on={opt.is_active} onClick={() => onOptionChange(opt.id, { is_active: !opt.is_active })}>
-                {opt.is_active ? 'Active' : 'Hidden'}
+                {opt.is_active ? t('modifiers.active') : t('modifiers.hidden')}
               </TogglePill>
             </div>
           </div>
@@ -524,7 +540,7 @@ function ModifierGroupCard({
           onClick={onAddOption}
           className="focus-ring flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border py-2 text-xs font-semibold text-primary transition-colors hover:border-primary/50 hover:bg-primary/5"
         >
-          <Plus className="h-3.5 w-3.5" /> Add option
+          <Plus className="h-3.5 w-3.5" /> {t('modifiers.addOption')}
         </button>
       </div>
     </div>
@@ -564,13 +580,14 @@ function TogglePill({ on, onClick, children }: { on: boolean; onClick: () => voi
 }
 
 function Stepper({ value, min, onChange }: { value: number; min: number; onChange: (v: number) => void }) {
+  const t = useTranslations('menu');
   return (
     <span className="inline-flex items-center gap-1">
       <button
         type="button"
         onClick={() => onChange(Math.max(min, value - 1))}
         className="focus-ring grid h-5 w-5 place-items-center rounded-full bg-muted text-muted-foreground hover:bg-muted/70"
-        aria-label="Decrease"
+        aria-label={t('modifiers.decrease')}
       >
         <Minus className="h-3 w-3" />
       </button>
@@ -579,7 +596,7 @@ function Stepper({ value, min, onChange }: { value: number; min: number; onChang
         type="button"
         onClick={() => onChange(value + 1)}
         className="focus-ring grid h-5 w-5 place-items-center rounded-full bg-muted text-muted-foreground hover:bg-muted/70"
-        aria-label="Increase"
+        aria-label={t('modifiers.increase')}
       >
         <Plus className="h-3 w-3" />
       </button>

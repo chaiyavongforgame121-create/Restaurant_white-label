@@ -1,12 +1,15 @@
 'use client';
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useLocale, useTranslations } from 'next-intl';
 import { ArrowDownWideNarrow, ArrowUpNarrowWide } from 'lucide-react';
 import { Segmented } from '@favornoms/ui';
 import {
-  CUSTOMER_SORT_OPTIONS,
+  customerSortOptions,
   customerSortQuery,
+  DEFAULT_UI_LOCALE,
   defaultDirFor,
+  isUiLocale,
   type CustomerSortKey,
   type SortDir,
 } from '@favornoms/shared';
@@ -26,6 +29,9 @@ interface Props {
  * `page`, because page 4 of the old order means nothing in the new one.
  */
 export function CustomerSortControls({ sort, dir }: Props) {
+  const t = useTranslations('customers.sort');
+  const rawLocale = useLocale();
+  const locale = isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE;
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -48,23 +54,19 @@ export function CustomerSortControls({ sort, dir }: Props) {
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span className="text-xs font-semibold text-muted-foreground">Sort by</span>
+      <span className="text-xs font-semibold text-muted-foreground">{t('label')}</span>
       <div className="max-w-full overflow-x-auto">
         <Segmented<CustomerSortKey>
           value={sort}
           onChange={(next) => push({ sort: next })}
-          options={CUSTOMER_SORT_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+          options={customerSortOptions(locale).map((o) => ({ value: o.value, label: o.label }))}
         />
       </div>
       <button
         type="button"
         onClick={() => push({ dir: ascending ? 'desc' : 'asc' })}
         aria-pressed={ascending}
-        aria-label={
-          ascending
-            ? 'Sorted ascending; switch to descending'
-            : 'Sorted descending; switch to ascending'
-        }
+        aria-label={ascending ? t('switchToDescending') : t('switchToAscending')}
         className="focus-ring inline-flex min-h-touch items-center gap-1.5 rounded-full border border-border bg-card px-3 py-2 text-xs font-semibold hover:bg-muted"
       >
         {ascending ? (
@@ -72,7 +74,7 @@ export function CustomerSortControls({ sort, dir }: Props) {
         ) : (
           <ArrowDownWideNarrow className="h-4 w-4" />
         )}
-        {ascending ? 'Ascending' : 'Descending'}
+        {ascending ? t('ascending') : t('descending')}
       </button>
     </div>
   );

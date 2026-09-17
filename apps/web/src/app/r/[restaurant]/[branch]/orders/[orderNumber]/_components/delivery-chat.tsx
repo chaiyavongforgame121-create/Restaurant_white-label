@@ -2,9 +2,9 @@
 
 import * as React from 'react';
 import { MessageCircle } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { getBrowserClient } from '@favornoms/database/client';
 import {
-  chatAttachmentErrorMessage,
   isChatPhotoBody,
   listMessages,
   markThreadRead,
@@ -16,9 +16,32 @@ import {
 } from '@favornoms/database/queries';
 import { Button, ChatThread, Sheet } from '@favornoms/ui';
 
-const CUSTOMER_QUICK_REPLIES = ['Where are you?', 'Leave it at the door', 'Coming down now'];
+// The value is SENT to the rider as the message text, so it stays English whatever language the
+// diner reads. Only the chip label is translated (tracking.chat.quickReplies).
+const CUSTOMER_QUICK_REPLIES = [
+  { value: 'Where are you?', labelKey: 'whereAreYou' },
+  { value: 'Leave it at the door', labelKey: 'leaveAtDoor' },
+  { value: 'Coming down now', labelKey: 'comingDown' },
+] as const;
 
 const ACTIVE_STATUSES = ['assigned', 'picked_up', 'in_transit'];
+
+/**
+ * sendPhotoMessage's error codes as the `tracking.chat.photoErrors` key. Same matching as
+ * chatAttachmentErrorMessage in @favornoms/database, which only speaks English.
+ */
+function photoErrorKey(
+  err: unknown,
+): 'unsupportedType' | 'tooLarge' | 'prepareFailed' | 'uploadFailed' | 'generic' {
+  const message = err instanceof Error ? err.message : String(err ?? '');
+  if (message.includes('chat_attachment_unsupported_type')) return 'unsupportedType';
+  if (message.includes('chat_attachment_too_large')) return 'tooLarge';
+  if (message.includes('chat_attachment_no_canvas') || message.includes('chat_attachment_encode_failed')) {
+    return 'prepareFailed';
+  }
+  if (message.includes('chat_attachment_upload_failed')) return 'uploadFailed';
+  return 'generic';
+}
 
 interface Props {
   /** delivery_assignments.id — the live rider's turn, and the thread key. */
@@ -42,6 +65,7 @@ export function DeliveryChat({
   deliveryStatus,
   pastAssignmentIds = [],
 }: Props) {
+  const t = useTranslations('tracking');
   const [open, setOpen] = React.useState(false);
   const [userId, setUserId] = React.useState<string | null>(null);
   const [authChecked, setAuthChecked] = React.useState(false);
@@ -136,7 +160,7 @@ export function DeliveryChat({
       );
       setMessages((curr) => (curr.some((m) => m.id === msg.id) ? curr : [...curr, msg]));
     } catch (err) {
-      setPhotoError(chatAttachmentErrorMessage(err));
+      setPhotoError(t(`chat.photoErrors.${photoErrorKey(err)}`));
       // Rethrow so the thread marks the optimistic bubble failed and offers the retry.
       throw err;
     }
@@ -155,7 +179,7 @@ export function DeliveryChat({
       );
       setArchive(pages.flat().sort((a, b) => a.created_at.localeCompare(b.created_at)));
     } catch {
-      setArchiveError('Could not load the earlier conversation.');
+      setArchiveError(t('chat.archiveError'));
     }
   };
 
@@ -172,14 +196,11 @@ export function DeliveryChat({
           leftIcon={<MessageCircle className="h-4 w-4" />}
           onClick={() => setOpen(true)}
         >
-          Chat
+          {t('chat.button')}
         </Button>
-        <Sheet open={open} onClose={() => setOpen(false)} title="Chat with your driver">
+        <Sheet open={open} onClose={() => setOpen(false)} title={t('chat.title')}>
           <div className="space-y-2 p-4 text-sm text-muted-foreground">
-            <p>
-              In-app chat is available when you order with an account. For this guest order, tap{' '}
-              <strong>Call</strong> to reach your driver directly.
-            </p>
+            <p>{t.rich('chat.guestBody', { strong: (chunks) => <strong>{chunks}</strong> })}</p>
           </div>
         </Sheet>
       </>
@@ -198,11 +219,11 @@ export function DeliveryChat({
           leftIcon={<MessageCircle className="h-4 w-4" />}
           onClick={openChat}
         >
-          Chat
+          {t('chat.button')}
         </Button>
         {unread > 0 && (
           <span
-            aria-label={`${unread} unread message${unread === 1 ? '' : 's'}`}
+            aria-label={t('chat.unread', { count: unread })}
             className="pointer-events-none absolute -right-2 -top-2 grid h-5 min-w-5 place-items-center rounded-full bg-danger px-1.5 text-[11px] font-bold leading-none text-white ring-2 ring-background"
           >
             {unread > 99 ? '99+' : unread}
@@ -210,7 +231,7 @@ export function DeliveryChat({
         )}
       </span>
 
-      <Sheet open={open} onClose={() => setOpen(false)} title="Chat with your driver">
+      <Sheet open={open} onClose={() => setOpen(false)} title={t('chat.title')}>
         <div className="flex h-[60vh] flex-col">
           {pastAssignmentIds.length > 0 && (
             <details
@@ -220,7 +241,7 @@ export function DeliveryChat({
               }}
             >
               <summary className="focus-ring cursor-pointer rounded-lg px-1 py-2 text-xs font-semibold text-muted-foreground">
-                Earlier, with a previous rider ({pastAssignmentIds.length})
+                {t('chat.earlier', { count: pastAssignmentIds.length })}
               </summary>
               {archiveError ? (
                 <p role="alert" className="px-1 pb-2 text-xs text-danger">
@@ -242,8 +263,8 @@ export function DeliveryChat({
                     }))}
                     onSend={() => {}}
                     disabled
-                    disabledNotice="That rider is no longer on your order."
-                    emptyNotice={archive ? 'Nothing was said.' : 'Loading…'}
+                    disabledNotice={t('chat.pastRiderGone')}
+                    emptyNotice={archive ? t('chat.nothingSaid') : t('chat.loading')}
                   />
                 </div>
               )}
@@ -265,9 +286,9 @@ export function DeliveryChat({
               onSend={send}
               onSendPhoto={sendPhoto}
               photoError={photoError}
-              quickReplies={CUSTOMER_QUICK_REPLIES}
+              quickReplies={CUSTOMER_QUICK_REPLIES.map((q) => ({ value: q.value, label: t(`chat.quickReplies.${q.labelKey}`) }))}
               disabled={!inFlight}
-              disabledNotice="Chat closes when the delivery ends."
+              disabledNotice={t('chat.closesWhenDone')}
             />
           </div>
         </div>

@@ -1,0 +1,50 @@
+{
+  "accessDenied": {
+    "title": "Không có quyền xem khách hàng",
+    "reason": "Chỉ chủ sở hữu, quản trị viên, quản lý và thu ngân mới xem được danh sách khách hàng tại {branch}."
+  },
+  "title": "Khách hàng",
+  "summary": "{count, plural, other {# khách hàng}} tại chi nhánh này",
+  "loadError": {
+    "title": "Không tải được danh sách khách hàng",
+    "body": "Hãy tải lại trang. Nếu lỗi vẫn tiếp diễn, hãy liên hệ bộ phận hỗ trợ."
+  },
+  "empty": {
+    "title": "Chưa có khách hàng",
+    "description": "Khi khách đặt hàng qua ứng dụng web dành cho khách, họ sẽ xuất hiện ở đây."
+  },
+  "emptyPage": {
+    "title": "Trang này không có dữ liệu",
+    "description": "Chi nhánh này có {total, plural, other {# khách hàng}}, nhưng trang {page} không có ai.",
+    "action": "Về trang đầu"
+  },
+  "columns": {
+    "name": "Tên",
+    "phone": "Điện thoại",
+    "address": "Địa chỉ",
+    "orders": "Đơn hàng",
+    "spent": "Tổng chi tiêu",
+    "lastSeen": "Ghé gần nhất",
+    "joined": "Ngày tham gia"
+  },
+  "address": {
+    "lastDelivered": "Giao gần nhất {date}",
+    "saved": "Địa chỉ đã lưu",
+    "moreSaved": "+{count} địa chỉ khác"
+  },
+  "never": "Chưa bao giờ",
+  "sort": {
+    "label": "Sắp xếp theo",
+    "ascending": "Tăng dần",
+    "descending": "Giảm dần",
+    "switchToDescending": "Đang sắp xếp tăng dần; chuyển sang giảm dần",
+    "switchToAscending": "Đang sắp xếp giảm dần; chuyển sang tăng dần"
+  },
+  "pager": {
+    "label": "Trang khách hàng",
+    "showing": "Hiển thị {first}–{last} trên {total}",
+    "previous": "Trước",
+    "next": "Tiếp",
+    "page": "Trang {page}/{pages}"
+  }
+}

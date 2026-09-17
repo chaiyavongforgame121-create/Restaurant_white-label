@@ -1,0 +1,19 @@
+{
+  "metaDescription": "Ứng dụng dành cho tài xế của nền tảng giao đồ ăn Favornoms.",
+  "crash": {
+    "title": "Đã xảy ra lỗi",
+    "body": "Các đơn giao của bạn vẫn an toàn. Hãy thử lại hoặc quay về trang chủ.",
+    "backHome": "Về trang chủ"
+  },
+  "session": {
+    "noProfileTitle": "Chưa có hồ sơ tài xế",
+    "noProfileBody": "Tài khoản này đã đăng nhập nhưng chưa có hồ sơ tài xế. Hãy đăng xuất rồi đăng nhập lại, hoặc nhờ nhà hàng thêm bạn vào.",
+    "unreachableTitle": "Không kết nối được Favornoms",
+    "offlineBody": "Có vẻ bạn đang mất kết nối. Các đơn giao vẫn an toàn — hãy thử lại khi có sóng.",
+    "unreachableBody": "Không tải được hồ sơ tài xế của bạn. Vui lòng thử lại."
+  },
+  "push": {
+    "prompt": "Bật thông báo để không bỏ lỡ đơn giao mới.",
+    "turnOn": "Bật"
+  }
+}

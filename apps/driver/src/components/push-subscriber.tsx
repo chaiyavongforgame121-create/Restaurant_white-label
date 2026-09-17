@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { Bell } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { ensurePushSubscription } from '@favornoms/ui';
 import { getBrowserClient } from '@favornoms/database/client';
 import { useDriverSession } from './driver-session';
@@ -20,6 +21,7 @@ import { useDriverSession } from './driver-session';
  */
 export function PushSubscriber() {
   const { driver } = useDriverSession();
+  const t = useTranslations('shell.push');
   const [needsTap, setNeedsTap] = React.useState(false);
   const triedRef = React.useRef(false);
 
@@ -65,14 +67,14 @@ export function PushSubscriber() {
       <span className="bg-primary/10 text-primary grid h-9 w-9 shrink-0 place-items-center rounded-xl">
         <Bell className="h-4 w-4" />
       </span>
-      <p className="flex-1 text-xs">Turn on alerts so you hear new delivery offers.</p>
+      <p className="flex-1 text-xs">{t('prompt')}</p>
       {/* min-h-0 opts out of the app-wide 48px button floor — this strip has to fit above the
           tab bar without swallowing the screen. */}
       <button
         onClick={() => void subscribe(true)}
         className="focus-ring bg-primary text-primary-foreground h-9 min-h-0 shrink-0 rounded-xl px-3 text-xs font-semibold"
       >
-        Turn on
+        {t('turnOn')}
       </button>
     </div>
   );

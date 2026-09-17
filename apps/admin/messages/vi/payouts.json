@@ -1,0 +1,81 @@
+{
+  "driverFallback": "Tài xế",
+  "receiptNumber": "Hóa đơn {number}",
+  "status": {
+    "pending": "Đang chờ",
+    "paid": "Đã trả",
+    "rejected": "Bị từ chối"
+  },
+  "page": {
+    "title": "Chi trả cho tài xế",
+    "subtitle": "Tài xế gửi yêu cầu rút thu nhập tích lũy; xử lý các yêu cầu tại đây.",
+    "requestsTitle": "Yêu cầu rút tiền",
+    "noRequests": "Chưa có yêu cầu rút tiền.",
+    "requested": "Gửi yêu cầu: {date}",
+    "reason": "Lý do: {reason}",
+    "summaryTitle": "Tổng kết theo tuần",
+    "summaryHint": "Chỉ để tham khảo — tài xế giờ tự gửi yêu cầu rút tiền; hãy xử lý từ danh sách phía trên.",
+    "noEarnings": "Chưa có thu nhập của tài xế.",
+    "weekOf": "Tuần từ {date} · {count, plural, other {# chuyến giao}}",
+    "breakdown": "Cơ bản {base} · Quãng đường {distance} · Tiền tip {tips}",
+    "unpaid": "{amount} chưa trả"
+  },
+  "receipt": {
+    "back": "← Quay lại chi trả",
+    "print": "In",
+    "title": "Hóa đơn chi trả",
+    "paidAt": "Đã trả: {date}",
+    "paidBy": "Người trả",
+    "paidTo": "Người nhận",
+    "branchFallback": "Chi nhánh",
+    "columns": {
+      "delivered": "Thời gian giao",
+      "base": "Cơ bản",
+      "distance": "Quãng đường",
+      "tip": "Tiền tip",
+      "total": "Tổng cộng"
+    },
+    "noLines": "Không có dòng chi tiết nào.",
+    "grandTotal": "Tổng cộng"
+  },
+  "attachments": {
+    "riderQr": "QR của tài xế",
+    "riderQrAlt": "Mã QR nhận tiền của tài xế",
+    "qrLoadFailed": "Không tải được mã QR.",
+    "noQr": "Chưa lưu mã QR — hãy chuyển vào số tài khoản ở trên.",
+    "slip": "Biên lai chuyển khoản",
+    "viewPdf": "Xem biên lai (PDF)",
+    "slipLoadFailed": "Không tải được biên lai.",
+    "notAttached": "Chưa đính kèm.",
+    "uploading": "Đang tải lên…",
+    "replace": "Thay biên lai",
+    "attach": "Đính kèm biên lai",
+    "errors": {
+      "fileType": "Hãy đính kèm biên lai chuyển khoản dạng PNG, JPEG, WebP hoặc PDF.",
+      "tooLarge": "Tệp này lớn hơn 10 MB.",
+      "notAuthorized": "Bạn không có quyền đính kèm biên lai cho khoản chi trả này.",
+      "notPending": "Yêu cầu này đã bị từ chối — không có gì để đính kèm.",
+      "notFound": "Khoản chi trả này không còn tồn tại.",
+      "uploadFailed": "Không tải lên được biên lai. Hãy thử lại.",
+      "generic": "Không lưu được biên lai. Hãy thử lại."
+    }
+  },
+  "actions": {
+    "payTitle": "Trả {amount} cho {name}?",
+    "payBody": "Chỉ xác nhận sau khi đã chuyển khoản.",
+    "payBodyNoSlip": "Chỉ xác nhận sau khi đã chuyển khoản. Chưa đính kèm biên lai chuyển khoản.",
+    "markPaid": "Đánh dấu đã trả",
+    "paidReceipt": "Đã trả · Hóa đơn {number}",
+    "reasonPlaceholder": "Lý do (không bắt buộc)",
+    "cancel": "Hủy",
+    "confirmReject": "Xác nhận từ chối",
+    "reject": "Từ chối",
+    "errors": {
+      "notPending": "Yêu cầu này đã được xử lý.",
+      "notAuthorized": "Bạn không có quyền xử lý yêu cầu này.",
+      "notFound": "Yêu cầu này không còn tồn tại.",
+      "signedOut": "Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại.",
+      "generic": "Không cập nhật được yêu cầu. Hãy thử lại."
+    }
+  }
+}

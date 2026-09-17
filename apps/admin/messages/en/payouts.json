@@ -1,0 +1,81 @@
+{
+  "driverFallback": "Driver",
+  "receiptNumber": "Receipt {number}",
+  "status": {
+    "pending": "Pending",
+    "paid": "Paid",
+    "rejected": "Rejected"
+  },
+  "page": {
+    "title": "Driver payouts",
+    "subtitle": "Drivers request withdrawals of their accrued earnings; settle them here.",
+    "requestsTitle": "Withdrawal requests",
+    "noRequests": "No withdrawal requests yet.",
+    "requested": "Requested {date}",
+    "reason": "Reason: {reason}",
+    "summaryTitle": "Weekly summary",
+    "summaryHint": "Info only — drivers now request withdrawals themselves; settle them from the queue above.",
+    "noEarnings": "No driver earnings yet.",
+    "weekOf": "Week of {date} · {count, plural, one {# delivery} other {# deliveries}}",
+    "breakdown": "Base {base} · Distance {distance} · Tips {tips}",
+    "unpaid": "{amount} unpaid"
+  },
+  "receipt": {
+    "back": "← Back to payouts",
+    "print": "Print",
+    "title": "Payout receipt",
+    "paidAt": "Paid {date}",
+    "paidBy": "Paid by",
+    "paidTo": "Paid to",
+    "branchFallback": "Branch",
+    "columns": {
+      "delivered": "Delivered",
+      "base": "Base",
+      "distance": "Distance",
+      "tip": "Tip",
+      "total": "Total"
+    },
+    "noLines": "No line items recorded.",
+    "grandTotal": "Grand total"
+  },
+  "attachments": {
+    "riderQr": "Rider’s QR",
+    "riderQrAlt": "Rider’s payout QR",
+    "qrLoadFailed": "Could not load the QR.",
+    "noQr": "No QR saved — pay to the account number above.",
+    "slip": "Transfer slip",
+    "viewPdf": "View slip (PDF)",
+    "slipLoadFailed": "Could not load the slip.",
+    "notAttached": "Not attached yet.",
+    "uploading": "Uploading…",
+    "replace": "Replace slip",
+    "attach": "Attach slip",
+    "errors": {
+      "fileType": "Attach a PNG, JPEG, WebP or PDF of the transfer slip.",
+      "tooLarge": "That file is over 10 MB.",
+      "notAuthorized": "You don’t have permission to file a slip for this payout.",
+      "notPending": "This request was rejected — there is nothing to file.",
+      "notFound": "That payout no longer exists.",
+      "uploadFailed": "The slip could not be uploaded. Try again.",
+      "generic": "The slip could not be saved. Try again."
+    }
+  },
+  "actions": {
+    "payTitle": "Pay {amount} to {name}?",
+    "payBody": "Confirm only after the transfer is sent.",
+    "payBodyNoSlip": "Confirm only after the transfer is sent. No transfer slip is attached yet.",
+    "markPaid": "Mark as paid",
+    "paidReceipt": "Paid · Receipt {number}",
+    "reasonPlaceholder": "Reason (optional)",
+    "cancel": "Cancel",
+    "confirmReject": "Confirm reject",
+    "reject": "Reject",
+    "errors": {
+      "notPending": "This request was already settled.",
+      "notAuthorized": "You don’t have permission to settle this request.",
+      "notFound": "That request no longer exists.",
+      "signedOut": "Your session has ended. Sign in again.",
+      "generic": "The request could not be updated. Try again."
+    }
+  }
+}

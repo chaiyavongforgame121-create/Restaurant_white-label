@@ -62,7 +62,7 @@ export function CartView({ branchId, storefrontVersion }: Props) {
   // the server refuses outright.
   const priceNotice = useCartReprice(branchId, storefrontVersion);
 
-  if (!hydrated) return <div className="container max-w-2xl pt-4 text-sm text-muted-foreground">Loading…</div>;
+  if (!hydrated) return <div className="container max-w-2xl pt-4 text-sm text-muted-foreground">{t('common.loading')}</div>;
 
   return (
     <div className="container max-w-2xl pt-4">
@@ -78,7 +78,11 @@ export function CartView({ branchId, storefrontVersion }: Props) {
           role="status"
           className="mb-4 rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning"
         >
-          {priceNotice}
+          {priceNotice.removed > 0
+            ? priceNotice.changed > 0
+              ? t('cart.priceNotice.removedAndChanged', { count: priceNotice.removed })
+              : t('cart.priceNotice.removed', { count: priceNotice.removed })
+            : t('cart.priceNotice.changed')}
         </p>
       )}
 
@@ -128,7 +132,7 @@ export function CartView({ branchId, storefrontVersion }: Props) {
                           {line.name}
                         </h3>
                         <IconButton
-                          label="Remove"
+                          label={t('cart.remove')}
                           size="sm"
                           onClick={() => remove(line.id)}
                           className="text-danger hover:bg-danger/10"
@@ -177,7 +181,7 @@ export function CartView({ branchId, storefrontVersion }: Props) {
                         onChange={(e) => setLineNotes(line.id, e.target.value)}
                         placeholder={t('cart.notesPlaceholder')}
                         className="focus-ring w-full rounded-lg border border-border/60 bg-background px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground"
-                        aria-label={`Note for ${line.name}`}
+                        aria-label={t('cart.lineNoteLabel', { name: line.name })}
                       />
                     </div>
                   </Card>

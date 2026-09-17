@@ -1,0 +1,86 @@
+{
+  "loading": "Đang tải…",
+  "back": "Quay lại",
+  "signIn": "Đăng nhập",
+  "sections": {
+    "orderHistory": "Lịch sử đơn hàng",
+    "addresses": "Địa chỉ giao hàng",
+    "loyalty": "Điểm tích lũy và phần thưởng",
+    "settings": "Cài đặt và tùy chọn"
+  },
+  "home": {
+    "welcomeBack": "Chào mừng bạn trở lại",
+    "memberAt": "Thành viên {brandName}",
+    "welcomeTo": "Chào mừng đến với {brandName}",
+    "signInToEarn": "Đăng nhập để tích điểm",
+    "statPoints": "Điểm",
+    "statTier": "Hạng",
+    "statLifetime": "Tổng tích lũy",
+    "addressesMeta": "Quản lý địa chỉ đã lưu",
+    "loyaltyMeta": "{tier} · {points, plural, other {# điểm}}",
+    "googleAccount": "Tài khoản Google",
+    "googleLinked": "Đã liên kết",
+    "googleLinkHint": "Liên kết Google để đổi điểm.",
+    "linkGoogle": "Liên kết Google",
+    "googleAlreadyLinked": "Tài khoản Google này đã được liên kết với một tài khoản khác.",
+    "linkGoogleFailed": "Không thể liên kết tài khoản Google. Vui lòng thử lại.",
+    "signOut": "Đăng xuất"
+  },
+  "addresses": {
+    "signInPrompt": "Đăng nhập để lưu và quản lý địa chỉ giao hàng.",
+    "retry": "Thử lại",
+    "emptyTitle": "Chưa có địa chỉ nào được lưu",
+    "emptyBody": "Thêm địa chỉ để thanh toán nhanh hơn vào lần sau.",
+    "fallbackLabel": "Địa chỉ",
+    "defaultBadge": "Mặc định",
+    "note": "Ghi chú: {note}",
+    "setDefault": "Đặt mặc định",
+    "edit": "Sửa",
+    "delete": "Xóa",
+    "addNew": "Thêm địa chỉ mới",
+    "confirmDelete": "Xóa địa chỉ này?",
+    "form": {
+      "editTitle": "Sửa địa chỉ",
+      "addTitle": "Thêm địa chỉ",
+      "label": "Tên gợi nhớ (không bắt buộc)",
+      "labelPlaceholder": "Nhà, Công ty, Nhà mẹ…",
+      "pinned": "Đã ghim vị trí",
+      "instructions": "Hướng dẫn giao hàng (không bắt buộc)",
+      "instructionsPlaceholder": "VD: Mã cổng 1234 · để trước cửa",
+      "setDefault": "Đặt làm địa chỉ mặc định",
+      "saveChanges": "Lưu thay đổi",
+      "save": "Lưu địa chỉ"
+    },
+    "errors": {
+      "line1Required": "Vui lòng nhập địa chỉ nhà và tên đường.",
+      "notFound": "Địa chỉ này không còn tồn tại — vui lòng tải lại trang.",
+      "forbidden": "Địa chỉ này thuộc về một tài khoản khác.",
+      "loadFailed": "Không thể tải địa chỉ của bạn. Vui lòng thử lại."
+    }
+  },
+  "settings": {
+    "signInPrompt": "Đăng nhập để quản lý hồ sơ và tùy chọn của bạn.",
+    "profileTitle": "Hồ sơ của bạn",
+    "fullName": "Họ và tên",
+    "fullNamePlaceholder": "VD: Nguyễn Văn An",
+    "phone": "Số điện thoại",
+    "email": "Email",
+    "notificationsTitle": "Thông báo",
+    "promotions": "Khuyến mãi và ưu đãi",
+    "promotionsHint": "Nhận ưu đãi, phần thưởng và tin tức qua email.",
+    "appearanceTitle": "Giao diện",
+    "darkMode": "Chế độ tối",
+    "lightMode": "Chế độ sáng",
+    "saveFailed": "Không thể lưu hồ sơ của bạn. Vui lòng đăng nhập lại rồi thử lại.",
+    "phoneTaken": "Số điện thoại này đã được dùng cho một hồ sơ khác tại nhà hàng này. Vui lòng dùng số khác.",
+    "noProfile": "Chưa tìm thấy hồ sơ của bạn — hãy đặt đơn hàng đầu tiên để tạo hồ sơ. Tùy chọn giao diện ở trên vẫn được lưu.",
+    "saved": "Đã lưu ✓",
+    "saveChanges": "Lưu thay đổi"
+  },
+  "errors": {
+    "sessionExpired": "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
+    "branchNotFound": "Không tìm thấy nhà hàng này. Vui lòng tải lại trang.",
+    "profileUnavailable": "Không thể thiết lập hồ sơ của bạn. Vui lòng thử lại.",
+    "generic": "Đã xảy ra lỗi. Vui lòng thử lại."
+  }
+}

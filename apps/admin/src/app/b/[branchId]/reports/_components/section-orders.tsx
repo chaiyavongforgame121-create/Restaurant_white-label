@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useTranslations } from 'next-intl';
 import {
   Bar,
   BarChart,
@@ -27,7 +28,9 @@ const CHANNEL_COLORS: Record<string, string> = {
   qr_ordering: '#2EC4B6',
 };
 
-const DOW_ORDER = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+// These are the `to_char(…, 'Dy')` values get_branch_orders_report returns, so they are
+// matched as-is; only the row label is translated, from reports.orders.dow.
+const DOW_ORDER = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 
 export function SectionOrders({
   result,
@@ -38,61 +41,71 @@ export function SectionOrders({
   currency: string;
   timezone: string;
 }) {
+  const t = useTranslations('reports.orders');
   const data = result.data;
   const money = (n: number) => formatCurrency(n, currency);
   const maxHeat = Math.max(1, ...(data?.hour_heatmap ?? []).map((h) => h.orders));
 
+  // Channel, source and status are open-ended codes from the RPC. A known one gets its
+  // translated name; anything new still shows, as the raw code.
+  const channelName = (channel: string) =>
+    t.has(`channel.${channel}`) ? t(`channel.${channel}`) : null;
+  const sourceName = (source: string) => (t.has(`source.${source}`) ? t(`source.${source}`) : null);
+  const statusName = (status: string) => (t.has(`status.${status}`) ? t(`status.${status}`) : null);
+
   return (
     <SectionFrame
       id="orders"
-      title="Orders"
+      title={t('title')}
       icon={<ShoppingBag className="h-5 w-5" />}
-      caption="Every order in the range, cancellations included — so the rates below have an honest denominator."
-      error={result.error ?? (data ? null : 'No orders payload was returned.')}
+      caption={t('caption')}
+      error={result.error ?? (data ? null : { code: 'emptyResponse', ref: null })}
     >
       {data ? (
         <>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
             <Kpi
               icon={<ShoppingBag className="h-5 w-5" />}
-              label="Total orders"
+              label={t('total')}
               value={data.totals.orders.toString()}
-              hint={`${data.totals.in_progress} still in progress`}
+              hint={t('totalHint', { count: data.totals.in_progress })}
             />
             <Kpi
               icon={<CheckCircle2 className="h-5 w-5" />}
-              label="Completed"
+              label={t('completed')}
               value={`${data.totals.completed} · ${data.totals.completion_rate_pct}%`}
               tone="success"
             />
             <Kpi
               icon={<XCircle className="h-5 w-5" />}
-              label="Cancelled"
+              label={t('cancelled')}
               value={`${data.totals.cancelled} · ${data.totals.cancel_rate_pct}%`}
               tone={data.totals.cancel_rate_pct >= 15 ? 'danger' : 'neutral'}
             />
             <Kpi
               icon={<Timer className="h-5 w-5" />}
-              label="Average order"
+              label={t('averageOrder')}
               value={money(data.totals.avg_order_value)}
               hint={
                 data.totals.avg_fulfil_min > 0
-                  ? `${data.totals.avg_fulfil_min} min to fulfil`
+                  ? t('fulfilHint', { minutes: data.totals.avg_fulfil_min })
                   : undefined
               }
             />
             <Kpi
               icon={<CalendarClock className="h-5 w-5" />}
-              label="Scheduled"
+              label={t('scheduled')}
               value={data.scheduled.total.toString()}
-              hint={`${data.scheduled.upcoming} still upcoming`}
+              hint={t('scheduledHint', { count: data.scheduled.upcoming })}
             />
           </div>
 
           <div className="mt-4 grid gap-4 lg:grid-cols-3">
             <Card className="p-5 lg:col-span-2">
-              <h3 className="font-display text-lg font-semibold">Orders by hour</h3>
-              <p className="mt-1 text-xs text-muted-foreground">Branch clock ({timezone})</p>
+              <h3 className="font-display text-lg font-semibold">{t('byHour')}</h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t('branchClock', { timezone })}
+              </p>
               <div className="mt-3 h-56">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={data.by_hour}>
@@ -109,19 +122,24 @@ export function SectionOrders({
                         border: '1px solid hsl(var(--border))',
                         borderRadius: 12,
                       }}
-                      labelFormatter={(h) => `${h}:00`}
-                      formatter={(v: number) => `${v} orders`}
+                      labelFormatter={(h) => t('hourLabel', { hour: String(h) })}
+                      formatter={(v: number) => t('ordersCount', { count: v })}
                     />
-                    <Bar dataKey="orders" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
+                    <Bar
+                      dataKey="orders"
+                      name={t('title')}
+                      fill="hsl(var(--primary))"
+                      radius={[6, 6, 0, 0]}
+                    />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             </Card>
 
             <Card className="p-5">
-              <h3 className="font-display text-lg font-semibold">By channel</h3>
+              <h3 className="font-display text-lg font-semibold">{t('byChannel')}</h3>
               {data.by_channel.length === 0 ? (
-                <EmptyNote>No orders in this range.</EmptyNote>
+                <EmptyNote>{t('empty')}</EmptyNote>
               ) : (
                 <>
                   <div className="mt-3 h-48">
@@ -145,30 +163,41 @@ export function SectionOrders({
                             border: '1px solid hsl(var(--border))',
                             borderRadius: 12,
                           }}
-                          formatter={(v: number) => money(v)}
+                          formatter={(v: number, name: string) => [
+                            money(v),
+                            channelName(String(name)) ?? name,
+                          ]}
                         />
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
                   <ul className="mt-2 space-y-1 text-sm">
-                    {data.by_channel.map((c) => (
-                      <li key={c.channel} className="flex items-center justify-between gap-2">
-                        <span className="inline-flex min-w-0 items-center gap-2 capitalize">
+                    {data.by_channel.map((c) => {
+                      const label = channelName(c.channel);
+                      return (
+                        <li key={c.channel} className="flex items-center justify-between gap-2">
                           <span
-                            className="h-3 w-3 shrink-0 rounded-full"
-                            style={{ background: CHANNEL_COLORS[c.channel] ?? '#999' }}
-                          />
-                          <span className="truncate">{c.channel.replace('_', ' ')}</span>
-                        </span>
-                        <span className="shrink-0 text-right">
-                          <span className="text-xs text-muted-foreground">
-                            {c.orders}
-                            {c.cancelled > 0 ? ` (${c.cancelled} cx)` : ''} ·{' '}
+                            className={`inline-flex min-w-0 items-center gap-2${label ? '' : ' capitalize'}`}
+                          >
+                            <span
+                              className="h-3 w-3 shrink-0 rounded-full"
+                              style={{ background: CHANNEL_COLORS[c.channel] ?? '#999' }}
+                            />
+                            <span className="truncate">{label ?? c.channel.replace('_', ' ')}</span>
                           </span>
-                          <span className="font-semibold tabular-nums">{money(c.revenue)}</span>
-                        </span>
-                      </li>
-                    ))}
+                          <span className="shrink-0 text-right">
+                            <span className="text-xs text-muted-foreground">
+                              {c.orders}
+                              {c.cancelled > 0
+                                ? ` ${t('channelCancelled', { count: c.cancelled })}`
+                                : ''}{' '}
+                              ·{' '}
+                            </span>
+                            <span className="font-semibold tabular-nums">{money(c.revenue)}</span>
+                          </span>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </>
               )}
@@ -177,68 +206,73 @@ export function SectionOrders({
 
           <div className="mt-4 grid gap-4 lg:grid-cols-3">
             <Card className="p-5">
-              <h3 className="font-display text-lg font-semibold">Where orders came from</h3>
+              <h3 className="font-display text-lg font-semibold">{t('whereFrom')}</h3>
               {data.by_source.length === 0 ? (
-                <EmptyNote>No orders in this range.</EmptyNote>
+                <EmptyNote>{t('empty')}</EmptyNote>
               ) : (
                 <ul className="mt-3 space-y-1.5 text-sm">
-                  {data.by_source.map((s) => (
-                    <li
-                      key={s.source}
-                      className="flex items-center justify-between gap-2 rounded-xl bg-muted/40 px-3 py-2"
-                    >
-                      <span className="truncate capitalize">{s.source}</span>
-                      <span className="shrink-0 text-right">
-                        <span className="text-xs text-muted-foreground">{s.orders} · </span>
-                        <span className="font-semibold tabular-nums">{money(s.revenue)}</span>
-                      </span>
-                    </li>
-                  ))}
+                  {data.by_source.map((s) => {
+                    const label = sourceName(s.source);
+                    return (
+                      <li
+                        key={s.source}
+                        className="flex items-center justify-between gap-2 rounded-xl bg-muted/40 px-3 py-2"
+                      >
+                        <span className={`truncate${label ? '' : ' capitalize'}`}>
+                          {label ?? s.source}
+                        </span>
+                        <span className="shrink-0 text-right">
+                          <span className="text-xs text-muted-foreground">{s.orders} · </span>
+                          <span className="font-semibold tabular-nums">{money(s.revenue)}</span>
+                        </span>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </Card>
 
             <Card className="p-5">
-              <h3 className="font-display text-lg font-semibold">By status</h3>
+              <h3 className="font-display text-lg font-semibold">{t('byStatus')}</h3>
               {data.by_status.length === 0 ? (
-                <EmptyNote>No orders in this range.</EmptyNote>
+                <EmptyNote>{t('empty')}</EmptyNote>
               ) : (
                 <ul className="mt-3 space-y-1.5 text-sm">
-                  {data.by_status.map((s) => (
-                    <li
-                      key={s.status}
-                      className="flex items-center justify-between gap-2 rounded-xl bg-muted/40 px-3 py-2"
-                    >
-                      <span className="truncate capitalize">{s.status.replace(/_/g, ' ')}</span>
-                      <span className="font-semibold tabular-nums">{s.orders}</span>
-                    </li>
-                  ))}
+                  {data.by_status.map((s) => {
+                    const label = statusName(s.status);
+                    return (
+                      <li
+                        key={s.status}
+                        className="flex items-center justify-between gap-2 rounded-xl bg-muted/40 px-3 py-2"
+                      >
+                        <span className={`truncate${label ? '' : ' capitalize'}`}>
+                          {label ?? s.status.replace(/_/g, ' ')}
+                        </span>
+                        <span className="font-semibold tabular-nums">{s.orders}</span>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
-              <Caption>
-                This list was fetched but never drawn before, so a cancelled order had
-                nowhere to appear.
-              </Caption>
+              <Caption>{t('byStatusCaption')}</Caption>
             </Card>
 
             <Card className="p-5">
-              <h3 className="font-display text-lg font-semibold">Scheduled orders</h3>
+              <h3 className="font-display text-lg font-semibold">{t('scheduledOrders')}</h3>
               <dl className="mt-3 space-y-1.5 text-sm">
-                <ScheduleRow label="Booked in advance" value={data.scheduled.total} />
-                <ScheduleRow label="Still upcoming" value={data.scheduled.upcoming} />
-                <ScheduleRow label="Fulfilled" value={data.scheduled.fulfilled} />
-                <ScheduleRow label="Cancelled" value={data.scheduled.cancelled} />
+                <ScheduleRow label={t('bookedInAdvance')} value={data.scheduled.total} />
+                <ScheduleRow label={t('stillUpcoming')} value={data.scheduled.upcoming} />
+                <ScheduleRow label={t('fulfilled')} value={data.scheduled.fulfilled} />
+                <ScheduleRow label={t('cancelled')} value={data.scheduled.cancelled} />
               </dl>
-              <Caption>
-                Counted by when the order was placed, not by the slot it was booked into.
-              </Caption>
+              <Caption>{t('scheduledCaption')}</Caption>
             </Card>
           </div>
 
           <Card className="mt-4 p-5">
-            <h3 className="font-display text-lg font-semibold">Peak-hour heatmap</h3>
+            <h3 className="font-display text-lg font-semibold">{t('heatmap')}</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              Orders per hour-of-day × day-of-week ({timezone})
+              {t('heatmapCaption', { timezone })}
             </p>
             <div className="mt-4 overflow-x-auto">
               <table className="w-full border-separate border-spacing-1 text-center text-[10px]">
@@ -255,7 +289,9 @@ export function SectionOrders({
                 <tbody>
                   {DOW_ORDER.map((d) => (
                     <tr key={d}>
-                      <td className="pr-1 text-left text-xs font-semibold">{d}</td>
+                      <td className="whitespace-nowrap pr-1 text-left text-xs font-semibold">
+                        {t(`dow.${d}`)}
+                      </td>
                       {Array.from({ length: 24 }, (_, h) => {
                         const cell = data.hour_heatmap.find((c) => c.dow === d && c.hour === h);
                         const intensity = cell ? cell.orders / maxHeat : 0;
@@ -264,8 +300,11 @@ export function SectionOrders({
                             key={h}
                             title={
                               cell
-                                ? `${cell.orders} orders · ${money(cell.revenue)}`
-                                : '0 orders'
+                                ? t('heatmapCell', {
+                                    count: cell.orders,
+                                    amount: money(cell.revenue),
+                                  })
+                                : t('ordersCount', { count: 0 })
                             }
                             className="h-6 w-6 rounded"
                             style={{

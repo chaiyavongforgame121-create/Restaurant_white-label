@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import { Lock } from 'lucide-react';
 import { Card } from '@favornoms/ui';
 import { getServerClient } from '@favornoms/database/server';
@@ -11,6 +12,7 @@ interface Props { params: Promise<{ branchId: string }> }
 export default async function LoyaltyRewardsPage({ params }: Props) {
   const { branchId } = await params;
   const supabase = await getServerClient();
+  const t = await getTranslations('loyalty');
 
   const { data: branch } = await supabase
     .from('branches')
@@ -52,16 +54,14 @@ export default async function LoyaltyRewardsPage({ params }: Props) {
     return (
       <div className="container max-w-3xl py-8">
         <header className="mb-6 px-2 pl-16 lg:px-0">
-          <h1 className="font-display text-3xl font-bold">Loyalty rewards</h1>
+          <h1 className="font-display text-3xl font-bold">{t('title')}</h1>
         </header>
         <Card className="p-6">
           <h2 className="flex items-center gap-2 font-display text-lg font-semibold text-destructive">
-            <Lock className="h-5 w-5" /> Owner access only
+            <Lock className="h-5 w-5" /> {t('ownerOnly.title')}
           </h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            A reward listed here can be redeemed at <em>every</em> branch of this restaurant and
-            comes out of the restaurant&rsquo;s own margin, so the catalog is limited to the owner.
-            Ask them to add or change a reward for you.
+            {t.rich('ownerOnly.body', { em: (chunks) => <em>{chunks}</em> })}
           </p>
         </Card>
       </div>
@@ -133,12 +133,8 @@ export default async function LoyaltyRewardsPage({ params }: Props) {
           <LoyaltyProgramCard restaurantId={branch.restaurant_id} initial={programValues} />
         ) : (
           <Card className="mb-6 p-5">
-            <h2 className="font-display text-lg font-semibold">Points &amp; tiers</h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              The current programme could not be loaded, so it is not shown here — editing it from
-              a blank form would overwrite your real earn rate and tiers. Reload the page to try
-              again.
-            </p>
+            <h2 className="font-display text-lg font-semibold">{t('program.title')}</h2>
+            <p className="mt-2 text-sm text-muted-foreground">{t('program.loadFailed')}</p>
           </Card>
         )
       }

@@ -1,3 +1,4 @@
+import { getTranslations } from 'next-intl/server';
 import { Clock, Lock } from 'lucide-react';
 import {
   getEntitlementsForBranch,
@@ -20,7 +21,10 @@ interface Props {
   }>;
 }
 
-export const metadata = { title: 'Plan & billing · Favornoms' };
+export async function generateMetadata() {
+  const t = await getTranslations('settings.plan');
+  return { title: t('metaTitle') };
+}
 
 /**
  * `?add=` arrives from an upsell card, which may only know its own title ("Delivery"),
@@ -141,11 +145,12 @@ export default async function PlanPage({ params, searchParams }: Props) {
  * redirect sends every role here, and an AccessDenied card with a Sign out button reads
  * as "your account is broken" to a cashier whose only real problem is an unpaid package.
  */
-function PlanNotYours({ inactive, branchName }: { inactive: boolean; branchName: string }) {
+async function PlanNotYours({ inactive, branchName }: { inactive: boolean; branchName: string }) {
+  const t = await getTranslations('settings.plan');
   return (
     <div className="container max-w-2xl py-8">
       <header className="mb-6 px-2 pl-16 lg:px-0 lg:pl-0">
-        <h1 className="font-display text-3xl font-bold">Plan &amp; billing</h1>
+        <h1 className="font-display text-3xl font-bold">{t('title')}</h1>
       </header>
       <Card className="flex items-start gap-3 p-5">
         {inactive ? (
@@ -155,14 +160,12 @@ function PlanNotYours({ inactive, branchName }: { inactive: boolean; branchName:
         )}
         <div className="text-sm">
           <p className="font-semibold">
-            {inactive
-              ? 'Your restaurant’s package is inactive — ask the owner'
-              : 'Only the owner or an admin can change the package'}
+            {inactive ? t('notYours.inactiveTitle') : t('notYours.lockedTitle')}
           </p>
           <p className="mt-1 text-muted-foreground">
             {inactive
-              ? `The storefront and back office for ${branchName} are paused until the restaurant owner or an admin chooses a package. Nothing has been deleted, and your work comes back as soon as it is active again.`
-              : `${branchName}'s package is managed by the restaurant owner. Ask them if you need a feature that is not switched on.`}
+              ? t('notYours.inactiveBody', { branch: branchName })
+              : t('notYours.lockedBody', { branch: branchName })}
           </p>
         </div>
       </Card>

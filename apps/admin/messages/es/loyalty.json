@@ -1,0 +1,122 @@
+{
+  "title": "Recompensas de fidelidad",
+  "ownerOnly": {
+    "title": "Solo para el propietario",
+    "body": "Una recompensa de esta lista se puede canjear en <em>todas</em> las sucursales del restaurante y sale del propio margen del restaurante, por eso solo el propietario gestiona el catálogo. Pídele que agregue o cambie una recompensa por ti."
+  },
+  "program": {
+    "title": "Puntos y niveles",
+    "loadFailed": "No se pudo cargar el programa actual, así que no se muestra aquí: editarlo desde un formulario en blanco sobrescribiría tu tasa de puntos y tus niveles reales. Recarga la página para intentarlo de nuevo.",
+    "description": "Qué tan rápido ganan puntos los clientes, cuánto falta para cada insignia y cómo se llama. Se aplica a todas las sucursales del restaurante.",
+    "rateLabel": "Puntos por cada $1 del subtotal",
+    "rateExample": "Un pedido de $20 gana {count, plural, one {<strong>#</strong> punto} other {<strong>#</strong> puntos}}.",
+    "rateExampleEmpty": "Un pedido de $20 gana <strong>—</strong> puntos.",
+    "rateBasis": "Los puntos se calculan sobre el subtotal, antes de impuestos, cargos y propina.",
+    "thresholdLabel": {
+      "silver": "Silver desde",
+      "gold": "Gold desde",
+      "platinum": "Platinum desde"
+    },
+    "thresholdHint": "Puntos acumulados en total, no el saldo actual: gastar puntos nunca hace perder una insignia. Todos empiezan en Bronze.",
+    "wordsTitle": "Nombres y beneficios de los niveles",
+    "wordsBody": "Cómo se llama cada insignia en la página de fidelidad del cliente y qué ofrece: un beneficio por línea, en cualquier idioma. La línea “se desbloquea con” se escribe sola a partir de los números de arriba, así que mover un nivel nunca deja una cifra equivocada en tu texto.",
+    "starter": "Aquí empiezan todos los miembros, sin gasto mínimo.",
+    "unlockedAt": "{points, plural, one {Se desbloquea con # punto acumulado.} other {Se desbloquea con # puntos acumulados.}}",
+    "tierNameLabel": {
+      "bronze": "Nivel Bronze: nombre",
+      "silver": "Nivel Silver: nombre",
+      "gold": "Nivel Gold: nombre",
+      "platinum": "Nivel Platinum: nombre"
+    },
+    "benefitsLabel": "Beneficios: uno por línea",
+    "alwaysFirst": "Siempre aparece primero: <line>{opening}</line>",
+    "alwaysFirstOnly": "Siempre aparece primero: <line>{opening}</line> y nada más, mientras este cuadro esté vacío.",
+    "standardWording": "Se usa el texto estándar, que se actualiza si lo mejoramos.",
+    "standardWordingTranslated": "Aquí se muestra en inglés; los clientes lo leen en su propio idioma.",
+    "useStandard": "Usar el texto estándar",
+    "save": "Guardar programa",
+    "saved": "Guardado ✓: se revisó la insignia de cada cliente con los nuevos niveles",
+    "errors": {
+      "notAuthorized": "Solo el propietario del restaurante puede cambiar el programa de fidelidad.",
+      "stale": "El programa se cambió en otro lugar (otra pestaña, otro dispositivo u otra persona) después de abrir esta página. No se guardó nada: recarga la página para ver la versión más reciente y vuelve a hacer tu cambio.",
+      "badRate": "Los puntos por cada $1 deben estar entre 0.01 y 100.",
+      "badTiers": "Los niveles deben ir de menor a mayor y cada uno debe estar entre 1 y {max, number} puntos.",
+      "labelTooLong": "El nombre de un nivel puede tener como máximo {max} caracteres.",
+      "tooManyPerks": "Un nivel puede tener como máximo {max} beneficios.",
+      "perkInvalid": "Cada beneficio debe ser una línea de texto de {max} caracteres como máximo.",
+      "perkLineTooLong": "Una línea de beneficio puede tener como máximo {max} caracteres.",
+      "wholeNumber": "Cada nivel necesita un número entero de puntos.",
+      "thresholdTooHigh": "Un nivel puede requerir como máximo {max, number} puntos.",
+      "mustClimb": "Los niveles deben ir de menor a mayor: Silver por debajo de Gold y Gold por debajo de Platinum.",
+      "saveFailed": "No se pudo guardar el programa. Inténtalo de nuevo."
+    }
+  },
+  "rewards": {
+    "subtitle": "En qué pueden gastar sus puntos los clientes. Los puntos solo se canjean por las recompensas que agregues aquí.",
+    "new": "Nueva recompensa",
+    "cancel": "Cancelar",
+    "multiBranch": "Estas recompensas se aplican a todas las sucursales del restaurante. Una recompensa de <strong>producto gratis</strong> solo aparece en las sucursales cuyo menú tiene ese producto.",
+    "fields": {
+      "name": "Nombre de la recompensa",
+      "namePlaceholder": "Postre gratis",
+      "points": "Puntos para canjear",
+      "kind": "Tipo de recompensa",
+      "percent": "Porcentaje (1–100)",
+      "amount": "Monto en USD",
+      "cap": "Descuento máximo (USD, opcional)",
+      "capPlaceholder": "sin límite",
+      "item": "Qué producto",
+      "itemPlaceholder": "Elige un producto…",
+      "itemOption": "{name} — {price}",
+      "itemOptionHidden": "{name} — {price} (oculto)",
+      "minSubtotal": "Subtotal mínimo del pedido (USD)",
+      "sortOrder": "Orden",
+      "description": "Descripción (opcional)",
+      "descriptionPlaceholder": "Se muestra a los clientes debajo del nombre de la recompensa"
+    },
+    "kinds": {
+      "percent_off": "% de descuento en el pedido",
+      "fixed_off": "Descuento fijo en USD",
+      "free_item": "Producto del menú gratis",
+      "free_delivery": "Envío gratis"
+    },
+    "saveChanges": "Guardar cambios",
+    "create": "Crear recompensa",
+    "empty": {
+      "title": "Aún no hay recompensas",
+      "description": "Hasta que agregues una, los clientes acumulan puntos pero no tienen en qué gastarlos."
+    },
+    "line": "{points, plural, one {# pto} other {# ptos}} · {reward}",
+    "lineWithMinimum": "{points, plural, one {# pto} other {# ptos}} · {reward} · mín. {min}",
+    "describe": {
+      "percentOff": "{value}% de descuento",
+      "percentOffCapped": "{value}% de descuento (máx. {max})",
+      "fixedOff": "{amount} de descuento",
+      "freeItem": "{item} gratis",
+      "freeItemElsewhere": "Producto gratis de otra sucursal",
+      "freeDelivery": "Envío gratis"
+    },
+    "status": {
+      "active": "Activa",
+      "paused": "En pausa"
+    },
+    "pause": "Pausar",
+    "activate": "Activar",
+    "edit": "Editar",
+    "delete": "Eliminar",
+    "deleteDialog": {
+      "title": "¿Eliminar la recompensa “{name}”?",
+      "body": "Los clientes dejarán de verla al pagar.",
+      "confirm": "Eliminar"
+    },
+    "footer": "Los clientes ven estas recompensas en su página de fidelidad y eligen una al pagar. En <link>Clientes</link> puedes ver quién tiene puntos suficientes para canjear.",
+    "errors": {
+      "denied": "No se guardó el cambio: solo el propietario del restaurante puede editar el catálogo de recompensas.",
+      "menuItemForeign": "Ese producto pertenece a otro restaurante. Elige un producto de tu propio menú.",
+      "kindShape": "Esa combinación no es válida: una recompensa en % necesita un valor de 1 a 100, una recompensa fija necesita un monto mayor que 0 y un producto gratis necesita un producto.",
+      "pointsCost": "Los puntos para canjear deben ser mayores que 0.",
+      "permission": "No tienes permiso para cambiar las recompensas de este restaurante.",
+      "saveFailed": "No se pudo guardar la recompensa. Inténtalo de nuevo."
+    }
+  }
+}

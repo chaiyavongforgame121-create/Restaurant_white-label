@@ -1,0 +1,105 @@
+{
+  "title": "Ganancias",
+  "separatePay": "Cada restaurante te paga por separado; cada cifra de abajo indica de cuál es.",
+  "loadError": "No se pudieron cargar tus ganancias. Revisa tu señal y vuelve a abrir.",
+  "lifetime": {
+    "allLabel": "Todos los restaurantes · total",
+    "label": "Ganancias totales",
+    "noDeliveries": "Aún no hay entregas",
+    "many": "{restaurants, plural, one {# restaurante} other {# restaurantes}} · {deliveries, plural, one {# entrega} other {# entregas}}",
+    "one": "{restaurant} · {deliveries, plural, one {# entrega} other {# entregas}}"
+  },
+  "unpaid": {
+    "label": "Por cobrar",
+    "many": "todos los restaurantes; retira de uno en uno",
+    "one": "pendiente de pago"
+  },
+  "paid": {
+    "label": "Cobrado",
+    "many": "todos los restaurantes, liquidado",
+    "one": "liquidado por el restaurante"
+  },
+  "breakdown": {
+    "allRestaurants": "Todos los restaurantes",
+    "base": "Base",
+    "distance": "Distancia",
+    "tips": "Propinas"
+  },
+  "balances": {
+    "title": "Saldo por restaurante",
+    "emptyTitle": "Aún no hay ganancias",
+    "emptyDescription": "Cuando hagas entregas para un restaurante, tendrá aquí su propia tarjeta, con su propio saldo y sus propios retiros.",
+    "deliveries": "{count, plural, one {# entrega} other {# entregas}}",
+    "toWithdraw": "Para retirar",
+    "paidByRestaurant": "Pagado por este restaurante",
+    "lifetime": "Total",
+    "pendingWithNew": "Ya solicitaste {requested}; esperando a {restaurant}. Los {available} que ganaste desde entonces irán en tu próxima solicitud.",
+    "pendingNothingNew": "Ya solicitaste {requested}; esperando a {restaurant}. Podrás solicitar de nuevo cuando te lo paguen.",
+    "requestPending": "Solicitud pendiente",
+    "request": "Solicitar {amount}",
+    "nothingToWithdraw": "Aún no hay nada que retirar",
+    "settlesOnly": "Solo liquida {restaurant}"
+  },
+  "withdrawals": {
+    "title": "Solicitudes de retiro",
+    "oneRestaurantEach": "Cada solicitud cubre solo el saldo de un restaurante.",
+    "empty": "Aún no hay solicitudes de retiro.",
+    "status": {
+      "pending": "Pendiente",
+      "paid": "Pagado",
+      "rejected": "Rechazado"
+    },
+    "viewReceipt": "Ver recibo"
+  },
+  "request": {
+    "title": "Solicitar retiro",
+    "summary": "{deliveries, plural, one {# entrega} other {# entregas}} · el restaurante confirma el monto final",
+    "settlesOnly": "Esta solicitud liquida solo {restaurant}; lo que te deban tus otros restaurantes no cambia.",
+    "bank": "Banco",
+    "bankPlaceholder": "Chase / Bank of America / etc.",
+    "accountNumber": "Número de cuenta",
+    "accountName": "Nombre del titular",
+    "submit": "Solicitar {amount}"
+  },
+  "errors": {
+    "bankDetailsRequired": "Completa todos los datos bancarios.",
+    "withdrawalAlreadyPending": "Ya tienes una solicitud pendiente para este restaurante.",
+    "nothingToWithdraw": "Aún no hay nada que retirar de este restaurante.",
+    "generic": "No se pudo enviar tu solicitud. Inténtalo de nuevo."
+  },
+  "receipt": {
+    "loading": "Cargando recibo…",
+    "notFound": "No encontramos este recibo. Puede pertenecer a otra cuenta.",
+    "back": "Volver a ganancias",
+    "notPaid": "Este retiro aún no se ha pagado; el recibo aparecerá aquí cuando el restaurante lo pague.",
+    "title": "Recibo de pago",
+    "paidBy": "Pagado por {restaurant}",
+    "restaurant": "Restaurante",
+    "branch": "Sucursal",
+    "driver": "Repartidor",
+    "paid": "Fecha de pago",
+    "bank": "Banco",
+    "transferSlip": "Comprobante de transferencia",
+    "transferSlipAlt": "Comprobante de transferencia del restaurante",
+    "deliveries": "{count, plural, one {# entrega} other {# entregas}}",
+    "lineBreakdown": "Base {base} · Distancia {distance} · Propina {tip}",
+    "totalPaid": "Total pagado"
+  },
+  "qr": {
+    "title": "QR de cobro",
+    "description": "Los restaurantes lo ven junto a tu solicitud de retiro, así pueden escanearlo en vez de escribir tu número de cuenta.",
+    "compactSaved": "El restaurante puede escanearlo para pagarte.",
+    "compactMissing": "Sin él, escriben tu número de cuenta a mano.",
+    "alt": "Tu QR de cobro",
+    "saving": "Guardando…",
+    "replace": "Cambiar",
+    "upload": "Subir QR",
+    "remove": "Quitar",
+    "errors": {
+      "wrongType": "Elige una imagen PNG, JPEG o WebP de tu QR.",
+      "tooLarge": "Esa imagen pesa más de 10 MB; basta con una captura de pantalla del QR.",
+      "busy": "El servidor está ocupado. Espera un momento e inténtalo de nuevo. ({detail})",
+      "updateFailed": "No se pudo actualizar tu QR de cobro. Inténtalo de nuevo."
+    }
+  }
+}

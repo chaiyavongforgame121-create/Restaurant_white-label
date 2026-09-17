@@ -1,4 +1,6 @@
+import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import { getServerClient } from '@favornoms/database/server';
 import {
   isPlatformAdmin,
@@ -8,7 +10,10 @@ import {
 import { PlatformAccessDenied } from '../_components/platform-nav';
 import { SubscriptionsManager } from './_components/subscriptions-manager';
 
-export const metadata = { title: 'Subscriptions · Favornoms' };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('platformBilling');
+  return { title: t('subscriptions.metaTitle') };
+}
 
 export default async function PlatformSubscriptionsPage({
   searchParams,

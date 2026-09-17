@@ -1,0 +1,22 @@
+{
+  "title": "Your cart",
+  "empty": "Your cart is empty",
+  "emptyDescription": "Add a few delicious dishes to get started",
+  "browseMenu": "Browse menu",
+  "subtotal": "Subtotal",
+  "deliveryFee": "Delivery fee",
+  "serviceFee": "Service fee",
+  "total": "Total",
+  "feesAtCheckout": "Delivery & taxes calculated at checkout",
+  "checkout": "Proceed to checkout",
+  "itemCount": "{count, plural, =1 {# item} other {# items}}",
+  "notes": "Special instructions (optional)",
+  "notesPlaceholder": "Allergies, spice level, extra sauce...",
+  "remove": "Remove",
+  "lineNoteLabel": "Note for {name}",
+  "priceNotice": {
+    "removed": "{count, plural, one {One item is no longer available, so it has been removed from your cart.} other {# items are no longer available, so they have been removed from your cart.}}",
+    "removedAndChanged": "{count, plural, one {One item is no longer available, so it has been removed from your cart. Some prices have changed too.} other {# items are no longer available, so they have been removed from your cart. Some prices have changed too.}}",
+    "changed": "The restaurant’s prices have changed — your cart now shows the current ones."
+  }
+}

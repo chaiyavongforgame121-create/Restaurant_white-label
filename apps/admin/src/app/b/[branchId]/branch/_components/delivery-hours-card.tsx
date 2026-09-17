@@ -2,8 +2,10 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
+import { useLocale, useTranslations } from 'next-intl';
 import { Clock, Plus, Save, Trash2 } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
+import { DEFAULT_UI_LOCALE, intlLocaleFor, isUiLocale } from '@favornoms/shared';
 import { Button, Card, RiderIcon } from '@favornoms/ui';
 
 /**
@@ -19,7 +21,26 @@ import { Button, Card, RiderIcon } from '@favornoms/ui';
  * time they saved an empty day.
  */
 
-const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+/**
+ * Weekday names in the interface language, Sunday first to match day_of_week (0 = Sunday).
+ * 1 January 2023 was a Sunday; UTC keeps the device's zone out of it.
+ */
+function weekdayNames(intlLocale: string): string[] {
+  const fmt = new Intl.DateTimeFormat(intlLocale, { weekday: 'long', timeZone: 'UTC' });
+  return Array.from({ length: 7 }, (_, d) => {
+    const name = fmt.format(new Date(Date.UTC(2023, 0, 1 + d)));
+    return name.charAt(0).toLocaleUpperCase(intlLocale) + name.slice(1);
+  });
+}
+
+/** Raw database text never reaches the merchant: a known refusal gets its own message,
+ *  anything else the generic one. */
+function saveErrorKey(err: { message: string; code?: string }): string {
+  if (err.code === '42501' || err.message === 'forbidden' || err.message.includes('branch_manager_required')) {
+    return 'errors.noPermission';
+  }
+  return 'errors.generic';
+}
 
 interface Window {
   opens_at: string;
@@ -37,6 +58,10 @@ export function DeliveryHoursCard({
   branchId: string;
   settings: Record<string, unknown>;
 }) {
+  const t = useTranslations('branchOps');
+  const rawLocale = useLocale();
+  const intlLocale = intlLocaleFor(isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE);
+  const days = React.useMemo(() => weekdayNames(intlLocale), [intlLocale]);
   const router = useRouter();
   const [enabled, setEnabled] = React.useState(
     settings?.delivery_hours_enabled === true,
@@ -112,7 +137,8 @@ export function DeliveryHoursCard({
     });
     if (rpcErr) {
       setSaving(false);
-      setError(rpcErr.message);
+      console.error('Saving delivery hours failed', rpcErr);
+      setError(t(saveErrorKey(rpcErr)));
       return;
     }
 
@@ -125,7 +151,8 @@ export function DeliveryHoursCard({
       .select('id');
     setSaving(false);
     if (upErr) {
-      setError(upErr.message);
+      console.error('Saving delivery mode failed', upErr);
+      setError(t(saveErrorKey(upErr)));
       return;
     }
     setSavedAt(Date.now());
@@ -135,43 +162,29 @@ export function DeliveryHoursCard({
   return (
     <Card className="p-5">
       <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
-        <RiderIcon className="h-5 w-5 text-primary" /> Delivery
+        <RiderIcon className="h-5 w-5 text-primary" /> {t('deliveryHours.title')}
       </h2>
 
       <div className="mt-4 space-y-3">
-        <p className="text-sm font-medium">Who delivers?</p>
+        <p className="text-sm font-medium">{t('deliveryHours.whoDelivers')}</p>
         <div className="grid gap-2 sm:grid-cols-2">
-          {(
-            [
-              {
-                key: 'platform' as const,
-                title: 'Favornoms drivers',
-                body: 'Orders are offered to nearby riders automatically. They pick up, navigate and mark the order delivered.',
-              },
-              {
-                key: 'self' as const,
-                title: 'We deliver ourselves',
-                body: 'No rider is called. Your own staff take the order out and mark it picked up and delivered from the Live deliveries screen.',
-              },
-            ]
-          ).map((opt) => (
+          {(['platform', 'self'] as const).map((key) => (
             <button
-              key={opt.key}
+              key={key}
               type="button"
-              onClick={() => setMode(opt.key)}
+              onClick={() => setMode(key)}
               className={`focus-ring rounded-xl border p-3 text-left transition ${
-                mode === opt.key ? 'border-primary bg-primary/5' : 'border-border bg-card'
+                mode === key ? 'border-primary bg-primary/5' : 'border-border bg-card'
               }`}
             >
-              <p className="text-sm font-semibold">{opt.title}</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">{opt.body}</p>
+              <p className="text-sm font-semibold">{t(`deliveryHours.${key}.title`)}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">{t(`deliveryHours.${key}.body`)}</p>
             </button>
           ))}
         </div>
         {mode === 'self' && (
           <p className="rounded-xl bg-muted/50 px-4 py-3 text-xs text-muted-foreground">
-            Customers still see live status updates, but not a map — nothing is reporting a
-            position while your own staff are driving.
+            {t('deliveryHours.selfNote')}
           </p>
         )}
       </div>
@@ -186,12 +199,12 @@ export function DeliveryHoursCard({
           />
           <span>
             <span className="flex items-center gap-1.5 text-sm font-medium">
-              <Clock className="h-4 w-4 text-muted-foreground" /> Limit delivery to set hours
+              <Clock className="h-4 w-4 text-muted-foreground" /> {t('deliveryHours.limit')}
             </span>
             <span className="block text-xs text-muted-foreground">
-              Off: deliveries can be booked for any time the branch is open. On: customers can
-              only book delivery times inside the windows below. Every delivery is booked ahead,
-              so delivery also needs <strong>Scheduled orders</strong> switched on.
+              {t.rich('deliveryHours.limitHint', {
+                strong: (chunks) => <strong>{chunks}</strong>,
+              })}
             </span>
           </span>
         </label>
@@ -200,10 +213,10 @@ export function DeliveryHoursCard({
       {enabled && (
         <>
           {!loaded ? (
-            <p className="mt-4 text-sm text-muted-foreground">Loading…</p>
+            <p className="mt-4 text-sm text-muted-foreground">{t('common.loading')}</p>
           ) : (
             <div className="mt-4 space-y-3">
-              {DAYS.map((name, day) => (
+              {days.map((name, day) => (
                 <div key={day} className="rounded-xl border border-border p-3">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-semibold">{name}</p>
@@ -214,7 +227,7 @@ export function DeliveryHoursCard({
                           onClick={() => copyToAll(day)}
                           className="focus-ring text-xs text-muted-foreground underline"
                         >
-                          Copy to all days
+                          {t('common.copyToAll')}
                         </button>
                       )}
                       <button
@@ -222,12 +235,12 @@ export function DeliveryHoursCard({
                         onClick={() => addWindow(day)}
                         className="focus-ring inline-flex items-center gap-1 text-xs font-medium text-primary"
                       >
-                        <Plus className="h-3.5 w-3.5" /> Add window
+                        <Plus className="h-3.5 w-3.5" /> {t('common.addWindow')}
                       </button>
                     </div>
                   </div>
                   {(week[day]?.length ?? 0) === 0 ? (
-                    <p className="mt-1 text-xs text-muted-foreground">No delivery this day</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{t('deliveryHours.noDelivery')}</p>
                   ) : (
                     <div className="mt-2 space-y-2">
                       {(week[day] ?? []).map((win, idx) => (
@@ -238,7 +251,7 @@ export function DeliveryHoursCard({
                             onChange={(e) => setWindow(day, idx, { opens_at: e.target.value })}
                             className={INPUT_CLS}
                           />
-                          <span className="text-xs text-muted-foreground">to</span>
+                          <span className="text-xs text-muted-foreground">{t('common.to')}</span>
                           <input
                             type="time"
                             value={win.closes_at}
@@ -246,13 +259,13 @@ export function DeliveryHoursCard({
                             className={INPUT_CLS}
                           />
                           {win.closes_at <= win.opens_at && (
-                            <span className="text-xs text-muted-foreground">(overnight)</span>
+                            <span className="text-xs text-muted-foreground">{t('common.overnight')}</span>
                           )}
                           <button
                             type="button"
                             onClick={() => removeWindow(day, idx)}
                             className="focus-ring ml-auto text-muted-foreground hover:text-danger"
-                            aria-label="Remove window"
+                            aria-label={t('common.removeWindow')}
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
@@ -267,8 +280,7 @@ export function DeliveryHoursCard({
 
           {armedButEmpty && (
             <p className="mt-3 rounded-xl bg-warning/10 px-4 py-3 text-sm">
-              Delivery hours are switched on but no windows are set — customers cannot place a
-              delivery order at all. Add a window, or switch this off.
+              {t('deliveryHours.armedButEmpty')}
             </p>
           )}
         </>
@@ -279,9 +291,9 @@ export function DeliveryHoursCard({
       )}
       <div className="mt-4 flex items-center gap-3">
         <Button onClick={save} loading={saving} leftIcon={<Save className="h-4 w-4" />}>
-          Save delivery settings
+          {t('deliveryHours.save')}
         </Button>
-        {savedAt && !saving && <span className="text-sm text-success">Saved ✓</span>}
+        {savedAt && !saving && <span className="text-sm text-success">{t('common.saved')}</span>}
       </div>
     </Card>
   );

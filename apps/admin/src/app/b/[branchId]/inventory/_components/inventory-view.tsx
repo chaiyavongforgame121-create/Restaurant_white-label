@@ -2,8 +2,9 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
+import { useLocale, useTranslations } from 'next-intl';
 import { AlertTriangle, Package, Plus, Trash } from 'lucide-react';
-import { formatCurrency } from '@favornoms/shared';
+import { DEFAULT_UI_LOCALE, formatCurrency, intlLocaleFor, isUiLocale } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Badge, Button, Card } from '@favornoms/ui';
 
@@ -52,12 +53,46 @@ interface Props {
   waste: Waste[];
 }
 
+/** Stored in waste_log.reason — the values stay English; only the label is translated. */
 const WASTE_REASONS = ['expired', 'spoiled', 'spilled', 'damaged', 'staff_meal', 'other'];
+
+const WASTE_REASON_KEYS: Record<string, string> = {
+  expired: 'expired',
+  spoiled: 'spoiled',
+  spilled: 'spilled',
+  damaged: 'damaged',
+  staff_meal: 'staffMeal',
+  other: 'other',
+};
 
 /** low_stock_threshold is `integer NOT NULL default 5`; the default is mirrored here. */
 const DEFAULT_LOW_STOCK_THRESHOLD = 5;
 
+type DbErrorKey = 'permissionDenied' | 'network' | 'invalidValue' | 'generic';
+
+/** Raw PostgREST text never reaches the merchant: known codes get a translated sentence. */
+function dbErrorKey(err: { code?: string; message?: string }): DbErrorKey {
+  const message = err.message ?? '';
+  if (err.code === '42501' || /row-level security|permission denied/i.test(message)) return 'permissionDenied';
+  if (/failed to fetch|networkerror|network request failed/i.test(message)) return 'network';
+  if (err.code && /^(22|23)/.test(err.code)) return 'invalidValue';
+  return 'generic';
+}
+
+function useWasteReasonLabel() {
+  const t = useTranslations('inventory.reasons');
+  // A reason written by something older than this list is shown as it was stored.
+  return (reason: string) => {
+    const key = WASTE_REASON_KEYS[reason];
+    return key ? t(key) : reason.replace('_', ' ');
+  };
+}
+
 export function InventoryView({ branchId, items, lowStock, restocks, waste }: Props) {
+  const t = useTranslations('inventory');
+  const rawLocale = useLocale();
+  const intlLocale = intlLocaleFor(isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE);
+  const reasonLabel = useWasteReasonLabel();
   const router = useRouter();
   const [restockOpen, setRestockOpen] = React.useState<MenuItem | null>(null);
   const [wasteOpen, setWasteOpen] = React.useState<MenuItem | null>(null);
@@ -132,23 +167,21 @@ export function InventoryView({ branchId, items, lowStock, restocks, waste }: Pr
         return next;
       });
       setNotice(null);
+      if (upErr) console.error('[inventory] toggle tracking failed', upErr);
       setError(
         upErr
-          ? `Could not change stock tracking for “${item.name}”: ${upErr.message}`
-          : `Nothing was saved for “${item.name}”. It may have been deleted, or your role ` +
-            `may not be allowed to edit the menu at this branch.`,
+          ? t('tracking.failed', { name: item.name, reason: t(`errors.${dbErrorKey(upErr)}`) })
+          : t('tracking.notSaved', { name: item.name }),
       );
       return;
     }
     setError(null);
     setNotice(
       !on
-        ? `Stock tracking is off for “${item.name}” — the storefront will no longer mark it ` +
-          `sold out, and its count is cleared, so ticking the box again starts it at 0.`
+        ? t('tracking.off', { name: item.name })
         : (quantity ?? 0) > 0
-          ? `Tracking stock for “${item.name}” — ${quantity} left.`
-          : `Tracking stock for “${item.name}”, but it has 0 left, so customers see it as sold ` +
-            `out right away. Log a restock to put it back on sale.`,
+          ? t('tracking.on', { name: item.name, count: quantity ?? 0 })
+          : t('tracking.onEmpty', { name: item.name }),
     );
     router.refresh();
   };
@@ -157,14 +190,12 @@ export function InventoryView({ branchId, items, lowStock, restocks, waste }: Pr
     <div className="container max-w-6xl py-8">
       <header className="mb-6 flex flex-wrap items-center justify-between gap-3 px-2 pl-16 lg:px-0">
         <div>
-          <h1 className="font-display text-3xl font-bold">Inventory</h1>
-          <p className="mt-1 text-muted-foreground">
-            Track stock, log restocks, record waste.
-          </p>
+          <h1 className="font-display text-3xl font-bold">{t('title')}</h1>
+          <p className="mt-1 text-muted-foreground">{t('subtitle')}</p>
         </div>
         <div className="flex items-center gap-3">
-          <Stat label="Tracked items" value={String(total)} />
-          <Stat label="Low stock" value={String(lowCount)} tone={lowCount > 0 ? 'warning' : 'muted'} />
+          <Stat label={t('stats.tracked')} value={String(total)} />
+          <Stat label={t('stats.lowStock')} value={String(lowCount)} tone={lowCount > 0 ? 'warning' : 'muted'} />
         </div>
       </header>
 
@@ -179,7 +210,7 @@ export function InventoryView({ branchId, items, lowStock, restocks, waste }: Pr
       {lowCount > 0 && (
         <Card className="mb-6 border-warning/40 bg-warning/5 p-5">
           <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
-            <AlertTriangle className="h-5 w-5 text-warning" /> Low stock alerts
+            <AlertTriangle className="h-5 w-5 text-warning" /> {t('lowStock.title')}
           </h2>
           <ul className="mt-3 space-y-2">
             {lowStock.map((l) => (
@@ -187,7 +218,7 @@ export function InventoryView({ branchId, items, lowStock, restocks, waste }: Pr
                 <span>
                   <strong>{l.name}</strong>
                   <span className="ml-2 text-muted-foreground">
-                    {l.stock_quantity} left · threshold {l.low_stock_threshold}
+                    {t('lowStock.detail', { left: l.stock_quantity, threshold: l.low_stock_threshold })}
                   </span>
                 </span>
                 <Button
@@ -199,7 +230,7 @@ export function InventoryView({ branchId, items, lowStock, restocks, waste }: Pr
                   }}
                   leftIcon={<Plus className="h-3.5 w-3.5" />}
                 >
-                  Restock
+                  {t('actions.restock')}
                 </Button>
               </li>
             ))}
@@ -211,10 +242,10 @@ export function InventoryView({ branchId, items, lowStock, restocks, waste }: Pr
         <div className="overflow-x-auto"><table className="w-full min-w-[600px] text-sm">
           <thead className="bg-muted/50 text-left text-xs uppercase tracking-wider text-muted-foreground">
             <tr>
-              <th className="px-5 py-3">Item</th>
-              <th className="px-5 py-3 text-center">Track stock</th>
-              <th className="px-5 py-3 text-right">Stock</th>
-              <th className="px-5 py-3 text-right">Threshold</th>
+              <th className="px-5 py-3">{t('table.item')}</th>
+              <th className="px-5 py-3 text-center">{t('table.trackStock')}</th>
+              <th className="px-5 py-3 text-right">{t('table.stock')}</th>
+              <th className="px-5 py-3 text-right">{t('table.threshold')}</th>
               <th className="px-5 py-3" />
             </tr>
           </thead>
@@ -258,10 +289,10 @@ export function InventoryView({ branchId, items, lowStock, restocks, waste }: Pr
                   {it.track_stock && (
                     <div className="inline-flex gap-1">
                       <Button size="sm" variant="ghost" onClick={() => setRestockOpen(it)} leftIcon={<Plus className="h-3.5 w-3.5" />}>
-                        Restock
+                        {t('actions.restock')}
                       </Button>
                       <Button size="sm" variant="ghost" onClick={() => setWasteOpen(it)} leftIcon={<Trash className="h-3.5 w-3.5" />}>
-                        Waste
+                        {t('actions.waste')}
                       </Button>
                     </div>
                   )}
@@ -274,9 +305,9 @@ export function InventoryView({ branchId, items, lowStock, restocks, waste }: Pr
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card className="p-5">
-          <h2 className="font-display text-lg font-semibold">Recent restocks</h2>
+          <h2 className="font-display text-lg font-semibold">{t('restocks.title')}</h2>
           {restocks.length === 0 ? (
-            <p className="mt-2 text-sm text-muted-foreground">No restocks logged yet.</p>
+            <p className="mt-2 text-sm text-muted-foreground">{t('restocks.empty')}</p>
           ) : (
             <ul className="mt-3 space-y-2 text-sm">
               {restocks.slice(0, 10).map((r) => {
@@ -288,7 +319,7 @@ export function InventoryView({ branchId, items, lowStock, restocks, waste }: Pr
                       <span className="text-muted-foreground">{it?.name ?? '?'}</span>
                       {r.supplier && <span className="text-xs text-muted-foreground"> · {r.supplier}</span>}
                     </span>
-                    <span className="text-xs text-muted-foreground">{new Date(r.created_at).toLocaleString()}</span>
+                    <span className="text-xs text-muted-foreground">{new Date(r.created_at).toLocaleString(intlLocale)}</span>
                   </li>
                 );
               })}
@@ -297,9 +328,9 @@ export function InventoryView({ branchId, items, lowStock, restocks, waste }: Pr
         </Card>
 
         <Card className="p-5">
-          <h2 className="font-display text-lg font-semibold">Recent waste</h2>
+          <h2 className="font-display text-lg font-semibold">{t('waste.title')}</h2>
           {waste.length === 0 ? (
-            <p className="mt-2 text-sm text-muted-foreground">No waste logged yet.</p>
+            <p className="mt-2 text-sm text-muted-foreground">{t('waste.empty')}</p>
           ) : (
             <ul className="mt-3 space-y-2 text-sm">
               {waste.slice(0, 10).map((w) => {
@@ -310,9 +341,9 @@ export function InventoryView({ branchId, items, lowStock, restocks, waste }: Pr
                       <strong>-{w.quantity}</strong>{' '}
                       <span className="text-muted-foreground">{it?.name ?? '?'}</span>
                       {' · '}
-                      <Badge variant="muted">{w.reason.replace('_', ' ')}</Badge>
+                      <Badge variant="muted">{reasonLabel(w.reason)}</Badge>
                     </span>
-                    <span className="text-xs text-muted-foreground">{new Date(w.created_at).toLocaleString()}</span>
+                    <span className="text-xs text-muted-foreground">{new Date(w.created_at).toLocaleString(intlLocale)}</span>
                   </li>
                 );
               })}
@@ -357,6 +388,7 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: 'wa
 }
 
 function RestockDialog({ branchId, item, onClose, onSaved }: { branchId: string; item: MenuItem; onClose: () => void; onSaved: () => void }) {
+  const t = useTranslations('inventory');
   const [delta, setDelta] = React.useState('10');
   const [cost, setCost] = React.useState('');
   const [supplier, setSupplier] = React.useState('');
@@ -366,7 +398,7 @@ function RestockDialog({ branchId, item, onClose, onSaved }: { branchId: string;
 
   const submit = async () => {
     const d = Number(delta);
-    if (!Number.isFinite(d) || d <= 0) { setError('Enter a positive quantity'); return; }
+    if (!Number.isFinite(d) || d <= 0) { setError(t('errors.positiveQuantity')); return; }
     setBusy(true);
     setError(null);
     const supabase = getBrowserClient();
@@ -379,34 +411,40 @@ function RestockDialog({ branchId, item, onClose, onSaved }: { branchId: string;
       notes: notes || null,
     });
     setBusy(false);
-    if (insErr) { setError(insErr.message); return; }
+    if (insErr) {
+      console.error('[inventory] restock failed', insErr);
+      setError(t(`errors.${dbErrorKey(insErr)}`));
+      return;
+    }
     onSaved();
   };
 
   return (
-    <ModalShell title={`Restock ${item.name}`} onClose={onClose}>
-      <Field label="Quantity">
+    <ModalShell title={t('restockDialog.title', { name: item.name })} onClose={onClose}>
+      <Field label={t('restockDialog.quantity')}>
         <input type="number" min={1} value={delta} onChange={(e) => setDelta(e.target.value)} className="modal-input" />
       </Field>
-      <Field label="Cost per unit (USD, optional)">
+      <Field label={t('restockDialog.cost')}>
         <input type="number" step="0.01" value={cost} onChange={(e) => setCost(e.target.value)} className="modal-input" />
       </Field>
-      <Field label="Supplier (optional)">
+      <Field label={t('restockDialog.supplier')}>
         <input value={supplier} onChange={(e) => setSupplier(e.target.value)} className="modal-input" />
       </Field>
-      <Field label="Notes (optional)">
+      <Field label={t('restockDialog.notes')}>
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="modal-input" />
       </Field>
       {error && <p className="text-sm text-destructive">{error}</p>}
       <div className="flex justify-end gap-2 pt-2">
-        <Button variant="ghost" onClick={onClose}>Cancel</Button>
-        <Button variant="gradient" onClick={submit} loading={busy}>Log restock</Button>
+        <Button variant="ghost" onClick={onClose}>{t('restockDialog.cancel')}</Button>
+        <Button variant="gradient" onClick={submit} loading={busy}>{t('restockDialog.submit')}</Button>
       </div>
     </ModalShell>
   );
 }
 
 function WasteDialog({ branchId, item, onClose, onSaved }: { branchId: string; item: MenuItem; onClose: () => void; onSaved: () => void }) {
+  const t = useTranslations('inventory');
+  const reasonLabel = useWasteReasonLabel();
   const [qty, setQty] = React.useState('1');
   const [reason, setReason] = React.useState('expired');
   const [notes, setNotes] = React.useState('');
@@ -415,7 +453,7 @@ function WasteDialog({ branchId, item, onClose, onSaved }: { branchId: string; i
 
   const submit = async () => {
     const q = Number(qty);
-    if (!Number.isFinite(q) || q <= 0) { setError('Enter a positive quantity'); return; }
+    if (!Number.isFinite(q) || q <= 0) { setError(t('errors.positiveQuantity')); return; }
     setBusy(true);
     setError(null);
     const supabase = getBrowserClient();
@@ -427,27 +465,31 @@ function WasteDialog({ branchId, item, onClose, onSaved }: { branchId: string; i
       notes: notes || null,
     });
     setBusy(false);
-    if (insErr) { setError(insErr.message); return; }
+    if (insErr) {
+      console.error('[inventory] waste log failed', insErr);
+      setError(t(`errors.${dbErrorKey(insErr)}`));
+      return;
+    }
     onSaved();
   };
 
   return (
-    <ModalShell title={`Log waste — ${item.name}`} onClose={onClose}>
-      <Field label="Quantity">
+    <ModalShell title={t('wasteDialog.title', { name: item.name })} onClose={onClose}>
+      <Field label={t('wasteDialog.quantity')}>
         <input type="number" min={1} value={qty} onChange={(e) => setQty(e.target.value)} className="modal-input" />
       </Field>
-      <Field label="Reason">
+      <Field label={t('wasteDialog.reason')}>
         <select value={reason} onChange={(e) => setReason(e.target.value)} className="modal-input">
-          {WASTE_REASONS.map((r) => <option key={r} value={r}>{r.replace('_', ' ')}</option>)}
+          {WASTE_REASONS.map((r) => <option key={r} value={r}>{reasonLabel(r)}</option>)}
         </select>
       </Field>
-      <Field label="Notes (optional)">
+      <Field label={t('wasteDialog.notes')}>
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="modal-input" />
       </Field>
       {error && <p className="text-sm text-destructive">{error}</p>}
       <div className="flex justify-end gap-2 pt-2">
-        <Button variant="ghost" onClick={onClose}>Cancel</Button>
-        <Button variant="gradient" onClick={submit} loading={busy}>Log waste</Button>
+        <Button variant="ghost" onClick={onClose}>{t('wasteDialog.cancel')}</Button>
+        <Button variant="gradient" onClick={submit} loading={busy}>{t('wasteDialog.submit')}</Button>
       </div>
     </ModalShell>
   );

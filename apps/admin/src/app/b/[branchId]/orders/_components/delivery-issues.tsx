@@ -2,10 +2,12 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Button, Card } from '@favornoms/ui';
 import { formatPhone } from '@favornoms/shared';
+import { orderErrorKey } from './order-errors';
 
 interface AssignmentReason {
   delivery_id: string;
@@ -34,7 +36,20 @@ export interface DeliveryIssue {
   customer_phone: string | null;
 }
 
+// The driver app sends its preset reasons as these English strings, and they are stored as
+// written (apps/driver active-view.tsx PRE_PICKUP_REASONS / AT_DOOR_REASONS). A preset is
+// shown in the reader's language; anything a rider typed is shown exactly as they typed it.
+const REASON_LABEL_KEYS: Record<string, string> = {
+  'Vehicle problem': 'vehicleProblem',
+  'Personal emergency': 'personalEmergency',
+  'Wait at restaurant too long': 'waitTooLong',
+  'Customer unreachable': 'customerUnreachable',
+  "Can't find the address": 'cantFindAddress',
+  'Customer refused the order': 'customerRefused',
+};
+
 export function DeliveryIssues({ issues }: { issues: DeliveryIssue[] }) {
+  const t = useTranslations('orders');
   const router = useRouter();
   const [busy, setBusy] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -68,6 +83,12 @@ export function DeliveryIssues({ issues }: { issues: DeliveryIssue[] }) {
 
   if (issues.length === 0) return null;
 
+  const reasonText = (raw: string | null | undefined) => {
+    if (!raw) return t('issues.noReason');
+    const key = REASON_LABEL_KEYS[raw];
+    return key ? t(`issues.reasons.${key}`) : raw;
+  };
+
   const requeue = async (deliveryId: string) => {
     setBusy(deliveryId);
     setError(null);
@@ -77,7 +98,8 @@ export function DeliveryIssues({ issues }: { issues: DeliveryIssue[] }) {
     } as never);
     setBusy(null);
     if (err) {
-      setError(err.message);
+      console.error('[orders] requeue_failed_delivery failed', err.message);
+      setError(t(`errors.${orderErrorKey('requeue', err.message)}`));
       return;
     }
     router.refresh();
@@ -86,11 +108,9 @@ export function DeliveryIssues({ issues }: { issues: DeliveryIssue[] }) {
   return (
     <Card className="mb-4 border-danger/30 bg-danger/5 p-4">
       <h2 className="flex items-center gap-2 font-display text-base font-bold text-danger">
-        <AlertTriangle className="h-4 w-4" /> Delivery issues ({issues.length})
+        <AlertTriangle className="h-4 w-4" /> {t('issues.title', { count: issues.length })}
       </h2>
-      <p className="mt-0.5 text-xs text-muted-foreground">
-        Failed deliveries — re-dispatch to find another driver, or refund via the order row.
-      </p>
+      <p className="mt-0.5 text-xs text-muted-foreground">{t('issues.subtitle')}</p>
       <ul className="mt-3 space-y-2">
         {issues.map((d) => (
           <li
@@ -100,11 +120,11 @@ export function DeliveryIssues({ issues }: { issues: DeliveryIssue[] }) {
             <div className="min-w-0">
               <p className="font-mono text-xs text-muted-foreground">{d.order_number}</p>
               <p className="text-sm font-semibold">
-                {d.customer_name ?? 'Customer'}
+                {d.customer_name ?? t('issues.customer')}
                 {d.customer_phone ? ` · ${formatPhone(d.customer_phone)}` : ''}
               </p>
               <p className="text-xs text-danger">
-                {d.failed_reason ?? reasons.get(d.id)?.end_reason ?? 'No reason recorded'}
+                {reasonText(d.failed_reason ?? reasons.get(d.id)?.end_reason)}
                 {d.failed_photo_url && (
                   <>
                     {' · '}
@@ -114,7 +134,7 @@ export function DeliveryIssues({ issues }: { issues: DeliveryIssue[] }) {
                       rel="noreferrer"
                       className="underline"
                     >
-                      photo
+                      {t('issues.photo')}
                     </a>
                   </>
                 )}
@@ -127,7 +147,7 @@ export function DeliveryIssues({ issues }: { issues: DeliveryIssue[] }) {
               onClick={() => requeue(d.id)}
               loading={busy === d.id}
             >
-              Re-dispatch
+              {t('issues.redispatch')}
             </Button>
           </li>
         ))}

@@ -1,5 +1,7 @@
+import { getLocale, getTranslations } from 'next-intl/server';
 import { getServerClient } from '@favornoms/database/server';
 import { getBranchRatings } from '@favornoms/database/queries';
+import { DEFAULT_UI_LOCALE, intlLocaleFor, isUiLocale } from '@favornoms/shared';
 import { Card, EmptyState, RiderIcon } from '@favornoms/ui';
 import { AlertTriangle, MessageSquare, Star, UtensilsCrossed } from 'lucide-react';
 
@@ -8,24 +10,40 @@ interface Props { params: Promise<{ branchId: string }> }
 export default async function RatingsPage({ params }: Props) {
   const { branchId } = await params;
   const supabase = await getServerClient();
+  const [t, rawLocale] = await Promise.all([getTranslations('ratings'), getLocale()]);
+  const locale = isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE;
   const { ratings, foodAvg, foodCount, deliveryAvg, deliveryCount, total, drivers, error } =
     await getBranchRatings(supabase, branchId);
+
+  // The raw PostgREST text is for the logs; the merchant reads what it means for them.
+  if (error) console.error('Loading branch ratings failed', error);
+  const errorMessage = error
+    ? /\b42501\b|permission denied|row-level security/i.test(error)
+      ? t('loadError.permission')
+      : t('loadError.generic')
+    : null;
+
+  const dateFormat = new Intl.DateTimeFormat(intlLocaleFor(locale), {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 
   return (
     <div className="container max-w-5xl py-8">
       <header className="mb-6 px-2 pl-16 lg:px-0">
-        <h1 className="font-display text-3xl font-bold">Ratings</h1>
-        <p className="mt-1 text-muted-foreground">What guests said after their orders</p>
+        <h1 className="font-display text-3xl font-bold">{t('title')}</h1>
+        <p className="mt-1 text-muted-foreground">{t('subtitle')}</p>
       </header>
 
       <div className="space-y-5 px-2 lg:px-0">
-        {error && (
+        {errorMessage && (
           <Card className="p-5">
             <h2 className="flex items-center gap-2 font-display text-lg font-semibold text-destructive">
-              <AlertTriangle className="h-5 w-5" /> Ratings could not be loaded
+              <AlertTriangle className="h-5 w-5" /> {t('loadError.title')}
             </h2>
-            <p className="mt-3 break-words rounded-xl bg-destructive/10 px-4 py-3 font-mono text-xs text-destructive">
-              {error}
+            <p className="mt-3 break-words rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              {errorMessage}
             </p>
           </Card>
         )}
@@ -33,22 +51,22 @@ export default async function RatingsPage({ params }: Props) {
         <section className="grid gap-3 sm:grid-cols-3">
           <ScoreCard
             icon={<UtensilsCrossed className="h-5 w-5" />}
-            label="Food rating"
+            label={t('score.food')}
             value={foodAvg}
-            sub={`${foodCount} rating${foodCount === 1 ? '' : 's'}`}
+            sub={t('score.count', { count: foodCount })}
           />
           <ScoreCard
             icon={<RiderIcon className="h-5 w-5" />}
-            label="Delivery rating"
+            label={t('score.delivery')}
             value={deliveryAvg}
-            sub={`${deliveryCount} rating${deliveryCount === 1 ? '' : 's'}`}
+            sub={t('score.count', { count: deliveryCount })}
           />
           <Card className="flex items-center gap-3 p-4">
             <div className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary">
               <MessageSquare className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Total reviews</p>
+              <p className="text-xs text-muted-foreground">{t('score.total')}</p>
               <p className="font-display text-2xl font-bold tabular-nums">{total}</p>
             </div>
           </Card>
@@ -56,7 +74,7 @@ export default async function RatingsPage({ params }: Props) {
 
         {drivers.length > 0 && (
           <section>
-            <h2 className="mb-3 font-display text-lg font-semibold">Riders</h2>
+            <h2 className="mb-3 font-display text-lg font-semibold">{t('riders.title')}</h2>
             {/* The branch-wide delivery average above hides who is earning it. This is the
                 same rows grouped per rider, so a merchant can tell one rider's run of one
                 stars from a bad week across the board. */}
@@ -71,10 +89,10 @@ export default async function RatingsPage({ params }: Props) {
                         </div>
                         <div className="min-w-0">
                           <p className="truncate font-semibold">
-                            {d.name ?? `Rider ${d.driver_id.slice(0, 8)}`}
+                            {d.name ?? t('riders.fallbackName', { id: d.driver_id.slice(0, 8) })}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {d.count} rated {d.count === 1 ? 'delivery' : 'deliveries'}
+                            {t('riders.rated', { count: d.count })}
                           </p>
                         </div>
                       </div>
@@ -122,7 +140,7 @@ export default async function RatingsPage({ params }: Props) {
                         ))}
                         {d.comments.length > 3 && (
                           <li className="text-xs text-muted-foreground">
-                            +{d.comments.length - 3} more
+                            {t('riders.more', { count: d.comments.length - 3 })}
                           </li>
                         )}
                       </ul>
@@ -137,8 +155,8 @@ export default async function RatingsPage({ params }: Props) {
         {ratings.length === 0 && !error ? (
           <EmptyState
             icon={<Star className="h-7 w-7" />}
-            title="No ratings yet"
-            description="Guests are asked to rate an order once it's completed — their stars and comments land here."
+            title={t('empty.title')}
+            description={t('empty.description')}
           />
         ) : (
           <ul className="space-y-3">
@@ -147,18 +165,24 @@ export default async function RatingsPage({ params }: Props) {
                 <Card className="p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                      {r.food_stars != null && <Stars label="Food" value={r.food_stars} />}
-                      {r.delivery_stars != null && <Stars label="Delivery" value={r.delivery_stars} />}
+                      {r.food_stars != null && (
+                        <Stars
+                          label={t('stars.food')}
+                          ariaLabel={t('stars.outOfFive', { value: r.food_stars })}
+                          value={r.food_stars}
+                        />
+                      )}
+                      {r.delivery_stars != null && (
+                        <Stars
+                          label={t('stars.delivery')}
+                          ariaLabel={t('stars.outOfFive', { value: r.delivery_stars })}
+                          value={r.delivery_stars}
+                        />
+                      )}
                     </div>
                     <div className="text-right text-xs text-muted-foreground">
                       <p className="font-mono">{r.order_number ?? '—'}</p>
-                      <p>
-                        {new Date(r.created_at).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                        })}
-                      </p>
+                      <p>{dateFormat.format(new Date(r.created_at))}</p>
                     </div>
                   </div>
                   {r.comment && <p className="mt-3 text-sm">&ldquo;{r.comment}&rdquo;</p>}
@@ -171,7 +195,9 @@ export default async function RatingsPage({ params }: Props) {
                       <span>
                         &ldquo;{r.driver_comment}&rdquo;
                         {r.driver_name && (
-                          <span className="ml-1 text-xs">— about {r.driver_name}</span>
+                          <span className="ml-1 text-xs">
+                            {t('aboutRider', { name: r.driver_name })}
+                          </span>
                         )}
                       </span>
                     </p>
@@ -214,13 +240,13 @@ function ScoreCard({
   );
 }
 
-function Stars({ label, value }: { label: string; value: number }) {
+function Stars({ label, ariaLabel, value }: { label: string; ariaLabel: string; value: number }) {
   return (
     <span className="inline-flex items-center gap-1.5">
       <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         {label}
       </span>
-      <span className="inline-flex" aria-label={`${value} out of 5`}>
+      <span className="inline-flex" aria-label={ariaLabel}>
         {[1, 2, 3, 4, 5].map((n) => (
           <Star
             key={n}

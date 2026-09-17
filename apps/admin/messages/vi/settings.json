@@ -1,0 +1,111 @@
+{
+  "index": {
+    "title": "Cài đặt chung",
+    "subtitle": "Cài đặt tài khoản và thanh toán",
+    "planTitle": "Gói và thanh toán",
+    "planDescription": "Xem gói hiện tại, mức sử dụng và các lựa chọn nâng cấp.",
+    "languageTitle": "Ngôn ngữ",
+    "languageDescription": "Ngôn ngữ của trang quản lý trên thiết bị này. Tên món và các tên khác vẫn giữ nguyên như bạn đã nhập.",
+    "themeTitle": "Giao diện",
+    "themeDescription": "Sắp ra mắt — hiện đang theo chế độ màu của hệ thống."
+  },
+  "plan": {
+    "metaTitle": "Gói và thanh toán · Favornoms",
+    "title": "Gói và thanh toán",
+    "subtitle": "Chọn những gì nhà hàng của bạn cần. Có thể thay đổi bất cứ lúc nào.",
+    "perMonth": "/tháng",
+    "selection": "{products}, {seats, plural, other {# suất chi nhánh}}",
+    "pricedSummary": "{summary} — {price}/tháng.",
+    "notYours": {
+      "inactiveTitle": "Gói của nhà hàng đang ngừng hoạt động — hãy liên hệ chủ sở hữu",
+      "lockedTitle": "Chỉ chủ sở hữu hoặc quản trị viên mới có thể đổi gói",
+      "inactiveBody": "Trang đặt hàng và trang quản lý của {branch} đang tạm dừng cho đến khi chủ nhà hàng hoặc quản trị viên chọn một gói. Không có dữ liệu nào bị xóa, mọi thứ sẽ trở lại ngay khi gói hoạt động trở lại.",
+      "lockedBody": "Gói của {branch} do chủ nhà hàng quản lý. Hãy liên hệ họ nếu bạn cần một tính năng chưa được bật."
+    },
+    "replaceDialog": {
+      "title": "Thay thế yêu cầu đang chờ?",
+      "body": "Yêu cầu trước đó ({summary}) sẽ bị rút lại và yêu cầu này sẽ được gửi đến đội ngũ Favornoms thay thế.",
+      "confirm": "Thay thế yêu cầu"
+    },
+    "errors": {
+      "sendFailed": "Không gửi được yêu cầu. Vui lòng thử lại.",
+      "generic": "Đã xảy ra lỗi. Vui lòng thử lại.",
+      "signedOut": "Phiên đăng nhập đã hết. Hãy đăng nhập lại rồi gửi yêu cầu.",
+      "forbidden": "Chỉ chủ nhà hàng hoặc quản trị viên mới có thể đổi gói.",
+      "planUnavailable": "Gói này không còn được cung cấp. Hãy tải lại trang và chọn lại."
+    },
+    "action": {
+      "pending": "Đang chờ duyệt",
+      "replace": "Thay thế yêu cầu đang chờ",
+      "requestActivation": "Yêu cầu kích hoạt",
+      "reactivate": "Kích hoạt lại tài khoản",
+      "confirm": "Xác nhận gói",
+      "renew": "Yêu cầu gia hạn",
+      "current": "Gói hiện tại"
+    },
+    "base": {
+      "name": "Cơ bản",
+      "description": "Mọi thứ bạn cần để vận hành một chi nhánh.",
+      "included": {
+        "cardPayment": "Thanh toán bằng thẻ khi đặt hàng",
+        "aiMenuImport": "Nhập thực đơn bằng AI",
+        "onlineOrdering": "Đặt hàng trực tuyến và QR",
+        "kitchenCounter": "Màn hình bếp và quầy",
+        "reportsLoyalty": "Báo cáo và tích điểm",
+        "oneBranch": "Bao gồm 1 chi nhánh"
+      }
+    },
+    "seats": {
+      "title": "Chi nhánh",
+      "body": "Đã bao gồm 1. Mỗi chi nhánh thêm {price}/tháng, đầy đủ tính năng như chi nhánh chính.",
+      "usage": "Đang dùng {used}/{seats, plural, other {# suất}}.",
+      "remove": "Bớt một suất chi nhánh",
+      "add": "Thêm một suất chi nhánh",
+      "floor": "Bạn đang có {count, plural, other {# chi nhánh hoạt động}}, nên không thể giảm xuống dưới {min} suất. Để bớt một suất, hãy ẩn chi nhánh không còn dùng: mở Cài đặt chi nhánh của chi nhánh đó và đặt Trạng thái thành Đã ẩn. Chi nhánh đã ẩn không chiếm suất."
+    },
+    "summary": {
+      "title": "Gói của bạn",
+      "total": "Tổng cộng",
+      "trialNote": "Bạn đang dùng thử miễn phí. Chưa bị tính phí cho đến khi hết thời gian dùng thử.",
+      "footnote": "Yêu cầu của bạn sẽ được gửi đến đội ngũ Favornoms để kích hoạt. Hóa đơn được gửi hằng tháng."
+    },
+    "addon": {
+      "aiSuiteComingSoon": "Bảng hiệu và Giọng nói AI — sắp ra mắt.",
+      "add": "Thêm",
+      "added": "Đã thêm"
+    },
+    "trial": {
+      "active": "Đang dùng thử miễn phí",
+      "endsToday": "Thời gian dùng thử miễn phí kết thúc hôm nay",
+      "daysLeft": "{days, plural, other {Còn # ngày dùng thử miễn phí}}",
+      "body": "Mọi tính năng đều đã mở. Chọn một gói bên dưới để tiếp tục dùng sau khi hết dùng thử — chưa cần thẻ cho đến lúc đó."
+    },
+    "suspended": {
+      "title": "Tài khoản của bạn chưa hoạt động",
+      "body": "Trang đặt hàng đang ngừng và không nhận đơn mới. Không có dữ liệu nào bị xóa — chọn một gói bên dưới là mọi thứ trở lại ngay."
+    },
+    "noTrial": {
+      "title": "Nhà hàng này bắt đầu mà không có dùng thử miễn phí",
+      "body": "Tài khoản của bạn đã dùng 14 ngày dùng thử miễn phí cho một nhà hàng khác. Nhà hàng này sẽ tạm ngừng cho đến khi có gói: hãy chọn một gói bên dưới và gửi yêu cầu, đội ngũ Favornoms sẽ kích hoạt."
+    },
+    "renew": {
+      "title": "Gia hạn gói",
+      "paidThrough": "Gói của bạn đã được thanh toán đến {date}.",
+      "body": "Gói hiện tại đã được chọn sẵn bên dưới. Nhấn Yêu cầu gia hạn để gửi đến đội ngũ Favornoms — gói chỉ được gia hạn khi họ duyệt. Bạn cũng có thể đổi gói trước khi gửi."
+    },
+    "decision": {
+      "approvedOn": "Yêu cầu đã được duyệt ngày {date}",
+      "declinedOn": "Yêu cầu bị từ chối ngày {date}",
+      "noteLabel": "Ghi chú từ đội ngũ Favornoms:",
+      "noReason": "Không có lý do được đưa ra. Bạn có thể chọn một gói bên dưới và gửi yêu cầu mới.",
+      "approved": "Đã duyệt",
+      "declined": "Bị từ chối"
+    },
+    "pending": {
+      "title": "Yêu cầu đang chờ đội ngũ Favornoms",
+      "titleSent": "Yêu cầu đang chờ đội ngũ Favornoms · gửi ngày {date}",
+      "body": "Chưa có gì thay đổi cho đến khi được duyệt. Muốn yêu cầu khác, hãy đổi gói bên dưới và nhấn Thay thế yêu cầu đang chờ.",
+      "badge": "Đang chờ"
+    }
+  }
+}

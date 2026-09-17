@@ -1,0 +1,8 @@
+{
+  "title": "How would you like to order?",
+  "subtitle": "Pick one to start your order.",
+  "subtitleNamed": "Pick one to start your order from {branch}.",
+  "deliveryHint": "Pick a day and time, and we bring it to your address",
+  "pickupHint": "Collect it at the restaurant while it's open",
+  "changeLater": "You can change this any time from the menu."
+}

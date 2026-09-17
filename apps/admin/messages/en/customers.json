@@ -1,0 +1,50 @@
+{
+  "accessDenied": {
+    "title": "No customer access",
+    "reason": "Only owners, admins, managers and cashiers can see the customer list at {branch}."
+  },
+  "title": "Customers",
+  "summary": "{count, plural, one {# customer} other {# customers}} at this branch",
+  "loadError": {
+    "title": "Customers could not be loaded",
+    "body": "Reload the page. If it keeps happening, contact support."
+  },
+  "empty": {
+    "title": "No customers yet",
+    "description": "Once people order via the customer web app they’ll appear here."
+  },
+  "emptyPage": {
+    "title": "Nothing on this page",
+    "description": "This branch has {total, plural, one {# customer} other {# customers}}, but none on page {page}.",
+    "action": "Back to the first page"
+  },
+  "columns": {
+    "name": "Name",
+    "phone": "Phone",
+    "address": "Address",
+    "orders": "Orders",
+    "spent": "Lifetime spend",
+    "lastSeen": "Last seen",
+    "joined": "Joined"
+  },
+  "address": {
+    "lastDelivered": "Last delivered {date}",
+    "saved": "Saved address",
+    "moreSaved": "+{count} more saved"
+  },
+  "never": "Never",
+  "sort": {
+    "label": "Sort by",
+    "ascending": "Ascending",
+    "descending": "Descending",
+    "switchToDescending": "Sorted ascending; switch to descending",
+    "switchToAscending": "Sorted descending; switch to ascending"
+  },
+  "pager": {
+    "label": "Customer pages",
+    "showing": "Showing {first}–{last} of {total}",
+    "previous": "Previous",
+    "next": "Next",
+    "page": "Page {page} of {pages}"
+  }
+}

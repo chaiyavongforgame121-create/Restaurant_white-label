@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { ChevronDown, ChevronUp, Link2, Plus, Trash2 } from 'lucide-react';
 import { formatCurrency } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
@@ -39,13 +40,32 @@ interface Props {
   menuItems: MenuItem[];
 }
 
+type DbErrorKey = 'permissionDenied' | 'network' | 'duplicate' | 'inUse' | 'invalidValue' | 'generic';
+
+/** Raw PostgREST text never reaches the merchant: known codes get a translated sentence. */
+function dbErrorKey(err: { code?: string; message?: string }): DbErrorKey {
+  const message = err.message ?? '';
+  if (err.code === '42501' || /row-level security|permission denied/i.test(message)) return 'permissionDenied';
+  if (/failed to fetch|networkerror|network request failed/i.test(message)) return 'network';
+  if (err.code === '23505') return 'duplicate';
+  if (err.code === '23503') return 'inUse';
+  if (err.code && /^(22|23)/.test(err.code)) return 'invalidValue';
+  return 'generic';
+}
+
 export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) {
+  const t = useTranslations('menuExtras');
   const router = useRouter();
   const confirm = useConfirm();
   const prompt = usePrompt();
   const [groups, setGroups] = React.useState(initialGroups);
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+
+  const dbError = (context: string, err: { code?: string; message?: string }) => {
+    console.error(`[modifiers] ${context}`, err);
+    return t(`errors.${dbErrorKey(err)}`);
+  };
 
   const refetch = async () => {
     const supabase = getBrowserClient();
@@ -62,10 +82,10 @@ export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) 
 
   const createGroup = async () => {
     const name = await prompt({
-      title: 'Name the modifier group',
-      body: 'This is the heading customers see above the choices, like Size or Add-ons.',
-      placeholder: 'Size',
-      confirmLabel: 'Create group',
+      title: t('modifiers.createPrompt.title'),
+      body: t('modifiers.createPrompt.body'),
+      placeholder: t('modifiers.createPrompt.placeholder'),
+      confirmLabel: t('modifiers.createPrompt.confirm'),
       required: true,
     });
     if (!name) return;
@@ -80,7 +100,7 @@ export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) 
       display_order: groups.length,
     });
     if (insErr) {
-      setError(insErr.message);
+      setError(dbError('create group', insErr));
       return;
     }
     await refetch();
@@ -90,7 +110,7 @@ export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) 
     const supabase = getBrowserClient();
     const { error: upErr } = await supabase.from('modifier_groups').update(patch).eq('id', id);
     if (upErr) {
-      setError(upErr.message);
+      setError(dbError('update group', upErr));
       return;
     }
     setGroups((curr) => curr.map((g) => (g.id === id ? { ...g, ...patch } : g)));
@@ -99,9 +119,9 @@ export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) 
   const deleteGroup = async (id: string) => {
     if (
       !(await confirm({
-        title: 'Delete this modifier group?',
-        body: 'Its options go with it, and every menu item linked to the group loses those choices.',
-        confirmLabel: 'Delete',
+        title: t('modifiers.deleteGroupConfirm.title'),
+        body: t('modifiers.deleteGroupConfirm.body'),
+        confirmLabel: t('modifiers.deleteGroupConfirm.confirm'),
         destructive: true,
       }))
     ) {
@@ -110,7 +130,7 @@ export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) 
     const supabase = getBrowserClient();
     const { error: delErr } = await supabase.from('modifier_groups').delete().eq('id', id);
     if (delErr) {
-      setError(delErr.message);
+      setError(dbError('delete group', delErr));
       return;
     }
     setGroups((curr) => curr.filter((g) => g.id !== id));
@@ -118,23 +138,23 @@ export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) 
 
   const addOption = async (groupId: string) => {
     const name = await prompt({
-      title: 'Name the option',
-      body: 'One of the choices in this group, like Large or Extra cheese.',
-      placeholder: 'Large',
-      confirmLabel: 'Next',
+      title: t('modifiers.optionPrompt.title'),
+      body: t('modifiers.optionPrompt.body'),
+      placeholder: t('modifiers.optionPrompt.placeholder'),
+      confirmLabel: t('modifiers.optionPrompt.confirm'),
       required: true,
     });
     if (!name) return;
     const priceStr = await prompt({
-      title: 'Price delta for this option',
-      body: 'Added to the item price in USD. Use 0 for no change, or a negative number to take money off.',
+      title: t('modifiers.pricePrompt.title'),
+      body: t('modifiers.pricePrompt.body'),
       defaultValue: '0',
-      confirmLabel: 'Add option',
+      confirmLabel: t('modifiers.pricePrompt.confirm'),
     });
     if (priceStr === null) return;
     const price = Number(priceStr);
     if (!Number.isFinite(price)) {
-      setError('Invalid price.');
+      setError(t('errors.invalidPrice'));
       return;
     }
     const supabase = getBrowserClient();
@@ -148,7 +168,7 @@ export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) 
       display_order: grp?.modifier_options.length ?? 0,
     });
     if (insErr) {
-      setError(insErr.message);
+      setError(dbError('add option', insErr));
       return;
     }
     await refetch();
@@ -158,7 +178,7 @@ export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) 
     const supabase = getBrowserClient();
     const { error: upErr } = await supabase.from('modifier_options').update(patch).eq('id', optionId);
     if (upErr) {
-      setError(upErr.message);
+      setError(dbError('update option', upErr));
       return;
     }
     await refetch();
@@ -167,9 +187,9 @@ export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) 
   const deleteOption = async (optionId: string) => {
     if (
       !(await confirm({
-        title: 'Delete this option?',
-        body: 'Customers can no longer pick it on any item using this group.',
-        confirmLabel: 'Delete',
+        title: t('modifiers.deleteOptionConfirm.title'),
+        body: t('modifiers.deleteOptionConfirm.body'),
+        confirmLabel: t('modifiers.deleteOptionConfirm.confirm'),
         destructive: true,
       }))
     ) {
@@ -178,7 +198,7 @@ export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) 
     const supabase = getBrowserClient();
     const { error: delErr } = await supabase.from('modifier_options').delete().eq('id', optionId);
     if (delErr) {
-      setError(delErr.message);
+      setError(dbError('delete option', delErr));
       return;
     }
     await refetch();
@@ -218,13 +238,11 @@ export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) 
     <div className="container max-w-5xl py-8">
       <header className="mb-6 flex flex-wrap items-center justify-between gap-3 px-2 pl-16 lg:px-0">
         <div>
-          <h1 className="font-display text-3xl font-bold">Modifier groups</h1>
-          <p className="mt-1 text-muted-foreground">
-            Size, add-ons, prep options — anything customers customize on an item.
-          </p>
+          <h1 className="font-display text-3xl font-bold">{t('modifiers.title')}</h1>
+          <p className="mt-1 text-muted-foreground">{t('modifiers.subtitle')}</p>
         </div>
         <Button variant="gradient" onClick={createGroup} leftIcon={<Plus className="h-4 w-4" />}>
-          New group
+          {t('modifiers.newGroup')}
         </Button>
       </header>
 
@@ -233,9 +251,7 @@ export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) 
       )}
 
       {groups.length === 0 ? (
-        <Card className="p-10 text-center text-muted-foreground">
-          No modifier groups yet. Create one (e.g. &ldquo;Size&rdquo; with Small / Medium / Large) and link it to menu items.
-        </Card>
+        <Card className="p-10 text-center text-muted-foreground">{t('modifiers.empty')}</Card>
       ) : (
         <ul className="space-y-3 px-2 lg:px-0">
           {groups.map((g) => {
@@ -259,12 +275,15 @@ export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) 
                       <div>
                         <p className="font-display text-lg font-semibold">{g.name}</p>
                         <p className="mt-0.5 text-xs text-muted-foreground">
-                          {g.is_required ? 'Required · ' : 'Optional · '}
-                          {g.selection_type === 'single' ? 'pick 1' : `pick up to ${g.max_select}`}
+                          {g.is_required ? t('modifiers.required') : t('modifiers.optional')}
                           {' · '}
-                          {g.modifier_options.length} option{g.modifier_options.length === 1 ? '' : 's'}
+                          {g.selection_type === 'single'
+                            ? t('modifiers.pickOne')
+                            : t('modifiers.pickUpTo', { max: g.max_select })}
                           {' · '}
-                          linked to {linked.length} item{linked.length === 1 ? '' : 's'}
+                          {t('modifiers.optionCount', { count: g.modifier_options.length })}
+                          {' · '}
+                          {t('modifiers.linkedCount', { count: linked.length })}
                         </p>
                       </div>
                     </button>
@@ -275,7 +294,7 @@ export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) 
                         onClick={() => deleteGroup(g.id)}
                         leftIcon={<Trash2 className="h-4 w-4" />}
                       >
-                        Delete
+                        {t('modifiers.delete')}
                       </Button>
                     </div>
                   </div>
@@ -286,7 +305,7 @@ export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) 
 
                       <div>
                         <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                          Options
+                          {t('modifiers.options')}
                         </p>
                         <ul className="space-y-2">
                           {g.modifier_options
@@ -313,14 +332,14 @@ export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) 
                                       type="checkbox"
                                       checked={opt.is_default}
                                       onChange={(e) => updateOption(opt.id, { is_default: e.target.checked })}
-                                    /> Default
+                                    /> {t('modifiers.default')}
                                   </label>
                                   <label className="flex items-center gap-1 text-xs">
                                     <input
                                       type="checkbox"
                                       checked={opt.is_active}
                                       onChange={(e) => updateOption(opt.id, { is_active: e.target.checked })}
-                                    /> Active
+                                    /> {t('modifiers.active')}
                                   </label>
                                   <Button
                                     variant="ghost"
@@ -328,7 +347,7 @@ export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) 
                                     onClick={() => deleteOption(opt.id)}
                                     leftIcon={<Trash2 className="h-3.5 w-3.5" />}
                                   >
-                                    Remove
+                                    {t('modifiers.remove')}
                                   </Button>
                                 </div>
                               </li>
@@ -341,7 +360,7 @@ export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) 
                           onClick={() => addOption(g.id)}
                           leftIcon={<Plus className="h-4 w-4" />}
                         >
-                          Add option
+                          {t('modifiers.addOption')}
                         </Button>
                       </div>
 
@@ -370,10 +389,11 @@ function GroupSettings({
   group: Group;
   onChange: (patch: Partial<Group>) => void;
 }) {
+  const t = useTranslations('menuExtras.modifiers.settings');
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       <label className="block">
-        <span className="mb-1 block text-xs font-medium">Name</span>
+        <span className="mb-1 block text-xs font-medium">{t('name')}</span>
         <input
           value={group.name}
           onChange={(e) => onChange({ name: e.target.value })}
@@ -381,18 +401,18 @@ function GroupSettings({
         />
       </label>
       <label className="block">
-        <span className="mb-1 block text-xs font-medium">Type</span>
+        <span className="mb-1 block text-xs font-medium">{t('type')}</span>
         <select
           value={group.selection_type}
           onChange={(e) => onChange({ selection_type: e.target.value as 'single' | 'multiple' })}
           className="focus-ring w-full rounded-lg border border-border bg-background px-2 py-1.5 text-sm"
         >
-          <option value="single">Single (radio)</option>
-          <option value="multiple">Multiple (checkbox)</option>
+          <option value="single">{t('single')}</option>
+          <option value="multiple">{t('multiple')}</option>
         </select>
       </label>
       <label className="block">
-        <span className="mb-1 block text-xs font-medium">Min</span>
+        <span className="mb-1 block text-xs font-medium">{t('min')}</span>
         <input
           type="number"
           min={0}
@@ -402,7 +422,7 @@ function GroupSettings({
         />
       </label>
       <label className="block">
-        <span className="mb-1 block text-xs font-medium">Max</span>
+        <span className="mb-1 block text-xs font-medium">{t('max')}</span>
         <input
           type="number"
           min={1}
@@ -417,7 +437,7 @@ function GroupSettings({
           checked={group.is_required}
           onChange={(e) => onChange({ is_required: e.target.checked })}
         />
-        Required (customer must pick at least min)
+        {t('required')}
       </label>
     </div>
   );
@@ -434,6 +454,7 @@ function LinkPicker({
   linked: MenuItem[];
   onSave: (itemIds: Set<string>) => void;
 }) {
+  const t = useTranslations('menuExtras.modifiers.links');
   const [open, setOpen] = React.useState(false);
   const [selected, setSelected] = React.useState<Set<string>>(new Set(linked.map((m) => m.id)));
 
@@ -441,17 +462,18 @@ function LinkPicker({
     setSelected(new Set(linked.map((m) => m.id)));
   }, [linked]);
 
+  // Item names are the merchant's own words, so they go into the sentence untouched.
+  const names = linked.slice(0, 3).map((m) => m.name).join(', ');
+
   return (
     <div className="rounded-xl border border-border bg-muted/30 p-3">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm font-medium">
-          Linked to{' '}
-          {linked.length > 0 ? (
-            linked.slice(0, 3).map((m) => m.name).join(', ') +
-            (linked.length > 3 ? ` + ${linked.length - 3} more` : '')
-          ) : (
-            <span className="text-muted-foreground">no items yet</span>
-          )}
+          {linked.length === 0
+            ? t.rich('none', { muted: (chunks) => <span className="text-muted-foreground">{chunks}</span> })
+            : linked.length > 3
+              ? t('linkedToMore', { names, count: linked.length - 3 })
+              : t('linkedTo', { names })}
         </p>
         <Button
           variant="ghost"
@@ -459,7 +481,7 @@ function LinkPicker({
           onClick={() => setOpen((o) => !o)}
           leftIcon={<Link2 className="h-3.5 w-3.5" />}
         >
-          {open ? 'Cancel' : 'Edit links'}
+          {open ? t('cancel') : t('edit')}
         </Button>
       </div>
       {open && (
@@ -480,11 +502,11 @@ function LinkPicker({
                   }}
                 />
                 {m.name}
-                {selected.has(m.id) && <Badge variant="success" className="ml-auto">linked</Badge>}
+                {selected.has(m.id) && <Badge variant="success" className="ml-auto">{t('linked')}</Badge>}
               </label>
             ))}
             {menuItems.length === 0 && (
-              <p className="px-2 py-3 text-xs text-muted-foreground">No active menu items in this branch.</p>
+              <p className="px-2 py-3 text-xs text-muted-foreground">{t('noItems')}</p>
             )}
           </div>
           <Button
@@ -495,7 +517,7 @@ function LinkPicker({
               setOpen(false);
             }}
           >
-            Save links
+            {t('save')}
           </Button>
         </div>
       )}

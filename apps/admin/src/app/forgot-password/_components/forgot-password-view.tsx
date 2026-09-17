@@ -10,11 +10,14 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import { KeyRound, Mail, ShieldCheck } from 'lucide-react';
 import { Button, Card } from '@favornoms/ui';
 import { getBrowserClient } from '@favornoms/database/client';
+import { authErrorKey } from '../../auth/_lib/auth-error';
 
 export function ForgotPasswordView() {
+  const t = useTranslations('auth');
   const [email, setEmail] = React.useState('');
   const [sent, setSent] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
@@ -36,7 +39,8 @@ export function ForgotPasswordView() {
     });
     setSubmitting(false);
     if (resetError) {
-      setError(resetError.message);
+      console.error('[forgot-password] resetPasswordForEmail failed:', resetError.message);
+      setError(t(authErrorKey(resetError)));
       return;
     }
     // Deliberately unconditional: reporting "no such account" here would turn this form into
@@ -54,25 +58,22 @@ export function ForgotPasswordView() {
         <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-gradient-warm text-white shadow-warm">
           <KeyRound className="h-8 w-8" />
         </div>
-        <h1 className="mt-5 text-center font-display text-3xl font-bold">Set a new password</h1>
-        <p className="mt-1 text-center text-sm text-muted-foreground">
-          We&apos;ll email you a link to choose one. Use this to set your first password too.
-        </p>
+        <h1 className="mt-5 text-center font-display text-3xl font-bold">{t('forgotPassword.title')}</h1>
+        <p className="mt-1 text-center text-sm text-muted-foreground">{t('forgotPassword.subtitle')}</p>
 
         <Card className="mt-6 p-5">
           {sent ? (
             <div className="text-center">
               <ShieldCheck className="mx-auto h-10 w-10 text-success" />
-              <p className="mt-3 font-display text-lg font-semibold">Check your inbox</p>
+              <p className="mt-3 font-display text-lg font-semibold">{t('forgotPassword.checkInbox')}</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                If <strong>{email}</strong> has an account, a reset link is on its way. Open it
-                in this browser — the link is tied to the one that asked for it.
+                {t.rich('forgotPassword.sentBody', { email, strong: (c) => <strong>{c}</strong> })}
               </p>
             </div>
           ) : (
             <form className="space-y-4" onSubmit={submit}>
               <label className="block">
-                <span className="mb-2 block text-sm font-medium">Email</span>
+                <span className="mb-2 block text-sm font-medium">{t('fields.email')}</span>
                 <div className="relative">
                   <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
                   <input
@@ -88,7 +89,7 @@ export function ForgotPasswordView() {
               </label>
               {error && <p className="text-sm text-danger">{error}</p>}
               <Button type="submit" variant="gradient" size="xl" fullWidth loading={submitting}>
-                Email me a reset link
+                {t('forgotPassword.submit')}
               </Button>
             </form>
           )}
@@ -96,7 +97,7 @@ export function ForgotPasswordView() {
 
         <p className="mt-4 text-center text-sm text-muted-foreground">
           <Link href="/login" className="font-semibold text-primary hover:underline">
-            Back to sign in
+            {t('forgotPassword.backToSignIn')}
           </Link>
         </p>
       </motion.div>

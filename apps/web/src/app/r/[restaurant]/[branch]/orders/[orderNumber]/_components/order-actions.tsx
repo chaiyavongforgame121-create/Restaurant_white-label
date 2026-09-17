@@ -4,6 +4,7 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertCircle, Info, Star } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Button, Card } from '@favornoms/ui';
 
@@ -62,18 +63,14 @@ const RATEABLE_STATUSES = ['completed'];
  * with the restaurant rather than applied behind their back. Staff keep both
  * powers (admin Orders kebab, kitchen "Reject order").
  */
-/** cancel_order's error codes, in words a diner can act on. */
-function cancelOrderMessage(raw: string): string {
-  if (raw.includes('auth_required')) {
-    return 'Please sign in with the account you ordered with to cancel this order.';
-  }
-  if (raw.includes('not_authorized')) {
-    return 'This order belongs to a different account. Please contact the restaurant to cancel it.';
-  }
+/** cancel_order's error codes, as the `tracking.actions.cancelErrors` key a diner can act on. */
+function cancelOrderErrorKey(raw: string): 'signIn' | 'otherAccount' | 'tooLate' | 'generic' {
+  if (raw.includes('auth_required')) return 'signIn';
+  if (raw.includes('not_authorized')) return 'otherAccount';
   if (raw.includes('too_late_for_customer_cancel') || raw.includes('cannot_cancel_status')) {
-    return 'This order has moved on and can no longer be cancelled here — please contact the restaurant.';
+    return 'tooLate';
   }
-  return "That didn't go through. Please try again, or contact the restaurant.";
+  return 'generic';
 }
 
 export function OrderActions({
@@ -86,6 +83,7 @@ export function OrderActions({
   driverId = null,
   awaitingPayment = false,
 }: Props) {
+  const t = useTranslations('tracking');
   const router = useRouter();
   const [cancelling, setCancelling] = React.useState(false);
   // The window in which contacting the restaurant can still change anything —
@@ -168,13 +166,13 @@ export function OrderActions({
   const resolveCustomerId = async (): Promise<string | null> => {
     const supabase = getBrowserClient();
     const { data: user } = await supabase.auth.getUser();
-    if (!user.user) { setError('not_signed_in'); return null; }
+    if (!user.user) { setError(t('rating.errors.signIn')); return null; }
     const { data: orderRow } = await supabase
       .from('orders')
       .select('customer_id')
       .eq('id', orderId)
       .maybeSingle();
-    if (!orderRow?.customer_id) { setError('no_customer'); return null; }
+    if (!orderRow?.customer_id) { setError(t('rating.errors.noAccount')); return null; }
     return orderRow.customer_id;
   };
 
@@ -194,7 +192,7 @@ export function OrderActions({
       );
     setBusy(false);
     if (upErr) {
-      setError(upErr.message);
+      setError(t('rating.errors.saveFailed'));
       return false;
     }
     return true;
@@ -249,10 +247,7 @@ export function OrderActions({
           order nobody has started is the wrong ask. */}
       {awaitingPayment && canStillChange && signedIn === true && (
         <div className="space-y-2 rounded-2xl border border-border bg-muted/40 p-3">
-          <p className="text-sm text-muted-foreground">
-            Changed your mind? Nothing has been prepared yet — the restaurant has not
-            confirmed your transfer, so you can still call this order off.
-          </p>
+          <p className="text-sm text-muted-foreground">{t('actions.cancelPrompt')}</p>
           <Button
             variant="outline"
             size="md"
@@ -271,13 +266,13 @@ export function OrderActions({
                 // cancel_order raises bare codes. The tracking page is readable by anyone
                 // holding the link, so "signed in" is not the same as "this is your order" —
                 // show the reason in words instead of leaking `not_authorized` at a diner.
-                setError(cancelOrderMessage(cancelErr.message));
+                setError(t(`actions.cancelErrors.${cancelOrderErrorKey(cancelErr.message)}`));
                 return;
               }
               router.refresh();
             }}
           >
-            Cancel this order
+            {t('actions.cancelOrder')}
           </Button>
         </div>
       )}
@@ -286,10 +281,7 @@ export function OrderActions({
       {canStillChange && (!awaitingPayment || signedIn === false) && (
         <div className="flex gap-2.5 rounded-2xl border border-border bg-muted/40 p-3">
           <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">
-            Need to change or cancel this order? Please contact the restaurant
-            directly — they can update it for you while it&apos;s still being prepared.
-          </p>
+          <p className="text-sm text-muted-foreground">{t('actions.contactToChange')}</p>
         </div>
       )}
       {canReport && (
@@ -327,10 +319,8 @@ export function OrderActions({
                 >
                   🎉
                 </motion.span>
-                <h3 className="font-display text-xl font-bold">Thank you!</h3>
-                <p className="text-sm text-muted-foreground">
-                  Your feedback helps the restaurant get even better.
-                </p>
+                <h3 className="font-display text-xl font-bold">{t('rating.thanksTitle')}</h3>
+                <p className="text-sm text-muted-foreground">{t('rating.thanksBody')}</p>
               </div>
             ) : (
               <>
@@ -341,44 +331,44 @@ export function OrderActions({
                   <div className="absolute inset-0 bg-noise opacity-30" />
                   <div className="relative">
                     <h3 className="font-display text-2xl font-bold">
-                      {step === 'driver' ? 'How was your driver?' : 'How was the food?'}
+                      {step === 'driver' ? t('rating.driverTitle') : t('rating.foodTitle')}
                     </h3>
                     <p className="mt-1 text-sm text-white/85">
                       {step === 'driver'
                         ? needsFood
-                          ? 'Rate your rider first — the restaurant is next.'
-                          : 'Rate the rider who brought your order.'
+                          ? t('rating.driverFirst')
+                          : t('rating.driverOnly')
                         : needsDriver || deliveryStars > 0
-                          ? 'Last step — how was the food itself?'
-                          : 'Rate the food to finish up.'}
+                          ? t('rating.foodLast')
+                          : t('rating.foodOnly')}
                     </p>
                     {step === 'food' && hasDriver && (
-                      <p className="mt-2 text-xs text-white/70">Step 2 of 2</p>
+                      <p className="mt-2 text-xs text-white/70">{t('rating.step', { current: 2, total: 2 })}</p>
                     )}
                     {step === 'driver' && needsFood && (
-                      <p className="mt-2 text-xs text-white/70">Step 1 of 2</p>
+                      <p className="mt-2 text-xs text-white/70">{t('rating.step', { current: 1, total: 2 })}</p>
                     )}
                   </div>
                 </div>
                 <div className="space-y-4 p-6">
                   {step === 'driver' ? (
                     <>
-                      <BigStarRow label="Your driver" value={deliveryStars} onChange={setDeliveryStars} />
+                      <BigStarRow label={t('rating.driverLabel')} value={deliveryStars} onChange={setDeliveryStars} />
                       <textarea
                         value={driverComment}
                         onChange={(e) => setDriverComment(e.target.value)}
-                        placeholder="Anything to say about your driver? (optional)"
+                        placeholder={t('rating.driverPlaceholder')}
                         className="input min-h-24 py-3"
                         maxLength={500}
                       />
                     </>
                   ) : (
                     <>
-                      <BigStarRow label="Food" value={foodStars} onChange={setFoodStars} />
+                      <BigStarRow label={t('rating.foodLabel')} value={foodStars} onChange={setFoodStars} />
                       <textarea
                         value={comment}
                         onChange={(e) => setComment(e.target.value)}
-                        placeholder="Anything to say about the food? (optional)"
+                        placeholder={t('rating.foodPlaceholder')}
                         className="input min-h-24 py-3"
                         maxLength={500}
                       />
@@ -396,10 +386,10 @@ export function OrderActions({
                     disabled={busy || (step === 'driver' ? deliveryStars === 0 : foodStars === 0)}
                     leftIcon={<Star className="h-4 w-4" />}
                   >
-                    {step === 'driver' && needsFood ? 'Next — rate the restaurant' : 'Submit rating'}
+                    {step === 'driver' && needsFood ? t('rating.next') : t('rating.submit')}
                   </Button>
                   <p className="text-center text-xs text-muted-foreground">
-                    {step === 'driver' ? 'Driver stars are required.' : 'Food stars are required.'}
+                    {step === 'driver' ? t('rating.driverRequired') : t('rating.foodRequired')}
                   </p>
                   {/* Once a submit has failed, the modal must not hold the page hostage. */}
                   {error && (
@@ -408,7 +398,7 @@ export function OrderActions({
                       onClick={() => setSkipped(true)}
                       className="focus-ring mx-auto block text-xs font-medium text-muted-foreground underline"
                     >
-                      Skip for now
+                      {t('rating.skip')}
                     </button>
                   )}
                 </div>
@@ -429,25 +419,28 @@ export function OrderActions({
 
 /** Read-only echo of the one rating this order is allowed to have. */
 function SubmittedRating({ rating }: { rating: ExistingRating }) {
+  const t = useTranslations('tracking');
   return (
     <div className="rounded-2xl border border-success/30 bg-success/5 p-3">
-      <p className="text-sm font-semibold text-success">Thanks for your feedback!</p>
+      <p className="text-sm font-semibold text-success">{t('rating.submittedTitle')}</p>
       <div className="mt-2 space-y-1">
         {/* Either half can stand alone now: the rider is rated in its own step and banked
             before the restaurant is even asked about. */}
         {rating.delivery_stars != null && (
-          <StaticStarRow label="Your driver" value={rating.delivery_stars} />
+          <StaticStarRow label={t('rating.driverLabel')} value={rating.delivery_stars} />
         )}
-        {rating.food_stars != null && <StaticStarRow label="Food" value={rating.food_stars} />}
+        {rating.food_stars != null && (
+          <StaticStarRow label={t('rating.foodLabel')} value={rating.food_stars} />
+        )}
       </div>
       {rating.driver_comment && (
         <p className="mt-2 text-sm italic text-muted-foreground">
-          On your driver: &ldquo;{rating.driver_comment}&rdquo;
+          {t('rating.onDriver', { comment: rating.driver_comment })}
         </p>
       )}
       {rating.comment && (
         <p className="mt-2 text-sm italic text-muted-foreground">
-          On the food: &ldquo;{rating.comment}&rdquo;
+          {t('rating.onFood', { comment: rating.comment })}
         </p>
       )}
     </div>
@@ -455,10 +448,11 @@ function SubmittedRating({ rating }: { rating: ExistingRating }) {
 }
 
 function StaticStarRow({ label, value }: { label: string; value: number }) {
+  const t = useTranslations('tracking');
   return (
     <div className="flex items-center gap-2">
       <span className="w-16 text-xs text-muted-foreground">{label}</span>
-      <span className="text-base leading-none" aria-label={`${label}: ${value} out of 5 stars`}>
+      <span className="text-base leading-none" aria-label={t('rating.starsSummary', { label, value })}>
         {[1, 2, 3, 4, 5].map((n) => (
           <span key={n} className={n <= value ? 'text-amber-400' : 'text-muted-foreground/25'}>
             ★
@@ -470,6 +464,7 @@ function StaticStarRow({ label, value }: { label: string; value: number }) {
 }
 
 function BigStarRow({ label, value, onChange }: { label: string; value: number; onChange: (n: number) => void }) {
+  const t = useTranslations('tracking');
   return (
     <div>
       <p className="text-sm font-semibold">{label}</p>
@@ -481,7 +476,7 @@ function BigStarRow({ label, value, onChange }: { label: string; value: number; 
             whileTap={{ scale: 0.8 }}
             onClick={() => onChange(n)}
             className="focus-ring rounded-lg"
-            aria-label={`${label}: ${n} star${n > 1 ? 's' : ''}`}
+            aria-label={t('rating.starButton', { label, count: n })}
             aria-pressed={n <= value}
           >
             {/* Remount on select so the star pops in with a spring overshoot. */}
@@ -503,16 +498,18 @@ function BigStarRow({ label, value, onChange }: { label: string; value: number; 
   );
 }
 
+/** support_tickets.category values. The label shown is `tracking.issue.categories.<value>`. */
 const CATEGORIES = [
-  { value: 'missing_item', label: 'Missing an item' },
-  { value: 'wrong_item', label: 'Wrong item received' },
-  { value: 'quality', label: 'Food quality issue' },
-  { value: 'delivery', label: 'Delivery problem' },
-  { value: 'payment', label: 'Payment / billing' },
-  { value: 'other', label: 'Other' },
+  { value: 'missing_item' },
+  { value: 'wrong_item' },
+  { value: 'quality' },
+  { value: 'delivery' },
+  { value: 'payment' },
+  { value: 'other' },
 ] as const;
 
 function IssueReportButton({ orderId, branchId }: { orderId: string; branchId: string }) {
+  const t = useTranslations('tracking');
   const [open, setOpen] = React.useState(false);
   const [category, setCategory] = React.useState<typeof CATEGORIES[number]['value']>('missing_item');
   const [message, setMessage] = React.useState('');
@@ -522,7 +519,7 @@ function IssueReportButton({ orderId, branchId }: { orderId: string; branchId: s
 
   const submit = async () => {
     if (!message.trim()) {
-      setErr('Please describe the issue.');
+      setErr(t('issue.describe'));
       return;
     }
     setBusy(true);
@@ -548,7 +545,7 @@ function IssueReportButton({ orderId, branchId }: { orderId: string; branchId: s
     });
     setBusy(false);
     if (insErr) {
-      setErr(insErr.message);
+      setErr(t('issue.sendFailed'));
       return;
     }
     setOk(true);
@@ -563,7 +560,7 @@ function IssueReportButton({ orderId, branchId }: { orderId: string; branchId: s
         className="focus-ring inline-flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-semibold text-muted-foreground hover:bg-muted"
       >
         <AlertCircle className="h-4 w-4" />
-        Report an issue
+        {t('issue.report')}
       </button>
     );
   }
@@ -571,13 +568,13 @@ function IssueReportButton({ orderId, branchId }: { orderId: string; branchId: s
   return (
     <div className="space-y-3 rounded-2xl border border-border bg-card p-3">
       <div className="flex items-center justify-between">
-        <p className="font-display text-sm font-semibold">Report an issue</p>
+        <p className="font-display text-sm font-semibold">{t('issue.report')}</p>
         <button
           type="button"
           onClick={() => setOpen(false)}
           className="focus-ring text-xs text-muted-foreground hover:text-foreground"
         >
-          Cancel
+          {t('issue.cancel')}
         </button>
       </div>
       <select
@@ -585,22 +582,26 @@ function IssueReportButton({ orderId, branchId }: { orderId: string; branchId: s
         onChange={(e) => setCategory(e.target.value as typeof CATEGORIES[number]['value'])}
         className="focus-ring w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
       >
-        {CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+        {CATEGORIES.map((c) => (
+          <option key={c.value} value={c.value}>
+            {t(`issue.categories.${c.value}`)}
+          </option>
+        ))}
       </select>
       <textarea
         value={message}
         onChange={(e) => setMessage(e.target.value)}
-        placeholder="Tell us what happened…"
+        placeholder={t('issue.placeholder')}
         rows={3}
         maxLength={1000}
         className="focus-ring w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
       />
       {err && <p className="text-xs text-destructive">{err}</p>}
       {ok ? (
-        <p className="rounded-xl bg-success/10 px-3 py-2 text-sm text-success">Thanks — the restaurant has been notified.</p>
+        <p className="rounded-xl bg-success/10 px-3 py-2 text-sm text-success">{t('issue.sent')}</p>
       ) : (
         <Button variant="gradient" fullWidth onClick={submit} loading={busy} leftIcon={<AlertCircle className="h-4 w-4" />}>
-          Submit
+          {t('issue.submit')}
         </Button>
       )}
     </div>

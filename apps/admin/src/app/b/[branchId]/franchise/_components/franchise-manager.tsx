@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Network, Send } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Badge, Button, Card } from '@favornoms/ui';
@@ -36,6 +37,7 @@ const slugify = (s: string) =>
   s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 64);
 
 export function FranchiseManager({ currentBranchId, restaurantId, restaurantName, currentGroupId }: Props) {
+  const t = useTranslations('hq.franchise');
   const router = useRouter();
   const [groups, setGroups] = React.useState<Group[]>([]);
   const [activeGroup, setActiveGroup] = React.useState<Group | null>(null);
@@ -70,6 +72,18 @@ export function FranchiseManager({ currentBranchId, restaurantId, restaurantName
     void refresh();
   }, [refresh]);
 
+  /** Database errors stay in the console; the merchant sees a translated sentence. */
+  const errorMessage = (
+    error: { message: string; code?: string },
+    fallback: 'createFailed' | 'broadcastFailed',
+  ) => {
+    if (error.code === '23505') return t('errors.nameTaken');
+    if (error.code === '42501' || error.message.includes('not_authorized')) return t('errors.notAllowed');
+    if (error.message.includes('auth_required')) return t('errors.signedOut');
+    console.error(`franchise ${fallback}`, error.message);
+    return t(`errors.${fallback}`);
+  };
+
   const createGroup = async () => {
     setBusy(true);
     const supabase = getBrowserClient();
@@ -80,7 +94,7 @@ export function FranchiseManager({ currentBranchId, restaurantId, restaurantName
       .insert({ owner_user_id: user.id, name: newName, slug: slugify(newName) })
       .select()
       .single();
-    if (error) { setMsg(error.message); setBusy(false); return; }
+    if (error) { setMsg(errorMessage(error, 'createFailed')); setBusy(false); return; }
     // Link current restaurant to this group
     await supabase.from('restaurants').update({ franchise_group_id: g.id }).eq('id', restaurantId);
     setBusy(false);
@@ -99,30 +113,30 @@ export function FranchiseManager({ currentBranchId, restaurantId, restaurantName
       p_target_branch_ids: targetIds,
     });
     setBusy(false);
-    if (error) { setMsg(error.message); return; }
+    if (error) { setMsg(errorMessage(error, 'broadcastFailed')); return; }
     const r = data as { inserted_items?: number; updated_items?: number };
-    setMsg(`Broadcast complete. Inserted ${r?.inserted_items ?? 0}, updated ${r?.updated_items ?? 0} items.`);
+    setMsg(t('broadcastDone', { inserted: r?.inserted_items ?? 0, updated: r?.updated_items ?? 0 }));
   };
 
   return (
     <div className="container max-w-5xl py-8">
       <header className="mb-6 px-2 pl-16 lg:px-0">
-        <h1 className="font-display text-3xl font-bold">Franchise</h1>
-        <p className="mt-1 text-muted-foreground">Manage HQ-to-branch menu broadcasts.</p>
+        <h1 className="font-display text-3xl font-bold">{t('title')}</h1>
+        <p className="mt-1 text-muted-foreground">{t('subtitle')}</p>
       </header>
 
       {!currentGroupId && (
         <Card className="mb-6 p-5">
-          <h2 className="font-display text-lg font-semibold">Create a franchise group</h2>
-          <p className="text-sm text-muted-foreground">Group multiple restaurants together to broadcast menu changes from one source.</p>
+          <h2 className="font-display text-lg font-semibold">{t('createTitle')}</h2>
+          <p className="text-sm text-muted-foreground">{t('createBody')}</p>
           {!creatingGroup ? (
             <Button variant="gradient" onClick={() => setCreatingGroup(true)} className="mt-3" leftIcon={<Network className="h-4 w-4" />}>
-              Create group
+              {t('createGroup')}
             </Button>
           ) : (
             <div className="mt-3 space-y-2">
-              <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="My franchise" className="input" />
-              <Button variant="gradient" onClick={createGroup} disabled={!newName} loading={busy}>Create</Button>
+              <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={t('namePlaceholder')} className="input" />
+              <Button variant="gradient" onClick={createGroup} disabled={!newName} loading={busy}>{t('create')}</Button>
             </div>
           )}
         </Card>
@@ -133,13 +147,13 @@ export function FranchiseManager({ currentBranchId, restaurantId, restaurantName
           <Card className="mb-6 p-5">
             <h2 className="font-display text-lg font-semibold">{activeGroup.name}</h2>
             <p className="text-sm text-muted-foreground">
-              {restaurants.length} restaurant{restaurants.length === 1 ? '' : 's'} · {branches.length} branch{branches.length === 1 ? '' : 'es'}
+              {t('groupSummary', { restaurants: restaurants.length, branches: branches.length })}
             </p>
           </Card>
 
           <Card className="mb-6 p-5">
-            <h3 className="font-display text-lg font-semibold">Broadcast this branch&apos;s menu to:</h3>
-            <p className="text-sm text-muted-foreground">Categories and items missing in target branches will be inserted.</p>
+            <h3 className="font-display text-lg font-semibold">{t('broadcastTitle')}</h3>
+            <p className="text-sm text-muted-foreground">{t('broadcastBody')}</p>
             <ul className="mt-3 space-y-2">
               {branches.filter((b) => b.id !== currentBranchId).map((b) => (
                 <li key={b.id}>
@@ -158,7 +172,7 @@ export function FranchiseManager({ currentBranchId, restaurantId, restaurantName
                 </li>
               ))}
               {branches.filter((b) => b.id !== currentBranchId).length === 0 && (
-                <li className="text-sm text-muted-foreground">No other branches in this group yet.</li>
+                <li className="text-sm text-muted-foreground">{t('noOtherBranches')}</li>
               )}
             </ul>
             <div className="mt-4 flex items-center gap-3">
@@ -169,7 +183,7 @@ export function FranchiseManager({ currentBranchId, restaurantId, restaurantName
                 disabled={selectedTargets.size === 0}
                 leftIcon={<Send className="h-4 w-4" />}
               >
-                Broadcast menu
+                {t('broadcast')}
               </Button>
               {msg && <span className="text-sm text-muted-foreground">{msg}</span>}
             </div>

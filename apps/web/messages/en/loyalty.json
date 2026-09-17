@@ -1,0 +1,67 @@
+{
+  "loading": "Loading…",
+  "signInPrompt": "Sign in to see your {brandName} points and rewards.",
+  "yourPoints": "Your points",
+  "loadingTier": "Loading tier",
+  "memberBadge": "{tier} member",
+  "rewardsReady": "{count, plural, one {# reward ready to redeem} other {# rewards ready to redeem}}",
+  "pointsForReward": "{points, plural, one {# more point for {reward}} other {# more points for {reward}}}",
+  "keepOrdering": "Keep ordering to earn more",
+  "lifetimeEarned": "Lifetime earned",
+  "lifetimeRedeemed": "Lifetime redeemed",
+  "howPoints": {
+    "title": "How points work",
+    "earnRate": "Earn <strong>{points, plural, one {# point} other {# points}} per {amount}</strong> of your order subtotal.",
+    "earnFallback": "Earn points on the subtotal of every completed order.",
+    "landing": "Points land <strong>once the order is completed</strong> — orders still being prepared or on their way don’t count yet.",
+    "checkout": "At checkout, pick <strong>one reward</strong> from the list above — its points come off your balance and the discount comes off that order.",
+    "redeemed": "Redeemed points leave your balance right away, but the entry shows in <strong>Recent activity</strong> once that order is completed.",
+    "climb": "Keep ordering to climb tiers and unlock more perks."
+  },
+  "activity": {
+    "title": "Recent activity",
+    "empty": "No points activity yet — your first order will start earning.",
+    "types": {
+      "earned": "Earned",
+      "redeemed": "Redeemed",
+      "expired": "Expired",
+      "adjusted": "Adjusted"
+    }
+  },
+  "rewards": {
+    "title": "Rewards you can redeem",
+    "empty": "{brandName} hasn’t published any rewards yet. Your points keep adding up in the meantime — they don’t expire while you’re waiting.",
+    "percentOff": "{percent}% off",
+    "percentOffCapped": "{percent}% off (up to {max})",
+    "fixedOff": "{amount} off",
+    "freeItem": "Free {item}",
+    "freeItemGeneric": "Free item",
+    "freeDelivery": "Free delivery",
+    "withMinimum": "{value} · on orders over {amount}",
+    "ready": "ready",
+    "toGo": "{points, plural, other {# to go}}",
+    "pickAtCheckout": "Pick one at checkout — one reward per order."
+  },
+  "tiers": {
+    "title": "Your tier",
+    "lifetimePoints": "{points, plural, one {# lifetime point} other {# lifetime points}}",
+    "benefitsAria": "{tier} tier benefits",
+    "toNext": "<strong>{points, plural, one {# more point} other {# more points}}</strong> to reach {tier}.",
+    "top": "You’re at the top tier — enjoy it! 🎉",
+    "tapHint": "Tap any tier to see what it unlocks.",
+    "current": "This is your tier right now.",
+    "passed": "You have already passed this tier.",
+    "toUnlock": "{points, plural, one {# more point to unlock.} other {# more points to unlock.}}",
+    "earnTitle": "How you earn points",
+    "earnBody": "You earn {points, plural, one {# point} other {# points}} for every {amount} of an order’s subtotal. Points are credited when the order is completed — nothing is added while an order is still pending, being prepared, or on its way, and cancelled orders never earn.",
+    "starter": "Where every member starts — no minimum spend.",
+    "unlockedAt": "Unlocked at {points, plural, one {# lifetime point} other {# lifetime points}}.",
+    "failed": "The tier ladder couldn’t be loaded just now. Your points and badge are unaffected — reload the page to try again."
+  },
+  "defaultPerks": {
+    "bronze": "Spend your points on any reward the restaurant is offering.",
+    "silver": "A member badge on your account, so the restaurant can send you member-only offers.",
+    "gold": "Member-only promotions and early access to campaigns the restaurant runs for its best regulars.",
+    "platinum": "The top tier — the restaurant’s most exclusive offers land here first."
+  }
+}

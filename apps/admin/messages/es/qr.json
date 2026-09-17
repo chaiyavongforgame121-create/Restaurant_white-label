@@ -1,0 +1,91 @@
+{
+  "actions": {
+    "copied": "Copiado",
+    "copyLink": "Copiar enlace"
+  },
+  "noLink": {
+    "title": "Aún no se puede crear el enlace del menú",
+    "branchBody": {
+      "both": "Este restaurante y esta sucursal no tienen slug de URL, así que no hay una dirección pública a la que pueda apuntar un código QR. El slug es el nombre corto de tu enlace del menú, por ejemplo <code>/r/coastal-grill/brooklyn</code>.",
+      "restaurant": "Este restaurante no tiene slug de URL, así que no hay una dirección pública a la que pueda apuntar un código QR. El slug es el nombre corto de tu enlace del menú, por ejemplo <code>/r/coastal-grill/brooklyn</code>.",
+      "branch": "Esta sucursal no tiene slug de URL, así que no hay una dirección pública a la que pueda apuntar un código QR. El slug es el nombre corto de tu enlace del menú, por ejemplo <code>/r/coastal-grill/brooklyn</code>."
+    },
+    "branchHelp": "Los slugs se crean durante el registro. Si el tuyo está vacío, configura un <strong>dominio propio</strong> en Configuración de sucursal (así esta sucursal también tendrá una dirección escaneable) o pide a soporte que complete el slug.",
+    "tableBody": {
+      "both": "Este restaurante y esta sucursal no tienen slug de URL, así que no hay una dirección pública a la que pueda apuntar el código de una mesa. El slug es el nombre corto de tu enlace del menú, por ejemplo <code>/r/coastal-grill/brooklyn</code>.",
+      "restaurant": "Este restaurante no tiene slug de URL, así que no hay una dirección pública a la que pueda apuntar el código de una mesa. El slug es el nombre corto de tu enlace del menú, por ejemplo <code>/r/coastal-grill/brooklyn</code>.",
+      "branch": "Esta sucursal no tiene slug de URL, así que no hay una dirección pública a la que pueda apuntar el código de una mesa. El slug es el nombre corto de tu enlace del menú, por ejemplo <code>/r/coastal-grill/brooklyn</code>."
+    },
+    "tableHelp": "Configura un <strong>dominio propio</strong> en Configuración de sucursal o pide a soporte que complete el slug. Tus mesas están a salvo de cualquier forma: los códigos aparecerán aquí en cuanto la sucursal tenga una dirección.",
+    "openBranchSettings": "Abrir Configuración de sucursal"
+  },
+  "branch": {
+    "title": "Código QR de la sucursal",
+    "introWithTables": "Un solo código para toda la sucursal: el mostrador, la vitrina, un volante para llevar. Los clientes lo escanean para abrir el menú de {branch} y elegir cómo quieren pedir. Las mesas tienen sus propios códigos.",
+    "intro": "Imprímelo y colócalo en el mostrador o en un volante. Los clientes lo escanean para abrir el menú de {branch} y pedir desde su teléfono.",
+    "tableCodes": "Códigos QR de mesas ({count})",
+    "setUpTableCodes": "Configurar códigos QR de mesas",
+    "downloadPng": "Descargar PNG",
+    "print": "Imprimir",
+    "pngHint": "El PNG mide {size}×{size} px: suficiente para carteles de mesa y pósteres."
+  },
+  "tables": {
+    "accessDenied": {
+      "title": "Sin acceso a las mesas",
+      "reason": "Solo el propietario o un administrador pueden configurar las mesas de {branch}."
+    },
+    "title": "Códigos QR de mesas",
+    "intro": "Un código por mesa. Al escanearlo se abre el menú de {branch} con Comer en el local y esa mesa ya elegidos: el cliente nunca elige sucursal ni escribe un número de mesa.",
+    "printSheet": "Imprimir hoja",
+    "cancel": "Cancelar",
+    "addTable": "Agregar mesa",
+    "editingNote": "Editando esta mesa. Su código QR no cambia: todos los carteles que ya están en las mesas siguen funcionando.",
+    "fields": {
+      "tableNumber": "Número de mesa",
+      "name": "Nombre (opcional)",
+      "namePlaceholder": "Gabinete junto a la ventana",
+      "type": "Tipo",
+      "seats": "Asientos (opcional)",
+      "zone": "Zona (opcional)",
+      "zonePlaceholder": "Terraza",
+      "sortOrder": "Orden (opcional)"
+    },
+    "sortHint": "El orden es lo que pone la mesa 2 antes de la 10: los números de mesa son texto y, por sí solos, se ordenan alfabéticamente. Si lo dejas vacío, se usan los dígitos del número.",
+    "saveChanges": "Guardar cambios",
+    "empty": {
+      "title": "Aún no hay mesas",
+      "description": "Agrega tus mesas y cada una tendrá su propio código QR para imprimir y poner sobre la mesa.",
+      "bulk": "Agregar mesas 1–{count}"
+    },
+    "codePending": "Código pendiente",
+    "editTable": "Editar mesa",
+    "rotate": "Generar un código nuevo",
+    "deleteTable": "Eliminar mesa",
+    "turnOff": "Desactivar",
+    "turnOn": "Activar",
+    "retired": {
+      "title": "Desactivadas",
+      "description": "Sus códigos ya no fijan una mesa: quien escanee uno llega al menú normal. Los pedidos anteriores siguen mostrando la mesa.",
+      "badge": "Inactiva"
+    },
+    "footer": "El PNG mide {size}×{size} px. “Imprimir hoja” coloca todas las mesas activas de dos en dos para recortarlas.",
+    "tableLabel": "Mesa {number}",
+    "rotateConfirm": {
+      "title": "¿Generar un código nuevo para {table}?",
+      "body": "Todas las copias impresas del QR de esta mesa dejarán de funcionar de inmediato.",
+      "confirm": "Generar código nuevo"
+    },
+    "deleteConfirm": {
+      "title": "¿Eliminar {table}?",
+      "body": "Su código se destruye para siempre. Para retirar una mesa y conservar legibles los pedidos anteriores, desactívala.",
+      "confirm": "Eliminar"
+    },
+    "errors": {
+      "duplicateNumber": "Ya existe una mesa con ese número en esta sucursal.",
+      "hasOrders": "Esta mesa todavía tiene pedidos o servicios vinculados, así que no se puede eliminar. Desactívala.",
+      "tableNotFound": "Esa mesa ya no existe.",
+      "notPermitted": "Tu cuenta no puede modificar las mesas de esta sucursal.",
+      "generic": "Algo salió mal. Inténtalo de nuevo."
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "title": "Historial",
+  "range": "{days, plural, one {# día} other {# días}}",
+  "allRestaurants": "Todos los restaurantes",
+  "loadError": "No se pudo cargar tu historial. Revisa tu señal y vuelve a abrirlo.",
+  "summary": {
+    "single": "{jobs, plural, one {# pedido} other {# pedidos}} · {delivered, plural, one {# entregado} other {# entregados}} · <amount>{total}</amount>",
+    "all": "{jobs, plural, one {# pedido} other {# pedidos}} · {delivered, plural, one {# entregado} other {# entregados}} · <amount>{total}</amount> en todos los restaurantes",
+    "restaurant": "{jobs, plural, one {# pedido} other {# pedidos}} · {delivered, plural, one {# entregado} other {# entregados}} · <amount>{total}</amount> de {restaurant}"
+  },
+  "empty": {
+    "all": "No hay pedidos {days, plural, one {en el último día} other {en los últimos # días}}.",
+    "restaurant": "No hay pedidos de {restaurant} {days, plural, one {en el último día} other {en los últimos # días}}."
+  },
+  "noPayment": "Sin pago",
+  "outcome": {
+    "inProgress": "En curso",
+    "delivered": "Entregado",
+    "youCancelled": "Lo cancelaste",
+    "couldNotDeliver": "No se pudo entregar",
+    "restaurantCancelled": "Cancelado por el restaurante",
+    "reassigned": "Asignado a otro repartidor",
+    "offerExpired": "Oferta vencida",
+    "youDeclined": "Lo rechazaste",
+    "ended": "Finalizado"
+  },
+  "ledger": {
+    "paid": "Pagado",
+    "awaitingPayout": "Pago pendiente"
+  }
+}

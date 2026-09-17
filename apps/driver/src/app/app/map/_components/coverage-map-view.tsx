@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { LocateFixed, MapPin, Store } from 'lucide-react';
 import {
   MapView,
@@ -83,6 +84,7 @@ interface MapLike {
 }
 
 export function CoverageMapView() {
+  const t = useTranslations('coverage');
   const { driver } = useDriverSession();
   const approvedIds = React.useMemo(
     () => (driver.approvals ?? []).filter((a) => a.status === 'approved').map((a) => a.branch_id),
@@ -91,7 +93,7 @@ export function CoverageMapView() {
 
   const [branches, setBranches] = React.useState<BranchLocation[] | null>(null);
   const [rider, setRider] = React.useState<LatLng | null>(null);
-  const [geoErr, setGeoErr] = React.useState<string | null>(null);
+  const [geoDenied, setGeoDenied] = React.useState(false);
   const [locating, setLocating] = React.useState(false);
 
   React.useEffect(() => {
@@ -108,11 +110,11 @@ export function CoverageMapView() {
 
   const locate = React.useCallback(async () => {
     setLocating(true);
-    setGeoErr(null);
+    setGeoDenied(false);
     try {
       setRider(await getCurrentPosition());
     } catch {
-      setGeoErr('Turn on location access to see whether you’re in range.');
+      setGeoDenied(true);
     } finally {
       setLocating(false);
     }
@@ -222,10 +224,8 @@ export function CoverageMapView() {
     <div className="container max-w-xl py-6">
       <header className="mb-4 flex items-start justify-between gap-3 px-1">
         <div>
-          <h1 className="font-display text-2xl font-bold">Coverage</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            You only get a restaurant&apos;s orders while you&apos;re inside its circle.
-          </p>
+          <h1 className="font-display text-2xl font-bold">{t('title')}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{t('subtitle')}</p>
         </div>
         <Button
           size="sm"
@@ -234,18 +234,18 @@ export function CoverageMapView() {
           leftIcon={<LocateFixed className="h-4 w-4" />}
           onClick={() => void locate()}
         >
-          Locate
+          {t('locate')}
         </Button>
       </header>
 
       {approvedIds.length === 0 ? (
         <EmptyState
           icon={<Store className="h-7 w-7" />}
-          title="No restaurants yet"
-          description="Get approved to a restaurant to see your coverage."
+          title={t('empty.title')}
+          description={t('empty.description')}
           action={
             <Link href="/app/apply">
-              <Button variant="gradient">Apply to restaurants</Button>
+              <Button variant="gradient">{t('empty.apply')}</Button>
             </Link>
           }
         />
@@ -263,24 +263,29 @@ export function CoverageMapView() {
                 }}
                 fallback={
                   <div className="grid h-72 w-full place-items-center bg-muted/40 p-6 text-center text-sm text-muted-foreground">
-                    Map unavailable — see the range list below.
+                    {t('mapUnavailable')}
                   </div>
                 }
               />
             ) : (
               <div className="grid h-72 w-full place-items-center bg-muted/40 text-sm text-muted-foreground">
-                Loading map…
+                {t('loadingMap')}
               </div>
             )}
           </Card>
 
-          {geoErr && (
-            <p className="mb-3 rounded-xl bg-warning/10 px-4 py-3 text-sm text-warning">{geoErr}</p>
+          {geoDenied && (
+            <p className="mb-3 rounded-xl bg-warning/10 px-4 py-3 text-sm text-warning">
+              {t('locationOff')}
+            </p>
           )}
           {rider && branches && (
             <p className="mb-3 px-1 text-sm text-muted-foreground">
-              In range of <span className="font-semibold text-foreground">{inRangeCount}</span> of{' '}
-              {rows.filter((r) => r.hasCoords).length} restaurants.
+              {t.rich('inRangeSummary', {
+                inRange: inRangeCount,
+                total: rows.filter((r) => r.hasCoords).length,
+                count: (chunks) => <span className="font-semibold text-foreground">{chunks}</span>,
+              })}
             </p>
           )}
 
@@ -305,10 +310,13 @@ export function CoverageMapView() {
                     <p className="flex items-center gap-1 text-xs text-muted-foreground">
                       <MapPin className="h-3 w-3" />
                       {!r.hasCoords
-                        ? 'No location set'
+                        ? t('noLocation')
                         : r.distanceKm == null
-                          ? `within ${kmToMi(r.dispatchRadiusKm).toFixed(1)} mi to get orders`
-                          : `${kmToMi(r.distanceKm).toFixed(1)} mi away · range ${kmToMi(r.dispatchRadiusKm).toFixed(1)} mi`}
+                          ? t('withinRadius', { radius: kmToMi(r.dispatchRadiusKm).toFixed(1) })
+                          : t('distanceAndRange', {
+                              distance: kmToMi(r.distanceKm).toFixed(1),
+                              radius: kmToMi(r.dispatchRadiusKm).toFixed(1),
+                            })}
                     </p>
                   </div>
                   {r.inRange != null && (
@@ -318,7 +326,7 @@ export function CoverageMapView() {
                         r.inRange ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground',
                       )}
                     >
-                      {r.inRange ? 'In range' : 'Out of range'}
+                      {r.inRange ? t('inRange') : t('outOfRange')}
                     </span>
                   )}
                 </Card>

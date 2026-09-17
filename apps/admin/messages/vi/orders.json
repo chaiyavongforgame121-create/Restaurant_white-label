@@ -1,0 +1,210 @@
+{
+  "page": {
+    "title": "Đơn hàng",
+    "count": "{count} đơn phù hợp",
+    "countCapped": "{count} đơn phù hợp · đang hiện {shown} đơn đầu tiên",
+    "empty": "Không có đơn hàng nào khớp với bộ lọc",
+    "tableLabel": "Bàn {number}",
+    "columns": {
+      "orderNumber": "Mã đơn",
+      "channel": "Kênh",
+      "customer": "Khách hàng",
+      "items": "Món",
+      "created": "Thời gian tạo",
+      "total": "Tổng cộng",
+      "status": "Trạng thái",
+      "actions": "Thao tác"
+    }
+  },
+  "status": {
+    "pending": "Đang chờ",
+    "confirmed": "Đã xác nhận",
+    "preparing": "Đang chuẩn bị",
+    "ready": "Đã xong",
+    "out_for_delivery": "Đang giao",
+    "completed": "Hoàn tất",
+    "cancelled": "Đã hủy",
+    "refunded": "Đã hoàn tiền"
+  },
+  "channel": {
+    "dine_in": "Ăn tại quán",
+    "pickup": "Tự đến lấy",
+    "delivery": "Giao hàng",
+    "qr_ordering": "Đặt qua QR"
+  },
+  "paymentMethod": {
+    "cash": "Tiền mặt",
+    "card": "Thẻ",
+    "transfer": "Chuyển khoản QR"
+  },
+  "filters": {
+    "saved": "Đã lưu:",
+    "removeSavedView": "Xóa bộ lọc đã lưu {name}",
+    "searchPlaceholder": "Tìm mã đơn / khách hàng / số điện thoại…",
+    "clearSearch": "Xóa tìm kiếm",
+    "allStatuses": "Tất cả trạng thái",
+    "allChannels": "Tất cả kênh",
+    "scheduledLabel": "Đơn hẹn giờ",
+    "when": {
+      "all": "Tất cả đơn",
+      "scheduled": "Đơn hẹn giờ — sắp tới",
+      "held": "Đơn hẹn giờ — chưa vào bếp"
+    },
+    "rangeLabel": "Khoảng thời gian",
+    "range": {
+      "all": "Mọi thời gian",
+      "today": "Hôm nay",
+      "days7": "7 ngày qua",
+      "days30": "30 ngày qua",
+      "custom": "Tùy chỉnh…"
+    },
+    "dueRange": {
+      "all": "Mọi ngày",
+      "today": "Đến hạn hôm nay",
+      "days7": "Đến hạn trong 7 ngày",
+      "days30": "Đến hạn trong 30 ngày",
+      "custom": "Tùy chỉnh…"
+    },
+    "fromDate": "Từ ngày",
+    "dateSeparator": "đến",
+    "toDate": "Đến ngày",
+    "saveView": "Lưu bộ lọc",
+    "savePrompt": {
+      "title": "Đặt tên cho bộ lọc này",
+      "body": "Các bộ lọc đang chọn được lưu trên thiết bị này để áp dụng lại chỉ với một lần nhấp.",
+      "placeholder": "Đơn giao hôm nay",
+      "confirm": "Lưu bộ lọc"
+    }
+  },
+  "row": {
+    "items": "{count, plural, other {# món}}",
+    "summaryMore": "{items} +{count} món khác",
+    "noLineItems": "Không có món",
+    "hasRequests": "Có tùy chọn hoặc ghi chú",
+    "unpaid": "Chưa thanh toán",
+    "unpaidHint": "Đang chờ khách xác nhận thanh toán",
+    "scheduledOn": "Hẹn lúc {date}",
+    "dueOn": "Đến hạn {date}",
+    "walkIn": "Khách vãng lai",
+    "combo": "Combo",
+    "noLinesRecorded": "Đơn này không có món nào được ghi nhận.",
+    "notes": {
+      "table": "Bàn",
+      "customer": "Ghi chú của khách",
+      "kitchen": "Ghi chú cho bếp",
+      "delivery": "Hướng dẫn giao hàng"
+    }
+  },
+  "receipt": {
+    "button": "Hóa đơn",
+    "title": "Hóa đơn · {number}",
+    "sheetLabel": "Hóa đơn của đơn {number}",
+    "loading": "Đang tải hóa đơn…",
+    "loadFailed": "Không thể đọc đơn hàng này nữa.",
+    "voidedCancelled": "Đơn này đã bị hủy. Hóa đơn chỉ ghi lại món đã đặt, không xác nhận đã thanh toán.",
+    "voidedRefunded": "Đơn này đã được hoàn tiền. Hóa đơn chỉ ghi lại món đã đặt, không xác nhận đã thanh toán.",
+    "printHint": "In hóa đơn khổ 80 mm trong cửa sổ mới.",
+    "print": "In",
+    "date": "Ngày",
+    "channel": "Kênh",
+    "status": "Trạng thái",
+    "customer": "Khách hàng",
+    "phone": "Số điện thoại",
+    "subtotal": "Tạm tính",
+    "deliveryFee": "Phí giao hàng",
+    "serviceFee": "Phí dịch vụ",
+    "discount": "Giảm giá",
+    "salesTax": "Thuế",
+    "tip": "Tiền tip",
+    "total": "Tổng cộng ({currency})",
+    "paidVia": "Thanh toán bằng",
+    "deliverTo": "Giao đến: {address}"
+  },
+  "actions": {
+    "menu": "Thao tác",
+    "issueRefund": "Hoàn tiền",
+    "cancelOrder": "Hủy đơn",
+    "editNote": "Sửa ghi chú của khách",
+    "issueReceipt": "Xuất hóa đơn",
+    "cancelDialog": {
+      "title": "Hủy đơn này?",
+      "body": "Đơn sẽ bị hủy và tồn kho được cộng lại. Không thể hoàn tác.",
+      "keep": "Giữ đơn",
+      "confirm": "Có, hủy đơn"
+    },
+    "noteDialog": {
+      "title": "Ghi chú của khách",
+      "body": "Đây là ghi chú khách nhập khi thanh toán và cũng là ghi chú in trên phiếu bếp. Khi lưu, ghi chú cũ sẽ bị thay thế.",
+      "placeholder": "VD: Không đậu phộng — dị ứng",
+      "cancel": "Hủy",
+      "save": "Lưu ghi chú"
+    },
+    "invoiceIssued": "Đã xuất hóa đơn {number}",
+    "invoiceIssuedNoNumber": "Đã xuất hóa đơn",
+    "done": "Xong"
+  },
+  "refund": {
+    "title": "Hoàn tiền",
+    "byItems": "Theo món",
+    "customAmount": "Nhập số tiền",
+    "loadingItems": "Đang tải món…",
+    "noItems": "Không tìm thấy món nào trong đơn này.",
+    "refundQty": "SL hoàn",
+    "amountLabel": "Số tiền (USD)",
+    "max": "Tối đa {amount}",
+    "reason": "Lý do (không bắt buộc)",
+    "total": "Tổng tiền hoàn: <strong>{amount}</strong>",
+    "cancel": "Hủy",
+    "submit": "Hoàn tiền",
+    "amountZero": "Số tiền hoàn phải lớn hơn 0.",
+    "amountTooHigh": "Số tiền hoàn không được vượt quá tổng đơn ({total})."
+  },
+  "issues": {
+    "title": "Sự cố giao hàng ({count})",
+    "subtitle": "Đơn giao thất bại — điều phối lại để tìm tài xế khác, hoặc hoàn tiền từ dòng đơn hàng.",
+    "customer": "Khách hàng",
+    "noReason": "Không ghi nhận lý do",
+    "photo": "ảnh",
+    "redispatch": "Điều phối lại",
+    "reasons": {
+      "vehicleProblem": "Xe gặp sự cố",
+      "personalEmergency": "Việc khẩn cấp cá nhân",
+      "waitTooLong": "Chờ ở nhà hàng quá lâu",
+      "customerUnreachable": "Không liên lạc được với khách",
+      "cantFindAddress": "Không tìm thấy địa chỉ",
+      "customerRefused": "Khách từ chối nhận hàng"
+    }
+  },
+  "payments": {
+    "title": "{count, plural, other {# khoản chuyển khoản đang chờ bạn duyệt}}",
+    "subtitle": "Các đơn này thanh toán bằng chuyển khoản QR và sẽ không được gửi vào bếp cho đến khi bạn xác nhận đã nhận tiền.",
+    "customer": "Khách hàng",
+    "slipUploaded": "Đã tải biên lai lúc {date}",
+    "rejectLabel": "Có vấn đề gì?",
+    "rejectPlaceholder": "Khách sẽ thấy nội dung này để sửa lại",
+    "cancel": "Hủy",
+    "confirmReject": "Xác nhận từ chối",
+    "reject": "Từ chối",
+    "approve": "Duyệt",
+    "slipAlt": "Biên lai chuyển khoản của đơn {number}",
+    "loadingSlip": "Đang tải biên lai…",
+    "noSlip": "Chưa có biên lai nào được tải lên"
+  },
+  "errors": {
+    "generic": "Đã xảy ra lỗi. Vui lòng thử lại.",
+    "authRequired": "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
+    "orderNotFound": "Đơn hàng này không còn tồn tại.",
+    "notAuthorized": "Tài khoản của bạn không có quyền truy cập chi nhánh của đơn này.",
+    "noteLocked": "Chỉ có thể sửa ghi chú khi đơn đang chờ, đã xác nhận hoặc đang chuẩn bị.",
+    "cannotCancel": "Đơn này đã hoàn tất, đã hủy hoặc đã hoàn tiền.",
+    "invoiceNotCompleted": "Chỉ có thể xuất hóa đơn khi đơn đã xác nhận, đã xong hoặc đã hoàn tất.",
+    "invoiceNotAuthorized": "Tài khoản của bạn không có trong danh sách nhân viên của chi nhánh này nên không thể xuất hóa đơn.",
+    "refundNotAuthorized": "Chỉ chủ sở hữu, quản trị viên hoặc quản lý của chi nhánh này mới có thể hoàn tiền.",
+    "invalidRefundAmount": "Số tiền hoàn phải lớn hơn 0 và không vượt quá tổng đơn.",
+    "deliveryNotFound": "Chuyến giao này không còn tồn tại.",
+    "deliveryNotFailed": "Chuyến giao này không còn ở trạng thái thất bại. Hãy tải lại trang để xem tình trạng hiện tại.",
+    "deliveryForbidden": "Tài khoản của bạn không thể điều phối lại chuyến giao tại chi nhánh này.",
+    "paymentNotFound": "Khoản thanh toán này không còn tồn tại.",
+    "paymentForbidden": "Chỉ chủ sở hữu hoặc quản lý mới có thể duyệt thanh toán."
+  }
+}

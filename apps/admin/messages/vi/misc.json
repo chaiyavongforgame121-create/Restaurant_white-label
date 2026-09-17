@@ -1,0 +1,43 @@
+{
+  "activity": {
+    "title": "Nhật ký hoạt động",
+    "subtitle": "Lịch sử các thao tác quan trọng",
+    "emptyTitle": "Chưa có hoạt động",
+    "emptyBody": "Các thao tác quan trọng (hoàn tiền, hủy giao dịch, thay đổi cài đặt) sẽ hiển thị tại đây."
+  },
+  "lockedFeature": {
+    "metaTitle": "{feature} · Favornoms",
+    "aiVoiceLocked": "Trợ lý AI trả lời điện thoại và nhận đơn. Thuộc tiện ích bổ sung AI Suite.",
+    "aiVoiceIncluded": "Trợ lý giọng nói AI đã có trong gói của bạn và đang được phát triển. Chúng tôi sẽ bật cho bạn ngay khi ra mắt — không tốn thêm phí.",
+    "signageLocked": "Bảng thực đơn và màn hình khuyến mãi lấy dữ liệu trực tiếp từ thực đơn của bạn. Thuộc tiện ích bổ sung AI Suite.",
+    "signageIncluded": "Bảng hiệu kỹ thuật số đã có trong gói của bạn và đang được phát triển. Chúng tôi sẽ bật cho bạn ngay khi ra mắt — không tốn thêm phí."
+  },
+  "receipts": {
+    "title": "Hóa đơn",
+    "subtitle": "Tất cả hóa đơn bán hàng đã xuất cho chi nhánh {branch}…",
+    "empty": "Chưa có hóa đơn nào được xuất. Hóa đơn được tạo từ trang Đơn hàng cho các đơn đã hoàn tất.",
+    "columns": {
+      "receipt": "Số hóa đơn",
+      "order": "Số đơn",
+      "customer": "Khách hàng",
+      "total": "Tổng cộng",
+      "status": "Trạng thái",
+      "issued": "Ngày xuất"
+    },
+    "walkIn": "Khách vãng lai",
+    "viewPrint": "Xem / in",
+    "status": {
+      "issued": "Đã xuất",
+      "draft": "Bản nháp",
+      "pending": "Đang chờ",
+      "canceled": "Đã hủy",
+      "cancelled": "Đã hủy",
+      "void": "Đã vô hiệu",
+      "voided": "Đã vô hiệu"
+    },
+    "openFailedTitle": "Không mở được hóa đơn này",
+    "openFailedBody": "Dịch vụ hóa đơn trả về lỗi {status}. Hãy thử lại sau giây lát.",
+    "popupTitle": "Cửa sổ bật lên bị chặn",
+    "popupBody": "Hãy cho phép cửa sổ bật lên cho trang này, rồi mở lại hóa đơn."
+  }
+}

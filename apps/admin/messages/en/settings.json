@@ -1,0 +1,111 @@
+{
+  "index": {
+    "title": "Preferences",
+    "subtitle": "Account and billing settings",
+    "planTitle": "Plan & billing",
+    "planDescription": "View your plan, usage, and upgrade options.",
+    "languageTitle": "Language",
+    "languageDescription": "The language of this back office on this device. Menu items and names stay as you typed them.",
+    "themeTitle": "Theme",
+    "themeDescription": "Coming soon — currently follows your system color scheme."
+  },
+  "plan": {
+    "metaTitle": "Plan & billing · Favornoms",
+    "title": "Plan & billing",
+    "subtitle": "Choose what your restaurant runs on. Change it any time.",
+    "perMonth": "/mo",
+    "selection": "{products}, {seats, plural, one {# branch seat} other {# branch seats}}",
+    "pricedSummary": "{summary} — {price}/mo.",
+    "notYours": {
+      "inactiveTitle": "Your restaurant’s package is inactive — ask the owner",
+      "lockedTitle": "Only the owner or an admin can change the package",
+      "inactiveBody": "The storefront and back office for {branch} are paused until the restaurant owner or an admin chooses a package. Nothing has been deleted, and your work comes back as soon as it is active again.",
+      "lockedBody": "{branch}’s package is managed by the restaurant owner. Ask them if you need a feature that is not switched on."
+    },
+    "replaceDialog": {
+      "title": "Replace your pending request?",
+      "body": "Your earlier request ({summary}) is withdrawn and this one goes to the Favornoms team instead.",
+      "confirm": "Replace request"
+    },
+    "errors": {
+      "sendFailed": "Could not send your request. Please try again.",
+      "generic": "Something went wrong. Please try again.",
+      "signedOut": "Your session has ended. Sign in again, then send the request.",
+      "forbidden": "Only the restaurant owner or an admin can change the package.",
+      "planUnavailable": "That package is not available any more. Reload the page and choose again."
+    },
+    "action": {
+      "pending": "Request pending",
+      "replace": "Replace pending request",
+      "requestActivation": "Request activation",
+      "reactivate": "Reactivate my account",
+      "confirm": "Confirm package",
+      "renew": "Request renewal",
+      "current": "Current package"
+    },
+    "base": {
+      "name": "Base",
+      "description": "Everything you need to run one branch.",
+      "included": {
+        "cardPayment": "Card payment at checkout",
+        "aiMenuImport": "AI menu import",
+        "onlineOrdering": "Online ordering & QR",
+        "kitchenCounter": "Kitchen display & counter",
+        "reportsLoyalty": "Reports & loyalty",
+        "oneBranch": "1 branch included"
+      }
+    },
+    "seats": {
+      "title": "Branches",
+      "body": "1 included. Each extra branch is {price}/mo with the full feature set of your main branch.",
+      "usage": "Using {used} of {seats, plural, one {# seat} other {# seats}}.",
+      "remove": "Remove a branch seat",
+      "add": "Add a branch seat",
+      "floor": "You run {count, plural, one {# active branch} other {# active branches}}, so you cannot go below {min} seats. To give up a seat, hide a branch you no longer use: open its Branch settings and set Status to Hidden. A hidden branch does not use a seat."
+    },
+    "summary": {
+      "title": "Your package",
+      "total": "Total",
+      "trialNote": "You are on the free trial. Nothing is charged until it ends.",
+      "footnote": "Your request goes to the Favornoms team for activation. You will be invoiced monthly."
+    },
+    "addon": {
+      "aiSuiteComingSoon": "Signage & AI Voice — coming soon.",
+      "add": "Add",
+      "added": "Added"
+    },
+    "trial": {
+      "active": "Free trial active",
+      "endsToday": "Your free trial ends today",
+      "daysLeft": "{days, plural, one {# day left in your free trial} other {# days left in your free trial}}",
+      "body": "Everything is unlocked. Choose a package below to keep it after the trial — no card needed until then."
+    },
+    "suspended": {
+      "title": "Your account is not active",
+      "body": "Your storefront is offline and new orders are blocked. Nothing has been deleted — choose a package below and everything comes straight back."
+    },
+    "noTrial": {
+      "title": "This restaurant starts without a free trial",
+      "body": "Your account already used its 14-day free trial on another restaurant. This one stays offline until it has a package: choose one below and send the request, and the Favornoms team activates it."
+    },
+    "renew": {
+      "title": "Renew your package",
+      "paidThrough": "Your package is paid through {date}.",
+      "body": "Your current package is selected below. Press Request renewal to send it to the Favornoms team — nothing renews until they approve it. You can also change the package before sending."
+    },
+    "decision": {
+      "approvedOn": "Request approved on {date}",
+      "declinedOn": "Request declined on {date}",
+      "noteLabel": "Note from the Favornoms team:",
+      "noReason": "No reason was given. You can choose a package below and send a new request.",
+      "approved": "Approved",
+      "declined": "Declined"
+    },
+    "pending": {
+      "title": "Request waiting for the Favornoms team",
+      "titleSent": "Request waiting for the Favornoms team · sent {date}",
+      "body": "Nothing changes until it is approved. To ask for something else, change the package below and press Replace pending request.",
+      "badge": "Pending"
+    }
+  }
+}
