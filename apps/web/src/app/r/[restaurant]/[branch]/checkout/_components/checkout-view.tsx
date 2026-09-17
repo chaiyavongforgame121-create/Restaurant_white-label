@@ -48,7 +48,7 @@ import { Badge, Button, Card, IconButton, Sheet } from '@favornoms/ui';
 import { resolveMyCustomerId } from '@/lib/customer';
 import { buildScheduleDays, type ClosurePeriod, type OpeningWindow } from '@/lib/schedule-slots';
 import { pickerLabels } from '@/lib/picker-labels';
-import { useCart } from '@/store/cart';
+import { linesUsing, useCart, useCartHydrated, type CartPart } from '@/store/cart';
 import { useAuth } from '@/components/auth/use-auth';
 import { LeaveTableButton, useTablePin } from '../../_components/table-pin';
 
@@ -203,6 +203,7 @@ const ORDER_ERRORS: Array<[string, string]> = [
   ['insufficient_stock', 'errors.order.insufficientStock'],
   ['item_inactive', 'errors.order.itemUnavailable'],
   ['item_not_in_branch', 'errors.order.itemUnavailable'],
+  ['combo_not_in_branch', 'errors.order.itemUnavailable'],
   ['combo_inactive', 'errors.order.itemUnavailable'],
   ['modifier_inactive', 'errors.order.itemUnavailable'],
   ['modifier_branch_mismatch', 'errors.order.itemUnavailable'],
@@ -236,6 +237,51 @@ function orderErrorKey(msg: string): string | null {
     if (subject.includes(code)) return key;
   }
   return null;
+}
+
+/**
+ * The item, combo or option a place-order refusal names, when it names one:
+ * 400 {"error":"modifier_inactive"|"modifier_branch_mismatch","option_id"},
+ * {"error":"item_not_in_branch"|"item_inactive","item_id"} and
+ * {"error":"combo_not_in_branch"|"combo_inactive","combo_id"}.
+ *
+ * Read from the parsed body's `error` field, not by substring: combo_not_in_branch carries
+ * `"hint":"item_not_in_branch"` in the same body.
+ */
+function refusedCartPart(msg: string): CartPart | null {
+  const match = /^place_order_failed:\d+:([\s\S]*)$/.exec(msg);
+  if (!match) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(match[1] ?? '');
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== 'object') return null;
+  const body = parsed as Record<string, unknown>;
+  const idOf = (value: unknown) => (typeof value === 'string' && value ? value : null);
+  let kind: CartPart['kind'];
+  let id: string | null;
+  switch (body.error) {
+    case 'modifier_inactive':
+    case 'modifier_branch_mismatch':
+      kind = 'option';
+      id = idOf(body.option_id);
+      break;
+    case 'item_not_in_branch':
+    case 'item_inactive':
+      kind = 'item';
+      id = idOf(body.item_id);
+      break;
+    case 'combo_not_in_branch':
+    case 'combo_inactive':
+      kind = 'combo';
+      id = idOf(body.combo_id);
+      break;
+    default:
+      return null;
+  }
+  return id ? { kind, id } : null;
 }
 
 // `datetime-local` reads its value/min/max as LOCAL wall-clock time, so they must
@@ -326,6 +372,9 @@ export function CheckoutView({
   const subtotal = useCart((s) => s.subtotal());
   const lines = useCart((s) => s.lines);
   const notes = useCart((s) => s.notes);
+  const removeLine = useCart((s) => s.remove);
+  // This branch's cart only (CartProvider), so clearing it after an order leaves every other
+  // branch's cart on this device exactly as it was.
   const clear = useCart((s) => s.clear);
   // null until the diner picks an order type. OrderTypeGate (mounted by the page)
   // covers checkout until they do, so the null window is never interactive.
@@ -610,7 +659,7 @@ export function CheckoutView({
   const deliveryOfferable = deliveryBookable && (!deliverySlotsKnown || deliveryHasSlots);
   const chooseOrderType = (next: 'pickup' | 'delivery') => {
     if (next === channel) return;
-    setChannel(next, branchId);
+    setChannel(next);
     // Errors belong to the fields of the order type being left; carrying them over would put a
     // red address box on a Pickup, or bring an old one back on the way to delivery.
     setFieldErrors({});
@@ -921,19 +970,9 @@ export function CheckoutView({
     };
   }, [channel, addressCoords, branchId]);
 
-  // Wait for Zustand persist rehydration before redirecting an "empty" cart —
-  // otherwise we bounce away on first mount before localStorage loads.
-  const [hydrated, setHydrated] = React.useState(false);
-  React.useEffect(() => {
-    const persist = useCart.persist;
-    if (!persist || persist.hasHydrated()) {
-      setHydrated(true);
-      return;
-    }
-    const unsub = persist.onFinishHydration(() => setHydrated(true));
-    void persist.rehydrate();
-    return unsub;
-  }, []);
+  // Wait for this branch's stored cart before showing an "empty" cart —
+  // otherwise the page renders empty on first mount before localStorage loads.
+  const hydrated = useCartHydrated();
 
   // Login is mandatory to check out — guest checkout was removed. Bounce a
   // signed-out visitor to sign-in with next back here, so deep-linking straight
@@ -989,6 +1028,13 @@ export function CheckoutView({
         </div>
         <h1 className="mt-4 font-display text-2xl font-bold">{t('checkout.empty.title')}</h1>
         <p className="mt-1 text-muted-foreground">{t('checkout.empty.body')}</p>
+        {/* The cart can be emptied here by a refused order that took its last line out; without
+            this the diner would see "empty" with no idea where their food went. */}
+        {error && (
+          <p className="mx-auto mt-3 max-w-md text-sm text-danger" role="alert">
+            {error}
+          </p>
+        )}
         <Button variant="gradient" size="lg" className="mt-5" onClick={() => router.push(base)}>
           {t('checkout.empty.cta')}
         </Button>
@@ -1078,6 +1124,17 @@ export function CheckoutView({
     setError(null);
     // OrderTypeGate is covering the page — there is nothing to submit yet.
     if (!channel) return;
+
+    // Defence in depth. This is the branch's own cart and it refuses anything added elsewhere,
+    // so a line from another branch should not be able to reach this page. If one does anyway
+    // it is taken out and the diner is told, rather than sent to a kitchen that does not sell
+    // it — where it would sink the whole order.
+    const foreignLines = lines.filter((l) => l.branchId !== branchId);
+    if (foreignLines.length > 0) {
+      for (const line of foreignLines) removeLine(line.id);
+      setError(t('errors.order.itemUnavailable'));
+      return;
+    }
 
     // Validate every field up front, then focus the first problem.
     const errs: Record<string, string> = {};
@@ -1283,6 +1340,19 @@ export function CheckoutView({
       router.push(`${base}/orders/${result.order_number}`);
     } catch (err) {
       const raw = (err as Error).message;
+      // The server named the dish, combo or option it no longer offers. Take out exactly the lines
+      // that use it — pressing the button again would only fail the same way — and say so. A code
+      // with no id, or an id no line uses any more, falls through to the sentence below.
+      const refused = refusedCartPart(raw);
+      const refusedLines = refused ? linesUsing(lines, refused) : [];
+      if (refusedLines.length > 0) {
+        // Before the lines go: a cart emptied while `submitting` is still true reads as an order
+        // that went through (the "redirecting" state above).
+        setSubmitting(false);
+        setError(t('errors.order.itemRemoved'));
+        for (const line of refusedLines) removeLine(line.id);
+        return;
+      }
       const key = orderErrorKey(raw);
       // A failure with no code we know is logged as it came and shown as the generic line —
       // a raw status and JSON body is no use to a diner.

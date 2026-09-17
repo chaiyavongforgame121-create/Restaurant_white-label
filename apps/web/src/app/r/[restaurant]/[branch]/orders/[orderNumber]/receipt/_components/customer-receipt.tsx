@@ -32,7 +32,8 @@ interface OrderRow {
 
 interface Props {
   order: OrderRow;
-  branchName: string;
+  /** "<brand> - <branch>", the name the storefront calls itself everywhere else. */
+  storeName: string;
   branchAddress?: string;
 }
 
@@ -49,7 +50,7 @@ const KNOWN_STATUSES = [
   'refunded',
 ];
 
-export function CustomerReceipt({ order, branchName, branchAddress }: Props) {
+export function CustomerReceipt({ order, storeName, branchAddress }: Props) {
   const t = useTranslations('orders');
   const locale = useUiLocale();
   const created = new Date(order.created_at).toLocaleString(intlLocaleFor(locale), {
@@ -79,7 +80,7 @@ export function CustomerReceipt({ order, branchName, branchAddress }: Props) {
 
       <Card className="p-6 print:border-0 print:shadow-none">
         <div className="text-center">
-          <h1 className="font-display text-2xl font-bold">{branchName}</h1>
+          <h1 className="font-display text-2xl font-bold">{storeName}</h1>
           {branchAddress && <p className="mt-1 text-xs text-muted-foreground">{branchAddress}</p>}
           <p className="mt-3 inline-block rounded-full bg-muted px-3 py-1 text-xs font-semibold">
             {t('receipt.heading', { number: order.order_number })}

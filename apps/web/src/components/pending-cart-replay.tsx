@@ -1,9 +1,9 @@
 'use client';
 
 import * as React from 'react';
-import { useCart } from '@/store/cart';
+import { useCart, useCartHydrated } from '@/store/cart';
 import { useAuth } from '@/components/auth/use-auth';
-import { clearPendingAdd, takePendingAdd } from '@/lib/pending-cart';
+import { takePendingAdd } from '@/lib/pending-cart';
 
 /**
  * Puts back whatever the diner had configured when the login gate interrupted them.
@@ -19,34 +19,28 @@ export function PendingCartReplay({ branchId }: { branchId: string }) {
   const { user, loading } = useAuth();
   const add = useCart((s) => s.add);
   const addCombo = useCart((s) => s.addCombo);
+  // An add made before the stored cart is read would be overwritten by it a tick later.
+  const cartHydrated = useCartHydrated();
   // Replay at most once per mount, even if `user` re-identifies on a token refresh.
   const done = React.useRef(false);
 
   React.useEffect(() => {
-    if (loading || done.current) return;
+    if (loading || !cartHydrated || done.current) return;
 
-    if (!user) {
-      // Still signed out — leave it parked. It is only dropped when it belongs to a
-      // different branch, since the cart is single-branch.
-      return;
-    }
+    // Still signed out — leave it parked.
+    if (!user) return;
 
     done.current = true;
-    const pending = takePendingAdd();
+    // Only this branch's slot: a line parked at another branch waits for that branch.
+    const pending = takePendingAdd(branchId);
     if (!pending) return;
-
-    // A parked line from another branch must not leak into this branch's cart.
-    if (pending.branchId !== branchId) {
-      clearPendingAdd();
-      return;
-    }
 
     if (pending.kind === 'item') {
       add(pending.item, pending.quantity, pending.notes, pending.modifiers);
     } else {
       addCombo(pending.combo, pending.quantity);
     }
-  }, [user, loading, branchId, add, addCombo]);
+  }, [user, loading, cartHydrated, branchId, add, addCombo]);
 
   return null;
 }

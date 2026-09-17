@@ -330,7 +330,7 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
 
       <ChannelPicker
         channel={channel}
-        setChannel={(c) => setChannel(c, branch.id)}
+        setChannel={setChannel}
         canDeliver={canDeliver}
         lockedTableLabel={pinnedTable ? tableLabel(pinnedTable) : null}
       />

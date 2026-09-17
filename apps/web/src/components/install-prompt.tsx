@@ -35,11 +35,19 @@ declare global {
   interface Window {
     /** Stashed by the inline <head> script in app/layout.tsx. */
     __bipEvent?: BeforeInstallPromptEvent | null;
+    /**
+     * The document's manifest link (resolved `href`) at the moment __bipEvent was stashed, set by
+     * the same script. Undefined only on HTML rendered before the script recorded it.
+     */
+    __bipManifest?: string | null;
   }
 }
 
 export interface InstallAvailability {
-  /** A `beforeinstallprompt` event is in hand — `install()` opens Chrome's dialog. */
+  /**
+   * A `beforeinstallprompt` event is in hand for the app this page currently links — `install()`
+   * opens Chrome's dialog.
+   */
   canInstall: boolean;
   /** iOS Safari: no install event exists, only manual Share › Add to Home Screen. */
   isIosSafari: boolean;
@@ -48,16 +56,98 @@ export interface InstallAvailability {
   install: () => Promise<'accepted' | 'dismissed' | 'unavailable'>;
 }
 
+/** The manifest the document links right now, as an absolute URL, or null. */
+function readManifestHref(): string | null {
+  return document.querySelector<HTMLLinkElement>('link[rel="manifest"]')?.href || null;
+}
+
+function readApplicationName(): string {
+  return (
+    document.querySelector('meta[name="application-name"]')?.getAttribute('content')?.trim() ||
+    PLATFORM_NAME
+  );
+}
+
+function readApplicationIcon(): string | null {
+  // The 192 first: it is the icon the merchant sees as "only my image", while the Apple one is
+  // the opaque iPhone copy. Older pages without a sized 192 still have the Apple link.
+  const el =
+    document.querySelector('link[rel="icon"][sizes="192x192"]') ??
+    document.querySelector('link[rel="apple-touch-icon"]');
+  const href = el?.getAttribute('href')?.trim();
+  // A tenant with no upload falls back to the platform icon in the root layout, and the
+  // glyph is a better answer than the platform's mark on a merchant's card.
+  return href && !href.startsWith('/icon') && !href.startsWith('/apple-touch') ? href : null;
+}
+
+/**
+ * One MutationObserver for every install hook on the page, watching the tags a storefront names
+ * itself with: the manifest link, <meta name="application-name"> and the icon links.
+ *
+ * Re-reading them on a pathname change was not enough. The install UI lives in the ROOT layout,
+ * so it survives a client-side move from one branch to another, and Next swaps the branch's
+ * metadata in after the URL has already changed (streamed, sometimes into a hidden <div> in the
+ * body rather than <head>) — a read on the pathname change caught the branch being left. Watching
+ * the document instead re-reads whenever those tags actually change, wherever they are.
+ * useSyncExternalStore then re-renders only when the value read is different.
+ */
+const documentListeners = new Set<() => void>();
+let documentObserver: MutationObserver | null = null;
+
+function subscribeToDocumentIdentity(onChange: () => void): () => void {
+  documentListeners.add(onChange);
+  if (!documentObserver && typeof MutationObserver !== 'undefined') {
+    documentObserver = new MutationObserver(() => {
+      for (const listener of Array.from(documentListeners)) listener();
+    });
+    documentObserver.observe(document.documentElement, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ['href', 'content', 'rel', 'name', 'sizes'],
+    });
+  }
+  return () => {
+    documentListeners.delete(onChange);
+    if (documentListeners.size === 0 && documentObserver) {
+      documentObserver.disconnect();
+      documentObserver = null;
+    }
+  };
+}
+
+/** The absolute URL of the manifest the document links, kept current across client navigation. */
+export function useManifestHref(): string | null {
+  return React.useSyncExternalStore(subscribeToDocumentIdentity, readManifestHref, () => null);
+}
+
+interface CapturedPrompt {
+  event: BeforeInstallPromptEvent;
+  /** The manifest the document linked when Chrome fired the event — the app it would install. */
+  manifest: string | null;
+}
+
 /**
  * Shared install plumbing for <InstallPrompt> and <InstallAppButton>.
  * Reads the event stashed pre-hydration by layout.tsx *and* keeps listening,
  * since on a first visit Chrome fires it only after the manifest round-trip.
+ *
+ * An event is only good for the manifest it was fired under. Two branches of one restaurant are
+ * two apps on one origin, and the install UI outlives a client-side move between them, so an
+ * event captured on Hamburger must not be offered — let alone prompted — on Food Thai Thai. Chrome
+ * fires a fresh event when the newly linked manifest is installable, and that one is kept instead.
  */
 export function useInstallAvailability(): InstallAvailability {
-  const [canInstall, setCanInstall] = React.useState(false);
+  const [captured, setCaptured] = React.useState<CapturedPrompt | null>(null);
   const [isIosSafari, setIsIosSafari] = React.useState(false);
   const [isStandalone, setIsStandalone] = React.useState(false);
-  const deferred = React.useRef<BeforeInstallPromptEvent | null>(null);
+  const capturedRef = React.useRef<CapturedPrompt | null>(null);
+  const manifestHref = useManifestHref();
+
+  const remember = React.useCallback((next: CapturedPrompt | null) => {
+    capturedRef.current = next;
+    setCaptured(next);
+  }, []);
 
   React.useEffect(() => {
     setIsStandalone(
@@ -69,18 +159,19 @@ export function useInstallAvailability(): InstallAvailability {
     setIsIosSafari(/iPhone|iPad|iPod/i.test(ua) && /Safari/i.test(ua) && !/CriOS|FxiOS/i.test(ua));
 
     if (window.__bipEvent) {
-      deferred.current = window.__bipEvent;
-      setCanInstall(true);
+      remember({
+        event: window.__bipEvent,
+        // HTML from before the stash recorded its manifest can only be matched to the page it is.
+        manifest: window.__bipManifest === undefined ? readManifestHref() : window.__bipManifest,
+      });
     }
 
     const onPrompt = (e: Event) => {
       e.preventDefault();
-      deferred.current = e as BeforeInstallPromptEvent;
-      setCanInstall(true);
+      remember({ event: e as BeforeInstallPromptEvent, manifest: readManifestHref() });
     };
     const onInstalled = () => {
-      deferred.current = null;
-      setCanInstall(false);
+      remember(null);
       setIsStandalone(true);
     };
     window.addEventListener('beforeinstallprompt', onPrompt);
@@ -89,19 +180,34 @@ export function useInstallAvailability(): InstallAvailability {
       window.removeEventListener('beforeinstallprompt', onPrompt);
       window.removeEventListener('appinstalled', onInstalled);
     };
-  }, []);
+  }, [remember]);
+
+  const canInstall = captured !== null && captured.manifest !== null && captured.manifest === manifestHref;
 
   const install = React.useCallback(async () => {
-    const event = deferred.current;
-    if (!event) return 'unavailable' as const;
-    await event.prompt();
-    const { outcome } = await event.userChoice;
-    // A prompt event is single-use; Chrome hands out a fresh one if the page re-qualifies.
-    deferred.current = null;
-    window.__bipEvent = null;
-    setCanInstall(false);
-    return outcome;
-  }, []);
+    const current = capturedRef.current;
+    // Checked against the document at the moment of the click, not the last render: the page may
+    // have moved to another branch in between.
+    if (!current || current.manifest === null || current.manifest !== readManifestHref()) {
+      return 'unavailable' as const;
+    }
+    const clear = () => {
+      // A prompt event is single-use; Chrome hands out a fresh one if the page re-qualifies.
+      remember(null);
+      window.__bipEvent = null;
+      window.__bipManifest = null;
+    };
+    try {
+      await current.event.prompt();
+      const { outcome } = await current.event.userChoice;
+      clear();
+      return outcome;
+    } catch {
+      // Already used, or no longer valid for this page: there is nothing to open.
+      clear();
+      return 'unavailable' as const;
+    }
+  }, [remember]);
 
   return { canInstall, isIosSafari, isStandalone, install };
 }
@@ -109,23 +215,14 @@ export function useInstallAvailability(): InstallAvailability {
 /**
  * The name to put in front of the diner. Install UI is mounted in the ROOT
  * layout, outside the branch <ThemeProvider>, so there is no tenant in React
- * context — but the branch layout already stamps the brand into the document as
- * <meta name="application-name">. Read that instead of hardcoding the platform
- * brand, which would otherwise leak into every white-labelled storefront.
+ * context — but the branch layout already stamps the app's name ("<brand> - <branch>",
+ * the manifest's `name`) into the document as <meta name="application-name">. Read that
+ * instead of hardcoding the platform brand, which would otherwise leak into every
+ * white-labelled storefront. Re-read whenever the document's tags change, so moving to a
+ * sibling branch renames the card.
  */
 export function useApplicationName(): string {
-  const pathname = usePathname();
-  const [name, setName] = React.useState(PLATFORM_NAME);
-
-  React.useEffect(() => {
-    const content = document
-      .querySelector('meta[name="application-name"]')
-      ?.getAttribute('content')
-      ?.trim();
-    setName(content || PLATFORM_NAME);
-  }, [pathname]);
-
-  return name;
+  return React.useSyncExternalStore(subscribeToDocumentIdentity, readApplicationName, () => PLATFORM_NAME);
 }
 
 /**
@@ -134,25 +231,11 @@ export function useApplicationName(): string {
  * The install card showed a generic download arrow while the merchant's icon sat in the
  * very same document as <link rel="apple-touch-icon">. A card offering to install "Coastal
  * Grill" under a grey arrow does not look like the app it installs, which is the whole of
- * what the merchant is being asked to trust.
+ * what the merchant is being asked to trust. Each branch has its own icon, so this follows the
+ * document too.
  */
 export function useApplicationIcon(): string | null {
-  const pathname = usePathname();
-  const [src, setSrc] = React.useState<string | null>(null);
-
-  React.useEffect(() => {
-    // The 192 first: it is the icon the merchant sees as "only my image", while the Apple one is
-    // the opaque iPhone copy. Older pages without a sized 192 still have the Apple link.
-    const el =
-      document.querySelector('link[rel="icon"][sizes="192x192"]') ??
-      document.querySelector('link[rel="apple-touch-icon"]');
-    const href = el?.getAttribute('href')?.trim();
-    // A tenant with no upload falls back to the platform icon in the root layout, and the
-    // glyph is a better answer than the platform's mark on a merchant's card.
-    setSrc(href && !href.startsWith('/icon') && !href.startsWith('/apple-touch') ? href : null);
-  }, [pathname]);
-
-  return src;
+  return React.useSyncExternalStore(subscribeToDocumentIdentity, readApplicationIcon, () => null);
 }
 
 export function InstallPrompt() {

@@ -13,23 +13,24 @@ export default async function BranchPage({ params }: Props) {
   const { data: branch } = await supabase
     .from('branches')
     .select(
-      'id, restaurant_id, brand_id, name, address, timezone, theme_override, settings, is_active, custom_domain, sales_tax_rate, geo_lat, geo_lng',
+      'id, restaurant_id, brand_id, name, address, timezone, theme_override, settings, is_active, custom_domain, sales_tax_rate, geo_lat, geo_lng, logo_url, favicon_url, icon_192_url, icon_512_url, icon_maskable_512_url, app_icon',
     )
     .eq('id', branchId)
     .maybeSingle();
   if (!branch) notFound();
-  // The brand this branch actually renders from: its own if linked, otherwise the
-  // restaurant's default — the same fallback resolveTenant uses for assets. Null when the
-  // restaurant has never created one, which the Branding card handles by creating it.
+  // The brand this branch renders from: its own if linked, otherwise the restaurant's default —
+  // the same ladder resolveTenant uses. Read only for the Branding card's preview: its name is the
+  // first half of "<brand> - <branch>", and its logo and icon are what a branch with none of its
+  // own falls back to. The card never writes it.
   const brandQuery = branch.brand_id
     ? supabase
         .from('brands')
-        .select('id, name, theme, logo_url, favicon_url, icon_192_url, icon_512_url, icon_maskable_512_url')
+        .select('name, logo_url, favicon_url, icon_192_url')
         .eq('id', branch.brand_id)
         .maybeSingle()
     : supabase
         .from('brands')
-        .select('id, name, theme, logo_url, favicon_url, icon_192_url, icon_512_url, icon_maskable_512_url')
+        .select('name, logo_url, favicon_url, icon_192_url')
         .eq('restaurant_id', branch.restaurant_id)
         .order('is_default', { ascending: false })
         .order('created_at', { ascending: true })
@@ -46,8 +47,21 @@ export default async function BranchPage({ params }: Props) {
     <BranchSettings
       branch={branch as never}
       restaurantStorefront={(restaurant?.storefront ?? null) as Record<string, unknown> | null}
-      restaurantName={restaurant?.name ?? t('defaultRestaurantName')}
-      brand={(brand ?? null) as never}
+      branding={{
+        brandName: brand?.name?.trim() || restaurant?.name?.trim() || t('defaultRestaurantName'),
+        identity: {
+          logo_url: branch.logo_url,
+          favicon_url: branch.favicon_url,
+          icon_192_url: branch.icon_192_url,
+          icon_512_url: branch.icon_512_url,
+          icon_maskable_512_url: branch.icon_maskable_512_url,
+          app_icon: branch.app_icon,
+        },
+        brandDefaults: {
+          logoUrl: brand?.logo_url || null,
+          iconUrl: brand?.icon_192_url || brand?.favicon_url || null,
+        },
+      }}
       canUseDelivery={hasFeature(entitlements, 'delivery')}
       canUseCard={hasFeature(entitlements, 'card_payment')}
     />

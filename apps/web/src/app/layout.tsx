@@ -57,9 +57,14 @@ export async function generateMetadata(): Promise<Metadata> {
  * bundle hydrates, so a listener attached in useEffect misses it for good —
  * which is why the install banner "hardly ever" appeared. Stash the event on
  * `window` from <head> instead; <InstallPrompt> consumes it whenever it mounts.
- * Keep the `__bipEvent` contract in sync with install-prompt.tsx.
+ *
+ * `__bipManifest` records which manifest the document linked when the event fired — the app it
+ * would install. Each branch is its own app on the same origin, and the install UI ignores an
+ * event whose manifest is not the one the page links now, so a move to a sibling branch never
+ * offers the branch just left.
+ * Keep the `__bipEvent` / `__bipManifest` contract in sync with install-prompt.tsx.
  */
-const CAPTURE_INSTALL_PROMPT = `!function(){var w=window;w.__bipEvent=null;w.addEventListener("beforeinstallprompt",function(e){e.preventDefault();w.__bipEvent=e});w.addEventListener("appinstalled",function(){w.__bipEvent=null})}();`;
+const CAPTURE_INSTALL_PROMPT = `!function(){var w=window;w.__bipEvent=null;w.__bipManifest=null;w.addEventListener("beforeinstallprompt",function(e){e.preventDefault();var l=document.querySelector("link[rel=manifest]");w.__bipEvent=e;w.__bipManifest=(l&&l.href)||null});w.addEventListener("appinstalled",function(){w.__bipEvent=null;w.__bipManifest=null})}();`;
 
 /**
  * Every restaurant now publishes its own PWA identity, and an app installed from a menu opens

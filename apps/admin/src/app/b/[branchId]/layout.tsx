@@ -21,9 +21,10 @@ interface Props {
  * The mark the back office should wear for one branch — the admin-side twin of the
  * logoUrl resolveTenantBySlug hands the storefront header.
  *
- * Same ladder as the storefront's asset fallback (the branch's own brand, else the
- * restaurant's default brand), plus a tier the storefront does not need: the
- * restaurant-level theme. `restaurants` has no logo column, so
+ * Same ladder as the storefront's logo: the branch's own logo (every branch owns one since
+ * 20260917150000_branch_own_identity, so two branches of one restaurant each show theirs),
+ * else its brand's (the linked brand, or the restaurant's default one), plus a tier the
+ * storefront does not need: the restaurant-level theme. `restaurants` has no logo column, so
  * restaurants.brand_settings.logoUrl is the only restaurant-scoped place a logo can live.
  * Nothing writes that field yet, so the tier is inert until an editor for it exists — it
  * costs nothing here because the row is already being read in parallel.
@@ -41,7 +42,7 @@ async function getBranchBrandMark(
   // brand_id and the restaurant-level theme do not depend on each other, so they go
   // together; the brand row is the only forced second hop.
   const [{ data: branchRow }, { data: restaurantRow }] = await Promise.all([
-    supabase.from('branches').select('brand_id').eq('id', branchId).maybeSingle(),
+    supabase.from('branches').select('brand_id, logo_url').eq('id', branchId).maybeSingle(),
     supabase.from('restaurants').select('brand_settings').eq('id', restaurantId).maybeSingle(),
   ]);
 
@@ -59,8 +60,9 @@ async function getBranchBrandMark(
         .maybeSingle();
   const { data: brand } = await brandQuery;
 
-  // A brands row exists for almost everyone once the Branding card has saved once, so the
-  // test is the logo and not the row: an empty logo_url has to fall through, not win.
+  // The test is the logo and not the row: an empty logo_url has to fall through, not win.
+  // The brand is still read when the branch has a logo, for its name (the logo's alt text).
+  if (branchRow?.logo_url) return { logoUrl: branchRow.logo_url, brandName: brand?.name ?? null };
   if (brand?.logo_url) return { logoUrl: brand.logo_url, brandName: brand.name };
 
   const theme = (restaurantRow?.brand_settings ?? {}) as unknown as TenantTheme;

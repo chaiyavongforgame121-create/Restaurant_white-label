@@ -5,10 +5,14 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { ShoppingBag } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { cn, RiderIcon } from '@favornoms/ui';
-import { useCart, type OrderChannel } from '@/store/cart';
+import { useCart, useCartHydrated, type OrderChannel } from '@/store/cart';
 import { useTablePin } from './table-pin';
 
 interface Props {
+  /**
+   * The storefront's branch. The gate itself reads and writes the cart of the CartProvider
+   * above it, which is this same branch's, so nothing here needs to compare branch ids.
+   */
   branchId: string;
   branchName?: string;
   /**
@@ -49,29 +53,18 @@ interface Props {
  * Deliberately not dismissible: no backdrop click, no Escape, no close button.
  */
 export function OrderTypeGate({
-  branchId,
   branchName,
   canDeliver = false,
   seatingFromScan = false,
 }: Props) {
   const t = useTranslations();
 
-  // useCart.persist is undefined during SSR — start false and confirm hydration
-  // in the effect, matching cart-view / checkout-view / app-shell.
-  const [hydrated, setHydrated] = React.useState(false);
-  React.useEffect(() => {
-    const persist = useCart.persist;
-    if (!persist || persist.hasHydrated()) {
-      setHydrated(true);
-      return;
-    }
-    const unsub = persist.onFinishHydration(() => setHydrated(true));
-    void persist.rehydrate();
-    return unsub;
-  }, []);
+  // False on the server and the first client paint, true once this branch's cart is read.
+  const hydrated = useCartHydrated();
 
+  // This branch's cart, so a channel in it was chosen here — another branch's choice lives in
+  // another branch's cart and never reaches this gate.
   const channel = useCart((s) => s.channel);
-  const channelBranchId = useCart((s) => s.channelBranchId);
   const setChannel = useCart((s) => s.setChannel);
   const resolveChannel = useCart((s) => s.resolveChannel);
 
@@ -92,11 +85,10 @@ export function OrderTypeGate({
   // leaving checkout's submit button dead with nothing on screen to explain it.
   React.useEffect(() => {
     if (!hydrated || !pinReady) return;
-    resolveChannel(canDeliver, branchId, seated);
-  }, [hydrated, pinReady, seated, canDeliver, branchId, resolveChannel]);
+    resolveChannel(canDeliver, seated);
+  }, [hydrated, pinReady, seated, canDeliver, resolveChannel]);
 
-  const open =
-    hydrated && pinReady && !seated && (channel === null || channelBranchId !== branchId);
+  const open = hydrated && pinReady && !seated && channel === null;
 
   // Nothing behind the overlay should scroll while the gate is up.
   React.useEffect(() => {
@@ -213,7 +205,7 @@ export function OrderTypeGate({
                 <button
                   key={opt.value}
                   type="button"
-                  onClick={() => setChannel(opt.value, branchId)}
+                  onClick={() => setChannel(opt.value)}
                   className={cn(
                     'focus-ring flex items-center gap-4 rounded-2xl border border-border bg-background px-4 py-4 text-left transition-colors',
                     'hover:border-primary hover:bg-primary/5',

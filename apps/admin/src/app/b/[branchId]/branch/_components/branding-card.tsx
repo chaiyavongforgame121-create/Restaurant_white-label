@@ -1,21 +1,24 @@
 'use client';
 
-// App name, logo and icon, on the settings screen where a merchant looks for them.
+// This branch's logo and app icon, on this branch's settings screen.
 //
-// They were never missing — they live in the Brands page, inside an editor that only opens
-// once a brand exists. A restaurant that has never created one (Coastal Grill had not) sees
-// "No brands yet" and no upload control anywhere, which reads exactly like the feature
-// vanished. Branding is not a multi-brand concept to most merchants; it is "my logo".
+// They used to live on the restaurant's single brands row, and this card wrote that row even
+// though it sits on one branch's page. A restaurant with two branches uploaded a different icon
+// on each and both storefronts and both installed apps showed whichever was saved last; the App
+// name field overwrote the brand's name with a branch name the same way.
 //
-// This card edits the SAME brands row the storefront reads (resolveTenant falls back to the
-// restaurant's default brand for assets when a branch has no brand_id), and creates that row
-// on first save if there is none. The Brands page still exists for anyone genuinely running
-// several brands; nothing here replaces it.
+// Now every branch owns logo_url, favicon_url, the three icon files and app_icon (migration
+// 20260917150000_branch_own_identity), and this card writes only those columns of only this
+// branch. It never touches brands. The brand row is still the default for a branch that has no
+// logo or icon of its own, edited on the Brand & branches page, and its name is the first half
+// of the storefront name "<brand> - <branch>", which this card previews but does not edit.
 
 import * as React from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Palette, Save, Store } from 'lucide-react';
+import type { Json } from '@favornoms/database/types';
 import { Button, Card } from '@favornoms/ui';
 import { getBrowserClient } from '@favornoms/database/client';
 import { storefrontBase } from '@/lib/site-url';
@@ -49,31 +52,50 @@ function askStorefrontToRefresh(branchId: string): void {
   }
 }
 
-export interface BrandingBrand {
-  id: string;
-  name: string;
-  theme?: Record<string, unknown> | null;
+/**
+ * The storefront's name for one branch: "<brand> - <branch>", with an ASCII hyphen.
+ *
+ * Only one half when the other is blank, and only one when both say the same thing (a
+ * single-branch restaurant often names its branch after itself): "Coastal Grill - Coastal Grill"
+ * is not a name anyone chose. Merchant text, so never translated.
+ */
+export function storefrontAppName(brandName: string | null | undefined, branchName: string | null | undefined): string {
+  const brand = brandName?.trim() ?? '';
+  const branch = branchName?.trim() ?? '';
+  if (!brand || !branch) return brand || branch;
+  if (brand.toLocaleLowerCase() === branch.toLocaleLowerCase()) return brand;
+  return `${brand} - ${branch}`;
+}
+
+/** This branch's own identity columns, exactly as public.branches holds them. */
+export interface BranchIdentity {
   logo_url: string | null;
   favicon_url: string | null;
   icon_192_url: string | null;
   icon_512_url: string | null;
   icon_maskable_512_url: string | null;
+  /** The icon style the icon files were rendered with (brands.theme.appIcon's shape). */
+  app_icon: unknown;
 }
 
-interface Props {
+/** What the storefront shows for a branch that has no logo or icon of its own. */
+export interface BrandDefaults {
+  logoUrl: string | null;
+  iconUrl: string | null;
+}
+
+export interface BrandingCardData {
+  /** The brand half of the storefront name: the branch's brand, else the default brand, else the restaurant. */
+  brandName: string;
+  identity: BranchIdentity;
+  brandDefaults: BrandDefaults;
+}
+
+interface Props extends BrandingCardData {
+  branchId: string;
   restaurantId: string;
-  restaurantName: string;
-  /** The brand this branch actually renders from, or null when none exists yet. */
-  brand: BrandingBrand | null;
-}
-
-/** Long enough for a real restaurant name; Chrome's dialog and every launcher cut far sooner. */
-const APP_NAME_MAX = 40;
-/** Android and iOS both start truncating under the icon at about this many characters. */
-const HOME_SCREEN_FITS = 12;
-
-function slugify(v: string): string {
-  return v.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'default';
+  /** The branch name as saved: the storefront only shows a rename once Save changes has run. */
+  branchName: string;
 }
 
 function storefrontHost(): string {
@@ -84,24 +106,20 @@ function storefrontHost(): string {
   }
 }
 
-export function BrandingCard({ restaurantId, restaurantName, brand }: Props) {
+export function BrandingCard({ branchId, restaurantId, branchName, brandName, identity, brandDefaults }: Props) {
   const t = useTranslations('branch');
   const router = useRouter();
-  const { branchId } = useParams<{ branchId: string }>();
-  const [appName, setAppName] = React.useState<string>(brand?.name || restaurantName);
-  const [logoUrl, setLogoUrl] = React.useState<string | null>(brand?.logo_url ?? null);
+  const [logoUrl, setLogoUrl] = React.useState<string | null>(identity.logo_url);
   const [icons, setIcons] = React.useState<IconSet>({
-    faviconUrl: brand?.favicon_url ?? null,
-    icon192Url: brand?.icon_192_url ?? null,
-    icon512Url: brand?.icon_512_url ?? null,
-    iconMaskable512Url: brand?.icon_maskable_512_url ?? null,
+    faviconUrl: identity.favicon_url,
+    icon192Url: identity.icon_192_url,
+    icon512Url: identity.icon_512_url,
+    iconMaskable512Url: identity.icon_maskable_512_url,
   });
   // The style the current icon files were rendered with. Null for an icon made before styles
   // existed (always the old padded one), which is how the uploader knows to offer Apply.
   const [iconStyle, setIconStyle] = React.useState<IconStyle | null>(() =>
-    brand?.theme && typeof brand.theme === 'object' && 'appIcon' in brand.theme
-      ? parseIconStyle(brand.theme.appIcon)
-      : null,
+    identity.app_icon && typeof identity.app_icon === 'object' ? parseIconStyle(identity.app_icon) : null,
   );
   // A restyled icon that has not been applied yet. Saving now would publish the old files and
   // report success, so Save waits until it is applied or set back.
@@ -114,74 +132,52 @@ export function BrandingCard({ restaurantId, restaurantName, brand }: Props) {
   // storefrontBase() may read window, so resolve it after mount rather than during render.
   React.useEffect(() => setHost(storefrontHost()), []);
 
-  const trimmedName = appName.trim();
-  const previewIcon = icons.icon192Url ?? icons.faviconUrl;
+  const appName = storefrontAppName(brandName, branchName);
+  // A branch with no icon files of its own installs with the brand's (the storefront decides on
+  // the 192 and 512), so the preview has to show that rather than the Favornoms placeholder.
+  const hasOwnIcon = !!(icons.icon192Url || icons.icon512Url);
+  const previewIcon = hasOwnIcon ? (icons.icon192Url ?? icons.faviconUrl) : brandDefaults.iconUrl;
 
   /** The database's own text is for the logs; the merchant gets a sentence they can act on. */
   const writeFailed = (err: { message: string; code?: string }) => {
-    console.error('Saving branding failed', err);
-    setError(err.code === '42501' ? t('branding.noPermission') : t('errors.generic'));
+    console.error('Saving branch branding failed', err);
+    if (err.message.includes('branch_icon_source_forbidden')) {
+      setError(t('branding.errors.uploadAgain'));
+    } else if (err.message.includes('branch_brand_edit_required') || err.message.includes('branch_manager_required')) {
+      // The branches row may also refuse a role below manager first; either way, what this card
+      // needs is the owner or an admin.
+      setError(t('branding.errors.ownerOrAdminOnly'));
+    } else {
+      setError(err.code === '42501' ? t('branding.noPermission') : t('errors.generic'));
+    }
   };
 
   const save = async () => {
-    if (!trimmedName) {
-      setError(t('branding.nameRequired'));
-      return;
-    }
     setSaving(true);
     setError(null);
     const supabase = getBrowserClient();
-    // appIcon travels with the icon files it describes, and leaves with them.
-    const withIconStyle = (theme: Record<string, unknown>): Record<string, unknown> => {
-      const next: Record<string, unknown> = { ...theme, brandName: trimmedName };
-      if (iconStyle && icons.icon512Url) next.appIcon = iconStyle;
-      else delete next.appIcon;
-      return next;
-    };
-    const payload = {
-      // The storefront names the installed app after brands.name. theme.brandName is kept in
-      // step because the Brands page writes both, and an older reader may still look there.
-      name: trimmedName,
-      logo_url: logoUrl,
-      favicon_url: icons.faviconUrl,
-      icon_192_url: icons.icon192Url,
-      icon_512_url: icons.icon512Url,
-      icon_maskable_512_url: icons.iconMaskable512Url,
-    };
-
-    if (brand) {
-      // .select() and a zero-row check, not just `error`: RLS refuses by filtering the row
-      // out, which returns success with nothing updated. brands writes are gated on the
-      // 'brand.edit' capability.
-      const { data, error: updErr } = await supabase
-        .from('brands')
-        .update({ ...payload, theme: withIconStyle(brand.theme ?? {}) })
-        .eq('id', brand.id)
-        .select('id');
-      setSaving(false);
-      if (updErr) return writeFailed(updErr);
-      if (!data || data.length === 0) {
-        return setError(t('branding.noPermission'));
-      }
-    } else {
-      const { data, error: insErr } = await supabase
-        .from('brands')
-        .insert({
-          restaurant_id: restaurantId,
-          slug: slugify(trimmedName),
-          is_default: true,
-          theme: withIconStyle({}),
-          ...payload,
-        })
-        .select('id');
-      setSaving(false);
-      if (insErr) return writeFailed(insErr);
-      if (!data || data.length === 0) {
-        return setError(t('branding.noPermission'));
-      }
+    // .select() and a zero-row check, not just `error`: RLS refuses by filtering the row out,
+    // which returns success with nothing updated.
+    const { data, error: updErr } = await supabase
+      .from('branches')
+      .update({
+        logo_url: logoUrl,
+        favicon_url: icons.faviconUrl,
+        icon_192_url: icons.icon192Url,
+        icon_512_url: icons.icon512Url,
+        icon_maskable_512_url: icons.iconMaskable512Url,
+        // The style travels with the icon files it describes, and leaves with them.
+        app_icon: iconStyle && icons.icon512Url ? ({ ...iconStyle } as Json) : null,
+      })
+      .eq('id', branchId)
+      .select('id');
+    setSaving(false);
+    if (updErr) return writeFailed(updErr);
+    if (!data || data.length === 0) {
+      return setError(t('branding.noPermission'));
     }
     setSavedAt(Date.now());
-    if (branchId) askStorefrontToRefresh(branchId);
+    askStorefrontToRefresh(branchId);
     router.refresh();
   };
 
@@ -192,32 +188,31 @@ export function BrandingCard({ restaurantId, restaurantName, brand }: Props) {
       </h2>
       <p className="text-sm text-muted-foreground">{t('branding.description')}</p>
 
-      <label className="mt-4 block">
+      {/* Read-only on purpose: both halves have a home of their own, and a name typed here
+          used to land on the brand and rename every other branch with it. */}
+      <div className="mt-4">
         <span className="mb-1.5 block text-sm font-medium">{t('branding.appName')}</span>
-        <input
-          value={appName}
-          maxLength={APP_NAME_MAX}
-          onChange={(e) => {
-            setAppName(e.target.value);
-            setSavedAt(null);
-          }}
-          placeholder={restaurantName}
-          className="input"
-        />
+        <p className="truncate rounded-xl border border-border bg-muted/40 px-4 py-3 text-base">{appName}</p>
         <span className="mt-1.5 block text-xs text-muted-foreground">
-          {t('branding.appNameHint')}
-          {trimmedName.length > HOME_SCREEN_FITS && (
-            <> {t('branding.appNameTooLong', { count: HOME_SCREEN_FITS })}</>
-          )}
+          {t.rich('branding.appNameSource', {
+            link: (chunks) => (
+              <Link href={`/b/${branchId}/brands`} className="font-medium underline">
+                {chunks}
+              </Link>
+            ),
+          })}
         </span>
-      </label>
+        <span className="mt-1 block text-xs text-muted-foreground">{t('branding.appNameWhere')}</span>
+      </div>
 
       <div className="mt-4 grid gap-5 sm:grid-cols-2">
         <div>
           <span className="mb-2 block text-sm font-medium">{t('branding.logo')}</span>
           <ImageUpload
             restaurantId={restaurantId}
-            folder="logo"
+            // The storage policy scopes writes by the restaurant folder; the branch id in the
+            // file name only says which branch a file belongs to.
+            folder={`logo-${branchId}`}
             removeBackground
             value={logoUrl}
             onChange={(url) => {
@@ -229,12 +224,15 @@ export function BrandingCard({ restaurantId, restaurantName, brand }: Props) {
             aspect="aspect-[3/1]"
             label={t('branding.uploadLogo')}
           />
-          <span className="mt-1.5 block text-xs text-muted-foreground">{t('branding.logoHint')}</span>
+          <span className="mt-1.5 block text-xs text-muted-foreground">
+            {!logoUrl && brandDefaults.logoUrl ? t('branding.logoFromBrand') : t('branding.logoHint')}
+          </span>
         </div>
         <div>
           <span className="mb-2 block text-sm font-medium">{t('branding.icon')}</span>
           <IconUpload
             restaurantId={restaurantId}
+            fileTag={branchId}
             value={icons}
             onChange={(next) => {
               setIcons(next);
@@ -248,8 +246,8 @@ export function BrandingCard({ restaurantId, restaurantName, brand }: Props) {
         </div>
       </div>
 
-      {/* The same name and icon the storefront manifest publishes, so what the merchant sees
-          here is what Chrome's install window and the home screen will show. */}
+      {/* The same name and icon the storefront manifest publishes for this branch, so what the
+          merchant sees here is what Chrome's install window and the home screen will show. */}
       <div className="mt-5">
         <span className="mb-2 block text-sm font-medium">{t('branding.installPreview')}</span>
         <div className="flex items-center gap-3 rounded-2xl border border-border bg-muted/30 p-3">
@@ -268,18 +266,19 @@ export function BrandingCard({ restaurantId, restaurantName, brand }: Props) {
             </span>
           )}
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">{trimmedName || restaurantName}</p>
+            <p className="truncate text-sm font-semibold">{appName}</p>
             {host && <p className="truncate text-xs text-muted-foreground">{host}</p>}
           </div>
         </div>
         <span className="mt-1.5 block text-xs text-muted-foreground">
-          {previewIcon ? t('branding.publishHint') : t('branding.noIconHint')}
+          {hasOwnIcon
+            ? t('branding.publishHint')
+            : previewIcon
+              ? t('branding.iconFromBrand')
+              : t('branding.noIconHint')}
         </span>
       </div>
 
-      {!brand && (
-        <p className="mt-3 text-xs text-muted-foreground">{t('branding.createsDefaultBrand')}</p>
-      )}
       {error && (
         <p className="mt-3 rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p>
       )}

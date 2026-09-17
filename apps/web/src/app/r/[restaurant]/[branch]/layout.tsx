@@ -4,6 +4,7 @@ import { ThemeProvider } from '@favornoms/ui';
 import { AppShell } from '@/components/app-shell';
 import { PendingCartReplay } from '@/components/pending-cart-replay';
 import { PushSubscriber } from '@/components/push-subscriber';
+import { CartProvider } from '@/store/cart';
 import {
   DEFAULT_DARK_THEME_COLOR,
   DEFAULT_THEME_COLOR,
@@ -28,23 +29,27 @@ export default async function BranchLayout({ params, children }: Props) {
   // ThemeProvider applies as CSS variables on a wrapping div.
   return (
     <ThemeProvider theme={tenant.theme}>
-      {/* Above AppShell so the scanned table survives every navigation inside this
-          storefront — the menu, the cart and the checkout all read the same pin. */}
-      <TablePinProvider branchId={tenant.branch.id}>
-        <AppShell
-          base={base}
-          // The branch, not the restaurant. A diner is standing in (or ordering from) ONE
-          // location, and the hero already says "Now serving from <branch>" — the header
-          // saying the parent company's name instead was the odd one out. Falls back to the
-          // brand and then the restaurant for a branch with no name of its own.
-          brandName={storefrontNames(tenant).branch || storefrontNames(tenant).brand}
-          logoUrl={tenant.logoUrl}
-        >
-          <PushSubscriber />
-          <PendingCartReplay branchId={tenant.branch.id} />
-          {children}
-        </AppShell>
-      </TablePinProvider>
+      {/* One cart per branch. Two branches of a restaurant live on the same host, and a single
+          origin-wide cart showed one branch's items in the other's storefront. Above the table
+          pin, which reads the cart, and above every page. */}
+      <CartProvider branchId={tenant.branch.id}>
+        {/* Above AppShell so the scanned table survives every navigation inside this
+            storefront — the menu, the cart and the checkout all read the same pin. */}
+        <TablePinProvider branchId={tenant.branch.id}>
+          <AppShell
+            base={base}
+            // "<brand> - <branch>", the same name as the tab and the installed app, so a diner
+            // who has both branches open can tell which kitchen this header belongs to. Also the
+            // logo's alt text. The logo is the branch's own (brand's until the branch uploads one).
+            brandName={storefrontNames(tenant).full}
+            logoUrl={tenant.logoUrl}
+          >
+            <PushSubscriber />
+            <PendingCartReplay branchId={tenant.branch.id} />
+            {children}
+          </AppShell>
+        </TablePinProvider>
+      </CartProvider>
     </ThemeProvider>
   );
 }
@@ -71,13 +76,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     // Branch-scoped manifest so an install from here opens this restaurant,
     // not the platform landing page the root manifest points at.
     manifest: `/r/${restaurant}/${branch}/manifest.webmanifest`,
-    // Our own install card reads this, so it offers the app under the name Chrome's dialog and
-    // the home screen will then show.
+    // Our own install card reads this, so it offers the app under the name Chrome's dialog
+    // shows — the manifest's `name`, from the same derivation.
     applicationName: names.app,
-    // iOS ignores the manifest for A2HS naming and reads this instead, and it has to agree
-    // with the manifest or the same restaurant is installed under two labels depending on
-    // the phone.
-    appleWebApp: { capable: true, statusBarStyle: 'default', title: names.app },
+    // iOS ignores the manifest for A2HS naming and reads this instead, so it is the manifest's
+    // `short_name`: the full "<brand> - <branch>", which the owner wants on the home screen too
+    // even though a launcher may truncate it.
+    appleWebApp: { capable: true, statusBarStyle: 'default', title: names.short },
+    // Every icon below is this branch's (tenant resolves the whole set from the branch once it
+    // has one, from the brand before). The hrefs are the upload URLs themselves, and every
+    // upload gets a new storage path, so a branch's new icon is a new href without a `?v`.
     // Sizes are declared only for the normalised icons the admin uploader produced —
     // those really are 192x192/512x512 PNGs. A legacy free-form favicon (uploaded
     // before normalisation existed) still gets no `sizes`, because claiming dimensions

@@ -1,4 +1,4 @@
-import { resolveTenant } from '@/lib/tenant';
+import { resolveTenant, storefrontNames } from '@/lib/tenant';
 import { LoyaltyView } from './_components/loyalty-view';
 
 interface Props {
@@ -9,5 +9,5 @@ export default async function LoyaltyPage({ params }: Props) {
   const { restaurant, branch } = await params;
   const tenant = await resolveTenant(restaurant, branch);
   const base = `/r/${restaurant}/${branch}`;
-  return <LoyaltyView base={base} brandName={tenant.restaurant.name} branchId={tenant.branch.id} />;
+  return <LoyaltyView base={base} brandName={storefrontNames(tenant).full} branchId={tenant.branch.id} />;
 }

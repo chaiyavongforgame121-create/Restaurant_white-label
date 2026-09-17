@@ -16,7 +16,7 @@ import { PaymentMethodsCard } from './payment-methods-card';
 import { DeliveryHoursCard } from './delivery-hours-card';
 import { LocationCard } from './location-card';
 import { ScheduledOrdersCard } from './scheduled-orders-card';
-import { BrandingCard, type BrandingBrand } from './branding-card';
+import { BrandingCard, type BrandingCardData } from './branding-card';
 import { ServiceFeeCard } from './service-fee-card';
 import { TipSettingsCard } from './tip-settings-card';
 import { StorefrontOverrideCard } from './storefront-override-card';
@@ -39,15 +39,14 @@ interface Branch {
 export function BranchSettings({
   branch,
   restaurantStorefront,
-  restaurantName,
-  brand,
+  branding,
   canUseDelivery,
   canUseCard,
 }: {
   branch: Branch;
   restaurantStorefront: Record<string, unknown> | null;
-  restaurantName: string;
-  brand: BrandingBrand | null;
+  /** This branch's own logo and icons, and the brand name and defaults the card previews with. */
+  branding: BrandingCardData;
   canUseDelivery: boolean;
   canUseCard: boolean;
 }) {
@@ -180,11 +179,13 @@ export function BranchSettings({
         />
 
         {/* Next to Brand theme on purpose: colours, logo and icon are one decision, and the
-            merchant looks for all three in the same place. */}
+            merchant looks for all three in the same place. The saved branch name, not the input
+            above: the storefront name only changes once Save changes has run. */}
         <BrandingCard
+          branchId={branch.id}
           restaurantId={branch.restaurant_id}
-          restaurantName={restaurantName}
-          brand={brand}
+          branchName={branch.name}
+          {...branding}
         />
 
         <Card className="p-5">

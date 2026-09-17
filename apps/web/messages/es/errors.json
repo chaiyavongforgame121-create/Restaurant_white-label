@@ -36,6 +36,7 @@
     "itemSoldOut": "Algo de tu carrito se acaba de agotar. Quítalo e inténtalo de nuevo.",
     "insufficientStock": "Al restaurante no le queda suficiente de algo que está en tu carrito. Reduce la cantidad e inténtalo de nuevo.",
     "itemUnavailable": "Algo de tu carrito ya no está disponible. Revisa tu carrito e inténtalo de nuevo.",
+    "itemRemoved": "Algo de tu carrito, o una opción que elegiste, ya no está disponible, así que lo quitamos. Revisa tu carrito e inténtalo de nuevo.",
     "rateLimited": "Demasiados pedidos en poco tiempo. Espera unos minutos antes de volver a intentarlo.",
     "signInToOrder": "Inicia sesión para hacer tu pedido.",
     "emptyOrder": "Tu carrito está vacío. Agrega algo antes de hacer tu pedido.",

@@ -1,6 +1,6 @@
 import { headers } from 'next/headers';
 import { countryForIso } from '@favornoms/shared';
-import { resolveTenant } from '@/lib/tenant';
+import { resolveTenant, storefrontNames } from '@/lib/tenant';
 import { SignInView } from './_components/sign-in-view';
 
 interface Props {
@@ -20,7 +20,7 @@ export default async function SignInPage({ params }: Props) {
   return (
     <SignInView
       branchId={tenant.branch.id}
-      brandName={tenant.restaurant.name}
+      brandName={storefrontNames(tenant).full}
       // Geo comes from the edge, not from us: Vercel sets x-vercel-ip-country on every
       // request, and Cloudflare's cf-ipcountry is read too so a self-hosted or proxied
       // deploy behaves the same. countryForIso falls back to the market we sell into for

@@ -39,7 +39,7 @@ export default async function BrandsPage({ params }: Props) {
       .order('created_at', { ascending: true }),
     supabase
       .from('restaurants')
-      .select('id, name, slug, loyalty_scope, storefront')
+      .select('id, name, slug, loyalty_scope, storefront, brand_settings')
       .eq('id', branch.restaurant_id)
       .maybeSingle(),
     getEntitlementsForBranch(supabase, branchId),
@@ -57,9 +57,24 @@ export default async function BrandsPage({ params }: Props) {
     storefront_url: branchMenuLink(b.slug, restaurantSlug, b.custom_domain).url,
   }));
 
+  // What the Create brand button starts a restaurant's first brand with. The name is the one its
+  // storefronts already show (tenant.ts falls back to restaurants.name while there is no brand),
+  // else this branch's, never a translated word: it is stored and published. The theme is the
+  // restaurant's own (restaurants.brand_settings), which is what an unlinked branch renders, so
+  // linking a branch to the new brand does not repaint it in the editor's placeholder orange. The
+  // logo and the brand name have columns of their own and are left out.
+  const newBrandName = restaurantRes.data?.name?.trim() || branch.name;
+  const brandSettings = restaurantRes.data?.brand_settings;
+  const newBrandTheme = Object.fromEntries(
+    Object.entries(
+      brandSettings && typeof brandSettings === 'object' && !Array.isArray(brandSettings) ? brandSettings : {},
+    ).filter(([key]) => key !== 'brandName' && key !== 'logoUrl'),
+  );
+
   return (
     <BrandsManager
       restaurantId={branch.restaurant_id}
+      newBrand={{ name: newBrandName, theme: newBrandTheme }}
       // Display only: a failed read falls back to the word for "restaurant" in the viewer's language.
       restaurantName={restaurantRes.data?.name ?? t('restaurantFallback')}
       loyaltyScope={

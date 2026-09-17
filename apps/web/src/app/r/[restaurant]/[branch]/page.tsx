@@ -2,7 +2,7 @@ import { getTranslations } from 'next-intl/server';
 import { getServerClient } from '@favornoms/database/server';
 import { resolveScheduleDelivery } from '@/lib/schedule-delivery';
 import { listCategories, listMenuItems } from '@favornoms/database/queries';
-import { resolveStorefrontStatus, resolveTenant } from '@/lib/tenant';
+import { resolveStorefrontStatus, resolveTenant, storefrontNames } from '@/lib/tenant';
 import { MenuView } from './_components/menu-view';
 import { SuspendedStorefront } from './_components/suspended-storefront';
 import { TablePinNotice, TableScanPin } from './_components/table-pin';
@@ -39,7 +39,7 @@ export default async function MenuPage({ params, searchParams }: Props) {
   // trip, not eight. The deadline is authoritative — no cron has to have run.
   const status = await resolveStorefrontStatus(tenant.branch.id);
   if (!status.entitled) {
-    return <SuspendedStorefront brandName={tenant.theme.brandName ?? tenant.restaurant.name} />;
+    return <SuspendedStorefront brandName={storefrontNames(tenant).full} />;
   }
 
   const supabase = await getServerClient();

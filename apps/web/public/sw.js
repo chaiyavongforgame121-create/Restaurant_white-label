@@ -26,7 +26,18 @@
 //     content-hashed chunks under new URLs and nothing removed the old ones, so the cache grew
 //     by a build's worth of JavaScript per deploy until the browser evicted the origin's
 //     storage wholesale.
-const CACHE_VERSION = 'favornoms-web-v4';
+//
+// v5 keeps branches apart. Two storefronts of one restaurant (/r/coastal-grill/brooklyn and
+// /r/coastal-grill/food-thai-thai) share this origin, so they share this worker and its one
+// push subscription:
+//
+//  1. Tapping a notification navigated the FIRST open window, whatever it was showing. An order
+//     update from one branch took over a window the diner had open on the other branch's menu,
+//     mid-cart. A tap now goes to a window of the storefront the notification is about, or opens
+//     a new one; another branch's window is never touched.
+//  2. Every notification wore the platform's icon and, when the payload had none, its name.
+//     notify-worker now sends the branch's own title and icon, and they are used when present.
+const CACHE_VERSION = 'favornoms-web-v5';
 
 // Icons only. Deliberately no HTML: see (2) above.
 const CACHE_FILES = [
@@ -98,6 +109,25 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// PNG, not SVG — Android notification icons do not render SVG.
+const PLATFORM_NOTIFICATION_ICON = '/icon-192.png';
+
+/**
+ * An icon URL from a push payload, or null. https anywhere (the branch's upload lives on the
+ * Supabase storage host), or a path on this origin. Anything else — javascript:, data:, a
+ * non-string — is ignored so the platform icon is used instead.
+ */
+function payloadIcon(value) {
+  if (typeof value !== 'string' || !value) return null;
+  try {
+    const u = new URL(value, self.location.origin);
+    if (u.protocol === 'https:' || u.origin === self.location.origin) return u.href;
+  } catch {
+    // Not a URL.
+  }
+  return null;
+}
+
 // Web Push: render notifications from notify-worker payloads.
 self.addEventListener('push', (event) => {
   let data = {};
@@ -106,32 +136,91 @@ self.addEventListener('push', (event) => {
   } catch {
     data = { title: 'Favornoms', body: event.data ? event.data.text() : '' };
   }
-  const title = data.title || 'Favornoms';
+  if (!data || typeof data !== 'object') data = {};
+  // notify-worker sends the storefront's own name ("Coastal Grill - Hamburger") and the branch's
+  // icon for a diner's order updates: two branches on one host share this worker, and the
+  // platform's name and icon said nothing about which of them was writing.
+  const title = (typeof data.title === 'string' && data.title) || 'Favornoms';
   const options = {
     body: data.body || '',
-    // PNG, not SVG — Android notification icons do not render SVG.
-    icon: '/icon-192.png',
-    badge: '/icon-192.png',
+    icon: payloadIcon(data.icon) || PLATFORM_NOTIFICATION_ICON,
+    badge: payloadIcon(data.badge) || PLATFORM_NOTIFICATION_ICON,
     tag: data.tag,
     data: { url: data.url || '/' },
   };
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
+/** A URL without its #fragment, for "is this window already showing that page". */
+function withoutHash(href) {
+  const i = href.indexOf('#');
+  return i === -1 ? href : href.slice(0, i);
+}
+
+/**
+ * Take the diner to `rawUrl` in a window of the SAME storefront, or a new one.
+ *
+ * Two branches of one restaurant share this origin and this worker, so "the first open window"
+ * could be the other branch's menu with a cart in it. A window only counts when its
+ * /r/<restaurant>/<branch> root matches the target's (for a platform URL, when it is not on a
+ * storefront either); every other window is left exactly as it is. On a merchant's own domain
+ * the storefront is served without the /r/ prefix, so its windows have no root and a /r/ target
+ * opens a new window instead: this worker cannot tell which branch such a window is showing, and
+ * guessing wrong is exactly the hijack this exists to prevent.
+ *
+ * Browsers grant ONE window interaction per click — focus() and openWindow() each consume it —
+ * so the choice between focusing and opening is made before either is called. A window this
+ * worker does not control cannot be navigated at all, so it only wins when it is already on the
+ * target page.
+ */
+async function openStorefrontWindow(rawUrl) {
+  let target;
+  try {
+    target = new URL(rawUrl, self.location.origin);
+  } catch {
+    target = new URL('/', self.location.origin);
+  }
+  const href = target.href;
+
+  if (target.origin !== self.location.origin) {
+    return self.clients.openWindow ? self.clients.openWindow(href) : undefined;
+  }
+
+  const root = tenantRoot(target);
+  const [all, controlled] = await Promise.all([
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }),
+    self.clients.matchAll({ type: 'window' }),
+  ]);
+  const controlledIds = new Set(controlled.map((c) => c.id));
+  const sameStorefront = all.filter((client) => {
+    try {
+      const u = new URL(client.url);
+      return u.origin === self.location.origin && tenantRoot(u) === root;
+    } catch {
+      return false;
+    }
+  });
+
+  // Already on the page: bring it forward, nothing to load.
+  const onTarget = sameStorefront.find((c) => withoutHash(c.url) === withoutHash(href));
+  if (onTarget) return onTarget.focus();
+
+  // Same storefront, another page: prefer the window the diner was last looking at. Focus
+  // first, while the click still grants it; navigating needs no such grant.
+  const navigable = sameStorefront.filter((c) => controlledIds.has(c.id));
+  const chosen = navigable.find((c) => c.focused) || navigable[0];
+  if (chosen) {
+    const focused = (await chosen.focus().catch(() => null)) || chosen;
+    return focused.navigate(href).catch(() => focused);
+  }
+
+  if (self.clients.openWindow) return self.clients.openWindow(href);
+}
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const url = (event.notification.data && event.notification.data.url) || '/';
-  event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      for (const client of clientList) {
-        if ('focus' in client) {
-          client.navigate(url).catch(() => {});
-          return client.focus();
-        }
-      }
-      if (self.clients.openWindow) return self.clients.openWindow(url);
-    }),
-  );
+  event.waitUntil(openStorefrontWindow(url).catch(() => {}));
 });
 
 self.addEventListener('fetch', (event) => {

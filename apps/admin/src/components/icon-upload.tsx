@@ -175,6 +175,7 @@ function swatchesOf(src: ImageBitmap): string[] {
  */
 export function IconUpload({
   restaurantId,
+  fileTag,
   value,
   onChange,
   appliedStyle = null,
@@ -182,6 +183,9 @@ export function IconUpload({
   onPendingChange,
 }: {
   restaurantId: string;
+  /** Added to every file name after the icon kind, e.g. a branch id, so the bucket shows whose
+   *  files they are. The folder stays the restaurant's: the storage policy scopes writes by it. */
+  fileTag?: string;
   value: IconSet;
   onChange: (next: IconSet) => void;
   /** The style the current files were rendered with, as saved. Null when unknown — an icon
@@ -335,10 +339,11 @@ export function IconUpload({
     const supabase = getBrowserClient();
     const stamp = crypto.randomUUID();
     const put = async (blob: Blob, name: string) => {
-      const path = `${restaurantId}/${name}-${stamp}.png`;
+      const path = `${restaurantId}/${name}${fileTag ? `-${fileTag}` : ''}-${stamp}.png`;
+      // No upsert: the stamp makes every path new, and upserting needs UPDATE, which managers do not have.
       const { error: upErr } = await supabase.storage
         .from('branding')
-        .upload(path, blob, { upsert: true, cacheControl: '3600', contentType: 'image/png' });
+        .upload(path, blob, { upsert: false, cacheControl: '3600', contentType: 'image/png' });
       if (upErr) throw storageUploadError(upErr);
       return supabase.storage.from('branding').getPublicUrl(path).data.publicUrl;
     };

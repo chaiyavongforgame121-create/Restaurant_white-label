@@ -6,7 +6,7 @@
   "restaurantFallback": "Nhà hàng",
   "header": {
     "title": "Thương hiệu và chi nhánh",
-    "subtitle": "Diện mạo của {restaurant} — logo, biểu tượng ứng dụng và màu sắc — cùng các chi nhánh sử dụng."
+    "subtitle": "Tên thương hiệu, màu sắc và hình ảnh mặc định của {restaurant}, cùng các chi nhánh. Mỗi chi nhánh đặt logo và biểu tượng ứng dụng riêng trong Cài đặt chi nhánh."
   },
   "loyalty": {
     "title": "Phạm vi điểm tích lũy",
@@ -52,7 +52,13 @@
     "default": "Mặc định",
     "meta": "{slug} · {count, plural, other {# chi nhánh}}",
     "edit": "Sửa",
-    "empty": "Chưa có thương hiệu. Tải logo lên tại <link>Cài đặt chi nhánh → Nhận diện thương hiệu</link> và thương hiệu sẽ được tạo tự động."
+    "emptyTitle": "Chưa có thương hiệu",
+    "empty": "Thương hiệu giữ phần tên đứng đầu trong tên cửa hàng của mọi chi nhánh, màu sắc, cùng logo và biểu tượng ứng dụng mặc định cho chi nhánh chưa có của riêng mình. Mỗi chi nhánh tải logo và biểu tượng riêng trong <link>Cài đặt chi nhánh</link>.",
+    "createHint": "Thương hiệu sẽ mang tên “{name}”. Bạn có thể đổi tên, màu sắc và hình ảnh mặc định ngay sau đó.",
+    "create": "Tạo thương hiệu",
+    "errors": {
+      "notAllowed": "Chỉ chủ nhà hàng hoặc quản trị viên mới có thể tạo thương hiệu."
+    }
   },
   "creator": {
     "title": "Thêm chi nhánh",
@@ -84,7 +90,7 @@
       "hoursHint": "Lịch hằng tuần, không gồm các ngày nghỉ đột xuất",
       "settings": "Sao chép cài đặt thanh toán và giao hàng",
       "settingsHint": "Phương thức thanh toán, giao hàng, tiền tip và phí dịch vụ",
-      "notCopied": "Địa chỉ, vị trí trên bản đồ, màu sắc và mã QR của bàn không được sao chép."
+      "notCopied": "Địa chỉ, vị trí trên bản đồ, logo, biểu tượng ứng dụng, màu sắc và mã QR của bàn không được sao chép."
     },
     "close": "Đóng",
     "cancel": "Hủy",
@@ -118,14 +124,16 @@
   "editor": {
     "title": "Sửa thương hiệu",
     "name": "Tên thương hiệu",
+    "nameHint": "Phần đầu trong tên cửa hàng và tên ứng dụng của mọi chi nhánh, ví dụ “{example}”.",
     "slug": "Slug",
     "slugPlaceholder": "thuong-hieu-cua-toi",
     "primaryColor": "Màu chính",
     "accentColor": "Màu nhấn",
-    "logo": "Logo (không bắt buộc)",
+    "logo": "Logo mặc định (không bắt buộc)",
     "uploadLogo": "Tải logo lên",
-    "appIcon": "Biểu tượng ứng dụng (không bắt buộc)",
-    "appIconHint": "Dùng cho tab trình duyệt và là biểu tượng khách thấy sau khi cài cửa hàng của bạn lên màn hình chính điện thoại. Để trống để dùng biểu tượng Favornoms.",
+    "logoHint": "Chỉ dùng cho chi nhánh chưa có logo riêng. Mỗi chi nhánh tải logo riêng trong Cài đặt chi nhánh → Nhận diện thương hiệu của chi nhánh này.",
+    "appIcon": "Biểu tượng ứng dụng mặc định (không bắt buộc)",
+    "appIconHint": "Chỉ dùng cho chi nhánh chưa có biểu tượng riêng, cho tab trình duyệt và biểu tượng khách thấy sau khi cài. Mỗi chi nhánh tải biểu tượng riêng trong Cài đặt chi nhánh. Để trống để dùng biểu tượng Favornoms.",
     "tabFallback": "Cửa hàng của bạn",
     "preview": "Xem trước",
     "nameFallback": "Tên thương hiệu",

@@ -36,6 +36,7 @@
     "itemSoldOut": "Something in your cart has just sold out. Please remove it and try again.",
     "insufficientStock": "The restaurant doesn’t have enough left of something in your cart. Please lower the quantity and try again.",
     "itemUnavailable": "Something in your cart is no longer available. Please review your cart and try again.",
+    "itemRemoved": "An item, or an option you chose for it, is no longer offered, so we removed it from your cart. Please check your order and try again.",
     "rateLimited": "Too many orders in a short time. Please wait a few minutes before trying again.",
     "signInToOrder": "Please sign in to place your order.",
     "emptyOrder": "Your cart is empty. Add something before placing your order.",

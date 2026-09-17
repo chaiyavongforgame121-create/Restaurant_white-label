@@ -1,6 +1,5 @@
 'use client';
 
-import * as React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -9,7 +8,7 @@ import { ChevronLeft, ShoppingBag, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { formatCurrency } from '@favornoms/shared';
 import { Button, Card, EmptyState, IconButton, QuantityStepper } from '@favornoms/ui';
-import { useCart } from '@/store/cart';
+import { useCart, useCartHydrated } from '@/store/cart';
 import { useAuth } from '@/components/auth/use-auth';
 import { useCartReprice } from './use-cart-reprice';
 
@@ -34,20 +33,8 @@ export function CartView({ branchId, storefrontVersion }: Props) {
       ? `${base}/sign-in?next=${encodeURIComponent(`${base}/checkout`)}`
       : `${base}/checkout`;
 
-  // useCart.persist can be undefined during SSR — start false and confirm hydration
-  // in the effect (client-only), matching checkout-view / app-shell. Reading
-  // useCart.persist.hasHydrated() directly in the initializer crashed SSR.
-  const [hydrated, setHydrated] = React.useState(false);
-  React.useEffect(() => {
-    const persist = useCart.persist;
-    if (!persist || persist.hasHydrated()) {
-      setHydrated(true);
-      return;
-    }
-    const unsub = persist.onFinishHydration(() => setHydrated(true));
-    void persist.rehydrate();
-    return unsub;
-  }, []);
+  // False on the server and the first client paint; the stored cart is read in an effect.
+  const hydrated = useCartHydrated();
 
   const lines = useCart((s) => s.lines);
   const subtotal = useCart((s) => s.subtotal());

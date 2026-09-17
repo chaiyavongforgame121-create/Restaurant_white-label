@@ -36,6 +36,7 @@
     "itemSoldOut": "Một món trong giỏ hàng vừa hết hàng. Vui lòng bỏ món đó ra rồi thử lại.",
     "insufficientStock": "Nhà hàng không còn đủ số lượng cho một món trong giỏ hàng. Vui lòng giảm số lượng rồi thử lại.",
     "itemUnavailable": "Một món trong giỏ hàng không còn phục vụ. Vui lòng kiểm tra lại giỏ hàng rồi thử lại.",
+    "itemRemoved": "Một món trong giỏ hàng, hoặc tùy chọn bạn đã chọn cho món đó, không còn phục vụ nên đã được bỏ ra. Vui lòng kiểm tra lại giỏ hàng rồi thử lại.",
     "rateLimited": "Bạn đã đặt quá nhiều đơn trong thời gian ngắn. Vui lòng đợi vài phút rồi thử lại.",
     "signInToOrder": "Vui lòng đăng nhập để đặt hàng.",
     "emptyOrder": "Giỏ hàng đang trống. Hãy thêm món trước khi đặt hàng.",

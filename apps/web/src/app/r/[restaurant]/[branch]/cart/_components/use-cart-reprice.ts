@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { getBrowserClient } from '@favornoms/database/client';
-import { useCart, type CurrentPrice } from '@/store/cart';
+import { useCart, useCartStoreApi, type CurrentPrice } from '@/store/cart';
 
 /** Do not re-ask more often than this when a view is flicked in and out of the foreground. */
 const RECHECK_MIN_GAP_MS = 30_000;
@@ -12,7 +12,7 @@ const RECHECK_MIN_GAP_MS = 30_000;
  * Never both zero: nothing moved is `null`.
  */
 export interface CartPriceNotice {
-  /** Lines taken out because the item or combo can no longer be ordered. */
+  /** Lines taken out because the item, the combo or an option chosen on it can no longer be ordered. */
   removed: number;
   /** Lines whose price was updated to the current one. */
   changed: number;
@@ -32,20 +32,21 @@ export interface CartPriceNotice {
  * version changes, whenever the set of lines changes, and when a backgrounded view comes back.
  */
 export function useCartReprice(branchId: string, storefrontVersion: number): CartPriceNotice | null {
+  // This branch's cart (CartProvider), so every line was added here and every id is one the
+  // queries below can find at `branchId` — a miss really does mean the dish is gone.
+  const cart = useCartStoreApi();
   const lines = useCart((s) => s.lines);
   const reprice = useCart((s) => s.reprice);
-  // One cart is persisted per origin, not per restaurant, so a diner can be looking at this
-  // storefront's cart page holding a cart built at a different branch. Every id would then miss
-  // and the cart would be wiped for being "unavailable" — check nothing rather than that.
-  const cartBranchId = useCart((s) => s.branchId);
   const [notice, setNotice] = React.useState<CartPriceNotice | null>(null);
   const [wake, setWake] = React.useState(0);
   const lastCheck = React.useRef(0);
 
   // Identity of the cart's contents, not of the array: re-checking on every quantity tap is
-  // noise, but adding or removing a line is worth a look.
+  // noise, but adding or removing a line, or the same dish with other options, is worth a look.
   const idsKey = lines
-    .map((l) => l.comboId ?? l.menuItemId)
+    .map((l) =>
+      l.comboId ?? [l.menuItemId, ...(l.modifiers ?? []).map((m) => m.option_id).sort()].join('+'),
+    )
     .sort()
     .join('|');
 
@@ -64,17 +65,22 @@ export function useCartReprice(branchId: string, storefrontVersion: number): Car
   }, []);
 
   React.useEffect(() => {
-    if (!idsKey || !branchId || cartBranchId !== branchId) return;
+    if (!idsKey || !branchId) return;
     let cancelled = false;
     lastCheck.current = Date.now();
 
-    const current = useCart.getState().lines;
+    const current = cart.getState().lines;
     const itemIds = [...new Set(current.filter((l) => !l.comboId).map((l) => l.menuItemId))];
     const comboIds = [...new Set(current.flatMap((l) => (l.comboId ? [l.comboId] : [])))];
+    const optionIds = [
+      ...new Set(
+        current.flatMap((l) => (l.comboId ? [] : (l.modifiers ?? []).map((m) => m.option_id))),
+      ),
+    ];
 
     void (async () => {
       const supabase = getBrowserClient();
-      const [itemRows, comboRows, effectiveRows] = await Promise.all([
+      const [itemRows, comboRows, effectiveRows, optionRows] = await Promise.all([
         itemIds.length
           ? supabase
               .from('menu_items')
@@ -92,9 +98,19 @@ export function useCartReprice(branchId: string, storefrontVersion: number): Car
         // Happy hour prices, the same source the menu page renders from — the stored unit
         // price is already the discounted one when a promotion was live.
         itemIds.length ? supabase.rpc('get_effective_prices', { p_branch_id: branchId }) : null,
+        // The options chosen on those lines. place-order refuses the WHOLE order for an option
+        // that was switched off, deleted or belongs to another branch's group (modifier_inactive /
+        // modifier_branch_mismatch), so a line still carrying one is as unorderable as a dish that
+        // is gone — better taken out here, with the notice, than found out at the button.
+        optionIds.length
+          ? supabase
+              .from('modifier_options')
+              .select('id, is_active, modifier_groups!inner(branch_id)')
+              .in('id', optionIds)
+          : null,
       ]);
       // A failed read tells us nothing, and nothing is exactly what it should change.
-      if (cancelled || itemRows?.error || comboRows?.error) return;
+      if (cancelled || itemRows?.error || comboRows?.error || optionRows?.error) return;
 
       const discounted = new Map<string, number>();
       for (const row of effectiveRows?.data ?? []) {
@@ -126,7 +142,15 @@ export function useCartReprice(branchId: string, storefrontVersion: number): Car
         else live.set(row.id, { price: Number(row.total_price), available: true });
       }
 
-      const { changed, removed } = reprice(live);
+      // The same three tests place-order applies, so the cart takes out exactly what the server
+      // would refuse: no row (deleted), switched off, or a group at another branch.
+      const unavailableOptions = new Set(optionIds);
+      for (const row of optionRows?.data ?? []) {
+        const group = Array.isArray(row.modifier_groups) ? row.modifier_groups[0] : row.modifier_groups;
+        if (row.is_active && group?.branch_id === branchId) unavailableOptions.delete(row.id);
+      }
+
+      const { changed, removed } = reprice(live, unavailableOptions);
       if (cancelled) return;
       // The words are the cart view's: a hook has no business picking a language.
       setNotice(removed > 0 || changed > 0 ? { removed, changed } : null);
@@ -138,7 +162,7 @@ export function useCartReprice(branchId: string, storefrontVersion: number): Car
     // `lines` is read from the store inside so a quantity change does not re-run this; idsKey
     // is what decides whether the contents are different.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [branchId, cartBranchId, storefrontVersion, idsKey, wake, reprice]);
+  }, [branchId, cart, storefrontVersion, idsKey, wake, reprice]);
 
   return notice;
 }

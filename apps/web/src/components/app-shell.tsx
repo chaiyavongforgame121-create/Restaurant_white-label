@@ -9,7 +9,7 @@ import { Home, Receipt, ShoppingBag, UserRound } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { cn } from '@favornoms/ui';
 import { LocaleSwitcher } from '@/components/locale-switcher';
-import { useCart } from '@/store/cart';
+import { useCart, useCartHydrated } from '@/store/cart';
 import { ThemeToggle } from './theme-toggle';
 
 export function AppShell({
@@ -27,19 +27,9 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const t = useTranslations('nav');
-  // Start false so SSR never touches `useCart.persist` (undefined on the server);
-  // flip true once the client mounts / persist finishes rehydrating.
-  const [hydrated, setHydrated] = React.useState(false);
-  React.useEffect(() => {
-    const persist = useCart.persist;
-    if (!persist || persist.hasHydrated()) {
-      setHydrated(true);
-      return;
-    }
-    const unsub = persist.onFinishHydration(() => setHydrated(true));
-    void persist.rehydrate();
-    return unsub;
-  }, []);
+  // This branch's cart only (CartProvider in the branch layout). Zero until it has been read
+  // from storage, so the server render and the first client paint agree.
+  const hydrated = useCartHydrated();
   const count = useCart((s) => (hydrated ? s.itemCount() : 0));
 
   const tabs = [
@@ -83,7 +73,7 @@ export function AppShell({
               A logo is a wide lockup (the hero renders it at h-12 w-44), so it replaces the
               mark AND the wordmark rather than sitting beside a duplicate of the name; the
               name stays for screen readers. Without a logo, nothing changes. */}
-          <Link href={base} className="focus-ring inline-flex items-center gap-2 rounded-full">
+          <Link href={base} className="focus-ring inline-flex min-w-0 items-center gap-2 rounded-full">
             {logoUrl ? (
               <>
                 <span className="relative block h-8 w-[150px]">
@@ -100,10 +90,12 @@ export function AppShell({
               </>
             ) : (
               <>
-                <span className="grid h-8 w-8 place-items-center rounded-full bg-gradient-warm text-white shadow-warm">
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-warm text-white shadow-warm">
                   <span className="font-display text-lg leading-none">{brandName.charAt(0)}</span>
                 </span>
-                <span className="font-display text-lg font-semibold tracking-tight">{brandName}</span>
+                {/* "<brand> - <branch>" can be long ("Coastal Grill - Food Thai Thai"): one line, cut with an
+                    ellipsis, rather than wrapping the header onto a second row on a phone. */}
+                <span className="truncate font-display text-lg font-semibold tracking-tight">{brandName}</span>
               </>
             )}
           </Link>

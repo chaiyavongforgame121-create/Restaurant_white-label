@@ -15,7 +15,7 @@ import {
 import { useRealtime } from '@favornoms/database/realtime';
 import { Badge, Button, Sheet, cn } from '@favornoms/ui';
 import { useAuth } from '@/components/auth/use-auth';
-import { useCart } from '@/store/cart';
+import { useCartHydrated, useCartStoreApi } from '@/store/cart';
 
 export interface PinnedTable {
   id: string;
@@ -50,11 +50,38 @@ interface TablePinValue {
 }
 
 /**
- * One key for every storefront on this origin, the same as the cart. A pin therefore
- * carries its branch and is only honoured at that branch — scanning table 7 at one
- * restaurant must not seat the diner at table 7 of the next one.
+ * One key per branch, the same as the cart. Scanning table 7 at one branch must not seat the
+ * diner at table 7 of another branch on the same host, and leaving one sitting must not
+ * forget a sitting at another. The pin still records its branch, and is still only honoured
+ * there.
  */
-const STORAGE_KEY = 'favornoms-table-v1';
+const storageKey = (branchId: string) => `favornoms-table-v2:${branchId}`;
+
+/** The single key every storefront used to share. Moved to its branch's key, then deleted. */
+const LEGACY_STORAGE_KEY = 'favornoms-table-v1';
+
+/**
+ * Moves a legacy pin into the key of the branch it was scanned at, unless that branch already
+ * has a pin of its own, and deletes the legacy key either way.
+ */
+function migrateLegacyPin(): void {
+  try {
+    const raw = window.localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (raw === null) return;
+    try {
+      const parsed = JSON.parse(raw) as Partial<StoredPin> | null;
+      const branchId = typeof parsed?.branchId === 'string' ? parsed.branchId : '';
+      if (branchId && window.localStorage.getItem(storageKey(branchId)) === null) {
+        window.localStorage.setItem(storageKey(branchId), raw);
+      }
+    } catch {
+      // Unparseable: nothing worth moving.
+    }
+    window.localStorage.removeItem(LEGACY_STORAGE_KEY);
+  } catch {
+    // Storage blocked — there is no pin to move.
+  }
+}
 
 /**
  * How long the CACHE is believed without asking.
@@ -79,8 +106,9 @@ interface StoredPin {
 }
 
 function readStored(branchId: string): StoredPin | null {
+  migrateLegacyPin();
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = window.localStorage.getItem(storageKey(branchId));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<StoredPin> | null;
     // A pin with no sessionId was written by the localStorage-only version of this file.
@@ -109,7 +137,7 @@ function readStored(branchId: string): StoredPin | null {
 function writeStored(branchId: string, table: PinnedTable, token: string): void {
   try {
     window.localStorage.setItem(
-      STORAGE_KEY,
+      storageKey(branchId),
       JSON.stringify({
         id: table.id,
         number: table.number,
@@ -125,9 +153,9 @@ function writeStored(branchId: string, table: PinnedTable, token: string): void 
   }
 }
 
-function removeStored(): void {
+function removeStored(branchId: string): void {
   try {
-    window.localStorage.removeItem(STORAGE_KEY);
+    window.localStorage.removeItem(storageKey(branchId));
   } catch {
     // nothing to remove
   }
@@ -188,20 +216,12 @@ export function TablePinProvider({
   /** Which sitting the bill below was first read for, so a join is not read twice. */
   const firstReadRef = React.useRef<string | null>(null);
 
+  // This branch's cart (CartProvider sits above this provider in the branch layout).
+  const cart = useCartStoreApi();
   // The cart persists with skipHydration, so anything written into it before rehydration
   // finishes is overwritten a tick later by the stored values — the same wait AppShell and
   // OrderTypeGate make before they trust the store.
-  const [cartHydrated, setCartHydrated] = React.useState(false);
-  React.useEffect(() => {
-    const persist = useCart.persist;
-    if (!persist || persist.hasHydrated()) {
-      setCartHydrated(true);
-      return;
-    }
-    const unsub = persist.onFinishHydration(() => setCartHydrated(true));
-    void persist.rehydrate();
-    return unsub;
-  }, []);
+  const cartHydrated = useCartHydrated();
 
   /**
    * Forget the sitting on THIS device.
@@ -211,11 +231,11 @@ export function TablePinProvider({
    * answered question. Nulling it is what hands the choice back.
    */
   const forget = React.useCallback(() => {
-    removeStored();
+    removeStored(branchId);
     setTable(null);
     setBill(null);
-    useCart.setState({ channel: null, channelBranchId: null });
-  }, []);
+    cart.setState({ channel: null });
+  }, [branchId, cart]);
 
   // localStorage is read in an effect, never during render: the server has no idea what this
   // device scanned, and reading it on the first paint is a hydration mismatch.
@@ -235,9 +255,9 @@ export function TablePinProvider({
         // the pin goes with it — this is what makes "the QR cannot order again until a new
         // sitting starts" true on the diner's screen and not only in the database.
         if (fresh.status === 'closed') {
-          removeStored();
+          removeStored(branchId);
           setTable(null);
-          useCart.setState({ channel: null, channelBranchId: null });
+          cart.setState({ channel: null });
           return;
         }
         setTable({
@@ -251,7 +271,7 @@ export function TablePinProvider({
       } catch {
         // Signed out, no longer a participant, or the sitting is gone. All three mean this
         // device is not at that table any more.
-        if (!cancelled) removeStored();
+        if (!cancelled) removeStored(branchId);
       } finally {
         if (!cancelled) setReady(true);
       }
@@ -259,7 +279,7 @@ export function TablePinProvider({
     return () => {
       cancelled = true;
     };
-  }, [cartHydrated, branchId]);
+  }, [cartHydrated, branchId, cart]);
 
   const sessionId = table?.sessionId ?? null;
 
@@ -307,17 +327,14 @@ export function TablePinProvider({
   // question instead of sitting beside it and letting the gate ask again.
   React.useEffect(() => {
     if (!ready || !table) return;
-    const { channel, channelBranchId, setChannel } = useCart.getState();
-    if (channel !== 'dine_in' || channelBranchId !== branchId) setChannel('dine_in', branchId);
-  }, [ready, table, branchId]);
+    const { channel, setChannel } = cart.getState();
+    if (channel !== 'dine_in') setChannel('dine_in');
+  }, [ready, table, cart]);
 
+  // No cart clearing here any more: the cart is this branch's own, so whatever is in it was
+  // chosen from this branch's menu and can be served at this table.
   const pin = React.useCallback(
     (next: PinnedTable, token: string) => {
-      const cart = useCart.getState();
-      // Items chosen at another branch cannot be served at this table — place-order would
-      // reject their menu ids anyway, but not before the diner had carried them to a
-      // checkout that could never succeed.
-      if (cart.branchId && cart.branchId !== branchId && cart.lines.length > 0) cart.clear();
       writeStored(branchId, next, token);
       setTable(next);
       setBill(null);

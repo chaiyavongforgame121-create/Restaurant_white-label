@@ -328,6 +328,17 @@ Deno.serve(async (req: Request) => {
       if (!c.is_active) return json(400, { error: 'combo_inactive', combo_id: c.id });
       comboMap.set(c.id, { id: c.id, name: c.name, total_price: Number(c.total_price), image_url: c.image_url });
     }
+    // The lookup is scoped to this branch, so a combo from another branch (a cart carried
+    // across storefronts on the same host) or a deleted one simply is not returned. Nothing
+    // checked for that, and the pricing step's `comboMap.get(id)!` threw a TypeError: a bare
+    // 500 for what is really "this set is not on this menu". `hint` carries a code the
+    // checkout and the counter already match by substring, so a client that predates
+    // combo_not_in_branch still reads "no longer available" rather than a raw body.
+    for (const cline of payload.combos) {
+      if (!comboMap.has(cline.combo_id)) {
+        return json(400, { error: 'combo_not_in_branch', combo_id: cline.combo_id, hint: 'item_not_in_branch' });
+      }
+    }
   }
 
   // deno-lint-ignore no-explicit-any
@@ -380,6 +391,13 @@ Deno.serve(async (req: Request) => {
       }
       if (!o.is_active) return json(400, { error: 'modifier_inactive', option_id: o.id });
       modMap.set(o.id, { id: o.id, group_id: o.group_id, name: o.name, price_delta: Number(o.price_delta), is_active: o.is_active });
+    }
+    // An option id that matched no row (deleted since the cart was built) used to be dropped
+    // without a word by the pricing step's filter, so the order went through WITHOUT the
+    // extra the diner chose, and cheaper than the total their screen showed. Refuse it the
+    // way an inactive option is refused.
+    for (const id of allModIds) {
+      if (!modMap.has(id)) return json(400, { error: 'modifier_inactive', option_id: id });
     }
   }
 
