@@ -41,6 +41,7 @@
   "editor": {
     "name": "Tên",
     "category": "Danh mục",
+    "chooseCategory": "Chọn danh mục",
     "newCategory": "+ Mới",
     "cancelNewCategory": "Hủy",
     "categoryIcon": "Biểu tượng danh mục",
@@ -137,5 +138,42 @@
     "invalidValue": "Một số giá trị không hợp lệ. Kiểm tra lại các ô rồi thử lại.",
     "fileTooLarge": "Ảnh quá lớn, không tải lên được.",
     "fileType": "Không tải lên được loại tệp này. Hãy chọn một tệp ảnh."
+  },
+  "categories": {
+    "button": "Danh mục",
+    "manage": "Quản lý danh mục",
+    "title": "Danh mục",
+    "intro": "Đổi tên hoặc xóa danh mục. Xóa danh mục không xóa các món trong đó — bạn chọn nơi chuyển món đến.",
+    "itemCount": "{count, plural, =0 {Chưa có món} other {# món}}",
+    "hiddenCount": "{count, plural, other {# món đã ẩn}}",
+    "rename": "Đổi tên {name}",
+    "delete": "Xóa {name}",
+    "nameLabel": "Tên danh mục",
+    "iconLabel": "Biểu tượng danh mục",
+    "namePlaceholder": "Tên danh mục (vd: Tráng miệng)",
+    "save": "Lưu",
+    "cancel": "Hủy",
+    "saved": "Đã lưu “{name}”.",
+    "nameRequired": "Vui lòng nhập tên danh mục.",
+    "deleteEmpty": "Xóa “{name}”? Không thể hoàn tác.",
+    "deleteMove": "“{name}” có {count, plural, other {# món}}. Chọn danh mục để chuyển món đến, rồi xóa.",
+    "moveTo": "Chuyển món đến",
+    "deleteMoveHint": "Các món đã ẩn cũng được chuyển. Giờ vàng đang áp dụng cho danh mục này vẫn giảm giá đúng các món đó, và các món được chuyển cũng sẽ nhận giờ vàng của danh mục mới.",
+    "deleteNoTarget": "“{name}” có {count, plural, other {# món}} và không còn danh mục nào khác để chuyển món đến. Hãy thêm một danh mục khác trước.",
+    "confirmDelete": "Xóa danh mục",
+    "confirmMoveDelete": "Chuyển món và xóa",
+    "deleted": "Đã xóa “{name}”.",
+    "deletedMoved": "Đã xóa “{name}” và chuyển {count, plural, other {# món}} sang “{target}”.",
+    "addTitle": "Thêm danh mục",
+    "add": "Thêm danh mục",
+    "added": "Đã thêm “{name}”.",
+    "empty": "Chưa có danh mục nào. Hãy thêm ở bên dưới.",
+    "errors": {
+      "notEmpty": "Danh mục này vẫn còn món. Hãy chọn nơi chuyển món đến.",
+      "invalidTarget": "Không thể chuyển món vào danh mục đó. Hãy chọn danh mục khác.",
+      "usedByHappyHour": "Các giờ vàng này chỉ áp dụng cho danh mục này: {names}. Hãy sửa hoặc xóa chúng trước.",
+      "notFound": "Danh mục này không còn tồn tại. Có thể nó đã bị xóa.",
+      "unchanged": "Không có gì thay đổi. Danh mục có thể đã bị xóa, hoặc vai trò của bạn không được phép sửa thực đơn tại chi nhánh này."
+    }
   }
 }

@@ -5,12 +5,13 @@ import Image from 'next/image';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { Copy, Edit3, LayoutGrid, Move, Plus, Save, Sparkles, Trash2, X } from 'lucide-react';
+import { Copy, Edit3, LayoutGrid, Move, Plus, Save, Sparkles, Tags, Trash2, X } from 'lucide-react';
 import type { MenuCategory, MenuItem } from '@favornoms/shared';
 import { formatCurrency } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
 import { listCategories, listMenuItems } from '@favornoms/database/queries';
 import { Badge, Button, Card, IconButton, Sheet, useConfirm } from '@favornoms/ui';
+import { CATEGORY_EMOJIS, CategoryManager } from './category-manager';
 import { MenuReorder } from './menu-reorder';
 import { ItemModifierEditor, type ItemModifierEditorHandle } from './item-modifier-editor';
 import { menuErrorKey } from './menu-errors';
@@ -90,6 +91,7 @@ export function MenuManager({
   const [stock, setStock] = React.useState(() => toStockMap(stockRows));
   const [editing, setEditing] = React.useState<MenuItem | null>(null);
   const [creating, setCreating] = React.useState(false);
+  const [managingCategories, setManagingCategories] = React.useState(false);
   const [mode, setMode] = React.useState<'grid' | 'reorder'>('grid');
   const [notice, setNotice] = React.useState<string | null>(null);
   const [problem, setProblem] = React.useState<string | null>(null);
@@ -256,6 +258,9 @@ export function MenuManager({
           </div>
           {mode === 'grid' && (
             <>
+              <Button variant="ghost" leftIcon={<Tags className="h-4 w-4" />} onClick={() => setManagingCategories(true)}>
+                {t('categories.button')}
+              </Button>
               <Link href={`/b/${branchId}/menu/modifiers`}>
                 <Button variant="ghost">
                   {t('header.modifiers')}
@@ -310,11 +315,24 @@ export function MenuManager({
         if (catItems.length === 0) return null;
         return (
           <section key={cat.id} className="mb-8 px-2 lg:px-0">
-            <h2 className="mb-3 flex items-center gap-2 font-display text-xl font-semibold">
-              <span aria-hidden>{cat.iconEmoji ?? '🍴'}</span>
-              {cat.name}
-              <Badge variant="muted">{catItems.length}</Badge>
-            </h2>
+            {/* The button sits beside the heading, not inside it, so a screen reader's heading list
+                reads "Burgers 3" rather than "Burgers 3 Manage categories". */}
+            <div className="mb-3 flex items-center gap-2">
+              <h2 className="flex items-center gap-2 font-display text-xl font-semibold">
+                <span aria-hidden>{cat.iconEmoji ?? '🍴'}</span>
+                {cat.name}
+                <Badge variant="muted">{catItems.length}</Badge>
+              </h2>
+              <IconButton
+                label={t('categories.manage')}
+                size="sm"
+                variant="ghost"
+                className="text-muted-foreground"
+                onClick={() => setManagingCategories(true)}
+              >
+                <Tags className="h-4 w-4" />
+              </IconButton>
+            </div>
             <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {catItems.map((item) => (
                 <motion.li
@@ -386,6 +404,22 @@ export function MenuManager({
         );
       })}
 
+      <Sheet
+        open={managingCategories}
+        onClose={() => setManagingCategories(false)}
+        title={t('categories.title')}
+        ariaLabel={t('categories.title')}
+        side="right"
+      >
+        <CategoryManager
+          branchId={branchId}
+          categories={categories}
+          items={items}
+          onChanged={refresh}
+          onNotice={setNotice}
+        />
+      </Sheet>
+
       {/* Editor sheet — usable in grid mode only */}
       <Sheet
         open={!!editing || creating}
@@ -432,7 +466,6 @@ function StockBadge({ stock }: { stock: ItemStock | undefined }) {
   );
 }
 
-const CATEGORY_EMOJIS = ['🍔', '🍕', '🥗', '🍟', '🥤', '🍰', '🍣', '🌮', '🍜', '☕', '🍦', '🍗', '🥪', '🍳'];
 /**
  * Quick-pick allergens. `value` is what gets saved on the item and shown to diners, so it stays
  * English exactly as before; `key` only picks the translated label on the picker button.
@@ -467,6 +500,7 @@ function ItemEditor({
   const [price, setPrice] = React.useState(item?.price.toString() ?? '');
   const [imageUrl, setImageUrl] = React.useState(item?.imageUrl ?? '');
   const [categoryId, setCategoryId] = React.useState(item?.categoryId ?? categories[0]?.id ?? '');
+  const categoryValid = categories.some((c) => c.id === categoryId);
   const [recommended, setRecommended] = React.useState(item?.isRecommended ?? false);
   const [isNew, setIsNew] = React.useState(item?.isNew ?? false);
   // New dishes are visible by default, as the column's default has always made them.
@@ -589,6 +623,13 @@ function ItemEditor({
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    // The category this editor opened with can be deleted meanwhile (from the Categories panel,
+    // or another tab). Saving its id would fail on the foreign key with a message about deleting;
+    // re-pointing the dish silently would move it without asking. Ask for a category instead.
+    if (!categoryValid) {
+      setError(t('editor.chooseCategory'));
+      return;
+    }
     // Catch half-built option groups before we create anything, so a blank or
     // optionless group never reaches the DB (and the customer menu).
     if (!item) {
@@ -682,7 +723,16 @@ function ItemEditor({
       </Field>
       <Field label={t('editor.category')}>
         <div className="flex items-center gap-2">
-          <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="input flex-1">
+          <select
+            value={categoryValid ? categoryId : ''}
+            onChange={(e) => setCategoryId(e.target.value)}
+            className="input flex-1"
+          >
+            {!categoryValid && (
+              <option value="" disabled>
+                {t('editor.chooseCategory')}
+              </option>
+            )}
             {categories.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.iconEmoji} {c.name}

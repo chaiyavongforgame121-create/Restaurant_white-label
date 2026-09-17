@@ -41,6 +41,7 @@
   "editor": {
     "name": "Name",
     "category": "Category",
+    "chooseCategory": "Choose a category",
     "newCategory": "+ New",
     "cancelNewCategory": "Cancel",
     "categoryIcon": "Category icon",
@@ -137,5 +138,42 @@
     "invalidValue": "Some values aren’t valid. Check the fields and try again.",
     "fileTooLarge": "That image is too large to upload.",
     "fileType": "That file type can’t be uploaded. Choose an image file."
+  },
+  "categories": {
+    "button": "Categories",
+    "manage": "Manage categories",
+    "title": "Categories",
+    "intro": "Rename or delete categories. Deleting a category doesn’t delete its items — you choose where they go.",
+    "itemCount": "{count, plural, =0 {No items} one {# item} other {# items}}",
+    "hiddenCount": "{count, plural, other {# hidden}}",
+    "rename": "Rename {name}",
+    "delete": "Delete {name}",
+    "nameLabel": "Category name",
+    "iconLabel": "Category icon",
+    "namePlaceholder": "Category name (e.g. Desserts)",
+    "save": "Save",
+    "cancel": "Cancel",
+    "saved": "Saved “{name}”.",
+    "nameRequired": "Enter a category name.",
+    "deleteEmpty": "Delete “{name}”? This can’t be undone.",
+    "deleteMove": "“{name}” has {count, plural, one {# item} other {# items}}. Choose a category to move the items to, then delete.",
+    "moveTo": "Move items to",
+    "deleteMoveHint": "Hidden items move too. Happy hours set on this category keep discounting the same items, and moved items also get any happy hour set on the category they move to.",
+    "deleteNoTarget": "“{name}” has {count, plural, one {# item} other {# items}} and there is no other category to move the items to. Add another category first.",
+    "confirmDelete": "Delete category",
+    "confirmMoveDelete": "Move items and delete",
+    "deleted": "Deleted “{name}”.",
+    "deletedMoved": "Deleted “{name}” and moved {count, plural, one {# item} other {# items}} to “{target}”.",
+    "addTitle": "Add a category",
+    "add": "Add category",
+    "added": "Added “{name}”.",
+    "empty": "No categories yet. Add one below.",
+    "errors": {
+      "notEmpty": "This category still has items. Choose where to move them.",
+      "invalidTarget": "The items can’t be moved to that category. Choose another one.",
+      "usedByHappyHour": "These happy hours apply only to this category: {names}. Change or delete them first.",
+      "notFound": "This category no longer exists. It may already have been deleted.",
+      "unchanged": "Nothing was changed. The category may have been deleted, or your role may not be allowed to edit the menu at this branch."
+    }
   }
 }

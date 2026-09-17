@@ -204,7 +204,12 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
   const t = useTranslations();
   const params = useParams<{ restaurant: string; branch: string }>();
   const [search, setSearch] = React.useState('');
-  const [activeCategory, setActiveCategory] = React.useState<string>('all');
+  const [chosenCategory, setActiveCategory] = React.useState<string>('all');
+  // The live storefront refresh keeps the chosen tab, but the merchant can delete that category
+  // meanwhile. Filtering on an id no dish has any more would show an empty "no results" menu with
+  // no tab selected, so fall back to All.
+  const activeCategory =
+    chosenCategory === 'all' || categories.some((c) => c.id === chosenCategory) ? chosenCategory : 'all';
   const [activeItem, setActiveItem] = React.useState<MenuItem | null>(null);
   const [activeCombo, setActiveCombo] = React.useState<ComboRow | null>(null);
   const [dietaryFilters, setDietaryFilters] = React.useState<Set<string>>(new Set());

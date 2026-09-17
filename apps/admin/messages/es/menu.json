@@ -41,6 +41,7 @@
   "editor": {
     "name": "Nombre",
     "category": "Categoría",
+    "chooseCategory": "Elige una categoría",
     "newCategory": "+ Nueva",
     "cancelNewCategory": "Cancelar",
     "categoryIcon": "Ícono de la categoría",
@@ -137,5 +138,42 @@
     "invalidValue": "Algunos valores no son válidos. Revisa los campos e inténtalo de nuevo.",
     "fileTooLarge": "La imagen es demasiado grande para subirla.",
     "fileType": "Ese tipo de archivo no se puede subir. Elige una imagen."
+  },
+  "categories": {
+    "button": "Categorías",
+    "manage": "Administrar categorías",
+    "title": "Categorías",
+    "intro": "Cambia el nombre de las categorías o elimínalas. Eliminar una categoría no elimina sus productos: tú eliges a dónde se mueven.",
+    "itemCount": "{count, plural, =0 {Sin productos} one {# producto} other {# productos}}",
+    "hiddenCount": "{count, plural, one {# oculto} other {# ocultos}}",
+    "rename": "Cambiar el nombre de {name}",
+    "delete": "Eliminar {name}",
+    "nameLabel": "Nombre de la categoría",
+    "iconLabel": "Ícono de la categoría",
+    "namePlaceholder": "Nombre de la categoría (p. ej., Postres)",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "saved": "Se guardó “{name}”.",
+    "nameRequired": "Escribe un nombre para la categoría.",
+    "deleteEmpty": "¿Eliminar “{name}”? No se puede deshacer.",
+    "deleteMove": "“{name}” tiene {count, plural, one {# producto} other {# productos}}. Elige a qué categoría mover los productos y luego elimínala.",
+    "moveTo": "Mover productos a",
+    "deleteMoveHint": "Los productos ocultos también se mueven. Las happy hours de esta categoría seguirán aplicando el descuento a los mismos productos, y los productos movidos también tendrán las happy hours de la categoría a la que se mueven.",
+    "deleteNoTarget": "“{name}” tiene {count, plural, one {# producto} other {# productos}} y no hay otra categoría a la que mover los productos. Agrega otra categoría primero.",
+    "confirmDelete": "Eliminar categoría",
+    "confirmMoveDelete": "Mover productos y eliminar",
+    "deleted": "Se eliminó “{name}”.",
+    "deletedMoved": "Se eliminó “{name}” y se {count, plural, one {movió # producto} other {movieron # productos}} a “{target}”.",
+    "addTitle": "Agregar una categoría",
+    "add": "Agregar categoría",
+    "added": "Se agregó “{name}”.",
+    "empty": "Aún no hay categorías. Agrega una abajo.",
+    "errors": {
+      "notEmpty": "Esta categoría todavía tiene productos. Elige a dónde moverlos.",
+      "invalidTarget": "Los productos no se pueden mover a esa categoría. Elige otra.",
+      "usedByHappyHour": "Estas happy hours solo se aplican a esta categoría: {names}. Cámbialas o elimínalas primero.",
+      "notFound": "Esta categoría ya no existe. Puede que ya se haya eliminado.",
+      "unchanged": "No se cambió nada. Puede que la categoría se haya eliminado o que tu rol no tenga permiso para editar el menú en esta sucursal."
+    }
   }
 }

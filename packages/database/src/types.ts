@@ -4715,6 +4715,10 @@ export type Database = {
         Args: { p_approve: boolean; p_note?: string; p_payment_id: string }
         Returns: undefined
       }
+      delete_menu_category: {
+        Args: { p_category_id: string; p_move_items_to?: string }
+        Returns: Json
+      }
       delete_my_account: { Args: never; Returns: Json }
       delivery_thread_history: {
         Args: { p_delivery_id: string }
