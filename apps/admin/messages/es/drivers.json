@@ -1,0 +1,93 @@
+{
+  "accessDenied": {
+    "title": "Sin acceso a repartidores",
+    "reason": "Tu rol no puede revisar repartidores en {branch}."
+  },
+  "header": {
+    "title": "Repartidores",
+    "applied": "{count, plural, one {# repartidor se ha postulado a esta sucursal} other {# repartidores se han postulado a esta sucursal}}",
+    "awaitingDecision": "{count, plural, one {# espera tu decisión} other {# esperan tu decisión}}",
+    "documentsToReview": "{count} con documentos por revisar",
+    "changedAfterReview": "{count, plural, one {# cambió un documento tras la revisión} other {# cambiaron un documento tras la revisión}}"
+  },
+  "loadError": {
+    "title": "No se pudieron cargar las solicitudes de repartidores",
+    "body": "Algo salió mal al leer las solicitudes de esta sucursal. Actualiza la página para reintentar."
+  },
+  "empty": {
+    "title": "Aún no hay solicitudes de repartidores",
+    "body": "Los repartidores se postulan desde la app de repartidor. Solo pueden hacerlo después de subir los tres documentos de verificación (licencia, registro del vehículo y una selfie), así que un repartidor que se registró pero no terminó de subirlos todavía no aparecerá aquí."
+  },
+  "card": {
+    "unknownDriver": "Repartidor desconocido",
+    "kyc": "Verificación: {status}",
+    "documentsUnreadable": "Documentos: no se pudieron leer",
+    "documentsCount": "Documentos: {received}/{total} recibidos",
+    "applied": "Se postuló el {date}",
+    "reviewed": "revisado el {date}",
+    "documentsReceived": "últimos documentos recibidos el {date}",
+    "note": "<label>Nota:</label> {note}",
+    "approvedNeedsDocuments": "Aprobado, pero sus documentos aún necesitan revisión: usa Revisar documentos.",
+    "replacedAfterVerify": "Reemplazó un documento el {received}, después de que se verificara el {verified}: vuelve a revisarlo.",
+    "replacedAfterDecision": "Reemplazó un documento el {received}, después de tu decisión del {reviewed}."
+  },
+  "kycStatus": {
+    "pending": "pendiente",
+    "verified": "verificada",
+    "rejected": "rechazada",
+    "suspended": "suspendida",
+    "unknown": "desconocida"
+  },
+  "approval": {
+    "pending": "pendiente",
+    "approved": "aprobado",
+    "rejected": "rechazado",
+    "suspended": "suspendido"
+  },
+  "vehicle": {
+    "motorcycle": "Moto",
+    "car": "Auto",
+    "bicycle": "Bicicleta",
+    "scooter": "Scooter"
+  },
+  "docs": {
+    "license": "Licencia de conducir",
+    "vehicleReg": "Registro del vehículo",
+    "selfie": "Selfie con la licencia"
+  },
+  "approve": {
+    "actions": {
+      "approve": "Aprobar",
+      "reject": "Rechazar",
+      "suspend": "Suspender",
+      "reopen": "Reabrir",
+      "reinstate": "Restablecer"
+    },
+    "rejectReasonLabel": "Motivo del rechazo",
+    "rejectReasonPlaceholder": "El repartidor lo verá en su app",
+    "cancel": "Cancelar",
+    "confirmReject": "Confirmar rechazo",
+    "notSaved": "No se guardó: es posible que no tengas permiso para revisar repartidores.",
+    "saveFailed": "No se pudo guardar la decisión. Inténtalo de nuevo."
+  },
+  "review": {
+    "button": "Revisar documentos",
+    "title": "Revisión de documentos",
+    "currentStatus": "Estado actual: {status}",
+    "currentStatusVerified": "Estado actual: {status} · verificada el {date}",
+    "sharedWarning": "Verificar o rechazar documentos aquí aplica a todos los restaurantes con los que trabaja este repartidor, no solo a {branch}. La decisión que es solo tuya es Aprobar / Suspender su solicitud.",
+    "replacedAfterVerify": "Se reemplazó un documento el {replaced}, después de que los documentos se verificaran el {verified}. Lo que ves abajo es el archivo nuevo.",
+    "replacedAfterDecision": "Se reemplazó un documento el {replaced}, después de tu decisión del {decided}. Lo que ves abajo es el archivo nuevo.",
+    "receivedAt": "Recibido el {date}",
+    "nothingReceived": "Nada recibido",
+    "openFullSize": "Ver en tamaño completo",
+    "notUploaded": "Sin subir",
+    "awaitingUpload": "Pendiente de subir",
+    "listError": "No se pudieron leer los documentos del repartidor. Cierra y vuelve a intentarlo.",
+    "forbidden": "No tienes permiso para revisar documentos de repartidores. Solo un propietario o gerente puede hacerlo.",
+    "saveFailed": "No se pudo guardar la revisión de documentos. Inténtalo de nuevo.",
+    "rejectHint": "Rechazar le indica al repartidor que debe cambiar un documento, pero no cuál. Para explicar por qué, rechaza su solicitud con un motivo: ese texto se muestra en su app.",
+    "reject": "Rechazar",
+    "verify": "Verificar"
+  }
+}

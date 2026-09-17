@@ -10,28 +10,42 @@ import { getBrowserClient } from '@favornoms/database/client';
 // saves in settings never reaches checkout. `get_or_create_my_customer` is
 // authoritative: it either returns a uuid or raises.
 
-const CUSTOMER_ERRORS: Array<[string, string]> = [
-  ['auth_required', 'Your session expired. Please sign in again.'],
-  ['branch_not_found', 'We couldn’t find this restaurant. Please reload the page.'],
-  ['customer_identity_unavailable', 'We couldn’t set up your profile. Please try again.'],
+/**
+ * The failures a diner can act on, keyed by the code Postgres raises, to the `account.errors.*`
+ * message that explains them. This module cannot translate (no hooks here), so it names the
+ * message and the screen that shows the error translates it.
+ */
+const CUSTOMER_ERRORS: Array<[string, CustomerErrorKey]> = [
+  ['auth_required', 'sessionExpired'],
+  ['branch_not_found', 'branchNotFound'],
+  ['customer_identity_unavailable', 'profileUnavailable'],
 ];
 
-/** Turn a Postgres error message into something a diner can act on. */
-export function describeCustomerError(message: string): string {
-  for (const [code, text] of CUSTOMER_ERRORS) {
-    if (message.includes(code)) return text;
+export type CustomerErrorKey = 'sessionExpired' | 'branchNotFound' | 'profileUnavailable';
+
+/**
+ * The `account.errors.*` key for a failure thrown by resolveMyCustomerId (or a raw Postgres message),
+ * or null when it is not one we can put into words — show `account.errors.generic` then.
+ */
+export function customerErrorKey(error: unknown): CustomerErrorKey | null {
+  const message = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
+  for (const [code, key] of CUSTOMER_ERRORS) {
+    if (message.includes(code)) return key;
   }
-  return message;
+  return null;
 }
 
-/** Resolve (creating if needed) the signed-in diner's customer row. Throws on failure. */
+/**
+ * Resolve (creating if needed) the signed-in diner's customer row. Throws on failure, with the
+ * server's message (which carries the code customerErrorKey reads) so callers can translate it.
+ */
 export async function resolveMyCustomerId(branchId: string): Promise<string> {
   const supabase = getBrowserClient();
   const { data, error } = await supabase.rpc('get_or_create_my_customer', {
     p_branch_id: branchId,
   });
-  if (error) throw new Error(describeCustomerError(error.message));
+  if (error) throw new Error(error.message);
   const customerId = (data as string | null) ?? null;
-  if (!customerId) throw new Error(describeCustomerError('customer_identity_unavailable'));
+  if (!customerId) throw new Error('customer_identity_unavailable');
   return customerId;
 }

@@ -10,6 +10,7 @@
 // except the one repair a broken tenant needs — that stays inline.
 
 import * as React from 'react';
+import { useTranslations } from 'next-intl';
 import {
   AlertTriangle,
   Ban,
@@ -22,6 +23,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { Badge, Button, cn } from '@favornoms/ui';
+import { usePlatformText } from './platform-text';
 import {
   money,
   type ChipIcon,
@@ -50,6 +52,7 @@ const ROW_GRID =
   'grid grid-cols-1 gap-1 md:grid-cols-[minmax(0,1fr)_16rem_8rem_1.5rem] md:items-center md:gap-4';
 
 export function TenantIndexHeader() {
+  const t = useTranslations('platform.index');
   return (
     <div
       aria-hidden
@@ -58,9 +61,9 @@ export function TenantIndexHeader() {
         'hidden border-l-4 border-l-transparent bg-muted/50 px-5 py-3 text-xs uppercase tracking-wider text-muted-foreground md:grid',
       )}
     >
-      <span>Restaurant</span>
-      <span>Billing &amp; access</span>
-      <span>Branches</span>
+      <span>{t('restaurant')}</span>
+      <span>{t('billingAccess')}</span>
+      <span>{t('branches')}</span>
       <span />
     </div>
   );
@@ -85,6 +88,8 @@ export function TenantIndexRow({
   onOpen: (id: string, trigger: HTMLElement) => void;
   onAction: (row: TenantRow, action: PrimaryAction) => void;
 }) {
+  const p = usePlatformText();
+  const { t, text } = p;
   return (
     <li className={cn('border-l-4 border-t border-border/40', RAIL_CLS[health.rail])}>
       <button
@@ -93,7 +98,12 @@ export function TenantIndexRow({
         // Every lamp, not just the first: a screen-reader user hearing only
         // "Suspended" would never learn the subscription had also lapsed, which
         // is the difference between Restore fixing it and Restore doing nothing.
-        aria-label={`${row.name} — ${health.lamps.map((l) => l.label).join(', ')}. ${health.branchCount}, ${health.branchQualifier}. Open details.`}
+        aria-label={t('index.rowLabel', {
+          name: row.name,
+          lamps: p.list(health.lamps.map((l) => text(l.label))),
+          branchCount: text(health.branchCount),
+          qualifier: text(health.branchQualifier),
+        })}
         className={cn(
           ROW_GRID,
           // Not `focus-ring`: its ring-offset-2 draws OUTSIDE the row, and the
@@ -111,28 +121,32 @@ export function TenantIndexRow({
             <span className="min-w-0 truncate font-display text-base font-bold">{row.name}</span>
             {row.franchise && (
               <Badge variant="muted" className="px-2 py-0.5 text-[10px]">
-                Franchise
+                {t('index.franchise')}
               </Badge>
             )}
           </span>
           <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-            <span className="font-mono">{row.slug}</span> · {row.ent.planCode} ·{' '}
-            {money(row.ent.monthlyTotal)}/mo
+            {t.rich('index.slugLine', {
+              slug: row.slug,
+              plan: p.plan(row.ent.planCode),
+              price: money(row.ent.monthlyTotal),
+              mono: (chunks) => <span className="font-mono">{chunks}</span>,
+            })}
           </span>
         </span>
 
         <span className="min-w-0">
           <span className="flex flex-wrap gap-1.5">
             {health.lamps.map((lamp) => (
-              <Lamp key={lamp.label} chip={lamp} />
+              <Lamp key={lamp.label.key} chip={lamp} label={text(lamp.label)} />
             ))}
           </span>
-          <span className="mt-1 block text-xs text-muted-foreground">{health.clause}</span>
+          <span className="mt-1 block text-xs text-muted-foreground">{text(health.clause)}</span>
         </span>
 
         <span className="text-xs text-muted-foreground">
-          <span className="block md:font-medium md:text-foreground">{health.branchCount}</span>
-          <span className="block">{health.branchQualifier}</span>
+          <span className="block md:font-medium md:text-foreground">{text(health.branchCount)}</span>
+          <span className="block">{text(health.branchQualifier)}</span>
         </span>
 
         <ChevronRight className="hidden h-4 w-4 shrink-0 text-muted-foreground md:block" aria-hidden />
@@ -152,7 +166,7 @@ export function TenantIndexRow({
               )}
               aria-hidden
             />
-            {health.reason}
+            {health.reason.map(text).join(' ')}
           </p>
           {action && (
             <div className="flex shrink-0 flex-col gap-1 md:items-end">
@@ -163,11 +177,11 @@ export function TenantIndexRow({
                 onClick={() => onAction(row, action)}
                 leftIcon={<ActionIcon kind={action.kind} />}
               >
-                {action.label}
+                {text(action.label)}
               </Button>
               {actionDone && (
                 <span role="status" className="flex items-center gap-1 text-xs text-success">
-                  <Check className="h-3.5 w-3.5" aria-hidden /> Reactivated
+                  <Check className="h-3.5 w-3.5" aria-hidden /> {t('index.reactivated')}
                 </span>
               )}
               {error && (
@@ -188,12 +202,12 @@ export function TenantIndexRow({
 
 // The icon carries the meaning as well as the colour, so the two off-switches
 // stay distinguishable in greyscale and for colour-blind operators.
-function Lamp({ chip }: { chip: HealthChip }) {
+function Lamp({ chip, label }: { chip: HealthChip; label: string }) {
   const Icon = CHIP_ICON[chip.icon];
   return (
     <Badge variant={chip.variant} className="px-2 py-0.5 text-[10px]">
       <Icon className="h-3 w-3" aria-hidden />
-      {chip.label}
+      {label}
     </Badge>
   );
 }

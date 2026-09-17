@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { Check, ChevronDown, Download } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { detectInstallPlatform, type InstallPlatform } from '@favornoms/shared';
 import {
   useApplicationIcon,
@@ -9,20 +10,19 @@ import {
   useInstallAvailability,
 } from './install-prompt';
 
-/** What to do when the browser cannot open its own install window for us. */
+/**
+ * What to do when the browser cannot open its own install window for us — the key of the
+ * steps under common.install.steps.
+ */
 const STEPS: Record<InstallPlatform, string> = {
-  'ios-safari': 'Tap the Share button at the bottom of Safari, then choose Add to Home Screen.',
-  'ios-other-browser':
-    'Tap the Share button, then choose Add to Home Screen. If it is not there, open this page in Safari and do the same.',
-  'in-app-browser':
-    "This browser inside another app cannot install apps. Open the menu (⋯ or ⋮), choose Open in browser, then install it from there.",
-  android: 'Tap the ⋮ menu at the top right of your browser, then choose Install app or Add to Home screen.',
-  'desktop-chromium':
-    'Click the install icon at the right end of the address bar, or open the ⋮ menu and choose Cast, save and share › Install page as app.',
-  'desktop-safari': 'In Safari’s menu bar, choose File › Add to Dock.',
-  'desktop-firefox':
-    'Firefox on a computer cannot install apps. Open this page in Chrome, Edge or Safari to install it.',
-  unknown: 'Open your browser’s menu and look for Install app or Add to Home screen.',
+  'ios-safari': 'iosSafari',
+  'ios-other-browser': 'iosOtherBrowser',
+  'in-app-browser': 'inAppBrowser',
+  android: 'android',
+  'desktop-chromium': 'desktopChromium',
+  'desktop-safari': 'desktopSafari',
+  'desktop-firefox': 'desktopFirefox',
+  unknown: 'unknown',
 };
 
 /**
@@ -38,6 +38,7 @@ const STEPS: Record<InstallPlatform, string> = {
  * Renders its own <li> to sit directly in the account menu <ul>.
  */
 export function InstallAppButton() {
+  const t = useTranslations('common');
   const { canInstall, isStandalone, install } = useInstallAvailability();
   const appName = useApplicationName();
   const appIcon = useApplicationIcon();
@@ -68,10 +69,10 @@ export function InstallAppButton() {
   };
 
   const subtitle = installed
-    ? 'Installed — open it from your home screen or desktop'
+    ? t('install.installed')
     : canInstall
-      ? 'Faster reordering and order notifications'
-      : 'Add it to your home screen — tap to see how';
+      ? t('install.benefits')
+      : t('install.howTo');
 
   return (
     <li>
@@ -98,14 +99,14 @@ export function InstallAppButton() {
           </div>
         )}
         <div className="min-w-0 flex-1">
-          <p className="font-semibold">Install {appName}</p>
+          <p className="font-semibold">{t('install.title', { name: appName })}</p>
           <p className={`text-xs ${installed ? 'text-success' : 'text-muted-foreground'}`}>{subtitle}</p>
         </div>
         {installed ? (
           <Check className="h-5 w-5 shrink-0 text-success" aria-hidden />
         ) : canInstall ? (
           <span className="shrink-0 rounded-xl bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground">
-            Install
+            {t('install.install')}
           </span>
         ) : (
           <ChevronDown
@@ -116,10 +117,9 @@ export function InstallAppButton() {
       </button>
       {open && !canInstall && !installed && (
         <div className="mt-2 rounded-2xl border border-border/60 bg-muted/40 px-4 py-3 text-sm">
-          <p>{STEPS[platform]}</p>
+          <p>{t(`install.steps.${STEPS[platform]}`)}</p>
           <p className="mt-1.5 text-xs text-muted-foreground">
-            Already installed? Your browser will not offer it again — open {appName} from your home
-            screen or desktop instead.
+            {t('install.alreadyInstalled', { name: appName })}
           </p>
         </div>
       )}

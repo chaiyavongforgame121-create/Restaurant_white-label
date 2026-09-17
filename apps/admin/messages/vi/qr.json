@@ -1,0 +1,91 @@
+{
+  "actions": {
+    "copied": "Đã sao chép",
+    "copyLink": "Sao chép liên kết"
+  },
+  "noLink": {
+    "title": "Chưa thể tạo liên kết thực đơn",
+    "branchBody": {
+      "both": "Nhà hàng và chi nhánh này chưa có slug URL, nên chưa có địa chỉ công khai để mã QR trỏ tới. Slug là tên ngắn trong liên kết thực đơn của bạn, ví dụ <code>/r/coastal-grill/brooklyn</code>.",
+      "restaurant": "Nhà hàng này chưa có slug URL, nên chưa có địa chỉ công khai để mã QR trỏ tới. Slug là tên ngắn trong liên kết thực đơn của bạn, ví dụ <code>/r/coastal-grill/brooklyn</code>.",
+      "branch": "Chi nhánh này chưa có slug URL, nên chưa có địa chỉ công khai để mã QR trỏ tới. Slug là tên ngắn trong liên kết thực đơn của bạn, ví dụ <code>/r/coastal-grill/brooklyn</code>."
+    },
+    "branchHelp": "Slug được tạo khi đăng ký. Nếu slug của bạn đang trống, hãy đặt <strong>tên miền riêng</strong> trong Cài đặt chi nhánh — cách này cũng cho chi nhánh một địa chỉ quét được — hoặc nhờ bộ phận hỗ trợ điền slug.",
+    "tableBody": {
+      "both": "Nhà hàng và chi nhánh này chưa có slug URL, nên chưa có địa chỉ công khai để mã của bàn trỏ tới. Slug là tên ngắn trong liên kết thực đơn của bạn, ví dụ <code>/r/coastal-grill/brooklyn</code>.",
+      "restaurant": "Nhà hàng này chưa có slug URL, nên chưa có địa chỉ công khai để mã của bàn trỏ tới. Slug là tên ngắn trong liên kết thực đơn của bạn, ví dụ <code>/r/coastal-grill/brooklyn</code>.",
+      "branch": "Chi nhánh này chưa có slug URL, nên chưa có địa chỉ công khai để mã của bàn trỏ tới. Slug là tên ngắn trong liên kết thực đơn của bạn, ví dụ <code>/r/coastal-grill/brooklyn</code>."
+    },
+    "tableHelp": "Hãy đặt <strong>tên miền riêng</strong> trong Cài đặt chi nhánh, hoặc nhờ bộ phận hỗ trợ điền slug. Dữ liệu bàn của bạn vẫn an toàn — mã sẽ hiện ở đây ngay khi chi nhánh có địa chỉ.",
+    "openBranchSettings": "Mở Cài đặt chi nhánh"
+  },
+  "branch": {
+    "title": "Mã QR chi nhánh",
+    "introWithTables": "Một mã cho cả chi nhánh — tại quầy, cửa sổ, tờ rơi mang đi. Khách quét để mở thực đơn của {branch} và chọn cách đặt món. Mỗi bàn có mã riêng.",
+    "intro": "In mã này và đặt ở quầy hoặc trên tờ rơi. Khách quét để mở thực đơn của {branch} và đặt món bằng điện thoại.",
+    "tableCodes": "Mã QR của bàn ({count})",
+    "setUpTableCodes": "Thiết lập mã QR cho bàn",
+    "downloadPng": "Tải PNG",
+    "print": "In",
+    "pngHint": "Ảnh PNG có kích thước {size}×{size}px — đủ lớn cho bảng đặt bàn và áp phích."
+  },
+  "tables": {
+    "accessDenied": {
+      "title": "Không có quyền quản lý bàn",
+      "reason": "Chỉ chủ sở hữu hoặc quản trị viên mới có thể thiết lập bàn tại {branch}."
+    },
+    "title": "Mã QR của bàn",
+    "intro": "Mỗi bàn một mã. Quét mã sẽ mở thực đơn của {branch} với hình thức Ăn tại quán và bàn đó đã được chọn sẵn — khách không cần chọn chi nhánh hay nhập số bàn.",
+    "printSheet": "In trang mã",
+    "cancel": "Hủy",
+    "addTable": "Thêm bàn",
+    "editingNote": "Đang sửa bàn này. Mã QR không thay đổi — mọi bảng mã đang đặt trên bàn vẫn dùng được.",
+    "fields": {
+      "tableNumber": "Số bàn",
+      "name": "Tên (không bắt buộc)",
+      "namePlaceholder": "Bàn cạnh cửa sổ",
+      "type": "Loại",
+      "seats": "Số chỗ (không bắt buộc)",
+      "zone": "Khu vực (không bắt buộc)",
+      "zonePlaceholder": "Sân thượng",
+      "sortOrder": "Thứ tự sắp xếp (không bắt buộc)"
+    },
+    "sortHint": "Thứ tự sắp xếp giúp bàn 2 đứng trước bàn 10 — số bàn là văn bản, nên nếu để nguyên sẽ được sắp theo bảng chữ cái. Để trống thì hệ thống dùng các chữ số trong số bàn.",
+    "saveChanges": "Lưu thay đổi",
+    "empty": {
+      "title": "Chưa có bàn nào",
+      "description": "Thêm bàn và mỗi bàn sẽ có mã QR riêng để in và đặt trên bàn.",
+      "bulk": "Thêm bàn 1–{count}"
+    },
+    "codePending": "Đang chờ mã",
+    "editTable": "Sửa bàn",
+    "rotate": "Cấp mã mới",
+    "deleteTable": "Xóa bàn",
+    "turnOff": "Tắt",
+    "turnOn": "Bật",
+    "retired": {
+      "title": "Đã tắt",
+      "description": "Mã của các bàn này không còn gắn với bàn — khách quét sẽ vào thực đơn thông thường. Đơn hàng cũ vẫn hiển thị bàn.",
+      "badge": "Tắt"
+    },
+    "footer": "Ảnh PNG có kích thước {size}×{size}px. “In trang mã” xếp mọi bàn đang bật thành hai cột để cắt.",
+    "tableLabel": "Bàn {number}",
+    "rotateConfirm": {
+      "title": "Cấp mã mới cho {table}?",
+      "body": "Mọi bản in mã QR của bàn này sẽ ngừng hoạt động ngay lập tức.",
+      "confirm": "Cấp mã mới"
+    },
+    "deleteConfirm": {
+      "title": "Xóa {table}?",
+      "body": "Mã của bàn sẽ bị hủy vĩnh viễn — để ngừng dùng bàn mà vẫn xem được đơn hàng cũ, hãy tắt bàn.",
+      "confirm": "Xóa"
+    },
+    "errors": {
+      "duplicateNumber": "Chi nhánh này đã có bàn mang số đó.",
+      "hasOrders": "Bàn này vẫn còn đơn hàng hoặc lượt phục vụ liên kết nên không thể xóa. Hãy tắt bàn.",
+      "tableNotFound": "Bàn này không còn tồn tại.",
+      "notPermitted": "Tài khoản của bạn không thể thay đổi bàn tại chi nhánh này.",
+      "generic": "Đã xảy ra lỗi. Vui lòng thử lại."
+    }
+  }
+}

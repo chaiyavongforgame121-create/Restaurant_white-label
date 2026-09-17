@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { Button } from './button';
+import { useUiStrings } from './ui-strings';
 
 /**
  * In-app replacements for window.confirm and window.prompt.
@@ -87,6 +88,7 @@ export function useAlert(): (req: AlertRequest) => Promise<void> {
 export function DialogProvider({ children }: { children: React.ReactNode }) {
   const [pending, setPending] = React.useState<Pending | null>(null);
   const [draft, setDraft] = React.useState('');
+  const strings = useUiStrings();
 
   const confirm = React.useCallback(
     (req: ConfirmRequest) =>
@@ -179,7 +181,7 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
                     variant="ghost"
                     onClick={() => settle(pending.kind === 'prompt' ? null : false)}
                   >
-                    {(pending.kind === 'confirm' ? pending.req.cancelLabel : undefined) ?? 'Cancel'}
+                    {(pending.kind === 'confirm' ? pending.req.cancelLabel : undefined) ?? strings.cancel}
                   </Button>
                 )}
                 <Button
@@ -190,7 +192,11 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
                   onClick={() => settle(pending.kind === 'prompt' ? draft : true)}
                 >
                   {pending.req.confirmLabel ??
-                    (pending.kind === 'prompt' ? 'Save' : pending.kind === 'alert' ? 'OK' : 'Confirm')}
+                    (pending.kind === 'prompt'
+                      ? strings.save
+                      : pending.kind === 'alert'
+                        ? strings.ok
+                        : strings.confirm)}
                 </Button>
               </div>
             </div>

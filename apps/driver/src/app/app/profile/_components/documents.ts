@@ -6,21 +6,12 @@ import type { DriverApproval } from '@favornoms/database/queries';
  * and the apply screen exactly. The rider's payout QR lives in the same folder under
  * `payout_qr.*`, which is why every read here filters by key rather than taking the
  * folder listing as-is.
+ *
+ * What each one is called on screen, and the hint under it, is in the `profile` catalogue:
+ * `docs.{key}.label` (a heading), `docs.{key}.inline` (inside a sentence) and `docs.{key}.hint`.
  */
 export const DOC_KEYS = ['license', 'vehicle_reg', 'selfie'] as const;
 export type DocKey = (typeof DOC_KEYS)[number];
-
-export const DOC_LABEL: Record<DocKey, string> = {
-  license: 'Driver licence',
-  vehicle_reg: 'Vehicle registration',
-  selfie: 'Selfie with licence',
-};
-
-export const DOC_HINT: Record<DocKey, string> = {
-  license: 'Both sides if your details are printed on the back.',
-  vehicle_reg: 'For the vehicle you actually deliver on.',
-  selfie: 'You holding your licence — face and licence both readable.',
-};
 
 export interface DocFile {
   key: DocKey;
@@ -113,10 +104,16 @@ export const STAGE_TONE: Record<DocsStage, 'success' | 'warning' | 'danger' | 'i
   changes_needed: 'danger',
 };
 
+/**
+ * `stale` — approved, but before the rider replaced a document.
+ * The label and the sentence under it are `documents.branchState.{code}.label` / `.detail`
+ * in the `profile` catalogue.
+ */
+export type BranchVerificationCode = 'stale' | 'cleared' | 'pending' | 'rejected' | 'paused';
+
 export interface BranchVerification {
-  label: string;
+  code: BranchVerificationCode;
   variant: 'success' | 'warning' | 'danger' | 'info';
-  detail: string;
 }
 
 /**
@@ -124,8 +121,8 @@ export interface BranchVerification {
  *
  * `driver_approvals` is per-branch, so this is the only verdict that differs between
  * restaurants. The document check itself (`drivers.kyc_status`) is a single shared column
- * — see `SHARED_CHECK_NOTE` — so the screen must not imply each restaurant re-examined
- * the files.
+ * — see `documents.byRestaurant.sharedNote` — so the screen must not imply each restaurant
+ * re-examined the files.
  */
 export function branchVerification(
   approval: DriverApproval,
@@ -134,70 +131,49 @@ export function branchVerification(
   switch (approval.status) {
     case 'approved':
       return decidedBeforeUpload(approval.reviewed_at, receivedAt)
-        ? {
-            label: 'Checked before your update',
-            variant: 'warning',
-            detail:
-              'You replaced a document after they cleared you. They may want to look again — you keep delivering here in the meantime.',
-          }
-        : {
-            label: 'Cleared to deliver',
-            variant: 'success',
-            detail: 'They have seen your documents and approved you.',
-          };
+        ? { code: 'stale', variant: 'warning' }
+        : { code: 'cleared', variant: 'success' };
     case 'pending':
-      return {
-        label: 'Awaiting verification',
-        variant: 'info',
-        detail: 'They have your documents. Nobody here has decided yet.',
-      };
+      return { code: 'pending', variant: 'info' };
     case 'rejected':
-      return {
-        label: 'Not accepted',
-        variant: 'danger',
-        detail: 'They turned this application down.',
-      };
+      return { code: 'rejected', variant: 'danger' };
     default:
-      return {
-        label: 'Paused',
-        variant: 'warning',
-        detail: 'They have paused you here, so you will not get their orders.',
-      };
+      return { code: 'paused', variant: 'warning' };
   }
 }
 
 /**
- * The one thing about this screen a rider cannot work out for themselves: the document
- * check is not per-restaurant. `drivers.kyc_status` is a single column every branch reads,
- * so the first restaurant to verify clears the rider everywhere. Only the approval below
- * is that restaurant's own.
+ * One line for the Profile row, so a rider sees the state without opening the screen.
+ * A key under `summary` in the `profile` catalogue plus the numbers it needs.
  */
-export const SHARED_CHECK_NOTE =
-  'Your documents are checked once and that result is shared with every restaurant. Each restaurant then decides separately whether you may deliver for them.';
+export type DocumentsSummary =
+  | { key: 'unreadable' | 'awaiting' | 'rechecking' | 'changesNeeded' | 'verifiedApplyNext'; values?: undefined }
+  | { key: 'incomplete'; values: { missing: number; total: number } }
+  | { key: 'verifiedCleared'; values: { count: number } };
 
-/** One line for the Profile row, so a rider sees the state without opening the screen. */
 export function documentsSummary(
   stage: DocsStage,
   docs: readonly DocFile[],
   approvals: readonly DriverApproval[],
-): string {
+): DocumentsSummary {
   const cleared = approvals.filter((a) => a.status === 'approved').length;
   switch (stage) {
     case 'unreadable':
-      return 'Could not check your documents just now';
-    case 'incomplete': {
-      const missing = missingDocKeys(docs).length;
-      return `${missing} of ${DOC_KEYS.length} still to send`;
-    }
+      return { key: 'unreadable' };
+    case 'incomplete':
+      return {
+        key: 'incomplete',
+        values: { missing: missingDocKeys(docs).length, total: DOC_KEYS.length },
+      };
     case 'awaiting':
-      return 'All received — awaiting verification';
+      return { key: 'awaiting' };
     case 'rechecking':
-      return 'You replaced a document since it was checked';
+      return { key: 'rechecking' };
     case 'changes_needed':
-      return 'A document needs changing';
+      return { key: 'changesNeeded' };
     default:
       return cleared > 0
-        ? `Verified · ${cleared} ${cleared === 1 ? 'restaurant' : 'restaurants'} cleared you`
-        : 'Verified — apply to a restaurant next';
+        ? { key: 'verifiedCleared', values: { count: cleared } }
+        : { key: 'verifiedApplyNext' };
   }
 }

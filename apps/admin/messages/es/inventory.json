@@ -1,0 +1,70 @@
+{
+  "metaTitle": "Inventario · Administración de Favornoms",
+  "title": "Inventario",
+  "subtitle": "Controla el inventario, registra reabastecimientos y mermas.",
+  "stats": {
+    "tracked": "Artículos controlados",
+    "lowStock": "Inventario bajo"
+  },
+  "errors": {
+    "generic": "Algo salió mal. Inténtalo de nuevo.",
+    "network": "No se pudo conectar con el servidor. Revisa tu conexión e inténtalo de nuevo.",
+    "permissionDenied": "No tienes permiso para cambiar esto.",
+    "invalidValue": "Ese valor no es válido. Revísalo e inténtalo de nuevo.",
+    "positiveQuantity": "Ingresa una cantidad mayor que 0"
+  },
+  "tracking": {
+    "failed": "No se pudo cambiar el control de inventario de “{name}”. {reason}",
+    "notSaved": "No se guardó nada para “{name}”. Puede que se haya eliminado, o que tu rol no tenga permiso para editar el menú en esta sucursal.",
+    "off": "El control de inventario está desactivado para “{name}”: la tienda en línea ya no lo marcará como agotado y su cantidad se borró, así que si vuelves a marcar la casilla empezará en 0.",
+    "on": "Controlando el inventario de “{name}”: quedan {count}.",
+    "onEmpty": "Controlando el inventario de “{name}”, pero quedan 0, así que los clientes lo ven agotado de inmediato. Registra un reabastecimiento para volver a ponerlo a la venta."
+  },
+  "lowStock": {
+    "title": "Alertas de inventario bajo",
+    "detail": "Quedan {left} · alerta en {threshold}"
+  },
+  "actions": {
+    "restock": "Reabastecer",
+    "waste": "Merma"
+  },
+  "table": {
+    "item": "Artículo",
+    "trackStock": "Controlar inventario",
+    "stock": "Inventario",
+    "threshold": "Alerta en"
+  },
+  "restocks": {
+    "title": "Reabastecimientos recientes",
+    "empty": "Aún no hay reabastecimientos registrados."
+  },
+  "waste": {
+    "title": "Mermas recientes",
+    "empty": "Aún no hay mermas registradas."
+  },
+  "reasons": {
+    "expired": "Caducado",
+    "spoiled": "Echado a perder",
+    "spilled": "Derramado",
+    "damaged": "Dañado",
+    "staffMeal": "Comida del personal",
+    "other": "Otro"
+  },
+  "restockDialog": {
+    "title": "Reabastecer {name}",
+    "quantity": "Cantidad",
+    "cost": "Costo por unidad (USD, opcional)",
+    "supplier": "Proveedor (opcional)",
+    "notes": "Notas (opcional)",
+    "cancel": "Cancelar",
+    "submit": "Registrar reabastecimiento"
+  },
+  "wasteDialog": {
+    "title": "Registrar merma — {name}",
+    "quantity": "Cantidad",
+    "reason": "Motivo",
+    "notes": "Notas (opcional)",
+    "cancel": "Cancelar",
+    "submit": "Registrar merma"
+  }
+}

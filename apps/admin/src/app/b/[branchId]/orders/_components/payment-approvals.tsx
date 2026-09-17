@@ -2,10 +2,13 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Check, QrCode, X } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Button, Card } from '@favornoms/ui';
 import { formatPhone } from '@favornoms/shared';
+import { orderErrorKey } from './order-errors';
+import { useIntlLocale } from './order-labels';
 
 export interface PendingTransfer {
   payment_id: string;
@@ -34,6 +37,8 @@ export function PaymentApprovals({
   branchId: string;
   pending: PendingTransfer[];
 }) {
+  const t = useTranslations('orders');
+  const intlLocale = useIntlLocale();
   const router = useRouter();
   const [urls, setUrls] = React.useState<Record<string, string>>({});
   const [busy, setBusy] = React.useState<string | null>(null);
@@ -62,6 +67,7 @@ export function PaymentApprovals({
     };
   }, [pending]);
 
+  // `reason` is what the operator typed for the customer; it is sent exactly as written.
   const decide = async (paymentId: string, approve: boolean, reason: string | null) => {
     setBusy(paymentId);
     setError(null);
@@ -73,11 +79,8 @@ export function PaymentApprovals({
     });
     setBusy(null);
     if (rpcErr) {
-      setError(
-        /forbidden/i.test(rpcErr.message)
-          ? 'Only an owner or manager can approve payments.'
-          : rpcErr.message,
-      );
+      console.error('[orders] decide_payment_proof failed', rpcErr.message);
+      setError(t(`errors.${orderErrorKey('decidePayment', rpcErr.message)}`));
       return;
     }
     setRejecting(null);
@@ -91,12 +94,9 @@ export function PaymentApprovals({
     <Card className="mb-4 border-warning/40 bg-warning/5 p-4">
       <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
         <QrCode className="h-5 w-5 text-warning" />
-        {pending.length} transfer{pending.length === 1 ? '' : 's'} waiting for you
+        {t('payments.title', { count: pending.length })}
       </h2>
-      <p className="mt-1 text-sm text-muted-foreground">
-        These orders are paid by QR transfer and will not reach the kitchen until you confirm
-        the money arrived.
-      </p>
+      <p className="mt-1 text-sm text-muted-foreground">{t('payments.subtitle')}</p>
 
       <ul className="mt-3 space-y-3">
         {pending.map((p) => {
@@ -107,14 +107,16 @@ export function PaymentApprovals({
                 <div className="min-w-0">
                   <p className="font-mono text-xs text-muted-foreground">#{p.order_number}</p>
                   <p className="font-semibold">
-                    ${Number(p.amount).toFixed(2)} · {p.customer_name ?? 'Customer'}
+                    ${Number(p.amount).toFixed(2)} · {p.customer_name ?? t('payments.customer')}
                   </p>
                   {p.customer_phone && (
                     <p className="text-sm text-muted-foreground">{formatPhone(p.customer_phone)}</p>
                   )}
                   {p.submitted_at && (
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      Slip uploaded {new Date(p.submitted_at).toLocaleString('en-US')}
+                      {t('payments.slipUploaded', {
+                        date: new Date(p.submitted_at).toLocaleString(intlLocale),
+                      })}
                     </p>
                   )}
                 </div>
@@ -124,7 +126,7 @@ export function PaymentApprovals({
                       htmlFor={`pay-note-${p.payment_id}`}
                       className="text-xs font-semibold"
                     >
-                      What was wrong?
+                      {t('payments.rejectLabel')}
                     </label>
                     <textarea
                       id={`pay-note-${p.payment_id}`}
@@ -132,7 +134,7 @@ export function PaymentApprovals({
                       onChange={(e) => setNote(e.target.value)}
                       rows={2}
                       maxLength={280}
-                      placeholder="Shown to the customer so they can fix it"
+                      placeholder={t('payments.rejectPlaceholder')}
                       className="focus-ring mt-1 w-full resize-none rounded-lg border border-border bg-card px-2 py-1.5 text-sm"
                     />
                     <div className="mt-2 flex justify-end gap-2">
@@ -144,7 +146,7 @@ export function PaymentApprovals({
                           setNote('');
                         }}
                       >
-                        Cancel
+                        {t('payments.cancel')}
                       </Button>
                       <Button
                         size="sm"
@@ -153,7 +155,7 @@ export function PaymentApprovals({
                         disabled={note.trim().length === 0}
                         onClick={() => void decide(p.payment_id, false, note.trim())}
                       >
-                        Confirm reject
+                        {t('payments.confirmReject')}
                       </Button>
                     </div>
                   </div>
@@ -166,7 +168,7 @@ export function PaymentApprovals({
                       leftIcon={<X className="h-4 w-4" />}
                       onClick={() => setRejecting(p.payment_id)}
                     >
-                      Reject
+                      {t('payments.reject')}
                     </Button>
                     <Button
                       size="sm"
@@ -176,7 +178,7 @@ export function PaymentApprovals({
                       leftIcon={<Check className="h-4 w-4" />}
                       onClick={() => void decide(p.payment_id, true, null)}
                     >
-                      Approve
+                      {t('payments.approve')}
                     </Button>
                   </div>
                 )}
@@ -187,13 +189,13 @@ export function PaymentApprovals({
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={url}
-                    alt={`Transfer slip for order ${p.order_number}`}
+                    alt={t('payments.slipAlt', { number: p.order_number })}
                     className="max-h-64 w-full rounded-lg border border-border bg-muted object-contain"
                   />
                 </a>
               ) : (
                 <div className="mt-3 grid h-24 place-items-center rounded-lg bg-muted text-sm text-muted-foreground">
-                  {p.proof_path ? 'Loading slip…' : 'No slip uploaded yet'}
+                  {p.proof_path ? t('payments.loadingSlip') : t('payments.noSlip')}
                 </div>
               )}
             </li>

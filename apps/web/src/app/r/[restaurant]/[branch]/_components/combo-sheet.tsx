@@ -96,7 +96,7 @@ export function ComboSheet({
         <div className="absolute inset-0 bg-gradient-to-t from-card via-card/20 to-transparent" />
         <button
           onClick={onClose}
-          aria-label="Close"
+          aria-label={t('common.close')}
           className="focus-ring absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-full bg-card/85 text-foreground shadow-soft backdrop-blur"
         >
           <span className="text-lg leading-none">×</span>
@@ -120,14 +120,14 @@ export function ComboSheet({
             <span className="font-display text-2xl font-bold text-primary">{formatCurrency(unit)}</span>
             {savings > 0 && (
               <span className="block text-[10px] font-bold uppercase tracking-wider text-success">
-                Save {formatCurrency(savings)}
+                {t('storefront.combos.save', { amount: formatCurrency(savings) })}
               </span>
             )}
           </span>
         </div>
 
         <div className="mt-6">
-          <p className="font-display text-sm font-semibold">What&apos;s included</p>
+          <p className="font-display text-sm font-semibold">{t('menu.whatsIncluded')}</p>
           <ul className="mt-2 space-y-2">
             {(combo.items ?? []).map((it, i) => (
               <li
@@ -158,7 +158,7 @@ export function ComboSheet({
         <div className="flex items-center gap-3">
           <QuantityStepper value={qty} onChange={setQty} min={1} size="lg" />
           <Button variant="gradient" size="xl" fullWidth onClick={handleAdd}>
-            {`${t('menu.addToCart')} · ${formatCurrency(total)}`}
+            {t('menu.addWithPrice', { price: formatCurrency(total) })}
           </Button>
         </div>
       </motion.div>

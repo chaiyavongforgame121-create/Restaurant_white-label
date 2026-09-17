@@ -1,0 +1,31 @@
+{
+  "title": "History",
+  "range": "{days, plural, one {# day} other {# days}}",
+  "allRestaurants": "All restaurants",
+  "loadError": "Could not load your history — check your signal and reopen.",
+  "summary": {
+    "single": "{jobs, plural, one {# job} other {# jobs}} · {delivered} delivered · <amount>{total}</amount>",
+    "all": "{jobs, plural, one {# job} other {# jobs}} · {delivered} delivered · <amount>{total}</amount> across every restaurant",
+    "restaurant": "{jobs, plural, one {# job} other {# jobs}} · {delivered} delivered · <amount>{total}</amount> from {restaurant}"
+  },
+  "empty": {
+    "all": "No jobs in the {days, plural, one {last day} other {last # days}}.",
+    "restaurant": "No jobs for {restaurant} in the {days, plural, one {last day} other {last # days}}."
+  },
+  "noPayment": "No payment",
+  "outcome": {
+    "inProgress": "In progress",
+    "delivered": "Delivered",
+    "youCancelled": "You cancelled",
+    "couldNotDeliver": "Could not deliver",
+    "restaurantCancelled": "Restaurant cancelled",
+    "reassigned": "Given to another rider",
+    "offerExpired": "Offer expired",
+    "youDeclined": "You declined",
+    "ended": "Ended"
+  },
+  "ledger": {
+    "paid": "Paid",
+    "awaitingPayout": "Awaiting payout"
+  }
+}

@@ -1,3 +1,5 @@
+import type { Metadata } from 'next';
+import { getTranslations } from 'next-intl/server';
 import { getServerClient } from '@favornoms/database/server';
 import { HappyHoursManager } from './_components/happy-hours-manager';
 
@@ -5,7 +7,10 @@ interface Props {
   params: Promise<{ branchId: string }>;
 }
 
-export const metadata = { title: 'Happy hours · Favornoms admin' };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('menuExtras');
+  return { title: t('happyHours.metaTitle') };
+}
 
 export default async function HappyHoursPage({ params }: Props) {
   const { branchId } = await params;

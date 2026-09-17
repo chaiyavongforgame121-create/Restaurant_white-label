@@ -1,0 +1,141 @@
+{
+  "header": {
+    "title": "Menu",
+    "summary": "{items, plural, one {# item} other {# items}} across {categories, plural, one {# category} other {# categories}}",
+    "modeEdit": "Edit",
+    "modeReorder": "Reorder",
+    "modifiers": "Modifiers",
+    "combos": "Combos",
+    "happyHours": "Happy hours",
+    "aiImport": "AI import",
+    "addItem": "Add item"
+  },
+  "card": {
+    "hidden": "Hidden",
+    "hiddenHint": "Not on the customer menu. Combos that include it still sell it.",
+    "showOnMenu": "Show on menu",
+    "edit": "Edit",
+    "duplicate": "Duplicate",
+    "delete": "Delete",
+    "soldOut": "Sold out",
+    "stockLeft": "{count} left"
+  },
+  "notices": {
+    "savedTracking": "Saved “{name}” — tracking stock, {count} left.",
+    "savedUntracked": "Saved “{name}” — stock tracking is off, so the storefront will not mark it sold out.",
+    "copied": "Copied. The copy is hidden from customers, and option groups are not copied — add them in Edit, then switch on “Show on customer menu”.",
+    "nowVisible": "“{name}” is now on the customer menu.",
+    "nowHidden": "“{name}” is hidden from customers.",
+    "visibilityUnchanged": "Nothing was changed. This dish may have been deleted, or your role may not be allowed to edit the menu at this branch.",
+    "reloadFailed": "Saved, but this list could not be reloaded. {reason}"
+  },
+  "deleteConfirm": {
+    "title": "Delete this menu item?",
+    "body": "It disappears from the customer menu, and this cannot be undone.",
+    "confirm": "Delete"
+  },
+  "sheet": {
+    "editTitle": "Edit item",
+    "addTitle": "Add menu item"
+  },
+  "editor": {
+    "name": "Name",
+    "category": "Category",
+    "newCategory": "+ New",
+    "cancelNewCategory": "Cancel",
+    "categoryIcon": "Category icon",
+    "categoryNamePlaceholder": "Category name (e.g. Desserts)",
+    "createCategory": "Create category",
+    "createCategoryFailed": "Could not create category.",
+    "price": "Price (USD)",
+    "description": "Description",
+    "allergens": "Allergens / Concerns",
+    "allergenPlaceholder": "Type an allergen, press Enter (e.g. Peanuts)",
+    "addAllergen": "Add",
+    "removeAllergen": "Remove {allergen}",
+    "allergenHint": "Shown to customers on the item page so allergy-sensitive diners can check before ordering.",
+    "image": "Image",
+    "uploading": "Uploading…",
+    "imageUrlPlaceholder": "…or paste URL",
+    "trackStock": "Track stock",
+    "trackStockOnHint": "The storefront marks this item sold out when the count reaches zero.",
+    "trackStockOffHint": "Not counted. The storefront will always offer this item.",
+    "currentStock": "Current stock",
+    "lowStockAt": "Low-stock alert at",
+    "showOnMenu": "Show on customer menu",
+    "showOnMenuHint": "Off takes the dish off the customer menu without deleting it (combos that include it still sell it). Copies start hidden, without option groups, so you can finish them first.",
+    "recommended": "Chef’s recommendation",
+    "isNew": "New",
+    "save": "Save",
+    "stockReadFailed": "Could not read this item’s stock settings. {reason}",
+    "planLimit": "You’ve reached your plan’s limit ({current} of {limit} items). Upgrade your subscription in Preferences → Plan & billing to add more.",
+    "nothingSaved": "Nothing was saved. This item may have been deleted, or your role may not be allowed to edit the menu at this branch.",
+    "optionsWarning": "“{name}” was saved, but one of its option groups could not be saved. {reason} Groups that did save were kept — reopen the item to finish its options."
+  },
+  "allergenPresets": {
+    "peanuts": "Peanuts",
+    "treeNuts": "Tree nuts",
+    "milk": "Milk",
+    "eggs": "Eggs",
+    "fish": "Fish",
+    "shellfish": "Shellfish",
+    "soy": "Soy",
+    "wheatGluten": "Wheat / Gluten",
+    "sesame": "Sesame"
+  },
+  "modifiers": {
+    "title": "Options",
+    "subtitle": "Size, add-ons, prep choices customers pick",
+    "addGroup": "Add group",
+    "loading": "Loading options…",
+    "emptyTitle": "Add an option group",
+    "emptyExample": "e.g. <strong>Size</strong> (pick 1) or <strong>Add-ons</strong> (pick many)",
+    "groupNamePlaceholder": "Group name (e.g. Size)",
+    "removeGroupTitle": "Remove group",
+    "remove": "Remove",
+    "pickOne": "Pick 1",
+    "pickMany": "Pick many",
+    "upTo": "up to",
+    "required": "Required",
+    "optional": "Optional",
+    "optionNamePlaceholder": "Option name (e.g. Large)",
+    "deleteOption": "Delete option",
+    "default": "Default",
+    "active": "Active",
+    "hidden": "Hidden",
+    "addOption": "Add option",
+    "decrease": "Decrease",
+    "increase": "Increase",
+    "groupSaveFailed": "Could not save option group.",
+    "groupCreateFailed": "Could not create group.",
+    "validation": {
+      "groupName": "Give every option group a name (e.g. Size) before saving.",
+      "noOptions": "Add at least one option to the “{group}” group, or remove the group.",
+      "blankOptions": "Name every option in “{group}”, or remove the blank ones."
+    },
+    "removeConfirm": {
+      "title": "Remove this option group?",
+      "body": "It stops showing on this item, and is deleted entirely if no other item uses it.",
+      "confirm": "Remove"
+    }
+  },
+  "reorder": {
+    "unsavedHint": "Unsaved changes — drag items between categories or up/down to reorder.",
+    "idleHint": "Drag the handle to reorder categories and items.",
+    "saveLayout": "Save layout",
+    "dragCategory": "Drag category",
+    "dragItem": "Drag item",
+    "emptyCategory": "Drop items here to add to this category"
+  },
+  "errors": {
+    "generic": "Something went wrong. Please try again.",
+    "network": "Couldn’t reach the server. Check your connection and try again.",
+    "permission": "Your role isn’t allowed to edit the menu at this branch.",
+    "notFound": "This item no longer exists. It may have been deleted.",
+    "inUse": "It’s still linked to other records, such as past orders or combos, so it can’t be deleted. Hide it from the menu instead.",
+    "duplicate": "That already exists.",
+    "invalidValue": "Some values aren’t valid. Check the fields and try again.",
+    "fileTooLarge": "That image is too large to upload.",
+    "fileType": "That file type can’t be uploaded. Choose an image file."
+  }
+}

@@ -1,0 +1,160 @@
+{
+  "meta": {
+    "title": "Trung tâm trợ giúp",
+    "description": "Câu hỏi thường gặp về đặt hàng, hoàn tiền, thanh toán, tài khoản và quyền riêng tư.",
+    "topicTitle": "{topic} · Trợ giúp",
+    "fallbackTitle": "Trợ giúp"
+  },
+  "index": {
+    "title": "Trung tâm trợ giúp",
+    "subtitle": "Giải đáp nhanh các câu hỏi thường gặp. Không tìm thấy điều bạn cần? Hãy gửi email cho chúng tôi.",
+    "stillNeedHelp": "Vẫn cần trợ giúp?",
+    "emailUs": "Gửi email tới <link>{email}</link> — chúng tôi thường phản hồi trong vài giờ."
+  },
+  "topic": {
+    "allTopics": "Tất cả chủ đề",
+    "stillNeedHelp": "Không tìm thấy điều bạn cần? Gửi email tới <link>{email}</link>."
+  },
+  "topics": {
+    "placingAnOrder": {
+      "title": "Đặt hàng",
+      "intro": "Cách đặt hàng, hẹn giờ và tùy chỉnh món.",
+      "faqs": {
+        "howToOrder": {
+          "q": "Làm sao để đặt hàng?",
+          "a": "Xem thực đơn, chạm vào món để thêm vào giỏ hàng, rồi chạm nút thanh toán. Bạn có thể đặt hàng mà không cần tài khoản, hoặc đăng nhập để đặt lại nhanh hơn và nhận điểm tích lũy."
+        },
+        "scheduleLater": {
+          "q": "Tôi có thể hẹn giờ cho đơn hàng không?",
+          "a": "Giao hàng luôn được đặt trước — chọn “Hẹn giờ giao hàng” rồi chọn ngày và giờ. Nhà hàng sẽ chuẩn bị để đơn xong đúng giờ đó và giao đi ngay sau đó. Đơn tự đến lấy được chuẩn bị ngay khi bạn đặt."
+        },
+        "customizeItem": {
+          "q": "Tôi có thể tùy chỉnh món (thêm topping, không hành, v.v.) không?",
+          "a": "Nếu món có tùy chọn, bạn sẽ thấy khi chạm vào món. Chọn tùy chọn, thêm ghi chú nếu cần rồi thêm vào giỏ hàng."
+        },
+        "kitchenInstructions": {
+          "q": "Tôi có thể ghi chú riêng cho bếp không?",
+          "a": "Có — mỗi món đều có ô ghi chú, và giỏ hàng có ô ghi chú chung. Bếp sẽ thấy các ghi chú này trên phiếu."
+        }
+      }
+    },
+    "cancelOrRefund": {
+      "title": "Hủy đơn hoặc hoàn tiền",
+      "intro": "Hủy đơn đang chờ, yêu cầu hoàn tiền.",
+      "faqs": {
+        "howToCancel": {
+          "q": "Làm sao để hủy đơn hàng?",
+          "a": "Hãy liên hệ trực tiếp với nhà hàng và yêu cầu hủy đơn. Đơn hàng do nhà hàng hủy chứ không hủy trên ứng dụng, để nhà hàng có thể dừng bếp cùng lúc — bạn gọi càng sớm thì càng dễ kịp dừng."
+        },
+        "refundTime": {
+          "q": "Hoàn tiền mất bao lâu?",
+          "a": "Tiền hoàn về thẻ thường hiển thị trong vòng 5–10 ngày làm việc. Khoản thanh toán bằng tiền mặt được giải quyết trực tiếp với nhà hàng."
+        },
+        "partialRefund": {
+          "q": "Tôi có được hoàn tiền một phần nếu thiếu một món không?",
+          "a": "Có — hãy liên hệ nhà hàng hoặc gửi email tới support@favornoms.com kèm mã đơn hàng và vấn đề gặp phải. Chúng tôi sẽ phối hợp với nhà hàng để hoàn tiền cho các món bị ảnh hưởng."
+        }
+      }
+    },
+    "deliveryIssues": {
+      "title": "Sự cố giao hàng",
+      "intro": "Giao trễ, sai địa chỉ, liên hệ tài xế.",
+      "faqs": {
+        "orderLate": {
+          "q": "Đơn hàng của tôi bị trễ — tôi nên làm gì?",
+          "a": "Xem trang theo dõi đơn để biết thời gian dự kiến tài xế đến theo thời gian thực. Nếu tài xế đã đến mà bạn không tìm thấy, hãy chạm nút gọi tài xế."
+        },
+        "wrongAddress": {
+          "q": "Tôi nhập sai địa chỉ",
+          "a": "Nếu tài xế chưa lấy hàng, bạn vẫn có thể sửa đơn trên trang theo dõi đơn. Sau khi tài xế đã lấy hàng, hãy gọi trực tiếp cho tài xế."
+        },
+        "coldOrDamaged": {
+          "q": "Đồ ăn đến nơi bị nguội hoặc hư hỏng",
+          "a": "Gửi email tới support@favornoms.com kèm mã đơn hàng và ảnh chụp. Chúng tôi sẽ xử lý hoàn tiền."
+        }
+      }
+    },
+    "promosAndLoyalty": {
+      "title": "Khuyến mãi và tích điểm",
+      "intro": "Mã khuyến mãi, điểm tích lũy, giới thiệu bạn bè.",
+      "faqs": {
+        "loyaltyPoints": {
+          "q": "Điểm tích lũy hoạt động thế nào?",
+          "a": "Bạn nhận điểm cho mỗi đơn hàng hoàn tất. Mỗi nhà hàng tự đặt tỷ lệ tích điểm, hạng và phần thưởng — của bạn hiển thị tại Tài khoản → Điểm tích lũy và phần thưởng, nơi bạn cũng chọn phần thưởng để dùng khi thanh toán. Mỗi đơn hàng dùng được một phần thưởng."
+        },
+        "usePromoCode": {
+          "q": "Làm sao để dùng mã khuyến mãi?",
+          "a": "Ở trang thanh toán, nhập mã vào ô “Mã khuyến mãi” rồi chạm Áp dụng. Không thể dùng chung nhiều mã khuyến mãi, trừ khi nhà hàng cho phép."
+        },
+        "promoExpired": {
+          "q": "Mã khuyến mãi báo đã hết hạn",
+          "a": "Mỗi khuyến mãi có ngày hết hạn và số lượt dùng tối đa. Nếu bạn nghĩ đây là lỗi, hãy gửi email tới support@favornoms.com."
+        }
+      }
+    },
+    "accountAndPrivacy": {
+      "title": "Tài khoản và quyền riêng tư",
+      "intro": "Đăng nhập, dữ liệu, xóa tài khoản.",
+      "faqs": {
+        "signIn": {
+          "q": "Làm sao để đăng nhập?",
+          "a": "Tại trang đăng nhập, chọn tiếp tục với Google, hoặc nhập số điện thoại là vào ngay — không phải chờ mã. Bạn cũng có thể dùng liên kết đăng nhập gửi qua email. Chúng tôi không dùng mật khẩu."
+        },
+        "downloadData": {
+          "q": "Làm sao để tải dữ liệu của tôi?",
+          "a": "Vào /account và chạm “Tải dữ liệu của tôi”. Bạn sẽ nhận được tệp JSON gồm đơn hàng, địa chỉ và thông tin tài khoản."
+        },
+        "deleteAccount": {
+          "q": "Làm sao để xóa tài khoản?",
+          "a": "Vào /account và chạm “Xóa tài khoản”. Chúng tôi sẽ ẩn danh thông tin cá nhân của bạn nhưng vẫn lưu hồ sơ đơn hàng theo quy định về thuế."
+        },
+        "paymentSafety": {
+          "q": "Thông tin thanh toán của tôi có an toàn không?",
+          "a": "Chúng tôi không bao giờ lưu thông tin thẻ — thanh toán được xử lý bởi Stripe, đơn vị đạt chứng nhận PCI-DSS Cấp 1."
+        }
+      }
+    },
+    "contactUs": {
+      "title": "Liên hệ",
+      "intro": "Email, giờ hỗ trợ, chuyển cấp xử lý.",
+      "faqs": {
+        "bestWay": {
+          "q": "Cách tốt nhất để liên hệ với các bạn là gì?",
+          "a": "Gửi email tới support@favornoms.com về sự cố đơn hàng, thắc mắc thanh toán hoặc bất kỳ vấn đề nào khác. Chúng tôi phản hồi trong vài giờ (Thứ Hai–Thứ Sáu, 9:00–21:00 giờ miền Đông Hoa Kỳ)."
+        },
+        "pressPartnership": {
+          "q": "Tôi muốn liên hệ về báo chí / hợp tác",
+          "a": "Gửi email tới hello@favornoms.com về báo chí, hợp tác kinh doanh hoặc đưa nhà hàng lên nền tảng."
+        },
+        "privacyConcern": {
+          "q": "Tôi cần báo cáo vấn đề về quyền riêng tư",
+          "a": "Gửi email tới privacy@favornoms.com — xem các trang /privacy và /ccpa (bằng tiếng Anh) để biết quyền của bạn."
+        }
+      }
+    }
+  },
+  "account": {
+    "metaTitle": "Tài khoản của bạn",
+    "title": "Tài khoản của bạn",
+    "subtitle": "Quản lý dữ liệu và cài đặt quyền riêng tư của bạn.",
+    "export": {
+      "title": "Tải xuống dữ liệu của bạn",
+      "body": "Xuất bản sao mọi dữ liệu chúng tôi có về bạn — đơn hàng, địa chỉ và thông tin tài khoản — dưới dạng tệp JSON.",
+      "button": "Tải dữ liệu của tôi (JSON)",
+      "failed": "Không thể tải dữ liệu của bạn. Hãy kiểm tra bạn đã đăng nhập rồi thử lại."
+    },
+    "delete": {
+      "title": "Xóa tài khoản của tôi",
+      "body": "Ẩn danh vĩnh viễn tài khoản của bạn. Lịch sử đơn hàng được giữ lại cho hồ sơ thuế, nhưng mọi thông tin cá nhân (tên, số điện thoại, địa chỉ, số điểm tích lũy) sẽ bị xóa và không thể khôi phục.",
+      "button": "Xóa tài khoản",
+      "prompt": "Nhập {word} để ẩn danh vĩnh viễn tài khoản của bạn. Không thể hoàn tác.",
+      "done": "Tài khoản của bạn đã được ẩn danh. Bạn sẽ được đăng xuất ngay bây giờ.",
+      "failed": "Không thể xóa tài khoản của bạn. Hãy kiểm tra bạn đã đăng nhập rồi thử lại."
+    },
+    "links": {
+      "privacy": "Chính sách quyền riêng tư",
+      "terms": "Điều khoản dịch vụ",
+      "ccpa": "Quyền tại California"
+    }
+  }
+}

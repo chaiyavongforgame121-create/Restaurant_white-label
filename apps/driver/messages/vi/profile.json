@@ -1,0 +1,142 @@
+{
+  "language": "Ngôn ngữ",
+  "kyc": {
+    "verified": "Đã xác minh",
+    "pending": "Đang xét duyệt",
+    "rejected": "Cần bổ sung",
+    "suspended": "Bị tạm khóa"
+  },
+  "stats": {
+    "deliveries": "Chuyến giao",
+    "battery": "Pin",
+    "rating": "Đánh giá"
+  },
+  "checkingDocuments": "Đang kiểm tra giấy tờ…",
+  "documentsRow": "Giấy tờ và xác minh",
+  "vehicle": "Phương tiện",
+  "vehicleTypes": {
+    "motorcycle": "Xe máy",
+    "car": "Ô tô",
+    "bicycle": "Xe đạp",
+    "scooter": "Xe tay ga"
+  },
+  "branchesIServe": "Chi nhánh tôi phục vụ",
+  "approvedCount": "{count} đã duyệt",
+  "supportCenter": "Trung tâm hỗ trợ",
+  "signOut": "Đăng xuất",
+  "summary": {
+    "unreadable": "Chưa kiểm tra được giấy tờ của bạn lúc này",
+    "incomplete": "Còn {missing}/{total} giấy tờ cần gửi",
+    "awaiting": "Đã nhận đủ — đang chờ xác minh",
+    "rechecking": "Bạn đã thay giấy tờ sau khi được kiểm tra",
+    "changesNeeded": "Cần thay một giấy tờ",
+    "verifiedCleared": "Đã xác minh · {count, plural, other {# nhà hàng đã duyệt bạn}}",
+    "verifiedApplyNext": "Đã xác minh — tiếp theo, hãy đăng ký với nhà hàng"
+  },
+  "docs": {
+    "license": {
+      "label": "Bằng lái xe",
+      "inline": "bằng lái xe",
+      "hint": "Chụp cả hai mặt nếu thông tin được in ở mặt sau."
+    },
+    "vehicle_reg": {
+      "label": "Giấy đăng ký xe",
+      "inline": "giấy đăng ký xe",
+      "hint": "Của chiếc xe bạn thực sự dùng để giao hàng."
+    },
+    "selfie": {
+      "label": "Ảnh selfie cầm bằng lái",
+      "inline": "ảnh selfie cầm bằng lái",
+      "hint": "Ảnh bạn cầm bằng lái — nhìn rõ cả khuôn mặt và bằng lái."
+    }
+  },
+  "documents": {
+    "metaTitle": "Giấy tờ",
+    "back": "Quay lại",
+    "title": "Giấy tờ",
+    "subtitle": "Giấy tờ đã nhận và tiến độ của từng nhà hàng",
+    "stage": {
+      "unreadable": {
+        "title": "Chúng tôi chưa đọc được giấy tờ của bạn",
+        "body": "Lỗi từ phía chúng tôi, không phải do bạn. Giấy tờ bạn đã gửi vẫn còn — hãy thử lại sau giây lát.",
+        "retry": "Thử lại"
+      },
+      "incomplete": {
+        "titleNone": "Chưa nhận được giấy tờ nào",
+        "titleSome": "Đã nhận {received}/{total}",
+        "body": "Còn cần gửi: {docs}. Nhà hàng chưa thể thấy bạn cho đến khi nhận đủ {total} giấy tờ."
+      },
+      "awaiting": {
+        "title": "Đã nhận đủ {total} giấy tờ",
+        "body": "Bạn không cần làm gì thêm — giấy tờ đang chờ xác minh.",
+        "bodyWithTime": "Bạn không cần làm gì thêm — giấy tờ đang chờ xác minh. Giấy tờ gần nhất đến lúc {when}."
+      },
+      "rechecking": {
+        "title": "Đang chờ kiểm tra lại",
+        "body": "Bạn đã thay một giấy tờ lúc {when}, sau khi giấy tờ được xác minh ngày {verifiedOn}. Tệp mới đã được nhận và đang chờ người kiểm tra."
+      },
+      "verified": {
+        "title": "Giấy tờ đã được xác minh",
+        "body": "Đã xác minh ngày {verifiedOn}. Mỗi nhà hàng vẫn duyệt bạn riêng — xem bên dưới.",
+        "bodyNoDate": "Giấy tờ đã được xác minh. Mỗi nhà hàng vẫn duyệt bạn riêng — xem bên dưới."
+      },
+      "changesNeeded": {
+        "title": "Cần thay một giấy tờ",
+        "titleSuspended": "Giấy tờ của bạn đang bị tạm khóa",
+        "body": "Thay giấy tờ bị sai ở bên dưới. Thay tệp không tự động kiểm tra lại — hãy báo nhà hàng rằng giấy tờ đã sẵn sàng để xem lại.",
+        "bodyWithTime": "Thay giấy tờ bị sai ở bên dưới. Lần gửi gần nhất của bạn: {when}. Thay tệp không tự động kiểm tra lại — hãy báo nhà hàng rằng giấy tờ đã sẵn sàng để xem lại."
+      }
+    },
+    "received": {
+      "heading": "Giấy tờ đã nhận",
+      "checking": "Đang kiểm tra…",
+      "couldNotCheck": "Không kiểm tra được",
+      "receivedAt": "Đã nhận lúc {when}",
+      "received": "Đã nhận",
+      "sending": "Đang gửi…",
+      "replace": "Thay",
+      "send": "Gửi"
+    },
+    "uploadError": "Không gửi được giấy tờ — máy chủ đang bận. Đợi một lát rồi thử lại. ({detail})",
+    "replaceNote": {
+      "cleared": "<label>Khi thay giấy tờ:</label> tệp mới được nhận ngay và thay thế tệp cũ, nhưng lần kiểm tra đã diễn ra sẽ không tự động bị hủy. Bạn vẫn tiếp tục giao hàng cho các nhà hàng đã duyệt bạn, và màn hình của họ sẽ báo rằng giấy tờ của bạn đã thay đổi sau khi họ xem.",
+      "queue": "<label>Khi thay giấy tờ:</label> tệp mới được nhận ngay và thay thế tệp cũ, nhưng lần kiểm tra đã diễn ra sẽ không tự động bị hủy. Giấy tờ sẽ quay lại hàng chờ xác minh."
+    },
+    "byRestaurant": {
+      "heading": "Xác minh theo nhà hàng",
+      "sharedNote": "Giấy tờ của bạn chỉ được kiểm tra một lần và kết quả được dùng chung cho mọi nhà hàng. Sau đó, mỗi nhà hàng tự quyết định bạn có được giao hàng cho họ hay không.",
+      "emptyTitle": "Chưa có nhà hàng nào xét duyệt bạn",
+      "emptyUnreadable": "Hiện chưa đọc được giấy tờ của bạn nên chưa thể cho biết bạn còn thiếu gì.",
+      "emptyMissing": "Hãy gửi các giấy tờ còn lại trước — bạn có thể đăng ký ngay khi đủ cả ba.",
+      "emptyReady": "Giấy tờ đã đủ. Hãy đăng ký với một nhà hàng để được xét duyệt.",
+      "applyCta": "Đăng ký với nhà hàng",
+      "noLongerListed": "Nhà hàng này không còn trong danh sách",
+      "appliedReviewed": "Đăng ký ngày {applied} · đã xem ngày {reviewed}",
+      "appliedNotReviewed": "Đăng ký ngày {applied} · chưa được xem",
+      "newerDocument": "Bạn đã gửi giấy tờ mới hơn vào {when}, sau quyết định này.",
+      "whatTheySaid": "<label>Nhà hàng nhắn:</label> {notes}"
+    },
+    "branchState": {
+      "stale": {
+        "label": "Duyệt trước khi bạn cập nhật",
+        "detail": "Bạn đã thay giấy tờ sau khi nhà hàng duyệt. Họ có thể muốn xem lại — trong lúc đó bạn vẫn giao hàng ở đây bình thường."
+      },
+      "cleared": {
+        "label": "Được phép giao hàng",
+        "detail": "Nhà hàng đã xem giấy tờ và duyệt bạn."
+      },
+      "pending": {
+        "label": "Đang chờ xác minh",
+        "detail": "Nhà hàng đã có giấy tờ của bạn nhưng chưa quyết định."
+      },
+      "rejected": {
+        "label": "Không được nhận",
+        "detail": "Nhà hàng đã từ chối đơn đăng ký này."
+      },
+      "paused": {
+        "label": "Tạm ngưng",
+        "detail": "Nhà hàng đã tạm ngưng bạn nên bạn sẽ không nhận được đơn của họ."
+      }
+    }
+  }
+}

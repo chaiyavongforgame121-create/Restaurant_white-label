@@ -1,0 +1,104 @@
+{
+  "accessDenied": {
+    "title": "Sin acceso al personal",
+    "reason": "Solo el propietario o un administrador pueden gestionar el equipo de {branch}."
+  },
+  "title": "Personal",
+  "summary": "{count, plural, one {# miembro} other {# miembros}} en {branch}",
+  "inviteStaff": "Invitar personal",
+  "empty": {
+    "title": "Aún no hay personal",
+    "description": "Invita a cajeros, personal de cocina y gerentes para que compartan el acceso al panel, el POS y la pantalla de cocina.",
+    "action": "Invitar al primer miembro"
+  },
+  "unnamed": "Sin nombre",
+  "roleNames": {
+    "owner": "Propietario",
+    "admin": "Administrador",
+    "manager": "Gerente",
+    "cashier": "Cajero",
+    "server": "Mesero",
+    "kitchen": "Cocina",
+    "driver": "Repartidor",
+    "staff": "Personal"
+  },
+  "statuses": {
+    "pending": "Pendiente",
+    "active": "Activo",
+    "suspended": "Suspendido",
+    "removed": "Eliminado"
+  },
+  "roles": {
+    "admin": {
+      "label": "Administrador",
+      "description": "Todo lo que tú puedes hacer, excepto la facturación y agregar otro administrador. Para un socio o un gerente general."
+    },
+    "manager": {
+      "label": "Gerente",
+      "description": "Lleva el día a día: pedidos, reembolsos, menú, inventario, promociones, repartidores, informes y horas del personal. Sin facturación, imagen de marca ni invitaciones de personal."
+    },
+    "cashier": {
+      "label": "Cajero",
+      "description": "Mostrador y cobros. Toma pedidos y cobra, aplica descuentos, reimprime recibos y cancela antes del pago. Los reembolsos requieren un gerente."
+    },
+    "server": {
+      "label": "Mesero",
+      "description": "Solo comer en el local. Arma el pedido de una mesa, lo envía a cocina y sigue su avance. Solo ve sus propios pedidos: sin ventas ni informes."
+    },
+    "kitchen": {
+      "label": "Cocina",
+      "description": "Solo la pantalla de cocina. Aceptar, cocinar, listo, y marcar productos como por agotarse o agotados. Sin datos de clientes ni de pagos."
+    },
+    "driver": {
+      "label": "Repartidor",
+      "description": "Aparece en tu lista de personal, pero no tiene ningún acceso a la administración: los repartidores trabajan en la app de repartidores, donde solo ven sus propios viajes y ganancias."
+    },
+    "staff": {
+      "label": "Personal (general)",
+      "description": "Solo acceso al mostrador. El rol general original, que se conserva para los miembros actuales del equipo."
+    }
+  },
+  "errors": {
+    "signedOut": "Tu sesión terminó. Inicia sesión de nuevo."
+  },
+  "branchAccess": {
+    "label": "Acceso a sucursales",
+    "allBranches": "Todas las sucursales",
+    "oneBranch": "Una sucursal",
+    "hiddenBranch": "{name} (oculta)",
+    "ownerLocked": "El propietario siempre tiene acceso a todas las sucursales.",
+    "adminLocked": "Solo el propietario puede cambiar el acceso a sucursales de un administrador.",
+    "errors": {
+      "notAuthorized": "Tu rol no permite cambiar el acceso a sucursales de esta persona.",
+      "invalidBranch": "Esa sucursal no pertenece a este restaurante.",
+      "notFound": "Este miembro del equipo ya no existe. Recarga la página.",
+      "generic": "No se pudo cambiar el acceso a sucursales. Reintenta."
+    }
+  },
+  "invite": {
+    "title": "Invitar personal",
+    "close": "Cerrar",
+    "sentTitle": "Invitación enviada",
+    "sentBody": "Enviamos un enlace a <strong>{email}</strong>. Al abrirlo, se une al equipo y elige una contraseña.",
+    "addedTitle": "Agregado al equipo",
+    "addedBody": "<strong>{email}</strong> ya tenía una cuenta, así que no hizo falta enviar un correo: puede iniciar sesión aquí ahora mismo con la contraseña que ya usa.",
+    "done": "Listo",
+    "email": "Correo electrónico",
+    "role": "Rol",
+    "scope": "Alcance",
+    "thisBranch": "Solo esta sucursal",
+    "thisBranchHint": "Acceso limitado a esta ubicación",
+    "allBranches": "Todas las sucursales",
+    "allBranchesHint": "Acceso a todo el restaurante (gerentes)",
+    "cancel": "Cancelar",
+    "send": "Enviar invitación",
+    "errors": {
+      "alreadyActive": "{email} ya está en tu equipo. Para cambiar las sucursales que puede usar, ajusta su acceso a sucursales en la lista de personal en lugar de invitarlo otra vez.",
+      "rateLimited": "Se enviaron demasiados correos en la última hora. El servicio de correo integrado permite solo unos pocos por hora: reintenta más tarde o conecta tu propio servicio de correo en Supabase (Authentication → SMTP).",
+      "onlyOwnerAdmin": "Solo el propietario puede invitar o cambiar a un administrador.",
+      "notAllowed": "Solo el propietario o un administrador pueden invitar personal.",
+      "emailFailed": "No se pudo enviar el correo de invitación. Reintenta más tarde.",
+      "generic": "No se pudo enviar la invitación. Reintenta."
+    }
+  }
+}

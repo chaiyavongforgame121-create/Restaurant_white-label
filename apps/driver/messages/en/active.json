@@ -1,0 +1,177 @@
+{
+  "headToPickup": "Head to pickup",
+  "atPickup": "I’m at the restaurant",
+  "pickedUp": "Picked up — start delivery",
+  "onTheWay": "On the way to the customer",
+  "atCustomer": "I’ve arrived",
+  "delivered": "Mark as delivered",
+  "callCustomer": "Call customer",
+  "navigate": "Navigate",
+  "noActive": "No active delivery",
+  "noActiveDescription": "When you accept a dispatch it’ll appear here",
+  "goHome": "Go home",
+  "complete": {
+    "title": "Delivery complete! 🎉",
+    "earningsAdded": "Earnings added",
+    "findNext": "Find next order"
+  },
+  "map": {
+    "liveUnavailable": "Live map unavailable for this order.",
+    "unavailable": "Map unavailable",
+    "tripSummary": "{miles} mi · {minutes} min"
+  },
+  "headerWithStop": "{orderNumber} · stop {seq} of 2",
+  "location": {
+    "insecure": "Location only works over https. Open the app from its installed icon so the customer can track you.",
+    "off": "Location is off. Turn it on so the customer can track you and you keep receiving offers.",
+    "sharedWhileOpen": "Your position is shared while this app is on screen. Navigating in another app pauses it — come back here and it catches up straight away."
+  },
+  "steps": {
+    "pickup": "Pickup",
+    "dropoff": "Drop-off",
+    "dropoffStop1": "Drop-off · stop 1",
+    "dropoffStop2": "Drop-off · stop 2 (after this one)"
+  },
+  "deliveryNote": "Delivery note:",
+  "earning": "Earning",
+  "earningBatch": "Earning (2 orders)",
+  "pickupOrder1": "Order 1 · {orderNumber}",
+  "pickupOrder2": "Order 2 · {orderNumber} — photograph this bag separately",
+  "arrival": {
+    "turnOnLocation": {
+      "restaurant": "Turn on location to confirm you’re at the restaurant.",
+      "dropoff": "Turn on location to confirm you’re at the drop-off."
+    },
+    "waiting": {
+      "restaurant": "Waiting for your location to confirm you’re at the restaurant…",
+      "dropoff": "Waiting for your location to confirm you’re at the drop-off…"
+    },
+    "tooFar": {
+      "restaurant": "You’re {miles} mi away — get within {radius} mi of the restaurant to continue.",
+      "dropoff": "You’re {miles} mi away — get within {radius} mi of the drop-off to continue."
+    },
+    "override": {
+      "restaurant": "My GPS is wrong — I’m at the restaurant",
+      "dropoff": "My GPS is wrong — I’m at the drop-off"
+    },
+    "skipped": "Distance check skipped. This is recorded on the delivery."
+  },
+  "photoNeeded": {
+    "secondOrder": "Upload a pickup photo for order 2 to continue.",
+    "eachOrder": "Upload a pickup photo for each order to continue.",
+    "pickup": "Upload a pickup photo to continue.",
+    "delivery": "Upload a delivery photo to finish."
+  },
+  "errors": {
+    "podPhotoRequired": "Take a delivery photo before you finish.",
+    "pickupPhotoRequired": "Take a pickup photo before you continue.",
+    "pickupPhotoBoth": "Take a pickup photo for BOTH orders before you continue.",
+    "notAccepted": "Accept the job before moving it on.",
+    "alreadyMoved": "This job has already moved on — pull down to refresh.",
+    "forbidden": "This job is no longer assigned to you.",
+    "unknown": "Couldn’t update this delivery. Tell support: {reason}"
+  },
+  "takenAway": {
+    "title": "{orderNumber} was taken off your list",
+    "orderCancelled": "The restaurant cancelled this order",
+    "reassigned": "The restaurant gave this job to another rider",
+    "requeued": "The restaurant sent this job back to dispatch",
+    "offerExpired": "The offer expired before you answered",
+    "other": "This job is no longer yours",
+    "gotIt": "Got it"
+  },
+  "issue": {
+    "open": "Having a problem with this delivery?",
+    "cancelTitle": "Cancel this delivery?",
+    "failTitle": "Can’t complete the drop-off?",
+    "cancelHint": "The job goes back to dispatch and you get a short cooldown.",
+    "failHint": "The restaurant will be alerted to sort out the order.",
+    "reasons": {
+      "vehicleProblem": "Vehicle problem",
+      "personalEmergency": "Personal emergency",
+      "waitTooLong": "Wait at restaurant too long",
+      "customerUnreachable": "Customer unreachable",
+      "cantFindAddress": "Can’t find the address",
+      "customerRefused": "Customer refused the order",
+      "other": "Other"
+    },
+    "otherLabel": "What happened",
+    "otherPlaceholder": "Tell the restaurant what happened",
+    "photoAttached": "Photo attached",
+    "attachPhoto": "Attach a photo (recommended)",
+    "keepDelivering": "Keep delivering",
+    "cancelDelivery": "Cancel delivery",
+    "markFailed": "Mark as failed",
+    "errors": {
+      "notCancellable": "This delivery can’t be cancelled any more.",
+      "notFailable": "This delivery can’t be marked as failed right now.",
+      "generic": "Couldn’t send that. Check your signal and try again."
+    }
+  },
+  "dropoff": {
+    "title": "Drop-off instructions",
+    "prefs": {
+      "leaveAtDoor": "Leave at the door",
+      "handToMe": "Hand it to me",
+      "atDesk": "At the desk / reception"
+    },
+    "other": "Other",
+    "otherWithText": "Other: {text}",
+    "gateCode": "Gate code:",
+    "room": "Room:",
+    "note": "Note:"
+  },
+  "chat": {
+    "button": "Chat",
+    "unread": "{count, plural, one {# unread message} other {# unread messages}}",
+    "sheetTitle": "Chat with the customer",
+    "closedNotice": "Chat closes when the delivery ends.",
+    "quickReplies": {
+      "onMyWay": "On my way",
+      "arrived": "I've arrived",
+      "cantFindEntrance": "Can't find the entrance",
+      "runningLate": "Running a bit late"
+    },
+    "photoErrors": {
+      "unsupportedType": "That file is not a photo we can send. Use a JPG, PNG or WebP image.",
+      "tooLarge": "That photo is too big. Try taking a new one.",
+      "cannotPrepare": "Your browser could not prepare that photo. Try another one.",
+      "uploadFailed": "The photo did not upload. Check your signal and tap to retry.",
+      "generic": "Could not send that photo. Tap to retry."
+    }
+  },
+  "photo": {
+    "pickup": {
+      "prompt": "Required — snap a photo of the order at the restaurant before you continue.",
+      "success": "Pickup photo uploaded",
+      "tips": {
+        "wholeOrder": "Show the WHOLE order — every bag and drink in one frame.",
+        "receipt": "Keep the receipt visible so the order number can be checked.",
+        "surface": "Set it on a flat surface in good light — no blur, nothing cut off."
+      }
+    },
+    "delivery": {
+      "prompt": "Required — snap a photo of the delivered order before you finish.",
+      "success": "Delivery photo uploaded",
+      "tips": {
+        "spot": "Show the food AT the drop-off spot the customer asked for.",
+        "landmark": "Include the door, desk or unit number so the spot is recognizable.",
+        "light": "Step back and use good light — no blur, nothing cut off."
+      }
+    },
+    "uploading": "Uploading…",
+    "retake": "Retake",
+    "chooseAnother": "Choose another",
+    "takePhoto": "Take photo",
+    "chooseFromGallery": "Choose from gallery",
+    "uploadFailed": "The photo didn’t upload. Check your signal and try again.",
+    "guide": {
+      "toggle": "How to take a good photo",
+      "wholeOrder": "Whole order, good light",
+      "receiptVisible": "Receipt visible",
+      "dropoffSpot": "At the drop-off spot",
+      "blurry": "Blurry or dark",
+      "cutOff": "Cut off at the edge"
+    }
+  }
+}

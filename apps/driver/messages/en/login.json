@@ -1,0 +1,33 @@
+{
+  "title": "Welcome back",
+  "registerTitle": "Become a rider",
+  "subtitle": "Log in with your phone number and password to start accepting deliveries.",
+  "registerSubtitle": "Sign up with your phone number to start accepting deliveries.",
+  "trustedBy": "Trusted by 2,300+ drivers",
+  "tabLogin": "Log in",
+  "tabRegister": "Register",
+  "phone": "Phone number",
+  "countryCode": "Country calling code",
+  "password": "Password",
+  "passwordNewPlaceholder": "At least 8 characters",
+  "passwordPlaceholder": "Your password",
+  "firstName": "First name",
+  "firstNamePlaceholder": "Alex",
+  "lastName": "Last name",
+  "lastNamePlaceholder": "Morgan",
+  "vehicle": "Vehicle",
+  "vehicleTypes": {
+    "motorcycle": "Motorcycle",
+    "car": "Car",
+    "bicycle": "Bicycle",
+    "scooter": "Scooter"
+  },
+  "plate": "License plate <muted>(optional)</muted>",
+  "platePlaceholder": "ABC-1234",
+  "email": "Email <muted>(optional)</muted>",
+  "emailPlaceholder": "you@example.com",
+  "submitLogin": "Log in",
+  "submitRegister": "Create account",
+  "byContinuing": "By continuing you agree to our Terms & Privacy.",
+  "nameRequired": "Please enter your name."
+}

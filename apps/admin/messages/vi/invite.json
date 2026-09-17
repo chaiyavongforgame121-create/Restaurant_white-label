@@ -1,0 +1,72 @@
+{
+  "roles": {
+    "owner": "Chủ sở hữu",
+    "admin": "Quản trị viên",
+    "manager": "Quản lý",
+    "cashier": "Thu ngân",
+    "server": "Phục vụ",
+    "kitchen": "Bếp",
+    "staff": "Nhân viên",
+    "driver": "Tài xế"
+  },
+  "accept": {
+    "opening": "Đang mở lời mời…",
+    "joining": "Đang tham gia đội ngũ…",
+    "oneMoment": "Vui lòng chờ trong giây lát.",
+    "anotherAccount": "một tài khoản khác",
+    "createAccount": {
+      "invited": "Bạn được mời tham gia <strong>{workplace}</strong> với vai trò <strong>{role}</strong>.",
+      "title": "Tạo tài khoản",
+      "email": "Email",
+      "password": "Mật khẩu",
+      "passwordHint": "Tối thiểu {min} ký tự. Bạn sẽ dùng mật khẩu này để đăng nhập trên thiết bị của nhà hàng.",
+      "confirmPassword": "Xác nhận mật khẩu",
+      "submit": "Tạo tài khoản và tham gia"
+    },
+    "confirmJoin": {
+      "title": "Tham gia {workplace}?",
+      "body": "Bạn sẽ tham gia với vai trò <strong>{role}</strong> bằng tài khoản <strong>{email}</strong>.",
+      "submit": "Tham gia đội ngũ"
+    },
+    "switchAccount": {
+      "title": "Chuyển tài khoản?",
+      "body": "Lời mời này dành cho <strong>{invited}</strong>, nhưng trình duyệt này đang đăng nhập bằng <strong>{current}</strong>. Nếu tiếp tục, trình duyệt sẽ đăng xuất khỏi {current} và đăng nhập bằng {invited}.",
+      "submit": "Tiếp tục với {invited}"
+    },
+    "needsLink": {
+      "expiredTitle": "Liên kết mời đã hết hạn",
+      "openTitle": "Mở liên kết trong email của bạn",
+      "expiredBody": "Liên kết mời chỉ dùng được một lần. Chúng tôi có thể gửi tới <strong>{email}</strong> một liên kết mới để đặt mật khẩu và tham gia — hãy mở liên kết trên trình duyệt này.",
+      "openBody": "Mở liên kết mời trong email đã gửi tới <strong>{email}</strong>, hoặc nhận liên kết mới bên dưới.",
+      "sent": "Đã gửi. Hãy kiểm tra {email} và mở email mới nhất trên trình duyệt này.",
+      "sendLink": "Gửi cho tôi liên kết đặt mật khẩu",
+      "signIn": "Đã tạo mật khẩu? Đăng nhập"
+    },
+    "wrongAccount": {
+      "title": "Lời mời này dành cho người khác",
+      "body": "Lời mời đã được gửi tới <strong>{invited}</strong>, nhưng trình duyệt này đang đăng nhập bằng <strong>{current}</strong>. Hãy đăng xuất tại đây, rồi mở lại liên kết mời trong email đó.",
+      "signOut": "Đăng xuất trên trình duyệt này"
+    },
+    "failed": {
+      "title": "Không thể chấp nhận lời mời",
+      "used": "Lời mời này đã được sử dụng. Nếu đó là lời mời của bạn, hãy đăng nhập — hoặc dùng “Quên mật khẩu?” nếu bạn chưa từng đặt mật khẩu.",
+      "notFound": "Liên kết mời không đầy đủ hoặc không còn tồn tại. Hãy nhờ nhà hàng mời lại bạn.",
+      "goToSignIn": "Đi tới đăng nhập"
+    },
+    "done": {
+      "title": "Bạn đã tham gia!",
+      "body": "Chào mừng bạn đến với {workplace}. Đang chuyển tới màn hình của bạn…"
+    },
+    "errors": {
+      "alreadyUsed": "Lời mời này đã được sử dụng.",
+      "notFound": "Lời mời này không còn tồn tại. Hãy nhờ nhà hàng mời lại bạn.",
+      "confirmEmail": "Hãy mở lại liên kết mời trong email để xác nhận địa chỉ của bạn.",
+      "alreadyStaff": "Bạn đã làm việc tại nhà hàng này bằng tài khoản này, ở cùng chi nhánh. Hãy đăng nhập để tiếp tục.",
+      "joinFailed": "Đã xảy ra lỗi khi tham gia nhà hàng. Vui lòng thử lại.",
+      "tooManyEmails": "Đã gửi quá nhiều email trong giờ qua. Vui lòng thử lại sau.",
+      "emailFailed": "Không thể gửi email. Vui lòng thử lại hoặc nhờ nhà hàng mời lại bạn.",
+      "passwordTooShort": "Cần ít nhất {min} ký tự.",
+      "passwordsDontMatch": "Hai mật khẩu không khớp."
+    }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "title": "Chào mừng trở lại",
+  "registerTitle": "Trở thành tài xế",
+  "subtitle": "Đăng nhập bằng số điện thoại và mật khẩu để bắt đầu nhận đơn giao hàng.",
+  "registerSubtitle": "Đăng ký bằng số điện thoại để bắt đầu nhận đơn giao hàng.",
+  "trustedBy": "Hơn 2.300 tài xế tin dùng",
+  "tabLogin": "Đăng nhập",
+  "tabRegister": "Đăng ký",
+  "phone": "Số điện thoại",
+  "countryCode": "Mã quốc gia",
+  "password": "Mật khẩu",
+  "passwordNewPlaceholder": "Ít nhất 8 ký tự",
+  "passwordPlaceholder": "Mật khẩu của bạn",
+  "firstName": "Tên",
+  "firstNamePlaceholder": "An",
+  "lastName": "Họ",
+  "lastNamePlaceholder": "Nguyễn",
+  "vehicle": "Phương tiện",
+  "vehicleTypes": {
+    "motorcycle": "Xe máy",
+    "car": "Ô tô",
+    "bicycle": "Xe đạp",
+    "scooter": "Xe tay ga"
+  },
+  "plate": "Biển số xe <muted>(không bắt buộc)</muted>",
+  "platePlaceholder": "59X1-234.56",
+  "email": "Email <muted>(không bắt buộc)</muted>",
+  "emailPlaceholder": "ban@example.com",
+  "submitLogin": "Đăng nhập",
+  "submitRegister": "Tạo tài khoản",
+  "byContinuing": "Khi tiếp tục, bạn đồng ý với Điều khoản và Chính sách quyền riêng tư của chúng tôi.",
+  "nameRequired": "Vui lòng nhập tên của bạn."
+}

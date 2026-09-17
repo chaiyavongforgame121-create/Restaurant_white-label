@@ -1,13 +1,19 @@
+import type { Metadata } from 'next';
+import { getLocale, getTranslations } from 'next-intl/server';
 import { getServerClient } from '@favornoms/database/server';
 import { getEntitlementsForBranch } from '@favornoms/database/queries';
-import { hasFeature } from '@favornoms/shared';
+import { DEFAULT_UI_LOCALE, featureLabel, hasFeature, isUiLocale } from '@favornoms/shared';
 import { LockedFeature } from '@/components/locked-feature';
 
 interface Props {
   params: Promise<{ branchId: string }>;
 }
 
-export const metadata = { title: 'Digital Signage · Favornoms' };
+export async function generateMetadata(): Promise<Metadata> {
+  const [t, locale] = await Promise.all([getTranslations('misc'), getLocale()]);
+  const feature = featureLabel('digital_signage', isUiLocale(locale) ? locale : DEFAULT_UI_LOCALE);
+  return { title: t('lockedFeature.metaTitle', { feature }) };
+}
 
 // Sold, not built (owner decision 2026-07-25). The entitlement is real — the
 // surface behind it is deliberately a placeholder, so an entitled restaurant
@@ -16,6 +22,7 @@ export default async function SignagePage({ params }: Props) {
   const { branchId } = await params;
   const supabase = await getServerClient();
   const ent = await getEntitlementsForBranch(supabase, branchId);
+  const t = await getTranslations('misc');
 
   if (!hasFeature(ent, 'digital_signage')) {
     return (
@@ -25,7 +32,7 @@ export default async function SignagePage({ params }: Props) {
         addonName="AI Suite"
         price={59}
         comingSoon
-        description="Menu boards and promo screens driven straight from your live menu. Part of the AI Suite add-on."
+        description={t('lockedFeature.signageLocked')}
       />
     );
   }
@@ -35,7 +42,7 @@ export default async function SignagePage({ params }: Props) {
       branchId={branchId}
       feature="digital_signage"
       comingSoon
-      description="Digital Signage is included in your package and is being built. We'll turn it on for you the moment it ships — no extra charge."
+      description={t('lockedFeature.signageIncluded')}
     />
   );
 }

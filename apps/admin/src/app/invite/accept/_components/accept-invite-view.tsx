@@ -19,24 +19,31 @@ import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import { CheckCircle2, ChefHat, KeyRound, Mail, ShieldAlert } from 'lucide-react';
 import { Button, Card } from '@favornoms/ui';
 import { getBrowserClient } from '@favornoms/database/client';
 import { acceptStaffInvite, getStaffInvite, type StaffInvite } from '@favornoms/database/queries';
+import { LocaleSwitcher } from '@/components/locale-switcher';
+import { authErrorKey } from '../../../auth/_lib/auth-error';
 
 /** The same minimum the password reset page asks for; the project's own policy still has the final say. */
 const MIN_PASSWORD = 8;
 
-const ROLE_LABEL: Record<string, string> = {
-  owner: 'Owner',
-  admin: 'Admin',
-  manager: 'Manager',
-  cashier: 'Cashier',
-  server: 'Server',
-  kitchen: 'Kitchen',
-  staff: 'Staff',
-  driver: 'Driver',
-};
+/** Roles with a label under `invite.roles.*`; anything else is shown as stored. */
+const ROLES = ['owner', 'admin', 'manager', 'cashier', 'server', 'kitchen', 'staff', 'driver'] as const;
+type Role = (typeof ROLES)[number];
+const isRole = (role: string): role is Role => (ROLES as readonly string[]).includes(role);
+
+/** `invite.accept.errors.*` keys. */
+type AcceptErrorKey =
+  | 'accept.errors.alreadyUsed'
+  | 'accept.errors.notFound'
+  | 'accept.errors.confirmEmail'
+  | 'accept.errors.alreadyStaff'
+  | 'accept.errors.joinFailed'
+  | 'accept.errors.tooManyEmails'
+  | 'accept.errors.emailFailed';
 
 type LinkTokens = { accessToken: string; refreshToken: string; email: string };
 
@@ -45,22 +52,22 @@ type State =
   | { kind: 'not_found' }
   | { kind: 'used'; invite: StaffInvite }
   | { kind: 'needs_link'; invite: StaffInvite; expired: boolean }
+  // signedInAs is '' when the signed-in account has no email; the screen then says "another account".
   | { kind: 'wrong_account'; invite: StaffInvite; signedInAs: string }
   | { kind: 'switch_account'; invite: StaffInvite; signedInAs: string; tokens: LinkTokens }
   | { kind: 'confirm_join'; invite: StaffInvite; email: string }
   | { kind: 'create_account'; invite: StaffInvite; email: string }
   | { kind: 'joining'; invite: StaffInvite }
   | { kind: 'done'; invite: StaffInvite }
-  | { kind: 'error'; invite: StaffInvite | null; message: string };
+  | { kind: 'error'; invite: StaffInvite | null; messageKey: AcceptErrorKey };
 
-function describeAcceptError(message: string): string {
-  if (message.includes('invite_not_pending')) return 'This invitation has already been used.';
-  if (message.includes('invite_not_found')) return 'This invitation no longer exists. Ask the restaurant to invite you again.';
+function describeAcceptError(message: string): AcceptErrorKey {
+  if (message.includes('invite_not_pending')) return 'accept.errors.alreadyUsed';
+  if (message.includes('invite_not_found')) return 'accept.errors.notFound';
   if (message.includes('email_not_confirmed') || message.includes('sign_in_required'))
-    return 'Open the invitation link from your email again to confirm your address.';
-  if (message.includes('already_staff_here'))
-    return 'You already work at this restaurant with this account, at the same branch. Sign in to continue.';
-  return 'Something went wrong joining the restaurant. Please try again.';
+    return 'accept.errors.confirmEmail';
+  if (message.includes('already_staff_here')) return 'accept.errors.alreadyStaff';
+  return 'accept.errors.joinFailed';
 }
 
 /** Created by an invitation and never given a password (the flag is written wherever one is set). */
@@ -99,6 +106,8 @@ function readFragment(): { tokens: LinkTokens | null; error: string | null; pres
 
 export function AcceptInviteView({ staffId }: { staffId?: string }) {
   const router = useRouter();
+  const t = useTranslations('invite');
+  const tAuth = useTranslations('auth');
   const [state, setState] = React.useState<State>({ kind: 'loading' });
   const [password, setPassword] = React.useState('');
   const [confirm, setConfirm] = React.useState('');
@@ -113,7 +122,9 @@ export function AcceptInviteView({ staffId }: { staffId?: string }) {
       await acceptStaffInvite(getBrowserClient(), staffId!);
       setState({ kind: 'done', invite });
     } catch (err) {
-      setState({ kind: 'error', invite, message: describeAcceptError((err as Error).message) });
+      const messageKey = describeAcceptError((err as Error).message);
+      if (messageKey === 'accept.errors.joinFailed') console.error('[invite] accept failed:', (err as Error).message);
+      setState({ kind: 'error', invite, messageKey });
     }
   }, [staffId]);
 
@@ -206,12 +217,12 @@ export function AcceptInviteView({ staffId }: { staffId?: string }) {
       }
       if (tokens) {
         // A different account is signed in on this device: never swap it silently.
-        if (user) setState({ kind: 'switch_account', invite, signedInAs: user.email ?? 'another account', tokens });
+        if (user) setState({ kind: 'switch_account', invite, signedInAs: user.email ?? '', tokens });
         else await adoptLinkSession(invite, tokens);
         return;
       }
       if (user) {
-        setState({ kind: 'wrong_account', invite, signedInAs: user.email ?? 'another account' });
+        setState({ kind: 'wrong_account', invite, signedInAs: user.email ?? '' });
         return;
       }
       setState({ kind: 'needs_link', invite, expired: !!fragment.error || fragment.present });
@@ -234,11 +245,11 @@ export function AcceptInviteView({ staffId }: { staffId?: string }) {
     if (state.kind !== 'create_account') return;
     setFormError(null);
     if (password.length < MIN_PASSWORD) {
-      setFormError(`Use at least ${MIN_PASSWORD} characters.`);
+      setFormError(t('accept.errors.passwordTooShort', { min: MIN_PASSWORD }));
       return;
     }
     if (password !== confirm) {
-      setFormError('The two passwords do not match.');
+      setFormError(t('accept.errors.passwordsDontMatch'));
       return;
     }
     setSaving(true);
@@ -253,7 +264,8 @@ export function AcceptInviteView({ staffId }: { staffId?: string }) {
         await supabase.auth.updateUser({ data: { password_set: true } });
       } else {
         setSaving(false);
-        setFormError(error.message);
+        console.error('[invite] updateUser failed:', error.message);
+        setFormError(tAuth(authErrorKey(error)));
         return;
       }
     }
@@ -273,10 +285,7 @@ export function AcceptInviteView({ staffId }: { staffId?: string }) {
       setState({
         kind: 'error',
         invite,
-        message:
-          error.status === 429
-            ? 'Too many emails were sent in the last hour. Please try again later.'
-            : 'We could not send the email. Please try again, or ask the restaurant to invite you again.',
+        messageKey: error.status === 429 ? 'accept.errors.tooManyEmails' : 'accept.errors.emailFailed',
       });
       return;
     }
@@ -284,13 +293,19 @@ export function AcceptInviteView({ staffId }: { staffId?: string }) {
   };
 
   const invite = 'invite' in state ? state.invite : null;
+  // Restaurant and branch names are the merchant's own, shown as entered.
   const workplace = invite
     ? `${invite.restaurantName}${invite.branchName ? ` · ${invite.branchName}` : ''}`
     : null;
   const loginHref = `/login?next=${encodeURIComponent(`/invite/accept?staff_id=${staffId ?? ''}`)}`;
+  const roleLabel = (role: string) => (isRole(role) ? t(`roles.${role}`) : role);
+  const strong = (c: React.ReactNode) => <strong className="text-foreground">{c}</strong>;
 
   return (
-    <div className="grid min-h-dynamic-screen place-items-center bg-background px-4 py-10">
+    <div className="relative grid min-h-dynamic-screen place-items-center bg-background px-4 pb-10 pt-16">
+      <div className="absolute right-4 top-4">
+        <LocaleSwitcher />
+      </div>
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md">
         <div className="mx-auto mb-6 grid h-16 w-16 place-items-center rounded-2xl bg-gradient-warm text-white shadow-warm">
           <ChefHat className="h-8 w-8" />
@@ -299,22 +314,25 @@ export function AcceptInviteView({ staffId }: { staffId?: string }) {
         {(state.kind === 'loading' || state.kind === 'joining') && (
           <Card className="p-6 text-center">
             <p className="font-display text-xl font-semibold">
-              {state.kind === 'joining' ? 'Joining the team…' : 'Opening your invitation…'}
+              {state.kind === 'joining' ? t('accept.joining') : t('accept.opening')}
             </p>
-            <p className="mt-1 text-sm text-muted-foreground">One moment.</p>
+            <p className="mt-1 text-sm text-muted-foreground">{t('accept.oneMoment')}</p>
           </Card>
         )}
 
         {state.kind === 'create_account' && (
           <Card className="p-6">
             <p className="text-center text-sm text-muted-foreground">
-              You&apos;re invited to join <strong className="text-foreground">{workplace}</strong> as{' '}
-              <strong className="text-foreground">{ROLE_LABEL[state.invite.role] ?? state.invite.role}</strong>.
+              {t.rich('accept.createAccount.invited', {
+                workplace,
+                role: roleLabel(state.invite.role),
+                strong,
+              })}
             </p>
-            <h1 className="mt-4 text-center font-display text-2xl font-bold">Create your account</h1>
+            <h1 className="mt-4 text-center font-display text-2xl font-bold">{t('accept.createAccount.title')}</h1>
             <form onSubmit={createAccount} className="mt-5 space-y-4">
               <label className="block">
-                <span className="mb-1.5 block text-sm font-medium">Email</span>
+                <span className="mb-1.5 block text-sm font-medium">{t('accept.createAccount.email')}</span>
                 <span className="relative block">
                   <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   {/* The address the invitation was sent to. It is the account's sign-in name, so
@@ -329,7 +347,7 @@ export function AcceptInviteView({ staffId }: { staffId?: string }) {
                 </span>
               </label>
               <label className="block">
-                <span className="mb-1.5 block text-sm font-medium">Password</span>
+                <span className="mb-1.5 block text-sm font-medium">{t('accept.createAccount.password')}</span>
                 <input
                   type="password"
                   value={password}
@@ -341,11 +359,11 @@ export function AcceptInviteView({ staffId }: { staffId?: string }) {
                   className="input"
                 />
                 <span className="mt-1 block text-xs text-muted-foreground">
-                  At least {MIN_PASSWORD} characters. You&apos;ll use this to sign in on the restaurant&apos;s devices.
+                  {t('accept.createAccount.passwordHint', { min: MIN_PASSWORD })}
                 </span>
               </label>
               <label className="block">
-                <span className="mb-1.5 block text-sm font-medium">Confirm password</span>
+                <span className="mb-1.5 block text-sm font-medium">{t('accept.createAccount.confirmPassword')}</span>
                 <input
                   type="password"
                   value={confirm}
@@ -361,7 +379,7 @@ export function AcceptInviteView({ staffId }: { staffId?: string }) {
                 </p>
               )}
               <Button type="submit" variant="gradient" size="lg" fullWidth loading={saving} leftIcon={<KeyRound className="h-4 w-4" />}>
-                Create account &amp; join
+                {t('accept.createAccount.submit')}
               </Button>
             </form>
           </Card>
@@ -369,13 +387,16 @@ export function AcceptInviteView({ staffId }: { staffId?: string }) {
 
         {state.kind === 'confirm_join' && (
           <Card className="p-6 text-center">
-            <p className="font-display text-xl font-semibold">Join {workplace}?</p>
+            <p className="font-display text-xl font-semibold">{t('accept.confirmJoin.title', { workplace })}</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              You&apos;ll join as <strong className="text-foreground">{ROLE_LABEL[state.invite.role] ?? state.invite.role}</strong>{' '}
-              using <strong className="text-foreground">{state.email}</strong>.
+              {t.rich('accept.confirmJoin.body', {
+                role: roleLabel(state.invite.role),
+                email: state.email,
+                strong,
+              })}
             </p>
             <Button variant="gradient" size="lg" className="mt-5" fullWidth onClick={() => void join(state.invite)}>
-              Join the team
+              {t('accept.confirmJoin.submit')}
             </Button>
           </Card>
         )}
@@ -383,11 +404,13 @@ export function AcceptInviteView({ staffId }: { staffId?: string }) {
         {state.kind === 'switch_account' && (
           <Card className="p-6 text-center">
             <ShieldAlert className="mx-auto h-10 w-10 text-warning" />
-            <p className="mt-3 font-display text-xl font-semibold">Switch accounts?</p>
+            <p className="mt-3 font-display text-xl font-semibold">{t('accept.switchAccount.title')}</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              This invitation is for <strong className="text-foreground">{state.invite.invitedEmail}</strong>, but this
-              browser is signed in as <strong className="text-foreground">{state.signedInAs}</strong>. Continuing signs this
-              browser out of {state.signedInAs} and in as {state.invite.invitedEmail}.
+              {t.rich('accept.switchAccount.body', {
+                invited: state.invite.invitedEmail,
+                current: state.signedInAs || t('accept.anotherAccount'),
+                strong,
+              })}
             </p>
             <Button
               variant="gradient"
@@ -402,7 +425,7 @@ export function AcceptInviteView({ staffId }: { staffId?: string }) {
                 await adoptLinkSession(target, tokens);
               }}
             >
-              Continue as {state.invite.invitedEmail}
+              {t('accept.switchAccount.submit', { invited: state.invite.invitedEmail })}
             </Button>
           </Card>
         )}
@@ -411,20 +434,17 @@ export function AcceptInviteView({ staffId }: { staffId?: string }) {
           <Card className="p-6 text-center">
             <ShieldAlert className="mx-auto h-10 w-10 text-warning" />
             <p className="mt-3 font-display text-xl font-semibold">
-              {state.expired ? 'This invitation link has expired' : 'Open the link from your email'}
+              {state.expired ? t('accept.needsLink.expiredTitle') : t('accept.needsLink.openTitle')}
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              {state.expired
-                ? 'Invitation links work only once. We can email '
-                : 'Open the invitation link in the email sent to '}
-              <strong className="text-foreground">{state.invite.invitedEmail}</strong>
-              {state.expired
-                ? ' a new link to set your password and join — open it in this browser.'
-                : ', or get a new link below.'}
+              {t.rich(state.expired ? 'accept.needsLink.expiredBody' : 'accept.needsLink.openBody', {
+                email: state.invite.invitedEmail,
+                strong,
+              })}
             </p>
             {linkSent ? (
               <p className="mt-4 rounded-xl bg-success/10 px-4 py-3 text-sm text-success">
-                Sent. Check {state.invite.invitedEmail} and open the newest email in this browser.
+                {t('accept.needsLink.sent', { email: state.invite.invitedEmail })}
               </p>
             ) : (
               <Button
@@ -435,11 +455,11 @@ export function AcceptInviteView({ staffId }: { staffId?: string }) {
                 loading={sendingLink}
                 onClick={() => void emailPasswordLink(state.invite)}
               >
-                Email me a link to set my password
+                {t('accept.needsLink.sendLink')}
               </Button>
             )}
             <Link href={loginHref} className="mt-4 inline-block text-sm font-medium text-primary underline underline-offset-2">
-              Already created your password? Sign in
+              {t('accept.needsLink.signIn')}
             </Link>
           </Card>
         )}
@@ -447,11 +467,13 @@ export function AcceptInviteView({ staffId }: { staffId?: string }) {
         {state.kind === 'wrong_account' && (
           <Card className="p-6 text-center">
             <ShieldAlert className="mx-auto h-10 w-10 text-warning" />
-            <p className="mt-3 font-display text-xl font-semibold">This invitation is for someone else</p>
+            <p className="mt-3 font-display text-xl font-semibold">{t('accept.wrongAccount.title')}</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              It was sent to <strong className="text-foreground">{state.invite.invitedEmail}</strong>, but this
-              browser is signed in as <strong className="text-foreground">{state.signedInAs}</strong>. Sign out here,
-              then open the invitation link from that email again.
+              {t.rich('accept.wrongAccount.body', {
+                invited: state.invite.invitedEmail,
+                current: state.signedInAs || t('accept.anotherAccount'),
+                strong,
+              })}
             </p>
             <Button
               variant="gradient"
@@ -465,7 +487,7 @@ export function AcceptInviteView({ staffId }: { staffId?: string }) {
                 setState({ kind: 'needs_link', invite: state.invite, expired: false });
               }}
             >
-              Sign out on this browser
+              {t('accept.wrongAccount.signOut')}
             </Button>
           </Card>
         )}
@@ -473,16 +495,16 @@ export function AcceptInviteView({ staffId }: { staffId?: string }) {
         {(state.kind === 'used' || state.kind === 'not_found' || state.kind === 'error') && (
           <Card className="p-6 text-center">
             <ShieldAlert className="mx-auto h-10 w-10 text-danger" />
-            <p className="mt-3 font-display text-xl font-semibold">Couldn&apos;t accept invite</p>
+            <p className="mt-3 font-display text-xl font-semibold">{t('accept.failed.title')}</p>
             <p className="mt-1 text-sm text-muted-foreground">
               {state.kind === 'used'
-                ? 'This invitation has already been used. If it was yours, sign in — or use “Forgot password?” if you never chose one.'
+                ? t('accept.failed.used')
                 : state.kind === 'not_found'
-                  ? 'This invitation link is incomplete or no longer exists. Ask the restaurant to invite you again.'
-                  : state.message}
+                  ? t('accept.failed.notFound')
+                  : t(state.messageKey)}
             </p>
             <Link href={loginHref} className="mt-4 inline-block text-sm font-medium text-primary underline underline-offset-2">
-              Go to sign in
+              {t('accept.failed.goToSignIn')}
             </Link>
           </Card>
         )}
@@ -490,10 +512,8 @@ export function AcceptInviteView({ staffId }: { staffId?: string }) {
         {state.kind === 'done' && (
           <Card className="p-6 text-center">
             <CheckCircle2 className="mx-auto h-10 w-10 text-success" />
-            <p className="mt-3 font-display text-xl font-semibold">You&apos;re in!</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Welcome to {workplace}. Taking you to your screen…
-            </p>
+            <p className="mt-3 font-display text-xl font-semibold">{t('accept.done.title')}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{t('accept.done.body', { workplace })}</p>
           </Card>
         )}
       </motion.div>

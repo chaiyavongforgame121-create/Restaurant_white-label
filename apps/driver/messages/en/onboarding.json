@@ -1,0 +1,103 @@
+{
+  "apply": {
+    "metaTitle": "Restaurants",
+    "back": "Back",
+    "title": "Restaurants",
+    "subtitleEmpty": "Apply to deliver — they review & approve you",
+    "subtitleCounts": "{applied} applied · {approved} approved",
+    "subtitleCountsWaiting": "{applied} applied · {approved} approved · {waiting} waiting",
+    "docsBanner": {
+      "title": "{count, plural, one {# document still needed} other {# documents still needed}}",
+      "body": "Restaurants cannot see you until you upload {docs}. Tap to upload.",
+      "allDocs": "your driver licence, vehicle registration and selfie"
+    },
+    "yourApplications": "Your applications",
+    "allRestaurants": "All restaurants",
+    "noLongerListed": "This restaurant is no longer listed",
+    "restaurantFallback": "Restaurant",
+    "applied": "Applied {applied}",
+    "appliedDecided": "Applied {applied} · decided {decided}",
+    "whatTheySaid": "<label>What they said:</label> {notes}",
+    "loading": "Loading…",
+    "empty": "No restaurants available right now.",
+    "apply": "Apply",
+    "applyAgain": "Apply again",
+    "availableFrom": "From {date}",
+    "withdraw": "Withdraw",
+    "confirmWithdraw": "Confirm withdraw",
+    "docsNotice": "📄 Upload all required documents first — taking you to your documents…",
+    "status": {
+      "pending": "Waiting for review",
+      "approved": "✓ Approved",
+      "rejected": "Not accepted",
+      "suspended": "Paused"
+    },
+    "explanation": {
+      "pending": "They have not decided yet. You cannot go online here until they approve you.",
+      "approved": "You can go online and receive this restaurant’s orders.",
+      "rejected": "They turned this application down. You can apply again later.",
+      "suspended": "They have paused you here — you will not receive orders. Contact the restaurant."
+    },
+    "errors": {
+      "tooLateToWithdraw": "Too late to withdraw — the restaurant has already decided.",
+      "reapplyTooSoon": "You can apply here again {days, plural, one {# day} other {# days}} after the decision.",
+      "changed": "This application has changed — pull down to refresh.",
+      "generic": "Something went wrong. Try again."
+    }
+  },
+  "training": {
+    "metaTitle": "Training",
+    "title": "Driver training",
+    "completedOn": "Completed {date}",
+    "required": "Required for first dispatch.",
+    "done": "Done",
+    "submit": "Submit & complete training",
+    "answerAll": "Answer all questions correctly to continue",
+    "modules": {
+      "safety": {
+        "title": "1 · Driver safety",
+        "description": "Bike & car safety basics",
+        "reading": "Always wear a helmet. Never check your phone while driving. Pull over before opening the app. Always confirm the address before leaving the restaurant.",
+        "question": "When should you check the app?",
+        "choices": {
+          "a": "While riding",
+          "b": "After pulling over",
+          "c": "At red lights"
+        }
+      },
+      "pickup": {
+        "title": "2 · At the restaurant",
+        "description": "Pickup checklist",
+        "reading": "Show your driver ID. Confirm the order number with the host. Check that the bag contains all items and is sealed. Tap “Picked up” only after confirming.",
+        "question": "What should you verify at pickup?",
+        "choices": {
+          "a": "Just the order number",
+          "b": "Order number + items + seal",
+          "c": "Nothing — just grab the bag"
+        }
+      },
+      "delivery": {
+        "title": "3 · Delivery etiquette",
+        "description": "Customer interaction",
+        "reading": "Greet the customer by name. Confirm the order. Hand over the bag with two hands. If contactless, take a photo to prove delivery. Never demand a tip.",
+        "question": "What proves a contactless delivery?",
+        "choices": {
+          "a": "Knocking",
+          "b": "A photo at the door",
+          "c": "Texting the customer"
+        }
+      },
+      "issues": {
+        "title": "4 · Handling issues",
+        "description": "What to do when things go wrong",
+        "reading": "If the customer is missing or unreachable: try calling twice, then text. Wait 5 minutes. Then mark “no answer” in the app. Never leave food unattended in a public area.",
+        "question": "How long should you wait if the customer doesn’t answer?",
+        "choices": {
+          "a": "1 minute",
+          "b": "5 minutes",
+          "c": "20 minutes"
+        }
+      }
+    }
+  }
+}

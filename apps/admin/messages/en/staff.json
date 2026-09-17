@@ -1,0 +1,104 @@
+{
+  "accessDenied": {
+    "title": "No staff access",
+    "reason": "Only the owner or an admin can manage the team at {branch}."
+  },
+  "title": "Staff",
+  "summary": "{count, plural, one {# member} other {# members}} at {branch}",
+  "inviteStaff": "Invite staff",
+  "empty": {
+    "title": "No staff yet",
+    "description": "Invite cashiers, kitchen staff and managers to share access to the dashboard, POS and KDS.",
+    "action": "Invite first member"
+  },
+  "unnamed": "Unnamed",
+  "roleNames": {
+    "owner": "Owner",
+    "admin": "Admin",
+    "manager": "Manager",
+    "cashier": "Cashier",
+    "server": "Server",
+    "kitchen": "Kitchen",
+    "driver": "Driver",
+    "staff": "Staff"
+  },
+  "statuses": {
+    "pending": "Pending",
+    "active": "Active",
+    "suspended": "Suspended",
+    "removed": "Removed"
+  },
+  "roles": {
+    "admin": {
+      "label": "Admin",
+      "description": "Everything you can do, except billing and adding another admin. For a business partner or general manager."
+    },
+    "manager": {
+      "label": "Manager",
+      "description": "Runs the day to day: orders, refunds, menu, stock, promos, drivers, reports and staff hours. No billing, branding or staff invites."
+    },
+    "cashier": {
+      "label": "Cashier",
+      "description": "Counter and payments. Takes orders and money, applies discounts, reprints receipts, cancels before payment. Refunds need a manager."
+    },
+    "server": {
+      "label": "Server",
+      "description": "Dine-in only. Builds a table order, sends it to the kitchen and watches its progress. Sees only their own orders — no takings, no reports."
+    },
+    "kitchen": {
+      "label": "Kitchen",
+      "description": "The kitchen display only. Accept, cooking, ready, plus marking items low or sold out. No customer or payment details."
+    },
+    "driver": {
+      "label": "Driver",
+      "description": "Appears in your staff list but has no back-office access at all — riders work in the Driver app, where they see only their own jobs and earnings."
+    },
+    "staff": {
+      "label": "Staff (general)",
+      "description": "Counter access only. The original catch-all role, kept for existing team members."
+    }
+  },
+  "errors": {
+    "signedOut": "Your session has ended. Sign in again."
+  },
+  "branchAccess": {
+    "label": "Branch access",
+    "allBranches": "All branches",
+    "oneBranch": "One branch",
+    "hiddenBranch": "{name} (hidden)",
+    "ownerLocked": "The owner always has every branch.",
+    "adminLocked": "Only the owner can change an admin’s branch access.",
+    "errors": {
+      "notAuthorized": "Your role cannot change this person’s branch access.",
+      "invalidBranch": "That branch is not part of this restaurant.",
+      "notFound": "This team member no longer exists. Reload the page.",
+      "generic": "Branch access could not be changed. Try again."
+    }
+  },
+  "invite": {
+    "title": "Invite staff member",
+    "close": "Close",
+    "sentTitle": "Invitation sent",
+    "sentBody": "We emailed <strong>{email}</strong> a link. Opening it adds them to the team and asks them to choose a password.",
+    "addedTitle": "Added to the team",
+    "addedBody": "<strong>{email}</strong> already had an account, so no email was needed — they can sign in here right now with the password they already use.",
+    "done": "Done",
+    "email": "Email",
+    "role": "Role",
+    "scope": "Scope",
+    "thisBranch": "This branch only",
+    "thisBranchHint": "Access limited to this location",
+    "allBranches": "All branches",
+    "allBranchesHint": "Full restaurant access (managers)",
+    "cancel": "Cancel",
+    "send": "Send invite",
+    "errors": {
+      "alreadyActive": "{email} is already on your team. To change which branches they can use, set their Branch access in the staff list instead of inviting them again.",
+      "rateLimited": "Too many emails were sent in the last hour. The built-in email service allows only a few per hour — try again later, or connect your own email service in Supabase (Authentication → SMTP).",
+      "onlyOwnerAdmin": "Only the owner can invite or change an admin.",
+      "notAllowed": "Only the owner or an admin can invite staff.",
+      "emailFailed": "The invitation email could not be sent. Try again later.",
+      "generic": "The invitation could not be sent. Try again."
+    }
+  }
+}

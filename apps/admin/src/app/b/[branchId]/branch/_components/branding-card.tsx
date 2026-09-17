@@ -14,6 +14,7 @@
 
 import * as React from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Palette, Save, Store } from 'lucide-react';
 import { Button, Card } from '@favornoms/ui';
 import { getBrowserClient } from '@favornoms/database/client';
@@ -84,6 +85,7 @@ function storefrontHost(): string {
 }
 
 export function BrandingCard({ restaurantId, restaurantName, brand }: Props) {
+  const t = useTranslations('branch');
   const router = useRouter();
   const { branchId } = useParams<{ branchId: string }>();
   const [appName, setAppName] = React.useState<string>(brand?.name || restaurantName);
@@ -115,9 +117,15 @@ export function BrandingCard({ restaurantId, restaurantName, brand }: Props) {
   const trimmedName = appName.trim();
   const previewIcon = icons.icon192Url ?? icons.faviconUrl;
 
+  /** The database's own text is for the logs; the merchant gets a sentence they can act on. */
+  const writeFailed = (err: { message: string; code?: string }) => {
+    console.error('Saving branding failed', err);
+    setError(err.code === '42501' ? t('branding.noPermission') : t('errors.generic'));
+  };
+
   const save = async () => {
     if (!trimmedName) {
-      setError('Give your app a name — it is what customers see under the icon.');
+      setError(t('branding.nameRequired'));
       return;
     }
     setSaving(true);
@@ -151,9 +159,9 @@ export function BrandingCard({ restaurantId, restaurantName, brand }: Props) {
         .eq('id', brand.id)
         .select('id');
       setSaving(false);
-      if (updErr) return setError(updErr.message);
+      if (updErr) return writeFailed(updErr);
       if (!data || data.length === 0) {
-        return setError("That didn't save — your role may not be allowed to change branding.");
+        return setError(t('branding.noPermission'));
       }
     } else {
       const { data, error: insErr } = await supabase
@@ -167,9 +175,9 @@ export function BrandingCard({ restaurantId, restaurantName, brand }: Props) {
         })
         .select('id');
       setSaving(false);
-      if (insErr) return setError(insErr.message);
+      if (insErr) return writeFailed(insErr);
       if (!data || data.length === 0) {
-        return setError("That didn't save — your role may not be allowed to change branding.");
+        return setError(t('branding.noPermission'));
       }
     }
     setSavedAt(Date.now());
@@ -180,16 +188,12 @@ export function BrandingCard({ restaurantId, restaurantName, brand }: Props) {
   return (
     <Card className="p-5">
       <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
-        <Palette className="h-5 w-5 text-primary" /> Branding
+        <Palette className="h-5 w-5 text-primary" /> {t('branding.title')}
       </h2>
-      <p className="text-sm text-muted-foreground">
-        Your app name, logo and icon, as customers see them. The logo appears at the top of your
-        storefront on every page; the name and icon are what customers get when they install
-        your menu to their phone or computer.
-      </p>
+      <p className="text-sm text-muted-foreground">{t('branding.description')}</p>
 
       <label className="mt-4 block">
-        <span className="mb-1.5 block text-sm font-medium">App name</span>
+        <span className="mb-1.5 block text-sm font-medium">{t('branding.appName')}</span>
         <input
           value={appName}
           maxLength={APP_NAME_MAX}
@@ -201,15 +205,16 @@ export function BrandingCard({ restaurantId, restaurantName, brand }: Props) {
           className="input"
         />
         <span className="mt-1.5 block text-xs text-muted-foreground">
-          Shown in the install window, under the home-screen icon and on the desktop shortcut.
-          {trimmedName.length > HOME_SCREEN_FITS &&
-            ` Phones may shorten names longer than ${HOME_SCREEN_FITS} characters under the icon.`}
+          {t('branding.appNameHint')}
+          {trimmedName.length > HOME_SCREEN_FITS && (
+            <> {t('branding.appNameTooLong', { count: HOME_SCREEN_FITS })}</>
+          )}
         </span>
       </label>
 
       <div className="mt-4 grid gap-5 sm:grid-cols-2">
         <div>
-          <span className="mb-2 block text-sm font-medium">Logo</span>
+          <span className="mb-2 block text-sm font-medium">{t('branding.logo')}</span>
           <ImageUpload
             restaurantId={restaurantId}
             folder="logo"
@@ -222,14 +227,12 @@ export function BrandingCard({ restaurantId, restaurantName, brand }: Props) {
               setSavedAt(null);
             }}
             aspect="aspect-[3/1]"
-            label="Upload logo"
+            label={t('branding.uploadLogo')}
           />
-          <span className="mt-1.5 block text-xs text-muted-foreground">
-            A wide image works best — it replaces your restaurant name in the header.
-          </span>
+          <span className="mt-1.5 block text-xs text-muted-foreground">{t('branding.logoHint')}</span>
         </div>
         <div>
-          <span className="mb-2 block text-sm font-medium">Icon</span>
+          <span className="mb-2 block text-sm font-medium">{t('branding.icon')}</span>
           <IconUpload
             restaurantId={restaurantId}
             value={icons}
@@ -241,16 +244,14 @@ export function BrandingCard({ restaurantId, restaurantName, brand }: Props) {
             onAppliedStyleChange={setIconStyle}
             onPendingChange={setIconPending}
           />
-          <span className="mt-1.5 block text-xs text-muted-foreground">
-            Square, at least 192×192. Used for the browser tab and the installed app icon.
-          </span>
+          <span className="mt-1.5 block text-xs text-muted-foreground">{t('branding.iconHint')}</span>
         </div>
       </div>
 
       {/* The same name and icon the storefront manifest publishes, so what the merchant sees
           here is what Chrome's install window and the home screen will show. */}
       <div className="mt-5">
-        <span className="mb-2 block text-sm font-medium">What customers see when they install</span>
+        <span className="mb-2 block text-sm font-medium">{t('branding.installPreview')}</span>
         <div className="flex items-center gap-3 rounded-2xl border border-border bg-muted/30 p-3">
           {previewIcon ? (
             // eslint-disable-next-line @next/next/no-img-element -- a storage URL chosen at runtime
@@ -272,16 +273,12 @@ export function BrandingCard({ restaurantId, restaurantName, brand }: Props) {
           </div>
         </div>
         <span className="mt-1.5 block text-xs text-muted-foreground">
-          {previewIcon
-            ? 'Save to publish. Someone who already installed the app gets the new name and icon the next time Chrome checks for updates, usually within a day — removing and reinstalling shows it straight away.'
-            : 'No icon yet — installs use the Favornoms icon until you upload one.'}
+          {previewIcon ? t('branding.publishHint') : t('branding.noIconHint')}
         </span>
       </div>
 
       {!brand && (
-        <p className="mt-3 text-xs text-muted-foreground">
-          Saving creates your restaurant&apos;s default brand — nothing else changes.
-        </p>
+        <p className="mt-3 text-xs text-muted-foreground">{t('branding.createsDefaultBrand')}</p>
       )}
       {error && (
         <p className="mt-3 rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p>
@@ -294,16 +291,14 @@ export function BrandingCard({ restaurantId, restaurantName, brand }: Props) {
           disabled={iconPending}
           leftIcon={<Save className="h-4 w-4" />}
         >
-          Save branding
+          {t('branding.save')}
         </Button>
         {iconPending ? (
-          <span className="text-sm text-muted-foreground">
-            Apply the new icon style first, or set it back.
-          </span>
+          <span className="text-sm text-muted-foreground">{t('branding.iconPending')}</span>
         ) : (
           savedAt &&
           !saving && (
-            <span className="text-sm text-success">Saved ✓ — customers see this within a minute</span>
+            <span className="text-sm text-success">{t('branding.saved')}</span>
           )
         )}
       </div>

@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Check, Pause, Play, X } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Button } from '@favornoms/ui';
@@ -22,11 +23,12 @@ const ACTIONS: Record<ApprovalStatus, ApprovalStatus[]> = {
   suspended: ['approved', 'rejected'],
 };
 
-const LABEL: Record<ApprovalStatus, string> = {
-  approved: 'Approve',
-  rejected: 'Reject',
-  suspended: 'Suspend',
-  pending: 'Reopen',
+/** The button for moving TO a status, as a key under drivers.approve.actions. */
+const LABEL_KEY: Record<ApprovalStatus, string> = {
+  approved: 'approve',
+  rejected: 'reject',
+  suspended: 'suspend',
+  pending: 'reopen',
 };
 
 const ICON: Record<ApprovalStatus, React.ReactNode> = {
@@ -37,10 +39,13 @@ const ICON: Record<ApprovalStatus, React.ReactNode> = {
 };
 
 /** Reinstating a previously-rejected rider reads better as "Reinstate" than "Approve". */
-function labelFor(from: ApprovalStatus, to: ApprovalStatus): string {
-  if (to === 'approved' && (from === 'rejected' || from === 'suspended')) return 'Reinstate';
-  return LABEL[to];
+function labelKeyFor(from: ApprovalStatus, to: ApprovalStatus): string {
+  if (to === 'approved' && (from === 'rejected' || from === 'suspended')) return 'reinstate';
+  return LABEL_KEY[to];
 }
+
+/** Postgres insufficient_privilege, as PostgREST reports it. */
+const PERMISSION_DENIED = '42501';
 
 export function ApproveButton({
   approvalId,
@@ -54,6 +59,7 @@ export function ApproveButton({
    *  the live constraint `driver_approvals_reviewed_by_fkey`. */
   reviewerId: string | null;
 }) {
+  const t = useTranslations('drivers');
   const router = useRouter();
   const [busy, setBusy] = React.useState<ApprovalStatus | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -83,11 +89,13 @@ export function ApproveButton({
 
     setBusy(null);
     if (updErr) {
-      setError(updErr.message);
+      // The database's own words go to the log; the merchant gets a sentence.
+      console.error('driver_approvals update failed:', updErr.message);
+      setError(updErr.code === PERMISSION_DENIED ? t('approve.notSaved') : t('approve.saveFailed'));
       return;
     }
     if (!data || data.length === 0) {
-      setError("That didn't save — you may not have permission to review drivers.");
+      setError(t('approve.notSaved'));
       return;
     }
     setNoteFor(null);
@@ -112,7 +120,7 @@ export function ApproveButton({
       {noteFor === 'rejected' ? (
         <div className="w-64 rounded-xl border border-border bg-muted/30 p-2.5">
           <label htmlFor={`reject-note-${approvalId}`} className="text-xs font-semibold">
-            Reason for rejection
+            {t('approve.rejectReasonLabel')}
           </label>
           <textarea
             id={`reject-note-${approvalId}`}
@@ -120,7 +128,7 @@ export function ApproveButton({
             onChange={(e) => setNote(e.target.value)}
             rows={2}
             maxLength={280}
-            placeholder="Shown to the rider in their app"
+            placeholder={t('approve.rejectReasonPlaceholder')}
             className="focus-ring mt-1 w-full resize-none rounded-lg border border-border bg-card px-2 py-1.5 text-sm"
           />
           <div className="mt-2 flex gap-2">
@@ -132,7 +140,7 @@ export function ApproveButton({
                 setNote('');
               }}
             >
-              Cancel
+              {t('approve.cancel')}
             </Button>
             <Button
               size="sm"
@@ -141,7 +149,7 @@ export function ApproveButton({
               disabled={note.trim().length === 0}
               onClick={() => void commit('rejected', note.trim())}
             >
-              Confirm reject
+              {t('approve.confirmReject')}
             </Button>
           </div>
         </div>
@@ -157,7 +165,7 @@ export function ApproveButton({
               onClick={() => onPick(status)}
               leftIcon={ICON[status]}
             >
-              {labelFor(currentStatus, status)}
+              {t(`approve.actions.${labelKeyFor(currentStatus, status)}`)}
             </Button>
           ))}
         </div>

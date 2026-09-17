@@ -1,3 +1,5 @@
+import type { Metadata } from 'next';
+import { getTranslations } from 'next-intl/server';
 import { getServerClient } from '@favornoms/database/server';
 import { ModifiersManager } from './_components/modifiers-manager';
 
@@ -5,7 +7,10 @@ interface Props {
   params: Promise<{ branchId: string }>;
 }
 
-export const metadata = { title: 'Modifiers · Favornoms admin' };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('menuExtras');
+  return { title: t('modifiers.metaTitle') };
+}
 
 export default async function ModifiersPage({ params }: Props) {
   const { branchId } = await params;

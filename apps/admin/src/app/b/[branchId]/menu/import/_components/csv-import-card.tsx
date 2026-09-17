@@ -1,10 +1,16 @@
 'use client';
 
 import * as React from 'react';
+import { useTranslations } from 'next-intl';
 import { FileSpreadsheet, Upload } from 'lucide-react';
 import type { MenuCategory } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Badge, Button, Card } from '@favornoms/ui';
+
+/** A row problem as a code; the sentence is translated where it is shown. */
+type RowError =
+  | { code: 'missingCategory' | 'missingName' }
+  | { code: 'invalidPrice'; value: string };
 
 interface ParsedRow {
   category: string;
@@ -12,9 +18,10 @@ interface ParsedRow {
   description?: string;
   price: number;
   station?: string;
-  error?: string;
+  error?: RowError;
 }
 
+// CSV column names are a data format: they stay English in every interface language.
 const HEADER_ALIASES: Record<string, string> = {
   category: 'category',
   cat: 'category',
@@ -27,7 +34,22 @@ const HEADER_ALIASES: Record<string, string> = {
   station: 'station',
 };
 
+const CSV_COLUMNS = 'category, name, description, price, station';
+
 const VALID_STATIONS = ['hot', 'cold', 'bar', 'dessert', 'expo'];
+
+type DbErrorKey = 'permissionDenied' | 'network' | 'duplicate' | 'inUse' | 'invalidValue' | 'generic';
+
+/** Raw PostgREST text never reaches the merchant: known codes get a translated sentence. */
+function dbErrorKey(err: { code?: string; message?: string }): DbErrorKey {
+  const message = err.message ?? '';
+  if (err.code === '42501' || /row-level security|permission denied/i.test(message)) return 'permissionDenied';
+  if (/failed to fetch|networkerror|network request failed/i.test(message)) return 'network';
+  if (err.code === '23505') return 'duplicate';
+  if (err.code === '23503') return 'inUse';
+  if (err.code && /^(22|23)/.test(err.code)) return 'invalidValue';
+  return 'generic';
+}
 
 export function CsvImportCard({
   branchId,
@@ -38,6 +60,7 @@ export function CsvImportCard({
   categories: MenuCategory[];
   onImported: (count: number) => void;
 }) {
+  const t = useTranslations('menuExtras');
   const [text, setText] = React.useState('');
   const [parsed, setParsed] = React.useState<ParsedRow[]>([]);
   const [busy, setBusy] = React.useState(false);
@@ -58,7 +81,7 @@ export function CsvImportCard({
   const importRows = async () => {
     const valid = parsed.filter((r) => !r.error);
     if (valid.length === 0) {
-      setError('No valid rows to import.');
+      setError(t('import.csv.noValidRows'));
       return;
     }
     setBusy(true);
@@ -92,12 +115,17 @@ export function CsvImportCard({
       const { error: insErr, count } = await supabase
         .from('menu_items')
         .insert(rows, { count: 'exact' });
-      if (insErr) throw new Error(insErr.message);
+      if (insErr) {
+        console.error('[menu-import] csv insert failed', insErr);
+        setError(t(`errors.${dbErrorKey(insErr)}`));
+        return;
+      }
       onImported(count ?? rows.length);
       setText('');
       setParsed([]);
     } catch (err) {
-      setError((err as Error).message);
+      console.error('[menu-import] csv import failed', err);
+      setError(t(`errors.${dbErrorKey({ message: (err as Error)?.message })}`));
     } finally {
       setBusy(false);
     }
@@ -105,6 +133,7 @@ export function CsvImportCard({
 
   const validCount = parsed.filter((r) => !r.error).length;
   const errorCount = parsed.length - validCount;
+  const rowsWithErrors = parsed.filter((r) => r.error);
 
   return (
     <Card className="mt-6 space-y-4 p-5">
@@ -113,9 +142,12 @@ export function CsvImportCard({
           <FileSpreadsheet className="h-5 w-5" />
         </span>
         <div className="flex-1">
-          <h2 className="font-display text-lg font-semibold">CSV bulk import</h2>
+          <h2 className="font-display text-lg font-semibold">{t('import.csv.title')}</h2>
           <p className="text-xs text-muted-foreground">
-            Columns: <code>category, name, description, price, station</code> (station optional). First row must be headers.
+            {t.rich('import.csv.columns', {
+              columns: CSV_COLUMNS,
+              code: (chunks) => <code>{chunks}</code>,
+            })}
           </p>
         </div>
       </header>
@@ -132,7 +164,7 @@ export function CsvImportCard({
           download="menu-template.csv"
           className="text-xs font-semibold text-primary underline"
         >
-          Download template
+          {t('import.csv.downloadTemplate')}
         </a>
       </div>
 
@@ -147,18 +179,21 @@ export function CsvImportCard({
       {parsed.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center gap-2 text-xs">
-            <Badge variant="success">{validCount} valid</Badge>
-            {errorCount > 0 && <Badge variant="danger">{errorCount} errors</Badge>}
+            <Badge variant="success">{t('import.csv.valid', { count: validCount })}</Badge>
+            {errorCount > 0 && <Badge variant="danger">{t('import.csv.errorCount', { count: errorCount })}</Badge>}
           </div>
           {errorCount > 0 && (
             <ul className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">
-              {parsed.filter((r) => r.error).slice(0, 5).map((r, i) => (
+              {rowsWithErrors.slice(0, 5).map((r, i) => (
                 <li key={i}>
-                  Row {parsed.indexOf(r) + 1}: {r.error}
+                  {t(`import.csv.rowErrors.${r.error!.code}`, {
+                    row: parsed.indexOf(r) + 1,
+                    value: r.error!.code === 'invalidPrice' ? r.error!.value : '',
+                  })}
                 </li>
               ))}
-              {parsed.filter((r) => r.error).length > 5 && (
-                <li>… and {parsed.filter((r) => r.error).length - 5} more.</li>
+              {rowsWithErrors.length > 5 && (
+                <li>{t('import.csv.moreErrors', { count: rowsWithErrors.length - 5 })}</li>
               )}
             </ul>
           )}
@@ -176,7 +211,7 @@ export function CsvImportCard({
         disabled={validCount === 0 || busy}
         leftIcon={<Upload className="h-4 w-4" />}
       >
-        Import {validCount} item{validCount === 1 ? '' : 's'}
+        {t('import.csv.import', { count: validCount })}
       </Button>
     </Card>
   );
@@ -199,9 +234,9 @@ function parseCsv(text: string): ParsedRow[] {
       price,
       station: obj.station && VALID_STATIONS.includes(obj.station) ? obj.station : undefined,
     };
-    if (!row.category) row.error = 'missing category';
-    else if (!row.name) row.error = 'missing name';
-    else if (!Number.isFinite(price) || price <= 0) row.error = `invalid price "${obj.price}"`;
+    if (!row.category) row.error = { code: 'missingCategory' };
+    else if (!row.name) row.error = { code: 'missingName' };
+    else if (!Number.isFinite(price) || price <= 0) row.error = { code: 'invalidPrice', value: obj.price ?? '' };
     rows.push(row);
   }
   return rows;
@@ -228,6 +263,7 @@ function splitCsv(line: string): string[] {
   return out;
 }
 
+// Sample data in the CSV format — kept English on purpose (it is a file template, not interface text).
 const SAMPLE_CSV = `category,name,description,price,station
 Burgers,Cheeseburger,Classic American cheeseburger,11.50,hot
 Burgers,Veggie Burger,Black-bean patty with chipotle mayo,12.95,hot

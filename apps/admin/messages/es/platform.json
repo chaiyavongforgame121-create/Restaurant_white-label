@@ -1,0 +1,247 @@
+{
+  "nav": {
+    "ariaLabel": "Secciones de la plataforma",
+    "dashboard": "Panel",
+    "reports": "Informes",
+    "subscriptions": "Suscripciones",
+    "requests": "Solicitudes",
+    "catalog": "Catálogo",
+    "settings": "Configuración",
+    "pendingBadge": "{count}<sr> pendientes</sr>"
+  },
+  "accessDenied": {
+    "title": "Acceso denegado",
+    "body": "Solo para administradores de la plataforma."
+  },
+  "page": {
+    "loadFailed": "No se pudieron cargar {parts}.",
+    "loadParts": {
+      "restaurantMeta": "los datos de los restaurantes",
+      "branches": "las sucursales",
+      "subscriptionFlags": "los indicadores de suscripción"
+    }
+  },
+  "dashboard": {
+    "title": "Consola de la plataforma",
+    "subtitle": "Panel de operaciones de todos los restaurantes.",
+    "loadError": "{message} Los conteos de sucursales y los estados de las tiendas en esta página están incompletos: recarga antes de actuar.",
+    "stats": {
+      "restaurants": "Restaurantes",
+      "billingOk": "Facturación al día",
+      "needsAttention": "Requieren atención",
+      "ordersToday": "Pedidos hoy",
+      "revenueToday": "Ingresos hoy",
+      "driversOnline": "Repartidores conectados"
+    },
+    "decisions": {
+      "ariaLabel": "Requiere una decisión",
+      "expiring": "{count, plural, one {# tienda de pago se apaga dentro de {days, plural, one {# día} other {# días}}.} other {# tiendas de pago se apagan dentro de {days, plural, one {# día} other {# días}}.}}",
+      "showThem": "Ver cuáles",
+      "requests": "{count, plural, one {# solicitud de paquete espera una decisión.} other {# solicitudes de paquete esperan una decisión.}}",
+      "reviewRequests": "Revisar solicitudes"
+    },
+    "search": {
+      "placeholder": "Buscar restaurantes",
+      "emptyTitle": "Ningún restaurante coincide",
+      "emptyBody": "Prueba con otro nombre o slug, o quita el filtro.",
+      "clear": "Quitar filtros"
+    },
+    "filters": {
+      "all": "Todos",
+      "attention": "Requieren atención",
+      "expiring": "Vencen pronto",
+      "offline": "Facturación o acceso apagados",
+      "live": "En línea",
+      "withCount": "{label} ({count})"
+    }
+  },
+  "errors": {
+    "generic": "Algo salió mal. No se cambió nada.",
+    "network": "No se pudo conectar con el servidor. No se cambió nada: revisa tu conexión e inténtalo de nuevo.",
+    "notPlatformAdmin": "Solo un administrador de la plataforma puede hacer esto. No se cambió nada.",
+    "reactivateFailed": "No se pudo reactivar la suscripción."
+  },
+  "plans": {
+    "base": "Base",
+    "trial": "Prueba gratuita",
+    "none": "Sin plan"
+  },
+  "subscriptionStatus": {
+    "active": "activa",
+    "trialing": "en prueba",
+    "past_due": "con pago atrasado",
+    "cancelled": "cancelada",
+    "expired": "vencida",
+    "none": "sin configurar"
+  },
+  "index": {
+    "restaurant": "Restaurante",
+    "billingAccess": "Facturación y acceso",
+    "branches": "Sucursales",
+    "franchise": "Franquicia",
+    "slugLine": "<mono>{slug}</mono> · {plan} · {price}/mes",
+    "rowLabel": "{name}: {lamps}. {branchCount}, {qualifier}. Abrir detalles.",
+    "reactivated": "Reactivada"
+  },
+  "health": {
+    "chip": {
+      "expired": "Vencida",
+      "unpaid": "Sin pagar",
+      "trial": "Prueba · quedan {days} d",
+      "pastDue": "Pago atrasado · {days} d de gracia",
+      "cancelling": "Cancelando · {days} d",
+      "expiresIn": "Vence en {days, plural, one {# día} other {# días}}",
+      "live": "En línea",
+      "suspended": "Suspendida",
+      "partlySuspended": "{suspended} de {total} suspendidas"
+    },
+    "clause": {
+      "noStorefront": "Aún sin tienda en línea",
+      "noStorefrontUnpaid": "Aún sin tienda en línea · sin pagar",
+      "bothOff": "404 + pantalla de suspensión",
+      "all404": "Los clientes ven un 404",
+      "some404": "{suspended} de {total} sucursales dan 404",
+      "suspendedScreen": "Los clientes ven la pantalla de suspensión",
+      "trialEndsToday": "La prueba termina hoy",
+      "trialEndsIn": "La prueba termina en {days, plural, one {# día} other {# días}}",
+      "graceLeft": "{days, plural, one {Queda # día de gracia} other {Quedan # días de gracia}}",
+      "ends": "Termina el {date}",
+      "goesDark": "Se apaga el {date}",
+      "paidThrough": "pagado hasta el {date}"
+    },
+    "branchCount": "{count, plural, =0 {Sin sucursales} one {# sucursal} other {# sucursales}}",
+    "qualifier": {
+      "nothingToServe": "nada que atender",
+      "suspended": "{count, plural, one {# suspendida} other {# suspendidas}}",
+      "unpaid": "{count} sin pagar",
+      "paused": "{count} en pausa",
+      "allLive": "todas en línea"
+    },
+    "reason": {
+      "allSuspended": "{count, plural, one {La única sucursal está suspendida por la plataforma, así que la tienda en línea devuelve 404.} other {Las # sucursales están suspendidas por la plataforma, así que la tienda en línea devuelve 404.}}",
+      "someSuspended": "{suspended, plural, one {# de {total} sucursales está suspendida por la plataforma y devuelve 404.} other {# de {total} sucursales están suspendidas por la plataforma y devuelven 404.}}",
+      "lapsedNoBranches": "La suscripción venció el {date}: este restaurante aún no tiene sucursales, así que de todos modos no se atiende a nadie.",
+      "lapsedStorefront": "La suscripción venció el {date}: la tienda en línea muestra la pantalla de suspensión.",
+      "noSubscriptionNoBranches": "Sin suscripción activa: este restaurante aún no tiene sucursales, así que de todos modos no se atiende a nadie.",
+      "noSubscriptionStorefront": "Sin suscripción activa: la tienda en línea muestra la pantalla de suspensión.",
+      "accessFine": "El acceso a la plataforma está bien, así que Restablecer no ayudará; corrige la suscripción.",
+      "trialEndsToday": "La prueba termina hoy.",
+      "trialEndsIn": "La prueba termina en {days, plural, one {# día} other {# días}}.",
+      "pastDue": "El pago está atrasado: {days, plural, one {queda # día de gracia} other {quedan # días de gracia}}.",
+      "expiring": "Pagado hasta el {date}. Nada lo renueva automáticamente: después de esa fecha, la tienda en línea muestra la pantalla de suspensión, a menos que lo extiendas.",
+      "allPaused": "Todas las sucursales están en pausa desde la cocina y no reciben pedidos.",
+      "somePaused": "{paused} de {total} sucursales están en pausa desde la cocina."
+    },
+    "action": {
+      "restore": "Restablecer",
+      "extend": "Extender 1 mes",
+      "convert": "Pasar a Base",
+      "convertPriced": "Pasar a Base · {price}/mes"
+    },
+    "verdict": {
+      "label": {
+        "suspended": "404: no encontrada",
+        "unpaid": "Pantalla de suspensión",
+        "paused": "No recibe pedidos",
+        "closed": "Cerrada ahora",
+        "live": "En línea",
+        "unknown": "Horario desconocido"
+      },
+      "hint": {
+        "suspended": "Suspendida por la plataforma: la URL de la tienda devuelve 404",
+        "unpaid": "Suscripción vencida: la tienda muestra la pantalla de suspensión",
+        "paused": "En pausa desde la cocina: el menú se ve, pero enviar un pedido devuelve 409",
+        "closure": "Cerrada temporalmente: el menú se ve, pero enviar un pedido devuelve 409",
+        "live": "Atendiendo a clientes",
+        "unknown": "Falló la verificación del horario; todo lo demás de esta sucursal está bien",
+        "outsideHours": "Fuera del horario de atención: el menú se ve, pero enviar un pedido devuelve 409"
+      },
+      "why": {
+        "suspended": "Suspendida por la plataforma: resolveTenantBySlug filtra por is_active, así que la URL da 404.",
+        "unpaidLapsed": "La suscripción venció el {date}.",
+        "unpaidNone": "Esta sucursal no tiene una suscripción activa.",
+        "paused": "La cocina pausó los pedidos. Solo el personal de la sucursal puede reanudarlos.",
+        "closure": "Cerrada temporalmente hasta el {date}.",
+        "closureWithReason": "Cerrada temporalmente hasta el {date}: {reason}",
+        "noHours": "No hay horario de atención configurado, así que la sucursal siempre está abierta.",
+        "unknown": "No se pudo consultar is_branch_open(). La facturación, el acceso y la pausa de cocina están en orden.",
+        "open": "Dentro del horario de atención y recibiendo pedidos.",
+        "outsideHours": "Fuera del horario de atención ({timezone})."
+      }
+    }
+  },
+  "drawer": {
+    "ariaLabel": "Detalles del restaurante {name}",
+    "meta": "<mono>{slug}</mono> · {loyalty} · agregado el {date}",
+    "loyalty": {
+      "branch": "fidelización por sucursal",
+      "brand": "fidelización por marca",
+      "other": "fidelización: {scope}"
+    },
+    "dinerTitle": "Lo que ve un cliente ahora",
+    "noBranches": "Este restaurante no tiene sucursales, así que no hay nada que un cliente pueda encontrar.",
+    "switchesTitle": "Los dos interruptores",
+    "accessLabel": "Acceso a la plataforma",
+    "accessConsequence": "Apagado = la URL de la tienda devuelve 404.",
+    "noBranchesToSuspend": "No hay sucursales para suspender",
+    "suspend": "Suspender",
+    "restore": "Restablecer",
+    "subscriptionLabel": "Suscripción",
+    "subscriptionConsequence": "Apagado = la tienda muestra la pantalla de suspensión.",
+    "manageSubscription": "Gestionar suscripción",
+    "checkingHours": "Verificando el horario de atención…",
+    "backOffice": "Administración",
+    "openBackOffice": "Abrir la administración de {name}",
+    "storefront": "Tienda en línea",
+    "openStorefront": "Abrir la tienda en línea de {name} en una pestaña nueva",
+    "accessState": {
+      "noBranches": "Sin sucursales",
+      "allActive": "{count, plural, one {# sucursal activa} other {Las # sucursales activas}}",
+      "allSuspended": "{count, plural, one {La sucursal está suspendida} other {Las # sucursales suspendidas}}",
+      "partlySuspended": "{suspended} de {total} suspendidas"
+    },
+    "billingState": {
+      "expired": "Venció el {date} · {plan}",
+      "noSubscription": "Sin suscripción",
+      "current": "{status} · {plan}"
+    },
+    "package": {
+      "title": "Paquete",
+      "plan": "Plan",
+      "monthly": "Mensual",
+      "paidThrough": "Pagado hasta",
+      "lapsed": "Venció",
+      "seats": "Cupos",
+      "overQuota": "excede los cupos: no se bloquea y se cobra de menos",
+      "noDelivery": "Base no incluye entrega a domicilio: el filtro de tipo de pedido la oculta y se rechazan los pedidos a domicilio.",
+      "dormant": "Otorgadas, inactivas mientras no se pague"
+    }
+  },
+  "confirm": {
+    "close": "Cerrar",
+    "cancel": "Cancelar",
+    "suspend": {
+      "title": "¿Suspender {name}?",
+      "confirm": "Suspender",
+      "body": "Esto desconecta {total, plural, one {la única sucursal} other {las # sucursales}} de {name}: {branches}. La tienda en línea devolverá 404, no la pantalla de suspensión. El personal conserva su acceso a la administración y no se elimina ningún dato. Esto no cambia su suscripción."
+    },
+    "restore": {
+      "title": "¿Restablecer {name}?",
+      "confirm": "Restablecer",
+      "body": "Esto vuelve a activar {total, plural, one {la única sucursal} other {las # sucursales}} de {name}: {branches}. Los clientes podrán volver a encontrar la tienda en línea.",
+      "bodyNoBranches": "{name} no tiene sucursales, así que no hay nada que restablecer.",
+      "warningUnpaid": "La suscripción de {name} está {status}, así que la tienda seguirá mostrando la pantalla de suspensión después de restablecerla. Corrige la suscripción para volver a ponerla en línea. <link>Gestionar suscripción</link>",
+      "warningPartial": "{active} de {total} sucursales ya están activas. Restablecer activa LAS {total}, incluida cualquier sucursal que se desactivó a propósito."
+    },
+    "reactivate": {
+      "titleExtend": "¿Extender {name} 1 mes?",
+      "titleConvert": "¿Pasar {name} a {plan}?",
+      "confirmExtend": "Extender",
+      "confirmConvert": "Cobrar {plan}",
+      "bodyExtendLive": "Agrega 1 mes al paquete {plan} que ya tiene el restaurante{hasPrice, select, yes { a {price}/mes} other {}} para {seats, plural, one {# sucursal} other {# sucursales}}: el pago hasta el {from} pasa a cubrir hasta el {to}. La tienda sigue en línea, así que los clientes no notan nada.",
+      "bodyRebill": "Vuelve a facturar el paquete {plan} que ya tiene el restaurante{hasPrice, select, yes { a {price}/mes} other {}} para {seats, plural, one {# sucursal} other {# sucursales}}, pagado hasta el {to}. La tienda en línea vuelve con la siguiente visita de un cliente.",
+      "bodyConvert": "Pasa {name} de {current} a {plan}{hasPrice, select, yes { a {price}/mes} other {}} para {seats, plural, one {# sucursal} other {# sucursales}}, pagado hasta el {to}. La tienda en línea vuelve con la siguiente visita de un cliente.",
+      "warningSuspended": "{suspended} de {total} sucursales también están suspendidas por la plataforma y seguirán devolviendo 404 después de esto. Restablécelas por separado."
+    }
+  }
+}

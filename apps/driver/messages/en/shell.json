@@ -1,0 +1,19 @@
+{
+  "metaDescription": "Driver app for the Favornoms food delivery platform.",
+  "crash": {
+    "title": "Something went wrong",
+    "body": "Your deliveries are safe. Try again, or go back to your home screen.",
+    "backHome": "Back to home"
+  },
+  "session": {
+    "noProfileTitle": "No rider profile yet",
+    "noProfileBody": "This account is signed in but has no rider profile. Sign out and sign in again, or ask your restaurant to add you.",
+    "unreachableTitle": "Can’t reach Favornoms",
+    "offlineBody": "You appear to be offline. Your deliveries are safe — try again once you have signal.",
+    "unreachableBody": "We couldn’t load your rider profile. Please try again."
+  },
+  "push": {
+    "prompt": "Turn on alerts so you hear new delivery offers.",
+    "turnOn": "Turn on"
+  }
+}

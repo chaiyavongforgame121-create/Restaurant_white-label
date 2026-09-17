@@ -1,12 +1,14 @@
 'use client';
 
 import * as React from 'react';
+import { useTranslations } from 'next-intl';
 import { Printer, ReceiptText } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { formatPhone, formatCurrency } from '@favornoms/shared';
 import { Button, Card, Sheet } from '@favornoms/ui';
 import { printReceiptViaBrowser } from '@favornoms/ui/printer';
 import { modifierLabel, parseLineModifiers } from './order-lines';
+import { useIntlLocale, useOrderLabels } from './order-labels';
 import { formatReceiptAddress, toReceiptInput, type ReceiptOrder } from './receipt-input';
 
 interface Props {
@@ -27,6 +29,7 @@ export function OrderReceiptButton({
   canPrint,
   currency,
 }: Props) {
+  const t = useTranslations('orders');
   const [open, setOpen] = React.useState(false);
   const [order, setOrder] = React.useState<ReceiptOrder | null>(null);
   const [paymentMethod, setPaymentMethod] = React.useState<string | null>(null);
@@ -58,7 +61,9 @@ export function OrderReceiptButton({
       if (cancelled) return;
       setLoading(false);
       if (readErr || !data) {
-        setError(readErr?.message ?? 'That order could no longer be read.');
+        // The database's own wording is for the console, not for the person at the counter.
+        if (readErr) console.error('[orders] receipt read failed', readErr.message);
+        setError(t('receipt.loadFailed'));
         return;
       }
 
@@ -78,6 +83,8 @@ export function OrderReceiptButton({
     return () => {
       cancelled = true;
     };
+    // t is left out on purpose: a language switch must not re-read an order already on screen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, order, orderId]);
 
   // Printing happens in its own window, never in this one. The Sheet is a fixed,
@@ -85,6 +92,9 @@ export function OrderReceiptButton({
   // the sidebar and the whole order table on the paper. printReceiptViaBrowser opens the
   // 80mm document and fires its own print dialog. It must stay synchronous inside the
   // click handler or the pop-up blocker eats window.open.
+  //
+  // The paper itself stays English: thermal printer code pages cannot print Thai or
+  // Vietnamese (docs/i18n/CONVENTIONS.md).
   const print = () => {
     if (!order) return;
     printReceiptViaBrowser(
@@ -102,20 +112,20 @@ export function OrderReceiptButton({
         onClick={() => setOpen(true)}
         leftIcon={<ReceiptText className="h-4 w-4" />}
       >
-        Receipt
+        {t('receipt.button')}
       </Button>
 
       <Sheet
         open={open}
         onClose={() => setOpen(false)}
         side="right"
-        title={`Receipt · ${orderNumber}`}
-        ariaLabel={`Receipt for order ${orderNumber}`}
+        title={t('receipt.title', { number: orderNumber })}
+        ariaLabel={t('receipt.sheetLabel', { number: orderNumber })}
       >
         <div className="space-y-4 px-5 pb-8">
           {loading && (
             <p role="status" className="text-sm text-muted-foreground">
-              Loading receipt…
+              {t('receipt.loading')}
             </p>
           )}
           {error && (
@@ -131,23 +141,22 @@ export function OrderReceiptButton({
                   role="status"
                   className="rounded-xl bg-warning/10 px-3 py-2 text-sm text-warning"
                 >
-                  This order was {order.status}. The receipt records what was ordered, not
-                  that it was paid for.
+                  {order.status === 'refunded'
+                    ? t('receipt.voidedRefunded')
+                    : t('receipt.voidedCancelled')}
                 </p>
               )}
 
               {canPrint && (
                 <div className="flex items-center justify-between gap-3">
-                  <p className="text-xs text-muted-foreground">
-                    Prints the 80mm receipt in a new window.
-                  </p>
+                  <p className="text-xs text-muted-foreground">{t('receipt.printHint')}</p>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={print}
                     leftIcon={<Printer className="h-4 w-4" />}
                   >
-                    Print
+                    {t('receipt.print')}
                   </Button>
                 </div>
               )}
@@ -183,7 +192,10 @@ function ReceiptCard({
   receiptNumber: string | null;
   currency: string;
 }) {
-  const created = new Date(order.created_at).toLocaleString('en-US', {
+  const t = useTranslations('orders');
+  const labels = useOrderLabels();
+  const intlLocale = useIntlLocale();
+  const created = new Date(order.created_at).toLocaleString(intlLocale, {
     dateStyle: 'medium',
     timeStyle: 'short',
   });
@@ -197,26 +209,26 @@ function ReceiptCard({
         <h2 className="font-display text-2xl font-bold">{branchName}</h2>
         {branchAddress && <p className="mt-1 text-xs text-muted-foreground">{branchAddress}</p>}
         <p className="mt-3 inline-block rounded-full bg-muted px-3 py-1 text-xs font-semibold">
-          Receipt · {receiptNumber ?? order.order_number}
+          {t('receipt.title', { number: receiptNumber ?? order.order_number })}
         </p>
       </div>
 
       <dl className="mt-5 grid grid-cols-2 gap-y-1.5 text-sm">
-        <dt className="text-muted-foreground">Date</dt>
+        <dt className="text-muted-foreground">{t('receipt.date')}</dt>
         <dd className="text-right">{created}</dd>
-        <dt className="text-muted-foreground">Channel</dt>
-        <dd className="text-right capitalize">{order.channel.replace('_', '-')}</dd>
-        <dt className="text-muted-foreground">Status</dt>
-        <dd className="text-right capitalize">{order.status.replace('_', ' ')}</dd>
+        <dt className="text-muted-foreground">{t('receipt.channel')}</dt>
+        <dd className="text-right">{labels.channel(order.channel)}</dd>
+        <dt className="text-muted-foreground">{t('receipt.status')}</dt>
+        <dd className="text-right">{labels.status(order.status)}</dd>
         {order.customer_name && (
           <>
-            <dt className="text-muted-foreground">Customer</dt>
+            <dt className="text-muted-foreground">{t('receipt.customer')}</dt>
             <dd className="text-right">{order.customer_name}</dd>
           </>
         )}
         {order.customer_phone && (
           <>
-            <dt className="text-muted-foreground">Phone</dt>
+            <dt className="text-muted-foreground">{t('receipt.phone')}</dt>
             <dd className="text-right">{formatPhone(order.customer_phone)}</dd>
           </>
         )}
@@ -258,24 +270,30 @@ function ReceiptCard({
       <hr className="my-5 border-dashed border-border" />
 
       <dl className="space-y-1.5 text-sm">
-        <Row label="Subtotal" value={money(n(order.subtotal))} />
-        {n(order.delivery_fee) > 0 && <Row label="Delivery" value={money(n(order.delivery_fee))} />}
+        <Row label={t('receipt.subtotal')} value={money(n(order.subtotal))} />
+        {n(order.delivery_fee) > 0 && (
+          <Row label={t('receipt.deliveryFee')} value={money(n(order.delivery_fee))} />
+        )}
         {n(order.service_fee) > 0 && (
-          <Row label="Service fee" value={money(n(order.service_fee))} />
+          <Row label={t('receipt.serviceFee')} value={money(n(order.service_fee))} />
         )}
         {n(order.discount_amount) > 0 && (
-          <Row label="Discount" value={`-${money(n(order.discount_amount))}`} />
+          <Row label={t('receipt.discount')} value={`-${money(n(order.discount_amount))}`} />
         )}
-        {n(order.tax_amount) > 0 && <Row label="Sales tax" value={money(n(order.tax_amount))} />}
-        {n(order.tip_amount) > 0 && <Row label="Tip" value={money(n(order.tip_amount))} />}
+        {n(order.tax_amount) > 0 && (
+          <Row label={t('receipt.salesTax')} value={money(n(order.tax_amount))} />
+        )}
+        {n(order.tip_amount) > 0 && <Row label={t('receipt.tip')} value={money(n(order.tip_amount))} />}
         <div className="my-1 h-px bg-border" />
-        <Row label={`Total (${currency})`} value={money(n(order.total))} emphasize />
-        {paymentMethod && <Row label="Paid via" value={paymentMethod.replace('_', ' ')} />}
+        <Row label={t('receipt.total', { currency })} value={money(n(order.total))} emphasize />
+        {paymentMethod && (
+          <Row label={t('receipt.paidVia')} value={labels.paymentMethod(paymentMethod)} />
+        )}
       </dl>
 
       {address && (
         <p className="mt-4 border-t border-dashed border-border pt-3 text-xs text-muted-foreground">
-          Deliver to: {address}
+          {t('receipt.deliverTo', { address })}
         </p>
       )}
     </Card>

@@ -1,0 +1,31 @@
+{
+  "title": "Đánh giá",
+  "subtitle": "Khách nói gì sau khi đặt hàng",
+  "loadError": {
+    "title": "Không tải được đánh giá",
+    "generic": "Hãy tải lại trang để thử lại. Nếu lỗi vẫn tiếp diễn, hãy liên hệ bộ phận hỗ trợ.",
+    "permission": "Tài khoản của bạn không xem được đánh giá của chi nhánh này. Hãy nhờ chủ sở hữu kiểm tra quyền nhân viên của bạn tại chi nhánh này."
+  },
+  "score": {
+    "food": "Điểm món ăn",
+    "delivery": "Điểm giao hàng",
+    "count": "{count, plural, other {# lượt đánh giá}}",
+    "total": "Tổng số đánh giá"
+  },
+  "riders": {
+    "title": "Tài xế",
+    "fallbackName": "Tài xế {id}",
+    "rated": "{count, plural, other {# chuyến giao được đánh giá}}",
+    "more": "+{count} bình luận khác"
+  },
+  "empty": {
+    "title": "Chưa có đánh giá",
+    "description": "Khách được mời đánh giá khi đơn hàng hoàn tất — số sao và bình luận của họ sẽ hiển thị ở đây."
+  },
+  "stars": {
+    "food": "Món ăn",
+    "delivery": "Giao hàng",
+    "outOfFive": "{value} trên 5"
+  },
+  "aboutRider": "— về {name}"
+}

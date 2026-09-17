@@ -1,3 +1,4 @@
+import { getTranslations } from 'next-intl/server';
 import { getBranchAccess } from '@/lib/capabilities';
 import { AccessDenied } from '@/components/access-denied';
 
@@ -11,10 +12,11 @@ export default async function KitchenLayout({ params, children }: Props) {
   const { branch, can } = await getBranchAccess(branchId, `/kitchen/${branchId}`);
 
   if (!can('kitchen.access')) {
+    const t = await getTranslations('kitchen');
     return (
       <AccessDenied
-        title="No kitchen access"
-        reason={`Your account can't open the kitchen display for ${branch.name}.`}
+        title={t('accessDenied.title')}
+        reason={t('accessDenied.reason', { branch: branch.name })}
       />
     );
   }

@@ -1,3 +1,4 @@
+import { getTranslations } from 'next-intl/server';
 import { getBranchAccess } from '@/lib/capabilities';
 import { AccessDenied } from '@/components/access-denied';
 import { LiveOpsView } from './_components/live-ops-view';
@@ -15,10 +16,11 @@ export default async function DeliveriesPage({ params }: Props) {
   // whole board, riders' phone numbers included. Gate it like the Drivers page does.
   const { supabase, branch, can } = await getBranchAccess(branchId, `/b/${branchId}/deliveries`);
   if (!can('delivery.manage')) {
+    const t = await getTranslations('deliveries');
     return (
       <AccessDenied
-        title="No delivery access"
-        reason={`Your role cannot manage deliveries at ${branch.name}.`}
+        title={t('accessDenied.title')}
+        reason={t('accessDenied.reason', { branch: branch.name })}
       />
     );
   }

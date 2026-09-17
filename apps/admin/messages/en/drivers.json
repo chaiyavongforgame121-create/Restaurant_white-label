@@ -1,0 +1,93 @@
+{
+  "accessDenied": {
+    "title": "No driver access",
+    "reason": "Your role cannot review riders at {branch}."
+  },
+  "header": {
+    "title": "Drivers",
+    "applied": "{count, plural, one {# driver has applied to this branch} other {# drivers have applied to this branch}}",
+    "awaitingDecision": "{count} awaiting your decision",
+    "documentsToReview": "{count} with documents to review",
+    "changedAfterReview": "{count} changed a document after review"
+  },
+  "loadError": {
+    "title": "Could not load driver applications",
+    "body": "Something went wrong while reading this branch’s applications. Refresh the page to try again."
+  },
+  "empty": {
+    "title": "No driver applications yet",
+    "body": "Riders apply from the Driver app. They can only apply after uploading all three KYC documents (licence, vehicle registration and a selfie), so a rider who has signed up but not finished uploading will not appear here yet."
+  },
+  "card": {
+    "unknownDriver": "Unknown driver",
+    "kyc": "KYC: {status}",
+    "documentsUnreadable": "Documents: could not read",
+    "documentsCount": "Documents: {received}/{total} received",
+    "applied": "Applied {date}",
+    "reviewed": "reviewed {date}",
+    "documentsReceived": "documents last received {date}",
+    "note": "<label>Note:</label> {note}",
+    "approvedNeedsDocuments": "Approved, but their documents still need reviewing — use Review documents.",
+    "replacedAfterVerify": "They replaced a document {received}, after it was verified on {verified} — look again.",
+    "replacedAfterDecision": "They replaced a document {received}, after your decision on {reviewed}."
+  },
+  "kycStatus": {
+    "pending": "pending",
+    "verified": "verified",
+    "rejected": "rejected",
+    "suspended": "suspended",
+    "unknown": "unknown"
+  },
+  "approval": {
+    "pending": "pending",
+    "approved": "approved",
+    "rejected": "rejected",
+    "suspended": "suspended"
+  },
+  "vehicle": {
+    "motorcycle": "Motorcycle",
+    "car": "Car",
+    "bicycle": "Bicycle",
+    "scooter": "Scooter"
+  },
+  "docs": {
+    "license": "Driver licence",
+    "vehicleReg": "Vehicle registration",
+    "selfie": "Selfie with licence"
+  },
+  "approve": {
+    "actions": {
+      "approve": "Approve",
+      "reject": "Reject",
+      "suspend": "Suspend",
+      "reopen": "Reopen",
+      "reinstate": "Reinstate"
+    },
+    "rejectReasonLabel": "Reason for rejection",
+    "rejectReasonPlaceholder": "Shown to the rider in their app",
+    "cancel": "Cancel",
+    "confirmReject": "Confirm reject",
+    "notSaved": "That didn’t save — you may not have permission to review drivers.",
+    "saveFailed": "Couldn’t save the decision. Try again."
+  },
+  "review": {
+    "button": "Review documents",
+    "title": "Document review",
+    "currentStatus": "Current status: {status}",
+    "currentStatusVerified": "Current status: {status} · verified {date}",
+    "sharedWarning": "Verifying or rejecting documents here applies to every restaurant this rider works with, not just {branch}. The decision that is yours alone is Approve / Suspend on their application.",
+    "replacedAfterVerify": "A document was replaced {replaced}, after the documents were verified on {verified}. What you are looking at below is the new file.",
+    "replacedAfterDecision": "A document was replaced {replaced}, after your decision on {decided}. What you are looking at below is the new file.",
+    "receivedAt": "Received {date}",
+    "nothingReceived": "Nothing received",
+    "openFullSize": "Open full size",
+    "notUploaded": "Not uploaded",
+    "awaitingUpload": "Awaiting upload",
+    "listError": "Could not read the rider’s documents. Close this and try again.",
+    "forbidden": "You do not have permission to review driver documents. Only an owner or manager can.",
+    "saveFailed": "Couldn’t save the document review. Try again.",
+    "rejectHint": "Rejecting tells the rider a document needs changing, but not which one. To say why, reject their application with a reason — that text is shown in their app.",
+    "reject": "Reject",
+    "verify": "Verify"
+  }
+}

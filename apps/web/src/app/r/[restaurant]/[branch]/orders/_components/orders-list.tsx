@@ -3,13 +3,14 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import {
   CheckCircle2, ChefHat, Clock, MapPin, QrCode, Receipt, RotateCcw,
   ShoppingBag, Store, XCircle, type LucideIcon,
 } from 'lucide-react';
-import { formatCurrency } from '@favornoms/shared';
+import { formatCurrency, intlLocaleFor } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
-import { Badge, Button, Card, RiderIcon } from '@favornoms/ui';
+import { Badge, Button, Card, RiderIcon, useUiLocale } from '@favornoms/ui';
 import { useCart } from '@/store/cart';
 
 interface OrderRow {
@@ -37,16 +38,17 @@ interface Props {
   branchId: string;
 }
 
-const CHANNEL_META: Record<string, { label: string; Icon: LucideIcon }> = {
-  dine_in: { label: 'Dine-in', Icon: Store },
-  pickup: { label: 'Pickup', Icon: ShoppingBag },
-  delivery: { label: 'Delivery', Icon: RiderIcon },
-  qr_ordering: { label: 'QR order', Icon: QrCode },
+/** Keyed by the `order_channel` value; the label is `orders.channel.<value>`. */
+const CHANNEL_META: Record<string, { Icon: LucideIcon }> = {
+  dine_in: { Icon: Store },
+  pickup: { Icon: ShoppingBag },
+  delivery: { Icon: RiderIcon },
+  qr_ordering: { Icon: QrCode },
 };
 
 /**
  * One entry per `order_status` enum value — all 8 are mapped, so nothing falls
- * through to the humanized default.
+ * through to the humanized default. The label is `orders.status.<value>`.
  *
  * Colour rules, both learned the hard way:
  *  1. Never `default`, `solid` or `accent`. Those resolve to --primary/--accent,
@@ -65,16 +67,16 @@ const CHANNEL_META: Record<string, { label: string; Icon: LucideIcon }> = {
  */
 const STATUS_META: Record<
   string,
-  { label: string; variant: React.ComponentProps<typeof Badge>['variant']; Icon: LucideIcon }
+  { variant: React.ComponentProps<typeof Badge>['variant']; Icon: LucideIcon }
 > = {
-  pending: { label: 'Pending', variant: 'neutral', Icon: Clock },
-  confirmed: { label: 'Confirmed', variant: 'info', Icon: CheckCircle2 },
-  preparing: { label: 'Preparing', variant: 'warning', Icon: ChefHat },
-  ready: { label: 'Ready', variant: 'success', Icon: Receipt },
-  out_for_delivery: { label: 'Out for delivery', variant: 'info', Icon: RiderIcon },
-  completed: { label: 'Completed', variant: 'success', Icon: MapPin },
-  cancelled: { label: 'Cancelled', variant: 'danger', Icon: XCircle },
-  refunded: { label: 'Refunded', variant: 'danger', Icon: RotateCcw },
+  pending: { variant: 'neutral', Icon: Clock },
+  confirmed: { variant: 'info', Icon: CheckCircle2 },
+  preparing: { variant: 'warning', Icon: ChefHat },
+  ready: { variant: 'success', Icon: Receipt },
+  out_for_delivery: { variant: 'info', Icon: RiderIcon },
+  completed: { variant: 'success', Icon: MapPin },
+  cancelled: { variant: 'danger', Icon: XCircle },
+  refunded: { variant: 'danger', Icon: RotateCcw },
 };
 
 function humanize(value: string): string {
@@ -83,6 +85,8 @@ function humanize(value: string): string {
 }
 
 export function OrdersList({ orders, base, branchId }: Props) {
+  const t = useTranslations('orders');
+  const locale = useUiLocale();
   const router = useRouter();
   const cartAdd = useCart((s) => s.add);
   const cartAddCombo = useCart((s) => s.addCombo);
@@ -173,13 +177,13 @@ export function OrdersList({ orders, base, branchId }: Props) {
       }
 
       if (adds.length === 0) {
-        alert('None of these items are available right now.');
+        alert(t('list.reorderNoneAvailable'));
         return;
       }
       cartClear();
       for (const apply of adds) apply();
       if (dropped > 0) {
-        alert('Some items or options from that order are no longer available and were left out — please review your cart.');
+        alert(t('list.reorderSomeDropped'));
       }
       router.push(`${base}/cart`);
     } finally {
@@ -189,7 +193,7 @@ export function OrdersList({ orders, base, branchId }: Props) {
 
   return (
     <div className="container max-w-2xl pt-6">
-      <h1 className="font-display text-2xl font-bold">Your orders</h1>
+      <h1 className="font-display text-2xl font-bold">{t('title')}</h1>
       <ul className="mt-4 space-y-3">
         {orders.map((order) => (
           <li key={order.id}>
@@ -201,13 +205,16 @@ export function OrdersList({ orders, base, branchId }: Props) {
                     <ChannelBadge channel={order.channel} />
                   </div>
                   <p className="mt-1 font-display text-lg font-semibold">
-                    {order.order_items.length} items · {formatCurrency(Number(order.total))}
+                    {t('list.summary', {
+                      count: order.order_items.length,
+                      total: formatCurrency(Number(order.total)),
+                    })}
                   </p>
                   <p className="text-sm text-muted-foreground">
                     {order.order_items.map((i) => i.item_name).join(', ')}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {new Date(order.created_at).toLocaleString()}
+                    {new Date(order.created_at).toLocaleString(intlLocaleFor(locale))}
                   </p>
                 </Link>
                 <div className="flex flex-col items-end gap-2">
@@ -219,7 +226,7 @@ export function OrdersList({ orders, base, branchId }: Props) {
                     loading={reorderingId === order.id}
                     leftIcon={<RotateCcw className="h-3.5 w-3.5" />}
                   >
-                    Reorder
+                    {t('list.reorder')}
                   </Button>
                 </div>
               </div>
@@ -232,25 +239,27 @@ export function OrdersList({ orders, base, branchId }: Props) {
 }
 
 function StatusBadge({ status }: { status: string }) {
+  const t = useTranslations('orders');
   const meta = STATUS_META[status];
   // A status added to the enum later must still render something legible rather
   // than an unstyled pill.
   if (!meta) return <Badge variant="neutral">{humanize(status)}</Badge>;
-  const { label, variant, Icon } = meta;
+  const { variant, Icon } = meta;
   return (
     <Badge variant={variant} className="whitespace-nowrap">
-      <Icon className="h-3 w-3 shrink-0" /> {label}
+      <Icon className="h-3 w-3 shrink-0" /> {t(`status.${status}` as never)}
     </Badge>
   );
 }
 
 function ChannelBadge({ channel }: { channel: string }) {
+  const t = useTranslations('orders');
   const meta = CHANNEL_META[channel];
   if (!meta) return <Badge variant="outline">{humanize(channel)}</Badge>;
-  const { label, Icon } = meta;
+  const { Icon } = meta;
   return (
     <Badge variant="outline">
-      <Icon className="h-3 w-3" /> {label}
+      <Icon className="h-3 w-3" /> {t(`channel.${channel}` as never)}
     </Badge>
   );
 }

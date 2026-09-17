@@ -1,0 +1,103 @@
+{
+  "apply": {
+    "metaTitle": "Nhà hàng",
+    "back": "Quay lại",
+    "title": "Nhà hàng",
+    "subtitleEmpty": "Đăng ký giao hàng — nhà hàng sẽ xét duyệt bạn",
+    "subtitleCounts": "{applied} đơn đăng ký · {approved} đã duyệt",
+    "subtitleCountsWaiting": "{applied} đơn đăng ký · {approved} đã duyệt · {waiting} đang chờ",
+    "docsBanner": {
+      "title": "{count, plural, other {Còn thiếu # giấy tờ}}",
+      "body": "Nhà hàng chưa thể thấy bạn cho đến khi bạn tải lên {docs}. Nhấn để tải lên.",
+      "allDocs": "bằng lái xe, giấy đăng ký xe và ảnh selfie cầm bằng lái"
+    },
+    "yourApplications": "Đơn đăng ký của bạn",
+    "allRestaurants": "Tất cả nhà hàng",
+    "noLongerListed": "Nhà hàng này không còn trong danh sách",
+    "restaurantFallback": "Nhà hàng",
+    "applied": "Đăng ký ngày {applied}",
+    "appliedDecided": "Đăng ký ngày {applied} · có kết quả ngày {decided}",
+    "whatTheySaid": "<label>Nhà hàng nhắn:</label> {notes}",
+    "loading": "Đang tải…",
+    "empty": "Hiện chưa có nhà hàng nào.",
+    "apply": "Đăng ký",
+    "applyAgain": "Đăng ký lại",
+    "availableFrom": "Từ {date}",
+    "withdraw": "Rút đơn",
+    "confirmWithdraw": "Xác nhận rút",
+    "docsNotice": "📄 Hãy tải lên đủ giấy tờ bắt buộc trước — đang chuyển đến trang giấy tờ…",
+    "status": {
+      "pending": "Chờ xét duyệt",
+      "approved": "✓ Đã duyệt",
+      "rejected": "Không được nhận",
+      "suspended": "Tạm ngưng"
+    },
+    "explanation": {
+      "pending": "Nhà hàng chưa quyết định. Bạn chưa thể bật nhận đơn ở đây cho đến khi được duyệt.",
+      "approved": "Bạn có thể bật nhận đơn và nhận đơn hàng của nhà hàng này.",
+      "rejected": "Nhà hàng đã từ chối đơn đăng ký này. Bạn có thể đăng ký lại sau.",
+      "suspended": "Nhà hàng đã tạm ngưng bạn — bạn sẽ không nhận được đơn. Hãy liên hệ nhà hàng."
+    },
+    "errors": {
+      "tooLateToWithdraw": "Đã quá muộn để rút đơn — nhà hàng đã quyết định.",
+      "reapplyTooSoon": "Bạn có thể đăng ký lại ở đây sau {days, plural, other {# ngày}} kể từ khi có kết quả.",
+      "changed": "Đơn đăng ký này đã thay đổi — kéo xuống để làm mới.",
+      "generic": "Đã xảy ra lỗi. Vui lòng thử lại."
+    }
+  },
+  "training": {
+    "metaTitle": "Đào tạo",
+    "title": "Đào tạo tài xế",
+    "completedOn": "Hoàn tất ngày {date}",
+    "required": "Bắt buộc trước khi nhận đơn đầu tiên.",
+    "done": "Xong",
+    "submit": "Gửi và hoàn tất đào tạo",
+    "answerAll": "Trả lời đúng tất cả câu hỏi để tiếp tục",
+    "modules": {
+      "safety": {
+        "title": "1 · An toàn khi lái xe",
+        "description": "Kiến thức an toàn cơ bản cho xe máy và ô tô",
+        "reading": "Luôn đội mũ bảo hiểm. Không bao giờ xem điện thoại khi đang lái xe. Tấp vào lề trước khi mở ứng dụng. Luôn xác nhận địa chỉ trước khi rời nhà hàng.",
+        "question": "Khi nào bạn nên xem ứng dụng?",
+        "choices": {
+          "a": "Khi đang chạy xe",
+          "b": "Sau khi tấp vào lề",
+          "c": "Lúc dừng đèn đỏ"
+        }
+      },
+      "pickup": {
+        "title": "2 · Tại nhà hàng",
+        "description": "Những việc cần kiểm tra khi lấy hàng",
+        "reading": "Xuất trình thẻ tài xế. Xác nhận mã đơn hàng với nhân viên. Kiểm tra túi có đủ món và đã được niêm phong. Chỉ nhấn “Đã lấy hàng” sau khi đã kiểm tra.",
+        "question": "Bạn cần kiểm tra gì khi lấy hàng?",
+        "choices": {
+          "a": "Chỉ mã đơn hàng",
+          "b": "Mã đơn + món + niêm phong",
+          "c": "Không cần — cứ lấy túi"
+        }
+      },
+      "delivery": {
+        "title": "3 · Phép lịch sự khi giao hàng",
+        "description": "Giao tiếp với khách hàng",
+        "reading": "Chào khách bằng tên. Xác nhận đơn hàng. Trao túi bằng hai tay. Nếu giao không tiếp xúc, hãy chụp ảnh để xác nhận đã giao. Không bao giờ đòi tiền tip.",
+        "question": "Điều gì chứng minh đã giao hàng không tiếp xúc?",
+        "choices": {
+          "a": "Gõ cửa",
+          "b": "Ảnh chụp tại cửa",
+          "c": "Nhắn tin cho khách"
+        }
+      },
+      "issues": {
+        "title": "4 · Xử lý sự cố",
+        "description": "Cần làm gì khi có sự cố",
+        "reading": "Nếu không gặp hoặc không liên lạc được với khách: gọi hai lần, sau đó nhắn tin. Đợi 5 phút. Rồi chọn “không trả lời” trong ứng dụng. Không bao giờ để đồ ăn không người trông ở nơi công cộng.",
+        "question": "Nên đợi bao lâu nếu khách không trả lời?",
+        "choices": {
+          "a": "1 phút",
+          "b": "5 phút",
+          "c": "20 phút"
+        }
+      }
+    }
+  }
+}

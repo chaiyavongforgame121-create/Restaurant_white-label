@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
+import { useFormatter, useTranslations } from 'next-intl';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -13,19 +14,17 @@ import {
   Store,
   Upload,
 } from 'lucide-react';
-import { Badge, Button, Card } from '@favornoms/ui';
+import { Badge, Button, Card, useUiLocale } from '@favornoms/ui';
+import { intlLocaleFor, type UiLocale } from '@favornoms/shared';
 import { useDriverSession } from '@/components/driver-session';
 import { listDriverDocuments, uploadDriverDocument } from './document-storage';
 import {
   branchVerification,
   decidedBeforeUpload,
-  DOC_HINT,
   DOC_KEYS,
-  DOC_LABEL,
   documentsStage,
   lastReceivedAt,
   missingDocKeys,
-  SHARED_CHECK_NOTE,
   STAGE_TONE,
   type DocFile,
   type DocKey,
@@ -39,11 +38,11 @@ const TONE_CLASS = {
 } as const;
 
 /** Absolute, short and with a time: riders compare "received" against "checked". */
-function fmtWhen(ts: string | null): string | null {
+function fmtWhen(ts: string | null, locale: UiLocale): string | null {
   if (!ts) return null;
   const d = new Date(ts);
   if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleString(undefined, {
+  return d.toLocaleString(intlLocaleFor(locale), {
     day: 'numeric',
     month: 'short',
     hour: '2-digit',
@@ -51,15 +50,18 @@ function fmtWhen(ts: string | null): string | null {
   });
 }
 
-function fmtDay(ts: string | null): string | null {
+function fmtDay(ts: string | null, locale: UiLocale): string | null {
   if (!ts) return null;
   const d = new Date(ts);
   if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  return d.toLocaleDateString(intlLocaleFor(locale), { day: 'numeric', month: 'short' });
 }
 
 export function DocumentsView() {
   const router = useRouter();
+  const t = useTranslations('profile');
+  const format = useFormatter();
+  const locale = useUiLocale();
   const { driver, refresh } = useDriverSession();
 
   const [docs, setDocs] = React.useState<DocFile[]>([]);
@@ -108,6 +110,8 @@ export function DocumentsView() {
   });
   const missing = missingDocKeys(docs);
   const anyCleared = approvals.some((a) => a.status === 'approved');
+  const receivedWhen = fmtWhen(receivedAt, locale);
+  const verifiedOn = fmtDay(driver.kyc_verified_at, locale);
 
   const send = async (key: DocKey, file: File) => {
     setBusyKey(key);
@@ -117,9 +121,7 @@ export function DocumentsView() {
       // Say what to do, not just what broke — "connection to the database timed out"
       // reads as permanent to a rider, and it almost never is. Inline rather than
       // alert(), which some mobile browsers swallow entirely.
-      setUploadError(
-        `Couldn't send that document — the server is busy. Wait a moment and try again. (${message})`,
-      );
+      setUploadError(t('documents.uploadError', { detail: message }));
     }
     await load();
     await refresh();
@@ -132,16 +134,14 @@ export function DocumentsView() {
         <button
           type="button"
           onClick={() => router.back()}
-          aria-label="Back"
+          aria-label={t('documents.back')}
           className="focus-ring grid h-10 w-10 shrink-0 place-items-center rounded-full text-muted-foreground hover:bg-muted"
         >
           <ChevronLeft className="h-5 w-5" />
         </button>
         <div className="min-w-0">
-          <h1 className="font-display text-2xl font-bold">Documents</h1>
-          <p className="truncate text-sm text-muted-foreground">
-            What we have, and where each restaurant has got to
-          </p>
+          <h1 className="font-display text-2xl font-bold">{t('documents.title')}</h1>
+          <p className="truncate text-sm text-muted-foreground">{t('documents.subtitle')}</p>
         </div>
       </header>
 
@@ -152,14 +152,11 @@ export function DocumentsView() {
             {stage === 'unreadable' && (
               <>
                 <p className="font-display text-base font-semibold">
-                  We couldn&apos;t read your documents
+                  {t('documents.stage.unreadable.title')}
                 </p>
                 {/* Deliberately not "nothing uploaded": this is our read failing, and a
                     rider told they sent nothing re-sends everything or gives up. */}
-                <p className="mt-0.5">
-                  This is our side, not yours. Anything you already sent is still there —
-                  try again in a moment.
-                </p>
+                <p className="mt-0.5">{t('documents.stage.unreadable.body')}</p>
                 <p className="mt-1 text-xs opacity-80">{listError}</p>
                 <Button
                   size="sm"
@@ -168,7 +165,7 @@ export function DocumentsView() {
                   leftIcon={<RefreshCw className="h-4 w-4" />}
                   onClick={() => void load()}
                 >
-                  Try again
+                  {t('documents.stage.unreadable.retry')}
                 </Button>
               </>
             )}
@@ -176,55 +173,71 @@ export function DocumentsView() {
               <>
                 <p className="font-display text-base font-semibold">
                   {docs.length === 0
-                    ? 'Nothing received yet'
-                    : `${docs.length} of ${DOC_KEYS.length} received`}
+                    ? t('documents.stage.incomplete.titleNone')
+                    : t('documents.stage.incomplete.titleSome', {
+                        received: docs.length,
+                        total: DOC_KEYS.length,
+                      })}
                 </p>
                 <p className="mt-0.5">
-                  Still to send: {missing.map((k) => DOC_LABEL[k].toLowerCase()).join(', ')}.
-                  Restaurants cannot see you until all {DOC_KEYS.length} are in.
+                  {t('documents.stage.incomplete.body', {
+                    docs: format.list(
+                      missing.map((k) => t(`docs.${k}.inline`)),
+                      { type: 'conjunction' },
+                    ),
+                    total: DOC_KEYS.length,
+                  })}
                 </p>
               </>
             )}
             {stage === 'awaiting' && (
               <>
                 <p className="font-display text-base font-semibold">
-                  All {DOC_KEYS.length} documents received
+                  {t('documents.stage.awaiting.title', { total: DOC_KEYS.length })}
                 </p>
                 <p className="mt-0.5">
-                  Nothing more to do — they are waiting to be verified.
-                  {receivedAt && ` Last one arrived ${fmtWhen(receivedAt)}.`}
+                  {receivedAt
+                    ? t('documents.stage.awaiting.bodyWithTime', { when: receivedWhen ?? '' })
+                    : t('documents.stage.awaiting.body')}
                 </p>
               </>
             )}
             {stage === 'rechecking' && (
               <>
-                <p className="font-display text-base font-semibold">Waiting to be checked again</p>
+                <p className="font-display text-base font-semibold">
+                  {t('documents.stage.rechecking.title')}
+                </p>
                 <p className="mt-0.5">
-                  You replaced a document {fmtWhen(receivedAt)}, after it was verified on{' '}
-                  {fmtDay(driver.kyc_verified_at)}. The new file has been received and is
-                  waiting for someone to look at it.
+                  {t('documents.stage.rechecking.body', {
+                    when: receivedWhen ?? '',
+                    verifiedOn: verifiedOn ?? '',
+                  })}
                 </p>
               </>
             )}
             {stage === 'verified' && (
               <>
-                <p className="font-display text-base font-semibold">Documents verified</p>
+                <p className="font-display text-base font-semibold">
+                  {t('documents.stage.verified.title')}
+                </p>
                 <p className="mt-0.5">
-                  Verified {fmtDay(driver.kyc_verified_at) ?? 'already'}. Each restaurant
-                  still approves you separately — see below.
+                  {verifiedOn
+                    ? t('documents.stage.verified.body', { verifiedOn })
+                    : t('documents.stage.verified.bodyNoDate')}
                 </p>
               </>
             )}
             {stage === 'changes_needed' && (
               <>
                 <p className="font-display text-base font-semibold">
-                  {kycStatus === 'suspended' ? 'Your documents are suspended' : 'A document needs changing'}
+                  {kycStatus === 'suspended'
+                    ? t('documents.stage.changesNeeded.titleSuspended')
+                    : t('documents.stage.changesNeeded.title')}
                 </p>
                 <p className="mt-0.5">
-                  Replace whichever document is wrong below.
-                  {receivedAt && ` You last sent one ${fmtWhen(receivedAt)}.`} Replacing a
-                  file does not restart the check on its own — tell the restaurant it is
-                  ready to look at again.
+                  {receivedAt
+                    ? t('documents.stage.changesNeeded.bodyWithTime', { when: receivedWhen ?? '' })
+                    : t('documents.stage.changesNeeded.body')}
                 </p>
               </>
             )}
@@ -233,13 +246,15 @@ export function DocumentsView() {
       </section>
 
       <section className="mt-4 px-4">
-        <h2 className="px-1 pb-2 font-display text-lg font-semibold">What we have received</h2>
+        <h2 className="px-1 pb-2 font-display text-lg font-semibold">
+          {t('documents.received.heading')}
+        </h2>
         <Card className="overflow-hidden p-0">
           <ul className="divide-y divide-border">
             {DOC_KEYS.map((key) => {
               const file = docs.find((d) => d.key === key) ?? null;
               const isPdf = file?.name.toLowerCase().endsWith('.pdf') ?? false;
-              const when = fmtWhen(file?.receivedAt ?? null);
+              const when = fmtWhen(file?.receivedAt ?? null, locale);
               return (
                 <li key={key} className="flex items-center gap-3 px-4 py-3">
                   {/* The document itself, not a tick: a rider who photographed the wrong
@@ -248,7 +263,7 @@ export function DocumentsView() {
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={file.url}
-                      alt={DOC_LABEL[key]}
+                      alt={t(`docs.${key}.label`)}
                       className="h-11 w-11 shrink-0 rounded-xl border border-border object-cover"
                     />
                   ) : (
@@ -265,17 +280,17 @@ export function DocumentsView() {
                     </div>
                   )}
                   <div className="min-w-0 flex-1">
-                    <p className="font-semibold">{DOC_LABEL[key]}</p>
+                    <p className="font-semibold">{t(`docs.${key}.label`)}</p>
                     <p className="truncate text-xs text-muted-foreground">
                       {!loaded
-                        ? 'Checking…'
+                        ? t('documents.received.checking')
                         : listError
-                          ? 'Could not check'
+                          ? t('documents.received.couldNotCheck')
                           : file
                             ? when
-                              ? `Received ${when}`
-                              : 'Received'
-                            : DOC_HINT[key]}
+                              ? t('documents.received.receivedAt', { when })
+                              : t('documents.received.received')
+                            : t(`docs.${key}.hint`)}
                     </p>
                   </div>
                   <label
@@ -286,7 +301,11 @@ export function DocumentsView() {
                     } ${busyKey === key ? 'pointer-events-none opacity-60' : ''}`}
                   >
                     <Upload className="h-3.5 w-3.5" />
-                    {busyKey === key ? 'Sending…' : file ? 'Replace' : 'Send'}
+                    {busyKey === key
+                      ? t('documents.received.sending')
+                      : file
+                        ? t('documents.received.replace')
+                        : t('documents.received.send')}
                     <input
                       type="file"
                       accept="image/*,.pdf"
@@ -313,36 +332,41 @@ export function DocumentsView() {
 
         {/* The owner's question, answered where the rider is about to tap Replace. */}
         <p className="mt-2 px-1 text-xs text-muted-foreground">
-          <span className="font-semibold text-foreground">Replacing a document: </span>
-          the new file is received straight away and replaces the old one, but a check that
-          already happened is not undone automatically.
-          {anyCleared
-            ? ' You keep delivering for the restaurants that have already approved you, and their screen flags that your paperwork changed after they looked at it.'
-            : ' It goes back into the queue to be verified.'}
+          {t.rich(anyCleared ? 'documents.replaceNote.cleared' : 'documents.replaceNote.queue', {
+            label: (chunks) => <span className="font-semibold text-foreground">{chunks}</span>,
+          })}
         </p>
       </section>
 
       <section className="mt-5 px-4">
-        <h2 className="px-1 pb-1 font-display text-lg font-semibold">Verification by restaurant</h2>
-        <p className="px-1 pb-2 text-xs text-muted-foreground">{SHARED_CHECK_NOTE}</p>
+        <h2 className="px-1 pb-1 font-display text-lg font-semibold">
+          {t('documents.byRestaurant.heading')}
+        </h2>
+        {/* The one thing about this screen a rider cannot work out for themselves: the
+            document check is not per-restaurant. `drivers.kyc_status` is a single column every
+            branch reads, so the first restaurant to verify clears the rider everywhere. Only
+            the approval below is that restaurant's own. */}
+        <p className="px-1 pb-2 text-xs text-muted-foreground">
+          {t('documents.byRestaurant.sharedNote')}
+        </p>
 
         {approvals.length === 0 ? (
           <Card className="p-6 text-center">
             <Store className="mx-auto h-8 w-8 text-muted-foreground" />
-            <p className="mt-2 font-semibold">No restaurant is reviewing you yet</p>
+            <p className="mt-2 font-semibold">{t('documents.byRestaurant.emptyTitle')}</p>
             <p className="mx-auto mt-1 max-w-xs text-sm text-muted-foreground">
               {listError
-                ? 'We could not read your documents just now, so we cannot tell you what is left to send.'
+                ? t('documents.byRestaurant.emptyUnreadable')
                 : missing.length > 0
-                  ? 'Send the remaining documents first — you can apply as soon as all three are in.'
-                  : 'Your documents are in. Apply to a restaurant and they will review you.'}
+                  ? t('documents.byRestaurant.emptyMissing')
+                  : t('documents.byRestaurant.emptyReady')}
             </p>
             <Button
               variant="gradient"
               className="mt-4"
               onClick={() => router.push('/app/apply')}
             >
-              Apply to a restaurant
+              {t('documents.byRestaurant.applyCta')}
             </Button>
           </Card>
         ) : (
@@ -350,6 +374,7 @@ export function DocumentsView() {
             {approvals.map((approval) => {
               const state = branchVerification(approval, receivedAt);
               const stale = decidedBeforeUpload(approval.reviewed_at, receivedAt);
+              const appliedOn = fmtDay(approval.applied_at, locale) ?? '';
               return (
                 <Card key={approval.id} className="p-4">
                   <div className="flex items-start gap-3">
@@ -360,7 +385,7 @@ export function DocumentsView() {
                       <p className="truncate font-semibold">
                         {approval.branch?.restaurant?.name ??
                           approval.branch?.name ??
-                          'This restaurant is no longer listed'}
+                          t('documents.byRestaurant.noLongerListed')}
                       </p>
                       {approval.branch && (
                         <p className="truncate text-sm text-muted-foreground">
@@ -369,22 +394,28 @@ export function DocumentsView() {
                       )}
                     </div>
                     <Badge variant={state.variant} className="shrink-0">
-                      {state.label}
+                      {t(`documents.branchState.${state.code}.label`)}
                     </Badge>
                   </div>
 
-                  <p className="mt-2 text-xs text-muted-foreground">{state.detail}</p>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {t(`documents.branchState.${state.code}.detail`)}
+                  </p>
 
                   <p className="mt-1.5 text-xs text-muted-foreground">
-                    Applied {fmtDay(approval.applied_at)}
                     {approval.reviewed_at
-                      ? ` · they looked ${fmtDay(approval.reviewed_at)}`
-                      : ' · not looked at yet'}
+                      ? t('documents.byRestaurant.appliedReviewed', {
+                          applied: appliedOn,
+                          reviewed: fmtDay(approval.reviewed_at, locale) ?? '',
+                        })
+                      : t('documents.byRestaurant.appliedNotReviewed', { applied: appliedOn })}
                   </p>
 
                   {stale && approval.status !== 'pending' && (
                     <p className="mt-2 rounded-xl bg-warning/10 px-3 py-2 text-xs text-warning">
-                      You sent a newer document on {fmtDay(receivedAt)}, after this decision.
+                      {t('documents.byRestaurant.newerDocument', {
+                        when: fmtDay(receivedAt, locale) ?? '',
+                      })}
                     </p>
                   )}
 
@@ -392,8 +423,12 @@ export function DocumentsView() {
                       "Shown to the rider in their app". This is where it is shown. */}
                   {approval.notes && (
                     <p className="mt-2 line-clamp-4 rounded-xl bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
-                      <span className="font-semibold text-foreground">What they said: </span>
-                      {approval.notes}
+                      {t.rich('documents.byRestaurant.whatTheySaid', {
+                        notes: approval.notes,
+                        label: (chunks) => (
+                          <span className="font-semibold text-foreground">{chunks}</span>
+                        ),
+                      })}
                     </p>
                   )}
                 </Card>

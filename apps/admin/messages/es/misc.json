@@ -1,0 +1,43 @@
+{
+  "activity": {
+    "title": "Registro de actividad",
+    "subtitle": "Historial de auditoría de las acciones importantes",
+    "emptyTitle": "Aún no hay actividad",
+    "emptyBody": "Las acciones importantes (reembolsos, anulaciones, cambios de configuración) aparecerán aquí."
+  },
+  "lockedFeature": {
+    "metaTitle": "{feature} · Favornoms",
+    "aiVoiceLocked": "Un asistente con IA que contesta el teléfono y toma pedidos. Forma parte del complemento AI Suite.",
+    "aiVoiceIncluded": "El asistente de voz con IA está incluido en tu paquete y lo estamos desarrollando. Lo activaremos en cuanto esté listo, sin costo adicional.",
+    "signageLocked": "Pantallas de menú y de promociones que se actualizan directamente desde tu menú. Forma parte del complemento AI Suite.",
+    "signageIncluded": "La señalización digital está incluida en tu paquete y la estamos desarrollando. La activaremos en cuanto esté lista, sin costo adicional."
+  },
+  "receipts": {
+    "title": "Recibos",
+    "subtitle": "Todos los recibos de venta emitidos para la sucursal {branch}…",
+    "empty": "Aún no se han emitido recibos. Los recibos se crean desde la página de Pedidos, en los pedidos completados.",
+    "columns": {
+      "receipt": "N.º de recibo",
+      "order": "N.º de pedido",
+      "customer": "Cliente",
+      "total": "Total",
+      "status": "Estado",
+      "issued": "Emitido"
+    },
+    "walkIn": "Cliente de paso",
+    "viewPrint": "Ver / imprimir",
+    "status": {
+      "issued": "Emitido",
+      "draft": "Borrador",
+      "pending": "Pendiente",
+      "canceled": "Cancelado",
+      "cancelled": "Cancelado",
+      "void": "Anulado",
+      "voided": "Anulado"
+    },
+    "openFailedTitle": "No se pudo abrir este recibo",
+    "openFailedBody": "El servicio de recibos devolvió el error {status}. Inténtalo de nuevo en un momento.",
+    "popupTitle": "Ventana emergente bloqueada",
+    "popupBody": "Permite las ventanas emergentes para este sitio y vuelve a abrir el recibo."
+  }
+}

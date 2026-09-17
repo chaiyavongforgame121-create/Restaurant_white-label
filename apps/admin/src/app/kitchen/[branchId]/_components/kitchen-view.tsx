@@ -2,13 +2,16 @@
 
 import * as React from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import {
   AlertTriangle, ArrowRight, Armchair, Bike, CalendarClock, Check, ChefHat, Clock,
   Flame, Layers, Loader2, Maximize2, Minimize2, MoreVertical, RotateCcw, ShoppingBag, Undo2,
   UserRound, Volume2, VolumeX, X,
 } from 'lucide-react';
+
 import { getBrowserClient } from '@favornoms/database/client';
 import { useRealtime } from '@favornoms/database/realtime';
+import { LocaleSwitcher } from '@/components/locale-switcher';
 import { OpsToggles } from './ops-toggles';
 
 /* ──────────────────────────────────────────────────────────────────────────
@@ -31,10 +34,11 @@ const SUN = {
   accentTx: '#BE4A12',
 };
 
+// Lane titles are translated at render: kitchen.lanes.<key>.
 const LANES = [
-  { key: 'new', title: 'NEW', grad: 'linear-gradient(120deg,#FFE3A8,#FFCB6A)', tone: '#9A6206' },
-  { key: 'cooking', title: 'COOKING', grad: 'linear-gradient(120deg,#FFC39A,#FF9166)', tone: '#A83C12' },
-  { key: 'ready', title: 'READY', grad: 'linear-gradient(120deg,#A9EDC9,#5FD89B)', tone: '#13794C' },
+  { key: 'new', grad: 'linear-gradient(120deg,#FFE3A8,#FFCB6A)', tone: '#9A6206' },
+  { key: 'cooking', grad: 'linear-gradient(120deg,#FFC39A,#FF9166)', tone: '#A83C12' },
+  { key: 'ready', grad: 'linear-gradient(120deg,#A9EDC9,#5FD89B)', tone: '#13794C' },
 ] as const;
 
 // Whole-card "standout" skins — every card carries a bold, lane-coloured
@@ -47,21 +51,25 @@ const LANE_SKIN: Record<string, { bg: string; border: string }> = {
 };
 const URGENT_SKIN = { bg: 'linear-gradient(135deg,#FFDAD5,#FFB8B0)', border: '#ED847B' };
 
-const CHAN: Record<string, { Icon: typeof Bike; bg: string; c: string; label: string }> = {
-  dine_in: { Icon: Armchair, bg: '#FFE3D6', c: '#C2491F', label: 'Dine-in' },
-  pickup: { Icon: ShoppingBag, bg: '#FCEBC6', c: '#9A6A0A', label: 'Pickup' },
-  delivery: { Icon: Bike, bg: '#E3ECFF', c: '#2E5FB0', label: 'Delivery' },
-  qr_ordering: { Icon: Armchair, bg: '#FFE3D6', c: '#C2491F', label: 'QR table' },
+// Channel chip labels are translated at render: kitchen.channel.<channel>.
+const CHAN: Record<string, { Icon: typeof Bike; bg: string; c: string }> = {
+  dine_in: { Icon: Armchair, bg: '#FFE3D6', c: '#C2491F' },
+  pickup: { Icon: ShoppingBag, bg: '#FCEBC6', c: '#9A6A0A' },
+  delivery: { Icon: Bike, bg: '#E3ECFF', c: '#2E5FB0' },
+  qr_ordering: { Icon: Armchair, bg: '#FFE3D6', c: '#C2491F' },
 };
 
-// What the primary button does, keyed by the order's CURRENT status.
-const ACTION: Record<string, { next: string; label: string; Icon: typeof Flame; grad: string; tx: string }> = {
-  pending: { next: 'confirmed', label: 'Accept order', Icon: Check, grad: 'linear-gradient(135deg,#FF9326,#FF5C5C)', tx: '#fff' },
-  confirmed: { next: 'preparing', label: 'Start cooking', Icon: Flame, grad: 'linear-gradient(135deg,#FF9326,#FF5C5C)', tx: '#fff' },
-  preparing: { next: 'ready', label: 'Mark ready', Icon: Check, grad: 'linear-gradient(135deg,#34D98C,#12A268)', tx: '#fff' },
-  ready: { next: 'completed', label: 'Bump', Icon: ArrowRight, grad: '#F3E9E0', tx: '#5A4636' },
+// What the primary button does, keyed by the order's CURRENT status. The button text is
+// kitchen.action.<status>; the undo toast names the NEXT status (kitchen.toast.advanced).
+const ACTION: Record<string, { next: string; Icon: typeof Flame; grad: string; tx: string }> = {
+  pending: { next: 'confirmed', Icon: Check, grad: 'linear-gradient(135deg,#FF9326,#FF5C5C)', tx: '#fff' },
+  confirmed: { next: 'preparing', Icon: Flame, grad: 'linear-gradient(135deg,#FF9326,#FF5C5C)', tx: '#fff' },
+  preparing: { next: 'ready', Icon: Check, grad: 'linear-gradient(135deg,#34D98C,#12A268)', tx: '#fff' },
+  ready: { next: 'completed', Icon: ArrowRight, grad: '#F3E9E0', tx: '#5A4636' },
 };
-const NEXT_LABEL: Record<string, string> = { confirmed: 'Accepted', preparing: 'Cooking', ready: 'Ready', completed: 'Bumped' };
+
+// Rider vehicle values stored on drivers.vehicle_type; anything else is shown as stored.
+const VEHICLE_TYPES = ['motorcycle', 'car', 'bicycle', 'scooter'];
 
 type Tier = { tier: string; spine: string; pill: string; pc: string; pulse: boolean; ring: boolean };
 const TIERS: Record<string, Omit<Tier, 'tier'>> = {
@@ -87,9 +95,9 @@ function safeElapsedSec(fromMs: number, now: number): number {
   const raw = Math.floor((now - fromMs) / 1000);
   return raw < 0 || raw > 12 * 3600 ? 0 : raw;
 }
-function fmtTimer(sec: number): string {
+function fmtTimer(sec: number, hoursMinutes: (hours: number, minutes: number) => string): string {
   if (sec < 3600) return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
-  return `${Math.floor(sec / 3600)}h ${Math.floor((sec % 3600) / 60)}m`;
+  return hoursMinutes(Math.floor(sec / 3600), Math.floor((sec % 3600) / 60));
 }
 
 // place-order's fallback when branches.settings carries neither key.
@@ -158,7 +166,22 @@ function parseMods(m: unknown): { label: string; remove: boolean }[] {
   return out;
 }
 
+/** Station codes the platform assigns (menu import, CSV). The code stays the filter and URL value;
+ *  only its label is translated, and a code we don't know is shown as it is stored. */
+const STATION_CODES = ['hot', 'cold', 'bar', 'dessert', 'expo'] as const;
+function isStationCode(value: string): value is (typeof STATION_CODES)[number] {
+  return (STATION_CODES as readonly string[]).includes(value);
+}
+
 const ALLERGY_RE = /allerg|peanut|\bnut\b|gluten|shellfish|dairy|lactose|sesame|\bsoy\b|vegan|coeliac|celiac/i;
+
+/** Pick the translation key for a failed RPC. The raw PostgREST / Postgres text is server
+ *  vocabulary, never a sentence for the cook: a known code gets its own message, anything
+ *  else the fallback, and the raw text goes to the console. */
+function errorKey(message: string, known: Record<string, string>, fallback: string): string {
+  for (const [code, key] of Object.entries(known)) if (message.includes(code)) return key;
+  return fallback;
+}
 
 /* ──────────────────────────────────────────────────────────────────────── */
 
@@ -236,34 +259,44 @@ interface DispatchFailure {
   } | null;
 }
 
+/** A sentence to show, as a key under kitchen.dispatch plus its values. */
+interface DispatchMessage {
+  key: string;
+  values?: Record<string, number>;
+}
+
 /** Turn dispatch-driver's gate counts into the one sentence that tells the merchant where
  *  to look. Ordered from "nothing is set up" to "everyone is busy", so the first failing
  *  gate is the one reported. */
-function describeDispatchFailure(body: DispatchFailure): string {
+function describeDispatchFailure(body: DispatchFailure): DispatchMessage {
   if (body?.error && body.error !== 'no_drivers_available') {
-    if (body.error === 'max_attempts_reached') return 'Tried every rider — raise "Max dispatch attempts" or assign one by hand.';
-    return body.error.replace(/_/g, ' ');
+    if (body.error === 'max_attempts_reached') return { key: 'maxAttempts' };
+    if (body.error === 'feature_not_entitled') return { key: 'notEntitled' };
+    if (body.error === 'delivery_not_dispatchable') return { key: 'notDispatchable' };
+    // Any other code is server vocabulary, not a sentence for the merchant.
+    console.error('dispatch-driver failed:', body.error);
+    return { key: 'failed' };
   }
   const d = body?.diagnostics;
-  if (!d) return 'No rider available right now.';
-  if (d.branch_has_pin === false) return 'This branch has no map pin yet — set it in Branch settings.';
-  if (!d.approved) return 'No rider is approved for this branch yet.';
-  if (!d.online) return `No rider is online right now (${d.approved} approved).`;
-  if (!d.has_location) {
-    return `${d.online} online, but none have shared a location — the rider app must be open with location permission granted.`;
-  }
-  if (!d.gps_fresh) {
-    return `${d.online} online, but no location newer than ${d.max_gps_age_min ?? 5} min. The rider app only sends GPS while it is open in the foreground.`;
-  }
-  if (!d.not_busy) return `${d.online} online, all already on a delivery.`;
+  if (!d) return { key: 'noneAvailable' };
+  if (d.branch_has_pin === false) return { key: 'noPin' };
+  if (!d.approved) return { key: 'noneApproved' };
+  if (!d.online) return { key: 'noneOnline', values: { approved: d.approved } };
+  if (!d.has_location) return { key: 'noLocation', values: { online: d.online } };
+  if (!d.gps_fresh) return { key: 'gpsStale', values: { online: d.online, minutes: d.max_gps_age_min ?? 5 } };
+  if (!d.not_busy) return { key: 'allBusy', values: { online: d.online } };
   if (!d.in_radius) {
     const mi = d.radius_km != null ? Math.round(d.radius_km / 1.609344) : null;
-    return `${d.online} online, but none within${mi != null ? ` ${mi} mi` : ' the search radius'} — raise "Driver search radius".`;
+    return mi != null
+      ? { key: 'outOfRangeMiles', values: { online: d.online, miles: mi } }
+      : { key: 'outOfRange', values: { online: d.online } };
   }
-  return 'No rider available right now.';
+  return { key: 'noneAvailable' };
 }
 
 export function KitchenView({ branchId, branchName, initialOrders, stations, activeStation, drivers }: Props) {
+  const t = useTranslations('kitchen');
+  const stationLabel = (s: string) => (isStationCode(s) ? t(`stations.${s}`) : s);
   const [orders, setOrders] = React.useState<Order[]>(() =>
     initialOrders.map((o) => ({ ...o, deliveries: asArray(o.deliveries) })),
   );
@@ -371,9 +404,9 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
             .eq('order_id', row.id);
           let tables: Order['tables'] = null;
           if (row.table_id) {
-            const { data: t } = await supa()
+            const { data: tableRow } = await supa()
               .from('tables').select('table_number, display_name').eq('id', row.table_id).maybeSingle();
-            tables = (t as Order['tables']) ?? null;
+            tables = (tableRow as Order['tables']) ?? null;
           }
           setOrders((curr) => (curr.some((o) => o.id === row.id) ? curr : [...curr, { ...row, order_items: items ?? [], tables }]));
         })();
@@ -428,6 +461,7 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
     const prevStatus = order.status;
     const prevReady = readyAtRef.current[order.id];
     const snapshot = order;
+    const ticket = order.order_number.slice(-4);
     if (action.next === 'ready') readyAtRef.current[order.id] = Date.now();
 
     setOrders((curr) => curr.map((o) => (o.id === order.id ? { ...o, status: action.next } : o)));
@@ -436,10 +470,16 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
     if (error) {
       setOrders((curr) => curr.map((o) => (o.id === order.id ? { ...o, status: prevStatus } : o)));
       if (action.next === 'ready') { if (prevReady != null) readyAtRef.current[order.id] = prevReady; else delete readyAtRef.current[order.id]; }
-      showToast(`Couldn't update #${order.order_number.slice(-4)} — ${error.message}`, null);
+      console.error('kitchen: order status update failed', error.message);
+      const key = errorKey(error.message, {
+        transfer_payment_not_approved: 'toast.updateUnpaid',
+        bad_transition: 'toast.updateNotAllowed',
+        invalid_status: 'toast.updateNotAllowed',
+      }, 'toast.updateFailed');
+      showToast(t(key, { ticket }), null);
       return;
     }
-    showToast(`#${order.order_number.slice(-4)} → ${NEXT_LABEL[action.next] ?? action.next}`, async () => {
+    showToast(t(`toast.advanced.${action.next}`, { ticket }), async () => {
       setToast(null);
       setOrders((curr) => (curr.some((o) => o.id === snapshot.id)
         ? curr.map((o) => (o.id === snapshot.id ? { ...o, status: prevStatus } : o))
@@ -450,12 +490,22 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
   };
 
   const reject = async (order: Order) => {
+    const ticket = order.order_number.slice(-4);
+    // The reason is WRITTEN to orders.cancellation_reason — it stays English whatever the board shows.
     const { error } = await supa().rpc('cancel_order', { p_order_id: order.id, p_reason: 'Rejected by kitchen' });
-    if (!error) { setOrders((curr) => curr.filter((o) => o.id !== order.id)); showToast(`#${order.order_number.slice(-4)} rejected`, null); }
-    else showToast(`Reject failed — ${error.message}`, null);
+    if (!error) { setOrders((curr) => curr.filter((o) => o.id !== order.id)); showToast(t('toast.rejected', { ticket }), null); }
+    else {
+      console.error('kitchen: cancel_order failed', error.message);
+      const key = errorKey(error.message, {
+        cannot_cancel_status: 'toast.rejectClosed',
+        not_authorized: 'toast.rejectForbidden',
+      }, 'toast.rejectFailed');
+      showToast(t(key, { ticket }), null);
+    }
   };
 
   const recall = async (order: Order) => {
+    const ticket = order.order_number.slice(-4);
     setOrders((curr) => curr.map((o) => (o.id === order.id ? { ...o, status: 'preparing' } : o)));
     delete readyAtRef.current[order.id];
     // The result was discarded and the success toast shown unconditionally, so a refusal —
@@ -463,15 +513,15 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
     // a 400 — read to the cook as "recalled to kitchen" while nothing had moved.
     const { error } = await supa().rpc('recall_order', { p_order_id: order.id });
     if (error) {
-      const msg = error.message.includes('not_recallable_status')
-        ? 'That order is too far along to recall.'
-        : error.message.includes('recall_window_passed')
-          ? 'The recall window for that order has passed.'
-          : error.message;
-      showToast(`Couldn't recall #${order.order_number.slice(-4)} — ${msg}`, null);
+      console.error('kitchen: recall_order failed', error.message);
+      const key = errorKey(error.message, {
+        not_recallable_status: 'toast.recallTooFar',
+        recall_window_passed: 'toast.recallWindowPassed',
+      }, 'toast.recallFailed');
+      showToast(t(key, { ticket }), null);
       return;
     }
-    showToast(`#${order.order_number.slice(-4)} recalled to kitchen`, null);
+    showToast(t('toast.recalled', { ticket }), null);
   };
 
   /**
@@ -491,10 +541,14 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
   const eightySix = async (itemName: string) => {
     const supabase = supa();
     const { data: row } = await supabase.from('menu_items').select('id').eq('branch_id', branchId).ilike('name', itemName).maybeSingle();
-    if (!row) { showToast(`Couldn't find "${itemName}" — may already be 86'd`, null); return; }
+    if (!row) { showToast(t('toast.eightySixNotFound', { item: itemName }), null); return; }
     const { error } = await supabase.rpc('set_item_86', { p_menu_item_id: row.id, p_sold_out: true });
-    if (error) { showToast(`86 failed — ${error.message}`, null); return; }
-    showToast(`86'd ${itemName} until tomorrow`, async () => {
+    if (error) {
+      console.error('kitchen: set_item_86 failed', error.message);
+      showToast(t('toast.eightySixFailed', { item: itemName }), null);
+      return;
+    }
+    showToast(t('toast.eightySixDone', { item: itemName }), async () => {
       setToast(null);
       await supabase.rpc('set_item_86', { p_menu_item_id: row.id, p_sold_out: false });
     });
@@ -507,16 +561,20 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
     // carries the reason the candidate list came back empty, and that reason is the only
     // useful thing on this screen — "No rider found" alone had the merchant chasing riders
     // who were online the whole time.
-    let reason = '';
+    let reason: DispatchMessage | null = null;
     try {
       const ctx = (error as unknown as { context?: Response }).context;
       if (ctx && typeof ctx.json === 'function') {
         reason = describeDispatchFailure((await ctx.json()) as DispatchFailure);
       }
     } catch {
-      /* body unreadable — fall through to the bare error */
+      /* body unreadable — fall through to the generic message */
     }
-    throw new Error(reason || error.message);
+    if (!reason) {
+      console.error('kitchen: dispatch-driver failed', error.message);
+      reason = { key: 'failed' };
+    }
+    throw new Error(t(`dispatch.${reason.key}`, reason.values));
   };
 
   // Manually offer a delivery to a SPECIFIC rider (staff override of auto-dispatch).
@@ -527,11 +585,19 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
       rpc: (fn: string, args: Record<string, unknown>) => Promise<{ error: { message: string } | null }>;
     }).rpc('staff_assign_driver', { p_delivery_id: deliveryId, p_driver_id: driverId });
     if (error) {
-      showToast(`Couldn't assign rider — ${error.message}`, null);
+      console.error('kitchen: staff_assign_driver failed', error.message);
+      const key = errorKey(error.message, {
+        not_assignable: 'toast.assignTooLate',
+        already_accepted: 'toast.assignTooLate',
+        driver_not_eligible: 'toast.assignNotEligible',
+        driver_busy: 'toast.assignBusy',
+        forbidden: 'toast.assignForbidden',
+      }, 'toast.assignFailed');
+      showToast(t(key), null);
       throw error;
     }
     const d = drivers.find((x) => x.id === driverId);
-    showToast(`Offered to ${d?.full_name ?? 'rider'}`, null);
+    showToast(d?.full_name ? t('toast.offeredTo', { name: d.full_name }) : t('toast.offeredToRider'), null);
   };
 
   /* derive lanes (client-side station filter + FIFO) */
@@ -620,7 +686,7 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
           className="px-4 py-2 text-center text-sm font-semibold text-white"
           style={{ background: '#B62D25' }}
         >
-          Connection lost — reconnecting. New tickets may not appear until this clears.
+          {t('header.connectionLost')}
         </div>
       )}
       <header className="flex items-center gap-3 px-4 py-3 text-white" style={{ background: SUN.header }}>
@@ -628,47 +694,53 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
           <ChefHat className="h-5 w-5" />
         </span>
         <div className="leading-tight">
-          <h1 className="text-[15px] font-semibold">{branchName} · Kitchen</h1>
+          <h1 className="text-[15px] font-semibold">{t('header.title', { branch: branchName })}</h1>
           <p className="text-[11px] tracking-wide" style={{ opacity: 0.85 }}>
-            {visible.length} active · {liveHealthy ? 'live' : 'reconnecting…'}
-            {station ? ` · ${station}` : ''}
+            {liveHealthy
+              ? t('header.statusLive', { count: visible.length })
+              : t('header.statusReconnecting', { count: visible.length })}
+            {station ? ` · ${stationLabel(station)}` : ''}
           </p>
         </div>
         <div className="ml-auto flex items-center gap-1.5">
           {scheduled.length > 0 && (
             <button onClick={() => setScheduledOpen(true)} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium" style={{ background: 'rgba(255,255,255,.24)' }}>
-              <CalendarClock className="h-4 w-4" />{scheduled.length} scheduled
+              <CalendarClock className="h-4 w-4" />{t('header.scheduled', { count: scheduled.length })}
             </button>
           )}
           <OpsToggles branchId={branchId} onPaused={setPaused} />
-          <HBtn onClick={() => setSoundOn((s) => !s)} label={soundOn ? 'Mute' : 'Unmute'}>
+          <LocaleSwitcher
+            compact
+            className="rounded-lg border-transparent bg-white/[.22] text-white [&_svg]:text-white"
+          />
+          <HBtn onClick={() => setSoundOn((s) => !s)} label={soundOn ? t('header.mute') : t('header.unmute')}>
             {soundOn ? <Volume2 className="h-[18px] w-[18px]" /> : <VolumeX className="h-[18px] w-[18px]" />}
           </HBtn>
-          <HBtn onClick={toggleFs} label="Fullscreen">{isFs ? <Minimize2 className="h-[18px] w-[18px]" /> : <Maximize2 className="h-[18px] w-[18px]" />}</HBtn>
+          <HBtn onClick={toggleFs} label={t('header.fullscreen')}>{isFs ? <Minimize2 className="h-[18px] w-[18px]" /> : <Maximize2 className="h-[18px] w-[18px]" />}</HBtn>
         </div>
       </header>
 
       {paused && (
         <div className="flex items-center gap-2 px-4 py-1.5 text-xs font-medium text-white" style={{ background: 'linear-gradient(120deg,#FF6B6B,#E5484D)' }}>
-          <AlertTriangle className="h-4 w-4" /> Orders paused — customers cannot order while this is on.
+          <AlertTriangle className="h-4 w-4" /> {t('header.ordersPaused')}
         </div>
       )}
 
       {/* station bar */}
       <div className="flex items-center gap-2 overflow-x-auto px-4 py-2.5" style={{ borderBottom: `1px solid ${SUN.line}` }}>
-        <StationPill label="All" count={visible.length} active={!station} onClick={() => setStationFilter(null)} />
+        <StationPill label={t('stations.all')} count={visible.length} active={!station} onClick={() => setStationFilter(null)} />
         {stations.map((s) => (
-          <StationPill key={s} label={s} count={stationStat[s]?.count ?? 0} drown={stationStat[s]?.drown} active={station === s} onClick={() => setStationFilter(s)} />
+          <StationPill key={s} label={stationLabel(s)} count={stationStat[s]?.count ?? 0} drown={stationStat[s]?.drown} active={station === s} onClick={() => setStationFilter(s)} />
         ))}
         <button onClick={() => setBatchOpen((b) => !b)} className="ml-auto flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium" style={batchOpen ? { background: SUN.accentBg, color: SUN.accentTx, border: `1px solid ${SUN.accent}` } : { color: SUN.muted, border: `1px solid ${SUN.cardBorder}` }}>
-          <Layers className="h-4 w-4" /> Batch view
+          <Layers className="h-4 w-4" /> {t('batch.toggle')}
         </button>
       </div>
 
       {batchOpen && (
         <div className="px-4 py-2.5" style={{ background: SUN.panel, borderBottom: `1px solid ${SUN.line}` }}>
           {batchGroups.length === 0 ? (
-            <p className="text-xs" style={{ color: SUN.muted }}>Nothing cooking to batch right now.</p>
+            <p className="text-xs" style={{ color: SUN.muted }}>{t('batch.empty')}</p>
           ) : (
             <div className="flex flex-wrap gap-2">
               {batchGroups.map((g, i) => (
@@ -691,7 +763,7 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
           <Column key={lane.key} lane={lane} count={byLane[lane.key]!.length}>
             <AnimatePresence initial={false}>
               {byLane[lane.key]!.length === 0 ? (
-                <div className="m-auto px-2 py-6 text-center text-xs" style={{ color: SUN.faint }}>All clear, chef.</div>
+                <div className="m-auto px-2 py-6 text-center text-xs" style={{ color: SUN.faint }}>{t('lanes.empty')}</div>
               ) : (
                 byLane[lane.key]!.map((order) => (
                   <OrderCard
@@ -748,10 +820,11 @@ function StationPill({ label, count, drown, active, onClick }: { label: string; 
 }
 
 function Column({ lane, count, children }: { lane: (typeof LANES)[number]; count: number; children: React.ReactNode }) {
+  const t = useTranslations('kitchen');
   return (
     <div className="flex min-h-0 flex-col rounded-xl" style={{ background: SUN.panel, border: `1px solid ${SUN.line}` }}>
-      <div className="flex items-center gap-2 rounded-t-xl px-3 py-2.5 text-xs font-semibold tracking-wider" style={{ background: lane.grad, color: lane.tone }}>
-        {lane.title}
+      <div className="flex items-center gap-2 rounded-t-xl px-3 py-2.5 text-xs font-semibold uppercase tracking-wider" style={{ background: lane.grad, color: lane.tone }}>
+        {t(`lanes.${lane.key}`)}
         <span className="ml-auto rounded-full px-2 tabular-nums" style={{ background: 'rgba(0,0,0,.08)', color: lane.tone }}>{count}</span>
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto p-2.5">{children}</div>
@@ -770,6 +843,7 @@ function OrderCard({
   onAdvance: () => void; onReject: () => void; onRecall: () => void; on86: (name: string) => void; onDispatch: (reset?: boolean) => void | Promise<void>;
   drivers: DriverLite[]; onAssign: (deliveryId: string, driverId: string) => void | Promise<void>;
 }) {
+  const t = useTranslations('kitchen');
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [dispatching, setDispatching] = React.useState(false);
   const [dispatchError, setDispatchError] = React.useState(false);
@@ -778,11 +852,13 @@ function OrderCard({
   const sec = safeElapsedSec(fromMs, now);
   const tg = agingTier(sec, lane);
 
-  const chan = CHAN[order.channel] ?? CHAN.pickup!;
+  const chanKey = CHAN[order.channel] ? order.channel : 'pickup';
+  const chan = CHAN[chanKey]!;
   const ChanIcon = chan.Icon;
-  const tableLabel = order.tables ? (order.tables.display_name || `Table ${order.tables.table_number}`) : null;
+  const chanLabel = t(`channel.${chanKey}`);
+  const tableLabel = order.tables ? (order.tables.display_name || t('card.table', { table: order.tables.table_number })) : null;
   const chipText = order.channel === 'dine_in' || order.channel === 'qr_ordering'
-    ? (tableLabel ?? chan.label) : chan.label;
+    ? (tableLabel ?? chanLabel) : chanLabel;
 
   const items = station ? order.order_items.filter((it) => it.station === station) : order.order_items;
   const totalLines = order.order_items.length;
@@ -807,10 +883,10 @@ function OrderCard({
   const urgent = tg.tier === 'late' || tg.tier === 'crit';
   const skin = urgent ? URGENT_SKIN : (LANE_SKIN[lane] ?? LANE_SKIN.new!);
   const driverLabel = !delivery || delivery.status === 'pending' || delivery.status === 'dispatching'
-    ? 'Finding a rider…'
+    ? t('rider.finding')
     : delivery.status === 'assigned'
-      ? (delivery.accepted_at ? 'Rider assigned ✓' : 'Rider offered…')
-      : 'Rider on the way';
+      ? (delivery.accepted_at ? t('rider.assigned') : t('rider.offered'))
+      : t('rider.onTheWay');
 
   // Show a "searching" indicator the instant the button is pressed (optimistic)
   // and for as long as the delivery sits in pending/dispatching, so the kitchen
@@ -864,7 +940,7 @@ function OrderCard({
         </span>
         <TimerPill fromMs={fromMs} lane={lane} />
         <div className="relative" onClick={(e) => e.stopPropagation()}>
-          <button aria-label="More actions" onClick={() => setMenuOpen((m) => !m)} className="grid h-7 w-7 place-items-center rounded-lg" style={{ color: SUN.faint }}>
+          <button aria-label={t('card.moreActions')} onClick={() => setMenuOpen((m) => !m)} className="grid h-7 w-7 place-items-center rounded-lg" style={{ color: SUN.faint }}>
             <MoreVertical className="h-4 w-4" />
           </button>
           {menuOpen && (
@@ -880,15 +956,15 @@ function OrderCard({
                     the board and find someone with back-office access. cancel_order permits
                     the kitchen role and accepts a confirmed order. */}
                 {(order.status === 'pending' || order.status === 'confirmed') && (
-                  <MenuRow onClick={() => { setMenuOpen(false); onReject(); }} danger><X className="h-4 w-4" />Reject order</MenuRow>
+                  <MenuRow onClick={() => { setMenuOpen(false); onReject(); }} danger><X className="h-4 w-4" />{t('card.reject')}</MenuRow>
                 )}
                 {order.status === 'ready' && (
-                  <MenuRow onClick={() => { setMenuOpen(false); onRecall(); }}><RotateCcw className="h-4 w-4" />Recall to kitchen</MenuRow>
+                  <MenuRow onClick={() => { setMenuOpen(false); onRecall(); }}><RotateCcw className="h-4 w-4" />{t('card.recall')}</MenuRow>
                 )}
                 {isDelivery && order.status === 'ready' && (
-                  <MenuRow onClick={() => { setMenuOpen(false); void handleDispatch(true); }}><Bike className="h-4 w-4" />Re-dispatch (start over)</MenuRow>
+                  <MenuRow onClick={() => { setMenuOpen(false); void handleDispatch(true); }}><Bike className="h-4 w-4" />{t('card.redispatch')}</MenuRow>
                 )}
-                <div className="px-3 pb-1 pt-1.5 text-[11px] font-medium uppercase tracking-wide" style={{ color: SUN.faint }}>86 an item</div>
+                <div className="px-3 pb-1 pt-1.5 text-[11px] font-medium uppercase tracking-wide" style={{ color: SUN.faint }}>{t('card.eightySixHeading')}</div>
                 {order.order_items.map((it) => (
                   <MenuRow key={it.id} onClick={() => { setMenuOpen(false); on86(it.item_name); }}>
                     <Flame className="h-4 w-4" />{it.item_name}
@@ -904,7 +980,7 @@ function OrderCard({
         #{order.order_number.slice(-4)}
         {delivery?.batch_id && (
           <span className="ml-1.5 inline-flex items-center rounded-md px-1.5 py-px font-semibold" style={{ background: '#E7EEFB', color: '#2E5FB0' }}>
-            🔗 Stacked · stop {delivery.batch_seq ?? '?'} — pack both bags for one rider
+            {t('card.stacked', { stop: delivery.batch_seq ?? '?' })}
           </span>
         )}
       </div>
@@ -934,7 +1010,7 @@ function OrderCard({
       {noteRaw && (
         <div className="mt-2 flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium" style={isAllergy ? { background: '#FBD9D6', color: '#B43A33' } : { background: '#FBF0D2', color: '#9A6A0A' }}>
           {isAllergy ? <AlertTriangle className="h-4 w-4 shrink-0" /> : <Clock className="h-4 w-4 shrink-0" />}
-          {isAllergy ? `Allergy / note: ${noteRaw}` : noteRaw}
+          {isAllergy ? t('card.allergyNote', { note: noteRaw }) : noteRaw}
         </div>
       )}
 
@@ -947,7 +1023,7 @@ function OrderCard({
           ) : dispatchError || searchTimedOut ? (
             <div className="mt-2.5">
               <button onClick={() => handleDispatch(true)} className="flex w-full items-center justify-center gap-2 rounded-[10px] py-2.5 text-sm font-medium active:scale-[.985]" style={{ background: '#FBE3E1', color: '#C0382F' }}>
-                <AlertTriangle className="h-4 w-4" /> No rider found — tap to retry
+                <AlertTriangle className="h-4 w-4" /> {t('rider.notFound')}
               </button>
               {dispatchReason && (
                 <p className="mt-1.5 px-1 text-[11px] leading-snug" style={{ color: '#C0382F' }}>
@@ -957,11 +1033,11 @@ function OrderCard({
             </div>
           ) : searching ? (
             <div className="mt-2.5 flex items-center justify-center gap-2 rounded-[10px] px-3 py-2.5 text-sm font-medium" style={{ background: '#E7EEFB', color: '#2E5FB0' }}>
-              <Loader2 className="h-4 w-4 animate-spin" /> Searching for a rider…
+              <Loader2 className="h-4 w-4 animate-spin" /> {t('rider.searching')}
             </div>
           ) : (
             <button onClick={() => handleDispatch(false)} className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-[10px] py-2.5 text-sm font-medium active:scale-[.985]" style={{ background: '#E3ECFF', color: '#2E5FB0' }}>
-              <Bike className="h-4 w-4" /> Find a rider
+              <Bike className="h-4 w-4" /> {t('rider.find')}
             </button>
           )}
           {canManualAssign && drivers.length > 0 && (
@@ -970,7 +1046,7 @@ function OrderCard({
         </div>
       ) : action ? (
         <button onClick={(e) => { e.stopPropagation(); onAdvance(); }} className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-[10px] py-2.5 text-sm font-medium active:scale-[.985]" style={{ background: action.grad, color: action.tx }}>
-          <action.Icon className="h-4 w-4" />{action.label}
+          <action.Icon className="h-4 w-4" />{t(`action.${order.status}`)}
         </button>
       ) : null}
     </motion.div>
@@ -980,12 +1056,13 @@ function OrderCard({
 /* The one thing on the board that has to move every second. It owns the 1s tick so the
    clock cannot re-render the ticket around it — or the two hundred lines of card beside it. */
 function TimerPill({ fromMs, lane }: { fromMs: number; lane: string }) {
+  const t = useTranslations('kitchen');
   const now = useTick(CLOCK_TICK_MS);
   const sec = safeElapsedSec(fromMs, now);
   const tg = agingTier(sec, lane);
   return (
-    <span className={`ml-auto rounded-lg px-2 py-0.5 text-[17px] font-medium tabular-nums ${tg.pulse ? 'animate-pulse' : ''}`} style={{ background: tg.pill, color: tg.pc }}>
-      {fmtTimer(sec)}
+    <span className={`ml-auto whitespace-nowrap rounded-lg px-2 py-0.5 text-[17px] font-medium tabular-nums ${tg.pulse ? 'animate-pulse' : ''}`} style={{ background: tg.pill, color: tg.pc }}>
+      {fmtTimer(sec, (hours, minutes) => t('timer.hoursMinutes', { hours, minutes }))}
     </span>
   );
 }
@@ -1004,6 +1081,7 @@ function MenuRow({ children, onClick, danger }: { children: React.ReactNode; onC
    riders with stale GPS, which auto-dispatch skips. */
 const GPS_FRESH_MS = 5 * 60_000; // mirrors find_dispatch_candidates' staleness cutoff
 function AssignPicker({ drivers, onAssign }: { drivers: DriverLite[]; onAssign: (driverId: string) => void | Promise<void> }) {
+  const t = useTranslations('kitchen');
   const [open, setOpen] = React.useState(false);
   const [busy, setBusy] = React.useState<string | null>(null);
   const nowMs = Date.now(); // fresh each render — the list is only up while someone is picking
@@ -1025,14 +1103,14 @@ function AssignPicker({ drivers, onAssign }: { drivers: DriverLite[]; onAssign: 
         className="flex w-full items-center justify-center gap-2 rounded-[10px] py-2 text-sm font-medium active:scale-[.985]"
         style={{ background: '#FFFFFF', border: `1px solid ${SUN.cardBorder}`, color: SUN.accentTx }}
       >
-        <UserRound className="h-4 w-4" /> Assign to a rider
+        <UserRound className="h-4 w-4" /> {t('rider.assign')}
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
           <div className="absolute left-0 right-0 top-11 z-20 max-h-56 overflow-y-auto rounded-xl py-1" style={{ background: SUN.card, border: `1px solid ${SUN.cardBorder}`, boxShadow: '0 8px 24px rgba(0,0,0,.14)' }}>
             {ordered.length === 0 ? (
-              <div className="px-3 py-2 text-xs" style={{ color: SUN.faint }}>No approved riders for this branch.</div>
+              <div className="px-3 py-2 text-xs" style={{ color: SUN.faint }}>{t('rider.noneApproved')}</div>
             ) : (
               ordered.map((d) => {
                 const age = gpsAge(d);
@@ -1048,16 +1126,22 @@ function AssignPicker({ drivers, onAssign }: { drivers: DriverLite[]; onAssign: 
                     <span className="flex-1 truncate" style={{ color: SUN.text }}>{d.full_name}</span>
                     {d.is_online && (fresh ? (
                       <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium" style={{ background: '#DCF6E8', color: '#13794C' }}>
-                        {age < 60_000 ? 'GPS now' : `GPS ${Math.floor(age / 60_000)}m`}
+                        {age < 60_000 ? t('rider.gpsNow') : t('rider.gpsAge', { minutes: Math.floor(age / 60_000) })}
                       </span>
                     ) : (
-                      <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium" style={{ background: '#FCEBC6', color: '#9A6206' }} title="No GPS ping in the last 5 min — auto-dispatch skips this rider; a targeted offer still works">
-                        GPS stale
+                      <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium" style={{ background: '#FCEBC6', color: '#9A6206' }} title={t('rider.gpsStaleHint')}>
+                        {t('rider.gpsStale')}
                       </span>
                     ))}
                     {busy === d.id
                       ? <Loader2 className="h-3.5 w-3.5 animate-spin" style={{ color: SUN.faint }} />
-                      : <span className="text-[11px] capitalize" style={{ color: SUN.faint }}>{d.is_online ? d.vehicle_type : 'offline'}</span>}
+                      : (
+                        <span className="text-[11px] capitalize" style={{ color: SUN.faint }}>
+                          {d.is_online
+                            ? (VEHICLE_TYPES.includes(d.vehicle_type) ? t(`vehicle.${d.vehicle_type}`) : d.vehicle_type)
+                            : t('rider.offline')}
+                        </span>
+                      )}
                   </button>
                 );
               })
@@ -1070,6 +1154,7 @@ function AssignPicker({ drivers, onAssign }: { drivers: DriverLite[]; onAssign: 
 }
 
 function UndoToast({ text, onUndo, onClose }: { text: string; onUndo: (() => void) | null; onClose: () => void }) {
+  const t = useTranslations('kitchen');
   return (
     <motion.div
       initial={{ opacity: 0, y: 20, x: '-50%' }} animate={{ opacity: 1, y: 0, x: '-50%' }} exit={{ opacity: 0, y: 20, x: '-50%' }}
@@ -1078,15 +1163,16 @@ function UndoToast({ text, onUndo, onClose }: { text: string; onUndo: (() => voi
     >
       <span>{text}</span>
       {onUndo ? (
-        <button onClick={onUndo} className="flex items-center gap-1 font-medium" style={{ color: SUN.accent }}><Undo2 className="h-4 w-4" />Undo</button>
+        <button onClick={onUndo} className="flex items-center gap-1 font-medium" style={{ color: SUN.accent }}><Undo2 className="h-4 w-4" />{t('toast.undo')}</button>
       ) : (
-        <button onClick={onClose} aria-label="Dismiss" style={{ color: SUN.faint }}><X className="h-4 w-4" /></button>
+        <button onClick={onClose} aria-label={t('toast.dismiss')} style={{ color: SUN.faint }}><X className="h-4 w-4" /></button>
       )}
     </motion.div>
   );
 }
 
 function ScheduledDrawer({ orders, onClose }: { orders: Order[]; onClose: () => void }) {
+  const t = useTranslations('kitchen');
   // "Releases in 12m" only ever moves a minute at a time, and the drawer is open for a
   // moment, so it keeps its own slow clock instead of riding the board's.
   const now = useTick(BOARD_TICK_MS);
@@ -1097,8 +1183,8 @@ function ScheduledDrawer({ orders, onClose }: { orders: Order[]; onClose: () => 
         onClick={(e) => e.stopPropagation()} className="flex h-full w-[340px] flex-col" style={{ background: SUN.page }}
       >
         <div className="flex items-center gap-2 px-4 py-3 text-white" style={{ background: SUN.header }}>
-          <CalendarClock className="h-5 w-5" /><h2 className="text-[15px] font-semibold">Scheduled · {orders.length}</h2>
-          <button onClick={onClose} aria-label="Close" className="ml-auto"><X className="h-5 w-5" /></button>
+          <CalendarClock className="h-5 w-5" /><h2 className="text-[15px] font-semibold">{t('scheduled.title', { count: orders.length })}</h2>
+          <button onClick={onClose} aria-label={t('scheduled.close')} className="ml-auto"><X className="h-5 w-5" /></button>
         </div>
         <div className="flex-1 space-y-2.5 overflow-y-auto p-3">
           {orders.map((o) => {
@@ -1110,7 +1196,7 @@ function ScheduledDrawer({ orders, onClose }: { orders: Order[]; onClose: () => 
                   <span className="text-[11px]" style={{ color: SUN.faint }}>#{o.order_number.slice(-4)}</span>
                   {mins != null && (
                     <span className="rounded-lg px-2 py-0.5 text-xs font-medium" style={mins <= 10 ? { background: '#FBE1BC', color: '#A85F00' } : { background: '#F1ECE6', color: SUN.muted }}>
-                      Releases in {mins}m
+                      {t('scheduled.releasesIn', { minutes: mins })}
                     </span>
                   )}
                 </div>

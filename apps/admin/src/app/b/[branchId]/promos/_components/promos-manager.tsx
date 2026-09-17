@@ -1,9 +1,10 @@
 'use client';
 
 import * as React from 'react';
+import { useLocale, useTranslations } from 'next-intl';
 import { Plus, Tag, Trash2 } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
-import { formatInZone, localInputToUtcIso } from '@favornoms/shared';
+import { DEFAULT_UI_LOCALE, formatInZone, isUiLocale, localInputToUtcIso } from '@favornoms/shared';
 import { Badge, Button, Card, EmptyState, IconButton, useConfirm } from '@favornoms/ui';
 
 interface Promo {
@@ -31,6 +32,9 @@ export function PromosManager({
   timezone: string;
   initialPromos: Promo[];
 }) {
+  const t = useTranslations('promos');
+  const rawLocale = useLocale();
+  const locale = isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE;
   const [list, setList] = React.useState(initialPromos);
   const [composing, setComposing] = React.useState(false);
   const [code, setCode] = React.useState('');
@@ -54,7 +58,7 @@ export function PromosManager({
     // as UTC, so a promo set to end at 6:51 PM at the shop ended five or six hours early.
     const endsAtIso = endsAt ? localInputToUtcIso(endsAt, timezone) : null;
     if (endsAt && !endsAtIso) {
-      setError('That end time could not be read. Pick it again.');
+      setError(t('errors.unreadableEnd'));
       return;
     }
     setBusy(true);
@@ -70,7 +74,20 @@ export function PromosManager({
       ends_at: endsAtIso,
     });
     setBusy(false);
-    if (insErr) { setError(insErr.message); return; }
+    if (insErr) {
+      // Raw constraint and policy text is for the console, not the merchant.
+      console.error('Creating a promo failed', insErr);
+      setError(
+        insErr.code === '23505'
+          ? t('errors.duplicateCode')
+          : insErr.code === '42501'
+            ? t('errors.permission')
+            : insErr.code === '23514' || insErr.code === '22P02'
+              ? t('errors.invalid')
+              : t('errors.saveFailed'),
+      );
+      return;
+    }
     setCode(''); setValue('10'); setMinSubtotal('0'); setMaxRedemptions(''); setEndsAt('');
     setComposing(false);
     void refresh();
@@ -85,9 +102,9 @@ export function PromosManager({
   const remove = async (p: Promo) => {
     if (
       !(await confirm({
-        title: `Delete promo ${p.code}?`,
-        body: 'Customers can no longer redeem this code at checkout.',
-        confirmLabel: 'Delete',
+        title: t('deleteDialog.title', { code: p.code }),
+        body: t('deleteDialog.body'),
+        confirmLabel: t('deleteDialog.confirm'),
         destructive: true,
       }))
     ) {
@@ -99,75 +116,84 @@ export function PromosManager({
   };
 
   const formatKind = (p: Promo) => {
-    if (p.kind === 'percent_off') return `${p.value}% off`;
-    if (p.kind === 'fixed_off') return `$${p.value} off`;
-    return 'Free delivery';
+    if (p.kind === 'percent_off') return t('describe.percentOff', { value: p.value });
+    if (p.kind === 'fixed_off') return t('describe.fixedOff', { value: p.value });
+    return t('describe.freeDelivery');
+  };
+
+  const describePromo = (p: Promo) => {
+    const parts = [
+      formatKind(p),
+      t('describe.minimum', { amount: p.min_subtotal }),
+      p.max_redemptions
+        ? t('describe.usedOf', { used: p.redemption_count, max: p.max_redemptions })
+        : t('describe.used', { used: p.redemption_count }),
+    ];
+    if (p.ends_at) parts.push(t('describe.ends', { date: formatInZone(p.ends_at, timezone, {}, locale) }));
+    return parts.join(' · ');
   };
 
   return (
     <div className="container max-w-5xl py-8">
       <header className="mb-6 flex flex-wrap items-center justify-between gap-3 px-2 pl-16 lg:px-0">
         <div>
-          <h1 className="font-display text-3xl font-bold">Promo codes</h1>
-          <p className="mt-1 text-muted-foreground">Discount codes customers can enter at checkout.</p>
+          <h1 className="font-display text-3xl font-bold">{t('title')}</h1>
+          <p className="mt-1 text-muted-foreground">{t('subtitle')}</p>
         </div>
         <Button onClick={() => setComposing((c) => !c)} variant={composing ? 'ghost' : 'gradient'} leftIcon={<Plus className="h-4 w-4" />}>
-          {composing ? 'Cancel' : 'New promo'}
+          {composing ? t('cancel') : t('new')}
         </Button>
       </header>
 
       {composing && (
         <Card className="mb-6 space-y-3 p-5">
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Code">
-              <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} className="input" placeholder="WELCOME10" />
+            <Field label={t('fields.code')}>
+              <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} className="input" placeholder={t('fields.codePlaceholder')} />
             </Field>
-            <Field label="Type">
+            <Field label={t('fields.kind')}>
               <select value={kind} onChange={(e) => setKind(e.target.value as Promo['kind'])} className="input">
-                <option value="percent_off">% off</option>
-                <option value="fixed_off">Fixed USD off</option>
-                <option value="free_delivery">Free delivery</option>
+                <option value="percent_off">{t('kinds.percent_off')}</option>
+                <option value="fixed_off">{t('kinds.fixed_off')}</option>
+                <option value="free_delivery">{t('kinds.free_delivery')}</option>
               </select>
             </Field>
             {kind !== 'free_delivery' && (
-              <Field label={kind === 'percent_off' ? 'Percent (1–100)' : 'USD amount'}>
+              <Field label={kind === 'percent_off' ? t('fields.percent') : t('fields.amount')}>
                 <input value={value} onChange={(e) => setValue(e.target.value)} className="input" inputMode="decimal" />
               </Field>
             )}
-            <Field label="Minimum subtotal (USD)">
+            <Field label={t('fields.minSubtotal')}>
               <input value={minSubtotal} onChange={(e) => setMinSubtotal(e.target.value.replace(/[^0-9.]/g, ''))} className="input" inputMode="decimal" />
             </Field>
-            <Field label="Max redemptions (optional)">
-              <input value={maxRedemptions} onChange={(e) => setMaxRedemptions(e.target.value.replace(/\D/g, ''))} className="input" inputMode="numeric" placeholder="unlimited" />
+            <Field label={t('fields.maxRedemptions')}>
+              <input value={maxRedemptions} onChange={(e) => setMaxRedemptions(e.target.value.replace(/\D/g, ''))} className="input" inputMode="numeric" placeholder={t('fields.maxRedemptionsPlaceholder')} />
             </Field>
-            <Field label={`Ends at (optional, ${timezone.replace(/_/g, ' ')} time)`}>
+            <Field label={t('fields.endsAt', { zone: timezone.replace(/_/g, ' ') })}>
               <input value={endsAt} onChange={(e) => setEndsAt(e.target.value)} type="datetime-local" className="input" />
             </Field>
           </div>
           {error && <p className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
-          <Button variant="gradient" onClick={create} disabled={!code} loading={busy}>Create promo</Button>
+          <Button variant="gradient" onClick={create} disabled={!code} loading={busy}>{t('create')}</Button>
         </Card>
       )}
 
       {list.length === 0 ? (
-        <EmptyState icon={<Tag className="h-7 w-7" />} title="No promos yet" description="Create a promo code to start running campaigns." />
+        <EmptyState icon={<Tag className="h-7 w-7" />} title={t('empty.title')} description={t('empty.description')} />
       ) : (
         <Card className="divide-y divide-border/40">
           {list.map((p) => (
             <div key={p.id} className="flex items-center justify-between p-4">
               <div>
                 <p className="font-mono text-lg font-bold">{p.code}</p>
-                <p className="text-xs text-muted-foreground">
-                  {formatKind(p)} · min ${p.min_subtotal} · used {p.redemption_count}{p.max_redemptions ? `/${p.max_redemptions}` : ''}
-                  {p.ends_at && ` · ends ${formatInZone(p.ends_at, timezone)}`}
-                </p>
+                <p className="text-xs text-muted-foreground">{describePromo(p)}</p>
               </div>
               <div className="flex items-center gap-2">
-                <Badge variant={p.is_active ? 'success' : 'muted'}>{p.is_active ? 'Active' : 'Paused'}</Badge>
+                <Badge variant={p.is_active ? 'success' : 'muted'}>{p.is_active ? t('status.active') : t('status.paused')}</Badge>
                 <button onClick={() => toggleActive(p)} className="text-xs text-muted-foreground underline">
-                  {p.is_active ? 'Pause' : 'Activate'}
+                  {p.is_active ? t('pause') : t('activate')}
                 </button>
-                <IconButton label="Delete" size="sm" className="text-danger" onClick={() => remove(p)}>
+                <IconButton label={t('delete')} size="sm" className="text-danger" onClick={() => remove(p)}>
                   <Trash2 className="h-4 w-4" />
                 </IconButton>
               </div>

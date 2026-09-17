@@ -12,8 +12,19 @@
 // query — billing and access. Whether a diner can order right now also depends
 // on hours, closures and the kitchen pause; that verdict is per-branch, needs an
 // is_branch_open() probe, and lives in the drawer.
+//
+// Nothing here is worded: every label is a Msg — a key in the `platform` message
+// namespace plus its values — and platform-text.ts turns it into the reader's
+// language where it is rendered. Only the decisions live in this module.
 
-import { PLAN_BASE, PLAN_TRIAL, type Entitlements } from '@favornoms/shared';
+import {
+  DEFAULT_UI_LOCALE,
+  PLAN_BASE,
+  PLAN_TRIAL,
+  intlLocaleFor,
+  type Entitlements,
+  type UiLocale,
+} from '@favornoms/shared';
 
 export interface BranchClosureLite {
   starts_at: string;
@@ -48,12 +59,23 @@ export interface TenantRow {
   cancelAtPeriodEnd: boolean;
 }
 
+/** A value inside a message. `{ date }` is an ISO timestamp, formatted in the reader's language. */
+export type MsgValue = string | number | { date: string | null };
+
+/** A message in the `platform` namespace: the key plus the values it needs. */
+export interface Msg {
+  key: string;
+  values?: Record<string, MsgValue>;
+}
+
+const msg = (key: string, values?: Record<string, MsgValue>): Msg => (values ? { key, values } : { key });
+
 export type ChipVariant = 'success' | 'danger' | 'warning' | 'default' | 'outline' | 'muted';
 export type ChipIcon = 'billing' | 'clock' | 'ban' | 'pause' | 'check';
 export type Rail = 'danger' | 'warning' | 'none';
 
 export interface HealthChip {
-  label: string;
+  label: Msg;
   variant: ChipVariant;
   icon: ChipIcon;
 }
@@ -71,11 +93,11 @@ export interface TenantHealth {
   /** One lamp per tripped switch, most severe first. Never more than two, never zero. */
   lamps: [HealthChip, ...HealthChip[]];
   /** Short consequence clause rendered under the lamps. */
-  clause: string;
+  clause: Msg;
   /** "3 branches" / "1 branch". */
-  branchCount: string;
+  branchCount: Msg;
   /** "all live" / "1 suspended" / "2 paused". */
-  branchQualifier: string;
+  branchQualifier: Msg;
   rail: Rail;
   /** suspended 4 · unpaid 3 · expiring 2 · partial 1 · live 0. Drives the default sort. */
   severity: 0 | 1 | 2 | 3 | 4;
@@ -87,7 +109,8 @@ export interface TenantHealth {
    * this is the cohort that goes dark next unless the platform owner extends it.
    */
   expiringSoon: boolean;
-  reason: string | null;
+  /** Whole sentences, rendered in order; null when there is nothing to explain. */
+  reason: Msg[] | null;
 }
 
 const DAY = 86_400_000;
@@ -114,21 +137,28 @@ export function addOneMonthUtc(ms: number): Date {
   return d;
 }
 
-const DATE_FMT = new Intl.DateTimeFormat('en-US', {
-  timeZone: 'UTC',
-  month: 'short',
-  day: 'numeric',
-  year: 'numeric',
-});
+const DATE_FMTS = new Map<UiLocale, Intl.DateTimeFormat>();
+
+function dateFormat(locale: UiLocale): Intl.DateTimeFormat {
+  let f = DATE_FMTS.get(locale);
+  if (!f) {
+    f = new Intl.DateTimeFormat(intlLocaleFor(locale), {
+      timeZone: 'UTC',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+    DATE_FMTS.set(locale, f);
+  }
+  return f;
+}
 
 // Vercel runs the server in UTC and the operator's browser does not, so an
 // unpinned toLocaleDateString() renders a different day on each side.
-export const fmtDate = (v?: string | null) => (v ? DATE_FMT.format(new Date(v)) : '—');
+export const fmtDate = (v?: string | null, locale: UiLocale = DEFAULT_UI_LOCALE) =>
+  v ? dateFormat(locale).format(new Date(v)) : '—';
 
 export const money = (n: number) => `$${Number(n ?? 0).toFixed(0)}`;
-
-const branchWord = (n: number) => (n === 1 ? 'branch' : 'branches');
-const dayWord = (n: number) => (n === 1 ? 'day' : 'days');
 
 export const branchEntitled = (b: BranchLite, nowMs: number) =>
   b.entitled_through !== null && Date.parse(b.entitled_through) > nowMs;
@@ -212,7 +242,7 @@ export function tenantHealth(row: TenantRow, branches: BranchLite[], nowMs: numb
     access,
     lamps,
     clause: clauseFor(ent, entitled, daysLeft, total, active, row.cancelAtPeriodEnd, expiringSoon),
-    branchCount: total === 0 ? 'No branches' : `${total} ${branchWord(total)}`,
+    branchCount: msg('health.branchCount', { count: total }),
     branchQualifier: qualifierFor(total, suspended, unpaid, paused),
     rail: platformSuspended || !entitled ? 'danger' : warned ? 'warning' : 'none',
     severity,
@@ -243,37 +273,41 @@ function billingChip(
 ): HealthChip {
   if (!entitled) {
     return {
-      label: ent.status === 'expired' ? 'Expired' : 'Unpaid',
+      label: msg(ent.status === 'expired' ? 'health.chip.expired' : 'health.chip.unpaid'),
       variant: 'danger',
       icon: 'billing',
     };
   }
   if (ent.status === 'trialing') {
     return {
-      label: `Trial · ${daysLeft}d left`,
+      label: msg('health.chip.trial', { days: daysLeft }),
       variant: daysLeft <= 3 ? 'warning' : 'default',
       icon: 'clock',
     };
   }
   if (ent.status === 'past_due') {
-    return { label: `Past due · ${daysLeft}d grace`, variant: 'warning', icon: 'billing' };
+    return { label: msg('health.chip.pastDue', { days: daysLeft }), variant: 'warning', icon: 'billing' };
   }
   if (ent.status === 'cancelled' || cancelAtPeriodEnd) {
-    return { label: `Cancelling · ${daysLeft}d`, variant: 'warning', icon: 'clock' };
+    return { label: msg('health.chip.cancelling', { days: daysLeft }), variant: 'warning', icon: 'clock' };
   }
   // A green "Live" a few days before the deadline is how a paying store went dark
   // with nobody warned: the lamp only changed once diners were already turned away.
   if (expiringSoon) {
-    return { label: `Expires in ${daysLeft} ${dayWord(daysLeft)}`, variant: 'warning', icon: 'clock' };
+    return { label: msg('health.chip.expiresIn', { days: daysLeft }), variant: 'warning', icon: 'clock' };
   }
-  return { label: 'Live', variant: 'success', icon: 'billing' };
+  return { label: msg('health.chip.live'), variant: 'success', icon: 'billing' };
 }
 
 function accessChip(total: number, active: number): HealthChip | null {
   if (total === 0 || active === total) return null;
   return active === 0
-    ? { label: 'Suspended', variant: 'danger', icon: 'ban' }
-    : { label: `${total - active} of ${total} suspended`, variant: 'warning', icon: 'ban' };
+    ? { label: msg('health.chip.suspended'), variant: 'danger', icon: 'ban' }
+    : {
+        label: msg('health.chip.partlySuspended', { suspended: total - active, total }),
+        variant: 'warning',
+        icon: 'ban',
+      };
 }
 
 function clauseFor(
@@ -284,33 +318,41 @@ function clauseFor(
   active: number,
   cancelAtPeriodEnd: boolean,
   expiringSoon: boolean,
-): string {
+): Msg {
   // No branches means no storefront, so every diner-facing clause below would be
   // a claim about a page that does not exist. Say what is actually true instead.
-  if (total === 0) return entitled ? 'No storefront yet' : 'No storefront yet · unpaid';
+  if (total === 0) return msg(entitled ? 'health.clause.noStorefront' : 'health.clause.noStorefrontUnpaid');
 
   const accessOff = total > 0 && active < total;
-  if (accessOff && !entitled) return '404 + suspended screen';
-  if (accessOff) return active === 0 ? 'Diners get a 404' : `${total - active} of ${total} branches 404`;
-  if (!entitled) return 'Diners see the suspended screen';
-  if (ent.status === 'trialing') {
-    return daysLeft <= 0 ? 'Trial ends today' : `Trial ends in ${daysLeft} ${dayWord(daysLeft)}`;
+  if (accessOff && !entitled) return msg('health.clause.bothOff');
+  if (accessOff) {
+    return active === 0
+      ? msg('health.clause.all404')
+      : msg('health.clause.some404', { suspended: total - active, total });
   }
-  if (ent.status === 'past_due') return `${daysLeft} ${dayWord(daysLeft)} of grace left`;
-  if (ent.status === 'cancelled' || cancelAtPeriodEnd) return `Ends ${fmtDate(ent.entitledThrough)}`;
+  if (!entitled) return msg('health.clause.suspendedScreen');
+  if (ent.status === 'trialing') {
+    return daysLeft <= 0
+      ? msg('health.clause.trialEndsToday')
+      : msg('health.clause.trialEndsIn', { days: daysLeft });
+  }
+  if (ent.status === 'past_due') return msg('health.clause.graceLeft', { days: daysLeft });
+  if (ent.status === 'cancelled' || cancelAtPeriodEnd) {
+    return msg('health.clause.ends', { date: { date: ent.entitledThrough } });
+  }
   // Not "renews": nothing renews on its own while there is no payment rail, and
   // that word is what let an owner assume a store would carry on past its date.
-  if (expiringSoon) return `Goes dark ${fmtDate(ent.entitledThrough)}`;
-  return `paid through ${fmtDate(ent.entitledThrough)}`;
+  if (expiringSoon) return msg('health.clause.goesDark', { date: { date: ent.entitledThrough } });
+  return msg('health.clause.paidThrough', { date: { date: ent.entitledThrough } });
 }
 
 // Counts, never names, so nothing here can be truncated.
-function qualifierFor(total: number, suspended: number, unpaid: number, paused: number): string {
-  if (total === 0) return 'nothing to serve';
-  if (suspended > 0) return `${suspended} suspended`;
-  if (unpaid > 0) return `${unpaid} unpaid`;
-  if (paused > 0) return `${paused} paused`;
-  return 'all live';
+function qualifierFor(total: number, suspended: number, unpaid: number, paused: number): Msg {
+  if (total === 0) return msg('health.qualifier.nothingToServe');
+  if (suspended > 0) return msg('health.qualifier.suspended', { count: suspended });
+  if (unpaid > 0) return msg('health.qualifier.unpaid', { count: unpaid });
+  if (paused > 0) return msg('health.qualifier.paused', { count: paused });
+  return msg('health.qualifier.allLive');
 }
 
 function reasonFor(
@@ -322,52 +364,56 @@ function reasonFor(
   paused: number,
   cancelAtPeriodEnd: boolean,
   expiringSoon: boolean,
-): string | null {
-  const parts: string[] = [];
+): Msg[] | null {
+  const parts: Msg[] = [];
 
   if (total > 0 && active === 0) {
-    parts.push(`All ${total} ${branchWord(total)} are platform-suspended, so the storefront returns 404.`);
+    parts.push(msg('health.reason.allSuspended', { count: total }));
   } else if (total > 0 && active < total) {
-    parts.push(`${total - active} of ${total} branches are platform-suspended and return 404.`);
+    parts.push(msg('health.reason.someSuspended', { suspended: total - active, total }));
   }
 
   if (!entitled) {
     const lapsed = ent.entitledThrough ?? ent.trialEndsAt;
     // With no branches there is no storefront to be showing anything, so the
     // usual diner-facing sentence would be a fabrication.
-    const symptom =
-      total === 0
-        ? 'this restaurant has no branches yet, so nothing is being served either way'
-        : 'the storefront is showing the suspended screen';
     parts.push(
       lapsed
-        ? `Subscription lapsed ${fmtDate(lapsed)} — ${symptom}.`
-        : `No active subscription — ${symptom}.`,
+        ? msg(total === 0 ? 'health.reason.lapsedNoBranches' : 'health.reason.lapsedStorefront', {
+            date: { date: lapsed },
+          })
+        : msg(
+            total === 0
+              ? 'health.reason.noSubscriptionNoBranches'
+              : 'health.reason.noSubscriptionStorefront',
+          ),
     );
     if (active > 0) {
-      parts.push('Platform access is fine, so Restore will not help; fix the subscription.');
+      parts.push(msg('health.reason.accessFine'));
     }
   } else if (ent.status === 'trialing' && daysLeft <= 3) {
-    parts.push(daysLeft <= 0 ? 'Trial ends today.' : `Trial ends in ${daysLeft} ${dayWord(daysLeft)}.`);
+    parts.push(
+      daysLeft <= 0
+        ? msg('health.reason.trialEndsToday')
+        : msg('health.reason.trialEndsIn', { days: daysLeft }),
+    );
   } else if (ent.status === 'past_due') {
-    parts.push(`Payment is past due — ${daysLeft} ${dayWord(daysLeft)} of grace left.`);
+    parts.push(msg('health.reason.pastDue', { days: daysLeft }));
   } else if (expiringSoon && ent.status !== 'cancelled' && !cancelAtPeriodEnd) {
     // Never for a cancelling store: resolvePrimaryAction offers it no Extend, so
     // "unless you extend it" pointed the owner at a button that is not there.
-    parts.push(
-      `Paid through ${fmtDate(ent.entitledThrough)}. Nothing renews it automatically — after that date the storefront shows the suspended screen unless you extend it.`,
-    );
+    parts.push(msg('health.reason.expiring', { date: { date: ent.entitledThrough } }));
   }
 
   if (paused > 0) {
     parts.push(
       paused === total
-        ? 'Every branch is paused by the kitchen and is not taking orders.'
-        : `${paused} of ${total} branches are paused by the kitchen.`,
+        ? msg('health.reason.allPaused')
+        : msg('health.reason.somePaused', { paused, total }),
     );
   }
 
-  return parts.length > 0 ? parts.join(' ') : null;
+  return parts.length > 0 ? parts : null;
 }
 
 // --- the one repair the row offers -------------------------------------------
@@ -376,7 +422,7 @@ export type PrimaryActionKind = 'restore' | 'extend' | 'convert';
 
 export interface PrimaryAction {
   kind: PrimaryActionKind;
-  label: string;
+  label: Msg;
 }
 
 /**
@@ -397,21 +443,28 @@ export function resolvePrimaryAction(
    */
   convertPrice: number | null,
 ): PrimaryAction | null {
-  if (health.total > 0 && health.active === 0) return { kind: 'restore', label: 'Restore' };
+  if (health.total > 0 && health.active === 0) {
+    return { kind: 'restore', label: msg('health.action.restore') };
+  }
   if (health.entitled) {
     // Offered BEFORE the deadline, not only after it: waiting for the lapse meant
     // the button appeared once diners were already seeing the suspended screen.
     // A cancellation is left alone — extending it would silently undo a decision
     // somebody made on purpose.
     const cancelling = row.ent.status === 'cancelled' || row.cancelAtPeriodEnd;
-    return health.expiringSoon && !cancelling ? { kind: 'extend', label: 'Extend 1 month' } : null;
+    return health.expiringSoon && !cancelling
+      ? { kind: 'extend', label: msg('health.action.extend') }
+      : null;
   }
   if (isPaidPlan(row.ent.planCode)) {
-    return { kind: 'extend', label: 'Extend 1 month' };
+    return { kind: 'extend', label: msg('health.action.extend') };
   }
   return {
     kind: 'convert',
-    label: convertPrice === null ? 'Convert to Base' : `Convert to Base · ${money(convertPrice)}/mo`,
+    label:
+      convertPrice === null
+        ? msg('health.action.convert')
+        : msg('health.action.convertPriced', { price: money(convertPrice) }),
   };
 }
 
@@ -457,12 +510,12 @@ export type OpenNow = boolean | 'unknown' | null;
 
 export interface BranchVerdict {
   key: BranchVerdictKey;
-  label: string;
+  label: Msg;
   variant: ChipVariant;
   icon: ChipIcon;
   /** The diner-visible symptom, not the internal cause. */
-  hint: string;
-  why: string;
+  hint: Msg;
+  why: Msg;
 }
 
 /**
@@ -481,55 +534,59 @@ export function branchVerdict(
   if (!b.is_active) {
     return {
       key: 'suspended',
-      label: '404 — not found',
+      label: msg('health.verdict.label.suspended'),
       variant: 'danger',
       icon: 'ban',
-      hint: 'Platform-suspended — the storefront URL returns 404',
-      why: 'Platform-suspended — resolveTenantBySlug filters is_active, so the URL 404s.',
+      hint: msg('health.verdict.hint.suspended'),
+      why: msg('health.verdict.why.suspended'),
     };
   }
   if (!branchEntitled(b, nowMs)) {
     return {
       key: 'unpaid',
-      label: 'Suspended screen',
+      label: msg('health.verdict.label.unpaid'),
       variant: 'danger',
       icon: 'billing',
-      hint: 'Subscription lapsed — the storefront shows the suspended screen',
+      hint: msg('health.verdict.hint.unpaid'),
       why: b.entitled_through
-        ? `Subscription lapsed ${fmtDate(b.entitled_through)}.`
-        : 'No active subscription for this branch.',
+        ? msg('health.verdict.why.unpaidLapsed', { date: { date: b.entitled_through } })
+        : msg('health.verdict.why.unpaidNone'),
     };
   }
   if (b.orders_paused) {
     return {
       key: 'paused',
-      label: 'Not taking orders',
+      label: msg('health.verdict.label.paused'),
       variant: 'warning',
       icon: 'pause',
-      hint: 'Paused by the kitchen — the menu renders, order submit returns 409',
-      why: 'The kitchen paused ordering. Only branch staff can unpause it.',
+      hint: msg('health.verdict.hint.paused'),
+      why: msg('health.verdict.why.paused'),
     };
   }
   if (b.closure) {
     return {
       key: 'closed',
-      label: 'Closed now',
+      label: msg('health.verdict.label.closed'),
       variant: 'warning',
       icon: 'clock',
-      hint: 'Temporarily closed — the menu renders, order submit returns 409',
+      hint: msg('health.verdict.hint.closure'),
+      // The reason is what the merchant typed, so it is passed through untranslated.
       why: b.closure.reason
-        ? `Temporarily closed until ${fmtDate(b.closure.ends_at)} — ${b.closure.reason}`
-        : `Temporarily closed until ${fmtDate(b.closure.ends_at)}.`,
+        ? msg('health.verdict.why.closureWithReason', {
+            date: { date: b.closure.ends_at },
+            reason: b.closure.reason,
+          })
+        : msg('health.verdict.why.closure', { date: { date: b.closure.ends_at } }),
     };
   }
   if (!b.has_hours) {
     return {
       key: 'live',
-      label: 'Live',
+      label: msg('health.verdict.label.live'),
       variant: 'success',
       icon: 'check',
-      hint: 'Serving diners',
-      why: 'No business hours configured, so the branch is always open.',
+      hint: msg('health.verdict.hint.live'),
+      why: msg('health.verdict.why.noHours'),
     };
   }
   if (openNow === null) return null;
@@ -539,29 +596,29 @@ export function branchVerdict(
   if (openNow === 'unknown') {
     return {
       key: 'unknown',
-      label: 'Hours unknown',
+      label: msg('health.verdict.label.unknown'),
       variant: 'muted',
       icon: 'clock',
-      hint: 'The business-hours check failed — everything else about this branch is fine',
-      why: 'Could not reach is_branch_open(). Billing, access and the kitchen pause are all clear.',
+      hint: msg('health.verdict.hint.unknown'),
+      why: msg('health.verdict.why.unknown'),
     };
   }
   return openNow
     ? {
         key: 'live',
-        label: 'Live',
+        label: msg('health.verdict.label.live'),
         variant: 'success',
         icon: 'check',
-        hint: 'Serving diners',
-        why: 'Inside business hours and taking orders.',
+        hint: msg('health.verdict.hint.live'),
+        why: msg('health.verdict.why.open'),
       }
     : {
         key: 'closed',
-        label: 'Closed now',
+        label: msg('health.verdict.label.closed'),
         variant: 'warning',
         icon: 'clock',
-        hint: 'Outside business hours — the menu renders, order submit returns 409',
-        why: `Outside business hours (${b.timezone}).`,
+        hint: msg('health.verdict.hint.outsideHours'),
+        why: msg('health.verdict.why.outsideHours', { timezone: b.timezone }),
       };
 }
 

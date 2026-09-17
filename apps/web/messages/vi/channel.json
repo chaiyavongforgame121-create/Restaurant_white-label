@@ -1,0 +1,6 @@
+{
+  "delivery": "Hẹn giờ giao hàng",
+  "pickup": "Tự đến lấy",
+  "dineIn": "Ăn tại quán",
+  "dineInAt": "Ăn tại quán · {table}"
+}

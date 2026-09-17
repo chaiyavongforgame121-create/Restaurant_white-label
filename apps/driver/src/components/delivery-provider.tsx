@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useTranslations } from 'next-intl';
 import { getBrowserClient } from '@favornoms/database/client';
 import { useRealtime } from '@favornoms/database/realtime';
 import {
@@ -113,7 +114,11 @@ const ANNOUNCED_END_KINDS = [
   'offer_expired',
 ];
 
-function mapDeliveryToUI(row: Record<string, unknown>): ActiveDeliveryUI {
+/**
+ * @param unnamedBranch Shown when the branch join comes back empty. Display text only, in the
+ *   rider's language: nothing compares against it.
+ */
+function mapDeliveryToUI(row: Record<string, unknown>, unnamedBranch: string): ActiveDeliveryUI {
   const order = row.order as {
     id: string;
     order_number: string;
@@ -156,9 +161,9 @@ function mapDeliveryToUI(row: Record<string, unknown>): ActiveDeliveryUI {
     batchSeq: (row.batch_seq as number | null) ?? null,
     // One level deep only: the mate row never carries its own batch_mate.
     batchMate: row.batch_mate
-      ? mapDeliveryToUI(row.batch_mate as Record<string, unknown>)
+      ? mapDeliveryToUI(row.batch_mate as Record<string, unknown>, unnamedBranch)
       : null,
-    branchName: branch?.name ?? 'Restaurant',
+    branchName: branch?.name ?? unnamedBranch,
     branchAddress: branch?.address ?? '',
     customerName: order.customer_name,
     customerAddress: order.delivery_address?.line1 ?? '',
@@ -226,6 +231,11 @@ function sameDelivery(a: ActiveDeliveryUI | null, b: ActiveDeliveryUI | null): b
 export function DeliveryProvider({ children }: { children: React.ReactNode }) {
   const { driver, refresh: refreshDriver } = useDriverSession();
   const driverId = driver.id;
+  const t = useTranslations('dispatch');
+  // Read through a ref so a language change does not rebuild refreshFromServer, which the
+  // realtime subscription is keyed on.
+  const unnamedBranchRef = React.useRef(t('unnamedBranch'));
+  unnamedBranchRef.current = t('unnamedBranch');
 
   const [offered, setOffered] = React.useState<ActiveDeliveryUI | null>(null);
   const [active, setActive] = React.useState<ActiveDeliveryUI | null>(null);
@@ -295,7 +305,7 @@ export function DeliveryProvider({ children }: { children: React.ReactNode }) {
     }
     rawRowsRef.current = rawRows;
 
-    const ui = mapDeliveryToUI(row);
+    const ui = mapDeliveryToUI(row, unnamedBranchRef.current);
     // accepted_at is the server-side acceptance signal (stamped by
     // accept_dispatch) — 'assigned' without it means a pending offer.
     if (ui.status === 'assigned' && !ui.acceptedAt) {

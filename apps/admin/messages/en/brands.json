@@ -1,0 +1,147 @@
+{
+  "accessDenied": {
+    "title": "No branding access",
+    "reason": "Only the owner or an admin can change the brand and branches of {branch}."
+  },
+  "restaurantFallback": "Restaurant",
+  "header": {
+    "title": "Brand & branches",
+    "subtitle": "Your look for {restaurant} — logo, app icon and colors — plus the branches that use it."
+  },
+  "loyalty": {
+    "title": "Loyalty pool",
+    "description": "Choose whether loyalty points are shared across all branches (default) or scoped to one branch.",
+    "modes": {
+      "brand": "Brand",
+      "branch": "Branch"
+    },
+    "modeHints": {
+      "brand": "Points pool across all branches of this restaurant.",
+      "branch": "Points are earned and redeemed within a single branch."
+    }
+  },
+  "storefront": {
+    "title": "Storefront appearance",
+    "saved": "Saved ✓",
+    "description": "How the menu looks to customers. Applies to every branch of this restaurant.",
+    "menuLayout": "Menu layout",
+    "cardStyle": "Card style",
+    "heroTitle": "Hero headline",
+    "heroTitlePlaceholder": "Welcome — order something delicious",
+    "heroTitleHint": "Leave empty to use the default headline.",
+    "heroSubtitle": "Hero tagline",
+    "heroSubtitlePlaceholder": "Now serving from your city",
+    "heroSubtitleHint": "Leave empty to show “Now serving from '{branch}'”.",
+    "heroImage": "Hero image",
+    "uploadHero": "Upload hero image"
+  },
+  "branches": {
+    "title": "Branches",
+    "description": "Locations under {restaurant}. Each gets its own storefront URL + QR code.",
+    "add": "Add branch",
+    "addSeat": "Add a branch seat +$99/mo",
+    "seatsUsed": "You are using {used} of {seats, plural, one {# branch seat} other {# branch seats}}. Add a seat to open another location — it gets the full feature set of your main branch.",
+    "hidden": "Hidden",
+    "noStorefront": "No storefront address yet",
+    "offlineHidden": "Storefront offline while hidden",
+    "settings": "Settings",
+    "empty": "No branches yet.",
+    "copyNote": "A new branch can copy the menu, opening hours and payment settings of an existing one. Its map pin and table QR codes are never copied — set those in the new branch’s settings."
+  },
+  "brandList": {
+    "default": "Default",
+    "meta": "{slug} · {count, plural, one {# branch} other {# branches}}",
+    "edit": "Edit",
+    "empty": "No brand yet. Upload your logo under <link>Branch settings → Branding</link> and it is created for you."
+  },
+  "creator": {
+    "title": "Add branch",
+    "fields": {
+      "name": "Branch name",
+      "namePlaceholder": "Downtown",
+      "slug": "URL slug",
+      "slugPlaceholder": "downtown",
+      "address": "Address (optional)",
+      "timezone": "Timezone",
+      "brand": "Brand (optional)",
+      "brandNone": "— None —",
+      "startFrom": "Start from",
+      "startFromNothing": "Nothing (an empty branch)"
+    },
+    "timezones": {
+      "eastern": "Eastern (New York)",
+      "central": "Central (Chicago)",
+      "mountain": "Mountain (Denver)",
+      "mountainNoDst": "Mountain — no DST (Phoenix)",
+      "pacific": "Pacific (Los Angeles)",
+      "alaska": "Alaska (Anchorage)",
+      "hawaii": "Hawaii (Honolulu)"
+    },
+    "copy": {
+      "menu": "Copy menu",
+      "menuHint": "Categories, items and their option groups",
+      "hours": "Copy opening hours",
+      "hoursHint": "The weekly hours, not one-off closures",
+      "settings": "Copy payment and delivery settings",
+      "settingsHint": "Payment methods, delivery, tips and service fee",
+      "notCopied": "Address, map pin, colours and table QR codes are not copied."
+    },
+    "close": "Close",
+    "cancel": "Cancel",
+    "retryCopy": "Retry copy",
+    "copying": "Copying…",
+    "create": "Create branch",
+    "errors": {
+      "seats": "{limit, plural, one {You are using your only branch seat.} other {You are using all # of your branch seats.}} Add a seat (+$99/mo) on the Plan page, then create the branch.",
+      "inactive": "Your subscription is not active. Choose a package on the Plan page to continue.",
+      "notAuthorized": "Only the owner or an admin can add a branch.",
+      "nameRequired": "Enter a branch name and a URL slug.",
+      "slugTaken": "Another branch already uses that URL slug. Choose a different one.",
+      "noBranchId": "The branch was created, but the reply did not say which branch it was, so nothing was copied into it. Close this and set the branch up in its own settings.",
+      "copyMenuNotEmpty": "The branch was created, but copying from {source} failed: the new branch already has menu items. Untick “Copy menu” and retry to copy the rest, or close this and set the branch up in its own settings.",
+      "copyFailed": "The branch was created, but copying from {source} failed. You can retry the copy, or close this and set the branch up in its own settings.",
+      "generic": "Something went wrong. Please try again."
+    }
+  },
+  "created": {
+    "title": "Branch created",
+    "copiedFrom": "Copied into {name} from {source}:",
+    "copiedFromUnknown": "Copied into {name} from the source branch:",
+    "menu": "{categories, plural, one {# category} other {# categories}}, {items, plural, one {# menu item} other {# menu items}} and {groups, plural, one {# option group} other {# option groups}}",
+    "hours": "{count, plural, one {# opening-hours window} other {# opening-hours windows}}",
+    "settingsCopied": "Payment, delivery, tip and service fee settings",
+    "settingsNone": "No payment or delivery settings: the source branch has none saved",
+    "todo": "Still to do at the new branch: drop its map pin and set up its table QR codes. Those are never copied.",
+    "done": "Done",
+    "openSettings": "Open its settings"
+  },
+  "editor": {
+    "title": "Edit brand",
+    "name": "Brand name",
+    "slug": "Slug",
+    "slugPlaceholder": "my-brand",
+    "primaryColor": "Primary color",
+    "accentColor": "Accent color",
+    "logo": "Logo (optional)",
+    "uploadLogo": "Upload logo",
+    "appIcon": "App icon (optional)",
+    "appIconHint": "Used for the browser tab, and for the icon people see after installing your store to their phone’s home screen. Leave empty to use the Favornoms icon.",
+    "tabFallback": "Your store",
+    "preview": "Preview",
+    "nameFallback": "Brand name",
+    "linkedBranches": "Linked branches",
+    "linkedHint": "Choose which branches use this brand’s theme.",
+    "setDefault": "Set as default brand for this restaurant",
+    "iconPending": "Apply the new icon style first, or set it back.",
+    "cancel": "Cancel",
+    "save": "Save",
+    "errors": {
+      "notSaved": "That didn’t save — your role may not be allowed to change branding.",
+      "slugTaken": "Another brand already uses that slug."
+    }
+  },
+  "errors": {
+    "generic": "Something went wrong. Please try again.",
+    "permissionDenied": "You don’t have permission to do that."
+  }
+}

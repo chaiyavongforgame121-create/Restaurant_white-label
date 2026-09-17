@@ -1,0 +1,147 @@
+{
+  "accessDenied": {
+    "title": "Không có quyền chỉnh thương hiệu",
+    "reason": "Chỉ chủ sở hữu hoặc quản trị viên mới có thể thay đổi thương hiệu và chi nhánh của {branch}."
+  },
+  "restaurantFallback": "Nhà hàng",
+  "header": {
+    "title": "Thương hiệu và chi nhánh",
+    "subtitle": "Diện mạo của {restaurant} — logo, biểu tượng ứng dụng và màu sắc — cùng các chi nhánh sử dụng."
+  },
+  "loyalty": {
+    "title": "Phạm vi điểm tích lũy",
+    "description": "Chọn điểm tích lũy được dùng chung cho mọi chi nhánh (mặc định) hay chỉ trong một chi nhánh.",
+    "modes": {
+      "brand": "Thương hiệu",
+      "branch": "Chi nhánh"
+    },
+    "modeHints": {
+      "brand": "Điểm được cộng dồn giữa mọi chi nhánh của nhà hàng này.",
+      "branch": "Điểm được tích và đổi trong cùng một chi nhánh."
+    }
+  },
+  "storefront": {
+    "title": "Giao diện cửa hàng trực tuyến",
+    "saved": "Đã lưu ✓",
+    "description": "Cách khách hàng nhìn thấy thực đơn. Áp dụng cho mọi chi nhánh của nhà hàng này.",
+    "menuLayout": "Bố cục thực đơn",
+    "cardStyle": "Kiểu thẻ món",
+    "heroTitle": "Tiêu đề ảnh bìa",
+    "heroTitlePlaceholder": "Chào mừng bạn — đặt ngay món ngon",
+    "heroTitleHint": "Để trống để dùng tiêu đề mặc định.",
+    "heroSubtitle": "Khẩu hiệu ảnh bìa",
+    "heroSubtitlePlaceholder": "Đang phục vụ tại thành phố của bạn",
+    "heroSubtitleHint": "Để trống để hiển thị “Đang phục vụ tại '{branch}'”.",
+    "heroImage": "Ảnh bìa",
+    "uploadHero": "Tải ảnh bìa lên"
+  },
+  "branches": {
+    "title": "Chi nhánh",
+    "description": "Các địa điểm thuộc {restaurant}. Mỗi chi nhánh có URL cửa hàng và mã QR riêng.",
+    "add": "Thêm chi nhánh",
+    "addSeat": "Thêm suất chi nhánh +$99/tháng",
+    "seatsUsed": "Bạn đang dùng {used}/{seats, plural, other {# suất chi nhánh}}. Hãy thêm suất để mở địa điểm mới — chi nhánh mới có đầy đủ tính năng như chi nhánh chính.",
+    "hidden": "Đã ẩn",
+    "noStorefront": "Chưa có địa chỉ cửa hàng",
+    "offlineHidden": "Cửa hàng ngừng hiển thị khi bị ẩn",
+    "settings": "Cài đặt",
+    "empty": "Chưa có chi nhánh nào.",
+    "copyNote": "Chi nhánh mới có thể sao chép thực đơn, giờ mở cửa và cài đặt thanh toán từ một chi nhánh hiện có. Vị trí trên bản đồ và mã QR của bàn không bao giờ được sao chép — hãy thiết lập trong cài đặt của chi nhánh mới."
+  },
+  "brandList": {
+    "default": "Mặc định",
+    "meta": "{slug} · {count, plural, other {# chi nhánh}}",
+    "edit": "Sửa",
+    "empty": "Chưa có thương hiệu. Tải logo lên tại <link>Cài đặt chi nhánh → Nhận diện thương hiệu</link> và thương hiệu sẽ được tạo tự động."
+  },
+  "creator": {
+    "title": "Thêm chi nhánh",
+    "fields": {
+      "name": "Tên chi nhánh",
+      "namePlaceholder": "Quận 1",
+      "slug": "Slug URL",
+      "slugPlaceholder": "quan-1",
+      "address": "Địa chỉ (không bắt buộc)",
+      "timezone": "Múi giờ",
+      "brand": "Thương hiệu (không bắt buộc)",
+      "brandNone": "— Không có —",
+      "startFrom": "Bắt đầu từ",
+      "startFromNothing": "Không có gì (chi nhánh trống)"
+    },
+    "timezones": {
+      "eastern": "Miền Đông (New York)",
+      "central": "Miền Trung (Chicago)",
+      "mountain": "Miền Núi (Denver)",
+      "mountainNoDst": "Miền Núi — không đổi giờ mùa hè (Phoenix)",
+      "pacific": "Thái Bình Dương (Los Angeles)",
+      "alaska": "Alaska (Anchorage)",
+      "hawaii": "Hawaii (Honolulu)"
+    },
+    "copy": {
+      "menu": "Sao chép thực đơn",
+      "menuHint": "Danh mục, món và các nhóm tùy chọn",
+      "hours": "Sao chép giờ mở cửa",
+      "hoursHint": "Lịch hằng tuần, không gồm các ngày nghỉ đột xuất",
+      "settings": "Sao chép cài đặt thanh toán và giao hàng",
+      "settingsHint": "Phương thức thanh toán, giao hàng, tiền tip và phí dịch vụ",
+      "notCopied": "Địa chỉ, vị trí trên bản đồ, màu sắc và mã QR của bàn không được sao chép."
+    },
+    "close": "Đóng",
+    "cancel": "Hủy",
+    "retryCopy": "Thử sao chép lại",
+    "copying": "Đang sao chép…",
+    "create": "Tạo chi nhánh",
+    "errors": {
+      "seats": "{limit, plural, other {Bạn đã dùng hết # suất chi nhánh.}} Hãy thêm suất (+$99/tháng) tại trang Gói, rồi tạo chi nhánh.",
+      "inactive": "Gói đăng ký của bạn chưa hoạt động. Hãy chọn một gói tại trang Gói để tiếp tục.",
+      "notAuthorized": "Chỉ chủ sở hữu hoặc quản trị viên mới có thể thêm chi nhánh.",
+      "nameRequired": "Hãy nhập tên chi nhánh và slug URL.",
+      "slugTaken": "Slug URL này đã được chi nhánh khác sử dụng. Hãy chọn slug khác.",
+      "noBranchId": "Chi nhánh đã được tạo, nhưng phản hồi không cho biết đó là chi nhánh nào nên chưa sao chép gì. Hãy đóng hộp thoại này và thiết lập chi nhánh trong cài đặt riêng của nó.",
+      "copyMenuNotEmpty": "Chi nhánh đã được tạo, nhưng sao chép từ {source} thất bại: chi nhánh mới đã có món trong thực đơn. Bỏ chọn “Sao chép thực đơn” rồi thử lại để sao chép phần còn lại, hoặc đóng hộp thoại này và thiết lập chi nhánh trong cài đặt riêng của nó.",
+      "copyFailed": "Chi nhánh đã được tạo, nhưng sao chép từ {source} thất bại. Bạn có thể thử sao chép lại, hoặc đóng hộp thoại này và thiết lập chi nhánh trong cài đặt riêng của nó.",
+      "generic": "Đã xảy ra lỗi. Vui lòng thử lại."
+    }
+  },
+  "created": {
+    "title": "Đã tạo chi nhánh",
+    "copiedFrom": "Đã sao chép sang {name} từ {source}:",
+    "copiedFromUnknown": "Đã sao chép sang {name} từ chi nhánh nguồn:",
+    "menu": "{categories, plural, other {# danh mục}}, {items, plural, other {# món}} và {groups, plural, other {# nhóm tùy chọn}}",
+    "hours": "{count, plural, other {# khung giờ mở cửa}}",
+    "settingsCopied": "Cài đặt thanh toán, giao hàng, tiền tip và phí dịch vụ",
+    "settingsNone": "Không có cài đặt thanh toán hay giao hàng: chi nhánh nguồn chưa lưu cài đặt nào",
+    "todo": "Việc cần làm ở chi nhánh mới: đặt vị trí trên bản đồ và thiết lập mã QR cho bàn. Những mục này không bao giờ được sao chép.",
+    "done": "Xong",
+    "openSettings": "Mở cài đặt chi nhánh"
+  },
+  "editor": {
+    "title": "Sửa thương hiệu",
+    "name": "Tên thương hiệu",
+    "slug": "Slug",
+    "slugPlaceholder": "thuong-hieu-cua-toi",
+    "primaryColor": "Màu chính",
+    "accentColor": "Màu nhấn",
+    "logo": "Logo (không bắt buộc)",
+    "uploadLogo": "Tải logo lên",
+    "appIcon": "Biểu tượng ứng dụng (không bắt buộc)",
+    "appIconHint": "Dùng cho tab trình duyệt và là biểu tượng khách thấy sau khi cài cửa hàng của bạn lên màn hình chính điện thoại. Để trống để dùng biểu tượng Favornoms.",
+    "tabFallback": "Cửa hàng của bạn",
+    "preview": "Xem trước",
+    "nameFallback": "Tên thương hiệu",
+    "linkedBranches": "Chi nhánh liên kết",
+    "linkedHint": "Chọn các chi nhánh dùng giao diện của thương hiệu này.",
+    "setDefault": "Đặt làm thương hiệu mặc định của nhà hàng",
+    "iconPending": "Hãy áp dụng kiểu biểu tượng mới trước, hoặc hoàn tác.",
+    "cancel": "Hủy",
+    "save": "Lưu",
+    "errors": {
+      "notSaved": "Chưa lưu được — vai trò của bạn có thể không được phép thay đổi thương hiệu.",
+      "slugTaken": "Slug này đã được thương hiệu khác sử dụng."
+    }
+  },
+  "errors": {
+    "generic": "Đã xảy ra lỗi. Vui lòng thử lại.",
+    "permissionDenied": "Bạn không có quyền thực hiện thao tác này."
+  }
+}

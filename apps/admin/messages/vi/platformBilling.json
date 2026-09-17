@@ -1,0 +1,240 @@
+{
+  "perMonth": "{amount}<unit>/tháng</unit>",
+  "subscriptionStatus": {
+    "active": "đang hoạt động",
+    "trialing": "đang dùng thử",
+    "past_due": "quá hạn thanh toán",
+    "cancelled": "đã hủy",
+    "expired": "đã hết hạn"
+  },
+  "errors": {
+    "saveFailed": "Không lưu được.",
+    "decisionFailed": "Không lưu được quyết định.",
+    "permission": "Bạn không có quyền thực hiện thao tác này.",
+    "network": "Không kết nối được máy chủ. Hãy kiểm tra kết nối và thử lại."
+  },
+  "plans": {
+    "metaTitle": "Danh mục sản phẩm · Favornoms",
+    "title": "Danh mục sản phẩm",
+    "subtitle": "Những gì nhà hàng có thể mua. Giá tính theo tháng, bằng USD.",
+    "newProduct": "Sản phẩm mới",
+    "stripeDormant": "<strong>Stripe đang tạm ngưng.</strong> {count, plural, other {# sản phẩm đang hoạt động chưa có}} mã giá Stripe ({codes}). Cho đến khi điền đủ, người bán được kích hoạt thủ công ở trang Gói đăng ký thay vì thanh toán bằng thẻ.",
+    "newProductCode": "sản phẩm mới",
+    "inactive": "Không hoạt động",
+    "noStripePrice": "Chưa có giá Stripe",
+    "markInactive": "Tắt sản phẩm",
+    "markActive": "Bật sản phẩm",
+    "kinds": {
+      "plan": "gói chính",
+      "addon": "tiện ích bổ sung",
+      "seat": "suất"
+    },
+    "fields": {
+      "code": "Mã (slug)",
+      "name": "Tên",
+      "monthlyPrice": "Giá hằng tháng ($)",
+      "kind": "Loại",
+      "includedSeats": "Suất đi kèm",
+      "includedSeatsHint": "Số suất mà gói chính tự cấp.",
+      "seatsPerUnit": "Suất mỗi đơn vị",
+      "seatsPerUnitHint": "Dành cho sản phẩm tính theo số lượng (extra_branch = 1).",
+      "trialDays": "Số ngày dùng thử",
+      "sortOrder": "Thứ tự sắp xếp",
+      "stripePriceId": "Mã giá Stripe",
+      "stripePriceIdHint": "price_… — bắt buộc trước khi bật Stripe.",
+      "description": "Mô tả",
+      "isQuantity": "Sản phẩm theo số lượng (tính phí theo đơn vị — cần giá theo số lượng trên Stripe)",
+      "features": "Tính năng được cấp"
+    },
+    "createProduct": "Tạo sản phẩm",
+    "save": "Lưu",
+    "cancel": "Hủy",
+    "codeRequired": "Cần nhập mã sản phẩm."
+  },
+  "reports": {
+    "title": "Báo cáo tài chính",
+    "subtitle": "Doanh thu từ gói đăng ký (thu nhập của nền tảng) và hoạt động trên toàn nền tảng.",
+    "stats": {
+      "mrr": "MRR",
+      "arr": "ARR (quy đổi năm)",
+      "payingRestaurants": "Nhà hàng trả phí",
+      "arpa": "ARPA",
+      "trialPipeline": "Tiềm năng từ dùng thử",
+      "servingCustomers": "Đang phục vụ khách",
+      "branchSeats": "Suất chi nhánh",
+      "branchSeatsValue": "Đã dùng {used} / đã bán {sold}",
+      "pendingRequests": "Yêu cầu đang chờ",
+      "active": "Đang hoạt động",
+      "trialing": "Đang dùng thử",
+      "pastDue": "Quá hạn thanh toán",
+      "expired": "Đã hết hạn",
+      "cancelled": "Đã hủy"
+    },
+    "mrrByPlan": "MRR theo gói chính",
+    "noSubscriptions": "Chưa có gói đăng ký nào.",
+    "mrrByAddon": "MRR theo tiện ích bổ sung",
+    "noAddons": "Chưa bán được tiện ích bổ sung nào.",
+    "barDetail": "{count} · {amount}/tháng",
+    "activityTitle": "Hoạt động nền tảng (30 ngày)",
+    "orders": "Đơn hàng",
+    "gmv": "GMV (đơn hoàn tất)",
+    "payoutsUnpaid": "Chi trả tài xế — chưa trả",
+    "payoutsPaid": "Chi trả tài xế — đã trả",
+    "activityNote": "GMV thuộc về nhà hàng (nhà hàng thu tiền); chi trả tài xế do nhà hàng thanh toán. Doanh thu của bạn là MRR từ gói đăng ký ở trên.",
+    "table": {
+      "restaurant": "Nhà hàng",
+      "status": "Trạng thái",
+      "addons": "Tiện ích bổ sung",
+      "branches": "Chi nhánh",
+      "mrr": "MRR"
+    },
+    "suspended": "bị tạm ngưng",
+    "trialEnds": "kết thúc {date}"
+  },
+  "settings": {
+    "title": "Cài đặt nền tảng",
+    "subtitle": "Cấu hình chung cho mọi nhà hàng trên nền tảng.",
+    "penalty": {
+      "title": "Phạt tài xế",
+      "description": "Khi tài xế có quá nhiều lần từ chối/hết thời gian trong khung thời gian trượt, họ sẽ bị chặn bật nhận đơn trong suốt thời gian chờ.",
+      "threshold": "Ngưỡng (lần)",
+      "thresholdHint": "Số lần trong khung thời gian trước khi bị chặn",
+      "window": "Khung thời gian (giờ)",
+      "windowHint": "Khoảng thời gian tính ngược lại",
+      "cooldown": "Thời gian chờ (phút)",
+      "cooldownHint": "Thời gian bị chặn",
+      "countRejects": "Tính các lần từ chối",
+      "countTimeouts": "Tính các lần hết thời gian (không phản hồi)"
+    },
+    "tips": {
+      "title": "Hiển thị tiền tip giao hàng",
+      "description": "Kiểm soát những gì tài xế thấy về tiền tip trong yêu cầu giao hàng.",
+      "hidden": "Ẩn (chỉ số thực nhận)",
+      "transparent": "Minh bạch",
+      "legalTitle": "Nên xem xét pháp lý",
+      "legalBody": "Việc ẩn phần tiền tip nhà hàng giữ lại khỏi tài xế có thể vi phạm luật tiền tip của Hoa Kỳ (FLSA) và quy định minh bạch tiền tip ở các bang/thành phố như CA, NY và Seattle, đặc biệt với tài xế W-2. Hãy tham khảo ý kiến luật sư trước khi bật trên môi trường thật."
+    },
+    "defaults": {
+      "title": "Mặc định giao hàng cho chi nhánh mới",
+      "description": "Giá trị ban đầu áp dụng khi tạo chi nhánh mới. Chi nhánh có thể thay đổi sau. Mọi khoảng cách/mức phí đều tính theo dặm.",
+      "deliveryRadius": "Bán kính giao hàng (mi)",
+      "driverSearchRadius": "Bán kính tìm tài xế (mi)",
+      "driverBasePay": "Tiền công cơ bản tài xế ($)",
+      "driverPerMile": "Tiền công tài xế mỗi dặm ($)"
+    },
+    "flags": {
+      "title": "Bật/tắt tính năng",
+      "description": "Bật hoặc tắt tính năng của nền tảng cho toàn hệ thống.",
+      "combos": "Combo",
+      "giftCards": "Thẻ quà tặng"
+    },
+    "save": "Lưu cài đặt nền tảng",
+    "saved": "Đã lưu ✓",
+    "reset": "Khôi phục mặc định"
+  },
+  "subscriptions": {
+    "metaTitle": "Gói đăng ký · Favornoms",
+    "title": "Gói đăng ký",
+    "subtitle": "Thiết lập trực tiếp gói của nhà hàng. Thay đổi có hiệu lực ngay.",
+    "searchPlaceholder": "Tìm nhà hàng",
+    "noMatches": "Không có nhà hàng phù hợp.",
+    "live": "Đang hoạt động",
+    "suspended": "Bị tạm ngưng",
+    "stats": {
+      "monthly": "Hằng tháng",
+      "seats": "Suất",
+      "paidThrough": "Đã trả đến",
+      "trialEnds": "Hết dùng thử"
+    },
+    "close": "Đóng",
+    "changePackage": "Đổi gói",
+    "featureSwitches": "Bật/tắt tính năng",
+    "plan": "Gói chính",
+    "status": "Trạng thái",
+    "statusOption": {
+      "active": "đang hoạt động",
+      "trialing": "đang dùng thử",
+      "past_due": "quá hạn thanh toán — vẫn giữ quyền truy cập",
+      "cancelled": "đã hủy — vẫn giữ quyền truy cập",
+      "expired": "đã hết hạn — mất quyền truy cập ngay"
+    },
+    "statusHint": {
+      "past_due": "“Quá hạn thanh toán” chỉ là nhãn, không phải công tắc tắt: cửa hàng vẫn có toàn quyền truy cập đến ngày đã trả. Tạm ngưng trên bảng tổng quan sẽ ẩn cửa hàng ngay; để qua ngày đó thì quyền truy cập kết thúc.",
+      "cancelled": "“Đã hủy” chỉ là nhãn, không phải công tắc tắt: cửa hàng vẫn có toàn quyền truy cập đến ngày đã trả. Tạm ngưng trên bảng tổng quan sẽ ẩn cửa hàng ngay; để qua ngày đó thì quyền truy cập kết thúc.",
+      "expired": "“Đã hết hạn” chấm dứt quyền truy cập ngay khi bạn áp dụng."
+    },
+    "paidThrough": "Đã trả đến",
+    "blankTrial": "Để trống để bắt đầu lại từ hôm nay: dùng thử {days} ngày, đến {date}.",
+    "blankMonth": "Để trống để bắt đầu lại tháng từ hôm nay: ngày đã trả đến sẽ là {date}.",
+    "blankShortens": "Ngày này sớm hơn ngày hiện tại ({date}). Hãy chọn một ngày để giữ lại thời gian họ đang có.",
+    "addons": "Tiện ích bổ sung",
+    "branchSeats": "Suất chi nhánh",
+    "removeSeat": "Bớt một suất",
+    "addSeat": "Thêm một suất",
+    "minSeats": "tối thiểu {count} (chi nhánh đang mở)",
+    "applyPackage": "Áp dụng gói",
+    "saved": "Đã lưu"
+  },
+  "switches": {
+    "intro": "Hiện hoặc ẩn một tính năng chỉ cho nhà hàng này. <strong>Theo gói</strong> làm theo gói ở trên; <strong>Bật</strong> và <strong>Tắt</strong> bỏ qua gói. Ẩn một tính năng sẽ gỡ nó khỏi thanh bên của người bán; nếu họ mở URL trực tiếp, họ sẽ thấy trang bị khóa thay vì tính năng.",
+    "states": {
+      "plan": "Theo gói",
+      "on": "Bật",
+      "off": "Tắt"
+    },
+    "visible": "Người bán thấy được",
+    "visibleOverridden": "Người bán thấy được · đã ghi đè",
+    "hiddenOverridden": "Ẩn với người bán · đã ghi đè",
+    "hiddenNotInPackage": "Ẩn với người bán · không có trong gói",
+    "groupLabel": "Hiển thị {feature}"
+  },
+  "requests": {
+    "metaTitle": "Yêu cầu đổi gói · Favornoms",
+    "title": "Yêu cầu đổi gói",
+    "subtitle": "Người bán đã chọn gói và đang chờ được kích hoạt.",
+    "filters": {
+      "pending": "Đang chờ",
+      "approved": "Đã duyệt",
+      "rejected": "Bị từ chối",
+      "all": "Tất cả"
+    },
+    "status": {
+      "pending": "đang chờ",
+      "approved": "đã duyệt",
+      "rejected": "bị từ chối"
+    },
+    "empty": "Không có gì ở đây.",
+    "thisRestaurant": "nhà hàng này",
+    "requested": "Đã yêu cầu",
+    "seatCount": "{count, plural, other {# suất}}",
+    "decisionNote": "Ghi chú quyết định: {note}",
+    "loadFailed": "Không tải được gói hiện tại của {name}, nên thẻ này không thể cho thấy việc duyệt sẽ gỡ bỏ những gì. Duyệt sẽ thay thế mọi thứ họ đang có.",
+    "notePlaceholder": "Ghi chú (không bắt buộc)",
+    "approve": "Duyệt và kích hoạt",
+    "reject": "Từ chối",
+    "currently": "Hiện tại",
+    "paidThroughDate": "Đã trả đến {date}",
+    "notLive": "Chưa hoạt động — cửa hàng đang tắt",
+    "approving": "Khi duyệt",
+    "removes": "Sẽ gỡ bỏ: {items}",
+    "adds": "Sẽ thêm: {items}",
+    "planChange": "Gói chính: {from} → {to}",
+    "seatsSame": "Suất: {count} (không đổi)",
+    "seatsChange": "Suất: {from} → {to}",
+    "newTotal": "Tổng mới: <b>{to}/tháng</b> (hiện tại {from}/tháng)",
+    "newTotalRequested": "Tổng mới: <b>{to}/tháng</b> (hiện tại {from}/tháng) · yêu cầu ở mức {requested}/tháng, áp dụng giá danh mục hiện hành",
+    "paidThroughChange": "Đã trả đến: {from} → {to}, tính từ lúc bạn duyệt",
+    "paidThroughChangeFewer": "Đã trả đến: {from} → {to}, tính từ lúc bạn duyệt (ít hơn {days} ngày đã trả)",
+    "lapsed": "đã hết hạn",
+    "noPackage": "Chưa có gói",
+    "confirm": {
+      "blindTitle": "Duyệt mà không xem gói hiện tại của {name}?",
+      "blindBody": "Không tải được gói hiện tại của họ. Duyệt sẽ thay toàn bộ gói bằng yêu cầu này và gỡ mọi tiện ích bổ sung hoặc suất không có trong yêu cầu.",
+      "approveAnyway": "Vẫn duyệt",
+      "removeTitle": "Duyệt và gỡ bỏ {items}?",
+      "smallerTitle": "Duyệt gói nhỏ hơn?",
+      "body": "Duyệt sẽ thay toàn bộ gói của {name} bằng yêu cầu này.{removes, select, yes { Gỡ bỏ {items}.} other {}}{seats, select, yes { Giảm suất chi nhánh từ {seatsFrom} xuống {seatsTo}.} other {}}{shortens, select, yes { Lùi ngày đã trả đến từ {paidFrom} về {paidTo} (ít hơn {days} ngày).} other {}} Họ mất những thứ này ngay khi bạn duyệt, và muốn lấy lại phải thiết lập lại gói ở trang Gói đăng ký.",
+      "approveRemove": "Duyệt và gỡ bỏ"
+    }
+  }
+}

@@ -3,6 +3,8 @@
 // the web app (so its JIT scanner picks them up) — this module only holds the typed
 // config, defaults, parsing, and labels used by both the admin picker and the storefront.
 
+import { DEFAULT_UI_LOCALE, isUiLocale, type UiLocale } from '../i18n';
+
 export type MenuLayout = 'list' | 'grid2' | 'grid3' | 'grid4';
 export type MenuCardStyle = 'standard' | 'compact';
 
@@ -57,16 +59,56 @@ export function serializeStorefront(s: StorefrontSettings): Record<string, strin
   };
 }
 
-export const MENU_LAYOUT_LABELS: Record<MenuLayout, string> = {
-  list: 'List · 1 column',
-  grid2: 'Grid · 2 columns',
-  grid3: 'Grid · 3 columns',
-  grid4: 'Grid · 4 columns',
+const MENU_LAYOUT_LABELS_BY_LOCALE: Record<UiLocale, Record<MenuLayout, string>> = {
+  en: {
+    list: 'List · 1 column',
+    grid2: 'Grid · 2 columns',
+    grid3: 'Grid · 3 columns',
+    grid4: 'Grid · 4 columns',
+  },
+  es: {
+    list: 'Lista · 1 columna',
+    grid2: 'Cuadrícula · 2 columnas',
+    grid3: 'Cuadrícula · 3 columnas',
+    grid4: 'Cuadrícula · 4 columnas',
+  },
+  vi: {
+    list: 'Danh sách · 1 cột',
+    grid2: 'Lưới · 2 cột',
+    grid3: 'Lưới · 3 cột',
+    grid4: 'Lưới · 4 cột',
+  },
+  th: {
+    list: 'รายการ · 1 คอลัมน์',
+    grid2: 'ตาราง · 2 คอลัมน์',
+    grid3: 'ตาราง · 3 คอลัมน์',
+    grid4: 'ตาราง · 4 คอลัมน์',
+  },
 };
-export const MENU_CARD_STYLE_LABELS: Record<MenuCardStyle, string> = {
-  standard: 'Standard (photo on top)',
-  compact: 'Compact (photo on left)',
+
+const MENU_CARD_STYLE_LABELS_BY_LOCALE: Record<UiLocale, Record<MenuCardStyle, string>> = {
+  en: { standard: 'Standard (photo on top)', compact: 'Compact (photo on left)' },
+  es: { standard: 'Estándar (foto arriba)', compact: 'Compacto (foto a la izquierda)' },
+  vi: { standard: 'Tiêu chuẩn (ảnh ở trên)', compact: 'Thu gọn (ảnh bên trái)' },
+  th: { standard: 'มาตรฐาน (รูปอยู่ด้านบน)', compact: 'กะทัดรัด (รูปอยู่ด้านซ้าย)' },
 };
+
+/** English labels. Prefer menuLayoutLabel(layout, locale) on screen. */
+export const MENU_LAYOUT_LABELS: Record<MenuLayout, string> = MENU_LAYOUT_LABELS_BY_LOCALE.en;
+/** English labels. Prefer menuCardStyleLabel(style, locale) on screen. */
+export const MENU_CARD_STYLE_LABELS: Record<MenuCardStyle, string> = MENU_CARD_STYLE_LABELS_BY_LOCALE.en;
+
+/** A menu layout as the picker names it, in `locale` (English when omitted). */
+export function menuLayoutLabel(layout: MenuLayout, locale: UiLocale = DEFAULT_UI_LOCALE): string {
+  const loc = isUiLocale(locale) ? locale : DEFAULT_UI_LOCALE;
+  return MENU_LAYOUT_LABELS_BY_LOCALE[loc][layout] ?? MENU_LAYOUT_LABELS[layout] ?? layout;
+}
+
+/** A menu card style as the picker names it, in `locale` (English when omitted). */
+export function menuCardStyleLabel(style: MenuCardStyle, locale: UiLocale = DEFAULT_UI_LOCALE): string {
+  const loc = isUiLocale(locale) ? locale : DEFAULT_UI_LOCALE;
+  return MENU_CARD_STYLE_LABELS_BY_LOCALE[loc][style] ?? MENU_CARD_STYLE_LABELS[style] ?? style;
+}
 
 // ---- Per-branch override -------------------------------------------------
 // Each branch of a restaurant may override the restaurant-level storefront.

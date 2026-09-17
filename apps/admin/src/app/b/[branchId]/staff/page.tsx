@@ -1,3 +1,4 @@
+import { getTranslations } from 'next-intl/server';
 import { getBranchAccess } from '@/lib/capabilities';
 import { AccessDenied } from '@/components/access-denied';
 import { StaffView } from './_components/staff-view';
@@ -17,10 +18,11 @@ export default async function StaffPage({ params }: Props) {
   );
 
   if (!can('staff.manage')) {
+    const t = await getTranslations('staff');
     return (
       <AccessDenied
-        title="No staff access"
-        reason={`Only the owner or an admin can manage the team at ${branch.name}.`}
+        title={t('accessDenied.title')}
+        reason={t('accessDenied.reason', { branch: branch.name })}
       />
     );
   }

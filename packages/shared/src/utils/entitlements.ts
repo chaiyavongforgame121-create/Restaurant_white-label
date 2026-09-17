@@ -11,6 +11,8 @@
 //
 // Pricing model locked 2026-07-25 — see docs/PACKAGING-2026-07-25.md.
 
+import { DEFAULT_UI_LOCALE, isUiLocale, type UiLocale } from '../i18n';
+
 export const FEATURE_KEYS = [
   'card_payment',
   'ai_menu_import',
@@ -341,29 +343,110 @@ export function describeBillingError(err: unknown): BillingError | null {
   return null;
 }
 
-const FEATURE_LABELS: Record<string, string> = {
-  card_payment: 'Card payment',
-  ai_menu_import: 'AI menu import',
-  delivery: 'Delivery',
-  ai_suite: 'AI Suite',
-  digital_signage: 'Digital Signage',
-  ai_voice: 'AI Voice Assistant',
+// --- labels and messages, per interface language -----------------------------
+//
+// Display only. Feature keys and error codes stay the stable values above; nothing here is
+// stored or compared.
+
+const FEATURE_LABELS: Record<UiLocale, Record<string, string>> = {
+  en: {
+    card_payment: 'Card payment',
+    ai_menu_import: 'AI menu import',
+    delivery: 'Delivery',
+    ai_suite: 'AI Suite',
+    digital_signage: 'Digital Signage',
+    ai_voice: 'AI Voice Assistant',
+  },
+  es: {
+    card_payment: 'Pago con tarjeta',
+    ai_menu_import: 'Importación de menú con IA',
+    delivery: 'Entrega a domicilio',
+    ai_suite: 'AI Suite',
+    digital_signage: 'Señalización digital',
+    ai_voice: 'Asistente de voz con IA',
+  },
+  vi: {
+    card_payment: 'Thanh toán bằng thẻ',
+    ai_menu_import: 'Nhập thực đơn bằng AI',
+    delivery: 'Giao hàng',
+    ai_suite: 'AI Suite',
+    digital_signage: 'Bảng hiệu kỹ thuật số',
+    ai_voice: 'Trợ lý giọng nói AI',
+  },
+  th: {
+    card_payment: 'ชำระเงินด้วยบัตร',
+    ai_menu_import: 'นำเข้าเมนูด้วย AI',
+    delivery: 'การจัดส่ง',
+    ai_suite: 'AI Suite',
+    digital_signage: 'ป้ายดิจิทัล',
+    ai_voice: 'ผู้ช่วยเสียง AI',
+  },
 };
 
-export function featureLabel(key: string): string {
-  return FEATURE_LABELS[key] ?? key;
+/**
+ * A feature key as people read it, in `locale` (English when omitted). Unknown keys come back
+ * unchanged.
+ *
+ * Overloaded so `keys.map(featureLabel)` keeps compiling: map passes the index as the second
+ * argument, and anything that is not an interface language reads as English.
+ */
+export function featureLabel(key: string): string;
+export function featureLabel(key: string, locale: UiLocale | undefined): string;
+export function featureLabel(key: string, locale?: unknown): string {
+  const loc = isUiLocale(locale) ? locale : DEFAULT_UI_LOCALE;
+  return FEATURE_LABELS[loc][key] ?? FEATURE_LABELS.en[key] ?? key;
 }
 
-/** Human-readable copy for a decoded billing error. */
-export function billingErrorMessage(e: BillingError): string {
+interface BillingErrorCopy {
+  inactive: string;
+  feature: (feature: string) => string;
+  seats: (current: number, limit: number) => string;
+  dormant: string;
+}
+
+const BILLING_ERROR_COPY: Record<UiLocale, BillingErrorCopy> = {
+  en: {
+    inactive: 'Your subscription is not active. Choose a package to continue.',
+    feature: (feature) => `${feature} is not included in your current package.`,
+    seats: (current, limit) =>
+      `You are using ${current} of ${limit} branch seats. Add a seat to create another branch.`,
+    dormant: 'Online payment is not configured yet. Your request has been sent for manual activation.',
+  },
+  es: {
+    inactive: 'Tu suscripción no está activa. Elige un paquete para continuar.',
+    feature: (feature) => `${feature} no está incluido en tu paquete actual.`,
+    seats: (current, limit) =>
+      `Cupos de sucursal en uso: ${current} de ${limit}. Agrega un cupo para crear otra sucursal.`,
+    dormant: 'El pago en línea aún no está configurado. Enviamos tu solicitud para activarlo manualmente.',
+  },
+  vi: {
+    inactive: 'Gói đăng ký của bạn chưa hoạt động. Hãy chọn một gói để tiếp tục.',
+    feature: (feature) => `${feature} không có trong gói hiện tại của bạn.`,
+    seats: (current, limit) =>
+      `Bạn đang dùng ${current}/${limit} suất chi nhánh. Hãy thêm suất để tạo chi nhánh mới.`,
+    dormant: 'Thanh toán trực tuyến chưa được thiết lập. Yêu cầu của bạn đã được gửi để kích hoạt thủ công.',
+  },
+  th: {
+    inactive: 'การสมัครสมาชิกของคุณไม่ได้เปิดใช้งานอยู่ โปรดเลือกแพ็กเกจเพื่อดำเนินการต่อ',
+    feature: (feature) => `${feature} ไม่รวมอยู่ในแพ็กเกจปัจจุบันของคุณ`,
+    seats: (current, limit) =>
+      `คุณใช้สิทธิ์สาขาไปแล้ว ${current} จาก ${limit} สิทธิ์ เพิ่มสิทธิ์สาขาเพื่อสร้างสาขาใหม่`,
+    dormant: 'ยังไม่ได้ตั้งค่าการชำระเงินออนไลน์ เราได้ส่งคำขอของคุณเพื่อเปิดใช้งานให้แล้ว',
+  },
+};
+
+/** Human-readable copy for a decoded billing error, in `locale` (English when omitted). */
+export function billingErrorMessage(e: BillingError, locale: UiLocale = DEFAULT_UI_LOCALE): string {
+  const loc = isUiLocale(locale) ? locale : DEFAULT_UI_LOCALE;
+  const copy = BILLING_ERROR_COPY[loc];
   switch (e.kind) {
     case 'inactive':
-      return 'Your subscription is not active. Choose a package to continue.';
+      return copy.inactive;
     case 'feature':
-      return `${featureLabel(e.feature)} is not included in your current package.`;
+      return copy.feature(featureLabel(e.feature, loc));
     case 'seats':
-      return `You are using ${e.current} of ${e.limit} branch seats. Add a seat to create another branch.`;
+      return copy.seats(e.current, e.limit);
     case 'dormant':
-      return 'Online payment is not configured yet. Your request has been sent for manual activation.';
+      return copy.dormant;
   }
 }

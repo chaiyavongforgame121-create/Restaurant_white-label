@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Loader2, Receipt, Utensils } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { formatCurrency } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
 import {
@@ -91,6 +92,8 @@ function readStored(branchId: string): StoredPin | null {
     return {
       id: parsed.id,
       number: parsed.number,
+      // Stays English: the label is data (checkout sends it with the order), matching the
+      // server's own 'Table ' || number fallback. useTableLabel translates it for display.
       label: parsed.label || `Table ${parsed.number}`,
       branchId,
       sessionId: parsed.sessionId,
@@ -143,6 +146,24 @@ const TablePinContext = React.createContext<TablePinValue>({
 
 /** What table this device is sitting at, and what the table owes. */
 export const useTablePin = () => React.useContext(TablePinContext);
+
+/**
+ * The table's name as the diner should read it.
+ *
+ * A table with no name of its own is labelled "Table <number>" in English by the server
+ * (join_table_session) and by the stored pin, and that English label is what travels with
+ * the order. Only the display is translated: the label itself is never rewritten.
+ */
+export function useTableLabel(): (table: Pick<PinnedTable, 'number' | 'label'>) => string {
+  const t = useTranslations('table');
+  return React.useCallback(
+    (table) =>
+      !table.label || table.label === `Table ${table.number}`
+        ? t('tableNumber', { number: table.number })
+        : table.label,
+    [t],
+  );
+}
 
 /**
  * Holds the sitting for the whole branch storefront.
@@ -338,12 +359,12 @@ export function TableScanPin({
   sessionMode,
   requiresJoinCode,
 }: TableScanPinProps) {
+  const t = useTranslations('table');
   const { ready, pin } = useTablePin();
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const [blocked, setBlocked] = React.useState<ScanBlock | null>(null);
-  const [message, setMessage] = React.useState<string | null>(null);
   const [code, setCode] = React.useState('');
   const [joining, setJoining] = React.useState(false);
   // pin() changes the context, which would otherwise re-run the join. One attempt per token
@@ -383,7 +404,6 @@ export function TableScanPin({
           token,
         );
         setBlocked(null);
-        setMessage(null);
         stripToken();
       } catch (err) {
         const reason = (err as Error).message ?? '';
@@ -397,8 +417,9 @@ export function TableScanPin({
         else if (reason.includes('table_session_locked')) setBlocked('locked');
         else if (reason.includes('table_not_seated')) setBlocked('not_seated');
         else {
+          // The server's own words are not shown to the diner; they go to the log only.
+          console.warn('join_table_session failed:', reason);
           setBlocked('error');
-          setMessage(reason);
         }
       } finally {
         setJoining(false);
@@ -429,28 +450,21 @@ export function TableScanPin({
         </p>
         {blocked === 'not_seated' && (
           <p className="mt-1 text-sm text-muted-foreground">
-            {sessionMode === 'staff'
-              ? 'Ask a member of staff to open your table, then scan again.'
-              : 'This table is not open for ordering yet. Ask a member of staff to seat you.'}
+            {sessionMode === 'staff' ? t('scan.notSeatedStaff') : t('scan.notSeatedAuto')}
           </p>
         )}
         {blocked === 'locked' && (
-          <p className="mt-1 text-sm text-muted-foreground">
-            This table has asked for the bill. Ask a member of staff to reopen it if you would
-            like to order more.
-          </p>
+          <p className="mt-1 text-sm text-muted-foreground">{t('scan.locked')}</p>
         )}
         {blocked === 'error' && (
           <p role="alert" className="mt-2 rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">
-            {message ?? 'That table could not be opened.'}
+            {t('scan.error')}
           </p>
         )}
         {blocked === 'code' && (
           <>
             <p className="mt-1 text-sm text-muted-foreground">
-              {requiresJoinCode
-                ? 'Someone is already ordering at this table. Enter the four-digit code your server gave you to join their bill.'
-                : 'Enter the four-digit code for this table to join the bill.'}
+              {requiresJoinCode ? t('scan.codeRequired') : t('scan.codeEnter')}
             </p>
             <div className="mt-3 flex gap-2">
               <input
@@ -458,7 +472,7 @@ export function TableScanPin({
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 4))}
                 inputMode="numeric"
                 autoComplete="one-time-code"
-                aria-label="Table code"
+                aria-label={t('scan.codeLabel')}
                 placeholder="0000"
                 className="focus-ring h-12 w-28 rounded-xl border border-border bg-background px-4 text-center text-lg tracking-[0.4em]"
               />
@@ -468,7 +482,7 @@ export function TableScanPin({
                 loading={joining}
                 onClick={() => void join(code)}
               >
-                Join table
+                {t('scan.join')}
               </Button>
             </div>
           </>
@@ -487,6 +501,8 @@ export function TableScanPin({
  * the number the party will be asked to pay.
  */
 export function TablePinNotice() {
+  const t = useTranslations('table');
+  const tableLabel = useTableLabel();
   const { table, bill } = useTablePin();
   const [open, setOpen] = React.useState(false);
   if (!table) return null;
@@ -496,11 +512,13 @@ export function TablePinNotice() {
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl bg-primary/10 px-4 py-3">
         <p className="flex items-center gap-2 text-sm font-semibold text-primary">
           <Utensils className="h-4 w-4 shrink-0" aria-hidden />
-          Ordering at {table.label}
+          {t('notice.orderingAt', { table: tableLabel(table) })}
           {rounds > 0 && (
             <span className="font-normal">
-              · {rounds} {rounds === 1 ? 'round' : 'rounds'} ·{' '}
-              {formatCurrency(Number(bill?.running_total ?? 0))}
+              {t('notice.rounds', {
+                count: rounds,
+                total: formatCurrency(Number(bill?.running_total ?? 0)),
+              })}
             </span>
           )}
         </p>
@@ -510,7 +528,7 @@ export function TablePinNotice() {
           className="focus-ring ml-auto inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-xs font-semibold text-primary underline underline-offset-2"
         >
           <Receipt className="h-3.5 w-3.5" aria-hidden />
-          Your table
+          {t('notice.yourTable')}
         </button>
       </div>
       <TableBillSheet open={open} onClose={() => setOpen(false)} />
@@ -527,6 +545,8 @@ export function TablePinNotice() {
  * participation and redacts instead.
  */
 function TableBillSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const t = useTranslations('table');
+  const tableLabel = useTableLabel();
   const { table, bill, refreshBill } = useTablePin();
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -548,35 +568,35 @@ function TableBillSheet({ open, onClose }: { open: boolean; onClose: () => void 
       await setTableSessionStatus(getBrowserClient(), bill.session_id, 'locked');
       refreshBill();
     } catch (err) {
-      setError((err as Error).message);
+      const reason = (err as Error).message ?? '';
+      // The server's own words go to the log; the diner gets a sentence in their language.
+      console.warn('set_table_session_status failed:', reason);
+      setError(reason.includes('session_already_closed') ? t('bill.alreadyClosed') : t('bill.askFailed'));
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <Sheet open={open} onClose={onClose} side="bottom" title={table.label}>
+    <Sheet open={open} onClose={onClose} side="bottom" title={tableLabel(table)}>
       <div className="max-h-[70vh] space-y-4 overflow-y-auto p-1">
         {!bill ? (
           <p className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-            Reading your table…
+            {t('bill.loading')}
           </p>
         ) : bill.orders.length === 0 ? (
-          <p className="py-6 text-sm text-muted-foreground">
-            Nothing ordered at this table yet. Everything you and the rest of your party order
-            lands on one bill.
-          </p>
+          <p className="py-6 text-sm text-muted-foreground">{t('bill.empty')}</p>
         ) : (
           <>
             {bill.orders.map((order) => (
               <div key={order.order_id} className="rounded-2xl border border-border p-3">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-sm font-semibold">
-                    Round {order.round ?? 1}
+                    {t('bill.round', { round: order.round ?? 1 })}
                     {order.mine && (
                       <Badge variant="muted" className="ml-2">
-                        Yours
+                        {t('bill.yours')}
                       </Badge>
                     )}
                   </p>
@@ -598,19 +618,19 @@ function TableBillSheet({ open, onClose }: { open: boolean; onClose: () => void 
                   ))}
                 </ul>
                 {order.paid && (
-                  <p className="mt-2 text-xs font-semibold text-success">Paid</p>
+                  <p className="mt-2 text-xs font-semibold text-success">{t('bill.paid')}</p>
                 )}
               </div>
             ))}
             <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
-              <span className="font-display text-lg font-semibold">Table total</span>
+              <span className="font-display text-lg font-semibold">{t('bill.total')}</span>
               <span className="font-display text-lg font-bold tabular-nums">
                 {formatCurrency(Number(bill.running_total))}
               </span>
             </div>
             {Number(bill.outstanding) !== Number(bill.running_total) && (
               <p className="text-sm text-muted-foreground">
-                Still to pay {formatCurrency(Number(bill.outstanding))}
+                {t('bill.stillToPay', { amount: formatCurrency(Number(bill.outstanding)) })}
               </p>
             )}
           </>
@@ -624,8 +644,7 @@ function TableBillSheet({ open, onClose }: { open: boolean; onClose: () => void 
 
         {locked ? (
           <p role="status" className="rounded-xl bg-warning/10 px-3 py-2 text-sm text-warning">
-            Your server has been asked for the bill. No more rounds can go to the kitchen until
-            they reopen the table.
+            {t('bill.locked')}
           </p>
         ) : (
           <Button
@@ -635,12 +654,10 @@ function TableBillSheet({ open, onClose }: { open: boolean; onClose: () => void 
             disabled={!bill || bill.orders.length === 0}
             onClick={() => void askForBill()}
           >
-            We&apos;re ready to pay
+            {t('bill.readyToPay')}
           </Button>
         )}
-        <p className="text-center text-xs text-muted-foreground">
-          You pay at the restaurant. The table closes when your bill is settled.
-        </p>
+        <p className="text-center text-xs text-muted-foreground">{t('bill.payAtRestaurant')}</p>
       </div>
     </Sheet>
   );
@@ -655,9 +672,12 @@ function TableBillSheet({ open, onClose }: { open: boolean; onClose: () => void 
  * is not the party leaving, and only the restaurant may say a bill is finished.
  */
 export function LeaveTableButton({ className }: { className?: string }) {
+  const t = useTranslations('table');
+  const tableLabel = useTableLabel();
   const { table, bill, clear } = useTablePin();
   if (!table) return null;
   const owed = Number(bill?.outstanding ?? 0);
+  const label = tableLabel(table);
   return (
     <button
       type="button"
@@ -665,8 +685,8 @@ export function LeaveTableButton({ className }: { className?: string }) {
         if (
           !window.confirm(
             owed > 0
-              ? `Stop ordering at ${table.label}?\n\nThe bill stays open — ${formatCurrency(owed)} is still to pay at the restaurant.`
-              : `Stop ordering at ${table.label}?\n\nThe bill stays open; you just won't be ordering to this table from this phone.`,
+              ? t('leave.confirmOwed', { table: label, amount: formatCurrency(owed) })
+              : t('leave.confirm', { table: label }),
           )
         )
           return;
@@ -677,7 +697,7 @@ export function LeaveTableButton({ className }: { className?: string }) {
         className,
       )}
     >
-      Not at {table.label}?
+      {t('leave.button', { table: label })}
     </button>
   );
 }

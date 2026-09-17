@@ -1,0 +1,37 @@
+{
+  "tableNumber": "Mesa {number}",
+  "scan": {
+    "notSeatedStaff": "Pide a alguien del personal que abra tu mesa y vuelve a escanear.",
+    "notSeatedAuto": "Esta mesa aún no está abierta para pedidos. Pide a alguien del personal que te asigne la mesa.",
+    "locked": "En esta mesa ya pidieron la cuenta. Si quieres pedir algo más, pide al personal que la vuelva a abrir.",
+    "error": "No se pudo abrir esa mesa.",
+    "codeRequired": "Alguien ya está pidiendo en esta mesa. Ingresa el código de cuatro dígitos que te dio tu mesero para unirte a su cuenta.",
+    "codeEnter": "Ingresa el código de cuatro dígitos de esta mesa para unirte a la cuenta.",
+    "codeLabel": "Código de la mesa",
+    "join": "Unirme a la mesa"
+  },
+  "notice": {
+    "orderingAt": "Pidiendo en {table}",
+    "rounds": "· {count, plural, one {# ronda} other {# rondas}} · {total}",
+    "yourTable": "Tu mesa"
+  },
+  "bill": {
+    "loading": "Cargando tu mesa…",
+    "empty": "Aún no se ha pedido nada en esta mesa. Todo lo que pidan tú y tu grupo va a una sola cuenta.",
+    "round": "Ronda {round}",
+    "yours": "Tuyo",
+    "paid": "Pagado",
+    "total": "Total de la mesa",
+    "stillToPay": "Falta pagar {amount}",
+    "locked": "Ya se pidió la cuenta a tu mesero. No se pueden enviar más rondas a la cocina hasta que vuelva a abrir la mesa.",
+    "readyToPay": "Queremos pagar",
+    "payAtRestaurant": "Pagas en el restaurante. La mesa se cierra cuando se liquida la cuenta.",
+    "askFailed": "No se pudo pedir la cuenta. Inténtalo de nuevo.",
+    "alreadyClosed": "Esta mesa ya se cerró."
+  },
+  "leave": {
+    "button": "¿No estás en {table}?",
+    "confirmOwed": "¿Dejar de pedir en {table}?\n\nLa cuenta sigue abierta: aún quedan {amount} por pagar en el restaurante.",
+    "confirm": "¿Dejar de pedir en {table}?\n\nLa cuenta sigue abierta; solo dejarás de pedir para esta mesa desde este teléfono."
+  }
+}

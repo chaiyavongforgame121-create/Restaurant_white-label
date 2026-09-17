@@ -1,0 +1,23 @@
+{
+  "newOrder": "Yêu cầu giao hàng mới",
+  "stacked": "Đơn ghép · 2 đơn",
+  "headline": "{amount} · {miles} mi",
+  "from": "Lấy hàng",
+  "to": "Nơi giao",
+  "toStop": "Nơi giao · điểm {stop}",
+  "distance": "Quãng đường",
+  "distanceValue": "{miles} mi",
+  "eta": "Thời gian",
+  "etaValue": "{minutes} phút",
+  "base": "Cơ bản",
+  "baseBatch": "Cơ bản ×2",
+  "tip": "Tiền tip",
+  "tipYourShare": "(phần của bạn trong {amount})",
+  "tipAllYours": "(bạn nhận toàn bộ)",
+  "note": "Ghi chú:",
+  "deliveryNote": "Ghi chú giao hàng:",
+  "orderStop": "{orderNumber} · điểm {stop}",
+  "accept": "Nhận đơn",
+  "reject": "Từ chối",
+  "unnamedBranch": "Nhà hàng"
+}

@@ -105,19 +105,23 @@ export function reportRangeQuery(range: ReportRange): string {
   return `?${sp.toString()}`;
 }
 
-export function reportRangeLabel(range: ReportRange): string {
-  if (range.preset === 'day') return 'Today';
-  if (range.preset === 'week') return 'Last 7 days';
-  if (range.preset === 'month') return 'Last 30 days';
-  return range.from === range.to ? range.from : `${range.from} to ${range.to}`;
+/**
+ * The words for a range, as a key under `reports.range.label` plus its values. This module has
+ * no locale, so the screen translates it with t('range.label.' + label.key, label.values).
+ */
+export interface ReportRangeLabel {
+  key: 'today' | 'last7Days' | 'last30Days' | 'singleDay' | 'span';
+  values: Record<string, string>;
 }
 
-export const REPORT_PRESET_LABELS: ReadonlyArray<{ value: ReportPreset; label: string }> = [
-  { value: 'day', label: 'Day' },
-  { value: 'week', label: 'Week' },
-  { value: 'month', label: 'Month' },
-  { value: 'custom', label: 'Custom' },
-];
+export function reportRangeLabel(range: ReportRange): ReportRangeLabel {
+  if (range.preset === 'day') return { key: 'today', values: {} };
+  if (range.preset === 'week') return { key: 'last7Days', values: {} };
+  if (range.preset === 'month') return { key: 'last30Days', values: {} };
+  return range.from === range.to
+    ? { key: 'singleDay', values: { day: range.from } }
+    : { key: 'span', values: { from: range.from, to: range.to } };
+}
 
 /** The range a preset pill selects, given the branch's today. */
 export function presetRange(preset: ReportPreset, today: string, current: ReportRange): ReportRange {

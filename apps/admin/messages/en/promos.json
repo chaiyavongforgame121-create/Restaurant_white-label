@@ -1,0 +1,55 @@
+{
+  "title": "Promo codes",
+  "subtitle": "Discount codes customers can enter at checkout.",
+  "new": "New promo",
+  "cancel": "Cancel",
+  "create": "Create promo",
+  "fields": {
+    "code": "Code",
+    "codePlaceholder": "WELCOME10",
+    "kind": "Type",
+    "percent": "Percent (1–100)",
+    "amount": "USD amount",
+    "minSubtotal": "Minimum subtotal (USD)",
+    "maxRedemptions": "Max redemptions (optional)",
+    "maxRedemptionsPlaceholder": "unlimited",
+    "endsAt": "Ends at (optional, {zone} time)"
+  },
+  "kinds": {
+    "percent_off": "% off",
+    "fixed_off": "Fixed USD off",
+    "free_delivery": "Free delivery"
+  },
+  "describe": {
+    "percentOff": "{value}% off",
+    "fixedOff": "${value} off",
+    "freeDelivery": "Free delivery",
+    "minimum": "min ${amount}",
+    "used": "used {used}",
+    "usedOf": "used {used}/{max}",
+    "ends": "ends {date}"
+  },
+  "status": {
+    "active": "Active",
+    "paused": "Paused"
+  },
+  "pause": "Pause",
+  "activate": "Activate",
+  "delete": "Delete",
+  "deleteDialog": {
+    "title": "Delete promo {code}?",
+    "body": "Customers can no longer redeem this code at checkout.",
+    "confirm": "Delete"
+  },
+  "empty": {
+    "title": "No promos yet",
+    "description": "Create a promo code to start running campaigns."
+  },
+  "errors": {
+    "unreadableEnd": "That end time could not be read. Pick it again.",
+    "duplicateCode": "This branch already has a promo with that code. Choose a different code.",
+    "invalid": "Some values are not valid. Check the amount, minimum subtotal and max redemptions.",
+    "permission": "You do not have permission to create promos for this branch.",
+    "saveFailed": "The promo could not be created. Please try again."
+  }
+}

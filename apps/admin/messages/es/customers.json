@@ -1,0 +1,50 @@
+{
+  "accessDenied": {
+    "title": "Sin acceso a clientes",
+    "reason": "Solo propietarios, administradores, gerentes y cajeros pueden ver la lista de clientes de {branch}."
+  },
+  "title": "Clientes",
+  "summary": "{count, plural, one {# cliente} other {# clientes}} en esta sucursal",
+  "loadError": {
+    "title": "No se pudieron cargar los clientes",
+    "body": "Recarga la página. Si sigue pasando, contacta a soporte."
+  },
+  "empty": {
+    "title": "Aún no hay clientes",
+    "description": "Cuando las personas hagan pedidos desde la app web para clientes, aparecerán aquí."
+  },
+  "emptyPage": {
+    "title": "No hay nada en esta página",
+    "description": "Esta sucursal tiene {total, plural, one {# cliente} other {# clientes}}, pero ninguno en la página {page}.",
+    "action": "Volver a la primera página"
+  },
+  "columns": {
+    "name": "Nombre",
+    "phone": "Teléfono",
+    "address": "Dirección",
+    "orders": "Pedidos",
+    "spent": "Gasto total",
+    "lastSeen": "Última visita",
+    "joined": "Registro"
+  },
+  "address": {
+    "lastDelivered": "Última entrega: {date}",
+    "saved": "Dirección guardada",
+    "moreSaved": "+{count} guardadas"
+  },
+  "never": "Nunca",
+  "sort": {
+    "label": "Ordenar por",
+    "ascending": "Ascendente",
+    "descending": "Descendente",
+    "switchToDescending": "Orden ascendente; cambiar a descendente",
+    "switchToAscending": "Orden descendente; cambiar a ascendente"
+  },
+  "pager": {
+    "label": "Páginas de clientes",
+    "showing": "Mostrando {first}–{last} de {total}",
+    "previous": "Anterior",
+    "next": "Siguiente",
+    "page": "Página {page} de {pages}"
+  }
+}

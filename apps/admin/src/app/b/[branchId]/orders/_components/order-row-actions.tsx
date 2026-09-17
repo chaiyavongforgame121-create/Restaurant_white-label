@@ -2,9 +2,11 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { FileText, MoreHorizontal, Pencil, RefreshCcw, XCircle } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Button, Card, IconButton } from '@favornoms/ui';
+import { orderErrorKey, type OrderAction } from './order-errors';
 
 interface Props {
   orderId: string;
@@ -14,15 +16,25 @@ interface Props {
   customerNotes?: string | null;
 }
 
-const INVOICE_ERRORS: Record<string, string> = {
-  order_not_completed:
-    'A receipt can only be issued once the order is confirmed, ready or completed.',
-  not_authorized:
-    'Your account is not listed as staff at this branch, so it cannot issue receipts.',
-  order_not_found: 'That order no longer exists.',
-};
+/**
+ * Written to orders.cancellation_reason and status_history, which other screens and the
+ * diner's own order page print. It is data, so it stays English whatever language the
+ * operator reads the back office in.
+ */
+const ADMIN_CANCEL_REASON = 'Admin canceled';
+
+/** The RPCs raise bare postgres exception names; a merchant reads a sentence instead. */
+function useOrderError() {
+  const t = useTranslations('orders');
+  return (action: OrderAction, raw: string) => {
+    console.error(`[orders] ${action} failed`, raw);
+    return t(`errors.${orderErrorKey(action, raw)}`);
+  };
+}
 
 export function OrderRowActions({ orderId, orderTotal, orderStatus, customerNotes }: Props) {
+  const t = useTranslations('orders');
+  const errorText = useOrderError();
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
   const [refundOpen, setRefundOpen] = React.useState(false);
@@ -58,7 +70,7 @@ export function OrderRowActions({ orderId, orderTotal, orderStatus, customerNote
       p_notes: notesDraft,
     });
     setBusy(false);
-    if (rpcErr) { setError(rpcErr.message); return; }
+    if (rpcErr) { setError(errorText('editNote', rpcErr.message)); return; }
     setNotesOpen(false);
     router.refresh();
   };
@@ -69,10 +81,10 @@ export function OrderRowActions({ orderId, orderTotal, orderStatus, customerNote
     const supabase = getBrowserClient();
     const { error: rpcErr } = await supabase.rpc('cancel_order', {
       p_order_id: orderId,
-      p_reason: 'Admin canceled',
+      p_reason: ADMIN_CANCEL_REASON,
     });
     setBusy(false);
-    if (rpcErr) { setError(rpcErr.message); return; }
+    if (rpcErr) { setError(errorText('cancel', rpcErr.message)); return; }
     setCancelOpen(false);
     router.refresh();
   };
@@ -87,17 +99,21 @@ export function OrderRowActions({ orderId, orderTotal, orderStatus, customerNote
     setBusy(false);
     // The RPC raises bare postgres exception names. Left alone they surface as
     // "order_not_completed", which reads like a crash rather than a rule.
-    if (rpcErr) { setError(INVOICE_ERRORS[rpcErr.message] ?? rpcErr.message); return; }
+    if (rpcErr) { setError(errorText('issueInvoice', rpcErr.message)); return; }
     const inv = data as { invoice_number?: string } | null;
     setOpen(false);
-    setInvoiceMsg(`Issued invoice ${inv?.invoice_number ?? '(unknown)'}`);
+    setInvoiceMsg(
+      inv?.invoice_number
+        ? t('actions.invoiceIssued', { number: inv.invoice_number })
+        : t('actions.invoiceIssuedNoNumber'),
+    );
     router.refresh();
   };
 
   return (
     <>
       <IconButton
-        label="Actions"
+        label={t('actions.menu')}
         size="sm"
         onClick={() => {
           // The menu now shows its own errors, so a failed "Issue receipt" must not
@@ -122,7 +138,7 @@ export function OrderRowActions({ orderId, orderTotal, orderStatus, customerNote
                   onClick={() => setRefundOpen(true)}
                   className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted"
                 >
-                  <RefreshCcw className="h-4 w-4" /> Issue refund
+                  <RefreshCcw className="h-4 w-4" /> {t('actions.issueRefund')}
                 </button>
               )}
               {canCancel && (
@@ -132,7 +148,7 @@ export function OrderRowActions({ orderId, orderTotal, orderStatus, customerNote
                   disabled={busy}
                   className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-destructive hover:bg-destructive/10"
                 >
-                  <XCircle className="h-4 w-4" /> Cancel order
+                  <XCircle className="h-4 w-4" /> {t('actions.cancelOrder')}
                 </button>
               )}
               {canEdit && (
@@ -147,7 +163,7 @@ export function OrderRowActions({ orderId, orderTotal, orderStatus, customerNote
                   disabled={busy}
                   className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted"
                 >
-                  <Pencil className="h-4 w-4" /> Edit customer note
+                  <Pencil className="h-4 w-4" /> {t('actions.editNote')}
                 </button>
               )}
               {canIssueReceipt && (
@@ -157,7 +173,7 @@ export function OrderRowActions({ orderId, orderTotal, orderStatus, customerNote
                   disabled={busy}
                   className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted"
                 >
-                  <FileText className="h-4 w-4" /> Issue receipt
+                  <FileText className="h-4 w-4" /> {t('actions.issueReceipt')}
                 </button>
               )}
               {error && (
@@ -185,14 +201,16 @@ export function OrderRowActions({ orderId, orderTotal, orderStatus, customerNote
           onClick={() => !busy && setCancelOpen(false)}
         >
           <Card className="w-full max-w-sm space-y-3 p-5" onClick={(e) => e.stopPropagation()}>
-            <h2 className="font-display text-lg font-semibold">Cancel this order?</h2>
-            <p className="text-sm text-muted-foreground">
-              This cancels the order and restores stock. It can&apos;t be undone.
-            </p>
+            <h2 className="font-display text-lg font-semibold">{t('actions.cancelDialog.title')}</h2>
+            <p className="text-sm text-muted-foreground">{t('actions.cancelDialog.body')}</p>
             {error && <p className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
             <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setCancelOpen(false)}>Keep order</Button>
-              <Button variant="danger" onClick={doCancel} loading={busy}>Yes, cancel</Button>
+              <Button variant="ghost" onClick={() => setCancelOpen(false)}>
+                {t('actions.cancelDialog.keep')}
+              </Button>
+              <Button variant="danger" onClick={doCancel} loading={busy}>
+                {t('actions.cancelDialog.confirm')}
+              </Button>
             </div>
           </Card>
         </div>
@@ -204,23 +222,24 @@ export function OrderRowActions({ orderId, orderTotal, orderStatus, customerNote
           onClick={() => !busy && setNotesOpen(false)}
         >
           <Card className="w-full max-w-md space-y-3 p-5" onClick={(e) => e.stopPropagation()}>
-            <h2 className="font-display text-lg font-semibold">Customer note</h2>
-            <p className="text-xs text-muted-foreground">
-              This is the note the diner typed at checkout, and the one the kitchen ticket
-              shows. Saving replaces it.
-            </p>
+            <h2 className="font-display text-lg font-semibold">{t('actions.noteDialog.title')}</h2>
+            <p className="text-xs text-muted-foreground">{t('actions.noteDialog.body')}</p>
             <textarea
               value={notesDraft}
               onChange={(e) => setNotesDraft(e.target.value)}
               rows={3}
               autoFocus
-              placeholder="e.g. No peanuts — allergy"
+              placeholder={t('actions.noteDialog.placeholder')}
               className="focus-ring w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
             />
             {error && <p className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
             <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setNotesOpen(false)}>Cancel</Button>
-              <Button variant="gradient" onClick={saveNotes} loading={busy}>Save note</Button>
+              <Button variant="ghost" onClick={() => setNotesOpen(false)}>
+                {t('actions.noteDialog.cancel')}
+              </Button>
+              <Button variant="gradient" onClick={saveNotes} loading={busy}>
+                {t('actions.noteDialog.save')}
+              </Button>
             </div>
           </Card>
         </div>
@@ -233,7 +252,9 @@ export function OrderRowActions({ orderId, orderTotal, orderStatus, customerNote
         >
           <Card className="w-full max-w-sm space-y-3 p-5 text-center" onClick={(e) => e.stopPropagation()}>
             <p className="text-sm font-medium text-success">{invoiceMsg}</p>
-            <Button variant="gradient" fullWidth onClick={() => setInvoiceMsg(null)}>Done</Button>
+            <Button variant="gradient" fullWidth onClick={() => setInvoiceMsg(null)}>
+              {t('actions.done')}
+            </Button>
           </Card>
         </div>
       )}
@@ -260,6 +281,8 @@ function RefundDialog({
   onClose: () => void;
   onRefunded: () => void;
 }) {
+  const t = useTranslations('orders');
+  const errorText = useOrderError();
   const [mode, setMode] = React.useState<'items' | 'amount'>('items');
   const [lines, setLines] = React.useState<OrderLine[] | null>(null);
   const [qty, setQty] = React.useState<Record<string, number>>({});
@@ -293,11 +316,11 @@ function RefundDialog({
 
   const submit = async () => {
     if (computedAmount <= 0) {
-      setError('Refund amount must be greater than zero.');
+      setError(t('refund.amountZero'));
       return;
     }
     if (computedAmount > orderTotal + 0.001) {
-      setError(`Refund cannot exceed the order total of $${orderTotal.toFixed(2)}.`);
+      setError(t('refund.amountTooHigh', { total: `$${orderTotal.toFixed(2)}` }));
       return;
     }
     setBusy(true);
@@ -309,6 +332,8 @@ function RefundDialog({
             .filter((l) => (qty[l.id] ?? 0) > 0)
             .map((l) => ({ line_id: l.id, name: l.item_name, quantity: qty[l.id], unit_price: Number(l.unit_price) }))
         : null;
+    // Stored in status_history and audit_logs, so the machine-written part stays English;
+    // the reason itself is whatever the operator typed.
     const reasonText = [
       reason || null,
       breakdown && breakdown.length > 0
@@ -324,7 +349,7 @@ function RefundDialog({
     });
     setBusy(false);
     if (rpcErr) {
-      setError(rpcErr.message);
+      setError(errorText('refund', rpcErr.message));
       return;
     }
     onRefunded();
@@ -336,7 +361,7 @@ function RefundDialog({
       onClick={onClose}
     >
       <Card className="w-full max-w-lg space-y-3 p-5" onClick={(e) => e.stopPropagation()}>
-        <h2 className="font-display text-lg font-semibold">Issue refund</h2>
+        <h2 className="font-display text-lg font-semibold">{t('refund.title')}</h2>
 
         <div className="flex rounded-full bg-muted p-1 text-sm font-semibold">
           <button
@@ -344,23 +369,23 @@ function RefundDialog({
             onClick={() => setMode('items')}
             className={`focus-ring flex-1 rounded-full py-1.5 ${mode === 'items' ? 'bg-card text-foreground shadow-soft' : 'text-muted-foreground'}`}
           >
-            By items
+            {t('refund.byItems')}
           </button>
           <button
             type="button"
             onClick={() => setMode('amount')}
             className={`focus-ring flex-1 rounded-full py-1.5 ${mode === 'amount' ? 'bg-card text-foreground shadow-soft' : 'text-muted-foreground'}`}
           >
-            Custom amount
+            {t('refund.customAmount')}
           </button>
         </div>
 
         {mode === 'items' ? (
           <div className="space-y-2">
             {lines === null ? (
-              <p className="text-sm text-muted-foreground">Loading items…</p>
+              <p className="text-sm text-muted-foreground">{t('refund.loadingItems')}</p>
             ) : lines.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No items found for this order.</p>
+              <p className="text-sm text-muted-foreground">{t('refund.noItems')}</p>
             ) : (
               <ul className="space-y-2">
                 {lines.map((l) => (
@@ -372,7 +397,7 @@ function RefundDialog({
                       </p>
                     </div>
                     <label className="flex items-center gap-1 text-xs">
-                      <span className="text-muted-foreground">Refund qty</span>
+                      <span className="text-muted-foreground">{t('refund.refundQty')}</span>
                       <input
                         type="number"
                         min={0}
@@ -394,7 +419,7 @@ function RefundDialog({
           </div>
         ) : (
           <label className="block">
-            <span className="mb-1.5 block text-sm font-medium">Amount (USD)</span>
+            <span className="mb-1.5 block text-sm font-medium">{t('refund.amountLabel')}</span>
             <input
               type="text"
               inputMode="decimal"
@@ -402,12 +427,14 @@ function RefundDialog({
               onChange={(e) => setCustomAmount(e.target.value.replace(/[^0-9.]/g, ''))}
               className="focus-ring w-full rounded-xl border border-border bg-background px-3 py-2 text-base"
             />
-            <p className="mt-1 text-xs text-muted-foreground">Max ${orderTotal.toFixed(2)}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t('refund.max', { amount: `$${orderTotal.toFixed(2)}` })}
+            </p>
           </label>
         )}
 
         <label className="block">
-          <span className="mb-1.5 block text-sm font-medium">Reason (optional)</span>
+          <span className="mb-1.5 block text-sm font-medium">{t('refund.reason')}</span>
           <textarea
             value={reason}
             onChange={(e) => setReason(e.target.value)}
@@ -420,12 +447,15 @@ function RefundDialog({
 
         <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-3">
           <span className="text-sm text-muted-foreground">
-            Refund total: <strong className="text-foreground">${computedAmount.toFixed(2)}</strong>
+            {t.rich('refund.total', {
+              amount: `$${computedAmount.toFixed(2)}`,
+              strong: (chunks) => <strong className="text-foreground">{chunks}</strong>,
+            })}
           </span>
           <div className="flex gap-2">
-            <Button variant="ghost" onClick={onClose}>Cancel</Button>
+            <Button variant="ghost" onClick={onClose}>{t('refund.cancel')}</Button>
             <Button variant="gradient" onClick={submit} loading={busy} disabled={computedAmount <= 0}>
-              Issue refund
+              {t('refund.submit')}
             </Button>
           </div>
         </div>

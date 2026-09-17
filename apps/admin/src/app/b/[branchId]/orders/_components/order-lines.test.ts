@@ -4,7 +4,6 @@ import {
   countItems,
   hasSpecialRequests,
   isRemovedOption,
-  itemsLabel,
   modifierLabel,
   parseLineModifiers,
   summarizeLines,
@@ -120,16 +119,24 @@ describe('isRemovedOption', () => {
 
 describe('item counting and summary', () => {
   it('counts quantities, not lines', () => {
+    // The row words this with an ICU plural ("3 items", "3 món"), so only the number is pinned.
     expect(countItems([burger, tea])).toBe(3);
-    expect(itemsLabel([burger, tea])).toBe('3 items');
-    expect(itemsLabel([tea])).toBe('1 item');
-    expect(itemsLabel([])).toBe('0 items');
+    expect(countItems([tea])).toBe(1);
+    expect(countItems([])).toBe(0);
   });
 
   it('summarises the first two lines and counts the rest', () => {
-    expect(summarizeLines([burger, tea, soup])).toBe('2× Double Smash Spicy, 1× Iced Tea +1 more');
-    expect(summarizeLines([tea])).toBe('1× Iced Tea');
-    expect(summarizeLines([])).toBe('');
+    expect(summarizeLines([burger, tea, soup])).toEqual({
+      shown: '2× Double Smash Spicy, 1× Iced Tea',
+      more: 1,
+    });
+    expect(summarizeLines([tea])).toEqual({ shown: '1× Iced Tea', more: 0 });
+    expect(summarizeLines([])).toEqual({ shown: '', more: 0 });
+  });
+
+  it('carries no interface words, only the merchant’s dish names', () => {
+    const { shown } = summarizeLines([burger, tea, soup]);
+    expect(shown).not.toMatch(/more|items?\b/);
   });
 });
 

@@ -1,0 +1,58 @@
+{
+  "notice": {
+    "ownerTitle": "Ya tienes un restaurante",
+    "teamTitle": "Ya formas parte de un equipo",
+    "ownerBody": "{name} ya está configurado en esta cuenta. Para abrir otro local, agrégalo como sucursal en <link>Marca y sucursales > Agregar sucursal</link>.",
+    "ownerBodyUnnamed": "Tu restaurante ya está configurado en esta cuenta. Para abrir otro local, agrégalo como sucursal en <link>Marca y sucursales > Agregar sucursal</link>.",
+    "teamBody": "Formas parte del equipo de {name}. Los nuevos locales los agrega su propietario o un administrador.",
+    "teamBodyUnnamed": "Formas parte del equipo de otro restaurante. Los nuevos locales los agrega su propietario o un administrador.",
+    "ownsRestaurant": "Si continúas, se creará un restaurante independiente con su propio menú y facturación, y sin prueba gratuita. No estará disponible para los clientes hasta que se apruebe un paquete para él.",
+    "separateRestaurant": "Si continúas, se creará otro restaurante tuyo, independiente, con su propio menú y facturación.",
+    "continueAnyway": "Continuar de todos modos",
+    "goToDashboard": "Ir a mi panel"
+  },
+  "wizard": {
+    "step": "Paso {current} de {total}",
+    "restaurantTitle": "Cuéntanos sobre tu restaurante",
+    "branchTitle": "Configura tu primera sucursal",
+    "colorsTitle": "Elige los colores de tu marca",
+    "back": "Atrás",
+    "continue": "Continuar",
+    "launch": "Lanzar mi restaurante"
+  },
+  "fields": {
+    "restaurantName": "Nombre del restaurante",
+    "restaurantNamePlaceholder": "La Parrilla del Puerto",
+    "restaurantSlug": "Slug de la URL (queda /r/tu-slug/…)",
+    "slugHint": "Solo letras sin acentos y números: formará parte de tu dirección web.",
+    "branchName": "Nombre de la sucursal",
+    "branchNamePlaceholder": "Sucursal Centro",
+    "branchSlug": "Slug de la URL de la sucursal",
+    "address": "Dirección (opcional)",
+    "timezone": "Zona horaria",
+    "timezoneHint": "El horario de atención, los informes y los pedidos programados usan esta zona horaria.",
+    "primaryColor": "Color principal",
+    "accentColor": "Color de acento",
+    "preview": "Vista previa",
+    "previewFallbackName": "Tu restaurante"
+  },
+  "timezones": {
+    "eastern": "Hora del Este — Nueva York, Miami, Atlanta",
+    "central": "Hora del Centro — Chicago, Houston, Dallas",
+    "mountain": "Hora de la Montaña — Denver, Salt Lake City",
+    "arizona": "Arizona — Phoenix (sin horario de verano)",
+    "pacific": "Hora del Pacífico — Los Ángeles, Seattle",
+    "alaska": "Alaska — Anchorage",
+    "hawaii": "Hawái — Honolulu",
+    "thisDevice": "{zone} (este dispositivo)"
+  },
+  "errors": {
+    "slugMissing": "Asigna una dirección web a tu restaurante y a tu sucursal antes de lanzarlo.",
+    "seatsFull": "{limit, plural, one {Ya usas tu único cupo de sucursal.} other {Ya usas los # cupos de sucursal.}} Primero agrega un cupo en la página Plan y facturación.",
+    "subscriptionInactive": "Tu suscripción no está activa. Elige un paquete antes de agregar otro restaurante.",
+    "restaurantSlugTaken": "Esa dirección web de restaurante ya está en uso. Vuelve atrás y elige otra.",
+    "branchSlugTaken": "Esa dirección web de sucursal ya está en uso. Vuelve atrás y elige otra.",
+    "notOpened": "Es posible que tu restaurante se haya creado, pero no pudimos abrirlo. Vuelve a iniciar sesión para comprobarlo antes de intentarlo otra vez.",
+    "generic": "No pudimos crear tu restaurante. Inténtalo de nuevo."
+  }
+}

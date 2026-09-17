@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Coins, Save } from 'lucide-react';
 import {
   distributeTip,
@@ -24,14 +25,29 @@ interface Props {
 }
 
 // The customer web cart only offers delivery / pickup / dine_in; qr_ordering
-// reuses the dine_in policy, so we surface these three here.
-const EDITABLE: Array<{ channel: Exclude<TipChannel, 'qr_ordering'>; label: string; worker: string }> = [
-  { channel: 'delivery', label: 'Delivery', worker: 'Driver' },
-  { channel: 'pickup', label: 'Pickup', worker: 'Staff pool' },
-  { channel: 'dine_in', label: 'Dine-in', worker: 'Staff pool' },
+// reuses the dine_in policy, so we surface these three here. `labelKey` is the
+// branchOps tips.channels.<key> message; `worker` picks the driver or staff-pool wording.
+const EDITABLE: Array<{
+  channel: Exclude<TipChannel, 'qr_ordering'>;
+  labelKey: 'delivery' | 'pickup' | 'dineIn';
+  worker: 'driver' | 'staff';
+}> = [
+  { channel: 'delivery', labelKey: 'delivery', worker: 'driver' },
+  { channel: 'pickup', labelKey: 'pickup', worker: 'staff' },
+  { channel: 'dine_in', labelKey: 'dineIn', worker: 'staff' },
 ];
 
+/** Raw database text never reaches the merchant: a known refusal gets its own message,
+ *  anything else the generic one. */
+function saveErrorKey(err: { message: string; code?: string }): string {
+  if (err.code === '42501' || err.message === 'forbidden' || err.message.includes('branch_manager_required')) {
+    return 'errors.noPermission';
+  }
+  return 'errors.generic';
+}
+
 export function TipSettingsCard({ branchId, settings }: Props) {
+  const t = useTranslations('branchOps');
   const router = useRouter();
   const [config, setConfig] = React.useState<TipConfig>(() => parseTipConfig(settings));
   const [saving, setSaving] = React.useState(false);
@@ -60,7 +76,8 @@ export function TipSettingsCard({ branchId, settings }: Props) {
       .eq('id', branchId);
     setSaving(false);
     if (updateError) {
-      setError(updateError.message);
+      console.error('Saving tip settings failed', updateError);
+      setError(t(saveErrorKey(updateError)));
       return;
     }
     setSavedAt(Date.now());
@@ -70,12 +87,9 @@ export function TipSettingsCard({ branchId, settings }: Props) {
   return (
     <Card className="p-5">
       <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
-        <Coins className="h-5 w-5 text-primary" /> Tips
+        <Coins className="h-5 w-5 text-primary" /> {t('tips.title')}
       </h2>
-      <p className="text-sm text-muted-foreground">
-        How each tip is split between the worker and the house. On delivery the worker is
-        the driver; on pickup and dine-in it&apos;s the staff pool.
-      </p>
+      <p className="text-sm text-muted-foreground">{t('tips.description')}</p>
 
       <div className="mt-4 space-y-4">
         {EDITABLE.map((e) => {
@@ -84,13 +98,13 @@ export function TipSettingsCard({ branchId, settings }: Props) {
           return (
             <div key={e.channel} className="rounded-xl border border-border p-3">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                {e.label}
+                {t(`tips.channels.${e.labelKey}`)}
               </h3>
               <label className="mt-2 block">
                 <span className="mb-1.5 flex items-center justify-between text-sm font-medium">
-                  <span>{e.worker} share</span>
+                  <span>{t('tips.share', { worker: e.worker })}</span>
                   <span className="font-display text-base font-bold text-primary">
-                    {worker}% {e.worker.toLowerCase()} &middot; {100 - worker}% house
+                    {t('tips.split', { worker: e.worker, workerPct: worker, housePct: 100 - worker })}
                   </span>
                 </span>
                 <input
@@ -103,11 +117,11 @@ export function TipSettingsCard({ branchId, settings }: Props) {
                   className="h-2 w-full accent-primary"
                 />
                 <span className="mt-1 block text-xs text-muted-foreground">
-                  On a $10 tip:{' '}
-                  {e.channel === 'delivery'
-                    ? `driver $${example.driverCut.toFixed(2)}`
-                    : `staff $${example.staffCut.toFixed(2)}`}
-                  , house ${example.houseCut.toFixed(2)}.
+                  {t('tips.example', {
+                    worker: e.worker,
+                    workerCut: (e.channel === 'delivery' ? example.driverCut : example.staffCut).toFixed(2),
+                    houseCut: example.houseCut.toFixed(2),
+                  })}
                 </span>
               </label>
             </div>
@@ -121,9 +135,9 @@ export function TipSettingsCard({ branchId, settings }: Props) {
 
       <div className="mt-4 flex items-center gap-3">
         <Button onClick={save} loading={saving} leftIcon={<Save className="h-4 w-4" />}>
-          Save tip settings
+          {t('tips.save')}
         </Button>
-        {savedAt && !saving && <span className="text-sm text-success">Saved ✓</span>}
+        {savedAt && !saving && <span className="text-sm text-success">{t('common.saved')}</span>}
       </div>
     </Card>
   );

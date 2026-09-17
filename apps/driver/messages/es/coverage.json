@@ -1,0 +1,19 @@
+{
+  "title": "Cobertura",
+  "subtitle": "Solo recibes pedidos de un restaurante mientras estás dentro de su círculo.",
+  "locate": "Ubicarme",
+  "locationOff": "Activa el acceso a tu ubicación para ver si estás dentro del área.",
+  "empty": {
+    "title": "Aún no hay restaurantes",
+    "description": "Consigue la aprobación de un restaurante para ver tu cobertura.",
+    "apply": "Postularme a restaurantes"
+  },
+  "mapUnavailable": "Mapa no disponible: consulta la lista de abajo.",
+  "loadingMap": "Cargando mapa…",
+  "inRangeSummary": "Dentro del área de <count>{inRange}</count> de {total, plural, one {# restaurante} other {# restaurantes}}.",
+  "noLocation": "Sin ubicación configurada",
+  "withinRadius": "a menos de {radius} mi para recibir pedidos",
+  "distanceAndRange": "a {distance} mi · alcance {radius} mi",
+  "inRange": "En el área",
+  "outOfRange": "Fuera del área"
+}

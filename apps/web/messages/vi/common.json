@@ -1,0 +1,46 @@
+{
+  "back": "Quay lại",
+  "close": "Đóng",
+  "save": "Lưu",
+  "cancel": "Hủy",
+  "continue": "Tiếp tục",
+  "loading": "Đang tải…",
+  "languageLabel": "Ngôn ngữ",
+  "themeLight": "Chế độ sáng",
+  "themeDark": "Chế độ tối",
+  "installApp": "Cài đặt ứng dụng",
+  "switchToLight": "Chuyển sang chế độ sáng",
+  "switchToDark": "Chuyển sang chế độ tối",
+  "dismiss": "Bỏ qua",
+  "cookies": {
+    "title": "Chúng tôi sử dụng cookie",
+    "body": "Chúng tôi dùng cookie thiết yếu để đăng nhập và đặt hàng, cùng cookie phân tích tùy chọn để cải thiện sản phẩm. Xem <link>chính sách quyền riêng tư</link> của chúng tôi.",
+    "acceptAll": "Chấp nhận tất cả",
+    "essentialOnly": "Chỉ cookie thiết yếu",
+    "rejectAndClose": "Từ chối và đóng"
+  },
+  "update": {
+    "ready": "Đã có phiên bản mới của ứng dụng",
+    "reload": "Tải lại"
+  },
+  "install": {
+    "title": "Cài đặt {name}",
+    "install": "Cài đặt",
+    "iosHint": "Nhấn <icon></icon> trong Safari, rồi chọn <strong>Thêm vào MH chính</strong> để đặt lại chỉ với một chạm.",
+    "promptBody": "Thêm vào màn hình chính để đặt lại nhanh hơn và nhận thông báo đơn hàng.",
+    "installed": "Đã cài đặt — mở từ màn hình chính hoặc màn hình máy tính",
+    "benefits": "Đặt lại nhanh hơn và nhận thông báo đơn hàng",
+    "howTo": "Thêm vào màn hình chính — nhấn để xem cách làm",
+    "alreadyInstalled": "Đã cài rồi? Trình duyệt sẽ không đề xuất lại — hãy mở {name} từ màn hình chính hoặc màn hình máy tính.",
+    "steps": {
+      "iosSafari": "Nhấn nút Chia sẻ ở cuối Safari, rồi chọn Thêm vào MH chính.",
+      "iosOtherBrowser": "Nhấn nút Chia sẻ, rồi chọn Thêm vào MH chính. Nếu không thấy, hãy mở trang này trong Safari và làm tương tự.",
+      "inAppBrowser": "Trình duyệt bên trong ứng dụng khác không cài được ứng dụng. Mở menu (⋯ hoặc ⋮), chọn Mở trong trình duyệt, rồi cài đặt từ đó.",
+      "android": "Nhấn menu ⋮ ở góc trên bên phải trình duyệt, rồi chọn Cài đặt ứng dụng hoặc Thêm vào màn hình chính.",
+      "desktopChromium": "Nhấp vào biểu tượng cài đặt ở cuối thanh địa chỉ, hoặc mở menu ⋮ và chọn Truyền, lưu và chia sẻ › Cài đặt trang dưới dạng ứng dụng.",
+      "desktopSafari": "Trên thanh menu của Safari, chọn Tệp › Thêm vào Dock.",
+      "desktopFirefox": "Firefox trên máy tính không cài được ứng dụng. Hãy mở trang này bằng Chrome, Edge hoặc Safari để cài đặt.",
+      "unknown": "Mở menu của trình duyệt và tìm Cài đặt ứng dụng hoặc Thêm vào màn hình chính."
+    }
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "driverFallback": "Repartidor",
+  "receiptNumber": "Recibo {number}",
+  "status": {
+    "pending": "Pendiente",
+    "paid": "Pagado",
+    "rejected": "Rechazado"
+  },
+  "page": {
+    "title": "Pagos a repartidores",
+    "subtitle": "Los repartidores solicitan retirar sus ganancias acumuladas; liquídalas aquí.",
+    "requestsTitle": "Solicitudes de retiro",
+    "noRequests": "Aún no hay solicitudes de retiro.",
+    "requested": "Solicitado: {date}",
+    "reason": "Motivo: {reason}",
+    "summaryTitle": "Resumen semanal",
+    "summaryHint": "Solo informativo: ahora los repartidores solicitan sus retiros; liquídalos desde la lista de arriba.",
+    "noEarnings": "Aún no hay ganancias de repartidores.",
+    "weekOf": "Semana del {date} · {count, plural, one {# entrega} other {# entregas}}",
+    "breakdown": "Base {base} · Distancia {distance} · Propinas {tips}",
+    "unpaid": "{amount} sin pagar"
+  },
+  "receipt": {
+    "back": "← Volver a pagos",
+    "print": "Imprimir",
+    "title": "Recibo de pago",
+    "paidAt": "Pagado: {date}",
+    "paidBy": "Pagado por",
+    "paidTo": "Pagado a",
+    "branchFallback": "Sucursal",
+    "columns": {
+      "delivered": "Entrega",
+      "base": "Base",
+      "distance": "Distancia",
+      "tip": "Propina",
+      "total": "Total"
+    },
+    "noLines": "No hay conceptos registrados.",
+    "grandTotal": "Total general"
+  },
+  "attachments": {
+    "riderQr": "QR del repartidor",
+    "riderQrAlt": "QR de cobro del repartidor",
+    "qrLoadFailed": "No se pudo cargar el QR.",
+    "noQr": "No hay QR guardado: paga a la cuenta indicada arriba.",
+    "slip": "Comprobante de transferencia",
+    "viewPdf": "Ver comprobante (PDF)",
+    "slipLoadFailed": "No se pudo cargar el comprobante.",
+    "notAttached": "Aún no se adjunta.",
+    "uploading": "Subiendo…",
+    "replace": "Reemplazar comprobante",
+    "attach": "Adjuntar comprobante",
+    "errors": {
+      "fileType": "Adjunta el comprobante de transferencia en PNG, JPEG, WebP o PDF.",
+      "tooLarge": "Ese archivo supera los 10 MB.",
+      "notAuthorized": "No tienes permiso para adjuntar un comprobante a este pago.",
+      "notPending": "Esta solicitud fue rechazada: no hay nada que adjuntar.",
+      "notFound": "Ese pago ya no existe.",
+      "uploadFailed": "No se pudo subir el comprobante. Reintenta.",
+      "generic": "No se pudo guardar el comprobante. Reintenta."
+    }
+  },
+  "actions": {
+    "payTitle": "¿Pagar {amount} a {name}?",
+    "payBody": "Confirma solo después de enviar la transferencia.",
+    "payBodyNoSlip": "Confirma solo después de enviar la transferencia. Aún no hay un comprobante adjunto.",
+    "markPaid": "Marcar como pagado",
+    "paidReceipt": "Pagado · Recibo {number}",
+    "reasonPlaceholder": "Motivo (opcional)",
+    "cancel": "Cancelar",
+    "confirmReject": "Confirmar rechazo",
+    "reject": "Rechazar",
+    "errors": {
+      "notPending": "Esta solicitud ya se resolvió.",
+      "notAuthorized": "No tienes permiso para resolver esta solicitud.",
+      "notFound": "Esa solicitud ya no existe.",
+      "signedOut": "Tu sesión terminó. Inicia sesión de nuevo.",
+      "generic": "No se pudo actualizar la solicitud. Reintenta."
+    }
+  }
+}

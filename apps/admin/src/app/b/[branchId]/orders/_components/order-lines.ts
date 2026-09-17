@@ -5,6 +5,9 @@
 // (that is the shape of every live row as of 2026-09-06). The parser still accepts the
 // looser shapes the kitchen board tolerates — bare strings, {label}/{option_name} — because
 // a jsonb column has no schema and one odd row must not blank the list for the whole day.
+//
+// Nothing here returns interface words. Counts and summaries come back as numbers and the
+// merchant's own dish names; the row puts them into a sentence in the reader's language.
 import { formatCurrency } from '@favornoms/shared';
 
 export interface OrderLineModifier {
@@ -67,17 +70,17 @@ export function countItems(lines: OrderLine[]): number {
   return lines.reduce((sum, l) => sum + (Number(l.quantity) || 0), 0);
 }
 
-export function itemsLabel(lines: OrderLine[]): string {
-  const n = countItems(lines);
-  return `${n} ${n === 1 ? 'item' : 'items'}`;
+export interface LinesSummary {
+  /** "2× Pad Thai, 1× Iced Tea": quantities and the dish names exactly as the merchant typed them. */
+  shown: string;
+  /** How many lines were left out of `shown`; the row words it ("+1 more") in the reader's language. */
+  more: number;
 }
 
-/** "2× Pad Thai, 1× Iced Tea" for the first `max` lines, then "+k more". */
-export function summarizeLines(lines: OrderLine[], max = 2): string {
-  if (lines.length === 0) return '';
+/** The first `max` lines, and how many were left out. */
+export function summarizeLines(lines: OrderLine[], max = 2): LinesSummary {
   const shown = lines.slice(0, max).map((l) => `${l.quantity}× ${l.item_name}`);
-  const rest = lines.length - shown.length;
-  return rest > 0 ? `${shown.join(', ')} +${rest} more` : shown.join(', ');
+  return { shown: shown.join(', '), more: lines.length - shown.length };
 }
 
 /**

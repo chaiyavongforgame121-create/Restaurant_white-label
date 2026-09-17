@@ -1,0 +1,55 @@
+{
+  "title": "Mã khuyến mãi",
+  "subtitle": "Mã giảm giá khách có thể nhập khi thanh toán.",
+  "new": "Tạo khuyến mãi",
+  "cancel": "Hủy",
+  "create": "Tạo khuyến mãi",
+  "fields": {
+    "code": "Mã",
+    "codePlaceholder": "CHAOMUNG10",
+    "kind": "Loại",
+    "percent": "Phần trăm (1–100)",
+    "amount": "Số tiền USD",
+    "minSubtotal": "Tạm tính tối thiểu (USD)",
+    "maxRedemptions": "Số lượt dùng tối đa (không bắt buộc)",
+    "maxRedemptionsPlaceholder": "không giới hạn",
+    "endsAt": "Kết thúc lúc (không bắt buộc, giờ {zone})"
+  },
+  "kinds": {
+    "percent_off": "Giảm %",
+    "fixed_off": "Giảm số tiền cố định (USD)",
+    "free_delivery": "Miễn phí giao hàng"
+  },
+  "describe": {
+    "percentOff": "Giảm {value}%",
+    "fixedOff": "Giảm ${value}",
+    "freeDelivery": "Miễn phí giao hàng",
+    "minimum": "tối thiểu ${amount}",
+    "used": "đã dùng {used}",
+    "usedOf": "đã dùng {used}/{max}",
+    "ends": "kết thúc {date}"
+  },
+  "status": {
+    "active": "Đang bật",
+    "paused": "Tạm dừng"
+  },
+  "pause": "Tạm dừng",
+  "activate": "Bật",
+  "delete": "Xóa",
+  "deleteDialog": {
+    "title": "Xóa khuyến mãi {code}?",
+    "body": "Khách sẽ không thể dùng mã này khi thanh toán nữa.",
+    "confirm": "Xóa"
+  },
+  "empty": {
+    "title": "Chưa có khuyến mãi",
+    "description": "Tạo mã khuyến mãi để bắt đầu chạy chiến dịch."
+  },
+  "errors": {
+    "unreadableEnd": "Không đọc được thời gian kết thúc. Hãy chọn lại.",
+    "duplicateCode": "Chi nhánh này đã có khuyến mãi dùng mã đó. Hãy chọn mã khác.",
+    "invalid": "Một số giá trị không hợp lệ. Hãy kiểm tra số tiền, tạm tính tối thiểu và số lượt dùng tối đa.",
+    "permission": "Bạn không có quyền tạo khuyến mãi cho chi nhánh này.",
+    "saveFailed": "Không tạo được khuyến mãi. Vui lòng thử lại."
+  }
+}

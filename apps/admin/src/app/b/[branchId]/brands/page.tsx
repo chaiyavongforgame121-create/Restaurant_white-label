@@ -1,3 +1,4 @@
+import { getTranslations } from 'next-intl/server';
 import { getEntitlementsForBranch } from '@favornoms/database/queries';
 import { getBranchAccess } from '@/lib/capabilities';
 import { AccessDenied } from '@/components/access-denied';
@@ -8,6 +9,7 @@ interface Props { params: Promise<{ branchId: string }> }
 
 export default async function BrandsPage({ params }: Props) {
   const { branchId } = await params;
+  const t = await getTranslations('brands');
   // Only the sidebar used to hide this page. A manager who typed the URL still got the brand
   // editor and the Add branch button, which opens a paid branch seat. Ask for the same
   // capability the sidebar and the brands RLS policies use.
@@ -15,8 +17,8 @@ export default async function BrandsPage({ params }: Props) {
   if (!can('brand.edit')) {
     return (
       <AccessDenied
-        title="No branding access"
-        reason={`Only the owner or an admin can change the brand and branches of ${branch.name}.`}
+        title={t('accessDenied.title')}
+        reason={t('accessDenied.reason', { branch: branch.name })}
       />
     );
   }
@@ -58,7 +60,8 @@ export default async function BrandsPage({ params }: Props) {
   return (
     <BrandsManager
       restaurantId={branch.restaurant_id}
-      restaurantName={restaurantRes.data?.name ?? 'Restaurant'}
+      // Display only: a failed read falls back to the word for "restaurant" in the viewer's language.
+      restaurantName={restaurantRes.data?.name ?? t('restaurantFallback')}
       loyaltyScope={
         // Fallback matches the column default ('brand'), so a failed read never
         // renders the opposite of what the database will actually enforce.

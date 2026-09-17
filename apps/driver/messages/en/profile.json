@@ -1,0 +1,142 @@
+{
+  "language": "Language",
+  "kyc": {
+    "verified": "Verified",
+    "pending": "In review",
+    "rejected": "Action needed",
+    "suspended": "Suspended"
+  },
+  "stats": {
+    "deliveries": "Deliveries",
+    "battery": "Battery",
+    "rating": "Rating"
+  },
+  "checkingDocuments": "Checking your documents…",
+  "documentsRow": "Documents & verification",
+  "vehicle": "Vehicle",
+  "vehicleTypes": {
+    "motorcycle": "Motorcycle",
+    "car": "Car",
+    "bicycle": "Bicycle",
+    "scooter": "Scooter"
+  },
+  "branchesIServe": "Branches I serve",
+  "approvedCount": "{count} approved",
+  "supportCenter": "Support center",
+  "signOut": "Sign out",
+  "summary": {
+    "unreadable": "Could not check your documents just now",
+    "incomplete": "{missing} of {total} still to send",
+    "awaiting": "All received — awaiting verification",
+    "rechecking": "You replaced a document since it was checked",
+    "changesNeeded": "A document needs changing",
+    "verifiedCleared": "Verified · {count, plural, one {# restaurant cleared you} other {# restaurants cleared you}}",
+    "verifiedApplyNext": "Verified — apply to a restaurant next"
+  },
+  "docs": {
+    "license": {
+      "label": "Driver licence",
+      "inline": "driver licence",
+      "hint": "Both sides if your details are printed on the back."
+    },
+    "vehicle_reg": {
+      "label": "Vehicle registration",
+      "inline": "vehicle registration",
+      "hint": "For the vehicle you actually deliver on."
+    },
+    "selfie": {
+      "label": "Selfie with licence",
+      "inline": "selfie with licence",
+      "hint": "You holding your licence — face and licence both readable."
+    }
+  },
+  "documents": {
+    "metaTitle": "Documents",
+    "back": "Back",
+    "title": "Documents",
+    "subtitle": "What we have, and where each restaurant has got to",
+    "stage": {
+      "unreadable": {
+        "title": "We couldn’t read your documents",
+        "body": "This is our side, not yours. Anything you already sent is still there — try again in a moment.",
+        "retry": "Try again"
+      },
+      "incomplete": {
+        "titleNone": "Nothing received yet",
+        "titleSome": "{received} of {total} received",
+        "body": "Still to send: {docs}. Restaurants cannot see you until all {total} are in."
+      },
+      "awaiting": {
+        "title": "All {total} documents received",
+        "body": "Nothing more to do — they are waiting to be verified.",
+        "bodyWithTime": "Nothing more to do — they are waiting to be verified. Last one arrived {when}."
+      },
+      "rechecking": {
+        "title": "Waiting to be checked again",
+        "body": "You replaced a document {when}, after it was verified on {verifiedOn}. The new file has been received and is waiting for someone to look at it."
+      },
+      "verified": {
+        "title": "Documents verified",
+        "body": "Verified {verifiedOn}. Each restaurant still approves you separately — see below.",
+        "bodyNoDate": "Verified already. Each restaurant still approves you separately — see below."
+      },
+      "changesNeeded": {
+        "title": "A document needs changing",
+        "titleSuspended": "Your documents are suspended",
+        "body": "Replace whichever document is wrong below. Replacing a file does not restart the check on its own — tell the restaurant it is ready to look at again.",
+        "bodyWithTime": "Replace whichever document is wrong below. You last sent one {when}. Replacing a file does not restart the check on its own — tell the restaurant it is ready to look at again."
+      }
+    },
+    "received": {
+      "heading": "What we have received",
+      "checking": "Checking…",
+      "couldNotCheck": "Could not check",
+      "receivedAt": "Received {when}",
+      "received": "Received",
+      "sending": "Sending…",
+      "replace": "Replace",
+      "send": "Send"
+    },
+    "uploadError": "Couldn’t send that document — the server is busy. Wait a moment and try again. ({detail})",
+    "replaceNote": {
+      "cleared": "<label>Replacing a document:</label> the new file is received straight away and replaces the old one, but a check that already happened is not undone automatically. You keep delivering for the restaurants that have already approved you, and their screen flags that your paperwork changed after they looked at it.",
+      "queue": "<label>Replacing a document:</label> the new file is received straight away and replaces the old one, but a check that already happened is not undone automatically. It goes back into the queue to be verified."
+    },
+    "byRestaurant": {
+      "heading": "Verification by restaurant",
+      "sharedNote": "Your documents are checked once and that result is shared with every restaurant. Each restaurant then decides separately whether you may deliver for them.",
+      "emptyTitle": "No restaurant is reviewing you yet",
+      "emptyUnreadable": "We could not read your documents just now, so we cannot tell you what is left to send.",
+      "emptyMissing": "Send the remaining documents first — you can apply as soon as all three are in.",
+      "emptyReady": "Your documents are in. Apply to a restaurant and they will review you.",
+      "applyCta": "Apply to a restaurant",
+      "noLongerListed": "This restaurant is no longer listed",
+      "appliedReviewed": "Applied {applied} · they looked {reviewed}",
+      "appliedNotReviewed": "Applied {applied} · not looked at yet",
+      "newerDocument": "You sent a newer document on {when}, after this decision.",
+      "whatTheySaid": "<label>What they said:</label> {notes}"
+    },
+    "branchState": {
+      "stale": {
+        "label": "Checked before your update",
+        "detail": "You replaced a document after they cleared you. They may want to look again — you keep delivering here in the meantime."
+      },
+      "cleared": {
+        "label": "Cleared to deliver",
+        "detail": "They have seen your documents and approved you."
+      },
+      "pending": {
+        "label": "Awaiting verification",
+        "detail": "They have your documents. Nobody here has decided yet."
+      },
+      "rejected": {
+        "label": "Not accepted",
+        "detail": "They turned this application down."
+      },
+      "paused": {
+        "label": "Paused",
+        "detail": "They have paused you here, so you will not get their orders."
+      }
+    }
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "loading": "Loading…",
+  "back": "Back",
+  "signIn": "Sign in",
+  "sections": {
+    "orderHistory": "Order history",
+    "addresses": "Delivery addresses",
+    "loyalty": "Loyalty & rewards",
+    "settings": "Settings & preferences"
+  },
+  "home": {
+    "welcomeBack": "Welcome back",
+    "memberAt": "Member at {brandName}",
+    "welcomeTo": "Welcome to {brandName}",
+    "signInToEarn": "Sign in to earn points",
+    "statPoints": "Points",
+    "statTier": "Tier",
+    "statLifetime": "Lifetime",
+    "addressesMeta": "Manage saved addresses",
+    "loyaltyMeta": "{tier} · {points, plural, one {# pt} other {# pts}}",
+    "googleAccount": "Google account",
+    "googleLinked": "Linked",
+    "googleLinkHint": "Link Google to redeem your points.",
+    "linkGoogle": "Link Google",
+    "googleAlreadyLinked": "That Google account is already linked to another account.",
+    "linkGoogleFailed": "Couldn’t link your Google account. Please try again.",
+    "signOut": "Sign out"
+  },
+  "addresses": {
+    "signInPrompt": "Sign in to save and manage your delivery addresses.",
+    "retry": "Retry",
+    "emptyTitle": "No saved addresses",
+    "emptyBody": "Add one to check out faster next time.",
+    "fallbackLabel": "Address",
+    "defaultBadge": "Default",
+    "note": "Note: {note}",
+    "setDefault": "Set default",
+    "edit": "Edit",
+    "delete": "Delete",
+    "addNew": "Add a new address",
+    "confirmDelete": "Delete this address?",
+    "form": {
+      "editTitle": "Edit address",
+      "addTitle": "Add address",
+      "label": "Label (optional)",
+      "labelPlaceholder": "Home, Work, Mom’s…",
+      "pinned": "Location pinned",
+      "instructions": "Delivery instructions (optional)",
+      "instructionsPlaceholder": "e.g. Gate code 1234 · leave at the door",
+      "setDefault": "Set as default address",
+      "saveChanges": "Save changes",
+      "save": "Save address"
+    },
+    "errors": {
+      "line1Required": "Please enter a street address.",
+      "notFound": "That address no longer exists — please refresh.",
+      "forbidden": "That address belongs to a different account.",
+      "loadFailed": "We couldn’t load your addresses. Please try again."
+    }
+  },
+  "settings": {
+    "signInPrompt": "Sign in to manage your profile and preferences.",
+    "profileTitle": "Your profile",
+    "fullName": "Full name",
+    "fullNamePlaceholder": "e.g. Jordan Smith",
+    "phone": "Phone",
+    "email": "Email",
+    "notificationsTitle": "Notifications",
+    "promotions": "Promotions & offers",
+    "promotionsHint": "Get deals, rewards and news by email.",
+    "appearanceTitle": "Appearance",
+    "darkMode": "Dark mode",
+    "lightMode": "Light mode",
+    "saveFailed": "We couldn’t save your profile. Please sign in again and retry.",
+    "phoneTaken": "That phone number is already on another profile at this restaurant. Please use a different number.",
+    "noProfile": "We couldn’t find your profile yet — place your first order to set it up. Your appearance preference above still saves.",
+    "saved": "Saved ✓",
+    "saveChanges": "Save changes"
+  },
+  "errors": {
+    "sessionExpired": "Your session expired. Please sign in again.",
+    "branchNotFound": "We couldn’t find this restaurant. Please reload the page.",
+    "profileUnavailable": "We couldn’t set up your profile. Please try again.",
+    "generic": "Something went wrong. Please try again."
+  }
+}

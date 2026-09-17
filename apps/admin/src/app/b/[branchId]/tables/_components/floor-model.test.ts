@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { FloorSession, FloorTable } from '@favornoms/database/queries';
 import {
   buildFloor,
-  elapsedLabel,
+  elapsedTime,
   floorCounts,
   groupByZone,
   sessionTotals,
@@ -48,25 +48,28 @@ function session(over: Partial<FloorSession> = {}): FloorSession {
 
 describe('tableLabel', () => {
   it('prefers the table name and falls back to the number', () => {
-    expect(tableLabel({ display_name: 'Window booth', table_number: '7' })).toBe('Window booth');
-    expect(tableLabel({ display_name: '   ', table_number: '7' })).toBe('Table 7');
-    expect(tableLabel({ display_name: null, table_number: '7' })).toBe('Table 7');
+    expect(tableLabel({ display_name: 'Window booth', table_number: '7' })).toEqual({
+      kind: 'name',
+      name: 'Window booth',
+    });
+    expect(tableLabel({ display_name: '   ', table_number: '7' })).toEqual({ kind: 'number', number: '7' });
+    expect(tableLabel({ display_name: null, table_number: '7' })).toEqual({ kind: 'number', number: '7' });
   });
 });
 
-describe('elapsedLabel', () => {
+describe('elapsedTime', () => {
   it('reads minutes, then hours and minutes', () => {
-    expect(elapsedLabel(new Date(NOW - 42 * 60_000).toISOString(), NOW)).toBe('42m');
-    expect(elapsedLabel(new Date(NOW - 65 * 60_000).toISOString(), NOW)).toBe('1h 05m');
+    expect(elapsedTime(new Date(NOW - 42 * 60_000).toISOString(), NOW)).toEqual({ hours: 0, minutes: 42 });
+    expect(elapsedTime(new Date(NOW - 65 * 60_000).toISOString(), NOW)).toEqual({ hours: 1, minutes: 5 });
   });
 
   it('never goes negative — a clock skew must not read as a nine-hour sitting', () => {
-    expect(elapsedLabel(new Date(NOW + 5 * 60_000).toISOString(), NOW)).toBe('0m');
+    expect(elapsedTime(new Date(NOW + 5 * 60_000).toISOString(), NOW)).toEqual({ hours: 0, minutes: 0 });
   });
 
   it('survives a missing or unparseable timestamp', () => {
-    expect(elapsedLabel(null, NOW)).toBe('—');
-    expect(elapsedLabel('not a date', NOW)).toBe('—');
+    expect(elapsedTime(null, NOW)).toBeNull();
+    expect(elapsedTime('not a date', NOW)).toBeNull();
   });
 });
 
@@ -90,25 +93,25 @@ describe('sessionTotals', () => {
 describe('buildFloor', () => {
   it('marks a seated table with how long the party has been there', () => {
     const [state] = buildFloor([table()], [session()], NOW);
-    expect(state!.badge).toEqual({ text: 'Seated · 42m', variant: 'success' });
+    expect(state!.badge).toEqual({ code: 'seated', variant: 'success', elapsed: { hours: 0, minutes: 42 } });
   });
 
   it('shows a locked sitting as the bill request it is, not as time elapsed', () => {
     const [state] = buildFloor([table()], [session({ status: 'locked' })], NOW);
-    expect(state!.badge).toEqual({ text: 'Bill requested', variant: 'warning' });
+    expect(state!.badge).toEqual({ code: 'billRequested', variant: 'warning' });
   });
 
   it('reads a just-settled table as needing clearing, and a fresh one as free', () => {
     const [dirty] = buildFloor([table({ status: 'dirty' })], [], NOW);
-    expect(dirty!.badge.text).toBe('Needs clearing');
+    expect(dirty!.badge.code).toBe('needsClearing');
     const [fresh] = buildFloor([table({ status: 'open' })], [], NOW);
-    expect(fresh!.badge.text).toBe('Free');
+    expect(fresh!.badge.code).toBe('free');
   });
 
   it('ignores a sitting belonging to another table', () => {
     const [state] = buildFloor([table({ id: 't1' })], [session({ table_id: 't9' })], NOW);
     expect(state!.session).toBeNull();
-    expect(state!.badge.text).toBe('Free');
+    expect(state!.badge.code).toBe('free');
   });
 
   it('describes the kind, the seats and the party in one line', () => {
@@ -117,12 +120,16 @@ describe('buildFloor', () => {
       [session({ party_size: 3 })],
       NOW,
     );
-    expect(state!.detail).toBe('high top · 4 seats · party of 3');
+    expect(state!.detail).toEqual([
+      { kind: 'type', tableType: 'high_top' },
+      { kind: 'seats', count: 4 },
+      { kind: 'party', size: 3 },
+    ]);
   });
 
   it('says nothing about a plain table with no seats recorded', () => {
     const [state] = buildFloor([table()], [], NOW);
-    expect(state!.detail).toBe('');
+    expect(state!.detail).toEqual([]);
   });
 });
 

@@ -1,9 +1,14 @@
+import type { Metadata } from 'next';
+import { getTranslations } from 'next-intl/server';
 import { SignupView } from './_components/signup-view';
 
-export const metadata = {
-  title: 'Start your free trial — Favornoms',
-  description: '14 days of every feature, no credit card required.',
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('auth');
+  return {
+    title: t('metadata.signupTitle'),
+    description: t('metadata.signupDescription'),
+  };
+}
 
 export default function SignupPage() {
   return <SignupView />;

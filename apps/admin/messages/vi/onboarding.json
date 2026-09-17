@@ -1,0 +1,58 @@
+{
+  "notice": {
+    "ownerTitle": "Bạn đã có nhà hàng",
+    "teamTitle": "Bạn đã thuộc một đội ngũ",
+    "ownerBody": "{name} đã được thiết lập trên tài khoản này. Để mở thêm địa điểm, hãy thêm chi nhánh tại <link>Thương hiệu và chi nhánh > Thêm chi nhánh</link>.",
+    "ownerBodyUnnamed": "Nhà hàng của bạn đã được thiết lập trên tài khoản này. Để mở thêm địa điểm, hãy thêm chi nhánh tại <link>Thương hiệu và chi nhánh > Thêm chi nhánh</link>.",
+    "teamBody": "Bạn đang thuộc đội ngũ của {name}. Địa điểm mới do chủ sở hữu hoặc quản trị viên thêm.",
+    "teamBodyUnnamed": "Bạn đang thuộc đội ngũ của một nhà hàng khác. Địa điểm mới do chủ sở hữu hoặc quản trị viên thêm.",
+    "ownsRestaurant": "Nếu tiếp tục, một nhà hàng riêng sẽ được tạo với thực đơn và thanh toán riêng, không có dùng thử miễn phí. Khách hàng chưa thể đặt ở nhà hàng này cho đến khi gói được duyệt.",
+    "separateRestaurant": "Nếu tiếp tục, một nhà hàng riêng của bạn sẽ được tạo, với thực đơn và thanh toán riêng.",
+    "continueAnyway": "Vẫn tiếp tục",
+    "goToDashboard": "Đến trang tổng quan"
+  },
+  "wizard": {
+    "step": "Bước {current}/{total}",
+    "restaurantTitle": "Giới thiệu về nhà hàng của bạn",
+    "branchTitle": "Thiết lập chi nhánh đầu tiên",
+    "colorsTitle": "Chọn màu thương hiệu",
+    "back": "Quay lại",
+    "continue": "Tiếp tục",
+    "launch": "Khai trương nhà hàng"
+  },
+  "fields": {
+    "restaurantName": "Tên nhà hàng",
+    "restaurantNamePlaceholder": "Phở Hà Nội",
+    "restaurantSlug": "Đường dẫn URL (thành /r/ten-quan/…)",
+    "slugHint": "Chỉ dùng chữ cái không dấu và số — đây sẽ là một phần địa chỉ web của bạn.",
+    "branchName": "Tên chi nhánh",
+    "branchNamePlaceholder": "Chi nhánh Quận 1",
+    "branchSlug": "Đường dẫn URL của chi nhánh",
+    "address": "Địa chỉ (không bắt buộc)",
+    "timezone": "Múi giờ",
+    "timezoneHint": "Giờ mở cửa, báo cáo và đơn hẹn giờ sẽ theo múi giờ này.",
+    "primaryColor": "Màu chính",
+    "accentColor": "Màu nhấn",
+    "preview": "Xem trước",
+    "previewFallbackName": "Nhà hàng của bạn"
+  },
+  "timezones": {
+    "eastern": "Miền Đông — New York, Miami, Atlanta",
+    "central": "Miền Trung — Chicago, Houston, Dallas",
+    "mountain": "Miền Núi — Denver, Salt Lake City",
+    "arizona": "Arizona — Phoenix (không đổi giờ mùa hè)",
+    "pacific": "Thái Bình Dương — Los Angeles, Seattle",
+    "alaska": "Alaska — Anchorage",
+    "hawaii": "Hawaii — Honolulu",
+    "thisDevice": "{zone} (thiết bị này)"
+  },
+  "errors": {
+    "slugMissing": "Hãy đặt địa chỉ web cho nhà hàng và chi nhánh trước khi khai trương.",
+    "seatsFull": "{limit, plural, other {Bạn đã dùng hết # suất chi nhánh.}} Hãy thêm suất ở trang Gói và thanh toán trước.",
+    "subscriptionInactive": "Gói đăng ký của bạn chưa hoạt động. Hãy chọn một gói trước khi thêm nhà hàng khác.",
+    "restaurantSlugTaken": "Địa chỉ web của nhà hàng này đã có người dùng. Hãy quay lại và chọn địa chỉ khác.",
+    "branchSlugTaken": "Địa chỉ web của chi nhánh này đã có người dùng. Hãy quay lại và chọn địa chỉ khác.",
+    "notOpened": "Nhà hàng của bạn có thể đã được tạo, nhưng chúng tôi không mở được. Hãy đăng nhập lại để kiểm tra trước khi thử lần nữa.",
+    "generic": "Không thể tạo nhà hàng. Vui lòng thử lại."
+  }
+}

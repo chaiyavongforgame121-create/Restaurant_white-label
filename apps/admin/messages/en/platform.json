@@ -1,0 +1,247 @@
+{
+  "nav": {
+    "ariaLabel": "Platform sections",
+    "dashboard": "Dashboard",
+    "reports": "Reports",
+    "subscriptions": "Subscriptions",
+    "requests": "Requests",
+    "catalog": "Catalog",
+    "settings": "Settings",
+    "pendingBadge": "{count}<sr> pending</sr>"
+  },
+  "accessDenied": {
+    "title": "Access denied",
+    "body": "Platform admin only."
+  },
+  "page": {
+    "loadFailed": "Could not load {parts}.",
+    "loadParts": {
+      "restaurantMeta": "restaurant metadata",
+      "branches": "branches",
+      "subscriptionFlags": "subscription flags"
+    }
+  },
+  "dashboard": {
+    "title": "Platform admin",
+    "subtitle": "Cross-tenant operations dashboard.",
+    "loadError": "{message} Branch counts and storefront verdicts on this page are incomplete — reload before acting on them.",
+    "stats": {
+      "restaurants": "Restaurants",
+      "billingOk": "Billing OK",
+      "needsAttention": "Needs attention",
+      "ordersToday": "Orders today",
+      "revenueToday": "Revenue today",
+      "driversOnline": "Drivers online"
+    },
+    "decisions": {
+      "ariaLabel": "Needs a decision",
+      "expiring": "{count, plural, one {# paying store goes dark within {days, plural, one {# day} other {# days}}.} other {# paying stores go dark within {days, plural, one {# day} other {# days}}.}}",
+      "showThem": "Show them",
+      "requests": "{count, plural, one {# package request is waiting for a decision.} other {# package requests are waiting for a decision.}}",
+      "reviewRequests": "Review requests"
+    },
+    "search": {
+      "placeholder": "Search restaurants",
+      "emptyTitle": "No restaurants match",
+      "emptyBody": "Try a different name or slug, or clear the filter.",
+      "clear": "Clear filters"
+    },
+    "filters": {
+      "all": "All",
+      "attention": "Needs attention",
+      "expiring": "Expiring soon",
+      "offline": "Billing or access off",
+      "live": "Live",
+      "withCount": "{label} ({count})"
+    }
+  },
+  "errors": {
+    "generic": "Something went wrong. Nothing was changed.",
+    "network": "Couldn’t reach the server. Nothing was changed — check your connection and try again.",
+    "notPlatformAdmin": "Only a platform admin can do this. Nothing was changed.",
+    "reactivateFailed": "Could not reactivate the subscription."
+  },
+  "plans": {
+    "base": "Base",
+    "trial": "Trial",
+    "none": "No plan"
+  },
+  "subscriptionStatus": {
+    "active": "active",
+    "trialing": "trialing",
+    "past_due": "past due",
+    "cancelled": "cancelled",
+    "expired": "expired",
+    "none": "not set up"
+  },
+  "index": {
+    "restaurant": "Restaurant",
+    "billingAccess": "Billing & access",
+    "branches": "Branches",
+    "franchise": "Franchise",
+    "slugLine": "<mono>{slug}</mono> · {plan} · {price}/mo",
+    "rowLabel": "{name} — {lamps}. {branchCount}, {qualifier}. Open details.",
+    "reactivated": "Reactivated"
+  },
+  "health": {
+    "chip": {
+      "expired": "Expired",
+      "unpaid": "Unpaid",
+      "trial": "Trial · {days}d left",
+      "pastDue": "Past due · {days}d grace",
+      "cancelling": "Cancelling · {days}d",
+      "expiresIn": "Expires in {days, plural, one {# day} other {# days}}",
+      "live": "Live",
+      "suspended": "Suspended",
+      "partlySuspended": "{suspended} of {total} suspended"
+    },
+    "clause": {
+      "noStorefront": "No storefront yet",
+      "noStorefrontUnpaid": "No storefront yet · unpaid",
+      "bothOff": "404 + suspended screen",
+      "all404": "Diners get a 404",
+      "some404": "{suspended} of {total} branches 404",
+      "suspendedScreen": "Diners see the suspended screen",
+      "trialEndsToday": "Trial ends today",
+      "trialEndsIn": "Trial ends in {days, plural, one {# day} other {# days}}",
+      "graceLeft": "{days, plural, one {# day} other {# days}} of grace left",
+      "ends": "Ends {date}",
+      "goesDark": "Goes dark {date}",
+      "paidThrough": "paid through {date}"
+    },
+    "branchCount": "{count, plural, =0 {No branches} one {# branch} other {# branches}}",
+    "qualifier": {
+      "nothingToServe": "nothing to serve",
+      "suspended": "{count} suspended",
+      "unpaid": "{count} unpaid",
+      "paused": "{count} paused",
+      "allLive": "all live"
+    },
+    "reason": {
+      "allSuspended": "{count, plural, one {The only branch is platform-suspended, so the storefront returns 404.} other {All # branches are platform-suspended, so the storefront returns 404.}}",
+      "someSuspended": "{suspended, plural, one {# of {total} branches is platform-suspended and returns 404.} other {# of {total} branches are platform-suspended and return 404.}}",
+      "lapsedNoBranches": "Subscription lapsed {date} — this restaurant has no branches yet, so nothing is being served either way.",
+      "lapsedStorefront": "Subscription lapsed {date} — the storefront is showing the suspended screen.",
+      "noSubscriptionNoBranches": "No active subscription — this restaurant has no branches yet, so nothing is being served either way.",
+      "noSubscriptionStorefront": "No active subscription — the storefront is showing the suspended screen.",
+      "accessFine": "Platform access is fine, so Restore will not help; fix the subscription.",
+      "trialEndsToday": "Trial ends today.",
+      "trialEndsIn": "Trial ends in {days, plural, one {# day} other {# days}}.",
+      "pastDue": "Payment is past due — {days, plural, one {# day} other {# days}} of grace left.",
+      "expiring": "Paid through {date}. Nothing renews it automatically — after that date the storefront shows the suspended screen unless you extend it.",
+      "allPaused": "Every branch is paused by the kitchen and is not taking orders.",
+      "somePaused": "{paused} of {total} branches are paused by the kitchen."
+    },
+    "action": {
+      "restore": "Restore",
+      "extend": "Extend 1 month",
+      "convert": "Convert to Base",
+      "convertPriced": "Convert to Base · {price}/mo"
+    },
+    "verdict": {
+      "label": {
+        "suspended": "404 — not found",
+        "unpaid": "Suspended screen",
+        "paused": "Not taking orders",
+        "closed": "Closed now",
+        "live": "Live",
+        "unknown": "Hours unknown"
+      },
+      "hint": {
+        "suspended": "Platform-suspended — the storefront URL returns 404",
+        "unpaid": "Subscription lapsed — the storefront shows the suspended screen",
+        "paused": "Paused by the kitchen — the menu renders, order submit returns 409",
+        "closure": "Temporarily closed — the menu renders, order submit returns 409",
+        "live": "Serving diners",
+        "unknown": "The business-hours check failed — everything else about this branch is fine",
+        "outsideHours": "Outside business hours — the menu renders, order submit returns 409"
+      },
+      "why": {
+        "suspended": "Platform-suspended — resolveTenantBySlug filters is_active, so the URL 404s.",
+        "unpaidLapsed": "Subscription lapsed {date}.",
+        "unpaidNone": "No active subscription for this branch.",
+        "paused": "The kitchen paused ordering. Only branch staff can unpause it.",
+        "closure": "Temporarily closed until {date}.",
+        "closureWithReason": "Temporarily closed until {date} — {reason}",
+        "noHours": "No business hours configured, so the branch is always open.",
+        "unknown": "Could not reach is_branch_open(). Billing, access and the kitchen pause are all clear.",
+        "open": "Inside business hours and taking orders.",
+        "outsideHours": "Outside business hours ({timezone})."
+      }
+    }
+  },
+  "drawer": {
+    "ariaLabel": "{name} tenant details",
+    "meta": "<mono>{slug}</mono> · {loyalty} · added {date}",
+    "loyalty": {
+      "branch": "per-branch loyalty",
+      "brand": "brand-wide loyalty",
+      "other": "{scope} loyalty"
+    },
+    "dinerTitle": "What a diner sees right now",
+    "noBranches": "This restaurant has no branches, so there is nothing for a diner to find.",
+    "switchesTitle": "The two off-switches",
+    "accessLabel": "Platform access",
+    "accessConsequence": "Off = the storefront URL returns 404.",
+    "noBranchesToSuspend": "No branches to suspend",
+    "suspend": "Suspend",
+    "restore": "Restore",
+    "subscriptionLabel": "Subscription",
+    "subscriptionConsequence": "Off = the storefront shows the suspended screen.",
+    "manageSubscription": "Manage subscription",
+    "checkingHours": "Checking business hours…",
+    "backOffice": "Back office",
+    "openBackOffice": "Open {name} back office",
+    "storefront": "Storefront",
+    "openStorefront": "Open {name} storefront in a new tab",
+    "accessState": {
+      "noBranches": "No branches",
+      "allActive": "{count, plural, one {# branch active} other {All # branches active}}",
+      "allSuspended": "{count, plural, one {The branch is suspended} other {All # branches suspended}}",
+      "partlySuspended": "{suspended} of {total} suspended"
+    },
+    "billingState": {
+      "expired": "Expired {date} · {plan}",
+      "noSubscription": "No subscription",
+      "current": "{status} · {plan}"
+    },
+    "package": {
+      "title": "Package",
+      "plan": "Plan",
+      "monthly": "Monthly",
+      "paidThrough": "Paid through",
+      "lapsed": "Lapsed",
+      "seats": "Seats",
+      "overQuota": "over quota — unenforced, billed short",
+      "noDelivery": "Base does not include delivery — the order-type gate hides it and delivery orders are rejected.",
+      "dormant": "Granted, inactive while unpaid"
+    }
+  },
+  "confirm": {
+    "close": "Close",
+    "cancel": "Cancel",
+    "suspend": {
+      "title": "Suspend {name}?",
+      "confirm": "Suspend",
+      "body": "This takes {total, plural, one {the only branch} other {all # branches}} of {name} offline — {branches}. The storefront will return 404 — not the suspended screen. Staff keep their back-office access and no data is deleted. This does not change their subscription."
+    },
+    "restore": {
+      "title": "Restore {name}?",
+      "confirm": "Restore",
+      "body": "This brings back {total, plural, one {the only branch} other {all # branches}} of {name} — {branches}. Customers will be able to find the storefront again.",
+      "bodyNoBranches": "{name} has no branches, so there is nothing to bring back.",
+      "warningUnpaid": "{name}’s subscription is {status}, so the storefront will still show the suspended screen after restoring. Fix the subscription to bring them back online. <link>Manage subscription</link>",
+      "warningPartial": "{active} of {total} branches are already active. Restoring turns ALL {total} on, including any branch that was disabled deliberately."
+    },
+    "reactivate": {
+      "titleExtend": "Extend {name} by 1 month?",
+      "titleConvert": "Put {name} on {plan}?",
+      "confirmExtend": "Extend",
+      "confirmConvert": "Charge {plan}",
+      "bodyExtendLive": "Adds 1 month to the {plan} package the tenant already has{hasPrice, select, yes { at {price}/mo} other {}} for {seats, plural, one {# branch} other {# branches}}: paid through {from} becomes {to}. The store is still live, so diners notice nothing.",
+      "bodyRebill": "Re-bills the {plan} package the tenant already has{hasPrice, select, yes { at {price}/mo} other {}} for {seats, plural, one {# branch} other {# branches}}, paid through {to}. The storefront comes back on the diner’s next request.",
+      "bodyConvert": "Moves {name} off {current} and onto {plan}{hasPrice, select, yes { at {price}/mo} other {}} for {seats, plural, one {# branch} other {# branches}}, paid through {to}. The storefront comes back on the diner’s next request.",
+      "warningSuspended": "{suspended} of {total} branches are also platform-suspended and will keep returning 404 after this. Restore them separately."
+    }
+  }
+}

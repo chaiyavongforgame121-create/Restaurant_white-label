@@ -9,6 +9,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
+import { useLocale, useTranslations } from 'next-intl';
 import { Check, Minus, Plus, Search } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import {
@@ -17,54 +18,74 @@ import {
   type RestaurantSubscriptionRow,
 } from '@favornoms/database/queries';
 import {
+  DEFAULT_UI_LOCALE,
   FEATURE_KEYS,
   PLAN_BASE,
   currentSelection,
   featureLabel,
   featureOverrideState,
+  intlLocaleFor,
+  isUiLocale,
   packageMonthlyTotal,
   type BillingProduct,
   type FeatureKey,
   type FeatureOverrideState,
   type PackageSelection,
+  type UiLocale,
 } from '@favornoms/shared';
 import { Badge, Button, Card } from '@favornoms/ui';
 import { PlatformNav } from '../../_components/platform-nav';
-import { addOneMonthUtc, fmtDate } from '../../_components/tenant-health';
+import { addOneMonthUtc } from '../../_components/tenant-health';
 
 const INPUT_CLS =
   'h-11 w-full rounded-xl border border-border bg-background px-3 text-base outline-none transition-colors focus-visible:border-primary';
 
 const STATUSES = ['active', 'trialing', 'past_due', 'cancelled', 'expired'] as const;
 type Status = (typeof STATUSES)[number];
+const isStatus = (value: string): value is Status => (STATUSES as readonly string[]).includes(value);
 
 // billing_compute grants entitled_through = greatest(period_end, trial_end) to
 // past_due and cancelled exactly as it does to active, so picking either one to
-// close a store switched nothing off. The option text says so before it is chosen.
-const STATUS_LABEL: Record<Status, string> = {
-  active: 'active',
-  trialing: 'trialing',
-  past_due: 'past_due — keeps access',
-  cancelled: 'cancelled — keeps access',
-  expired: 'expired — access ends now',
-};
-
-const NOT_AN_OFF_SWITCH =
-  'is a label, not an off switch: the store keeps full access until the paid-through date. Suspend on the dashboard hides the store now; letting the date pass ends access.';
-
-const STATUS_HINT: Partial<Record<Status, string>> = {
-  past_due: `Past due ${NOT_AN_OFF_SWITCH}`,
-  cancelled: `Cancelled ${NOT_AN_OFF_SWITCH}`,
-  expired: 'Expired ends access as soon as you apply.',
-};
+// close a store switched nothing off. The option text (subscriptions.statusOption)
+// says so before it is chosen, and subscriptions.statusHint repeats it after.
+const HINTED_STATUSES: readonly Status[] = ['past_due', 'cancelled', 'expired'];
 
 const money = (n: number) => `$${Number(n).toFixed(0)}`;
 
-// Pin the locale: the market is US-only, and an unpinned toLocaleDateString()
-// renders in whatever locale the *server* runs under (a Thai dev box turned
-// "8/8/2026" into the Buddhist-calendar "8/8/2569"). Pinning also keeps SSR and
-// the client agreeing, so there's no hydration mismatch.
-const date = (v: string) => new Date(v).toLocaleDateString('en-US');
+// Pin the locale: an unpinned toLocaleDateString() renders in whatever locale the
+// *server* runs under (a Thai dev box turned "8/8/2026" into the Buddhist-calendar
+// "8/8/2569"). Pinning to the reader's interface language (Gregorian in Thai, via
+// intlLocaleFor) also keeps SSR and the client agreeing, so there's no hydration mismatch.
+const date = (v: string, locale: UiLocale) => new Date(v).toLocaleDateString(intlLocaleFor(locale));
+
+// Same day on server and browser: Vercel runs in UTC and the operator's browser does not.
+const fmtDate = (v: string | null | undefined, locale: UiLocale) =>
+  v
+    ? new Intl.DateTimeFormat(intlLocaleFor(locale), {
+        timeZone: 'UTC',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      }).format(new Date(v))
+    : '—';
+
+/** Raw PostgREST text is for the logs, never the screen. */
+function saveErrorKey(raw: string | undefined): string {
+  if (!raw) return 'errors.saveFailed';
+  console.error('[platform/subscriptions] save failed:', raw);
+  if (/forbidden|not[ _]authori[sz]ed|permission denied|platform[ _]admin/i.test(raw)) {
+    return 'errors.permission';
+  }
+  if (/failed to fetch|fetch failed|networkerror|network request failed/i.test(raw)) {
+    return 'errors.network';
+  }
+  return 'errors.saveFailed';
+}
+
+function useUiLocale(): UiLocale {
+  const rawLocale = useLocale();
+  return isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE;
+}
 
 export function SubscriptionsManager({
   rows,
@@ -80,6 +101,7 @@ export function SubscriptionsManager({
   /** The server clock, so the "blank = …" date renders identically on both sides. */
   nowMs: number;
 }) {
+  const t = useTranslations('platformBilling');
   const [q, setQ] = React.useState(initialQuery);
   const focusSlug = initialQuery.trim().toLowerCase();
   const filtered = rows.filter((r) => {
@@ -94,10 +116,8 @@ export function SubscriptionsManager({
   return (
     <div className="container max-w-5xl py-8">
       <header className="mb-2">
-        <h1 className="font-display text-3xl font-bold">Subscriptions</h1>
-        <p className="mt-1 text-muted-foreground">
-          Set a restaurant&apos;s package directly. Changes take effect immediately.
-        </p>
+        <h1 className="font-display text-3xl font-bold">{t('subscriptions.title')}</h1>
+        <p className="mt-1 text-muted-foreground">{t('subscriptions.subtitle')}</p>
       </header>
       <PlatformNav />
 
@@ -106,7 +126,7 @@ export function SubscriptionsManager({
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search restaurants"
+          placeholder={t('subscriptions.searchPlaceholder')}
           className={`${INPUT_CLS} pl-9`}
         />
       </label>
@@ -122,7 +142,7 @@ export function SubscriptionsManager({
           />
         ))}
         {filtered.length === 0 && (
-          <p className="py-12 text-center text-muted-foreground">No restaurants match.</p>
+          <p className="py-12 text-center text-muted-foreground">{t('subscriptions.noMatches')}</p>
         )}
       </div>
     </div>
@@ -141,6 +161,8 @@ function SubscriptionCard({
   defaultOpen?: boolean;
 }) {
   const router = useRouter();
+  const t = useTranslations('platformBilling');
+  const locale = useUiLocale();
   const ent = row.entitlements;
   const [open, setOpen] = React.useState(defaultOpen);
   const [sel, setSel] = React.useState<PackageSelection>(() => currentSelection(ent));
@@ -166,7 +188,13 @@ function SubscriptionCard({
   const blankEnd = trialDays > 0 ? new Date(nowMs + trialDays * 86_400_000) : addOneMonthUtc(nowMs);
   const currentEnd = ent.entitledThrough ? Date.parse(ent.entitledThrough) : NaN;
   const blankShortens = !periodEnd && Number.isFinite(currentEnd) && currentEnd > blankEnd.getTime();
-  const statusHint = STATUS_HINT[status];
+  const statusHint = HINTED_STATUSES.includes(status) ? t(`subscriptions.statusHint.${status}`) : null;
+
+  const perMonth = (amount: string) =>
+    t.rich('perMonth', {
+      amount,
+      unit: (chunks) => <span className="ml-1 text-sm font-normal text-muted-foreground">{chunks}</span>,
+    });
 
   const save = async () => {
     setSaving(true);
@@ -181,7 +209,7 @@ function SubscriptionCard({
     );
     setSaving(false);
     if (res.ok !== true) {
-      setError(res.error ?? 'Could not save.');
+      setError(t(saveErrorKey(res.error)));
       return;
     }
     setSaved(true);
@@ -197,10 +225,12 @@ function SubscriptionCard({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={ent.entitled ? 'success' : 'danger'}>
-            {ent.entitled ? 'Live' : 'Suspended'}
+            {ent.entitled ? t('subscriptions.live') : t('subscriptions.suspended')}
           </Badge>
           <Badge variant="muted">{ent.planCode}</Badge>
-          <Badge variant="outline">{ent.status}</Badge>
+          <Badge variant="outline">
+            {isStatus(ent.status) ? t(`subscriptionStatus.${ent.status}`) : ent.status}
+          </Badge>
           {ent.addons.map((a) => (
             <Badge key={a} variant="default">
               {a}
@@ -210,13 +240,16 @@ function SubscriptionCard({
       </div>
 
       <dl className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-        <Stat label="Monthly" value={money(ent.monthlyTotal)} />
-        <Stat label="Seats" value={`${ent.branchesUsed} / ${ent.branchSeats}`} />
+        <Stat label={t('subscriptions.stats.monthly')} value={money(ent.monthlyTotal)} />
+        <Stat label={t('subscriptions.stats.seats')} value={`${ent.branchesUsed} / ${ent.branchSeats}`} />
         <Stat
-          label="Paid through"
-          value={ent.entitledThrough ? date(ent.entitledThrough) : '—'}
+          label={t('subscriptions.stats.paidThrough')}
+          value={ent.entitledThrough ? date(ent.entitledThrough, locale) : '—'}
         />
-        <Stat label="Trial ends" value={ent.trialEndsAt ? date(ent.trialEndsAt) : '—'} />
+        <Stat
+          label={t('subscriptions.stats.trialEnds')}
+          value={ent.trialEndsAt ? date(ent.trialEndsAt, locale) : '—'}
+        />
       </dl>
 
       <div className="mt-3 flex flex-wrap gap-4">
@@ -225,14 +258,14 @@ function SubscriptionCard({
           onClick={() => setOpen((o) => !o)}
           className="text-sm text-primary underline-offset-2 hover:underline"
         >
-          {open ? 'Close' : 'Change package'}
+          {open ? t('subscriptions.close') : t('subscriptions.changePackage')}
         </button>
         <button
           type="button"
           onClick={() => setFeaturesOpen((o) => !o)}
           className="text-sm text-primary underline-offset-2 hover:underline"
         >
-          {featuresOpen ? 'Close' : 'Feature switches'}
+          {featuresOpen ? t('subscriptions.close') : t('subscriptions.featureSwitches')}
         </button>
       </div>
 
@@ -248,7 +281,9 @@ function SubscriptionCard({
 
           <div className="grid gap-3 sm:grid-cols-3">
             <label className="block">
-              <span className="mb-1 block text-xs font-medium text-muted-foreground">Plan</span>
+              <span className="mb-1 block text-xs font-medium text-muted-foreground">
+                {t('subscriptions.plan')}
+              </span>
               <select
                 value={sel.planCode}
                 onChange={(e) => setSel((s) => ({ ...s, planCode: e.target.value }))}
@@ -264,7 +299,9 @@ function SubscriptionCard({
             </label>
 
             <label className="block">
-              <span className="mb-1 block text-xs font-medium text-muted-foreground">Status</span>
+              <span className="mb-1 block text-xs font-medium text-muted-foreground">
+                {t('subscriptions.status')}
+              </span>
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value as Status)}
@@ -272,7 +309,7 @@ function SubscriptionCard({
               >
                 {STATUSES.map((s) => (
                   <option key={s} value={s}>
-                    {STATUS_LABEL[s]}
+                    {t(`subscriptions.statusOption.${s}`)}
                   </option>
                 ))}
               </select>
@@ -283,7 +320,7 @@ function SubscriptionCard({
 
             <label className="block">
               <span className="mb-1 block text-xs font-medium text-muted-foreground">
-                Paid through
+                {t('subscriptions.paidThrough')}
               </span>
               <input
                 type="date"
@@ -293,20 +330,24 @@ function SubscriptionCard({
               />
               <span className="mt-1 block text-[11px] text-muted-foreground">
                 {trialDays > 0
-                  ? `Leave blank to restart from today: a ${trialDays}-day trial, to ${fmtDate(blankEnd.toISOString())}.`
-                  : `Leave blank to restart the month from today: paid through becomes ${fmtDate(blankEnd.toISOString())}.`}
+                  ? t('subscriptions.blankTrial', {
+                      days: trialDays,
+                      date: fmtDate(blankEnd.toISOString(), locale),
+                    })
+                  : t('subscriptions.blankMonth', { date: fmtDate(blankEnd.toISOString(), locale) })}
               </span>
               {blankShortens && (
                 <span className="mt-1 block text-[11px] font-medium text-danger">
-                  That is earlier than the current {fmtDate(ent.entitledThrough)}. Pick a date to keep
-                  the time they already have.
+                  {t('subscriptions.blankShortens', { date: fmtDate(ent.entitledThrough, locale) })}
                 </span>
               )}
             </label>
           </div>
 
           <div>
-            <span className="mb-2 block text-xs font-medium text-muted-foreground">Add-ons</span>
+            <span className="mb-2 block text-xs font-medium text-muted-foreground">
+              {t('subscriptions.addons')}
+            </span>
             <div className="flex flex-wrap gap-2">
               {addons.map((a) => {
                 const on = sel.addons.includes(a.code);
@@ -338,10 +379,12 @@ function SubscriptionCard({
 
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <span className="text-xs font-medium text-muted-foreground">Branch seats</span>
+              <span className="text-xs font-medium text-muted-foreground">
+                {t('subscriptions.branchSeats')}
+              </span>
               <button
                 type="button"
-                aria-label="Remove a seat"
+                aria-label={t('subscriptions.removeSeat')}
                 disabled={sel.branchSeats <= minSeats}
                 onClick={() => setSel((s) => ({ ...s, branchSeats: s.branchSeats - 1 }))}
                 className="focus-ring grid h-9 w-9 place-items-center rounded-full border border-border disabled:opacity-40"
@@ -353,7 +396,7 @@ function SubscriptionCard({
               </span>
               <button
                 type="button"
-                aria-label="Add a seat"
+                aria-label={t('subscriptions.addSeat')}
                 onClick={() => setSel((s) => ({ ...s, branchSeats: Math.min(99, s.branchSeats + 1) }))}
                 className="focus-ring grid h-9 w-9 place-items-center rounded-full border border-border"
               >
@@ -361,24 +404,21 @@ function SubscriptionCard({
               </button>
               {minSeats > 1 && (
                 <span className="text-[11px] text-muted-foreground">
-                  min {minSeats} (branches open)
+                  {t('subscriptions.minSeats', { count: minSeats })}
                 </span>
               )}
             </div>
 
-            <p className="font-display text-xl font-bold">
-              {money(total)}
-              <span className="ml-1 text-sm font-normal text-muted-foreground">/mo</span>
-            </p>
+            <p className="font-display text-xl font-bold">{perMonth(money(total))}</p>
           </div>
 
           <div className="flex items-center gap-3">
             <Button size="sm" onClick={save} loading={saving}>
-              Apply package
+              {t('subscriptions.applyPackage')}
             </Button>
             {saved && (
               <span className="flex items-center gap-1 text-sm text-success">
-                <Check className="h-4 w-4" /> Saved
+                <Check className="h-4 w-4" /> {t('subscriptions.saved')}
               </span>
             )}
           </div>
@@ -394,14 +434,13 @@ function SubscriptionCard({
 // Digital Signage to every restaurant, and both pages are still placeholders, so
 // the operator needs to hide them for one customer without repricing the plan
 // everyone else is on. "Plan" is the default and means: follow the package.
-const STATES: Array<{ value: FeatureOverrideState; label: string }> = [
-  { value: 'plan', label: 'Plan' },
-  { value: 'on', label: 'On' },
-  { value: 'off', label: 'Off' },
-];
+// Labels are switches.states.<value>.
+const STATES: FeatureOverrideState[] = ['plan', 'on', 'off'];
 
 function FeatureSwitches({ row }: { row: RestaurantSubscriptionRow }) {
   const router = useRouter();
+  const t = useTranslations('platformBilling');
+  const locale = useUiLocale();
   // Seeded from the server row, then advanced from each RPC reply — the reply
   // carries the recomputed entitlements, so the "Merchant sees" column stays
   // truthful without waiting for router.refresh() to land.
@@ -416,7 +455,7 @@ function FeatureSwitches({ row }: { row: RestaurantSubscriptionRow }) {
     const res = await setFeatureOverride(getBrowserClient(), row.restaurant_id, feature, state);
     setBusy(null);
     if (!res.ok) {
-      setError(res.error ?? 'Could not save.');
+      setError(t(saveErrorKey(res.error)));
       return;
     }
     if (res.overrides) setOverrides(res.overrides);
@@ -427,10 +466,7 @@ function FeatureSwitches({ row }: { row: RestaurantSubscriptionRow }) {
   return (
     <div className="mt-4 space-y-3 border-t border-border pt-4">
       <p className="text-xs text-muted-foreground">
-        Show or hide a feature for this restaurant only. <strong>Plan</strong> follows the package
-        above; <strong>On</strong> and <strong>Off</strong> ignore it. Hiding a feature removes it
-        from the merchant&apos;s sidebar; if they open the URL directly they get the locked
-        page instead of the feature.
+        {t.rich('switches.intro', { strong: (chunks) => <strong>{chunks}</strong> })}
       </p>
 
       {error && (
@@ -444,37 +480,42 @@ function FeatureSwitches({ row }: { row: RestaurantSubscriptionRow }) {
           // by undoing the switch rather than re-querying the catalog.
           const effective = granted[key] === true;
           const fromPlan = state === 'plan' ? effective : null;
+          const label = featureLabel(key, locale);
+          const visibility =
+            state !== 'plan'
+              ? effective
+                ? 'switches.visibleOverridden'
+                : 'switches.hiddenOverridden'
+              : fromPlan === false
+                ? 'switches.hiddenNotInPackage'
+                : 'switches.visible';
           return (
             <li key={key} className="flex flex-wrap items-center justify-between gap-3 py-2.5">
               <div>
-                <p className="text-sm font-medium">{featureLabel(key)}</p>
-                <p className="text-xs text-muted-foreground">
-                  {effective ? 'Merchant sees it' : 'Hidden from the merchant'}
-                  {state !== 'plan' && ' · overridden'}
-                  {fromPlan === false && ' · not in their package'}
-                </p>
+                <p className="text-sm font-medium">{label}</p>
+                <p className="text-xs text-muted-foreground">{t(visibility)}</p>
               </div>
               <div
                 role="group"
-                aria-label={`${featureLabel(key)} availability`}
+                aria-label={t('switches.groupLabel', { feature: label })}
                 className="inline-flex rounded-full border border-border bg-muted/50 p-0.5"
               >
-                {STATES.map((s) => (
+                {STATES.map((value) => (
                   <button
-                    key={s.value}
+                    key={value}
                     type="button"
-                    aria-pressed={state === s.value}
+                    aria-pressed={state === value}
                     disabled={busy === key}
-                    onClick={() => apply(key, s.value)}
+                    onClick={() => apply(key, value)}
                     className={`focus-ring rounded-full px-3 py-1 text-xs font-semibold transition-colors disabled:opacity-50 ${
-                      state === s.value
-                        ? s.value === 'off'
+                      state === value
+                        ? value === 'off'
                           ? 'bg-destructive text-destructive-foreground'
                           : 'bg-primary text-primary-foreground'
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    {s.label}
+                    {t(`switches.states.${value}`)}
                   </button>
                 ))}
               </div>

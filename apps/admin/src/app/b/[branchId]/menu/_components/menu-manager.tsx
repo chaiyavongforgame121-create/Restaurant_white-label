@@ -4,6 +4,7 @@ import * as React from 'react';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { Copy, Edit3, LayoutGrid, Move, Plus, Save, Sparkles, Trash2, X } from 'lucide-react';
 import type { MenuCategory, MenuItem } from '@favornoms/shared';
 import { formatCurrency } from '@favornoms/shared';
@@ -12,6 +13,7 @@ import { listCategories, listMenuItems } from '@favornoms/database/queries';
 import { Badge, Button, Card, IconButton, Sheet, useConfirm } from '@favornoms/ui';
 import { MenuReorder } from './menu-reorder';
 import { ItemModifierEditor, type ItemModifierEditorHandle } from './item-modifier-editor';
+import { menuErrorKey } from './menu-errors';
 
 /**
  * The stock columns as the database holds them. They are not part of MenuItem: the
@@ -55,7 +57,7 @@ interface SavedItemSummary {
   trackStock: boolean;
   stockQuantity: number | null;
   lowStockThreshold: number;
-  /** The item itself saved, but something attached to it did not. */
+  /** The item itself saved, but something attached to it did not. Already translated. */
   warning?: string;
 }
 
@@ -66,12 +68,23 @@ interface Props {
   stockRows: MenuItemStockRow[];
 }
 
+/** Logs the raw failure and returns the translated message the merchant sees instead. */
+function useMenuErrorText() {
+  const t = useTranslations('menu');
+  return (context: string, err: unknown) => {
+    console.error(`[menu] ${context} failed`, err);
+    return t(`errors.${menuErrorKey(err)}`);
+  };
+}
+
 export function MenuManager({
   branchId,
   categories: initCategories,
   items: initItems,
   stockRows,
 }: Props) {
+  const t = useTranslations('menu');
+  const errorText = useMenuErrorText();
   const [items, setItems] = React.useState(initItems);
   const [categories, setCategories] = React.useState(initCategories);
   const [stock, setStock] = React.useState(() => toStockMap(stockRows));
@@ -119,7 +132,7 @@ export function MenuManager({
       // This used to reject unhandled. A refresh that fails in silence is
       // indistinguishable from a save that did nothing, which is exactly the
       // complaint this screen collected.
-      setProblem(`Saved, but this list could not be reloaded: ${(err as Error).message}`);
+      setProblem(t('notices.reloadFailed', { reason: errorText('menu reload', err) }));
     }
   };
 
@@ -143,8 +156,8 @@ export function MenuManager({
     }
     setNotice(
       saved.trackStock
-        ? `Saved “${saved.name}” — tracking stock, ${saved.stockQuantity ?? 0} left.`
-        : `Saved “${saved.name}” — stock tracking is off, so the storefront will not mark it sold out.`,
+        ? t('notices.savedTracking', { name: saved.name, count: saved.stockQuantity ?? 0 })
+        : t('notices.savedUntracked', { name: saved.name }),
     );
     void refresh();
   };
@@ -152,9 +165,9 @@ export function MenuManager({
   const handleDelete = async (id: string) => {
     if (
       !(await confirm({
-        title: 'Delete this menu item?',
-        body: 'It disappears from the customer menu, and this cannot be undone.',
-        confirmLabel: 'Delete',
+        title: t('deleteConfirm.title'),
+        body: t('deleteConfirm.body'),
+        confirmLabel: t('deleteConfirm.confirm'),
         destructive: true,
       }))
     ) {
@@ -163,7 +176,7 @@ export function MenuManager({
     const supabase = getBrowserClient();
     const { error } = await supabase.from('menu_items').delete().eq('id', id);
     if (error) {
-      setProblem(error.message);
+      setProblem(errorText('delete item', error));
       return;
     }
     setItems((curr) => curr.filter((i) => i.id !== id));
@@ -174,15 +187,13 @@ export function MenuManager({
     const supabase = getBrowserClient();
     const { error } = await supabase.rpc('duplicate_menu_item', { p_item_id: id });
     if (error) {
-      setProblem(error.message);
+      setProblem(errorText('duplicate_menu_item', error));
       return;
     }
     setProblem(null);
     // duplicate_menu_item makes the copy hidden on purpose, so a half-edited "(Copy)" never
     // reaches customers. Say so, and say how to publish it — the badge alone did not.
-    setNotice(
-      'Copied. The copy is hidden from customers, and option groups are not copied — add them in Edit, then switch on “Show on customer menu”.',
-    );
+    setNotice(t('notices.copied'));
     await refresh();
   };
 
@@ -197,10 +208,7 @@ export function MenuManager({
       .select('id')
       .maybeSingle();
     if (error || !data) {
-      setProblem(
-        error?.message ??
-          'Nothing was changed. This dish may have been deleted, or your role may not be allowed to edit the menu at this branch.',
-      );
+      setProblem(error ? errorText('set item visibility', error) : t('notices.visibilityUnchanged'));
       return;
     }
     setProblem(null);
@@ -209,8 +217,8 @@ export function MenuManager({
     setItems((curr) => curr.map((i) => (i.id === target.id ? { ...i, isActive: visible } : i)));
     setNotice(
       visible
-        ? `“${target.name}” is now on the customer menu.`
-        : `“${target.name}” is hidden from customers.`,
+        ? t('notices.nowVisible', { name: target.name })
+        : t('notices.nowHidden', { name: target.name }),
     );
   };
 
@@ -218,8 +226,10 @@ export function MenuManager({
     <div className="container max-w-6xl py-8">
       <header className="mb-6 flex flex-col gap-3 px-2 lg:flex-row lg:items-start lg:justify-between lg:px-0">
         <div className="pl-14 lg:pl-0">
-          <h1 className="font-display text-3xl font-bold">Menu</h1>
-          <p className="mt-1 text-muted-foreground">{items.length} items across {categories.length} categories</p>
+          <h1 className="font-display text-3xl font-bold">{t('header.title')}</h1>
+          <p className="mt-1 text-muted-foreground">
+            {t('header.summary', { items: items.length, categories: categories.length })}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex rounded-xl border border-border bg-card p-1">
@@ -231,7 +241,7 @@ export function MenuManager({
               }`}
               aria-pressed={mode === 'grid'}
             >
-              <LayoutGrid className="h-4 w-4" /> Edit
+              <LayoutGrid className="h-4 w-4" /> {t('header.modeEdit')}
             </button>
             <button
               type="button"
@@ -241,33 +251,33 @@ export function MenuManager({
               }`}
               aria-pressed={mode === 'reorder'}
             >
-              <Move className="h-4 w-4" /> Reorder
+              <Move className="h-4 w-4" /> {t('header.modeReorder')}
             </button>
           </div>
           {mode === 'grid' && (
             <>
               <Link href={`/b/${branchId}/menu/modifiers`}>
                 <Button variant="ghost">
-                  Modifiers
+                  {t('header.modifiers')}
                 </Button>
               </Link>
               <Link href={`/b/${branchId}/menu/combos`}>
                 <Button variant="ghost">
-                  Combos
+                  {t('header.combos')}
                 </Button>
               </Link>
               <Link href={`/b/${branchId}/menu/happy-hours`}>
                 <Button variant="ghost">
-                  Happy hours
+                  {t('header.happyHours')}
                 </Button>
               </Link>
               <Link href={`/b/${branchId}/menu/import`}>
                 <Button variant="ghost" leftIcon={<Sparkles className="h-4 w-4" />}>
-                  AI import
+                  {t('header.aiImport')}
                 </Button>
               </Link>
               <Button variant="gradient" leftIcon={<Plus className="h-4 w-4" />} onClick={() => setCreating(true)}>
-                Add item
+                {t('header.addItem')}
               </Button>
             </>
           )}
@@ -340,29 +350,29 @@ export function MenuManager({
                             <>
                               <span
                                 className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground"
-                                title="Not on the customer menu. Combos that include it still sell it."
+                                title={t('card.hiddenHint')}
                               >
-                                Hidden
+                                {t('card.hidden')}
                               </span>
                               <button
                                 type="button"
                                 onClick={() => void handleVisibility(item, true)}
                                 className="focus-ring rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary hover:bg-primary/20"
                               >
-                                Show on menu
+                                {t('card.showOnMenu')}
                               </button>
                             </>
                           )}
                           <StockBadge stock={stock[item.id]} />
                         </div>
                         <div className="mt-auto flex items-center gap-1">
-                          <IconButton label="Edit" size="sm" onClick={() => setEditing(item)}>
+                          <IconButton label={t('card.edit')} size="sm" onClick={() => setEditing(item)}>
                             <Edit3 className="h-4 w-4" />
                           </IconButton>
-                          <IconButton label="Duplicate" size="sm" onClick={() => handleDuplicate(item.id)}>
+                          <IconButton label={t('card.duplicate')} size="sm" onClick={() => handleDuplicate(item.id)}>
                             <Copy className="h-4 w-4" />
                           </IconButton>
-                          <IconButton label="Delete" size="sm" className="text-danger" onClick={() => handleDelete(item.id)}>
+                          <IconButton label={t('card.delete')} size="sm" className="text-danger" onClick={() => handleDelete(item.id)}>
                             <Trash2 className="h-4 w-4" />
                           </IconButton>
                         </div>
@@ -383,7 +393,7 @@ export function MenuManager({
           setEditing(null);
           setCreating(false);
         }}
-        title={editing ? 'Edit item' : 'Add menu item'}
+        title={editing ? t('sheet.editTitle') : t('sheet.addTitle')}
         side="right"
       >
         {/* Keyed so every state initialiser re-runs for the item actually being
@@ -410,19 +420,34 @@ export function MenuManager({
  * is the only thing on the card that moves after that save.
  */
 function StockBadge({ stock }: { stock: ItemStock | undefined }) {
+  const t = useTranslations('menu');
   if (!stock?.trackStock) return null;
   const left = stock.stockQuantity ?? 0;
   return (
     <div className="flex">
       <Badge variant={left <= 0 ? 'danger' : left <= stock.lowStockThreshold ? 'warning' : 'muted'}>
-        {left <= 0 ? 'Sold out' : `${left} left`}
+        {left <= 0 ? t('card.soldOut') : t('card.stockLeft', { count: left })}
       </Badge>
     </div>
   );
 }
 
 const CATEGORY_EMOJIS = ['🍔', '🍕', '🥗', '🍟', '🥤', '🍰', '🍣', '🌮', '🍜', '☕', '🍦', '🍗', '🥪', '🍳'];
-const COMMON_ALLERGENS = ['Peanuts', 'Tree nuts', 'Milk', 'Eggs', 'Fish', 'Shellfish', 'Soy', 'Wheat / Gluten', 'Sesame'];
+/**
+ * Quick-pick allergens. `value` is what gets saved on the item and shown to diners, so it stays
+ * English exactly as before; `key` only picks the translated label on the picker button.
+ */
+const COMMON_ALLERGENS = [
+  { value: 'Peanuts', key: 'peanuts' },
+  { value: 'Tree nuts', key: 'treeNuts' },
+  { value: 'Milk', key: 'milk' },
+  { value: 'Eggs', key: 'eggs' },
+  { value: 'Fish', key: 'fish' },
+  { value: 'Shellfish', key: 'shellfish' },
+  { value: 'Soy', key: 'soy' },
+  { value: 'Wheat / Gluten', key: 'wheatGluten' },
+  { value: 'Sesame', key: 'sesame' },
+] as const;
 
 function ItemEditor({
   branchId, categories, item, initialStock, onSaved, onCategoryCreated,
@@ -435,6 +460,8 @@ function ItemEditor({
   onSaved: (saved: SavedItemSummary) => void;
   onCategoryCreated: (cat: MenuCategory) => void;
 }) {
+  const t = useTranslations('menu');
+  const errorText = useMenuErrorText();
   const [name, setName] = React.useState(item?.name ?? '');
   const [description, setDescription] = React.useState(item?.description ?? '');
   const [price, setPrice] = React.useState(item?.price.toString() ?? '');
@@ -488,7 +515,7 @@ function ItemEditor({
       .single();
     setCreatingCat(false);
     if (catErr || !data) {
-      setError(catErr?.message ?? 'Could not create category');
+      setError(catErr ? errorText('create category', catErr) : t('editor.createCategoryFailed'));
       return;
     }
     const cat: MenuCategory = {
@@ -527,7 +554,7 @@ function ItemEditor({
       .then(({ data, error: readErr }) => {
         if (cancelled || stockTouched.current) return;
         if (readErr) {
-          setError(`Could not read this item's stock settings: ${readErr.message}`);
+          setError(t('editor.stockReadFailed', { reason: errorText('read item stock', readErr) }));
           return;
         }
         if (!data) return;
@@ -538,6 +565,8 @@ function ItemEditor({
     return () => {
       cancelled = true;
     };
+    // `t` and `errorText` are recreated on render; the read belongs to the item alone, as before.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item]);
 
   const uploadImage = async (file: File) => {
@@ -552,7 +581,7 @@ function ItemEditor({
       const { data } = supabase.storage.from('branch-assets').getPublicUrl(path);
       setImageUrl(data.publicUrl);
     } else {
-      setError(upErr.message);
+      setError(errorText('upload item image', upErr));
     }
     setUploading(false);
   };
@@ -606,18 +635,14 @@ function ItemEditor({
         const planErr = describePlanError(res.error);
         setError(
           planErr
-            ? `You've reached your plan's limit (${planErr.current} of ${planErr.limit} items). ` +
-                `Upgrade your subscription in Preferences → Plan to add more.`
-            : res.error.message,
+            ? t('editor.planLimit', { current: planErr.current, limit: planErr.limit })
+            : errorText('save item', res.error),
         );
         return;
       }
       const savedId = (res.data as { id: string } | null)?.id ?? null;
       if (item && !savedId) {
-        setError(
-          'Nothing was saved. This item may have been deleted, or your role may not be ' +
-            'allowed to edit the menu at this branch.',
-        );
+        setError(t('editor.nothingSaved'));
         return;
       }
       // New item: persist the draft option groups now that it has an id.
@@ -627,10 +652,7 @@ function ItemEditor({
         if (persistRes?.error) {
           // The item itself is saved, so the sheet still closes and the grid still
           // reloads; the warning rides up to the page banner, which outlives the sheet.
-          warning =
-            `“${name}” was saved and any option groups that succeeded were kept, ` +
-            `but one couldn't be saved: ${persistRes.error}. ` +
-            `Reopen the item to finish its options.`;
+          warning = t('editor.optionsWarning', { name, reason: persistRes.error });
         }
       }
       onSaved({
@@ -642,7 +664,7 @@ function ItemEditor({
         warning,
       });
     } catch (err) {
-      setError((err as Error).message);
+      setError(errorText('save item', err));
     } finally {
       setSaving(false);
     }
@@ -650,7 +672,7 @@ function ItemEditor({
 
   return (
     <form onSubmit={handleSave} className="space-y-4 p-5">
-      <Field label="Name">
+      <Field label={t('editor.name')}>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -658,7 +680,7 @@ function ItemEditor({
           className="input"
         />
       </Field>
-      <Field label="Category">
+      <Field label={t('editor.category')}>
         <div className="flex items-center gap-2">
           <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="input flex-1">
             {categories.map((c) => (
@@ -668,7 +690,7 @@ function ItemEditor({
             ))}
           </select>
           <Button type="button" variant="ghost" size="md" onClick={() => setShowNewCat((s) => !s)}>
-            {showNewCat ? 'Cancel' : '+ New'}
+            {showNewCat ? t('editor.cancelNewCategory') : t('editor.newCategory')}
           </Button>
         </div>
         {showNewCat && (
@@ -677,14 +699,14 @@ function ItemEditor({
               <input
                 value={newCatEmoji}
                 onChange={(e) => setNewCatEmoji(e.target.value)}
-                aria-label="Category icon"
+                aria-label={t('editor.categoryIcon')}
                 maxLength={4}
                 className="focus-ring h-12 w-16 shrink-0 rounded-xl border border-border bg-background text-center text-2xl"
               />
               <input
                 value={newCatName}
                 onChange={(e) => setNewCatName(e.target.value)}
-                placeholder="Category name (e.g. Desserts)"
+                placeholder={t('editor.categoryNamePlaceholder')}
                 className="focus-ring h-12 min-w-0 flex-1 rounded-xl border border-border bg-background px-3 text-base"
               />
             </div>
@@ -710,12 +732,12 @@ function ItemEditor({
               loading={creatingCat}
               disabled={!newCatName.trim()}
             >
-              Create category
+              {t('editor.createCategory')}
             </Button>
           </div>
         )}
       </Field>
-      <Field label="Price (USD)">
+      <Field label={t('editor.price')}>
         <input
           type="number"
           inputMode="decimal"
@@ -727,7 +749,7 @@ function ItemEditor({
           className="input"
         />
       </Field>
-      <Field label="Description">
+      <Field label={t('editor.description')}>
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
@@ -736,10 +758,11 @@ function ItemEditor({
         />
       </Field>
 
-      <Field label="Allergens / Concerns">
+      <Field label={t('editor.allergens')}>
         <div className="space-y-2">
           {allergens.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
+              {/* The saved text, exactly as diners see it — never relabelled. */}
               {allergens.map((a) => (
                 <span
                   key={a}
@@ -749,7 +772,7 @@ function ItemEditor({
                   <button
                     type="button"
                     onClick={() => removeAllergen(a)}
-                    aria-label={`Remove ${a}`}
+                    aria-label={t('editor.removeAllergen', { allergen: a })}
                     className="text-warning/70 hover:text-danger"
                   >
                     ×
@@ -768,31 +791,35 @@ function ItemEditor({
                   addAllergen(allergenDraft);
                 }
               }}
-              placeholder="Type an allergen, press Enter (e.g. Peanuts)"
+              placeholder={t('editor.allergenPlaceholder')}
               className="input flex-1"
             />
             <Button type="button" variant="ghost" size="md" onClick={() => addAllergen(allergenDraft)} disabled={!allergenDraft.trim()}>
-              Add
+              {t('editor.addAllergen')}
             </Button>
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {COMMON_ALLERGENS.filter((a) => !allergens.some((x) => x.toLowerCase() === a.toLowerCase())).map((a) => (
-              <button
-                key={a}
-                type="button"
-                onClick={() => addAllergen(a)}
-                className="rounded-full border border-border bg-card px-2.5 py-1 text-xs text-muted-foreground hover:border-primary/40"
-              >
-                + {a}
-              </button>
-            ))}
+            {COMMON_ALLERGENS.filter((a) => !allergens.some((x) => x.toLowerCase() === a.value.toLowerCase())).map((a) => {
+              const label = t(`allergenPresets.${a.key}`);
+              return (
+                <button
+                  key={a.value}
+                  type="button"
+                  onClick={() => addAllergen(a.value)}
+                  title={label !== a.value ? a.value : undefined}
+                  className="rounded-full border border-border bg-card px-2.5 py-1 text-xs text-muted-foreground hover:border-primary/40"
+                >
+                  + {label}
+                </button>
+              );
+            })}
           </div>
           <p className="text-xs text-muted-foreground">
-            Shown to customers on the item page so allergy-sensitive diners can check before ordering.
+            {t('editor.allergenHint')}
           </p>
         </div>
       </Field>
-      <Field label="Image">
+      <Field label={t('editor.image')}>
         <div className="space-y-2">
           {imageUrl && (
             <div className="relative h-32 w-32 overflow-hidden rounded-xl bg-muted">
@@ -809,12 +836,12 @@ function ItemEditor({
             }}
             className="block w-full text-sm file:mr-3 file:cursor-pointer file:rounded-xl file:border-0 file:bg-primary file:px-4 file:py-2 file:text-primary-foreground"
           />
-          {uploading && <p className="text-xs text-muted-foreground">Uploading…</p>}
+          {uploading && <p className="text-xs text-muted-foreground">{t('editor.uploading')}</p>}
           <input
             type="url"
             value={imageUrl}
             onChange={(e) => setImageUrl(e.target.value)}
-            placeholder="…or paste URL"
+            placeholder={t('editor.imageUrlPlaceholder')}
             className="input"
           />
         </div>
@@ -831,19 +858,17 @@ function ItemEditor({
               setTrackStock(e.target.checked);
             }}
           />
-          Track stock
+          {t('editor.trackStock')}
         </label>
         <p className="text-xs text-muted-foreground">
-          {trackStock
-            ? 'The storefront marks this item sold out when the count reaches zero.'
-            : 'Not counted. The storefront will always offer this item.'}
+          {trackStock ? t('editor.trackStockOnHint') : t('editor.trackStockOffHint')}
         </p>
         {trackStock && (
           <div className="grid grid-cols-2 gap-2">
-            <Field label="Current stock">
+            <Field label={t('editor.currentStock')}>
               <input value={stockQuantity} onChange={(e) => setStockQuantity(e.target.value.replace(/\D/g, ''))} className="input" inputMode="numeric" />
             </Field>
-            <Field label="Low-stock alert at">
+            <Field label={t('editor.lowStockAt')}>
               <input value={lowStockThreshold} onChange={(e) => setLowStockThreshold(e.target.value.replace(/\D/g, ''))} className="input" inputMode="numeric" />
             </Field>
           </div>
@@ -861,21 +886,20 @@ function ItemEditor({
           className="mt-0.5"
         />
         <span>
-          <span className="block font-medium">Show on customer menu</span>
+          <span className="block font-medium">{t('editor.showOnMenu')}</span>
           <span className="block text-xs text-muted-foreground">
-            Off takes the dish off the customer menu without deleting it (combos that include it
-            still sell it). Copies start hidden, without option groups, so you can finish them first.
+            {t('editor.showOnMenuHint')}
           </span>
         </span>
       </label>
       <div className="flex gap-3">
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={recommended} onChange={(e) => setRecommended(e.target.checked)} />
-          Chef&apos;s recommendation
+          {t('editor.recommended')}
         </label>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={isNew} onChange={(e) => setIsNew(e.target.checked)} />
-          New
+          {t('editor.isNew')}
         </label>
       </div>
       <div className="rounded-xl border border-border bg-muted/20 p-3">
@@ -900,7 +924,7 @@ function ItemEditor({
         loading={saving}
         leftIcon={<Save className="h-4 w-4" />}
       >
-        Save
+        {t('editor.save')}
       </Button>
       <style jsx>{`
         .input {

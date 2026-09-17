@@ -1,0 +1,96 @@
+{
+  "meta": {
+    "title": "Favornoms — Nền tảng đặt món tất cả trong một cho nhà hàng",
+    "description": "Quản lý giao hàng, tự đến lấy, ăn tại quán, màn hình bếp, POS và điều phối tài xế trên cùng một nền tảng. $199/tháng, dùng thử miễn phí 14 ngày. Dành cho nhà hàng tại Mỹ."
+  },
+  "site": {
+    "description": "Quản lý đặt món trực tuyến, màn hình bếp, POS, điều phối tài xế và thanh toán Stripe trên cùng một nền tảng. Dành cho nhà hàng tại Mỹ.",
+    "ogDescription": "Quản lý đặt món trực tuyến, màn hình bếp, POS, điều phối tài xế và thanh toán Stripe trên cùng một nền tảng.",
+    "twitterDescription": "Nền tảng đặt món tất cả trong một cho nhà hàng tại Mỹ — thanh toán Stripe, màn hình bếp, điều phối tài xế."
+  },
+  "legacyInstall": "<strong>Bạn đã cài ứng dụng này từ thực đơn của một nhà hàng?</strong> Ứng dụng được cài trước khi mỗi nhà hàng có ứng dụng riêng, nên chỉ có thể mở trang này. Hãy mở thực đơn của nhà hàng đó trong trình duyệt và cài lại — ứng dụng mới mang tên, logo của nhà hàng và mở thẳng vào thực đơn. Sau đó bạn có thể gỡ ứng dụng này.",
+  "hero": {
+    "badge": "Sẵn sàng cho thị trường Mỹ",
+    "titleLine1": "Nhà hàng của bạn.",
+    "titleLine2": "Trực tuyến, gói gọn một nơi.",
+    "body": "Nhận đơn trực tuyến, vận hành bếp, điều phối tài xế, nhận thanh toán thẻ và phát triển lượng khách quen — không cần xoay xở với năm công cụ khác nhau.",
+    "startTrial": "Dùng thử miễn phí 14 ngày",
+    "seeLiveMenu": "Xem thực đơn thực tế",
+    "noCard": "Không cần thẻ tín dụng · mở khóa mọi tính năng trong thời gian dùng thử",
+    "mockCheckout": "Thanh toán · {total}"
+  },
+  "trustedBy": "Được các nhà hàng độc lập từ Brooklyn đến Brentwood tin dùng",
+  "features": {
+    "title": "Mọi thứ bạn cần để vận hành quán",
+    "subtitle": "Năm ứng dụng. Một cơ sở dữ liệu. Không khâu nào phải chuyển tay.",
+    "storefront": {
+      "title": "Cửa hàng trực tuyến cho khách",
+      "description": "Thực đơn mang thương hiệu của bạn trên tên miền riêng. Giỏ hàng, thanh toán, đổi điểm tích lũy."
+    },
+    "kitchen": {
+      "title": "Màn hình bếp",
+      "description": "Phiếu theo thời gian thực, chia món theo khu bếp, nhấn giữ để báo hết món — giữ bếp luôn chạy đều."
+    },
+    "payments": {
+      "title": "Thanh toán bằng thẻ",
+      "description": "Nhận thanh toán thẻ trực tuyến và tại quầy. Hoàn tiền và hóa đơn đúng quy định thuế bán hàng trên cùng một trang tổng quan."
+    },
+    "dispatch": {
+      "title": "Điều phối tài xế",
+      "description": "Tự động giao đơn cho tài xế đang nhận đơn gần nhất. Khách theo dõi vị trí GPS trực tiếp."
+    },
+    "marketing": {
+      "title": "Công cụ marketing",
+      "description": "Gửi thông báo đẩy, SMS, email hàng loạt. Điểm tích lũy. Mã khuyến mãi. Kéo khách quay lại."
+    },
+    "reports": {
+      "title": "Báo cáo và phân tích",
+      "description": "Doanh thu, giờ cao điểm, món bán chạy, giá trị vòng đời khách hàng (LTV) — không cần xuất ra Excel."
+    }
+  },
+  "pricing": {
+    "title": "Một gói cơ bản. Thêm những gì bạn cần.",
+    "subtitle": "Không giới hạn số món. Không giới hạn số đơn. Hủy bất cứ lúc nào.",
+    "baseName": "Cơ bản",
+    "perMonth": "{price}<unit>/tháng</unit>",
+    "baseSummary": "Mọi thứ bạn cần để vận hành một cơ sở, bao gồm thanh toán bằng thẻ.",
+    "includes": {
+      "storefront": "Cửa hàng trực tuyến mang thương hiệu trên tên miền riêng",
+      "payments": "Thanh toán bằng thẻ và tiền mặt khi đặt hàng",
+      "kitchen": "Màn hình bếp, POS và gọi món tại quầy",
+      "growth": "Điểm tích lũy, khuyến mãi, thẻ quà tặng và báo cáo",
+      "aiImport": "Nhập thực đơn bằng AI — chụp ảnh thực đơn là có ngay thực đơn"
+    },
+    "trialNote": "Miễn phí 14 ngày, bao gồm mọi tiện ích bổ sung. Không cần thẻ cho đến khi bạn quyết định.",
+    "addOnsTitle": "Thêm tiện ích khi bạn cần",
+    "addOns": {
+      "delivery": {
+        "name": "Giao hàng",
+        "description": "Đội tài xế riêng, điều phối tự động và theo dõi trực tiếp."
+      },
+      "aiSuite": {
+        "name": "AI Suite",
+        "description": "Bảng hiệu kỹ thuật số và trợ lý giọng nói AI."
+      },
+      "extraBranch": {
+        "name": "Thêm chi nhánh",
+        "description": "Mỗi chi nhánh thêm đều có đầy đủ tính năng như chi nhánh chính."
+      }
+    }
+  },
+  "footer": {
+    "help": "Trợ giúp",
+    "privacy": "Quyền riêng tư",
+    "terms": "Điều khoản",
+    "account": "Tài khoản",
+    "contact": "Liên hệ"
+  },
+  "notFound": {
+    "metaTitle": "Không tìm thấy trang",
+    "title": "Không tìm thấy trang này",
+    "body": "Nhà hàng hoặc trang bạn tìm đã được chuyển đi hoặc không tồn tại. Hãy về trang chủ hoặc xem bản demo.",
+    "backHome": "Về trang chủ",
+    "seeDemo": "Xem bản demo"
+  },
+  "loading": "Đang tải…"
+}

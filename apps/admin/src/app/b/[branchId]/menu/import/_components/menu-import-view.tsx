@@ -2,8 +2,15 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
+import { useLocale, useTranslations } from 'next-intl';
 import { Check, Loader2, Sparkles, Trash2, Upload } from 'lucide-react';
-import type { MenuCategory } from '@favornoms/shared';
+import {
+  DEFAULT_UI_LOCALE,
+  billingErrorMessage,
+  describeBillingError,
+  isUiLocale,
+  type MenuCategory,
+} from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
 import { getSupabaseEnv } from '@favornoms/database/env';
 import { Badge, Button, Card, IconButton } from '@favornoms/ui';
@@ -18,6 +25,50 @@ interface ProposedItem {
   _accepted?: boolean;
 }
 
+/** Kitchen stations the importer knows; anything else the AI returns is shown as it came. */
+const STATION_KEYS = ['hot', 'cold', 'bar', 'dessert', 'expo'] as const;
+function isKnownStation(value: string): value is (typeof STATION_KEYS)[number] {
+  return (STATION_KEYS as readonly string[]).includes(value);
+}
+
+type DbErrorKey = 'permissionDenied' | 'network' | 'duplicate' | 'inUse' | 'invalidValue' | 'generic';
+
+/** Raw PostgREST text never reaches the merchant: known codes get a translated sentence. */
+function dbErrorKey(err: { code?: string; message?: string }): DbErrorKey {
+  const message = err.message ?? '';
+  if (err.code === '42501' || /row-level security|permission denied/i.test(message)) return 'permissionDenied';
+  if (/failed to fetch|networkerror|network request failed/i.test(message)) return 'network';
+  if (err.code === '23505') return 'duplicate';
+  if (err.code === '23503') return 'inUse';
+  if (err.code && /^(22|23)/.test(err.code)) return 'invalidValue';
+  return 'generic';
+}
+
+/** Storage upload failures, as a message key under `menuExtras`. */
+function uploadErrorKey(message: string): string {
+  if (/maximum allowed size|too large|413/i.test(message)) return 'import.errors.fileTooLarge';
+  if (/mime|file type|not supported/i.test(message)) return 'import.errors.fileTypeNotAllowed';
+  if (/row-level security|permission|unauthorized|403/i.test(message)) return 'errors.permissionDenied';
+  if (/failed to fetch|networkerror|network request failed/i.test(message)) return 'errors.network';
+  return 'import.errors.uploadFailed';
+}
+
+/** Error codes returned by the import-menu edge function, as a message key under `menuExtras`. */
+function analyzeErrorKey(code: string | undefined): string {
+  switch (code) {
+    case 'auth_required':
+      return 'import.errors.signedOut';
+    case 'not_authorized':
+      return 'import.errors.notAllowed';
+    case 'anthropic_not_configured':
+      return 'import.errors.aiUnavailable';
+    case 'rate_limited':
+      return 'import.errors.rateLimited';
+    default:
+      return 'import.errors.analyzeFailed';
+  }
+}
+
 export function MenuImportView({
   branchId,
   categories,
@@ -25,6 +76,9 @@ export function MenuImportView({
   branchId: string;
   categories: MenuCategory[];
 }) {
+  const t = useTranslations('menuExtras');
+  const rawLocale = useLocale();
+  const locale = isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE;
   const router = useRouter();
   const [file, setFile] = React.useState<File | null>(null);
   const [imageUrl, setImageUrl] = React.useState<string | null>(null);
@@ -47,11 +101,16 @@ export function MenuImportView({
         upsert: false,
         contentType: file.type,
       });
-      if (upErr) throw new Error(upErr.message);
+      if (upErr) {
+        console.error('[menu-import] upload failed', upErr);
+        setError(t(uploadErrorKey(upErr.message)));
+        return;
+      }
       const { data: pub } = supabase.storage.from('branch-assets').getPublicUrl(path);
       setImageUrl(pub.publicUrl);
     } catch (err) {
-      setError((err as Error).message);
+      console.error('[menu-import] upload failed', err);
+      setError(t(uploadErrorKey((err as Error)?.message ?? '')));
     } finally {
       setBusy(false);
     }
@@ -65,7 +124,10 @@ export function MenuImportView({
       const supabase = getBrowserClient();
       const { data: session } = await supabase.auth.getSession();
       const accessToken = session.session?.access_token;
-      if (!accessToken) throw new Error('not_signed_in');
+      if (!accessToken) {
+        setError(t('import.errors.signedOut'));
+        return;
+      }
 
       const { url } = getSupabaseEnv();
       const res = await fetch(`${url}/functions/v1/import-menu`, {
@@ -77,10 +139,17 @@ export function MenuImportView({
         body: JSON.stringify({ image_url: imageUrl, branch_id: branchId, hint }),
       });
       const body = (await res.json()) as { items?: ProposedItem[]; error?: string };
-      if (!res.ok || body.error) throw new Error(body.error ?? `http_${res.status}`);
+      if (!res.ok || body.error) {
+        console.error('[menu-import] analyze failed', res.status, body);
+        const billing = describeBillingError(body.error ?? '');
+        setError(billing ? billingErrorMessage(billing, locale) : t(analyzeErrorKey(body.error)));
+        return;
+      }
       setItems((body.items ?? []).map((i) => ({ ...i, _accepted: true })));
     } catch (err) {
-      setError((err as Error).message);
+      console.error('[menu-import] analyze failed', err);
+      const key = dbErrorKey({ message: (err as Error)?.message });
+      setError(key === 'network' ? t('errors.network') : t('import.errors.analyzeFailed'));
     } finally {
       setBusy(false);
     }
@@ -120,32 +189,37 @@ export function MenuImportView({
       const { error: insErr, count } = await supabase
         .from('menu_items')
         .insert(rows, { count: 'exact' });
-      if (insErr) throw new Error(insErr.message);
+      if (insErr) {
+        console.error('[menu-import] insert failed', insErr);
+        setError(t(`errors.${dbErrorKey(insErr)}`));
+        return;
+      }
       setSavedCount(count ?? rows.length);
       setItems([]);
       setImageUrl(null);
       setFile(null);
       router.refresh();
     } catch (err) {
-      setError((err as Error).message);
+      console.error('[menu-import] import failed', err);
+      setError(t(`errors.${dbErrorKey({ message: (err as Error)?.message })}`));
     } finally {
       setBusy(false);
     }
   };
 
+  const acceptedCount = items.filter((i) => i._accepted).length;
+
   return (
     <div className="container max-w-4xl py-8">
       <header className="mb-6 px-2 pl-16 lg:px-0">
-        <h1 className="font-display text-3xl font-bold">Import menu with AI</h1>
-        <p className="mt-1 text-muted-foreground">
-          Upload a photo of a printed menu — Claude extracts items, prices, and categories for review.
-        </p>
+        <h1 className="font-display text-3xl font-bold">{t('import.title')}</h1>
+        <p className="mt-1 text-muted-foreground">{t('import.subtitle')}</p>
       </header>
 
       <Card className="mb-6 space-y-4 p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <label className="flex-1">
-            <span className="mb-1.5 block text-sm font-medium">Menu image</span>
+            <span className="mb-1.5 block text-sm font-medium">{t('import.menuImage')}</span>
             <input
               type="file"
               accept="image/*"
@@ -160,25 +234,23 @@ export function MenuImportView({
             loading={busy && !!file && !imageUrl}
             leftIcon={<Upload className="h-4 w-4" />}
           >
-            Upload
+            {t('import.upload')}
           </Button>
         </div>
 
         <label>
-          <span className="mb-1.5 block text-sm font-medium">Hint to AI (optional)</span>
+          <span className="mb-1.5 block text-sm font-medium">{t('import.hint')}</span>
           <input
             value={hint}
             onChange={(e) => setHint(e.target.value)}
-            placeholder="e.g. American casual, prices in USD"
+            placeholder={t('import.hintPlaceholder')}
             className="input"
           />
         </label>
 
         {imageUrl && (
           <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Image uploaded. Click Analyze to extract menu items.
-            </p>
+            <p className="text-sm text-muted-foreground">{t('import.uploaded')}</p>
             <Button
               variant="gradient"
               onClick={analyze}
@@ -186,7 +258,7 @@ export function MenuImportView({
               loading={busy && items.length === 0}
               leftIcon={<Sparkles className="h-4 w-4" />}
             >
-              Analyze with AI
+              {t('import.analyze')}
             </Button>
           </div>
         )}
@@ -194,7 +266,7 @@ export function MenuImportView({
         {error && <p className="rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p>}
         {savedCount !== null && (
           <p className="rounded-xl bg-success/10 px-4 py-3 text-sm text-success">
-            Imported {savedCount} item{savedCount === 1 ? '' : 's'}.
+            {t('import.imported', { count: savedCount })}
           </p>
         )}
 
@@ -230,16 +302,16 @@ export function MenuImportView({
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="font-display text-lg font-semibold">
-              {items.filter((i) => i._accepted).length} of {items.length} items selected
+              {t('import.selected', { selected: acceptedCount, total: items.length })}
             </h2>
             <Button
               variant="gradient"
               onClick={importAccepted}
-              disabled={busy || items.filter((i) => i._accepted).length === 0}
+              disabled={busy || acceptedCount === 0}
               loading={busy}
               leftIcon={<Check className="h-4 w-4" />}
             >
-              Import selected
+              {t('import.importSelected')}
             </Button>
           </div>
 
@@ -289,16 +361,20 @@ export function MenuImportView({
                         ),
                       )
                     }
-                    placeholder="Description"
+                    placeholder={t('import.descriptionPlaceholder')}
                     className="w-full bg-transparent text-sm text-muted-foreground outline-none"
                   />
                   <div className="mt-1 flex items-center gap-2">
                     <Badge variant="muted">{item.category}</Badge>
-                    {item.station && <Badge variant="muted">{item.station}</Badge>}
+                    {item.station && (
+                      <Badge variant="muted">
+                        {isKnownStation(item.station) ? t(`import.stations.${item.station}`) : item.station}
+                      </Badge>
+                    )}
                   </div>
                 </div>
                 <IconButton
-                  label="Remove"
+                  label={t('import.remove')}
                   size="sm"
                   className="text-danger"
                   onClick={() =>
@@ -316,7 +392,7 @@ export function MenuImportView({
       {busy && items.length === 0 && imageUrl && (
         <Card className="flex items-center justify-center gap-2 p-8 text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin" />
-          Analyzing image with Claude…
+          {t('import.analyzing')}
         </Card>
       )}
     </div>

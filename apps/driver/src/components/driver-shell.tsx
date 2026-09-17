@@ -18,7 +18,7 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
   const tabs = [
     { href: '/app/home', label: t('home'), icon: Home },
     { href: '/app/active', label: t('active'), icon: Navigation, badge },
-    { href: '/app/map', label: 'Map', icon: MapIcon },
+    { href: '/app/map', label: t('map'), icon: MapIcon },
     { href: '/app/history', label: t('history'), icon: History },
     { href: '/app/earnings', label: t('earnings'), icon: Wallet },
     { href: '/app/profile', label: t('profile'), icon: User },
@@ -29,7 +29,7 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
       <main className="flex-1 pb-24">{children}</main>
 
       <nav
-        aria-label="Primary"
+        aria-label={t('primary')}
         className="fixed inset-x-0 bottom-0 z-40 border-t border-border/60 bg-card pb-safe"
       >
         <ul className="grid h-[68px] grid-cols-6">

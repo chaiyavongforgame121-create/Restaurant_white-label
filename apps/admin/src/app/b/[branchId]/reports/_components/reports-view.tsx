@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button, Card } from '@favornoms/ui';
 import { getBrowserClient } from '@favornoms/database/client';
@@ -14,8 +15,9 @@ import { SectionMenu } from './section-menu';
 import { SectionDelivery } from './section-delivery';
 import { SectionCustomers } from './section-customers';
 import { SectionPayments } from './section-payments';
+import { ErrorDetail } from './section-frame';
 import { reportRangeLabel, type ReportRange } from './report-range';
-import type { ReportSections } from './report-queries';
+import type { ReportSections, SectionError } from './report-queries';
 
 interface Props {
   branchId: string;
@@ -28,14 +30,7 @@ interface Props {
   sections: ReportSections;
 }
 
-const ANCHORS = [
-  { id: 'sales', label: 'Sales' },
-  { id: 'orders', label: 'Orders' },
-  { id: 'menu', label: 'Menu' },
-  { id: 'delivery', label: 'Delivery' },
-  { id: 'customers', label: 'Customers' },
-  { id: 'payments', label: 'Payments' },
-];
+const ANCHORS = ['sales', 'orders', 'menu', 'delivery', 'customers', 'payments'] as const;
 
 export function ReportsView({
   branchId,
@@ -45,24 +40,31 @@ export function ReportsView({
   today,
   sections,
 }: Props) {
+  const t = useTranslations('reports');
   // The tier names are the restaurant’s to set, so the customers table has to ask for them
   // rather than print the enum key a diner never sees.
   const [tierLabels, setTierLabels] = React.useState<Record<string, string>>({});
   React.useEffect(() => {
     void getLoyaltyProgram(getBrowserClient(), branchId).then((p) => {
-      if (p) setTierLabels(Object.fromEntries(p.tiers.map((t) => [t.key, t.label])));
+      if (p) setTierLabels(Object.fromEntries(p.tiers.map((tier) => [tier.key, tier.label])));
     });
   }, [branchId]);
   const router = useRouter();
   const results = Object.values(sections);
   const allFailed = results.every((r) => r.data === null);
+  const rangeLabel = reportRangeLabel(range);
 
   const title = (
     <header className="mb-3 flex flex-wrap items-end justify-between gap-3 px-2 pl-16 lg:px-0">
       <div>
-        <h1 className="font-display text-3xl font-bold">Reports</h1>
+        <h1 className="font-display text-3xl font-bold">{t('title')}</h1>
         <p className="mt-1 text-muted-foreground">
-          {reportRangeLabel(range)} · {range.from} to {range.to} ({timezone})
+          {t('subtitle', {
+            label: t(`range.label.${rangeLabel.key}`, rangeLabel.values),
+            from: range.from,
+            to: range.to,
+            timezone,
+          })}
         </p>
       </div>
       {/* Export stays out of the pinned bar below: seven buttons wrap to three rows on a
@@ -90,14 +92,14 @@ export function ReportsView({
         // overflow-x-auto belongs on the nav and never on the sticky wrapper: it resolves
         // overflow-y to auto as well, which would turn the bar into a scroll container and
         // clip the range picker's pills.
-        <nav aria-label="Report sections" className="mt-2 flex gap-1 overflow-x-auto pl-16 lg:pl-0">
-          {ANCHORS.map((a) => (
+        <nav aria-label={t('sectionsNav')} className="mt-2 flex gap-1 overflow-x-auto pl-16 lg:pl-0">
+          {ANCHORS.map((id) => (
             <a
-              key={a.id}
-              href={`#${a.id}`}
+              key={id}
+              href={`#${id}`}
               className="focus-ring whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground"
             >
-              {a.label}
+              {t(`anchors.${id}`)}
             </a>
           ))}
         </nav>
@@ -106,31 +108,29 @@ export function ReportsView({
   );
 
   if (allFailed) {
-    // Failure is not an empty week. "Try again later" is unactionable, so show the real
-    // database error the merchant can quote to support.
-    const first = results.find((r) => r.error)?.error;
+    // Failure is not an empty week. "Try again later" is unactionable, so show what went
+    // wrong and the database's error code the merchant can quote to support.
+    const first: SectionError = results.find((r) => r.error)?.error ?? {
+      code: 'unknown',
+      ref: null,
+    };
     return (
       <div className="container max-w-6xl py-8">
         {title}
         {toolbar(false)}
         <Card className="p-6" role="alert">
           <h2 className="flex items-center gap-2 font-display text-lg font-semibold text-danger">
-            <AlertTriangle className="h-5 w-5" /> Reports could not be loaded
+            <AlertTriangle className="h-5 w-5" /> {t('failed.title')}
           </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Your sales data is safe — this is a problem reading it, not a problem with your
-            orders. Reload the page; if it keeps happening, send the message below to support.
-          </p>
-          <p className="mt-3 break-words rounded-xl bg-danger/10 px-4 py-3 font-mono text-xs text-danger">
-            {first ?? 'Unknown error from the reports service.'}
-          </p>
+          <p className="mt-2 text-sm text-muted-foreground">{t('failed.body')}</p>
+          <ErrorDetail error={first} />
           <div className="mt-4">
             <Button
               variant="outline"
               leftIcon={<RefreshCw className="h-4 w-4" />}
               onClick={() => router.refresh()}
             >
-              Try again
+              {t('retry')}
             </Button>
           </div>
         </Card>
@@ -146,12 +146,9 @@ export function ReportsView({
         {toolbar(false)}
         <Card className="p-6 text-center">
           <h2 className="font-display text-lg font-semibold">
-            No orders between {range.from} and {range.to}
+            {t('empty.title', { from: range.from, to: range.to })}
           </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Reports loaded fine — this branch just hasn&apos;t taken an order in this window.
-            Try a wider range above.
-          </p>
+          <p className="mt-2 text-sm text-muted-foreground">{t('empty.body')}</p>
         </Card>
       </div>
     );

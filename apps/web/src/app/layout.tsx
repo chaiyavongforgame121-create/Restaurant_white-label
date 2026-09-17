@@ -1,51 +1,55 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter, Playfair_Display } from 'next/font/google';
+import { Inter, Noto_Sans_Thai, Playfair_Display } from 'next/font/google';
 import { NextIntlClientProvider } from 'next-intl';
-import { getLocale, getMessages } from 'next-intl/server';
-import { ConnectionBanner, ThemeProvider } from '@favornoms/ui';
+import { getLocale, getMessages, getTranslations } from 'next-intl/server';
+import { ConnectionBanner, ThemeProvider, UiLocaleProvider } from '@favornoms/ui';
+import { DEFAULT_UI_LOCALE, isUiLocale } from '@favornoms/shared';
 import { ServiceWorkerRegistrar } from '@/components/service-worker';
 import { CookieBanner } from '@/components/cookie-banner';
 import { InstallPrompt } from '@/components/install-prompt';
 import './globals.css';
 
-const inter = Inter({ subsets: ['latin'], variable: '--font-sans', display: 'swap' });
+// Vietnamese needs the extended subsets; Thai has no glyphs in Inter or Playfair at all, so it
+// gets its own family, loaded only when Thai text is on the page (unicode-range, not preloaded).
+const inter = Inter({ subsets: ['latin', 'vietnamese'], variable: '--font-sans', display: 'swap' });
+const notoThai = Noto_Sans_Thai({ subsets: ['thai'], variable: '--font-thai', display: 'swap', preload: false });
 const playfair = Playfair_Display({
-  subsets: ['latin'],
+  subsets: ['latin', 'vietnamese'],
   variable: '--font-display',
   display: 'swap',
 });
 
-export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://favornoms.com'),
-  title: { default: 'Favornoms — All-in-one ordering platform for restaurants', template: '%s · Favornoms' },
-  description:
-    'Run online ordering, kitchen display, POS, driver dispatch, and Stripe payments from one platform. Built for US restaurants.',
-  manifest: '/manifest.webmanifest',
-  applicationName: 'Favornoms',
-  appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Favornoms' },
-  icons: {
-    icon: [
-      { url: '/icon.svg', type: 'image/svg+xml' },
-      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
-    ],
-    apple: '/apple-touch-icon.png',
-  },
-  openGraph: {
-    type: 'website',
-    siteName: 'Favornoms',
-    title: 'Favornoms — All-in-one ordering platform for restaurants',
-    description:
-      'Run online ordering, kitchen display, POS, driver dispatch, and Stripe payments from one platform.',
-    images: ['/icon-512.png'],
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'Favornoms',
-    description:
-      'All-in-one ordering platform for US restaurants — Stripe payments, kitchen display, driver dispatch.',
-    images: ['/icon-512.png'],
-  },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('landing');
+  return {
+    metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://favornoms.com'),
+    title: { default: t('meta.title'), template: '%s · Favornoms' },
+    description: t('site.description'),
+    manifest: '/manifest.webmanifest',
+    applicationName: 'Favornoms',
+    appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Favornoms' },
+    icons: {
+      icon: [
+        { url: '/icon.svg', type: 'image/svg+xml' },
+        { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+      ],
+      apple: '/apple-touch-icon.png',
+    },
+    openGraph: {
+      type: 'website',
+      siteName: 'Favornoms',
+      title: t('meta.title'),
+      description: t('site.ogDescription'),
+      images: ['/icon-512.png'],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: 'Favornoms',
+      description: t('site.twitterDescription'),
+      images: ['/icon-512.png'],
+    },
+  };
+}
 
 /**
  * Chrome fires `beforeinstallprompt` exactly once, early, and never replays it.
@@ -86,6 +90,7 @@ export const viewport: Viewport = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const locale = await getLocale();
   const messages = await getMessages();
+  const t = await getTranslations('landing');
 
   return (
     // ThemeProvider stamps `.dark` on <html> from a blocking script before the first
@@ -93,7 +98,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     // rendered. Without this, that difference is reported as a hydration mismatch.
     <html
       lang={locale}
-      className={`${inter.variable} ${playfair.variable}`}
+      className={`${inter.variable} ${playfair.variable} ${notoThai.variable}`}
       suppressHydrationWarning
     >
       <head>
@@ -107,21 +112,20 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           className="border-b border-border bg-warning/10 px-4 py-3 text-sm text-foreground"
         >
           <p className="mx-auto max-w-3xl">
-            <strong>Installed this from a restaurant&apos;s menu?</strong> It was installed before
-            each restaurant had an app of its own, so it can only ever open this page. Open that
-            restaurant&apos;s menu in your browser and install it again — the new one carries their
-            name and logo and starts on their menu. You can remove this one afterwards.
+            {t.rich('legacyInstall', { strong: (chunks) => <strong>{chunks}</strong> })}
           </p>
         </div>
         <NextIntlClientProvider messages={messages} locale={locale}>
-          {/* Default theme; tenant layouts re-wrap with branded theme */}
-          <ThemeProvider theme={{}}>
-            <ConnectionBanner />
-            <ServiceWorkerRegistrar />
-            {children}
-            <CookieBanner />
-            <InstallPrompt />
-          </ThemeProvider>
+          <UiLocaleProvider locale={isUiLocale(locale) ? locale : DEFAULT_UI_LOCALE}>
+            {/* Default theme; tenant layouts re-wrap with branded theme */}
+            <ThemeProvider theme={{}}>
+              <ConnectionBanner />
+              <ServiceWorkerRegistrar />
+              {children}
+              <CookieBanner />
+              <InstallPrompt />
+            </ThemeProvider>
+          </UiLocaleProvider>
         </NextIntlClientProvider>
         <script dangerouslySetInnerHTML={{ __html: REVEAL_LEGACY_INSTALL_NOTICE }} />
       </body>

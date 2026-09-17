@@ -1,6 +1,6 @@
 import { CcpaToggle } from './_components/ccpa-toggle';
 
-export const metadata = { title: 'CCPA Notice · Favornoms' };
+export const metadata = { title: 'CCPA Notice' };
 
 export default function CcpaPage() {
   return (

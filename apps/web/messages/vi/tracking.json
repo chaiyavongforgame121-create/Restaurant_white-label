@@ -1,0 +1,156 @@
+{
+  "title": "Theo dõi đơn hàng",
+  "orderNumber": "Đơn hàng {number}",
+  "back": "Quay lại",
+  "statuses": {
+    "confirmed": "Đã xác nhận đơn",
+    "preparing": "Bếp đang chuẩn bị",
+    "ready": "Đã xong, chờ lấy",
+    "readyDineIn": "Đã xong, chờ phục vụ",
+    "out_for_delivery": "Đang giao",
+    "completed": "Đã giao",
+    "completedDineIn": "Đã phục vụ",
+    "completedPickup": "Đã nhận món"
+  },
+  "driverAssigned": "{name} đang mang đơn hàng đến cho bạn",
+  "callDriver": "Gọi tài xế",
+  "rateOrder": "Đánh giá đơn hàng",
+  "reconnecting": "Đang kết nối lại… trang này có thể chậm cập nhật một chút.",
+  "arrivingNow": "🛵 Sắp đến",
+  "lastSeen": "Vị trí cuối {age}",
+  "closed": {
+    "refunded": "Đơn hàng này đã được hoàn tiền",
+    "cancelled": "Đơn hàng này đã bị hủy",
+    "contactRestaurant": "Nếu điều này nằm ngoài dự kiến của bạn, vui lòng liên hệ nhà hàng."
+  },
+  "driver": {
+    "almostThere": "Tài xế sắp đến rồi!",
+    "finishingOtherDelivery": "Tài xế đang giao nốt một đơn gần đó trước",
+    "collecting": "Tài xế đang đến lấy đơn hàng của bạn",
+    "onTheWay": "Tài xế đang trên đường giao",
+    "distance": "{miles} mi",
+    "waitingForLocation": "Đang chờ vị trí của tài xế…",
+    "locationStale": "Vị trí cập nhật lần cuối {age} — bản đồ và thời gian dự kiến có thể chưa chính xác",
+    "etaUpdated": "Còn {minutes} phút nữa đến · cập nhật {age}",
+    "updated": "Cập nhật {age}",
+    "includesOtherStop": "gồm cả điểm giao khác"
+  },
+  "items": {
+    "title": "Món",
+    "viewReceipt": "Xem hóa đơn đầy đủ →"
+  },
+  "cardPayment": {
+    "title": "Chưa thể thanh toán bằng thẻ tại đây",
+    "body": "Đơn hàng này được đặt với phương thức thanh toán bằng thẻ, nhưng hiện chúng tôi chưa thể thu tiền qua thẻ trực tuyến. Vui lòng thanh toán trực tiếp cho nhà hàng — bạn có thể trả khi đến lấy đơn hoặc khi đơn được giao đến. Đơn hàng của bạn không bị hủy.",
+    "devNote": "Chỉ dành cho bản phát triển: đánh dấu đơn đã thanh toán để thử phần còn lại của quy trình.",
+    "devConfirm": "Xác nhận thử (chỉ bản phát triển)"
+  },
+  "transfer": {
+    "confirmedTitle": "Đã xác nhận chuyển khoản",
+    "confirmedBody": "Nhà hàng đã kiểm tra biên lai và bắt đầu làm đơn của bạn.",
+    "rejectedTitle": "Biên lai chuyển khoản của bạn không được chấp nhận",
+    "waitingTitle": "Đang chờ nhà hàng kiểm tra biên lai",
+    "reviewTitle": "Kiểm tra biên lai rồi xác nhận",
+    "payTitle": "Thanh toán {amount} để tiếp tục",
+    "rejectedReason": "Lý do: {reason}",
+    "rejectedNoReason": "Vui lòng tải lên ảnh chuyển khoản rõ hơn.",
+    "waitingBody": "Chúng tôi sẽ bắt đầu làm đơn ngay khi nhà hàng xác nhận. Thường chỉ mất vài phút.",
+    "reviewBody": "Xem lại ảnh bên dưới. Nếu chưa đúng thì thay ảnh khác, sau đó xác nhận bạn đã thanh toán — lúc đó biên lai mới được gửi đến nhà hàng.",
+    "payBody": "Quét mã, chuyển khoản số tiền tổng cộng, rồi tải lên ảnh xác nhận giao dịch.",
+    "qrAlt": "Mã QR thanh toán",
+    "slipAlt": "Biên lai chuyển khoản của bạn",
+    "replacePhoto": "Tải ảnh khác",
+    "choosePhoto": "Chọn ảnh",
+    "confirmPaid": "Tôi đã thanh toán — gửi cho nhà hàng",
+    "errors": {
+      "fileType": "Vui lòng tải lên ảnh biên lai dạng PNG, JPEG hoặc WebP.",
+      "tooLarge": "Ảnh này lớn hơn 10 MB.",
+      "uploadFailed": "Không tải ảnh lên được. Hãy kiểm tra kết nối rồi thử lại.",
+      "notYourOrder": "Không tìm thấy khoản chuyển khoản này trong tài khoản của bạn. Hãy đăng nhập bằng tài khoản đã dùng để đặt hàng.",
+      "slipRequired": "Hãy tải lên ảnh chuyển khoản trước khi xác nhận.",
+      "generic": "Đã xảy ra lỗi. Vui lòng thử lại."
+    }
+  },
+  "actions": {
+    "cancelPrompt": "Bạn đổi ý? Nhà hàng chưa xác nhận chuyển khoản nên chưa chuẩn bị gì cả — bạn vẫn có thể hủy đơn này.",
+    "cancelOrder": "Hủy đơn này",
+    "contactToChange": "Cần thay đổi hoặc hủy đơn này? Vui lòng liên hệ trực tiếp với nhà hàng — họ có thể cập nhật giúp bạn khi đơn vẫn đang được chuẩn bị.",
+    "cancelErrors": {
+      "signIn": "Vui lòng đăng nhập bằng tài khoản đã đặt hàng để hủy đơn này.",
+      "otherAccount": "Đơn hàng này thuộc tài khoản khác. Vui lòng liên hệ nhà hàng để hủy.",
+      "tooLate": "Đơn hàng này đã được xử lý tiếp nên không thể hủy tại đây — vui lòng liên hệ nhà hàng.",
+      "generic": "Chưa thực hiện được. Vui lòng thử lại hoặc liên hệ nhà hàng."
+    }
+  },
+  "rating": {
+    "thanksTitle": "Cảm ơn bạn!",
+    "thanksBody": "Góp ý của bạn giúp nhà hàng ngày càng tốt hơn.",
+    "driverTitle": "Tài xế của bạn thế nào?",
+    "foodTitle": "Món ăn thế nào?",
+    "driverFirst": "Đánh giá tài xế trước — tiếp theo là nhà hàng.",
+    "driverOnly": "Đánh giá tài xế đã giao đơn cho bạn.",
+    "foodLast": "Bước cuối — món ăn thế nào?",
+    "foodOnly": "Đánh giá món ăn để hoàn tất.",
+    "step": "Bước {current}/{total}",
+    "driverLabel": "Tài xế",
+    "foodLabel": "Món ăn",
+    "driverPlaceholder": "Bạn muốn nói gì về tài xế? (không bắt buộc)",
+    "foodPlaceholder": "Bạn muốn nói gì về món ăn? (không bắt buộc)",
+    "next": "Tiếp — đánh giá nhà hàng",
+    "submit": "Gửi đánh giá",
+    "driverRequired": "Bắt buộc chấm sao cho tài xế.",
+    "foodRequired": "Bắt buộc chấm sao cho món ăn.",
+    "skip": "Bỏ qua lúc này",
+    "submittedTitle": "Cảm ơn góp ý của bạn!",
+    "onDriver": "Về tài xế: “{comment}”",
+    "onFood": "Về món ăn: “{comment}”",
+    "starsSummary": "{label}: {value}/5 sao",
+    "starButton": "{label}: {count, plural, other {# sao}}",
+    "errors": {
+      "signIn": "Vui lòng đăng nhập bằng tài khoản đã đặt hàng để đánh giá đơn này.",
+      "noAccount": "Đơn hàng này không gắn với tài khoản nào nên không thể đánh giá.",
+      "saveFailed": "Không lưu được đánh giá. Vui lòng thử lại."
+    }
+  },
+  "issue": {
+    "report": "Báo cáo sự cố",
+    "cancel": "Hủy",
+    "categories": {
+      "missing_item": "Thiếu món",
+      "wrong_item": "Giao nhầm món",
+      "quality": "Chất lượng món ăn có vấn đề",
+      "delivery": "Sự cố giao hàng",
+      "payment": "Thanh toán / hóa đơn",
+      "other": "Khác"
+    },
+    "placeholder": "Hãy cho chúng tôi biết chuyện gì đã xảy ra…",
+    "describe": "Vui lòng mô tả sự cố.",
+    "sent": "Cảm ơn bạn — nhà hàng đã được thông báo.",
+    "submit": "Gửi",
+    "sendFailed": "Không gửi được báo cáo. Vui lòng thử lại."
+  },
+  "chat": {
+    "button": "Nhắn tin",
+    "title": "Nhắn tin với tài xế",
+    "guestBody": "Tính năng nhắn tin chỉ có khi bạn đặt hàng bằng tài khoản. Với đơn khách này, hãy nhấn <strong>Gọi tài xế</strong> để liên hệ trực tiếp.",
+    "unread": "{count, plural, other {# tin nhắn chưa đọc}}",
+    "earlier": "Trước đó, với tài xế trước ({count})",
+    "pastRiderGone": "Tài xế đó không còn giao đơn của bạn.",
+    "nothingSaid": "Không có tin nhắn nào.",
+    "loading": "Đang tải…",
+    "closesWhenDone": "Cuộc trò chuyện sẽ đóng khi giao hàng xong.",
+    "archiveError": "Không tải được cuộc trò chuyện trước đó.",
+    "quickReplies": {
+      "whereAreYou": "Bạn đang ở đâu?",
+      "leaveAtDoor": "Để ở trước cửa nhé",
+      "comingDown": "Tôi xuống ngay"
+    },
+    "photoErrors": {
+      "unsupportedType": "Tệp này không phải ảnh có thể gửi. Hãy dùng ảnh JPG, PNG hoặc WebP.",
+      "tooLarge": "Ảnh quá lớn. Hãy thử chụp ảnh mới.",
+      "prepareFailed": "Trình duyệt không xử lý được ảnh này. Hãy thử ảnh khác.",
+      "uploadFailed": "Ảnh chưa tải lên được. Kiểm tra sóng điện thoại rồi nhấn để thử lại.",
+      "generic": "Không gửi được ảnh. Nhấn để thử lại."
+    }
+  }
+}

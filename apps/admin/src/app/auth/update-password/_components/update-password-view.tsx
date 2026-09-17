@@ -11,9 +11,11 @@ import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import { KeyRound, ShieldAlert } from 'lucide-react';
 import { Button, Card } from '@favornoms/ui';
 import { getBrowserClient } from '@favornoms/database/client';
+import { authErrorKey } from '../../_lib/auth-error';
 
 /** GoTrue's default minimum is 6; 8 is the shortest length worth asking a restaurant owner
  *  to remember for an account that can refund orders and read payouts. Enforced here and by
@@ -22,6 +24,7 @@ const MIN_LENGTH = 8;
 
 export function UpdatePasswordView({ welcome }: { welcome: boolean }) {
   const router = useRouter();
+  const t = useTranslations('auth');
   const [ready, setReady] = React.useState<'checking' | 'ok' | 'no_session'>('checking');
   const [password, setPassword] = React.useState('');
   const [confirm, setConfirm] = React.useState('');
@@ -41,11 +44,11 @@ export function UpdatePasswordView({ welcome }: { welcome: boolean }) {
     e.preventDefault();
     setError(null);
     if (password.length < MIN_LENGTH) {
-      setError(`Use at least ${MIN_LENGTH} characters.`);
+      setError(t('updatePassword.errors.tooShort', { min: MIN_LENGTH }));
       return;
     }
     if (password !== confirm) {
-      setError('The two passwords do not match.');
+      setError(t('updatePassword.errors.mismatch'));
       return;
     }
     setSubmitting(true);
@@ -55,7 +58,8 @@ export function UpdatePasswordView({ welcome }: { welcome: boolean }) {
     const { error: updateError } = await supabase.auth.updateUser({ password, data: { password_set: true } });
     setSubmitting(false);
     if (updateError) {
-      setError(updateError.message);
+      console.error('[update-password] updateUser failed:', updateError.message);
+      setError(t(authErrorKey(updateError)));
       return;
     }
     setDone(true);
@@ -76,30 +80,25 @@ export function UpdatePasswordView({ welcome }: { welcome: boolean }) {
           <KeyRound className="h-8 w-8" />
         </div>
         <h1 className="mt-5 text-center font-display text-3xl font-bold">
-          {welcome ? 'Choose your password' : 'Set a new password'}
+          {welcome ? t('updatePassword.welcomeTitle') : t('updatePassword.resetTitle')}
         </h1>
         <p className="mt-1 text-center text-sm text-muted-foreground">
-          {welcome
-            ? 'One last step and your account is ready.'
-            : 'You will use this to sign in from now on.'}
+          {welcome ? t('updatePassword.welcomeSubtitle') : t('updatePassword.resetSubtitle')}
         </p>
 
         <Card className="mt-6 p-5">
           {ready === 'checking' && (
-            <p className="text-center text-sm text-muted-foreground">Checking your link…</p>
+            <p className="text-center text-sm text-muted-foreground">{t('updatePassword.checking')}</p>
           )}
 
           {ready === 'no_session' && (
             <div className="text-center">
               <ShieldAlert className="mx-auto h-10 w-10 text-warning" />
-              <p className="mt-3 font-display text-lg font-semibold">This link has expired</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Reset links work once and only in the browser that requested them. Ask for a
-                fresh one and open it here.
-              </p>
+              <p className="mt-3 font-display text-lg font-semibold">{t('updatePassword.expiredTitle')}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{t('updatePassword.expiredBody')}</p>
               <Link href="/forgot-password">
                 <Button variant="gradient" size="lg" className="mt-5" fullWidth>
-                  Send a new link
+                  {t('updatePassword.sendNewLink')}
                 </Button>
               </Link>
             </div>
@@ -108,7 +107,7 @@ export function UpdatePasswordView({ welcome }: { welcome: boolean }) {
           {ready === 'ok' && (
             <form className="space-y-4" onSubmit={submit}>
               <label className="block">
-                <span className="mb-2 block text-sm font-medium">New password</span>
+                <span className="mb-2 block text-sm font-medium">{t('fields.newPassword')}</span>
                 <input
                   type="password"
                   value={password}
@@ -119,11 +118,11 @@ export function UpdatePasswordView({ welcome }: { welcome: boolean }) {
                   className="focus-ring w-full rounded-xl border border-border bg-background px-4 py-3 text-base"
                 />
                 <span className="mt-1 block text-xs text-muted-foreground">
-                  At least {MIN_LENGTH} characters.
+                  {t('fields.minLength', { min: MIN_LENGTH })}
                 </span>
               </label>
               <label className="block">
-                <span className="mb-2 block text-sm font-medium">Confirm password</span>
+                <span className="mb-2 block text-sm font-medium">{t('fields.confirmPassword')}</span>
                 <input
                   type="password"
                   value={confirm}
@@ -141,7 +140,7 @@ export function UpdatePasswordView({ welcome }: { welcome: boolean }) {
                 fullWidth
                 loading={submitting || done}
               >
-                Save password and continue
+                {t('updatePassword.submit')}
               </Button>
             </form>
           )}

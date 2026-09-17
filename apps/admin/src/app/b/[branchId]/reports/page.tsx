@@ -1,3 +1,4 @@
+import { getTranslations } from 'next-intl/server';
 import { getBranchAccess } from '@/lib/capabilities';
 import { AccessDenied } from '@/components/access-denied';
 import { ReportsView } from './_components/reports-view';
@@ -19,10 +20,11 @@ export default async function ReportsPage({ params, searchParams }: Props) {
   // this check is what turns that into a card instead of a raw 42501.
   const { supabase, branch, can } = await getBranchAccess(branchId, `/b/${branchId}/reports`);
   if (!can('reports.view')) {
+    const t = await getTranslations('reports');
     return (
       <AccessDenied
-        title="No reports access"
-        reason={`Only owners, admins and managers can see sales reports at ${branch.name}.`}
+        title={t('noAccess.title')}
+        reason={t('noAccess.reason', { branch: branch.name })}
       />
     );
   }

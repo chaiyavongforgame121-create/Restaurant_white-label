@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { getLocale, getTranslations } from 'next-intl/server';
 import {
   AlertTriangle,
   Banknote,
@@ -23,24 +24,35 @@ import {
   shiftDayKey,
 } from '@favornoms/database/queries';
 import {
+  DEFAULT_UI_LOCALE,
   formatCurrency,
   formatInZone,
   hasFeature,
+  intlLocaleFor,
   isTrialing,
+  isUiLocale,
   trialDaysLeft,
+  type UiLocale,
 } from '@favornoms/shared';
 import { Card } from '@favornoms/ui';
 import { getBranchAccess } from '@/lib/capabilities';
 import { AccessDenied } from '@/components/access-denied';
 import {
-  ageLabel,
   readDeliveries,
   readKitchen,
   readScheduled,
   SCHEDULED_SOON_MS,
+  spanSince,
   type ActionRow,
+  type RowAge,
+  type RowReason,
+  type Span,
 } from './_components/action-model';
-import { ActionRequired, type ActionBucket } from './_components/action-required';
+import {
+  ActionRequired,
+  type ActionBucket,
+  type ActionLine,
+} from './_components/action-required';
 import { AutoRefresh } from './_components/auto-refresh';
 import { OverviewTiles, type OverviewTile } from './_components/overview-tiles';
 import {
@@ -59,6 +71,21 @@ interface Props {
 /** Action Required lists the oldest few of each bucket and links out for the rest. */
 const ROWS_PER_BUCKET = 5;
 
+/** Order statuses the catalogue can name. Anything else is printed as its code. */
+const ORDER_STATUSES = [
+  'pending',
+  'confirmed',
+  'preparing',
+  'ready',
+  'out_for_delivery',
+  'completed',
+  'cancelled',
+  'refunded',
+] as const;
+type KnownOrderStatus = (typeof ORDER_STATUSES)[number];
+const isKnownOrderStatus = (s: string): s is KnownOrderStatus =>
+  (ORDER_STATUSES as readonly string[]).includes(s);
+
 export default async function DashboardPage({ params }: Props) {
   const { branchId } = await params;
   // This page used to take a raw server client, so it had no capability set and no branch
@@ -68,11 +95,14 @@ export default async function DashboardPage({ params }: Props) {
     branchId,
     `/b/${branchId}/dashboard`,
   );
+  const [t, requestLocale] = await Promise.all([getTranslations('dashboard'), getLocale()]);
+  const locale: UiLocale = isUiLocale(requestLocale) ? requestLocale : DEFAULT_UI_LOCALE;
+  const intlLocale = intlLocaleFor(locale);
   if (!can('dashboard.view')) {
     return (
       <AccessDenied
-        title="No dashboard access"
-        reason={`Your role cannot see the dashboard for ${branch.name}.`}
+        title={t('accessDenied.title')}
+        reason={t('accessDenied.reason', { branch: branch.name })}
       />
     );
   }
@@ -125,6 +155,28 @@ export default async function DashboardPage({ params }: Props) {
 
   const { currency, settings, timezone: tz } = snapshot;
 
+  // Raw database text belongs in the server log, not on a merchant's screen: every card that
+  // depends on a failed read says "couldn't check" in the reader's language instead.
+  const reads = {
+    trend: snapshot.trend.error,
+    kitchen: snapshot.kitchen.error,
+    deliveries: snapshot.deliveries.error,
+    proofs: snapshot.proofs.error,
+    refundable: snapshot.refundable.error,
+    lowStock: snapshot.lowStock.error,
+    riderQueue: snapshot.riderQueue.error,
+    withdrawals: snapshot.withdrawals.error,
+    scheduled: snapshot.scheduled.error,
+  };
+  for (const [read, error] of Object.entries(reads)) {
+    if (error) console.error(`[dashboard] ${read} read failed for branch ${branchId}:`, error);
+  }
+  const setupError = (check: string, error: { message: string } | null | undefined) => {
+    if (!error) return null;
+    console.error(`[dashboard] setup check "${check}" failed for branch ${branchId}:`, error.message);
+    return error.message;
+  };
+
   // A paid package runs for a fixed month and the expiry job switches the store off at the
   // deadline, mid-service if that is when it falls. Nothing warned anyone before it
   // happened, so this counts down the last week. Trials already have their own banner.
@@ -151,42 +203,42 @@ export default async function DashboardPage({ params }: Props) {
       ? [
           {
             id: 'menu',
-            label: 'Add at least one menu item',
-            why: 'Your storefront is already public, and customers see an empty menu until you add items.',
+            label: t('setup.menu.label'),
+            why: t('setup.menu.why'),
             done: (menuRes.count ?? 0) > 0,
             href: `/b/${branchId}/menu`,
-            hrefLabel: 'Menu',
-            error: menuRes.error?.message ?? null,
+            hrefLabel: t('setup.menu.link'),
+            error: setupError('menu', menuRes.error),
           },
           {
             id: 'pin',
-            label: 'Set the map pin',
-            why: 'Delivery fees and rider dispatch are measured from the pin, not from the address text.',
+            label: t('setup.pin.label'),
+            why: t('setup.pin.why'),
             done: hasPin,
             href: branchSettingsHref,
-            hrefLabel: 'Location',
-            error: geoRes.error?.message ?? null,
+            hrefLabel: t('setup.pin.link'),
+            error: setupError('pin', geoRes.error),
           },
           {
             id: 'hours',
-            label: 'Save your opening hours',
-            why: 'With no hours saved, the storefront treats this branch as open around the clock.',
+            label: t('setup.hours.label'),
+            why: t('setup.hours.why'),
             done: (hoursRes.count ?? 0) > 0,
             href: branchSettingsHref,
-            hrefLabel: 'Opening hours',
-            error: hoursRes.error?.message ?? null,
+            hrefLabel: t('setup.hours.link'),
+            error: setupError('hours', hoursRes.error),
           },
           {
             id: 'payment',
-            label: 'Switch on at least one payment method',
-            why: 'With every method off, customers cannot order pickup or schedule a delivery.',
+            label: t('setup.payment.label'),
+            why: t('setup.payment.why'),
             done: paymentMethodOn(
               settings,
               hasFeature(entitlements, 'card_payment'),
               deliveryEnabled && settings.scheduling_enabled !== false,
             ),
             href: branchSettingsHref,
-            hrefLabel: 'Payment methods',
+            hrefLabel: t('setup.payment.link'),
           },
         ]
       : [];
@@ -197,10 +249,10 @@ export default async function DashboardPage({ params }: Props) {
       ? [
           {
             id: 'delivery-no-pin',
-            label: 'Delivery is on, but this branch has no map pin',
-            why: 'Riders cannot be dispatched to delivery orders from this branch until the pin is set.',
+            label: t('setup.noPin.label'),
+            why: t('setup.noPin.why'),
             href: branchSettingsHref,
-            hrefLabel: 'Set the pin',
+            hrefLabel: t('setup.noPin.link'),
           },
         ]
       : [];
@@ -215,20 +267,75 @@ export default async function DashboardPage({ params }: Props) {
   const deliveries = readDeliveries(snapshot.deliveries.rows, now, selfDelivery, branchId);
   const scheduled = readScheduled(snapshot.scheduled.rows, now, leadMs, branchId);
 
+  // --- Words for the model's codes -------------------------------------------------------
+  const spanText = (span: Span): string => {
+    switch (span.unit) {
+      case 'unknown':
+        return t('age.unknown');
+      case 'underMinute':
+        return t('age.underMinute');
+      case 'minutes':
+        return t('age.minutes', { minutes: span.minutes });
+      case 'hours':
+        return span.minutes
+          ? t('age.hoursMinutes', { hours: span.hours, minutes: span.minutes })
+          : t('age.hours', { hours: span.hours });
+      case 'days':
+        return t('age.days', { days: span.days });
+    }
+  };
+  const ageText = (age: RowAge): string => {
+    if (!age) return '';
+    return age.kind === 'dueIn' ? t('age.dueIn', { span: spanText(age.span) }) : spanText(age.span);
+  };
+  const reasonText = (why: RowReason): string => {
+    switch (why.code) {
+      case 'cookingLong':
+        return t('rows.cookingLong', { minutes: why.minutes });
+      case 'deliveryKitchenStatus':
+        return t('rows.deliveryKitchenStatus', {
+          status: isKnownOrderStatus(why.status)
+            ? t(`orderStatus.${why.status}`)
+            : why.status.replace(/_/g, ' '),
+        });
+      case 'deliveryAskedRiders':
+        return t('rows.deliveryAskedRiders', { count: why.count });
+      case 'deliveryFailed':
+        // The rider's own words are shown as typed.
+        return t('rows.deliveryFailed', {
+          reason: why.reason ?? t('rows.noReason'),
+          age: spanText(why.startedAgo),
+        });
+      default:
+        return t(`rows.${why.code}`);
+    }
+  };
+  const toLine = (row: ActionRow): ActionLine => ({
+    key: row.key,
+    title: row.title ?? t('rows.deliveryTitle'),
+    why: reasonText(row.why),
+    age: ageText(row.age),
+    href: row.href,
+  });
+  const lines = (rows: ActionRow[]) => rows.slice(0, ROWS_PER_BUCKET).map(toLine);
+
   // "Today" has to mean the branch's today. This used to bucket on the server's
   // clock, so a New York merchant on a UTC host watched their day roll over at
   // 8pm — mid-dinner-service.
   const earning = (s: string) =>
     ['confirmed', 'preparing', 'ready', 'out_for_delivery', 'completed'].includes(s);
 
-  const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  // Noon UTC of a day key names that calendar day in every zone, so the weekday is read in UTC.
+  const weekday = new Intl.DateTimeFormat(intlLocale, { weekday: 'short', timeZone: 'UTC' });
   const todayKey = branchDayKey(new Date(now), tz);
   const trend: { key: string; label: string; revenue: number }[] = [];
   for (let i = 6; i >= 0; i--) {
     const key = shiftDayKey(todayKey, -i);
+    const noon = new Date(`${key}T12:00:00Z`);
     trend.push({
       key,
-      label: i === 0 ? 'Today' : (DOW[new Date(`${key}T12:00:00Z`).getUTCDay()] ?? ''),
+      label:
+        i === 0 ? t('trend.today') : Number.isNaN(noon.getTime()) ? '' : weekday.format(noon),
       revenue: 0,
     });
   }
@@ -240,7 +347,7 @@ export default async function DashboardPage({ params }: Props) {
   for (const o of snapshot.trend.rows) {
     const at = new Date(o.created_at);
     const key = branchDayKey(at, tz);
-    const bucket = trend.find((t) => t.key === key);
+    const bucket = trend.find((d) => d.key === key);
     if (bucket && earning(o.status)) bucket.revenue += o.total;
     if (key === todayKey) todayOrders += 1;
     // Same clock time yesterday, not all of yesterday: comparing a morning's
@@ -251,7 +358,7 @@ export default async function DashboardPage({ params }: Props) {
     }
   }
   const totalRevenue = trend[6]?.revenue ?? 0;
-  const trendMax = Math.max(1, ...trend.map((t) => t.revenue));
+  const trendMax = Math.max(1, ...trend.map((d) => d.revenue));
 
   // undefined, not 0, when there is no baseline: "+0.0%" against a day with no
   // trade is a number the merchant would act on, and it means nothing.
@@ -260,240 +367,250 @@ export default async function DashboardPage({ params }: Props) {
   const salesFailed = !!snapshot.trend.error;
   const tiles: OverviewTile[] = [
     {
-      label: "Today's Sales",
+      label: t('overview.sales.label'),
       // Reports offers 7/30/90 days only, so ?days=1 would land on a range with no pill
       // selected. The plain screen is the one that answers "show me the money".
       href: `/b/${branchId}/reports`,
       value: salesFailed ? '—' : formatCurrency(totalRevenue, currency),
-      sub: salesFailed ? 'Could not read sales' : null,
+      sub: salesFailed ? t('overview.sales.failed') : null,
       delta: salesFailed ? undefined : delta(totalRevenue, yRevenue),
-      deltaLabel: 'vs same time yesterday',
+      deltaLabel: t('overview.vsYesterday'),
       icon: DollarSign,
       tone: 'primary',
     },
     {
-      label: 'Orders Today',
+      label: t('overview.orders.label'),
       href: `/b/${branchId}/orders?range=today`,
       value: salesFailed ? '—' : todayOrders.toString(),
-      sub: salesFailed ? 'Could not read orders' : null,
+      sub: salesFailed ? t('overview.orders.failed') : null,
       delta: salesFailed ? undefined : delta(todayOrders, yOrders),
-      deltaLabel: 'vs same time yesterday',
+      deltaLabel: t('overview.vsYesterday'),
       icon: Receipt,
       tone: 'accent',
     },
     {
-      label: 'Kitchen Queue',
+      label: t('overview.kitchen.label'),
       href: `/kitchen/${branchId}`,
       value: snapshot.kitchen.error ? '—' : (kitchen.waiting + kitchen.cooking).toString(),
       // The old "In kitchen" tile counted confirmed+preparing and ignored held and
       // awaiting_payment, so it never matched the board it was describing.
       sub: snapshot.kitchen.error
-        ? 'Could not read the kitchen'
-        : `${kitchen.waiting} waiting · ${kitchen.cooking} cooking` +
-          (kitchen.abandoned > 0 ? ` · ${kitchen.abandoned} stalled` : ''),
+        ? t('overview.kitchen.failed')
+        : kitchen.abandoned > 0
+          ? t('overview.kitchen.subStalled', {
+              waiting: kitchen.waiting,
+              cooking: kitchen.cooking,
+              stalled: kitchen.abandoned,
+            })
+          : t('overview.kitchen.sub', { waiting: kitchen.waiting, cooking: kitchen.cooking }),
       icon: ChefHat,
       tone: 'warning',
     },
     {
-      label: 'Active Deliveries',
+      label: t('overview.deliveries.label'),
       href: deliveryEnabled ? `/b/${branchId}/deliveries` : `/b/${branchId}/settings/plan`,
       value: !deliveryEnabled || snapshot.deliveries.error ? '—' : deliveries.inFlight.toString(),
       // Without the stalled line a truthful 0 reads as a broken tile: one branch carries
       // thirteen June test runs that the board itself parks as forgotten.
       sub: !deliveryEnabled
-        ? "Delivery isn't on your plan"
+        ? t('overview.deliveries.notOnPlan')
         : snapshot.deliveries.error
-          ? 'Could not read deliveries'
+          ? t('overview.deliveries.failed')
           : deliveries.stalled > 0
-            ? `${deliveries.stalled} stalled`
+            ? t('overview.deliveries.stalled', { count: deliveries.stalled })
             : null,
       icon: Bike,
       tone: 'success',
     },
   ];
 
-  const cap = (rows: ActionRow[]) => rows.slice(0, ROWS_PER_BUCKET);
-
-  const proofRows: ActionRow[] = snapshot.proofs.rows.map((p) => {
+  const proofRows: ActionLine[] = snapshot.proofs.rows.map((p) => {
     const at = p.submitted_at ?? p.created_at;
     return {
       key: p.payment_id,
       title: `#${p.order_number}`,
-      why:
-        `${formatCurrency(p.amount, currency)} slip waiting — ` +
-        'the kitchen cannot start until you decide',
-      age: ageLabel(at, now),
-      ageMs: now - Date.parse(at),
+      why: t('rows.proof', { amount: formatCurrency(p.amount, currency) }),
+      age: spanText(spanSince(at, now)),
       href: `/b/${branchId}/orders`,
     };
   });
 
-  const refundRows: ActionRow[] = snapshot.refundable.rows.map((o) => ({
+  const refundRows: ActionLine[] = snapshot.refundable.rows.map((o) => ({
     key: o.id,
     title: `#${o.order_number}`,
-    why: `Cancelled with ${formatCurrency(o.total, currency)} still taken`,
-    age: ageLabel(o.created_at, now),
-    ageMs: now - Date.parse(o.created_at),
+    why: t('rows.refund', { amount: formatCurrency(o.total, currency) }),
+    age: spanText(spanSince(o.created_at, now)),
     href: `/b/${branchId}/orders?q=${encodeURIComponent(o.order_number)}`,
   }));
 
-  const stockRows: ActionRow[] = snapshot.lowStock.rows.map((i) => ({
+  const stockRows: ActionLine[] = snapshot.lowStock.rows.map((i) => ({
     key: i.id,
+    // The item's name as the merchant typed it.
     title: i.name,
     why: i.is_sold_out
-      ? 'Sold out — diners cannot order it'
-      : `${i.stock_quantity ?? 0} left (alerts at ${i.low_stock_threshold ?? 0})`,
+      ? t('rows.soldOut')
+      : t('rows.lowStock', {
+          left: i.stock_quantity ?? 0,
+          threshold: i.low_stock_threshold ?? 0,
+        }),
     // Stock has no waiting clock of its own: nothing records when an item ran down.
     age: '',
-    ageMs: 0,
     href: `/b/${branchId}/inventory`,
   }));
 
   // One row per rider, not one per reason: a new applicant whose documents are also
   // unverified is one person to look at, not two jobs.
-  const riderRows: ActionRow[] = [];
+  const riderQueue: { line: ActionLine; ageMs: number }[] = [];
   for (const r of snapshot.riderQueue.rows) {
-    const reasons: string[] = [];
-    if (r.approval_status === 'pending') reasons.push('waiting for your decision');
-    if (r.kyc_status === 'pending') reasons.push('documents not verified yet');
-    if (reasons.length === 0) continue;
+    const awaitingDecision = r.approval_status === 'pending';
+    const documentsPending = r.kyc_status === 'pending';
+    if (!awaitingDecision && !documentsPending) continue;
     const at = r.applied_at;
-    riderRows.push({
-      key: r.id,
-      title: r.driver_name,
-      why: `Applied — ${reasons.join(' · ')}`,
-      age: at ? ageLabel(at, now) : '',
+    riderQueue.push({
       ageMs: at ? now - Date.parse(at) : 0,
-      href: `/b/${branchId}/drivers`,
+      line: {
+        key: r.id,
+        title: r.driver_name,
+        why: t(
+          awaitingDecision && documentsPending
+            ? 'rows.riderBoth'
+            : awaitingDecision
+              ? 'rows.riderDecision'
+              : 'rows.riderDocuments',
+        ),
+        age: at ? spanText(spanSince(at, now)) : '',
+        href: `/b/${branchId}/drivers`,
+      },
     });
   }
-  riderRows.sort((a, b) => b.ageMs - a.ageMs);
+  riderQueue.sort((a, b) => b.ageMs - a.ageMs);
+  const riderRows = riderQueue.map((r) => r.line);
 
-  const withdrawalRows: ActionRow[] = snapshot.withdrawals.rows.map((w) => ({
+  const withdrawalRows: ActionLine[] = snapshot.withdrawals.rows.map((w) => ({
     key: w.id,
     title: w.driver_name,
-    why: `Requested ${formatCurrency(w.amount, currency)}`,
-    age: ageLabel(w.created_at, now),
-    ageMs: now - Date.parse(w.created_at),
+    why: t('rows.withdrawal', { amount: formatCurrency(w.amount, currency) }),
+    age: spanText(spanSince(w.created_at, now)),
     href: `/b/${branchId}/payouts`,
   }));
 
+  const cap = (rows: ActionLine[]) => rows.slice(0, ROWS_PER_BUCKET);
   const deliveriesUnavailable = !snapshot.deliveries.available;
   const buckets: ActionBucket[] = [
     {
       id: 'proofs',
-      label: 'Payment slips to approve',
+      label: t('buckets.proofs'),
       icon: Banknote,
       tone: 'danger',
       count: snapshot.proofs.total,
       rows: cap(proofRows),
       href: `/b/${branchId}/orders`,
-      hrefLabel: 'Orders',
+      destination: 'orders',
       error: snapshot.proofs.error,
       hidden: !snapshot.proofs.available,
     },
     {
       id: 'refunds',
-      label: 'Refunds owed',
+      label: t('buckets.refunds'),
       icon: RotateCcw,
       tone: 'danger',
       count: refundRows.length,
       rows: cap(refundRows),
       href: `/b/${branchId}/orders?status=cancelled`,
-      hrefLabel: 'Orders',
+      destination: 'orders',
       error: snapshot.refundable.error,
       hidden: !snapshot.refundable.available,
     },
     {
       id: 'delivery-failed',
-      label: 'Riders reporting a problem',
+      label: t('buckets.deliveryFailed'),
       icon: AlertTriangle,
       tone: 'danger',
       count: deliveries.failed.length,
-      rows: cap(deliveries.failed),
+      rows: lines(deliveries.failed),
       href: `/b/${branchId}/orders`,
-      hrefLabel: 'Orders',
+      destination: 'orders',
       error: snapshot.deliveries.error,
       hidden: deliveriesUnavailable,
     },
     {
       id: 'delivery-unaccepted',
-      label: 'Deliveries nobody has taken',
+      label: t('buckets.deliveryUnaccepted'),
       icon: Bike,
       tone: 'warning',
       count: deliveries.unaccepted.length,
-      rows: cap(deliveries.unaccepted),
+      rows: lines(deliveries.unaccepted),
       href: `/b/${branchId}/deliveries`,
-      hrefLabel: 'Live deliveries',
+      destination: 'deliveries',
       error: snapshot.deliveries.error,
       hidden: deliveriesUnavailable,
     },
     {
       id: 'customers-waiting',
-      label: 'Customers waiting',
+      label: t('buckets.customersWaiting'),
       icon: Clock,
       tone: 'warning',
       count: kitchen.customersWaiting.length,
-      rows: cap(kitchen.customersWaiting),
+      rows: lines(kitchen.customersWaiting),
       href: `/kitchen/${branchId}`,
-      hrefLabel: 'the kitchen display',
+      destination: 'kitchen',
       error: snapshot.kitchen.error,
     },
     {
       id: 'kitchen-late',
-      label: 'Kitchen running late',
+      label: t('buckets.kitchenLate'),
       icon: Timer,
       tone: 'warning',
       count: kitchen.kitchenLate.length,
-      rows: cap(kitchen.kitchenLate),
+      rows: lines(kitchen.kitchenLate),
       href: `/kitchen/${branchId}`,
-      hrefLabel: 'the kitchen display',
+      destination: 'kitchen',
       error: snapshot.kitchen.error,
     },
     {
       id: 'scheduled',
-      label: 'Pre-orders due soon',
+      label: t('buckets.scheduled'),
       icon: CalendarClock,
       tone: 'warning',
       count: scheduled.length,
-      rows: cap(scheduled),
+      rows: lines(scheduled),
       href: `/b/${branchId}/orders?when=scheduled`,
-      hrefLabel: 'Orders',
+      destination: 'orders',
       error: snapshot.scheduled.error,
     },
     {
       id: 'stock',
-      label: 'Menu items out or running low',
+      label: t('buckets.stock'),
       icon: Package,
       tone: 'warning',
       count: snapshot.lowStock.total,
       rows: cap(stockRows),
       href: `/b/${branchId}/inventory`,
-      hrefLabel: 'Inventory',
+      destination: 'inventory',
       error: snapshot.lowStock.error,
       hidden: !snapshot.lowStock.available,
     },
     {
       id: 'riders',
-      label: 'Riders waiting on you',
+      label: t('buckets.riders'),
       icon: UserPlus,
       tone: 'info',
       count: riderRows.length,
       rows: cap(riderRows),
       href: `/b/${branchId}/drivers`,
-      hrefLabel: 'Drivers',
+      destination: 'drivers',
       error: snapshot.riderQueue.error,
       hidden: !snapshot.riderQueue.available,
     },
     {
       id: 'withdrawals',
-      label: 'Withdrawals to pay',
+      label: t('buckets.withdrawals'),
       icon: Wallet,
       tone: 'info',
       count: snapshot.withdrawals.total,
       rows: cap(withdrawalRows),
       href: `/b/${branchId}/payouts`,
-      hrefLabel: 'Driver payouts',
+      destination: 'payouts',
       error: snapshot.withdrawals.error,
       hidden: !snapshot.withdrawals.available,
     },
@@ -501,18 +618,18 @@ export default async function DashboardPage({ params }: Props) {
       // Not on the owner's list, but a board carrying twenty-two forgotten tickets while
       // this page says "nothing needs you" is the one way the section loses its credit.
       id: 'stalled',
-      label: 'Stalled kitchen tickets',
+      label: t('buckets.stalled'),
       icon: Hourglass,
       tone: 'info',
       count: kitchen.abandoned,
       rows: [],
       href: `/kitchen/${branchId}`,
-      hrefLabel: 'the kitchen display',
+      destination: 'kitchen',
       error: snapshot.kitchen.error,
     },
   ];
 
-  const checkedAt = new Date(now).toLocaleTimeString('en-US', {
+  const checkedAt = new Date(now).toLocaleTimeString(intlLocale, {
     timeZone: tz,
     hour: 'numeric',
     minute: '2-digit',
@@ -521,8 +638,10 @@ export default async function DashboardPage({ params }: Props) {
   return (
     <div className="container max-w-6xl py-8">
       <header className="mb-6 px-2 pl-16 lg:px-0">
-        <h1 className="font-display text-3xl font-bold">Today at a glance</h1>
-        <p className="mt-1 text-muted-foreground">Live metrics from {branch.name}</p>
+        <h1 className="font-display text-3xl font-bold">{t('header.title')}</h1>
+        <p className="mt-1 text-muted-foreground">
+          {t('header.subtitle', { branch: branch.name })}
+        </p>
       </header>
 
       {trialDays !== null && (
@@ -534,19 +653,17 @@ export default async function DashboardPage({ params }: Props) {
             <div>
               <p className="text-sm font-semibold">
                 {trialDays === 0
-                  ? 'Your free trial ends today'
-                  : `${trialDays} day${trialDays === 1 ? '' : 's'} left in your free trial`}
+                  ? t('trial.endsToday')
+                  : t('trial.daysLeft', { days: trialDays })}
               </p>
-              <p className="text-xs text-muted-foreground">
-                Everything is unlocked. Choose a package to keep it — no card needed until then.
-              </p>
+              <p className="text-xs text-muted-foreground">{t('trial.body')}</p>
             </div>
           </div>
           <Link
             href={`/b/${branchId}/settings/plan`}
             className="focus-ring inline-flex items-center rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white shadow-soft hover:bg-amber-600"
           >
-            Choose a package
+            {t('trial.cta')}
           </Link>
         </Card>
       )}
@@ -559,16 +676,18 @@ export default async function DashboardPage({ params }: Props) {
             </span>
             <div>
               <p className="text-sm font-semibold">
-                Your package is paid through {formatInZone(entitlements.entitledThrough, tz)}
                 {expiryDaysLeft <= 1
-                  ? ' — less than a day left'
-                  : ` — ${expiryDaysLeft} days left`}
+                  ? t('expiry.titleUnderDay', {
+                      date: formatInZone(entitlements.entitledThrough, tz, {}, locale),
+                    })
+                  : t('expiry.titleDays', {
+                      date: formatInZone(entitlements.entitledThrough, tz, {}, locale),
+                      days: expiryDaysLeft,
+                    })}
               </p>
               <p className="text-xs text-muted-foreground">
-                After that the storefront stops taking orders and the back office locks.{' '}
-                {canRenew
-                  ? 'Renewal is a request the Favornoms team approves, so send it before the date.'
-                  : 'Ask the restaurant owner to renew it; renewal is a request the Favornoms team approves.'}
+                {t('expiry.body')}{' '}
+                {canRenew ? t('expiry.renewHint') : t('expiry.askOwner')}
               </p>
             </div>
           </div>
@@ -577,7 +696,7 @@ export default async function DashboardPage({ params }: Props) {
               href={`/b/${branchId}/settings/plan?renew=1`}
               className="focus-ring inline-flex items-center rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white shadow-soft hover:bg-amber-600"
             >
-              Renew package
+              {t('expiry.cta')}
             </Link>
           )}
         </Card>
@@ -586,7 +705,9 @@ export default async function DashboardPage({ params }: Props) {
       {setupPending && <SetupChecklist steps={setupSteps} warnings={setupWarnings} />}
 
       <section>
-        <h2 className="mb-3 px-2 font-display text-xl font-semibold lg:px-0">Business overview</h2>
+        <h2 className="mb-3 px-2 font-display text-xl font-semibold lg:px-0">
+          {t('overview.title')}
+        </h2>
         <OverviewTiles tiles={tiles} />
       </section>
 
@@ -594,38 +715,41 @@ export default async function DashboardPage({ params }: Props) {
 
       <div className="mt-8 px-2 lg:px-0">
         <Card className="p-6">
-          <h2 className="font-display text-lg font-semibold">Sales trend</h2>
-          <p className="text-sm text-muted-foreground">Last 7 days</p>
+          <h2 className="font-display text-lg font-semibold">{t('trend.title')}</h2>
+          <p className="text-sm text-muted-foreground">{t('trend.subtitle')}</p>
           {/* Real revenue per day. This was a fixed array of made-up figures
               (6200, 7800, 9100 …) that every branch saw as its own trade, with
               weekday labels that never matched the actual days either. */}
           <div className="mt-4 flex h-40 items-end gap-2">
-            {trend.map((t) => {
-              const h = Math.round((t.revenue / trendMax) * 100);
+            {trend.map((d) => {
+              const h = Math.round((d.revenue / trendMax) * 100);
               return (
-                <div key={t.key} className="flex flex-1 flex-col items-center gap-2">
+                <div key={d.key} className="flex flex-1 flex-col items-center gap-2">
                   <div
                     className="relative w-full overflow-hidden rounded-lg bg-muted"
                     style={{ height: '128px' }}
-                    title={`${t.label} · ${formatCurrency(t.revenue, currency)}`}
+                    title={t('trend.bar', {
+                      day: d.label,
+                      amount: formatCurrency(d.revenue, currency),
+                    })}
                   >
                     <div
                       className="absolute inset-x-0 bottom-0 rounded-lg bg-gradient-warm"
                       style={{ height: `${h}%` }}
                     />
                   </div>
-                  <span className="text-[10px] text-muted-foreground">{t.label}</span>
+                  <span className="text-[10px] text-muted-foreground">{d.label}</span>
                 </div>
               );
             })}
           </div>
           {salesFailed ? (
             <p role="alert" className="mt-2 text-xs text-warning">
-              Couldn’t read this branch’s sales — {snapshot.trend.error}
+              {t('trend.failed')}
             </p>
           ) : (
             trendMax === 1 && (
-              <p className="mt-2 text-xs text-muted-foreground">No sales in the last 7 days yet.</p>
+              <p className="mt-2 text-xs text-muted-foreground">{t('trend.empty')}</p>
             )
           )}
         </Card>

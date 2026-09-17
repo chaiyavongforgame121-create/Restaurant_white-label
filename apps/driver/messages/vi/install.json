@@ -1,0 +1,22 @@
+{
+  "title": "Cài đặt Favornoms Driver",
+  "body": "Thêm vào màn hình chính — mở toàn màn hình và luôn nhận thông báo đơn mới.",
+  "cta": "Cài đặt",
+  "iosHint": "Nhấn Chia sẻ trong Safari, rồi chọn Thêm vào MH chính.",
+  "rowTitle": "Cài đặt ứng dụng",
+  "rowSubtitle": "Toàn màn hình · biểu tượng trên màn hình chính · báo đơn mới",
+  "rowSubtitleHelp": "Thêm vào màn hình chính — nhấn để xem cách làm",
+  "installed": "Đã cài đặt — mở từ màn hình chính",
+  "alreadyInstalled": "Đã cài rồi? Trình duyệt sẽ không đề xuất lại — hãy mở Favornoms Driver từ màn hình chính hoặc màn hình máy tính.",
+  "steps": {
+    "iosSafari": "Nhấn nút Chia sẻ ở cuối màn hình Safari, rồi chọn Thêm vào MH chính.",
+    "iosOtherBrowser": "Nhấn nút Chia sẻ, rồi chọn Thêm vào MH chính. Nếu không thấy, hãy mở trang này bằng Safari và làm tương tự.",
+    "inAppBrowser": "Trình duyệt bên trong ứng dụng khác (LINE, Facebook…) không cài được ứng dụng. Mở menu (⋯ hoặc ⋮), chọn Mở bằng trình duyệt, rồi cài đặt từ đó.",
+    "android": "Nhấn menu ⋮ ở góc trên bên phải trình duyệt, rồi chọn Cài đặt ứng dụng hoặc Thêm vào màn hình chính.",
+    "desktopChromium": "Nhấp vào biểu tượng cài đặt ở cuối thanh địa chỉ, hoặc mở menu ⋮ và chọn Truyền, lưu và chia sẻ › Cài đặt trang dưới dạng ứng dụng.",
+    "desktopSafari": "Trên thanh menu của Safari, chọn Tệp › Thêm vào Dock.",
+    "desktopFirefox": "Firefox trên máy tính không cài được ứng dụng. Hãy mở trang này bằng Chrome, Edge hoặc Safari để cài đặt.",
+    "unknown": "Mở menu của trình duyệt và tìm Cài đặt ứng dụng hoặc Thêm vào màn hình chính."
+  },
+  "dismiss": "Bỏ qua"
+}

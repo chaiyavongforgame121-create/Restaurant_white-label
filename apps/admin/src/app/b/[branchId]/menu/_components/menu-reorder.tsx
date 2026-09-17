@@ -22,11 +22,13 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { useTranslations } from 'next-intl';
 import { GripVertical, Save } from 'lucide-react';
 import type { MenuCategory, MenuItem } from '@favornoms/shared';
 import { formatCurrency } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Badge, Button, Card } from '@favornoms/ui';
+import { menuErrorKey } from './menu-errors';
 
 interface Props {
   branchId: string;
@@ -43,6 +45,7 @@ interface Props {
  * Two-step UX: drag locally → "Save layout" button persists changes.
  */
 export function MenuReorder({ branchId, categories: initCategories, items: initItems, onSaved }: Props) {
+  const t = useTranslations('menu');
   const [categories, setCategories] = React.useState(initCategories);
   const [itemsByCat, setItemsByCat] = React.useState<Map<string, MenuItem[]>>(() => groupByCat(initItems));
   const [activeId, setActiveId] = React.useState<string | null>(null);
@@ -113,7 +116,8 @@ export function MenuReorder({ branchId, categories: initCategories, items: initI
         p_branch_id: branchId,
         p_orders: catOrders,
       });
-      if (catErr) throw new Error(catErr.message);
+      // Thrown as-is so the catch below can read its code.
+      if (catErr) throw catErr;
 
       // Items per category — update category_id + display_order
       const itemPromises: Array<PromiseLike<unknown>> = [];
@@ -143,12 +147,14 @@ export function MenuReorder({ branchId, categories: initCategories, items: initI
       const firstError = results.find(
         (r) => (r as { error?: { message?: string } })?.error,
       ) as { error: { message: string } } | undefined;
-      if (firstError?.error) throw new Error(firstError.error.message);
+      if (firstError?.error) throw firstError.error;
 
       setDirty(false);
       onSaved?.();
     } catch (err) {
-      setError((err as Error).message);
+      // Raw database text is for the log; the merchant gets a translated message.
+      console.error('[menu] save layout failed', err);
+      setError(t(`errors.${menuErrorKey(err)}`));
     } finally {
       setSaving(false);
     }
@@ -161,9 +167,7 @@ export function MenuReorder({ branchId, categories: initCategories, items: initI
     <div>
       <div className="mb-4 flex items-center justify-between rounded-2xl bg-card px-4 py-3 shadow-warm">
         <p className="text-sm text-muted-foreground">
-          {dirty
-            ? 'Unsaved changes — drag items between categories or up/down to reorder.'
-            : 'Drag the handle to reorder categories and items.'}
+          {dirty ? t('reorder.unsavedHint') : t('reorder.idleHint')}
         </p>
         <Button
           variant="gradient"
@@ -172,7 +176,7 @@ export function MenuReorder({ branchId, categories: initCategories, items: initI
           disabled={!dirty}
           leftIcon={<Save className="h-4 w-4" />}
         >
-          Save layout
+          {t('reorder.saveLayout')}
         </Button>
       </div>
       {error && <p className="mb-3 rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p>}
@@ -201,6 +205,7 @@ export function MenuReorder({ branchId, categories: initCategories, items: initI
 }
 
 function SortableCategory({ cat, items }: { cat: MenuCategory; items: MenuItem[] }) {
+  const t = useTranslations('menu');
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: cat.id,
     data: { kind: 'category' },
@@ -219,7 +224,7 @@ function SortableCategory({ cat, items }: { cat: MenuCategory; items: MenuItem[]
             {...listeners}
             type="button"
             className="cursor-grab touch-none rounded-md p-1.5 text-muted-foreground hover:bg-background active:cursor-grabbing"
-            aria-label="Drag category"
+            aria-label={t('reorder.dragCategory')}
           >
             <GripVertical className="h-4 w-4" />
           </button>
@@ -233,7 +238,7 @@ function SortableCategory({ cat, items }: { cat: MenuCategory; items: MenuItem[]
           <ul className="divide-y divide-border/40">
             {items.length === 0 ? (
               <li className="px-4 py-6 text-center text-sm text-muted-foreground">
-                Drop items here to add to this category
+                {t('reorder.emptyCategory')}
               </li>
             ) : (
               items.map((item) => <SortableItem key={item.id} item={item} catId={cat.id} />)
@@ -271,13 +276,14 @@ function ItemRow({
   dragHandleProps: Record<string, unknown>;
   dragging?: boolean;
 }) {
+  const t = useTranslations('menu');
   return (
     <div className={`flex items-center gap-3 px-3 py-2 ${dragging ? 'rounded-xl bg-card shadow-warm' : ''}`}>
       <button
         {...dragHandleProps}
         type="button"
         className="cursor-grab touch-none rounded-md p-1.5 text-muted-foreground hover:bg-muted active:cursor-grabbing"
-        aria-label="Drag item"
+        aria-label={t('reorder.dragItem')}
       >
         <GripVertical className="h-4 w-4" />
       </button>

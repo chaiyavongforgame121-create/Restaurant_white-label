@@ -2,11 +2,14 @@
 
 import * as React from 'react';
 import Image from 'next/image';
+import { useLocale, useTranslations } from 'next-intl';
 import { Minus, Plus } from 'lucide-react';
 import {
+  DEFAULT_UI_LOCALE,
   defaultSelections,
   flattenSelections,
   formatCurrency,
+  isUiLocale,
   modifierDelta,
   toggleOption,
   validateSelections,
@@ -44,12 +47,15 @@ interface Props {
  * a button.
  */
 export function CounterItemSheet({ item, onClose, onAdd }: Props) {
+  const t = useTranslations('counter');
+  const rawLocale = useLocale();
+  const locale = isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE;
   const [groups, setGroups] = React.useState<ModifierGroup[]>([]);
   const [selections, setSelections] = React.useState<Record<string, string[]>>({});
   const [qty, setQty] = React.useState(1);
   const [notes, setNotes] = React.useState('');
   const [loading, setLoading] = React.useState(false);
-  const [loadError, setLoadError] = React.useState<string | null>(null);
+  const [loadError, setLoadError] = React.useState(false);
 
   React.useEffect(() => {
     if (!item) return undefined;
@@ -60,7 +66,7 @@ export function CounterItemSheet({ item, onClose, onAdd }: Props) {
     setNotes('');
     setGroups([]);
     setSelections({});
-    setLoadError(null);
+    setLoadError(false);
     setLoading(true);
     void (async () => {
       try {
@@ -72,7 +78,7 @@ export function CounterItemSheet({ item, onClose, onAdd }: Props) {
         if (cancelled) return;
         // Adding at the base price is still the right fallback -- refusing the sale because
         // a modifier lookup failed is worse than a ticket with no options on it.
-        setLoadError('Options could not be loaded. This adds at the base price.');
+        setLoadError(true);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -83,7 +89,10 @@ export function CounterItemSheet({ item, onClose, onAdd }: Props) {
   }, [item]);
 
   const delta = React.useMemo(() => modifierDelta(groups, selections), [groups, selections]);
-  const problem = React.useMemo(() => validateSelections(groups, selections), [groups, selections]);
+  const problem = React.useMemo(
+    () => validateSelections(groups, selections, locale),
+    [groups, selections, locale],
+  );
   const unitPrice = (item?.price ?? 0) + delta;
   const lineTotal = Math.round(unitPrice * qty * 100) / 100;
   const soldOut = !!item?.outOfStock;
@@ -121,8 +130,8 @@ export function CounterItemSheet({ item, onClose, onAdd }: Props) {
       open={!!item}
       onClose={onClose}
       side="right"
-      title={item?.name ?? 'Item'}
-      ariaLabel={item ? `Add ${item.name}` : 'Add item'}
+      title={item?.name ?? t('item.fallbackTitle')}
+      ariaLabel={item ? t('sheet.addAria', { name: item.name }) : t('item.addItemAria')}
     >
       {item && (
         <div className="space-y-4 px-5 pb-8">
@@ -149,15 +158,15 @@ export function CounterItemSheet({ item, onClose, onAdd }: Props) {
 
           {soldOut && (
             <p role="alert" className="bg-danger/10 text-danger rounded-xl px-3 py-2 text-sm">
-              This item is out of stock.
+              {t('item.soldOut')}
             </p>
           )}
           {loadError && (
             <p role="alert" className="bg-warning/10 text-warning rounded-xl px-3 py-2 text-sm">
-              {loadError}
+              {t('item.loadError')}
             </p>
           )}
-          {loading && <p className="text-muted-foreground text-sm">Loading options…</p>}
+          {loading && <p className="text-muted-foreground text-sm">{t('item.loadingOptions')}</p>}
 
           {groups.map((g) => {
             const picked = selections[g.id] ?? [];
@@ -166,8 +175,9 @@ export function CounterItemSheet({ item, onClose, onAdd }: Props) {
                 <legend className="px-1 text-sm font-semibold">
                   {g.name}
                   <span className="text-muted-foreground ml-2 text-xs font-normal">
-                    {g.is_required ? 'Required' : 'Optional'}
-                    {g.max_select > 1 ? ` · up to ${g.max_select}` : ''}
+                    {g.max_select > 1
+                      ? t(g.is_required ? 'item.requiredUpTo' : 'item.optionalUpTo', { max: g.max_select })
+                      : t(g.is_required ? 'item.required' : 'item.optional')}
                   </span>
                 </legend>
                 <div className="mt-1 grid gap-1.5 sm:grid-cols-2">
@@ -204,23 +214,23 @@ export function CounterItemSheet({ item, onClose, onAdd }: Props) {
           })}
 
           <label className="block">
-            <span className="mb-1.5 block text-sm font-medium">Note for the kitchen</span>
+            <span className="mb-1.5 block text-sm font-medium">{t('sheet.note')}</span>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
               maxLength={300}
-              placeholder="e.g. no onions — allergy"
+              placeholder={t('item.notePlaceholder')}
               className="focus-ring border-border bg-background w-full rounded-xl border px-3 py-2 text-sm"
             />
           </label>
 
           <div className="flex items-center justify-between gap-3">
-            <span className="text-sm font-medium">Quantity</span>
+            <span className="text-sm font-medium">{t('sheet.quantity')}</span>
             <div className="border-border flex items-center gap-1 rounded-xl border p-1">
               <button
                 type="button"
-                aria-label="One fewer"
+                aria-label={t('sheet.fewer')}
                 onClick={() => setQty((q) => Math.max(1, q - 1))}
                 className="focus-ring hover:bg-muted grid h-10 w-10 place-items-center rounded-lg"
               >
@@ -229,7 +239,7 @@ export function CounterItemSheet({ item, onClose, onAdd }: Props) {
               <span className="w-10 text-center text-lg font-semibold tabular-nums">{qty}</span>
               <button
                 type="button"
-                aria-label="One more"
+                aria-label={t('sheet.more')}
                 onClick={() => setQty((q) => Math.min(99, q + 1))}
                 className="focus-ring hover:bg-muted grid h-10 w-10 place-items-center rounded-lg"
               >
@@ -245,8 +255,7 @@ export function CounterItemSheet({ item, onClose, onAdd }: Props) {
           )}
 
           <Button variant="gradient" size="xl" fullWidth disabled={blocked} onClick={commit}>
-            Add {qty > 1 ? `${qty} · ` : ''}
-            {formatCurrency(lineTotal)}
+            {t('sheet.add', { qty, total: formatCurrency(lineTotal) })}
           </Button>
         </div>
       )}

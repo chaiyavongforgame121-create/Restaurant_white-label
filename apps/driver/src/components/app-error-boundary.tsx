@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useTranslations } from 'next-intl';
 
 interface AppErrorBoundaryProps {
   children: React.ReactNode;
@@ -35,27 +36,33 @@ export class AppErrorBoundary extends React.Component<
   override render() {
     if (!this.state.failed) return this.props.children;
 
-    return (
-      <div className="min-h-dynamic-screen bg-background grid place-items-center px-6 text-center">
-        <div>
-          <p className="font-display text-lg font-semibold">Something went wrong</p>
-          <p className="text-muted-foreground mt-1 text-sm">
-            Your deliveries are safe. Try again, or go back to your home screen.
-          </p>
-          <button
-            onClick={() => this.setState({ failed: false })}
-            className="focus-ring bg-primary text-primary-foreground mt-5 inline-flex h-12 items-center rounded-2xl px-5 text-sm font-semibold"
-          >
-            Try again
-          </button>
-          <button
-            onClick={() => window.location.assign('/app/home')}
-            className="focus-ring text-muted-foreground mt-3 block h-auto min-h-0 w-full text-xs underline"
-          >
-            Back to home
-          </button>
-        </div>
-      </div>
-    );
+    return <AppErrorFallback onRetry={() => this.setState({ failed: false })} />;
   }
+}
+
+/** A function component so the fallback can read translations (a class cannot use hooks). */
+function AppErrorFallback({ onRetry }: { onRetry: () => void }) {
+  const t = useTranslations('shell.crash');
+  const tCommon = useTranslations('common');
+
+  return (
+    <div className="min-h-dynamic-screen bg-background grid place-items-center px-6 text-center">
+      <div>
+        <p className="font-display text-lg font-semibold">{t('title')}</p>
+        <p className="text-muted-foreground mt-1 text-sm">{t('body')}</p>
+        <button
+          onClick={onRetry}
+          className="focus-ring bg-primary text-primary-foreground mt-5 inline-flex h-12 items-center rounded-2xl px-5 text-sm font-semibold"
+        >
+          {tCommon('tryAgain')}
+        </button>
+        <button
+          onClick={() => window.location.assign('/app/home')}
+          className="focus-ring text-muted-foreground mt-3 block h-auto min-h-0 w-full text-xs underline"
+        >
+          {t('backHome')}
+        </button>
+      </div>
+    </div>
+  );
 }

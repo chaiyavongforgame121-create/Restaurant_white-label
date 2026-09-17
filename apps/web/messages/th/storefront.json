@@ -1,0 +1,41 @@
+{
+  "metaDescription": "สั่งอาหารจาก {name}",
+  "hero": {
+    "defaultTitle": "ยินดีต้อนรับ — สั่งของอร่อยได้เลย",
+    "defaultSubtitle": "เปิดให้บริการที่ {branch}",
+    "nowServing": "เปิดให้บริการ"
+  },
+  "closed": {
+    "title": "ขณะนี้ร้านปิดอยู่",
+    "canSchedule": "รับเองที่ร้านได้เฉพาะในเวลาทำการ — แต่คุณยังนัดเวลาจัดส่งได้ตั้งแต่ตอนนี้",
+    "notTaking": "ขณะนี้ร้านยังไม่รับออร์เดอร์ใหม่ โปรดกลับมาใหม่ในเวลาทำการ"
+  },
+  "reviews": {
+    "count": "{count, plural, other {# รีวิวจากลูกค้า}}"
+  },
+  "combos": {
+    "title": "🔥 คอมโบและดีลพิเศษ",
+    "available": "มี {count} รายการ",
+    "more": "… และอีก {count} รายการ",
+    "save": "ประหยัด {amount}",
+    "viewDeal": "ดูดีล"
+  },
+  "happyHour": {
+    "percentOff": "ลด {value}%",
+    "amountOff": "ลด {amount}",
+    "liveNow": "กำลังจัดอยู่",
+    "daily": "ทุกวัน",
+    "window": "{days} · {start}–{end}",
+    "everythingLive": "{discount} ทุกเมนูตอนนี้ 🍽️",
+    "everythingWindow": "{discount} ทุกเมนูในช่วงเวลานี้ 🍽️",
+    "saleLabel": "แฮปปี้อาวร์"
+  },
+  "usuals": {
+    "title": "👋 เมนูประจำของคุณ",
+    "subtitle": "{count, plural, other {# รายการที่คุณสั่งบ่อยที่สุด}}"
+  },
+  "suspended": {
+    "title": "{brand} ยังไม่รับออร์เดอร์ในขณะนี้",
+    "body": "สาขานี้ปิดรับออร์เดอร์ออนไลน์ชั่วคราว โปรดกลับมาใหม่เร็วๆ นี้ หรือติดต่อร้านโดยตรงเพื่อสั่งอาหาร"
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "back": "Back",
+  "close": "Close",
+  "save": "Save",
+  "cancel": "Cancel",
+  "continue": "Continue",
+  "loading": "Loading...",
+  "languageLabel": "Language",
+  "themeLight": "Light mode",
+  "themeDark": "Dark mode",
+  "installApp": "Install app",
+  "switchToLight": "Switch to light mode",
+  "switchToDark": "Switch to dark mode",
+  "dismiss": "Dismiss",
+  "cookies": {
+    "title": "We use cookies",
+    "body": "We use essential cookies for sign-in and ordering, plus optional analytics to improve the product. See our <link>privacy policy</link>.",
+    "acceptAll": "Accept all",
+    "essentialOnly": "Essential only",
+    "rejectAndClose": "Reject and close"
+  },
+  "update": {
+    "ready": "A new version of the app is ready",
+    "reload": "Reload"
+  },
+  "install": {
+    "title": "Install {name}",
+    "install": "Install",
+    "iosHint": "Tap <icon></icon> in Safari, then <strong>Add to Home Screen</strong> for one-tap reordering.",
+    "promptBody": "Add to your home screen for faster reordering and order notifications.",
+    "installed": "Installed — open it from your home screen or desktop",
+    "benefits": "Faster reordering and order notifications",
+    "howTo": "Add it to your home screen — tap to see how",
+    "alreadyInstalled": "Already installed? Your browser will not offer it again — open {name} from your home screen or desktop instead.",
+    "steps": {
+      "iosSafari": "Tap the Share button at the bottom of Safari, then choose Add to Home Screen.",
+      "iosOtherBrowser": "Tap the Share button, then choose Add to Home Screen. If it is not there, open this page in Safari and do the same.",
+      "inAppBrowser": "This browser inside another app cannot install apps. Open the menu (⋯ or ⋮), choose Open in browser, then install it from there.",
+      "android": "Tap the ⋮ menu at the top right of your browser, then choose Install app or Add to Home screen.",
+      "desktopChromium": "Click the install icon at the right end of the address bar, or open the ⋮ menu and choose Cast, save and share › Install page as app.",
+      "desktopSafari": "In Safari’s menu bar, choose File › Add to Dock.",
+      "desktopFirefox": "Firefox on a computer cannot install apps. Open this page in Chrome, Edge or Safari to install it.",
+      "unknown": "Open your browser’s menu and look for Install app or Add to Home screen."
+    }
+  }
+}

@@ -134,11 +134,13 @@ export function DispatchSheet({
               </div>
               <div>
                 <p className="text-xs uppercase tracking-wider text-white/80">
-                  {offer.batchMate ? 'Stacked · 2 orders' : t('newOrder')}
+                  {offer.batchMate ? t('stacked') : t('newOrder')}
                 </p>
                 <p className="font-display text-xl font-bold leading-tight">
-                  {formatCurrency(offer.driverEarnings + (offer.batchMate?.driverEarnings ?? 0))} ·{' '}
-                  {kmToMi(offer.distanceKm).toFixed(1)} mi
+                  {t('headline', {
+                    amount: formatCurrency(offer.driverEarnings + (offer.batchMate?.driverEarnings ?? 0)),
+                    miles: kmToMi(offer.distanceKm).toFixed(1),
+                  })}
                 </p>
               </div>
             </div>
@@ -177,7 +179,7 @@ export function DispatchSheet({
           <Step
             color="accent"
             icon={<MapPin className="h-5 w-5" />}
-            title={offer.batchMate ? `${t('to')} · stop 1` : t('to')}
+            title={offer.batchMate ? t('toStop', { stop: '1' }) : t('to')}
             primary={offer.customerName}
             secondary={offer.customerAddress}
           />
@@ -187,7 +189,7 @@ export function DispatchSheet({
               <Step
                 color="accent"
                 icon={<MapPin className="h-5 w-5" />}
-                title={`${t('to')} · stop 2`}
+                title={t('toStop', { stop: '2' })}
                 primary={offer.batchMate.customerName}
                 secondary={offer.batchMate.customerAddress}
               />
@@ -195,10 +197,16 @@ export function DispatchSheet({
           )}
 
           <div className="grid grid-cols-3 divide-x divide-border rounded-2xl bg-muted/40 p-3">
-            <Metric label="Distance" value={`${kmToMi(offer.distanceKm).toFixed(1)} mi`} />
-            <Metric label="ETA" value={`${offer.estimatedDurationMin} min`} />
             <Metric
-              label={offer.batchMate ? 'Base ×2' : 'Base'}
+              label={t('distance')}
+              value={t('distanceValue', { miles: kmToMi(offer.distanceKm).toFixed(1) })}
+            />
+            <Metric
+              label={t('eta')}
+              value={t('etaValue', { minutes: String(offer.estimatedDurationMin) })}
+            />
+            <Metric
+              label={offer.batchMate ? t('baseBatch') : t('base')}
               value={formatCurrency(offer.driverEarnings + (offer.batchMate?.driverEarnings ?? 0))}
               highlight
             />
@@ -217,8 +225,8 @@ export function DispatchSheet({
                   {t('tip')}{' '}
                   <span className="text-muted-foreground">
                     {fullTotal != null
-                      ? `(your share of ${formatCurrency(fullTotal)})`
-                      : '(all yours)'}
+                      ? t('tipYourShare', { amount: formatCurrency(fullTotal) })
+                      : t('tipAllYours')}
                   </span>
                 </span>
                 <span className="font-display text-lg font-bold text-primary">
@@ -235,13 +243,13 @@ export function DispatchSheet({
             <p className="mt-1 font-medium">{offer.itemsSummary}</p>
             {offer.customerNotes && (
               <p className="mt-2 rounded-lg bg-card/60 px-3 py-2 text-xs text-muted-foreground">
-                <span className="font-semibold text-foreground">Note: </span>
+                <span className="font-semibold text-foreground">{t('note')} </span>
                 {offer.customerNotes}
               </p>
             )}
             {offer.dropoffNotes && (
               <p className="mt-2 rounded-lg bg-card/60 px-3 py-2 text-xs text-muted-foreground">
-                <span className="font-semibold text-foreground">📍 Delivery note: </span>
+                <span className="font-semibold text-foreground">📍 {t('deliveryNote')} </span>
                 {offer.dropoffNotes}
               </p>
             )}
@@ -250,7 +258,7 @@ export function DispatchSheet({
           {offer.batchMate && (
             <div className="rounded-2xl bg-muted/40 p-4 text-sm">
               <p className="text-xs uppercase tracking-wider text-muted-foreground">
-                {offer.batchMate.orderNumber} · stop 2
+                {t('orderStop', { orderNumber: offer.batchMate.orderNumber, stop: '2' })}
               </p>
               <p className="mt-1 font-medium">{offer.batchMate.itemsSummary}</p>
             </div>

@@ -1,0 +1,188 @@
+{
+  "metadata": {
+    "title": "Favornoms cho cửa hàng",
+    "description": "Ứng dụng quản lý dành cho nhà hàng"
+  },
+  "nav": {
+    "dashboard": "Tổng quan",
+    "orders": "Đơn hàng",
+    "liveDeliveries": "Đơn đang giao",
+    "liveDeliveriesHint": "Vị trí hiện tại của tài xế và các đơn đang giao",
+    "menu": "Thực đơn",
+    "kitchenDisplay": "Màn hình bếp",
+    "counter": "Quầy",
+    "qrCode": "Mã QR",
+    "reports": "Báo cáo",
+    "headOffice": "Trụ sở",
+    "ratings": "Đánh giá",
+    "inventory": "Tồn kho",
+    "digitalSignage": "Bảng hiệu kỹ thuật số",
+    "aiVoice": "Giọng nói AI",
+    "staff": "Nhân viên",
+    "drivers": "Tài xế",
+    "driverPayouts": "Chi trả tài xế",
+    "customers": "Khách hàng",
+    "promos": "Khuyến mãi",
+    "loyaltyRewards": "Phần thưởng tích điểm",
+    "receipts": "Hóa đơn",
+    "activityLog": "Nhật ký hoạt động",
+    "branchSettings": "Cài đặt chi nhánh",
+    "brandAndBranches": "Thương hiệu và chi nhánh",
+    "franchise": "Nhượng quyền",
+    "planBilling": "Gói và thanh toán",
+    "preferences": "Cài đặt chung",
+    "platformConsole": "Bảng điều khiển nền tảng"
+  },
+  "sections": {
+    "advanced": "Nâng cao",
+    "operations": "Vận hành",
+    "aiSuite": "AI Suite",
+    "peopleGrowth": "Nhân sự và tăng trưởng",
+    "records": "Sổ sách",
+    "setup": "Thiết lập"
+  },
+  "sidebar": {
+    "merchant": "Cửa hàng",
+    "switchBranch": "Đổi chi nhánh",
+    "openMenu": "Mở thanh điều hướng",
+    "closeMenu": "Đóng thanh điều hướng",
+    "branchDashboard": "Tổng quan {branch}"
+  },
+  "theme": {
+    "switchToLight": "Chuyển sang chế độ sáng",
+    "switchToDark": "Chuyển sang chế độ tối",
+    "lightMode": "Chế độ sáng",
+    "darkMode": "Chế độ tối"
+  },
+  "accessDenied": {
+    "title": "Không có quyền truy cập"
+  },
+  "branchAccess": {
+    "title": "Không có quyền quản trị",
+    "roleCannotOpen": "Tài khoản {role} của bạn không thể mở trang quản trị của {branch}. Công việc của bạn nằm ở màn hình quầy hoặc màn hình bếp.",
+    "accountCannotOpen": "Tài khoản của bạn không thể mở trang quản trị của {branch}. Công việc của bạn nằm ở màn hình quầy hoặc màn hình bếp.",
+    "notStaff": "Tài khoản của bạn không phải nhân viên của {branch}.",
+    "roles": {
+      "owner": "chủ sở hữu",
+      "admin": "quản trị viên",
+      "manager": "quản lý",
+      "cashier": "thu ngân",
+      "server": "phục vụ",
+      "kitchen": "bếp",
+      "staff": "nhân viên",
+      "driver": "tài xế"
+    }
+  },
+  "noAccess": {
+    "title": "Bạn là tài xế tại đây",
+    "body": "Tài khoản tài xế không dùng trang quản trị của nhà hàng. Hãy mở ứng dụng Favornoms Driver để xem các đơn được giao cho bạn, lịch sử giao hàng và thu nhập.",
+    "askOwner": "Nếu bạn cũng cần quyền vào trang quản trị, hãy nhờ chủ nhà hàng mời lại bạn với vai trò quản lý hoặc quản trị viên.",
+    "signInAsSomeoneElse": "Đăng nhập bằng tài khoản khác"
+  },
+  "platformBanner": {
+    "title": "Chế độ quản trị nền tảng",
+    "body": "Bạn không phải nhân viên của {branch}. Mọi thay đổi bạn thực hiện ở đây đều được ghi lại theo tài khoản của bạn.",
+    "back": "Quay lại nền tảng"
+  },
+  "suspension": {
+    "title": "Gói đăng ký đã ngừng hoạt động",
+    "locked": {
+      "counter": "Quầy của {branch} đã bị khóa vì gói đăng ký đã hết hạn.",
+      "screen": "Màn hình này đã bị khóa tại {branch} vì gói đăng ký đã hết hạn."
+    },
+    "lockedHere": {
+      "counter": "Quầy của chi nhánh này đã bị khóa vì gói đăng ký đã hết hạn.",
+      "screen": "Màn hình này đã bị khóa tại chi nhánh này vì gói đăng ký đã hết hạn."
+    },
+    "nothingDeleted": "Không có dữ liệu nào bị xóa — chỉ cần chọn một gói là mọi thứ được khôi phục ngay.",
+    "kitchenStillWorks": "Các đơn hàng đã đặt vẫn có thể được nấu và hoàn tất trên màn hình bếp.",
+    "goToBilling": "Đến trang thanh toán"
+  },
+  "addon": {
+    "pricePerMonth": "+${price}<unit>/tháng</unit>",
+    "addToPackage": "Thêm vào gói của tôi"
+  },
+  "lockedFeature": {
+    "comingSoon": "Sắp ra mắt",
+    "notInPackage": "{feature} thuộc tiện ích bổ sung {addon} và không có trong gói hiện tại của bạn.",
+    "viewPackages": "Xem các gói"
+  },
+  "upload": {
+    "noCanvas": "Trình duyệt của bạn không xử lý được ảnh (không hỗ trợ canvas)."
+  },
+  "imageUpload": {
+    "upload": "Tải ảnh lên",
+    "uploading": "Đang tải lên…",
+    "working": "Đang xử lý…",
+    "replace": "Thay ảnh",
+    "remove": "Xóa ảnh",
+    "undoBackgroundRemoval": "Hoàn tác xóa nền",
+    "removeWhiteBackground": "Xóa nền trắng",
+    "previewLightAlt": "Logo trên cửa hàng nền sáng",
+    "previewDarkAlt": "Logo trên cửa hàng nền tối",
+    "light": "Sáng",
+    "dark": "Tối",
+    "notice": {
+      "darkLogo": "Logo này có màu tối, khách hàng dùng chế độ tối sẽ khó nhìn thấy. Hãy hoàn tác hoặc tải lên phiên bản màu sáng.",
+      "lightLogo": "Logo này có màu sáng, sẽ khó nhìn thấy trên cửa hàng nền sáng. Hãy hoàn tác hoặc tải lên phiên bản màu tối hơn."
+    },
+    "errors": {
+      "formatUnsupported": "Không thể xử lý định dạng ảnh này. Hãy tải logo lên ở dạng PNG hoặc JPEG.",
+      "svgUnreadable": "Không đọc được tệp SVG này. Hãy xóa nền bên trong tệp SVG hoặc tải lên ảnh PNG.",
+      "loadFailed": "Không tải được ảnh của bạn.",
+      "noPlainBackground": "Ảnh này không có nền trơn nào để xóa.",
+      "encodeFailed": "Không tạo được tệp ảnh."
+    }
+  },
+  "iconUpload": {
+    "requirements": "Ảnh vuông PNG, JPEG hoặc WebP, tối thiểu 192×192. Ảnh PNG nền trong suốt cho bạn nhiều lựa chọn nhất. Chúng tôi sẽ tạo đủ mọi kích thước mà trình duyệt và ứng dụng đã cài cần dùng.",
+    "processing": "Đang xử lý…",
+    "replace": "Thay biểu tượng",
+    "choose": "Chọn biểu tượng",
+    "remove": "Xóa biểu tượng",
+    "androidIcon": "Biểu tượng trên màn hình chính Android",
+    "fitFill": "Lấp đầy ô",
+    "fitPadded": "Giữ khoảng đệm",
+    "removeBackground": {
+      "label": "Xóa nền trơn quanh ảnh",
+      "hint": "Màu trắng (hoặc màu trơn khác) bên ngoài logo sẽ đổi thành màu bạn chọn bên dưới — không còn góc trắng trên biểu tượng nào."
+    },
+    "transparent": {
+      "label": "Chỉ hình ảnh, không có nền (như ảnh PNG)",
+      "hint": "Dành cho thẻ trình duyệt và khi cài trên máy tính. Điện thoại không hiển thị được nền trong suốt — Android và iPhone luôn đặt một màu nền đặc phía sau ảnh, vì vậy hãy chọn màu đó bên dưới."
+    },
+    "zoom": "Thu phóng",
+    "zoomHint": "Phóng to để hình hiển thị lớn hơn trên Android.",
+    "colour": {
+      "phoneBackground": "Nền trên điện thoại",
+      "background": "Nền",
+      "frame": "Màu khung",
+      "swatch": "Màu {hex}",
+      "custom": "Màu tùy chỉnh",
+      "hintFromEdge": "Những màu đầu tiên được lấy từ mép ảnh của bạn — chọn màu viền sẽ giúp ô biểu tượng trông liền mạch.",
+      "hintFrameOnly": "Chỉ khung quanh biểu tượng đổi màu; biểu tượng vẫn giữ nền ban đầu.",
+      "tickRemoveFirst": "Đánh dấu “Xóa nền trơn” để chọn màu cho vùng quanh ảnh.",
+      "backgroundBakedIn": "Nền của biểu tượng này là một phần của ảnh. Để chọn màu khác, hãy tải lại ảnh gốc — tốt nhất là ảnh PNG nền trong suốt."
+    },
+    "preview": {
+      "androidSquircleAlt": "Xem trước Android dạng vuông bo góc",
+      "androidCircleAlt": "Xem trước Android dạng tròn",
+      "iphoneAlt": "Xem trước iPhone",
+      "computerAlt": "Xem trước trên máy tính và thẻ trình duyệt",
+      "computer": "Máy tính",
+      "hint": "Hình dung gần đúng trên từng thiết bị. Android cắt theo hình dạng riêng và iPhone bo tròn các góc — cả hai đều cần màu nền đặc, và thu phóng chỉ áp dụng cho Android. Máy tính và thẻ trình duyệt có thể chỉ hiển thị hình ảnh của bạn."
+    },
+    "apply": "Áp dụng cho biểu tượng",
+    "repaintsRemoved": "Màu nền trùng với màu đang được xóa — hãy chọn màu khác, nếu không các góc sẽ trông như cũ.",
+    "thenSave": "Sau đó lưu để xuất bản.",
+    "oldPadding": "Biểu tượng hiện tại vẫn còn khoảng đệm trắng cũ — hãy áp dụng rồi lưu.",
+    "ready": "Xong — đã tạo biểu tượng 192, 512 và maskable.",
+    "errors": {
+      "loadFailed": "Không tải được biểu tượng hiện tại. Hãy tải lên lại để đổi kiểu.",
+      "encodeFailed": "Không tạo được biểu tượng đã đổi kích thước.",
+      "wrongType": "Hãy dùng ảnh PNG, JPEG hoặc WebP. Không thể dùng SVG làm biểu tượng ứng dụng.",
+      "tooLarge": "Ảnh này lớn hơn {megabytes} MB.",
+      "tooSmall": "Ảnh này có kích thước {width}×{height}. Biểu tượng ứng dụng cần tối thiểu {min}×{min} — nhỏ hơn thì nút cài đặt sẽ biến mất."
+    }
+  }
+}

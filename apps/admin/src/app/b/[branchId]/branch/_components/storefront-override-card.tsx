@@ -2,10 +2,13 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
+import { useLocale, useTranslations } from 'next-intl';
 import { LayoutGrid } from 'lucide-react';
 import {
-  MENU_CARD_STYLE_LABELS,
-  MENU_LAYOUT_LABELS,
+  DEFAULT_UI_LOCALE,
+  isUiLocale,
+  menuCardStyleLabel,
+  menuLayoutLabel,
   mergeStorefrontOverride,
   parseStorefront,
   parseStorefrontOverride,
@@ -30,6 +33,9 @@ interface Props {
 }
 
 export function StorefrontOverrideCard({ branchId, restaurantId, settings, restaurantStorefront }: Props) {
+  const t = useTranslations('branch');
+  const rawLocale = useLocale();
+  const locale = isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE;
   const router = useRouter();
   const base = React.useMemo(() => parseStorefront(restaurantStorefront), [restaurantStorefront]);
   const [override, setOverride] = React.useState<StorefrontOverride>(() =>
@@ -58,7 +64,14 @@ export function StorefrontOverrideCard({ branchId, restaurantId, settings, resta
       .eq('id', branchId);
     setSaving(false);
     if (upErr) {
-      setError(upErr.message);
+      console.error('Saving the menu layout override failed', upErr);
+      setError(
+        upErr.message.includes('branch_manager_required')
+          ? t('errors.managerRequired')
+          : upErr.code === '42501'
+            ? t('errors.noPermission')
+            : t('errors.generic'),
+      );
       return;
     }
     setSavedAt(Date.now());
@@ -66,17 +79,17 @@ export function StorefrontOverrideCard({ branchId, restaurantId, settings, resta
   };
 
   const layoutOptions: Array<{ value: MenuLayout | null; label: string }> = [
-    { value: null, label: `Inherit · ${MENU_LAYOUT_LABELS[base.menuLayout]}` },
+    { value: null, label: t('storefront.inherit', { label: menuLayoutLabel(base.menuLayout, locale) }) },
     ...(['list', 'grid2', 'grid3', 'grid4'] as const).map((v) => ({
       value: v,
-      label: MENU_LAYOUT_LABELS[v],
+      label: menuLayoutLabel(v, locale),
     })),
   ];
   const cardOptions: Array<{ value: MenuCardStyle | null; label: string }> = [
-    { value: null, label: `Inherit · ${MENU_CARD_STYLE_LABELS[base.menuCardStyle]}` },
+    { value: null, label: t('storefront.inherit', { label: menuCardStyleLabel(base.menuCardStyle, locale) }) },
     ...(['standard', 'compact'] as const).map((v) => ({
       value: v,
-      label: MENU_CARD_STYLE_LABELS[v],
+      label: menuCardStyleLabel(v, locale),
     })),
   ];
 
@@ -84,18 +97,17 @@ export function StorefrontOverrideCard({ branchId, restaurantId, settings, resta
     <Card className="p-5">
       <div className="flex items-center justify-between gap-2">
         <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
-          <LayoutGrid className="h-5 w-5 text-primary" /> Menu layout
+          <LayoutGrid className="h-5 w-5 text-primary" /> {t('storefront.title')}
         </h2>
-        {savedAt && !saving && <span className="text-sm text-success">Saved ✓</span>}
+        {savedAt && !saving && <span className="text-sm text-success">{t('storefront.saved')}</span>}
       </div>
       <p className="text-sm text-muted-foreground">
-        Override how this branch&apos;s menu looks. Leave on <em>Inherit</em> to follow the
-        restaurant-wide setting from Brands &rsaquo; Storefront appearance.
+        {t.rich('storefront.description', { em: (chunks) => <em>{chunks}</em> })}
       </p>
 
       <div className="mt-4 space-y-4">
         <div>
-          <p className="mb-1.5 text-sm font-medium">Layout</p>
+          <p className="mb-1.5 text-sm font-medium">{t('storefront.layout')}</p>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {layoutOptions.map((opt) => {
               const active = override.menuLayout === opt.value;
@@ -116,7 +128,7 @@ export function StorefrontOverrideCard({ branchId, restaurantId, settings, resta
           </div>
         </div>
         <div>
-          <p className="mb-1.5 text-sm font-medium">Card style</p>
+          <p className="mb-1.5 text-sm font-medium">{t('storefront.cardStyle')}</p>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {cardOptions.map((opt) => {
               const active = override.menuCardStyle === opt.value;
@@ -137,46 +149,48 @@ export function StorefrontOverrideCard({ branchId, restaurantId, settings, resta
           </div>
         </div>
         <div>
-          <p className="mb-1.5 text-sm font-medium">Hero headline</p>
+          <p className="mb-1.5 text-sm font-medium">{t('storefront.heroHeadline')}</p>
           <input
             value={heroTitleText}
             onChange={(e) => setHeroTitleText(e.target.value)}
             onBlur={() => save({ ...override, heroTitle: heroTitleText.trim() || null })}
             disabled={saving}
-            placeholder={base.heroTitle || 'Welcome — order something delicious'}
+            placeholder={base.heroTitle || t('storefront.heroHeadlinePlaceholder')}
             className="h-11 w-full rounded-xl border border-border bg-background px-3 text-base outline-none focus-visible:border-primary"
           />
-          <p className="mt-1 text-xs text-muted-foreground">Leave empty to inherit the restaurant-wide headline.</p>
+          <p className="mt-1 text-xs text-muted-foreground">{t('storefront.heroHeadlineHint')}</p>
         </div>
         <div>
-          <p className="mb-1.5 text-sm font-medium">Hero tagline</p>
+          <p className="mb-1.5 text-sm font-medium">{t('storefront.heroTagline')}</p>
           <input
             value={heroSubtitleText}
             onChange={(e) => setHeroSubtitleText(e.target.value)}
             onBlur={() => save({ ...override, heroSubtitle: heroSubtitleText.trim() || null })}
             disabled={saving}
-            placeholder={base.heroSubtitle || 'Now serving from your city'}
+            placeholder={base.heroSubtitle || t('storefront.heroTaglinePlaceholder')}
             className="h-11 w-full rounded-xl border border-border bg-background px-3 text-base outline-none focus-visible:border-primary"
           />
-          <p className="mt-1 text-xs text-muted-foreground">Leave empty to inherit the restaurant-wide tagline.</p>
+          <p className="mt-1 text-xs text-muted-foreground">{t('storefront.heroTaglineHint')}</p>
         </div>
         <div>
-          <p className="mb-1.5 text-sm font-medium">Hero image</p>
+          <p className="mb-1.5 text-sm font-medium">{t('storefront.heroImage')}</p>
           <ImageUpload
             restaurantId={restaurantId}
             folder="hero"
             value={override.heroUrl}
             onChange={(url) => save({ ...override, heroUrl: url })}
             aspect="aspect-video"
-            label="Upload hero image"
+            label={t('storefront.uploadHeroImage')}
           />
-          <p className="mt-1 text-xs text-muted-foreground">Leave empty to inherit the restaurant-wide image.</p>
+          <p className="mt-1 text-xs text-muted-foreground">{t('storefront.heroImageHint')}</p>
         </div>
       </div>
 
       <p className="mt-3 text-xs text-muted-foreground">
-        Effective on the storefront: {MENU_LAYOUT_LABELS[effective.menuLayout]} ·{' '}
-        {MENU_CARD_STYLE_LABELS[effective.menuCardStyle]}
+        {t('storefront.effective', {
+          layout: menuLayoutLabel(effective.menuLayout, locale),
+          cardStyle: menuCardStyleLabel(effective.menuCardStyle, locale),
+        })}
       </p>
 
       {error && (

@@ -1,0 +1,41 @@
+{
+  "metaDescription": "Order from {name}",
+  "hero": {
+    "defaultTitle": "Welcome — order something delicious",
+    "defaultSubtitle": "Now serving from {branch}",
+    "nowServing": "Now serving"
+  },
+  "closed": {
+    "title": "Currently closed.",
+    "canSchedule": "Pickup is available during business hours — you can still schedule a delivery now.",
+    "notTaking": "We're not taking new orders right now. Please check back during business hours."
+  },
+  "reviews": {
+    "count": "{count, plural, one {# customer review} other {# customer reviews}}"
+  },
+  "combos": {
+    "title": "🔥 Combos & deals",
+    "available": "{count} available",
+    "more": "… + {count} more",
+    "save": "Save {amount}",
+    "viewDeal": "View deal"
+  },
+  "happyHour": {
+    "percentOff": "{value}% off",
+    "amountOff": "{amount} off",
+    "liveNow": "Live now",
+    "daily": "Daily",
+    "window": "{days} · {start}–{end}",
+    "everythingLive": "{discount} on everything on the menu right now 🍽️",
+    "everythingWindow": "{discount} on everything on the menu during this window 🍽️",
+    "saleLabel": "Happy hour"
+  },
+  "usuals": {
+    "title": "👋 Your usuals",
+    "subtitle": "{count, plural, one {# item you order most} other {# items you order most}}"
+  },
+  "suspended": {
+    "title": "{brand} is not taking orders right now",
+    "body": "Online ordering for this location is temporarily unavailable. Please check back soon, or contact the restaurant directly to order."
+  }
+}

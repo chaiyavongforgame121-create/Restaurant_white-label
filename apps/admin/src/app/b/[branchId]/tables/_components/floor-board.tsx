@@ -2,10 +2,12 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { Ban, Banknote, Lock, QrCode, Receipt, RefreshCw, Unlock, Users } from 'lucide-react';
 import { formatCurrency } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
 import {
+  TABLE_TYPES,
   closeTableSession,
   getTableSessionBill,
   listTableStates,
@@ -18,7 +20,16 @@ import {
 } from '@favornoms/database/queries';
 import { useRealtime } from '@favornoms/database/realtime';
 import { Badge, Button, Card, EmptyState, Sheet, usePrompt } from '@favornoms/ui';
-import { buildFloor, floorCounts, groupByZone, type FloorTableState } from './floor-model';
+import {
+  buildFloor,
+  elapsedTime,
+  floorCounts,
+  groupByZone,
+  type Elapsed,
+  type FloorDetailPart,
+  type FloorTableState,
+  type TableLabel,
+} from './floor-model';
 
 interface Props {
   branchId: string;
@@ -33,15 +44,25 @@ interface Props {
   canSetup: boolean;
 }
 
-/** RPC failures, in words a server with a customer waiting can act on. */
-function readableError(message: string): string {
-  if (message.includes('unpaid_needs_manager'))
-    return 'This bill still has money on it. Ask a manager to write it off.';
-  if (message.includes('forbidden')) return 'Your account cannot do that at this branch.';
-  if (message.includes('session_already_closed')) return 'That table has already been closed.';
-  if (message.includes('table_not_found')) return 'That table is no longer set up here.';
-  return message;
+type FloorErrorCode =
+  | 'unpaidNeedsManager'
+  | 'forbidden'
+  | 'sessionAlreadyClosed'
+  | 'tableNotFound'
+  | 'generic';
+
+/** RPC failures, as codes for words a server with a customer waiting can act on. */
+function readableError(message: string): FloorErrorCode {
+  if (message.includes('unpaid_needs_manager')) return 'unpaidNeedsManager';
+  if (message.includes('forbidden')) return 'forbidden';
+  if (message.includes('session_already_closed')) return 'sessionAlreadyClosed';
+  if (message.includes('table_not_found')) return 'tableNotFound';
+  // Anything else is raw database text: keep it for the logs, not for the floor.
+  console.error(message);
+  return 'generic';
 }
+
+const KNOWN_TABLE_TYPES: readonly string[] = TABLE_TYPES;
 
 /**
  * Who is sitting where, and what each table owes.
@@ -61,6 +82,7 @@ export function FloorBoard({
   canVoid,
   canSetup,
 }: Props) {
+  const t = useTranslations('tables');
   const [tables, setTables] = React.useState(initialTables);
   const [sessions, setSessions] = React.useState(initialSessions);
   const [error, setError] = React.useState<string | null>(null);
@@ -78,6 +100,38 @@ export function FloorBoard({
     const timer = window.setInterval(() => setNowMs(Date.now()), 30_000);
     return () => window.clearInterval(timer);
   }, []);
+
+  const labelText = (label: TableLabel) =>
+    label.kind === 'name' ? label.name : t('label.number', { number: label.number });
+
+  const elapsedText = (elapsed: Elapsed | null | undefined) =>
+    !elapsed
+      ? t('elapsed.unknown')
+      : elapsed.hours === 0
+        ? t('elapsed.minutes', { minutes: elapsed.minutes })
+        : t('elapsed.hoursMinutes', {
+            hours: elapsed.hours,
+            minutes: String(elapsed.minutes).padStart(2, '0'),
+          });
+
+  const badgeText = (state: FloorTableState) =>
+    state.badge.code === 'seated'
+      ? t('badge.seated', { elapsed: elapsedText(state.badge.elapsed) })
+      : t(`badge.${state.badge.code}`);
+
+  const typeText = (tableType: string) =>
+    KNOWN_TABLE_TYPES.includes(tableType) ? t(`types.${tableType}`) : tableType.replace(/_/g, ' ');
+
+  const detailText = (parts: FloorDetailPart[]) =>
+    parts
+      .map((part) =>
+        part.kind === 'type'
+          ? typeText(part.tableType)
+          : part.kind === 'seats'
+            ? t('detail.seats', { count: part.count })
+            : t('detail.party', { size: part.size }),
+      )
+      .join(' · ');
 
   const reload = React.useCallback(async () => {
     const next = await listTableStates(getBrowserClient(), branchId);
@@ -111,23 +165,26 @@ export function FloorBoard({
       await action();
       await reload();
     } catch (err) {
-      setError(readableError((err as Error).message));
+      setError(t(`errors.${readableError((err as Error).message)}`));
     } finally {
       setBusyId(null);
     }
   };
 
-  const loadBill = React.useCallback(async (sessionId: string) => {
-    setBillLoading(true);
-    setBill(null);
-    try {
-      setBill(await getTableSessionBill(getBrowserClient(), sessionId));
-    } catch (err) {
-      setError(readableError((err as Error).message));
-    } finally {
-      setBillLoading(false);
-    }
-  }, []);
+  const loadBill = React.useCallback(
+    async (sessionId: string) => {
+      setBillLoading(true);
+      setBill(null);
+      try {
+        setBill(await getTableSessionBill(getBrowserClient(), sessionId));
+      } catch (err) {
+        setError(t(`errors.${readableError((err as Error).message)}`));
+      } finally {
+        setBillLoading(false);
+      }
+    },
+    [t],
+  );
 
   const openBill = (state: FloorTableState) => {
     setSettleNote(null);
@@ -170,15 +227,24 @@ export function FloorBoard({
       const result = await settleTableSession(getBrowserClient(), session.id);
       // A QR transfer settles against a photographed slip, so record_counter_payment
       // refuses it. Saying "paid" over the top of that would be a lie the cash-up finds.
-      setSettleNote(
-        result.skipped.length > 0
-          ? `Closed, but ${result.skipped
-              .map((s) => `order ${s.order_number} could not be settled here (${s.reason})`)
-              .join('; ')}. Approve it in Payments.`
-          : `${state.label} settled — ${result.orders_settled} ${
-              result.orders_settled === 1 ? 'round' : 'rounds'
-            }, ${formatCurrency(Number(result.total))}.`,
-      );
+      if (result.skipped.length > 0) {
+        // The reasons are the database's own words; the floor only needs the order numbers.
+        console.error('settle_table_session skipped rounds', result.skipped);
+        setSettleNote(
+          t('settle.skipped', {
+            count: result.skipped.length,
+            orders: result.skipped.map((s) => s.order_number).join(', '),
+          }),
+        );
+      } else {
+        setSettleNote(
+          t('settle.done', {
+            table: labelText(state.label),
+            rounds: result.orders_settled,
+            total: formatCurrency(Number(result.total)),
+          }),
+        );
+      }
       setOpenTableId(null);
     });
   };
@@ -187,11 +253,12 @@ export function FloorBoard({
     const session = state.session;
     if (!session) return;
     const note = await prompt({
-      title: `Close ${state.label} without taking payment?`,
-      body: 'The rounds stay on the books as unpaid.',
+      title: t('void.title', { table: labelText(state.label) }),
+      body: t('void.body'),
+      // Saved as the sitting's close note, so it stays in the words the records are kept in.
       defaultValue: 'Walk-out',
-      placeholder: 'Say why',
-      confirmLabel: 'Close unpaid',
+      placeholder: t('void.placeholder'),
+      confirmLabel: t('void.confirm'),
     });
     if (note === null) return;
     return run(state.table.id, async () => {
@@ -204,17 +271,15 @@ export function FloorBoard({
     <div className="container max-w-6xl py-8">
       <header className="mb-6 flex flex-wrap items-end justify-between gap-3 px-2 pl-16 lg:px-0">
         <div>
-          <h1 className="font-display text-3xl font-bold">Tables</h1>
+          <h1 className="font-display text-3xl font-bold">{t('header.title')}</h1>
           <p className="mt-1 max-w-2xl text-muted-foreground">
-            Who is sitting where at {branchName}, and what each table owes. A table stays open
-            for round after round until you take the money — settling the bill is what stops
-            its QR code ordering again.
+            {t('header.intro', { branch: branchName })}
           </p>
         </div>
         {canSetup && (
           <Link href={`/b/${branchId}/qr/tables`}>
             <Button variant="outline" leftIcon={<QrCode className="h-4 w-4" />}>
-              Table QR codes
+              {t('header.qrCodes')}
             </Button>
           </Link>
         )}
@@ -222,7 +287,7 @@ export function FloorBoard({
 
       {!healthy && (
         <p role="status" className="mb-4 rounded-xl bg-warning/10 px-3 py-2 text-sm text-warning">
-          Reconnecting — the board may be a moment behind.
+          {t('reconnecting')}
         </p>
       )}
 
@@ -241,12 +306,12 @@ export function FloorBoard({
       {states.length === 0 ? (
         <EmptyState
           icon={<Users className="h-7 w-7" />}
-          title="No tables set up yet"
-          description="Add your tables and print their QR codes, and this board fills in as guests scan them."
+          title={t('empty.title')}
+          description={t('empty.description')}
           action={
             canSetup ? (
               <Link href={`/b/${branchId}/qr/tables`}>
-                <Button variant="gradient">Set up tables</Button>
+                <Button variant="gradient">{t('empty.action')}</Button>
               </Link>
             ) : undefined
           }
@@ -254,12 +319,16 @@ export function FloorBoard({
       ) : (
         <>
           <div className="mb-5 flex flex-wrap gap-2 text-sm">
-            <Badge variant="success">{counts.seated} seated</Badge>
-            <Badge variant="muted">{counts.free} free</Badge>
+            <Badge variant="success">{t('counts.seated', { count: counts.seated })}</Badge>
+            <Badge variant="muted">{t('counts.free', { count: counts.free })}</Badge>
             {counts.billRequested > 0 && (
-              <Badge variant="warning">{counts.billRequested} waiting for the bill</Badge>
+              <Badge variant="warning">
+                {t('counts.billRequested', { count: counts.billRequested })}
+              </Badge>
             )}
-            <Badge variant="neutral">On the floor {formatCurrency(counts.outstanding)}</Badge>
+            <Badge variant="neutral">
+              {t('counts.outstanding', { amount: formatCurrency(counts.outstanding) })}
+            </Badge>
           </div>
 
           {zones.map((zone) => (
@@ -272,12 +341,16 @@ export function FloorBoard({
                   <Card key={state.table.id} className="flex flex-col gap-2 p-4">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="font-display text-lg font-semibold">{state.label}</p>
-                        {state.detail && (
-                          <p className="text-xs text-muted-foreground">{state.detail}</p>
+                        <p className="font-display text-lg font-semibold">
+                          {labelText(state.label)}
+                        </p>
+                        {state.detail.length > 0 && (
+                          <p className="text-xs text-muted-foreground">
+                            {detailText(state.detail)}
+                          </p>
                         )}
                       </div>
-                      <Badge variant={state.badge.variant}>{state.badge.text}</Badge>
+                      <Badge variant={state.badge.variant}>{badgeText(state)}</Badge>
                     </div>
 
                     {state.session ? (
@@ -286,15 +359,17 @@ export function FloorBoard({
                           {formatCurrency(state.total)}
                         </span>{' '}
                         <span className="text-muted-foreground">
-                          · {state.rounds} {state.rounds === 1 ? 'round' : 'rounds'} · code{' '}
-                          {state.session.session_code}
+                          {t('card.sessionSummary', {
+                            rounds: state.rounds,
+                            code: state.session.session_code,
+                          })}
                         </span>
                       </p>
                     ) : (
                       <p className="text-sm text-muted-foreground">
                         {state.table.status === 'dirty'
-                          ? 'Settled — clear it for the next party.'
-                          : 'Nobody sitting here.'}
+                          ? t('card.settledNeedsClearing')
+                          : t('card.empty')}
                       </p>
                     )}
 
@@ -307,7 +382,7 @@ export function FloorBoard({
                             leftIcon={<Receipt className="h-4 w-4" />}
                             onClick={() => openBill(state)}
                           >
-                            Bill
+                            {t('card.bill')}
                           </Button>
                           {canSettle && (
                             <Button
@@ -323,7 +398,9 @@ export function FloorBoard({
                               loading={busyId === state.table.id}
                               onClick={() => void toggleLock(state)}
                             >
-                              {state.session.status === 'locked' ? 'Reopen' : 'Ask for bill'}
+                              {state.session.status === 'locked'
+                                ? t('card.reopen')
+                                : t('card.askForBill')}
                             </Button>
                           )}
                         </>
@@ -337,7 +414,7 @@ export function FloorBoard({
                               loading={busyId === state.table.id}
                               onClick={() => void seat(state)}
                             >
-                              Seat
+                              {t('card.seat')}
                             </Button>
                           )}
                           {canSettle && state.table.status === 'dirty' && (
@@ -348,7 +425,7 @@ export function FloorBoard({
                               loading={busyId === state.table.id}
                               onClick={() => void clearTable(state)}
                             >
-                              Clear
+                              {t('card.clear')}
                             </Button>
                           )}
                         </>
@@ -366,26 +443,28 @@ export function FloorBoard({
         open={!!selected?.session}
         onClose={() => setOpenTableId(null)}
         side="right"
-        title={selected?.label ?? 'Table'}
+        title={selected ? labelText(selected.label) : t('sheet.titleFallback')}
       >
         {selected?.session && (
           <div className="space-y-4 p-1">
             <p className="text-sm text-muted-foreground">
-              Open {selected.badge.text.replace('Seated · ', '')} · code{' '}
-              <span className="font-semibold">{selected.session.session_code}</span> — read it out
-              when a second phone is asked to join this table.
+              {t.rich('sheet.openFor', {
+                elapsed: elapsedText(elapsedTime(selected.session.opened_at, nowMs)),
+                code: selected.session.session_code,
+                strong: (chunks) => <span className="font-semibold">{chunks}</span>,
+              })}
             </p>
 
-            {billLoading && <p className="text-sm text-muted-foreground">Reading the bill…</p>}
+            {billLoading && <p className="text-sm text-muted-foreground">{t('sheet.readingBill')}</p>}
 
             {bill?.orders.map((order) => (
               <div key={order.order_id} className="rounded-2xl border border-border p-3">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-sm font-semibold">
-                    Round {order.round ?? 1} · {order.order_number}
+                    {t('sheet.round', { round: order.round ?? 1, number: order.order_number })}
                     {order.paid && (
                       <Badge variant="success" className="ml-2">
-                        Paid
+                        {t('sheet.paid')}
                       </Badge>
                     )}
                   </p>
@@ -415,13 +494,13 @@ export function FloorBoard({
             {bill && (
               <div className="space-y-1 border-t border-border pt-3">
                 <div className="flex items-center justify-between gap-3">
-                  <span className="font-display text-lg font-semibold">Table total</span>
+                  <span className="font-display text-lg font-semibold">{t('sheet.tableTotal')}</span>
                   <span className="font-display text-lg font-bold tabular-nums">
                     {formatCurrency(Number(bill.running_total))}
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
-                  <span>Still to collect</span>
+                  <span>{t('sheet.stillToCollect')}</span>
                   <span className="tabular-nums">{formatCurrency(Number(bill.outstanding))}</span>
                 </div>
               </div>
@@ -435,7 +514,7 @@ export function FloorBoard({
                   loading={busyId === selected.table.id}
                   onClick={() => void takePayment(selected)}
                 >
-                  Take payment
+                  {t('sheet.takePayment')}
                 </Button>
               )}
               {canVoid && (
@@ -446,14 +525,11 @@ export function FloorBoard({
                   loading={busyId === selected.table.id}
                   onClick={() => void voidBill(selected)}
                 >
-                  Close without payment
+                  {t('sheet.closeWithoutPayment')}
                 </Button>
               )}
             </div>
-            <p className="text-xs text-muted-foreground">
-              Taking payment records every round as received, closes the table and stops its QR
-              code ordering until the next party is seated.
-            </p>
+            <p className="text-xs text-muted-foreground">{t('sheet.paymentHint')}</p>
           </div>
         )}
       </Sheet>

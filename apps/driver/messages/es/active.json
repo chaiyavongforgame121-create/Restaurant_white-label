@@ -1,0 +1,177 @@
+{
+  "headToPickup": "Ve a recoger",
+  "atPickup": "Estoy en el restaurante",
+  "pickedUp": "Recogido — iniciar entrega",
+  "onTheWay": "En camino al cliente",
+  "atCustomer": "Llegué",
+  "delivered": "Marcar como entregado",
+  "callCustomer": "Llamar al cliente",
+  "navigate": "Navegar",
+  "noActive": "No hay entregas activas",
+  "noActiveDescription": "Cuando aceptes una entrega, aparecerá aquí",
+  "goHome": "Ir al inicio",
+  "complete": {
+    "title": "¡Entrega completada! 🎉",
+    "earningsAdded": "Ganancias sumadas",
+    "findNext": "Buscar otro pedido"
+  },
+  "map": {
+    "liveUnavailable": "El mapa en vivo no está disponible para este pedido.",
+    "unavailable": "Mapa no disponible",
+    "tripSummary": "{miles} mi · {minutes} min"
+  },
+  "headerWithStop": "{orderNumber} · parada {seq} de 2",
+  "location": {
+    "insecure": "La ubicación solo funciona con https. Abre la app desde su ícono instalado para que el cliente pueda seguirte.",
+    "off": "La ubicación está desactivada. Actívala para que el cliente pueda seguirte y sigas recibiendo ofertas.",
+    "sharedWhileOpen": "Tu ubicación se comparte mientras esta app está en pantalla. Si navegas con otra app, se pausa; al volver aquí se actualiza de inmediato."
+  },
+  "steps": {
+    "pickup": "Recogida",
+    "dropoff": "Lugar de entrega",
+    "dropoffStop1": "Lugar de entrega · parada 1",
+    "dropoffStop2": "Lugar de entrega · parada 2 (después de esta)"
+  },
+  "deliveryNote": "Nota de entrega:",
+  "earning": "Ganancia",
+  "earningBatch": "Ganancia (2 pedidos)",
+  "pickupOrder1": "Pedido 1 · {orderNumber}",
+  "pickupOrder2": "Pedido 2 · {orderNumber}: toma una foto aparte de esta bolsa",
+  "arrival": {
+    "turnOnLocation": {
+      "restaurant": "Activa la ubicación para confirmar que estás en el restaurante.",
+      "dropoff": "Activa la ubicación para confirmar que estás en el lugar de entrega."
+    },
+    "waiting": {
+      "restaurant": "Esperando tu ubicación para confirmar que estás en el restaurante…",
+      "dropoff": "Esperando tu ubicación para confirmar que estás en el lugar de entrega…"
+    },
+    "tooFar": {
+      "restaurant": "Estás a {miles} mi. Acércate a menos de {radius} mi del restaurante para continuar.",
+      "dropoff": "Estás a {miles} mi. Acércate a menos de {radius} mi del lugar de entrega para continuar."
+    },
+    "override": {
+      "restaurant": "Mi GPS está mal: ya estoy en el restaurante",
+      "dropoff": "Mi GPS está mal: ya estoy en el lugar de entrega"
+    },
+    "skipped": "Se omitió la verificación de distancia. Esto queda registrado en la entrega."
+  },
+  "photoNeeded": {
+    "secondOrder": "Sube una foto de recogida del pedido 2 para continuar.",
+    "eachOrder": "Sube una foto de recogida de cada pedido para continuar.",
+    "pickup": "Sube una foto de recogida para continuar.",
+    "delivery": "Sube una foto de entrega para terminar."
+  },
+  "errors": {
+    "podPhotoRequired": "Toma una foto de entrega antes de terminar.",
+    "pickupPhotoRequired": "Toma una foto de recogida antes de continuar.",
+    "pickupPhotoBoth": "Toma una foto de recogida de AMBOS pedidos antes de continuar.",
+    "notAccepted": "Acepta el pedido antes de avanzar.",
+    "alreadyMoved": "Este pedido ya avanzó. Desliza hacia abajo para actualizar.",
+    "forbidden": "Este pedido ya no está asignado a ti.",
+    "unknown": "No se pudo actualizar esta entrega. Avísale a soporte: {reason}"
+  },
+  "takenAway": {
+    "title": "{orderNumber} se quitó de tu lista",
+    "orderCancelled": "El restaurante canceló este pedido",
+    "reassigned": "El restaurante le dio este pedido a otro repartidor",
+    "requeued": "El restaurante devolvió este pedido a la asignación",
+    "offerExpired": "La oferta venció antes de que respondieras",
+    "other": "Este pedido ya no es tuyo",
+    "gotIt": "Entendido"
+  },
+  "issue": {
+    "open": "¿Tienes un problema con esta entrega?",
+    "cancelTitle": "¿Cancelar esta entrega?",
+    "failTitle": "¿No puedes completar la entrega?",
+    "cancelHint": "El pedido vuelve a la asignación y tendrás una breve pausa.",
+    "failHint": "Se avisará al restaurante para que resuelva el pedido.",
+    "reasons": {
+      "vehicleProblem": "Problema con el vehículo",
+      "personalEmergency": "Emergencia personal",
+      "waitTooLong": "Espera demasiado larga en el restaurante",
+      "customerUnreachable": "No logro contactar al cliente",
+      "cantFindAddress": "No encuentro la dirección",
+      "customerRefused": "El cliente rechazó el pedido",
+      "other": "Otro"
+    },
+    "otherLabel": "Qué pasó",
+    "otherPlaceholder": "Cuéntale al restaurante qué pasó",
+    "photoAttached": "Foto adjunta",
+    "attachPhoto": "Adjuntar una foto (recomendado)",
+    "keepDelivering": "Seguir con la entrega",
+    "cancelDelivery": "Cancelar entrega",
+    "markFailed": "Marcar como fallida",
+    "errors": {
+      "notCancellable": "Esta entrega ya no se puede cancelar.",
+      "notFailable": "Esta entrega no se puede marcar como fallida en este momento.",
+      "generic": "No se pudo enviar. Revisa tu conexión e inténtalo de nuevo."
+    }
+  },
+  "dropoff": {
+    "title": "Instrucciones de entrega",
+    "prefs": {
+      "leaveAtDoor": "Dejar en la puerta",
+      "handToMe": "Entregar en mano",
+      "atDesk": "En recepción / mostrador"
+    },
+    "other": "Otro",
+    "otherWithText": "Otro: {text}",
+    "gateCode": "Código de acceso:",
+    "room": "Habitación:",
+    "note": "Nota:"
+  },
+  "chat": {
+    "button": "Chat",
+    "unread": "{count, plural, one {# mensaje sin leer} other {# mensajes sin leer}}",
+    "sheetTitle": "Chat con el cliente",
+    "closedNotice": "El chat se cierra cuando termina la entrega.",
+    "quickReplies": {
+      "onMyWay": "Voy en camino",
+      "arrived": "Ya llegué",
+      "cantFindEntrance": "No encuentro la entrada",
+      "runningLate": "Voy un poco tarde"
+    },
+    "photoErrors": {
+      "unsupportedType": "Ese archivo no es una foto que podamos enviar. Usa una imagen JPG, PNG o WebP.",
+      "tooLarge": "Esa foto es demasiado grande. Intenta tomar una nueva.",
+      "cannotPrepare": "Tu navegador no pudo preparar esa foto. Prueba con otra.",
+      "uploadFailed": "La foto no se subió. Revisa tu señal y toca para reintentar.",
+      "generic": "No se pudo enviar esa foto. Toca para reintentar."
+    }
+  },
+  "photo": {
+    "pickup": {
+      "prompt": "Obligatorio: toma una foto del pedido en el restaurante antes de continuar.",
+      "success": "Foto de recogida subida",
+      "tips": {
+        "wholeOrder": "Muestra el pedido COMPLETO: todas las bolsas y bebidas en una sola toma.",
+        "receipt": "Deja el recibo a la vista para poder verificar el número de pedido.",
+        "surface": "Ponlo sobre una superficie plana con buena luz, sin desenfoque y sin cortar nada."
+      }
+    },
+    "delivery": {
+      "prompt": "Obligatorio: toma una foto del pedido entregado antes de terminar.",
+      "success": "Foto de entrega subida",
+      "tips": {
+        "spot": "Muestra la comida EN el lugar de entrega que pidió el cliente.",
+        "landmark": "Incluye la puerta, el mostrador o el número de la unidad para reconocer el lugar.",
+        "light": "Aléjate un poco y busca buena luz, sin desenfoque y sin cortar nada."
+      }
+    },
+    "uploading": "Subiendo…",
+    "retake": "Repetir foto",
+    "chooseAnother": "Elegir otra",
+    "takePhoto": "Tomar foto",
+    "chooseFromGallery": "Elegir de la galería",
+    "uploadFailed": "La foto no se subió. Revisa tu señal e inténtalo de nuevo.",
+    "guide": {
+      "toggle": "Cómo tomar una buena foto",
+      "wholeOrder": "Pedido completo, buena luz",
+      "receiptVisible": "Recibo visible",
+      "dropoffSpot": "En el lugar de entrega",
+      "blurry": "Borrosa u oscura",
+      "cutOff": "Cortada en el borde"
+    }
+  }
+}

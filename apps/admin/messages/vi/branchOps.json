@@ -1,0 +1,207 @@
+{
+  "common": {
+    "saved": "Đã lưu ✓",
+    "loading": "Đang tải…",
+    "copyToAll": "Sao chép cho mọi ngày",
+    "addWindow": "Thêm khung giờ",
+    "removeWindow": "Xóa khung giờ",
+    "to": "đến",
+    "overnight": "(qua đêm)"
+  },
+  "errors": {
+    "generic": "Đã xảy ra lỗi và chưa có gì được lưu. Vui lòng thử lại.",
+    "noPermission": "Vai trò của bạn không được phép thay đổi các cài đặt này."
+  },
+  "payments": {
+    "title": "Phương thức thanh toán",
+    "description": "Chọn phương thức thanh toán khách có thể dùng cho Tự đến lấy (làm ngay) và Hẹn giờ giao hàng (đặt trước). Thanh toán thẻ do bạn tự thu khi giao bằng máy đọc thẻ của mình — hiện chưa thu tiền trực tuyến. Đơn nhân viên nhận tại quầy hoặc POS không bị ảnh hưởng.",
+    "dineInNote": "Phần này chỉ áp dụng cho giao hàng và tự đến lấy. Khách ăn tại quán bỏ qua bước thanh toán và trả tiền trực tiếp tại nhà hàng.",
+    "modes": {
+      "asap": "Tự đến lấy (ngay)",
+      "scheduled": "Hẹn giờ giao hàng"
+    },
+    "methods": {
+      "cash": {
+        "label": "Tiền mặt",
+        "hint": "Trả cho tài xế hoặc tại quầy"
+      },
+      "card": {
+        "label": "Thẻ",
+        "hint": "Thu khi giao bằng máy đọc thẻ của bạn"
+      },
+      "transfer": {
+        "label": "Chuyển khoản QR",
+        "hint": "Khách quét mã QR của bạn, chuyển khoản và tải biên lai lên để bạn duyệt"
+      }
+    },
+    "lockedTransfer": "Tải mã QR lên ở bên dưới để bật",
+    "lockedPackage": "Không có trong gói của bạn",
+    "toggleAria": "{method} cho đơn {mode}",
+    "cardLocked": "Thanh toán thẻ không có trong gói hiện tại của bạn.",
+    "viewPackages": "Xem các gói",
+    "noMethod": "{which, select, asap {Đơn Tự đến lấy (ngay) chưa bật phương thức thanh toán nào — khách sẽ không thể đặt đơn giao hàng hoặc tự đến lấy theo cách này.} scheduled {Đơn Hẹn giờ giao hàng chưa bật phương thức thanh toán nào — khách sẽ không thể đặt đơn giao hàng hoặc tự đến lấy theo cách này.} other {Cả Tự đến lấy (ngay) và Hẹn giờ giao hàng đều chưa bật phương thức thanh toán nào — khách sẽ không thể đặt đơn giao hàng hoặc tự đến lấy theo cả hai cách.}} Đơn ăn tại quán không bị ảnh hưởng.",
+    "qr": {
+      "title": "Mã QR của bạn",
+      "description": "Khách thấy mã này khi thanh toán, chuyển khoản tổng tiền rồi tải ảnh biên lai lên. Không có khoản nào bị thu tự động — đơn sẽ chờ trong <b>Đơn hàng</b> cho đến khi bạn duyệt biên lai.",
+      "upload": "Tải QR lên",
+      "accountName": "Tên tài khoản",
+      "accountNamePlaceholder": "Tên trên tài khoản ngân hàng của bạn",
+      "instructions": "Hướng dẫn (không bắt buộc)",
+      "instructionsPlaceholder": "VD: Ghi mã đơn hàng vào nội dung chuyển khoản",
+      "onWithoutImage": "Chuyển khoản QR đang bật nhưng chưa lưu ảnh QR. Khách sẽ bị từ chối khi thanh toán cho đến khi bạn tải ảnh lên.",
+      "savedButOff": "Mã QR của bạn đã được lưu nhưng <strong>Chuyển khoản QR vẫn đang tắt</strong>, nên khách không thể chọn. Hãy đánh dấu ở Tự đến lấy (ngay) và/hoặc Hẹn giờ giao hàng phía trên, rồi lưu."
+    },
+    "save": "Lưu phương thức thanh toán"
+  },
+  "delivery": {
+    "title": "Giao hàng",
+    "description": "Giá theo khoảng cách, bán kính giao hàng và cách điều phối tài xế của chi nhánh này. Khoảng cách và giá theo khoảng cách tính bằng dặm.",
+    "groups": {
+      "fees": "Phí giao hàng của khách",
+      "timing": "Bán kính và thời gian",
+      "dispatch": "Điều phối",
+      "pay": "Tiền công tài xế"
+    },
+    "fields": {
+      "baseFee": {
+        "label": "Phí cơ bản ($)"
+      },
+      "perMile": {
+        "label": "Mỗi dặm ($)"
+      },
+      "radius": {
+        "label": "Bán kính giao hàng (mi)",
+        "hint": "Đơn ở xa hơn khoảng cách này sẽ bị từ chối khi thanh toán. Trên ~50 mi, hãy tăng cả “Tiền công tối đa của tài xế”, nếu không tài xế chỉ nhận tối đa $50 dù chạy xa đến đâu."
+      },
+      "surgeFrom": {
+        "label": "Phụ phí bắt đầu từ (mi)",
+        "hint": "Dưới khoảng cách này, hệ số hoàn toàn không được áp dụng. Đặt 0 thì mọi đơn đều tính phụ phí, kể cả chuyến nửa dặm."
+      },
+      "prepTime": {
+        "label": "Thời gian chuẩn bị (phút)",
+        "hint": "Thời gian bếp cơ bản dùng để tính thời gian dự kiến cho khách"
+      },
+      "searchRadius": {
+        "label": "Bán kính tìm tài xế (mi)",
+        "hint": "Tìm tài xế trong phạm vi bao xa tính từ chi nhánh. Đặt thật cao để tìm tới mọi tài xế (hữu ích khi thử điều phối)."
+      },
+      "maxAttempts": {
+        "label": "Số lần điều phối tối đa",
+        "hint": "Nhân viên được báo sau chừng này vòng thất bại. Đặt thật cao để tiếp tục thử lại (hữu ích khi thử điều phối)."
+      },
+      "gpsAge": {
+        "label": "Độ cũ tối đa của GPS tài xế (phút)",
+        "hint": "Vị trí gần nhất của tài xế được cũ tối đa bao lâu mà vẫn được mời nhận đơn. Hãy tăng khi thử nghiệm — tài xế chỉ gửi GPS khi ứng dụng đang mở trên màn hình."
+      },
+      "offerTimeout": {
+        "label": "Thời hạn nhận đơn (giây)",
+        "hint": "Thời gian tài xế có để nhận một lời mời"
+      },
+      "stackDetour": {
+        "label": "Quãng đi vòng tối đa khi ghép đơn (mi)",
+        "hint": "Chỉ ghép hai đơn đã xong khi đơn thứ hai nằm trên đường đi — giới hạn quãng chạy thêm mà khách thứ hai phải chịu. Thấp hơn = chỉ ghép các cặp gần như cùng tuyến (cần bật ghép đơn bên dưới)"
+      },
+      "maxPay": {
+        "label": "Tiền công tối đa của tài xế ($)",
+        "hint": "Mức trần một chuyến giao có thể trả cho tài xế, chưa tính tiền tip. Phải tăng cùng với bán kính giao hàng lớn, nếu không các chuyến xa sẽ bị cắt về mức này."
+      }
+    },
+    "availability": "Tình trạng nhận đơn",
+    "pause": {
+      "label": "Tạm dừng nhận đơn mới",
+      "hint": "Khách sẽ thấy chi nhánh đang đóng cửa cho đến khi bạn mở lại."
+    },
+    "stacking": {
+      "label": "Ghép đơn cùng tuyến",
+      "hint": "Khi hai đơn cùng xong và đơn thứ hai cùng tuyến đường (chạy thêm rất ít), mời một tài xế nhận cả hai trong một chuyến. Mỗi đơn vẫn trả đủ tiền công cho tài xế."
+    },
+    "busy": {
+      "label": "Chế độ bận — thêm thời gian chuẩn bị (phút)",
+      "hint": "Được cộng vào mọi thời gian dự kiến của khách khi bếp quá tải. 0 = tắt."
+    },
+    "surge": {
+      "title": "Phụ phí đường xa",
+      "description": "Tính thêm cho các chuyến giao xa tốn nhiều chi phí hơn, không ảnh hưởng chuyến gần.",
+      "multiplier": "Hệ số phụ phí",
+      "multiplierHint": "1.00 = tắt, không tính thêm gì.",
+      "off": "Phụ phí đang tắt — mọi đơn tính phí cơ bản + theo dặm.",
+      "on": "Dưới {distance} mi: phí cơ bản + theo dặm. Từ {distance} mi: ×{multiplier} trên toàn bộ phí.",
+      "unreachable": "Hệ số này không bao giờ được áp dụng: nó bắt đầu từ {distance} mi, trong khi không thể đặt đơn xa hơn bán kính giao hàng {radius} mi của bạn. Hãy giảm khoảng cách phụ phí hoặc tăng bán kính."
+    },
+    "preview": {
+      "title": "Xem trước phí",
+      "distance": "{distance} mi",
+      "eta": "~{minutes} phút",
+      "surge": "phụ phí ×{multiplier}",
+      "noSurge": "không phụ phí",
+      "outOfRange": "Ngoài phạm vi",
+      "footnote": "Các khoảng cách mẫu được chọn theo khoảng cách phụ phí và bán kính giao hàng của bạn, tính giá bằng đúng công thức mà trang đặt hàng và máy chủ đơn hàng dùng."
+    },
+    "save": "Lưu cài đặt giao hàng"
+  },
+  "deliveryHours": {
+    "title": "Giao hàng",
+    "whoDelivers": "Ai giao hàng?",
+    "platform": {
+      "title": "Tài xế Favornoms",
+      "body": "Đơn được tự động mời các tài xế gần đó. Họ đến lấy, chỉ đường và đánh dấu đơn đã giao."
+    },
+    "self": {
+      "title": "Chúng tôi tự giao",
+      "body": "Không gọi tài xế. Nhân viên của bạn tự mang đơn đi và đánh dấu đã lấy hàng, đã giao trên màn hình Đơn đang giao."
+    },
+    "selfNote": "Khách vẫn thấy trạng thái cập nhật trực tiếp nhưng không có bản đồ — không có gì gửi vị trí khi nhân viên của bạn đang giao.",
+    "limit": "Giới hạn giờ giao hàng",
+    "limitHint": "Tắt: có thể đặt giao vào bất kỳ lúc nào chi nhánh mở cửa. Bật: khách chỉ đặt được giờ giao trong các khung giờ bên dưới. Mọi đơn giao hàng đều được đặt trước, nên cũng cần bật <strong>Đơn hẹn giờ</strong>.",
+    "noDelivery": "Không giao hàng ngày này",
+    "armedButEmpty": "Giờ giao hàng đang bật nhưng chưa có khung giờ nào — khách hoàn toàn không thể đặt đơn giao hàng. Hãy thêm khung giờ hoặc tắt tùy chọn này.",
+    "save": "Lưu cài đặt giao hàng"
+  },
+  "scheduling": {
+    "title": "Đơn hẹn giờ",
+    "description": "Cách khách đặt giao hàng: trên trang đặt hàng của bạn, mọi đơn giao đều được hẹn theo ngày và giờ, còn đơn tự đến lấy luôn là lấy ngay. Giờ có thể đặt dựa trên <strong>Giờ mở cửa</strong> của chi nhánh ở trên, được thu hẹp bởi các khung giờ đặt trước bên dưới khi bạn bật, và bởi <strong>Giờ giao hàng</strong> khi có giới hạn. Chi nhánh không bán giao hàng sẽ không nhận đơn đặt trước của khách.",
+    "accept": "Nhận đơn hẹn giờ",
+    "acceptHint": "Khách hẹn ngày và giờ cho mọi đơn giao. Tắt: “Hẹn giờ giao hàng” biến mất khỏi trang đặt hàng và khách chỉ có thể đặt Tự đến lấy.",
+    "minLead": "Đặt sớm nhất (trước bao nhiêu phút)",
+    "minLeadHint": "Khách phải đặt trước tối thiểu bao lâu. Khung giờ gần hơn sẽ không được hiển thị.",
+    "maxDays": "Đặt xa nhất (trước bao nhiêu ngày)",
+    "maxDaysHint": "Đặt 0 thì chỉ hẹn giờ được trong ngày.",
+    "slot": "Khoảng cách khung giờ",
+    "slotOption": "{minutes, plural, other {Mỗi # phút}}",
+    "slotHint": "Làm tròn các giờ đưa ra. Khung càng lớn thì lựa chọn càng ít và gọn.",
+    "kitchenLead": "Gửi xuống bếp (trước bao nhiêu phút)",
+    "kitchenLeadHint": "Đơn đặt trước chưa hiện trên màn hình bếp cho đến khi chỉ còn chừng này thời gian. Đây <strong>không phải</strong> thời gian chuẩn bị hiển thị cho khách — mục đó nằm ở thẻ Giao hàng.",
+    "leadGap": "Khách có thể đặt trước {bookMinutes, plural, other {# phút}}, nhưng bạn muốn bếp được báo trước {kitchenMinutes, plural, other {# phút}}. Đơn đặt trong khoảng chênh lệch đó sẽ vào bếp ngay, với thời gian báo trước ít hơn mong muốn. Nếu điều này quan trọng, hãy tăng <strong>Đặt sớm nhất</strong> cho khớp.",
+    "limit": "Giới hạn giờ khách có thể đặt",
+    "limitHint": "Tắt: khách có thể đặt vào bất kỳ lúc nào chi nhánh mở cửa. Bật: chỉ trong các khung giờ bên dưới — mỗi ngày có thể đặt khung riêng, ví dụ nhận đặt từ 17:00 cả tuần và chỉ 10:00–14:00 vào Chủ nhật.",
+    "sameAsOpening": "Giống giờ mở cửa",
+    "noBookings": "Không nhận đặt trước ngày này",
+    "customersSee": "Khách sẽ thấy: {ranges}",
+    "closedDuringWindows": "không có — chi nhánh đóng cửa trong các giờ này",
+    "armedButEmpty": "Khung giờ đặt trước đang bật nhưng chưa có khung nào — khách hoàn toàn không thể hẹn giờ đơn. Hãy thêm khung giờ hoặc tắt tùy chọn này.",
+    "save": "Lưu cài đặt hẹn giờ"
+  },
+  "serviceFee": {
+    "title": "Phí dịch vụ",
+    "description": "Một tỷ lệ phần trăm trên tạm tính tiền món, chỉ thu <strong>khi khách thanh toán bằng thẻ tín dụng / ghi nợ</strong>. Đơn tiền mặt, chuyển khoản QR và ăn tại quán không bao giờ phải trả. Đặt <strong>0</strong> để không thu phí dịch vụ.",
+    "label": "Phí dịch vụ (%)",
+    "hint": "0 – {max}%. Chỉ áp dụng khi thanh toán thẻ. Tính trên tạm tính — không bao giờ tính trên thuế, tiền tip hay phí giao hàng.",
+    "previewTitle": "Xem trước phí (thanh toán thẻ)",
+    "previewOrder": "Đơn ${amount}",
+    "cardLocked": "Thanh toán thẻ không có trong gói hiện tại của bạn, nên hiện tại phí này không bao giờ được thu.",
+    "save": "Lưu phí dịch vụ"
+  },
+  "tips": {
+    "title": "Tiền tip",
+    "description": "Cách chia mỗi khoản tip giữa người làm và nhà hàng. Với giao hàng, người làm là tài xế; với tự đến lấy và ăn tại quán là quỹ chung của nhân viên.",
+    "channels": {
+      "delivery": "Giao hàng",
+      "pickup": "Tự đến lấy",
+      "dineIn": "Ăn tại quán"
+    },
+    "share": "{worker, select, driver {Phần của tài xế} other {Phần của quỹ nhân viên}}",
+    "split": "{worker, select, driver {{workerPct}% tài xế · {housePct}% nhà hàng} other {{workerPct}% quỹ nhân viên · {housePct}% nhà hàng}}",
+    "example": "{worker, select, driver {Với $10 tiền tip: tài xế ${workerCut}, nhà hàng ${houseCut}.} other {Với $10 tiền tip: nhân viên ${workerCut}, nhà hàng ${houseCut}.}}",
+    "save": "Lưu cài đặt tiền tip"
+  }
+}

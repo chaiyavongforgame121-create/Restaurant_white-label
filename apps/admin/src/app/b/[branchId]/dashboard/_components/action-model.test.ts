@@ -5,7 +5,15 @@ import type {
   DashboardScheduledOrder,
   LiveDelivery,
 } from '@favornoms/database/queries';
-import { lastReadyAt, parseStamp, readDeliveries, readKitchen, readScheduled } from './action-model';
+import {
+  lastReadyAt,
+  parseStamp,
+  readDeliveries,
+  readKitchen,
+  readScheduled,
+  spanOf,
+  unacceptedReason,
+} from './action-model';
 
 // The shapes here are the ones the live project actually carries: twenty-two kitchen
 // tickets left on the board since June, thirteen June deliveries still "Finding a rider",
@@ -117,7 +125,10 @@ describe('lastReadyAt', () => {
     const reading = readKitchen([recalled], NOW, LEAD_MS, BRANCH);
     expect(reading.abandoned).toBe(0);
     expect(reading.kitchenLate).toHaveLength(1);
-    expect(reading.kitchenLate[0]?.age).toBe('20 min');
+    expect(reading.kitchenLate[0]?.age).toEqual({
+      kind: 'waited',
+      span: { unit: 'minutes', minutes: 20 },
+    });
   });
 });
 
@@ -180,7 +191,7 @@ describe('readKitchen', () => {
     );
     expect(reading.abandoned).toBe(0);
     expect(reading.kitchenLate).toHaveLength(1);
-    expect(reading.kitchenLate[0]?.why).toBe('Cooking longer than 15 min');
+    expect(reading.kitchenLate[0]?.why).toEqual({ code: 'cookingLong', minutes: 15 });
   });
 
   it('measures a scheduled order from its release, not from when it was booked', () => {
@@ -208,7 +219,7 @@ describe('readKitchen', () => {
       BRANCH,
     );
     expect(reading.customersWaiting).toHaveLength(1);
-    expect(reading.customersWaiting[0]?.why).toBe('Nobody has accepted this order yet');
+    expect(reading.customersWaiting[0]?.why).toEqual({ code: 'orderNotAccepted' });
     expect(reading.kitchenLate).toHaveLength(0);
   });
 
@@ -221,7 +232,7 @@ describe('readKitchen', () => {
       BRANCH,
     );
     expect(pickup.customersWaiting).toHaveLength(1);
-    expect(pickup.customersWaiting[0]?.why).toBe('Ready on the pass, not collected');
+    expect(pickup.customersWaiting[0]?.why).toEqual({ code: 'readyNotCollected' });
 
     const forDelivery = readKitchen(
       [kitchenOrder({ status: 'ready', channel: 'delivery', status_history: [readyAt] })],
@@ -249,6 +260,8 @@ describe('readDeliveries', () => {
     const overdue = readDeliveries([delivery({ created_at: minsAgo(45) })], NOW, false, BRANCH);
     expect(overdue).toMatchObject({ inFlight: 1, stalled: 0 });
     expect(overdue.unaccepted).toHaveLength(1);
+    expect(overdue.unaccepted[0]?.why).toEqual({ code: 'deliveryLookingForRider' });
+    expect(overdue.unaccepted[0]?.title).toBe('#A-2609-991284');
 
     const fresh = readDeliveries([delivery({ created_at: minsAgo(10) })], NOW, false, BRANCH);
     expect(fresh).toMatchObject({ inFlight: 1, stalled: 0 });
@@ -265,7 +278,56 @@ describe('readDeliveries', () => {
     expect(reading.stalled).toBe(1);
     expect(reading.inFlight).toBe(0);
     expect(reading.failed).toHaveLength(1);
-    expect(reading.failed[0]?.why).toContain('Nobody at the door');
+    expect(reading.failed[0]?.why).toEqual({
+      code: 'deliveryFailed',
+      reason: 'Nobody at the door',
+      startedAgo: { unit: 'days', days: 3 },
+    });
+  });
+});
+
+describe('unacceptedReason', () => {
+  // The same second line the Live deliveries board prints for each of these rows.
+  it('follows the kitchen while no rider has been asked', () => {
+    expect(unacceptedReason(delivery({ status: 'pending' }), false)).toEqual({
+      code: 'deliveryKitchenStatus',
+      status: 'preparing',
+    });
+    const ready = delivery({ status: 'pending' });
+    expect(unacceptedReason({ ...ready, order: { ...ready.order!, status: 'ready' } }, false)).toEqual({
+      code: 'deliveryKitchenReady',
+    });
+    expect(unacceptedReason(delivery({ status: 'pending', order: null }), false)).toEqual({
+      code: 'deliveryWaitingKitchen',
+    });
+  });
+
+  it('counts the riders already asked', () => {
+    expect(unacceptedReason(delivery({ dispatch_attempts: 3 }), false)).toEqual({
+      code: 'deliveryAskedRiders',
+      count: 3,
+    });
+  });
+
+  it('separates self-delivery, an empty assignment and an expired offer', () => {
+    expect(unacceptedReason(delivery({ status: 'assigned' }), true)).toEqual({ code: 'deliveryOwnStaff' });
+    expect(unacceptedReason(delivery({ status: 'assigned' }), false)).toEqual({
+      code: 'deliveryNoRiderHolds',
+    });
+    expect(unacceptedReason(delivery({ status: 'assigned', driver_id: 'r1' }), false)).toEqual({
+      code: 'deliveryOfferExpired',
+    });
+  });
+});
+
+describe('spanOf', () => {
+  it('uses the delivery board’s cut-offs', () => {
+    expect(spanOf(30_000)).toEqual({ unit: 'underMinute' });
+    expect(spanOf(-5_000)).toEqual({ unit: 'underMinute' });
+    expect(spanOf(59 * 60_000)).toEqual({ unit: 'minutes', minutes: 59 });
+    expect(spanOf(130 * 60_000)).toEqual({ unit: 'hours', hours: 2, minutes: 10 });
+    expect(spanOf(3 * 86_400_000)).toEqual({ unit: 'days', days: 3 });
+    expect(spanOf(Number.NaN)).toEqual({ unit: 'unknown' });
   });
 });
 
@@ -273,8 +335,8 @@ describe('readScheduled', () => {
   it('chases a booking nobody has accepted', () => {
     const rows = readScheduled([booking({ status: 'pending' })], NOW, LEAD_MS, BRANCH);
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.why).toBe('Nobody has accepted this booking yet');
-    expect(rows[0]?.age).toBe('due in 40 min');
+    expect(rows[0]?.why).toEqual({ code: 'bookingNotAccepted' });
+    expect(rows[0]?.age).toEqual({ kind: 'dueIn', span: { unit: 'minutes', minutes: 40 } });
   });
 
   it('leaves an accepted booking that is not due yet alone', () => {
@@ -296,7 +358,7 @@ describe('readScheduled', () => {
       BRANCH,
     );
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.why).toBe('Should already be in the kitchen — still held');
+    expect(rows[0]?.why).toEqual({ code: 'bookingStillHeld' });
   });
 });
 

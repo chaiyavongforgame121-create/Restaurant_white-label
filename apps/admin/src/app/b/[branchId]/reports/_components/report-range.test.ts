@@ -152,16 +152,18 @@ describe('round trip', () => {
 });
 
 describe('labels and pills', () => {
-  it('names each preset and prints a custom span', () => {
-    expect(reportRangeLabel({ preset: 'day', from: 'x', to: 'x' })).toBe('Today');
-    expect(reportRangeLabel({ preset: 'week', from: 'x', to: 'x' })).toBe('Last 7 days');
-    expect(reportRangeLabel({ preset: 'month', from: 'x', to: 'x' })).toBe('Last 30 days');
-    expect(reportRangeLabel({ preset: 'custom', from: '2026-08-01', to: '2026-08-15' })).toBe(
-      '2026-08-01 to 2026-08-15',
-    );
-    expect(reportRangeLabel({ preset: 'custom', from: '2026-08-01', to: '2026-08-01' })).toBe(
-      '2026-08-01',
-    );
+  it('names each preset and carries a custom span as values, not English', () => {
+    expect(reportRangeLabel({ preset: 'day', from: 'x', to: 'x' })).toEqual({ key: 'today', values: {} });
+    expect(reportRangeLabel({ preset: 'week', from: 'x', to: 'x' })).toEqual({ key: 'last7Days', values: {} });
+    expect(reportRangeLabel({ preset: 'month', from: 'x', to: 'x' })).toEqual({ key: 'last30Days', values: {} });
+    expect(reportRangeLabel({ preset: 'custom', from: '2026-08-01', to: '2026-08-15' })).toEqual({
+      key: 'span',
+      values: { from: '2026-08-01', to: '2026-08-15' },
+    });
+    expect(reportRangeLabel({ preset: 'custom', from: '2026-08-01', to: '2026-08-01' })).toEqual({
+      key: 'singleDay',
+      values: { day: '2026-08-01' },
+    });
   });
 
   it('keeps the merchant’s dates when they switch to the custom pill', () => {

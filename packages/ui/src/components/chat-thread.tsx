@@ -2,7 +2,9 @@
 
 import * as React from 'react';
 import { Camera, Image as ImageIcon, X } from 'lucide-react';
+import { intlLocaleFor } from '@favornoms/shared';
 import { cn } from '../lib/cn';
+import { useUiLocale, useUiStrings } from './ui-strings';
 
 // Pure presentational chat thread — no supabase/network deps so it stays
 // reusable across the web and driver apps (each wires its own data container).
@@ -36,6 +38,11 @@ interface PendingMessage {
   previewUrl?: string;
 }
 
+export interface ChatQuickReply {
+  label: string;
+  value: string;
+}
+
 export interface ChatThreadProps {
   messages: ChatThreadMessage[];
   onSend: (body: string) => void | Promise<void>;
@@ -44,10 +51,15 @@ export interface ChatThreadProps {
   onSendPhoto?: (file: File) => void | Promise<void>;
   /** Human-readable failure from the parent's upload, shown above the composer. */
   photoError?: string | null;
-  quickReplies?: string[];
+  /** Tapping a chip sends its value; the label is only what the chip shows. A plain string is both.
+   *  Keeping them apart lets a translated chip send the shared-language message, while text typed
+   *  in the composer is always sent exactly as typed. */
+  quickReplies?: Array<string | ChatQuickReply>;
   /** Composer hidden (e.g. delivery completed). */
   disabled?: boolean;
+  /** Defaults to the translated "This conversation is closed." */
   disabledNotice?: string;
+  /** Defaults to the translated "Type a message…" */
   placeholder?: string;
   /** Rendered above the first bubble. A read-only archive needs to say whose words these are;
    *  a delivery's thread now belongs to one rider's turn, and an order can have several. */
@@ -64,12 +76,14 @@ export function ChatThread({
   photoError,
   quickReplies = [],
   disabled,
-  disabledNotice = 'This conversation is closed.',
-  placeholder = 'Type a message…',
+  disabledNotice,
+  placeholder,
   header,
-  emptyNotice = 'No messages yet — say hi 👋',
+  emptyNotice,
   className,
 }: ChatThreadProps) {
+  const strings = useUiStrings();
+  const locale = useUiLocale();
   const [draft, setDraft] = React.useState('');
   // Optimistic outgoing bubbles: shown instantly, removed when the real message
   // lands (via the parent's messages list / realtime), or marked failed on error.
@@ -149,7 +163,7 @@ export function ChatThread({
       <div ref={scrollRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto px-1 py-3">
         {header && <div className="pb-1">{header}</div>}
         {messages.length === 0 && (
-          <p className="py-8 text-center text-sm text-muted-foreground">{emptyNotice}</p>
+          <p className="py-8 text-center text-sm text-muted-foreground">{emptyNotice ?? strings.chatEmpty}</p>
         )}
         {messages.map((m) => (
           <div key={m.id} className={cn('flex', m.mine ? 'justify-end' : 'justify-start')}>
@@ -165,7 +179,7 @@ export function ChatThread({
                 (m.imageUrl ? (
                   <img
                     src={m.imageUrl}
-                    alt={m.photoOnly ? 'Photo in the conversation' : m.body}
+                    alt={m.photoOnly ? strings.chatPhotoAlt : m.body}
                     loading="lazy"
                     onClick={() => setLightbox(m.imageUrl ?? null)}
                     style={aspectStyle(m.imageWidth, m.imageHeight)}
@@ -188,7 +202,7 @@ export function ChatThread({
                   m.mine ? 'text-primary-foreground/70' : 'text-muted-foreground',
                 )}
               >
-                {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                {new Date(m.created_at).toLocaleTimeString(intlLocaleFor(locale), { hour: '2-digit', minute: '2-digit' })}
               </p>
             </div>
           </div>
@@ -204,7 +218,7 @@ export function ChatThread({
               {m.previewUrl ? (
                 <img
                   src={m.previewUrl}
-                  alt="Photo being sent"
+                  alt={strings.chatPhotoSendingAlt}
                   className="mb-1 w-full max-w-[240px] rounded-xl bg-black/10 object-cover opacity-60"
                 />
               ) : (
@@ -217,10 +231,10 @@ export function ChatThread({
                     onClick={() => retry(m)}
                     className="font-semibold underline"
                   >
-                    Not sent — tap to retry
+                    {strings.chatNotSent}
                   </button>
                 ) : (
-                  <span className="text-primary-foreground/70">Sending…</span>
+                  <span className="text-primary-foreground/70">{strings.chatSending}</span>
                 )}
               </p>
             </div>
@@ -230,22 +244,25 @@ export function ChatThread({
 
       {disabled ? (
         <p className="border-t border-border px-3 py-3 text-center text-xs text-muted-foreground">
-          {disabledNotice}
+          {disabledNotice ?? strings.chatClosed}
         </p>
       ) : (
         <div className="border-t border-border pt-2">
           {quickReplies.length > 0 && (
             <div className="flex gap-1.5 overflow-x-auto px-1 pb-2">
-              {quickReplies.map((q) => (
-                <button
-                  key={q}
-                  type="button"
-                  onClick={() => void submit(q)}
-                  className="focus-ring shrink-0 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium hover:border-primary/50"
-                >
-                  {q}
-                </button>
-              ))}
+              {quickReplies.map((q) => {
+                const reply = typeof q === 'string' ? { label: q, value: q } : q;
+                return (
+                  <button
+                    key={reply.value}
+                    type="button"
+                    onClick={() => void submit(reply.value)}
+                    className="focus-ring shrink-0 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium hover:border-primary/50"
+                  >
+                    {reply.label}
+                  </button>
+                );
+              })}
             </div>
           )}
           {photoError && (
@@ -283,7 +300,7 @@ export function ChatThread({
                 <button
                   type="button"
                   onClick={() => cameraRef.current?.click()}
-                  aria-label="Take a photo"
+                  aria-label={strings.chatTakePhoto}
                   className="focus-ring grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border text-muted-foreground hover:border-primary/50"
                 >
                   <Camera className="h-5 w-5" />
@@ -291,7 +308,7 @@ export function ChatThread({
                 <button
                   type="button"
                   onClick={() => galleryRef.current?.click()}
-                  aria-label="Choose a photo"
+                  aria-label={strings.chatChoosePhoto}
                   className="focus-ring grid h-11 w-11 shrink-0 place-items-center rounded-full border border-border text-muted-foreground hover:border-primary/50"
                 >
                   <ImageIcon className="h-5 w-5" />
@@ -301,7 +318,7 @@ export function ChatThread({
             <input
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              placeholder={placeholder}
+              placeholder={placeholder ?? strings.chatPlaceholder}
               maxLength={1000}
               className="h-11 min-w-0 flex-1 rounded-full border border-border bg-background px-4 text-sm outline-none transition-colors focus-visible:border-primary"
             />
@@ -309,7 +326,7 @@ export function ChatThread({
               type="submit"
               disabled={!draft.trim()}
               className="focus-ring grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground disabled:opacity-40"
-              aria-label="Send"
+              aria-label={strings.chatSend}
             >
               ➤
             </button>
@@ -329,6 +346,7 @@ function aspectStyle(width?: number | null, height?: number | null): React.CSSPr
 }
 
 function Lightbox({ src, onClose }: { src: string; onClose: () => void }) {
+  const strings = useUiStrings();
   React.useEffect(() => {
     // Capture phase, and stopPropagation. The chat renders inside Sheet, which listens for
     // Escape with a bubble-phase window listener; a bubble-phase listener here would not
@@ -347,7 +365,7 @@ function Lightbox({ src, onClose }: { src: string; onClose: () => void }) {
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Photo"
+      aria-label={strings.chatPhotoViewer}
       onClick={onClose}
       // Above Sheet's own z-[100], or it opens behind the conversation it came from.
       className="fixed inset-0 z-[200] grid place-items-center bg-black/90 p-4"
@@ -356,7 +374,7 @@ function Lightbox({ src, onClose }: { src: string; onClose: () => void }) {
       <button
         type="button"
         onClick={onClose}
-        aria-label="Close photo"
+        aria-label={strings.chatClosePhoto}
         className="focus-ring absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-full bg-white/15 text-white"
       >
         <X className="h-5 w-5" />

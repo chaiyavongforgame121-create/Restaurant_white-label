@@ -1,0 +1,111 @@
+{
+  "index": {
+    "title": "Preferencias",
+    "subtitle": "Configuración de la cuenta y facturación",
+    "planTitle": "Plan y facturación",
+    "planDescription": "Consulta tu plan, el uso y las opciones para ampliarlo.",
+    "languageTitle": "Idioma",
+    "languageDescription": "El idioma del panel de gestión en este dispositivo. Los platos y los nombres se muestran tal como los escribiste.",
+    "themeTitle": "Tema",
+    "themeDescription": "Próximamente. Por ahora sigue el modo de color de tu sistema."
+  },
+  "plan": {
+    "metaTitle": "Plan y facturación · Favornoms",
+    "title": "Plan y facturación",
+    "subtitle": "Elige con qué funciona tu restaurante. Puedes cambiarlo cuando quieras.",
+    "perMonth": "/mes",
+    "selection": "{products}, {seats, plural, one {# cupo de sucursal} other {# cupos de sucursal}}",
+    "pricedSummary": "{summary} — {price}/mes.",
+    "notYours": {
+      "inactiveTitle": "El paquete de tu restaurante está inactivo: habla con el propietario",
+      "lockedTitle": "Solo el propietario o un administrador pueden cambiar el paquete",
+      "inactiveBody": "La tienda en línea y el panel de gestión de {branch} están en pausa hasta que el propietario del restaurante o un administrador elija un paquete. No se borró nada y tu trabajo vuelve en cuanto se active de nuevo.",
+      "lockedBody": "El paquete de {branch} lo gestiona el propietario del restaurante. Pídeselo si necesitas una función que no está activada."
+    },
+    "replaceDialog": {
+      "title": "¿Reemplazar tu solicitud pendiente?",
+      "body": "Tu solicitud anterior ({summary}) se retira y esta se envía al equipo de Favornoms en su lugar.",
+      "confirm": "Reemplazar solicitud"
+    },
+    "errors": {
+      "sendFailed": "No se pudo enviar tu solicitud. Inténtalo de nuevo.",
+      "generic": "Algo salió mal. Inténtalo de nuevo.",
+      "signedOut": "Tu sesión terminó. Vuelve a iniciar sesión y envía la solicitud.",
+      "forbidden": "Solo el propietario del restaurante o un administrador pueden cambiar el paquete.",
+      "planUnavailable": "Ese paquete ya no está disponible. Recarga la página y vuelve a elegir."
+    },
+    "action": {
+      "pending": "Solicitud pendiente",
+      "replace": "Reemplazar solicitud pendiente",
+      "requestActivation": "Solicitar activación",
+      "reactivate": "Reactivar mi cuenta",
+      "confirm": "Confirmar paquete",
+      "renew": "Solicitar renovación",
+      "current": "Paquete actual"
+    },
+    "base": {
+      "name": "Base",
+      "description": "Todo lo que necesitas para operar una sucursal.",
+      "included": {
+        "cardPayment": "Pago con tarjeta al pagar",
+        "aiMenuImport": "Importación de menú con IA",
+        "onlineOrdering": "Pedidos en línea y QR",
+        "kitchenCounter": "Pantalla de cocina y mostrador",
+        "reportsLoyalty": "Informes y fidelidad",
+        "oneBranch": "1 sucursal incluida"
+      }
+    },
+    "seats": {
+      "title": "Sucursales",
+      "body": "1 incluida. Cada sucursal adicional cuesta {price}/mes, con todas las funciones de tu sucursal principal.",
+      "usage": "En uso: {used} de {seats, plural, one {# cupo} other {# cupos}}.",
+      "remove": "Quitar un cupo de sucursal",
+      "add": "Agregar un cupo de sucursal",
+      "floor": "Tienes {count, plural, one {# sucursal activa} other {# sucursales activas}}, así que no puedes bajar de {min} cupos. Para liberar un cupo, oculta una sucursal que ya no uses: abre su Configuración de sucursal y cambia Estado a Oculta. Una sucursal oculta no usa cupo."
+    },
+    "summary": {
+      "title": "Tu paquete",
+      "total": "Total",
+      "trialNote": "Estás en la prueba gratuita. No se cobra nada hasta que termine.",
+      "footnote": "Tu solicitud llega al equipo de Favornoms para activarla. Recibirás una factura mensual."
+    },
+    "addon": {
+      "aiSuiteComingSoon": "Señalización y voz con IA: próximamente.",
+      "add": "Agregar",
+      "added": "Agregado"
+    },
+    "trial": {
+      "active": "Prueba gratuita activa",
+      "endsToday": "Tu prueba gratuita termina hoy",
+      "daysLeft": "{days, plural, one {Te queda # día de prueba gratuita} other {Te quedan # días de prueba gratuita}}",
+      "body": "Todo está desbloqueado. Elige un paquete abajo para conservarlo después de la prueba; no necesitas tarjeta hasta entonces."
+    },
+    "suspended": {
+      "title": "Tu cuenta no está activa",
+      "body": "Tu tienda en línea está desconectada y no se aceptan pedidos nuevos. No se borró nada: elige un paquete abajo y todo vuelve de inmediato."
+    },
+    "noTrial": {
+      "title": "Este restaurante empieza sin prueba gratuita",
+      "body": "Tu cuenta ya usó su prueba gratuita de 14 días en otro restaurante. Este seguirá desconectado hasta tener un paquete: elige uno abajo, envía la solicitud y el equipo de Favornoms lo activará."
+    },
+    "renew": {
+      "title": "Renueva tu paquete",
+      "paidThrough": "Tu paquete está pagado hasta el {date}.",
+      "body": "Tu paquete actual está seleccionado abajo. Pulsa Solicitar renovación para enviarlo al equipo de Favornoms; nada se renueva hasta que lo aprueben. También puedes cambiar el paquete antes de enviarlo."
+    },
+    "decision": {
+      "approvedOn": "Solicitud aprobada el {date}",
+      "declinedOn": "Solicitud rechazada el {date}",
+      "noteLabel": "Nota del equipo de Favornoms:",
+      "noReason": "No se indicó ningún motivo. Puedes elegir un paquete abajo y enviar una nueva solicitud.",
+      "approved": "Aprobada",
+      "declined": "Rechazada"
+    },
+    "pending": {
+      "title": "Solicitud en espera del equipo de Favornoms",
+      "titleSent": "Solicitud en espera del equipo de Favornoms · enviada el {date}",
+      "body": "Nada cambia hasta que se apruebe. Si quieres pedir otra cosa, cambia el paquete abajo y pulsa Reemplazar solicitud pendiente.",
+      "badge": "Pendiente"
+    }
+  }
+}

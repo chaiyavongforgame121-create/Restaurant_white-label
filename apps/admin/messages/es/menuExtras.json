@@ -1,0 +1,203 @@
+{
+  "errors": {
+    "generic": "Algo salió mal. Inténtalo de nuevo.",
+    "network": "No se pudo conectar con el servidor. Revisa tu conexión e inténtalo de nuevo.",
+    "permissionDenied": "No tienes permiso para cambiar esto.",
+    "duplicate": "Eso ya existe.",
+    "inUse": "Todavía está en uso, así que no se puede cambiar.",
+    "invalidValue": "Ese valor no es válido. Revísalo e inténtalo de nuevo.",
+    "invalidPrice": "Ingresa un precio válido."
+  },
+  "modifiers": {
+    "metaTitle": "Opciones · Administración de Favornoms",
+    "title": "Grupos de opciones",
+    "subtitle": "Tamaño, extras, preparación: todo lo que los clientes personalizan en un artículo.",
+    "newGroup": "Nuevo grupo",
+    "empty": "Aún no hay grupos de opciones. Crea uno (p. ej., “Tamaño” con Chico / Mediano / Grande) y vincúlalo a artículos del menú.",
+    "required": "Obligatorio",
+    "optional": "Opcional",
+    "pickOne": "elegir 1",
+    "pickUpTo": "elegir hasta {max}",
+    "optionCount": "{count, plural, one {# opción} other {# opciones}}",
+    "linkedCount": "vinculado a {count, plural, one {# artículo} other {# artículos}}",
+    "delete": "Eliminar",
+    "options": "Opciones",
+    "default": "Predeterminada",
+    "active": "Activa",
+    "remove": "Quitar",
+    "addOption": "Agregar opción",
+    "createPrompt": {
+      "title": "Nombra el grupo de opciones",
+      "body": "Es el encabezado que ven los clientes sobre las opciones, como Tamaño o Extras.",
+      "placeholder": "Tamaño",
+      "confirm": "Crear grupo"
+    },
+    "deleteGroupConfirm": {
+      "title": "¿Eliminar este grupo de opciones?",
+      "body": "También se eliminan sus opciones, y todos los artículos vinculados al grupo dejan de ofrecerlas.",
+      "confirm": "Eliminar"
+    },
+    "optionPrompt": {
+      "title": "Nombra la opción",
+      "body": "Una de las opciones de este grupo, como Grande o Queso extra.",
+      "placeholder": "Grande",
+      "confirm": "Siguiente"
+    },
+    "pricePrompt": {
+      "title": "Diferencia de precio de esta opción",
+      "body": "Se suma al precio del artículo en USD. Usa 0 si no cambia, o un número negativo para descontar.",
+      "confirm": "Agregar opción"
+    },
+    "deleteOptionConfirm": {
+      "title": "¿Eliminar esta opción?",
+      "body": "Los clientes ya no podrán elegirla en ningún artículo que use este grupo.",
+      "confirm": "Eliminar"
+    },
+    "settings": {
+      "name": "Nombre",
+      "type": "Tipo",
+      "single": "Una sola opción",
+      "multiple": "Varias opciones",
+      "min": "Mín.",
+      "max": "Máx.",
+      "required": "Obligatorio (el cliente debe elegir al menos el mínimo)"
+    },
+    "links": {
+      "linkedTo": "Vinculado a {names}",
+      "linkedToMore": "Vinculado a {names} y {count} más",
+      "none": "<muted>Aún no está vinculado a ningún artículo</muted>",
+      "cancel": "Cancelar",
+      "edit": "Editar vínculos",
+      "linked": "vinculado",
+      "noItems": "No hay artículos activos en el menú de esta sucursal.",
+      "save": "Guardar vínculos"
+    }
+  },
+  "combos": {
+    "metaTitle": "Combos · Administración de Favornoms",
+    "title": "Combos",
+    "subtitle": "Agrupa artículos con descuento. Los clientes ven los combos en una fila destacada sobre el menú.",
+    "newCombo": "Nuevo combo",
+    "empty": "Aún no hay combos. Haz clic en <strong>Nuevo combo</strong> para crear tu primera oferta.",
+    "namePrompt": {
+      "title": "Nombra este combo",
+      "body": "Los clientes lo ven en la fila de combos destacados sobre el menú.",
+      "placeholder": "p. ej., “Combo hamburguesa”, “Comida familiar”",
+      "confirm": "Siguiente"
+    },
+    "pricePrompt": {
+      "title": "Precio total (USD)",
+      "body": "Lo que paga el cliente por todo el combo. Puedes cambiarlo después.",
+      "confirm": "Crear combo"
+    },
+    "deleteConfirm": {
+      "title": "¿Eliminar este combo?",
+      "body": "Los pedidos existentes no se ven afectados.",
+      "confirm": "Eliminar"
+    },
+    "active": "Activo",
+    "hidden": "Oculto",
+    "price": "Precio",
+    "saves": "Ahorra {amount}",
+    "delete": "Eliminar",
+    "hideContents": "Ocultar contenido",
+    "showContents": "{count, plural, one {# artículo en este combo →} other {# artículos en este combo →}}",
+    "noItems": "Aún no hay artículos: agrega algunos abajo.",
+    "each": "{price} c/u",
+    "addItem": "Agregar un artículo…"
+  },
+  "happyHours": {
+    "metaTitle": "Happy hours · Administración de Favornoms",
+    "title": "Happy hours",
+    "subtitle": "Descuentos por horario en artículos o categorías completas.",
+    "newHappyHour": "Nueva happy hour",
+    "empty": "Aún no hay happy hours.",
+    "namePrompt": {
+      "title": "Nombra esta promoción",
+      "body": "Por ejemplo, “Happy hour” o “Especial del almuerzo”.",
+      "placeholder": "Happy hour",
+      "confirm": "Crear"
+    },
+    "deleteConfirm": {
+      "title": "¿Eliminar esta happy hour?",
+      "body": "El descuento deja de aplicarse en el menú de los clientes de inmediato.",
+      "confirm": "Eliminar"
+    },
+    "active": "Activa",
+    "paused": "En pausa",
+    "percentOff": "% de descuento",
+    "fixedOff": "$ de descuento",
+    "from": "De",
+    "to": "a",
+    "days": {
+      "sun": "Dom",
+      "mon": "Lun",
+      "tue": "Mar",
+      "wed": "Mié",
+      "thu": "Jue",
+      "fri": "Vie",
+      "sat": "Sáb"
+    },
+    "appliesToAll": "Se aplica a: <strong>todos los artículos del menú</strong>",
+    "appliesToItems": "Se aplica a: {items, plural, one {# artículo} other {# artículos}}",
+    "appliesToCategories": "Se aplica a: {categories, plural, one {# categoría} other {# categorías}}",
+    "appliesToBoth": "Se aplica a: {items, plural, one {# artículo} other {# artículos}}, {categories, plural, one {# categoría} other {# categorías}}",
+    "moveUp": "Subir",
+    "moveDown": "Bajar",
+    "delete": "Eliminar",
+    "scope": {
+      "edit": "Editar",
+      "hide": "Ocultar",
+      "items": "Artículos",
+      "categories": "Categorías"
+    }
+  },
+  "import": {
+    "title": "Importar menú con IA",
+    "subtitle": "Sube una foto de un menú impreso: Claude extrae los artículos, precios y categorías para que los revises.",
+    "menuImage": "Imagen del menú",
+    "upload": "Subir",
+    "hint": "Indicaciones para la IA (opcional)",
+    "hintPlaceholder": "p. ej., comida casual estadounidense, precios en USD",
+    "uploaded": "Imagen subida. Haz clic en Analizar con IA para extraer los artículos del menú.",
+    "analyze": "Analizar con IA",
+    "analyzing": "Analizando la imagen con Claude…",
+    "imported": "{count, plural, one {Se importó # artículo.} other {Se importaron # artículos.}}",
+    "selected": "{selected} de {total} artículos seleccionados",
+    "importSelected": "Importar seleccionados",
+    "descriptionPlaceholder": "Descripción",
+    "remove": "Quitar",
+    "stations": {
+      "hot": "Caliente",
+      "cold": "Fría",
+      "bar": "Bar",
+      "dessert": "Postres",
+      "expo": "Pase"
+    },
+    "errors": {
+      "uploadFailed": "No se pudo subir el archivo. Inténtalo de nuevo.",
+      "fileTooLarge": "La imagen es demasiado grande para subirla.",
+      "fileTypeNotAllowed": "Ese tipo de archivo no se puede subir. Elige una imagen.",
+      "signedOut": "Tu sesión terminó. Vuelve a iniciar sesión e inténtalo otra vez.",
+      "notAllowed": "Solo los propietarios y gerentes pueden importar un menú en esta sucursal.",
+      "aiUnavailable": "La importación de menú con IA no está disponible en este momento.",
+      "rateLimited": "Esta sucursal alcanzó el límite de importaciones por hora. Inténtalo de nuevo en una hora.",
+      "analyzeFailed": "No pudimos leer un menú en esa imagen. Prueba con una foto más nítida."
+    },
+    "csv": {
+      "title": "Importación masiva por CSV",
+      "columns": "Columnas: <code>{columns}</code> (station es opcional). La primera fila debe tener los encabezados.",
+      "downloadTemplate": "Descargar plantilla",
+      "valid": "{count, plural, one {# válida} other {# válidas}}",
+      "errorCount": "{count, plural, one {# error} other {# errores}}",
+      "rowErrors": {
+        "missingCategory": "Fila {row}: falta la categoría",
+        "missingName": "Fila {row}: falta el nombre",
+        "invalidPrice": "Fila {row}: precio no válido “{value}”"
+      },
+      "moreErrors": "… y {count} más.",
+      "import": "{count, plural, one {Importar # artículo} other {Importar # artículos}}",
+      "noValidRows": "No hay filas válidas para importar."
+    }
+  }
+}

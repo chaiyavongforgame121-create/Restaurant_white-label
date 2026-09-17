@@ -1,0 +1,207 @@
+{
+  "common": {
+    "saved": "Guardado ✓",
+    "loading": "Cargando…",
+    "copyToAll": "Copiar a todos los días",
+    "addWindow": "Agregar franja",
+    "removeWindow": "Quitar franja",
+    "to": "a",
+    "overnight": "(pasa la medianoche)"
+  },
+  "errors": {
+    "generic": "Algo salió mal y no se guardó nada. Inténtalo de nuevo.",
+    "noPermission": "Tu rol no tiene permiso para cambiar esta configuración."
+  },
+  "payments": {
+    "title": "Métodos de pago",
+    "description": "Elige qué métodos de pago pueden usar los clientes en Recoger en tienda (se prepara ahora) y Programar entrega (se reserva con anticipación). Los pagos con tarjeta los cobras tú en la entrega con tu propio lector; por ahora no se cobra nada en línea. Los pedidos que tu personal toma en el mostrador o en el POS no se ven afectados.",
+    "dineInNote": "Esto aplica solo a entregas a domicilio y pedidos para recoger. Los clientes que comen en el local se saltan el paso de pago y te pagan directamente en el restaurante.",
+    "modes": {
+      "asap": "Recoger en tienda (ahora)",
+      "scheduled": "Programar entrega"
+    },
+    "methods": {
+      "cash": {
+        "label": "Efectivo",
+        "hint": "Se paga al repartidor o en el mostrador"
+      },
+      "card": {
+        "label": "Tarjeta",
+        "hint": "Se cobra en la entrega con tu propio lector"
+      },
+      "transfer": {
+        "label": "Transferencia QR",
+        "hint": "El cliente escanea tu QR, transfiere y sube el comprobante para que lo apruebes"
+      }
+    },
+    "lockedTransfer": "Sube tu código QR abajo para activarla",
+    "lockedPackage": "No incluido en tu plan",
+    "toggleAria": "{method} para pedidos de {mode}",
+    "cardLocked": "El pago con tarjeta no está incluido en tu plan actual.",
+    "viewPackages": "Ver planes",
+    "noMethod": "{which, select, asap {Los pedidos de Recoger en tienda (ahora) no tienen ningún método de pago activado: los clientes no podrán hacer pedidos a domicilio ni para recoger de esa forma.} scheduled {Los pedidos de Programar entrega no tienen ningún método de pago activado: los clientes no podrán hacer pedidos a domicilio ni para recoger de esa forma.} other {Ni Recoger en tienda (ahora) ni Programar entrega tienen un método de pago activado: los clientes no podrán hacer pedidos a domicilio ni para recoger de ninguna de las dos formas.}} Los pedidos para comer en el local no se ven afectados.",
+    "qr": {
+      "title": "Tu código QR",
+      "description": "Los clientes lo ven al pagar, transfieren el total y luego suben una foto del comprobante. No se cobra nada automáticamente: el pedido espera en <b>Pedidos</b> hasta que apruebes el comprobante.",
+      "upload": "Subir QR",
+      "accountName": "Nombre de la cuenta",
+      "accountNamePlaceholder": "Nombre que aparece en tu cuenta bancaria",
+      "instructions": "Instrucciones (opcional)",
+      "instructionsPlaceholder": "p. ej., Incluye tu número de pedido en el concepto de la transferencia",
+      "onWithoutImage": "La transferencia QR está activada, pero no hay ninguna imagen QR guardada. Se rechazará a los clientes al pagar hasta que subas una.",
+      "savedButOff": "Tu código QR está guardado, pero <strong>la transferencia QR sigue desactivada</strong>, así que los clientes no pueden elegirla. Márcala arriba en Recoger en tienda (ahora) o Programar entrega (o en ambos) y luego guarda."
+    },
+    "save": "Guardar métodos de pago"
+  },
+  "delivery": {
+    "title": "Entrega a domicilio",
+    "description": "Precios por distancia, radio de entrega y reglas de despacho de esta sucursal. Las distancias y las tarifas por distancia están en millas.",
+    "groups": {
+      "fees": "Costo de envío para el cliente",
+      "timing": "Radio y tiempos",
+      "dispatch": "Despacho",
+      "pay": "Pago al repartidor"
+    },
+    "fields": {
+      "baseFee": {
+        "label": "Tarifa base ($)"
+      },
+      "perMile": {
+        "label": "Por milla ($)"
+      },
+      "radius": {
+        "label": "Radio de entrega (mi)",
+        "hint": "Los pedidos más allá de esta distancia se rechazan al pagar. Por encima de ~50 mi, sube también “Pago máximo al repartidor” o los repartidores cobrarán como máximo $50 sin importar cuánto manejen."
+      },
+      "surgeFrom": {
+        "label": "Recargo desde (mi)",
+        "hint": "Por debajo de esta distancia no se aplica el multiplicador. Con 0 se aplica a todos los pedidos, incluso a un trayecto de media milla."
+      },
+      "prepTime": {
+        "label": "Tiempo de preparación (min)",
+        "hint": "Tiempo base de cocina que se usa en los tiempos estimados para el cliente"
+      },
+      "searchRadius": {
+        "label": "Radio de búsqueda de repartidores (mi)",
+        "hint": "Hasta qué distancia de la sucursal se buscan repartidores. Ponlo muy alto para llegar a todos (útil al probar el despacho)."
+      },
+      "maxAttempts": {
+        "label": "Máximo de intentos de despacho",
+        "hint": "Se avisa al personal después de esta cantidad de rondas fallidas. Ponlo muy alto para seguir reintentando (útil al probar el despacho)."
+      },
+      "gpsAge": {
+        "label": "Antigüedad máx. del GPS del repartidor (min)",
+        "hint": "Qué tan antigua puede ser la última ubicación conocida de un repartidor para que aún se le ofrezcan pedidos. Súbelo mientras haces pruebas: los repartidores solo envían GPS con la app abierta en primer plano."
+      },
+      "offerTimeout": {
+        "label": "Tiempo límite de la oferta (s)",
+        "hint": "Cuánto tiempo tiene un repartidor para aceptar una oferta"
+      },
+      "stackDetour": {
+        "label": "Desvío máx. de pedidos agrupados (mi)",
+        "hint": "Agrupa dos pedidos listos solo cuando el segundo queda de camino; esto limita el trayecto extra que acepta el segundo cliente. Más bajo = solo pares con rutas casi idénticas (requiere activar la agrupación abajo)"
+      },
+      "maxPay": {
+        "label": "Pago máximo al repartidor ($)",
+        "hint": "Tope de lo que una entrega puede pagarle a un repartidor, sin contar propinas. Súbelo junto con un radio de entrega grande o los viajes largos se recortarán a este monto."
+      }
+    },
+    "availability": "Disponibilidad",
+    "pause": {
+      "label": "Pausar pedidos nuevos",
+      "hint": "Los clientes verán la sucursal cerrada hasta que la reactives."
+    },
+    "stacking": {
+      "label": "Agrupar pedidos de la misma ruta",
+      "hint": "Cuando dos pedidos están listos a la vez y el segundo va por la misma ruta (con poco trayecto extra), se ofrecen a un solo repartidor como un único viaje. Cada pedido le sigue pagando completo al repartidor."
+    },
+    "busy": {
+      "label": "Modo ocupado: tiempo extra de preparación (min)",
+      "hint": "Se suma a cada tiempo estimado para el cliente mientras la cocina está saturada. 0 = desactivado."
+    },
+    "surge": {
+      "title": "Recargo por distancia",
+      "description": "Cobra más por las entregas largas, que cuestan más, y deja igual las cortas.",
+      "multiplier": "Multiplicador de recargo",
+      "multiplierHint": "1.00 = desactivado; no se cobra nada extra.",
+      "off": "El recargo está desactivado: cada pedido paga tarifa base + por milla.",
+      "on": "Menos de {distance} mi: base + por milla. Desde {distance} mi: ×{multiplier} sobre toda la tarifa.",
+      "unreachable": "Este multiplicador nunca se aplica: empieza en {distance} mi y no se pueden hacer pedidos más allá de tu radio de entrega de {radius} mi. Baja la distancia del recargo o aumenta el radio."
+    },
+    "preview": {
+      "title": "Vista previa de tarifas",
+      "distance": "{distance} mi",
+      "eta": "~{minutes} min",
+      "surge": "recargo ×{multiplier}",
+      "noSurge": "sin recargo",
+      "outOfRange": "Fuera de alcance",
+      "footnote": "Distancias de ejemplo tomadas de tu distancia de recargo y tu radio de entrega, calculadas con la misma fórmula que usan la tienda en línea y el servidor de pedidos."
+    },
+    "save": "Guardar configuración de entrega"
+  },
+  "deliveryHours": {
+    "title": "Entrega a domicilio",
+    "whoDelivers": "¿Quién entrega?",
+    "platform": {
+      "title": "Repartidores de Favornoms",
+      "body": "Los pedidos se ofrecen automáticamente a repartidores cercanos. Ellos recogen, navegan y marcan el pedido como entregado."
+    },
+    "self": {
+      "title": "Entregamos nosotros",
+      "body": "No se llama a ningún repartidor. Tu propio personal lleva el pedido y lo marca como recogido y entregado desde la pantalla Entregas en curso."
+    },
+    "selfNote": "Los clientes siguen viendo el estado en vivo, pero no un mapa: nada reporta la ubicación mientras tu personal maneja.",
+    "limit": "Limitar las entregas a un horario",
+    "limitHint": "Desactivado: las entregas se pueden reservar para cualquier hora en que la sucursal esté abierta. Activado: los clientes solo pueden reservar entregas dentro de las franjas de abajo. Toda entrega se reserva con anticipación, así que también necesitas <strong>Pedidos programados</strong> activado.",
+    "noDelivery": "Sin entregas este día",
+    "armedButEmpty": "El horario de entrega está activado, pero no hay franjas: los clientes no pueden hacer ningún pedido a domicilio. Agrega una franja o desactiva esta opción.",
+    "save": "Guardar configuración de entrega"
+  },
+  "scheduling": {
+    "title": "Pedidos programados",
+    "description": "Cómo reservan entregas los clientes: en tu tienda en línea cada entrega se reserva para un día y una hora, y los pedidos para recoger siempre son para ahora. Las horas disponibles parten del <strong>Horario de atención</strong> de esta sucursal (arriba), se acotan con las franjas de reserva de abajo cuando las activas, y con el <strong>Horario de entrega</strong> cuando está limitado. Una sucursal que no ofrece entregas a domicilio no recibe reservas de clientes.",
+    "accept": "Aceptar pedidos programados",
+    "acceptHint": "Los clientes reservan cada entrega para un día y una hora. Desactivado: “Programar entrega” desaparece de tu tienda en línea y los clientes solo pueden pedir para recoger en tienda.",
+    "minLead": "Reserva más próxima (minutos de anticipación)",
+    "minLeadHint": "Con cuánta anticipación debe reservar un cliente. No se ofrecen horarios más cercanos.",
+    "maxDays": "Reserva más lejana (días de anticipación)",
+    "maxDaysHint": "Con 0, solo se puede programar para el mismo día.",
+    "slot": "Intervalo de horarios",
+    "slotOption": "{minutes, plural, one {Cada minuto} other {Cada # minutos}}",
+    "slotHint": "Redondea las horas ofrecidas. Intervalos más grandes dan menos opciones y más ordenadas.",
+    "kitchenLead": "Enviar a cocina (minutos antes)",
+    "kitchenLeadHint": "Una reserva no aparece en la pantalla de cocina hasta este tiempo antes de su hora. <strong>No</strong> es el tiempo de preparación de los tiempos estimados para el cliente; ese se configura en la tarjeta Entrega a domicilio.",
+    "leadGap": "Los clientes pueden reservar con {bookMinutes, plural, one {# minuto} other {# minutos}} de anticipación, pero pediste {kitchenMinutes, plural, one {# minuto} other {# minutos}} de aviso para la cocina. Lo que se reserve dentro de esa diferencia llega a la cocina de inmediato, con menos aviso del que querías. Si te importa, sube <strong>Reserva más próxima</strong> para igualarlo.",
+    "limit": "Limitar las horas en que los clientes pueden reservar",
+    "limitHint": "Desactivado: los clientes pueden reservar a cualquier hora en que la sucursal esté abierta. Activado: solo dentro de las franjas de abajo. Puedes definir una distinta por día, por ejemplo, reservas desde las 5 p. m. toda la semana y solo de 10 a. m. a 2 p. m. el domingo.",
+    "sameAsOpening": "Igual que el horario de atención",
+    "noBookings": "Sin pedidos anticipados este día",
+    "customersSee": "Los clientes verán: {ranges}",
+    "closedDuringWindows": "nada, la sucursal está cerrada en ese horario",
+    "armedButEmpty": "Las franjas de reserva están activadas, pero no hay ninguna: los clientes no pueden programar ningún pedido. Agrega una franja o desactiva esta opción.",
+    "save": "Guardar programación"
+  },
+  "serviceFee": {
+    "title": "Cargo por servicio",
+    "description": "Un porcentaje del subtotal de la comida que se cobra <strong>solo cuando el cliente paga con tarjeta de crédito o débito</strong>. Los pedidos en efectivo, por transferencia QR y para comer en el local nunca lo pagan. Ponlo en <strong>0</strong> para no cobrar cargo por servicio.",
+    "label": "Cargo por servicio (%)",
+    "hint": "De 0 a {max}%. Solo pagos con tarjeta. Se cobra sobre el subtotal, nunca sobre impuestos, propinas ni el costo de envío.",
+    "previewTitle": "Vista previa del cargo (pagos con tarjeta)",
+    "previewOrder": "Pedido de ${amount}",
+    "cardLocked": "El pago con tarjeta no está incluido en tu plan actual, así que por ahora este cargo nunca se cobra.",
+    "save": "Guardar cargo por servicio"
+  },
+  "tips": {
+    "title": "Propinas",
+    "description": "Cómo se reparte cada propina entre el trabajador y la casa. En las entregas a domicilio el trabajador es el repartidor; en los pedidos para recoger y para comer en el local es el fondo común del personal.",
+    "channels": {
+      "delivery": "Entrega a domicilio",
+      "pickup": "Recoger en tienda",
+      "dineIn": "Comer en el local"
+    },
+    "share": "{worker, select, driver {Parte del repartidor} other {Parte del fondo del personal}}",
+    "split": "{worker, select, driver {{workerPct}% repartidor · {housePct}% casa} other {{workerPct}% personal · {housePct}% casa}}",
+    "example": "{worker, select, driver {Con una propina de $10: repartidor ${workerCut}, casa ${houseCut}.} other {Con una propina de $10: personal ${workerCut}, casa ${houseCut}.}}",
+    "save": "Guardar propinas"
+  }
+}

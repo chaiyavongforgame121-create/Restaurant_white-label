@@ -1,0 +1,247 @@
+{
+  "nav": {
+    "ariaLabel": "Các mục của nền tảng",
+    "dashboard": "Tổng quan",
+    "reports": "Báo cáo",
+    "subscriptions": "Gói đăng ký",
+    "requests": "Yêu cầu",
+    "catalog": "Danh mục gói",
+    "settings": "Cài đặt",
+    "pendingBadge": "{count}<sr> đang chờ</sr>"
+  },
+  "accessDenied": {
+    "title": "Không có quyền truy cập",
+    "body": "Chỉ dành cho quản trị viên nền tảng."
+  },
+  "page": {
+    "loadFailed": "Không tải được {parts}.",
+    "loadParts": {
+      "restaurantMeta": "thông tin nhà hàng",
+      "branches": "chi nhánh",
+      "subscriptionFlags": "trạng thái gói đăng ký"
+    }
+  },
+  "dashboard": {
+    "title": "Bảng điều khiển nền tảng",
+    "subtitle": "Tổng quan vận hành của mọi nhà hàng.",
+    "loadError": "{message} Số chi nhánh và trạng thái trang đặt món trên trang này chưa đầy đủ — hãy tải lại trước khi thao tác.",
+    "stats": {
+      "restaurants": "Nhà hàng",
+      "billingOk": "Thanh toán ổn",
+      "needsAttention": "Cần chú ý",
+      "ordersToday": "Đơn hôm nay",
+      "revenueToday": "Doanh thu hôm nay",
+      "driversOnline": "Tài xế đang nhận đơn"
+    },
+    "decisions": {
+      "ariaLabel": "Cần quyết định",
+      "expiring": "{count, plural, other {# cửa hàng trả phí sẽ ngừng hoạt động trong vòng {days, plural, other {# ngày}}.}}",
+      "showThem": "Xem danh sách",
+      "requests": "{count, plural, other {# yêu cầu gói đang chờ quyết định.}}",
+      "reviewRequests": "Xem yêu cầu"
+    },
+    "search": {
+      "placeholder": "Tìm nhà hàng",
+      "emptyTitle": "Không có nhà hàng phù hợp",
+      "emptyBody": "Thử tên hoặc slug khác, hoặc bỏ bộ lọc.",
+      "clear": "Xóa bộ lọc"
+    },
+    "filters": {
+      "all": "Tất cả",
+      "attention": "Cần chú ý",
+      "expiring": "Sắp hết hạn",
+      "offline": "Tắt thanh toán hoặc truy cập",
+      "live": "Đang hoạt động",
+      "withCount": "{label} ({count})"
+    }
+  },
+  "errors": {
+    "generic": "Đã xảy ra lỗi. Chưa có gì thay đổi.",
+    "network": "Không kết nối được máy chủ. Chưa có gì thay đổi — hãy kiểm tra kết nối và thử lại.",
+    "notPlatformAdmin": "Chỉ quản trị viên nền tảng mới làm được việc này. Chưa có gì thay đổi.",
+    "reactivateFailed": "Không thể kích hoạt lại gói đăng ký."
+  },
+  "plans": {
+    "base": "Cơ bản",
+    "trial": "Dùng thử",
+    "none": "Chưa có gói"
+  },
+  "subscriptionStatus": {
+    "active": "đang hoạt động",
+    "trialing": "đang dùng thử",
+    "past_due": "quá hạn thanh toán",
+    "cancelled": "đã hủy",
+    "expired": "đã hết hạn",
+    "none": "chưa thiết lập"
+  },
+  "index": {
+    "restaurant": "Nhà hàng",
+    "billingAccess": "Thanh toán & truy cập",
+    "branches": "Chi nhánh",
+    "franchise": "Nhượng quyền",
+    "slugLine": "<mono>{slug}</mono> · {plan} · {price}/tháng",
+    "rowLabel": "{name} — {lamps}. {branchCount}, {qualifier}. Mở chi tiết.",
+    "reactivated": "Đã kích hoạt lại"
+  },
+  "health": {
+    "chip": {
+      "expired": "Đã hết hạn",
+      "unpaid": "Chưa thanh toán",
+      "trial": "Dùng thử · còn {days} ngày",
+      "pastDue": "Quá hạn · còn {days} ngày ân hạn",
+      "cancelling": "Đang hủy · {days} ngày",
+      "expiresIn": "Hết hạn sau {days, plural, other {# ngày}}",
+      "live": "Đang hoạt động",
+      "suspended": "Bị tạm ngưng",
+      "partlySuspended": "{suspended}/{total} bị tạm ngưng"
+    },
+    "clause": {
+      "noStorefront": "Chưa có trang đặt món",
+      "noStorefrontUnpaid": "Chưa có trang đặt món · chưa thanh toán",
+      "bothOff": "404 + màn hình tạm ngưng",
+      "all404": "Khách gặp lỗi 404",
+      "some404": "{suspended}/{total} chi nhánh lỗi 404",
+      "suspendedScreen": "Khách thấy màn hình tạm ngưng",
+      "trialEndsToday": "Hết dùng thử hôm nay",
+      "trialEndsIn": "Hết dùng thử sau {days, plural, other {# ngày}}",
+      "graceLeft": "Còn {days, plural, other {# ngày}} ân hạn",
+      "ends": "Kết thúc {date}",
+      "goesDark": "Ngừng hoạt động {date}",
+      "paidThrough": "đã thanh toán đến {date}"
+    },
+    "branchCount": "{count, plural, =0 {Chưa có chi nhánh} other {# chi nhánh}}",
+    "qualifier": {
+      "nothingToServe": "chưa có gì để phục vụ",
+      "suspended": "{count} bị tạm ngưng",
+      "unpaid": "{count} chưa thanh toán",
+      "paused": "{count} tạm dừng nhận đơn",
+      "allLive": "tất cả đang hoạt động"
+    },
+    "reason": {
+      "allSuspended": "{count, plural, =1 {Chi nhánh duy nhất bị nền tảng tạm ngưng nên trang đặt món trả về lỗi 404.} other {Cả # chi nhánh đều bị nền tảng tạm ngưng nên trang đặt món trả về lỗi 404.}}",
+      "someSuspended": "{suspended, plural, other {# trên {total} chi nhánh bị nền tảng tạm ngưng và trả về lỗi 404.}}",
+      "lapsedNoBranches": "Gói đăng ký đã hết hạn ngày {date} — nhà hàng này chưa có chi nhánh nào nên dù sao cũng chưa phục vụ ai.",
+      "lapsedStorefront": "Gói đăng ký đã hết hạn ngày {date} — trang đặt món đang hiển thị màn hình tạm ngưng.",
+      "noSubscriptionNoBranches": "Không có gói đăng ký đang hoạt động — nhà hàng này chưa có chi nhánh nào nên dù sao cũng chưa phục vụ ai.",
+      "noSubscriptionStorefront": "Không có gói đăng ký đang hoạt động — trang đặt món đang hiển thị màn hình tạm ngưng.",
+      "accessFine": "Quyền truy cập nền tảng vẫn bình thường nên Khôi phục sẽ không giúp được; hãy xử lý gói đăng ký.",
+      "trialEndsToday": "Hết dùng thử hôm nay.",
+      "trialEndsIn": "Hết dùng thử sau {days, plural, other {# ngày}}.",
+      "pastDue": "Thanh toán đã quá hạn — còn {days, plural, other {# ngày}} ân hạn.",
+      "expiring": "Đã thanh toán đến {date}. Không có gì tự động gia hạn — sau ngày đó trang đặt món sẽ hiển thị màn hình tạm ngưng, trừ khi bạn gia hạn.",
+      "allPaused": "Mọi chi nhánh đều bị bếp tạm dừng và không nhận đơn.",
+      "somePaused": "{paused}/{total} chi nhánh bị bếp tạm dừng nhận đơn."
+    },
+    "action": {
+      "restore": "Khôi phục",
+      "extend": "Gia hạn 1 tháng",
+      "convert": "Chuyển sang gói Cơ bản",
+      "convertPriced": "Chuyển sang gói Cơ bản · {price}/tháng"
+    },
+    "verdict": {
+      "label": {
+        "suspended": "404 — không tìm thấy",
+        "unpaid": "Màn hình tạm ngưng",
+        "paused": "Không nhận đơn",
+        "closed": "Đang đóng cửa",
+        "live": "Đang hoạt động",
+        "unknown": "Chưa rõ giờ mở cửa"
+      },
+      "hint": {
+        "suspended": "Bị nền tảng tạm ngưng — URL trang đặt món trả về 404",
+        "unpaid": "Gói đăng ký đã hết hạn — trang đặt món hiển thị màn hình tạm ngưng",
+        "paused": "Bếp tạm dừng — thực đơn vẫn hiển thị, gửi đơn trả về 409",
+        "closure": "Tạm đóng cửa — thực đơn vẫn hiển thị, gửi đơn trả về 409",
+        "live": "Đang phục vụ khách",
+        "unknown": "Không kiểm tra được giờ mở cửa — mọi thứ khác của chi nhánh này đều ổn",
+        "outsideHours": "Ngoài giờ mở cửa — thực đơn vẫn hiển thị, gửi đơn trả về 409"
+      },
+      "why": {
+        "suspended": "Bị nền tảng tạm ngưng — resolveTenantBySlug lọc theo is_active nên URL trả về 404.",
+        "unpaidLapsed": "Gói đăng ký đã hết hạn ngày {date}.",
+        "unpaidNone": "Chi nhánh này không có gói đăng ký đang hoạt động.",
+        "paused": "Bếp đã tạm dừng nhận đơn. Chỉ nhân viên chi nhánh mới mở lại được.",
+        "closure": "Tạm đóng cửa đến {date}.",
+        "closureWithReason": "Tạm đóng cửa đến {date} — {reason}",
+        "noHours": "Chưa cài đặt giờ mở cửa nên chi nhánh luôn mở.",
+        "unknown": "Không gọi được is_branch_open(). Thanh toán, truy cập và tạm dừng của bếp đều ổn.",
+        "open": "Trong giờ mở cửa và đang nhận đơn.",
+        "outsideHours": "Ngoài giờ mở cửa ({timezone})."
+      }
+    }
+  },
+  "drawer": {
+    "ariaLabel": "Chi tiết nhà hàng {name}",
+    "meta": "<mono>{slug}</mono> · {loyalty} · thêm ngày {date}",
+    "loyalty": {
+      "branch": "tích điểm theo chi nhánh",
+      "brand": "tích điểm theo thương hiệu",
+      "other": "tích điểm: {scope}"
+    },
+    "dinerTitle": "Khách đang thấy gì lúc này",
+    "noBranches": "Nhà hàng này chưa có chi nhánh nên khách không tìm thấy gì.",
+    "switchesTitle": "Hai công tắc tắt",
+    "accessLabel": "Truy cập nền tảng",
+    "accessConsequence": "Tắt = URL trang đặt món trả về 404.",
+    "noBranchesToSuspend": "Không có chi nhánh để tạm ngưng",
+    "suspend": "Tạm ngưng",
+    "restore": "Khôi phục",
+    "subscriptionLabel": "Gói đăng ký",
+    "subscriptionConsequence": "Tắt = trang đặt món hiển thị màn hình tạm ngưng.",
+    "manageSubscription": "Quản lý gói đăng ký",
+    "checkingHours": "Đang kiểm tra giờ mở cửa…",
+    "backOffice": "Trang quản lý",
+    "openBackOffice": "Mở trang quản lý của {name}",
+    "storefront": "Trang đặt món",
+    "openStorefront": "Mở trang đặt món của {name} trong thẻ mới",
+    "accessState": {
+      "noBranches": "Chưa có chi nhánh",
+      "allActive": "{count, plural, =1 {Chi nhánh đang hoạt động} other {Cả # chi nhánh đang hoạt động}}",
+      "allSuspended": "{count, plural, =1 {Chi nhánh bị tạm ngưng} other {Cả # chi nhánh bị tạm ngưng}}",
+      "partlySuspended": "{suspended}/{total} bị tạm ngưng"
+    },
+    "billingState": {
+      "expired": "Hết hạn {date} · {plan}",
+      "noSubscription": "Chưa có gói đăng ký",
+      "current": "{status} · {plan}"
+    },
+    "package": {
+      "title": "Gói dịch vụ",
+      "plan": "Gói",
+      "monthly": "Hằng tháng",
+      "paidThrough": "Đã thanh toán đến",
+      "lapsed": "Đã hết hạn",
+      "seats": "Suất chi nhánh",
+      "overQuota": "vượt hạn mức — chưa bị chặn, đang tính phí thiếu",
+      "noDelivery": "Gói Cơ bản không gồm giao hàng — bộ lọc loại đơn sẽ ẩn giao hàng và đơn giao hàng bị từ chối.",
+      "dormant": "Đã cấp, không hoạt động khi chưa thanh toán"
+    }
+  },
+  "confirm": {
+    "close": "Đóng",
+    "cancel": "Hủy",
+    "suspend": {
+      "title": "Tạm ngưng {name}?",
+      "confirm": "Tạm ngưng",
+      "body": "Thao tác này tạm ngưng {total, plural, =1 {chi nhánh duy nhất} other {cả # chi nhánh}} của {name} — {branches}. Trang đặt món sẽ trả về 404, không phải màn hình tạm ngưng. Nhân viên vẫn vào được trang quản lý và không dữ liệu nào bị xóa. Việc này không thay đổi gói đăng ký của họ."
+    },
+    "restore": {
+      "title": "Khôi phục {name}?",
+      "confirm": "Khôi phục",
+      "body": "Thao tác này khôi phục {total, plural, =1 {chi nhánh duy nhất} other {cả # chi nhánh}} của {name} — {branches}. Khách sẽ lại tìm thấy trang đặt món.",
+      "bodyNoBranches": "{name} chưa có chi nhánh nên không có gì để khôi phục.",
+      "warningUnpaid": "Gói đăng ký của {name} đang ở trạng thái {status}, nên trang đặt món vẫn hiển thị màn hình tạm ngưng sau khi khôi phục. Hãy xử lý gói đăng ký để đưa họ hoạt động trở lại. <link>Quản lý gói đăng ký</link>",
+      "warningPartial": "{active}/{total} chi nhánh đã hoạt động sẵn. Khôi phục sẽ bật TẤT CẢ {total} chi nhánh, kể cả chi nhánh đã được cố ý tắt."
+    },
+    "reactivate": {
+      "titleExtend": "Gia hạn {name} thêm 1 tháng?",
+      "titleConvert": "Chuyển {name} sang gói {plan}?",
+      "confirmExtend": "Gia hạn",
+      "confirmConvert": "Thu phí gói {plan}",
+      "bodyExtendLive": "Thêm 1 tháng cho gói {plan} nhà hàng đang dùng{hasPrice, select, yes {, giá {price}/tháng,} other {}} cho {seats, plural, other {# chi nhánh}}: hạn thanh toán {from} thành {to}. Cửa hàng vẫn đang hoạt động nên khách không thấy gì khác.",
+      "bodyRebill": "Tính phí lại gói {plan} nhà hàng đang dùng{hasPrice, select, yes {, giá {price}/tháng,} other {}} cho {seats, plural, other {# chi nhánh}}, thanh toán đến {to}. Trang đặt món hoạt động lại ngay lượt truy cập tiếp theo của khách.",
+      "bodyConvert": "Chuyển {name} từ gói {current} sang gói {plan}{hasPrice, select, yes {, giá {price}/tháng,} other {}} cho {seats, plural, other {# chi nhánh}}, thanh toán đến {to}. Trang đặt món hoạt động lại ngay lượt truy cập tiếp theo của khách.",
+      "warningSuspended": "{suspended}/{total} chi nhánh cũng đang bị nền tảng tạm ngưng và sẽ vẫn trả về 404 sau thao tác này. Hãy khôi phục riêng các chi nhánh đó."
+    }
+  }
+}

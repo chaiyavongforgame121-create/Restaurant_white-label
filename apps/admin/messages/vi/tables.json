@@ -1,0 +1,90 @@
+{
+  "accessDenied": {
+    "title": "Không có quyền quản lý bàn",
+    "reason": "Tài khoản của bạn không thể phục vụ bàn tại {branch}."
+  },
+  "header": {
+    "title": "Bàn",
+    "intro": "Ai đang ngồi bàn nào tại {branch} và mỗi bàn còn phải trả bao nhiêu. Bàn vẫn mở qua từng lượt gọi món cho đến khi bạn thu tiền — thanh toán hóa đơn là điều khiến mã QR của bàn ngừng gọi món.",
+    "qrCodes": "Mã QR của bàn"
+  },
+  "reconnecting": "Đang kết nối lại — bảng có thể cập nhật chậm một chút.",
+  "empty": {
+    "title": "Chưa thiết lập bàn nào",
+    "description": "Thêm bàn và in mã QR cho từng bàn, bảng này sẽ tự cập nhật khi khách quét mã.",
+    "action": "Thiết lập bàn"
+  },
+  "counts": {
+    "seated": "{count} bàn có khách",
+    "free": "{count} bàn trống",
+    "billRequested": "{count} bàn chờ tính tiền",
+    "outstanding": "Chưa thu {amount}"
+  },
+  "label": {
+    "number": "Bàn {number}"
+  },
+  "badge": {
+    "billRequested": "Đã gọi tính tiền",
+    "seated": "Có khách · {elapsed}",
+    "needsClearing": "Cần dọn",
+    "reserved": "Đã đặt trước",
+    "free": "Trống"
+  },
+  "elapsed": {
+    "unknown": "—",
+    "minutes": "{minutes} phút",
+    "hoursMinutes": "{hours} giờ {minutes} phút"
+  },
+  "detail": {
+    "seats": "{count, plural, other {# chỗ ngồi}}",
+    "party": "nhóm {size} người"
+  },
+  "types": {
+    "standard": "Tiêu chuẩn",
+    "booth": "Bàn sofa",
+    "bar": "Quầy bar",
+    "high_top": "Bàn cao",
+    "private_room": "Phòng riêng",
+    "outdoor": "Ngoài trời",
+    "counter": "Quầy"
+  },
+  "card": {
+    "sessionSummary": "· {rounds, plural, other {# lượt gọi món}} · mã {code}",
+    "settledNeedsClearing": "Đã thanh toán — dọn bàn cho khách tiếp theo.",
+    "empty": "Chưa có khách ngồi.",
+    "bill": "Hóa đơn",
+    "reopen": "Mở lại",
+    "askForBill": "Tính tiền",
+    "seat": "Mở bàn",
+    "clear": "Dọn bàn"
+  },
+  "sheet": {
+    "titleFallback": "Bàn",
+    "openFor": "Đã mở {elapsed} · mã <strong>{code}</strong> — đọc mã này khi có điện thoại khác muốn vào bàn.",
+    "readingBill": "Đang tải hóa đơn…",
+    "round": "Lượt {round} · {number}",
+    "paid": "Đã trả",
+    "tableTotal": "Tổng cộng của bàn",
+    "stillToCollect": "Còn phải thu",
+    "takePayment": "Thu tiền",
+    "closeWithoutPayment": "Đóng bàn không thu tiền",
+    "paymentHint": "Thu tiền sẽ ghi nhận mọi lượt gọi món là đã thanh toán, đóng bàn và khóa mã QR không cho gọi món cho đến khi có khách mới vào bàn."
+  },
+  "settle": {
+    "done": "{table} đã thanh toán — {rounds, plural, other {# lượt gọi món}}, {total}.",
+    "skipped": "Đã đóng bàn, nhưng không thể thanh toán {count, plural, other {đơn {orders}}} tại đây. Hãy duyệt trong mục Thanh toán."
+  },
+  "void": {
+    "title": "Đóng {table} mà không thu tiền?",
+    "body": "Các lượt gọi món vẫn được ghi nhận là chưa thanh toán.",
+    "placeholder": "Nhập lý do",
+    "confirm": "Đóng, chưa thu"
+  },
+  "errors": {
+    "unpaidNeedsManager": "Hóa đơn này vẫn còn tiền chưa thu. Hãy nhờ quản lý xóa khoản này.",
+    "forbidden": "Tài khoản của bạn không thể làm việc này tại chi nhánh này.",
+    "sessionAlreadyClosed": "Bàn này đã được đóng.",
+    "tableNotFound": "Bàn này không còn được thiết lập ở đây.",
+    "generic": "Đã xảy ra lỗi. Vui lòng thử lại."
+  }
+}

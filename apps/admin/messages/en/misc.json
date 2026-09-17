@@ -1,0 +1,43 @@
+{
+  "activity": {
+    "title": "Activity log",
+    "subtitle": "Audit trail of important actions",
+    "emptyTitle": "No activity yet",
+    "emptyBody": "Important actions (refunds, voids, settings changes) will appear here."
+  },
+  "lockedFeature": {
+    "metaTitle": "{feature} · Favornoms",
+    "aiVoiceLocked": "An AI assistant that answers the phone and takes orders. Part of the AI Suite add-on.",
+    "aiVoiceIncluded": "AI Voice is included in your package and is being built. We’ll turn it on for you the moment it ships — no extra charge.",
+    "signageLocked": "Menu boards and promo screens driven straight from your live menu. Part of the AI Suite add-on.",
+    "signageIncluded": "Digital Signage is included in your package and is being built. We’ll turn it on for you the moment it ships — no extra charge."
+  },
+  "receipts": {
+    "title": "Receipts",
+    "subtitle": "All sales receipts issued for branch {branch}…",
+    "empty": "No receipts issued yet. Receipts are created from the Orders page on completed orders.",
+    "columns": {
+      "receipt": "Receipt #",
+      "order": "Order #",
+      "customer": "Customer",
+      "total": "Total",
+      "status": "Status",
+      "issued": "Issued"
+    },
+    "walkIn": "Walk-in",
+    "viewPrint": "View / print",
+    "status": {
+      "issued": "Issued",
+      "draft": "Draft",
+      "pending": "Pending",
+      "canceled": "Cancelled",
+      "cancelled": "Cancelled",
+      "void": "Void",
+      "voided": "Void"
+    },
+    "openFailedTitle": "Could not open this receipt",
+    "openFailedBody": "The receipt service returned error {status}. Try again in a moment.",
+    "popupTitle": "Pop-up blocked",
+    "popupBody": "Allow pop-ups for this site, then open the receipt again."
+  }
+}

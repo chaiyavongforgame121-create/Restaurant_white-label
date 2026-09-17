@@ -22,6 +22,7 @@ import { usePendingRequestCount } from './pending-requests';
 import { ConfirmDialog, reactivateCopy, suspendCopy, type ConfirmCopy } from './confirm-dialog';
 import { TenantDrawer } from './tenant-drawer';
 import { TenantIndexHeader, TenantIndexRow } from './tenant-row';
+import { platformErrorKey, usePlatformText } from './platform-text';
 import {
   EXPIRY_WARN_DAYS,
   addOneMonthUtc,
@@ -44,14 +45,8 @@ type FilterKey = 'all' | 'attention' | 'expiring' | 'offline' | 'live';
 // Named after the two switches this page can prove from its own query. Whether a
 // diner can order right now also depends on hours, closures and the kitchen
 // pause, which only the drawer probes — so a broader label here would lie the
-// moment an owner sets business hours.
-const FILTERS: { value: FilterKey; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: 'attention', label: 'Needs attention' },
-  { value: 'expiring', label: 'Expiring soon' },
-  { value: 'offline', label: 'Billing or access off' },
-  { value: 'live', label: 'Live' },
-];
+// moment an owner sets business hours. Labels: platform.dashboard.filters.<key>.
+const FILTERS: FilterKey[] = ['all', 'attention', 'expiring', 'offline', 'live'];
 
 const matchesFilter = (h: TenantHealth, f: FilterKey) =>
   f === 'all'
@@ -87,6 +82,8 @@ export function PlatformDashboard({
   loadError: string | null;
 }) {
   const router = useRouter();
+  const p = usePlatformText();
+  const { t } = p;
   const pendingRequests = usePendingRequestCount();
   const [search, setSearch] = React.useState('');
   const [filter, setFilter] = React.useState<FilterKey>('all');
@@ -203,7 +200,8 @@ export function PlatformDashboard({
     try {
       await confirm.run();
     } catch (e) {
-      setConfirmError(e instanceof Error ? e.message : 'Something went wrong. Nothing was changed.');
+      // The thrown text is for the log; the operator gets a sentence in their language.
+      setConfirmError(t(platformErrorKey(e instanceof Error ? e.message : String(e))));
     } finally {
       setBusy(false);
     }
@@ -216,14 +214,14 @@ export function PlatformDashboard({
     if (!entry) return;
     setConfirmError(null);
     setConfirm({
-      copy: suspendCopy(row, entry.branches, entry.health.entitled),
+      copy: suspendCopy(row, entry.branches, entry.health.entitled, p),
       run: async () => {
         const { error } = await getBrowserClient().rpc('set_restaurant_suspended', {
           p_restaurant_id: row.id,
           p_suspended: entry.branches.some((b) => b.is_active),
         });
         if (error) {
-          setConfirmError(error.message);
+          setConfirmError(t(platformErrorKey(error.message, error.code)));
           return;
         }
         closeConfirm();
@@ -246,7 +244,7 @@ export function PlatformDashboard({
     const res = await setRestaurantPackage(getBrowserClient(), row.id, selection, 'active', periodEnd);
     setActingId(null);
     if (res.ok !== true) {
-      const message = res.error ?? 'Could not reactivate the subscription.';
+      const message = t(platformErrorKey(res.error, null, 'errors.reactivateFailed'));
       setRowError({ id: row.id, message });
       setConfirmError(message);
       return false;
@@ -290,6 +288,7 @@ export function PlatformDashboard({
         selection.branchSeats,
         explicitEnd ? new Date(explicitEnd) : addOneMonthUtc(clickMs),
         explicitEnd ? row.ent.entitledThrough : null,
+        p,
       ),
       run: async () => {
         if (await applyPackage(row, selection, explicitEnd)) closeConfirm();
@@ -305,8 +304,8 @@ export function PlatformDashboard({
   return (
     <div className="container max-w-6xl py-8">
       <header className="mb-2">
-        <h1 className="font-display text-3xl font-bold">Platform admin</h1>
-        <p className="mt-1 text-muted-foreground">Cross-tenant operations dashboard.</p>
+        <h1 className="font-display text-3xl font-bold">{t('dashboard.title')}</h1>
+        <p className="mt-1 text-muted-foreground">{t('dashboard.subtitle')}</p>
       </header>
       <PlatformNav />
 
@@ -319,45 +318,43 @@ export function PlatformDashboard({
           className="mb-4 flex items-start gap-2 rounded-xl bg-warning/10 px-4 py-3 text-sm text-warning"
         >
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-          <span>
-            {loadError} Branch counts and storefront verdicts on this page are incomplete — reload
-            before acting on them.
-          </span>
+          <span>{t('dashboard.loadError', { message: loadError })}</span>
         </div>
       )}
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-        <Stat label="Restaurants" value={String(scored.length)} />
+        <Stat label={t('dashboard.stats.restaurants')} value={String(scored.length)} />
         {/* Not `active_branches`: that counts is_active and ignores billing, so a
             dead tenant inflates the headline. This one counts entitlement, which
             is billing only — hence the name. */}
-        <Stat label="Billing OK" value={`${entitledCount}/${scored.length}`} accent />
+        <Stat label={t('dashboard.stats.billingOk')} value={`${entitledCount}/${scored.length}`} accent />
         <Stat
-          label="Needs attention"
+          label={t('dashboard.stats.needsAttention')}
           value={String(counts.attention)}
           warn={counts.attention > 0}
           onSelect={counts.attention > 0 ? () => setFilter('attention') : undefined}
         />
-        <Stat label="Orders today" value={String(summary.orders_today ?? 0)} />
-        <Stat label="Revenue today" value={formatCurrency(Number(summary.revenue_today ?? 0))} />
-        <Stat label="Drivers online" value={String(summary.drivers_online ?? 0)} />
+        <Stat label={t('dashboard.stats.ordersToday')} value={String(summary.orders_today ?? 0)} />
+        <Stat
+          label={t('dashboard.stats.revenueToday')}
+          value={formatCurrency(Number(summary.revenue_today ?? 0))}
+        />
+        <Stat label={t('dashboard.stats.driversOnline')} value={String(summary.drivers_online ?? 0)} />
       </div>
 
       {/* The two things that turn a live store dark with nobody touching it: a
           paid-through date running out, and a merchant's request sitting unread
           while their lapsed store waits. Neither showed anywhere on this page. */}
       {(counts.expiring > 0 || pendingRequests > 0) && (
-        <ul aria-label="Needs a decision" className="mb-6 space-y-2">
+        <ul aria-label={t('dashboard.decisions.ariaLabel')} className="mb-6 space-y-2">
           {counts.expiring > 0 && (
             <li className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-warning/10 px-4 py-3 text-sm text-warning">
               <span className="flex items-center gap-2">
                 <Clock className="h-4 w-4 shrink-0" aria-hidden />
-                {counts.expiring === 1
-                  ? `1 paying store goes dark within ${EXPIRY_WARN_DAYS} days.`
-                  : `${counts.expiring} paying stores go dark within ${EXPIRY_WARN_DAYS} days.`}
+                {t('dashboard.decisions.expiring', { count: counts.expiring, days: EXPIRY_WARN_DAYS })}
               </span>
               <Button size="sm" variant="ghost" onClick={() => setFilter('expiring')}>
-                Show them
+                {t('dashboard.decisions.showThem')}
               </Button>
             </li>
           )}
@@ -365,15 +362,13 @@ export function PlatformDashboard({
             <li className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-warning/10 px-4 py-3 text-sm text-warning">
               <span className="flex items-center gap-2">
                 <Inbox className="h-4 w-4 shrink-0" aria-hidden />
-                {pendingRequests === 1
-                  ? '1 package request is waiting for a decision.'
-                  : `${pendingRequests} package requests are waiting for a decision.`}
+                {t('dashboard.decisions.requests', { count: pendingRequests })}
               </span>
               <Link
                 href="/platform/subscriptions/requests"
                 className="rounded-lg px-3 py-1.5 text-sm font-medium underline-offset-2 hover:underline"
               >
-                Review requests
+                {t('dashboard.decisions.reviewRequests')}
               </Link>
             </li>
           )}
@@ -389,23 +384,26 @@ export function PlatformDashboard({
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search restaurants"
-            aria-label="Search restaurants"
+            placeholder={t('dashboard.search.placeholder')}
+            aria-label={t('dashboard.search.placeholder')}
             className={`${INPUT_CLS} pl-9`}
           />
         </label>
         <div className="flex flex-wrap gap-2">
           {FILTERS.map((f) => (
             <button
-              key={f.value}
+              key={f}
               type="button"
-              aria-pressed={filter === f.value}
-              onClick={() => setFilter(f.value)}
+              aria-pressed={filter === f}
+              onClick={() => setFilter(f)}
               className={`focus-ring rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
-                filter === f.value ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'
+                filter === f ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'
               }`}
             >
-              {f.label} ({counts[f.value]})
+              {t('dashboard.filters.withCount', {
+                label: t(`dashboard.filters.${f}`),
+                count: counts[f],
+              })}
             </button>
           ))}
         </div>
@@ -414,11 +412,11 @@ export function PlatformDashboard({
       {visible.length === 0 ? (
         <EmptyState
           icon={<Search className="h-7 w-7" aria-hidden />}
-          title="No restaurants match"
-          description="Try a different name or slug, or clear the filter."
+          title={t('dashboard.search.emptyTitle')}
+          description={t('dashboard.search.emptyBody')}
           action={
             <Button variant="ghost" onClick={clearFilters}>
-              Clear filters
+              {t('dashboard.search.clear')}
             </Button>
           }
         />

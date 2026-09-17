@@ -1,0 +1,164 @@
+{
+  "accessDenied": {
+    "title": "Sin acceso al panel",
+    "reason": "Tu rol no puede ver el panel de {branch}."
+  },
+  "header": {
+    "title": "Hoy de un vistazo",
+    "subtitle": "Métricas en vivo de {branch}"
+  },
+  "trial": {
+    "endsToday": "Tu prueba gratuita termina hoy",
+    "daysLeft": "{days, plural, one {Te queda # día de prueba gratuita} other {Te quedan # días de prueba gratuita}}",
+    "body": "Todo está desbloqueado. Elige un paquete para conservarlo; no necesitas tarjeta hasta entonces.",
+    "cta": "Elegir un paquete"
+  },
+  "expiry": {
+    "titleUnderDay": "Tu paquete está pagado hasta el {date}: queda menos de un día",
+    "titleDays": "Tu paquete está pagado hasta el {date}: {days, plural, one {queda # día} other {quedan # días}}",
+    "body": "Después, la tienda en línea deja de recibir pedidos y el panel de administración se bloquea.",
+    "renewHint": "La renovación es una solicitud que aprueba el equipo de Favornoms, así que envíala antes de esa fecha.",
+    "askOwner": "Pide al propietario del restaurante que lo renueve; la renovación es una solicitud que aprueba el equipo de Favornoms.",
+    "cta": "Renovar paquete"
+  },
+  "setup": {
+    "title": "Prepárate para recibir pedidos",
+    "progress": "{done} de {total} listos",
+    "checkFailed": "No se pudo comprobar en este momento. Se volverá a intentar en la próxima actualización.",
+    "menu": {
+      "label": "Agrega al menos un producto al menú",
+      "why": "Tu tienda en línea ya es pública y los clientes ven un menú vacío hasta que agregues productos.",
+      "link": "Menú"
+    },
+    "pin": {
+      "label": "Coloca el pin en el mapa",
+      "why": "El costo de envío y la asignación de repartidores se calculan desde el pin, no desde el texto de la dirección.",
+      "link": "Ubicación"
+    },
+    "hours": {
+      "label": "Guarda tu horario de atención",
+      "why": "Sin horario guardado, la tienda en línea considera que esta sucursal está abierta las 24 horas.",
+      "link": "Horario de atención"
+    },
+    "payment": {
+      "label": "Activa al menos un método de pago",
+      "why": "Con todos los métodos desactivados, los clientes no pueden pedir para recoger en tienda ni programar una entrega.",
+      "link": "Métodos de pago"
+    },
+    "noPin": {
+      "label": "La entrega a domicilio está activada, pero esta sucursal no tiene pin en el mapa",
+      "why": "No se pueden asignar repartidores a los pedidos a domicilio de esta sucursal hasta que se coloque el pin.",
+      "link": "Colocar el pin"
+    }
+  },
+  "overview": {
+    "title": "Resumen del negocio",
+    "vsYesterday": "vs. ayer a esta hora",
+    "sales": {
+      "label": "Ventas de hoy",
+      "failed": "No se pudieron leer las ventas"
+    },
+    "orders": {
+      "label": "Pedidos de hoy",
+      "failed": "No se pudieron leer los pedidos"
+    },
+    "kitchen": {
+      "label": "Cola de cocina",
+      "failed": "No se pudo leer la cocina",
+      "sub": "{waiting} en espera · {cooking} en preparación",
+      "subStalled": "{waiting} en espera · {cooking} en preparación · {stalled, plural, one {# estancado} other {# estancados}}"
+    },
+    "deliveries": {
+      "label": "Entregas activas",
+      "notOnPlan": "La entrega a domicilio no está en tu plan",
+      "failed": "No se pudieron leer las entregas",
+      "stalled": "{count, plural, one {# estancada} other {# estancadas}}"
+    }
+  },
+  "action": {
+    "title": "Requiere atención",
+    "allClear": "Todo revisado, nada pendiente",
+    "checksFailed": "{count, plural, one {# revisión no se pudo ejecutar} other {# revisiones no se pudieron ejecutar}}",
+    "waiting": "{count, plural, one {# asunto te espera} other {# asuntos te esperan}}",
+    "emptyTitle": "Nada requiere tu atención ahora",
+    "checkedList": "Revisamos: {list}.",
+    "checkedNothing": "Nada que revisar.",
+    "checkedAt": "Revisado a las {time}",
+    "checkFailed": "No se pudo ejecutar esta revisión. Se volverá a intentar en la próxima actualización.",
+    "seeAll": {
+      "orders": "Ver los {count} en Pedidos →",
+      "deliveries": "Ver los {count} en Entregas en curso →",
+      "kitchen": "Ver los {count} en la pantalla de cocina →",
+      "inventory": "Ver los {count} en Inventario →",
+      "drivers": "Ver los {count} en Repartidores →",
+      "payouts": "Ver los {count} en Pagos a repartidores →"
+    }
+  },
+  "buckets": {
+    "proofs": "Comprobantes de pago por aprobar",
+    "refunds": "Reembolsos pendientes",
+    "deliveryFailed": "Repartidores que reportan un problema",
+    "deliveryUnaccepted": "Entregas que nadie ha tomado",
+    "customersWaiting": "Clientes esperando",
+    "kitchenLate": "Cocina con retraso",
+    "scheduled": "Pedidos programados próximos",
+    "stock": "Productos agotados o por agotarse",
+    "riders": "Repartidores esperando tu respuesta",
+    "withdrawals": "Retiros por pagar",
+    "stalled": "Comandas de cocina estancadas"
+  },
+  "rows": {
+    "deliveryTitle": "Entrega",
+    "proof": "Comprobante de {amount} en espera: la cocina no puede empezar hasta que decidas",
+    "refund": "Cancelado con {amount} aún cobrados",
+    "soldOut": "Agotado: los clientes no pueden pedirlo",
+    "lowStock": "Quedan {left} (alerta en {threshold})",
+    "riderDecision": "Solicitud enviada: espera tu decisión",
+    "riderDocuments": "Solicitud enviada: documentos sin verificar",
+    "riderBoth": "Solicitud enviada: espera tu decisión · documentos sin verificar",
+    "withdrawal": "Solicitó {amount}",
+    "orderNotAccepted": "Nadie ha aceptado este pedido todavía",
+    "cookingLong": "En preparación hace más de {minutes} min",
+    "acceptedNotStarted": "Aceptado, pero sin empezar",
+    "readyNotCollected": "Listo en el pase, sin recoger",
+    "deliveryWaitingKitchen": "Esperando a la cocina",
+    "deliveryKitchenReady": "La cocina dice que está listo; aún no se ha pedido repartidor",
+    "deliveryKitchenStatus": "Cocina: {status}",
+    "deliveryLookingForRider": "Buscando repartidor",
+    "deliveryAskedRiders": "{count, plural, one {Se ha preguntado a # repartidor} other {Se ha preguntado a # repartidores}}",
+    "deliveryOwnStaff": "La entrega la hace tu propio personal",
+    "deliveryNoRiderHolds": "Ningún repartidor la ha tomado todavía",
+    "deliveryOfferExpired": "La oferta venció; vuelve a la lista de espera",
+    "deliveryFailed": "{reason} · reportado en una entrega iniciada hace {age}",
+    "noReason": "Sin motivo registrado",
+    "bookingNotAccepted": "Nadie ha aceptado este pedido programado todavía",
+    "bookingStillHeld": "Ya debería estar en cocina, pero sigue en espera"
+  },
+  "orderStatus": {
+    "pending": "pendiente",
+    "confirmed": "confirmado",
+    "preparing": "en preparación",
+    "ready": "listo",
+    "out_for_delivery": "en camino",
+    "completed": "completado",
+    "cancelled": "cancelado",
+    "refunded": "reembolsado"
+  },
+  "age": {
+    "unknown": "—",
+    "underMinute": "<1 min",
+    "minutes": "{minutes} min",
+    "hours": "{hours} h",
+    "hoursMinutes": "{hours} h {minutes} min",
+    "days": "{days} d",
+    "dueIn": "en {span}"
+  },
+  "trend": {
+    "title": "Tendencia de ventas",
+    "subtitle": "Últimos 7 días",
+    "today": "Hoy",
+    "bar": "{day} · {amount}",
+    "failed": "No se pudieron leer las ventas de esta sucursal. Se volverá a intentar en la próxima actualización.",
+    "empty": "Aún no hay ventas en los últimos 7 días."
+  }
+}

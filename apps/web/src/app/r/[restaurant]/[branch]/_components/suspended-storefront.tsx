@@ -1,4 +1,5 @@
 import { Clock } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 /**
  * Shown to customers when a restaurant's subscription has lapsed.
@@ -11,18 +12,16 @@ import { Clock } from 'lucide-react';
  * No data is deleted on suspension — paying restores this page instantly.
  */
 export function SuspendedStorefront({ brandName }: { brandName: string }) {
+  const t = useTranslations('storefront');
   return (
     <div className="container flex min-h-[70vh] max-w-lg flex-col items-center justify-center px-4 py-16 text-center">
       <span className="grid h-16 w-16 place-items-center rounded-2xl bg-muted text-muted-foreground">
         <Clock className="h-8 w-8" />
       </span>
       <h1 className="mt-6 font-display text-2xl font-bold">
-        {brandName} is not taking orders right now
+        {t('suspended.title', { brand: brandName })}
       </h1>
-      <p className="mt-3 text-muted-foreground">
-        Online ordering for this location is temporarily unavailable. Please check back soon, or
-        contact the restaurant directly to order.
-      </p>
+      <p className="mt-3 text-muted-foreground">{t('suspended.body')}</p>
     </div>
   );
 }

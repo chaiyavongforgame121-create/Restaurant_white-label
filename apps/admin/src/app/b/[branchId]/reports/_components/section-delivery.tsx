@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { Bike, Clock, Coins, Star, Timer } from 'lucide-react';
 import { Card } from '@favornoms/ui';
 import { formatCurrency } from '@favornoms/shared';
@@ -18,92 +19,86 @@ export function SectionDelivery({
   currency: string;
   branchId: string;
 }) {
+  const t = useTranslations('reports.delivery');
   const data = result.data;
   const money = (n: number) => formatCurrency(n, currency);
+  const minutes = (n: number) => (n > 0 ? t('minutes', { minutes: n }) : '—');
   const maxStars = Math.max(1, ...(data?.star_distribution ?? []).map((s) => s.count));
 
   return (
     <SectionFrame
       id="delivery"
-      title="Delivery"
+      title={t('title')}
       icon={<Bike className="h-5 w-5" />}
-      caption="Deliveries for orders taken in this range, timed from the rider's own stamps."
-      error={result.error ?? (data ? null : 'No delivery payload was returned.')}
+      caption={t('caption')}
+      error={result.error ?? (data ? null : { code: 'emptyResponse', ref: null })}
     >
       {data ? (
         <>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
             <Kpi
               icon={<Bike className="h-5 w-5" />}
-              label="Delivered"
+              label={t('delivered')}
               value={data.totals.completed.toString()}
-              hint={`${data.totals.deliveries} dispatched`}
+              hint={t('deliveredHint', { count: data.totals.deliveries })}
               tone="success"
             />
             <Kpi
               icon={<Timer className="h-5 w-5" />}
-              label="Ride time"
-              value={data.totals.avg_ride_min > 0 ? `${data.totals.avg_ride_min} min` : '—'}
-              hint="Pickup to doorstep"
+              label={t('rideTime')}
+              value={minutes(data.totals.avg_ride_min)}
+              hint={t('rideTimeHint')}
             />
             <Kpi
               icon={<Clock className="h-5 w-5" />}
-              label="Door to door"
-              value={data.totals.avg_total_min > 0 ? `${data.totals.avg_total_min} min` : '—'}
-              hint="Order placed to delivered"
+              label={t('doorToDoor')}
+              value={minutes(data.totals.avg_total_min)}
+              hint={t('doorToDoorHint')}
             />
             <Kpi
               icon={<Star className="h-5 w-5" />}
-              label="Delivery rating"
+              label={t('rating')}
               value={data.totals.rating_count > 0 ? `${data.totals.avg_stars} ★` : '—'}
-              hint={`${data.totals.rating_count} rated`}
+              hint={t('ratingHint', { count: data.totals.rating_count })}
             />
             <Kpi
               icon={<Coins className="h-5 w-5" />}
-              label="Delivery fees"
+              label={t('deliveryFees')}
               value={money(data.totals.delivery_fees)}
-              hint="Charged to the diner"
+              hint={t('deliveryFeesHint')}
             />
             <Kpi
               icon={<Coins className="h-5 w-5" />}
-              label="Tips"
+              label={t('tips')}
               value={money(data.totals.tips_charged)}
-              hint={`${money(data.totals.tips_to_riders)} to riders`}
+              hint={t('tipsHint', { amount: money(data.totals.tips_to_riders) })}
             />
           </div>
 
           <div className="mt-4 grid gap-4 lg:grid-cols-3">
             <Card className="p-5">
-              <h3 className="font-display text-lg font-semibold">How it went</h3>
+              <h3 className="font-display text-lg font-semibold">{t('howItWent')}</h3>
               <dl className="mt-3 space-y-1.5 text-sm">
-                <StatRow label="Delivered" value={data.totals.completed.toString()} />
-                <StatRow label="Still out" value={data.totals.in_flight.toString()} />
-                <StatRow label="Failed" value={data.totals.failed.toString()} />
-                <StatRow label="Cancelled" value={data.totals.cancelled.toString()} />
+                <StatRow label={t('delivered')} value={data.totals.completed.toString()} />
+                <StatRow label={t('stillOut')} value={data.totals.in_flight.toString()} />
+                <StatRow label={t('failed')} value={data.totals.failed.toString()} />
+                <StatRow label={t('cancelled')} value={data.totals.cancelled.toString()} />
                 <div className="my-2 border-t border-border" />
                 <StatRow
-                  label="Average distance"
+                  label={t('avgDistance')}
                   value={data.totals.avg_distance_km > 0 ? `${data.totals.avg_distance_km} km` : '—'}
                 />
-                <StatRow
-                  label="Time to accept an offer"
-                  value={
-                    data.totals.avg_accept_min > 0 ? `${data.totals.avg_accept_min} min` : '—'
-                  }
-                />
-                <StatRow label="Rider payouts" value={money(data.totals.rider_payouts)} />
-                <StatRow label="Tips kept by the house" value={money(data.totals.tips_to_house)} />
+                <StatRow label={t('timeToAccept')} value={minutes(data.totals.avg_accept_min)} />
+                <StatRow label={t('riderPayouts')} value={money(data.totals.rider_payouts)} />
+                <StatRow label={t('houseTips')} value={money(data.totals.tips_to_house)} />
               </dl>
-              <Caption>
-                On-time percentage is not shown: no promised-delivery time is recorded
-                anywhere, so there is nothing honest to measure lateness against.
-              </Caption>
+              <Caption>{t('howItWentCaption')}</Caption>
             </Card>
 
             <Card className="p-5">
-              <h3 className="font-display text-lg font-semibold">Delivery stars</h3>
+              <h3 className="font-display text-lg font-semibold">{t('stars')}</h3>
               {data.totals.rating_count === 0 ? (
-                <EmptyNote>No diner rated a delivery in this range.</EmptyNote>
+                <EmptyNote>{t('starsEmpty')}</EmptyNote>
               ) : (
                 <ul className="mt-3 space-y-2">
                   {[...data.star_distribution].reverse().map((s) => (
@@ -123,33 +118,37 @@ export function SectionDelivery({
                 </ul>
               )}
               <Caption>
-                <Link href={`/b/${branchId}/ratings`} className="focus-ring underline">
-                  Full reviews live on the Ratings page
-                </Link>
-                .
+                {t.rich('ratingsLink', {
+                  link: (chunks) => (
+                    <Link href={`/b/${branchId}/ratings`} className="focus-ring underline">
+                      {chunks}
+                    </Link>
+                  ),
+                })}
               </Caption>
             </Card>
 
             <Card className="p-5">
-              <h3 className="font-display text-lg font-semibold">By rider</h3>
+              <h3 className="font-display text-lg font-semibold">{t('byRider')}</h3>
               {data.by_driver.length === 0 ? (
-                <EmptyNote>No rider took a delivery in this range.</EmptyNote>
+                <EmptyNote>{t('byRiderEmpty')}</EmptyNote>
               ) : (
                 <div className="mt-3 max-h-72 overflow-auto">
                   <table className="w-full text-sm">
                     <thead className="sticky top-0 bg-card">
                       <tr className="text-left text-xs text-muted-foreground">
-                        <th className="pb-1 font-normal">Rider</th>
-                        <th className="pb-1 text-right font-normal">Done</th>
-                        <th className="pb-1 text-right font-normal">Ride</th>
-                        <th className="pb-1 text-right font-normal">Tips</th>
+                        <th className="pb-1 font-normal">{t('col.rider')}</th>
+                        <th className="pb-1 text-right font-normal">{t('col.done')}</th>
+                        <th className="pb-1 text-right font-normal">{t('col.ride')}</th>
+                        <th className="pb-1 text-right font-normal">{t('col.tips')}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {data.by_driver.map((d) => (
                         <tr key={d.driver_id} className="border-t border-border">
                           <td className="max-w-[10rem] truncate py-1.5 pr-2 font-medium">
-                            {d.name}
+                            {/* has_name false: the report's stand-in for a rider with no name on file. */}
+                            {d.has_name === false ? t('unnamedRider') : d.name}
                             {d.avg_stars > 0 ? (
                               <span className="ml-1 text-xs text-muted-foreground">
                                 {d.avg_stars} ★
@@ -158,7 +157,9 @@ export function SectionDelivery({
                           </td>
                           <td className="py-1.5 pr-2 text-right tabular-nums">{d.delivered}</td>
                           <td className="py-1.5 pr-2 text-right tabular-nums text-muted-foreground">
-                            {d.avg_ride_min > 0 ? `${d.avg_ride_min}m` : '—'}
+                            {d.avg_ride_min > 0
+                              ? t('minutesShort', { minutes: d.avg_ride_min })
+                              : '—'}
                           </td>
                           <td className="py-1.5 text-right font-semibold tabular-nums">
                             {money(d.tips)}

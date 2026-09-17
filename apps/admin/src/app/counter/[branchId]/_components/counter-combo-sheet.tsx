@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import Image from 'next/image';
+import { useTranslations } from 'next-intl';
 import { Minus, Plus } from 'lucide-react';
 import { formatCurrency } from '@favornoms/shared';
 import type { ComboSet } from '@favornoms/database/queries';
@@ -22,6 +23,7 @@ interface Props {
  * number a customer asks about when the poster says one thing and the till says another.
  */
 export function CounterComboSheet({ combo, onClose, onAdd }: Props) {
+  const t = useTranslations('counter');
   const [qty, setQty] = React.useState(1);
   const [notes, setNotes] = React.useState('');
 
@@ -64,8 +66,8 @@ export function CounterComboSheet({ combo, onClose, onAdd }: Props) {
       open={!!combo}
       onClose={onClose}
       side="right"
-      title={combo?.name ?? 'Combo'}
-      ariaLabel={combo ? `Add ${combo.name}` : 'Add combo'}
+      title={combo?.name ?? t('combo.fallbackTitle')}
+      ariaLabel={combo ? t('sheet.addAria', { name: combo.name }) : t('combo.addComboAria')}
     >
       {combo && (
       <div className="space-y-4 px-5 pb-8">
@@ -92,7 +94,7 @@ export function CounterComboSheet({ combo, onClose, onAdd }: Props) {
 
         <div className="border-border rounded-2xl border p-3">
           <p className="text-muted-foreground text-xs font-semibold uppercase tracking-wider">
-            What&apos;s in it
+            {t('combo.contents')}
           </p>
           <ul className="mt-2 space-y-1">
             {combo.items.map((it) => (
@@ -108,29 +110,32 @@ export function CounterComboSheet({ combo, onClose, onAdd }: Props) {
           </ul>
           {saving > 0 && (
             <p className="border-border text-success mt-2 border-t pt-2 text-sm font-semibold">
-              Saves {formatCurrency(saving)} against {formatCurrency(listTotal)} separately
+              {t('combo.saves', {
+                saving: formatCurrency(saving),
+                listTotal: formatCurrency(listTotal),
+              })}
             </p>
           )}
         </div>
 
         <label className="block">
-          <span className="mb-1.5 block text-sm font-medium">Note for the kitchen</span>
+          <span className="mb-1.5 block text-sm font-medium">{t('sheet.note')}</span>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={2}
             maxLength={300}
-            placeholder="e.g. drink with no ice"
+            placeholder={t('combo.notePlaceholder')}
             className="focus-ring border-border bg-background w-full rounded-xl border px-3 py-2 text-sm"
           />
         </label>
 
         <div className="flex items-center justify-between gap-3">
-          <span className="text-sm font-medium">Quantity</span>
+          <span className="text-sm font-medium">{t('sheet.quantity')}</span>
           <div className="border-border flex items-center gap-1 rounded-xl border p-1">
             <button
               type="button"
-              aria-label="One fewer"
+              aria-label={t('sheet.fewer')}
               onClick={() => setQty((q) => Math.max(1, q - 1))}
               className="focus-ring hover:bg-muted grid h-10 w-10 place-items-center rounded-lg"
             >
@@ -139,7 +144,7 @@ export function CounterComboSheet({ combo, onClose, onAdd }: Props) {
             <span className="w-10 text-center text-lg font-semibold tabular-nums">{qty}</span>
             <button
               type="button"
-              aria-label="One more"
+              aria-label={t('sheet.more')}
               onClick={() => setQty((q) => Math.min(99, q + 1))}
               className="focus-ring hover:bg-muted grid h-10 w-10 place-items-center rounded-lg"
             >
@@ -149,8 +154,7 @@ export function CounterComboSheet({ combo, onClose, onAdd }: Props) {
         </div>
 
         <Button variant="gradient" size="xl" fullWidth onClick={commit}>
-          Add {qty > 1 ? `${qty} · ` : ''}
-          {formatCurrency(lineTotal)}
+          {t('sheet.add', { qty, total: formatCurrency(lineTotal) })}
         </Button>
       </div>
       )}

@@ -1,0 +1,52 @@
+{
+  "title": "Đơn hàng của bạn",
+  "loadError": {
+    "title": "Không tải được đơn hàng",
+    "description": "Đã xảy ra lỗi khi tải đơn hàng. Hãy tải lại trang hoặc thử lại sau ít phút."
+  },
+  "empty": {
+    "title": "Chưa có đơn hàng nào",
+    "signedIn": "Đặt món ngon ngay, đơn hàng sẽ hiện ở đây",
+    "guest": "Đơn hàng cũ và đang xử lý sẽ hiện ở đây khi bạn đăng nhập"
+  },
+  "list": {
+    "summary": "{count, plural, other {# món}} · {total}",
+    "reorder": "Đặt lại",
+    "reorderNoneAvailable": "Hiện không còn món nào trong đơn này.",
+    "reorderSomeDropped": "Một số món hoặc tùy chọn trong đơn đó không còn nên đã được bỏ ra — vui lòng kiểm tra lại giỏ hàng."
+  },
+  "channel": {
+    "dine_in": "Ăn tại quán",
+    "pickup": "Tự đến lấy",
+    "delivery": "Giao hàng",
+    "qr_ordering": "Đơn QR"
+  },
+  "status": {
+    "pending": "Đang chờ",
+    "confirmed": "Đã xác nhận",
+    "preparing": "Đang chuẩn bị",
+    "ready": "Đã xong",
+    "out_for_delivery": "Đang giao",
+    "completed": "Hoàn tất",
+    "cancelled": "Đã hủy",
+    "refunded": "Đã hoàn tiền"
+  },
+  "receipt": {
+    "title": "Hóa đơn",
+    "back": "Quay lại",
+    "print": "In",
+    "heading": "Hóa đơn · {number}",
+    "date": "Ngày",
+    "channel": "Hình thức",
+    "status": "Trạng thái",
+    "customer": "Khách hàng",
+    "subtotal": "Tạm tính",
+    "delivery": "Phí giao hàng",
+    "serviceFee": "Phí dịch vụ",
+    "discount": "Giảm giá",
+    "salesTax": "Thuế",
+    "tip": "Tiền tip",
+    "total": "Tổng cộng (USD)",
+    "thanks": "Cảm ơn bạn đã đặt hàng — hẹn gặp lại!"
+  }
+}

@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { getBrowserClient } from '@favornoms/database/client';
 import { getMyDriver, type DriverWithApproval } from '@favornoms/database/queries';
 
@@ -53,6 +54,8 @@ function isRetryableAuthFailure(error: unknown): boolean {
  */
 export function DriverSessionProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const t = useTranslations('shell.session');
+  const tCommon = useTranslations('common');
   const [driver, setDriver] = React.useState<DriverWithApproval | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [problem, setProblem] = React.useState<SessionProblem | null>(null);
@@ -123,7 +126,7 @@ export function DriverSessionProvider({ children }: { children: React.ReactNode 
   if (loading && !driver) {
     return (
       <div className="min-h-dynamic-screen bg-background grid place-items-center">
-        <div className="text-muted-foreground text-sm">Loading…</div>
+        <div className="text-muted-foreground text-sm">{tCommon('loading')}</div>
       </div>
     );
   }
@@ -134,26 +137,26 @@ export function DriverSessionProvider({ children }: { children: React.ReactNode 
       <div className="min-h-dynamic-screen bg-background grid place-items-center px-6 text-center">
         <div>
           <p className="font-display text-lg font-semibold">
-            {noProfile ? 'No rider profile yet' : 'Can’t reach Favornoms'}
+            {noProfile ? t('noProfileTitle') : t('unreachableTitle')}
           </p>
           <p className="text-muted-foreground mt-1 text-sm">
             {noProfile
-              ? 'This account is signed in but has no rider profile. Sign out and sign in again, or ask your restaurant to add you.'
+              ? t('noProfileBody')
               : problem === 'offline'
-                ? 'You appear to be offline. Your deliveries are safe — try again once you have signal.'
-                : 'We couldn’t load your rider profile. Please try again.'}
+                ? t('offlineBody')
+                : t('unreachableBody')}
           </p>
           <button
             onClick={retry}
             className="focus-ring bg-primary text-primary-foreground mt-5 inline-flex h-12 items-center rounded-2xl px-5 text-sm font-semibold"
           >
-            Try again
+            {tCommon('tryAgain')}
           </button>
           <button
             onClick={signOut}
             className="focus-ring text-muted-foreground mt-3 block h-auto min-h-0 w-full text-xs underline"
           >
-            Sign out
+            {tCommon('signOut')}
           </button>
         </div>
       </div>

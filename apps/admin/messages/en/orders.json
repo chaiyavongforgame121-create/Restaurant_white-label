@@ -1,0 +1,210 @@
+{
+  "page": {
+    "title": "Orders",
+    "count": "{count} matching",
+    "countCapped": "{count} matching · showing the first {shown}",
+    "empty": "No orders match your filters",
+    "tableLabel": "Table {number}",
+    "columns": {
+      "orderNumber": "Order #",
+      "channel": "Channel",
+      "customer": "Customer",
+      "items": "Items",
+      "created": "Created",
+      "total": "Total",
+      "status": "Status",
+      "actions": "Actions"
+    }
+  },
+  "status": {
+    "pending": "Pending",
+    "confirmed": "Confirmed",
+    "preparing": "Preparing",
+    "ready": "Ready",
+    "out_for_delivery": "Out for delivery",
+    "completed": "Completed",
+    "cancelled": "Cancelled",
+    "refunded": "Refunded"
+  },
+  "channel": {
+    "dine_in": "Dine-in",
+    "pickup": "Pickup",
+    "delivery": "Delivery",
+    "qr_ordering": "QR ordering"
+  },
+  "paymentMethod": {
+    "cash": "Cash",
+    "card": "Card",
+    "transfer": "QR transfer"
+  },
+  "filters": {
+    "saved": "Saved:",
+    "removeSavedView": "Remove saved view {name}",
+    "searchPlaceholder": "Search order # / customer / phone…",
+    "clearSearch": "Clear search",
+    "allStatuses": "All statuses",
+    "allChannels": "All channels",
+    "scheduledLabel": "Scheduled orders",
+    "when": {
+      "all": "All orders",
+      "scheduled": "Scheduled — upcoming",
+      "held": "Scheduled — not yet in kitchen"
+    },
+    "rangeLabel": "Date range",
+    "range": {
+      "all": "All time",
+      "today": "Today",
+      "days7": "Last 7 days",
+      "days30": "Last 30 days",
+      "custom": "Custom…"
+    },
+    "dueRange": {
+      "all": "Any date",
+      "today": "Due today",
+      "days7": "Due within 7 days",
+      "days30": "Due within 30 days",
+      "custom": "Custom…"
+    },
+    "fromDate": "From date",
+    "dateSeparator": "to",
+    "toDate": "To date",
+    "saveView": "Save view",
+    "savePrompt": {
+      "title": "Name this view",
+      "body": "The filters set right now are kept on this device, ready to reapply in one click.",
+      "placeholder": "Today’s deliveries",
+      "confirm": "Save view"
+    }
+  },
+  "row": {
+    "items": "{count, plural, one {# item} other {# items}}",
+    "summaryMore": "{items} +{count} more",
+    "noLineItems": "No line items",
+    "hasRequests": "Has options or notes",
+    "unpaid": "Unpaid",
+    "unpaidHint": "Waiting for the customer to confirm payment",
+    "scheduledOn": "Scheduled {date}",
+    "dueOn": "Due {date}",
+    "walkIn": "Walk-in",
+    "combo": "Combo",
+    "noLinesRecorded": "No line items were recorded for this order.",
+    "notes": {
+      "table": "Table",
+      "customer": "Customer note",
+      "kitchen": "Kitchen note",
+      "delivery": "Delivery instructions"
+    }
+  },
+  "receipt": {
+    "button": "Receipt",
+    "title": "Receipt · {number}",
+    "sheetLabel": "Receipt for order {number}",
+    "loading": "Loading receipt…",
+    "loadFailed": "That order could no longer be read.",
+    "voidedCancelled": "This order was cancelled. The receipt records what was ordered, not that it was paid for.",
+    "voidedRefunded": "This order was refunded. The receipt records what was ordered, not that it was paid for.",
+    "printHint": "Prints the 80mm receipt in a new window.",
+    "print": "Print",
+    "date": "Date",
+    "channel": "Channel",
+    "status": "Status",
+    "customer": "Customer",
+    "phone": "Phone",
+    "subtotal": "Subtotal",
+    "deliveryFee": "Delivery",
+    "serviceFee": "Service fee",
+    "discount": "Discount",
+    "salesTax": "Sales tax",
+    "tip": "Tip",
+    "total": "Total ({currency})",
+    "paidVia": "Paid via",
+    "deliverTo": "Deliver to: {address}"
+  },
+  "actions": {
+    "menu": "Actions",
+    "issueRefund": "Issue refund",
+    "cancelOrder": "Cancel order",
+    "editNote": "Edit customer note",
+    "issueReceipt": "Issue receipt",
+    "cancelDialog": {
+      "title": "Cancel this order?",
+      "body": "This cancels the order and restores stock. It can’t be undone.",
+      "keep": "Keep order",
+      "confirm": "Yes, cancel"
+    },
+    "noteDialog": {
+      "title": "Customer note",
+      "body": "This is the note the diner typed at checkout, and the one the kitchen ticket shows. Saving replaces it.",
+      "placeholder": "e.g. No peanuts — allergy",
+      "cancel": "Cancel",
+      "save": "Save note"
+    },
+    "invoiceIssued": "Issued invoice {number}",
+    "invoiceIssuedNoNumber": "Invoice issued",
+    "done": "Done"
+  },
+  "refund": {
+    "title": "Issue refund",
+    "byItems": "By items",
+    "customAmount": "Custom amount",
+    "loadingItems": "Loading items…",
+    "noItems": "No items found for this order.",
+    "refundQty": "Refund qty",
+    "amountLabel": "Amount (USD)",
+    "max": "Max {amount}",
+    "reason": "Reason (optional)",
+    "total": "Refund total: <strong>{amount}</strong>",
+    "cancel": "Cancel",
+    "submit": "Issue refund",
+    "amountZero": "Refund amount must be greater than zero.",
+    "amountTooHigh": "Refund cannot exceed the order total of {total}."
+  },
+  "issues": {
+    "title": "Delivery issues ({count})",
+    "subtitle": "Failed deliveries — re-dispatch to find another driver, or refund via the order row.",
+    "customer": "Customer",
+    "noReason": "No reason recorded",
+    "photo": "photo",
+    "redispatch": "Re-dispatch",
+    "reasons": {
+      "vehicleProblem": "Vehicle problem",
+      "personalEmergency": "Personal emergency",
+      "waitTooLong": "Wait at restaurant too long",
+      "customerUnreachable": "Customer unreachable",
+      "cantFindAddress": "Can’t find the address",
+      "customerRefused": "Customer refused the order"
+    }
+  },
+  "payments": {
+    "title": "{count, plural, one {# transfer waiting for you} other {# transfers waiting for you}}",
+    "subtitle": "These orders are paid by QR transfer and will not reach the kitchen until you confirm the money arrived.",
+    "customer": "Customer",
+    "slipUploaded": "Slip uploaded {date}",
+    "rejectLabel": "What was wrong?",
+    "rejectPlaceholder": "Shown to the customer so they can fix it",
+    "cancel": "Cancel",
+    "confirmReject": "Confirm reject",
+    "reject": "Reject",
+    "approve": "Approve",
+    "slipAlt": "Transfer slip for order {number}",
+    "loadingSlip": "Loading slip…",
+    "noSlip": "No slip uploaded yet"
+  },
+  "errors": {
+    "generic": "Something went wrong. Please try again.",
+    "authRequired": "Your session has expired. Sign in again.",
+    "orderNotFound": "That order no longer exists.",
+    "notAuthorized": "Your account doesn’t have access to this order’s branch.",
+    "noteLocked": "The note can only be changed while the order is pending, confirmed or preparing.",
+    "cannotCancel": "This order is already completed, cancelled or refunded.",
+    "invoiceNotCompleted": "A receipt can only be issued once the order is confirmed, ready or completed.",
+    "invoiceNotAuthorized": "Your account is not listed as staff at this branch, so it cannot issue receipts.",
+    "refundNotAuthorized": "Only an owner, admin or manager at this branch can issue refunds.",
+    "invalidRefundAmount": "The refund must be more than zero and no more than the order total.",
+    "deliveryNotFound": "That delivery no longer exists.",
+    "deliveryNotFailed": "This delivery is no longer marked as failed. Refresh to see where it is.",
+    "deliveryForbidden": "Your account can’t re-dispatch deliveries at this branch.",
+    "paymentNotFound": "That payment no longer exists.",
+    "paymentForbidden": "Only an owner or manager can approve payments."
+  }
+}

@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import { getServerClient } from '@favornoms/database/server';
 import {
   getEntitlementsForBranch,
@@ -18,6 +19,7 @@ interface Props {
 export default async function CounterPage({ params }: Props) {
   const { branchId } = await params;
   const supabase = await getServerClient();
+  const tr = await getTranslations('counter');
   // sales_tax_rate and settings ride along because the till has to price the cart the way
   // place-order will. Without them the Charge button quoted the food alone while the server
   // charged tax and the card fee on top, and the drawer came up short by the difference.
@@ -47,7 +49,7 @@ export default async function CounterPage({ params }: Props) {
     .map((t) => ({
       id: t.id,
       number: t.table_number,
-      label: t.display_name?.trim() || `Table ${t.table_number}`,
+      label: t.display_name?.trim() || tr('tableLabel', { number: t.table_number }),
       seated: seatedTableIds.has(t.id),
     }));
   // Gate the till at the page, not the layout: /counter/[branchId]/recent must
@@ -55,7 +57,7 @@ export default async function CounterPage({ params }: Props) {
   // that was already taken. Without the gate a cashier would ring a whole sale
   // and only hit the BEFORE INSERT trigger at "Charge", in front of a customer.
   if (!entitlements.entitled) {
-    return <SuspensionScreen branchId={branchId} branchName={branch.name} surface="The counter" />;
+    return <SuspensionScreen branchId={branchId} branchName={branch.name} surface="counter" />;
   }
 
   return (

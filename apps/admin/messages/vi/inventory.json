@@ -1,0 +1,70 @@
+{
+  "metaTitle": "Tồn kho · Quản trị Favornoms",
+  "title": "Tồn kho",
+  "subtitle": "Theo dõi tồn kho, ghi nhập hàng và hao hụt.",
+  "stats": {
+    "tracked": "Món theo dõi",
+    "lowStock": "Sắp hết hàng"
+  },
+  "errors": {
+    "generic": "Đã xảy ra lỗi. Vui lòng thử lại.",
+    "network": "Không kết nối được máy chủ. Kiểm tra kết nối mạng rồi thử lại.",
+    "permissionDenied": "Bạn không có quyền thay đổi mục này.",
+    "invalidValue": "Giá trị không hợp lệ. Vui lòng kiểm tra rồi thử lại.",
+    "positiveQuantity": "Nhập số lượng lớn hơn 0"
+  },
+  "tracking": {
+    "failed": "Không đổi được chế độ theo dõi tồn kho của “{name}”. {reason}",
+    "notSaved": "Chưa lưu được gì cho “{name}”. Có thể món đã bị xóa, hoặc vai trò của bạn không được sửa thực đơn ở chi nhánh này.",
+    "off": "Đã tắt theo dõi tồn kho cho “{name}” — trang đặt món sẽ không còn báo món này hết hàng, và số lượng đã được xóa, nên khi đánh dấu lại sẽ bắt đầu từ 0.",
+    "on": "Đang theo dõi tồn kho cho “{name}” — còn {count}.",
+    "onEmpty": "Đang theo dõi tồn kho cho “{name}”, nhưng số lượng còn 0 nên khách sẽ thấy món hết hàng ngay. Hãy ghi nhập hàng để bán lại."
+  },
+  "lowStock": {
+    "title": "Cảnh báo sắp hết hàng",
+    "detail": "Còn {left} · cảnh báo khi còn {threshold}"
+  },
+  "actions": {
+    "restock": "Nhập hàng",
+    "waste": "Hao hụt"
+  },
+  "table": {
+    "item": "Món",
+    "trackStock": "Theo dõi tồn kho",
+    "stock": "Tồn kho",
+    "threshold": "Ngưỡng"
+  },
+  "restocks": {
+    "title": "Nhập hàng gần đây",
+    "empty": "Chưa ghi lần nhập hàng nào."
+  },
+  "waste": {
+    "title": "Hao hụt gần đây",
+    "empty": "Chưa ghi hao hụt nào."
+  },
+  "reasons": {
+    "expired": "Hết hạn",
+    "spoiled": "Bị hư",
+    "spilled": "Bị đổ",
+    "damaged": "Bị hỏng",
+    "staffMeal": "Suất ăn nhân viên",
+    "other": "Khác"
+  },
+  "restockDialog": {
+    "title": "Nhập hàng: {name}",
+    "quantity": "Số lượng",
+    "cost": "Giá vốn mỗi đơn vị (USD, không bắt buộc)",
+    "supplier": "Nhà cung cấp (không bắt buộc)",
+    "notes": "Ghi chú (không bắt buộc)",
+    "cancel": "Hủy",
+    "submit": "Ghi nhập hàng"
+  },
+  "wasteDialog": {
+    "title": "Ghi hao hụt — {name}",
+    "quantity": "Số lượng",
+    "reason": "Lý do",
+    "notes": "Ghi chú (không bắt buộc)",
+    "cancel": "Hủy",
+    "submit": "Ghi hao hụt"
+  }
+}

@@ -1,3 +1,4 @@
+import { getTranslations } from 'next-intl/server';
 import { listTableStates } from '@favornoms/database/queries';
 import { getBranchAccess } from '@/lib/capabilities';
 import { AccessDenied } from '@/components/access-denied';
@@ -15,10 +16,11 @@ export default async function TablesPage({ params }: Props) {
   const { supabase, branch, can } = await getBranchAccess(branchId, `/b/${branchId}/tables`);
 
   if (!can('counter.access')) {
+    const t = await getTranslations('tables');
     return (
       <AccessDenied
-        title="No table access"
-        reason={`Your account can't work the floor at ${branch.name}.`}
+        title={t('accessDenied.title')}
+        reason={t('accessDenied.reason', { branch: branch.name })}
       />
     );
   }

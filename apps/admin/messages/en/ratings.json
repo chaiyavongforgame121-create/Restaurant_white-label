@@ -1,0 +1,31 @@
+{
+  "title": "Ratings",
+  "subtitle": "What guests said after their orders",
+  "loadError": {
+    "title": "Ratings could not be loaded",
+    "generic": "Reload the page to try again. If it keeps happening, contact support.",
+    "permission": "Your account cannot read this branch’s ratings. Ask the owner to check your staff access for this branch."
+  },
+  "score": {
+    "food": "Food rating",
+    "delivery": "Delivery rating",
+    "count": "{count, plural, one {# rating} other {# ratings}}",
+    "total": "Total reviews"
+  },
+  "riders": {
+    "title": "Riders",
+    "fallbackName": "Rider {id}",
+    "rated": "{count, plural, one {# rated delivery} other {# rated deliveries}}",
+    "more": "+{count} more"
+  },
+  "empty": {
+    "title": "No ratings yet",
+    "description": "Guests are asked to rate an order once it’s completed — their stars and comments land here."
+  },
+  "stars": {
+    "food": "Food",
+    "delivery": "Delivery",
+    "outOfFive": "{value} out of 5"
+  },
+  "aboutRider": "— about {name}"
+}

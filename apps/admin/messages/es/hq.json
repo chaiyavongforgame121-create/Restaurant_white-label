@@ -1,0 +1,113 @@
+{
+  "title": "Oficina central",
+  "subtitle": "Todas las sucursales, {months, plural, one {último mes} other {últimos # meses}}",
+  "subtitleWithRestaurant": "{restaurant} · Todas las sucursales, {months, plural, one {último mes} other {últimos # meses}}",
+  "rangeShort": "{months} meses",
+  "tryAgain": "Reintentar",
+  "goToBranchReports": "Ir a informes de la sucursal",
+  "errorBoundary": {
+    "title": "Algo falló al mostrar este resumen",
+    "body": "Tus pedidos y datos de ventas están intactos. Reintenta; si sigue fallando, contacta a soporte.",
+    "reference": "Referencia: {digest}"
+  },
+  "ownerOnly": {
+    "title": "Solo para el propietario",
+    "body": "Esta página resume ventas y costos de <em>todas</em> las sucursales, por eso solo la ve el propietario del restaurante. Los gerentes pueden ver su propia sucursal en Informes. Si la necesitas, pídele al propietario que cambie tu rol."
+  },
+  "loadError": {
+    "title": "No se pudieron cargar los datos de la oficina central",
+    "body": "Tus datos de ventas están a salvo: el problema es al leerlos. Recarga la página; si sigue pasando, contacta a soporte."
+  },
+  "empty": {
+    "title": "Nada que resumir {months, plural, one {en el último mes} other {en los últimos # meses}}",
+    "body": "El resumen cargó bien: {count, plural, one {tu sucursal no ha} other {tus # sucursales no han}} recibido pedidos en este periodo. Prueba un rango más amplio arriba."
+  },
+  "kpi": {
+    "revenue": "Ingresos",
+    "orders": "Pedidos",
+    "branch": "Sucursal",
+    "branches": "Sucursales",
+    "avgOrder": "Pedido promedio {amount}",
+    "knownCosts": "Costos conocidos",
+    "knownCostsHint": "Pagos a repartidores + suscripción"
+  },
+  "chart": {
+    "title": "Ingresos vs. costos conocidos",
+    "timezone": "Los meses se agrupan según la hora de la oficina central ({timezone}).",
+    "revenue": "Ingresos",
+    "driverPayouts": "Pagos a repartidores",
+    "subscription": "Suscripción"
+  },
+  "branches": {
+    "title": "Sucursales",
+    "ranked": "Ordenadas por ingresos",
+    "columns": {
+      "branch": "Sucursal",
+      "orders": "Pedidos",
+      "revenue": "Ingresos",
+      "avgOrder": "Promedio",
+      "payouts": "Pagos",
+      "share": "Participación"
+    },
+    "inactive": "Inactiva",
+    "open": "Abrir"
+  },
+  "costs": {
+    "title": "Costos que podemos ver",
+    "driverPayouts": "Pagos a repartidores",
+    "subscription": "Suscripción de Favornoms",
+    "noInvoicesWithPlan": "Aún no hay facturas registradas. Tu tarifa actual es <strong>{rate}/mes</strong> con el plan <planName>{plan}</planName>.",
+    "noInvoices": "Aún no hay facturas registradas. Tu tarifa actual es <strong>{rate}/mes</strong>.",
+    "totalKnown": "Total de costos conocidos",
+    "afterCosts": "Ingresos después de costos",
+    "disclaimer": "Estos son los únicos costos que registra Favornoms. No incluyen comida, sueldos del personal, renta ni comisiones de tarjeta, así que esto no es tu ganancia."
+  },
+  "monthly": {
+    "title": "Mes a mes",
+    "columns": {
+      "month": "Mes",
+      "orders": "Pedidos",
+      "revenue": "Ingresos",
+      "payouts": "Pagos",
+      "subscription": "Suscripción",
+      "afterCosts": "Tras costos"
+    }
+  },
+  "channels": {
+    "title": "Por canal",
+    "subtitle": "Todas las sucursales combinadas",
+    "empty": "Aún no hay pedidos.",
+    "orders": "{count, plural, one {# pedido} other {# pedidos}}",
+    "names": {
+      "dine_in": "Comer en el local",
+      "pickup": "Recoger en tienda",
+      "delivery": "Entrega a domicilio",
+      "qr_ordering": "Pedidos por QR"
+    }
+  },
+  "stacked": {
+    "title": "Ingresos por sucursal y por mes"
+  },
+  "franchise": {
+    "title": "Franquicia",
+    "subtitle": "Gestiona el envío del menú desde la oficina central a las sucursales.",
+    "createTitle": "Crear un grupo de franquicia",
+    "createBody": "Agrupa varios restaurantes para enviar cambios del menú desde una sola fuente.",
+    "createGroup": "Crear grupo",
+    "namePlaceholder": "Mi franquicia",
+    "create": "Crear",
+    "groupSummary": "{restaurants, plural, one {# restaurante} other {# restaurantes}} · {branches, plural, one {# sucursal} other {# sucursales}}",
+    "broadcastTitle": "Enviar el menú de esta sucursal a:",
+    "broadcastBody": "Se agregarán las categorías y productos que falten en las sucursales de destino.",
+    "noOtherBranches": "Aún no hay otras sucursales en este grupo.",
+    "broadcast": "Enviar menú",
+    "broadcastDone": "Envío completado. Productos agregados: {inserted}, actualizados: {updated}.",
+    "errors": {
+      "nameTaken": "Ya existe un grupo de franquicia con ese nombre.",
+      "notAllowed": "No tienes permiso para hacer esto.",
+      "signedOut": "Tu sesión terminó. Inicia sesión de nuevo.",
+      "createFailed": "No se pudo crear el grupo. Reintenta.",
+      "broadcastFailed": "No se pudo enviar el menú. Reintenta."
+    }
+  }
+}

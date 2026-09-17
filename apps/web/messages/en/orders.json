@@ -1,0 +1,52 @@
+{
+  "title": "Your orders",
+  "loadError": {
+    "title": "Couldn’t load your orders",
+    "description": "Something went wrong fetching your orders. Refresh the page or try again in a moment."
+  },
+  "empty": {
+    "title": "No orders yet",
+    "signedIn": "Order something tasty and it will show up here",
+    "guest": "Your past and active orders will appear here once you sign in"
+  },
+  "list": {
+    "summary": "{count, plural, one {# item} other {# items}} · {total}",
+    "reorder": "Reorder",
+    "reorderNoneAvailable": "None of these items are available right now.",
+    "reorderSomeDropped": "Some items or options from that order are no longer available and were left out — please review your cart."
+  },
+  "channel": {
+    "dine_in": "Dine-in",
+    "pickup": "Pickup",
+    "delivery": "Delivery",
+    "qr_ordering": "QR order"
+  },
+  "status": {
+    "pending": "Pending",
+    "confirmed": "Confirmed",
+    "preparing": "Preparing",
+    "ready": "Ready",
+    "out_for_delivery": "Out for delivery",
+    "completed": "Completed",
+    "cancelled": "Cancelled",
+    "refunded": "Refunded"
+  },
+  "receipt": {
+    "title": "Receipt",
+    "back": "Back",
+    "print": "Print",
+    "heading": "Receipt · {number}",
+    "date": "Date",
+    "channel": "Channel",
+    "status": "Status",
+    "customer": "Customer",
+    "subtotal": "Subtotal",
+    "delivery": "Delivery",
+    "serviceFee": "Service fee",
+    "discount": "Discount",
+    "salesTax": "Sales tax",
+    "tip": "Tip",
+    "total": "Total (USD)",
+    "thanks": "Thank you for your order — please come back soon!"
+  }
+}

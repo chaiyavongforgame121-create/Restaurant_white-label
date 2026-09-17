@@ -1,0 +1,11 @@
+{
+  "generic": "Đã xảy ra lỗi. Vui lòng thử lại.",
+  "auth": {
+    "weakPassword": "Mật khẩu phải có ít nhất 8 ký tự.",
+    "invalidCredentials": "Sai số điện thoại hoặc mật khẩu.",
+    "accountExists": "Bạn đã có tài khoản — vui lòng đăng nhập.",
+    "needsProfile": "Hãy hoàn tất tạo tài khoản tài xế để tiếp tục.",
+    "invalidPhone": "Số điện thoại có vẻ không đúng. Vui lòng kiểm tra và thử lại.",
+    "couldNotContinue": "Không thể tiếp tục. Vui lòng thử lại."
+  }
+}

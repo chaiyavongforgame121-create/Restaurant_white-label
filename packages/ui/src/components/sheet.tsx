@@ -4,6 +4,7 @@ import * as React from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
 import { cn } from '../lib/cn';
+import { useUiStrings } from './ui-strings';
 
 interface SheetProps {
   open: boolean;
@@ -34,6 +35,7 @@ export function Sheet({
   hideCloseButton,
   ariaLabel,
 }: SheetProps) {
+  const strings = useUiStrings();
   const idRef = React.useRef<symbol | null>(null);
   if (idRef.current === null) idRef.current = Symbol('sheet');
 
@@ -108,7 +110,7 @@ export function Sheet({
                 <div className="font-display text-xl font-semibold">{title}</div>
                 {!hideCloseButton && (
                   <button
-                    aria-label="Close"
+                    aria-label={strings.close}
                     onClick={onClose}
                     className="focus-ring inline-flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
                   >

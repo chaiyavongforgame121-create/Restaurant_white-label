@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { getTranslations } from 'next-intl/server';
 import { ThemeProvider } from '@favornoms/ui';
 import { AppShell } from '@/components/app-shell';
 import { PendingCartReplay } from '@/components/pending-cart-replay';
@@ -54,7 +55,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   // One source for every name on the page, so the tab, the install dialog, the
   // home-screen label and the share card cannot drift apart again.
   const names = storefrontNames(tenant);
-  const description = `Order from ${names.full}`;
+  const t = await getTranslations('storefront');
+  const description = t('metaDescription', { name: names.full });
   // Share card uses the wide logo; the tab icon uses the square favicon. Falling
   // back to the platform icon (by omitting the key, so the root layout's value is
   // inherited) beats scaling a merchant's banner down to 32px.

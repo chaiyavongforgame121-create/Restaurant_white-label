@@ -1,3 +1,5 @@
+import type { Metadata } from 'next';
+import { getTranslations } from 'next-intl/server';
 import { getServerClient } from '@favornoms/database/server';
 import { InventoryView } from './_components/inventory-view';
 
@@ -5,7 +7,10 @@ interface Props {
   params: Promise<{ branchId: string }>;
 }
 
-export const metadata = { title: 'Inventory · Favornoms admin' };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('inventory');
+  return { title: t('metaTitle') };
+}
 
 export default async function InventoryPage({ params }: Props) {
   const { branchId } = await params;

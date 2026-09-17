@@ -1,15 +1,18 @@
 import Link from 'next/link';
+import { getTranslations } from 'next-intl/server';
 import {
   Check, ChefHat, ChevronRight, CreditCard, LineChart,
   Megaphone, MonitorPlay, ShoppingBag, Star, Store, Zap,
 } from 'lucide-react';
 import { RiderIcon } from '@favornoms/ui';
 
-export const metadata = {
-  title: 'Favornoms — All-in-one ordering platform for restaurants',
-  description:
-    'Run delivery, pickup, dine-in, KDS, POS, and driver dispatch from one platform. $199/mo, 14-day free trial. Built for US restaurants.',
-};
+export async function generateMetadata() {
+  const t = await getTranslations('landing');
+  return {
+    title: { absolute: t('meta.title') },
+    description: t('meta.description'),
+  };
+}
 
 // The merchant back office is a separate deployment, so signup and onboarding
 // live on another origin. Defaults to the local dev port so `pnpm dev` links
@@ -19,7 +22,28 @@ const MERCHANT_URL = (
 ).replace(/\/$/, '');
 const SIGNUP_URL = `${MERCHANT_URL}/signup`;
 
-export default function RootPage() {
+// What the base plan includes, in display order. The words live in landing.pricing.includes.
+const BASE_INCLUDES = [
+  'storefront',
+  // Deliberately does NOT say "into your own Stripe account" yet:
+  // stripe-create-payment-intent still charges through a single
+  // platform key with no Connect account, so order money would not
+  // land in the restaurant's Stripe. Restore that wording (in every
+  // language) the day Connect onboarding ships.
+  'payments',
+  'kitchen',
+  'growth',
+  'aiImport',
+] as const;
+
+export default async function RootPage() {
+  const t = await getTranslations('landing');
+  const perMonth = (price: string, unitClassName: string) =>
+    t.rich('pricing.perMonth', {
+      price,
+      unit: (chunks) => <span className={unitClassName}>{chunks}</span>,
+    });
+
   return (
     <main className="overflow-hidden">
       {/* Hero */}
@@ -29,36 +53,36 @@ export default function RootPage() {
           <div className="grid items-center gap-10 lg:grid-cols-2">
             <div>
               <span className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold backdrop-blur">
-                <Zap className="h-3.5 w-3.5" /> US-launch ready
+                <Zap className="h-3.5 w-3.5" /> {t('hero.badge')}
               </span>
               <h1 className="mt-5 font-display text-4xl font-bold leading-tight sm:text-5xl lg:text-6xl">
-                Your restaurant.
-                <br />Online, in one place.
+                {t('hero.titleLine1')}
+                <br />{t('hero.titleLine2')}
               </h1>
               <p className="mt-5 max-w-lg text-lg text-white/85">
-                Take orders online, run your kitchen, dispatch drivers, take card payments, and grow
-                your loyal customer base — without juggling five different tools.
+                {t('hero.body')}
               </p>
               <div className="mt-7 flex flex-wrap gap-3">
                 <a
                   href={SIGNUP_URL}
                   className="focus-ring inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-white px-6 text-base font-semibold text-primary shadow-warm hover:bg-white/95"
                 >
-                  Start 14 days free <ChevronRight className="h-4 w-4" />
+                  {t('hero.startTrial')} <ChevronRight className="h-4 w-4" />
                 </a>
                 <Link
                   href="/r/coastal-grill/brooklyn"
                   className="focus-ring inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-white/40 px-6 text-base font-semibold text-white hover:bg-white/10"
                 >
-                  See a live menu
+                  {t('hero.seeLiveMenu')}
                 </Link>
               </div>
               <p className="mt-4 text-xs text-white/70">
-                No credit card required &middot; every feature unlocked during the trial
+                {t('hero.noCard')}
               </p>
             </div>
 
-            {/* Stylized phone mock */}
+            {/* Stylized phone mock. The branch, restaurant and dish names are a demo merchant's
+                own content, so they stay as that merchant would have typed them. */}
             <div className="relative hidden lg:block">
               <div className="absolute inset-0 -m-8 rounded-[2.5rem] bg-white/5 blur-3xl" />
               <div className="relative mx-auto max-w-xs rounded-[2rem] bg-white/10 p-3 shadow-warm backdrop-blur">
@@ -75,7 +99,7 @@ export default function RootPage() {
                   </div>
                   <div className="border-t border-border/60 p-4">
                     <button className="w-full rounded-xl bg-gradient-warm py-2.5 text-sm font-bold text-white">
-                      Checkout · $42.45
+                      {t('hero.mockCheckout', { total: '$42.45' })}
                     </button>
                   </div>
                 </div>
@@ -87,45 +111,45 @@ export default function RootPage() {
 
       {/* Trusted */}
       <section className="border-b border-border/40 bg-card py-6 text-center text-xs uppercase tracking-wider text-muted-foreground">
-        Trusted by independent restaurants from Brooklyn to Brentwood
+        {t('trustedBy')}
       </section>
 
       {/* Features */}
       <section className="container max-w-6xl py-20">
         <div className="text-center">
-          <h2 className="font-display text-3xl font-bold sm:text-4xl">Everything you need to run service</h2>
-          <p className="mt-3 text-muted-foreground">Five apps. One database. Zero hand-offs.</p>
+          <h2 className="font-display text-3xl font-bold sm:text-4xl">{t('features.title')}</h2>
+          <p className="mt-3 text-muted-foreground">{t('features.subtitle')}</p>
         </div>
         <div className="mt-10 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
           <Feature
             icon={<ShoppingBag className="h-5 w-5" />}
-            title="Customer storefront"
-            description="Branded menus on your custom domain. Cart, checkout, loyalty redemption."
+            title={t('features.storefront.title')}
+            description={t('features.storefront.description')}
           />
           <Feature
             icon={<ChefHat className="h-5 w-5" />}
-            title="Kitchen Display"
-            description="Realtime tickets, station routing, long-press to 86 an item — keep the line moving."
+            title={t('features.kitchen.title')}
+            description={t('features.kitchen.description')}
           />
           <Feature
             icon={<CreditCard className="h-5 w-5" />}
-            title="Card payment"
-            description="Take cards online and at the counter. Refunds and sales-tax compliant receipts from one dashboard."
+            title={t('features.payments.title')}
+            description={t('features.payments.description')}
           />
           <Feature
             icon={<RiderIcon className="h-5 w-5" />}
-            title="Driver dispatch"
-            description="Auto-route to your nearest online driver. GPS tracking customers can watch live."
+            title={t('features.dispatch.title')}
+            description={t('features.dispatch.description')}
           />
           <Feature
             icon={<Megaphone className="h-5 w-5" />}
-            title="Marketing tools"
-            description="Push, SMS, email blasts. Loyalty points. Promo codes. Bring guests back."
+            title={t('features.marketing.title')}
+            description={t('features.marketing.description')}
           />
           <Feature
             icon={<LineChart className="h-5 w-5" />}
-            title="Reports & insights"
-            description="Revenue, peak hours, top items, customer LTV — without exporting to Excel."
+            title={t('features.reports.title')}
+            description={t('features.reports.description')}
           />
         </div>
       </section>
@@ -134,36 +158,25 @@ export default function RootPage() {
       <section className="bg-muted/40 py-20">
         <div className="container max-w-5xl">
           <div className="text-center">
-            <h2 className="font-display text-3xl font-bold sm:text-4xl">One base plan. Add what you need.</h2>
+            <h2 className="font-display text-3xl font-bold sm:text-4xl">{t('pricing.title')}</h2>
             <p className="mt-3 text-muted-foreground">
-              No menu-item limits. No cap on orders. Cancel any time.
+              {t('pricing.subtitle')}
             </p>
           </div>
 
           <div className="mx-auto mt-10 max-w-md rounded-3xl border-2 border-primary bg-card p-7 shadow-warm">
-            <p className="text-xs font-semibold uppercase tracking-wider text-primary">Base</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-primary">{t('pricing.baseName')}</p>
             <p className="mt-2 font-display text-5xl font-bold">
-              $199<span className="text-lg font-normal text-muted-foreground">/mo</span>
+              {perMonth('$199', 'text-lg font-normal text-muted-foreground')}
             </p>
             <p className="mt-2 text-sm text-muted-foreground">
-              Everything you need to run one location, including card payment.
+              {t('pricing.baseSummary')}
             </p>
             <ul className="mt-5 space-y-2 text-left">
-              {[
-                'Branded storefront on your own domain',
-                // Deliberately does NOT say "into your own Stripe account" yet:
-                // stripe-create-payment-intent still charges through a single
-                // platform key with no Connect account, so order money would not
-                // land in the restaurant's Stripe. Restore that wording the day
-                // Connect onboarding ships.
-                'Card and cash payments at checkout',
-                'Kitchen Display, POS and counter ordering',
-                'Loyalty, promos, gift cards and reports',
-                'AI menu import — photograph a menu, get a menu',
-              ].map((f) => (
-                <li key={f} className="flex items-start gap-2 text-sm">
+              {BASE_INCLUDES.map((key) => (
+                <li key={key} className="flex items-start gap-2 text-sm">
                   <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
-                  {f}
+                  {t(`pricing.includes.${key}`)}
                 </li>
               ))}
             </ul>
@@ -171,34 +184,34 @@ export default function RootPage() {
               href={SIGNUP_URL}
               className="focus-ring mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary px-6 text-base font-semibold text-primary-foreground shadow-warm hover:bg-primary/90"
             >
-              Start 14 days free
+              {t('hero.startTrial')}
             </a>
             <p className="mt-3 text-center text-xs text-muted-foreground">
-              Free for 14 days with every add-on included. No card until you decide.
+              {t('pricing.trialNote')}
             </p>
           </div>
 
           <p className="mt-12 text-center text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            Add on when you need it
+            {t('pricing.addOnsTitle')}
           </p>
           <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
             <AddonTile
               icon={<RiderIcon className="h-5 w-5" />}
-              name="Delivery"
-              price="+$49"
-              tag="Your own riders, automatic dispatch and live tracking."
+              name={t('pricing.addOns.delivery.name')}
+              price={perMonth('+$49', 'text-sm font-normal text-muted-foreground')}
+              tag={t('pricing.addOns.delivery.description')}
             />
             <AddonTile
               icon={<MonitorPlay className="h-5 w-5" />}
-              name="AI Suite"
-              price="+$59"
-              tag="Digital Signage and the AI Voice Assistant."
+              name={t('pricing.addOns.aiSuite.name')}
+              price={perMonth('+$59', 'text-sm font-normal text-muted-foreground')}
+              tag={t('pricing.addOns.aiSuite.description')}
             />
             <AddonTile
               icon={<Store className="h-5 w-5" />}
-              name="Extra branch"
-              price="+$99"
-              tag="Each additional location, with the full feature set of your main branch."
+              name={t('pricing.addOns.extraBranch.name')}
+              price={perMonth('+$99', 'text-sm font-normal text-muted-foreground')}
+              tag={t('pricing.addOns.extraBranch.description')}
             />
           </div>
         </div>
@@ -214,12 +227,12 @@ export default function RootPage() {
             <span className="font-display font-semibold text-foreground">Favornoms</span>
           </div>
           <nav className="flex flex-wrap gap-4">
-            <Link href="/help" className="hover:text-foreground">Help</Link>
-            <Link href="/privacy" className="hover:text-foreground">Privacy</Link>
-            <Link href="/terms" className="hover:text-foreground">Terms</Link>
+            <Link href="/help" className="hover:text-foreground">{t('footer.help')}</Link>
+            <Link href="/privacy" className="hover:text-foreground">{t('footer.privacy')}</Link>
+            <Link href="/terms" className="hover:text-foreground">{t('footer.terms')}</Link>
             <Link href="/ccpa" className="hover:text-foreground">CCPA</Link>
-            <Link href="/account" className="hover:text-foreground">Account</Link>
-            <a href="mailto:hello@favornoms.com" className="hover:text-foreground">Contact</a>
+            <Link href="/account" className="hover:text-foreground">{t('footer.account')}</Link>
+            <a href="mailto:hello@favornoms.com" className="hover:text-foreground">{t('footer.contact')}</a>
           </nav>
           <p className="text-xs">&copy; {new Date().getFullYear()} Favornoms</p>
         </div>
@@ -252,15 +265,16 @@ function Feature({ icon, title, description }: { icon: React.ReactNode; title: s
   );
 }
 
-function AddonTile({ icon, name, price, tag }: { icon: React.ReactNode; name: string; price: string; tag: string }) {
+function AddonTile({ icon, name, price, tag }: { icon: React.ReactNode; name: string; price: React.ReactNode; tag: string }) {
   return (
     <div className="rounded-2xl border border-border bg-card p-5">
       <span className="grid h-10 w-10 place-items-center rounded-xl bg-accent/20 text-accent-foreground">
         {icon}
       </span>
       <p className="mt-4 font-display text-lg font-semibold">{name}</p>
+      {/* `price` is the whole "+$49/mo" line, unit included, so each language orders it itself. */}
       <p className="mt-1 font-display text-2xl font-bold">
-        {price}<span className="text-sm font-normal text-muted-foreground">/mo</span>
+        {price}
       </p>
       <p className="mt-2 text-sm text-muted-foreground">{tag}</p>
     </div>

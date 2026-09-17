@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react';
 import {
   Check,
@@ -59,10 +60,28 @@ const PNG_SIZE = 1024;
 /** How many tables the one-tap starter creates. */
 const BULK_COUNT = 20;
 
+/**
+ * The table's name as printed on its tent (and in the PNG's file name). The printed sheet has
+ * no language of its own, so this stays English; the screen uses `screenLabel` instead.
+ */
 const labelFor = (t: BranchTable) => t.display_name?.trim() || `Table ${t.table_number}`;
 
 const fileSlug = (s: string) =>
   s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'table';
+
+const KNOWN_TABLE_TYPES: readonly string[] = TABLE_TYPES;
+
+type TableErrorCode = 'duplicateNumber' | 'hasOrders' | 'tableNotFound' | 'notPermitted' | 'generic';
+
+/** Database failures as codes; anything unrecognised is logged and shown as a generic message. */
+function tableErrorCode(err: { message: string; code?: string }): TableErrorCode {
+  if (err.message.includes('tables_branch_id_table_number_key')) return 'duplicateNumber';
+  if (err.code === '23503') return 'hasOrders';
+  if (err.message.includes('table_not_found')) return 'tableNotFound';
+  if (err.message.includes('not_permitted') || err.code === '42501') return 'notPermitted';
+  console.error(err.message);
+  return 'generic';
+}
 
 export function TableQrManager({
   branchId,
@@ -72,6 +91,8 @@ export function TableQrManager({
   missingSlugs,
   initialTables,
 }: Props) {
+  const tr = useTranslations('qr');
+  const tt = useTranslations('tables');
   const [list, setList] = React.useState(initialTables);
   const [composing, setComposing] = React.useState(false);
   const [tableNumber, setTableNumber] = React.useState('');
@@ -93,6 +114,16 @@ export function TableQrManager({
 
   const active = list.filter((t) => t.is_active);
   const retired = list.filter((t) => !t.is_active);
+
+  /** The table's name in the viewer's language, for everything that is not printed. */
+  const screenLabel = (t: BranchTable) =>
+    t.display_name?.trim() || tr('tables.tableLabel', { number: t.table_number });
+
+  const typeLabel = (value: string) =>
+    tt(`types.${KNOWN_TABLE_TYPES.includes(value) ? value : 'standard'}`);
+
+  const describe = (err: { message: string; code?: string }) =>
+    tr(`tables.errors.${tableErrorCode(err)}`);
 
   const linkFor = (t: BranchTable) =>
     menuUrl && t.qr_code_token ? tableMenuLink(menuUrl, t.qr_code_token) : null;
@@ -133,11 +164,6 @@ export function TableQrManager({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const describe = (message: string) =>
-    message.includes('tables_branch_id_table_number_key')
-      ? 'A table with that number already exists at this branch.'
-      : message;
-
   /** The fields both Add and Edit write. Sort order defaults to the digits in the number. */
   const formValues = () => ({
     table_number: tableNumber.trim(),
@@ -159,7 +185,7 @@ export function TableQrManager({
       .insert({ branch_id: branchId, ...formValues() });
     setBusy(false);
     if (insErr) {
-      setError(describe(insErr.message));
+      setError(describe(insErr));
       return;
     }
     resetForm();
@@ -180,7 +206,7 @@ export function TableQrManager({
       .eq('id', editingId);
     setBusy(false);
     if (updErr) {
-      setError(describe(updErr.message));
+      setError(describe(updErr));
       return;
     }
     resetForm();
@@ -202,7 +228,7 @@ export function TableQrManager({
     const { error: insErr } = await supabase.from('tables').insert(rows);
     setBusy(false);
     if (insErr) {
-      setError(describe(insErr.message));
+      setError(describe(insErr));
       return;
     }
     void refresh();
@@ -215,7 +241,7 @@ export function TableQrManager({
       .update({ is_active: !t.is_active })
       .eq('id', t.id);
     if (updErr) {
-      setError(updErr.message);
+      setError(describe(updErr));
       return;
     }
     void refresh();
@@ -224,9 +250,9 @@ export function TableQrManager({
   const rotate = async (t: BranchTable) => {
     if (
       !(await confirm({
-        title: `Issue a new code for ${labelFor(t)}?`,
-        body: "Every printed copy of this table's QR stops working immediately.",
-        confirmLabel: 'Issue new code',
+        title: tr('tables.rotateConfirm.title', { table: screenLabel(t) }),
+        body: tr('tables.rotateConfirm.body'),
+        confirmLabel: tr('tables.rotateConfirm.confirm'),
         destructive: true,
       }))
     ) {
@@ -238,7 +264,7 @@ export function TableQrManager({
       p_table_id: t.id,
     } as never);
     if (rpcErr) {
-      setError(rpcErr.message);
+      setError(describe(rpcErr));
       return;
     }
     void refresh();
@@ -247,9 +273,9 @@ export function TableQrManager({
   const remove = async (t: BranchTable) => {
     if (
       !(await confirm({
-        title: `Delete ${labelFor(t)}?`,
-        body: 'Its code is destroyed for good — to retire a table but keep past orders readable, turn it off instead.',
-        confirmLabel: 'Delete',
+        title: tr('tables.deleteConfirm.title', { table: screenLabel(t) }),
+        body: tr('tables.deleteConfirm.body'),
+        confirmLabel: tr('tables.deleteConfirm.confirm'),
         destructive: true,
       }))
     ) {
@@ -258,7 +284,7 @@ export function TableQrManager({
     const supabase = getBrowserClient();
     const { error: delErr } = await supabase.from('tables').delete().eq('id', t.id);
     if (delErr) {
-      setError(delErr.message);
+      setError(describe(delErr));
       return;
     }
     void refresh();
@@ -294,31 +320,27 @@ export function TableQrManager({
   const pngLink = pngTarget ? linkFor(pngTarget) : null;
 
   if (!menuUrl) {
-    const what =
-      missingSlugs.length === 2
-        ? 'This restaurant and this branch have no URL slug'
-        : missingSlugs[0] === 'restaurant'
-          ? 'This restaurant has no URL slug'
-          : 'This branch has no URL slug';
+    const missing =
+      missingSlugs.length === 2 ? 'both' : missingSlugs[0] === 'restaurant' ? 'restaurant' : 'branch';
     return (
       <div className="container max-w-xl py-8">
-        <h1 className="font-display text-2xl font-bold">Table QR codes</h1>
+        <h1 className="font-display text-2xl font-bold">{tr('tables.title')}</h1>
         <Card className="mt-5 p-6">
-          <h2 className="font-display text-lg font-semibold">Can&apos;t build a menu link yet</h2>
+          <h2 className="font-display text-lg font-semibold">{tr('noLink.title')}</h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            {what}, so there is no public address for a table code to point at. A slug is the
-            short name in your menu link, e.g.{' '}
-            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">/r/coastal-grill/brooklyn</code>.
+            {tr.rich(`noLink.tableBody.${missing}`, {
+              code: (chunks) => (
+                <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{chunks}</code>
+              ),
+            })}
           </p>
           <p className="mt-2 text-sm text-muted-foreground">
-            Set a <strong>custom domain</strong> in Branch settings, or ask support to fill the
-            slug in. Your tables are safe either way — the codes appear here as soon as the
-            branch has an address.
+            {tr.rich('noLink.tableHelp', { strong: (chunks) => <strong>{chunks}</strong> })}
           </p>
           <div className="mt-4">
             <Link href={`/b/${branchId}/branch`}>
               <Button variant="outline" leftIcon={<Settings2 className="h-4 w-4" />}>
-                Open Branch settings
+                {tr('noLink.openBranchSettings')}
               </Button>
             </Link>
           </div>
@@ -331,10 +353,9 @@ export function TableQrManager({
     <div className="container max-w-5xl py-8">
       <header className="no-print mb-6 flex flex-wrap items-end justify-between gap-3 px-2 pl-16 lg:px-0">
         <div>
-          <h1 className="font-display text-3xl font-bold">Table QR codes</h1>
+          <h1 className="font-display text-3xl font-bold">{tr('tables.title')}</h1>
           <p className="mt-1 max-w-2xl text-muted-foreground">
-            One code per table. Scanning it opens {branchName}&apos;s menu with dine-in and that
-            table already chosen — the guest never picks a branch or types a table number.
+            {tr('tables.intro', { branch: branchName })}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -344,7 +365,7 @@ export function TableQrManager({
               leftIcon={<Printer className="h-4 w-4" />}
               onClick={() => window.print()}
             >
-              Print sheet
+              {tr('tables.printSheet')}
             </Button>
           )}
           <Button
@@ -355,7 +376,7 @@ export function TableQrManager({
               else setComposing(true);
             }}
           >
-            {composing || editingId ? 'Cancel' : 'Add table'}
+            {composing || editingId ? tr('tables.cancel') : tr('tables.addTable')}
           </Button>
         </div>
       </header>
@@ -363,13 +384,10 @@ export function TableQrManager({
       {(composing || editingId) && (
         <Card className="no-print mb-6 space-y-3 p-5">
           {editingId && (
-            <p className="text-sm text-muted-foreground">
-              Editing this table. Its QR code is untouched — every tent already on the floor
-              keeps working.
-            </p>
+            <p className="text-sm text-muted-foreground">{tr('tables.editingNote')}</p>
           )}
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Table number">
+            <Field label={tr('tables.fields.tableNumber')}>
               <input
                 value={tableNumber}
                 onChange={(e) => setTableNumber(e.target.value)}
@@ -378,15 +396,15 @@ export function TableQrManager({
                 inputMode="numeric"
               />
             </Field>
-            <Field label="Name (optional)">
+            <Field label={tr('tables.fields.name')}>
               <input
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 className="input"
-                placeholder="Window booth"
+                placeholder={tr('tables.fields.namePlaceholder')}
               />
             </Field>
-            <Field label="Type">
+            <Field label={tr('tables.fields.type')}>
               <select
                 value={tableType}
                 onChange={(e) => setTableType(e.target.value)}
@@ -394,12 +412,12 @@ export function TableQrManager({
               >
                 {TABLE_TYPES.map((value) => (
                   <option key={value} value={value}>
-                    {tableTypeLabel(value)}
+                    {typeLabel(value)}
                   </option>
                 ))}
               </select>
             </Field>
-            <Field label="Seats (optional)">
+            <Field label={tr('tables.fields.seats')}>
               <input
                 value={capacity}
                 onChange={(e) => setCapacity(e.target.value.replace(/\D/g, ''))}
@@ -408,15 +426,15 @@ export function TableQrManager({
                 placeholder="4"
               />
             </Field>
-            <Field label="Zone (optional)">
+            <Field label={tr('tables.fields.zone')}>
               <input
                 value={zone}
                 onChange={(e) => setZone(e.target.value)}
                 className="input"
-                placeholder="Terrace"
+                placeholder={tr('tables.fields.zonePlaceholder')}
               />
             </Field>
-            <Field label="Sort order (optional)">
+            <Field label={tr('tables.fields.sortOrder')}>
               <input
                 value={sortOrder}
                 onChange={(e) => setSortOrder(e.target.value.replace(/\D/g, ''))}
@@ -426,11 +444,7 @@ export function TableQrManager({
               />
             </Field>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Sort order is what puts table 2 before table 10 — table numbers are text, so left
-            to themselves they sort alphabetically. Leave it blank and the digits in the
-            number are used.
-          </p>
+          <p className="text-xs text-muted-foreground">{tr('tables.sortHint')}</p>
           {error && (
             <p role="alert" className="rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">
               {error}
@@ -442,7 +456,7 @@ export function TableQrManager({
             disabled={!tableNumber.trim()}
             loading={busy}
           >
-            {editingId ? 'Save changes' : 'Add table'}
+            {editingId ? tr('tables.saveChanges') : tr('tables.addTable')}
           </Button>
         </Card>
       )}
@@ -457,11 +471,11 @@ export function TableQrManager({
         <div className="no-print">
           <EmptyState
             icon={<QrCode className="h-7 w-7" />}
-            title="No tables yet"
-            description="Add your tables and each one gets its own QR code to print and stand on the table."
+            title={tr('tables.empty.title')}
+            description={tr('tables.empty.description')}
             action={
               <Button variant="gradient" onClick={bulkCreate} loading={busy}>
-                Add tables 1–{BULK_COUNT}
+                {tr('tables.empty.bulk', { count: BULK_COUNT })}
               </Button>
             }
           />
@@ -481,10 +495,12 @@ export function TableQrManager({
                       <QRCodeSVG value={link} size={160} level="M" marginSize={2} />
                     ) : (
                       <div className="grid h-[160px] w-[160px] place-items-center text-xs text-muted-foreground">
-                        Code pending
+                        {tr('tables.codePending')}
                       </div>
                     )}
                   </div>
+                  {/* What diners read on the printed tent. The print has no language of its
+                      own, so these words stay English. */}
                   <div>
                     <p className="font-display text-xl font-bold">{labelFor(t)}</p>
                     <p className="text-sm text-muted-foreground">
@@ -518,7 +534,7 @@ export function TableQrManager({
                       }
                       onClick={() => void copy(t)}
                     >
-                      {copiedId === t.id ? 'Copied' : 'Copy link'}
+                      {copiedId === t.id ? tr('actions.copied') : tr('actions.copyLink')}
                     </Button>
                     <Button
                       variant="outline"
@@ -529,14 +545,14 @@ export function TableQrManager({
                     >
                       PNG
                     </Button>
-                    <IconButton label="Edit table" size="sm" onClick={() => startEdit(t)}>
+                    <IconButton label={tr('tables.editTable')} size="sm" onClick={() => startEdit(t)}>
                       <Pencil className="h-4 w-4" />
                     </IconButton>
-                    <IconButton label="Issue a new code" size="sm" onClick={() => void rotate(t)}>
+                    <IconButton label={tr('tables.rotate')} size="sm" onClick={() => void rotate(t)}>
                       <RefreshCw className="h-4 w-4" />
                     </IconButton>
                     <IconButton
-                      label="Delete table"
+                      label={tr('tables.deleteTable')}
                       size="sm"
                       className="text-danger"
                       onClick={() => void remove(t)}
@@ -549,7 +565,7 @@ export function TableQrManager({
                     onClick={() => void toggleActive(t)}
                     className="no-print text-xs text-muted-foreground underline"
                   >
-                    Turn off
+                    {tr('tables.turnOff')}
                   </button>
                 </Card>
               );
@@ -559,29 +575,28 @@ export function TableQrManager({
           {retired.length > 0 && (
             <Card className="no-print mt-6 divide-y divide-border/40">
               <div className="p-4">
-                <h2 className="font-display text-lg font-semibold">Turned off</h2>
+                <h2 className="font-display text-lg font-semibold">{tr('tables.retired.title')}</h2>
                 <p className="mt-0.5 text-sm text-muted-foreground">
-                  Their codes stop pinning a table — a guest scanning one lands on the ordinary
-                  menu. Past orders still show the table.
+                  {tr('tables.retired.description')}
                 </p>
               </div>
               {retired.map((t) => (
                 <div key={t.id} className="flex items-center justify-between gap-3 p-4">
                   <div>
-                    <p className="font-semibold">{labelFor(t)}</p>
+                    <p className="font-semibold">{screenLabel(t)}</p>
                     {t.zone && <p className="text-xs text-muted-foreground">{t.zone}</p>}
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge variant="muted">Off</Badge>
+                    <Badge variant="muted">{tr('tables.retired.badge')}</Badge>
                     <button
                       type="button"
                       onClick={() => void toggleActive(t)}
                       className="text-xs text-muted-foreground underline"
                     >
-                      Turn on
+                      {tr('tables.turnOn')}
                     </button>
                     <IconButton
-                      label="Delete table"
+                      label={tr('tables.deleteTable')}
                       size="sm"
                       className="text-danger"
                       onClick={() => void remove(t)}
@@ -595,8 +610,7 @@ export function TableQrManager({
           )}
 
           <p className="no-print mt-6 text-center text-xs text-muted-foreground">
-            PNG is {PNG_SIZE}×{PNG_SIZE}px. &ldquo;Print sheet&rdquo; lays every active table out
-            two-up for cutting.
+            {tr('tables.footer', { size: PNG_SIZE })}
           </p>
         </>
       )}

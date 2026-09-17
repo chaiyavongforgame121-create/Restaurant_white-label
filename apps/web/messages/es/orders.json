@@ -1,0 +1,52 @@
+{
+  "title": "Tus pedidos",
+  "loadError": {
+    "title": "No pudimos cargar tus pedidos",
+    "description": "Algo salió mal al obtener tus pedidos. Actualiza la página o vuelve a intentarlo en un momento."
+  },
+  "empty": {
+    "title": "Aún no tienes pedidos",
+    "signedIn": "Pide algo rico y aparecerá aquí",
+    "guest": "Tus pedidos anteriores y en curso aparecerán aquí cuando inicies sesión"
+  },
+  "list": {
+    "summary": "{count, plural, one {# producto} other {# productos}} · {total}",
+    "reorder": "Volver a pedir",
+    "reorderNoneAvailable": "Ninguno de estos productos está disponible ahora.",
+    "reorderSomeDropped": "Algunos productos u opciones de ese pedido ya no están disponibles y se omitieron. Revisa tu carrito."
+  },
+  "channel": {
+    "dine_in": "Comer en el local",
+    "pickup": "Recoger en tienda",
+    "delivery": "Entrega a domicilio",
+    "qr_ordering": "Pedido QR"
+  },
+  "status": {
+    "pending": "Pendiente",
+    "confirmed": "Confirmado",
+    "preparing": "En preparación",
+    "ready": "Listo",
+    "out_for_delivery": "En camino",
+    "completed": "Completado",
+    "cancelled": "Cancelado",
+    "refunded": "Reembolsado"
+  },
+  "receipt": {
+    "title": "Recibo",
+    "back": "Atrás",
+    "print": "Imprimir",
+    "heading": "Recibo · {number}",
+    "date": "Fecha",
+    "channel": "Tipo de pedido",
+    "status": "Estado",
+    "customer": "Cliente",
+    "subtotal": "Subtotal",
+    "delivery": "Costo de envío",
+    "serviceFee": "Cargo por servicio",
+    "discount": "Descuento",
+    "salesTax": "Impuestos",
+    "tip": "Propina",
+    "total": "Total (USD)",
+    "thanks": "¡Gracias por tu pedido! Vuelve pronto."
+  }
+}

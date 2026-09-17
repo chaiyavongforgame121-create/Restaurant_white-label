@@ -1,7 +1,26 @@
 import Link from 'next/link';
+import { useLocale, useTranslations } from 'next-intl';
 import { CheckCircle2, ChevronRight } from 'lucide-react';
+import { DEFAULT_UI_LOCALE, intlLocaleFor, isUiLocale } from '@favornoms/shared';
 import { Badge, Card, EmptyState } from '@favornoms/ui';
-import type { ActionRow } from './action-model';
+
+/** One line in Action Required, already in the reader's language. */
+export interface ActionLine {
+  key: string;
+  title: string;
+  why: string;
+  age: string;
+  href: string;
+}
+
+/** The screen a bucket's "See all" link opens; each is its own sentence in the catalogue. */
+export type BucketDestination =
+  | 'orders'
+  | 'deliveries'
+  | 'kitchen'
+  | 'inventory'
+  | 'drivers'
+  | 'payouts';
 
 export interface ActionBucket {
   id: string;
@@ -10,10 +29,13 @@ export interface ActionBucket {
   tone: 'danger' | 'warning' | 'info';
   /** Everything matching, which may be more than the rows carried here. */
   count: number;
-  rows: ActionRow[];
+  rows: ActionLine[];
   href: string;
-  hrefLabel: string;
-  /** A read that failed. Rendered instead of a count — never as a zero. */
+  destination: BucketDestination;
+  /**
+   * A read that failed. Rendered instead of a count — never as a zero. The raw text is for
+   * the server log only; the merchant is told the check could not run.
+   */
   error?: string | null;
   /** The role or the plan puts this out of scope: dropped, not shown as "0". */
   hidden?: boolean;
@@ -52,21 +74,25 @@ export function ActionRequired({
   /** Branch-local wall clock of the render, so "all clear" is dated. */
   checkedAt: string;
 }) {
+  const t = useTranslations('dashboard');
+  const rawLocale = useLocale();
+  const intlLocale = intlLocaleFor(isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE);
   const visible = buckets.filter((b) => !b.hidden);
   const shown = visible.filter((b) => b.error || b.count > 0);
   const total = shown.reduce((n, b) => n + (b.error ? 0 : b.count), 0);
   const failing = shown.filter((b) => b.error).length;
+  const checked = visible.map((b) => b.label.toLocaleLowerCase(intlLocale));
 
   return (
     <section className="mt-8 px-2 lg:px-0">
       <header className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="font-display text-xl font-semibold">Action required</h2>
+        <h2 className="font-display text-xl font-semibold">{t('action.title')}</h2>
         <p className="text-sm text-muted-foreground">
           {shown.length === 0
-            ? 'Everything checked, nothing outstanding'
+            ? t('action.allClear')
             : failing > 0 && total === 0
-              ? `${failing} check${failing === 1 ? '' : 's'} could not run`
-              : `${total} thing${total === 1 ? '' : 's'} waiting on you`}
+              ? t('action.checksFailed', { count: failing })
+              : t('action.waiting', { count: total })}
         </p>
       </header>
 
@@ -76,10 +102,16 @@ export function ActionRequired({
               space is exactly what reads as a screen that failed to load. */}
           <EmptyState
             icon={<CheckCircle2 className="h-8 w-8" />}
-            title="Nothing needs you right now"
-            description={`Checked ${listLabels(visible.map((b) => b.label.toLowerCase()))}.`}
+            title={t('action.emptyTitle')}
+            description={
+              checked.length === 0
+                ? t('action.checkedNothing')
+                : t('action.checkedList', { list: listLabels(checked, intlLocale) })
+            }
           />
-          <p className="pb-4 text-center text-xs text-muted-foreground">Checked at {checkedAt}</p>
+          <p className="pb-4 text-center text-xs text-muted-foreground">
+            {t('action.checkedAt', { time: checkedAt })}
+          </p>
         </Card>
       ) : (
         <div className="space-y-3">
@@ -110,7 +142,7 @@ export function ActionRequired({
                     role="alert"
                     className="mx-4 mb-4 rounded-xl bg-warning/10 px-3 py-2 text-sm text-warning"
                   >
-                    Couldn’t check {bucket.label.toLowerCase()} — {bucket.error}
+                    {t('action.checkFailed')}
                   </p>
                 ) : (
                   <>
@@ -141,7 +173,7 @@ export function ActionRequired({
                         href={bucket.href}
                         className="focus-ring block px-4 py-2.5 text-xs font-semibold text-primary hover:underline"
                       >
-                        See all {bucket.count} in {bucket.hrefLabel} →
+                        {t(`action.seeAll.${bucket.destination}`, { count: bucket.count })}
                       </Link>
                     )}
                   </>
@@ -155,9 +187,7 @@ export function ActionRequired({
   );
 }
 
-/** 'a, b and c' — the checks that actually ran, so "nothing needs you" can be believed. */
-function listLabels(labels: string[]): string {
-  if (labels.length === 0) return 'nothing';
-  if (labels.length === 1) return labels[0]!;
-  return `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`;
+/** 'a, b and c' in the reader's language — the checks that actually ran. */
+function listLabels(labels: string[], intlLocale: string): string {
+  return new Intl.ListFormat(intlLocale, { style: 'long', type: 'conjunction' }).format(labels);
 }

@@ -2,6 +2,8 @@
 // places have to agree on it: the database helper that builds the ORDER BY, the
 // page that draws the header carets, and the client control that writes the URL.
 
+import { DEFAULT_UI_LOCALE, isUiLocale, type UiLocale } from '../i18n';
+
 export const CUSTOMER_SORT_KEYS = ['spent', 'orders', 'last_seen', 'name', 'joined'] as const;
 export type CustomerSortKey = (typeof CUSTOMER_SORT_KEYS)[number];
 export type SortDir = 'asc' | 'desc';
@@ -26,13 +28,29 @@ export const CUSTOMER_SORT_COLUMNS = {
   joined: 'created_at',
 } as const satisfies Record<CustomerSortKey, string>;
 
-export const CUSTOMER_SORT_OPTIONS: ReadonlyArray<{ value: CustomerSortKey; label: string }> = [
-  { value: 'spent', label: 'Spend' },
-  { value: 'orders', label: 'Orders' },
-  { value: 'last_seen', label: 'Last seen' },
-  { value: 'name', label: 'Name' },
-  { value: 'joined', label: 'Joined' },
-];
+const CUSTOMER_SORT_LABELS: Record<UiLocale, Record<CustomerSortKey, string>> = {
+  en: { spent: 'Spend', orders: 'Orders', last_seen: 'Last seen', name: 'Name', joined: 'Joined' },
+  es: { spent: 'Gasto', orders: 'Pedidos', last_seen: 'Última visita', name: 'Nombre', joined: 'Registro' },
+  vi: { spent: 'Chi tiêu', orders: 'Đơn hàng', last_seen: 'Ghé gần nhất', name: 'Tên', joined: 'Ngày tham gia' },
+  th: { spent: 'ยอดใช้จ่าย', orders: 'ออร์เดอร์', last_seen: 'มาล่าสุด', name: 'ชื่อ', joined: 'วันที่สมัคร' },
+};
+
+/** The column header / picker label for a sort key, in `locale` (English when omitted). */
+export function customerSortLabel(key: CustomerSortKey, locale: UiLocale = DEFAULT_UI_LOCALE): string {
+  const loc = isUiLocale(locale) ? locale : DEFAULT_UI_LOCALE;
+  return CUSTOMER_SORT_LABELS[loc][key] ?? CUSTOMER_SORT_LABELS.en[key] ?? key;
+}
+
+/** The sort picker's options, labelled in `locale` (English when omitted). */
+export function customerSortOptions(
+  locale: UiLocale = DEFAULT_UI_LOCALE,
+): ReadonlyArray<{ value: CustomerSortKey; label: string }> {
+  return CUSTOMER_SORT_KEYS.map((value) => ({ value, label: customerSortLabel(value, locale) }));
+}
+
+/** English labels. Prefer customerSortOptions(locale) on screen. */
+export const CUSTOMER_SORT_OPTIONS: ReadonlyArray<{ value: CustomerSortKey; label: string }> =
+  customerSortOptions(DEFAULT_UI_LOCALE);
 
 /** Names read A→Z; every number and date reads biggest or newest first. */
 export function defaultDirFor(key: CustomerSortKey): SortDir {

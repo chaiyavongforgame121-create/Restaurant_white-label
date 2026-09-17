@@ -1,6 +1,7 @@
 import Link from 'next/link';
+import { getLocale, getTranslations } from 'next-intl/server';
 import { getServerClient } from '@favornoms/database/server';
-import { formatCurrency } from '@favornoms/shared';
+import { DEFAULT_UI_LOCALE, formatCurrency, intlLocaleFor, isUiLocale } from '@favornoms/shared';
 import { Badge, Card } from '@favornoms/ui';
 import { PayoutAttachments } from './_components/payout-attachments';
 import { fetchPayoutMedia } from './_components/payout-media';
@@ -27,6 +28,8 @@ interface SummaryRow {
 export default async function PayoutsPage({ params }: Props) {
   const { branchId } = await params;
   const supabase = await getServerClient();
+  const [t, locale] = await Promise.all([getTranslations('payouts'), getLocale()]);
+  const intlLocale = intlLocaleFor(isUiLocale(locale) ? locale : DEFAULT_UI_LOCALE);
 
   const WITHDRAWAL_COLS =
     'id, amount, status, bank_name, account_number, account_name, created_at, paid_at, receipt_number, rejection_reason, drivers(full_name)';
@@ -55,7 +58,10 @@ export default async function PayoutsPage({ params }: Props) {
   const normalize = (rows: NonNullable<typeof pendingData>) =>
     rows.map((w) => {
       const d = w.drivers as { full_name: string } | { full_name: string }[] | null;
-      return { ...w, driver_name: (Array.isArray(d) ? d[0]?.full_name : d?.full_name) ?? 'Driver' };
+      return {
+        ...w,
+        driver_name: (Array.isArray(d) ? d[0]?.full_name : d?.full_name) ?? t('driverFallback'),
+      };
     });
   const pending = normalize(pendingData ?? []);
   const settled = normalize(settledData ?? []);
@@ -67,16 +73,14 @@ export default async function PayoutsPage({ params }: Props) {
   return (
     <div className="container max-w-4xl py-8">
       <header className="mb-6 px-2 pl-16 lg:px-0">
-        <h1 className="font-display text-3xl font-bold">Driver payouts</h1>
-        <p className="mt-1 text-muted-foreground">
-          Drivers request withdrawals of their accrued earnings; settle them here.
-        </p>
+        <h1 className="font-display text-3xl font-bold">{t('page.title')}</h1>
+        <p className="mt-1 text-muted-foreground">{t('page.subtitle')}</p>
       </header>
 
       <section className="mb-8 px-2 lg:px-0">
-        <h2 className="mb-3 font-display text-xl font-semibold">Withdrawal requests</h2>
+        <h2 className="mb-3 font-display text-xl font-semibold">{t('page.requestsTitle')}</h2>
         {pending.length === 0 && settled.length === 0 ? (
-          <Card className="p-8 text-center text-muted-foreground">No withdrawal requests yet.</Card>
+          <Card className="p-8 text-center text-muted-foreground">{t('page.noRequests')}</Card>
         ) : (
           <ul className="space-y-3">
             {pending.map((w) => (
@@ -86,10 +90,12 @@ export default async function PayoutsPage({ params }: Props) {
                     <div>
                       <div className="flex items-center gap-2">
                         <p className="font-display text-lg font-semibold">{w.driver_name}</p>
-                        <Badge variant="warning">Pending</Badge>
+                        <Badge variant="warning">{t('status.pending')}</Badge>
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        Requested {new Date(w.created_at).toLocaleString()}
+                        {t('page.requested', {
+                          date: new Date(w.created_at).toLocaleString(intlLocale),
+                        })}
                       </p>
                       <p className="mt-1 text-xs text-muted-foreground">
                         {w.bank_name} ··{w.account_number.slice(-4)} · {w.account_name}
@@ -121,29 +127,34 @@ export default async function PayoutsPage({ params }: Props) {
                     <div>
                       <p className="font-display text-base font-semibold">{w.driver_name}</p>
                       <p className="text-sm text-muted-foreground">
-                        Requested {new Date(w.created_at).toLocaleDateString()} · {w.bank_name} ··
+                        {t('page.requested', {
+                          date: new Date(w.created_at).toLocaleDateString(intlLocale),
+                        })}{' '}
+                        · {w.bank_name} ··
                         {w.account_number.slice(-4)}
                       </p>
                       {w.status === 'rejected' && w.rejection_reason && (
-                        <p className="mt-1 text-xs text-muted-foreground">Reason: {w.rejection_reason}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {t('page.reason', { reason: w.rejection_reason })}
+                        </p>
                       )}
                     </div>
                     <div className="flex flex-col items-end gap-1">
                       <span className="font-display text-lg font-bold">{formatCurrency(Number(w.amount))}</span>
                       {w.status === 'paid' ? (
                         <>
-                          <Badge variant="success">Paid</Badge>
+                          <Badge variant="success">{t('status.paid')}</Badge>
                           {w.receipt_number && (
                             <Link
                               href={`/b/${branchId}/payouts/receipt/${w.id}`}
                               className="focus-ring text-sm font-medium text-primary underline-offset-2 hover:underline"
                             >
-                              Receipt {w.receipt_number}
+                              {t('receiptNumber', { number: w.receipt_number })}
                             </Link>
                           )}
                         </>
                       ) : (
-                        <Badge variant="danger">Rejected</Badge>
+                        <Badge variant="danger">{t('status.rejected')}</Badge>
                       )}
                     </div>
                   </div>
@@ -165,12 +176,10 @@ export default async function PayoutsPage({ params }: Props) {
       </section>
 
       <section className="px-2 lg:px-0">
-        <h2 className="mb-1 font-display text-xl font-semibold">Weekly summary</h2>
-        <p className="mb-3 text-sm text-muted-foreground">
-          Info only — drivers now request withdrawals themselves; settle them from the queue above.
-        </p>
+        <h2 className="mb-1 font-display text-xl font-semibold">{t('page.summaryTitle')}</h2>
+        <p className="mb-3 text-sm text-muted-foreground">{t('page.summaryHint')}</p>
         {rows.length === 0 ? (
-          <Card className="p-8 text-center text-muted-foreground">No driver earnings yet.</Card>
+          <Card className="p-8 text-center text-muted-foreground">{t('page.noEarnings')}</Card>
         ) : (
           <ul className="space-y-3">
             {rows.map((r) => (
@@ -180,18 +189,27 @@ export default async function PayoutsPage({ params }: Props) {
                     <div>
                       <p className="font-display text-lg font-semibold">{r.driver_name}</p>
                       <p className="text-sm text-muted-foreground">
-                        Week of {new Date(r.payout_period_start).toLocaleDateString()} · {r.delivery_count} deliveries
+                        {t('page.weekOf', {
+                          date: new Date(r.payout_period_start).toLocaleDateString(intlLocale),
+                          count: r.delivery_count,
+                        })}
                       </p>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        Base {formatCurrency(Number(r.base_total))} · Distance {formatCurrency(Number(r.distance_total))} · Tips {formatCurrency(Number(r.tip_total))}
+                        {t('page.breakdown', {
+                          base: formatCurrency(Number(r.base_total)),
+                          distance: formatCurrency(Number(r.distance_total)),
+                          tips: formatCurrency(Number(r.tip_total)),
+                        })}
                       </p>
                     </div>
                     <div className="flex flex-col items-end gap-2">
                       <span className="font-display text-xl font-bold">{formatCurrency(Number(r.grand_total))}</span>
                       {Number(r.accrued_total) > 0 ? (
-                        <Badge variant="warning">{formatCurrency(Number(r.accrued_total))} unpaid</Badge>
+                        <Badge variant="warning">
+                          {t('page.unpaid', { amount: formatCurrency(Number(r.accrued_total)) })}
+                        </Badge>
                       ) : (
-                        <Badge variant="success">Paid</Badge>
+                        <Badge variant="success">{t('status.paid')}</Badge>
                       )}
                     </div>
                   </div>

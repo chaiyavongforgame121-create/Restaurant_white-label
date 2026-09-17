@@ -1,0 +1,22 @@
+{
+  "title": "Tu carrito",
+  "empty": "Tu carrito está vacío",
+  "emptyDescription": "Agrega algunos platillos deliciosos para empezar",
+  "browseMenu": "Ver menú",
+  "subtotal": "Subtotal",
+  "deliveryFee": "Costo de envío",
+  "serviceFee": "Cargo por servicio",
+  "total": "Total",
+  "feesAtCheckout": "El envío y los impuestos se calculan al pagar",
+  "checkout": "Ir a pagar",
+  "itemCount": "{count, plural, one {# producto} other {# productos}}",
+  "notes": "Instrucciones especiales (opcional)",
+  "notesPlaceholder": "Alergias, nivel de picante, salsa extra…",
+  "remove": "Quitar",
+  "lineNoteLabel": "Nota para {name}",
+  "priceNotice": {
+    "removed": "{count, plural, one {Un producto ya no está disponible, así que lo quitamos de tu carrito.} other {# productos ya no están disponibles, así que los quitamos de tu carrito.}}",
+    "removedAndChanged": "{count, plural, one {Un producto ya no está disponible, así que lo quitamos de tu carrito. Además, algunos precios cambiaron.} other {# productos ya no están disponibles, así que los quitamos de tu carrito. Además, algunos precios cambiaron.}}",
+    "changed": "Los precios del restaurante cambiaron: tu carrito ya muestra los precios actuales."
+  }
+}

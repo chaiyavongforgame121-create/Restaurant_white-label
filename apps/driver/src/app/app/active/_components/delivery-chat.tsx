@@ -2,9 +2,9 @@
 
 import * as React from 'react';
 import { MessageCircle } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { getBrowserClient } from '@favornoms/database/client';
 import {
-  chatAttachmentErrorMessage,
   isChatPhotoBody,
   listMessages,
   markThreadRead,
@@ -16,7 +16,14 @@ import {
 } from '@favornoms/database/queries';
 import { Button, ChatThread, Sheet } from '@favornoms/ui';
 
-const DRIVER_QUICK_REPLIES = ["On my way", "I've arrived", "Can't find the entrance", 'Running a bit late'];
+// The value is SENT to the customer as the message text, so it stays English whatever
+// language the rider reads. Only the button label is translated (active.chat.quickReplies).
+const DRIVER_QUICK_REPLIES = [
+  { value: 'On my way', labelKey: 'onMyWay' },
+  { value: "I've arrived", labelKey: 'arrived' },
+  { value: "Can't find the entrance", labelKey: 'cantFindEntrance' },
+  { value: 'Running a bit late', labelKey: 'runningLate' },
+] as const;
 
 const ACTIVE_STATUSES = ['assigned', 'picked_up', 'in_transit'];
 
@@ -32,6 +39,7 @@ interface Props {
 
 /** Driver side of the chat for ONE turn at a delivery. */
 export function DriverDeliveryChat({ assignmentId, deliveryId, deliveryStatus }: Props) {
+  const t = useTranslations('active');
   const [open, setOpen] = React.useState(false);
   const [userId, setUserId] = React.useState<string | null>(null);
   const [messages, setMessages] = React.useState<DeliveryMessage[]>([]);
@@ -42,6 +50,24 @@ export function DriverDeliveryChat({ assignmentId, deliveryId, deliveryStatus }:
   openRef.current = open;
 
   const inFlight = ACTIVE_STATUSES.includes(deliveryStatus);
+
+  // ChatThread sends the text of the chip it shows, so hand it the translated labels and turn
+  // a label back into its English message on the way out.
+  const quickReplies = DRIVER_QUICK_REPLIES.map((q) => ({
+    value: q.value,
+    label: t(`chat.quickReplies.${q.labelKey}`),
+  }));
+
+  /** The codes sendPhotoMessage throws, in the rider's language. */
+  const photoErrorMessage = (err: unknown): string => {
+    const message = err instanceof Error ? err.message : String(err ?? '');
+    if (message.includes('chat_attachment_unsupported_type')) return t('chat.photoErrors.unsupportedType');
+    if (message.includes('chat_attachment_too_large')) return t('chat.photoErrors.tooLarge');
+    if (message.includes('chat_attachment_no_canvas') || message.includes('chat_attachment_encode_failed'))
+      return t('chat.photoErrors.cannotPrepare');
+    if (message.includes('chat_attachment_upload_failed')) return t('chat.photoErrors.uploadFailed');
+    return t('chat.photoErrors.generic');
+  };
 
   React.useEffect(() => {
     const supabase = getBrowserClient();
@@ -103,6 +129,7 @@ export function DriverDeliveryChat({ assignmentId, deliveryId, deliveryStatus }:
   };
 
   const send = async (body: string) => {
+    // A tapped quick reply already arrives as its English value; typed text goes out as typed.
     const supabase = getBrowserClient();
     const msg = await sendMessage(supabase, assignmentId, deliveryId, 'driver', body);
     if (msg) setMessages((curr) => (curr.some((m) => m.id === msg.id) ? curr : [...curr, msg]));
@@ -120,7 +147,7 @@ export function DriverDeliveryChat({ assignmentId, deliveryId, deliveryStatus }:
       );
       setMessages((curr) => (curr.some((m) => m.id === msg.id) ? curr : [...curr, msg]));
     } catch (err) {
-      setPhotoError(chatAttachmentErrorMessage(err));
+      setPhotoError(photoErrorMessage(err));
       // Rethrow so the thread marks the optimistic bubble failed and offers the retry.
       throw err;
     }
@@ -140,11 +167,11 @@ export function DriverDeliveryChat({ assignmentId, deliveryId, deliveryStatus }:
           leftIcon={<MessageCircle className="h-4 w-4" />}
           onClick={openChat}
         >
-          Chat
+          {t('chat.button')}
         </Button>
         {unread > 0 && (
           <span
-            aria-label={`${unread} unread message${unread === 1 ? '' : 's'}`}
+            aria-label={t('chat.unread', { count: unread })}
             className="pointer-events-none absolute -right-2 -top-2 grid h-5 min-w-5 place-items-center rounded-full bg-danger px-1.5 text-[11px] font-bold leading-none text-white ring-2 ring-background"
           >
             {unread > 99 ? '99+' : unread}
@@ -152,7 +179,7 @@ export function DriverDeliveryChat({ assignmentId, deliveryId, deliveryStatus }:
         )}
       </span>
 
-      <Sheet open={open} onClose={() => setOpen(false)} title="Chat with the customer">
+      <Sheet open={open} onClose={() => setOpen(false)} title={t('chat.sheetTitle')}>
         <div className="h-[60vh]">
           <ChatThread
             messages={messages.map((m) => ({
@@ -169,9 +196,9 @@ export function DriverDeliveryChat({ assignmentId, deliveryId, deliveryStatus }:
             onSend={send}
             onSendPhoto={sendPhoto}
             photoError={photoError}
-            quickReplies={DRIVER_QUICK_REPLIES}
+            quickReplies={quickReplies}
             disabled={!inFlight}
-            disabledNotice="Chat closes when the delivery ends."
+            disabledNotice={t('chat.closedNotice')}
           />
         </div>
       </Sheet>

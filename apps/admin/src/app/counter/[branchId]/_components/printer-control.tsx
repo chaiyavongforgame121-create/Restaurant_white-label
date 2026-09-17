@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useTranslations } from 'next-intl';
 import { Printer, PrinterCheck, AlertCircle } from 'lucide-react';
 import { useAlert } from '@favornoms/ui';
 import {
@@ -38,7 +39,9 @@ export function PrinterProvider({ children }: { children: React.ReactNode }) {
           setPrinter(dev);
           // Type-cast — only exposing the productName field
           const name = (dev as unknown as { device: { productName?: string } }).device.productName;
-          setVendor(name ?? 'USB Printer');
+          // Empty when the device reports no product name: the button names it "USB Printer"
+          // in the language on screen.
+          setVendor(name ?? '');
         }
       } catch {
         // ignore — user hasn't paired one yet
@@ -50,7 +53,7 @@ export function PrinterProvider({ children }: { children: React.ReactNode }) {
     const dev = await pairPrinter();
     setPrinter(dev);
     const name = (dev as unknown as { device: { productName?: string } }).device.productName;
-    setVendor(name ?? 'USB Printer');
+    setVendor(name ?? '');
   }, []);
 
   const print = React.useCallback(
@@ -91,20 +94,28 @@ export function usePrinter() {
   return ctx;
 }
 
+/** WebUSB support never changes while the page is open. */
+const subscribeNever = () => () => {};
+
 export function PrinterStatusButton() {
+  const t = useTranslations('counter');
   const { ready, vendor, pair } = usePrinter();
   const [busy, setBusy] = React.useState(false);
   const notify = useAlert();
+  // null on the server and while hydrating: only the browser knows whether it has WebUSB, and
+  // reading navigator during render made the server's "Browser print" and Chrome's "Pair printer"
+  // disagree, so React threw the page's HTML away.
+  const webUsb = React.useSyncExternalStore(subscribeNever, isWebUsbSupported, () => null);
 
-  if (!isWebUsbSupported()) {
+  if (webUsb === false) {
     return (
       <button
         type="button"
-        title="WebUSB not supported in this browser — will print via system dialog"
+        title={t('printer.unsupportedTitle')}
         className="focus-ring inline-flex h-9 items-center gap-1.5 rounded-full border border-warning/40 bg-warning/10 px-3 text-xs font-semibold text-warning"
       >
         <AlertCircle className="h-3.5 w-3.5" />
-        Browser print
+        {t('printer.browserPrint')}
       </button>
     );
   }
@@ -116,7 +127,15 @@ export function PrinterStatusButton() {
     } catch (err) {
       const msg = (err as Error).message;
       if (msg !== 'webusb_unsupported') {
-        await notify({ title: 'Pairing failed', body: msg });
+        // The browser's and the driver's own wording is logged, not shown.
+        console.error('counter: printer pairing failed', err);
+        await notify({
+          title: t('printer.pairFailed'),
+          body:
+            (err as Error)?.name === 'NotFoundError'
+              ? t('printer.noneSelected')
+              : t('printer.pairFailedBody'),
+        });
       }
     } finally {
       setBusy(false);
@@ -129,11 +148,11 @@ export function PrinterStatusButton() {
         type="button"
         onClick={handleClick}
         disabled={busy}
-        title={`Connected: ${vendor}. Click to re-pair.`}
+        title={t('printer.connectedTitle', { vendor: vendor || t('printer.usbPrinter') })}
         className="focus-ring inline-flex h-9 items-center gap-1.5 rounded-full border border-success/40 bg-success/10 px-3 text-xs font-semibold text-success"
       >
         <PrinterCheck className="h-3.5 w-3.5" />
-        Printer ready
+        {t('printer.ready')}
       </button>
     );
   }
@@ -146,7 +165,7 @@ export function PrinterStatusButton() {
       className="focus-ring inline-flex h-9 items-center gap-1.5 rounded-full border border-border bg-card px-3 text-xs font-semibold text-foreground hover:border-primary"
     >
       <Printer className="h-3.5 w-3.5" />
-      {busy ? 'Pairing…' : 'Pair printer'}
+      {busy ? t('printer.pairing') : t('printer.pair')}
     </button>
   );
 }

@@ -1,0 +1,195 @@
+{
+  "title": "Pagar",
+  "deliveryAddress": "Dirección de entrega",
+  "contactInfo": "Información de contacto",
+  "paymentMethod": "Método de pago",
+  "dineInPayAtRestaurant": "No tienes que pagar ahora: pagarás en el restaurante.",
+  "name": "Nombre completo",
+  "namePlaceholder": "p. ej., María López",
+  "phone": "Número de teléfono",
+  "phonePlaceholder": "(555) 234-5678",
+  "emailLabel": "Correo electrónico (para el recibo)",
+  "emailPlaceholder": "tu@ejemplo.com",
+  "address": "Dirección",
+  "addressPlaceholder": "Empieza a escribir tu dirección…",
+  "addNote": "Agregar nota de entrega",
+  "setOnMap": "Marcar en el mapa",
+  "useCurrentLocation": "Usar mi ubicación",
+  "locating": "Buscando ubicación…",
+  "remove": "Quitar",
+  "apply": "Aplicar",
+  "picker": {
+    "title": "Marca tu lugar de entrega",
+    "confirm": "Confirmar esta ubicación",
+    "useCurrentLocation": "Usar mi ubicación actual",
+    "locating": "Buscando tu ubicación…",
+    "searching": "Buscando la dirección…",
+    "dragHint": "Busca o arrastra el mapa para marcar el lugar exacto",
+    "searchPlaceholder": "Buscar dirección o lugar",
+    "unavailable": "El mapa no está disponible en este momento."
+  },
+  "geo": {
+    "unsupported": "Tu navegador no admite la ubicación.",
+    "insecure": "Para usar tu ubicación se necesita una conexión segura (https). Arrastra el mapa.",
+    "denied": "Se denegó el permiso de ubicación. Arrastra el mapa para marcar tu lugar.",
+    "unavailable": "No pudimos encontrar tu ubicación. Arrastra el mapa.",
+    "timeout": "Se agotó el tiempo para ubicarte. Inténtalo de nuevo o arrastra el mapa."
+  },
+  "loyalty": {
+    "verifyRequired": "Para usar tus puntos, primero verifica tu correo electrónico o vincula tu cuenta de Google; así tus puntos están protegidos. Puedes hacer tu pedido sin canjearlos.",
+    "verifyHint": "Verifica tu correo electrónico o vincula Google para usar tus puntos; así nos aseguramos de que sigan siendo tuyos.",
+    "verifyCta": "Verificar o vincular tu cuenta"
+  },
+  "errors": {
+    "nameRequired": "Ingresa tu nombre.",
+    "phoneRequired": "Ingresa un número de teléfono.",
+    "phoneInvalid": "Ingresa un número de teléfono válido.",
+    "emailInvalid": "Ingresa un correo electrónico válido.",
+    "addressRequired": "Ingresa tu dirección de entrega.",
+    "addressUnconfirmed": "Elige tu dirección de las sugerencias o en el mapa para que podamos ubicarte.",
+    "scheduleRequired": "Elige un día y una hora para tu entrega.",
+    "scheduleStale": "Esa hora de entrega ya no está disponible. Revisa la nueva hora y vuelve a hacer tu pedido.",
+    "dropoffRequired": "Elige dónde debe dejar tu pedido el repartidor.",
+    "dropoffOtherRequired": "Describe el lugar de entrega.",
+    "outOfRange": "Esta dirección está fuera del área de entrega.",
+    "deliveryNotSold": "Esta sucursal no está recibiendo pedidos a domicilio en este momento. Prueba con Recoger en tienda.",
+    "pickupClosedScheduleInstead": "Este restaurante está cerrado en este momento, así que no puedes recoger en tienda. Puedes programar una entrega."
+  },
+  "promoCode": "¿Tienes un código promocional?",
+  "placeOrder": "Hacer pedido — {amount}",
+  "sendToKitchen": "Enviar a cocina · {amount}",
+  "estimatedDelivery": "Llegada estimada: {time}",
+  "submitError": "<strong>No se pudo hacer el pedido:</strong> {error}",
+  "payment": {
+    "card": "Tarjeta de crédito o débito",
+    "cash": "Efectivo al recibir",
+    "transfer": "Transferencia QR",
+    "cardFeeNote": "Se aplica un cargo por servicio del {percent}% solo a pagos con tarjeta; en efectivo o con transferencia QR no se cobra.",
+    "transferNote": "Primero haz tu pedido. El código QR y la opción para subir el comprobante aparecen justo después en la página del pedido; no se cobra nada hasta que confirmes que ya pagaste.",
+    "cardWithheldChooseOther": "El pago con tarjeta aún no está disponible en este sitio. Elige una de las opciones de arriba; igual puedes pagar con tarjeta en persona en el restaurante.",
+    "cardWithheldOnly": "El pago con tarjeta aún no está disponible en este sitio. Es el único método que este restaurante tiene activado, así que por ahora no puedes hacer este pedido en línea. Llama al restaurante para pedir.",
+    "noneAvailable": "Este restaurante no tiene métodos de pago disponibles en este momento."
+  },
+  "signIn": {
+    "title": "Inicia sesión para pagar",
+    "body": "Necesitas una cuenta para hacer un pedido. Solo toma un momento.",
+    "cta": "Iniciar sesión para continuar"
+  },
+  "placed": {
+    "title": "¡Pedido realizado!",
+    "redirecting": "Te llevamos a tu pedido…"
+  },
+  "empty": {
+    "title": "Tu carrito está vacío",
+    "body": "Agrega algunos productos del menú para pagar.",
+    "cta": "Ver el menú"
+  },
+  "orderType": {
+    "paused": "Este restaurante no está recibiendo pedidos en este momento. Vuelve pronto.",
+    "pickupClosedCanSchedule": "Este restaurante está cerrado en este momento, así que no puedes recoger en tienda, pero aún puedes programar una entrega.",
+    "pickupClosed": "Este restaurante está cerrado en este momento, así que no puedes recoger en tienda. Haz tu pedido en su horario de atención.",
+    "pickupNoPaymentCanSchedule": "Con los métodos de pago actuales de este restaurante no puedes recoger en tienda, pero aún puedes programar una entrega.",
+    "pickupNoPayment": "Con los métodos de pago actuales de este restaurante no puedes recoger en tienda.",
+    "pickupReady": "Se prepara en cuanto se confirma tu pedido.",
+    "deliveryUnavailablePickupOpen": "Este restaurante no está aceptando entregas programadas en este momento, pero aún puedes recoger en tienda.",
+    "deliveryUnavailable": "Este restaurante no está aceptando entregas programadas en este momento.",
+    "deliveryNoPaymentPickupOpen": "Con los métodos de pago actuales de este restaurante no puedes programar una entrega, pero aún puedes recoger en tienda.",
+    "deliveryNoPayment": "Con los métodos de pago actuales de este restaurante no puedes programar una entrega.",
+    "pickupPaused": "Recoger en tienda no está disponible por ahora: el restaurante pausó los pedidos.",
+    "pickupClosedNow": "Recoger en tienda no está disponible por ahora: el restaurante está cerrado."
+  },
+  "schedule": {
+    "loading": "Cargando los horarios en que este restaurante acepta pedidos…",
+    "none": "No hay horarios de entrega disponibles por ahora. Elige Recoger en tienda o vuelve más tarde.",
+    "day": "Día",
+    "time": "Hora",
+    "today": "Hoy",
+    "tomorrow": "Mañana",
+    "hint": "Solo se muestran los horarios en que este restaurante hace entregas, en la hora local del restaurante. Tu pedido estará listo a esa hora y saldrá hacia ti justo después."
+  },
+  "addresses": {
+    "default": "Predeterminada",
+    "useNew": "+ Usar una dirección nueva",
+    "pinned": "Ubicación marcada"
+  },
+  "quote": {
+    "calculating": "Calculando el envío…",
+    "distanceFee": "A {distance} mi · envío {fee}",
+    "outOfRangeMax": "Lo sentimos, esta dirección está fuera del área de entrega (máx. {max} mi).",
+    "notSold": "Lo sentimos, esta sucursal no está recibiendo pedidos a domicilio en este momento. Aún puedes recoger en tienda.",
+    "pickSuggestion": "Elige tu dirección de las sugerencias para confirmar la entrega y ver el costo exacto."
+  },
+  "dropoff": {
+    "title": "¿Dónde lo dejamos?",
+    "options": {
+      "leave_at_door": "Dejar en la puerta",
+      "hand_to_me": "Entregar en mano",
+      "at_desk": "En recepción",
+      "other": "Otro"
+    },
+    "otherPlaceholder": "Dile al repartidor dónde dejarlo",
+    "gateCode": "Código del portón <optional>(opcional)</optional>",
+    "gateCodePlaceholder": "p. ej., #1234",
+    "room": "Depto. / unidad <optional>(opcional)</optional>",
+    "roomPlaceholder": "p. ej., Depto. 203",
+    "instructions": "Instrucciones de entrega <optional>(opcional)</optional>",
+    "instructionsPlaceholder": "p. ej., Casa azul detrás de la panadería · llamar al llegar",
+    "instructionsHint": "Cualquier detalle que ayude al repartidor a encontrarte; útil cuando el mapa no es exacto."
+  },
+  "dineIn": {
+    "scanned": "Tomado del código QR de tu mesa; no tienes que escribir nada.",
+    "roundTotal": "Ronda {round} · Total de la mesa hasta ahora {amount}"
+  },
+  "promo": {
+    "title": "Código promocional",
+    "applied": "{code}: ahorraste {amount}",
+    "appliedFreeDelivery": "{code}: ahorraste {amount} + envío gratis",
+    "errors": {
+      "invalidCode": "Ese código promocional no es válido.",
+      "exhausted": "Este código promocional ya alcanzó su límite de usos.",
+      "minSubtotal": "Gasta al menos {amount} para usar este código.",
+      "minSubtotalUnknown": "Tu pedido no alcanza el mínimo para este código.",
+      "perCustomerLimit": "Ya usaste este código el máximo de veces permitido."
+    }
+  },
+  "giftCard": {
+    "title": "🎁 Tarjeta de regalo",
+    "placeholder": "Código de la tarjeta de regalo",
+    "applied": "{code}: se aplican {amount} (saldo {balance})",
+    "errors": {
+      "invalidOrRedeemed": "Ese código de tarjeta de regalo no es válido o ya se usó.",
+      "expired": "Esta tarjeta de regalo ya venció."
+    }
+  },
+  "tip": {
+    "title": "Agrega propina",
+    "driverAll": "El {percent}% es para tu repartidor.",
+    "driverPartial": "El {percent}% es para tu repartidor (el resto apoya al restaurante).",
+    "teamAll": "El {percent}% es para el equipo de cocina y el personal.",
+    "teamPartial": "El {percent}% es para el equipo de cocina y el personal (el resto apoya al restaurante).",
+    "custom": "Otro monto",
+    "none": "Sin propina",
+    "customPlaceholder": "Monto en USD",
+    "customLabel": "Monto de la propina en USD"
+  },
+  "rewards": {
+    "title": "Canjear puntos",
+    "balance": "Saldo: <strong>{balance, number}</strong>",
+    "onePerOrder": "Elige una recompensa por pedido.",
+    "cost": "{points, number} pts",
+    "freeDelivery": "Envío gratis",
+    "needsMore": "{count, plural, one {Te falta # punto} other {Te faltan # puntos}}",
+    "spendToUnlock": "Gasta {amount} para desbloquear",
+    "addItem": "Agrega {item} a tu carrito",
+    "addTheItem": "Agrega el producto a tu carrito",
+    "deliveryOnly": "Solo pedidos a domicilio"
+  },
+  "summary": {
+    "calculating": "Calculando…",
+    "salesTax": "Impuestos",
+    "tip": "Propina",
+    "promo": "Promoción ({code})",
+    "reward": "Recompensa ({name})",
+    "deliveryFree": "Envío gratis"
+  }
+}

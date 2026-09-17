@@ -1,0 +1,180 @@
+{
+  "accessDenied": {
+    "title": "No delivery access",
+    "reason": "Your role cannot manage deliveries at {branch}."
+  },
+  "header": {
+    "title": "Live deliveries",
+    "subtitle": "Where your riders and live orders are right now.",
+    "introSelf": "Every delivery order at {branch} from the moment it is placed until it is handed over. You deliver these yourself — move each one along with the buttons on its card.",
+    "introPlatform": "Every delivery order at {branch} from the moment it is placed until it is handed over: where the rider is, how long until it arrives, and who is waiting. Riders approved here also appear on the map whenever they are online, even between jobs."
+  },
+  "stats": {
+    "waitingKitchen": "{count} waiting on the kitchen",
+    "findingRider": "{count} finding a rider",
+    "offered": "{count} offered",
+    "accepted": "{count} accepted",
+    "onTheWay": "{count} on the way",
+    "failed": "{count} failed",
+    "ridersReady": "{ready} of {total} approved riders ready",
+    "live": "Live",
+    "reconnecting": "Reconnecting…"
+  },
+  "map": {
+    "fitAll": "Fit all",
+    "legendShop": "your shop",
+    "legendDropoff": "drop-off",
+    "legendOnJob": "blue: on a job",
+    "legendReady": "green: ready",
+    "legendStale": "amber: online, GPS stale",
+    "customer": "Customer",
+    "rider": "Rider",
+    "riderGpsAge": "{name} · GPS {age} old",
+    "noToken": "Map unavailable — set NEXT_PUBLIC_MAPBOX_TOKEN.",
+    "noPin": "This branch has no map pin yet, so there is nothing to draw riders against. <link>Set it in Branch settings</link>."
+  },
+  "list": {
+    "title": "In flight",
+    "loadError": "Could not load deliveries. Refresh the page to try again.",
+    "ridersError": "Could not load riders. Trying again every 15 seconds.",
+    "emptyTitle": "No deliveries in flight",
+    "emptySelf": "A card appears the moment someone places a delivery order at {branch}, and stays until you mark it delivered.",
+    "emptyPlatform": "A card appears the moment someone places a delivery order at {branch}, and stays until the food is handed over. {ready} of {total} approved riders are ready right now.",
+    "emptyPlatformNoRiders": "A card appears the moment someone places a delivery order at {branch}, and stays until the food is handed over. {ready} of {total} approved riders are ready right now — no rider is approved for this branch yet.",
+    "openDrivers": "Open Drivers",
+    "stalled": "{count, plural, one {# stalled order} other {# stalled orders}}",
+    "hide": "Hide",
+    "show": "Show",
+    "stalledHint": "Older than 12 hours and still waiting. Kept off the map — cancel or assign them from here.",
+    "riders": "Riders",
+    "riderOnJob": "On a job",
+    "riderOffline": "Offline",
+    "riderGps": "GPS {age}"
+  },
+  "card": {
+    "waiting": "Waiting {age}",
+    "customer": "Customer",
+    "callRider": "Call rider",
+    "noRider": "No rider yet",
+    "placed": "placed {age} ago",
+    "lastRider": "Last rider: “{note}”",
+    "findRider": "Find a rider",
+    "reassign": "Reassign",
+    "assign": "Assign to a rider",
+    "redispatch": "Re-dispatch",
+    "markDelivered": "Mark delivered",
+    "outForDelivery": "Out for delivery",
+    "cancelOrder": "Cancel order",
+    "viewOrder": "View order",
+    "withRider": "Food is with the rider — refund it from Orders if it cannot be delivered.",
+    "retryFromScratch": "Retry from scratch"
+  },
+  "status": {
+    "waitingKitchen": "Waiting for the kitchen",
+    "findingRider": "Finding a rider",
+    "readyToGo": "Ready to go out",
+    "riderAccepted": "Rider accepted · heading to shop",
+    "offered": "Offered to rider",
+    "pickedUp": "Picked up",
+    "arriving": "Arriving now",
+    "onTheWay": "On the way",
+    "failed": "Failed — needs you",
+    "unknown": "{status}"
+  },
+  "detail": {
+    "kitchenReady": "Kitchen says ready — no rider has been asked yet",
+    "kitchenStatus": "{status, select, pending {Kitchen: pending} confirmed {Kitchen: confirmed} preparing {Kitchen: preparing} ready {Kitchen: ready} out_for_delivery {Kitchen: out for delivery} completed {Kitchen: completed} cancelled {Kitchen: cancelled} refunded {Kitchen: refunded} other {Kitchen: {status}}}",
+    "riderCancelled": "Rider cancelled: {reason}",
+    "askedRiders": "{count, plural, one {Asked # rider so far} other {Asked # riders so far}}",
+    "lookingForRider": "Looking for a rider",
+    "selfStaff": "Your own staff deliver this one",
+    "noRiderHolds": "No rider holds this yet",
+    "acceptedAgo": "Accepted {age} ago",
+    "expiresIn": "Expires in {countdown}",
+    "offerExpired": "Offer expired — returning to the pool",
+    "eta": "ETA {minutes} min",
+    "pickedUpAgo": "Picked up {age} ago",
+    "atDoor": "Rider is at the door",
+    "etaUnknown": "ETA unknown — waiting for the rider’s GPS",
+    "noReason": "No reason recorded"
+  },
+  "age": {
+    "unknown": "—",
+    "underMinute": "<1 min",
+    "minutes": "{minutes} min",
+    "hours": "{hours} h",
+    "hoursMinutes": "{hours} h {minutes} min",
+    "days": "{days} d"
+  },
+  "dispatch": {
+    "maxAttempts": "Tried every rider — raise “Max dispatch attempts” or assign one by hand.",
+    "notEntitled": "Delivery isn’t included in this restaurant’s plan.",
+    "notDispatchable": "This delivery is no longer waiting for a rider.",
+    "failed": "Couldn’t search for a rider. Try again.",
+    "noneAvailable": "No rider available right now.",
+    "noPin": "This branch has no map pin yet — set it in Branch settings.",
+    "noneApproved": "No rider is approved for this branch yet.",
+    "noneOnline": "No rider is online right now ({approved} approved).",
+    "noLocation": "{online} online, but none have shared a location — the rider app must be open with location permission granted.",
+    "gpsStale": "{online} online, but no location newer than {minutes} min. The rider app only sends GPS while it is open in the foreground.",
+    "allBusy": "{online} online, all already on a delivery.",
+    "outOfRangeMiles": "{online} online, but none within {miles} mi — raise “Driver search radius”.",
+    "outOfRange": "{online} online, but none within the search radius — raise “Driver search radius”."
+  },
+  "rpcErrors": {
+    "driverBusy": "That rider is already on a delivery.",
+    "driverNotEligible": "That rider is not approved here or their documents are not verified.",
+    "alreadyAccepted": "The rider has already accepted — they must hand it back from their app before you can reassign.",
+    "notAssignable": "This delivery can no longer be assigned by hand.",
+    "notFound": "That delivery no longer exists.",
+    "forbidden": "Your account cannot manage deliveries at this branch.",
+    "authRequired": "Your session has expired — sign in again.",
+    "notFailed": "Only a failed delivery can be re-dispatched.",
+    "notSelfDelivery": "This branch uses platform riders; the rider moves the delivery from their app.",
+    "badTransition": "That step is not available for this delivery any more.",
+    "orderNotFound": "That order no longer exists.",
+    "notAuthorized": "Your account cannot cancel this order.",
+    "cannotCancelStatus": "This order can no longer be cancelled.",
+    "generic": "Something went wrong. Please try again."
+  },
+  "assign": {
+    "title": "Assign {number} to a rider",
+    "titleNoNumber": "Assign to a rider",
+    "intro": "The rider gets a normal offer they can still decline — it just goes to the one you pick instead of whoever auto-dispatch scores highest.",
+    "noRiders": "No rider is approved for this branch yet, so there is nobody to offer this to.",
+    "pill": {
+      "available": "GPS fresh",
+      "stale": "GPS stale",
+      "offline": "Offline",
+      "busy": "On a job"
+    },
+    "blockedBusy": "On another delivery",
+    "blockedDocs": "Documents not verified",
+    "blockedCooldown": "In a rejection cool-down",
+    "lastSeen": "{vehicle} · last seen {age} ago",
+    "close": "Close"
+  },
+  "vehicle": {
+    "motorcycle": "Motorcycle",
+    "car": "Car",
+    "bicycle": "Bicycle",
+    "scooter": "Scooter"
+  },
+  "cancel": {
+    "title": "Cancel {number}?",
+    "titleNoNumber": "Cancel this order?",
+    "body": "This cancels the order, restores stock and takes the delivery off the board. It can’t be undone.",
+    "why": "Why? The customer sees this on their order page.",
+    "reasons": {
+      "kitchenCannotMake": "Kitchen cannot make it",
+      "customerAsked": "Customer asked to cancel",
+      "noRider": "No rider available",
+      "duplicate": "Duplicate order",
+      "other": "Other"
+    },
+    "otherLabel": "What happened",
+    "otherPlaceholder": "Tell the customer what happened",
+    "keep": "Keep order",
+    "confirm": "Yes, cancel"
+  }
+}

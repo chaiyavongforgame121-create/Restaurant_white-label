@@ -1,0 +1,142 @@
+{
+  "language": "Idioma",
+  "kyc": {
+    "verified": "Verificado",
+    "pending": "En revisión",
+    "rejected": "Requiere acción",
+    "suspended": "Suspendido"
+  },
+  "stats": {
+    "deliveries": "Entregas",
+    "battery": "Batería",
+    "rating": "Calificación"
+  },
+  "checkingDocuments": "Revisando tus documentos…",
+  "documentsRow": "Documentos y verificación",
+  "vehicle": "Vehículo",
+  "vehicleTypes": {
+    "motorcycle": "Motocicleta",
+    "car": "Auto",
+    "bicycle": "Bicicleta",
+    "scooter": "Scooter"
+  },
+  "branchesIServe": "Sucursales donde reparto",
+  "approvedCount": "{count, plural, one {# aprobada} other {# aprobadas}}",
+  "supportCenter": "Centro de ayuda",
+  "signOut": "Cerrar sesión",
+  "summary": {
+    "unreadable": "No pudimos revisar tus documentos ahora",
+    "incomplete": "{missing, plural, one {Falta # de {total}} other {Faltan # de {total}}} por enviar",
+    "awaiting": "Todo recibido: pendiente de verificación",
+    "rechecking": "Reemplazaste un documento después de la revisión",
+    "changesNeeded": "Hay que cambiar un documento",
+    "verifiedCleared": "Verificado · {count, plural, one {# restaurante te aprobó} other {# restaurantes te aprobaron}}",
+    "verifiedApplyNext": "Verificado: ahora postúlate a un restaurante"
+  },
+  "docs": {
+    "license": {
+      "label": "Licencia de conducir",
+      "inline": "licencia de conducir",
+      "hint": "Ambos lados si tus datos están impresos al reverso."
+    },
+    "vehicle_reg": {
+      "label": "Registro del vehículo",
+      "inline": "registro del vehículo",
+      "hint": "Del vehículo con el que realmente repartes."
+    },
+    "selfie": {
+      "label": "Selfie con tu licencia",
+      "inline": "selfie con tu licencia",
+      "hint": "Tú sosteniendo tu licencia, con tu cara y la licencia legibles."
+    }
+  },
+  "documents": {
+    "metaTitle": "Documentos",
+    "back": "Atrás",
+    "title": "Documentos",
+    "subtitle": "Lo que recibimos y en qué va cada restaurante",
+    "stage": {
+      "unreadable": {
+        "title": "No pudimos leer tus documentos",
+        "body": "El problema es nuestro, no tuyo. Lo que ya enviaste sigue ahí; inténtalo de nuevo en un momento.",
+        "retry": "Reintentar"
+      },
+      "incomplete": {
+        "titleNone": "Aún no recibimos nada",
+        "titleSome": "{received} de {total} recibidos",
+        "body": "Falta enviar: {docs}. Los restaurantes no pueden verte hasta que lleguen los {total}."
+      },
+      "awaiting": {
+        "title": "Recibimos los {total} documentos",
+        "body": "No tienes que hacer nada más: están pendientes de verificación.",
+        "bodyWithTime": "No tienes que hacer nada más: están pendientes de verificación. El último llegó el {when}."
+      },
+      "rechecking": {
+        "title": "Pendiente de una nueva revisión",
+        "body": "Reemplazaste un documento el {when}, después de que se verificara el {verifiedOn}. Ya recibimos el archivo nuevo y está esperando que alguien lo revise."
+      },
+      "verified": {
+        "title": "Documentos verificados",
+        "body": "Verificados el {verifiedOn}. Aun así, cada restaurante te aprueba por separado; mira abajo.",
+        "bodyNoDate": "Ya están verificados. Aun así, cada restaurante te aprueba por separado; mira abajo."
+      },
+      "changesNeeded": {
+        "title": "Hay que cambiar un documento",
+        "titleSuspended": "Tus documentos están suspendidos",
+        "body": "Reemplaza abajo el documento que esté mal. Reemplazar un archivo no reinicia la revisión por sí solo: avísale al restaurante que ya puede revisarlo de nuevo.",
+        "bodyWithTime": "Reemplaza abajo el documento que esté mal. Enviaste el último el {when}. Reemplazar un archivo no reinicia la revisión por sí solo: avísale al restaurante que ya puede revisarlo de nuevo."
+      }
+    },
+    "received": {
+      "heading": "Lo que recibimos",
+      "checking": "Revisando…",
+      "couldNotCheck": "No se pudo revisar",
+      "receivedAt": "Recibido el {when}",
+      "received": "Recibido",
+      "sending": "Enviando…",
+      "replace": "Reemplazar",
+      "send": "Enviar"
+    },
+    "uploadError": "No se pudo enviar el documento: el servidor está ocupado. Espera un momento e inténtalo de nuevo. ({detail})",
+    "replaceNote": {
+      "cleared": "<label>Si reemplazas un documento:</label> recibimos el archivo nuevo al instante y sustituye al anterior, pero una revisión ya hecha no se deshace automáticamente. Sigues repartiendo para los restaurantes que ya te aprobaron, y en su pantalla verán que tus documentos cambiaron después de que los revisaran.",
+      "queue": "<label>Si reemplazas un documento:</label> recibimos el archivo nuevo al instante y sustituye al anterior, pero una revisión ya hecha no se deshace automáticamente. Vuelve a la fila para ser verificado."
+    },
+    "byRestaurant": {
+      "heading": "Verificación por restaurante",
+      "sharedNote": "Tus documentos se revisan una sola vez y ese resultado se comparte con todos los restaurantes. Luego cada restaurante decide por separado si puedes repartir para él.",
+      "emptyTitle": "Ningún restaurante te está revisando todavía",
+      "emptyUnreadable": "No pudimos leer tus documentos ahora, así que no podemos decirte qué falta enviar.",
+      "emptyMissing": "Primero envía los documentos que faltan; podrás postularte en cuanto lleguen los tres.",
+      "emptyReady": "Tus documentos están completos. Postúlate a un restaurante y te revisarán.",
+      "applyCta": "Postularme a un restaurante",
+      "noLongerListed": "Este restaurante ya no está disponible",
+      "appliedReviewed": "Te postulaste el {applied} · lo revisaron el {reviewed}",
+      "appliedNotReviewed": "Te postulaste el {applied} · aún sin revisar",
+      "newerDocument": "Enviaste un documento más reciente el {when}, después de esta decisión.",
+      "whatTheySaid": "<label>Lo que dijeron:</label> {notes}"
+    },
+    "branchState": {
+      "stale": {
+        "label": "Revisado antes de tu cambio",
+        "detail": "Reemplazaste un documento después de que te aprobaron. Puede que quieran revisarlo otra vez; mientras tanto, sigues repartiendo aquí."
+      },
+      "cleared": {
+        "label": "Aprobado para repartir",
+        "detail": "Revisaron tus documentos y te aprobaron."
+      },
+      "pending": {
+        "label": "Pendiente de verificación",
+        "detail": "Ya tienen tus documentos. Nadie ha decidido todavía."
+      },
+      "rejected": {
+        "label": "No aceptado",
+        "detail": "Rechazaron esta postulación."
+      },
+      "paused": {
+        "label": "En pausa",
+        "detail": "Te pusieron en pausa aquí, así que no recibirás sus pedidos."
+      }
+    }
+  }
+}

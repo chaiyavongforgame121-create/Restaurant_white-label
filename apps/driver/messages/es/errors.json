@@ -1,0 +1,11 @@
+{
+  "generic": "Algo salió mal. Inténtalo de nuevo.",
+  "auth": {
+    "weakPassword": "La contraseña debe tener al menos 8 caracteres.",
+    "invalidCredentials": "Número de teléfono o contraseña incorrectos.",
+    "accountExists": "Ya tienes una cuenta. Inicia sesión.",
+    "needsProfile": "Termina de crear tu cuenta de repartidor para continuar.",
+    "invalidPhone": "Ese número de teléfono no parece correcto. Revísalo e inténtalo de nuevo.",
+    "couldNotContinue": "No se pudo continuar. Inténtalo de nuevo."
+  }
+}

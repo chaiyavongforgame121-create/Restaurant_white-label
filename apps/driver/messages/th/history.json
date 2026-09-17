@@ -1,0 +1,31 @@
+{
+  "title": "ประวัติ",
+  "range": "{days, plural, other {# วัน}}",
+  "allRestaurants": "ทุกร้าน",
+  "loadError": "โหลดประวัติไม่สำเร็จ โปรดตรวจสอบสัญญาณแล้วเปิดหน้านี้ใหม่",
+  "summary": {
+    "single": "{jobs, plural, other {# งาน}} · ส่งแล้ว {delivered} งาน · <amount>{total}</amount>",
+    "all": "{jobs, plural, other {# งาน}} · ส่งแล้ว {delivered} งาน · <amount>{total}</amount> จากทุกร้าน",
+    "restaurant": "{jobs, plural, other {# งาน}} · ส่งแล้ว {delivered} งาน · <amount>{total}</amount> จาก {restaurant}"
+  },
+  "empty": {
+    "all": "ไม่มีงานในช่วง {days, plural, other {# วันที่ผ่านมา}}",
+    "restaurant": "ไม่มีงานของ {restaurant} ในช่วง {days, plural, other {# วันที่ผ่านมา}}"
+  },
+  "noPayment": "ไม่มีรายได้",
+  "outcome": {
+    "inProgress": "กำลังดำเนินการ",
+    "delivered": "ส่งถึงแล้ว",
+    "youCancelled": "คุณยกเลิก",
+    "couldNotDeliver": "ส่งไม่สำเร็จ",
+    "restaurantCancelled": "ร้านยกเลิก",
+    "reassigned": "ส่งต่อให้คนขับคนอื่น",
+    "offerExpired": "งานหมดเวลา",
+    "youDeclined": "คุณปฏิเสธ",
+    "ended": "สิ้นสุดแล้ว"
+  },
+  "ledger": {
+    "paid": "จ่ายแล้ว",
+    "awaitingPayout": "รอรับเงิน"
+  }
+}

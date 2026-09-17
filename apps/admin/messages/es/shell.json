@@ -1,0 +1,188 @@
+{
+  "metadata": {
+    "title": "Favornoms para comercios",
+    "description": "App de gestión para restaurantes"
+  },
+  "nav": {
+    "dashboard": "Panel",
+    "orders": "Pedidos",
+    "liveDeliveries": "Entregas en curso",
+    "liveDeliveriesHint": "Dónde están ahora tus repartidores y los pedidos en curso",
+    "menu": "Menú",
+    "kitchenDisplay": "Pantalla de cocina",
+    "counter": "Mostrador",
+    "qrCode": "Código QR",
+    "reports": "Informes",
+    "headOffice": "Oficina central",
+    "ratings": "Reseñas",
+    "inventory": "Inventario",
+    "digitalSignage": "Señalización digital",
+    "aiVoice": "Voz con IA",
+    "staff": "Personal",
+    "drivers": "Repartidores",
+    "driverPayouts": "Pagos a repartidores",
+    "customers": "Clientes",
+    "promos": "Promociones",
+    "loyaltyRewards": "Recompensas de fidelidad",
+    "receipts": "Recibos",
+    "activityLog": "Registro de actividad",
+    "branchSettings": "Configuración de sucursal",
+    "brandAndBranches": "Marca y sucursales",
+    "franchise": "Franquicia",
+    "planBilling": "Plan y facturación",
+    "preferences": "Preferencias",
+    "platformConsole": "Consola de la plataforma"
+  },
+  "sections": {
+    "advanced": "Avanzado",
+    "operations": "Operaciones",
+    "aiSuite": "AI Suite",
+    "peopleGrowth": "Equipo y crecimiento",
+    "records": "Registros",
+    "setup": "Configuración"
+  },
+  "sidebar": {
+    "merchant": "Comercio",
+    "switchBranch": "Cambiar de sucursal",
+    "openMenu": "Abrir menú de navegación",
+    "closeMenu": "Cerrar menú de navegación",
+    "branchDashboard": "Panel de {branch}"
+  },
+  "theme": {
+    "switchToLight": "Cambiar a modo claro",
+    "switchToDark": "Cambiar a modo oscuro",
+    "lightMode": "Modo claro",
+    "darkMode": "Modo oscuro"
+  },
+  "accessDenied": {
+    "title": "Acceso denegado"
+  },
+  "branchAccess": {
+    "title": "Sin acceso al panel de administración",
+    "roleCannotOpen": "Tu cuenta de {role} no puede abrir el panel de administración de {branch}. Tu trabajo está en el mostrador o en la pantalla de cocina.",
+    "accountCannotOpen": "Tu cuenta no puede abrir el panel de administración de {branch}. Tu trabajo está en el mostrador o en la pantalla de cocina.",
+    "notStaff": "Tu cuenta no forma parte del personal de {branch}.",
+    "roles": {
+      "owner": "propietario",
+      "admin": "administrador",
+      "manager": "gerente",
+      "cashier": "cajero",
+      "server": "mesero",
+      "kitchen": "cocina",
+      "staff": "personal",
+      "driver": "repartidor"
+    }
+  },
+  "noAccess": {
+    "title": "Aquí eres repartidor",
+    "body": "Las cuentas de repartidor no usan el panel de administración del restaurante. Abre la app Favornoms Driver para ver las entregas que tienes asignadas, tu historial de entregas y tus ganancias.",
+    "askOwner": "Si también deberías tener acceso al panel de administración, pide al propietario del restaurante que te invite de nuevo con el rol de gerente o administrador.",
+    "signInAsSomeoneElse": "Iniciar sesión con otra cuenta"
+  },
+  "platformBanner": {
+    "title": "Vista de administrador de la plataforma",
+    "body": "No formas parte del personal de {branch}. Cada cambio que hagas aquí queda registrado a nombre de tu cuenta.",
+    "back": "Volver a la plataforma"
+  },
+  "suspension": {
+    "title": "Suscripción inactiva",
+    "locked": {
+      "counter": "El mostrador de {branch} está bloqueado porque la suscripción venció.",
+      "screen": "Esta pantalla está bloqueada en {branch} porque la suscripción venció."
+    },
+    "lockedHere": {
+      "counter": "El mostrador de esta sucursal está bloqueado porque la suscripción venció.",
+      "screen": "Esta pantalla está bloqueada en esta sucursal porque la suscripción venció."
+    },
+    "nothingDeleted": "No se eliminó ningún dato: al elegir un paquete, todo se restablece de inmediato.",
+    "kitchenStillWorks": "Los pedidos ya realizados se pueden seguir preparando y completando desde la pantalla de cocina.",
+    "goToBilling": "Ir a facturación"
+  },
+  "addon": {
+    "pricePerMonth": "+${price}<unit>/mes</unit>",
+    "addToPackage": "Agregar a mi paquete"
+  },
+  "lockedFeature": {
+    "comingSoon": "Próximamente",
+    "notInPackage": "{feature} forma parte del complemento {addon} y no está incluido en tu paquete actual.",
+    "viewPackages": "Ver paquetes"
+  },
+  "upload": {
+    "noCanvas": "Tu navegador no pudo procesar la imagen (no admite canvas)."
+  },
+  "imageUpload": {
+    "upload": "Subir imagen",
+    "uploading": "Subiendo…",
+    "working": "Procesando…",
+    "replace": "Cambiar imagen",
+    "remove": "Quitar imagen",
+    "undoBackgroundRemoval": "Restaurar el fondo",
+    "removeWhiteBackground": "Quitar fondo blanco",
+    "previewLightAlt": "Logo en la tienda con tema claro",
+    "previewDarkAlt": "Logo en la tienda con tema oscuro",
+    "light": "Claro",
+    "dark": "Oscuro",
+    "notice": {
+      "darkLogo": "Este logo es oscuro y será difícil de ver para los clientes que usan el modo oscuro. Deshaz el cambio o sube una versión clara.",
+      "lightLogo": "Este logo es claro y será difícil de ver en la tienda con tema claro. Deshaz el cambio o sube una versión más oscura."
+    },
+    "errors": {
+      "formatUnsupported": "Este formato de imagen no se puede procesar aquí. Sube el logo en PNG o JPEG.",
+      "svgUnreadable": "No se pudo leer este SVG. Quita el fondo dentro del archivo SVG o sube un PNG.",
+      "loadFailed": "No se pudo cargar tu imagen.",
+      "noPlainBackground": "Esta imagen no tiene un fondo liso que se pueda quitar.",
+      "encodeFailed": "No se pudo generar la imagen."
+    }
+  },
+  "iconUpload": {
+    "requirements": "PNG, JPEG o WebP cuadrado, de al menos 192×192. Un PNG con fondo transparente te da más opciones. Lo ajustamos a todos los tamaños que necesitan el navegador y la app instalada.",
+    "processing": "Procesando…",
+    "replace": "Cambiar ícono",
+    "choose": "Elegir ícono",
+    "remove": "Quitar ícono",
+    "androidIcon": "Ícono en la pantalla de inicio de Android",
+    "fitFill": "Llenar el recuadro",
+    "fitPadded": "Mantener márgenes",
+    "removeBackground": {
+      "label": "Quitar el fondo liso alrededor de la imagen",
+      "hint": "El blanco (u otro color liso) alrededor de tu logo pasa a ser el color que elijas abajo: ningún ícono tendrá esquinas blancas."
+    },
+    "transparent": {
+      "label": "Solo la imagen, sin fondo (como un PNG)",
+      "hint": "Para la pestaña del navegador y la instalación en computadora. Los teléfonos no muestran transparencia: Android y iPhone siempre ponen un color sólido detrás de la imagen, así que elige ese color abajo."
+    },
+    "zoom": "Zoom",
+    "zoomHint": "Acerca la imagen para que se vea más grande en Android.",
+    "colour": {
+      "phoneBackground": "Fondo en teléfonos",
+      "background": "Fondo",
+      "frame": "Color del marco",
+      "swatch": "Color {hex}",
+      "custom": "Color personalizado",
+      "hintFromEdge": "Los primeros colores salen del borde de tu imagen; si eliges el color del contorno, el recuadro se verá continuo.",
+      "hintFrameOnly": "Solo cambia el color del marco alrededor del ícono; el ícono conserva el fondo con el que se creó.",
+      "tickRemoveFirst": "Marca “Quitar el fondo liso” para elegir un color para el área alrededor de tu imagen.",
+      "backgroundBakedIn": "El fondo de este ícono es parte de la imagen. Para elegir otro color, vuelve a subir tu original, idealmente un PNG con fondo transparente."
+    },
+    "preview": {
+      "androidSquircleAlt": "Vista previa de Android en cuadrado redondeado",
+      "androidCircleAlt": "Vista previa de Android en círculo",
+      "iphoneAlt": "Vista previa de iPhone",
+      "computerAlt": "Vista previa en computadora y pestaña del navegador",
+      "computer": "Computadora",
+      "hint": "Así se verá aproximadamente en cada dispositivo. Android lo recorta con su propia forma y iPhone redondea las esquinas; ambos necesitan un color sólido, y el zoom solo se aplica en Android. Las computadoras y las pestañas del navegador pueden mostrar solo tu imagen."
+    },
+    "apply": "Aplicar al ícono",
+    "repaintsRemoved": "El color de fondo es el mismo que se está quitando: elige otro color o las esquinas se verán igual.",
+    "thenSave": "Luego guarda para publicar.",
+    "oldPadding": "Tu ícono actual todavía tiene el margen blanco anterior: aplica y luego guarda.",
+    "ready": "Listo: se generaron los íconos de 192, 512 y adaptable (maskable).",
+    "errors": {
+      "loadFailed": "No se pudo cargar tu ícono actual. Súbelo de nuevo para cambiar su estilo.",
+      "encodeFailed": "No se pudo generar el ícono redimensionado.",
+      "wrongType": "Usa una imagen PNG, JPEG o WebP. Un SVG no sirve como ícono de la app.",
+      "tooLarge": "Esa imagen pesa más de {megabytes} MB.",
+      "tooSmall": "Esa imagen mide {width}×{height}. Los íconos de la app necesitan al menos {min}×{min}; con uno más pequeño desaparece el botón de instalar."
+    }
+  }
+}

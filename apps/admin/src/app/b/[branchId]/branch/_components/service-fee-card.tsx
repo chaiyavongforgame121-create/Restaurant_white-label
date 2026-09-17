@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Lock, Percent, Save } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { SERVICE_FEE_MAX_PERCENT } from '@favornoms/shared';
@@ -33,7 +34,17 @@ const PREVIEW_SUBTOTALS = [20, 40, 80];
 // server would trim.
 const MAX_PCT = SERVICE_FEE_MAX_PERCENT;
 
+/** Raw database text never reaches the merchant: a known refusal gets its own message,
+ *  anything else the generic one. */
+function saveErrorKey(err: { message: string; code?: string }): string {
+  if (err.code === '42501' || err.message === 'forbidden' || err.message.includes('branch_manager_required')) {
+    return 'errors.noPermission';
+  }
+  return 'errors.generic';
+}
+
 export function ServiceFeeCard({ branchId, settings, canUseCard }: Props) {
+  const t = useTranslations('branchOps');
   const router = useRouter();
   const [percent, setPercent] = React.useState<string>(() => {
     const n = Number(settings?.service_fee_percent);
@@ -61,7 +72,8 @@ export function ServiceFeeCard({ branchId, settings, canUseCard }: Props) {
       .eq('id', branchId);
     setSaving(false);
     if (updateError) {
-      setError(updateError.message);
+      console.error('Saving service fee failed', updateError);
+      setError(t(saveErrorKey(updateError)));
       return;
     }
     setSavedAt(Date.now());
@@ -71,17 +83,15 @@ export function ServiceFeeCard({ branchId, settings, canUseCard }: Props) {
   return (
     <Card className="p-5">
       <h2 className="flex items-center gap-2 font-display text-lg font-semibold">
-        <Percent className="h-5 w-5 text-primary" /> Service fee
+        <Percent className="h-5 w-5 text-primary" /> {t('serviceFee.title')}
       </h2>
       <p className="text-sm text-muted-foreground">
-        A percentage of the food subtotal, charged{' '}
-        <strong>only when the customer pays by credit / debit card</strong>. Cash, QR transfer and
-        dine-in orders never pay it. Set it to <strong>0</strong> to charge no service fee at all.
+        {t.rich('serviceFee.description', { strong: (chunks) => <strong>{chunks}</strong> })}
       </p>
 
       <div className="mt-4 max-w-xs">
         <label className="block">
-          <span className="mb-1.5 block text-sm font-medium">Service fee (%)</span>
+          <span className="mb-1.5 block text-sm font-medium">{t('serviceFee.label')}</span>
           <input
             type="number"
             min={0}
@@ -93,20 +103,19 @@ export function ServiceFeeCard({ branchId, settings, canUseCard }: Props) {
             className={INPUT_CLS}
           />
           <span className="mt-1 block text-xs text-muted-foreground">
-            0 – {MAX_PCT}%. Card payments only. Charged on the subtotal — never on tax, tips or
-            the delivery fee.
+            {t('serviceFee.hint', { max: MAX_PCT })}
           </span>
         </label>
       </div>
 
       <div className="mt-4 rounded-xl bg-muted/50 p-3">
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Fee preview (card payments)
+          {t('serviceFee.previewTitle')}
         </p>
         <div className="mt-2 grid grid-cols-3 gap-2 text-center text-sm">
           {PREVIEW_SUBTOTALS.map((s) => (
             <div key={s} className="rounded-lg bg-card p-2">
-              <p className="text-xs text-muted-foreground">${s} order</p>
+              <p className="text-xs text-muted-foreground">{t('serviceFee.previewOrder', { amount: s })}</p>
               <p className="font-display text-base font-bold text-primary">
                 ${(Math.round(s * parsed) / 100).toFixed(2)}
               </p>
@@ -118,10 +127,7 @@ export function ServiceFeeCard({ branchId, settings, canUseCard }: Props) {
       {!canUseCard && (
         <p className="mt-3 flex items-center gap-2 rounded-xl bg-muted px-4 py-3 text-sm">
           <Lock className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <span>
-            Card payment is not included in your current package, so this fee is never charged
-            right now.
-          </span>
+          <span>{t('serviceFee.cardLocked')}</span>
         </p>
       )}
 
@@ -131,9 +137,9 @@ export function ServiceFeeCard({ branchId, settings, canUseCard }: Props) {
 
       <div className="mt-4 flex items-center gap-3">
         <Button onClick={save} loading={saving} leftIcon={<Save className="h-4 w-4" />}>
-          Save service fee
+          {t('serviceFee.save')}
         </Button>
-        {savedAt && !saving && <span className="text-sm text-success">Saved ✓</span>}
+        {savedAt && !saving && <span className="text-sm text-success">{t('common.saved')}</span>}
       </div>
     </Card>
   );

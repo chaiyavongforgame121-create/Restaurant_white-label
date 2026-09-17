@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { QrCode, Upload } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Card } from '@favornoms/ui';
 import { useDriverSession } from '@/components/driver-session';
@@ -27,6 +28,7 @@ interface Props {
  * merchant's copy are short-lived signed URLs rather than public links.
  */
 export function PayoutQrCard({ qrPath, onChange, compact = false }: Props) {
+  const t = useTranslations('earnings');
   const { driver, refresh } = useDriverSession();
   const [url, setUrl] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
@@ -55,11 +57,11 @@ export function PayoutQrCard({ qrPath, onChange, compact = false }: Props) {
   const upload = async (file: File) => {
     setError(null);
     if (!PAYOUT_QR_MIME.includes(file.type)) {
-      setError('Please pick a PNG, JPEG or WebP image of your QR.');
+      setError(t('qr.errors.wrongType'));
       return;
     }
     if (file.size > PAYOUT_QR_MAX_BYTES) {
-      setError('That image is over 10 MB — a screenshot of the QR is plenty.');
+      setError(t('qr.errors.tooLarge'));
       return;
     }
     const path = payoutQrPath(driver.id, file.type);
@@ -79,7 +81,8 @@ export function PayoutQrCard({ qrPath, onChange, compact = false }: Props) {
         const rpcMessage = await setDriverPayoutQr(supabase, path);
         setBusy(false);
         if (rpcMessage) {
-          setError(rpcMessage);
+          // The RPC raises bare codes (forbidden, path_not_owned); never put those on screen.
+          setError(t('qr.errors.updateFailed'));
           return;
         }
         setVersion((v) => v + 1);
@@ -93,7 +96,7 @@ export function PayoutQrCard({ qrPath, onChange, compact = false }: Props) {
     setBusy(false);
     // Say what to do, not just what broke: "the connection to the database timed out" reads
     // as permanent to a rider, and it almost never is.
-    setError(`The server is busy right now — please wait a moment and try again. (${lastMessage})`);
+    setError(t('qr.errors.busy', { detail: lastMessage }));
   };
 
   const remove = async () => {
@@ -104,7 +107,7 @@ export function PayoutQrCard({ qrPath, onChange, compact = false }: Props) {
     const message = await setDriverPayoutQr(getBrowserClient(), null);
     setBusy(false);
     if (message) {
-      setError(message);
+      setError(t('qr.errors.updateFailed'));
       return;
     }
     onChange(null);
@@ -118,7 +121,7 @@ export function PayoutQrCard({ qrPath, onChange, compact = false }: Props) {
       } ${busy ? 'pointer-events-none opacity-60' : ''}`}
     >
       <Upload className="h-3.5 w-3.5" />
-      {busy ? 'Saving…' : qrPath ? 'Replace' : 'Upload QR'}
+      {busy ? t('qr.saving') : qrPath ? t('qr.replace') : t('qr.upload')}
       <input
         type="file"
         accept="image/png,image/jpeg,image/webp"
@@ -140,7 +143,7 @@ export function PayoutQrCard({ qrPath, onChange, compact = false }: Props) {
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={url}
-              alt="Your payout QR"
+              alt={t('qr.alt')}
               className="border-border bg-background h-10 w-10 shrink-0 rounded-lg border object-contain"
             />
           ) : (
@@ -149,11 +152,9 @@ export function PayoutQrCard({ qrPath, onChange, compact = false }: Props) {
             </div>
           )}
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold">Payout QR</p>
+            <p className="text-sm font-semibold">{t('qr.title')}</p>
             <p className="text-muted-foreground text-xs">
-              {qrPath
-                ? 'The restaurant can scan this to pay you.'
-                : 'Without one, they type your account number by hand.'}
+              {qrPath ? t('qr.compactSaved') : t('qr.compactMissing')}
             </p>
           </div>
           {picker}
@@ -174,11 +175,8 @@ export function PayoutQrCard({ qrPath, onChange, compact = false }: Props) {
           <QrCode className="h-5 w-5" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="font-display text-lg font-semibold">Payout QR</p>
-          <p className="text-muted-foreground text-xs">
-            Restaurants see this next to your withdrawal request, so they can scan instead of typing
-            your account number.
-          </p>
+          <p className="font-display text-lg font-semibold">{t('qr.title')}</p>
+          <p className="text-muted-foreground text-xs">{t('qr.description')}</p>
         </div>
       </div>
 
@@ -187,7 +185,7 @@ export function PayoutQrCard({ qrPath, onChange, compact = false }: Props) {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={url}
-            alt="Your payout QR"
+            alt={t('qr.alt')}
             className="border-border bg-background h-40 w-40 rounded-xl border object-contain"
           />
         </a>
@@ -202,7 +200,7 @@ export function PayoutQrCard({ qrPath, onChange, compact = false }: Props) {
             disabled={busy}
             className="focus-ring text-muted-foreground rounded-full px-2 py-1 text-xs font-semibold disabled:opacity-60"
           >
-            Remove
+            {t('qr.remove')}
           </button>
         )}
       </div>

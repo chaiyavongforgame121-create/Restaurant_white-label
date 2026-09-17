@@ -1,0 +1,93 @@
+{
+  "accessDenied": {
+    "title": "Không có quyền quản lý tài xế",
+    "reason": "Vai trò của bạn không thể duyệt tài xế tại {branch}."
+  },
+  "header": {
+    "title": "Tài xế",
+    "applied": "{count, plural, other {# tài xế đã đăng ký vào chi nhánh này}}",
+    "awaitingDecision": "{count} đang chờ bạn quyết định",
+    "documentsToReview": "{count} có giấy tờ cần xem xét",
+    "changedAfterReview": "{count} đã đổi giấy tờ sau khi được xem xét"
+  },
+  "loadError": {
+    "title": "Không tải được danh sách đăng ký tài xế",
+    "body": "Đã xảy ra lỗi khi đọc danh sách đăng ký của chi nhánh này. Hãy tải lại trang để thử lại."
+  },
+  "empty": {
+    "title": "Chưa có tài xế nào đăng ký",
+    "body": "Tài xế đăng ký từ ứng dụng Tài xế. Họ chỉ có thể đăng ký sau khi tải lên đủ ba giấy tờ xác minh (bằng lái, giấy đăng ký xe và ảnh selfie), nên tài xế đã tạo tài khoản nhưng chưa tải lên xong sẽ chưa hiện ở đây."
+  },
+  "card": {
+    "unknownDriver": "Tài xế không xác định",
+    "kyc": "Xác minh: {status}",
+    "documentsUnreadable": "Giấy tờ: không đọc được",
+    "documentsCount": "Giấy tờ: đã nhận {received}/{total}",
+    "applied": "Đăng ký {date}",
+    "reviewed": "xem xét {date}",
+    "documentsReceived": "nhận giấy tờ gần nhất {date}",
+    "note": "<label>Ghi chú:</label> {note}",
+    "approvedNeedsDocuments": "Đã duyệt, nhưng giấy tờ vẫn cần được xem xét — hãy dùng Xem giấy tờ.",
+    "replacedAfterVerify": "Tài xế đã thay một giấy tờ lúc {received}, sau khi được xác minh ngày {verified} — hãy xem lại.",
+    "replacedAfterDecision": "Tài xế đã thay một giấy tờ lúc {received}, sau quyết định của bạn ngày {reviewed}."
+  },
+  "kycStatus": {
+    "pending": "đang chờ",
+    "verified": "đã xác minh",
+    "rejected": "bị từ chối",
+    "suspended": "bị tạm ngưng",
+    "unknown": "không rõ"
+  },
+  "approval": {
+    "pending": "đang chờ",
+    "approved": "đã duyệt",
+    "rejected": "bị từ chối",
+    "suspended": "bị tạm ngưng"
+  },
+  "vehicle": {
+    "motorcycle": "Xe máy",
+    "car": "Ô tô",
+    "bicycle": "Xe đạp",
+    "scooter": "Xe tay ga"
+  },
+  "docs": {
+    "license": "Bằng lái xe",
+    "vehicleReg": "Giấy đăng ký xe",
+    "selfie": "Ảnh selfie cầm bằng lái"
+  },
+  "approve": {
+    "actions": {
+      "approve": "Duyệt",
+      "reject": "Từ chối",
+      "suspend": "Tạm ngưng",
+      "reopen": "Mở lại",
+      "reinstate": "Khôi phục"
+    },
+    "rejectReasonLabel": "Lý do từ chối",
+    "rejectReasonPlaceholder": "Tài xế sẽ thấy trong ứng dụng",
+    "cancel": "Hủy",
+    "confirmReject": "Xác nhận từ chối",
+    "notSaved": "Chưa lưu được — có thể bạn không có quyền duyệt tài xế.",
+    "saveFailed": "Không lưu được quyết định. Hãy thử lại."
+  },
+  "review": {
+    "button": "Xem giấy tờ",
+    "title": "Xem xét giấy tờ",
+    "currentStatus": "Trạng thái hiện tại: {status}",
+    "currentStatusVerified": "Trạng thái hiện tại: {status} · xác minh {date}",
+    "sharedWarning": "Xác minh hoặc từ chối giấy tờ ở đây áp dụng cho mọi nhà hàng tài xế này làm việc cùng, không chỉ {branch}. Quyết định chỉ thuộc về bạn là Duyệt / Tạm ngưng đơn đăng ký của họ.",
+    "replacedAfterVerify": "Một giấy tờ đã được thay lúc {replaced}, sau khi giấy tờ được xác minh ngày {verified}. Tệp bạn thấy bên dưới là tệp mới.",
+    "replacedAfterDecision": "Một giấy tờ đã được thay lúc {replaced}, sau quyết định của bạn ngày {decided}. Tệp bạn thấy bên dưới là tệp mới.",
+    "receivedAt": "Đã nhận {date}",
+    "nothingReceived": "Chưa nhận được",
+    "openFullSize": "Xem kích thước đầy đủ",
+    "notUploaded": "Chưa tải lên",
+    "awaitingUpload": "Đang chờ tải lên",
+    "listError": "Không đọc được giấy tờ của tài xế. Hãy đóng lại và thử lại.",
+    "forbidden": "Bạn không có quyền xem xét giấy tờ tài xế. Chỉ chủ sở hữu hoặc quản lý mới làm được.",
+    "saveFailed": "Không lưu được kết quả xem xét giấy tờ. Hãy thử lại.",
+    "rejectHint": "Từ chối sẽ báo cho tài xế rằng cần thay một giấy tờ, nhưng không nói là giấy tờ nào. Để nêu lý do, hãy từ chối đơn đăng ký của họ kèm lý do — nội dung đó sẽ hiện trong ứng dụng của họ.",
+    "reject": "Từ chối",
+    "verify": "Xác minh"
+  }
+}

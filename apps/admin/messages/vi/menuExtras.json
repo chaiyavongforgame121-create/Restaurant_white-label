@@ -1,0 +1,203 @@
+{
+  "errors": {
+    "generic": "Đã xảy ra lỗi. Vui lòng thử lại.",
+    "network": "Không kết nối được máy chủ. Kiểm tra kết nối mạng rồi thử lại.",
+    "permissionDenied": "Bạn không có quyền thay đổi mục này.",
+    "duplicate": "Mục này đã tồn tại.",
+    "inUse": "Mục này vẫn đang được dùng nên không thể thay đổi.",
+    "invalidValue": "Giá trị không hợp lệ. Vui lòng kiểm tra rồi thử lại.",
+    "invalidPrice": "Nhập giá hợp lệ."
+  },
+  "modifiers": {
+    "metaTitle": "Tùy chọn · Quản trị Favornoms",
+    "title": "Nhóm tùy chọn",
+    "subtitle": "Kích cỡ, món thêm, cách chế biến — mọi thứ khách có thể tùy chỉnh cho một món.",
+    "newGroup": "Nhóm mới",
+    "empty": "Chưa có nhóm tùy chọn nào. Hãy tạo một nhóm (ví dụ “Kích cỡ” với Nhỏ / Vừa / Lớn) rồi liên kết với các món trong thực đơn.",
+    "required": "Bắt buộc",
+    "optional": "Không bắt buộc",
+    "pickOne": "chọn 1",
+    "pickUpTo": "chọn tối đa {max}",
+    "optionCount": "{count, plural, other {# tùy chọn}}",
+    "linkedCount": "liên kết với {count, plural, other {# món}}",
+    "delete": "Xóa",
+    "options": "Tùy chọn",
+    "default": "Mặc định",
+    "active": "Đang bật",
+    "remove": "Gỡ",
+    "addOption": "Thêm tùy chọn",
+    "createPrompt": {
+      "title": "Đặt tên nhóm tùy chọn",
+      "body": "Đây là tiêu đề khách thấy phía trên các lựa chọn, ví dụ Kích cỡ hoặc Món thêm.",
+      "placeholder": "Kích cỡ",
+      "confirm": "Tạo nhóm"
+    },
+    "deleteGroupConfirm": {
+      "title": "Xóa nhóm tùy chọn này?",
+      "body": "Các tùy chọn trong nhóm cũng bị xóa, và mọi món đang liên kết với nhóm sẽ mất các lựa chọn đó.",
+      "confirm": "Xóa"
+    },
+    "optionPrompt": {
+      "title": "Đặt tên tùy chọn",
+      "body": "Một lựa chọn trong nhóm này, ví dụ Lớn hoặc Thêm phô mai.",
+      "placeholder": "Lớn",
+      "confirm": "Tiếp"
+    },
+    "pricePrompt": {
+      "title": "Chênh lệch giá của tùy chọn",
+      "body": "Cộng vào giá món, tính bằng USD. Nhập 0 nếu không đổi giá, hoặc số âm để giảm giá.",
+      "confirm": "Thêm tùy chọn"
+    },
+    "deleteOptionConfirm": {
+      "title": "Xóa tùy chọn này?",
+      "body": "Khách sẽ không chọn được tùy chọn này ở bất kỳ món nào dùng nhóm này nữa.",
+      "confirm": "Xóa"
+    },
+    "settings": {
+      "name": "Tên",
+      "type": "Kiểu",
+      "single": "Chọn một",
+      "multiple": "Chọn nhiều",
+      "min": "Tối thiểu",
+      "max": "Tối đa",
+      "required": "Bắt buộc (khách phải chọn ít nhất số tối thiểu)"
+    },
+    "links": {
+      "linkedTo": "Liên kết với {names}",
+      "linkedToMore": "Liên kết với {names} và {count} món khác",
+      "none": "<muted>Chưa liên kết với món nào</muted>",
+      "cancel": "Hủy",
+      "edit": "Sửa liên kết",
+      "linked": "đã liên kết",
+      "noItems": "Chi nhánh này chưa có món nào đang bán.",
+      "save": "Lưu liên kết"
+    }
+  },
+  "combos": {
+    "metaTitle": "Combo · Quản trị Favornoms",
+    "title": "Combo",
+    "subtitle": "Gộp nhiều món với giá ưu đãi. Khách thấy combo ở hàng nổi bật phía trên thực đơn.",
+    "newCombo": "Combo mới",
+    "empty": "Chưa có combo nào. Bấm <strong>Combo mới</strong> để tạo combo ưu đãi đầu tiên.",
+    "namePrompt": {
+      "title": "Đặt tên combo",
+      "body": "Khách thấy tên này ở hàng combo nổi bật phía trên thực đơn.",
+      "placeholder": "ví dụ “Combo burger”, “Suất gia đình”",
+      "confirm": "Tiếp"
+    },
+    "pricePrompt": {
+      "title": "Tổng giá (USD)",
+      "body": "Số tiền khách trả cho cả combo. Bạn có thể đổi sau.",
+      "confirm": "Tạo combo"
+    },
+    "deleteConfirm": {
+      "title": "Xóa combo này?",
+      "body": "Các đơn hàng đã có không bị ảnh hưởng.",
+      "confirm": "Xóa"
+    },
+    "active": "Đang bán",
+    "hidden": "Đã ẩn",
+    "price": "Giá",
+    "saves": "Tiết kiệm {amount}",
+    "delete": "Xóa",
+    "hideContents": "Ẩn các món",
+    "showContents": "{count, plural, other {# món trong combo này →}}",
+    "noItems": "Chưa có món nào — thêm món bên dưới.",
+    "each": "{price}/món",
+    "addItem": "Thêm món…"
+  },
+  "happyHours": {
+    "metaTitle": "Giờ vàng · Quản trị Favornoms",
+    "title": "Giờ vàng",
+    "subtitle": "Giảm giá theo khung giờ cho từng món hoặc cả danh mục.",
+    "newHappyHour": "Thêm giờ vàng",
+    "empty": "Chưa có khung giờ vàng nào.",
+    "namePrompt": {
+      "title": "Đặt tên chương trình",
+      "body": "Ví dụ “Giờ vàng” hoặc “Ưu đãi bữa trưa”.",
+      "placeholder": "Giờ vàng",
+      "confirm": "Tạo"
+    },
+    "deleteConfirm": {
+      "title": "Xóa khung giờ vàng này?",
+      "body": "Giảm giá sẽ ngừng áp dụng trên thực đơn của khách ngay lập tức.",
+      "confirm": "Xóa"
+    },
+    "active": "Đang bật",
+    "paused": "Tạm dừng",
+    "percentOff": "Giảm %",
+    "fixedOff": "Giảm $",
+    "from": "Từ",
+    "to": "đến",
+    "days": {
+      "sun": "CN",
+      "mon": "T2",
+      "tue": "T3",
+      "wed": "T4",
+      "thu": "T5",
+      "fri": "T6",
+      "sat": "T7"
+    },
+    "appliesToAll": "Áp dụng cho: <strong>tất cả món trong thực đơn</strong>",
+    "appliesToItems": "Áp dụng cho: {items, plural, other {# món}}",
+    "appliesToCategories": "Áp dụng cho: {categories, plural, other {# danh mục}}",
+    "appliesToBoth": "Áp dụng cho: {items, plural, other {# món}}, {categories, plural, other {# danh mục}}",
+    "moveUp": "Chuyển lên",
+    "moveDown": "Chuyển xuống",
+    "delete": "Xóa",
+    "scope": {
+      "edit": "Sửa",
+      "hide": "Ẩn",
+      "items": "Món",
+      "categories": "Danh mục"
+    }
+  },
+  "import": {
+    "title": "Nhập thực đơn bằng AI",
+    "subtitle": "Tải lên ảnh chụp thực đơn in sẵn — Claude sẽ trích xuất món, giá và danh mục để bạn duyệt.",
+    "menuImage": "Ảnh thực đơn",
+    "upload": "Tải lên",
+    "hint": "Gợi ý cho AI (không bắt buộc)",
+    "hintPlaceholder": "ví dụ: đồ ăn Mỹ bình dân, giá bằng USD",
+    "uploaded": "Đã tải ảnh lên. Bấm Phân tích bằng AI để trích xuất các món.",
+    "analyze": "Phân tích bằng AI",
+    "analyzing": "Claude đang phân tích ảnh…",
+    "imported": "{count, plural, other {Đã nhập # món.}}",
+    "selected": "Đã chọn {selected}/{total} món",
+    "importSelected": "Nhập các món đã chọn",
+    "descriptionPlaceholder": "Mô tả",
+    "remove": "Gỡ",
+    "stations": {
+      "hot": "Bếp nóng",
+      "cold": "Bếp lạnh",
+      "bar": "Quầy bar",
+      "dessert": "Tráng miệng",
+      "expo": "Ra món"
+    },
+    "errors": {
+      "uploadFailed": "Tải lên không thành công. Vui lòng thử lại.",
+      "fileTooLarge": "Ảnh quá lớn, không tải lên được.",
+      "fileTypeNotAllowed": "Không tải lên được loại tệp này. Hãy chọn một tệp ảnh.",
+      "signedOut": "Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại rồi thử lại.",
+      "notAllowed": "Chỉ chủ sở hữu và quản lý mới được nhập thực đơn ở chi nhánh này.",
+      "aiUnavailable": "Tính năng nhập thực đơn bằng AI hiện chưa dùng được.",
+      "rateLimited": "Chi nhánh này đã đạt giới hạn số lần nhập mỗi giờ. Vui lòng thử lại sau một giờ.",
+      "analyzeFailed": "Không đọc được thực đơn từ ảnh này. Hãy thử ảnh rõ nét hơn."
+    },
+    "csv": {
+      "title": "Nhập hàng loạt từ CSV",
+      "columns": "Các cột: <code>{columns}</code> (cột station không bắt buộc). Dòng đầu tiên phải là tiêu đề cột.",
+      "downloadTemplate": "Tải tệp mẫu",
+      "valid": "{count} hợp lệ",
+      "errorCount": "{count, plural, other {# lỗi}}",
+      "rowErrors": {
+        "missingCategory": "Dòng {row}: thiếu danh mục",
+        "missingName": "Dòng {row}: thiếu tên",
+        "invalidPrice": "Dòng {row}: giá không hợp lệ “{value}”"
+      },
+      "moreErrors": "… và {count} lỗi khác.",
+      "import": "{count, plural, other {Nhập # món}}",
+      "noValidRows": "Không có dòng hợp lệ để nhập."
+    }
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "loading": "Cargando…",
+  "back": "Atrás",
+  "signIn": "Iniciar sesión",
+  "sections": {
+    "orderHistory": "Historial de pedidos",
+    "addresses": "Direcciones de entrega",
+    "loyalty": "Puntos y recompensas",
+    "settings": "Configuración y preferencias"
+  },
+  "home": {
+    "welcomeBack": "¡Hola de nuevo!",
+    "memberAt": "Miembro de {brandName}",
+    "welcomeTo": "Te damos la bienvenida a {brandName}",
+    "signInToEarn": "Inicia sesión para ganar puntos",
+    "statPoints": "Puntos",
+    "statTier": "Nivel",
+    "statLifetime": "Acumulados",
+    "addressesMeta": "Administra tus direcciones guardadas",
+    "loyaltyMeta": "{tier} · {points, plural, one {# punto} other {# puntos}}",
+    "googleAccount": "Cuenta de Google",
+    "googleLinked": "Vinculada",
+    "googleLinkHint": "Vincula Google para canjear tus puntos.",
+    "linkGoogle": "Vincular Google",
+    "googleAlreadyLinked": "Esa cuenta de Google ya está vinculada a otra cuenta.",
+    "linkGoogleFailed": "No pudimos vincular tu cuenta de Google. Inténtalo de nuevo.",
+    "signOut": "Cerrar sesión"
+  },
+  "addresses": {
+    "signInPrompt": "Inicia sesión para guardar y administrar tus direcciones de entrega.",
+    "retry": "Reintentar",
+    "emptyTitle": "No tienes direcciones guardadas",
+    "emptyBody": "Agrega una para pagar más rápido la próxima vez.",
+    "fallbackLabel": "Dirección",
+    "defaultBadge": "Predeterminada",
+    "note": "Nota: {note}",
+    "setDefault": "Predeterminar",
+    "edit": "Editar",
+    "delete": "Eliminar",
+    "addNew": "Agregar una dirección",
+    "confirmDelete": "¿Eliminar esta dirección?",
+    "form": {
+      "editTitle": "Editar dirección",
+      "addTitle": "Agregar dirección",
+      "label": "Etiqueta (opcional)",
+      "labelPlaceholder": "Casa, Trabajo, Casa de mamá…",
+      "pinned": "Ubicación marcada",
+      "instructions": "Instrucciones de entrega (opcional)",
+      "instructionsPlaceholder": "p. ej., código del portón 1234 · dejar en la puerta",
+      "setDefault": "Usar como dirección predeterminada",
+      "saveChanges": "Guardar cambios",
+      "save": "Guardar dirección"
+    },
+    "errors": {
+      "line1Required": "Escribe la dirección (calle y número).",
+      "notFound": "Esa dirección ya no existe. Actualiza la página.",
+      "forbidden": "Esa dirección pertenece a otra cuenta.",
+      "loadFailed": "No pudimos cargar tus direcciones. Inténtalo de nuevo."
+    }
+  },
+  "settings": {
+    "signInPrompt": "Inicia sesión para administrar tu perfil y tus preferencias.",
+    "profileTitle": "Tu perfil",
+    "fullName": "Nombre completo",
+    "fullNamePlaceholder": "p. ej., Ana García",
+    "phone": "Teléfono",
+    "email": "Correo electrónico",
+    "notificationsTitle": "Notificaciones",
+    "promotions": "Promociones y ofertas",
+    "promotionsHint": "Recibe ofertas, recompensas y novedades por correo.",
+    "appearanceTitle": "Apariencia",
+    "darkMode": "Modo oscuro",
+    "lightMode": "Modo claro",
+    "saveFailed": "No pudimos guardar tu perfil. Vuelve a iniciar sesión e inténtalo otra vez.",
+    "phoneTaken": "Ese número de teléfono ya está en otro perfil de este restaurante. Usa otro número.",
+    "noProfile": "Aún no encontramos tu perfil. Haz tu primer pedido para crearlo. Tu preferencia de apariencia se guarda de todos modos.",
+    "saved": "Guardado ✓",
+    "saveChanges": "Guardar cambios"
+  },
+  "errors": {
+    "sessionExpired": "Tu sesión expiró. Vuelve a iniciar sesión.",
+    "branchNotFound": "No encontramos este restaurante. Vuelve a cargar la página.",
+    "profileUnavailable": "No pudimos configurar tu perfil. Inténtalo de nuevo.",
+    "generic": "Algo salió mal. Inténtalo de nuevo."
+  }
+}

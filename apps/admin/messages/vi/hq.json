@@ -1,0 +1,113 @@
+{
+  "title": "Trụ sở",
+  "subtitle": "Tất cả chi nhánh, {months, plural, other {# tháng gần nhất}}",
+  "subtitleWithRestaurant": "{restaurant} · Tất cả chi nhánh, {months, plural, other {# tháng gần nhất}}",
+  "rangeShort": "{months} tháng",
+  "tryAgain": "Thử lại",
+  "goToBranchReports": "Đến báo cáo chi nhánh",
+  "errorBoundary": {
+    "title": "Đã xảy ra lỗi khi hiển thị bản tổng hợp này",
+    "body": "Đơn hàng và dữ liệu doanh thu của bạn vẫn nguyên vẹn. Hãy thử lại — nếu vẫn lỗi, hãy liên hệ bộ phận hỗ trợ.",
+    "reference": "Mã tham chiếu: {digest}"
+  },
+  "ownerOnly": {
+    "title": "Chỉ dành cho chủ sở hữu",
+    "body": "Trang này tổng hợp doanh thu và chi phí của <em>mọi</em> chi nhánh nên chỉ dành cho chủ nhà hàng. Quản lý vẫn xem được chi nhánh của mình trong mục Báo cáo. Nếu cần, hãy nhờ chủ sở hữu đổi vai trò của bạn."
+  },
+  "loadError": {
+    "title": "Không tải được dữ liệu trụ sở",
+    "body": "Dữ liệu doanh thu của bạn vẫn an toàn — đây là lỗi khi đọc dữ liệu. Hãy tải lại trang; nếu vẫn lỗi, hãy liên hệ bộ phận hỗ trợ."
+  },
+  "empty": {
+    "title": "Không có dữ liệu để tổng hợp trong {months, plural, other {# tháng gần nhất}}",
+    "body": "Bản tổng hợp đã tải bình thường — {count, plural, =1 {chi nhánh của bạn} other {# chi nhánh của bạn}} chưa nhận đơn nào trong khoảng thời gian này. Hãy thử khoảng thời gian rộng hơn ở trên."
+  },
+  "kpi": {
+    "revenue": "Doanh thu",
+    "orders": "Đơn hàng",
+    "branch": "Chi nhánh",
+    "branches": "Chi nhánh",
+    "avgOrder": "Trung bình mỗi đơn {amount}",
+    "knownCosts": "Chi phí đã biết",
+    "knownCostsHint": "Chi trả tài xế + gói đăng ký"
+  },
+  "chart": {
+    "title": "Doanh thu so với chi phí đã biết",
+    "timezone": "Các tháng được tính theo giờ của trụ sở ({timezone}).",
+    "revenue": "Doanh thu",
+    "driverPayouts": "Chi trả tài xế",
+    "subscription": "Gói đăng ký"
+  },
+  "branches": {
+    "title": "Chi nhánh",
+    "ranked": "Xếp theo doanh thu",
+    "columns": {
+      "branch": "Chi nhánh",
+      "orders": "Đơn hàng",
+      "revenue": "Doanh thu",
+      "avgOrder": "TB mỗi đơn",
+      "payouts": "Chi trả",
+      "share": "Tỷ trọng"
+    },
+    "inactive": "Ngừng hoạt động",
+    "open": "Mở"
+  },
+  "costs": {
+    "title": "Chi phí ghi nhận được",
+    "driverPayouts": "Chi trả tài xế",
+    "subscription": "Gói đăng ký Favornoms",
+    "noInvoicesWithPlan": "Chưa có hóa đơn nào được ghi nhận. Mức phí hiện tại của bạn là <strong>{rate}/tháng</strong> với gói <planName>{plan}</planName>.",
+    "noInvoices": "Chưa có hóa đơn nào được ghi nhận. Mức phí hiện tại của bạn là <strong>{rate}/tháng</strong>.",
+    "totalKnown": "Tổng chi phí đã biết",
+    "afterCosts": "Doanh thu sau chi phí",
+    "disclaimer": "Đây là các chi phí duy nhất Favornoms ghi nhận. Chưa bao gồm nguyên liệu, lương nhân viên, tiền thuê mặt bằng và phí thẻ, nên đây không phải lợi nhuận của bạn."
+  },
+  "monthly": {
+    "title": "Theo từng tháng",
+    "columns": {
+      "month": "Tháng",
+      "orders": "Đơn hàng",
+      "revenue": "Doanh thu",
+      "payouts": "Chi trả",
+      "subscription": "Gói đăng ký",
+      "afterCosts": "Sau chi phí"
+    }
+  },
+  "channels": {
+    "title": "Theo kênh",
+    "subtitle": "Gộp tất cả chi nhánh",
+    "empty": "Chưa có đơn hàng.",
+    "orders": "{count, plural, other {# đơn hàng}}",
+    "names": {
+      "dine_in": "Ăn tại quán",
+      "pickup": "Tự đến lấy",
+      "delivery": "Giao hàng",
+      "qr_ordering": "Đặt món qua QR"
+    }
+  },
+  "stacked": {
+    "title": "Doanh thu theo chi nhánh, theo tháng"
+  },
+  "franchise": {
+    "title": "Nhượng quyền",
+    "subtitle": "Quản lý việc gửi thực đơn từ trụ sở xuống chi nhánh.",
+    "createTitle": "Tạo nhóm nhượng quyền",
+    "createBody": "Gom nhiều nhà hàng vào một nhóm để gửi thay đổi thực đơn từ một nguồn.",
+    "createGroup": "Tạo nhóm",
+    "namePlaceholder": "Nhóm nhượng quyền của tôi",
+    "create": "Tạo",
+    "groupSummary": "{restaurants, plural, other {# nhà hàng}} · {branches, plural, other {# chi nhánh}}",
+    "broadcastTitle": "Gửi thực đơn của chi nhánh này tới:",
+    "broadcastBody": "Các danh mục và món còn thiếu ở chi nhánh đích sẽ được thêm vào.",
+    "noOtherBranches": "Nhóm này chưa có chi nhánh nào khác.",
+    "broadcast": "Gửi thực đơn",
+    "broadcastDone": "Đã gửi xong. Món đã thêm: {inserted}, đã cập nhật: {updated}.",
+    "errors": {
+      "nameTaken": "Đã có nhóm nhượng quyền trùng tên này.",
+      "notAllowed": "Bạn không có quyền thực hiện thao tác này.",
+      "signedOut": "Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại.",
+      "createFailed": "Không tạo được nhóm. Hãy thử lại.",
+      "broadcastFailed": "Không gửi được thực đơn. Hãy thử lại."
+    }
+  }
+}

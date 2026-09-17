@@ -1,0 +1,72 @@
+{
+  "roles": {
+    "owner": "Owner",
+    "admin": "Admin",
+    "manager": "Manager",
+    "cashier": "Cashier",
+    "server": "Server",
+    "kitchen": "Kitchen",
+    "staff": "Staff",
+    "driver": "Driver"
+  },
+  "accept": {
+    "opening": "Opening your invitation…",
+    "joining": "Joining the team…",
+    "oneMoment": "One moment.",
+    "anotherAccount": "another account",
+    "createAccount": {
+      "invited": "You’re invited to join <strong>{workplace}</strong> as <strong>{role}</strong>.",
+      "title": "Create your account",
+      "email": "Email",
+      "password": "Password",
+      "passwordHint": "At least {min} characters. You’ll use this to sign in on the restaurant’s devices.",
+      "confirmPassword": "Confirm password",
+      "submit": "Create account & join"
+    },
+    "confirmJoin": {
+      "title": "Join {workplace}?",
+      "body": "You’ll join as <strong>{role}</strong> using <strong>{email}</strong>.",
+      "submit": "Join the team"
+    },
+    "switchAccount": {
+      "title": "Switch accounts?",
+      "body": "This invitation is for <strong>{invited}</strong>, but this browser is signed in as <strong>{current}</strong>. Continuing signs this browser out of {current} and in as {invited}.",
+      "submit": "Continue as {invited}"
+    },
+    "needsLink": {
+      "expiredTitle": "This invitation link has expired",
+      "openTitle": "Open the link from your email",
+      "expiredBody": "Invitation links work only once. We can email <strong>{email}</strong> a new link to set your password and join — open it in this browser.",
+      "openBody": "Open the invitation link in the email sent to <strong>{email}</strong>, or get a new link below.",
+      "sent": "Sent. Check {email} and open the newest email in this browser.",
+      "sendLink": "Email me a link to set my password",
+      "signIn": "Already created your password? Sign in"
+    },
+    "wrongAccount": {
+      "title": "This invitation is for someone else",
+      "body": "It was sent to <strong>{invited}</strong>, but this browser is signed in as <strong>{current}</strong>. Sign out here, then open the invitation link from that email again.",
+      "signOut": "Sign out on this browser"
+    },
+    "failed": {
+      "title": "Couldn’t accept invite",
+      "used": "This invitation has already been used. If it was yours, sign in — or use “Forgot password?” if you never chose one.",
+      "notFound": "This invitation link is incomplete or no longer exists. Ask the restaurant to invite you again.",
+      "goToSignIn": "Go to sign in"
+    },
+    "done": {
+      "title": "You’re in!",
+      "body": "Welcome to {workplace}. Taking you to your screen…"
+    },
+    "errors": {
+      "alreadyUsed": "This invitation has already been used.",
+      "notFound": "This invitation no longer exists. Ask the restaurant to invite you again.",
+      "confirmEmail": "Open the invitation link from your email again to confirm your address.",
+      "alreadyStaff": "You already work at this restaurant with this account, at the same branch. Sign in to continue.",
+      "joinFailed": "Something went wrong joining the restaurant. Please try again.",
+      "tooManyEmails": "Too many emails were sent in the last hour. Please try again later.",
+      "emailFailed": "We could not send the email. Please try again, or ask the restaurant to invite you again.",
+      "passwordTooShort": "Use at least {min} characters.",
+      "passwordsDontMatch": "The two passwords do not match."
+    }
+  }
+}

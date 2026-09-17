@@ -1,0 +1,141 @@
+{
+  "header": {
+    "title": "Menú",
+    "summary": "{items, plural, one {# producto} other {# productos}} en {categories, plural, one {# categoría} other {# categorías}}",
+    "modeEdit": "Editar",
+    "modeReorder": "Ordenar",
+    "modifiers": "Opciones",
+    "combos": "Combos",
+    "happyHours": "Happy hour",
+    "aiImport": "Importar con IA",
+    "addItem": "Agregar producto"
+  },
+  "card": {
+    "hidden": "Oculto",
+    "hiddenHint": "No aparece en el menú para clientes. Los combos que lo incluyen lo siguen vendiendo.",
+    "showOnMenu": "Mostrar en el menú",
+    "edit": "Editar",
+    "duplicate": "Duplicar",
+    "delete": "Eliminar",
+    "soldOut": "Agotado",
+    "stockLeft": "{count, plural, one {Queda #} other {Quedan #}}"
+  },
+  "notices": {
+    "savedTracking": "Se guardó “{name}”: con control de inventario, {count, plural, one {queda #} other {quedan #}}.",
+    "savedUntracked": "Se guardó “{name}”: sin control de inventario, así que la tienda en línea no lo marcará como agotado.",
+    "copied": "Copiado. La copia está oculta para los clientes y los grupos de opciones no se copian: agrégalos en Editar y luego activa “Mostrar en el menú para clientes”.",
+    "nowVisible": "“{name}” ya está en el menú para clientes.",
+    "nowHidden": "“{name}” está oculto para los clientes.",
+    "visibilityUnchanged": "No se cambió nada. Es posible que este producto se haya eliminado o que tu rol no pueda editar el menú en esta sucursal.",
+    "reloadFailed": "Se guardó, pero no se pudo recargar esta lista. {reason}"
+  },
+  "deleteConfirm": {
+    "title": "¿Eliminar este producto del menú?",
+    "body": "Desaparecerá del menú para clientes y no se puede deshacer.",
+    "confirm": "Eliminar"
+  },
+  "sheet": {
+    "editTitle": "Editar producto",
+    "addTitle": "Agregar producto al menú"
+  },
+  "editor": {
+    "name": "Nombre",
+    "category": "Categoría",
+    "newCategory": "+ Nueva",
+    "cancelNewCategory": "Cancelar",
+    "categoryIcon": "Ícono de la categoría",
+    "categoryNamePlaceholder": "Nombre de la categoría (p. ej., Postres)",
+    "createCategory": "Crear categoría",
+    "createCategoryFailed": "No se pudo crear la categoría.",
+    "price": "Precio (USD)",
+    "description": "Descripción",
+    "allergens": "Alérgenos / advertencias",
+    "allergenPlaceholder": "Escribe un alérgeno y presiona Enter (p. ej., Maní)",
+    "addAllergen": "Agregar",
+    "removeAllergen": "Quitar {allergen}",
+    "allergenHint": "Se muestra a los clientes en la página del producto para que las personas con alergias lo revisen antes de pedir.",
+    "image": "Imagen",
+    "uploading": "Subiendo…",
+    "imageUrlPlaceholder": "…o pega una URL",
+    "trackStock": "Controlar inventario",
+    "trackStockOnHint": "La tienda en línea marca este producto como agotado cuando el conteo llega a cero.",
+    "trackStockOffHint": "Sin conteo. La tienda en línea siempre ofrecerá este producto.",
+    "currentStock": "Inventario actual",
+    "lowStockAt": "Alerta de inventario bajo en",
+    "showOnMenu": "Mostrar en el menú para clientes",
+    "showOnMenuHint": "Si lo desactivas, el producto sale del menú para clientes sin eliminarse (los combos que lo incluyen lo siguen vendiendo). Las copias empiezan ocultas y sin grupos de opciones, para que puedas terminarlas primero.",
+    "recommended": "Recomendación del chef",
+    "isNew": "Nuevo",
+    "save": "Guardar",
+    "stockReadFailed": "No se pudo leer la configuración de inventario de este producto. {reason}",
+    "planLimit": "Llegaste al límite de tu plan ({current} de {limit} productos). Mejora tu suscripción en Preferencias → Plan y facturación para agregar más.",
+    "nothingSaved": "No se guardó nada. Es posible que este producto se haya eliminado o que tu rol no pueda editar el menú en esta sucursal.",
+    "optionsWarning": "Se guardó “{name}”, pero uno de sus grupos de opciones no se pudo guardar. {reason} Los grupos que sí se guardaron se conservaron: vuelve a abrir el producto para terminar sus opciones."
+  },
+  "allergenPresets": {
+    "peanuts": "Maní",
+    "treeNuts": "Frutos secos",
+    "milk": "Leche",
+    "eggs": "Huevo",
+    "fish": "Pescado",
+    "shellfish": "Mariscos",
+    "soy": "Soya",
+    "wheatGluten": "Trigo / gluten",
+    "sesame": "Sésamo"
+  },
+  "modifiers": {
+    "title": "Opciones",
+    "subtitle": "Tamaño, extras y preparación que eligen los clientes",
+    "addGroup": "Agregar grupo",
+    "loading": "Cargando opciones…",
+    "emptyTitle": "Agregar un grupo de opciones",
+    "emptyExample": "p. ej., <strong>Tamaño</strong> (elige 1) o <strong>Extras</strong> (elige varios)",
+    "groupNamePlaceholder": "Nombre del grupo (p. ej., Tamaño)",
+    "removeGroupTitle": "Quitar grupo",
+    "remove": "Quitar",
+    "pickOne": "Elige 1",
+    "pickMany": "Elige varios",
+    "upTo": "hasta",
+    "required": "Obligatorio",
+    "optional": "Opcional",
+    "optionNamePlaceholder": "Nombre de la opción (p. ej., Grande)",
+    "deleteOption": "Eliminar opción",
+    "default": "Predeterminada",
+    "active": "Activa",
+    "hidden": "Oculta",
+    "addOption": "Agregar opción",
+    "decrease": "Disminuir",
+    "increase": "Aumentar",
+    "groupSaveFailed": "No se pudo guardar el grupo de opciones.",
+    "groupCreateFailed": "No se pudo crear el grupo.",
+    "validation": {
+      "groupName": "Ponle nombre a cada grupo de opciones (p. ej., Tamaño) antes de guardar.",
+      "noOptions": "Agrega al menos una opción al grupo “{group}” o quita el grupo.",
+      "blankOptions": "Ponle nombre a cada opción de “{group}” o quita las que están en blanco."
+    },
+    "removeConfirm": {
+      "title": "¿Quitar este grupo de opciones?",
+      "body": "Dejará de mostrarse en este producto y se eliminará por completo si ningún otro producto lo usa.",
+      "confirm": "Quitar"
+    }
+  },
+  "reorder": {
+    "unsavedHint": "Cambios sin guardar: arrastra productos entre categorías o hacia arriba y abajo para ordenarlos.",
+    "idleHint": "Arrastra el controlador para ordenar categorías y productos.",
+    "saveLayout": "Guardar orden",
+    "dragCategory": "Arrastrar categoría",
+    "dragItem": "Arrastrar producto",
+    "emptyCategory": "Suelta productos aquí para agregarlos a esta categoría"
+  },
+  "errors": {
+    "generic": "Algo salió mal. Inténtalo de nuevo.",
+    "network": "No se pudo conectar con el servidor. Revisa tu conexión e inténtalo de nuevo.",
+    "permission": "Tu rol no tiene permiso para editar el menú en esta sucursal.",
+    "notFound": "Este producto ya no existe. Es posible que se haya eliminado.",
+    "inUse": "Todavía está vinculado a otros registros, como pedidos anteriores o combos, así que no se puede eliminar. Mejor ocúltalo del menú.",
+    "duplicate": "Eso ya existe.",
+    "invalidValue": "Algunos valores no son válidos. Revisa los campos e inténtalo de nuevo.",
+    "fileTooLarge": "La imagen es demasiado grande para subirla.",
+    "fileType": "Ese tipo de archivo no se puede subir. Elige una imagen."
+  }
+}

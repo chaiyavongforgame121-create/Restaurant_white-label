@@ -1,13 +1,15 @@
 'use client';
 
 import * as React from 'react';
+import { useTranslations } from 'next-intl';
 import { AlertTriangle } from 'lucide-react';
 import { Card } from '@favornoms/ui';
+import type { SectionError } from './report-queries';
 
 /**
  * A failed section must not blank the other five. Every section renders through here, so
- * one broken RPC costs the merchant that heading and nothing else — and it shows the
- * database's own words, which support can act on, instead of "try again later".
+ * one broken RPC costs the merchant that heading and nothing else — and it shows what went
+ * wrong plus the database's error code, which support can act on, instead of "try again later".
  */
 export function SectionFrame({
   id,
@@ -21,9 +23,10 @@ export function SectionFrame({
   title: string;
   icon: React.ReactNode;
   caption?: string;
-  error?: string | null;
+  error?: SectionError | null;
   children: React.ReactNode;
 }) {
+  const t = useTranslations('reports');
   return (
     // scroll-mt clears the toolbar pinned at the top of the reports page: without it a tab
     // click parked the section heading behind the bar and the merchant landed on a headless
@@ -39,25 +42,38 @@ export function SectionFrame({
           {caption ? <p className="text-xs text-muted-foreground">{caption}</p> : null}
         </div>
       </header>
-      {error ? <SectionAlert title={`${title} could not be loaded`} message={error} /> : children}
+      {error ? (
+        <SectionAlert title={t('frame.loadFailed', { section: title })} error={error} />
+      ) : (
+        children
+      )}
     </section>
   );
 }
 
-export function SectionAlert({ title, message }: { title: string; message: string }) {
+export function SectionAlert({ title, error }: { title: string; error: SectionError }) {
+  const t = useTranslations('reports');
   return (
     <Card className="p-5" role="alert">
       <h3 className="flex items-center gap-2 font-display text-base font-semibold text-danger">
         <AlertTriangle className="h-4 w-4" /> {title}
       </h3>
-      <p className="mt-2 text-sm text-muted-foreground">
-        Your data is safe — this is a problem reading it. Reload the page; if it keeps
-        happening, send the message below to support.
-      </p>
-      <p className="mt-3 break-words rounded-xl bg-danger/10 px-4 py-3 font-mono text-xs text-danger">
-        {message}
-      </p>
+      <p className="mt-2 text-sm text-muted-foreground">{t('frame.body')}</p>
+      <ErrorDetail error={error} />
     </Card>
+  );
+}
+
+/** The translated reason, and the database's code on its own line for support. */
+export function ErrorDetail({ error }: { error: SectionError }) {
+  const t = useTranslations('reports');
+  return (
+    <p className="mt-3 break-words rounded-xl bg-danger/10 px-4 py-3 text-xs text-danger">
+      {t(`errors.${error.code}`)}
+      {error.ref ? (
+        <span className="mt-1 block font-mono">{t('errors.reference', { code: error.ref })}</span>
+      ) : null}
+    </p>
   );
 }
 

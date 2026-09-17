@@ -1,0 +1,105 @@
+{
+  "online": "Đang nhận đơn",
+  "offline": "Đã tắt nhận đơn",
+  "goOnline": "Bật nhận đơn",
+  "goOffline": "Tắt nhận đơn",
+  "readyToReceive": "Sẵn sàng nhận đơn",
+  "currentlyOffline": "Bạn đang tắt nhận đơn — hãy bật lên để bắt đầu kiếm tiền",
+  "statusOnline": "Bạn đang nhận đơn",
+  "statusOffline": "Bạn đã tắt nhận đơn",
+  "subOffline": "Bật nhận đơn để bắt đầu kiếm tiền",
+  "today": "Hôm nay",
+  "week": "Tuần này",
+  "deliveries": "Đơn đã giao",
+  "rating": "Đánh giá",
+  "lastDispatch": "Hoạt động gần đây",
+  "tips": "Mẹo để tăng thu nhập",
+  "tip1": "Ở lại các khu đông đúc như Williamsburg và Bushwick vào giờ trưa",
+  "tip2": "Nhận đơn trong vòng 10 giây để được điểm thưởng",
+  "tip3": "Giữ điểm đánh giá từ 4.5 trở lên để mở khóa hạng Vàng",
+  "greeting": "Chào {name} 👋",
+  "onlineNoLocation": "Đang nhận đơn — nhưng chưa xác định được vị trí của bạn",
+  "reconnecting": "Đang kết nối lại — bạn có thể chưa nhận được đơn cho đến khi kết nối ổn định.",
+  "location": {
+    "denied": "Vị trí đang tắt. Hãy bật vị trí cho ứng dụng này trong cài đặt điện thoại — nhà hàng chỉ gửi đơn cho bạn khi chúng tôi thấy được vị trí của bạn.",
+    "insecure": "Vị trí chỉ hoạt động qua https. Hãy mở ứng dụng từ biểu tượng đã cài đặt hoặc từ một địa chỉ https.",
+    "stale": "Vị trí của bạn được cập nhật lần cuối {age}. Hãy giữ ứng dụng mở và cho phép truy cập vị trí — bạn sẽ không nhận được đơn cho đến khi vị trí được cập nhật.",
+    "waiting": "Đang chờ tín hiệu GPS — bạn chưa được gửi đơn."
+  },
+  "paused": "Tạm khóa · {countdown}",
+  "onlineFor": "Nhận đơn từ {restaurants}",
+  "tapToGoOnline": "Chạm để bật nhận đơn",
+  "statusUpdateFailed": "Không cập nhật được trạng thái — hãy kiểm tra kết nối và thử lại.",
+  "noApproval": "Chưa có nhà hàng nào duyệt bạn — hãy đăng ký bên dưới trước, sau đó bạn có thể bật nhận đơn.",
+  "cooldown": "Bạn đã từ chối quá nhiều đơn — có thể bật nhận đơn lại sau {countdown}.",
+  "restaurant": "Nhà hàng",
+  "restaurants": {
+    "title": "Nhà hàng và giờ làm của bạn",
+    "onlineFor": "Nhận đơn từ {restaurants} · chạm để thay đổi",
+    "onlineForAll": "Nhận đơn từ các nhà hàng của bạn · chạm để thay đổi",
+    "offline": "Chọn nhà hàng và đặt giờ làm"
+  },
+  "apply": {
+    "title": "Đăng ký với nhà hàng",
+    "approved": "{approved} đã duyệt · chạm để xem tất cả",
+    "approvedWaiting": "{approved} đã duyệt · {pending} đang chờ · chạm để xem tất cả",
+    "waiting": "{pending} đang chờ duyệt · chạm để xem",
+    "none": "Đăng ký và được duyệt để bắt đầu nhận đơn"
+  },
+  "recent": {
+    "summary": "{items} · {distance} mi · {earnings}",
+    "empty": "Chưa có đơn giao nào"
+  },
+  "performance": {
+    "title": "30 ngày qua",
+    "earnings": "Thu nhập",
+    "acceptance": "Tỷ lệ nhận",
+    "onTime": "Đúng giờ",
+    "ratingCount": "Đánh giá · {count}"
+  },
+  "sheet": {
+    "tabNow": "Nhận đơn ngay",
+    "tabSchedule": "Hẹn giờ",
+    "intro": "Chọn những nhà hàng được gửi đơn cho bạn. Nhà hàng bạn không chọn sẽ không gửi đơn cho bạn.",
+    "selectAll": "Chọn tất cả",
+    "clearAll": "Bỏ chọn tất cả",
+    "update": "Cập nhật nhà hàng",
+    "cooldown": "Bạn đang bị tạm khóa do bỏ lỡ quá nhiều đơn — hãy thử lại sau ít phút.",
+    "pickOne": "Chọn ít nhất một nhà hàng."
+  },
+  "schedule": {
+    "title": "Lịch làm việc",
+    "intro": "Đặt giờ bạn muốn làm ở từng nhà hàng. Bạn sẽ tự động bật nhận đơn khi khung giờ bắt đầu và tắt khi khung giờ kết thúc — có thể tắt một nhà hàng bất cứ lúc nào để thay đổi.",
+    "noRestaurants": "Chưa có nhà hàng nào",
+    "noRestaurantsHint": "Hãy được một nhà hàng duyệt trước khi đặt giờ làm.",
+    "addHours": "Thêm giờ làm",
+    "days": "Ngày",
+    "opens": "Bắt đầu",
+    "closes": "Kết thúc",
+    "repeatFor": "Lặp lại trong",
+    "weeks": "{count, plural, other {# tuần}}",
+    "repeatHint": "Tạo một khung giờ vào mỗi ngày đã chọn trong các tuần tới.",
+    "addToSchedule": "Thêm vào lịch",
+    "upcoming": "Sắp tới",
+    "loading": "Đang tải…",
+    "empty": "Chưa đặt giờ làm",
+    "emptyHint": "Thêm giờ bạn muốn làm ở trên và bạn sẽ được tự động bật nhận đơn.",
+    "remove": "Xóa khung giờ",
+    "added": "{count, plural, other {Đã thêm # khung giờ.}}",
+    "status": {
+      "active": "Đang diễn ra",
+      "completed": "Hoàn tất",
+      "cancelled": "Đã hủy"
+    },
+    "errors": {
+      "pickRestaurant": "Chọn một nhà hàng.",
+      "pickDay": "Chọn ít nhất một ngày trong tuần.",
+      "closeAfterOpen": "Giờ kết thúc phải sau giờ bắt đầu.",
+      "nothingToAdd": "Không có gì để thêm — những ngày đó đã qua.",
+      "duplicate": "Các khung giờ này đã có trong lịch của bạn.",
+      "overlap": "Khung giờ này trùng với giờ đã có trong lịch của bạn.",
+      "saveFailed": "Không thêm được giờ làm — hãy kiểm tra kết nối và thử lại.",
+      "removeFailed": "Không xóa được khung giờ — hãy kiểm tra kết nối và thử lại."
+    }
+  }
+}

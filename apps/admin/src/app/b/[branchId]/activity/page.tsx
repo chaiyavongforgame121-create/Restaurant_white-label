@@ -1,4 +1,6 @@
+import { getLocale, getTranslations } from 'next-intl/server';
 import { getServerClient } from '@favornoms/database/server';
+import { DEFAULT_UI_LOCALE, intlLocaleFor, isUiLocale } from '@favornoms/shared';
 import { Card, EmptyState } from '@favornoms/ui';
 import { ClipboardList } from 'lucide-react';
 
@@ -13,18 +15,20 @@ export default async function ActivityPage({ params }: Props) {
     .eq('branch_id', branchId)
     .order('created_at', { ascending: false })
     .limit(100);
+  const [t, locale] = await Promise.all([getTranslations('misc'), getLocale()]);
+  const intlLocale = intlLocaleFor(isUiLocale(locale) ? locale : DEFAULT_UI_LOCALE);
 
   return (
     <div className="container max-w-3xl py-8">
       <header className="mb-6 px-2 pl-16 lg:px-0">
-        <h1 className="font-display text-3xl font-bold">Activity log</h1>
-        <p className="mt-1 text-muted-foreground">Audit trail of important actions</p>
+        <h1 className="font-display text-3xl font-bold">{t('activity.title')}</h1>
+        <p className="mt-1 text-muted-foreground">{t('activity.subtitle')}</p>
       </header>
       {(!logs || logs.length === 0) ? (
         <EmptyState
           icon={<ClipboardList className="h-7 w-7" />}
-          title="No activity yet"
-          description="Important actions (refunds, void, settings changes) will appear here."
+          title={t('activity.emptyTitle')}
+          description={t('activity.emptyBody')}
         />
       ) : (
         <ul className="space-y-2 px-2 lg:px-0">
@@ -32,9 +36,11 @@ export default async function ActivityPage({ params }: Props) {
             <li key={l.id}>
               <Card className="p-3 text-sm">
                 <div className="flex justify-between">
+                  {/* Audit codes (action, actor, entity) are written by many RPCs and edge
+                      functions as an open set, so they are shown as recorded. */}
                   <span className="font-semibold">{l.action}</span>
                   <span className="text-xs text-muted-foreground">
-                    {new Date(l.created_at).toLocaleString()}
+                    {new Date(l.created_at).toLocaleString(intlLocale)}
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground">

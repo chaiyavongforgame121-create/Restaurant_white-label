@@ -4,7 +4,6 @@ import type {
   LiveDelivery,
 } from '@favornoms/database/queries';
 import {
-  ageLabel,
   boardCounts,
   describeDelivery,
   OVERDUE_AFTER_MS,
@@ -15,8 +14,11 @@ import {
 // Everything the dashboard decides without React or the network. Every threshold here is
 // either imported from the screen that owns it or mirrored with the line it came from:
 // two screens disagreeing about the same number is worse than no number.
+//
+// Nothing here is worded: rows carry a reason code and a span, and the page puts them into
+// the reader's language. Only the decisions live in this module.
 
-export { ageLabel, OVERDUE_AFTER_MS, STALE_AFTER_MS };
+export { OVERDUE_AFTER_MS, STALE_AFTER_MS };
 
 /**
  * A ticket nobody has touched for this long is abandoned, not late. Same number and the
@@ -33,12 +35,68 @@ export const ACCEPT_LATE_MS = 10 * 60_000;
 /** A booking this close that nobody has accepted is the merchant's problem now. */
 export const SCHEDULED_SOON_MS = 3 * 60 * 60_000;
 
+/**
+ * A duration in the parts the screen writes it with: '<1 min', '3 min', '2 h 10 min', '3 d'.
+ * Same cut-offs as the delivery board's ageLabel; `unknown` is its '—'.
+ */
+export type Span =
+  | { unit: 'unknown' }
+  | { unit: 'underMinute' }
+  | { unit: 'minutes'; minutes: number }
+  | { unit: 'hours'; hours: number; minutes: number }
+  | { unit: 'days'; days: number };
+
+/** Never negative; anything that is not a finite number is `unknown`. */
+export function spanOf(ms: number | null | undefined): Span {
+  if (ms == null || !Number.isFinite(ms)) return { unit: 'unknown' };
+  const min = Math.max(0, Math.floor(ms / 60_000));
+  if (min < 1) return { unit: 'underMinute' };
+  if (min < 60) return { unit: 'minutes', minutes: min };
+  const h = Math.floor(min / 60);
+  if (h < 24) return { unit: 'hours', hours: h, minutes: min % 60 };
+  return { unit: 'days', days: Math.floor(h / 24) };
+}
+
+/** How long ago an ISO stamp was. */
+export function spanSince(iso: string | null | undefined, nowMs: number): Span {
+  if (!iso) return { unit: 'unknown' };
+  const t = new Date(iso).getTime();
+  return Number.isFinite(t) ? spanOf(nowMs - t) : { unit: 'unknown' };
+}
+
+/**
+ * The right-hand column of a row. `waited` is how long it has sat there; `dueIn` is how long
+ * until a booking is due. null prints nothing (stock has no waiting clock of its own).
+ */
+export type RowAge = { kind: 'waited' | 'dueIn'; span: Span } | null;
+
+/** Why a row needs a human. The page turns each code into a sentence. */
+export type RowReason =
+  | { code: 'orderNotAccepted' }
+  | { code: 'cookingLong'; minutes: number }
+  | { code: 'acceptedNotStarted' }
+  | { code: 'readyNotCollected' }
+  | { code: 'deliveryWaitingKitchen' }
+  | { code: 'deliveryKitchenReady' }
+  /** `status` is the order's raw status code; the page labels it. */
+  | { code: 'deliveryKitchenStatus'; status: string }
+  | { code: 'deliveryLookingForRider' }
+  | { code: 'deliveryAskedRiders'; count: number }
+  | { code: 'deliveryOwnStaff' }
+  | { code: 'deliveryNoRiderHolds' }
+  | { code: 'deliveryOfferExpired' }
+  /** `reason` is what the rider typed, shown as written; null when nobody said. */
+  | { code: 'deliveryFailed'; reason: string | null; startedAgo: Span }
+  | { code: 'bookingNotAccepted' }
+  | { code: 'bookingStillHeld' };
+
 /** One line in Action Required: what it is, why it needs a human, how long it has waited. */
 export interface ActionRow {
   key: string;
-  title: string;
-  why: string;
-  age: string;
+  /** '#A-2609-100001'. null only for a delivery with no order attached. */
+  title: string | null;
+  why: RowReason;
+  age: RowAge;
   ageMs: number;
   href: string;
 }
@@ -164,26 +222,29 @@ export function readKitchen(
       key: o.id,
       title: `#${o.order_number}`,
       ageMs: elapsed,
-      age: ageLabel(new Date(from).toISOString(), nowMs),
+      age: { kind: 'waited', span: spanOf(elapsed) } as const,
     };
     // Split by WHO is waiting, so no ticket is counted in two buckets.
     if (o.status === 'pending' && elapsed > ACCEPT_LATE_MS) {
       reading.customersWaiting.push({
         ...base,
         href: `/b/${branchId}/orders?status=pending`,
-        why: 'Nobody has accepted this order yet',
+        why: { code: 'orderNotAccepted' },
       });
     } else if ((o.status === 'confirmed' || o.status === 'preparing') && elapsed > COOK_LATE_MS) {
       reading.kitchenLate.push({
         ...base,
         href: kitchenHref,
-        why: o.status === 'preparing' ? 'Cooking longer than 15 min' : 'Accepted but not started',
+        why:
+          o.status === 'preparing'
+            ? { code: 'cookingLong', minutes: COOK_LATE_MS / 60_000 }
+            : { code: 'acceptedNotStarted' },
       });
     } else if (lane === 'ready' && o.channel !== 'delivery' && elapsed > PASS_LATE_MS) {
       reading.customersWaiting.push({
         ...base,
         href: kitchenHref,
-        why: 'Ready on the pass, not collected',
+        why: { code: 'readyNotCollected' },
       });
     }
   }
@@ -199,6 +260,32 @@ export interface DeliveryReading {
   stalled: number;
   unaccepted: ActionRow[];
   failed: ActionRow[];
+}
+
+/**
+ * Why an overdue, unaccepted delivery is on the list: the second line the Live deliveries
+ * board prints for the same row (its detail, else its label), as a code. Whether the row is
+ * overdue at all stays describeDelivery's call; only the wording is mirrored here. Called
+ * without assignments, as readDeliveries always did, so "Rider cancelled" never applies.
+ */
+export function unacceptedReason(d: LiveDelivery, selfDelivery: boolean): RowReason {
+  if (d.status === 'pending') {
+    const kitchen = d.order?.status;
+    if (kitchen === 'ready') return { code: 'deliveryKitchenReady' };
+    if (kitchen) return { code: 'deliveryKitchenStatus', status: kitchen };
+    return { code: 'deliveryWaitingKitchen' };
+  }
+  if (d.status === 'dispatching') {
+    return d.dispatch_attempts > 0
+      ? { code: 'deliveryAskedRiders', count: d.dispatch_attempts }
+      : { code: 'deliveryLookingForRider' };
+  }
+  // `assigned` and not accepted. With no rider it is waiting on staff or on the pool; with a
+  // rider, an offer still open is never overdue, so only an expired one reaches this list.
+  if (!d.driver_id) {
+    return selfDelivery ? { code: 'deliveryOwnStaff' } : { code: 'deliveryNoRiderHolds' };
+  }
+  return { code: 'deliveryOfferExpired' };
 }
 
 export function readDeliveries(
@@ -218,17 +305,14 @@ export function readDeliveries(
     counts.accepted +
     counts.onTheWay;
 
-  const row = (d: LiveDelivery, href: string, why?: string): ActionRow => {
-    const described = describeDelivery(d, nowMs, selfDelivery);
-    return {
-      key: d.id,
-      href,
-      ageMs: nowMs - Date.parse(d.created_at),
-      age: ageLabel(d.created_at, nowMs),
-      title: d.order ? `#${d.order.order_number}` : 'Delivery',
-      why: why ?? (described.detail || described.label),
-    };
-  };
+  const row = (d: LiveDelivery, href: string, why: RowReason): ActionRow => ({
+    key: d.id,
+    href,
+    ageMs: nowMs - Date.parse(d.created_at),
+    age: { kind: 'waited', span: spanSince(d.created_at, nowMs) },
+    title: d.order ? `#${d.order.order_number}` : null,
+    why,
+  });
 
   const deliveriesHref = `/b/${branchId}/deliveries`;
   const unaccepted = live
@@ -239,7 +323,7 @@ export function readDeliveries(
         (d.status === 'assigned' && !d.accepted_at),
     )
     .filter((d) => describeDelivery(d, nowMs, selfDelivery).overdue)
-    .map((d) => row(d, deliveriesHref))
+    .map((d) => row(d, deliveriesHref, unacceptedReason(d, selfDelivery)))
     .sort(byAgeDesc);
 
   // Failures are pulled from BOTH partitions: a rider's problem does not stop mattering
@@ -248,11 +332,11 @@ export function readDeliveries(
   const failed = [...live, ...stale]
     .filter((d) => d.status === 'failed')
     .map((d) =>
-      row(
-        d,
-        `/b/${branchId}/orders`,
-        `${d.failed_reason ?? 'No reason recorded'} · raised on a delivery started ${ageLabel(d.created_at, nowMs)} ago`,
-      ),
+      row(d, `/b/${branchId}/orders`, {
+        code: 'deliveryFailed',
+        reason: d.failed_reason ?? null,
+        startedAgo: spanSince(d.created_at, nowMs),
+      }),
     )
     .sort(byAgeDesc);
 
@@ -272,10 +356,6 @@ export function readScheduled(
   branchId: string,
 ): ActionRow[] {
   const href = `/b/${branchId}/orders?when=scheduled`;
-  // ageLabel formats a span as "how long ago"; a point that far in the past reads it back
-  // as the same span, which is what "due in 40 min" needs.
-  const spanLabel = (ms: number) =>
-    ageLabel(new Date(nowMs - Math.max(0, ms)).toISOString(), nowMs);
   const out: ActionRow[] = [];
   for (const o of rows) {
     const due = Date.parse(o.scheduled_for);
@@ -290,10 +370,8 @@ export function readScheduled(
       // For a booking the number a merchant acts on is the time LEFT, not the time since,
       // so that is what "how long has it waited" means in this one bucket.
       ageMs: untilDue,
-      age: `due in ${spanLabel(untilDue)}`,
-      why: overdueRelease
-        ? 'Should already be in the kitchen — still held'
-        : 'Nobody has accepted this booking yet',
+      age: { kind: 'dueIn', span: spanOf(untilDue) },
+      why: overdueRelease ? { code: 'bookingStillHeld' } : { code: 'bookingNotAccepted' },
     });
   }
   // Soonest first: the opposite of every other bucket, because here small means urgent.

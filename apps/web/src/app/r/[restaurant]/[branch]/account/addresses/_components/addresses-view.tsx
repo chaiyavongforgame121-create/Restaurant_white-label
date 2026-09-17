@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { LocateFixed, Map as MapIcon, MapPin, Pencil, Plus, Star, Trash2 } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import {
@@ -19,26 +19,51 @@ import {
   type GeolocationFailure,
   type ResolvedAddress,
 } from '@favornoms/maps';
+import { DEFAULT_UI_LOCALE, isUiLocale } from '@favornoms/shared';
 import { Badge, Button, Card, IconButton, Sheet } from '@favornoms/ui';
 import { useAuth } from '@/components/auth/use-auth';
-import { resolveMyCustomerId } from '@/lib/customer';
+import { customerErrorKey, resolveMyCustomerId } from '@/lib/customer';
 import { pickerLabels } from '@/lib/picker-labels';
 import { AccountHeader, SignInGate } from '../../_components/account-ui';
 
+/** Messages (root keys) this page can show for a failed identity, list, save or delete. */
+type AddressErrorKey =
+  | 'checkout.errors.addressRequired'
+  | 'account.addresses.errors.line1Required'
+  | 'account.addresses.errors.notFound'
+  | 'account.addresses.errors.forbidden'
+  | 'account.addresses.errors.loadFailed'
+  | 'account.errors.sessionExpired'
+  | 'account.errors.branchNotFound'
+  | 'account.errors.profileUnavailable'
+  | 'account.errors.generic';
+
 // upsert/deleteCustomerAddress wrap the Postgres error as
 // `upsert_address_failed:<msg>` — unwrap it and put the known codes into words
-// so a failed save actually tells the diner what to do.
-function describeAddressError(message: string): string {
+// so a failed save actually tells the diner what to do. Anything else gets a
+// generic line: a raw Postgres message means nothing to a diner in any language.
+function addressErrorKey(err: unknown): AddressErrorKey {
+  const message = err instanceof Error ? err.message : String(err ?? '');
   const raw = message.replace(/^(upsert_address_failed|delete_address_failed):/, '');
-  if (raw.includes('line1_required')) return 'Please enter a street address.';
-  if (raw.includes('address_not_found')) return 'That address no longer exists — please refresh.';
-  if (raw.includes('forbidden')) return 'That address belongs to a different account.';
-  if (raw.includes('auth_required')) return 'Your session expired. Please sign in again.';
-  return raw;
+  if (raw.includes('line1_required')) return 'account.addresses.errors.line1Required';
+  if (raw.includes('address_not_found')) return 'account.addresses.errors.notFound';
+  if (raw.includes('forbidden')) return 'account.addresses.errors.forbidden';
+  if (raw.includes('auth_required')) return 'account.errors.sessionExpired';
+  const customer = customerErrorKey(raw);
+  if (customer) return `account.errors.${customer}`;
+  return 'account.errors.generic';
+}
+
+/** Why the address book could not be read: an identity failure we can name, else a load failure. */
+function loadErrorKey(err: unknown): AddressErrorKey {
+  const customer = customerErrorKey(err);
+  return customer ? `account.errors.${customer}` : 'account.addresses.errors.loadFailed';
 }
 
 export function AddressesView({ base, branchId }: { base: string; branchId: string }) {
   const t = useTranslations();
+  const rawLocale = useLocale();
+  const locale = isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE;
   const { user, loading } = useAuth();
 
   const [customerId, setCustomerId] = React.useState<string | null>(null);
@@ -65,11 +90,12 @@ export function AddressesView({ base, branchId }: { base: string; branchId: stri
   const [locatingQuick, setLocatingQuick] = React.useState(false);
   const [geoError, setGeoError] = React.useState<string | null>(null);
   const [saving, setSaving] = React.useState(false);
-  const [formError, setFormError] = React.useState<string | null>(null);
+  // Errors are held as message keys and translated at render.
+  const [formError, setFormError] = React.useState<AddressErrorKey | null>(null);
   // Identity/list failures. Without these the page silently renders an empty
   // address book and "Save address" does nothing at all.
-  const [loadError, setLoadError] = React.useState<string | null>(null);
-  const [actionError, setActionError] = React.useState<string | null>(null);
+  const [loadError, setLoadError] = React.useState<AddressErrorKey | null>(null);
+  const [actionError, setActionError] = React.useState<AddressErrorKey | null>(null);
   const [reloadKey, setReloadKey] = React.useState(0);
 
   const refresh = React.useCallback(
@@ -83,7 +109,8 @@ export function AddressesView({ base, branchId }: { base: string; branchId: stri
         setAddresses(rows);
         setLoadError(null);
       } catch (err) {
-        setLoadError((err as Error).message);
+        console.error('[addresses] listing saved addresses failed', err);
+        setLoadError(loadErrorKey(err));
         throw err;
       }
     },
@@ -106,7 +133,7 @@ export function AddressesView({ base, branchId }: { base: string; branchId: stri
         setCustomerId(cid);
         await refresh(cid);
       } catch (err) {
-        if (!cancelled) setLoadError((err as Error).message);
+        if (!cancelled) setLoadError(loadErrorKey(err));
       } finally {
         if (!cancelled) setBusy(false);
       }
@@ -230,7 +257,7 @@ export function AddressesView({ base, branchId }: { base: string; branchId: stri
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!addrText.trim()) {
-      setFormError(t('checkout.errors.addressRequired'));
+      setFormError('checkout.errors.addressRequired');
       return;
     }
     setSaving(true);
@@ -258,7 +285,8 @@ export function AddressesView({ base, branchId }: { base: string; branchId: stri
       setFormOpen(false);
       await refresh(cid).catch(() => undefined);
     } catch (err) {
-      setFormError(describeAddressError((err as Error).message));
+      console.error('[addresses] saving an address failed', err);
+      setFormError(addressErrorKey(err));
     } finally {
       setSaving(false);
     }
@@ -286,12 +314,13 @@ export function AddressesView({ base, branchId }: { base: string; branchId: stri
       });
       await refresh(cid);
     } catch (err) {
-      setActionError(describeAddressError((err as Error).message));
+      console.error('[addresses] setting the default address failed', err);
+      setActionError(addressErrorKey(err));
     }
   };
 
   const remove = async (a: SavedAddress) => {
-    if (!confirm('Delete this address?')) return;
+    if (!confirm(t('account.addresses.confirmDelete'))) return;
     setActionError(null);
     try {
       const cid = await ensureCustomerId();
@@ -299,21 +328,22 @@ export function AddressesView({ base, branchId }: { base: string; branchId: stri
       await deleteCustomerAddress(supabase, a.id);
       await refresh(cid);
     } catch (err) {
-      setActionError(describeAddressError((err as Error).message));
+      console.error('[addresses] deleting an address failed', err);
+      setActionError(addressErrorKey(err));
     }
   };
 
   return (
     <div className="container max-w-2xl pb-24 pt-4">
-      <AccountHeader base={base} title="Delivery addresses" />
+      <AccountHeader base={base} title={t('account.sections.addresses')} />
 
       {loading ? null : !user ? (
-        <SignInGate base={base} message="Sign in to save and manage your delivery addresses." />
+        <SignInGate base={base} message={t('account.addresses.signInPrompt')} />
       ) : (
         <div className="space-y-4">
           {loadError && (
             <Card className="border-danger/30 bg-danger/5 p-4">
-              <p className="text-sm font-medium text-danger">{loadError}</p>
+              <p className="text-sm font-medium text-danger">{t(loadError)}</p>
               <Button
                 type="button"
                 variant="ghost"
@@ -321,26 +351,24 @@ export function AddressesView({ base, branchId }: { base: string; branchId: stri
                 className="mt-2"
                 onClick={() => setReloadKey((k) => k + 1)}
               >
-                Retry
+                {t('account.addresses.retry')}
               </Button>
             </Card>
           )}
           {actionError && (
             <Card className="border-danger/30 bg-danger/5 p-4 text-sm text-danger">
-              {actionError}
+              {t(actionError)}
             </Card>
           )}
           {busy ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
+            <p className="text-sm text-muted-foreground">{t('account.loading')}</p>
           ) : addresses.length === 0 ? (
             <Card className="p-8 text-center">
               <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-primary/10 text-primary">
                 <MapPin className="h-6 w-6" />
               </div>
-              <p className="mt-3 font-semibold">No saved addresses</p>
-              <p className="text-sm text-muted-foreground">
-                Add one to check out faster next time.
-              </p>
+              <p className="mt-3 font-semibold">{t('account.addresses.emptyTitle')}</p>
+              <p className="text-sm text-muted-foreground">{t('account.addresses.emptyBody')}</p>
             </Card>
           ) : (
             <ul className="space-y-2">
@@ -353,15 +381,15 @@ export function AddressesView({ base, branchId }: { base: string; branchId: stri
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="flex items-center gap-2 font-semibold">
-                          {a.label || 'Address'}
-                          {a.is_default && <Badge variant="muted">Default</Badge>}
+                          {a.label || t('account.addresses.fallbackLabel')}
+                          {a.is_default && <Badge variant="muted">{t('account.addresses.defaultBadge')}</Badge>}
                         </p>
                         <p className="truncate text-sm text-muted-foreground">
                           {[a.address_line1, a.address_line2, a.city, a.state].filter(Boolean).join(', ')}
                         </p>
                         {a.delivery_notes && (
                           <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                            Note: {a.delivery_notes}
+                            {t('account.addresses.note', { note: a.delivery_notes })}
                           </p>
                         )}
                       </div>
@@ -373,7 +401,7 @@ export function AddressesView({ base, branchId }: { base: string; branchId: stri
                           onClick={() => setAsDefault(a)}
                           className="focus-ring inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted"
                         >
-                          <Star className="h-3.5 w-3.5" /> Set default
+                          <Star className="h-3.5 w-3.5" /> {t('account.addresses.setDefault')}
                         </button>
                       )}
                       <button
@@ -381,14 +409,14 @@ export function AddressesView({ base, branchId }: { base: string; branchId: stri
                         onClick={() => openEdit(a)}
                         className="focus-ring inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted"
                       >
-                        <Pencil className="h-3.5 w-3.5" /> Edit
+                        <Pencil className="h-3.5 w-3.5" /> {t('account.addresses.edit')}
                       </button>
                       <button
                         type="button"
                         onClick={() => remove(a)}
                         className="focus-ring ml-auto inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-danger hover:bg-danger/10"
                       >
-                        <Trash2 className="h-3.5 w-3.5" /> Delete
+                        <Trash2 className="h-3.5 w-3.5" /> {t('account.addresses.delete')}
                       </button>
                     </div>
                   </Card>
@@ -406,7 +434,7 @@ export function AddressesView({ base, branchId }: { base: string; branchId: stri
               leftIcon={<Plus className="h-4 w-4" />}
               onClick={openNew}
             >
-              Add a new address
+              {t('account.addresses.addNew')}
             </Button>
           )}
         </div>
@@ -417,15 +445,15 @@ export function AddressesView({ base, branchId }: { base: string; branchId: stri
         open={formOpen}
         onClose={() => setFormOpen(false)}
         side="bottom"
-        title={editingId ? 'Edit address' : 'Add address'}
+        title={editingId ? t('account.addresses.form.editTitle') : t('account.addresses.form.addTitle')}
       >
         <form className="space-y-4 p-5" onSubmit={save}>
-          <Field label="Label (optional)">
+          <Field label={t('account.addresses.form.label')}>
             <input
               className="input"
               value={label}
               onChange={(e) => setLabel(e.target.value)}
-              placeholder="Home, Work, Mom's…"
+              placeholder={t('account.addresses.form.labelPlaceholder')}
             />
           </Field>
 
@@ -448,6 +476,7 @@ export function AddressesView({ base, branchId }: { base: string; branchId: stri
                 setFormError(null);
               }}
               placeholder={t('checkout.addressPlaceholder')}
+              locale={locale}
               inputClassName="input"
               aria-label={t('checkout.address')}
             />
@@ -477,28 +506,28 @@ export function AddressesView({ base, branchId }: { base: string; branchId: stri
           {geoError && <p className="text-xs text-warning">{geoError}</p>}
           {coords && resolvedRef.current && (
             <p className="flex items-center gap-1 text-xs font-medium text-success">
-              <MapPin className="h-3.5 w-3.5" /> Location pinned
+              <MapPin className="h-3.5 w-3.5" /> {t('account.addresses.form.pinned')}
             </p>
           )}
 
-          <Field label="Delivery instructions (optional)">
+          <Field label={t('account.addresses.form.instructions')}>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
               maxLength={300}
-              placeholder="e.g. Gate code 1234 · leave at the door"
+              placeholder={t('account.addresses.form.instructionsPlaceholder')}
               className="focus-ring w-full resize-none rounded-2xl border border-border bg-background px-4 py-3 text-base placeholder:text-muted-foreground"
             />
           </Field>
 
           <label className="flex items-center justify-between gap-3">
-            <span className="text-sm font-medium">Set as default address</span>
+            <span className="text-sm font-medium">{t('account.addresses.form.setDefault')}</span>
             <button
               type="button"
               role="switch"
               aria-checked={isDefault}
-              aria-label="Set as default address"
+              aria-label={t('account.addresses.form.setDefault')}
               onClick={() => setIsDefault((d) => !d)}
               className={`focus-ring relative h-7 w-12 shrink-0 rounded-full transition-colors ${
                 isDefault ? 'bg-primary' : 'bg-muted'
@@ -512,10 +541,10 @@ export function AddressesView({ base, branchId }: { base: string; branchId: stri
             </button>
           </label>
 
-          {formError && <p className="text-sm font-medium text-danger">{formError}</p>}
+          {formError && <p className="text-sm font-medium text-danger">{t(formError)}</p>}
 
           <Button type="submit" variant="gradient" size="xl" fullWidth loading={saving}>
-            {editingId ? 'Save changes' : 'Save address'}
+            {editingId ? t('account.addresses.form.saveChanges') : t('account.addresses.form.save')}
           </Button>
         </form>
       </Sheet>
@@ -535,6 +564,7 @@ export function AddressesView({ base, branchId }: { base: string; branchId: stri
             applyResolved(a);
             setPickerOpen(false);
           }}
+          locale={locale}
           labels={pickerLabels(t)}
         />
       </Sheet>

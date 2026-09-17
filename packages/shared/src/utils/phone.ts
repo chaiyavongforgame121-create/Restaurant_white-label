@@ -14,6 +14,8 @@
  * here that moves a US or TH result is a breaking change to live logins, not a refactor.
  */
 
+import { DEFAULT_UI_LOCALE, intlLocaleFor, isUiLocale, type UiLocale } from '../i18n';
+
 export interface CountryDial {
   /**
    * ISO 3166-1 alpha-2, and the stable key — NOT the dial code. +1 is both US and CA with
@@ -124,6 +126,94 @@ export const COUNTRY_DIALS: readonly CountryDial[] = [
 ];
 
 export const DEFAULT_COUNTRY_ISO = 'US';
+
+// --- country names in the interface language --------------------------------
+//
+// `label` above is English and stays that way: it is part of the list's contract and tests.
+// Pickers shown in another language read the names from the runtime's CLDR data instead of a
+// hand-kept table, falling back to the English name wherever Intl cannot answer.
+
+/** The English country name, i.e. the label without its " (+dial)" suffix. */
+function englishCountryName(country: CountryDial): string {
+  const suffix = ` (${country.dial})`;
+  return country.label.endsWith(suffix) ? country.label.slice(0, -suffix.length) : country.label;
+}
+
+/** Regions whose full CLDR name is an administrative mouthful ("RAE de Hong Kong (China)"). */
+const SHORT_NAME_REGIONS = new Set(['HK']);
+
+const regionNamesCache = new Map<string, Intl.DisplayNames | null>();
+
+function regionNames(locale: UiLocale, style: 'long' | 'short'): Intl.DisplayNames | null {
+  const key = `${locale}:${style}`;
+  if (!regionNamesCache.has(key)) {
+    let names: Intl.DisplayNames | null = null;
+    try {
+      if (typeof Intl.DisplayNames === 'function') {
+        names = new Intl.DisplayNames(intlLocaleFor(locale), { type: 'region', style });
+      }
+    } catch {
+      names = null;
+    }
+    regionNamesCache.set(key, names);
+  }
+  return regionNamesCache.get(key) ?? null;
+}
+
+/** A country's name in `locale` (English when omitted, or when the runtime has no name for it). */
+export function countryName(country: CountryDial, locale: UiLocale = DEFAULT_UI_LOCALE): string {
+  const english = englishCountryName(country);
+  const loc = isUiLocale(locale) ? locale : DEFAULT_UI_LOCALE;
+  if (loc === DEFAULT_UI_LOCALE) return english;
+  try {
+    const style = SHORT_NAME_REGIONS.has(country.iso) ? 'short' : 'long';
+    const name = regionNames(loc, style)?.of(country.iso);
+    return name && name !== country.iso ? name : english;
+  } catch {
+    return english;
+  }
+}
+
+/** What a country picker option shows, e.g. "Tailandia (+66)". English is exactly `label`. */
+export function countryDialLabel(country: CountryDial, locale: UiLocale = DEFAULT_UI_LOCALE): string {
+  const loc = isUiLocale(locale) ? locale : DEFAULT_UI_LOCALE;
+  if (loc === DEFAULT_UI_LOCALE) return country.label;
+  return `${countryName(country, loc)} (${country.dial})`;
+}
+
+/** Countries that stay at the top of the picker in every language (see COUNTRY_DIALS). */
+const LEADING_COUNTRY_ISOS = ['US', 'TH'];
+
+const localizedDialsCache = new Map<UiLocale, readonly CountryDial[]>();
+
+/**
+ * COUNTRY_DIALS for a picker in `locale`: same entries, same iso/dial/placeholder/trunk, with
+ * `label` in that language and the rest re-sorted alphabetically in it (US and TH still lead).
+ * English returns COUNTRY_DIALS itself. Use `iso` as the option value, never the label.
+ */
+export function countryDialsFor(locale: UiLocale = DEFAULT_UI_LOCALE): readonly CountryDial[] {
+  const loc = isUiLocale(locale) ? locale : DEFAULT_UI_LOCALE;
+  if (loc === DEFAULT_UI_LOCALE) return COUNTRY_DIALS;
+  const cached = localizedDialsCache.get(loc);
+  if (cached) return cached;
+
+  const localized = COUNTRY_DIALS.map((c) => ({ ...c, label: countryDialLabel(c, loc) }));
+  const leading = LEADING_COUNTRY_ISOS.map((iso) => localized.find((c) => c.iso === iso)).filter(
+    (c): c is CountryDial => c !== undefined,
+  );
+  let compare: (a: string, b: string) => number;
+  try {
+    compare = new Intl.Collator(intlLocaleFor(loc)).compare;
+  } catch {
+    compare = (a, b) => a.localeCompare(b);
+  }
+  const rest = localized
+    .filter((c) => !LEADING_COUNTRY_ISOS.includes(c.iso))
+    .sort((a, b) => compare(a.label, b.label));
+  const out = Object.freeze([...leading, ...rest]);
+  localizedDialsCache.set(loc, out);
+  return out;
+}
 
 const US = COUNTRY_DIALS[0] as CountryDial;
 

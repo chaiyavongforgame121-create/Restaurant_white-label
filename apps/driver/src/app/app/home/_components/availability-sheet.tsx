@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { CalendarClock, Check, Power, Store } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { Button, Sheet, cn } from '@favornoms/ui';
 import { ScheduleEditor } from '@/components/schedule-editor';
 
@@ -37,6 +38,7 @@ export function AvailabilitySheet({
   blocked?: boolean;
   onApply: (ids: string[]) => void | Promise<void>;
 }) {
+  const t = useTranslations('home');
   const [tab, setTab] = React.useState<'now' | 'schedule'>('now');
   const [selected, setSelected] = React.useState<Set<string>>(() => new Set());
 
@@ -72,14 +74,14 @@ export function AvailabilitySheet({
   const canGo = selected.size > 0 && !blocked;
 
   return (
-    <Sheet open={open} onClose={onClose} title="Go online" className="max-h-[92dvh]">
+    <Sheet open={open} onClose={onClose} title={t('goOnline')} className="max-h-[92dvh]">
       <div className="px-5 pb-8 pt-1">
         {/* Mode tabs */}
         <div className="mb-4 grid grid-cols-2 gap-1 rounded-2xl bg-muted/60 p-1">
           {(
             [
-              ['now', 'Online now', Power],
-              ['schedule', 'Schedule', CalendarClock],
+              ['now', t('sheet.tabNow'), Power],
+              ['schedule', t('sheet.tabSchedule'), CalendarClock],
             ] as const
           ).map(([key, label, Icon]) => (
             <button
@@ -98,10 +100,7 @@ export function AvailabilitySheet({
 
         {tab === 'now' ? (
           <div>
-            <p className="mb-3 text-sm text-muted-foreground">
-              Choose which restaurants can send you orders. A restaurant you leave off won&apos;t
-              dispatch to you.
-            </p>
+            <p className="mb-3 text-sm text-muted-foreground">{t('sheet.intro')}</p>
             <button
               type="button"
               onClick={() =>
@@ -109,7 +108,7 @@ export function AvailabilitySheet({
               }
               className="mb-2 text-sm font-medium text-primary"
             >
-              {allOn ? 'Clear all' : 'Select all'}
+              {allOn ? t('sheet.clearAll') : t('sheet.selectAll')}
             </button>
             <ul className="space-y-2">
               {approved.map((a) => {
@@ -152,17 +151,13 @@ export function AvailabilitySheet({
               leftIcon={<Power className="h-4 w-4" />}
               onClick={() => void onApply([...selected])}
             >
-              {isOnline ? 'Update restaurants' : 'Go online'}
+              {isOnline ? t('sheet.update') : t('goOnline')}
             </Button>
             {blocked ? (
-              <p className="mt-2 text-center text-xs text-danger">
-                You&apos;re in a cooldown after too many missed offers — try again shortly.
-              </p>
+              <p className="mt-2 text-center text-xs text-danger">{t('sheet.cooldown')}</p>
             ) : (
               selected.size === 0 && (
-                <p className="mt-2 text-center text-xs text-muted-foreground">
-                  Pick at least one restaurant.
-                </p>
+                <p className="mt-2 text-center text-xs text-muted-foreground">{t('sheet.pickOne')}</p>
               )
             )}
           </div>

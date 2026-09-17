@@ -24,9 +24,9 @@ import {
 import { getBrowserClient } from '@favornoms/database/client';
 import { featureLabel, hasFeature, ownsFeature, FEATURE_KEYS } from '@favornoms/shared';
 import { Badge, Button, Sheet, Skeleton, buttonVariants, cn } from '@favornoms/ui';
+import { usePlatformText, type PlatformText } from './platform-text';
 import {
   branchVerdict,
-  fmtDate,
   money,
   needsOpenProbe,
   storefrontUrl,
@@ -76,6 +76,8 @@ export function TenantDrawer({
   onAction: (row: TenantRow, action: PrimaryAction) => void;
   onSuspend: (row: TenantRow) => void;
 }) {
+  const p = usePlatformText();
+  const { t, text } = p;
   const openNow = useOpenProbe(open ? row.id : null, branches, nowMs);
   const actionRef = React.useRef<HTMLButtonElement>(null);
   const firstLinkRef = React.useRef<HTMLAnchorElement>(null);
@@ -85,8 +87,8 @@ export function TenantDrawer({
   // A healthy tenant has no repair, so focus falls to the first Back office link.
   React.useEffect(() => {
     if (!open) return;
-    const t = window.setTimeout(() => (actionRef.current ?? firstLinkRef.current)?.focus(), 60);
-    return () => window.clearTimeout(t);
+    const timer = window.setTimeout(() => (actionRef.current ?? firstLinkRef.current)?.focus(), 60);
+    return () => window.clearTimeout(timer);
   }, [open, row.id]);
 
   return (
@@ -95,28 +97,32 @@ export function TenantDrawer({
       onClose={onClose}
       side="right"
       title={row.name}
-      ariaLabel={`${row.name} tenant details`}
+      ariaLabel={t('drawer.ariaLabel', { name: row.name })}
     >
       <div className="space-y-5 px-5 pb-8">
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-xs text-muted-foreground">
-            <span className="font-mono">{row.slug}</span> · {row.loyaltyScope} loyalty · added{' '}
-            {fmtDate(row.createdAt)}
+            {t.rich('drawer.meta', {
+              slug: row.slug,
+              loyalty: loyaltyLabel(row.loyaltyScope, p),
+              date: p.date(row.createdAt),
+              mono: (chunks) => <span className="font-mono">{chunks}</span>,
+            })}
           </p>
           {row.franchise && (
             <Badge variant="muted" className="px-2 py-0.5 text-[10px]">
-              Franchise
+              {t('index.franchise')}
             </Badge>
           )}
         </div>
 
         <section className="space-y-2">
           <h3 className="text-xs uppercase tracking-wider text-muted-foreground">
-            What a diner sees right now
+            {t('drawer.dinerTitle')}
           </h3>
           {branches.length === 0 ? (
             <p className="rounded-xl border border-border/60 p-3 text-sm text-muted-foreground">
-              This restaurant has no branches, so there is nothing for a diner to find.
+              {t('drawer.noBranches')}
             </p>
           ) : (
             branches.map((b, i) => (
@@ -126,38 +132,41 @@ export function TenantDrawer({
                 verdict={branchVerdict(b, nowMs, openNow[b.id] ?? null)}
                 storefront={storefrontUrl(siteBase, row.slug, b)}
                 linkRef={i === 0 ? firstLinkRef : undefined}
+                p={p}
               />
             ))
           )}
         </section>
 
         <section className="space-y-2">
-          <h3 className="text-xs uppercase tracking-wider text-muted-foreground">The two off-switches</h3>
+          <h3 className="text-xs uppercase tracking-wider text-muted-foreground">
+            {t('drawer.switchesTitle')}
+          </h3>
 
           <SwitchRow
             icon={<Ban className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />}
-            label="Platform access"
-            state={accessState(branches)}
-            consequence="Off = the storefront URL returns 404."
+            label={t('drawer.accessLabel')}
+            state={accessState(branches, p)}
+            consequence={t('drawer.accessConsequence')}
           >
             <Button
               ref={action?.kind === 'restore' ? actionRef : undefined}
               size="sm"
               variant={anyActive ? 'ghost' : 'primary'}
               disabled={branches.length === 0}
-              title={branches.length === 0 ? 'No branches to suspend' : undefined}
+              title={branches.length === 0 ? t('drawer.noBranchesToSuspend') : undefined}
               onClick={() => onSuspend(row)}
               leftIcon={anyActive ? <Ban className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
             >
-              {anyActive ? 'Suspend' : 'Restore'}
+              {anyActive ? t('drawer.suspend') : t('drawer.restore')}
             </Button>
           </SwitchRow>
 
           <SwitchRow
             icon={<CreditCard className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />}
-            label="Subscription"
-            state={billingState(row, health)}
-            consequence="Off = the storefront shows the suspended screen."
+            label={t('drawer.subscriptionLabel')}
+            state={billingState(row, health, p)}
+            consequence={t('drawer.subscriptionConsequence')}
           >
             <div className="flex flex-col items-end gap-1.5">
               {action && action.kind !== 'restore' && (
@@ -175,7 +184,7 @@ export function TenantDrawer({
                     )
                   }
                 >
-                  {action.label}
+                  {text(action.label)}
                 </Button>
               )}
               {/* buttonVariants on the anchor itself: a <button> nested inside an
@@ -186,11 +195,11 @@ export function TenantDrawer({
                 prefetch={false}
                 className={buttonVariants({ size: 'sm', variant: 'ghost' })}
               >
-                Manage subscription
+                {t('drawer.manageSubscription')}
               </Link>
               {actionDone && (
                 <span role="status" className="flex items-center gap-1 text-xs text-success">
-                  <Check className="h-3.5 w-3.5" aria-hidden /> Reactivated
+                  <Check className="h-3.5 w-3.5" aria-hidden /> {t('index.reactivated')}
                 </span>
               )}
               {error && (
@@ -202,10 +211,12 @@ export function TenantDrawer({
           </SwitchRow>
         </section>
 
-        <Package row={row} health={health} />
+        <Package row={row} health={health} p={p} />
 
         {health.reason && (
-          <p className="border-t border-border/60 pt-3 text-xs text-muted-foreground">{health.reason}</p>
+          <p className="border-t border-border/60 pt-3 text-xs text-muted-foreground">
+            {health.reason.map(text).join(' ')}
+          </p>
         )}
       </div>
     </Sheet>
@@ -217,12 +228,15 @@ function BranchBlock({
   verdict,
   storefront,
   linkRef,
+  p,
 }: {
   branch: BranchLite;
   verdict: BranchVerdict | null;
   storefront: string;
   linkRef?: React.Ref<HTMLAnchorElement>;
+  p: PlatformText;
 }) {
+  const { t, text } = p;
   const Icon = verdict ? VERDICT_ICON[verdict.icon] : null;
   return (
     <div
@@ -238,34 +252,36 @@ function BranchBlock({
       {/* Never truncated and never sliced — a long branch name wraps instead. */}
       <p className="break-words font-display text-base font-semibold">{branch.name}</p>
       {verdict && Icon ? (
-        <Badge variant={verdict.variant} className="px-2 py-0.5 text-[10px]" title={verdict.hint}>
+        <Badge variant={verdict.variant} className="px-2 py-0.5 text-[10px]" title={text(verdict.hint)}>
           <Icon className="h-3 w-3" aria-hidden />
-          {verdict.label}
+          {text(verdict.label)}
         </Badge>
       ) : (
         <Skeleton className="h-5 w-24" />
       )}
-      <p className="text-xs text-muted-foreground">{verdict?.why ?? 'Checking business hours…'}</p>
+      <p className="text-xs text-muted-foreground">
+        {verdict ? text(verdict.why) : t('drawer.checkingHours')}
+      </p>
       <div className="flex flex-wrap gap-2">
         <Link
           ref={linkRef}
           href={`/b/${branch.id}/dashboard`}
           prefetch={false}
-          aria-label={`Open ${branch.name} back office`}
+          aria-label={t('drawer.openBackOffice', { name: branch.name })}
           className={buttonVariants({ size: 'sm', variant: 'soft' })}
         >
           <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-          Back office
+          {t('drawer.backOffice')}
         </Link>
         <a
           href={storefront}
           target="_blank"
           rel="noreferrer"
-          aria-label={`Open ${branch.name} storefront in a new tab`}
+          aria-label={t('drawer.openStorefront', { name: branch.name })}
           className={buttonVariants({ size: 'sm', variant: 'ghost' })}
         >
           <Store className="h-3.5 w-3.5" aria-hidden />
-          Storefront
+          {t('drawer.storefront')}
         </a>
       </div>
     </div>
@@ -300,7 +316,8 @@ function SwitchRow({
   );
 }
 
-function Package({ row, health }: { row: TenantRow; health: TenantHealth }) {
+function Package({ row, health, p }: { row: TenantRow; health: TenantHealth; p: PlatformText }) {
+  const { t, locale } = p;
   const { ent } = row;
   const overQuota = ent.branchesUsed > ent.branchSeats;
   // billing_compute never clears features on expiry, so a dead tenant still
@@ -310,29 +327,29 @@ function Package({ row, health }: { row: TenantRow; health: TenantHealth }) {
 
   return (
     <section className="space-y-3">
-      <h3 className="text-xs uppercase tracking-wider text-muted-foreground">Package</h3>
+      <h3 className="text-xs uppercase tracking-wider text-muted-foreground">{t('drawer.package.title')}</h3>
       <dl className="grid grid-cols-2 gap-3 text-sm">
         <div>
-          <dt className="text-xs text-muted-foreground">Plan</dt>
-          <dd className="font-semibold">{ent.planCode}</dd>
+          <dt className="text-xs text-muted-foreground">{t('drawer.package.plan')}</dt>
+          <dd className="font-semibold">{p.plan(ent.planCode)}</dd>
         </div>
         <div>
-          <dt className="text-xs text-muted-foreground">Monthly</dt>
+          <dt className="text-xs text-muted-foreground">{t('drawer.package.monthly')}</dt>
           <dd className="font-semibold tabular-nums">{money(ent.monthlyTotal)}</dd>
         </div>
         <div>
           {/* Not "Renews": nothing renews by itself, the store goes dark on this date. */}
-          <dt className="text-xs text-muted-foreground">{health.entitled ? 'Paid through' : 'Lapsed'}</dt>
-          <dd className="font-semibold tabular-nums">
-            {fmtDate(ent.entitledThrough ?? ent.trialEndsAt)}
-          </dd>
+          <dt className="text-xs text-muted-foreground">
+            {health.entitled ? t('drawer.package.paidThrough') : t('drawer.package.lapsed')}
+          </dt>
+          <dd className="font-semibold tabular-nums">{p.date(ent.entitledThrough ?? ent.trialEndsAt)}</dd>
         </div>
         <div>
-          <dt className="text-xs text-muted-foreground">Seats</dt>
+          <dt className="text-xs text-muted-foreground">{t('drawer.package.seats')}</dt>
           <dd className={cn('font-semibold tabular-nums', overQuota && 'text-danger')}>
             {ent.branchesUsed}/{ent.branchSeats}
             {overQuota && (
-              <span className="ml-1 text-xs font-normal">over quota — unenforced, billed short</span>
+              <span className="ml-1 text-xs font-normal">{t('drawer.package.overQuota')}</span>
             )}
           </dd>
         </div>
@@ -342,7 +359,7 @@ function Package({ row, health }: { row: TenantRow; health: TenantHealth }) {
         <div className="flex flex-wrap gap-1.5">
           {live.map((k) => (
             <Badge key={k} variant="accent" className="px-2 py-0.5 text-[10px]">
-              {featureLabel(k)}
+              {featureLabel(k, locale)}
             </Badge>
           ))}
         </div>
@@ -350,17 +367,17 @@ function Package({ row, health }: { row: TenantRow; health: TenantHealth }) {
 
       {health.entitled && !hasFeature(ent, 'delivery') && (
         <p className="rounded-xl bg-warning/10 px-3 py-2 text-xs text-warning">
-          Base does not include delivery — the order-type gate hides it and delivery orders are rejected.
+          {t('drawer.package.noDelivery')}
         </p>
       )}
 
       {dormant.length > 0 && (
         <div className="space-y-1.5">
-          <p className="text-xs text-muted-foreground">Granted, inactive while unpaid</p>
+          <p className="text-xs text-muted-foreground">{t('drawer.package.dormant')}</p>
           <div className="flex flex-wrap gap-1.5">
             {dormant.map((k) => (
               <Badge key={k} variant="muted" className="px-2 py-0.5 text-[10px] line-through opacity-60">
-                {featureLabel(k)}
+                {featureLabel(k, locale)}
               </Badge>
             ))}
           </div>
@@ -370,21 +387,32 @@ function Package({ row, health }: { row: TenantRow; health: TenantHealth }) {
   );
 }
 
-function accessState(branches: BranchLite[]): string {
-  const total = branches.length;
-  if (total === 0) return 'No branches';
-  const active = branches.filter((b) => b.is_active).length;
-  if (active === total) return `All ${total} branch${total === 1 ? '' : 'es'} active`;
-  if (active === 0) return total === 1 ? 'Suspended' : `All ${total} branches suspended`;
-  return `${total - active} of ${total} suspended`;
+// The stored scope ('branch' | 'brand') stays as it is; only its label is translated.
+function loyaltyLabel(scope: string, { t }: PlatformText): string {
+  if (scope === 'branch') return t('drawer.loyalty.branch');
+  if (scope === 'brand') return t('drawer.loyalty.brand');
+  return t('drawer.loyalty.other', { scope });
 }
 
-function billingState(row: TenantRow, health: TenantHealth): string {
+function accessState(branches: BranchLite[], { t }: PlatformText): string {
+  const total = branches.length;
+  if (total === 0) return t('drawer.accessState.noBranches');
+  const active = branches.filter((b) => b.is_active).length;
+  if (active === total) return t('drawer.accessState.allActive', { count: total });
+  if (active === 0) return t('drawer.accessState.allSuspended', { count: total });
+  return t('drawer.accessState.partlySuspended', { suspended: total - active, total });
+}
+
+function billingState(row: TenantRow, health: TenantHealth, p: PlatformText): string {
+  const { t } = p;
+  const plan = p.plan(row.ent.planCode);
   if (!health.entitled) {
     const lapsed = row.ent.entitledThrough ?? row.ent.trialEndsAt;
-    return lapsed ? `Expired ${fmtDate(lapsed)} · ${row.ent.planCode}` : 'No subscription';
+    return lapsed
+      ? t('drawer.billingState.expired', { date: p.date(lapsed), plan })
+      : t('drawer.billingState.noSubscription');
   }
-  return `${health.billing.label} · ${row.ent.planCode}`;
+  return t('drawer.billingState.current', { status: p.text(health.billing.label), plan });
 }
 
 /**

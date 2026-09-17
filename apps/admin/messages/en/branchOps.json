@@ -1,0 +1,207 @@
+{
+  "common": {
+    "saved": "Saved ✓",
+    "loading": "Loading…",
+    "copyToAll": "Copy to all days",
+    "addWindow": "Add window",
+    "removeWindow": "Remove window",
+    "to": "to",
+    "overnight": "(overnight)"
+  },
+  "errors": {
+    "generic": "Something went wrong and nothing was saved. Try again.",
+    "noPermission": "Your role isn’t allowed to change these settings."
+  },
+  "payments": {
+    "title": "Payment methods",
+    "description": "Choose which payment methods customers can pick for Pickup (prepared now) and Schedule Delivery (booked ahead). Card payments are collected by you at handoff with your own reader — nothing is charged online yet. Orders your staff take at the counter or POS are not affected.",
+    "dineInNote": "This covers delivery and pickup only. Dine-in customers skip the payment step entirely and settle with you at the restaurant.",
+    "modes": {
+      "asap": "Pickup (now)",
+      "scheduled": "Schedule Delivery"
+    },
+    "methods": {
+      "cash": {
+        "label": "Cash",
+        "hint": "Paid to the driver or at the counter"
+      },
+      "card": {
+        "label": "Card",
+        "hint": "Collected at handoff with your own reader"
+      },
+      "transfer": {
+        "label": "QR transfer",
+        "hint": "Customer scans your QR, transfers, and uploads the slip for you to approve"
+      }
+    },
+    "lockedTransfer": "Upload your QR code below to enable",
+    "lockedPackage": "Not included in your package",
+    "toggleAria": "{method} for {mode} orders",
+    "cardLocked": "Card payment is not included in your current package.",
+    "viewPackages": "View packages",
+    "noMethod": "{which, select, asap {Pickup (now) orders have no payment method enabled — customers won’t be able to place delivery or pickup orders that way.} scheduled {Schedule Delivery orders have no payment method enabled — customers won’t be able to place delivery or pickup orders that way.} other {Pickup (now) and Schedule Delivery orders have no payment method enabled — customers won’t be able to place delivery or pickup orders either way.}} Dine-in is not affected.",
+    "qr": {
+      "title": "Your QR code",
+      "description": "Customers see this at checkout, transfer the total, then upload a photo of the slip. Nothing is charged automatically — the order waits in <b>Orders</b> until you approve the slip.",
+      "upload": "Upload QR",
+      "accountName": "Account name",
+      "accountNamePlaceholder": "Name shown on your bank account",
+      "instructions": "Instructions (optional)",
+      "instructionsPlaceholder": "e.g. Include your order number in the transfer note",
+      "onWithoutImage": "QR transfer is switched on but no QR image is saved. Customers will be refused at checkout until you upload one.",
+      "savedButOff": "Your QR code is saved but <strong>QR transfer is still switched off</strong>, so customers cannot choose it. Tick it under Pickup (now) and/or Schedule Delivery above, then save."
+    },
+    "save": "Save payment methods"
+  },
+  "delivery": {
+    "title": "Delivery",
+    "description": "Distance-based pricing, delivery radius, and dispatch behavior for this branch. Distances and per-distance rates are in miles.",
+    "groups": {
+      "fees": "Customer delivery fee",
+      "timing": "Radius & timing",
+      "dispatch": "Dispatch",
+      "pay": "Driver pay"
+    },
+    "fields": {
+      "baseFee": {
+        "label": "Base fee ($)"
+      },
+      "perMile": {
+        "label": "Per mile ($)"
+      },
+      "radius": {
+        "label": "Delivery radius (mi)",
+        "hint": "Orders beyond this distance are rejected at checkout. Above ~50 mi, raise “Driver max pay” too or drivers are capped at $50 no matter how far they drive."
+      },
+      "surgeFrom": {
+        "label": "Surge starts at (mi)",
+        "hint": "Below this distance the multiplier is not applied at all. 0 surges every order, including a half-mile hop."
+      },
+      "prepTime": {
+        "label": "Prep time (min)",
+        "hint": "Baseline kitchen time used in customer ETAs"
+      },
+      "searchRadius": {
+        "label": "Driver search radius (mi)",
+        "hint": "How far from the branch to look for drivers. Set it very high to reach every driver (useful when testing dispatch)."
+      },
+      "maxAttempts": {
+        "label": "Max dispatch attempts",
+        "hint": "Staff get alerted after this many failed rounds. Set it very high to keep retrying (useful when testing dispatch)."
+      },
+      "gpsAge": {
+        "label": "Max rider GPS age (min)",
+        "hint": "How stale a last known rider location may be and still be offered work. Raise it while testing — riders only send GPS while the app is open in the foreground."
+      },
+      "offerTimeout": {
+        "label": "Offer timeout (sec)",
+        "hint": "How long a driver has to accept an offer"
+      },
+      "stackDetour": {
+        "label": "Stacked-order max detour (mi)",
+        "hint": "Pair two ready orders only when the second is on the way — this caps the extra driving the second customer accepts. Lower = only near-perfect same-route pairs (needs stacking enabled below)"
+      },
+      "maxPay": {
+        "label": "Driver max pay ($)",
+        "hint": "Hard ceiling on what one delivery can pay a driver, before tips. Must be raised alongside a large delivery radius, or long runs are truncated to this amount."
+      }
+    },
+    "availability": "Availability",
+    "pause": {
+      "label": "Pause new orders",
+      "hint": "Customers see the branch as closed until you resume."
+    },
+    "stacking": {
+      "label": "Stack same-route orders (งานพ่วง)",
+      "hint": "When two orders are ready together and the second is on the same route (little extra driving), offer both to one driver as a single trip. Each order still pays the driver in full."
+    },
+    "busy": {
+      "label": "Busy mode — extra prep time (min)",
+      "hint": "Added to every customer ETA while the kitchen is slammed. 0 = off."
+    },
+    "surge": {
+      "title": "Surge pricing",
+      "description": "Charges more for the long deliveries that cost more to run, and leaves short ones alone.",
+      "multiplier": "Surge multiplier",
+      "multiplierHint": "1.00 = off, and nothing below is charged extra.",
+      "off": "Surge is off — every order is charged base + per-mile.",
+      "on": "Under {distance} mi: base + per mile. From {distance} mi: ×{multiplier} on the whole fee.",
+      "unreachable": "This multiplier never applies: it starts at {distance} mi, and nothing past your {radius} mi delivery radius can be ordered. Lower the surge distance or raise the radius."
+    },
+    "preview": {
+      "title": "Fee preview",
+      "distance": "{distance} mi",
+      "eta": "~{minutes} min",
+      "surge": "×{multiplier} surge",
+      "noSurge": "no surge",
+      "outOfRange": "Out of range",
+      "footnote": "Sample distances picked from your own surge distance and delivery radius, priced by the same formula the storefront and the order server use."
+    },
+    "save": "Save delivery settings"
+  },
+  "deliveryHours": {
+    "title": "Delivery",
+    "whoDelivers": "Who delivers?",
+    "platform": {
+      "title": "Favornoms drivers",
+      "body": "Orders are offered to nearby riders automatically. They pick up, navigate and mark the order delivered."
+    },
+    "self": {
+      "title": "We deliver ourselves",
+      "body": "No rider is called. Your own staff take the order out and mark it picked up and delivered from the Live deliveries screen."
+    },
+    "selfNote": "Customers still see live status updates, but not a map — nothing is reporting a position while your own staff are driving.",
+    "limit": "Limit delivery to set hours",
+    "limitHint": "Off: deliveries can be booked for any time the branch is open. On: customers can only book delivery times inside the windows below. Every delivery is booked ahead, so delivery also needs <strong>Scheduled orders</strong> switched on.",
+    "noDelivery": "No delivery this day",
+    "armedButEmpty": "Delivery hours are switched on but no windows are set — customers cannot place a delivery order at all. Add a window, or switch this off.",
+    "save": "Save delivery settings"
+  },
+  "scheduling": {
+    "title": "Scheduled orders",
+    "description": "How customers book deliveries: on your storefront every delivery is booked for a day and time, and pickup is always ordered for now. Bookable times start from this branch’s <strong>Opening hours</strong> above, narrowed by the booking windows below when you switch those on, and by <strong>Delivery hours</strong> when those are limited. A branch that does not sell delivery takes no bookings from customers.",
+    "accept": "Accept scheduled orders",
+    "acceptHint": "Customers book every delivery for a day and time. Off: “Schedule Delivery” disappears from your storefront and customers can only order Pickup.",
+    "minLead": "Earliest booking (minutes ahead)",
+    "minLeadHint": "How far in advance a customer must book. Slots sooner than this are not offered.",
+    "maxDays": "Furthest booking (days ahead)",
+    "maxDaysHint": "0 turns scheduling into same-day only.",
+    "slot": "Time slot size",
+    "slotOption": "{minutes, plural, one {Every minute} other {Every # minutes}}",
+    "slotHint": "Rounds the offered times. Bigger slots mean fewer, tidier choices.",
+    "kitchenLead": "Send to kitchen (minutes before)",
+    "kitchenLeadHint": "A booking stays out of the kitchen display until this long before its time. This is <strong>not</strong> the prep time shown in customer ETAs — that stays on the Delivery card.",
+    "leadGap": "Customers can book {bookMinutes, plural, one {# minute} other {# minutes}} ahead, but you asked for {kitchenMinutes, plural, one {# minute} other {# minutes}} of kitchen notice. Anything booked inside that gap reaches the kitchen straight away, with less notice than you wanted. Raise <strong>Earliest booking</strong> to match if that matters.",
+    "limit": "Limit the times customers can book",
+    "limitHint": "Off: customers can book any time the branch is open. On: only inside the windows below — set a different one per day, so you can take bookings from 5pm all week and only 10am–2pm on Sunday.",
+    "sameAsOpening": "Same as opening hours",
+    "noBookings": "No advance orders this day",
+    "customersSee": "Customers will see: {ranges}",
+    "closedDuringWindows": "nothing — the branch is closed during these hours",
+    "armedButEmpty": "Booking windows are switched on but none are set — customers cannot schedule an order at all. Add a window, or switch this off.",
+    "save": "Save scheduling"
+  },
+  "serviceFee": {
+    "title": "Service fee",
+    "description": "A percentage of the food subtotal, charged <strong>only when the customer pays by credit / debit card</strong>. Cash, QR transfer and dine-in orders never pay it. Set it to <strong>0</strong> to charge no service fee at all.",
+    "label": "Service fee (%)",
+    "hint": "0 – {max}%. Card payments only. Charged on the subtotal — never on tax, tips or the delivery fee.",
+    "previewTitle": "Fee preview (card payments)",
+    "previewOrder": "${amount} order",
+    "cardLocked": "Card payment is not included in your current package, so this fee is never charged right now.",
+    "save": "Save service fee"
+  },
+  "tips": {
+    "title": "Tips",
+    "description": "How each tip is split between the worker and the house. On delivery the worker is the driver; on pickup and dine-in it’s the staff pool.",
+    "channels": {
+      "delivery": "Delivery",
+      "pickup": "Pickup",
+      "dineIn": "Dine-in"
+    },
+    "share": "{worker, select, driver {Driver share} other {Staff pool share}}",
+    "split": "{worker, select, driver {{workerPct}% driver · {housePct}% house} other {{workerPct}% staff pool · {housePct}% house}}",
+    "example": "{worker, select, driver {On a $10 tip: driver ${workerCut}, house ${houseCut}.} other {On a $10 tip: staff ${workerCut}, house ${houseCut}.}}",
+    "save": "Save tip settings"
+  }
+}

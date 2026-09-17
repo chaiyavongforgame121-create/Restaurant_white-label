@@ -15,6 +15,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
+import { useLocale, useTranslations } from 'next-intl';
 import { Check, X } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import {
@@ -23,27 +24,67 @@ import {
   type RestaurantSubscriptionRow,
 } from '@favornoms/database/queries';
 import {
+  DEFAULT_UI_LOCALE,
   FEATURE_KEYS,
   featureLabel,
+  intlLocaleFor,
+  isUiLocale,
   packageMonthlyTotal,
   selectionFeatures,
   type BillingProduct,
   type PackageSelection,
+  type UiLocale,
 } from '@favornoms/shared';
 import { Badge, Button, Card, useConfirm } from '@favornoms/ui';
 import { PlatformNav } from '../../../_components/platform-nav';
-import { addOneMonthUtc, fmtDate } from '../../../_components/tenant-health';
+import { addOneMonthUtc } from '../../../_components/tenant-health';
+
+type T = ReturnType<typeof useTranslations<'platformBilling'>>;
 
 const money = (n: number) => `$${Number(n ?? 0).toFixed(0)}`;
 
 const DAY = 86_400_000;
 
+// Same day on server and browser: Vercel runs in UTC and the operator's browser does not.
+const fmtDate = (v: string | null | undefined, locale: UiLocale) =>
+  v
+    ? new Intl.DateTimeFormat(intlLocaleFor(locale), {
+        timeZone: 'UTC',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      }).format(new Date(v))
+    : '—';
+
+/** Filter values go in the URL; the label is requests.filters.<key>. */
 const FILTERS = [
-  { value: 'pending', label: 'Pending' },
-  { value: 'approved', label: 'Approved' },
-  { value: 'rejected', label: 'Rejected' },
-  { value: '', label: 'All' },
+  { value: 'pending', key: 'pending' },
+  { value: 'approved', key: 'approved' },
+  { value: 'rejected', key: 'rejected' },
+  { value: '', key: 'all' },
 ] as const;
+
+const REQUEST_STATUSES = ['pending', 'approved', 'rejected'] as const;
+const isRequestStatus = (s: string): s is (typeof REQUEST_STATUSES)[number] =>
+  (REQUEST_STATUSES as readonly string[]).includes(s);
+
+/** Raw PostgREST text is for the logs, never the screen. */
+function decisionErrorKey(raw: string | undefined): string {
+  if (!raw) return 'errors.decisionFailed';
+  console.error('[platform/requests] decide_billing_request failed:', raw);
+  if (/forbidden|not[ _]authori[sz]ed|permission denied|platform[ _]admin/i.test(raw)) {
+    return 'errors.permission';
+  }
+  if (/failed to fetch|fetch failed|networkerror|network request failed/i.test(raw)) {
+    return 'errors.network';
+  }
+  return 'errors.decisionFailed';
+}
+
+function useUiLocale(): UiLocale {
+  const rawLocale = useLocale();
+  return isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE;
+}
 
 export function RequestsView({
   requests,
@@ -63,15 +104,14 @@ export function RequestsView({
   nowMs: number;
 }) {
   const router = useRouter();
+  const t = useTranslations('platformBilling');
   const [error, setError] = React.useState<string | null>(null);
 
   return (
     <div className="container max-w-4xl py-8">
       <header className="mb-2">
-        <h1 className="font-display text-3xl font-bold">Package requests</h1>
-        <p className="mt-1 text-muted-foreground">
-          Merchants who chose a package and are waiting to be switched on.
-        </p>
+        <h1 className="font-display text-3xl font-bold">{t('requests.title')}</h1>
+        <p className="mt-1 text-muted-foreground">{t('requests.subtitle')}</p>
       </header>
       <PlatformNav />
 
@@ -89,7 +129,7 @@ export function RequestsView({
                 : 'text-muted-foreground hover:bg-muted'
             }`}
           >
-            {f.label}
+            {t(`requests.filters.${f.key}`)}
           </button>
         ))}
       </div>
@@ -101,7 +141,7 @@ export function RequestsView({
       )}
 
       {requests.length === 0 ? (
-        <p className="py-16 text-center text-muted-foreground">Nothing here.</p>
+        <p className="py-16 text-center text-muted-foreground">{t('requests.empty')}</p>
       ) : (
         <div className="space-y-4">
           {requests.map((r) => (
@@ -134,20 +174,30 @@ function RequestCard({
   onError: (m: string | null) => void;
 }) {
   const router = useRouter();
+  const t = useTranslations('platformBilling');
+  const locale = useUiLocale();
   const confirm = useConfirm();
   const [busy, setBusy] = React.useState<'approve' | 'reject' | null>(null);
   const [note, setNote] = React.useState('');
 
   const pending = request.status === 'pending';
-  const name = request.restaurant_name ?? 'this restaurant';
+  const name = request.restaurant_name ?? t('requests.thisRestaurant');
+  const noPackage = t('requests.noPackage');
   const diff = React.useMemo(
-    () => (pending && current ? packageDiff(request, current, catalog, nowMs) : null),
-    [pending, request, current, catalog, nowMs],
+    () =>
+      pending && current ? packageDiff(request, current, catalog, nowMs, locale, noPackage) : null,
+    [pending, request, current, catalog, nowMs, locale, noPackage],
   );
+
+  const perMonth = (amount: string) =>
+    t.rich('perMonth', {
+      amount,
+      unit: (chunks) => <span className="ml-1 text-sm font-normal text-muted-foreground">{chunks}</span>,
+    });
 
   const decide = async (approve: boolean) => {
     if (approve) {
-      const question = approvalQuestion(name, diff);
+      const question = approvalQuestion(name, diff, t, locale);
       if (question && !(await confirm(question))) return;
     }
     setBusy(approve ? 'approve' : 'reject');
@@ -160,7 +210,7 @@ function RequestCard({
     );
     setBusy(null);
     if (res.ok !== true) {
-      onError(res.error ?? 'Could not save that decision.');
+      onError(t(decisionErrorKey(res.error)));
       return;
     }
     router.refresh();
@@ -174,7 +224,7 @@ function RequestCard({
             {request.restaurant_name ?? request.restaurant_id}
           </h2>
           <p className="text-xs text-muted-foreground">
-            {new Date(request.created_at).toLocaleString('en-US')}
+            {new Date(request.created_at).toLocaleString(intlLocaleFor(locale))}
           </p>
         </div>
         <Badge
@@ -186,12 +236,14 @@ function RequestCard({
                 : 'muted'
           }
         >
-          {request.status}
+          {isRequestStatus(request.status) ? t(`requests.status.${request.status}`) : request.status}
         </Badge>
       </div>
 
       {pending && (
-        <p className="mt-3 text-xs uppercase tracking-wider text-muted-foreground">Requested</p>
+        <p className="mt-3 text-xs uppercase tracking-wider text-muted-foreground">
+          {t('requests.requested')}
+        </p>
       )}
       <div className={`${pending ? 'mt-1.5' : 'mt-3'} flex flex-wrap items-center gap-2 text-sm`}>
         <Badge variant="outline">{request.plan_code}</Badge>
@@ -200,12 +252,9 @@ function RequestCard({
             {a}
           </Badge>
         ))}
-        <Badge variant="muted">
-          {request.branch_seats} seat{request.branch_seats === 1 ? '' : 's'}
-        </Badge>
+        <Badge variant="muted">{t('requests.seatCount', { count: request.branch_seats })}</Badge>
         <span className="ml-auto font-display text-xl font-bold">
-          {money(request.monthly_total)}
-          <span className="ml-1 text-sm font-normal text-muted-foreground">/mo</span>
+          {perMonth(money(request.monthly_total))}
         </span>
       </div>
 
@@ -214,7 +263,7 @@ function RequestCard({
       )}
       {request.decision_note && (
         <p className="mt-3 text-sm text-muted-foreground">
-          Decision note: {request.decision_note}
+          {t('requests.decisionNote', { note: request.decision_note })}
         </p>
       )}
 
@@ -223,8 +272,7 @@ function RequestCard({
           <PackageComparison diff={diff} />
         ) : (
           <p className="mt-4 rounded-xl bg-warning/10 px-3 py-2 text-sm text-warning">
-            Could not load {name}&apos;s current package, so this card cannot show what approving
-            removes. Approving replaces whatever they have now.
+            {t('requests.loadFailed', { name })}
           </p>
         ))}
 
@@ -233,7 +281,7 @@ function RequestCard({
           <input
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder="Note (optional)"
+            placeholder={t('requests.notePlaceholder')}
             className="h-10 min-w-[12rem] flex-1 rounded-xl border border-border bg-background px-3 text-sm outline-none focus-visible:border-primary"
           />
           <Button
@@ -243,7 +291,7 @@ function RequestCard({
             onClick={() => decide(true)}
             leftIcon={<Check className="h-4 w-4" />}
           >
-            Approve &amp; activate
+            {t('requests.approve')}
           </Button>
           <Button
             size="sm"
@@ -253,7 +301,7 @@ function RequestCard({
             onClick={() => decide(false)}
             leftIcon={<X className="h-4 w-4" />}
           >
-            Reject
+            {t('requests.reject')}
           </Button>
         </div>
       )}
@@ -262,12 +310,19 @@ function RequestCard({
 }
 
 function PackageComparison({ diff }: { diff: PackageDiff }) {
+  const t = useTranslations('platformBilling');
+  const locale = useUiLocale();
   const seatClass =
     diff.seatsTo < diff.seatsFrom ? 'text-danger' : diff.seatsTo > diff.seatsFrom ? 'text-success' : '';
+  const bold = (chunks: React.ReactNode) => <span className="font-semibold">{chunks}</span>;
+  const paidFrom = diff.paidFrom ? fmtDate(diff.paidFrom, locale) : t('requests.lapsed');
+  const paidTo = fmtDate(diff.paidTo, locale);
   return (
     <div className="mt-4 space-y-3 border-t border-border pt-4 text-sm">
       <div>
-        <p className="text-xs uppercase tracking-wider text-muted-foreground">Currently</p>
+        <p className="text-xs uppercase tracking-wider text-muted-foreground">
+          {t('requests.currently')}
+        </p>
         <div className="mt-1.5 flex flex-wrap items-center gap-2">
           <Badge variant="outline">{diff.planFrom}</Badge>
           {diff.currentAddons.map((a) => (
@@ -275,51 +330,64 @@ function PackageComparison({ diff }: { diff: PackageDiff }) {
               {a}
             </Badge>
           ))}
-          <Badge variant="muted">
-            {diff.seatsFrom} seat{diff.seatsFrom === 1 ? '' : 's'}
-          </Badge>
+          <Badge variant="muted">{t('requests.seatCount', { count: diff.seatsFrom })}</Badge>
           <span className="ml-auto font-display text-lg font-bold">
-            {money(diff.totalFrom)}
-            <span className="ml-1 text-sm font-normal text-muted-foreground">/mo</span>
+            {t.rich('perMonth', {
+              amount: money(diff.totalFrom),
+              unit: (chunks) => (
+                <span className="ml-1 text-sm font-normal text-muted-foreground">{chunks}</span>
+              ),
+            })}
           </span>
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
           {diff.paidFrom
-            ? `Paid through ${fmtDate(diff.paidFrom)}`
-            : 'Not live — the storefront is dark right now'}
+            ? t('requests.paidThroughDate', { date: fmtDate(diff.paidFrom, locale) })
+            : t('requests.notLive')}
         </p>
       </div>
 
       <div>
-        <p className="text-xs uppercase tracking-wider text-muted-foreground">Approving</p>
+        <p className="text-xs uppercase tracking-wider text-muted-foreground">
+          {t('requests.approving')}
+        </p>
         <ul className="mt-1.5 space-y-1">
           {diff.removes.length > 0 && (
-            <li className="font-semibold text-danger">This removes: {diff.removes.join(', ')}</li>
-          )}
-          {diff.adds.length > 0 && (
-            <li className="font-semibold text-success">This adds: {diff.adds.join(', ')}</li>
-          )}
-          {diff.planFrom !== diff.planTo && (
-            <li>
-              Plan: {diff.planFrom} → {diff.planTo}
+            <li className="font-semibold text-danger">
+              {t('requests.removes', { items: diff.removes.join(', ') })}
             </li>
           )}
+          {diff.adds.length > 0 && (
+            <li className="font-semibold text-success">
+              {t('requests.adds', { items: diff.adds.join(', ') })}
+            </li>
+          )}
+          {diff.planFrom !== diff.planTo && (
+            <li>{t('requests.planChange', { from: diff.planFrom, to: diff.planTo })}</li>
+          )}
           <li className={seatClass}>
-            Seats:{' '}
             {diff.seatsFrom === diff.seatsTo
-              ? `${diff.seatsTo} (no change)`
-              : `${diff.seatsFrom} → ${diff.seatsTo}`}
+              ? t('requests.seatsSame', { count: diff.seatsTo })
+              : t('requests.seatsChange', { from: diff.seatsFrom, to: diff.seatsTo })}
           </li>
           <li>
-            New total: <span className="font-semibold">{money(diff.totalTo)}/mo</span> (now{' '}
-            {money(diff.totalFrom)}/mo)
-            {diff.totalTo !== diff.requestedTotal &&
-              ` · requested at ${money(diff.requestedTotal)}/mo, today's catalog prices apply`}
+            {diff.totalTo !== diff.requestedTotal
+              ? t.rich('requests.newTotalRequested', {
+                  to: money(diff.totalTo),
+                  from: money(diff.totalFrom),
+                  requested: money(diff.requestedTotal),
+                  b: bold,
+                })
+              : t.rich('requests.newTotal', {
+                  to: money(diff.totalTo),
+                  from: money(diff.totalFrom),
+                  b: bold,
+                })}
           </li>
           <li className={diff.daysLost > 0 ? 'text-danger' : ''}>
-            Paid through: {diff.paidFrom ? fmtDate(diff.paidFrom) : 'lapsed'} →{' '}
-            {fmtDate(diff.paidTo)}, counted from when you approve
-            {diff.daysLost > 0 && ` (${diff.daysLost} paid days fewer)`}
+            {diff.daysLost > 0
+              ? t('requests.paidThroughChangeFewer', { from: paidFrom, to: paidTo, days: diff.daysLost })
+              : t('requests.paidThroughChange', { from: paidFrom, to: paidTo })}
           </li>
         </ul>
       </div>
@@ -345,12 +413,12 @@ interface PackageDiff {
   daysLost: number;
 }
 
-function productName(catalog: BillingProduct[], code: string): string {
-  return catalog.find((p) => p.code === code)?.name ?? featureLabel(code);
+function productName(catalog: BillingProduct[], code: string, locale: UiLocale): string {
+  return catalog.find((p) => p.code === code)?.name ?? featureLabel(code, locale);
 }
 
-function planName(catalog: BillingProduct[], code: string): string {
-  if (code === 'none') return 'No package';
+function planName(catalog: BillingProduct[], code: string, noPackage: string): string {
+  if (code === 'none') return noPackage;
   return catalog.find((p) => p.code === code)?.name ?? code;
 }
 
@@ -359,6 +427,9 @@ function packageDiff(
   current: RestaurantSubscriptionRow,
   catalog: BillingProduct[],
   nowMs: number,
+  locale: UiLocale,
+  /** The reader's words for plan code 'none'. */
+  noPackage: string,
 ): PackageDiff {
   const ent = current.entitlements;
   const requestedAddons = request.addons ?? [];
@@ -407,11 +478,17 @@ function packageDiff(
   const daysLost = live ? Math.max(0, Math.floor((deadline - paidTo.getTime()) / DAY)) : 0;
 
   return {
-    planFrom: planName(catalog, ent.planCode),
-    planTo: planName(catalog, next.planCode),
-    currentAddons: ent.addons.map((a) => productName(catalog, a)),
-    removes: [...removedAddons.map((a) => productName(catalog, a)), ...lostFeatures.map(featureLabel)],
-    adds: [...addedAddons.map((a) => productName(catalog, a)), ...gainedFeatures.map(featureLabel)],
+    planFrom: planName(catalog, ent.planCode, noPackage),
+    planTo: planName(catalog, next.planCode, noPackage),
+    currentAddons: ent.addons.map((a) => productName(catalog, a, locale)),
+    removes: [
+      ...removedAddons.map((a) => productName(catalog, a, locale)),
+      ...lostFeatures.map((k) => featureLabel(k, locale)),
+    ],
+    adds: [
+      ...addedAddons.map((a) => productName(catalog, a, locale)),
+      ...gainedFeatures.map((k) => featureLabel(k, locale)),
+    ],
     seatsFrom: ent.branchSeats,
     seatsTo: next.branchSeats,
     totalFrom: ent.monthlyTotal,
@@ -428,35 +505,41 @@ function packageDiff(
 function approvalQuestion(
   name: string,
   diff: PackageDiff | null,
+  t: T,
+  locale: UiLocale,
 ): { title: string; body: string; confirmLabel: string; destructive: true } | null {
   if (!diff) {
     return {
-      title: `Approve without seeing ${name}'s current package?`,
-      body: 'Their current package could not be loaded. Approving replaces it entirely with this request, removing any add-on or seat the request does not include.',
-      confirmLabel: 'Approve anyway',
+      title: t('requests.confirm.blindTitle', { name }),
+      body: t('requests.confirm.blindBody'),
+      confirmLabel: t('requests.confirm.approveAnyway'),
       destructive: true,
     };
   }
 
-  const losses: string[] = [];
-  if (diff.removes.length > 0) losses.push(`removes ${diff.removes.join(', ')}`);
-  if (diff.seatsTo < diff.seatsFrom) {
-    losses.push(`cuts branch seats from ${diff.seatsFrom} to ${diff.seatsTo}`);
-  }
-  if (diff.daysLost > 0 && diff.paidFrom) {
-    losses.push(
-      `moves paid through back from ${fmtDate(diff.paidFrom)} to ${fmtDate(diff.paidTo)} (${diff.daysLost} days fewer)`,
-    );
-  }
-  if (losses.length === 0) return null;
+  const removes = diff.removes.length > 0;
+  const cutsSeats = diff.seatsTo < diff.seatsFrom;
+  const shortens = diff.daysLost > 0 && diff.paidFrom !== null;
+  if (!removes && !cutsSeats && !shortens) return null;
 
+  const items = diff.removes.join(', ');
   return {
-    title:
-      diff.removes.length > 0
-        ? `Approve and remove ${diff.removes.join(', ')}?`
-        : 'Approve a smaller package?',
-    body: `Approving replaces ${name}'s whole package with this request: it ${losses.join('; it ')}. They lose that as soon as you approve, and getting it back means setting the package again on Subscriptions.`,
-    confirmLabel: 'Approve & remove',
+    title: removes
+      ? t('requests.confirm.removeTitle', { items })
+      : t('requests.confirm.smallerTitle'),
+    body: t('requests.confirm.body', {
+      name,
+      removes: removes ? 'yes' : 'no',
+      items,
+      seats: cutsSeats ? 'yes' : 'no',
+      seatsFrom: diff.seatsFrom,
+      seatsTo: diff.seatsTo,
+      shortens: shortens ? 'yes' : 'no',
+      paidFrom: fmtDate(diff.paidFrom, locale),
+      paidTo: fmtDate(diff.paidTo, locale),
+      days: diff.daysLost,
+    }),
+    confirmLabel: t('requests.confirm.approveRemove'),
     destructive: true,
   };
 }

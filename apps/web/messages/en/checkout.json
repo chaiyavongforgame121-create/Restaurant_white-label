@@ -1,0 +1,195 @@
+{
+  "title": "Checkout",
+  "deliveryAddress": "Delivery address",
+  "contactInfo": "Contact information",
+  "paymentMethod": "Payment method",
+  "dineInPayAtRestaurant": "No payment needed now — you'll settle up at the restaurant.",
+  "name": "Full name",
+  "namePlaceholder": "e.g. Jordan Smith",
+  "phone": "Phone number",
+  "phonePlaceholder": "(555) 234-5678",
+  "emailLabel": "Email (for receipt)",
+  "emailPlaceholder": "you@example.com",
+  "address": "Address",
+  "addressPlaceholder": "Start typing your street address…",
+  "addNote": "Add delivery note",
+  "setOnMap": "Set location on map",
+  "useCurrentLocation": "Use current location",
+  "locating": "Locating…",
+  "remove": "Remove",
+  "apply": "Apply",
+  "picker": {
+    "title": "Set your delivery location",
+    "confirm": "Confirm this location",
+    "useCurrentLocation": "Use my current location",
+    "locating": "Finding your location…",
+    "searching": "Finding address…",
+    "dragHint": "Search or drag the map to set the exact spot",
+    "searchPlaceholder": "Search address or place",
+    "unavailable": "The map is unavailable right now."
+  },
+  "geo": {
+    "unsupported": "Your browser doesn't support location.",
+    "insecure": "Current location needs a secure (https) connection — drag the map instead.",
+    "denied": "Location permission was denied — drag the map to set your spot.",
+    "unavailable": "Couldn't find your location — drag the map instead.",
+    "timeout": "Locating timed out — try again or drag the map."
+  },
+  "loyalty": {
+    "verifyRequired": "To spend loyalty points, verify your email or link your Google account first — it keeps your points safe. You can still order without redeeming.",
+    "verifyHint": "Verify your email or link Google to spend points — it's how we keep them yours.",
+    "verifyCta": "Verify or link your account"
+  },
+  "errors": {
+    "nameRequired": "Please enter your name.",
+    "phoneRequired": "Please enter a phone number.",
+    "phoneInvalid": "Please enter a valid phone number.",
+    "emailInvalid": "Please enter a valid email address.",
+    "addressRequired": "Please enter your delivery address.",
+    "addressUnconfirmed": "Pick your address from the suggestions or the map so we can locate you.",
+    "scheduleRequired": "Please pick a day and time for your delivery.",
+    "scheduleStale": "That delivery time is no longer available. Please check the new time and place your order again.",
+    "dropoffRequired": "Please choose where the driver should leave your order.",
+    "dropoffOtherRequired": "Please describe the drop-off spot.",
+    "outOfRange": "This address is outside the delivery area.",
+    "deliveryNotSold": "This branch isn’t taking delivery orders right now. Try pickup instead.",
+    "pickupClosedScheduleInstead": "This restaurant is closed right now, so pickup is not available. You can schedule a delivery instead."
+  },
+  "promoCode": "Have a promo code?",
+  "placeOrder": "Place order — {amount}",
+  "sendToKitchen": "Send to kitchen · {amount}",
+  "estimatedDelivery": "Estimated arrival: {time}",
+  "submitError": "<strong>Couldn’t place order:</strong> {error}",
+  "payment": {
+    "card": "Credit / Debit card",
+    "cash": "Cash on delivery",
+    "transfer": "QR transfer",
+    "cardFeeNote": "A {percent}% service fee applies to card payments only — cash and QR transfer pay none.",
+    "transferNote": "Place your order first. The QR code and the slip upload appear on the order page straight after — nothing is charged until you confirm you have paid.",
+    "cardWithheldChooseOther": "Card payment isn’t available on this site yet. Choose one of the options above — you can still pay the restaurant by card in person.",
+    "cardWithheldOnly": "Card payment isn’t available on this site yet. It is the only method this restaurant has switched on, so this order cannot be placed online right now. Please call them to order.",
+    "noneAvailable": "This restaurant has no payment options available right now."
+  },
+  "signIn": {
+    "title": "Please sign in to check out",
+    "body": "You need an account to place an order — it only takes a moment.",
+    "cta": "Sign in to continue"
+  },
+  "placed": {
+    "title": "Order placed!",
+    "redirecting": "Taking you to your order…"
+  },
+  "empty": {
+    "title": "Your cart is empty",
+    "body": "Add a few items from the menu to check out.",
+    "cta": "Browse the menu"
+  },
+  "orderType": {
+    "paused": "This restaurant is not taking orders right now. Please check back soon.",
+    "pickupClosedCanSchedule": "This restaurant is closed right now, so pickup is not available — you can still schedule a delivery.",
+    "pickupClosed": "This restaurant is closed right now, so pickup is not available. Please order during opening hours.",
+    "pickupNoPaymentCanSchedule": "Pickup is not available with this restaurant’s current payment options — you can still schedule a delivery.",
+    "pickupNoPayment": "Pickup is not available with this restaurant’s current payment options.",
+    "pickupReady": "Prepared right away once your order is confirmed.",
+    "deliveryUnavailablePickupOpen": "This restaurant is not taking delivery bookings right now — pickup is still available.",
+    "deliveryUnavailable": "This restaurant is not taking delivery bookings right now.",
+    "deliveryNoPaymentPickupOpen": "Scheduled delivery is not available with this restaurant’s current payment options — pickup is still available.",
+    "deliveryNoPayment": "Scheduled delivery is not available with this restaurant’s current payment options.",
+    "pickupPaused": "Pickup is not available right now — the restaurant has paused orders.",
+    "pickupClosedNow": "Pickup is not available right now — the restaurant is closed."
+  },
+  "schedule": {
+    "loading": "Loading the times this restaurant takes bookings…",
+    "none": "No delivery times are available to book right now. Choose Pickup, or check back later.",
+    "day": "Day",
+    "time": "Time",
+    "today": "Today",
+    "tomorrow": "Tomorrow",
+    "hint": "Only times this restaurant delivers are shown, in the restaurant’s local time. Your order is prepared to be ready at that time and sent out to you straight after."
+  },
+  "addresses": {
+    "default": "Default",
+    "useNew": "+ Use a new address",
+    "pinned": "Location pinned"
+  },
+  "quote": {
+    "calculating": "Calculating delivery…",
+    "distanceFee": "{distance} mi away · delivery {fee}",
+    "outOfRangeMax": "Sorry, this address is outside the delivery area (max {max} mi).",
+    "notSold": "Sorry, this branch isn’t taking delivery orders right now. Pickup is still available.",
+    "pickSuggestion": "Select your address from the suggestions to confirm delivery and see the exact fee."
+  },
+  "dropoff": {
+    "title": "Where should we leave it?",
+    "options": {
+      "leave_at_door": "Leave at the door",
+      "hand_to_me": "Hand it to me",
+      "at_desk": "At the desk / reception",
+      "other": "Other"
+    },
+    "otherPlaceholder": "Tell the driver where to leave it",
+    "gateCode": "Front gate code <optional>(optional)</optional>",
+    "gateCodePlaceholder": "e.g. #1234",
+    "room": "Room / unit <optional>(optional)</optional>",
+    "roomPlaceholder": "e.g. Apt 203",
+    "instructions": "Delivery instructions <optional>(optional)</optional>",
+    "instructionsPlaceholder": "e.g. Blue house behind the bakery · call on arrival",
+    "instructionsHint": "Anything that helps the driver find you — useful when the map isn’t exact."
+  },
+  "dineIn": {
+    "scanned": "Scanned from the QR code on your table — nothing to type.",
+    "roundTotal": "Round {round} · Table total so far {amount}"
+  },
+  "promo": {
+    "title": "Promo code",
+    "applied": "{code} — saved {amount}",
+    "appliedFreeDelivery": "{code} — saved {amount} + free delivery",
+    "errors": {
+      "invalidCode": "That promo code isn’t valid.",
+      "exhausted": "This promo code has reached its limit.",
+      "minSubtotal": "Spend at least {amount} to use this code.",
+      "minSubtotalUnknown": "Your order is below the minimum for this code.",
+      "perCustomerLimit": "You’ve already used this code as many times as it allows."
+    }
+  },
+  "giftCard": {
+    "title": "🎁 Gift card",
+    "placeholder": "Gift card code",
+    "applied": "{code} — applies {amount} (balance {balance})",
+    "errors": {
+      "invalidOrRedeemed": "That gift card code isn’t valid or has already been used.",
+      "expired": "This gift card has expired."
+    }
+  },
+  "tip": {
+    "title": "Add a tip",
+    "driverAll": "{percent}% goes to your driver.",
+    "driverPartial": "{percent}% goes to your driver (the rest supports the restaurant).",
+    "teamAll": "{percent}% goes to your kitchen & staff team.",
+    "teamPartial": "{percent}% goes to your kitchen & staff team (the rest supports the restaurant).",
+    "custom": "Custom",
+    "none": "No tip",
+    "customPlaceholder": "Custom amount in USD",
+    "customLabel": "Custom tip amount in USD"
+  },
+  "rewards": {
+    "title": "Redeem points",
+    "balance": "Balance: <strong>{balance, number}</strong>",
+    "onePerOrder": "Pick one reward per order.",
+    "cost": "{points, number} pts",
+    "freeDelivery": "Free delivery",
+    "needsMore": "{count, plural, one {Needs # more point} other {Needs # more points}}",
+    "spendToUnlock": "Spend {amount} to unlock",
+    "addItem": "Add {item} to your cart",
+    "addTheItem": "Add the item to your cart",
+    "deliveryOnly": "Delivery orders only"
+  },
+  "summary": {
+    "calculating": "Calculating…",
+    "salesTax": "Sales tax",
+    "tip": "Tip",
+    "promo": "Promo ({code})",
+    "reward": "Reward ({name})",
+    "deliveryFree": "Delivery free"
+  }
+}

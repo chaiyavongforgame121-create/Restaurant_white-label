@@ -1,0 +1,188 @@
+{
+  "metadata": {
+    "title": "Favornoms Merchant",
+    "description": "Restaurant merchant app"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "orders": "Orders",
+    "liveDeliveries": "Live deliveries",
+    "liveDeliveriesHint": "Where your riders and live orders are right now",
+    "menu": "Menu",
+    "kitchenDisplay": "Kitchen display",
+    "counter": "Counter",
+    "qrCode": "QR code",
+    "reports": "Reports",
+    "headOffice": "Head office",
+    "ratings": "Ratings",
+    "inventory": "Inventory",
+    "digitalSignage": "Digital Signage",
+    "aiVoice": "AI Voice",
+    "staff": "Staff",
+    "drivers": "Drivers",
+    "driverPayouts": "Driver payouts",
+    "customers": "Customers",
+    "promos": "Promos",
+    "loyaltyRewards": "Loyalty rewards",
+    "receipts": "Receipts",
+    "activityLog": "Activity log",
+    "branchSettings": "Branch settings",
+    "brandAndBranches": "Brand & branches",
+    "franchise": "Franchise",
+    "planBilling": "Plan & billing",
+    "preferences": "Preferences",
+    "platformConsole": "Platform console"
+  },
+  "sections": {
+    "advanced": "Advanced",
+    "operations": "Operations",
+    "aiSuite": "AI Suite",
+    "peopleGrowth": "People & growth",
+    "records": "Records",
+    "setup": "Setup"
+  },
+  "sidebar": {
+    "merchant": "Merchant",
+    "switchBranch": "Switch branch",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "branchDashboard": "{branch} dashboard"
+  },
+  "theme": {
+    "switchToLight": "Switch to light mode",
+    "switchToDark": "Switch to dark mode",
+    "lightMode": "Light mode",
+    "darkMode": "Dark mode"
+  },
+  "accessDenied": {
+    "title": "Access denied"
+  },
+  "branchAccess": {
+    "title": "No admin access",
+    "roleCannotOpen": "Your {role} account can’t open the back office for {branch}. Your work is on the counter or kitchen screen.",
+    "accountCannotOpen": "Your account can’t open the back office for {branch}. Your work is on the counter or kitchen screen.",
+    "notStaff": "Your account isn’t a member of staff at {branch}.",
+    "roles": {
+      "owner": "owner",
+      "admin": "admin",
+      "manager": "manager",
+      "cashier": "cashier",
+      "server": "server",
+      "kitchen": "kitchen",
+      "staff": "staff",
+      "driver": "driver"
+    }
+  },
+  "noAccess": {
+    "title": "You’re a driver here",
+    "body": "Driver accounts don’t use the restaurant back office. Open the Favornoms Driver app to see the jobs assigned to you, your delivery history and your earnings.",
+    "askOwner": "If you should also have back-office access, ask the restaurant owner to invite you again with a manager or admin role.",
+    "signInAsSomeoneElse": "Sign in as someone else"
+  },
+  "platformBanner": {
+    "title": "Platform admin view",
+    "body": "You are not staff of {branch}. Every change you make here is recorded against your account.",
+    "back": "Back to platform"
+  },
+  "suspension": {
+    "title": "Subscription inactive",
+    "locked": {
+      "counter": "The counter is locked for {branch} because the subscription has lapsed.",
+      "screen": "This screen is locked for {branch} because the subscription has lapsed."
+    },
+    "lockedHere": {
+      "counter": "The counter is locked for this branch because the subscription has lapsed.",
+      "screen": "This screen is locked for this branch because the subscription has lapsed."
+    },
+    "nothingDeleted": "No data has been deleted — choosing a package restores everything immediately.",
+    "kitchenStillWorks": "Orders already placed can still be cooked and completed from the kitchen display.",
+    "goToBilling": "Go to billing"
+  },
+  "addon": {
+    "pricePerMonth": "+${price}<unit>/month</unit>",
+    "addToPackage": "Add to my package"
+  },
+  "lockedFeature": {
+    "comingSoon": "Coming soon",
+    "notInPackage": "{feature} is part of the {addon} add-on and is not included in your current package.",
+    "viewPackages": "View packages"
+  },
+  "upload": {
+    "noCanvas": "Your browser could not process the image (no canvas support)."
+  },
+  "imageUpload": {
+    "upload": "Upload image",
+    "uploading": "Uploading…",
+    "working": "Working…",
+    "replace": "Replace image",
+    "remove": "Remove image",
+    "undoBackgroundRemoval": "Undo background removal",
+    "removeWhiteBackground": "Remove white background",
+    "previewLightAlt": "Logo on the light storefront",
+    "previewDarkAlt": "Logo on the dark storefront",
+    "light": "Light",
+    "dark": "Dark",
+    "notice": {
+      "darkLogo": "This logo is dark and will be hard to see for customers using dark mode. Undo, or upload a light version.",
+      "lightLogo": "This logo is light and will be hard to see on the light storefront. Undo, or upload a darker version."
+    },
+    "errors": {
+      "formatUnsupported": "This image format cannot be processed here. Upload the logo as a PNG or JPEG.",
+      "svgUnreadable": "Could not read this SVG. Remove the background inside the SVG file, or upload a PNG.",
+      "loadFailed": "Could not load your image.",
+      "noPlainBackground": "There is no plain background around this image to remove.",
+      "encodeFailed": "Could not encode the image."
+    }
+  },
+  "iconUpload": {
+    "requirements": "Square PNG, JPEG or WebP, at least 192×192. A PNG with a transparent background gives you the most choice. We resize it into every size the browser and the installed app need.",
+    "processing": "Processing…",
+    "replace": "Replace icon",
+    "choose": "Choose icon",
+    "remove": "Remove icon",
+    "androidIcon": "Android home-screen icon",
+    "fitFill": "Fill the tile",
+    "fitPadded": "Keep padding",
+    "removeBackground": {
+      "label": "Remove the plain background around the image",
+      "hint": "The white (or other flat colour) outside your logo becomes the colour you pick below — no white corners on any icon."
+    },
+    "transparent": {
+      "label": "Only the image, no background (like a PNG)",
+      "hint": "For the browser tab and installing on a computer. Phones cannot show transparency — Android and iPhone always put a solid colour behind the image, so pick that colour below."
+    },
+    "zoom": "Zoom",
+    "zoomHint": "Zoom in to make the artwork bigger on Android.",
+    "colour": {
+      "phoneBackground": "Phone background",
+      "background": "Background",
+      "frame": "Frame colour",
+      "swatch": "Colour {hex}",
+      "custom": "Custom colour",
+      "hintFromEdge": "The first colours come from the edge of your image — picking the rim colour makes the tile look seamless.",
+      "hintFrameOnly": "Only the frame around your icon changes colour; the icon keeps the background it was made with.",
+      "tickRemoveFirst": "Tick “Remove the plain background” to choose a colour for the area around your image.",
+      "backgroundBakedIn": "This icon’s background is part of the image. To choose a different colour, upload your original again — ideally a PNG with a transparent background."
+    },
+    "preview": {
+      "androidSquircleAlt": "Android rounded-square preview",
+      "androidCircleAlt": "Android circle preview",
+      "iphoneAlt": "iPhone preview",
+      "computerAlt": "Computer and browser tab preview",
+      "computer": "Computer",
+      "hint": "Roughly what each device shows. Android crops to its own shape and iPhone rounds the corners — both need a solid colour, and zoom only applies to Android. Computers and browser tabs can show just your image."
+    },
+    "apply": "Apply to icon",
+    "repaintsRemoved": "The background colour is the same as the one being removed — pick another colour, or the corners will look unchanged.",
+    "thenSave": "Then save to publish.",
+    "oldPadding": "Your current icon still has the old white padding — apply, then save.",
+    "ready": "Ready — 192, 512 and maskable icons generated.",
+    "errors": {
+      "loadFailed": "Could not load your current icon. Upload it again to change its style.",
+      "encodeFailed": "Could not encode the resized icon.",
+      "wrongType": "Use a PNG, JPEG or WebP image. SVG cannot be used as an app icon.",
+      "tooLarge": "That image is larger than {megabytes} MB.",
+      "tooSmall": "That image is {width}×{height}. App icons need at least {min}×{min} — a smaller one makes the install button disappear."
+    }
+  }
+}

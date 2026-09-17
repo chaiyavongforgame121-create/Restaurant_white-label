@@ -1,0 +1,22 @@
+{
+  "title": "Instala Favornoms Driver",
+  "body": "Agrégala a tu pantalla de inicio: se abre en pantalla completa y mantiene activas las alertas de entregas.",
+  "cta": "Instalar",
+  "iosHint": "Toca Compartir en Safari y luego Agregar a la pantalla de inicio.",
+  "rowTitle": "Instalar app",
+  "rowSubtitle": "Pantalla completa · ícono en inicio · alertas de entregas",
+  "rowSubtitleHelp": "Agrégala a tu pantalla de inicio: toca para ver cómo",
+  "installed": "Instalada: ábrela desde tu pantalla de inicio",
+  "alreadyInstalled": "¿Ya la instalaste? Tu navegador no volverá a ofrecerla; abre Favornoms Driver desde tu pantalla de inicio o tu escritorio.",
+  "steps": {
+    "iosSafari": "Toca el botón Compartir en la parte inferior de Safari y elige Agregar a la pantalla de inicio.",
+    "iosOtherBrowser": "Toca el botón Compartir y elige Agregar a la pantalla de inicio. Si no aparece, abre esta página en Safari y haz lo mismo.",
+    "inAppBrowser": "El navegador dentro de otra app (LINE, Facebook…) no puede instalar apps. Abre el menú (⋯ o ⋮), elige Abrir en el navegador e instálala desde ahí.",
+    "android": "Toca el menú ⋮ arriba a la derecha del navegador y elige Instalar app o Agregar a la pantalla principal.",
+    "desktopChromium": "Haz clic en el ícono de instalar al final de la barra de direcciones, o abre el menú ⋮ y elige Transmitir, guardar y compartir › Instalar página como app.",
+    "desktopSafari": "En la barra de menús de Safari, elige Archivo › Añadir al Dock.",
+    "desktopFirefox": "Firefox en computadora no puede instalar apps. Abre esta página en Chrome, Edge o Safari para instalarla.",
+    "unknown": "Abre el menú de tu navegador y busca Instalar app o Agregar a la pantalla principal."
+  },
+  "dismiss": "Descartar"
+}

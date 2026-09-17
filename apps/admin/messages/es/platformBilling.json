@@ -1,0 +1,240 @@
+{
+  "perMonth": "{amount}<unit>/mes</unit>",
+  "subscriptionStatus": {
+    "active": "activa",
+    "trialing": "en prueba",
+    "past_due": "pago vencido",
+    "cancelled": "cancelada",
+    "expired": "vencida"
+  },
+  "errors": {
+    "saveFailed": "No se pudo guardar.",
+    "decisionFailed": "No se pudo guardar la decisión.",
+    "permission": "No tienes permiso para hacer eso.",
+    "network": "No se pudo conectar con el servidor. Revisa tu conexión e inténtalo de nuevo."
+  },
+  "plans": {
+    "metaTitle": "Catálogo de productos · Favornoms",
+    "title": "Catálogo de productos",
+    "subtitle": "Lo que pueden comprar los restaurantes. Precios mensuales en USD.",
+    "newProduct": "Nuevo producto",
+    "stripeDormant": "<strong>Stripe está inactivo.</strong> {count, plural, one {# producto activo no tiene} other {# productos activos no tienen}} ID de precio de Stripe ({codes}). Hasta completarlos todos, los comercios se activan manualmente desde Suscripciones en lugar de pagar con tarjeta.",
+    "newProductCode": "nuevo producto",
+    "inactive": "Inactivo",
+    "noStripePrice": "Sin precio de Stripe",
+    "markInactive": "Desactivar",
+    "markActive": "Activar",
+    "kinds": {
+      "plan": "plan",
+      "addon": "complemento",
+      "seat": "cupo"
+    },
+    "fields": {
+      "code": "Código (slug)",
+      "name": "Nombre",
+      "monthlyPrice": "Precio mensual ($)",
+      "kind": "Tipo",
+      "includedSeats": "Cupos incluidos",
+      "includedSeatsHint": "Cupos que el plan otorga por sí solo.",
+      "seatsPerUnit": "Cupos por unidad",
+      "seatsPerUnitHint": "Para productos por cantidad (extra_branch = 1).",
+      "trialDays": "Días de prueba",
+      "sortOrder": "Orden",
+      "stripePriceId": "ID de precio de Stripe",
+      "stripePriceIdHint": "price_… — obligatorio antes de activar Stripe.",
+      "description": "Descripción",
+      "isQuantity": "Producto por cantidad (se cobra por unidad; requiere precio por cantidad en Stripe)",
+      "features": "Funciones incluidas"
+    },
+    "createProduct": "Crear producto",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "codeRequired": "El código del producto es obligatorio."
+  },
+  "reports": {
+    "title": "Informes financieros",
+    "subtitle": "Ingresos por suscripciones (los ingresos de tu plataforma) y actividad de toda la plataforma.",
+    "stats": {
+      "mrr": "MRR",
+      "arr": "ARR (anualizado)",
+      "payingRestaurants": "Restaurantes que pagan",
+      "arpa": "ARPA",
+      "trialPipeline": "Potencial en prueba",
+      "servingCustomers": "Atendiendo clientes",
+      "branchSeats": "Cupos de sucursal",
+      "branchSeatsValue": "{used} usados / {sold} vendidos",
+      "pendingRequests": "Solicitudes pendientes",
+      "active": "Activas",
+      "trialing": "En prueba",
+      "pastDue": "Pago vencido",
+      "expired": "Vencidas",
+      "cancelled": "Canceladas"
+    },
+    "mrrByPlan": "MRR por plan",
+    "noSubscriptions": "Aún no hay suscripciones.",
+    "mrrByAddon": "MRR por complemento",
+    "noAddons": "Aún no se ha vendido ningún complemento.",
+    "barDetail": "{count} · {amount}/mes",
+    "activityTitle": "Actividad de la plataforma (30 días)",
+    "orders": "Pedidos",
+    "gmv": "GMV (completados)",
+    "payoutsUnpaid": "Pagos a repartidores — pendientes",
+    "payoutsPaid": "Pagos a repartidores — pagados",
+    "activityNote": "El GMV va a los restaurantes (ellos cobran) y los pagos a repartidores los liquidan los restaurantes. Tus ingresos son el MRR de suscripciones de arriba.",
+    "table": {
+      "restaurant": "Restaurante",
+      "status": "Estado",
+      "addons": "Complementos",
+      "branches": "Sucursales",
+      "mrr": "MRR"
+    },
+    "suspended": "suspendido",
+    "trialEnds": "termina el {date}"
+  },
+  "settings": {
+    "title": "Configuración de la plataforma",
+    "subtitle": "Configuración global para todos los restaurantes de la plataforma.",
+    "penalty": {
+      "title": "Penalización de repartidores",
+      "description": "Cuando un repartidor acumula demasiados rechazos o tiempos agotados en la ventana móvil, no puede conectarse durante el periodo de espera.",
+      "threshold": "Límite (eventos)",
+      "thresholdHint": "Eventos en la ventana antes del bloqueo",
+      "window": "Ventana (horas)",
+      "windowHint": "Periodo móvil que se revisa",
+      "cooldown": "Espera (minutos)",
+      "cooldownHint": "Cuánto dura el bloqueo",
+      "countRejects": "Contar rechazos explícitos",
+      "countTimeouts": "Contar ofertas sin respuesta (tiempo agotado)"
+    },
+    "tips": {
+      "title": "Visibilidad de la propina",
+      "description": "Controla qué ve el repartidor sobre la propina en una oferta de entrega.",
+      "hidden": "Oculta (solo neto)",
+      "transparent": "Transparente",
+      "legalTitle": "Se recomienda revisión legal",
+      "legalBody": "Ocultar a los repartidores la parte de la propina que retiene el restaurante puede infringir la ley de propinas de EE. UU. (FLSA) y las normas de transparencia de propinas de estados o ciudades como CA, NY y Seattle, sobre todo con repartidores W-2. Consulta con un abogado antes de activarlo en producción."
+    },
+    "defaults": {
+      "title": "Valores de entrega para sucursales nuevas",
+      "description": "Valores iniciales que se aplican al crear una sucursal. Cada sucursal puede cambiarlos después. Todas las distancias y tarifas son en millas.",
+      "deliveryRadius": "Radio de entrega (mi)",
+      "driverSearchRadius": "Radio de búsqueda de repartidores (mi)",
+      "driverBasePay": "Pago base del repartidor ($)",
+      "driverPerMile": "Pago por milla del repartidor ($)"
+    },
+    "flags": {
+      "title": "Interruptores de funciones",
+      "description": "Activa o desactiva funciones de la plataforma para todos.",
+      "combos": "Combos",
+      "giftCards": "Tarjetas de regalo"
+    },
+    "save": "Guardar configuración",
+    "saved": "Guardado ✓",
+    "reset": "Restablecer valores predeterminados"
+  },
+  "subscriptions": {
+    "metaTitle": "Suscripciones · Favornoms",
+    "title": "Suscripciones",
+    "subtitle": "Configura directamente el paquete de un restaurante. Los cambios se aplican de inmediato.",
+    "searchPlaceholder": "Buscar restaurantes",
+    "noMatches": "Ningún restaurante coincide.",
+    "live": "Activo",
+    "suspended": "Suspendido",
+    "stats": {
+      "monthly": "Mensual",
+      "seats": "Cupos",
+      "paidThrough": "Pagado hasta",
+      "trialEnds": "Fin de la prueba"
+    },
+    "close": "Cerrar",
+    "changePackage": "Cambiar paquete",
+    "featureSwitches": "Interruptores de funciones",
+    "plan": "Plan",
+    "status": "Estado",
+    "statusOption": {
+      "active": "activa",
+      "trialing": "en prueba",
+      "past_due": "pago vencido — mantiene el acceso",
+      "cancelled": "cancelada — mantiene el acceso",
+      "expired": "vencida — el acceso termina ya"
+    },
+    "statusHint": {
+      "past_due": "«Pago vencido» es solo una etiqueta, no un interruptor de apagado: la tienda mantiene acceso completo hasta la fecha de pagado hasta. Suspender en el panel oculta la tienda ya; dejar pasar la fecha termina el acceso.",
+      "cancelled": "«Cancelada» es solo una etiqueta, no un interruptor de apagado: la tienda mantiene acceso completo hasta la fecha de pagado hasta. Suspender en el panel oculta la tienda ya; dejar pasar la fecha termina el acceso.",
+      "expired": "«Vencida» termina el acceso en cuanto aplicas."
+    },
+    "paidThrough": "Pagado hasta",
+    "blankTrial": "Déjalo vacío para reiniciar desde hoy: {days, plural, one {una prueba de # día} other {una prueba de # días}}, hasta el {date}.",
+    "blankMonth": "Déjalo vacío para reiniciar el mes desde hoy: quedará pagado hasta el {date}.",
+    "blankShortens": "Es anterior a la fecha actual ({date}). Elige una fecha para conservar el tiempo que ya tienen.",
+    "addons": "Complementos",
+    "branchSeats": "Cupos de sucursal",
+    "removeSeat": "Quitar un cupo",
+    "addSeat": "Agregar un cupo",
+    "minSeats": "mín. {count} (sucursales abiertas)",
+    "applyPackage": "Aplicar paquete",
+    "saved": "Guardado"
+  },
+  "switches": {
+    "intro": "Muestra u oculta una función solo para este restaurante. <strong>Según plan</strong> sigue el paquete de arriba; <strong>Activado</strong> y <strong>Desactivado</strong> lo ignoran. Ocultar una función la quita del menú lateral del comercio; si abren la URL directamente, ven la página bloqueada en lugar de la función.",
+    "states": {
+      "plan": "Según plan",
+      "on": "Activado",
+      "off": "Desactivado"
+    },
+    "visible": "El comercio la ve",
+    "visibleOverridden": "El comercio la ve · forzado",
+    "hiddenOverridden": "Oculta para el comercio · forzado",
+    "hiddenNotInPackage": "Oculta para el comercio · no está en su paquete",
+    "groupLabel": "Disponibilidad de {feature}"
+  },
+  "requests": {
+    "metaTitle": "Solicitudes de paquete · Favornoms",
+    "title": "Solicitudes de paquete",
+    "subtitle": "Comercios que eligieron un paquete y esperan que se active.",
+    "filters": {
+      "pending": "Pendientes",
+      "approved": "Aprobadas",
+      "rejected": "Rechazadas",
+      "all": "Todas"
+    },
+    "status": {
+      "pending": "pendiente",
+      "approved": "aprobada",
+      "rejected": "rechazada"
+    },
+    "empty": "No hay nada aquí.",
+    "thisRestaurant": "este restaurante",
+    "requested": "Solicitado",
+    "seatCount": "{count, plural, one {# cupo} other {# cupos}}",
+    "decisionNote": "Nota de la decisión: {note}",
+    "loadFailed": "No se pudo cargar el paquete actual de {name}, así que esta tarjeta no puede mostrar qué quita la aprobación. Aprobar reemplaza lo que tengan ahora.",
+    "notePlaceholder": "Nota (opcional)",
+    "approve": "Aprobar y activar",
+    "reject": "Rechazar",
+    "currently": "Actualmente",
+    "paidThroughDate": "Pagado hasta el {date}",
+    "notLive": "Sin servicio: la tienda está apagada ahora mismo",
+    "approving": "Al aprobar",
+    "removes": "Esto quita: {items}",
+    "adds": "Esto agrega: {items}",
+    "planChange": "Plan: {from} → {to}",
+    "seatsSame": "Cupos: {count} (sin cambios)",
+    "seatsChange": "Cupos: {from} → {to}",
+    "newTotal": "Nuevo total: <b>{to}/mes</b> (ahora {from}/mes)",
+    "newTotalRequested": "Nuevo total: <b>{to}/mes</b> (ahora {from}/mes) · se solicitó a {requested}/mes; se aplican los precios actuales del catálogo",
+    "paidThroughChange": "Pagado hasta: {from} → {to}, contando desde que apruebas",
+    "paidThroughChangeFewer": "Pagado hasta: {from} → {to}, contando desde que apruebas ({days, plural, one {# día pagado menos} other {# días pagados menos}})",
+    "lapsed": "vencido",
+    "noPackage": "Sin paquete",
+    "confirm": {
+      "blindTitle": "¿Aprobar sin ver el paquete actual de {name}?",
+      "blindBody": "No se pudo cargar su paquete actual. Aprobar lo reemplaza por completo con esta solicitud y quita cualquier complemento o cupo que la solicitud no incluya.",
+      "approveAnyway": "Aprobar de todos modos",
+      "removeTitle": "¿Aprobar y quitar {items}?",
+      "smallerTitle": "¿Aprobar un paquete más pequeño?",
+      "body": "Aprobar reemplaza todo el paquete de {name} por esta solicitud.{removes, select, yes { Quita {items}.} other {}}{seats, select, yes { Reduce los cupos de sucursal de {seatsFrom} a {seatsTo}.} other {}}{shortens, select, yes { Cambia la fecha de pagado hasta del {paidFrom} al {paidTo} ({days, plural, one {# día menos} other {# días menos}}).} other {}} Lo pierden en cuanto apruebas y, para recuperarlo, hay que volver a configurar el paquete en Suscripciones.",
+      "approveRemove": "Aprobar y quitar"
+    }
+  }
+}

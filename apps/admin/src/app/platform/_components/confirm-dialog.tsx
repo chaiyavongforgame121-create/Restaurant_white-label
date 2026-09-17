@@ -9,9 +9,11 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { X } from 'lucide-react';
 import { Button, Card, IconButton } from '@favornoms/ui';
-import { fmtDate, money, type BranchLite, type TenantRow } from './tenant-health';
+import { money, type BranchLite, type TenantRow } from './tenant-health';
+import type { PlatformText } from './platform-text';
 
 export interface ConfirmCopy {
   titleText: string;
@@ -34,6 +36,7 @@ export function ConfirmDialog({
   onClose: () => void;
   onConfirm: () => void;
 }) {
+  const t = useTranslations('platform.confirm');
   const titleId = React.useId();
   const cancelRef = React.useRef<HTMLButtonElement>(null);
   const cardRef = React.useRef<HTMLDivElement>(null);
@@ -94,7 +97,7 @@ export function ConfirmDialog({
           <h2 id={titleId} className="font-display text-lg font-semibold">
             {copy.titleText}
           </h2>
-          <IconButton label="Close" size="sm" onClick={onClose} disabled={busy}>
+          <IconButton label={t('close')} size="sm" onClick={onClose} disabled={busy}>
             <X className="h-4 w-4" />
           </IconButton>
         </div>
@@ -113,7 +116,7 @@ export function ConfirmDialog({
 
         <div className="flex justify-end gap-2">
           <Button ref={cancelRef} variant="ghost" onClick={onClose} disabled={busy}>
-            Cancel
+            {t('cancel')}
           </Button>
           <Button variant={copy.confirmVariant} onClick={onConfirm} loading={busy}>
             {copy.confirmLabel}
@@ -124,41 +127,47 @@ export function ConfirmDialog({
   );
 }
 
-export function suspendCopy(row: TenantRow, branches: BranchLite[], entitled: boolean): ConfirmCopy {
+export function suspendCopy(
+  row: TenantRow,
+  branches: BranchLite[],
+  entitled: boolean,
+  p: PlatformText,
+): ConfirmCopy {
+  const { t } = p;
   const total = branches.length;
   const active = branches.filter((b) => b.is_active).length;
   const suspending = active > 0;
+  // Branch names are the merchant's own words; only the list punctuation is localized.
+  const names = p.list(branches.map((b) => b.name));
 
   return {
-    titleText: suspending ? `Suspend ${row.name}?` : `Restore ${row.name}?`,
-    confirmLabel: suspending ? 'Suspend' : 'Restore',
+    titleText: suspending
+      ? t('confirm.suspend.title', { name: row.name })
+      : t('confirm.restore.title', { name: row.name }),
+    confirmLabel: suspending ? t('confirm.suspend.confirm') : t('confirm.restore.confirm'),
     confirmVariant: suspending ? 'danger' : 'primary',
-    body: (
-      <>
-        {suspending ? 'This takes ' : 'This brings back '}
-        {total === 1 ? 'the only branch' : `all ${total} branches`} of {row.name}
-        {total > 0 && <> — {branches.map((b) => b.name).join(', ')}</>}.{' '}
-        {suspending
-          ? 'The storefront will return 404 — not the suspended screen. Staff keep their back-office access and no data is deleted. This does not change their subscription.'
-          : 'Customers will be able to find the storefront again.'}
-      </>
-    ),
+    body: suspending
+      ? t('confirm.suspend.body', { total, name: row.name, branches: names })
+      : total === 0
+        ? t('confirm.restore.bodyNoBranches', { name: row.name })
+        : t('confirm.restore.body', { total, name: row.name, branches: names }),
     warning: !suspending && !entitled ? (
       <>
-        {row.name}&apos;s subscription is {row.ent.status}, so the storefront will still show the
-        suspended screen after restoring. Fix the subscription to bring them back online.{' '}
-        <Link
-          href={`/platform/subscriptions?q=${encodeURIComponent(row.slug)}`}
-          className="text-primary underline-offset-2 hover:underline"
-        >
-          Manage subscription
-        </Link>
+        {t.rich('confirm.restore.warningUnpaid', {
+          name: row.name,
+          status: p.status(row.ent.status),
+          link: (chunks) => (
+            <Link
+              href={`/platform/subscriptions?q=${encodeURIComponent(row.slug)}`}
+              className="text-primary underline-offset-2 hover:underline"
+            >
+              {chunks}
+            </Link>
+          ),
+        })}
       </>
     ) : !suspending && active > 0 && active < total ? (
-      <>
-        {active} of {total} branches are already active. Restoring turns ALL {total} on, including any
-        branch that was disabled deliberately.
-      </>
+      <>{t('confirm.restore.warningPartial', { active, total })}</>
     ) : undefined,
   };
 }
@@ -167,43 +176,48 @@ export function reactivateCopy(
   row: TenantRow,
   branches: BranchLite[],
   kind: 'extend' | 'convert',
-  planLabel: string,
+  /** The plan code the write sends; shown through its label. */
+  planCode: string,
   monthly: number | null,
   seats: number,
   /** The exact paid-through date the write will produce (see extensionPeriodEnd). */
   periodEnd: Date,
   /** The current deadline when extending a store that has not lapsed yet, else null. */
   extendsFrom: string | null,
+  p: PlatformText,
 ): ConfirmCopy {
+  const { t } = p;
   const stillSuspended = branches.filter((b) => !b.is_active).length;
-  const price = monthly === null ? '' : ` at ${money(monthly)}/mo`;
-  const seatText = `${seats} branch${seats === 1 ? '' : 'es'}`;
+  const plan = p.plan(planCode);
+  const current = p.plan(row.ent.planCode);
+  const price = {
+    hasPrice: monthly === null ? 'no' : 'yes',
+    price: monthly === null ? '' : money(monthly),
+  };
+  const to = p.date(periodEnd.toISOString());
 
   return {
-    titleText: kind === 'extend' ? `Extend ${row.name} by 1 month?` : `Put ${row.name} on ${planLabel}?`,
-    confirmLabel: kind === 'extend' ? 'Extend' : `Charge ${planLabel}`,
+    titleText:
+      kind === 'extend'
+        ? t('confirm.reactivate.titleExtend', { name: row.name })
+        : t('confirm.reactivate.titleConvert', { name: row.name, plan }),
+    confirmLabel:
+      kind === 'extend' ? t('confirm.reactivate.confirmExtend') : t('confirm.reactivate.confirmConvert', { plan }),
     confirmVariant: 'primary',
-    body: extendsFrom ? (
-      <>
-        Adds 1 month to the {row.ent.planCode} package the tenant already has{price} for {seatText}:
-        paid through {fmtDate(extendsFrom)} becomes {fmtDate(periodEnd.toISOString())}. The store is
-        still live, so diners notice nothing.
-      </>
-    ) : (
-      <>
-        {kind === 'extend'
-          ? `Re-bills the ${row.ent.planCode} package the tenant already has`
-          : `Moves ${row.name} off ${row.ent.planCode} and onto ${planLabel}`}
-        {price} for {seatText}, paid through {fmtDate(periodEnd.toISOString())}. The storefront comes
-        back on the diner&apos;s next request.
-      </>
-    ),
+    body: extendsFrom
+      ? t('confirm.reactivate.bodyExtendLive', {
+          plan: current,
+          ...price,
+          seats,
+          from: p.date(extendsFrom),
+          to,
+        })
+      : kind === 'extend'
+        ? t('confirm.reactivate.bodyRebill', { plan: current, ...price, seats, to })
+        : t('confirm.reactivate.bodyConvert', { name: row.name, current, plan, ...price, seats, to }),
     warning:
-      stillSuspended > 0 ? (
-        <>
-          {stillSuspended} of {branches.length} branches are also platform-suspended and will keep
-          returning 404 after this. Restore them separately.
-        </>
-      ) : undefined,
+      stillSuspended > 0
+        ? t('confirm.reactivate.warningSuspended', { suspended: stillSuspended, total: branches.length })
+        : undefined,
   };
 }

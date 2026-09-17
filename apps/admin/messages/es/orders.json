@@ -1,0 +1,210 @@
+{
+  "page": {
+    "title": "Pedidos",
+    "count": "{count, plural, one {# resultado} other {# resultados}}",
+    "countCapped": "{count, plural, one {# resultado} other {# resultados}} · se muestran los primeros {shown}",
+    "empty": "Ningún pedido coincide con los filtros",
+    "tableLabel": "Mesa {number}",
+    "columns": {
+      "orderNumber": "N.º de pedido",
+      "channel": "Canal",
+      "customer": "Cliente",
+      "items": "Artículos",
+      "created": "Creado",
+      "total": "Total",
+      "status": "Estado",
+      "actions": "Acciones"
+    }
+  },
+  "status": {
+    "pending": "Pendiente",
+    "confirmed": "Confirmado",
+    "preparing": "En preparación",
+    "ready": "Listo",
+    "out_for_delivery": "En camino",
+    "completed": "Completado",
+    "cancelled": "Cancelado",
+    "refunded": "Reembolsado"
+  },
+  "channel": {
+    "dine_in": "Comer en el local",
+    "pickup": "Recoger en tienda",
+    "delivery": "Entrega a domicilio",
+    "qr_ordering": "Pedido por QR"
+  },
+  "paymentMethod": {
+    "cash": "Efectivo",
+    "card": "Tarjeta",
+    "transfer": "Transferencia QR"
+  },
+  "filters": {
+    "saved": "Guardadas:",
+    "removeSavedView": "Quitar la vista guardada {name}",
+    "searchPlaceholder": "Buscar n.º de pedido / cliente / teléfono…",
+    "clearSearch": "Borrar búsqueda",
+    "allStatuses": "Todos los estados",
+    "allChannels": "Todos los canales",
+    "scheduledLabel": "Pedidos programados",
+    "when": {
+      "all": "Todos los pedidos",
+      "scheduled": "Programados — próximos",
+      "held": "Programados — aún no en cocina"
+    },
+    "rangeLabel": "Rango de fechas",
+    "range": {
+      "all": "Todo el historial",
+      "today": "Hoy",
+      "days7": "Últimos 7 días",
+      "days30": "Últimos 30 días",
+      "custom": "Personalizado…"
+    },
+    "dueRange": {
+      "all": "Cualquier fecha",
+      "today": "Para hoy",
+      "days7": "En los próximos 7 días",
+      "days30": "En los próximos 30 días",
+      "custom": "Personalizado…"
+    },
+    "fromDate": "Fecha de inicio",
+    "dateSeparator": "a",
+    "toDate": "Fecha de fin",
+    "saveView": "Guardar vista",
+    "savePrompt": {
+      "title": "Ponle nombre a esta vista",
+      "body": "Los filtros actuales se guardan en este dispositivo para volver a aplicarlos con un clic.",
+      "placeholder": "Entregas de hoy",
+      "confirm": "Guardar vista"
+    }
+  },
+  "row": {
+    "items": "{count, plural, one {# artículo} other {# artículos}}",
+    "summaryMore": "{items} +{count} más",
+    "noLineItems": "Sin artículos",
+    "hasRequests": "Tiene opciones o notas",
+    "unpaid": "Sin pagar",
+    "unpaidHint": "Esperando a que el cliente confirme el pago",
+    "scheduledOn": "Programado {date}",
+    "dueOn": "Para el {date}",
+    "walkIn": "Cliente en local",
+    "combo": "Combo",
+    "noLinesRecorded": "Este pedido no tiene artículos registrados.",
+    "notes": {
+      "table": "Mesa",
+      "customer": "Nota del cliente",
+      "kitchen": "Nota de cocina",
+      "delivery": "Instrucciones de entrega"
+    }
+  },
+  "receipt": {
+    "button": "Recibo",
+    "title": "Recibo · {number}",
+    "sheetLabel": "Recibo del pedido {number}",
+    "loading": "Cargando recibo…",
+    "loadFailed": "Ya no se pudo leer ese pedido.",
+    "voidedCancelled": "Este pedido se canceló. El recibo muestra lo que se pidió, no que se haya pagado.",
+    "voidedRefunded": "Este pedido se reembolsó. El recibo muestra lo que se pidió, no que se haya pagado.",
+    "printHint": "Imprime el recibo de 80 mm en una ventana nueva.",
+    "print": "Imprimir",
+    "date": "Fecha",
+    "channel": "Canal",
+    "status": "Estado",
+    "customer": "Cliente",
+    "phone": "Teléfono",
+    "subtotal": "Subtotal",
+    "deliveryFee": "Costo de envío",
+    "serviceFee": "Cargo por servicio",
+    "discount": "Descuento",
+    "salesTax": "Impuestos",
+    "tip": "Propina",
+    "total": "Total ({currency})",
+    "paidVia": "Pagado con",
+    "deliverTo": "Entregar en: {address}"
+  },
+  "actions": {
+    "menu": "Acciones",
+    "issueRefund": "Emitir reembolso",
+    "cancelOrder": "Cancelar pedido",
+    "editNote": "Editar nota del cliente",
+    "issueReceipt": "Emitir recibo",
+    "cancelDialog": {
+      "title": "¿Cancelar este pedido?",
+      "body": "Se cancelará el pedido y se repondrá el inventario. No se puede deshacer.",
+      "keep": "Mantener pedido",
+      "confirm": "Sí, cancelar"
+    },
+    "noteDialog": {
+      "title": "Nota del cliente",
+      "body": "Es la nota que el cliente escribió al pagar y la que aparece en la comanda de cocina. Al guardar, se reemplaza.",
+      "placeholder": "p. ej., Sin maní — alergia",
+      "cancel": "Cancelar",
+      "save": "Guardar nota"
+    },
+    "invoiceIssued": "Recibo {number} emitido",
+    "invoiceIssuedNoNumber": "Recibo emitido",
+    "done": "Aceptar"
+  },
+  "refund": {
+    "title": "Emitir reembolso",
+    "byItems": "Por artículos",
+    "customAmount": "Monto personalizado",
+    "loadingItems": "Cargando artículos…",
+    "noItems": "No se encontraron artículos en este pedido.",
+    "refundQty": "Cant. a reembolsar",
+    "amountLabel": "Monto (USD)",
+    "max": "Máx. {amount}",
+    "reason": "Motivo (opcional)",
+    "total": "Total a reembolsar: <strong>{amount}</strong>",
+    "cancel": "Cancelar",
+    "submit": "Emitir reembolso",
+    "amountZero": "El monto del reembolso debe ser mayor que cero.",
+    "amountTooHigh": "El reembolso no puede superar el total del pedido, {total}."
+  },
+  "issues": {
+    "title": "Problemas de entrega ({count})",
+    "subtitle": "Entregas fallidas: reasígnalas para buscar otro repartidor o reembolsa desde la fila del pedido.",
+    "customer": "Cliente",
+    "noReason": "Sin motivo registrado",
+    "photo": "foto",
+    "redispatch": "Reasignar",
+    "reasons": {
+      "vehicleProblem": "Problema con el vehículo",
+      "personalEmergency": "Emergencia personal",
+      "waitTooLong": "Espera demasiado larga en el restaurante",
+      "customerUnreachable": "No se pudo contactar al cliente",
+      "cantFindAddress": "No se encontró la dirección",
+      "customerRefused": "El cliente rechazó el pedido"
+    }
+  },
+  "payments": {
+    "title": "{count, plural, one {# transferencia pendiente de revisión} other {# transferencias pendientes de revisión}}",
+    "subtitle": "Estos pedidos se pagan por transferencia QR y no llegarán a la cocina hasta que confirmes que recibiste el dinero.",
+    "customer": "Cliente",
+    "slipUploaded": "Comprobante subido el {date}",
+    "rejectLabel": "¿Qué estaba mal?",
+    "rejectPlaceholder": "El cliente lo verá para poder corregirlo",
+    "cancel": "Cancelar",
+    "confirmReject": "Confirmar rechazo",
+    "reject": "Rechazar",
+    "approve": "Aprobar",
+    "slipAlt": "Comprobante de transferencia del pedido {number}",
+    "loadingSlip": "Cargando comprobante…",
+    "noSlip": "Aún no se ha subido un comprobante"
+  },
+  "errors": {
+    "generic": "Algo salió mal. Inténtalo de nuevo.",
+    "authRequired": "Tu sesión expiró. Vuelve a iniciar sesión.",
+    "orderNotFound": "Ese pedido ya no existe.",
+    "notAuthorized": "Tu cuenta no tiene acceso a la sucursal de este pedido.",
+    "noteLocked": "La nota solo se puede cambiar mientras el pedido está pendiente, confirmado o en preparación.",
+    "cannotCancel": "Este pedido ya está completado, cancelado o reembolsado.",
+    "invoiceNotCompleted": "Solo se puede emitir un recibo cuando el pedido está confirmado, listo o completado.",
+    "invoiceNotAuthorized": "Tu cuenta no figura como personal de esta sucursal, así que no puede emitir recibos.",
+    "refundNotAuthorized": "Solo el propietario, un administrador o un gerente de esta sucursal puede emitir reembolsos.",
+    "invalidRefundAmount": "El reembolso debe ser mayor que cero y no superar el total del pedido.",
+    "deliveryNotFound": "Esa entrega ya no existe.",
+    "deliveryNotFailed": "Esta entrega ya no figura como fallida. Actualiza la página para ver en qué estado está.",
+    "deliveryForbidden": "Tu cuenta no puede reasignar entregas en esta sucursal.",
+    "paymentNotFound": "Ese pago ya no existe.",
+    "paymentForbidden": "Solo el propietario o un gerente puede aprobar pagos."
+  }
+}

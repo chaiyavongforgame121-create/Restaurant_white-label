@@ -1,0 +1,11 @@
+{
+  "generic": "Something went wrong. Please try again.",
+  "auth": {
+    "weakPassword": "Password must be at least 8 characters.",
+    "invalidCredentials": "Wrong phone number or password.",
+    "accountExists": "You already have an account — please log in.",
+    "needsProfile": "Finish creating your rider account to continue.",
+    "invalidPhone": "That phone number doesn’t look right. Please check and try again.",
+    "couldNotContinue": "Couldn’t continue. Please try again."
+  }
+}

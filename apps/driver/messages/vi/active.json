@@ -1,0 +1,177 @@
+{
+  "headToPickup": "Đến lấy hàng",
+  "atPickup": "Tôi đã đến nhà hàng",
+  "pickedUp": "Đã lấy hàng — bắt đầu giao",
+  "onTheWay": "Đang giao đến khách",
+  "atCustomer": "Đã đến",
+  "delivered": "Xác nhận đã giao",
+  "callCustomer": "Gọi khách",
+  "navigate": "Chỉ đường",
+  "noActive": "Không có đơn đang giao",
+  "noActiveDescription": "Đơn bạn nhận sẽ hiện ở đây",
+  "goHome": "Về trang chủ",
+  "complete": {
+    "title": "Đã giao xong! 🎉",
+    "earningsAdded": "Thu nhập đã cộng",
+    "findNext": "Tìm đơn tiếp theo"
+  },
+  "map": {
+    "liveUnavailable": "Không có bản đồ trực tiếp cho đơn này.",
+    "unavailable": "Không có bản đồ",
+    "tripSummary": "{miles} mi · {minutes} phút"
+  },
+  "headerWithStop": "{orderNumber} · điểm {seq}/2",
+  "location": {
+    "insecure": "Vị trí chỉ hoạt động qua https. Hãy mở ứng dụng từ biểu tượng đã cài để khách theo dõi được bạn.",
+    "off": "Vị trí đang tắt. Hãy bật lên để khách theo dõi được bạn và bạn tiếp tục nhận được đơn.",
+    "sharedWhileOpen": "Vị trí của bạn được chia sẻ khi ứng dụng này đang mở trên màn hình. Chỉ đường bằng ứng dụng khác sẽ tạm dừng chia sẻ — quay lại đây là cập nhật ngay."
+  },
+  "steps": {
+    "pickup": "Lấy hàng",
+    "dropoff": "Nơi giao",
+    "dropoffStop1": "Nơi giao · điểm 1",
+    "dropoffStop2": "Nơi giao · điểm 2 (sau điểm này)"
+  },
+  "deliveryNote": "Ghi chú giao hàng:",
+  "earning": "Thu nhập",
+  "earningBatch": "Thu nhập (2 đơn)",
+  "pickupOrder1": "Đơn 1 · {orderNumber}",
+  "pickupOrder2": "Đơn 2 · {orderNumber} — chụp riêng túi này",
+  "arrival": {
+    "turnOnLocation": {
+      "restaurant": "Bật vị trí để xác nhận bạn đã ở nhà hàng.",
+      "dropoff": "Bật vị trí để xác nhận bạn đã ở nơi giao."
+    },
+    "waiting": {
+      "restaurant": "Đang chờ vị trí của bạn để xác nhận bạn đã ở nhà hàng…",
+      "dropoff": "Đang chờ vị trí của bạn để xác nhận bạn đã ở nơi giao…"
+    },
+    "tooFar": {
+      "restaurant": "Bạn còn cách {miles} mi — hãy đến trong phạm vi {radius} mi quanh nhà hàng để tiếp tục.",
+      "dropoff": "Bạn còn cách {miles} mi — hãy đến trong phạm vi {radius} mi quanh nơi giao để tiếp tục."
+    },
+    "override": {
+      "restaurant": "GPS bị sai — tôi đang ở nhà hàng",
+      "dropoff": "GPS bị sai — tôi đang ở nơi giao"
+    },
+    "skipped": "Đã bỏ qua kiểm tra khoảng cách. Việc này được ghi lại trong đơn giao."
+  },
+  "photoNeeded": {
+    "secondOrder": "Tải ảnh lấy hàng của đơn 2 lên để tiếp tục.",
+    "eachOrder": "Tải ảnh lấy hàng của từng đơn lên để tiếp tục.",
+    "pickup": "Tải ảnh lấy hàng lên để tiếp tục.",
+    "delivery": "Tải ảnh giao hàng lên để hoàn tất."
+  },
+  "errors": {
+    "podPhotoRequired": "Hãy chụp ảnh giao hàng trước khi hoàn tất.",
+    "pickupPhotoRequired": "Hãy chụp ảnh lấy hàng trước khi tiếp tục.",
+    "pickupPhotoBoth": "Hãy chụp ảnh lấy hàng cho CẢ HAI đơn trước khi tiếp tục.",
+    "notAccepted": "Hãy nhận đơn trước khi chuyển sang bước tiếp theo.",
+    "alreadyMoved": "Đơn này đã sang bước khác — kéo xuống để làm mới.",
+    "forbidden": "Đơn này không còn được giao cho bạn.",
+    "unknown": "Không cập nhật được đơn giao này. Hãy báo bộ phận hỗ trợ: {reason}"
+  },
+  "takenAway": {
+    "title": "{orderNumber} đã bị gỡ khỏi danh sách của bạn",
+    "orderCancelled": "Nhà hàng đã hủy đơn này",
+    "reassigned": "Nhà hàng đã chuyển đơn này cho tài xế khác",
+    "requeued": "Nhà hàng đã đưa đơn này về hàng chờ điều phối",
+    "offerExpired": "Yêu cầu đã hết hạn trước khi bạn trả lời",
+    "other": "Đơn này không còn là của bạn",
+    "gotIt": "Đã hiểu"
+  },
+  "issue": {
+    "open": "Gặp vấn đề với đơn giao này?",
+    "cancelTitle": "Hủy đơn giao này?",
+    "failTitle": "Không giao được hàng?",
+    "cancelHint": "Đơn sẽ quay về hàng chờ điều phối và bạn phải tạm nghỉ nhận đơn một lúc.",
+    "failHint": "Nhà hàng sẽ được thông báo để xử lý đơn.",
+    "reasons": {
+      "vehicleProblem": "Xe gặp sự cố",
+      "personalEmergency": "Việc khẩn cấp cá nhân",
+      "waitTooLong": "Chờ ở nhà hàng quá lâu",
+      "customerUnreachable": "Không liên lạc được với khách",
+      "cantFindAddress": "Không tìm thấy địa chỉ",
+      "customerRefused": "Khách từ chối nhận hàng",
+      "other": "Khác"
+    },
+    "otherLabel": "Chuyện gì đã xảy ra",
+    "otherPlaceholder": "Cho nhà hàng biết chuyện gì đã xảy ra",
+    "photoAttached": "Đã đính kèm ảnh",
+    "attachPhoto": "Đính kèm ảnh (nên có)",
+    "keepDelivering": "Tiếp tục giao",
+    "cancelDelivery": "Hủy đơn giao",
+    "markFailed": "Báo giao thất bại",
+    "errors": {
+      "notCancellable": "Không thể hủy đơn giao này nữa.",
+      "notFailable": "Hiện chưa thể báo giao thất bại cho đơn này.",
+      "generic": "Không gửi được. Kiểm tra kết nối rồi thử lại."
+    }
+  },
+  "dropoff": {
+    "title": "Hướng dẫn giao hàng",
+    "prefs": {
+      "leaveAtDoor": "Để ở cửa",
+      "handToMe": "Giao tận tay",
+      "atDesk": "Để ở quầy / lễ tân"
+    },
+    "other": "Khác",
+    "otherWithText": "Khác: {text}",
+    "gateCode": "Mã cổng:",
+    "room": "Phòng:",
+    "note": "Ghi chú:"
+  },
+  "chat": {
+    "button": "Nhắn tin",
+    "unread": "{count, plural, other {# tin nhắn chưa đọc}}",
+    "sheetTitle": "Nhắn tin với khách",
+    "closedNotice": "Cuộc trò chuyện sẽ đóng khi đơn giao kết thúc.",
+    "quickReplies": {
+      "onMyWay": "Tôi đang đến",
+      "arrived": "Tôi đã đến nơi",
+      "cantFindEntrance": "Không tìm thấy lối vào",
+      "runningLate": "Tôi sẽ đến trễ một chút"
+    },
+    "photoErrors": {
+      "unsupportedType": "Tệp này không phải ảnh có thể gửi. Hãy dùng ảnh JPG, PNG hoặc WebP.",
+      "tooLarge": "Ảnh quá lớn. Hãy thử chụp ảnh mới.",
+      "cannotPrepare": "Trình duyệt không xử lý được ảnh này. Hãy thử ảnh khác.",
+      "uploadFailed": "Chưa tải ảnh lên được. Kiểm tra sóng rồi nhấn để thử lại.",
+      "generic": "Không gửi được ảnh. Nhấn để thử lại."
+    }
+  },
+  "photo": {
+    "pickup": {
+      "prompt": "Bắt buộc — chụp ảnh đơn hàng tại nhà hàng trước khi tiếp tục.",
+      "success": "Đã tải ảnh lấy hàng lên",
+      "tips": {
+        "wholeOrder": "Chụp TOÀN BỘ đơn — mọi túi và đồ uống trong cùng một khung hình.",
+        "receipt": "Để lộ hóa đơn để có thể kiểm tra số đơn.",
+        "surface": "Đặt trên mặt phẳng, đủ sáng — không bị mờ, không bị cắt mất phần nào."
+      }
+    },
+    "delivery": {
+      "prompt": "Bắt buộc — chụp ảnh đơn hàng đã giao trước khi hoàn tất.",
+      "success": "Đã tải ảnh giao hàng lên",
+      "tips": {
+        "spot": "Chụp đồ ăn TẠI đúng nơi giao mà khách yêu cầu.",
+        "landmark": "Chụp kèm cửa, quầy hoặc số căn hộ để dễ nhận ra vị trí.",
+        "light": "Lùi ra một chút và chụp đủ sáng — không bị mờ, không bị cắt mất phần nào."
+      }
+    },
+    "uploading": "Đang tải lên…",
+    "retake": "Chụp lại",
+    "chooseAnother": "Chọn ảnh khác",
+    "takePhoto": "Chụp ảnh",
+    "chooseFromGallery": "Chọn từ thư viện",
+    "uploadFailed": "Chưa tải ảnh lên được. Kiểm tra sóng rồi thử lại.",
+    "guide": {
+      "toggle": "Cách chụp ảnh đạt yêu cầu",
+      "wholeOrder": "Đủ cả đơn, đủ sáng",
+      "receiptVisible": "Thấy rõ hóa đơn",
+      "dropoffSpot": "Tại nơi giao",
+      "blurry": "Mờ hoặc tối",
+      "cutOff": "Bị cắt ở mép"
+    }
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "loading": "Cargando…",
+  "signInPrompt": "Inicia sesión para ver tus puntos y recompensas de {brandName}.",
+  "yourPoints": "Tus puntos",
+  "loadingTier": "Cargando nivel",
+  "memberBadge": "Miembro {tier}",
+  "rewardsReady": "{count, plural, one {# recompensa lista para canjear} other {# recompensas listas para canjear}}",
+  "pointsForReward": "{points, plural, one {Te falta # punto para {reward}} other {Te faltan # puntos para {reward}}}",
+  "keepOrdering": "Sigue pidiendo para ganar más",
+  "lifetimeEarned": "Total ganado",
+  "lifetimeRedeemed": "Total canjeado",
+  "howPoints": {
+    "title": "Cómo funcionan los puntos",
+    "earnRate": "Gana <strong>{points, plural, one {# punto} other {# puntos}} por cada {amount}</strong> del subtotal de tu pedido.",
+    "earnFallback": "Gana puntos sobre el subtotal de cada pedido completado.",
+    "landing": "Los puntos se suman <strong>cuando el pedido se completa</strong>; los pedidos en preparación o en camino todavía no cuentan.",
+    "checkout": "Al pagar, elige <strong>una recompensa</strong> de la lista de arriba: sus puntos se descuentan de tu saldo y el descuento se aplica a ese pedido.",
+    "redeemed": "Los puntos canjeados salen de tu saldo al instante, pero el movimiento aparece en <strong>Actividad reciente</strong> cuando ese pedido se completa.",
+    "climb": "Sigue pidiendo para subir de nivel y desbloquear más beneficios."
+  },
+  "activity": {
+    "title": "Actividad reciente",
+    "empty": "Aún no hay movimientos de puntos. Tu primer pedido empezará a sumar.",
+    "types": {
+      "earned": "Ganados",
+      "redeemed": "Canjeados",
+      "expired": "Vencidos",
+      "adjusted": "Ajustados"
+    }
+  },
+  "rewards": {
+    "title": "Recompensas para canjear",
+    "empty": "{brandName} aún no ha publicado recompensas. Mientras tanto, tus puntos siguen sumando y no vencen mientras esperas.",
+    "percentOff": "{percent}% de descuento",
+    "percentOffCapped": "{percent}% de descuento (hasta {max})",
+    "fixedOff": "{amount} de descuento",
+    "freeItem": "{item} gratis",
+    "freeItemGeneric": "Producto gratis",
+    "freeDelivery": "Envío gratis",
+    "withMinimum": "{value} · en pedidos de más de {amount}",
+    "ready": "lista",
+    "toGo": "{points, plural, one {falta #} other {faltan #}}",
+    "pickAtCheckout": "Elige una al pagar: una recompensa por pedido."
+  },
+  "tiers": {
+    "title": "Tu nivel",
+    "lifetimePoints": "{points, plural, one {# punto acumulado} other {# puntos acumulados}}",
+    "benefitsAria": "Beneficios del nivel {tier}",
+    "toNext": "<strong>{points, plural, one {Te falta # punto} other {Te faltan # puntos}}</strong> para llegar a {tier}.",
+    "top": "¡Estás en el nivel más alto! Disfrútalo 🎉",
+    "tapHint": "Toca un nivel para ver qué desbloquea.",
+    "current": "Este es tu nivel actual.",
+    "passed": "Ya superaste este nivel.",
+    "toUnlock": "{points, plural, one {Te falta # punto para desbloquearlo.} other {Te faltan # puntos para desbloquearlo.}}",
+    "earnTitle": "Cómo ganas puntos",
+    "earnBody": "Ganas {points, plural, one {# punto} other {# puntos}} por cada {amount} del subtotal de un pedido. Los puntos se acreditan cuando el pedido se completa: no se suma nada mientras el pedido está pendiente, en preparación o en camino, y los pedidos cancelados no generan puntos.",
+    "starter": "Aquí empiezan todos los miembros, sin gasto mínimo.",
+    "unlockedAt": "Se desbloquea con {points, plural, one {# punto acumulado} other {# puntos acumulados}}.",
+    "failed": "No pudimos cargar los niveles en este momento. Tus puntos y tu insignia no se ven afectados; vuelve a cargar la página para intentarlo de nuevo."
+  },
+  "defaultPerks": {
+    "bronze": "Usa tus puntos en cualquier recompensa que ofrezca el restaurante.",
+    "silver": "Una insignia de miembro en tu cuenta, para que el restaurante pueda enviarte ofertas exclusivas para miembros.",
+    "gold": "Promociones exclusivas para miembros y acceso anticipado a las campañas que el restaurante organiza para sus mejores clientes.",
+    "platinum": "El nivel más alto: las ofertas más exclusivas del restaurante llegan aquí primero."
+  }
+}

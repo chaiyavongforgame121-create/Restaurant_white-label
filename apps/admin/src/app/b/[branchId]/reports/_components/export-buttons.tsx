@@ -1,27 +1,31 @@
 'use client';
 
 import * as React from 'react';
+import { useTranslations } from 'next-intl';
 import { Download } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { getSupabaseEnv } from '@favornoms/database/env';
 import { Button } from '@favornoms/ui';
 import type { ReportRange } from './report-range';
 
+// `kind` is what the export-csv function reads and what names the file; the button's words
+// come from reports.export.kind. The CSV itself (headers, filename) stays English: it is data.
 const KINDS = [
-  { kind: 'orders', label: 'Orders', ranged: true },
-  { kind: 'revenue', label: 'Revenue', ranged: true },
-  { kind: 'menu', label: 'Menu', ranged: true },
-  { kind: 'payments', label: 'Payments', ranged: true },
-  { kind: 'refunds', label: 'Refunds', ranged: true },
+  { kind: 'orders', ranged: true },
+  { kind: 'revenue', ranged: true },
+  { kind: 'menu', ranged: true },
+  { kind: 'payments', ranged: true },
+  { kind: 'refunds', ranged: true },
   // Customers is a standing list ordered by lifetime spend, so a date window would only
   // narrow it to who signed up in the range — not what anyone means by "export customers".
-  { kind: 'customers', label: 'Customers', ranged: false },
-  { kind: 'loyalty', label: 'Loyalty', ranged: true },
+  { kind: 'customers', ranged: false },
+  { kind: 'loyalty', ranged: true },
 ] as const;
 
 type ExportKind = (typeof KINDS)[number]['kind'];
 
 export function ExportButtons({ branchId, range }: { branchId: string; range: ReportRange }) {
+  const t = useTranslations('reports.export');
   const [busy, setBusy] = React.useState<ExportKind | null>(null);
   const [failure, setFailure] = React.useState<string | null>(null);
 
@@ -33,7 +37,7 @@ export function ExportButtons({ branchId, range }: { branchId: string; range: Re
       const { data: session } = await supabase.auth.getSession();
       const token = session.session?.access_token;
       if (!token) {
-        setFailure('Your session expired. Reload the page and sign in again.');
+        setFailure(t('sessionExpired'));
         return;
       }
       const { url } = getSupabaseEnv();
@@ -48,7 +52,7 @@ export function ExportButtons({ branchId, range }: { branchId: string; range: Re
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) {
-        setFailure(`${kind} export failed (${res.status}). Try again, or contact support.`);
+        setFailure(t('failed', { kind: t(`kind.${kind}`), status: String(res.status) }));
         return;
       }
       const blob = await res.blob();
@@ -77,7 +81,7 @@ export function ExportButtons({ branchId, range }: { branchId: string; range: Re
             loading={busy === k.kind}
             leftIcon={<Download className="h-4 w-4" />}
           >
-            {k.label}
+            {t(`kind.${k.kind}`)}
           </Button>
         ))}
       </div>

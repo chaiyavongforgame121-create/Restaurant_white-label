@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { getFormatter, getTranslations } from 'next-intl/server';
 import { getServerClient } from '@favornoms/database/server';
 import { listBillingProducts, listRestaurantSubscriptions } from '@favornoms/database/queries';
 import { storefrontBase } from '@/lib/site-url';
@@ -81,10 +82,22 @@ export default async function PlatformPage() {
   // dark tenant then renders as the healthiest row on the screen. Name the
   // failure and let the dashboard warn on it.
   const failed = [
-    restaurantsRes.error && 'restaurant metadata',
+    restaurantsRes.error && 'restaurantMeta',
     branchesRes.error && 'branches',
-    subsRes.error && 'subscription flags',
+    subsRes.error && 'subscriptionFlags',
   ].filter((v): v is string => typeof v === 'string');
+
+  let loadError: string | null = null;
+  if (failed.length > 0) {
+    const t = await getTranslations('platform.page');
+    const format = await getFormatter();
+    loadError = t('loadFailed', {
+      parts: format.list(
+        failed.map((part) => t(`loadParts.${part}`)),
+        { type: 'conjunction' },
+      ),
+    });
+  }
 
   return (
     <PlatformDashboard
@@ -94,7 +107,7 @@ export default async function PlatformPage() {
       nowMs={Date.now()}
       catalog={catalog}
       siteBase={storefrontBase()}
-      loadError={failed.length > 0 ? `Could not load ${failed.join(', ')}.` : null}
+      loadError={loadError}
     />
   );
 }

@@ -20,12 +20,15 @@ import {
 import { useLocale, useTranslations } from 'next-intl';
 import {
   formatCurrency,
-  pickLocalized,
+  intlLocaleFor,
+  isUiLocale,
+  DEFAULT_UI_LOCALE,
   type Branch,
   type MenuCardStyle,
   type MenuCategory,
   type MenuItem,
   type MenuLayout,
+  type UiLocale,
 } from '@favornoms/shared';
 import {
   Badge,
@@ -40,11 +43,10 @@ import {
 import { useRealtime } from '@favornoms/database/realtime';
 import { useCart, type OrderChannel } from '@/store/cart';
 import { useRequireAuth } from '@/components/auth/require-auth';
-import type { Locale } from '@/i18n/config';
 import { ComboSheet, type ComboRow as ComboRowType } from './combo-sheet';
 import { MenuItemSheet } from './menu-item-sheet';
 import { OrderTypeGate } from './order-type-gate';
-import { useTablePin } from './table-pin';
+import { useTableLabel, useTablePin } from './table-pin';
 
 /** Never re-run the server tree more often than this, whatever the kitchen is doing. */
 const LIVE_MIN_GAP_MS = 5_000;
@@ -151,6 +153,12 @@ function useLiveStorefront(branchId: string, restaurantSlug: string, branchSlug:
   });
 }
 
+/** The interface language as the shared helpers type it; anything unexpected reads as English. */
+function useUiLocaleValue(): UiLocale {
+  const locale = useLocale();
+  return isUiLocale(locale) ? locale : DEFAULT_UI_LOCALE;
+}
+
 interface BranchReviews {
   summary: { rating: number | null; count: number };
   recent: Array<{ food_stars: number; delivery_stars: number | null; comment: string; created_at: string }>;
@@ -240,6 +248,7 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
   // change. Offering the switcher anyway would let them send a dine-in ticket for the
   // table they are sitting at away with a driver.
   const { table: pinnedTable } = useTablePin();
+  const tableLabel = useTableLabel();
 
   // One auth gate for the whole menu: instantiated once here and threaded down to
   // the quick-add buttons and the combo row. Calling the hook per MenuCard would
@@ -293,10 +302,10 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
 
   // Hero copy is merchant-configurable (restaurant default + per-branch override,
   // via storefront settings). Empty falls back to sensible built-ins.
-  const effectiveHeroTitle = heroTitle?.trim() ? heroTitle : 'Welcome — order something delicious';
+  const effectiveHeroTitle = heroTitle?.trim() ? heroTitle : t('storefront.hero.defaultTitle');
   const effectiveHeroSubtitle = heroSubtitle?.trim()
     ? heroSubtitle
-    : `Now serving from ${branch.name}`;
+    : t('storefront.hero.defaultSubtitle', { branch: branch.name });
 
   return (
     <div>
@@ -318,20 +327,20 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
         channel={channel}
         setChannel={(c) => setChannel(c, branch.id)}
         canDeliver={canDeliver}
-        lockedTableLabel={pinnedTable?.label ?? null}
+        lockedTableLabel={pinnedTable ? tableLabel(pinnedTable) : null}
       />
 
       {!isOpen && (
         <div className="container mt-4">
           <div className="rounded-2xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning">
-            <strong>Currently closed.</strong>{' '}
+            <strong>{t('storefront.closed.title')}</strong>{' '}
             {/* Pickup is always prepared now, so it waits for opening hours — but a delivery is
                 booked for a later time, which a closed restaurant can still take. canDeliver is
                 only true with a bookable slot and orders not paused, so this never promises a
                 booking every slot would refuse. */}
             {canDeliver
-              ? 'Pickup is available during business hours — you can still schedule a delivery now.'
-              : "We're not taking new orders right now. Please check back during business hours."}
+              ? t('storefront.closed.canSchedule')
+              : t('storefront.closed.notTaking')}
           </div>
         </div>
       )}
@@ -437,6 +446,7 @@ function Hero({
   address: string;
   heroUrl?: string | null;
 }) {
+  const t = useTranslations('storefront');
   return (
     <section className="relative overflow-hidden">
       <div className="absolute inset-0 -z-10 bg-gradient-sunset opacity-90" />
@@ -473,7 +483,7 @@ function Hero({
               className="object-cover"
             />
             <div className="absolute inset-x-4 bottom-4 rounded-2xl border border-white/30 bg-white/85 px-4 py-3 backdrop-blur-md">
-              <p className="text-xs font-medium text-muted-foreground">Now serving</p>
+              <p className="text-xs font-medium text-muted-foreground">{t('hero.nowServing')}</p>
               <p className="font-display text-lg font-semibold">{title}</p>
             </div>
           </div>
@@ -524,7 +534,7 @@ function ChannelPicker({
       {lockedTableLabel ? (
         <span className="inline-flex items-center gap-2 self-start rounded-full bg-primary/10 px-4 py-2.5 text-sm font-semibold text-primary">
           <Store className="h-4 w-4" aria-hidden />
-          {t('channel.dineIn')} · {lockedTableLabel}
+          {t('channel.dineInAt', { table: lockedTableLabel })}
         </span>
       ) : (
         /* `channel` is null only while OrderTypeGate is covering the page; the
@@ -555,7 +565,7 @@ function MenuSearch({ search, setSearch }: { search: string; setSearch: (s: stri
         />
         {search && (
           <button
-            aria-label="Clear search"
+            aria-label={t('menu.clearSearch')}
             onClick={() => setSearch('')}
             className="focus-ring absolute right-2 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full text-muted-foreground hover:bg-muted"
           >
@@ -610,7 +620,7 @@ function RecommendedRow({ items, onOpen }: { items: MenuItem[]; onOpen: (i: Menu
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
               {item.outOfStock && (
                 <span className="absolute inset-0 z-10 grid place-items-center bg-background/60">
-                  <Badge variant="muted" className="text-sm">Sold out</Badge>
+                  <Badge variant="muted" className="text-sm">{t('soldOut')}</Badge>
                 </span>
               )}
               <div className="absolute left-3 top-3 flex gap-1.5">
@@ -652,13 +662,14 @@ function CategoryTabs({
   onChange: (id: string) => void;
   counts: Record<string, number>;
 }) {
-  const locale = useLocale() as Locale;
   const t = useTranslations('menu');
   const items = [
     { id: 'all', name: t('categories'), iconEmoji: '🍽️' } as const,
     ...categories.map((c) => ({
       id: c.id,
-      name: pickLocalized(c.name, c.nameTranslations, locale),
+      // Exactly as the merchant typed it, whatever language the interface is in. The seeded
+      // name_translations would otherwise replace their category names for Thai viewers.
+      name: c.name,
       iconEmoji: c.iconEmoji ?? '🍴',
     })),
   ];
@@ -668,7 +679,7 @@ function CategoryTabs({
     // negative margins — the padding here re-aligns the chips with the grid
     // while letting the scroll region run to the screen edge.
     <nav
-      aria-label="Categories"
+      aria-label={t('categories')}
       className="flex gap-2 overflow-x-auto px-4 pb-1 scrollbar-hide sm:px-6 lg:px-8"
     >
       {items.map((cat) => {
@@ -764,7 +775,7 @@ function MenuCard({
           <button
             onClick={onOpen}
             className="focus-ring relative h-24 w-24 shrink-0 overflow-hidden rounded-xl text-left"
-            aria-label={`Open ${item.name}`}
+            aria-label={t('openItem', { name: item.name })}
           >
             {item.imageUrl ? (
               <Image src={item.imageUrl} alt={item.name} fill sizes="96px" className={cn('object-cover', soldOut && 'opacity-40')} />
@@ -774,7 +785,7 @@ function MenuCard({
             {soldOut && (
               <span className="absolute inset-0 grid place-items-center">
                 <span className="rounded-full bg-background/85 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
-                  Sold out
+                  {t('soldOut')}
                 </span>
               </span>
             )}
@@ -800,9 +811,9 @@ function MenuCard({
                 variant={soldOut ? 'ghost' : inCartQty > 0 ? 'soft' : 'gradient'}
                 onClick={() => { if (!soldOut) onOpen(); }}
                 disabled={soldOut}
-                aria-label={soldOut ? `${item.name} sold out` : `Choose options for ${item.name}`}
+                aria-label={soldOut ? t('itemSoldOut', { name: item.name }) : t('chooseOptions', { name: item.name })}
               >
-                {soldOut ? 'Sold out' : inCartQty > 0 ? `${inCartQty} ${t('inCart')}` : `+ ${t('addToCart')}`}
+                {soldOut ? t('soldOut') : inCartQty > 0 ? t('inCartCount', { count: inCartQty }) : t('quickAdd')}
               </Button>
             </div>
           </div>
@@ -817,7 +828,7 @@ function MenuCard({
         <button
           onClick={onOpen}
           className="focus-ring relative aspect-[4/3] w-full overflow-hidden text-left"
-          aria-label={`Open ${item.name}`}
+          aria-label={t('openItem', { name: item.name })}
         >
           {item.imageUrl ? (
             <Image
@@ -833,17 +844,17 @@ function MenuCard({
           <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
           {item.isNew && (
             <Badge variant="solid" className="absolute left-3 top-3 bg-accent text-accent-foreground">
-              New
+              {t('badgeNew')}
             </Badge>
           )}
           {item.isRecommended && !item.isNew && (
             <Badge variant="solid" className="absolute left-3 top-3">
-              <Star className="h-3 w-3 fill-current" /> Chef
+              <Star className="h-3 w-3 fill-current" /> {t('badgeChef')}
             </Badge>
           )}
           {soldOut && (
             <span className="absolute inset-0 grid place-items-center bg-background/60">
-              <Badge variant="muted" className="text-sm">Sold out</Badge>
+              <Badge variant="muted" className="text-sm">{t('soldOut')}</Badge>
             </span>
           )}
         </button>
@@ -895,9 +906,9 @@ function MenuCard({
               variant={soldOut ? 'ghost' : inCartQty > 0 ? 'soft' : 'gradient'}
               onClick={() => { if (!soldOut) onOpen(); }}
               disabled={soldOut}
-              aria-label={soldOut ? `${item.name} sold out` : `Choose options for ${item.name}`}
+              aria-label={soldOut ? t('itemSoldOut', { name: item.name }) : t('chooseOptions', { name: item.name })}
             >
-              {soldOut ? 'Sold out' : inCartQty > 0 ? `${inCartQty} ${t('inCart')}` : `+ ${t('addToCart')}`}
+              {soldOut ? t('soldOut') : inCartQty > 0 ? t('inCartCount', { count: inCartQty }) : t('quickAdd')}
             </Button>
           </div>
         </div>
@@ -950,6 +961,7 @@ function FloatingCartBar() {
 }
 
 function ReviewsStrip({ reviews }: { reviews: { summary: { rating: number | null; count: number }; recent: Array<{ food_stars: number; comment: string }> } }) {
+  const t = useTranslations('storefront');
   return (
     <section className="container mt-5">
       <div className="rounded-2xl border border-border/60 bg-card p-4">
@@ -963,7 +975,7 @@ function ReviewsStrip({ reviews }: { reviews: { summary: { rating: number | null
                 {reviews.summary.rating != null ? Number(reviews.summary.rating).toFixed(1) : '—'}
                 <span className="ml-1.5 text-sm font-normal text-muted-foreground">/ 5</span>
               </p>
-              <p className="text-xs text-muted-foreground">{reviews.summary.count.toLocaleString()} customer reviews</p>
+              <p className="text-xs text-muted-foreground">{t('reviews.count', { count: reviews.summary.count })}</p>
             </div>
           </div>
           {reviews.recent.length > 0 && (
@@ -985,11 +997,12 @@ function CombosRow({
   /** Opens the combo detail sheet. Adding happens there, behind the usual login gate. */
   onOpenCombo: (combo: ComboRow) => void;
 }) {
+  const t = useTranslations('storefront');
   return (
     <section className="container mt-6">
       <div className="flex items-baseline justify-between">
-        <h2 className="font-display text-lg font-bold">🔥 Combos & deals</h2>
-        <span className="text-xs text-muted-foreground">{combos.length} available</span>
+        <h2 className="font-display text-lg font-bold">{t('combos.title')}</h2>
+        <span className="text-xs text-muted-foreground">{t('combos.available', { count: combos.length })}</span>
       </div>
       <div className="-mx-2 mt-3 flex snap-x snap-mandatory overflow-x-auto px-2 pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {combos.map((c) => {
@@ -1022,7 +1035,9 @@ function CombosRow({
                   {(c.items ?? []).slice(0, 4).map((it, i) => (
                     <li key={i}>· {it.quantity > 1 ? `${it.quantity}×` : ''}{it.item_name}</li>
                   ))}
-                  {(c.items ?? []).length > 4 && <li>… + {(c.items ?? []).length - 4} more</li>}
+                  {(c.items ?? []).length > 4 && (
+                    <li>{t('combos.more', { count: (c.items ?? []).length - 4 })}</li>
+                  )}
                 </ul>
                 <div className="mt-3 flex items-center justify-between">
                   <div>
@@ -1030,14 +1045,16 @@ function CombosRow({
                       {formatCurrency(Number(c.total_price))}
                     </p>
                     {savings > 0 && (
-                      <p className="text-[10px] font-semibold text-success">Save {formatCurrency(savings)}</p>
+                      <p className="text-[10px] font-semibold text-success">
+                        {t('combos.save', { amount: formatCurrency(savings) })}
+                      </p>
                     )}
                   </div>
                   {/* Opens the detail sheet rather than adding straight to the cart — a
                       combo bundles several dishes and a saving, which the diner should be
                       able to read before committing. The Add button lives in the sheet. */}
                   <Button size="sm" variant="gradient" onClick={() => onOpenCombo(c)}>
-                    View deal
+                    {t('combos.viewDeal')}
                   </Button>
                 </div>
               </div>
@@ -1051,28 +1068,34 @@ function CombosRow({
 
 /* -------------------- Happy hour sections -------------------- */
 
-const DOW_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+/** A Sunday, so day 0..6 of the happy-hour row lands on the matching weekday name. */
+const DOW_REFERENCE_SUNDAY_MS = Date.UTC(2026, 0, 4);
+const DAY_MS = 24 * 60 * 60 * 1000;
 
-function formatTime(t: string): string {
-  const [hStr, mStr] = t.split(':');
+function weekdayLabel(day: number, locale: UiLocale): string {
+  return new Intl.DateTimeFormat(intlLocaleFor(locale), { weekday: 'short', timeZone: 'UTC' }).format(
+    new Date(DOW_REFERENCE_SUNDAY_MS + day * DAY_MS),
+  );
+}
+
+/**
+ * 'HH:MM:SS' as each language writes a shop's clock — the same conventions the shared
+ * describeRanges uses: English and Latin American Spanish read 12-hour, Vietnamese and Thai
+ * 24-hour (Thai adds น.).
+ */
+function formatTime(value: string, locale: UiLocale): string {
+  const [hStr, mStr] = value.split(':');
   let h = Number(hStr);
   const m = mStr ?? '00';
-  const ampm = h >= 12 ? 'PM' : 'AM';
+  if (locale === 'vi' || locale === 'th') {
+    const clock = `${String(h).padStart(2, '0')}:${m}`;
+    return locale === 'th' ? `${clock} น.` : clock;
+  }
+  const [am, pm] = locale === 'es' ? ['a. m.', 'p. m.'] : ['AM', 'PM'];
+  const ampm = h >= 12 ? pm : am;
   h = h % 12;
   if (h === 0) h = 12;
   return `${h}:${m} ${ampm}`;
-}
-
-function formatWindow(days: number[], start: string, end: string): string {
-  const dayPart =
-    days.length >= 7
-      ? 'Daily'
-      : days
-          .slice()
-          .sort((a, b) => a - b)
-          .map((d) => DOW_LABELS[d])
-          .join(', ');
-  return `${dayPart} · ${formatTime(start)}–${formatTime(end)}`;
 }
 
 function HappyHourSections({
@@ -1092,9 +1115,25 @@ function HappyHourSections({
 }
 
 function HappyHourCard({ hh, onOpen }: { hh: HappyHourSection; onOpen: (i: MenuItem) => void }) {
+  const t = useTranslations('storefront');
+  const locale = useUiLocaleValue();
   const discountText =
-    hh.discountType === 'percent' ? `${hh.discountValue}% off` : `${formatCurrency(hh.discountValue)} off`;
-  const windowText = formatWindow(hh.daysOfWeek, hh.startTime, hh.endTime);
+    hh.discountType === 'percent'
+      ? t('happyHour.percentOff', { value: String(hh.discountValue) })
+      : t('happyHour.amountOff', { amount: formatCurrency(hh.discountValue) });
+  const dayPart =
+    hh.daysOfWeek.length >= 7
+      ? t('happyHour.daily')
+      : hh.daysOfWeek
+          .slice()
+          .sort((a, b) => a - b)
+          .map((d) => weekdayLabel(d, locale))
+          .join(', ');
+  const windowText = t('happyHour.window', {
+    days: dayPart,
+    start: formatTime(hh.startTime, locale),
+    end: formatTime(hh.endTime, locale),
+  });
 
   return (
     <div className="rounded-3xl border border-primary/30 bg-primary/5 p-4">
@@ -1110,7 +1149,7 @@ function HappyHourCard({ hh, onOpen }: { hh: HappyHourSection; onOpen: (i: MenuI
               <span className="absolute inset-0 animate-pulse-ring rounded-full bg-white" />
               <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-white" />
             </span>
-            Live now
+            {t('happyHour.liveNow')}
           </span>
         ) : (
           <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-semibold text-muted-foreground">
@@ -1122,7 +1161,9 @@ function HappyHourCard({ hh, onOpen }: { hh: HappyHourSection; onOpen: (i: MenuI
 
       {hh.appliesToAll ? (
         <p className="mt-3 text-sm font-medium">
-          {discountText} on everything on the menu{hh.isLive ? ' right now' : ' during this window'} 🍽️
+          {hh.isLive
+            ? t('happyHour.everythingLive', { discount: discountText })
+            : t('happyHour.everythingWindow', { discount: discountText })}
         </p>
       ) : (
         <div className="-mx-1 mt-3 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -1160,13 +1201,14 @@ function HappyHourCard({ hh, onOpen }: { hh: HappyHourSection; onOpen: (i: MenuI
   );
 }
 
-const DIETARY_LABELS: Record<string, { label: string; emoji: string }> = {
-  vegan: { label: 'Vegan', emoji: '🌱' },
-  'gluten-free': { label: 'Gluten-free', emoji: '🌾' },
-  halal: { label: 'Halal', emoji: '🕌' },
-  spicy: { label: 'Spicy', emoji: '🌶️' },
-  'chef-pick': { label: "Chef's pick", emoji: '⭐' },
-  new: { label: 'New', emoji: '✨' },
+/** Keyed by the stored dietary tag; the label is looked up under menu.dietary.<key>. */
+const DIETARY_LABELS: Record<string, { key: string; emoji: string }> = {
+  vegan: { key: 'vegan', emoji: '🌱' },
+  'gluten-free': { key: 'glutenFree', emoji: '🌾' },
+  halal: { key: 'halal', emoji: '🕌' },
+  spicy: { key: 'spicy', emoji: '🌶️' },
+  'chef-pick': { key: 'chefPick', emoji: '⭐' },
+  new: { key: 'new', emoji: '✨' },
 };
 
 function DietaryFilters({
@@ -1191,7 +1233,10 @@ function DietaryFilters({
         {t('filters')}
       </span>
       {available.map((tag) => {
-        const meta = DIETARY_LABELS[tag] ?? { label: tag, emoji: '' };
+        const known = DIETARY_LABELS[tag];
+        const meta = known
+          ? { label: t(`dietary.${known.key}`), emoji: known.emoji }
+          : { label: tag, emoji: '' };
         const isOn = selected.has(tag);
         return (
           <button
@@ -1216,7 +1261,7 @@ function DietaryFilters({
           onClick={onClear}
           className="focus-ring inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted"
         >
-          <X className="h-3 w-3" /> Clear
+          <X className="h-3 w-3" /> {t('clearFilters')}
         </button>
       )}
     </div>
@@ -1224,11 +1269,14 @@ function DietaryFilters({
 }
 
 function YourUsualsRow({ items, onOpen }: { items: MenuItem[]; onOpen: (item: MenuItem) => void }) {
+  const t = useTranslations();
   return (
     <section>
       <div className="flex items-baseline justify-between">
-        <h2 className="font-display text-lg font-bold">👋 Your usuals</h2>
-        <span className="text-xs text-muted-foreground">{items.length} items you order most</span>
+        <h2 className="font-display text-lg font-bold">{t('storefront.usuals.title')}</h2>
+        <span className="text-xs text-muted-foreground">
+          {t('storefront.usuals.subtitle', { count: items.length })}
+        </span>
       </div>
       <div className="-mx-2 mt-3 flex snap-x snap-mandatory overflow-x-auto px-2 pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {items.map((item) => (
@@ -1246,7 +1294,7 @@ function YourUsualsRow({ items, onOpen }: { items: MenuItem[]; onOpen: (item: Me
             >
               {item.outOfStock && (
                 <span className="absolute inset-0 grid place-items-center bg-background/60">
-                  <Badge variant="muted" className="text-xs">Sold out</Badge>
+                  <Badge variant="muted" className="text-xs">{t('menu.soldOut')}</Badge>
                 </span>
               )}
             </div>
