@@ -15,6 +15,11 @@
 // email round-trip and no redirect allow-list involved, which is also what a cashier or line
 // cook signing into a shared tablet at the start of every shift actually needs. The magic
 // link survives as a secondary option for anyone who would rather not keep a password.
+//
+// Continue with Google sits above both. Supabase's built-in mailer sends about two emails an
+// hour, and only to the project's team members, so the email link and "Forgot password?" rarely
+// reach a real owner; Google needs no email at all, and it is the only way back in for someone
+// who started their trial with Google and never had a password.
 
 import * as React from 'react';
 import Link from 'next/link';
@@ -25,6 +30,7 @@ import { Building2, KeyRound, Mail, ShieldCheck } from 'lucide-react';
 import { Button, Card } from '@favornoms/ui';
 import { getBrowserClient } from '@favornoms/database/client';
 import { currentOrigin, safeNext } from '@favornoms/shared';
+import { AuthDivider, ContinueWithGoogle } from '@/components/auth/continue-with-google';
 import { LocaleSwitcher } from '@/components/locale-switcher';
 import { authErrorKey } from '../../auth/_lib/auth-error';
 
@@ -37,16 +43,18 @@ const ERROR_KEYS: Record<string, string> = {
   exchange_failed: 'login.errors.exchangeFailed',
   missing_code: 'login.errors.missingCode',
   link: 'login.errors.link',
+  oauth_cancelled: 'login.errors.googleCancelled',
+  oauth_failed: 'login.errors.googleFailed',
 };
 
 export function LoginView({ next, error: initialError }: { next: string; error: string | null }) {
   const router = useRouter();
   const t = useTranslations('auth');
   // Shared open-redirect guard — see @favornoms/shared. `next` feeds router.replace() on
-  // SIGNED_IN and the magic-link emailRedirectTo below, so a hostile value would hand a
-  // freshly-minted *staff* session to an attacker's page. Falls back to the dashboard root.
-  // During prerender currentOrigin() is '' and this resolves to '/', but target is never
-  // rendered, so hydration can't mismatch.
+  // SIGNED_IN, the magic-link emailRedirectTo and the Google redirect below, so a hostile value
+  // would hand a freshly-minted *staff* session to an attacker's page. Falls back to the
+  // dashboard root. During prerender currentOrigin() is '' and this resolves to '/', but target
+  // is never rendered (ContinueWithGoogle only reads it on click), so hydration can't mismatch.
   const target = safeNext(next, currentOrigin()) ?? '/';
   const [mode, setMode] = React.useState<'password' | 'link'>('password');
   const [email, setEmail] = React.useState('');
@@ -160,69 +168,73 @@ export function LoginView({ next, error: initialError }: { next: string; error: 
               </Button>
             </div>
           ) : (
-            <form
-              className="space-y-4"
-              onSubmit={mode === 'password' ? signInWithPassword : sendLink}
-            >
-              <label className="block">
-                <span className="mb-2 block text-sm font-medium">{t('fields.email')}</span>
-                <div className="relative">
-                  <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    autoComplete="email"
-                    placeholder="owner@example.com"
-                    className="focus-ring w-full rounded-xl border border-border bg-background py-3 pl-11 pr-4 text-base"
-                  />
-                </div>
-              </label>
-
-              {mode === 'password' && (
+            <>
+              <ContinueWithGoogle next={target} />
+              <AuthDivider />
+              <form
+                className="space-y-4"
+                onSubmit={mode === 'password' ? signInWithPassword : sendLink}
+              >
                 <label className="block">
-                  <span className="mb-2 block text-sm font-medium">{t('fields.password')}</span>
+                  <span className="mb-2 block text-sm font-medium">{t('fields.email')}</span>
                   <div className="relative">
-                    <KeyRound className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                    <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
                     <input
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
                       required
-                      autoComplete="current-password"
-                      placeholder={t('fields.passwordPlaceholder')}
+                      autoComplete="email"
+                      placeholder="owner@example.com"
                       className="focus-ring w-full rounded-xl border border-border bg-background py-3 pl-11 pr-4 text-base"
                     />
                   </div>
                 </label>
-              )}
 
-              {error && <p className="text-sm text-danger">{error}</p>}
+                {mode === 'password' && (
+                  <label className="block">
+                    <span className="mb-2 block text-sm font-medium">{t('fields.password')}</span>
+                    <div className="relative">
+                      <KeyRound className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                      <input
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                        autoComplete="current-password"
+                        placeholder={t('fields.passwordPlaceholder')}
+                        className="focus-ring w-full rounded-xl border border-border bg-background py-3 pl-11 pr-4 text-base"
+                      />
+                    </div>
+                  </label>
+                )}
 
-              <Button type="submit" variant="gradient" size="xl" fullWidth loading={submitting}>
-                {mode === 'password' ? t('login.signIn') : t('login.sendLink')}
-              </Button>
+                {error && <p className="text-sm text-danger">{error}</p>}
 
-              <div className="flex items-center justify-between gap-3 text-sm">
-                <button
-                  type="button"
-                  className="text-left font-medium text-muted-foreground hover:text-foreground"
-                  onClick={() => {
-                    setMode(mode === 'password' ? 'link' : 'password');
-                    setError(null);
-                  }}
-                >
-                  {mode === 'password' ? t('login.emailLink') : t('login.usePassword')}
-                </button>
-                <Link
-                  href="/forgot-password"
-                  className="text-right font-medium text-muted-foreground hover:text-foreground"
-                >
-                  {t('login.forgotPassword')}
-                </Link>
-              </div>
-            </form>
+                <Button type="submit" variant="gradient" size="xl" fullWidth loading={submitting}>
+                  {mode === 'password' ? t('login.signIn') : t('login.sendLink')}
+                </Button>
+
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <button
+                    type="button"
+                    className="text-left font-medium text-muted-foreground hover:text-foreground"
+                    onClick={() => {
+                      setMode(mode === 'password' ? 'link' : 'password');
+                      setError(null);
+                    }}
+                  >
+                    {mode === 'password' ? t('login.emailLink') : t('login.usePassword')}
+                  </button>
+                  <Link
+                    href="/forgot-password"
+                    className="text-right font-medium text-muted-foreground hover:text-foreground"
+                  >
+                    {t('login.forgotPassword')}
+                  </Link>
+                </div>
+              </form>
+            </>
           )}
         </Card>
 

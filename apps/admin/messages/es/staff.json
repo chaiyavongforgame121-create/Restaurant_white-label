@@ -75,14 +75,47 @@
       "generic": "No se pudo cambiar el acceso a sucursales. Reintenta."
     }
   },
+  "pendingInvite": {
+    "copyLink": "Copiar enlace de invitación",
+    "copyLinkFor": "Copiar enlace de invitación de {email}",
+    "copied": "Enlace copiado",
+    "copyFailed": "No se pudo copiar automáticamente. Copia este enlace manualmente:",
+    "cancel": "Cancelar invitación",
+    "cancelFor": "Cancelar invitación de {email}",
+    "cancelDialog": {
+      "title": "¿Cancelar la invitación de {email}?",
+      "body": "El enlace deja de funcionar de inmediato. Puedes volver a invitar a esta persona más tarde.",
+      "confirm": "Cancelar invitación",
+      "keep": "Conservar invitación"
+    },
+    "cancelled": "Se canceló la invitación de {email}.",
+    "alreadyCancelled": "La invitación de {email} ya estaba cancelada.",
+    "alreadyJoined": "{email} ya se unió al equipo, así que no hay ninguna invitación que cancelar.",
+    "errors": {
+      "notAuthorized": "Tu rol no permite cancelar esta invitación.",
+      "generic": "No se pudo cancelar la invitación. Reintenta."
+    }
+  },
   "invite": {
     "title": "Invitar personal",
     "close": "Cerrar",
+    "linkReadyTitle": "Enlace de invitación listo",
+    "linkReadyBody": "Envía este enlace a <strong>{email}</strong>. Al abrirlo, debe continuar con Google usando exactamente esa dirección, o iniciar sesión si ya tiene una cuenta con ella.",
     "sentTitle": "Invitación enviada",
     "sentBody": "Enviamos un enlace a <strong>{email}</strong>. Al abrirlo, se une al equipo y elige una contraseña.",
-    "addedTitle": "Agregado al equipo",
-    "addedBody": "<strong>{email}</strong> ya tenía una cuenta, así que no hizo falta enviar un correo: puede iniciar sesión aquí ahora mismo con la contraseña que ya usa.",
+    "existingAccountTitle": "Envíale el enlace de invitación",
+    "existingAccountBody": "<strong>{email}</strong> ya tiene una cuenta, así que no se envió ningún correo. Envíale este enlace. Se une al equipo cuando lo abre y toca “Unirme al equipo”.",
     "done": "Listo",
+    "link": {
+      "label": "Enlace de invitación",
+      "copy": "Copiar",
+      "copied": "Copiado",
+      "copyFailed": "No se pudo copiar automáticamente. El enlace está seleccionado: cópialo manualmente.",
+      "shareLine": "Compartir en LINE",
+      "share": "Compartir…",
+      "shareText": "Te invitamos a unirte a nuestro equipo. Abre este enlace e inicia sesión con {email}:",
+      "emailFallback": "Si el correo no llega, envíale este enlace."
+    },
     "email": "Correo electrónico",
     "role": "Rol",
     "scope": "Alcance",
@@ -90,7 +123,10 @@
     "thisBranchHint": "Acceso limitado a esta ubicación",
     "allBranches": "Todas las sucursales",
     "allBranchesHint": "Acceso a todo el restaurante (gerentes)",
+    "alsoEmail": "Enviar también una invitación por correo",
+    "alsoEmailHint": "Por ahora el envío de correos es limitado. El enlace de invitación es la forma confiable de llegar a esta persona.",
     "cancel": "Cancelar",
+    "createLink": "Crear enlace de invitación",
     "send": "Enviar invitación",
     "errors": {
       "alreadyActive": "{email} ya está en tu equipo. Para cambiar las sucursales que puede usar, ajusta su acceso a sucursales en la lista de personal en lugar de invitarlo otra vez.",
@@ -98,7 +134,8 @@
       "onlyOwnerAdmin": "Solo el propietario puede invitar o cambiar a un administrador.",
       "notAllowed": "Solo el propietario o un administrador pueden invitar personal.",
       "emailFailed": "No se pudo enviar el correo de invitación. Reintenta más tarde.",
-      "generic": "No se pudo enviar la invitación. Reintenta."
+      "emailNotSent": "No se pudo enviar el correo de invitación a {email}, pero la invitación quedó guardada en tu lista de personal. Desmarca “Enviar también una invitación por correo” y crea un enlace de invitación para compartir.",
+      "generic": "No se pudo crear la invitación. Reintenta."
     }
   }
 }

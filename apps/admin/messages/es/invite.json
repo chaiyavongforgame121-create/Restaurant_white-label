@@ -35,21 +35,23 @@
     },
     "needsLink": {
       "expiredTitle": "Este enlace de invitación venció",
-      "openTitle": "Abre el enlace de tu correo",
-      "expiredBody": "Los enlaces de invitación funcionan una sola vez. Podemos enviar a <strong>{email}</strong> un enlace nuevo para crear tu contraseña y unirte; ábrelo en este navegador.",
-      "openBody": "Abre el enlace de invitación del correo enviado a <strong>{email}</strong> o pide un enlace nuevo aquí abajo.",
-      "sent": "Enviado. Revisa {email} y abre el correo más reciente en este navegador.",
+      "expiredBody": "Los enlaces de los correos de invitación funcionan una sola vez y vencen después de un tiempo. Aún puedes unirte: inicia sesión aquí abajo.",
+      "title": "Únete a {workplace} con el rol {role}",
+      "googleHint": "Usa la cuenta de Google de <strong>{email}</strong>.",
+      "signIn": "Ya tengo una cuenta con este correo: iniciar sesión",
+      "noGoogle": "¿No tienes cuenta de Google? <googleSignup>Crea una gratis</googleSignup> con esta misma dirección, <strong>{email}</strong>: Google te deja usar un correo que ya tienes, no solo Gmail. Luego vuelve aquí y continúa con Google, o pide ayuda al restaurante.",
+      "emailInvited": "¿Te invitaron por correo y nunca creaste una contraseña?",
       "sendLink": "Enviarme un enlace para crear mi contraseña",
-      "signIn": "¿Ya creaste tu contraseña? Inicia sesión"
+      "sent": "Si invitaron a {email} por correo, te llegará un enlace para crear tu contraseña. ¿No llega en unos minutos? Continúa con Google aquí arriba."
     },
     "wrongAccount": {
       "title": "Esta invitación es para otra persona",
-      "body": "Se envió a <strong>{invited}</strong>, pero este navegador tiene la sesión iniciada como <strong>{current}</strong>. Cierra sesión aquí y vuelve a abrir el enlace de invitación desde ese correo.",
+      "body": "Esta invitación es para <strong>{invited}</strong>, pero iniciaste sesión como <strong>{current}</strong>. Cierra sesión aquí e inicia sesión con {invited}, o pide al restaurante que invite la dirección que usas.",
       "signOut": "Cerrar sesión en este navegador"
     },
     "failed": {
       "title": "No se pudo aceptar la invitación",
-      "used": "Esta invitación ya se usó. Si era tuya, inicia sesión, o usa “¿Olvidaste tu contraseña?” si nunca elegiste una.",
+      "used": "Esta invitación ya se usó. Si era tuya, inicia sesión con Google o con tu contraseña, o usa “¿Olvidaste tu contraseña?” si nunca elegiste una.",
       "notFound": "Este enlace de invitación está incompleto o ya no existe. Pide al restaurante que te invite de nuevo.",
       "goToSignIn": "Ir a iniciar sesión"
     },
@@ -60,8 +62,11 @@
     "errors": {
       "alreadyUsed": "Esta invitación ya se usó.",
       "notFound": "Esta invitación ya no existe. Pide al restaurante que te invite de nuevo.",
-      "confirmEmail": "Vuelve a abrir el enlace de invitación de tu correo para confirmar tu dirección.",
+      "confirmEmail": "Tu correo electrónico aún no está confirmado. Continúa con Google o confírmalo desde el correo que te enviamos y vuelve a abrir este enlace de invitación.",
+      "signedOut": "Se cerró tu sesión. Vuelve a iniciar sesión y abre otra vez este enlace de invitación.",
       "alreadyStaff": "Ya trabajas en este restaurante con esta cuenta, en la misma sucursal. Inicia sesión para continuar.",
+      "emailMismatch": "Esta invitación es para otro correo electrónico. Inicia sesión con <strong>{email}</strong> para aceptarla.",
+      "emailMismatchUnknown": "Esta invitación es para otro correo electrónico. Inicia sesión con la dirección a la que te invitó el restaurante.",
       "joinFailed": "Algo salió mal al unirte al restaurante. Inténtalo de nuevo.",
       "tooManyEmails": "Se enviaron demasiados correos en la última hora. Inténtalo más tarde.",
       "emailFailed": "No pudimos enviar el correo. Inténtalo de nuevo o pide al restaurante que te invite otra vez.",

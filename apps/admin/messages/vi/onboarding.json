@@ -11,6 +11,12 @@
     "continueAnyway": "Vẫn tiếp tục",
     "goToDashboard": "Đến trang tổng quan"
   },
+  "account": {
+    "signedInAs": "Đang đăng nhập bằng <strong>{email}</strong>.",
+    "differentAccountHint": "Bạn đã có nhà hàng? Có thể bạn đang đăng nhập bằng một tài khoản khác.",
+    "useDifferentAccount": "Dùng tài khoản khác",
+    "signOutFailed": "Không thể đăng xuất. Hãy kiểm tra kết nối rồi thử lại."
+  },
   "wizard": {
     "step": "Bước {current}/{total}",
     "restaurantTitle": "Giới thiệu về nhà hàng của bạn",

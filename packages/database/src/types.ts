@@ -4642,6 +4642,7 @@ export type Database = {
         Args: { p_order_id: string; p_reason?: string }
         Returns: Json
       }
+      cancel_staff_invite: { Args: { p_staff_id: string }; Returns: Json }
       check_gift_card: { Args: { p_code: string }; Returns: Json }
       check_plan_limit: {
         Args: { p_limit_key: string; p_restaurant_id: string }

@@ -53,8 +53,14 @@ export async function GET(request: NextRequest) {
   // GoTrue reports its own failures by redirecting to the target with ?error=… rather than
   // by refusing to redirect, so an untranslated error would render as a normal login page
   // and look like the click did nothing.
+  // `via=google` is added by ContinueWithGoogle. Without it a cancelled Google consent read as
+  // "that sign-in link is no longer valid", which is about email links.
+  const viaGoogle = params.get('via') === 'google';
   const providerError = params.get('error_code') ?? params.get('error');
-  if (providerError) return fail(providerError);
+  if (providerError) {
+    if (viaGoogle) return fail(providerError === 'access_denied' ? 'oauth_cancelled' : 'oauth_failed');
+    return fail(providerError);
+  }
 
   const supabase = await getServerClient();
 
@@ -64,7 +70,7 @@ export async function GET(request: NextRequest) {
     // PKCE binds the code to a verifier stored by the browser that *started* the flow.
     // Opening the mail on a different device is therefore a legitimate failure, not a bug,
     // and the message on /login says so.
-    if (error) return fail('exchange_failed');
+    if (error) return fail(viaGoogle ? 'oauth_failed' : 'exchange_failed');
     return NextResponse.redirect(new URL(next, origin));
   }
 

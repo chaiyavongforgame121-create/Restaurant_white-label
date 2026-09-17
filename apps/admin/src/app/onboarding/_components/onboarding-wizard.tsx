@@ -4,7 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { ChefHat, ChevronRight, Sparkles, Store } from 'lucide-react';
+import { ChefHat, ChevronRight, Sparkles, Store, UserRound } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { describeBillingError, isValidTimeZone } from '@favornoms/shared';
 import { Button, Card, buttonVariants } from '@favornoms/ui';
@@ -45,7 +45,14 @@ export interface ExistingMembership {
   addBranchHref: string | null;
 }
 
-export function OnboardingWizard({ existing }: { existing: ExistingMembership | null }) {
+export function OnboardingWizard({
+  existing,
+  signedInEmail = null,
+}: {
+  existing: ExistingMembership | null;
+  /** Set only for a user with no memberships at all; see SignedInAsNotice. */
+  signedInEmail?: string | null;
+}) {
   const router = useRouter();
   const t = useTranslations('onboarding');
   const [continuedPastNotice, setContinuedPastNotice] = React.useState(false);
@@ -230,6 +237,8 @@ export function OnboardingWizard({ existing }: { existing: ExistingMembership | 
   return (
     <div className="grid min-h-dynamic-screen place-items-center bg-gradient-to-br from-background to-muted/40 p-6">
       <Card className="w-full max-w-xl space-y-5 p-7">
+        {signedInEmail && <SignedInAsNotice email={signedInEmail} />}
+
         <div className="flex items-center gap-3">
           <div className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-warm text-white shadow-warm">
             <ChefHat className="h-6 w-6" />
@@ -343,6 +352,62 @@ export function OnboardingWizard({ existing }: { existing: ExistingMembership | 
           .input:focus-visible { outline: none; border-color: hsl(var(--primary)); box-shadow: 0 0 0 3px hsl(var(--primary) / 0.18); }
         `}</style>
       </Card>
+    </div>
+  );
+}
+
+// "Continue with Google" on /login creates an account for whichever Google account is picked,
+// so an owner who picks the wrong one is sent here instead of to their dashboard. Nothing on the
+// wizard said which account was signed in, so they could believe their restaurant was gone, or
+// build a second one and start a second trial. Shown only to a user with no memberships: anyone
+// with one already got the existing-restaurant notice above.
+function SignedInAsNotice({ email }: { email: string }) {
+  const router = useRouter();
+  const t = useTranslations('onboarding.account');
+  const [busy, setBusy] = React.useState(false);
+  const [failed, setFailed] = React.useState(false);
+
+  const switchAccount = async () => {
+    setBusy(true);
+    setFailed(false);
+    // This browser only. The account picked by mistake may be one its holder is signed in with
+    // elsewhere (the customer ordering app uses the same accounts), and choosing the wrong one on
+    // this page is no reason to end those sessions too.
+    const { error } = await getBrowserClient().auth.signOut({ scope: 'local' });
+    if (error) {
+      // supabase-js keeps the session when the sign-out request itself fails, so going on to
+      // /login would show a sign-in form to someone who is still signed in as this account.
+      console.error('[onboarding] signOut failed:', error.message);
+      setBusy(false);
+      setFailed(true);
+      return;
+    }
+    // No ?next=/onboarding: the right account has its memberships, and '/' opens its restaurant.
+    router.replace('/login');
+    // Drops the server output cached for the account that just signed out.
+    router.refresh();
+  };
+
+  return (
+    <div className="flex gap-3 rounded-xl bg-muted/60 px-4 py-3 text-sm">
+      <UserRound className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+      <div className="min-w-0 space-y-1">
+        <p>
+          {t.rich('signedInAs', {
+            email,
+            strong: (c) => <strong className="break-all font-semibold">{c}</strong>,
+          })}
+        </p>
+        <p className="text-muted-foreground">{t('differentAccountHint')}</p>
+        {failed && (
+          <p role="alert" className="text-destructive">
+            {t('signOutFailed')}
+          </p>
+        )}
+        <Button variant="outline" size="sm" className="mt-1" loading={busy} onClick={switchAccount}>
+          {t('useDifferentAccount')}
+        </Button>
+      </div>
     </div>
   );
 }

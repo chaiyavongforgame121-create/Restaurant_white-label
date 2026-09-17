@@ -35,21 +35,23 @@
     },
     "needsLink": {
       "expiredTitle": "Liên kết mời đã hết hạn",
-      "openTitle": "Mở liên kết trong email của bạn",
-      "expiredBody": "Liên kết mời chỉ dùng được một lần. Chúng tôi có thể gửi tới <strong>{email}</strong> một liên kết mới để đặt mật khẩu và tham gia — hãy mở liên kết trên trình duyệt này.",
-      "openBody": "Mở liên kết mời trong email đã gửi tới <strong>{email}</strong>, hoặc nhận liên kết mới bên dưới.",
-      "sent": "Đã gửi. Hãy kiểm tra {email} và mở email mới nhất trên trình duyệt này.",
+      "expiredBody": "Liên kết trong email mời chỉ dùng được một lần và sẽ hết hạn sau một thời gian. Bạn vẫn có thể tham gia — hãy đăng nhập bên dưới.",
+      "title": "Tham gia {workplace} với vai trò {role}",
+      "googleHint": "Dùng tài khoản Google của <strong>{email}</strong>.",
+      "signIn": "Tôi đã có tài khoản với email này — Đăng nhập",
+      "noGoogle": "Không có tài khoản Google? <googleSignup>Tạo tài khoản miễn phí</googleSignup> bằng chính địa chỉ <strong>{email}</strong> — Google cho phép dùng email bạn đang có, không nhất thiết là Gmail. Sau đó quay lại đây và tiếp tục với Google, hoặc nhờ nhà hàng hỗ trợ.",
+      "emailInvited": "Được mời qua email và chưa từng đặt mật khẩu?",
       "sendLink": "Gửi cho tôi liên kết đặt mật khẩu",
-      "signIn": "Đã tạo mật khẩu? Đăng nhập"
+      "sent": "Nếu {email} được mời qua email, liên kết đặt mật khẩu đang được gửi tới. Sau vài phút vẫn chưa nhận được? Hãy tiếp tục với Google ở phía trên."
     },
     "wrongAccount": {
       "title": "Lời mời này dành cho người khác",
-      "body": "Lời mời đã được gửi tới <strong>{invited}</strong>, nhưng trình duyệt này đang đăng nhập bằng <strong>{current}</strong>. Hãy đăng xuất tại đây, rồi mở lại liên kết mời trong email đó.",
+      "body": "Lời mời này dành cho <strong>{invited}</strong>, nhưng bạn đang đăng nhập bằng <strong>{current}</strong>. Hãy đăng xuất tại đây rồi đăng nhập bằng {invited}, hoặc nhờ nhà hàng mời địa chỉ email bạn đang dùng.",
       "signOut": "Đăng xuất trên trình duyệt này"
     },
     "failed": {
       "title": "Không thể chấp nhận lời mời",
-      "used": "Lời mời này đã được sử dụng. Nếu đó là lời mời của bạn, hãy đăng nhập — hoặc dùng “Quên mật khẩu?” nếu bạn chưa từng đặt mật khẩu.",
+      "used": "Lời mời này đã được sử dụng. Nếu là của bạn, hãy đăng nhập bằng Google hoặc mật khẩu — hoặc dùng “Quên mật khẩu?” nếu bạn chưa từng đặt mật khẩu.",
       "notFound": "Liên kết mời không đầy đủ hoặc không còn tồn tại. Hãy nhờ nhà hàng mời lại bạn.",
       "goToSignIn": "Đi tới đăng nhập"
     },
@@ -60,8 +62,11 @@
     "errors": {
       "alreadyUsed": "Lời mời này đã được sử dụng.",
       "notFound": "Lời mời này không còn tồn tại. Hãy nhờ nhà hàng mời lại bạn.",
-      "confirmEmail": "Hãy mở lại liên kết mời trong email để xác nhận địa chỉ của bạn.",
+      "confirmEmail": "Địa chỉ email của bạn chưa được xác nhận. Hãy tiếp tục với Google hoặc xác nhận qua email chúng tôi đã gửi, rồi mở lại liên kết mời này.",
+      "signedOut": "Bạn đã bị đăng xuất. Hãy đăng nhập lại, rồi mở lại liên kết mời này.",
       "alreadyStaff": "Bạn đã làm việc tại nhà hàng này bằng tài khoản này, ở cùng chi nhánh. Hãy đăng nhập để tiếp tục.",
+      "emailMismatch": "Lời mời này dành cho một địa chỉ email khác. Hãy đăng nhập bằng <strong>{email}</strong> để chấp nhận.",
+      "emailMismatchUnknown": "Lời mời này dành cho một địa chỉ email khác. Hãy đăng nhập bằng địa chỉ email mà nhà hàng đã mời.",
       "joinFailed": "Đã xảy ra lỗi khi tham gia nhà hàng. Vui lòng thử lại.",
       "tooManyEmails": "Đã gửi quá nhiều email trong giờ qua. Vui lòng thử lại sau.",
       "emailFailed": "Không thể gửi email. Vui lòng thử lại hoặc nhờ nhà hàng mời lại bạn.",

@@ -75,14 +75,47 @@
       "generic": "Không thể đổi quyền chi nhánh. Hãy thử lại."
     }
   },
+  "pendingInvite": {
+    "copyLink": "Sao chép liên kết mời",
+    "copyLinkFor": "Sao chép liên kết mời của {email}",
+    "copied": "Đã sao chép liên kết",
+    "copyFailed": "Không tự sao chép được. Hãy sao chép thủ công liên kết này:",
+    "cancel": "Hủy lời mời",
+    "cancelFor": "Hủy lời mời của {email}",
+    "cancelDialog": {
+      "title": "Hủy lời mời của {email}?",
+      "body": "Liên kết sẽ ngừng hoạt động ngay. Bạn có thể mời lại người này sau.",
+      "confirm": "Hủy lời mời",
+      "keep": "Giữ lời mời"
+    },
+    "cancelled": "Đã hủy lời mời của {email}.",
+    "alreadyCancelled": "Lời mời của {email} đã được hủy trước đó.",
+    "alreadyJoined": "{email} đã tham gia nhóm nên không còn lời mời để hủy.",
+    "errors": {
+      "notAuthorized": "Vai trò của bạn không thể hủy lời mời này.",
+      "generic": "Không hủy được lời mời. Hãy thử lại."
+    }
+  },
   "invite": {
     "title": "Mời nhân viên",
     "close": "Đóng",
+    "linkReadyTitle": "Liên kết mời đã sẵn sàng",
+    "linkReadyBody": "Gửi liên kết này cho <strong>{email}</strong>. Người này mở liên kết rồi tiếp tục với Google bằng đúng địa chỉ đó, hoặc đăng nhập nếu đã có tài khoản dùng địa chỉ này.",
     "sentTitle": "Đã gửi lời mời",
     "sentBody": "Chúng tôi đã gửi liên kết tới <strong>{email}</strong>. Khi mở liên kết, người này sẽ được thêm vào nhóm và được yêu cầu đặt mật khẩu.",
-    "addedTitle": "Đã thêm vào nhóm",
-    "addedBody": "<strong>{email}</strong> đã có tài khoản nên không cần gửi email — người này có thể đăng nhập tại đây ngay bằng mật khẩu đang dùng.",
+    "existingAccountTitle": "Hãy gửi liên kết mời",
+    "existingAccountBody": "<strong>{email}</strong> đã có tài khoản nên không có email nào được gửi. Hãy gửi liên kết này cho người đó. Người này sẽ tham gia khi mở liên kết và nhấn “Tham gia đội ngũ”.",
     "done": "Xong",
+    "link": {
+      "label": "Liên kết mời",
+      "copy": "Sao chép",
+      "copied": "Đã sao chép",
+      "copyFailed": "Không tự sao chép được. Liên kết đã được chọn, hãy sao chép thủ công.",
+      "shareLine": "Chia sẻ qua LINE",
+      "share": "Chia sẻ…",
+      "shareText": "Bạn được mời tham gia nhóm của chúng tôi. Hãy mở liên kết này và đăng nhập bằng {email}:",
+      "emailFallback": "Nếu email không đến, hãy gửi liên kết này cho người đó."
+    },
     "email": "Email",
     "role": "Vai trò",
     "scope": "Phạm vi",
@@ -90,7 +123,10 @@
     "thisBranchHint": "Chỉ truy cập tại địa điểm này",
     "allBranches": "Tất cả chi nhánh",
     "allBranchesHint": "Truy cập toàn bộ nhà hàng (quản lý)",
+    "alsoEmail": "Gửi thêm lời mời qua email",
+    "alsoEmailHint": "Hiện việc gửi email còn hạn chế. Liên kết mời là cách chắc chắn để gửi lời mời tới người này.",
     "cancel": "Hủy",
+    "createLink": "Tạo liên kết mời",
     "send": "Gửi lời mời",
     "errors": {
       "alreadyActive": "{email} đã có trong nhóm của bạn. Để đổi các chi nhánh người này dùng được, hãy chỉnh Quyền chi nhánh trong danh sách nhân viên thay vì mời lại.",
@@ -98,7 +134,8 @@
       "onlyOwnerAdmin": "Chỉ chủ sở hữu mới mời hoặc thay đổi được quản trị viên.",
       "notAllowed": "Chỉ chủ sở hữu hoặc quản trị viên mới mời được nhân viên.",
       "emailFailed": "Không gửi được email mời. Hãy thử lại sau.",
-      "generic": "Không gửi được lời mời. Hãy thử lại."
+      "emailNotSent": "Không gửi được email mời tới {email}, nhưng lời mời đã được lưu trong danh sách nhân viên. Hãy bỏ chọn “Gửi thêm lời mời qua email” và tạo liên kết mời để chia sẻ.",
+      "generic": "Không tạo được lời mời. Hãy thử lại."
     }
   }
 }
