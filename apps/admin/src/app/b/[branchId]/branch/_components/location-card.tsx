@@ -24,6 +24,7 @@ import { Button, Card } from '@favornoms/ui';
 import dynamic from 'next/dynamic';
 import { hasMapboxToken, type ResolvedAddress } from '@favornoms/maps';
 import { getBrowserClient } from '@favornoms/database/client';
+import { TimezoneSelect } from './timezone-select';
 
 function MapLoading() {
   const t = useTranslations('branch.location');
@@ -52,20 +53,6 @@ export interface BranchLocation {
   geo_lng: number | null;
   timezone: string;
 }
-
-/** The zones a US restaurant can be in. `timezone` decides when the branch counts as open
- *  and when a delivery window starts, so a Texas store left on America/New_York closes an
- *  hour early every single day — silently, because nothing else contradicts it.
- *  `key` names the label in branch.location.timezones; `value` is what is stored. */
-const US_TIMEZONES = [
-  { value: 'America/New_York', key: 'eastern' },
-  { value: 'America/Chicago', key: 'central' },
-  { value: 'America/Denver', key: 'mountain' },
-  { value: 'America/Phoenix', key: 'arizona' },
-  { value: 'America/Los_Angeles', key: 'pacific' },
-  { value: 'America/Anchorage', key: 'alaska' },
-  { value: 'Pacific/Honolulu', key: 'hawaii' },
-] as const;
 
 /** set_branch_location's hints for invalid_location, compared (never shown) to pick a message. */
 const INVALID_LOCATION_HINTS: Record<string, 'bothRequired' | 'outOfRange' | 'dropPin'> = {
@@ -159,9 +146,11 @@ export function LocationCard({ branch }: { branch: BranchLocation }) {
       setError(
         updateError.message.includes('branch_manager_required')
           ? t('errors.managerRequired')
-          : updateError.code === '42501'
-            ? t('errors.noPermission')
-            : t('errors.generic'),
+          : updateError.message.includes('invalid_timezone')
+            ? t('location.errors.invalidTimezone')
+            : updateError.code === '42501'
+              ? t('errors.noPermission')
+              : t('errors.generic'),
       );
       return;
     }
@@ -252,22 +241,14 @@ export function LocationCard({ branch }: { branch: BranchLocation }) {
         <div className="rounded-xl border border-border p-3">
           <label className="block">
             <span className="text-xs font-medium text-muted-foreground">{t('location.timezone')}</span>
-            <select
+            {/* `timezone` decides when the branch counts as open and when a delivery window
+                starts, so a store left on another zone opens and closes hours off every day,
+                silently, because nothing else contradicts it. Every IANA zone is offered. */}
+            <TimezoneSelect
               value={timezone}
-              onChange={(e) => setTimezone(e.target.value)}
+              onChange={setTimezone}
               className="focus-ring mt-1 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
-            >
-              {/* Keep whatever is stored selectable even when it is not in the US list, so
-                  opening this card can never silently rewrite a branch's zone. */}
-              {!US_TIMEZONES.some((z) => z.value === branch.timezone) && (
-                <option value={branch.timezone}>{branch.timezone}</option>
-              )}
-              {US_TIMEZONES.map((z) => (
-                <option key={z.value} value={z.value}>
-                  {t(`location.timezones.${z.key}`)}
-                </option>
-              ))}
-            </select>
+            />
           </label>
           <p className="mt-1.5 text-xs text-muted-foreground">{t('location.timezoneHint')}</p>
           {timezone !== branch.timezone && (

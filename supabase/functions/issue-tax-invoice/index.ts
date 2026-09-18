@@ -15,11 +15,15 @@
 // schema rename — semantically the row is now a "receipt".
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
-import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2';
 import { billingInactiveBody, loadEntitlements } from '../_shared/entitlements.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+// Platform-wide fallbacks only. The seller on a receipt is the branch that made the sale: every
+// restaurant and every branch of one is its own seller, so these must never print over the
+// branch's own name or address (they used to, on every tenant's receipts).
 const SELLER_NAME = Deno.env.get('RECEIPT_SELLER_NAME');
 const SELLER_ADDRESS = Deno.env.get('RECEIPT_SELLER_ADDRESS');
 const SELLER_PHONE = Deno.env.get('RECEIPT_SELLER_PHONE');
@@ -38,11 +42,11 @@ Deno.serve(async (req) => {
 
   const authHeader = req.headers.get('Authorization') ?? '';
   if (!authHeader.startsWith('Bearer ')) return cors(json({ error: 'auth_required' }, 401));
-  const userJwt = authHeader.slice(7);
-
-  const userClient = createClient(SUPABASE_URL, userJwt, {
+  // The caller's own token decides what they can read (tax_invoices RLS: staff of the invoice's
+  // branch, owner rows covering every branch); the anon key only identifies the project.
+  const userClient = createClient(SUPABASE_URL, ANON_KEY, {
     auth: { persistSession: false },
-    global: { headers: { Authorization: `Bearer ${userJwt}` } },
+    global: { headers: { Authorization: authHeader } },
   });
   const { data: invoice, error: invErr } = await userClient
     .from('tax_invoices')
@@ -61,7 +65,8 @@ Deno.serve(async (req) => {
   const ent = await loadEntitlements(adminClient, { branchId: invoice.branch_id as string });
   if (!ent.entitled) return cors(json(billingInactiveBody('receipts'), 402));
 
-  const html = buildReceiptHtml(invoice);
+  const seller = await resolveSeller(adminClient, invoice.branch_id as string);
+  const html = buildReceiptHtml(invoice, seller);
 
   await adminClient
     .from('tax_invoices')
@@ -88,16 +93,71 @@ interface InvoiceRow {
   orders?: { order_number?: string; tip_amount?: number | string };
 }
 
-function buildReceiptHtml(invoice: Record<string, unknown>): string {
+interface Seller {
+  name: string;
+  address: string;
+  phone: string;
+}
+
+/**
+ * The seller printed on the receipt: the branch that made the sale, named the way the storefront
+ * names it ("<brand> - <branch>", one name when both are the same; brand = the branch's brand
+ * within the same restaurant, else the restaurant's default brand, else the restaurant name; see
+ * apps/web/src/lib/app-identity.ts). The RECEIPT_SELLER_* values only fill a field the branch
+ * leaves empty.
+ */
+async function resolveSeller(
+  admin: SupabaseClient,
+  branchId: string,
+): Promise<Seller> {
+  const { data: branch } = await admin
+    .from('branches')
+    .select('name, address, settings, restaurant_id, brand_id')
+    .eq('id', branchId)
+    .maybeSingle();
+  const b = (branch ?? null) as {
+    name?: string | null;
+    address?: string | null;
+    settings?: Record<string, unknown> | null;
+    restaurant_id?: string | null;
+    brand_id?: string | null;
+  } | null;
+
+  let brandName = '';
+  let restaurantName = '';
+  if (b?.restaurant_id) {
+    const [{ data: brands }, { data: restaurant }] = await Promise.all([
+      admin.from('brands').select('id, name, is_default').eq('restaurant_id', b.restaurant_id),
+      admin.from('restaurants').select('name').eq('id', b.restaurant_id).maybeSingle(),
+    ]);
+    const list = (brands ?? []) as Array<{ id: string; name: string | null; is_default: boolean | null }>;
+    const brand = list.find((x) => x.id === b.brand_id) ?? list.find((x) => x.is_default);
+    brandName = brand?.name?.trim() ?? '';
+    restaurantName = ((restaurant as { name?: string | null } | null)?.name ?? '').trim();
+  }
+  const brand = brandName || restaurantName;
+  const branchName = b?.name?.trim() ?? '';
+  const sameName = brand.toLowerCase() === branchName.toLowerCase();
+  const fullName = brand && branchName && !sameName ? `${brand} - ${branchName}` : brand || branchName;
+  const phone = typeof b?.settings?.phone === 'string' ? (b.settings.phone as string).trim() : '';
+
+  return {
+    name: fullName || SELLER_NAME || 'Restaurant',
+    address: b?.address?.trim() || SELLER_ADDRESS || '',
+    phone: phone || SELLER_PHONE || '',
+  };
+}
+
+function buildReceiptHtml(invoice: Record<string, unknown>, seller: Seller): string {
   const inv = invoice as unknown as InvoiceRow;
   const lines = inv.line_items ?? [];
   const branch = inv.branches ?? {};
   const currency = (branch.settings as { currency?: string } | undefined)?.currency ?? 'USD';
   const fmt = (n: number | string) =>
     `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  const sellerName = SELLER_NAME ?? branch.name ?? 'Restaurant';
-  const sellerAddr = SELLER_ADDRESS ?? branch.address ?? '';
-  const sellerPhone = SELLER_PHONE ?? '';
+  const sellerName = seller.name;
+  const sellerAddr = seller.address;
+  const sellerPhone = seller.phone;
   const issuedAt = inv.issued_at ?? new Date().toISOString();
   const issuedDate = new Date(issuedAt).toLocaleString('en-US', {
     timeZone: branch.timezone ?? 'America/New_York',

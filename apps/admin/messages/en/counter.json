@@ -13,7 +13,12 @@
     "parked": "Parked ({count})",
     "park": "Park order",
     "tables": "Tables",
-    "recent": "Recent orders"
+    "recent": "Recent orders",
+    "clockNotStaff": "You are not on this branch's staff, so you cannot clock in here. Ask the owner to add you.",
+    "clockElsewhere": "You are still clocked in at another branch. Clock out there first.",
+    "clockSignIn": "Your session has expired. Sign in again to clock in.",
+    "clockDismiss": "Dismiss",
+    "clockShiftGone": "That shift was already closed, or it is not yours. The button now shows your own shift."
   },
   "channel": {
     "dine_in": "Dine-in",
@@ -58,7 +63,8 @@
     "noMatch": "No items match",
     "soldOutAria": "{name} — out of stock",
     "soldOut": "Out of stock",
-    "comboItems": "{count, plural, one {# item} other {# items}}"
+    "comboItems": "{count, plural, one {# item} other {# items}}",
+    "soldOutUntil": "Sold out until {time}"
   },
   "cart": {
     "title": "Order",
@@ -79,7 +85,31 @@
     "discount": "Discount %",
     "discountAria": "Discount percent",
     "split": "Split",
-    "splitAria": "Split how many ways"
+    "splitAria": "Split how many ways",
+    "phonePoints": "Phone (for points)",
+    "phoneDelivery": "Customer phone",
+    "phoneInvalid": "That phone number does not look right. Check it, or clear the field.",
+    "lineGone": "No longer on the menu",
+    "unsellableHint": "{count, plural, one {One item in the order can no longer be sold. Take it off to charge.} other {# items in the order can no longer be sold. Take them off to charge.}}"
+  },
+  "delivery": {
+    "address": "Delivery address",
+    "addressPlaceholder": "House no., street, area",
+    "addressRequired": "Enter the address the rider should go to.",
+    "dropPin": "Pin the address on the map",
+    "movePin": "Move the map pin",
+    "notes": "Notes for the rider",
+    "notesPlaceholder": "Notes for the rider — gate, floor, landmark",
+    "pickerTitle": "Pin the delivery address",
+    "quoting": "Working out the delivery fee…",
+    "quoted": "Delivery {fee} · {distance} mi · about {eta} min",
+    "quotedNoDistance": "Delivery {fee}",
+    "outOfRange": "That pin is outside the delivery area.",
+    "outOfRangeMax": "That pin is outside the delivery area (up to {max} mi).",
+    "notSold": "Delivery is not included in this branch's plan.",
+    "flatFee": "Flat delivery fee: {fee}",
+    "clearPin": "Remove pin",
+    "needsDetails": "A delivery needs the customer's phone number and address."
   },
   "totals": {
     "subtotal": "Subtotal",
@@ -107,10 +137,22 @@
     "changeDue": "Change due",
     "handedOver": "Handed over",
     "success": "Order {number} sent to kitchen",
-    "placedQuoteMismatch": "Order {number} was placed, but the till quoted {quoted} and the order priced {priced}. Sort it out in Recent orders before handing over a receipt.",
-    "placedDiscountFailed": "Order {number} was placed, but the discount was not applied to the order. Sort it out in Recent orders before handing over a receipt.",
-    "placedQuoteAndDiscount": "Order {number} was placed, but the till quoted {quoted} and the order priced {priced}, and the discount was not applied to the order. Sort it out in Recent orders before handing over a receipt.",
-    "placedNotSettled": "Order {number} was placed, but the payment was not recorded as taken — settle it from the back office before the cash-up."
+    "placedQuoteMismatch": "Order {number} was placed, but the till quoted {quoted} and the order was priced at {priced} — prices may have just changed (happy hour). Settle the difference with the customer and check the order in Recent orders. No receipt was printed.",
+    "placedDiscountFailed": "Order {number} was placed at {priced} without the discount (the till quoted {quoted}). Settle the difference with the customer and check the order in Recent orders. No receipt was printed.",
+    "placedNotSettled": "Order {number} was placed, but the payment was not recorded as taken — settle it from the back office before the cash-up.",
+    "qr": "QR transfer · {amount}",
+    "qrTitle": "QR transfer",
+    "qrAmount": "Amount to transfer",
+    "qrAccount": "Account name",
+    "qrScanHint": "Ask the customer to scan the code and send exactly this amount. Tap “Payment received” only after you have seen the successful transfer on their phone.",
+    "qrReceived": "Payment received",
+    "qrImageAlt": "This branch's payment QR code",
+    "qrSetupHint": "This branch has no payment QR yet. <link>Add one in Branch settings</link> to take QR transfers here.",
+    "transferNotSettled": "Order {number} was placed, but the QR payment was not recorded, so it is not on the kitchen board yet. Tap “Record payment” to try again, or record it later from Recent orders.",
+    "retrySettle": "Record payment",
+    "dismiss": "Dismiss",
+    "customerMatched": "Order {number} is filed under this branch’s customer with that phone number, so it goes on their history and points here.",
+    "customerWalkIn": "No customer at this branch has that phone number, so order {number} was saved as a walk-in (no points)."
   },
   "errors": {
     "branchClosedAtTime": "The branch is closed at that time.",
@@ -127,8 +169,36 @@
     "deliveryOutOfRange": "That address is outside the delivery area.",
     "emptyOrder": "There is nothing in the cart.",
     "invalidChannel": "Pick dine-in, pickup or delivery, then charge again.",
-    "refused": "That order was refused. Try again, or take it in the back office.",
-    "generic": "Something went wrong. Try again."
+    "generic": "Something went wrong. Try again.",
+    "branchInactive": "This branch is not taking orders — it is switched off or no longer exists.",
+    "invalidQuantity": "One of the quantities is not valid. Adjust it and charge again.",
+    "modifierInactive": "An option on one of these dishes is no longer available. Take the dish off and add it again.",
+    "comboUnavailable": "This combo is no longer on sale at this branch. Take it off and charge again.",
+    "comboItemUnavailable": "A dish in one of these combos is sold out or off the menu. Take the combo off, or ring the dishes up separately.",
+    "comboEmpty": "One of these combos has no dishes in it. Take it off and fix it in the back office.",
+    "transferNotConfigured": "This branch has no payment QR set up. Take cash or card, or add a QR in Branch settings.",
+    "tableNotInBranch": "That table is not at this branch. Pick it again from the list.",
+    "tableSessionClosed": "That table's bill has just been closed. Pick the table again to start a new one.",
+    "deliveryAddressRequired": "A delivery needs an address. Enter where the rider should go.",
+    "dropoffRequired": "A delivery needs drop-off details. Check the address and charge again.",
+    "customerPhoneRequired": "A delivery needs the customer's phone number.",
+    "deliveryNotAvailableNow": "This branch does not deliver at this time of day.",
+    "deliveryMustBeScheduled": "This branch only takes deliveries scheduled for later right now.",
+    "insufficientPoints": "The customer does not have enough points for that.",
+    "giftCardChanged": "The gift card balance changed. Charge again.",
+    "featureNotEntitled": "This branch's plan does not include that. Check the Plan page in the back office.",
+    "invalidDiscount": "The discount must be between 0 and 100%.",
+    "invalidPhone": "The customer's phone number was not accepted. Check it and charge again.",
+    "notStaffHere": "This account cannot ring up sales at this branch, or your session has expired. Sign in again, or ask the owner for counter access here.",
+    "orderInsertFailed": "The order could not be saved. Try again in a moment.",
+    "lookupFailed": "The menu could not be checked just now. Try again in a moment.",
+    "network": "The till could not reach the server. Check the connection.",
+    "unknown": "The order was refused. Try again, or take it in the back office.",
+    "onlyLeft": "{name}: only {count} left.",
+    "which": "Affected: {name}.",
+    "transferNoOrder": "No order was placed, so the customer's transfer is not linked to anything yet — ring the order up again, or refund the transfer.",
+    "maybePlaced": "The order may still have gone through. Check Recent orders before ringing it up again.",
+    "transferMaybePlaced": "The order may still have gone through. Check Recent orders before ringing it up again, and do not ask the customer to transfer a second time."
   },
   "sheet": {
     "note": "Note for the kitchen",
@@ -148,14 +218,17 @@
     "optional": "Optional",
     "requiredUpTo": "Required · up to {max}",
     "optionalUpTo": "Optional · up to {max}",
-    "notePlaceholder": "e.g. no onions — allergy"
+    "notePlaceholder": "e.g. no onions — allergy",
+    "happyHour": "Happy hour price",
+    "happyHourNamed": "{name} price"
   },
   "combo": {
     "fallbackTitle": "Combo",
     "addComboAria": "Add combo",
     "contents": "What’s in it",
     "saves": "Saves {saving} against {listTotal} separately",
-    "notePlaceholder": "e.g. drink with no ice"
+    "notePlaceholder": "e.g. drink with no ice",
+    "soldOut": "A dish in this combo is sold out, so it cannot be sold right now."
   },
   "printer": {
     "unsupportedTitle": "WebUSB is not supported in this browser — receipts print through the system dialog",
@@ -180,7 +253,7 @@
     "metaScheduled": "{customer} · for {date}",
     "refund": "Refund",
     "refundTitle": "Refund order {number}",
-    "refundBody": "Enter an amount in USD, up to {max}. Leave it blank to refund in full.",
+    "refundBody": "Enter an amount up to {max}. Leave it blank to refund in full.",
     "continue": "Continue",
     "invalidAmount": "Invalid amount",
     "invalidAmountBody": "Enter a number greater than zero, or leave the field blank to refund in full.",
@@ -189,6 +262,22 @@
     "refundNotAuthorized": "Only an owner, admin or manager can refund an order.",
     "refundInvalidAmount": "The amount must be greater than zero and no more than the order total.",
     "refundNotFound": "This order could not be found. Refresh the page.",
-    "refundAuthRequired": "Your session has expired. Sign in again."
+    "refundAuthRequired": "Your session has expired. Sign in again.",
+    "awaitingQr": "QR payment not recorded",
+    "recordQr": "Record QR payment",
+    "recordQrTitle": "Record the QR payment for order {number}?",
+    "recordQrBody": "Only do this once you have seen the successful transfer of {amount} on the customer’s phone. The order then goes to the kitchen.",
+    "recordQrConfirm": "Payment received",
+    "recordQrFailed": "Payment not recorded"
+  },
+  "settle": {
+    "authRequired": "Your session has expired. Sign in again, then record the payment.",
+    "orderNotFound": "This order no longer exists.",
+    "forbidden": "This account cannot record payments at this branch.",
+    "notCounterOrder": "This order was not rung up at the till. Its transfer is approved from the back office, against the customer’s slip.",
+    "paymentNotFound": "This order has no QR payment waiting to be recorded.",
+    "paymentNotSettleable": "This order’s QR payment was already voided or refunded, so it cannot be recorded.",
+    "orderNotSettleable": "The order was cancelled or refunded in the meantime, so the payment cannot be recorded. Refund the customer’s transfer.",
+    "failed": "The payment could not be recorded just now. Try again in a moment."
   }
 }

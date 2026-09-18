@@ -18,7 +18,8 @@
     "available": "มี {count} รายการ",
     "more": "… และอีก {count} รายการ",
     "save": "ประหยัด {amount}",
-    "viewDeal": "ดูดีล"
+    "viewDeal": "ดูดีล",
+    "soldOutHint": "บางเมนูในดีลนี้หมดชั่วคราว แวะกลับมาใหม่เร็ว ๆ นี้นะ"
   },
   "happyHour": {
     "percentOff": "ลด {value}%",

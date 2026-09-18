@@ -2,9 +2,9 @@
 
 import * as React from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import {
-  AlertTriangle, ArrowRight, Armchair, Bike, CalendarClock, Check, ChefHat, Clock,
+  AlertTriangle, ArrowRight, Armchair, BellRing, Bike, CalendarClock, Check, ChefHat, Clock,
   Flame, Layers, Loader2, Maximize2, Minimize2, MoreVertical, RotateCcw, ShoppingBag, Undo2,
   UserRound, Volume2, VolumeX, X,
 } from 'lucide-react';
@@ -13,6 +13,16 @@ import { getBrowserClient } from '@favornoms/database/client';
 import { useRealtime } from '@favornoms/database/realtime';
 import { LocaleSwitcher } from '@/components/locale-switcher';
 import { OpsToggles } from './ops-toggles';
+import {
+  ACTIVE_STATUSES, KITCHEN_ORDER_SELECT, REMINDER_INTERVAL_MS, agingTierKey, eightySixTargets, fmtTimer,
+  heardOnTap, isLineDone, isOnBoard, laneOf, lateTicketIds, lineMatchesStation, lineStations, mergeSoldOut,
+  overlaySnapshot, parseComboContents, parseTimestamp, readyStartedMs, reminderDue, safeElapsedSec,
+  speakableTicket, workStartedMs,
+  type Delivery, type DriverLite, type Order, type OrderItem, type SoldOutItem, type TierKey,
+} from './kitchen-model';
+import {
+  UNLOCK_EVENTS, audioContext, playChime, speak, speechAvailable, speechLang, unlockAudio,
+} from './kitchen-sound';
 
 /* ──────────────────────────────────────────────────────────────────────────
    "Sunset" theme — warm, light, gradient. Kept local to the kitchen surface so
@@ -71,8 +81,8 @@ const ACTION: Record<string, { next: string; Icon: typeof Flame; grad: string; t
 // Rider vehicle values stored on drivers.vehicle_type; anything else is shown as stored.
 const VEHICLE_TYPES = ['motorcycle', 'car', 'bicycle', 'scooter'];
 
-type Tier = { tier: string; spine: string; pill: string; pc: string; pulse: boolean; ring: boolean };
-const TIERS: Record<string, Omit<Tier, 'tier'>> = {
+type Tier = { tier: TierKey; spine: string; pill: string; pc: string; pulse: boolean; ring: boolean };
+const TIERS: Record<TierKey, Omit<Tier, 'tier'>> = {
   fresh: { spine: '#E3D8CE', pill: '#F1ECE6', pc: '#9A8676', pulse: false, ring: false },
   work: { spine: 'linear-gradient(180deg,#FBC85A,#F5A623)', pill: '#FCEFCF', pc: '#9A6A0A', pulse: false, ring: false },
   warn: { spine: 'linear-gradient(180deg,#F7A641,#F2802E)', pill: '#FBE1BC', pc: '#A85F00', pulse: false, ring: false },
@@ -81,44 +91,12 @@ const TIERS: Record<string, Omit<Tier, 'tier'>> = {
 };
 
 function agingTier(sec: number, lane: string): Tier {
-  let t: string;
-  if (lane === 'ready') t = sec < 180 ? 'fresh' : sec < 300 ? 'warn' : 'late';
-  else t = sec < 300 ? 'fresh' : sec < 600 ? 'work' : sec < 900 ? 'warn' : sec < 1200 ? 'late' : 'crit';
-  return { tier: t, ...TIERS[t]! };
-}
-
-// created_at is timestamptz (ISO) — never seconds. An absurd value (negative skew
-// or > 12h, e.g. stale seed rows) means bad data, so clamp it to "fresh" rather
-// than render "23889m". No ×1000 normalisation — that would corrupt real stamps.
-function safeElapsedSec(fromMs: number, now: number): number {
-  if (!Number.isFinite(fromMs)) return 0;
-  const raw = Math.floor((now - fromMs) / 1000);
-  return raw < 0 || raw > 12 * 3600 ? 0 : raw;
-}
-function fmtTimer(sec: number, hoursMinutes: (hours: number, minutes: number) => string): string {
-  if (sec < 3600) return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
-  return hoursMinutes(Math.floor(sec / 3600), Math.floor((sec % 3600) / 60));
+  const tier = agingTierKey(sec, lane);
+  return { tier, ...TIERS[tier] };
 }
 
 // place-order's fallback when branches.settings carries neither key.
 const DEFAULT_LEAD_MIN = 15;
-
-/** When a ticket became the kitchen's work.
- *
- *  For a scheduled order that is the moment private.release_scheduled_orders() let it out —
- *  scheduled_for − schedule_lead_time_min — not the moment the diner typed it in. A pickup
- *  booked at 09:00 for 13:00 reached the board at 12:40 already showing 3h 40m, wearing the
- *  urgent red skin with a pulsing critical ring, and dragged its stations into "drowning",
- *  which made every genuinely late ticket beside it unreadable. */
-function workStartedMs(order: Order, leadMs: number): number {
-  const created = new Date(order.created_at).getTime();
-  if (!order.scheduled_for) return created;
-  const due = new Date(order.scheduled_for).getTime();
-  if (!Number.isFinite(due)) return created;
-  // Clamped to created_at: a slot booked for sooner than the lead time is released
-  // immediately, and such a ticket has been work since it was placed.
-  return Math.max(created, due - leadMs);
-}
 
 // Only the mm:ss text has to move every second. A board-wide 1s tick re-rendered every
 // card — and while the cards carried framer-motion's `layout`, re-measured and re-committed
@@ -128,6 +106,13 @@ function workStartedMs(order: Order, leadMs: number): number {
 const CLOCK_TICK_MS = 1_000;
 const AGING_TICK_MS = 5_000;
 const BOARD_TICK_MS = 30_000;
+/** How often the reminder rule is checked; it rings at most once per REMINDER_INTERVAL_MS. */
+const REMINDER_CHECK_MS = 5_000;
+/** Coalesce a burst of realtime events (an order and its lines land as several) into one read. */
+const RELOAD_COALESCE_MS = 250;
+/** A tap on the "Tap to enable order sounds" bar plays the test chime once the context starts,
+ *  if it starts within this long (a refused tap must not chime at some later, unrelated one). */
+const BAR_CHIME_WINDOW_MS = 3_000;
 
 function useTick(periodMs: number): number {
   const [now, setNow] = React.useState(() => Date.now());
@@ -183,66 +168,38 @@ function errorKey(message: string, known: Record<string, string>, fallback: stri
   return fallback;
 }
 
+/** Per-device preferences (mute, voice). Storage can be missing or throw (private mode, blocked
+ *  site data); the board then simply starts with sound on and voice off. */
+function readPref(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+function writePref(key: string, value: string): void {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    /* not persisted; the setting still holds for this visit */
+  }
+}
+
 /* ──────────────────────────────────────────────────────────────────────── */
-
-interface OrderItem {
-  id: string;
-  item_name: string;
-  quantity: number;
-  notes?: string | null;
-  prep_status?: string | null;
-  station?: string | null;
-  modifiers?: unknown;
-}
-interface Delivery {
-  id: string;
-  status: string;
-  driver_id: string | null;
-  accepted_at: string | null;
-  batch_id?: string | null;
-  batch_seq?: number | null;
-}
-interface Order {
-  id: string;
-  order_number: string;
-  status: 'pending' | 'confirmed' | 'preparing' | 'ready' | string;
-  channel: 'dine_in' | 'pickup' | 'delivery' | 'qr_ordering' | string;
-  created_at: string;
-  customer_name?: string | null;
-  customer_notes?: string | null;
-  kitchen_notes?: string | null;
-  held?: boolean;
-  /** A QR-transfer order whose money the merchant has not confirmed. Read from the ORDER
-   *  row on purpose: payments is gated behind the 'payments.view' capability, which kitchen
-   *  staff do not have, so an embedded payments check silently returns nothing and passes. */
-  awaiting_payment?: boolean;
-  scheduled_for?: string | null;
-  table_id?: string | null;
-  tables?: { table_number: string; display_name: string | null } | null;
-  order_items: OrderItem[];
-  deliveries?: Delivery[];
-}
-
-export interface DriverLite {
-  id: string;
-  full_name: string;
-  phone: string | null;
-  vehicle_type: string;
-  is_online: boolean;
-  cooldown_until: string | null;
-  location_updated_at: string | null;
-}
 
 interface Props {
   branchId: string;
   branchName: string;
+  /** The branch's IANA zone, for "sold out until" times. */
+  branchTimezone: string | null;
   initialOrders: Order[];
   stations: string[];
   activeStation: string | null;
   drivers: DriverLite[];
+  /** delivery.manage at this branch: only then is the "assign a rider" picker offered. */
+  canAssign: boolean;
+  initialSoldOut: SoldOutItem[];
 }
-
-const ACTIVE_STATUSES = ['pending', 'confirmed', 'preparing', 'ready'];
 
 interface DispatchFailure {
   error?: string;
@@ -268,11 +225,23 @@ interface DispatchMessage {
 /** Turn dispatch-driver's gate counts into the one sentence that tells the merchant where
  *  to look. Ordered from "nothing is set up" to "everyone is busy", so the first failing
  *  gate is the one reported. */
-function describeDispatchFailure(body: DispatchFailure): DispatchMessage {
+function describeDispatchFailure(body: DispatchFailure | null, status?: number): DispatchMessage {
+  // A body with neither `error` nor `diagnostics` never reached dispatch-driver: the gateway
+  // rejected the JWT itself (401 "Invalid JWT") or failed (5xx). That is not "no rider".
+  if (!body?.error && !body?.diagnostics) {
+    if (status === 401) return { key: 'signInAgain' };
+    if (status === 403) return { key: 'notAllowed' };
+    console.error('dispatch-driver failed with no body, status', status);
+    return { key: 'failed' };
+  }
   if (body?.error && body.error !== 'no_drivers_available') {
     if (body.error === 'max_attempts_reached') return { key: 'maxAttempts' };
     if (body.error === 'feature_not_entitled') return { key: 'notEntitled' };
     if (body.error === 'delivery_not_dispatchable') return { key: 'notDispatchable' };
+    // dispatch-driver checks the caller: 403 without kitchen.access / delivery.manage at the
+    // delivery's branch, 401 when the session is gone.
+    if (body.error === 'not_authorized') return { key: 'notAllowed' };
+    if (body.error === 'auth_required') return { key: 'signInAgain' };
     // Any other code is server vocabulary, not a sentence for the merchant.
     console.error('dispatch-driver failed:', body.error);
     return { key: 'failed' };
@@ -294,14 +263,28 @@ function describeDispatchFailure(body: DispatchFailure): DispatchMessage {
   return { key: 'noneAvailable' };
 }
 
-export function KitchenView({ branchId, branchName, initialOrders, stations, activeStation, drivers }: Props) {
+type Translate = ReturnType<typeof useTranslations<'kitchen'>>;
+
+/** The card's channel chip text (the table for dine-in), also what the voice reads out. */
+function chipText(order: Order, t: Translate): string {
+  const chanKey = CHAN[order.channel] ? order.channel : 'pickup';
+  const chanLabel = t(`channel.${chanKey}`);
+  const tableLabel = order.tables ? (order.tables.display_name || t('card.table', { table: order.tables.table_number })) : null;
+  return order.channel === 'dine_in' || order.channel === 'qr_ordering' ? (tableLabel ?? chanLabel) : chanLabel;
+}
+
+type AudioState = 'unknown' | 'unsupported' | 'locked' | 'running';
+
+export function KitchenView({
+  branchId, branchName, branchTimezone, initialOrders, stations, activeStation, drivers, canAssign, initialSoldOut,
+}: Props) {
   const t = useTranslations('kitchen');
+  const locale = useLocale();
   const stationLabel = (s: string) => (isStationCode(s) ? t(`stations.${s}`) : s);
   const [orders, setOrders] = React.useState<Order[]>(() =>
     initialOrders.map((o) => ({ ...o, deliveries: asArray(o.deliveries) })),
   );
   const [station, setStation] = React.useState<string | null>(activeStation);
-  const [soundOn, setSoundOn] = React.useState(true);
   // Aging colours and the "drowning" station pills turn on minute-scale thresholds, so the
   // board reads a coarse clock. The per-second mm:ss lives in its own leaf (TimerPill).
   const now = useTick(AGING_TICK_MS);
@@ -310,32 +293,148 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
   const [scheduledOpen, setScheduledOpen] = React.useState(false);
   const [batchOpen, setBatchOpen] = React.useState(false);
   const [toast, setToast] = React.useState<{ text: string; onUndo: (() => void) | null } | null>(null);
+  const [soldOut, setSoldOut] = React.useState<SoldOutItem[]>(initialSoldOut);
 
   const seenVisibleRef = React.useRef<Set<string> | null>(null);
   const beepStationRef = React.useRef<string | null>(null);
-  const mountNowRef = React.useRef(Date.now());
+  const lateSeenRef = React.useRef<Set<string> | null>(null);
+  const lateStationRef = React.useRef<string | null>(null);
+  const lastChimeRef = React.useRef(0);
+  // Accepted tickets someone at this screen has seen (a tap or key press since they arrived):
+  // the 30-second reminder leaves them alone (reminderDue).
+  const heardRef = React.useRef<Set<string>>(new Set());
   const readyAtRef = React.useRef<Record<string, number>>({});
   const toastTimer = React.useRef<number | null>(null);
+  // Orders this tab rejected itself: their 'cancelled' echo is not news to the cook.
+  const selfCancelledRef = React.useRef<Set<string>>(new Set());
+  // Orders announced by an INSERT whose lines may still be on their way (place-order writes the
+  // order and its lines in separate requests).
+  const awaitingLinesRef = React.useRef<Set<string>>(new Set());
+  const ordersRef = React.useRef(orders);
+  ordersRef.current = orders;
+  // What changed on this board, and when, on a counter that only goes up: an optimistic tap, a
+  // realtime echo merged in, a ticket removed. A board read that started before such a change
+  // must not paint over it (overlaySnapshot). Keyed by order id, and by menu item id for the
+  // sold-out strip.
+  const changeClock = React.useRef(0);
+  const orderChangedAt = React.useRef<Map<string, number>>(new Map());
+  const soldOutChangedAt = React.useRef<Map<string, number>>(new Map());
+  const markOrderChanged = React.useCallback((id: string) => {
+    orderChangedAt.current.set(id, ++changeClock.current);
+  }, []);
+  const markSoldOutChanged = React.useCallback((id: string) => {
+    soldOutChangedAt.current.set(id, ++changeClock.current);
+  }, []);
 
   const supa = React.useCallback(() => getBrowserClient(), []);
 
-  /* How far ahead of its slot a scheduled order is released to the board. Read from the
-     branch rather than assumed, because the same two keys decide when release_scheduled_orders()
-     fires — and a ticket's clock has to start when the cook was meant to start it. */
-  const [leadMin, setLeadMin] = React.useState(DEFAULT_LEAD_MIN);
+  /* ── sound preferences ─────────────────────────────────────────────────
+     Mute and voice are per device and per branch: the pass tablet can stay silent while the
+     line's tablet rings. Read after mount, so the server render and the first client render
+     agree. */
+  const soundKey = `kitchen:sound:${branchId}`;
+  const voiceKey = `kitchen:voice:${branchId}`;
+  const [soundOn, setSoundOn] = React.useState(true);
+  const [voiceOn, setVoiceOn] = React.useState(false);
+  const [canSpeak, setCanSpeak] = React.useState(false);
+  const [audioState, setAudioState] = React.useState<AudioState>('unknown');
+  const [soundMenuOpen, setSoundMenuOpen] = React.useState(false);
+  const soundOnRef = React.useRef(soundOn);
+  soundOnRef.current = soundOn;
+  const voiceOnRef = React.useRef(voiceOn);
+  voiceOnRef.current = voiceOn;
+
   React.useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const { data } = await supa()
-        .from('branches').select('settings').eq('id', branchId).maybeSingle();
-      if (cancelled) return;
-      const s = (data?.settings ?? {}) as Record<string, unknown>;
-      const prep = Number(s.prep_time_min ?? DEFAULT_LEAD_MIN);
-      const lead = Number(s.schedule_lead_time_min ?? prep);
-      if (Number.isFinite(lead) && lead >= 0) setLeadMin(lead);
-    })();
-    return () => { cancelled = true; };
-  }, [branchId, supa]);
+    setSoundOn(readPref(soundKey) !== 'off');
+    setVoiceOn(readPref(voiceKey) === 'on');
+    setCanSpeak(speechAvailable());
+  }, [soundKey, voiceKey]);
+
+  const chime = React.useCallback((kind: 'new' | 'reminder' | 'late' | 'test') => {
+    if (playChime(kind)) lastChimeRef.current = Date.now();
+  }, []);
+
+  /* One AudioContext for the page (kitchen-sound.ts). Browsers keep it suspended until the page
+     has had a tap or key press, so the first one anywhere on the board unlocks it. It keeps
+     listening: iOS suspends the context again after a call or when the tablet sleeps, and the
+     next tap has to bring it back. While sound is on and the context is not running, the board
+     says so with a full-width bar instead of staying silently mute.
+     Every gesture event is listened to (UNLOCK_EVENTS): with a finger the activation arrives on
+     pointerup / touchend, not pointerdown, and pointerdown alone left a tablet needing a second
+     tap (an iPad possibly never unlocking from a tap outside a button). The bar itself has no
+     click handler: a tap on it is one of these gestures, and the test chime plays when the
+     context actually starts (statechange), whichever event started it. A click handler of its
+     own raced that: with a mouse, pointerdown already unlocked and the bar unmounted before its
+     click, so the chime it promised often never played. */
+  const barTapAt = React.useRef(0);
+  React.useEffect(() => {
+    const c = audioContext();
+    if (!c) {
+      setAudioState('unsupported');
+      return;
+    }
+    const sync = () => {
+      const running = c.state === 'running';
+      setAudioState(running ? 'running' : 'locked');
+      if (running && barTapAt.current > 0) {
+        const fresh = Date.now() - barTapAt.current < BAR_CHIME_WINDOW_MS;
+        barTapAt.current = 0;
+        if (fresh) chime('test');
+      }
+    };
+    const unlock = (e: Event) => {
+      if (c.state === 'running') return;
+      if (e.target instanceof Element && e.target.closest('[data-sound-unlock]')) barTapAt.current = Date.now();
+      void unlockAudio().then(sync);
+    };
+    const opts: AddEventListenerOptions = { capture: true, passive: true };
+    sync();
+    c.addEventListener('statechange', sync);
+    for (const type of UNLOCK_EVENTS) window.addEventListener(type, unlock, opts);
+    return () => {
+      c.removeEventListener('statechange', sync);
+      for (const type of UNLOCK_EVENTS) window.removeEventListener(type, unlock, opts);
+    };
+  }, [chime]);
+
+  const testSound = () => {
+    // Called from a tap, so both the context and speech are allowed to start here.
+    void unlockAudio().then((ok) => {
+      setAudioState(ok ? 'running' : 'locked');
+      if (ok) chime('test');
+    });
+    if (voiceOnRef.current) speak(t('voice.test'), speechLang(locale));
+  };
+
+  const changeSound = (on: boolean) => {
+    setSoundOn(on);
+    writePref(soundKey, on ? 'on' : 'off');
+    if (on) {
+      void unlockAudio().then((ok) => {
+        setAudioState(ok ? 'running' : 'locked');
+        if (ok) chime('reminder');
+      });
+    }
+  };
+
+  const changeVoice = (on: boolean) => {
+    setVoiceOn(on);
+    writePref(voiceKey, on ? 'on' : 'off');
+    // iOS only lets speech start inside a tap; this is one.
+    if (on) speak(t('voice.test'), speechLang(locale));
+  };
+
+  /* How far ahead of its slot a scheduled order is released to the board, and whether the
+     branch is paused. Both come from the settings OpsToggles already reads (and re-reads every
+     minute and on focus), because the same keys decide when release_scheduled_orders() fires —
+     and a ticket's clock has to start when the cook was meant to start it. */
+  const [leadMin, setLeadMin] = React.useState(DEFAULT_LEAD_MIN);
+  const onSettings = React.useCallback((s: Record<string, unknown>) => {
+    setPaused(Boolean(s.orders_paused));
+    const prep = Number(s.prep_time_min ?? DEFAULT_LEAD_MIN);
+    const lead = Number(s.schedule_lead_time_min ?? prep);
+    if (Number.isFinite(lead) && lead >= 0) setLeadMin(lead);
+  }, []);
   const leadMs = leadMin * 60_000;
 
   /* fullscreen state mirror */
@@ -345,44 +444,172 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
     return () => document.removeEventListener('fullscreenchange', h);
   }, []);
 
+  /* Keep the tablet awake while the board is open. A sleeping screen drops the socket and
+     misses both the tickets and their chimes. The lock is released whenever the tab is hidden,
+     so it is taken again on return; some browsers refuse it before the first tap, so a tap
+     retries too. */
+  React.useEffect(() => {
+    type Sentinel = { released?: boolean; release: () => Promise<void> };
+    const wakeLock = (navigator as unknown as { wakeLock?: { request: (type: 'screen') => Promise<Sentinel> } }).wakeLock;
+    if (!wakeLock) return;
+    let lock: Sentinel | null = null;
+    let disposed = false;
+    const acquire = async () => {
+      if (disposed || document.visibilityState !== 'visible' || (lock && !lock.released)) return;
+      try {
+        const next = await wakeLock.request('screen');
+        if (disposed) void next.release().catch(() => undefined);
+        else lock = next;
+      } catch {
+        /* refused (battery saver, no gesture yet): the tablet's own display settings apply */
+      }
+    };
+    const retry = () => void acquire();
+    void acquire();
+    document.addEventListener('visibilitychange', retry);
+    window.addEventListener('pointerdown', retry, true);
+    return () => {
+      disposed = true;
+      document.removeEventListener('visibilitychange', retry);
+      window.removeEventListener('pointerdown', retry, true);
+      if (lock) void lock.release().catch(() => undefined);
+    };
+  }, []);
+
   /* Full reload of the active board. Used on (re)connect, on tab focus and on network
      return: a channel that dropped silently means the deltas below were missed, and a
-     kitchen that quietly stops showing tickets is the worst failure this screen has. */
+     kitchen that quietly stops showing tickets is the worst failure this screen has.
+     New orders come through here too: the INSERT payload is the bare order row, and building
+     the card from it (then reading its lines once) raced place-order's second request and could
+     leave a ticket with no lines for good. */
+  const reloadSeq = React.useRef(0);
+  const emptyRetries = React.useRef(0);
+  const requestReloadRef = React.useRef<(delay?: number) => void>(() => undefined);
   const reload = React.useCallback(async () => {
-    const { data } = await supa()
-      .from('orders')
-      .select(
-        'id, order_number, status, channel, created_at, customer_name, customer_notes, kitchen_notes, held, awaiting_payment, scheduled_for, table_id, tables(table_number, display_name), order_items(id, item_name, quantity, notes, prep_status, station, modifiers), deliveries(id, status, driver_id, accepted_at, batch_id, batch_seq)',
-      )
-      .eq('branch_id', branchId)
-      .in('status', ACTIVE_STATUSES)
-      .order('created_at', { ascending: false });
-    if (!data) return;
+    const seq = ++reloadSeq.current;
+    // Changes stamped after this point are newer than what the read below will see.
+    const mark = changeClock.current;
+    const [{ data, error }, soldOutRead] = await Promise.all([
+      supa()
+        .from('orders')
+        .select(KITCHEN_ORDER_SELECT)
+        .eq('branch_id', branchId)
+        .in('status', ACTIVE_STATUSES)
+        .order('created_at', { ascending: false }),
+      // The sold-out strip is re-read with the board: its realtime events are lost with the
+      // socket just like the orders', and a dish put back on sale from the back office while the
+      // tablet was offline stayed listed (and its 86 row disabled on every card) until a reload.
+      supa()
+        .from('menu_items')
+        .select('id, name, sold_out_until')
+        .eq('branch_id', branchId)
+        .eq('is_active', true)
+        .gt('sold_out_until', new Date().toISOString())
+        .order('name'),
+    ]);
+    // Only the newest read may land: reads from the reconnect path and from realtime events can
+    // overlap, and an older one finishing last would paint a stale board.
+    if (seq !== reloadSeq.current) return;
+    const newerThanRead = (changedAt: Map<string, number>) => (id: string) => (changedAt.get(id) ?? 0) > mark;
+    if (!soldOutRead.error && soldOutRead.data) {
+      const fresh = soldOutRead.data as SoldOutItem[];
+      setSoldOut((curr) =>
+        overlaySnapshot(curr, fresh, newerThanRead(soldOutChangedAt.current), () => true)
+          .sort((a, b) => a.name.localeCompare(b.name)),
+      );
+    }
+    if (error || !data) return;
     const rows = (data as unknown as Order[]).map((o) => ({ ...o, deliveries: asArray(o.deliveries) }));
-    setOrders((curr) =>
-      rows.map((r) => {
+    setOrders((curr) => {
+      const withDeliveries = rows.map((r) => {
         // A refetch must never REMOVE a delivery already on the board either. This runs on
         // connect, reconnect, tab focus and network return, and a moment of replication lag
         // is enough to come back without the embed — which put a "Find a rider" button back
         // under a ticket whose rider was already riding.
         const known = curr.find((o) => o.id === r.id)?.deliveries;
         return r.deliveries.length === 0 && (known?.length ?? 0) > 0 ? { ...r, deliveries: known } : r;
-      }),
-    );
+      });
+      // A ticket tapped, echoed or removed while this read was in flight keeps what the board
+      // holds: the read is older than that change.
+      return overlaySnapshot(curr, withDeliveries, newerThanRead(orderChangedAt.current), (o) =>
+        ACTIVE_STATUSES.includes(o.status),
+      );
+    });
+    // Stamps at or before this read's start can never outrank it or any later read (only the
+    // newest read lands), so they are dropped here and the maps stay small.
+    for (const changedAt of [orderChangedAt.current, soldOutChangedAt.current]) {
+      for (const [id, at] of changedAt) if (at <= mark) changedAt.delete(id);
+    }
+    for (const r of rows) if (r.order_items.length > 0) awaitingLinesRef.current.delete(r.id);
+    // A just-placed order read between its two writes has no lines yet and is kept off the board
+    // (isOnBoard). Its lines' own realtime events trigger a read; this is the fallback in case
+    // those were missed, bounded so a genuinely empty order cannot poll forever.
+    const waiting = rows.some((r) => r.order_items.length === 0 && Date.now() - new Date(r.created_at).getTime() < 5 * 60_000);
+    if (!waiting) emptyRetries.current = 0;
+    else if (emptyRetries.current < 3) {
+      emptyRetries.current += 1;
+      requestReloadRef.current(1_500);
+    }
   }, [branchId, supa]);
 
-  /* realtime: orders INSERT/UPDATE + deliveries */
+  /* One read at a time, and a burst of events collapses into one. */
+  const reloadState = React.useRef<{ timer: number | null; inFlight: boolean; queued: boolean }>({
+    timer: null, inFlight: false, queued: false,
+  });
+  const requestReload = React.useCallback((delay: number = RELOAD_COALESCE_MS) => {
+    const s = reloadState.current;
+    if (s.timer) window.clearTimeout(s.timer);
+    s.timer = window.setTimeout(() => {
+      s.timer = null;
+      if (s.inFlight) {
+        s.queued = true;
+        return;
+      }
+      s.inFlight = true;
+      void reload().finally(() => {
+        s.inFlight = false;
+        if (s.queued) {
+          s.queued = false;
+          requestReloadRef.current();
+        }
+      });
+    }, delay);
+  }, [reload]);
+  requestReloadRef.current = requestReload;
+  React.useEffect(() => () => {
+    if (reloadState.current.timer) window.clearTimeout(reloadState.current.timer);
+  }, []);
+
+  /* realtime: orders, their lines, deliveries, and this branch's sold-out dishes */
   const { healthy: liveHealthy } = useRealtime({
     channel: `kitchen-branch:${branchId}`,
     tables: [
       { table: 'orders', filter: `branch_id=eq.${branchId}` },
       { table: 'deliveries', filter: `branch_id=eq.${branchId}` },
+      // order_items has no branch_id to filter on. RLS (order_items_staff) already limits the
+      // rows to the viewer's branches, and lines of orders not on this board are ignored.
+      { table: 'order_items' },
+      { table: 'menu_items', filter: `branch_id=eq.${branchId}`, event: 'UPDATE' },
     ],
     refetch: reload,
     onChange: (payload, table) => {
+      if (table === 'menu_items') {
+        const m = payload.new as { id?: string; name?: string; sold_out_until?: string | null; is_active?: boolean } | null;
+        if (m?.id) {
+          const id = m.id;
+          setSoldOut((curr) => {
+            const next = mergeSoldOut(curr, m, Date.now());
+            // Stamp only a real change: every sale updates menu_items (stock).
+            if (next !== curr) markSoldOutChanged(id);
+            return next;
+          });
+        }
+        return;
+      }
       if (table === 'deliveries') {
         const d = payload.new as Partial<Delivery> & { order_id?: string };
         if (!d?.order_id) return;
+        markOrderChanged(d.order_id);
         setOrders((curr) => curr.map((o) => {
           if (o.id !== d.order_id) return o;
           // Merge over the row already held rather than rebuilding it from the payload. A
@@ -394,45 +621,82 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
         }));
         return;
       }
+      if (table === 'order_items') {
+        if (payload.eventType === 'UPDATE') {
+          // A line ticked off on another tablet (prep_status), or edited before the kitchen
+          // started it.
+          const row = payload.new as Partial<OrderItem> & { id?: string; order_id?: string };
+          if (!row?.id || !row.order_id) return;
+          if (ordersRef.current.some((o) => o.id === row.order_id)) markOrderChanged(row.order_id);
+          setOrders((curr) => {
+            const idx = curr.findIndex((o) => o.id === row.order_id);
+            if (idx < 0 || !curr[idx]!.order_items.some((it) => it.id === row.id)) return curr;
+            const next = curr.slice();
+            const o = curr[idx]!;
+            next[idx] = { ...o, order_items: o.order_items.map((it) => (it.id === row.id ? { ...it, ...row } : it)) };
+            return next;
+          });
+          return;
+        }
+        // Lines added (place-order's second write, an edit) or removed: re-read the board.
+        // A DELETE payload carries only the line's id.
+        const orderId = (payload.new as { order_id?: string } | null)?.order_id;
+        const lineId = (payload.old as { id?: string } | null)?.id;
+        const board = ordersRef.current;
+        const affects =
+          (!!orderId && (awaitingLinesRef.current.has(orderId) || board.some((o) => o.id === orderId))) ||
+          (!!lineId && board.some((o) => o.order_items.some((it) => it.id === lineId)));
+        if (affects) requestReload();
+        return;
+      }
+      // orders
+      if (payload.eventType === 'DELETE') {
+        // place-order deletes an order whose lines failed to insert.
+        const id = (payload.old as { id?: string } | null)?.id;
+        if (!id) return;
+        awaitingLinesRef.current.delete(id);
+        markOrderChanged(id);
+        setOrders((curr) => (curr.some((o) => o.id === id) ? curr.filter((o) => o.id !== id) : curr));
+        return;
+      }
       if (payload.eventType === 'INSERT') {
-        // The payload carries the order row only; its items and table have to be read.
-        const row = payload.new as Order;
-        void (async () => {
-          const { data: items } = await supa()
-            .from('order_items')
-            .select('id, item_name, quantity, notes, prep_status, station, modifiers')
-            .eq('order_id', row.id);
-          let tables: Order['tables'] = null;
-          if (row.table_id) {
-            const { data: tableRow } = await supa()
-              .from('tables').select('table_number, display_name').eq('id', row.table_id).maybeSingle();
-            tables = (tableRow as Order['tables']) ?? null;
-          }
-          setOrders((curr) => (curr.some((o) => o.id === row.id) ? curr : [...curr, { ...row, order_items: items ?? [], tables }]));
-        })();
+        const id = (payload.new as { id?: string } | null)?.id;
+        if (id) awaitingLinesRef.current.add(id);
+        requestReload();
         return;
       }
       if (payload.eventType === 'UPDATE') {
         const updated = payload.new as Order;
-        setOrders((curr) => {
-          if (!ACTIVE_STATUSES.includes(updated.status)) return curr.filter((o) => o.id !== updated.id);
-          return curr.map((o) => (o.id === updated.id ? { ...o, ...updated, tables: o.tables ?? updated.tables, order_items: o.order_items, deliveries: o.deliveries } : o));
-        });
+        const known = ordersRef.current.find((o) => o.id === updated.id);
+        if (!ACTIVE_STATUSES.includes(updated.status)) {
+          // Cancelled by the diner, the counter or the back office while the kitchen had it up:
+          // say so, or the cook finishes a dish nobody will collect.
+          if (
+            updated.status === 'cancelled' && known && isOnBoard(known) &&
+            !selfCancelledRef.current.has(updated.id) &&
+            (!station || known.order_items.some((it) => lineMatchesStation(it, station)))
+          ) {
+            showToast(t('toast.cancelledElsewhere', { ticket: known.order_number.slice(-4) }), null);
+            if (soundOnRef.current) chime('late');
+          }
+          // Stamped so a board read already in flight cannot bring the closed ticket back.
+          markOrderChanged(updated.id);
+          setOrders((curr) => curr.filter((o) => o.id !== updated.id));
+          return;
+        }
+        // Not on this board yet (an Undo of "Bump" pressed on another tablet, a missed insert),
+        // still without its lines, or moved to another table: read it properly.
+        if (!known || known.order_items.length === 0 || (known.table_id ?? null) !== (updated.table_id ?? null)) {
+          requestReload();
+          return;
+        }
+        markOrderChanged(updated.id);
+        setOrders((curr) => curr.map((o) => (o.id === updated.id
+          ? { ...o, ...updated, tables: o.tables, order_items: o.order_items, deliveries: o.deliveries }
+          : o)));
       }
     },
   });
-
-  /* keyboard: m = mute, f = fullscreen, Esc = close overlays */
-  React.useEffect(() => {
-    const h = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
-      if (e.key === 'm' || e.key === 'M') setSoundOn((s) => !s);
-      else if (e.key === 'f' || e.key === 'F') void toggleFs();
-      else if (e.key === 'Escape') { setScheduledOpen(false); setBatchOpen(false); }
-    };
-    window.addEventListener('keydown', h);
-    return () => window.removeEventListener('keydown', h);
-  }, []);
 
   const setStationFilter = (s: string | null) => {
     setStation(s);
@@ -447,6 +711,23 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
       else await document.documentElement.requestFullscreen();
     } catch { /* ignore */ }
   };
+
+  /* keyboard: m = mute, f = fullscreen, Esc = close overlays */
+  const keyActions = React.useRef({ toggleSound: () => undefined as void, toggleFs });
+  keyActions.current = { toggleSound: () => changeSound(!soundOnRef.current), toggleFs };
+  React.useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      // Ctrl+F is the browser's find, not fullscreen; and nothing typed into a field is a shortcut.
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))) return;
+      if (e.key === 'm' || e.key === 'M') keyActions.current.toggleSound();
+      else if (e.key === 'f' || e.key === 'F') void keyActions.current.toggleFs();
+      else if (e.key === 'Escape') { setScheduledOpen(false); setBatchOpen(false); setSoundMenuOpen(false); }
+    };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, []);
 
   const showToast = (text: string, onUndo: (() => void) | null) => {
     setToast({ text, onUndo });
@@ -464,12 +745,30 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
     const ticket = order.order_number.slice(-4);
     if (action.next === 'ready') readyAtRef.current[order.id] = Date.now();
 
+    markOrderChanged(order.id);
     setOrders((curr) => curr.map((o) => (o.id === order.id ? { ...o, status: action.next } : o)));
 
-    const { error } = await supa().from('orders').update({ status: action.next }).eq('id', order.id).eq('branch_id', branchId);
-    if (error) {
-      setOrders((curr) => curr.map((o) => (o.id === order.id ? { ...o, status: prevStatus } : o)));
+    // Only from the status this card showed. Nothing on the server checks the transition, so an
+    // unguarded UPDATE from a tablet that missed a cancel (a dropped socket, a tap inside the
+    // echo's latency) brought the cancelled order back to 'preparing', and Bump then ran the
+    // completion triggers (loyalty award, tip split) on an order the diner or counter cancelled.
+    const { data, error } = await supa()
+      .from('orders')
+      .update({ status: action.next })
+      .eq('id', order.id)
+      .eq('branch_id', branchId)
+      .eq('status', prevStatus)
+      .select('id');
+    if (error || !data || data.length === 0) {
+      markOrderChanged(order.id);
+      setOrders((curr) => curr.map((o) => (o.id === order.id && o.status === action.next ? { ...o, status: prevStatus } : o)));
       if (action.next === 'ready') { if (prevReady != null) readyAtRef.current[order.id] = prevReady; else delete readyAtRef.current[order.id]; }
+      if (!error) {
+        // No row matched: the order had already moved (cancelled, or advanced on another screen).
+        showToast(t('toast.changedElsewhere', { ticket }), null);
+        requestReload(0);
+        return;
+      }
       console.error('kitchen: order status update failed', error.message);
       const key = errorKey(error.message, {
         transfer_payment_not_approved: 'toast.updateUnpaid',
@@ -481,20 +780,45 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
     }
     showToast(t(`toast.advanced.${action.next}`, { ticket }), async () => {
       setToast(null);
+      // Putting a ticket back is not an arrival: no chime.
+      seenVisibleRef.current?.add(snapshot.id);
+      markOrderChanged(snapshot.id);
       setOrders((curr) => (curr.some((o) => o.id === snapshot.id)
         ? curr.map((o) => (o.id === snapshot.id ? { ...o, status: prevStatus } : o))
         : [...curr, { ...snapshot, status: prevStatus }]));
       if (action.next === 'ready') { if (prevReady != null) readyAtRef.current[snapshot.id] = prevReady; else delete readyAtRef.current[snapshot.id]; }
-      await supa().from('orders').update({ status: prevStatus }).eq('id', snapshot.id).eq('branch_id', branchId);
+      // Only if the order is still where this tap left it. Without the status guard an Undo
+      // pressed after the order had been cancelled elsewhere (the diner, the counter) reopened it.
+      const { data, error: undoError } = await supa()
+        .from('orders')
+        .update({ status: prevStatus })
+        .eq('id', snapshot.id)
+        .eq('branch_id', branchId)
+        .eq('status', action.next)
+        .select('id');
+      if (undoError || !data || data.length === 0) {
+        if (undoError) console.error('kitchen: undo failed', undoError.message);
+        const key = undoError
+          ? errorKey(undoError.message, { loyalty_points_already_spent: 'toast.undoPointsSpent' }, 'toast.undoFailed')
+          : 'toast.undoFailed';
+        showToast(t(key, { ticket }), null);
+        requestReload(0); // the optimistic put-back was wrong: show what the server has
+      }
     });
   };
 
   const reject = async (order: Order) => {
     const ticket = order.order_number.slice(-4);
+    selfCancelledRef.current.add(order.id);
     // The reason is WRITTEN to orders.cancellation_reason — it stays English whatever the board shows.
     const { error } = await supa().rpc('cancel_order', { p_order_id: order.id, p_reason: 'Rejected by kitchen' });
-    if (!error) { setOrders((curr) => curr.filter((o) => o.id !== order.id)); showToast(t('toast.rejected', { ticket }), null); }
+    if (!error) {
+      markOrderChanged(order.id);
+      setOrders((curr) => curr.filter((o) => o.id !== order.id));
+      showToast(t('toast.rejected', { ticket }), null);
+    }
     else {
+      selfCancelledRef.current.delete(order.id);
       console.error('kitchen: cancel_order failed', error.message);
       const key = errorKey(error.message, {
         cannot_cancel_status: 'toast.rejectClosed',
@@ -506,6 +830,9 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
 
   const recall = async (order: Order) => {
     const ticket = order.order_number.slice(-4);
+    const prevStatus = order.status;
+    const prevReady = readyAtRef.current[order.id];
+    markOrderChanged(order.id);
     setOrders((curr) => curr.map((o) => (o.id === order.id ? { ...o, status: 'preparing' } : o)));
     delete readyAtRef.current[order.id];
     // The result was discarded and the success toast shown unconditionally, so a refusal —
@@ -513,10 +840,15 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
     // a 400 — read to the cook as "recalled to kitchen" while nothing had moved.
     const { error } = await supa().rpc('recall_order', { p_order_id: order.id });
     if (error) {
+      // Put the card back where it was: it did not move.
+      markOrderChanged(order.id);
+      setOrders((curr) => curr.map((o) => (o.id === order.id && o.status === 'preparing' ? { ...o, status: prevStatus } : o)));
+      if (prevReady != null) readyAtRef.current[order.id] = prevReady;
       console.error('kitchen: recall_order failed', error.message);
       const key = errorKey(error.message, {
         not_recallable_status: 'toast.recallTooFar',
         recall_window_passed: 'toast.recallWindowPassed',
+        not_authorized: 'toast.recallForbidden',
       }, 'toast.recallFailed');
       showToast(t(key, { ticket }), null);
       return;
@@ -525,33 +857,65 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
   };
 
   /**
-   * 86 an item for the rest of the day.
+   * 86 a dish for the rest of the day.
    *
-   * This used to call toggle_item_availability, which clears is_active — and listMenuItems
-   * filters on is_active, so an 86'd dish did not go grey anywhere, it VANISHED from the
-   * storefront and from the till. A cashier then had no way to tell "we are out of it" from
-   * "we never sold it", and the item stayed gone until somebody remembered to put it back.
+   * set_item_86 stamps sold_out_until, which the menu queries surface as outOfStock, place-order
+   * refuses at 409, and the counter and storefront render dimmed and unclickable. It defaults to
+   * "until we open tomorrow" computed in the BRANCH's timezone, so the dish returns on its own.
+   * is_active stays what it is for — taking a dish off the menu for good.
    *
-   * set_item_86 is what this button always meant: it stamps sold_out_until, which the menu
-   * queries surface as outOfStock, place-order refuses at 409, and the counter and storefront
-   * both now render dimmed and unclickable. It defaults to "until we open tomorrow" computed
-   * in the BRANCH's timezone, so the item returns on its own. is_active stays what it is for
-   * — taking a dish off the menu for good.
+   * The dish is named by the line's menu_item_id. It used to be looked up by name (ilike +
+   * maybeSingle), which failed for a dish renamed since the order, for two dishes with the same
+   * name, for a name holding % or _, and for every combo (a combo is not a menu item). A combo
+   * offers each dish inside it instead.
    */
-  const eightySix = async (itemName: string) => {
-    const supabase = supa();
-    const { data: row } = await supabase.from('menu_items').select('id').eq('branch_id', branchId).ilike('name', itemName).maybeSingle();
-    if (!row) { showToast(t('toast.eightySixNotFound', { item: itemName }), null); return; }
-    const { error } = await supabase.rpc('set_item_86', { p_menu_item_id: row.id, p_sold_out: true });
+  const eightySix = async (itemId: string, itemName: string) => {
+    const { data, error } = await supa().rpc('set_item_86', { p_menu_item_id: itemId, p_sold_out: true });
     if (error) {
       console.error('kitchen: set_item_86 failed', error.message);
       showToast(t('toast.eightySixFailed', { item: itemName }), null);
       return;
     }
-    showToast(t('toast.eightySixDone', { item: itemName }), async () => {
+    const until = (data as { sold_out_until?: string | null } | null)?.sold_out_until ?? null;
+    markSoldOutChanged(itemId);
+    setSoldOut((curr) => mergeSoldOut(curr, { id: itemId, name: itemName, sold_out_until: until }, Date.now()));
+    showToast(t('toast.eightySixDone', { item: itemName }), () => {
       setToast(null);
-      await supabase.rpc('set_item_86', { p_menu_item_id: row.id, p_sold_out: false });
+      void backOnSale({ id: itemId, name: itemName }, true);
     });
+  };
+
+  const backOnSale = async (item: { id: string; name: string }, quiet = false) => {
+    const { error } = await supa().rpc('set_item_86', { p_menu_item_id: item.id, p_sold_out: false });
+    if (error) {
+      console.error('kitchen: set_item_86 (back on sale) failed', error.message);
+      showToast(t('toast.backOnSaleFailed', { item: item.name }), null);
+      return;
+    }
+    markSoldOutChanged(item.id);
+    setSoldOut((curr) => curr.filter((s) => s.id !== item.id));
+    if (!quiet) showToast(t('toast.backOnSaleDone', { item: item.name }), null);
+  };
+
+  /* Tick a line off (or back on). set_order_item_prep_status is gated by kitchen.access at the
+     order's branch and changes that one column only. */
+  const togglePrep = async (orderId: string, item: OrderItem) => {
+    const next = isLineDone(item) ? 'pending' : 'ready';
+    const prev = item.prep_status ?? 'pending';
+    const put = (status: string) => {
+      markOrderChanged(orderId);
+      setOrders((curr) => curr.map((o) => (o.id !== orderId ? o : {
+        ...o,
+        order_items: o.order_items.map((it) => (it.id === item.id ? { ...it, prep_status: status } : it)),
+      })));
+    };
+    put(next);
+    const { error } = await supa().rpc('set_order_item_prep_status', { p_order_item_id: item.id, p_prep_status: next });
+    if (error) {
+      put(prev);
+      console.error('kitchen: set_order_item_prep_status failed', error.message);
+      showToast(t('toast.prepFailed', { item: item.item_name }), null);
+    }
   };
 
   const dispatchDriver = async (orderId: string, reset = false) => {
@@ -565,7 +929,8 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
     try {
       const ctx = (error as unknown as { context?: Response }).context;
       if (ctx && typeof ctx.json === 'function') {
-        reason = describeDispatchFailure((await ctx.json()) as DispatchFailure);
+        const body = (await ctx.json().catch(() => null)) as DispatchFailure | null;
+        reason = describeDispatchFailure(body, ctx.status);
       }
     } catch {
       /* body unreadable — fall through to the generic message */
@@ -601,19 +966,20 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
   };
 
   /* derive lanes (client-side station filter + FIFO) */
-  const matchesStation = React.useCallback(
-    (o: Order) => !station || o.order_items.some((it) => it.station === station),
-    [station],
-  );
   // awaiting_payment tickets are not work yet — the money has not arrived, and
   // orders_block_unpaid_transfer would refuse the transition anyway, but only AFTER the cook
-  // had tried it mid-service.
-  const visible = orders.filter(
-    (o) => !o.held && !o.awaiting_payment && ACTIVE_STATUSES.includes(o.status) && matchesStation(o),
-  );
+  // had tried it mid-service. A ticket whose lines have not landed yet is not work either.
+  const onBoard = orders.filter(isOnBoard);
+  // A line with no station (a hand-built menu, a combo whose dishes span stations) shows on
+  // every station's screen: it used to match none of them and vanish from all but "All".
+  const visible = station ? onBoard.filter((o) => o.order_items.some((it) => lineMatchesStation(it, station))) : onBoard;
   const scheduled = orders.filter((o) => o.held);
+  const visibleRef = React.useRef(visible);
+  visibleRef.current = visible;
+  const leadMsRef = React.useRef(leadMs);
+  leadMsRef.current = leadMs;
 
-  /* new-order beep — gated to the active station, with an aging escalation tone.
+  /* New-order chime — gated to the active station.
      Keyed on the tickets actually ON the board, not on orders.length: a
      scheduled order is released by cron flipping held→false, which arrives as an
      UPDATE and leaves the count unchanged, so counting orders let it land
@@ -623,56 +989,165 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
     const ids = visibleKey ? visibleKey.split(',') : [];
     const prev = seenVisibleRef.current;
     // First run, and every station switch, only re-baselines: revealing older
-    // tickets by changing the filter is not an arrival and must not beep.
+    // tickets by changing the filter is not an arrival and must not chime.
     if (prev === null || beepStationRef.current !== station) {
       seenVisibleRef.current = new Set(ids);
       beepStationRef.current = station;
       return;
     }
-    const arrived = ids.some((id) => !prev.has(id));
+    const arrived = ids.filter((id) => !prev.has(id));
     seenVisibleRef.current = new Set(ids);
-    if (arrived && soundOn) beep(880);
-  }, [visibleKey, station, soundOn]);
+    if (arrived.length === 0 || !soundOnRef.current) return;
+    chime('new');
+    if (voiceOnRef.current) {
+      for (const id of arrived.slice(0, 3)) {
+        const o = visibleRef.current.find((x) => x.id === id);
+        if (o) speak(t('voice.newOrder', { channel: chipText(o, t), ticket: speakableTicket(o.order_number) }), speechLang(locale));
+      }
+    }
+  }, [visibleKey, station, chime, t, locale]);
+
+  /* Reminder: a shorter chime every 30 s (counted from the last chime of any kind, so it never
+     lands on top of an arrival) while a ticket waits in New unaccepted, or an accepted one arrived
+     in the last two minutes and nobody has touched the screen since (see reminderDue). Any tap or
+     key press on the board counts as seen for the tickets in New at that moment (heardOnTap). */
+  React.useEffect(() => {
+    const onGesture = () => {
+      for (const id of heardOnTap(visibleRef.current)) heardRef.current.add(id);
+    };
+    const opts: AddEventListenerOptions = { capture: true, passive: true };
+    window.addEventListener('pointerdown', onGesture, opts);
+    window.addEventListener('keydown', onGesture, opts);
+    return () => {
+      window.removeEventListener('pointerdown', onGesture, opts);
+      window.removeEventListener('keydown', onGesture, opts);
+    };
+  }, []);
+
+  React.useEffect(() => {
+    if (!soundOn) return;
+    const id = window.setInterval(() => {
+      const at = Date.now();
+      // Forget tickets that have left the board, so the set stays the size of the board.
+      const onBoardIds = new Set(ordersRef.current.map((o) => o.id));
+      for (const heardId of heardRef.current) if (!onBoardIds.has(heardId)) heardRef.current.delete(heardId);
+      if (at - lastChimeRef.current < REMINDER_INTERVAL_MS) return;
+      if (reminderDue(visibleRef.current, at, leadMsRef.current, heardRef.current)) chime('reminder');
+    }, REMINDER_CHECK_MS);
+    return () => window.clearInterval(id);
+  }, [soundOn, chime]);
+
+  /* Escalation: a low tone, once per ticket, when a ticket in New or Cooking turns late.
+     Tickets already late when the board loads (or when the station filter reveals them) are
+     only noted. */
+  React.useEffect(() => {
+    const ids = lateTicketIds(visible, now, leadMs);
+    const seen = lateSeenRef.current;
+    if (seen === null || lateStationRef.current !== station) {
+      lateSeenRef.current = new Set([...(seen ?? []), ...ids]);
+      lateStationRef.current = station;
+      return;
+    }
+    const fresh = ids.filter((id) => !seen.has(id));
+    for (const id of fresh) seen.add(id);
+    if (fresh.length > 0 && soundOnRef.current) chime('late');
+    // `visible` is rebuilt every render; its ids and the clock are what this rule reads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [now, visibleKey, station, leadMs, chime]);
+
   const byLane: Record<string, Order[]> = {
-    new: visible.filter((o) => o.status === 'pending' || o.status === 'confirmed'),
-    cooking: visible.filter((o) => o.status === 'preparing'),
-    ready: visible.filter((o) => o.status === 'ready'),
+    new: visible.filter((o) => laneOf(o.status) === 'new'),
+    cooking: visible.filter((o) => laneOf(o.status) === 'cooking'),
+    ready: visible.filter((o) => laneOf(o.status) === 'ready'),
   };
   // Newest order first (requested): the freshest tickets sit at the top of each lane.
   const newestFirst = (a: Order, b: Order) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   for (const k of Object.keys(byLane)) byLane[k]!.sort(newestFirst);
 
+  /* The tab title carries the New count, so a backgrounded tab (or a second monitor) still says
+     that tickets are waiting. The page's own title comes back when the board closes. */
+  const newCount = byLane.new!.length;
+  const baseTitle = t('header.title', { branch: branchName });
+  React.useEffect(() => {
+    const original = document.title;
+    return () => { document.title = original; };
+  }, []);
+  React.useEffect(() => {
+    const want = newCount > 0 ? `(${newCount}) ${baseTitle}` : baseTitle;
+    const apply = () => {
+      if (document.title !== want) document.title = want;
+    };
+    apply();
+    // Next writes the route's metadata title after hydration, which silently replaced the count
+    // with "Favornoms Merchant" until the next ticket arrived. Put it back whenever the head changes.
+    const observer = new MutationObserver(apply);
+    observer.observe(document.head, { subtree: true, childList: true, characterData: true });
+    return () => observer.disconnect();
+  }, [newCount, baseTitle]);
+
   /* station counts + "drowning" (any item on a station is Late/Critical) */
   const stationStat: Record<string, { count: number; drown: boolean }> = {};
   for (const s of stations) stationStat[s] = { count: 0, drown: false };
-  for (const o of orders) {
-    if (o.held || o.awaiting_payment || !ACTIVE_STATUSES.includes(o.status)) continue;
-    const lane = o.status === 'preparing' ? 'cooking' : o.status === 'ready' ? 'ready' : 'new';
-    const from = lane === 'ready' ? (readyAtRef.current[o.id] ?? mountNowRef.current) : workStartedMs(o, leadMs);
-    const tier = agingTier(safeElapsedSec(from, now), lane).tier;
+  for (const o of onBoard) {
+    const lane = laneOf(o.status);
+    const from = lane === 'ready' ? readyStartedMs(o, readyAtRef.current[o.id]) : workStartedMs(o, leadMs);
+    const tier = agingTierKey(safeElapsedSec(from, now), lane);
     for (const it of o.order_items) {
-      if (it.station && stationStat[it.station]) {
-        stationStat[it.station]!.count += 1;
-        if (tier === 'late' || tier === 'crit') stationStat[it.station]!.drown = true;
+      for (const s of lineStations(it, stations)) {
+        const stat = stationStat[s];
+        if (!stat) continue;
+        stat.count += 1;
+        if (tier === 'late' || tier === 'crit') stat.drown = true;
       }
     }
   }
 
-  /* batch groups across COOKING (optionally station-filtered) */
+  /* batch groups across COOKING (optionally station-filtered). A combo counts as the dishes
+     inside it: the cook makes two soups, not "a Family Meal". */
   const batchGroups = React.useMemo(() => {
     const map = new Map<string, { name: string; qty: number; sources: string[] }>();
+    const add = (name: string, mods: string, qty: number, ticket: string) => {
+      const sig = `${name}|${mods}`;
+      const g = map.get(sig) ?? { name, qty: 0, sources: [] };
+      g.qty += qty;
+      g.sources.push(`#${ticket} ×${qty}`);
+      map.set(sig, g);
+    };
     for (const o of byLane.cooking ?? []) {
+      const ticket = o.order_number.slice(-4);
       for (const it of o.order_items) {
-        if (station && it.station !== station) continue;
-        const sig = `${it.item_name}|${parseMods(it.modifiers).map((m) => m.label).sort().join(',')}`;
-        const g = map.get(sig) ?? { name: it.item_name, qty: 0, sources: [] };
-        g.qty += it.quantity;
-        g.sources.push(`#${o.order_number.slice(-4)} ×${it.quantity}`);
-        map.set(sig, g);
+        const parts = it.menu_item_id ? [] : parseComboContents(it.combo_contents);
+        if (parts.length > 0) {
+          for (const p of parts) {
+            if (station && p.station !== null && p.station !== station) continue;
+            add(p.name, '', p.quantity * it.quantity, ticket);
+          }
+          continue;
+        }
+        if (!lineMatchesStation(it, station)) continue;
+        add(it.item_name, parseMods(it.modifiers).map((m) => m.label).sort().join(','), it.quantity, ticket);
       }
     }
     return [...map.values()].sort((a, b) => b.qty - a.qty);
   }, [byLane.cooking, station]);
+
+  /* the sold-out strip: dishes 86'd at this branch whose time has not run out */
+  const liveSoldOut = soldOut.filter((s) => parseTimestamp(s.sold_out_until) > now);
+  const soldOutIds = new Set(liveSoldOut.map((s) => s.id));
+  const fmtUntil = (iso: string) => {
+    const at = parseTimestamp(iso);
+    if (!Number.isFinite(at)) return '';
+    const opts: Intl.DateTimeFormatOptions = at - Date.now() > 20 * 3600_000
+      ? { weekday: 'short', hour: '2-digit', minute: '2-digit' }
+      : { hour: '2-digit', minute: '2-digit' };
+    try {
+      return new Intl.DateTimeFormat(locale, { ...opts, timeZone: branchTimezone ?? undefined }).format(at);
+    } catch {
+      return new Intl.DateTimeFormat(locale, opts).format(at);
+    }
+  };
+
+  const soundLocked = soundOn && audioState === 'locked';
 
   return (
     <div className="flex min-h-dynamic-screen flex-col" style={{ background: SUN.page, color: SUN.text }}>
@@ -689,12 +1164,27 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
           {t('header.connectionLost')}
         </div>
       )}
+      {/* The browser keeps sound locked until someone touches the page, so a board that was
+          reloaded and left alone used to stay silent with nothing on screen to say so. No
+          onClick: the window-level unlock listeners handle the tap (and play the test chime once
+          the context starts), see the audio effect above. */}
+      {soundLocked && (
+        <button
+          type="button"
+          data-sound-unlock=""
+          className="flex w-full flex-wrap items-center justify-center gap-x-2 gap-y-0.5 px-4 py-2.5 text-sm font-semibold"
+          style={{ background: '#FFC53D', color: '#4A3000' }}
+        >
+          <Volume2 className="h-5 w-5" /> {t('header.soundLocked')}
+          <span className="text-xs font-normal" style={{ opacity: 0.8 }}>{t('header.soundLockedHint')}</span>
+        </button>
+      )}
       <header className="flex items-center gap-3 px-4 py-3 text-white" style={{ background: SUN.header }}>
         <span className="grid h-9 w-9 place-items-center rounded-[10px]" style={{ background: 'rgba(255,255,255,.24)' }}>
           <ChefHat className="h-5 w-5" />
         </span>
         <div className="leading-tight">
-          <h1 className="text-[15px] font-semibold">{t('header.title', { branch: branchName })}</h1>
+          <h1 className="text-[15px] font-semibold">{baseTitle}</h1>
           <p className="text-[11px] tracking-wide" style={{ opacity: 0.85 }}>
             {liveHealthy
               ? t('header.statusLive', { count: visible.length })
@@ -702,20 +1192,73 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
             {station ? ` · ${stationLabel(station)}` : ''}
           </p>
         </div>
-        <div className="ml-auto flex items-center gap-1.5">
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
           {scheduled.length > 0 && (
             <button onClick={() => setScheduledOpen(true)} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium" style={{ background: 'rgba(255,255,255,.24)' }}>
               <CalendarClock className="h-4 w-4" />{t('header.scheduled', { count: scheduled.length })}
             </button>
           )}
-          <OpsToggles branchId={branchId} onPaused={setPaused} />
+          <OpsToggles
+            branchId={branchId}
+            onSettings={onSettings}
+            onError={(key) => showToast(t(`toast.${key}`), null)}
+          />
           <LocaleSwitcher
             compact
             className="rounded-lg border-transparent bg-white/[.22] text-white [&_svg]:text-white"
           />
-          <HBtn onClick={() => setSoundOn((s) => !s)} label={soundOn ? t('header.mute') : t('header.unmute')}>
-            {soundOn ? <Volume2 className="h-[18px] w-[18px]" /> : <VolumeX className="h-[18px] w-[18px]" />}
-          </HBtn>
+          {soundOn ? (
+            <HBtn onClick={() => changeSound(false)} label={t('header.mute')}>
+              <Volume2 className="h-[18px] w-[18px]" />
+            </HBtn>
+          ) : (
+            // Muted is a state someone forgets: it stays on screen as words, not just an icon.
+            <button
+              type="button"
+              onClick={() => changeSound(true)}
+              title={t('header.unmute')}
+              aria-label={t('header.unmute')}
+              className="flex h-9 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold"
+              style={{ background: '#fff', color: '#C0382F' }}
+            >
+              <VolumeX className="h-4 w-4" />{t('header.soundOff')}
+            </button>
+          )}
+          <div className="relative">
+            <HBtn onClick={() => setSoundMenuOpen((o) => !o)} label={t('header.soundSettings')}>
+              <BellRing className="h-[18px] w-[18px]" />
+            </HBtn>
+            {soundMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setSoundMenuOpen(false)} />
+                <div
+                  className="absolute right-0 top-11 z-20 w-72 rounded-xl p-3 text-left"
+                  style={{ background: SUN.card, color: SUN.text, border: `1px solid ${SUN.cardBorder}`, boxShadow: '0 8px 24px rgba(0,0,0,.14)' }}
+                >
+                  <button
+                    type="button"
+                    onClick={testSound}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium"
+                    style={{ background: SUN.accentBg, color: SUN.accentTx }}
+                  >
+                    <Volume2 className="h-4 w-4" />{t('header.testSound')}
+                  </button>
+                  {canSpeak && (
+                    <label className="mt-2.5 flex cursor-pointer items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={voiceOn}
+                        onChange={(e) => changeVoice(e.target.checked)}
+                        className="h-4 w-4 accent-[#FF6B2C]"
+                      />
+                      {t('header.voice')}
+                    </label>
+                  )}
+                  <p className="mt-2.5 text-xs leading-snug" style={{ color: SUN.muted }}>{t('header.soundHelp')}</p>
+                </div>
+              </>
+            )}
+          </div>
           <HBtn onClick={toggleFs} label={t('header.fullscreen')}>{isFs ? <Minimize2 className="h-[18px] w-[18px]" /> : <Maximize2 className="h-[18px] w-[18px]" />}</HBtn>
         </div>
       </header>
@@ -728,7 +1271,7 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
 
       {/* station bar */}
       <div className="flex items-center gap-2 overflow-x-auto px-4 py-2.5" style={{ borderBottom: `1px solid ${SUN.line}` }}>
-        <StationPill label={t('stations.all')} count={visible.length} active={!station} onClick={() => setStationFilter(null)} />
+        <StationPill label={t('stations.all')} count={onBoard.length} active={!station} onClick={() => setStationFilter(null)} />
         {stations.map((s) => (
           <StationPill key={s} label={stationLabel(s)} count={stationStat[s]?.count ?? 0} drown={stationStat[s]?.drown} active={station === s} onClick={() => setStationFilter(s)} />
         ))}
@@ -736,6 +1279,30 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
           <Layers className="h-4 w-4" /> {t('batch.toggle')}
         </button>
       </div>
+
+      {/* 86'd dishes: what the kitchen has marked sold out, and the way back on sale without
+          leaving the board (the undo toast lasts six seconds). */}
+      {liveSoldOut.length > 0 && (
+        <div className="flex items-center gap-2 overflow-x-auto px-4 py-2" style={{ background: '#FFF1EE', borderBottom: `1px solid ${SUN.line}` }}>
+          <span className="flex shrink-0 items-center gap-1 text-[11px] font-semibold uppercase tracking-wide" style={{ color: '#C0382F' }}>
+            <Flame className="h-3.5 w-3.5" />{t('eightySix.title')}
+          </span>
+          {liveSoldOut.map((s) => (
+            <span key={s.id} className="flex shrink-0 items-center gap-2 rounded-full py-1 pl-3 pr-1 text-xs" style={{ background: SUN.card, border: '1px solid #F0A8A4', color: SUN.text }}>
+              <span className="font-medium">{s.name}</span>
+              <span style={{ color: SUN.faint }} suppressHydrationWarning>{t('eightySix.until', { time: fmtUntil(s.sold_out_until) })}</span>
+              <button
+                type="button"
+                onClick={() => void backOnSale(s)}
+                className="rounded-full px-2.5 py-1 text-[11px] font-medium"
+                style={{ background: '#DCF6E8', color: '#13794C' }}
+              >
+                {t('eightySix.backOnSale')}
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
 
       {batchOpen && (
         <div className="px-4 py-2.5" style={{ background: SUN.panel, borderBottom: `1px solid ${SUN.line}` }}>
@@ -772,14 +1339,17 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
                     lane={lane.key}
                     now={now}
                     station={station}
-                    readyAt={readyAtRef.current[order.id] ?? mountNowRef.current}
+                    readyAt={readyStartedMs(order, readyAtRef.current[order.id])}
                     workStartedAt={workStartedMs(order, leadMs)}
                     onAdvance={() => advance(order)}
                     onReject={() => reject(order)}
                     onRecall={() => recall(order)}
                     on86={eightySix}
+                    soldOutIds={soldOutIds}
+                    onTogglePrep={(item) => void togglePrep(order.id, item)}
                     onDispatch={(reset) => dispatchDriver(order.id, reset)}
                     drivers={drivers}
+                    canAssign={canAssign}
                     onAssign={assignDriver}
                   />
                 ))
@@ -799,7 +1369,7 @@ export function KitchenView({ branchId, branchName, initialOrders, stations, act
 
 function HBtn({ children, onClick, label }: { children: React.ReactNode; onClick: () => void; label: string }) {
   return (
-    <button onClick={onClick} aria-label={label} className="grid h-9 w-9 place-items-center rounded-lg" style={{ background: 'rgba(255,255,255,.22)', color: '#fff' }}>
+    <button type="button" onClick={onClick} aria-label={label} title={label} className="grid h-9 w-9 place-items-center rounded-lg" style={{ background: 'rgba(255,255,255,.22)', color: '#fff' }}>
       {children}
     </button>
   );
@@ -837,11 +1407,14 @@ function Column({ lane, count, children }: { lane: (typeof LANES)[number]; count
 const SEARCH_TIMEOUT_SEC = 120;
 
 function OrderCard({
-  order, lane, now, station, readyAt, workStartedAt, onAdvance, onReject, onRecall, on86, onDispatch, drivers, onAssign,
+  order, lane, now, station, readyAt, workStartedAt, onAdvance, onReject, onRecall, on86, soldOutIds, onTogglePrep,
+  onDispatch, drivers, canAssign, onAssign,
 }: {
   order: Order; lane: string; now: number; station: string | null; readyAt: number; workStartedAt: number;
-  onAdvance: () => void; onReject: () => void; onRecall: () => void; on86: (name: string) => void; onDispatch: (reset?: boolean) => void | Promise<void>;
-  drivers: DriverLite[]; onAssign: (deliveryId: string, driverId: string) => void | Promise<void>;
+  onAdvance: () => void; onReject: () => void; onRecall: () => void;
+  on86: (menuItemId: string, name: string) => void; soldOutIds: Set<string>; onTogglePrep: (item: OrderItem) => void;
+  onDispatch: (reset?: boolean) => void | Promise<void>;
+  drivers: DriverLite[]; canAssign: boolean; onAssign: (deliveryId: string, driverId: string) => void | Promise<void>;
 }) {
   const t = useTranslations('kitchen');
   const [menuOpen, setMenuOpen] = React.useState(false);
@@ -855,14 +1428,12 @@ function OrderCard({
   const chanKey = CHAN[order.channel] ? order.channel : 'pickup';
   const chan = CHAN[chanKey]!;
   const ChanIcon = chan.Icon;
-  const chanLabel = t(`channel.${chanKey}`);
-  const tableLabel = order.tables ? (order.tables.display_name || t('card.table', { table: order.tables.table_number })) : null;
-  const chipText = order.channel === 'dine_in' || order.channel === 'qr_ordering'
-    ? (tableLabel ?? chanLabel) : chanLabel;
+  const chip = chipText(order, t);
 
-  const items = station ? order.order_items.filter((it) => it.station === station) : order.order_items;
+  const items = order.order_items.filter((it) => lineMatchesStation(it, station));
   const totalLines = order.order_items.length;
-  const doneLines = order.order_items.filter((it) => it.prep_status === 'ready').length;
+  const doneLines = order.order_items.filter(isLineDone).length;
+  const targets = eightySixTargets(order.order_items);
 
   const noteRaw = [order.customer_notes, order.kitchen_notes].filter(Boolean).join(' · ');
   const isAllergy = noteRaw ? ALLERGY_RE.test(noteRaw) : false;
@@ -923,7 +1494,9 @@ function OrderCard({
       whileTap={cardClickable ? { scale: 0.99 } : undefined}
       role={cardClickable ? 'button' : undefined}
       tabIndex={cardClickable ? 0 : undefined}
-      onKeyDown={cardClickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onAdvance(); } } : undefined}
+      // Only a key pressed on the card itself: Enter on a button inside it (a line's tick, the
+      // ⋮ menu) must not also advance the order.
+      onKeyDown={cardClickable ? (e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onAdvance(); } } : undefined}
       className={`relative rounded-2xl ${cardClickable ? 'cursor-pointer' : ''}`}
       style={{ background: skin.bg, border: `1px solid ${skin.border}`, padding: '11px 12px 12px 16px', boxShadow: tg.ring ? '0 0 0 2px rgba(229,72,77,.5)' : undefined }}
     >
@@ -931,22 +1504,22 @@ function OrderCard({
 
       <div className="flex items-center gap-2">
         <span className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium uppercase tracking-wide" style={{ background: chan.bg, color: chan.c }}>
-          <ChanIcon className="h-3.5 w-3.5" />{chipText}
+          <ChanIcon className="h-3.5 w-3.5" />{chip}
         </span>
-        <span className="flex items-center gap-[3px]">
+        <span className="flex items-center gap-[3px]" aria-hidden>
           {Array.from({ length: totalLines }).map((_, i) => (
             <span key={i} className="h-[7px] w-[7px] rounded-full" style={{ background: i < doneLines ? '#23C16B' : 'rgba(0,0,0,.14)' }} />
           ))}
         </span>
         <TimerPill fromMs={fromMs} lane={lane} />
         <div className="relative" onClick={(e) => e.stopPropagation()}>
-          <button aria-label={t('card.moreActions')} onClick={() => setMenuOpen((m) => !m)} className="grid h-7 w-7 place-items-center rounded-lg" style={{ color: SUN.faint }}>
+          <button aria-label={t('card.moreActions')} title={t('card.moreActions')} onClick={() => setMenuOpen((m) => !m)} className="grid h-7 w-7 place-items-center rounded-lg" style={{ color: SUN.faint }}>
             <MoreVertical className="h-4 w-4" />
           </button>
           {menuOpen && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-              <div className="absolute right-0 top-8 z-20 w-52 overflow-hidden rounded-xl py-1 text-left text-sm" style={{ background: SUN.card, border: `1px solid ${SUN.cardBorder}`, boxShadow: '0 8px 24px rgba(0,0,0,.14)' }}>
+              <div className="absolute right-0 top-8 z-20 w-56 overflow-hidden rounded-xl py-1 text-left text-sm" style={{ background: SUN.card, border: `1px solid ${SUN.cardBorder}`, boxShadow: '0 8px 24px rgba(0,0,0,.14)' }}>
                 {/* Any ticket the pass has not started cooking can still be refused. Gating
                     this on 'pending' alone made Reject unreachable for exactly the orders a
                     cook most often has to refuse: payments_confirm_cash_order promotes every
@@ -964,12 +1537,21 @@ function OrderCard({
                 {isDelivery && order.status === 'ready' && (
                   <MenuRow onClick={() => { setMenuOpen(false); void handleDispatch(true); }}><Bike className="h-4 w-4" />{t('card.redispatch')}</MenuRow>
                 )}
-                <div className="px-3 pb-1 pt-1.5 text-[11px] font-medium uppercase tracking-wide" style={{ color: SUN.faint }}>{t('card.eightySixHeading')}</div>
-                {order.order_items.map((it) => (
-                  <MenuRow key={it.id} onClick={() => { setMenuOpen(false); on86(it.item_name); }}>
-                    <Flame className="h-4 w-4" />{it.item_name}
-                  </MenuRow>
-                ))}
+                {targets.length > 0 && (
+                  <>
+                    <div className="px-3 pb-1 pt-1.5 text-[11px] font-medium uppercase tracking-wide" style={{ color: SUN.faint }}>{t('card.eightySixHeading')}</div>
+                    {targets.map((x) => {
+                      const out = soldOutIds.has(x.id);
+                      return (
+                        <MenuRow key={x.id} disabled={out} onClick={() => { setMenuOpen(false); on86(x.id, x.name); }}>
+                          <Flame className="h-4 w-4 shrink-0" />
+                          <span className="flex-1 truncate">{x.name}</span>
+                          {out && <span className="shrink-0 text-[11px]" style={{ color: SUN.faint }}>{t('card.soldOut')}</span>}
+                        </MenuRow>
+                      );
+                    })}
+                  </>
+                )}
               </div>
             </>
           )}
@@ -988,11 +1570,28 @@ function OrderCard({
       <div className="mt-1">
         {items.map((it) => {
           const mods = parseMods(it.modifiers);
+          const parts = it.menu_item_id ? [] : parseComboContents(it.combo_contents);
+          const done = isLineDone(it);
+          const tickLabel = done ? t('card.markLineNotDone', { item: it.item_name }) : t('card.markLineDone', { item: it.item_name });
           return (
-            <div key={it.id} className="mt-1.5 flex items-baseline gap-2.5">
-              <span className="text-[21px] font-medium leading-none tabular-nums" style={{ color: SUN.qty }}>{it.quantity}×</span>
-              <div>
-                <div className="text-[15px] font-medium leading-tight" style={{ color: SUN.text }}>{it.item_name}</div>
+            <div key={it.id} className="mt-1.5 flex items-start gap-2.5">
+              <span className="text-[21px] font-medium leading-none tabular-nums" style={{ color: SUN.qty, opacity: done ? 0.5 : 1 }}>{it.quantity}×</span>
+              <div className="min-w-0 flex-1" style={done ? { opacity: 0.55 } : undefined}>
+                <div className={`text-[15px] font-medium leading-tight ${done ? 'line-through' : ''}`} style={{ color: SUN.text }}>{it.item_name}</div>
+                {/* A combo is cooked as its dishes: list them, each counted for the whole line.
+                    Under a station filter, the dishes another station makes are greyed. */}
+                {parts.length > 0 && (
+                  <ul className="mt-0.5">
+                    {parts.map((p, i) => {
+                      const here = !station || p.station === null || p.station === station;
+                      return (
+                        <li key={`${p.menu_item_id ?? p.name}-${i}`} className="text-[13px] leading-snug" style={{ color: here ? SUN.text : SUN.faint }}>
+                          · {p.quantity * it.quantity}× {p.name}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
                 {(mods.length > 0 || it.notes) && (
                   <div className="mt-0.5">
                     {mods.map((m, i) => (
@@ -1002,6 +1601,20 @@ function OrderCard({
                   </div>
                 )}
               </div>
+              {/* Tick a line off. It fills the progress dots above, on every tablet. */}
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onTogglePrep(it); }}
+                aria-label={tickLabel}
+                aria-pressed={done}
+                title={tickLabel}
+                className="grid h-7 w-7 shrink-0 place-items-center rounded-full"
+                style={done
+                  ? { background: '#23C16B', color: '#fff', border: '1.5px solid #23C16B' }
+                  : { background: 'rgba(255,255,255,.7)', color: 'rgba(0,0,0,.18)', border: '1.5px solid rgba(0,0,0,.18)' }}
+              >
+                <Check className="h-4 w-4" />
+              </button>
             </div>
           );
         })}
@@ -1040,7 +1653,9 @@ function OrderCard({
               <Bike className="h-4 w-4" /> {t('rider.find')}
             </button>
           )}
-          {canManualAssign && drivers.length > 0 && (
+          {/* Assigning a named rider is delivery.manage (staff_assign_driver checks it); the
+              kitchen role only finds one automatically. */}
+          {canAssign && canManualAssign && drivers.length > 0 && (
             <AssignPicker drivers={drivers} onAssign={(driverId) => onAssign(deliveryId!, driverId)} />
           )}
         </div>
@@ -1054,31 +1669,35 @@ function OrderCard({
 }
 
 /* The one thing on the board that has to move every second. It owns the 1s tick so the
-   clock cannot re-render the ticket around it — or the two hundred lines of card beside it. */
+   clock cannot re-render the ticket around it — or the two hundred lines of card beside it.
+   An old ticket shows its real age (hours, then days) and stays red. */
 function TimerPill({ fromMs, lane }: { fromMs: number; lane: string }) {
   const t = useTranslations('kitchen');
   const now = useTick(CLOCK_TICK_MS);
   const sec = safeElapsedSec(fromMs, now);
   const tg = agingTier(sec, lane);
   return (
-    <span className={`ml-auto whitespace-nowrap rounded-lg px-2 py-0.5 text-[17px] font-medium tabular-nums ${tg.pulse ? 'animate-pulse' : ''}`} style={{ background: tg.pill, color: tg.pc }}>
-      {fmtTimer(sec, (hours, minutes) => t('timer.hoursMinutes', { hours, minutes }))}
+    <span className={`ml-auto whitespace-nowrap rounded-lg px-2 py-0.5 text-[17px] font-medium tabular-nums ${tg.pulse ? 'animate-pulse' : ''}`} style={{ background: tg.pill, color: tg.pc }} suppressHydrationWarning>
+      {fmtTimer(sec, {
+        hoursMinutes: (hours, minutes) => t('timer.hoursMinutes', { hours, minutes }),
+        daysHours: (days, hours) => t('timer.daysHours', { days, hours }),
+      })}
     </span>
   );
 }
 
-function MenuRow({ children, onClick, danger }: { children: React.ReactNode; onClick: () => void; danger?: boolean }) {
+function MenuRow({ children, onClick, danger, disabled }: { children: React.ReactNode; onClick: () => void; danger?: boolean; disabled?: boolean }) {
   return (
-    <button onClick={onClick} className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-black/5" style={{ color: danger ? '#C0382F' : SUN.text }}>
+    <button type="button" onClick={onClick} disabled={disabled} className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-black/5 disabled:cursor-default disabled:opacity-60 disabled:hover:bg-transparent" style={{ color: danger ? '#C0382F' : SUN.text }}>
       {children}
     </button>
   );
 }
 
 /* Manual "assign a specific rider" picker (staff override of auto-dispatch).
-   Riders auto-dispatch can reach (online + GPS ping within 5 min) float to the
-   top; picking one sends them a targeted offer — that still works for online
-   riders with stale GPS, which auto-dispatch skips. */
+   Riders auto-dispatch can reach (online here + free + GPS ping within 5 min) float to the
+   top; picking one sends them a targeted offer — that still works for online riders with
+   stale GPS, which auto-dispatch skips. */
 const GPS_FRESH_MS = 5 * 60_000; // mirrors find_dispatch_candidates' staleness cutoff
 function AssignPicker({ drivers, onAssign }: { drivers: DriverLite[]; onAssign: (driverId: string) => void | Promise<void> }) {
   const t = useTranslations('kitchen');
@@ -1087,7 +1706,8 @@ function AssignPicker({ drivers, onAssign }: { drivers: DriverLite[]; onAssign: 
   const nowMs = Date.now(); // fresh each render — the list is only up while someone is picking
   const gpsAge = (d: DriverLite) => (d.location_updated_at ? nowMs - new Date(d.location_updated_at).getTime() : null);
   const rank = (d: DriverLite) => {
-    if (!d.is_online) return 2;
+    if (!d.is_online) return 3;
+    if (d.busy) return 2;
     const age = gpsAge(d);
     return age != null && age < GPS_FRESH_MS ? 0 : 1;
   };
@@ -1122,9 +1742,9 @@ function AssignPicker({ drivers, onAssign }: { drivers: DriverLite[]; onAssign: 
                     onClick={() => void pick(d.id)}
                     className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-black/5 disabled:opacity-60"
                   >
-                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: d.is_online ? '#23C16B' : '#CFC2B4' }} />
+                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: d.is_online ? (d.busy ? '#F5A623' : '#23C16B') : '#CFC2B4' }} />
                     <span className="flex-1 truncate" style={{ color: SUN.text }}>{d.full_name}</span>
-                    {d.is_online && (fresh ? (
+                    {d.is_online && !d.busy && (fresh ? (
                       <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium" style={{ background: '#DCF6E8', color: '#13794C' }}>
                         {age < 60_000 ? t('rider.gpsNow') : t('rider.gpsAge', { minutes: Math.floor(age / 60_000) })}
                       </span>
@@ -1137,9 +1757,11 @@ function AssignPicker({ drivers, onAssign }: { drivers: DriverLite[]; onAssign: 
                       ? <Loader2 className="h-3.5 w-3.5 animate-spin" style={{ color: SUN.faint }} />
                       : (
                         <span className="text-[11px] capitalize" style={{ color: SUN.faint }}>
-                          {d.is_online
-                            ? (VEHICLE_TYPES.includes(d.vehicle_type) ? t(`vehicle.${d.vehicle_type}`) : d.vehicle_type)
-                            : t('rider.offline')}
+                          {!d.is_online
+                            ? t('rider.offline')
+                            : d.busy
+                              ? t('rider.busy')
+                              : (VEHICLE_TYPES.includes(d.vehicle_type) ? t(`vehicle.${d.vehicle_type}`) : d.vehicle_type)}
                         </span>
                       )}
                   </button>
@@ -1210,19 +1832,4 @@ function ScheduledDrawer({ orders, onClose }: { orders: Order[]; onClose: () => 
       </motion.div>
     </motion.div>
   );
-}
-
-function beep(freq: number) {
-  try {
-    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    const ctx = new Ctx();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.frequency.value = freq;
-    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.4);
-    osc.start(); osc.stop(ctx.currentTime + 0.4);
-  } catch { /* autoplay may be blocked until first interaction */ }
 }

@@ -11,7 +11,7 @@
   },
   "empty": {
     "title": "Aún no hay clientes",
-    "description": "Cuando las personas hagan pedidos desde la app web para clientes, aparecerán aquí."
+    "description": "Las personas que inicien sesión o hagan pedidos en esta sucursal aparecerán aquí."
   },
   "emptyPage": {
     "title": "No hay nada en esta página",
@@ -25,7 +25,8 @@
     "orders": "Pedidos",
     "spent": "Gasto total",
     "lastSeen": "Última visita",
-    "joined": "Registro"
+    "joined": "Registro",
+    "points": "Puntos"
   },
   "address": {
     "lastDelivered": "Última entrega: {date}",
@@ -46,5 +47,100 @@
     "previous": "Anterior",
     "next": "Siguiente",
     "page": "Página {page} de {pages}"
+  },
+  "summaryFiltered": "{count, plural, one {# cliente coincide} other {# clientes coinciden}} con “{query}”",
+  "emptySearch": {
+    "title": "Ningún cliente coincide",
+    "description": "Nadie en esta sucursal coincide con “{query}”. Prueba con parte de un nombre, un teléfono o un correo.",
+    "action": "Mostrar a todos"
+  },
+  "search": {
+    "label": "Buscar clientes",
+    "placeholder": "Nombre, teléfono o correo",
+    "submit": "Buscar",
+    "clear": "Borrar"
+  },
+  "points": "{points, plural, one {# pt} other {# pts}}",
+  "unnamed": "Cliente sin nombre",
+  "nameFromOrder": "Nombre de su último pedido",
+  "phoneFromOrder": "De su último pedido",
+  "legend": "Todas las cifras son solo de esta sucursal. Pedidos y gasto cuentan los pedidos completados; la última visita es su pedido más reciente aquí que no se canceló; los puntos son los de fidelidad de esta sucursal.",
+  "detail": {
+    "title": "Cliente",
+    "unnamed": "Cliente sin nombre",
+    "since": "Cliente de esta sucursal desde {date}",
+    "walkInRecord": "Sin cuenta",
+    "nameFromOrder": "nombre de su último pedido",
+    "fromOrder": "de su último pedido",
+    "never": "Nunca",
+    "notFound": {
+      "title": "Cliente no encontrado",
+      "description": "Este cliente no está en la lista de esta sucursal."
+    },
+    "loadError": "No se pudo cargar este cliente. Recarga la página.",
+    "stats": {
+      "orders": "Pedidos completados",
+      "spent": "Gastado",
+      "lastSeen": "Última visita",
+      "points": "Puntos"
+    },
+    "contact": {
+      "title": "Contacto",
+      "phone": "Teléfono",
+      "email": "Correo",
+      "birthday": "Cumpleaños",
+      "marketing": "Marketing",
+      "consentYes": "Aceptó recibir mensajes de esta sucursal",
+      "consentNo": "No ha aceptado",
+      "none": "Sin registrar"
+    },
+    "orders": {
+      "title": "Pedidos en esta sucursal",
+      "empty": "Aún no hay pedidos en esta sucursal.",
+      "showing": "Los {shown} más recientes de {count, plural, one {# pedido} other {# pedidos}}"
+    },
+    "addresses": {
+      "title": "Direcciones guardadas",
+      "empty": "No hay direcciones guardadas.",
+      "default": "Predeterminada"
+    },
+    "loyalty": {
+      "title": "Fidelidad en esta sucursal",
+      "none": "Aún no ha ganado puntos en esta sucursal.",
+      "balance": "Saldo",
+      "earned": "Ganados",
+      "spent": "Canjeados",
+      "ledgerTitle": "Movimientos recientes de puntos",
+      "ledgerEmpty": "Aún no hay movimientos de puntos.",
+      "type": {
+        "earned": "Ganados",
+        "redeemed": "Canjeados",
+        "adjusted": "Ajuste",
+        "expired": "Vencidos"
+      },
+      "adjust": {
+        "open": "Ajustar puntos",
+        "title": "Ajustar los puntos de este miembro",
+        "add": "Sumar",
+        "remove": "Restar",
+        "pointsLabel": "Puntos",
+        "balanceNow": "Saldo actual: {points, plural, one {# punto} other {# puntos}}",
+        "reasonLabel": "Motivo",
+        "reasonPlaceholder": "p. ej., faltaron los puntos del pedido del viernes",
+        "reasonHint": "El miembro ve este motivo en su historial de puntos.",
+        "cancel": "Cancelar",
+        "submitAdd": "Sumar puntos",
+        "submitRemove": "Restar puntos",
+        "done": "Puntos actualizados. Nuevo saldo: {points, plural, one {# punto} other {# puntos}}.",
+        "error": {
+          "notAuthorized": "No tienes permiso para cambiar puntos en esta sucursal.",
+          "badDelta": "Escribe un número entero de puntos entre 1 y {max, number}.",
+          "badReason": "Indica un motivo de hasta {length, number} caracteres.",
+          "notInBranch": "Este cliente no está en la lista de esta sucursal, así que aquí no se pueden cambiar sus puntos.",
+          "insufficient": "Este miembro no tiene tantos puntos para restar.",
+          "generic": "No se pudieron cambiar los puntos. Inténtalo de nuevo."
+        }
+      }
+    }
   }
 }

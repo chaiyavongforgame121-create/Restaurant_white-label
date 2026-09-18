@@ -14,12 +14,20 @@ import {
   quoteDeliveryLocal,
   surgeIsUnreachable,
 } from '@favornoms/shared';
-import { getBrowserClient } from '@favornoms/database/client';
 import { Button, Card, RiderIcon } from '@favornoms/ui';
+import { useSettingsPatch } from './patch-settings';
 
 // Structured editor for the delivery keys inside branches.settings (jsonb).
-// Saves independently from the main BranchSettings form — merges keys, never
-// clobbers unrelated settings.
+// Saves independently from the main BranchSettings form, through patch_branch_settings, and
+// sends only the keys that changed. It used to write back every key it shows, including the
+// kitchen's Pause and Busy state as they were when this page loaded, so saving a fee here
+// un-paused a kitchen that had paused in the meantime.
+//
+// "Changed" is decided on the numbers Save would write, not on the stored ones: distances and
+// rates are shown in miles and $/mi rounded to 2 decimals and converted back, so an untouched
+// 8 km radius comes back as 7.9984 km. Compared with the row, every converted key looked changed
+// on every save and a stale tab still overwrote them. The card's own starting point is put
+// through the same rounding and conversion (shownPatch) and compared with that instead.
 
 interface Props {
   branchId: string;
@@ -85,24 +93,31 @@ const FIELDS: Array<{
   // the owner's request (2026-08-31) and quote_delivery no longer clamps, so a long delivery
   // now charges base + per-mile in full. Rider pay still stops at driver_max_pay, which is
   // why that one stayed.
-  { key: 'delivery_radius_km', msg: 'radius', hint: true, group: 'timing', step: '0.5', fallback: DELIVERY_SETTING_DEFAULTS.deliveryRadiusKm, convert: 'dist', max: 9_999_999_999 },
+  //
+  // BOUNDS (2026-09-18): the opened fields below had a max of 9,999,999,999, which only stopped
+  // nothing. They now stop at values far past any real delivery that still serve the owner's
+  // long-distance and dispatch testing: 500 mi of delivery radius, 12,500 mi of rider search
+  // (half the Earth's circumference, so every rider on the planet is still a candidate), 1,000
+  // dispatch rounds (hours of retrying), a day of GPS age and $1,000 of rider pay. A value
+  // already stored above its bound is shown as stored and left alone until someone edits it.
+  { key: 'delivery_radius_km', msg: 'radius', hint: true, group: 'timing', step: '0.5', fallback: DELIVERY_SETTING_DEFAULTS.deliveryRadiusKm, convert: 'dist', max: 500 },
     // group 'surge', not 'fees': this and the multiplier are one setting, and they were two
   // sections apart — the merchant read "Surge multiplier" with no distance beside it and
   // reported the distance field as missing. They now sit together.
-  { key: 'delivery_surge_from_mi', msg: 'surgeFrom', hint: true, group: 'surge', step: '0.5', fallback: 0, max: 9_999_999_999 },
+  { key: 'delivery_surge_from_mi', msg: 'surgeFrom', hint: true, group: 'surge', step: '0.5', fallback: 0, max: 500 },
   { key: 'prep_time_min', msg: 'prepTime', hint: true, group: 'timing', step: '1', fallback: DELIVERY_SETTING_DEFAULTS.prepTimeMin, max: 240, integer: true },
-  // These two are deliberately near-unbounded (owner's call): a huge search radius and a
-  // huge attempt count are how you force every driver to be a candidate while testing
-  // dispatch. They are safe to leave open because neither charges anyone money — unlike
-  // the fee fields above, which stay tightly capped.
-  { key: 'driver_search_radius_km', msg: 'searchRadius', hint: true, group: 'dispatch', step: '0.5', fallback: 3 * KM_PER_MILE, convert: 'dist', max: 9_999_999_999 },
-  { key: 'driver_max_attempts', msg: 'maxAttempts', hint: true, group: 'dispatch', step: '1', fallback: 3, max: 9_999_999_999, integer: true },
+  // These two are deliberately loose (owner's call): a huge search radius and a huge attempt
+  // count are how you force every driver to be a candidate while testing dispatch. They are
+  // safe to leave wide because neither charges anyone money — unlike the fee fields above,
+  // which stay tightly capped.
+  { key: 'driver_search_radius_km', msg: 'searchRadius', hint: true, group: 'dispatch', step: '0.5', fallback: 3 * KM_PER_MILE, convert: 'dist', max: 12_500 },
+  { key: 'driver_max_attempts', msg: 'maxAttempts', hint: true, group: 'dispatch', step: '1', fallback: 3, max: 1_000, integer: true },
   // find_dispatch_candidates refuses a rider whose last GPS fix is older than this. It was
   // a hardcoded 5 minutes, and the rider app only pings while it is OPEN and in the
   // foreground — so a rider who locks their phone becomes undispatchable in five minutes
   // while every screen still shows them online. That is what produced "No rider found" with
   // five riders online.
-  { key: 'dispatch_max_gps_age_min', msg: 'gpsAge', hint: true, group: 'dispatch', step: '1', fallback: 5, max: 9_999_999_999, integer: true },
+  { key: 'dispatch_max_gps_age_min', msg: 'gpsAge', hint: true, group: 'dispatch', step: '1', fallback: 5, max: 1_440, integer: true },
   { key: 'offer_ttl_seconds', msg: 'offerTimeout', hint: true, group: 'dispatch', step: '5', fallback: DELIVERY_SETTING_DEFAULTS.offerTtlSeconds, max: 300, integer: true },
   // Stored directly in miles (unlike the km-stored keys above) — the SQL pairing fn
   // claim_batch_sibling reads settings->>'batch_max_detour_mi' as miles.
@@ -110,8 +125,11 @@ const FIELDS: Array<{
   // branch_driver_pay_cap reads this key and falls back to $50. It had no editor, so the
   // ceiling that silently truncates a long delivery's pay could not be seen or moved from
   // the back office — which only became reachable once the radius above was opened.
-  { key: 'driver_max_pay', msg: 'maxPay', hint: true, group: 'pay', step: '1', fallback: 50, max: 9_999_999_999 },
+  { key: 'driver_max_pay', msg: 'maxPay', hint: true, group: 'pay', step: '1', fallback: 50, max: 1_000 },
 ];
+
+/** patch_branch_settings refuses busy_extra_prep_min outside 0..240 (22023). */
+const BUSY_MAX_MIN = 240;
 
 /** Rendered by hand beside the multiplier slider, not by the group loop. */
 const SURGE_FIELDS = FIELDS.filter((f) => f.group === 'surge');
@@ -164,34 +182,57 @@ function buildPatch(
     const stored = toStoredUnit(f.convert, display); // km / $-per-km equivalent
     patch[f.key] = f.integer ? Math.round(stored) : stored;
   }
-  patch.busy_extra_prep_min = Math.round(Math.max(0, Number(busyExtra) || 0));
+  patch.busy_extra_prep_min = Math.round(Math.min(BUSY_MAX_MIN, Math.max(0, Number(busyExtra) || 0)));
   patch.delivery_surge_multiplier = Math.min(2, Math.max(1, surge));
   return patch;
 }
 
+/** The inputs' starting text for each numeric field: the stored value in the display unit. */
+function initialValues(settings: Record<string, unknown> | undefined): Record<NumericKey, string> {
+  const out = {} as Record<NumericKey, string>;
+  for (const f of FIELDS) {
+    const raw = settings?.[f.key];
+    const n = typeof raw === 'string' ? Number(raw) : (raw as number | undefined);
+    const storedKm = typeof n === 'number' && Number.isFinite(n) ? n : f.fallback;
+    out[f.key] = String(round2disp(toDisplayUnit(f.convert, storedKm)));
+  }
+  return out;
+}
+
+function initialBusy(settings: Record<string, unknown> | undefined): string {
+  const n = Number(settings?.busy_extra_prep_min);
+  return Number.isFinite(n) && n > 0 ? String(n) : '0';
+}
+
+function initialSurge(settings: Record<string, unknown> | undefined): number {
+  const n = Number(settings?.delivery_surge_multiplier);
+  return Number.isFinite(n) && n >= 1 ? Math.min(2, n) : 1;
+}
+
+/**
+ * What Save would write if nothing on the card were touched. Save compares its patch with this,
+ * so an untouched field is never sent, whatever its unit round trip does to the number. A key
+ * the row does not have yet (no pause ever set) counts as what the card shows for it (off / 0);
+ * re-sending that would clear a pause the kitchen set after this page loaded.
+ */
+function shownPatch(settings: Record<string, unknown> | undefined): Record<string, number | boolean> {
+  return {
+    ...buildPatch(initialValues(settings), initialSurge(settings), initialBusy(settings)),
+    orders_paused: Boolean(settings?.orders_paused),
+    batch_enabled: Boolean(settings?.batch_enabled),
+  };
+}
+
 export function DeliverySettingsCard({ branchId, settings }: Props) {
   const t = useTranslations('branchOps');
+  const tb = useTranslations('branch');
   const router = useRouter();
-  const [values, setValues] = React.useState<Record<NumericKey, string>>(() => {
-    const out = {} as Record<NumericKey, string>;
-    for (const f of FIELDS) {
-      const raw = settings?.[f.key];
-      const n = typeof raw === 'string' ? Number(raw) : (raw as number | undefined);
-      const storedKm = typeof n === 'number' && Number.isFinite(n) ? n : f.fallback;
-      out[f.key] = String(round2disp(toDisplayUnit(f.convert, storedKm)));
-    }
-    return out;
-  });
+  const savePatch = useSettingsPatch(branchId, () => shownPatch(settings));
+  const [values, setValues] = React.useState<Record<NumericKey, string>>(() => initialValues(settings));
   const [paused, setPaused] = React.useState<boolean>(Boolean(settings?.orders_paused));
   const [batching, setBatching] = React.useState<boolean>(Boolean(settings?.batch_enabled));
-  const [busyExtra, setBusyExtra] = React.useState<string>(() => {
-    const n = Number(settings?.busy_extra_prep_min);
-    return Number.isFinite(n) && n > 0 ? String(n) : '0';
-  });
-  const [surge, setSurge] = React.useState<number>(() => {
-    const n = Number(settings?.delivery_surge_multiplier);
-    return Number.isFinite(n) && n >= 1 ? Math.min(2, n) : 1;
-  });
+  const [busyExtra, setBusyExtra] = React.useState<string>(() => initialBusy(settings));
+  const [surge, setSurge] = React.useState<number>(() => initialSurge(settings));
   const [saving, setSaving] = React.useState(false);
   const [savedAt, setSavedAt] = React.useState<number | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -222,21 +263,17 @@ export function DeliverySettingsCard({ branchId, settings }: Props) {
   const save = async () => {
     setSaving(true);
     setError(null);
-    const supabase = getBrowserClient();
-    const patch: Record<string, number | boolean> = {
+    // Compared with shownPatch(settings), then with what the last save wrote (useSettingsPatch).
+    const { error: updateError } = await savePatch({
       ...buildPatch(values, surge, busyExtra),
       orders_paused: paused,
       batch_enabled: batching,
-    };
-    // Merge into the existing jsonb — other settings keys stay untouched.
-    const { error: updateError } = await supabase
-      .from('branches')
-      .update({ settings: { ...settings, ...patch } })
-      .eq('id', branchId);
+    });
     setSaving(false);
     if (updateError) {
       console.error('Saving delivery settings failed', updateError);
-      setError(t(saveErrorKey(updateError)));
+      // invalid_setting_value: the only value the server bounds here is busy mode's minutes.
+      setError(updateError.code === '22023' ? tb('errors.busyMinutesRange', { max: BUSY_MAX_MIN }) : t(saveErrorKey(updateError)));
       return;
     }
     setSavedAt(Date.now());
@@ -316,6 +353,7 @@ export function DeliverySettingsCard({ branchId, settings }: Props) {
             <input
               type="number"
               min={0}
+              max={BUSY_MAX_MIN}
               step="5"
               inputMode="numeric"
               value={busyExtra}

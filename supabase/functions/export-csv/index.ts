@@ -1,5 +1,10 @@
 // Admin CSV export — orders / revenue / menu / payments / refunds / customers / loyalty.
-// Auth required + owner/admin/manager on the branch.
+// Auth required + the reports.view capability on the branch (my_capabilities, the same answer
+// the back office's sidebar and Reports screen get).
+//
+// Everything is this branch's alone. customers rows are per branch (a diner who uses two branches
+// has a row at each), so the customers file lists this branch's records with this branch's
+// totals and points; the loyalty file lists this branch's ledger only.
 //
 // Every kind except `customers` honours the ?from=&to= window the Reports screen is showing,
 // as branch-local calendar dates with `to` inclusive — the same contract as the six
@@ -12,6 +17,14 @@ import { billingInactiveBody, loadEntitlements } from '../_shared/entitlements.t
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
+
+// The same rules as packages/database/src/queries/customers.ts and the database's
+// private.is_placeholder_customer_name / private.is_synthetic_email, so the file names a
+// customer exactly as the Customers page does.
+const PLACEHOLDER_NAME = /^(walk[- ]?in|guest|customer|deleted user|table\s*\S+)$/i;
+const SYNTHETIC_EMAIL = /@([a-z0-9-]+\.)*favornoms\.local$/i;
+const PLACEHOLDER_PHONE = '+10000000000';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -30,28 +43,10 @@ Deno.serve(async (req) => {
 
   const authHeader = req.headers.get('Authorization') ?? '';
   if (!authHeader.startsWith('Bearer ')) return json({ error: 'auth_required' }, 401);
-  const supabase = createClient(SUPABASE_URL, authHeader.slice(7), {
-    auth: { persistSession: false },
-    global: { headers: { Authorization: authHeader } },
-  });
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
-  // Role check.
-  //
-  // This used to be `.select('role').eq('branch_id', branchId).maybeSingle()` with no
-  // user filter, leaning on RLS to narrow the rows. But staff_owner_manage lets an owner
-  // read EVERY staff row in their restaurant, so on any branch with more than one staff
-  // member the query matched several rows, maybeSingle() failed, `staff` came back null and
-  // the owner got 403 — i.e. the export was broken for precisely the people allowed to use
-  // it, and only ever worked on a branch staffed by exactly one person. Brooklyn returns 5.
-  //
-  // Resolve the CALLER's own membership explicitly instead, and honour the two ways a
-  // person can be staff on a branch: a row for that branch, or a restaurant-wide row
-  // (branch_id IS NULL) covering every branch of the restaurant.
   // Validate the caller's JWT with the SERVICE-ROLE client, passing the token explicitly.
-  // `supabase` above is built with the user's JWT standing in for the anon key, so calling
-  // getUser() on it sends that JWT as the apikey and comes back 401.
   const { data: authData } = await admin.auth.getUser(authHeader.slice(7));
   const uid = authData.user?.id;
   if (!uid) return json({ error: 'auth_required' }, 401);
@@ -63,29 +58,28 @@ Deno.serve(async (req) => {
     .maybeSingle();
   if (!branchRow) return json({ error: 'branch_not_found' }, 404);
 
-  const { data: memberships } = await admin
-    .from('staff_members')
-    .select('role, branch_id')
-    .eq('user_id', uid)
-    .eq('status', 'active')
-    .eq('restaurant_id', branchRow.restaurant_id);
-
-  // `admin` belongs here: role_capabilities grants it reports.view, so the sidebar shows it
-  // Reports and the screen renders the export buttons — leaving it out of this list meant
-  // the one role added after this function was written got a 403 from its own screen.
-  const allowed = (memberships ?? []).some(
-    (m) =>
-      ['owner', 'admin', 'manager'].includes(m.role as string) &&
-      (m.branch_id === branchId || m.branch_id === null),
-  );
-
-  // Platform admins operate across tenants and must not be locked out of a tenant's export.
-  let isPlatformAdmin = false;
-  if (!allowed) {
-    const { data: pa } = await supabase.rpc('is_platform_admin');
-    isPlatformAdmin = pa === true;
+  // Capability check, as the caller. my_capabilities is the one answer the whole back office
+  // uses for "what may this person do at this branch": it covers an owner row filed under any
+  // branch of the restaurant (an owner owns every branch), restaurant-wide rows, the
+  // restaurant's owner_user_id and platform admins, and it ignores suspended or removed rows.
+  // The hand-written
+  // staff_members check this replaces only accepted a row for exactly this branch, so the owner,
+  // whose row names the first branch, got 403 on every branch opened after it.
+  const asCaller = createClient(SUPABASE_URL, ANON_KEY, {
+    auth: { persistSession: false },
+    global: { headers: { Authorization: authHeader } },
+  });
+  const { data: caps, error: capsError } = await asCaller.rpc('my_capabilities', { p_branch_id: branchId });
+  if (capsError) {
+    console.error('my_capabilities failed', capsError.message);
+    return json({ error: 'not_authorized' }, 403);
   }
-  if (!allowed && !isPlatformAdmin) return json({ error: 'not_authorized' }, 403);
+  const capabilities = new Set(
+    ((caps ?? []) as unknown[]).map((c) =>
+      typeof c === 'string' ? c : String((c as Record<string, unknown>)?.my_capabilities ?? ''),
+    ),
+  );
+  if (!capabilities.has('reports.view')) return json({ error: 'not_authorized' }, 403);
 
   // Back-office data egress stops at suspension. Nothing is deleted — paying
   // restores the export immediately.
@@ -136,31 +130,59 @@ Deno.serve(async (req) => {
     headers = ['order_number', 'channel', 'source', 'status', 'customer_name', 'customer_phone', 'subtotal', 'discount_amount', 'promo_code', 'promo_discount', 'tax_amount', 'delivery_fee', 'service_fee', 'tip_amount', 'total', 'created_at', 'completed_at'];
     filename = `orders-${stamp}.csv`;
   } else if (kind === 'customers') {
+    // This branch's customer records with this branch's totals (completed orders), wallet and
+    // the name the Customers page shows: profile name, else the latest real name they gave on an
+    // order here, else their email. The address is where the food last went, else the default
+    // saved address. Every embed is pinned to this branch.
     const { data, error } = await admin
       .from('customers')
-      .select('id, full_name, phone, email, total_orders, total_spent, last_order_at, marketing_consent, created_at')
+      .select(
+        'id, full_name, phone, email, total_orders, total_spent, last_order_at, marketing_consent, created_at, ' +
+          'recent:orders(customer_name, customer_phone, created_at), ' +
+          'delivered:orders(delivery_address, created_at), ' +
+          'customer_addresses(address_line1, address_line2, city, state, postal_code, is_default, created_at), ' +
+          'loyalty_points(points_balance, tier)',
+      )
       .eq('branch_id', branchId)
+      .eq('recent.branch_id', branchId)
+      .order('created_at', { referencedTable: 'recent', ascending: false })
+      .limit(5, { referencedTable: 'recent' })
+      .eq('delivered.branch_id', branchId)
+      .eq('delivered.channel', 'delivery')
+      .not('delivered.delivery_address', 'is', null)
+      .order('created_at', { referencedTable: 'delivered', ascending: false })
+      .limit(1, { referencedTable: 'delivered' })
+      .eq('loyalty_points.branch_id', branchId)
       .order('total_spent', { ascending: false })
+      .order('id', { ascending: true })
       .limit(10000);
-    rows = data ?? []; queryError = error?.message ?? queryError;
-    headers = ['id', 'full_name', 'phone', 'email', 'total_orders', 'total_spent', 'last_order_at', 'marketing_consent', 'created_at'];
+    queryError = error?.message ?? queryError;
+    rows = ((data ?? []) as unknown as CustomerExportRow[]).map(customerCsvRow);
+    headers = [
+      'id', 'name', 'name_source', 'phone', 'email', 'address', 'total_orders', 'total_spent',
+      'last_order_at', 'points_balance', 'tier', 'marketing_consent', 'created_at',
+    ];
     filename = `customers-${stamp}.csv`;
   } else if (kind === 'loyalty') {
-    // Scoped by RESTAURANT, not branch. Loyalty is brand-wide by design (the owner-locked
-    // decision: points follow the diner across every branch of a restaurant), so every
-    // loyalty_transactions row carries restaurant_id and leaves branch_id NULL. Filtering
-    // on branch_id matched 0 of 19 live rows and made this export download an empty file.
+    // This branch's ledger only. Each branch runs its own loyalty programme, so a row belongs to
+    // exactly one branch; the old restaurant-wide filter mixed every branch's points into one
+    // file once a second branch existed.
     const { data, error } = await windowed(
       admin
         .from('loyalty_transactions')
-        .select('id, customer_id, points, balance_after, type, reference_type, reference_id, description, created_at')
-        .eq('restaurant_id', branchRow.restaurant_id),
+        .select('id, customer_id, points, balance_after, type, reference_type, reference_id, description, created_at, customers(full_name)')
+        .eq('branch_id', branchId),
       'created_at',
     )
       .order('created_at', { ascending: false })
       .limit(10000);
-    rows = data ?? []; queryError = error?.message ?? queryError;
-    headers = ['id', 'customer_id', 'points', 'balance_after', 'type', 'reference_type', 'reference_id', 'description', 'created_at'];
+    queryError = error?.message ?? queryError;
+    rows = ((data ?? []) as Array<Record<string, unknown> & { customers?: unknown }>).map((r) => {
+      const c = Array.isArray(r.customers) ? r.customers[0] : r.customers;
+      const { customers: _customers, ...rest } = r;
+      return { ...rest, customer_name: (c as { full_name?: string | null } | null)?.full_name ?? '' };
+    });
+    headers = ['id', 'customer_id', 'customer_name', 'points', 'balance_after', 'type', 'reference_type', 'reference_id', 'description', 'created_at'];
     filename = `loyalty-${stamp}.csv`;
   } else if (kind === 'revenue') {
     const { data, error } = await windowed(
@@ -314,6 +336,90 @@ Deno.serve(async (req) => {
     },
   });
 });
+
+interface CustomerExportRow {
+  id: string;
+  full_name: string | null;
+  phone: string | null;
+  email: string | null;
+  total_orders: number | null;
+  total_spent: number | null;
+  last_order_at: string | null;
+  marketing_consent: boolean | null;
+  created_at: string;
+  recent?: unknown;
+  delivered?: unknown;
+  customer_addresses?: unknown;
+  loyalty_points?: unknown;
+}
+
+const asList = <T>(value: unknown): T[] =>
+  Array.isArray(value) ? (value as T[]) : value ? [value as T] : [];
+
+const joinParts = (parts: unknown[]): string =>
+  parts
+    .map((p) => (typeof p === 'string' ? p.trim() : ''))
+    .filter((p) => p.length > 0)
+    .join(', ');
+
+/** One customers row as its CSV line, named and addressed the way the Customers page shows it. */
+function customerCsvRow(c: CustomerExportRow): Record<string, unknown> {
+  const recent = asList<{ customer_name: string | null; customer_phone: string | null; created_at: string }>(c.recent)
+    .slice()
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  const email = c.email?.trim() && !SYNTHETIC_EMAIL.test(c.email.trim()) ? c.email.trim() : '';
+  const profileName = c.full_name?.trim() ?? '';
+  const orderName =
+    recent.map((o) => o.customer_name?.trim() ?? '').find((n) => n !== '' && !PLACEHOLDER_NAME.test(n)) ?? '';
+  const name = profileName || orderName || email;
+  const nameSource = profileName ? 'profile' : orderName ? 'order' : email ? 'email' : '';
+  const phone =
+    c.phone?.trim() ||
+    recent.map((o) => o.customer_phone?.trim() ?? '').find((p) => p !== '' && p !== PLACEHOLDER_PHONE) ||
+    '';
+
+  const lastDelivery = asList<{ delivery_address: unknown; created_at: string }>(c.delivered)
+    .slice()
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+  const deliveredTo =
+    lastDelivery?.delivery_address && typeof lastDelivery.delivery_address === 'object'
+      ? (() => {
+          const a = lastDelivery.delivery_address as Record<string, unknown>;
+          return joinParts([a.line1, a.line2, a.city, a.state, a.postal_code]);
+        })()
+      : '';
+  const saved = asList<{
+    address_line1: string | null;
+    address_line2: string | null;
+    city: string | null;
+    state: string | null;
+    postal_code: string | null;
+    is_default: boolean | null;
+    created_at: string;
+  }>(c.customer_addresses)
+    .slice()
+    .sort((a, b) => Number(!!b.is_default) - Number(!!a.is_default) || b.created_at.localeCompare(a.created_at))[0];
+  const savedAt = saved
+    ? joinParts([saved.address_line1, saved.address_line2, saved.city, saved.state, saved.postal_code])
+    : '';
+  const wallet = asList<{ points_balance: number | null; tier: string | null }>(c.loyalty_points)[0];
+
+  return {
+    id: c.id,
+    name,
+    name_source: nameSource,
+    phone,
+    email,
+    address: deliveredTo || savedAt,
+    total_orders: c.total_orders ?? 0,
+    total_spent: c.total_spent ?? 0,
+    last_order_at: c.last_order_at,
+    points_balance: wallet ? (wallet.points_balance ?? 0) : '',
+    tier: wallet?.tier ?? '',
+    marketing_consent: c.marketing_consent ?? false,
+    created_at: c.created_at,
+  };
+}
 
 /** Step whole days from a YYYY-MM-DD, anchored at noon UTC so a DST shift cannot move it. */
 function addDay(day: string, delta: number): string {

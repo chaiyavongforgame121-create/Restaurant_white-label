@@ -1,9 +1,9 @@
 import { getTranslations } from 'next-intl/server';
-import { getEntitlementsForBranch } from '@favornoms/database/queries';
+import { getEntitlementsForBranch, isPlatformAdmin } from '@favornoms/database/queries';
 import { getBranchAccess } from '@/lib/capabilities';
 import { AccessDenied } from '@/components/access-denied';
 import { branchMenuLink } from '../qr/_lib/menu-url';
-import { BrandsManager } from './_components/brands-manager';
+import { BrandsManager, type CopyCaps } from './_components/brands-manager';
 
 interface Props { params: Promise<{ branchId: string }> }
 
@@ -13,7 +13,7 @@ export default async function BrandsPage({ params }: Props) {
   // Only the sidebar used to hide this page. A manager who typed the URL still got the brand
   // editor and the Add branch button, which opens a paid branch seat. Ask for the same
   // capability the sidebar and the brands RLS policies use.
-  const { supabase, branch, can } = await getBranchAccess(branchId, `/b/${branchId}/brands`);
+  const { supabase, user, branch, can } = await getBranchAccess(branchId, `/b/${branchId}/brands`);
   if (!can('brand.edit')) {
     return (
       <AccessDenied
@@ -23,7 +23,7 @@ export default async function BrandsPage({ params }: Props) {
     );
   }
 
-  const [brandsRes, branchesRes, restaurantRes, entitlements] = await Promise.all([
+  const [brandsRes, branchesRes, restaurantRes, entitlements, myRowsRes, platformAdmin] = await Promise.all([
     supabase
       .from('brands')
       .select(
@@ -39,16 +39,67 @@ export default async function BrandsPage({ params }: Props) {
       .order('created_at', { ascending: true }),
     supabase
       .from('restaurants')
-      .select('id, name, slug, loyalty_scope, storefront, brand_settings')
+      .select('id, name, slug, storefront, brand_settings, owner_user_id')
       .eq('id', branch.restaurant_id)
       .maybeSingle(),
     getEntitlementsForBranch(supabase, branchId),
+    supabase
+      .from('staff_members')
+      .select('role, branch_id')
+      .eq('user_id', user.id)
+      .eq('restaurant_id', branch.restaurant_id)
+      .eq('status', 'active'),
+    isPlatformAdmin(supabase),
   ]);
+
+  // The restaurant row (storefront defaults) and the brand are shared by every branch, so their
+  // policies (private.user_administers_restaurant) take the owner or an admin of every branch,
+  // not an admin pinned to one. Mirrored here only to lock the editors instead of letting a save
+  // bounce; the policies are the boundary.
+  const canEditShared =
+    platformAdmin ||
+    restaurantRes.data?.owner_user_id === user.id ||
+    (myRowsRes.data ?? []).some((r) => r.role === 'owner' || (r.branch_id === null && r.role === 'admin'));
+
+  // What the Add branch dialog may copy from each active branch: copy_branch_setup asks for
+  // menu.manage and branch.settings at the source (loyalty.manage for the loyalty programme).
+  // Offering a branch the viewer cannot copy from let create_branch take a paid seat and the copy
+  // fail with not_authorized straight after. Owners and platform admins copy from anywhere; anyone
+  // else is asked per branch they have a row at (every branch with a restaurant-wide row).
+  const myRows = myRowsRes.data ?? [];
+  const copiesFromAnywhere =
+    platformAdmin || restaurantRes.data?.owner_user_id === user.id || myRows.some((r) => r.role === 'owner');
+  const restaurantWideRow = myRows.some((r) => r.branch_id === null);
+  const copyCapsEntries = await Promise.all(
+    (branchesRes.data ?? [])
+      .filter((b) => b.is_active)
+      .map(async (b): Promise<[string, CopyCaps]> => {
+        if (copiesFromAnywhere) return [b.id, { menu: true, settings: true, loyalty: true }];
+        if (b.id === branchId) {
+          return [b.id, { menu: can('menu.manage'), settings: can('branch.settings'), loyalty: can('loyalty.manage') }];
+        }
+        if (!restaurantWideRow && !myRows.some((r) => r.branch_id === b.id)) {
+          return [b.id, { menu: false, settings: false, loyalty: false }];
+        }
+        const { data } = await supabase.rpc('my_capabilities', { p_branch_id: b.id });
+        const caps = (data ?? []) as string[];
+        return [
+          b.id,
+          {
+            menu: caps.includes('menu.manage'),
+            settings: caps.includes('branch.settings'),
+            loyalty: caps.includes('loyalty.manage'),
+          },
+        ];
+      }),
+  );
+  const copyCaps: Record<string, CopyCaps> = Object.fromEntries(copyCapsEntries);
 
   const restaurantSlug = restaurantRes.data?.slug;
   const branches = (branchesRes.data ?? []).map((b) => ({
     id: b.id,
     name: b.name,
+    slug: b.slug,
     brand_id: b.brand_id,
     is_active: b.is_active,
     timezone: b.timezone,
@@ -77,12 +128,9 @@ export default async function BrandsPage({ params }: Props) {
       newBrand={{ name: newBrandName, theme: newBrandTheme }}
       // Display only: a failed read falls back to the word for "restaurant" in the viewer's language.
       restaurantName={restaurantRes.data?.name ?? t('restaurantFallback')}
-      loyaltyScope={
-        // Fallback matches the column default ('brand'), so a failed read never
-        // renders the opposite of what the database will actually enforce.
-        (restaurantRes.data?.loyalty_scope as 'branch' | 'brand') ?? 'brand'
-      }
       currentBranchId={branchId}
+      canEditShared={canEditShared}
+      copyCaps={copyCaps}
       brands={(brandsRes.data ?? []) as never}
       branches={branches}
       storefront={(restaurantRes.data?.storefront ?? {}) as Record<string, unknown>}

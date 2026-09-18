@@ -27,7 +27,7 @@ export default async function PlatformPage() {
   // Scope the child reads to the rows actually being rendered, so the result
   // sets are consistent by construction instead of by four limits.
   const [restaurantsRes, branchesRes, subsRes, catalog] = await Promise.all([
-    supabase.from('restaurants').select('id, franchise_group_id, loyalty_scope').in('id', ids),
+    supabase.from('restaurants').select('id, franchise_group_id').in('id', ids),
     // The closure filters are on the EMBEDDED resource, so they prune the child
     // rows to the window that is open right now without dropping the branch.
     supabase
@@ -73,7 +73,8 @@ export default async function PlatformPage() {
     createdAt: row.created_at,
     ent: row.entitlements,
     franchise: Boolean(meta.get(row.restaurant_id)?.franchise_group_id),
-    loyaltyScope: meta.get(row.restaurant_id)?.loyalty_scope ?? 'branch',
+    // Loyalty is always per branch (restaurants.loyalty_scope is pinned to 'branch' and legacy).
+    loyaltyScope: 'branch',
     cancelAtPeriodEnd: subs.get(row.restaurant_id)?.cancel_at_period_end === true,
   }));
 

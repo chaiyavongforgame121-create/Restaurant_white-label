@@ -5,6 +5,8 @@ import { customerSortQuery, type CustomerSort } from '@favornoms/shared';
 interface Props {
   basePath: string;
   sort: CustomerSort;
+  /** The search the list is filtered by, kept on every page link. */
+  q?: string;
   page: number;
   pageSize: number;
   total: number;
@@ -17,12 +19,12 @@ const PILL =
  * Plain links rather than a client component: the page is already a server render
  * per sort state, so paging is just another URL and needs no JavaScript to work.
  */
-export function CustomersPager({ basePath, sort, page, pageSize, total }: Props) {
+export function CustomersPager({ basePath, sort, q, page, pageSize, total }: Props) {
   const t = useTranslations('customers.pager');
   const pages = Math.max(1, Math.ceil(total / pageSize));
   if (pages <= 1) return null;
 
-  const href = (target: number) => `${basePath}${customerSortQuery({ ...sort, page: target })}`;
+  const href = (target: number) => `${basePath}${customerSortQuery({ ...sort, q, page: target })}`;
   const first = (page - 1) * pageSize + 1;
   const last = Math.min(total, page * pageSize);
 

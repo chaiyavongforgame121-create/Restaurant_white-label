@@ -110,6 +110,8 @@
     "maxAttempts": "Tried every rider — raise “Max dispatch attempts” or assign one by hand.",
     "notEntitled": "Delivery isn’t included in this restaurant’s plan.",
     "notDispatchable": "This delivery is no longer waiting for a rider.",
+    "authRequired": "Your sign-in has expired. Sign in again, then search for a rider.",
+    "notAuthorized": "You don’t have permission to send riders for this branch.",
     "failed": "Couldn’t search for a rider. Try again.",
     "noneAvailable": "No rider available right now.",
     "noPin": "This branch has no map pin yet — set it in Branch settings.",

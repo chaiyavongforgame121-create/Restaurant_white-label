@@ -1,7 +1,8 @@
 {
   "loading": "Cargando…",
   "signInPrompt": "Inicia sesión para ver tus puntos y recompensas de {brandName}.",
-  "yourPoints": "Tus puntos",
+  "yourPoints": "Tus puntos en {brandName}",
+  "branchNote": "Los puntos, las recompensas y los niveles son independientes en cada sucursal. Los puntos que ganes en {brandName} solo se pueden usar aquí.",
   "loadingTier": "Cargando nivel",
   "memberBadge": "Miembro {tier}",
   "rewardsReady": "{count, plural, one {# recompensa lista para canjear} other {# recompensas listas para canjear}}",
@@ -15,7 +16,7 @@
     "earnFallback": "Gana puntos sobre el subtotal de cada pedido completado.",
     "landing": "Los puntos se suman <strong>cuando el pedido se completa</strong>; los pedidos en preparación o en camino todavía no cuentan.",
     "checkout": "Al pagar, elige <strong>una recompensa</strong> de la lista de arriba: sus puntos se descuentan de tu saldo y el descuento se aplica a ese pedido.",
-    "redeemed": "Los puntos canjeados salen de tu saldo al instante, pero el movimiento aparece en <strong>Actividad reciente</strong> cuando ese pedido se completa.",
+    "redeemed": "Los puntos canjeados salen de tu saldo al instante y aparecen en <strong>Actividad reciente</strong>. Si ese pedido se cancela antes de completarse, los puntos vuelven a tu saldo.",
     "climb": "Sigue pidiendo para subir de nivel y desbloquear más beneficios."
   },
   "activity": {

@@ -15,16 +15,26 @@ export interface CustomerSort {
 
 export interface CustomerListParams extends CustomerSort {
   page: number;
+  /** Free-text search over name, phone and email. Absent when the list is not filtered. */
+  q?: string;
 }
+
+/** Longer than any name, phone or email a merchant would type into the search box. */
+export const CUSTOMER_SEARCH_MAX = 80;
 
 export const DEFAULT_CUSTOMER_SORT: CustomerSortKey = 'spent';
 
-/** The public.customers column each key orders by. */
+/**
+ * The public.customers column each key orders by. `name` sorts on sort_name, the name the list
+ * shows, lower-cased and stored by the database (the profile name, else a real email), so a row
+ * the page names by its email files under that email rather than after every named row. Only a
+ * row known by neither sorts last.
+ */
 export const CUSTOMER_SORT_COLUMNS = {
   spent: 'total_spent',
   orders: 'total_orders',
   last_seen: 'last_order_at',
-  name: 'full_name',
+  name: 'sort_name',
   joined: 'created_at',
 } as const satisfies Record<CustomerSortKey, string>;
 
@@ -65,21 +75,32 @@ export function parseCustomerSort(input: {
   sort?: string;
   dir?: string;
   page?: string;
+  q?: string;
 }): CustomerListParams {
   const sort = (CUSTOMER_SORT_KEYS as readonly string[]).includes(input.sort ?? '')
     ? (input.sort as CustomerSortKey)
     : DEFAULT_CUSTOMER_SORT;
   const dir: SortDir = input.dir === 'asc' || input.dir === 'desc' ? input.dir : defaultDirFor(sort);
   const page = Math.max(1, Math.floor(Number(input.page) || 1));
-  return { sort, dir, page };
+  const q = normalizeCustomerSearch(input.q);
+  // Only present when set, so an unfiltered list parses to exactly { sort, dir, page }.
+  return q ? { sort, dir, page, q } : { sort, dir, page };
+}
+
+/** The search box's text, trimmed, with runs of whitespace collapsed and a length cap. */
+export function normalizeCustomerSearch(raw: string | null | undefined): string {
+  return (raw ?? '').replace(/\s+/g, ' ').trim().slice(0, CUSTOMER_SEARCH_MAX);
 }
 
 /**
  * Query string for a sort state, with the defaults omitted so the canonical URL
  * of the list stays bare and only a deliberate choice survives into a shared link.
+ * A search term rides along, so paging and re-sorting a filtered list keep the filter.
  */
-export function customerSortQuery(state: CustomerSort & { page?: number }): string {
+export function customerSortQuery(state: CustomerSort & { page?: number; q?: string }): string {
   const sp = new URLSearchParams();
+  const q = normalizeCustomerSearch(state.q);
+  if (q) sp.set('q', q);
   if (state.sort !== DEFAULT_CUSTOMER_SORT) sp.set('sort', state.sort);
   if (state.dir !== defaultDirFor(state.sort)) sp.set('dir', state.dir);
   if (state.page && state.page > 1) sp.set('page', String(state.page));

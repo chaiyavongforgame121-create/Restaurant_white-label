@@ -34,12 +34,11 @@ export function AccountView({
   base,
   brandName,
   branchId,
-  restaurantId,
 }: {
   base: string;
   brandName: string;
+  /** Scopes the profile read: the diner's record here is this branch's own row. */
   branchId: string;
-  restaurantId: string;
 }) {
   const { user, loading } = useAuth();
   const router = useRouter();
@@ -77,8 +76,9 @@ export function AccountView({
   // get_or_create_my_customer, a SECURITY DEFINER routine whose adoption step matches on
   // an unverified phone. Fine as a deliberate act at checkout or settings; not something
   // to fire on a passive page view that also happens to be the post-sign-in landing page.
-  // customers is UNIQUE on (restaurant_id, user_id), so this resolves the same single row
-  // every other surface uses.
+  // customers is UNIQUE on (branch_id, user_id): each branch keeps its own record of the diner,
+  // so this resolves the same single row every other surface of THIS branch uses. No row yet
+  // (first visit here) leaves the profile empty until settings or checkout creates it.
   React.useEffect(() => {
     if (!user) return;
     let cancelled = false;
@@ -88,7 +88,7 @@ export function AccountView({
         .from('customers')
         .select('full_name, phone')
         .eq('user_id', user.id)
-        .eq('restaurant_id', restaurantId)
+        .eq('branch_id', branchId)
         .maybeSingle();
       if (cancelled) return;
       if (data) setProfile({ full_name: data.full_name, phone: data.phone });
@@ -97,7 +97,7 @@ export function AccountView({
     return () => {
       cancelled = true;
     };
-  }, [user, restaurantId]);
+  }, [user, branchId]);
 
   React.useEffect(() => {
     if (!user) return;

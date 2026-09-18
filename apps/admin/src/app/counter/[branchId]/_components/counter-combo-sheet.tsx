@@ -1,15 +1,19 @@
 'use client';
 
 import * as React from 'react';
-import Image from 'next/image';
 import { useTranslations } from 'next-intl';
 import { Minus, Plus } from 'lucide-react';
 import { formatCurrency } from '@favornoms/shared';
 import type { ComboSet } from '@favornoms/database/queries';
 import { Button, Sheet } from '@favornoms/ui';
+import { ComboArt } from './combo-art';
 
 interface Props {
   combo: ComboSet | null;
+  /** The dishes' photos, shown when the combo has none of its own. */
+  dishImages?: string[];
+  /** False when a dish in it is switched off, 86'd or short of stock (v_active_combos). */
+  available?: boolean;
   onClose: () => void;
   onAdd: (args: { combo: ComboSet; quantity: number; notes: string }) => void;
 }
@@ -22,22 +26,30 @@ interface Props {
  * what is in the deal and what it saves against ringing the dishes up separately -- the
  * number a customer asks about when the poster says one thing and the till says another.
  */
-export function CounterComboSheet({ combo, onClose, onAdd }: Props) {
+export function CounterComboSheet({
+  combo,
+  dishImages = [],
+  available = true,
+  onClose,
+  onAdd,
+}: Props) {
   const t = useTranslations('counter');
   const [qty, setQty] = React.useState(1);
   const [notes, setNotes] = React.useState('');
 
+  // Keyed on the id: a live menu refresh hands the sheet a fresh object for the same combo.
+  const comboId = combo?.id ?? null;
   React.useEffect(() => {
-    if (!combo) return;
+    if (!comboId) return;
     setQty(1);
     setNotes('');
-  }, [combo]);
+  }, [comboId]);
 
   const commit = React.useCallback(() => {
-    if (!combo) return;
+    if (!combo || !available) return;
     onAdd({ combo, quantity: qty, notes: notes.trim() });
     onClose();
-  }, [combo, onAdd, qty, notes, onClose]);
+  }, [combo, available, onAdd, qty, notes, onClose]);
 
   // Same keyboard contract as the item sheet: Enter adds, the note box keeps its own Enter.
   React.useEffect(() => {
@@ -71,15 +83,9 @@ export function CounterComboSheet({ combo, onClose, onAdd }: Props) {
     >
       {combo && (
       <div className="space-y-4 px-5 pb-8">
-        {combo.image_url && (
+        {(combo.image_url || dishImages.length > 0) && (
           <div className="relative aspect-[16/9] overflow-hidden rounded-2xl">
-            <Image
-              src={combo.image_url}
-              alt={combo.name}
-              fill
-              sizes="(max-width:640px) 100vw, 28rem"
-              className="object-cover"
-            />
+            <ComboArt combo={combo} dishImages={dishImages} sizes="(max-width:640px) 100vw, 28rem" />
           </div>
         )}
 
@@ -92,6 +98,12 @@ export function CounterComboSheet({ combo, onClose, onAdd }: Props) {
           )}
         </div>
 
+        {!available && (
+          <p role="alert" className="bg-danger/10 text-danger rounded-xl px-3 py-2 text-sm">
+            {t('combo.soldOut')}
+          </p>
+        )}
+
         <div className="border-border rounded-2xl border p-3">
           <p className="text-muted-foreground text-xs font-semibold uppercase tracking-wider">
             {t('combo.contents')}
@@ -101,6 +113,12 @@ export function CounterComboSheet({ combo, onClose, onAdd }: Props) {
               <li key={it.menu_item_id} className="flex justify-between gap-3 text-sm">
                 <span>
                   {it.quantity}× {it.item_name}
+                  {/* Which dish is holding the deal up, so the cashier can offer a swap. */}
+                  {it.is_available === false && (
+                    <span className="text-danger ml-1.5 text-xs font-semibold">
+                      {t('menu.soldOut')}
+                    </span>
+                  )}
                 </span>
                 <span className="text-muted-foreground tabular-nums">
                   {formatCurrency(it.list_price * it.quantity)}
@@ -153,7 +171,7 @@ export function CounterComboSheet({ combo, onClose, onAdd }: Props) {
           </div>
         </div>
 
-        <Button variant="gradient" size="xl" fullWidth onClick={commit}>
+        <Button variant="gradient" size="xl" fullWidth disabled={!available} onClick={commit}>
           {t('sheet.add', { qty, total: formatCurrency(lineTotal) })}
         </Button>
       </div>

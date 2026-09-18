@@ -1,4 +1,4 @@
-import type { ReceiptInput } from './escpos';
+import { receiptPaymentLabel, type ReceiptInput } from './escpos';
 
 /**
  * Fallback when WebUSB isn't available: open a print-friendly window with the
@@ -44,7 +44,7 @@ export function printReceiptViaBrowser(input: ReceiptInput) {
     lines.push(padTo('Sales tax', `${input.taxAmount.toFixed(2)} ${currency}`, 42));
   if (input.tipAmount) lines.push(padTo('Tip', `${input.tipAmount.toFixed(2)} ${currency}`, 42));
   lines.push(padTo('TOTAL', `${input.total.toFixed(2)} ${currency}`, 42));
-  lines.push(`Paid via ${input.paymentMethod}`);
+  lines.push(`Paid via ${receiptPaymentLabel(input.paymentMethod)}`);
   if (input.cashTendered !== undefined) {
     lines.push(padTo('Tendered', `${input.cashTendered.toFixed(2)} ${currency}`, 42));
     lines.push(

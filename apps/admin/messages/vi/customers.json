@@ -11,7 +11,7 @@
   },
   "empty": {
     "title": "Chưa có khách hàng",
-    "description": "Khi khách đặt hàng qua ứng dụng web dành cho khách, họ sẽ xuất hiện ở đây."
+    "description": "Những người đăng nhập hoặc đặt món tại chi nhánh này sẽ xuất hiện ở đây."
   },
   "emptyPage": {
     "title": "Trang này không có dữ liệu",
@@ -25,7 +25,8 @@
     "orders": "Đơn hàng",
     "spent": "Tổng chi tiêu",
     "lastSeen": "Ghé gần nhất",
-    "joined": "Ngày tham gia"
+    "joined": "Ngày tham gia",
+    "points": "Điểm"
   },
   "address": {
     "lastDelivered": "Giao gần nhất {date}",
@@ -46,5 +47,100 @@
     "previous": "Trước",
     "next": "Tiếp",
     "page": "Trang {page}/{pages}"
+  },
+  "summaryFiltered": "{count, plural, other {# khách hàng}} khớp với “{query}”",
+  "emptySearch": {
+    "title": "Không có khách hàng phù hợp",
+    "description": "Không ai ở chi nhánh này khớp với “{query}”. Hãy thử một phần tên, số điện thoại hoặc email.",
+    "action": "Hiển thị tất cả"
+  },
+  "search": {
+    "label": "Tìm khách hàng",
+    "placeholder": "Tên, số điện thoại hoặc email",
+    "submit": "Tìm",
+    "clear": "Xóa"
+  },
+  "points": "{points, plural, other {# điểm}}",
+  "unnamed": "Khách hàng chưa có tên",
+  "nameFromOrder": "Tên từ đơn gần nhất",
+  "phoneFromOrder": "Từ đơn gần nhất",
+  "legend": "Mọi con số chỉ tính riêng chi nhánh này. Đơn hàng và chi tiêu tính các đơn đã hoàn tất; ghé gần nhất là đơn gần nhất tại đây không bị hủy; điểm là điểm thành viên của chi nhánh này.",
+  "detail": {
+    "title": "Khách hàng",
+    "unnamed": "Khách hàng chưa có tên",
+    "since": "Khách của chi nhánh này từ {date}",
+    "walkInRecord": "Không có tài khoản",
+    "nameFromOrder": "tên từ đơn gần nhất",
+    "fromOrder": "từ đơn gần nhất",
+    "never": "Chưa bao giờ",
+    "notFound": {
+      "title": "Không tìm thấy khách hàng",
+      "description": "Khách hàng này không có trong danh sách của chi nhánh này."
+    },
+    "loadError": "Không tải được khách hàng này. Hãy tải lại trang.",
+    "stats": {
+      "orders": "Đơn đã hoàn tất",
+      "spent": "Đã chi",
+      "lastSeen": "Ghé gần nhất",
+      "points": "Điểm"
+    },
+    "contact": {
+      "title": "Liên hệ",
+      "phone": "Điện thoại",
+      "email": "Email",
+      "birthday": "Sinh nhật",
+      "marketing": "Tiếp thị",
+      "consentYes": "Đồng ý nhận tin từ chi nhánh này",
+      "consentNo": "Chưa đồng ý",
+      "none": "Chưa có"
+    },
+    "orders": {
+      "title": "Đơn tại chi nhánh này",
+      "empty": "Chưa có đơn nào tại chi nhánh này.",
+      "showing": "{shown} đơn gần nhất trong {count, plural, other {# đơn}}"
+    },
+    "addresses": {
+      "title": "Địa chỉ đã lưu",
+      "empty": "Không có địa chỉ đã lưu.",
+      "default": "Mặc định"
+    },
+    "loyalty": {
+      "title": "Điểm thành viên tại chi nhánh này",
+      "none": "Chưa tích điểm tại chi nhánh này.",
+      "balance": "Số dư",
+      "earned": "Đã tích",
+      "spent": "Đã dùng",
+      "ledgerTitle": "Hoạt động điểm gần đây",
+      "ledgerEmpty": "Chưa có hoạt động điểm.",
+      "type": {
+        "earned": "Tích điểm",
+        "redeemed": "Đổi điểm",
+        "adjusted": "Điều chỉnh",
+        "expired": "Hết hạn"
+      },
+      "adjust": {
+        "open": "Điều chỉnh điểm",
+        "title": "Điều chỉnh điểm của thành viên này",
+        "add": "Cộng",
+        "remove": "Trừ",
+        "pointsLabel": "Số điểm",
+        "balanceNow": "Số dư hiện tại: {points, number} điểm",
+        "reasonLabel": "Lý do",
+        "reasonPlaceholder": "VD: Đơn hôm thứ Sáu chưa được cộng điểm",
+        "reasonHint": "Thành viên sẽ thấy lý do này trong lịch sử điểm của họ.",
+        "cancel": "Hủy",
+        "submitAdd": "Cộng điểm",
+        "submitRemove": "Trừ điểm",
+        "done": "Đã cập nhật điểm. Số dư mới: {points, number} điểm.",
+        "error": {
+          "notAuthorized": "Bạn không có quyền thay đổi điểm tại chi nhánh này.",
+          "badDelta": "Nhập số điểm là số nguyên từ 1 đến {max, number}.",
+          "badReason": "Nhập lý do, tối đa {length, number} ký tự.",
+          "notInBranch": "Khách hàng này không có trong danh sách của chi nhánh này nên không thể thay đổi điểm tại đây.",
+          "insufficient": "Thành viên này không đủ điểm để trừ số điểm đó.",
+          "generic": "Không thể thay đổi điểm. Vui lòng thử lại."
+        }
+      }
+    }
   }
 }

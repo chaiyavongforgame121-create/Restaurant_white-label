@@ -45,7 +45,14 @@ interface Props {
   menuItems: MenuItem[];
 }
 
-type DbErrorKey = 'permissionDenied' | 'network' | 'duplicate' | 'inUse' | 'invalidValue' | 'generic';
+type DbErrorKey =
+  | 'permissionDenied'
+  | 'network'
+  | 'duplicate'
+  | 'inUse'
+  | 'branchMismatch'
+  | 'invalidValue'
+  | 'generic';
 
 /** Raw PostgREST text never reaches the merchant: known codes get a translated sentence. */
 function dbErrorKey(err: { code?: string; message?: string }): DbErrorKey {
@@ -54,6 +61,9 @@ function dbErrorKey(err: { code?: string; message?: string }): DbErrorKey {
   if (/failed to fetch|networkerror|network request failed/i.test(message)) return 'network';
   if (err.code === '23505') return 'duplicate';
   if (err.code === '23503') return 'inUse';
+  // trg_menu_item_modifiers_same_branch (23514): a group may only be put on dishes of its own
+  // branch. Checked before the generic 23xxx line, which would call it an invalid value.
+  if (/modifier_group_branch_mismatch/.test(message)) return 'branchMismatch';
   if (err.code && /^(22|23)/.test(err.code)) return 'invalidValue';
   return 'generic';
 }

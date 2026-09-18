@@ -8,22 +8,10 @@
     "title": "Brand & branches",
     "subtitle": "The brand name, colors and default images for {restaurant}, plus its branches. Each branch sets its own logo and app icon in its Branch settings."
   },
-  "loyalty": {
-    "title": "Loyalty pool",
-    "description": "Choose whether loyalty points are shared across all branches (default) or scoped to one branch.",
-    "modes": {
-      "brand": "Brand",
-      "branch": "Branch"
-    },
-    "modeHints": {
-      "brand": "Points pool across all branches of this restaurant.",
-      "branch": "Points are earned and redeemed within a single branch."
-    }
-  },
   "storefront": {
-    "title": "Storefront appearance",
+    "title": "Default storefront look",
     "saved": "Saved ✓",
-    "description": "How the menu looks to customers. Applies to every branch of this restaurant.",
+    "description": "The menu layout and hero every branch shows until it sets its own in Branch settings → Menu layout. A branch’s own look always wins.",
     "menuLayout": "Menu layout",
     "cardStyle": "Card style",
     "heroTitle": "Hero headline",
@@ -46,7 +34,7 @@
     "offlineHidden": "Storefront offline while hidden",
     "settings": "Settings",
     "empty": "No branches yet.",
-    "copyNote": "A new branch can copy the menu, opening hours and payment settings of an existing one. Its map pin and table QR codes are never copied — set those in the new branch’s settings."
+    "copyNote": "A new branch can copy the menu, opening hours, payment, delivery and tax settings, the look and the loyalty programme of an existing one. Its map pin, table QR codes, payment QR, stock counts, staff and customers are never copied — set those up at the new branch."
   },
   "brandList": {
     "default": "Default",
@@ -72,25 +60,23 @@
       "brand": "Brand (optional)",
       "brandNone": "— None —",
       "startFrom": "Start from",
-      "startFromNothing": "Nothing (an empty branch)"
-    },
-    "timezones": {
-      "eastern": "Eastern (New York)",
-      "central": "Central (Chicago)",
-      "mountain": "Mountain (Denver)",
-      "mountainNoDst": "Mountain — no DST (Phoenix)",
-      "pacific": "Pacific (Los Angeles)",
-      "alaska": "Alaska (Anchorage)",
-      "hawaii": "Hawaii (Honolulu)"
+      "startFromNothing": "Nothing (an empty branch)",
+      "slugHint": "Part of the storefront web address. Lowercase letters, numbers and hyphens.",
+      "timezoneHint": "Opening hours, scheduling and daily reports use this zone. It starts on this device’s zone."
     },
     "copy": {
       "menu": "Copy menu",
-      "menuHint": "Categories, items and their option groups",
+      "menuHint": "Categories, items, option groups and combos. Stock tracking starts off until you count stock there.",
       "hours": "Copy opening hours",
       "hoursHint": "The weekly hours, not one-off closures",
-      "settings": "Copy payment and delivery settings",
-      "settingsHint": "Payment methods, delivery, tips and service fee",
-      "notCopied": "Address, map pin, logo, app icon, colours and table QR codes are not copied."
+      "settings": "Copy settings",
+      "settingsHint": "Payment methods, delivery, tips, service fee, sales tax, prep time, dine-in and scheduling",
+      "notCopied": "Address, map pin, logo, app icon, payment QR, stock counts, staff, customers, loyalty points and table QR codes are not copied.",
+      "look": "Copy the look",
+      "lookHint": "Colours, menu layout and hero. Each branch uploads its own logo and app icon.",
+      "qrNever": "The payment QR is never copied: it is the other branch’s bank account. Bank transfer stays off at the new branch until it uploads its own QR.",
+      "loyalty": "Copy the loyalty programme",
+      "loyaltyHint": "Points rate, tiers, perks and the rewards list. Members and their points stay at their own branch. A free-item reward needs the menu copied too."
     },
     "close": "Close",
     "cancel": "Cancel",
@@ -106,20 +92,42 @@
       "noBranchId": "The branch was created, but the reply did not say which branch it was, so nothing was copied into it. Close this and set the branch up in its own settings.",
       "copyMenuNotEmpty": "The branch was created, but copying from {source} failed: the new branch already has menu items. Untick “Copy menu” and retry to copy the rest, or close this and set the branch up in its own settings.",
       "copyFailed": "The branch was created, but copying from {source} failed. You can retry the copy, or close this and set the branch up in its own settings.",
-      "generic": "Something went wrong. Please try again."
+      "generic": "Something went wrong. Please try again.",
+      "invalidSlug": "The URL slug can use only lowercase letters, numbers and single hyphens, 2 to 64 characters, like downtown-2.",
+      "invalidTimezone": "That time zone is not recognised. Pick one from the list.",
+      "invalidTaxRate": "The sales tax rate must be from 0% up to 50%.",
+      "invalidBrand": "That brand is not part of this restaurant. Choose another or none.",
+      "copyNotAuthorized": "The branch was created, but you are not allowed to copy from {source}. Close this and set the branch up in its own settings."
     }
   },
   "created": {
     "title": "Branch created",
     "copiedFrom": "Copied into {name} from {source}:",
-    "copiedFromUnknown": "Copied into {name} from the source branch:",
     "menu": "{categories, plural, one {# category} other {# categories}}, {items, plural, one {# menu item} other {# menu items}} and {groups, plural, one {# option group} other {# option groups}}",
     "hours": "{count, plural, one {# opening-hours window} other {# opening-hours windows}}",
-    "settingsCopied": "Payment, delivery, tip and service fee settings",
+    "settingsCopied": "Payment, delivery, tip, service fee, sales tax, prep time, dine-in and scheduling settings",
     "settingsNone": "No payment or delivery settings: the source branch has none saved",
-    "todo": "Still to do at the new branch: drop its map pin and set up its table QR codes. Those are never copied.",
     "done": "Done",
-    "openSettings": "Open its settings"
+    "openSettings": "Open its settings",
+    "combos": "{count, plural, one {# combo} other {# combos}}",
+    "scheduleWindows": "{count, plural, one {# booking window for scheduled orders} other {# booking windows for scheduled orders}}",
+    "lookCopied": "Colours, menu layout and hero",
+    "empty": "{name} starts empty: no menu, no opening hours (open around the clock) and the standard settings.",
+    "transferOff": "Bank transfer is off here: the payment QR belongs to the other branch and was not copied. Upload this branch’s own QR in its settings, then switch transfer on.",
+    "stockOff": "{count, plural, one {# item tracked stock at the source branch. Tracking is off here} other {# items tracked stock at the source branch. Tracking is off here}} until you count stock at the new branch.",
+    "todoTitle": "Still to do at {name}:",
+    "todo": {
+      "pin": "Drop its map pin (delivery fees and riders are measured from it)",
+      "tables": "Set up its tables and print their QR codes",
+      "tax": "Check the sales tax rate ({rate})",
+      "paymentQr": "Upload its own payment QR if it takes bank transfers",
+      "stock": "Count stock, then switch stock tracking on",
+      "staff": "Invite its staff (cashier, kitchen)",
+      "riders": "Approve riders for this branch",
+      "loyalty": "Set up its loyalty programme and rewards"
+    },
+    "loyaltyCopied": "{count, plural, =0 {The loyalty programme settings (no rewards)} one {The loyalty programme and # reward} other {The loyalty programme and # rewards}}",
+    "rewardsSkipped": "{count, plural, one {# free-item reward was not copied because its dish was not copied. Create it again once the menu is in place.} other {# free-item rewards were not copied because their dishes were not copied. Create them again once the menu is in place.}}"
   },
   "editor": {
     "title": "Edit brand",
@@ -151,5 +159,8 @@
   "errors": {
     "generic": "Something went wrong. Please try again.",
     "permissionDenied": "You don’t have permission to do that."
+  },
+  "shared": {
+    "ownerOnly": "Only the restaurant owner or an admin of every branch can change these shared settings. You can still add a branch."
   }
 }

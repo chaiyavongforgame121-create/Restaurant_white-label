@@ -10,10 +10,11 @@
 // We DO NOT auto-insert. The admin must confirm.
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
-import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2';
 import { billingInactiveBody, loadEntitlements } from '../_shared/entitlements.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 const MODEL = Deno.env.get('ANTHROPIC_MODEL') ?? 'claude-haiku-4-5-20251001';
@@ -40,23 +41,23 @@ Deno.serve(async (req) => {
     return cors(json({ error: 'image_url_and_branch_id_required' }, 400));
   }
 
-  // Verify caller is owner/manager of the branch.
+  // The caller must be allowed to manage this branch's menu.
+  //
+  // This used to read `staff_members where branch_id = <branch>` through RLS and maybeSingle()
+  // the result. It never filtered on the caller, so on a branch with several staff rows the owner
+  // (who may read them all) got an error back and a 403; and every owner row is pinned to the
+  // first branch, so at a second branch there was no row to find at all. my_capabilities answers
+  // with the rule RLS uses (owner anywhere in the restaurant, restaurant-wide rows, this branch's
+  // rows, owner_user_id, platform admin; active rows only).
   const authHeader = req.headers.get('Authorization') ?? '';
   if (!authHeader.startsWith('Bearer ')) {
     return cors(json({ error: 'auth_required' }, 401));
   }
-  const userJwt = authHeader.slice(7);
-  const supabase = createClient(SUPABASE_URL, userJwt, {
+  const userClient = createClient(SUPABASE_URL, ANON_KEY, {
     auth: { persistSession: false },
-    global: { headers: { Authorization: `Bearer ${userJwt}` } },
+    global: { headers: { Authorization: authHeader } },
   });
-
-  const { data: staffRow } = await supabase
-    .from('staff_members')
-    .select('role')
-    .eq('branch_id', body.branch_id)
-    .maybeSingle();
-  if (!staffRow || !['owner', 'manager'].includes(staffRow.role)) {
+  if (!(await hasCapability(userClient, body.branch_id, 'menu.manage'))) {
     return cors(json({ error: 'not_authorized' }, 403));
   }
 
@@ -165,6 +166,17 @@ async function proposeItems(imageUrl: string, hint?: string): Promise<ProposedIt
   const items = (toolUse.input?.items ?? []) as ProposedItem[];
   if (!Array.isArray(items) || items.length === 0) throw new Error('no_items_extracted');
   return items.slice(0, 200);
+}
+
+/** Does the signed-in caller hold `capability` at this branch? Fails closed. */
+async function hasCapability(
+  client: SupabaseClient,
+  branchId: string,
+  capability: string,
+): Promise<boolean> {
+  const { data, error } = await client.rpc('my_capabilities', { p_branch_id: branchId });
+  if (error || !Array.isArray(data)) return false;
+  return (data as unknown[]).includes(capability);
 }
 
 function json(body: unknown, status = 200) {

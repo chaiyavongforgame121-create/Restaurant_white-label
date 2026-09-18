@@ -1,7 +1,8 @@
 {
   "loading": "Đang tải…",
   "signInPrompt": "Đăng nhập để xem điểm và phần thưởng của bạn tại {brandName}.",
-  "yourPoints": "Điểm của bạn",
+  "yourPoints": "Điểm của bạn tại {brandName}",
+  "branchNote": "Điểm, phần thưởng và hạng được tính riêng ở từng chi nhánh. Điểm bạn tích tại {brandName} chỉ dùng được ở đây.",
   "loadingTier": "Đang tải hạng",
   "memberBadge": "Thành viên {tier}",
   "rewardsReady": "{count, plural, other {# phần thưởng có thể đổi}}",
@@ -15,7 +16,7 @@
     "earnFallback": "Tích điểm trên tạm tính của mọi đơn hàng đã hoàn tất.",
     "landing": "Điểm được cộng <strong>khi đơn hàng hoàn tất</strong> — đơn đang chuẩn bị hoặc đang giao chưa được tính.",
     "checkout": "Khi thanh toán, chọn <strong>một phần thưởng</strong> trong danh sách trên — số điểm tương ứng sẽ được trừ khỏi số dư và đơn hàng đó được giảm giá.",
-    "redeemed": "Điểm đã đổi được trừ khỏi số dư ngay, nhưng giao dịch chỉ hiện trong <strong>Hoạt động gần đây</strong> khi đơn hàng đó hoàn tất.",
+    "redeemed": "Điểm đã đổi được trừ khỏi số dư ngay và hiện trong <strong>Hoạt động gần đây</strong>. Nếu đơn hàng đó bị hủy trước khi hoàn tất, điểm sẽ được hoàn lại.",
     "climb": "Tiếp tục đặt hàng để lên hạng và mở khóa thêm ưu đãi."
   },
   "activity": {

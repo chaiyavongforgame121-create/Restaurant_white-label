@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BranchRider, LiveDelivery } from '@favornoms/database/queries';
-import type { DeliveryAssignmentRef } from './live-ops-model';
+import type { DeliveryAssignmentRef, DispatchFailure } from './live-ops-model';
 import {
   ageSpan,
   boardCounts,
@@ -466,6 +466,29 @@ describe('describeDispatchFailure', () => {
         },
       }),
     ).toEqual({ key: 'outOfRangeMiles', values: { online: 2, miles: 5 } });
+  });
+
+  it('names the two refusals instead of "try again"', () => {
+    expect(describeDispatchFailure({ error: 'auth_required' })).toEqual({ key: 'authRequired' });
+    expect(describeDispatchFailure({ error: 'not_authorized' })).toEqual({ key: 'notAuthorized' });
+  });
+
+  it('reads the status when the gateway, not dispatch-driver, answered', () => {
+    const invalidJwt = { code: 401, message: 'Invalid JWT' } as DispatchFailure;
+    expect(describeDispatchFailure(invalidJwt, 401)).toEqual({ key: 'authRequired' });
+    expect(describeDispatchFailure({}, 403)).toEqual({ key: 'notAuthorized' });
+    // A gateway 5xx is a failure to log, not "no rider available".
+    expect(describeDispatchFailure({ message: 'boom' } as DispatchFailure, 502)).toEqual({
+      key: 'failed',
+      code: 'http_502',
+    });
+    expect(describeDispatchFailure(null)).toEqual({ key: 'failed' });
+  });
+
+  it('still says "no rider" when dispatch-driver found none but sent no diagnostics', () => {
+    expect(describeDispatchFailure({ error: 'no_drivers_available', diagnostics: null }, 503)).toEqual({
+      key: 'noneAvailable',
+    });
   });
 
   it('keeps an unknown server code for the log instead of printing it', () => {

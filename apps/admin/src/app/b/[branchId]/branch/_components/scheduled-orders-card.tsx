@@ -14,6 +14,7 @@ import {
   type WeekdayWindow,
 } from '@favornoms/shared';
 import { Button, Card } from '@favornoms/ui';
+import { useSettingsPatch } from './patch-settings';
 
 // Scheduling policy for this branch. Merges its own keys into branches.settings and never
 // clobbers the rest, matching ServiceFeeCard.
@@ -140,6 +141,8 @@ export function ScheduledOrdersCard({ branchId, settings }: Props) {
   const locale = isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE;
   const days = React.useMemo(() => weekdayNames(intlLocaleFor(locale)), [locale]);
   const router = useRouter();
+  // Sends only what changed since this card was rendered or last saved.
+  const savePatch = useSettingsPatch(branchId, settings);
   const [enabled, setEnabled] = React.useState<boolean>(
     settings?.scheduling_enabled === undefined
       ? DEFAULTS.scheduling_enabled
@@ -246,20 +249,15 @@ export function ScheduledOrdersCard({ branchId, settings }: Props) {
       }
     }
 
-    const { error: updateError } = await supabase
-      .from('branches')
-      .update({
-        settings: {
-          ...settings,
-          scheduling_enabled: enabled,
-          schedule_hours_enabled: windowsEnabled,
-          schedule_min_lead_min: Math.max(0, Math.min(24 * 60, intOr(minLead, DEFAULTS.schedule_min_lead_min))),
-          schedule_max_days: Math.max(0, Math.min(365, intOr(maxDays, DEFAULTS.schedule_max_days))),
-          schedule_slot_minutes: Math.max(5, Math.min(60, intOr(slot, DEFAULTS.schedule_slot_minutes))),
-          schedule_lead_time_min: Math.max(0, Math.min(7 * 24 * 60, intOr(kitchenLead, 15))),
-        },
-      })
-      .eq('id', branchId);
+    // Only the keys that changed, merged on the server into the row as it is now.
+    const { error: updateError } = await savePatch({
+      scheduling_enabled: enabled,
+      schedule_hours_enabled: windowsEnabled,
+      schedule_min_lead_min: Math.max(0, Math.min(24 * 60, intOr(minLead, DEFAULTS.schedule_min_lead_min))),
+      schedule_max_days: Math.max(0, Math.min(365, intOr(maxDays, DEFAULTS.schedule_max_days))),
+      schedule_slot_minutes: Math.max(5, Math.min(60, intOr(slot, DEFAULTS.schedule_slot_minutes))),
+      schedule_lead_time_min: Math.max(0, Math.min(7 * 24 * 60, intOr(kitchenLead, 15))),
+    });
     setSaving(false);
     if (updateError) {
       console.error('Saving scheduling settings failed', updateError);

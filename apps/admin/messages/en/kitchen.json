@@ -12,7 +12,14 @@
     "unmute": "Unmute",
     "fullscreen": "Fullscreen",
     "connectionLost": "Connection lost — reconnecting. New tickets may not appear until this clears.",
-    "ordersPaused": "Orders paused — customers cannot order while this is on."
+    "ordersPaused": "Orders paused — customers cannot order while this is on.",
+    "soundOff": "Sound off",
+    "soundLocked": "Tap to enable order sounds",
+    "soundLockedHint": "The browser keeps this screen silent until someone touches it.",
+    "soundSettings": "Sound settings",
+    "testSound": "Test sound",
+    "voice": "Read new orders aloud",
+    "soundHelp": "A chime plays for every new order. It repeats every 30 seconds while a ticket in New has not been accepted. An accepted ticket reminds for up to 2 minutes, or until someone touches the screen. A low tone plays once when a ticket runs late."
   },
   "stations": {
     "all": "All",
@@ -52,10 +59,14 @@
     "redispatch": "Re-dispatch (start over)",
     "eightySixHeading": "86 an item",
     "stacked": "🔗 Stacked · stop {stop} — pack both bags for one rider",
-    "allergyNote": "Allergy / note: {note}"
+    "allergyNote": "Allergy / note: {note}",
+    "markLineDone": "Mark {item} done",
+    "markLineNotDone": "Mark {item} not done",
+    "soldOut": "Sold out"
   },
   "timer": {
-    "hoursMinutes": "{hours}h {minutes}m"
+    "hoursMinutes": "{hours}h {minutes}m",
+    "daysHours": "{days}d {hours}h"
   },
   "rider": {
     "finding": "Finding a rider…",
@@ -71,7 +82,8 @@
     "gpsAge": "GPS {minutes}m",
     "gpsStale": "GPS stale",
     "gpsStaleHint": "No GPS ping in the last 5 min — auto-dispatch skips this rider; a targeted offer still works",
-    "offline": "Offline"
+    "offline": "Offline",
+    "busy": "On a delivery"
   },
   "vehicle": {
     "motorcycle": "Motorcycle",
@@ -97,7 +109,6 @@
     "recallTooFar": "Couldn’t recall #{ticket} — it’s too far along.",
     "recallWindowPassed": "Couldn’t recall #{ticket} — the recall window has passed.",
     "recallFailed": "Couldn’t recall #{ticket}. Try again.",
-    "eightySixNotFound": "Couldn’t find “{item}” — may already be 86’d",
     "eightySixFailed": "Couldn’t 86 {item}. Try again.",
     "eightySixDone": "86’d {item} until tomorrow",
     "assignFailed": "Couldn’t assign the rider. Try again.",
@@ -108,7 +119,17 @@
     "offeredTo": "Offered to {name}",
     "offeredToRider": "Offered to rider",
     "undo": "Undo",
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "backOnSaleDone": "{item} is back on sale",
+    "backOnSaleFailed": "Couldn’t put {item} back on sale. Try again.",
+    "prepFailed": "Couldn’t update {item}. Try again.",
+    "settingsFailed": "Couldn’t change that setting. Try again.",
+    "settingsForbidden": "Your account can’t change this setting.",
+    "undoFailed": "Couldn’t undo #{ticket} — it was changed on another screen.",
+    "undoPointsSpent": "Couldn’t undo #{ticket} — the diner has already spent the points from it.",
+    "recallForbidden": "Your account can’t recall orders at this branch.",
+    "cancelledElsewhere": "#{ticket} was cancelled — stop making it.",
+    "changedElsewhere": "#{ticket} was changed on another screen. The board has been refreshed."
   },
   "dispatch": {
     "maxAttempts": "Tried every rider — raise “Max dispatch attempts” or assign one by hand.",
@@ -123,7 +144,9 @@
     "gpsStale": "{online} online, but no location newer than {minutes} min. The rider app only sends GPS while it is open in the foreground.",
     "allBusy": "{online} online, all already on a delivery.",
     "outOfRangeMiles": "{online} online, but none within {miles} mi — raise “Driver search radius”.",
-    "outOfRange": "{online} online, but none within the search radius — raise “Driver search radius”."
+    "outOfRange": "{online} online, but none within the search radius — raise “Driver search radius”.",
+    "notAllowed": "Your account isn’t allowed to dispatch riders at this branch.",
+    "signInAgain": "Your sign-in has expired. Sign in again to find a rider."
   },
   "ops": {
     "busy": "Busy",
@@ -139,5 +162,14 @@
     "title": "Scheduled · {count}",
     "close": "Close",
     "releasesIn": "Releases in {minutes}m"
+  },
+  "voice": {
+    "newOrder": "New order, {channel}, number {ticket}",
+    "test": "Sound check. New orders will be read aloud."
+  },
+  "eightySix": {
+    "title": "Sold out",
+    "until": "until {time}",
+    "backOnSale": "Back on sale"
   }
 }

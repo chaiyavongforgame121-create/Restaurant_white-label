@@ -27,6 +27,11 @@ export default async function StaffPage({ params }: Props) {
     );
   }
 
+  // The restaurant's roster is read, and StaffView splits it: this branch's team, the people who
+  // work at every branch, and (collapsed, read-only) the teams of other branches this viewer also
+  // manages. It used to show everyone as "members at <this branch>", so Food Thai Thai listed
+  // Hamburger's cashier and kitchen as its own. RLS still returns every branch's rows to anyone
+  // with staff.manage somewhere in the restaurant, so the other teams are filtered below.
   const [{ data: staff }, { data: branches }, { data: restaurant }] = await Promise.all([
     supabase
       .from('staff_members')
@@ -49,15 +54,60 @@ export default async function StaffPage({ params }: Props) {
   // restaurant's owner_user_id counts as the owner even without an owner staff row, the same
   // way capabilities.ts treats them.
   const viewerIsOwner = role === 'owner' || restaurant?.owner_user_id === user.id;
+  // invite-staff lets an admin of one branch invite into that branch only; an owner or an admin
+  // of every branch may also invite someone to all branches.
+  const viewerRestaurantWide =
+    viewerIsOwner ||
+    (staff ?? []).some(
+      (s) => s.user_id === user.id && s.status === 'active' && s.branch_id === null && s.role === 'admin',
+    );
+
+  // The other branches' teams link to their own Staff page only where the viewer can open it.
+  // Restaurant-wide authority opens every branch; anyone else is asked per branch they have a row
+  // at, through my_capabilities, the same answer that page gates on.
+  let staffBranchIds: string[];
+  if (viewerRestaurantWide) {
+    staffBranchIds = (branches ?? []).map((b) => b.id);
+  } else {
+    const candidates = [
+      ...new Set(
+        (staff ?? [])
+          .filter((s) => s.user_id === user.id && s.status === 'active' && s.branch_id !== null)
+          .map((s) => s.branch_id as string),
+      ),
+    ];
+    const open = await Promise.all(
+      candidates.map(async (id) => {
+        if (id === branchId) return true;
+        const { data } = await supabase.rpc('my_capabilities', { p_branch_id: id });
+        return ((data ?? []) as string[]).includes('staff.manage');
+      }),
+    );
+    staffBranchIds = candidates.filter((_, i) => open[i]);
+  }
+
+  // Each branch's team is its own. An admin of Hamburger only sees Food Thai Thai's people if
+  // they manage Food Thai Thai too; the rows are dropped here so they never reach the browser.
+  // Owners and rows with no branch work here as well, so they always stay.
+  const roster = (staff ?? []).filter(
+    (s) =>
+      s.role === 'owner' ||
+      s.branch_id === null ||
+      s.branch_id === branchId ||
+      staffBranchIds.includes(s.branch_id),
+  );
 
   return (
     <StaffView
       branchId={branchId}
       restaurantId={branch.restaurant_id}
       branchName={branch.name}
-      initialStaff={staff ?? []}
+      initialStaff={roster}
       branches={branches ?? []}
       viewerIsOwner={viewerIsOwner}
+      viewerRestaurantWide={viewerRestaurantWide}
+      viewerUserId={user.id}
+      staffBranchIds={staffBranchIds}
     />
   );
 }

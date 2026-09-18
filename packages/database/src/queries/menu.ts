@@ -45,7 +45,7 @@ export async function listMenuItems(
       id, branch_id, category_id, name, name_translations,
       description, description_translations, price, image_url,
       is_recommended, is_new, dietary_tags, allergens, rating, review_count,
-      prep_time_minutes, calories, display_order, track_stock, stock_quantity,
+      prep_time_minutes, calories, display_order, out_of_stock,
       sold_out_until, is_active
     `,
     )
@@ -69,7 +69,7 @@ export async function getMenuItem(
       id, branch_id, category_id, name, name_translations,
       description, description_translations, price, image_url,
       is_recommended, is_new, dietary_tags, allergens, rating, review_count,
-      prep_time_minutes, calories, display_order, track_stock, stock_quantity,
+      prep_time_minutes, calories, display_order, out_of_stock,
       sold_out_until
     `,
     )
@@ -95,6 +95,9 @@ function mapCategory(row: Partial<RowCat>): MenuCategory {
 }
 
 function mapItem(row: Partial<RowItem>): MenuItem {
+  // A manual 86 only counts while it is in the future; an expired one is the same as none.
+  const soldOutUntil =
+    row.sold_out_until && new Date(row.sold_out_until).getTime() > Date.now() ? row.sold_out_until : null;
   return {
     id: row.id!,
     branchId: row.branch_id!,
@@ -116,10 +119,12 @@ function mapItem(row: Partial<RowItem>): MenuItem {
     // Sold out has two halves, and reading only the stock counter meant a manual 86 -- which
     // writes sold_out_until and touches nothing else -- reached no client at all: the cashier
     // and the diner both saw the item on sale and first heard of it when place-order refused
-    // the line with 409 item_sold_out at payment. This is the same test the server runs.
-    outOfStock:
-      (row.track_stock === true && (row.stock_quantity ?? 0) <= 0) ||
-      (!!row.sold_out_until && new Date(row.sold_out_until).getTime() > Date.now()),
+    // the line with 409 item_sold_out at payment. This is the same test the server runs, and
+    // v_low_stock_items.is_sold_out. The stock half is the generated column out_of_stock, so
+    // the storefront never has to read (or be granted) the raw count.
+    outOfStock: row.out_of_stock === true || soldOutUntil !== null,
+    stockOut: row.out_of_stock === true,
+    soldOutUntil,
     // Absent from the storefront's select, where every row is active by definition.
     isActive: row.is_active ?? true,
   };
@@ -248,7 +253,23 @@ export interface ComboSet {
   description: string | null;
   total_price: number;
   image_url: string | null;
-  items: Array<{ menu_item_id: string; item_name: string; quantity: number; list_price: number }>;
+  /**
+   * False while any dish in it is switched off, 86'd or short of stock for one combo --
+   * v_active_combos works it out with the same test place-order and the stock screen use.
+   */
+  is_available: boolean;
+  /** The merchant's position for the deal in the list (combo_sets.display_order). */
+  order: number;
+  /** In the order the merchant arranged them (combo_items.position). */
+  items: Array<{
+    menu_item_id: string;
+    item_name: string;
+    item_image_url: string | null;
+    quantity: number;
+    list_price: number;
+    /** Set on every dish listActiveCombos returns; optional so a caller may rebuild items. */
+    is_available?: boolean;
+  }>;
 }
 
 /**
@@ -259,6 +280,9 @@ export interface ComboSet {
  * place-order has always accepted `combos`, and the till simply never offered them, so a
  * customer who walked in asking for the deal on the poster got it keyed as separate dishes
  * at separate prices.
+ *
+ * In the merchant's order (display_order, then age), not by name, so the till lists the deals
+ * the way the storefront does. Sold-out deals are kept, flagged by is_available.
  */
 export async function listActiveCombos(
   supabase: FavornomsClient,
@@ -266,8 +290,11 @@ export async function listActiveCombos(
 ): Promise<ComboSet[]> {
   const { data, error } = await supabase
     .from('v_active_combos')
-    .select('id, name, description, total_price, image_url, items')
-    .eq('branch_id', branchId);
+    .select('id, name, description, total_price, image_url, is_available, display_order, items')
+    .eq('branch_id', branchId)
+    .order('display_order')
+    .order('created_at')
+    .order('id');
 
   if (error) throw error;
 
@@ -281,14 +308,17 @@ export async function listActiveCombos(
       description: row.description,
       total_price: Number(row.total_price ?? 0),
       image_url: row.image_url,
+      is_available: row.is_available === true,
+      order: row.display_order ?? 0,
       items: Array.isArray(row.items)
         ? (row.items as Array<Record<string, unknown>>).map((it) => ({
             menu_item_id: String(it.menu_item_id ?? ''),
             item_name: String(it.item_name ?? ''),
+            item_image_url: typeof it.item_image_url === 'string' && it.item_image_url ? it.item_image_url : null,
             quantity: Number(it.quantity ?? 1),
             list_price: Number(it.list_price ?? 0),
+            is_available: it.is_available === true,
           }))
         : [],
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    }));
 }

@@ -1,9 +1,11 @@
 'use client';
 
 // The whole programme in the merchant's hands: how points are earned, how far each badge is, what
-// each badge is called, and what it promises. All four used to be fixed — a restaurant whose
-// average ticket is small could not reach Silver in any realistic number of orders, and a Thai
-// restaurant could set the points for a rung it could not name.
+// each badge is called, what it promises, and the birthday gift. All of it used to be fixed — a
+// restaurant whose average ticket is small could not reach Silver in any realistic number of
+// orders, and a Thai restaurant could set the points for a rung it could not name. It belongs to
+// ONE branch: another branch of the same restaurant runs its own programme, and saving here
+// re-grades only this branch's members.
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
@@ -33,6 +35,8 @@ const MAX_PERKS = 6;
 const MAX_PERK_LENGTH = 200;
 /** The database refuses a threshold of more than nine digits (it would not fit the column). */
 const MAX_THRESHOLD = 999_999_999;
+/** set_loyalty_settings refuses a birthday gift above this. */
+const MAX_BIRTHDAY_POINTS = 1_000_000;
 
 type LoyaltyT = ReturnType<typeof useTranslations>;
 
@@ -43,6 +47,8 @@ export interface LoyaltyProgramValues {
   silver: number;
   gold: number;
   platinum: number;
+  /** Points a member gets at this branch on their birthday; 0 means no gift. */
+  birthdayPoints: number;
   labels: Record<string, string>;
   /** null for a tier the merchant has never written, which still shows the platform's line. */
   perks: Record<string, string[] | null>;
@@ -51,6 +57,21 @@ export interface LoyaltyProgramValues {
 /** What an order of this size earns, so the rate is not an abstract number. */
 function exampleEarn(rate: number, spend: number): number {
   return Math.floor(spend * rate);
+}
+
+/** A whole amount in the branch's currency ("$1", "THB 20"), for the rate's wording. */
+function wholeMoney(amount: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  } catch {
+    // An unknown code in branches.settings must not take the whole editor down.
+    return `${currency} ${amount}`;
+  }
 }
 
 /**
@@ -80,10 +101,12 @@ function perksFrom(source: Record<string, string[] | null>): Record<TierKey, str
  * The database's refusal codes, as sentences. The form checks the same rules first, so these are
  * reached only when something slipped past it — and a merchant should never read "bad_tiers:…".
  */
-function describeSaveError(message: string, t: LoyaltyT): string {
+function describeSaveError(message: string, t: LoyaltyT, unit: string): string {
   if (message === 'not_authorized') return t('program.errors.notAuthorized');
   if (message === 'stale_settings') return t('program.errors.stale');
-  if (message.startsWith('bad_rate')) return t('program.errors.badRate');
+  if (message.startsWith('bad_rate')) return t('program.errors.badRate', { unit });
+  if (message.startsWith('bad_birthday_points'))
+    return t('program.errors.badBirthday', { max: MAX_BIRTHDAY_POINTS });
   if (message.startsWith('bad_tiers')) return t('program.errors.badTiers', { max: MAX_THRESHOLD });
   if (message.startsWith('label_too_long')) return t('program.errors.labelTooLong', { max: MAX_LABEL });
   if (message.startsWith('too_many_perks')) return t('program.errors.tooManyPerks', { max: MAX_PERKS });
@@ -101,20 +124,25 @@ function toLines(text: string): string[] {
 }
 
 export function LoyaltyProgramCard({
-  restaurantId,
+  branchId,
+  currency,
   initial,
 }: {
-  restaurantId: string;
+  branchId: string;
+  /** branches.settings.currency — the rate is "points per 1 of this". */
+  currency: string;
   initial: LoyaltyProgramValues;
 }) {
   const t = useTranslations('loyalty');
   const locale = useLocale();
   const router = useRouter();
+  const unit = wholeMoney(1, currency);
   const [version, setVersion] = React.useState(initial.version);
   const [rate, setRate] = React.useState(String(initial.pointsPerCurrency));
   const [silver, setSilver] = React.useState(String(initial.silver));
   const [gold, setGold] = React.useState(String(initial.gold));
   const [platinum, setPlatinum] = React.useState(String(initial.platinum));
+  const [birthday, setBirthday] = React.useState(String(initial.birthdayPoints));
   // Names start blank when they are still the platform's, so the placeholder shows what a diner
   // sees today and clearing the box visibly means "go back to that".
   const [labels, setLabels] = React.useState<Record<TierKey, string>>(() => labelsFrom(initial.labels));
@@ -132,6 +160,7 @@ export function LoyaltyProgramCard({
   const s = Number(silver);
   const g = Number(gold);
   const p = Number(platinum);
+  const b = Number(birthday);
 
   const thresholdOf: Record<TierKey, number> = { bronze: 0, silver: s, gold: g, platinum: p };
 
@@ -148,14 +177,16 @@ export function LoyaltyProgramCard({
 
   const problem =
     !Number.isFinite(rateNum) || rateSent < 0.01 || rateSent > 100
-      ? t('program.errors.badRate')
+      ? t('program.errors.badRate', { unit })
       : ![s, g, p].every((n) => Number.isFinite(n) && n >= 1)
         ? t('program.errors.wholeNumber')
         : ![s, g, p].every((n) => n <= MAX_THRESHOLD)
           ? t('program.errors.thresholdTooHigh', { max: MAX_THRESHOLD })
           : !(s < g && g < p)
             ? t('program.errors.mustClimb')
-            : wordProblem;
+            : birthday === '' || !Number.isInteger(b) || b < 0 || b > MAX_BIRTHDAY_POINTS
+              ? t('program.errors.badBirthday', { max: MAX_BIRTHDAY_POINTS })
+              : wordProblem;
 
   const save = async () => {
     if (problem) {
@@ -179,7 +210,7 @@ export function LoyaltyProgramCard({
 
     const supabase = getBrowserClient();
     const { data: saved, error: rpcErr } = await supabase.rpc('set_loyalty_settings', {
-      p_restaurant_id: restaurantId,
+      p_branch_id: branchId,
       p_expected_version: version,
       p_points_per_currency: rateSent,
       p_silver: Math.round(s),
@@ -187,10 +218,11 @@ export function LoyaltyProgramCard({
       p_platinum: Math.round(p),
       p_labels: labelPayload,
       p_perks: perkPayload,
+      p_birthday_points: Math.round(b),
     });
     setSaving(false);
     if (rpcErr) {
-      setError(describeSaveError(rpcErr.message, t));
+      setError(describeSaveError(rpcErr.message, t, unit));
       return;
     }
     // Re-seed from what was stored, with the version it now has: the next save must be checked
@@ -202,6 +234,7 @@ export function LoyaltyProgramCard({
       silver?: number;
       gold?: number;
       platinum?: number;
+      birthday_points?: number;
       labels?: Record<string, string>;
       perks?: Record<string, string[] | null>;
     };
@@ -210,6 +243,7 @@ export function LoyaltyProgramCard({
     if (stored.silver != null) setSilver(String(stored.silver));
     if (stored.gold != null) setGold(String(stored.gold));
     if (stored.platinum != null) setPlatinum(String(stored.platinum));
+    if (stored.birthday_points != null) setBirthday(String(stored.birthday_points));
     if (stored.labels) setLabels(labelsFrom(stored.labels));
     if (stored.perks) setPerks(perksFrom(stored.perks));
     setSavedAt(Date.now());
@@ -232,7 +266,7 @@ export function LoyaltyProgramCard({
 
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <label className="block">
-          <span className="mb-1.5 block text-sm font-medium">{t('program.rateLabel')}</span>
+          <span className="mb-1.5 block text-sm font-medium">{t('program.rateLabel', { unit })}</span>
           <input
             value={rate}
             onChange={(e) => {
@@ -244,8 +278,12 @@ export function LoyaltyProgramCard({
           />
           <span className="mt-1.5 block text-xs text-muted-foreground">
             {example !== null
-              ? t.rich('program.rateExample', { count: example, strong })
-              : t.rich('program.rateExampleEmpty', { strong })}{' '}
+              ? t.rich('program.rateExample', {
+                  count: example,
+                  amount: wholeMoney(20, currency),
+                  strong,
+                })
+              : t.rich('program.rateExampleEmpty', { amount: wholeMoney(20, currency), strong })}{' '}
             {t('program.rateBasis')}
           </span>
         </label>
@@ -274,6 +312,23 @@ export function LoyaltyProgramCard({
             {t('program.thresholdHint')}
           </span>
         </div>
+
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-medium">{t('program.birthdayLabel')}</span>
+          <input
+            value={birthday}
+            onChange={(e) => {
+              setBirthday(e.target.value.replace(/\D/g, ''));
+              touch();
+            }}
+            inputMode="numeric"
+            maxLength={7}
+            className="input"
+          />
+          <span className="mt-1.5 block text-xs text-muted-foreground">
+            {t('program.birthdayHint')}
+          </span>
+        </label>
       </div>
 
       <div className="mt-6 border-t border-border pt-5">

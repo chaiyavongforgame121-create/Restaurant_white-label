@@ -13,7 +13,12 @@
     "parked": "Lưu tạm ({count})",
     "park": "Lưu tạm đơn",
     "tables": "Bàn",
-    "recent": "Đơn gần đây"
+    "recent": "Đơn gần đây",
+    "clockNotStaff": "Bạn không thuộc nhân viên của chi nhánh này nên không thể chấm công vào tại đây. Hãy nhờ chủ quán thêm bạn.",
+    "clockElsewhere": "Bạn vẫn đang trong ca ở chi nhánh khác. Hãy chấm công ra ở đó trước.",
+    "clockSignIn": "Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại để chấm công.",
+    "clockDismiss": "Đóng",
+    "clockShiftGone": "Ca đó đã đóng hoặc không phải ca của bạn. Nút giờ hiển thị ca của chính bạn."
   },
   "channel": {
     "dine_in": "Ăn tại quán",
@@ -58,7 +63,8 @@
     "noMatch": "Không có món phù hợp",
     "soldOutAria": "{name} — hết hàng",
     "soldOut": "Hết hàng",
-    "comboItems": "{count, plural, other {# món}}"
+    "comboItems": "{count, plural, other {# món}}",
+    "soldOutUntil": "Hết hàng đến {time}"
   },
   "cart": {
     "title": "Đơn hàng",
@@ -79,7 +85,31 @@
     "discount": "Giảm giá %",
     "discountAria": "Phần trăm giảm giá",
     "split": "Chia",
-    "splitAria": "Chia cho bao nhiêu người"
+    "splitAria": "Chia cho bao nhiêu người",
+    "phonePoints": "Số điện thoại (tích điểm)",
+    "phoneDelivery": "Số điện thoại khách",
+    "phoneInvalid": "Số điện thoại này có vẻ không đúng. Hãy kiểm tra lại hoặc xóa trống.",
+    "lineGone": "Không còn trong thực đơn",
+    "unsellableHint": "{count, plural, other {Có # món trong đơn không còn bán được. Hãy bỏ ra để thu tiền.}}"
+  },
+  "delivery": {
+    "address": "Địa chỉ giao hàng",
+    "addressPlaceholder": "Số nhà, đường, khu vực",
+    "addressRequired": "Nhập địa chỉ mà tài xế cần giao đến.",
+    "dropPin": "Ghim địa chỉ trên bản đồ",
+    "movePin": "Di chuyển ghim trên bản đồ",
+    "notes": "Ghi chú cho tài xế",
+    "notesPlaceholder": "Ghi chú cho tài xế — cổng, tầng, điểm mốc",
+    "pickerTitle": "Ghim địa chỉ giao hàng",
+    "quoting": "Đang tính phí giao hàng…",
+    "quoted": "Phí giao {fee} · {distance} dặm · khoảng {eta} phút",
+    "quotedNoDistance": "Phí giao {fee}",
+    "outOfRange": "Vị trí ghim nằm ngoài khu vực giao hàng.",
+    "outOfRangeMax": "Vị trí ghim nằm ngoài khu vực giao hàng (tối đa {max} dặm).",
+    "notSold": "Gói dịch vụ của chi nhánh này không bao gồm giao hàng.",
+    "flatFee": "Phí giao hàng cố định: {fee}",
+    "clearPin": "Bỏ ghim",
+    "needsDetails": "Đơn giao hàng cần số điện thoại và địa chỉ của khách."
   },
   "totals": {
     "subtotal": "Tạm tính",
@@ -107,10 +137,22 @@
     "changeDue": "Tiền thừa trả khách",
     "handedOver": "Đã trả khách",
     "success": "Đã gửi đơn {number} vào bếp",
-    "placedQuoteMismatch": "Đơn {number} đã được tạo, nhưng quầy báo {quoted} còn đơn hàng tính {priced}. Hãy xử lý trong Đơn gần đây trước khi đưa hóa đơn cho khách.",
-    "placedDiscountFailed": "Đơn {number} đã được tạo, nhưng giảm giá chưa được áp dụng vào đơn. Hãy xử lý trong Đơn gần đây trước khi đưa hóa đơn cho khách.",
-    "placedQuoteAndDiscount": "Đơn {number} đã được tạo, nhưng quầy báo {quoted} còn đơn hàng tính {priced}, và giảm giá chưa được áp dụng vào đơn. Hãy xử lý trong Đơn gần đây trước khi đưa hóa đơn cho khách.",
-    "placedNotSettled": "Đơn {number} đã được tạo, nhưng khoản thanh toán chưa được ghi nhận — hãy xác nhận trong trang quản trị trước khi chốt ca."
+    "placedQuoteMismatch": "Đơn {number} đã được tạo, nhưng quầy báo {quoted} còn đơn hàng tính {priced} — giá có thể vừa thay đổi (giờ vàng). Hãy xử lý phần chênh lệch với khách và kiểm tra đơn trong Đơn gần đây. Hóa đơn chưa được in.",
+    "placedDiscountFailed": "Đơn {number} đã được tạo với giá {priced} mà không có giảm giá (quầy báo {quoted}). Hãy xử lý phần chênh lệch với khách và kiểm tra đơn trong Đơn gần đây. Hóa đơn chưa được in.",
+    "placedNotSettled": "Đơn {number} đã được tạo, nhưng khoản thanh toán chưa được ghi nhận — hãy xác nhận trong trang quản trị trước khi chốt ca.",
+    "qr": "Chuyển khoản QR · {amount}",
+    "qrTitle": "Chuyển khoản QR",
+    "qrAmount": "Số tiền cần chuyển",
+    "qrAccount": "Tên tài khoản",
+    "qrScanHint": "Nhờ khách quét mã và chuyển đúng số tiền này. Chỉ chạm “Đã nhận tiền” sau khi bạn thấy màn hình chuyển khoản thành công trên điện thoại của khách.",
+    "qrReceived": "Đã nhận tiền",
+    "qrImageAlt": "Mã QR thanh toán của chi nhánh này",
+    "qrSetupHint": "Chi nhánh này chưa có mã QR thanh toán. <link>Thêm trong cài đặt chi nhánh</link> để nhận chuyển khoản QR tại quầy.",
+    "transferNotSettled": "Đơn {number} đã được tạo, nhưng khoản chuyển khoản QR chưa được ghi nhận nên đơn chưa lên màn hình bếp. Chạm “Ghi nhận thanh toán” để thử lại, hoặc ghi nhận sau trong Đơn gần đây.",
+    "retrySettle": "Ghi nhận thanh toán",
+    "dismiss": "Đóng",
+    "customerMatched": "Đơn {number} đã được ghi cho khách hàng của chi nhánh này có số điện thoại đó, nên được tính vào lịch sử và điểm của họ tại đây.",
+    "customerWalkIn": "Không có khách hàng nào của chi nhánh này dùng số điện thoại đó, nên đơn {number} được lưu là khách vãng lai (không tích điểm)."
   },
   "errors": {
     "branchClosedAtTime": "Chi nhánh đóng cửa vào giờ đó.",
@@ -127,8 +169,36 @@
     "deliveryOutOfRange": "Địa chỉ này nằm ngoài khu vực giao hàng.",
     "emptyOrder": "Giỏ hàng đang trống.",
     "invalidChannel": "Chọn ăn tại quán, tự đến lấy hoặc giao hàng rồi thu lại.",
-    "refused": "Đơn hàng bị từ chối. Hãy thử lại, hoặc tạo đơn trong trang quản trị.",
-    "generic": "Đã xảy ra lỗi. Hãy thử lại."
+    "generic": "Đã xảy ra lỗi. Hãy thử lại.",
+    "branchInactive": "Chi nhánh này không nhận đơn — đã bị tắt hoặc không còn tồn tại.",
+    "invalidQuantity": "Có số lượng không hợp lệ. Sửa lại rồi thu lại.",
+    "modifierInactive": "Một tùy chọn của món trong đơn không còn nữa. Bỏ món đó ra rồi thêm lại.",
+    "comboUnavailable": "Combo này không còn bán ở chi nhánh này. Bỏ ra rồi thu lại.",
+    "comboItemUnavailable": "Có món trong combo đã hết hàng hoặc không còn trên thực đơn. Bỏ combo ra, hoặc nhập riêng từng món.",
+    "comboEmpty": "Combo này không có món nào. Bỏ ra rồi sửa trong trang quản trị.",
+    "transferNotConfigured": "Chi nhánh này chưa cài đặt mã QR thanh toán. Thu tiền mặt hoặc thẻ, hoặc thêm mã QR trong cài đặt chi nhánh.",
+    "tableNotInBranch": "Bàn này không thuộc chi nhánh này. Chọn lại từ danh sách.",
+    "tableSessionClosed": "Hóa đơn của bàn này vừa được đóng. Chọn lại bàn để mở hóa đơn mới.",
+    "deliveryAddressRequired": "Đơn giao hàng cần có địa chỉ. Nhập nơi tài xế cần giao đến.",
+    "dropoffRequired": "Đơn giao hàng cần thông tin giao nhận. Kiểm tra địa chỉ rồi thu lại.",
+    "customerPhoneRequired": "Đơn giao hàng cần số điện thoại của khách.",
+    "deliveryNotAvailableNow": "Chi nhánh này không giao hàng vào giờ này.",
+    "deliveryMustBeScheduled": "Hiện chi nhánh này chỉ nhận giao hàng đặt trước.",
+    "insufficientPoints": "Khách không đủ điểm cho việc này.",
+    "giftCardChanged": "Số dư thẻ quà tặng đã thay đổi. Hãy thu lại.",
+    "featureNotEntitled": "Gói dịch vụ của chi nhánh này không bao gồm tính năng đó. Kiểm tra trang Gói dịch vụ trong trang quản trị.",
+    "invalidDiscount": "Giảm giá phải từ 0 đến 100%.",
+    "invalidPhone": "Số điện thoại của khách không được chấp nhận. Kiểm tra lại rồi thu lại.",
+    "notStaffHere": "Tài khoản này không thể bán hàng tại chi nhánh này, hoặc phiên đăng nhập đã hết hạn. Hãy đăng nhập lại, hoặc xin chủ quán quyền dùng quầy của chi nhánh này.",
+    "orderInsertFailed": "Không lưu được đơn hàng. Hãy thử lại sau giây lát.",
+    "lookupFailed": "Hiện không kiểm tra được thực đơn. Hãy thử lại sau giây lát.",
+    "network": "Quầy không kết nối được máy chủ. Kiểm tra kết nối.",
+    "unknown": "Đơn hàng bị từ chối. Hãy thử lại, hoặc tạo đơn trong trang quản trị.",
+    "onlyLeft": "{name}: chỉ còn {count}.",
+    "which": "Món liên quan: {name}.",
+    "transferNoOrder": "Chưa có đơn nào được tạo, nên khoản chuyển khoản của khách chưa gắn với đơn nào — hãy nhập lại đơn, hoặc hoàn lại tiền cho khách.",
+    "maybePlaced": "Đơn có thể đã được tạo. Hãy xem Đơn gần đây trước khi nhập lại.",
+    "transferMaybePlaced": "Đơn có thể đã được tạo. Hãy xem Đơn gần đây trước khi nhập lại, và đừng yêu cầu khách chuyển khoản lần nữa."
   },
   "sheet": {
     "note": "Ghi chú cho bếp",
@@ -148,14 +218,17 @@
     "optional": "Không bắt buộc",
     "requiredUpTo": "Bắt buộc · tối đa {max}",
     "optionalUpTo": "Không bắt buộc · tối đa {max}",
-    "notePlaceholder": "VD: không hành — dị ứng"
+    "notePlaceholder": "VD: không hành — dị ứng",
+    "happyHour": "Giá giờ vàng",
+    "happyHourNamed": "Giá {name}"
   },
   "combo": {
     "fallbackTitle": "Combo",
     "addComboAria": "Thêm combo",
     "contents": "Gồm có",
     "saves": "Tiết kiệm {saving} so với {listTotal} khi mua lẻ",
-    "notePlaceholder": "VD: nước không đá"
+    "notePlaceholder": "VD: nước không đá",
+    "soldOut": "Có món trong combo này đã hết hàng nên hiện không bán được combo này."
   },
   "printer": {
     "unsupportedTitle": "Trình duyệt này không hỗ trợ WebUSB — hóa đơn sẽ được in qua hộp thoại in của hệ thống",
@@ -180,7 +253,7 @@
     "metaScheduled": "{customer} · hẹn lúc {date}",
     "refund": "Hoàn tiền",
     "refundTitle": "Hoàn tiền đơn {number}",
-    "refundBody": "Nhập số tiền bằng USD, tối đa {max}. Để trống để hoàn toàn bộ.",
+    "refundBody": "Nhập số tiền tối đa {max}. Để trống để hoàn toàn bộ.",
     "continue": "Tiếp tục",
     "invalidAmount": "Số tiền không hợp lệ",
     "invalidAmountBody": "Nhập số lớn hơn 0, hoặc để trống để hoàn toàn bộ.",
@@ -189,6 +262,22 @@
     "refundNotAuthorized": "Chỉ chủ sở hữu, quản trị viên hoặc quản lý mới được hoàn tiền đơn hàng.",
     "refundInvalidAmount": "Số tiền phải lớn hơn 0 và không vượt quá tổng đơn.",
     "refundNotFound": "Không tìm thấy đơn này. Hãy tải lại trang.",
-    "refundAuthRequired": "Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại."
+    "refundAuthRequired": "Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại.",
+    "awaitingQr": "Chưa ghi nhận chuyển khoản QR",
+    "recordQr": "Ghi nhận chuyển khoản QR",
+    "recordQrTitle": "Ghi nhận chuyển khoản QR cho đơn {number}?",
+    "recordQrBody": "Chỉ làm việc này khi bạn đã thấy khoản chuyển {amount} thành công trên điện thoại của khách. Sau đó đơn sẽ được chuyển vào bếp.",
+    "recordQrConfirm": "Đã nhận tiền",
+    "recordQrFailed": "Chưa ghi nhận được thanh toán"
+  },
+  "settle": {
+    "authRequired": "Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại rồi ghi nhận thanh toán.",
+    "orderNotFound": "Đơn này không còn tồn tại.",
+    "forbidden": "Tài khoản này không thể ghi nhận thanh toán ở chi nhánh này.",
+    "notCounterOrder": "Đơn này không được nhập tại quầy. Khoản chuyển khoản của đơn được duyệt trong trang quản lý, dựa trên biên lai của khách.",
+    "paymentNotFound": "Đơn này không có khoản chuyển khoản QR nào đang chờ ghi nhận.",
+    "paymentNotSettleable": "Khoản chuyển khoản QR của đơn này đã bị hủy hoặc hoàn tiền nên không thể ghi nhận.",
+    "orderNotSettleable": "Đơn đã bị hủy hoặc hoàn tiền trong lúc đó nên không thể ghi nhận thanh toán. Hãy hoàn lại khoản chuyển khoản cho khách.",
+    "failed": "Chưa thể ghi nhận thanh toán lúc này. Hãy thử lại sau giây lát."
   }
 }

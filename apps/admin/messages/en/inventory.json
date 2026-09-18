@@ -1,9 +1,16 @@
 {
   "metaTitle": "Inventory · Favornoms admin",
   "title": "Inventory",
-  "subtitle": "Track stock, log restocks, record waste.",
+  "subtitle": "Track stock, log restocks and waste, and mark dishes sold out.",
+  "accessDenied": {
+    "title": "No inventory access",
+    "reason": "Only owners, admins and managers can manage stock at {branch}."
+  },
+  "loadFailed": "Part of this page couldn’t be loaded, so some of it may be empty or out of date. Refresh the page to try again.",
+  "liveOff": "Live updates are paused. Counts may be out of date until the connection comes back.",
   "stats": {
     "tracked": "Tracked items",
+    "soldOut": "Sold out",
     "lowStock": "Low stock"
   },
   "errors": {
@@ -11,36 +18,86 @@
     "network": "Couldn’t reach the server. Check your connection and try again.",
     "permissionDenied": "You don’t have permission to change this.",
     "invalidValue": "That value isn’t valid. Check it and try again.",
-    "positiveQuantity": "Enter a positive quantity"
+    "notFound": "That dish no longer exists at this branch. Refresh the page.",
+    "wholeQuantity": "Enter a whole number greater than 0.",
+    "wholeCount": "Enter a whole number: 0 or more.",
+    "costInvalid": "Enter a cost of 0 or more, or leave it blank."
   },
   "tracking": {
     "failed": "Couldn’t change stock tracking for “{name}”. {reason}",
     "notSaved": "Nothing was saved for “{name}”. It may have been deleted, or your role may not be allowed to edit the menu at this branch.",
-    "off": "Stock tracking is off for “{name}” — the storefront will no longer mark it sold out, and its count is cleared, so ticking the box again starts it at 0.",
-    "on": "Tracking stock for “{name}” — {count} left.",
-    "onEmpty": "Tracking stock for “{name}”, but it has 0 left, so customers see it as sold out right away. Log a restock to put it back on sale."
+    "off": "Stock tracking is off for “{name}”. It is no longer counted, and ticking the box again asks for a new count.",
+    "on": "Tracking stock for “{name}” — {count} in stock.",
+    "onEmpty": "Tracking stock for “{name}”, but it has 0 in stock, so customers see it as sold out right away. Log a restock to put it back on sale."
   },
-  "lowStock": {
-    "title": "Low stock alerts",
-    "detail": "{left} left · threshold {threshold}"
+  "soldOutFailed": "Couldn’t change whether “{name}” is sold out. {reason}",
+  "thresholdFailed": "Couldn’t change the alert level for “{name}”. {reason}",
+  "alerts": {
+    "soldOutTitle": "Sold out",
+    "soldOutHint": "Customers and the till can’t order these right now.",
+    "lowTitle": "Low stock",
+    "until": "Sold out until {time}",
+    "untilWithCount": "Sold out until {time} · {count} in stock",
+    "noneLeft": "None left",
+    "lowDetail": "{left} left · alert at {threshold}"
+  },
+  "status": {
+    "hidden": "Hidden",
+    "hiddenHint": "Not on the customer menu, so it is left out of the totals and alerts.",
+    "soldOutUntil": "Sold out until {time}",
+    "soldOut": "Sold out",
+    "low": "Low"
   },
   "actions": {
     "restock": "Restock",
-    "waste": "Waste"
+    "waste": "Waste",
+    "count": "Set count",
+    "backOnSale": "Back on sale",
+    "markSoldOut": "Mark sold out",
+    "editThreshold": "Low-stock alert level for {name}",
+    "saveThreshold": "Save",
+    "cancelThreshold": "Cancel"
+  },
+  "markSoldOutConfirm": {
+    "title": "Mark “{name}” sold out?",
+    "body": "Customers and the till can’t order it until midnight (branch time), or until you put it back on sale or restock it.",
+    "confirm": "Mark sold out"
+  },
+  "notices": {
+    "restocked": "Added {delta} to “{name}” — {count} in stock now.",
+    "backOnSale": "It’s back on sale.",
+    "wasted": "Logged {quantity} wasted “{name}” — {count} left.",
+    "nowSoldOut": "None are left, so customers see it as sold out.",
+    "counted": "Counted {count} of “{name}” (was {previous}).",
+    "countedFirst": "Counted {count} of “{name}”.",
+    "markedSoldOut": "“{name}” is sold out until {time}.",
+    "markedSoldOutNoTime": "“{name}” is marked sold out.",
+    "backOnSaleNow": "“{name}” is back on sale.",
+    "backOnSaleEmpty": "“{name}” is no longer marked sold out, but it has none in stock, so it stays sold out until you restock it.",
+    "thresholdSaved": "“{name}” now alerts at {threshold} left."
   },
   "table": {
     "item": "Item",
     "trackStock": "Track stock",
-    "stock": "Stock",
-    "threshold": "Threshold"
+    "trackStockFor": "Track stock for {name}",
+    "stock": "In stock",
+    "threshold": "Alert at",
+    "actions": "Actions"
   },
   "restocks": {
     "title": "Recent restocks",
-    "empty": "No restocks logged yet."
+    "empty": "No restocks logged yet.",
+    "costEach": "{cost} each"
   },
   "waste": {
     "title": "Recent waste",
     "empty": "No waste logged yet."
+  },
+  "counts": {
+    "title": "Recent counts",
+    "empty": "No stock counts yet.",
+    "entry": "{previous} → {count}",
+    "entryFirst": "Set to {count}"
   },
   "reasons": {
     "expired": "Expired",
@@ -52,8 +109,10 @@
   },
   "restockDialog": {
     "title": "Restock {name}",
-    "quantity": "Quantity",
-    "cost": "Cost per unit (USD, optional)",
+    "inStock": "{count} in stock now.",
+    "clears86": "It is marked sold out until {time}. Restocking puts it back on sale.",
+    "quantity": "How many arrived?",
+    "cost": "Cost per unit ({currency}, optional)",
     "supplier": "Supplier (optional)",
     "notes": "Notes (optional)",
     "cancel": "Cancel",
@@ -61,10 +120,23 @@
   },
   "wasteDialog": {
     "title": "Log waste — {name}",
+    "inStock": "{count} in stock now.",
     "quantity": "Quantity",
     "reason": "Reason",
     "notes": "Notes (optional)",
     "cancel": "Cancel",
     "submit": "Log waste"
+  },
+  "countDialog": {
+    "title": "Count {name}",
+    "startTitle": "Track stock for {name}",
+    "hint": "Replaces the current count ({count}). Use it after a stock-take.",
+    "startHint": "How many are there right now? Customers can order it until the count reaches 0.",
+    "quantity": "How many are there now?",
+    "notes": "Notes (optional)",
+    "clears86": "A count above 0 also puts the dish back on sale if it was marked sold out.",
+    "cancel": "Cancel",
+    "submit": "Save count",
+    "startSubmit": "Start tracking"
   }
 }

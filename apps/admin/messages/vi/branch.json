@@ -5,7 +5,8 @@
     "managerRequired": "Chỉ chủ sở hữu hoặc quản lý mới có thể thay đổi các cài đặt chi nhánh này.",
     "ownerOnlyDomain": "Chỉ chủ nhà hàng mới có thể đổi tên miền riêng.",
     "domainTaken": "Tên miền này đã được một chi nhánh khác sử dụng.",
-    "noPermission": "Vai trò của bạn không được phép thực hiện thay đổi này."
+    "noPermission": "Vai trò của bạn không được phép thực hiện thay đổi này.",
+    "busyMinutesRange": "Chế độ bận chỉ có thể cộng thêm từ 0 đến {max} phút chuẩn bị."
   },
   "settings": {
     "title": "Cài đặt chi nhánh",
@@ -30,7 +31,9 @@
     "tax": {
       "title": "Thuế bán hàng",
       "description": "Thuế bán hàng của bang và địa phương (Mỹ) áp dụng cho các món chịu thuế. Nhập dưới dạng phần trăm (ví dụ <code>8.875</code> cho NYC, <code>9.5</code> cho LA).",
-      "rate": "Thuế suất (%)"
+      "rate": "Thuế suất (%)",
+      "zeroConfirmed": "0% là đúng cho chi nhánh này",
+      "zeroConfirmedHint": "Ví dụ: giá của bạn đã bao gồm thuế. Khi đó bảng điều khiển sẽ không hỏi về thuế suất nữa."
     },
     "domain": {
       "title": "Tên miền riêng",
@@ -50,7 +53,8 @@
       "hint": "Bản chỉ đọc của branches.settings — chỉnh sửa qua các thẻ ở trên."
     },
     "seatLimit": "Chưa có gì được lưu. {seats, plural, =1 {Suất chi nhánh duy nhất của bạn} other {Cả # suất chi nhánh của bạn}} đã được các chi nhánh đang hoạt động sử dụng, nên không thể bật lại chi nhánh này. Hãy thêm suất ở <link>Gói và thanh toán</link>, hoặc ẩn một chi nhánh khác trước.",
-    "save": "Lưu thay đổi"
+    "save": "Lưu thay đổi",
+    "readOnly": "Chỉ chủ sở hữu hoặc quản trị viên mới thay đổi được các cài đặt bên dưới. Bạn vẫn có thể xem."
   },
   "location": {
     "title": "Vị trí",
@@ -68,15 +72,6 @@
     "longitude": "Kinh độ",
     "saveLocation": "Lưu vị trí",
     "timezone": "Múi giờ",
-    "timezones": {
-      "eastern": "Miền Đông — New York, Miami, Atlanta",
-      "central": "Miền Trung — Chicago, Houston, Dallas",
-      "mountain": "Miền Núi — Denver, Salt Lake City",
-      "arizona": "Arizona — Phoenix (không đổi giờ mùa hè)",
-      "pacific": "Thái Bình Dương — Los Angeles, Seattle",
-      "alaska": "Alaska — Anchorage",
-      "hawaii": "Hawaii — Honolulu"
-    },
     "timezoneHint": "Giờ mở cửa và khung giờ giao hàng được tính theo múi giờ này. Hãy chọn múi giờ nơi cửa hàng thực sự đặt, không phải của trụ sở.",
     "saveTimezone": "Lưu múi giờ",
     "saved": "Đã lưu.",
@@ -95,7 +90,8 @@
       "pinRequired": "Hãy chọn địa chỉ mới trên bản đồ để tài xế biết nơi lấy hàng.",
       "notAuthorized": "Chỉ chủ sở hữu hoặc quản lý mới có thể di chuyển chi nhánh.",
       "signedOut": "Bạn đã bị đăng xuất. Hãy đăng nhập lại rồi thử lại.",
-      "branchNotFound": "Không tìm thấy chi nhánh này."
+      "branchNotFound": "Không tìm thấy chi nhánh này.",
+      "invalidTimezone": "Hãy chọn một múi giờ trong danh sách."
     }
   },
   "hours": {

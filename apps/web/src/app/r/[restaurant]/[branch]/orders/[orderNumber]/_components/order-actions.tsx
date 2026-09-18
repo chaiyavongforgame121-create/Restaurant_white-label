@@ -161,8 +161,8 @@ export function OrderActions({
   const canReport = ['completed', 'out_for_delivery', 'ready'].includes(orderStatus);
   if (!canStillChange && !canRate && !canReport && !storedRating) return null;
 
-  /** Resolve the customers row through the ORDER, never by user_id: identity is per
-   *  restaurant, so one person can own several customers rows. */
+  /** Resolve the customers row through the ORDER, never by user_id: each branch keeps its
+   *  own record of the diner, so one person owns a customers row per branch they use. */
   const resolveCustomerId = async (): Promise<string | null> => {
     const supabase = getBrowserClient();
     const { data: user } = await supabase.auth.getUser();
@@ -528,13 +528,15 @@ function IssueReportButton({ orderId, branchId }: { orderId: string; branchId: s
     const { data: user } = await supabase.auth.getUser();
     let customerId: string | null = null;
     if (user.user) {
-      const { data: c } = await supabase
-        .from('customers')
-        .select('id')
-        .eq('user_id', user.user.id)
-        .eq('branch_id', branchId)
+      // Through the ORDER, like the rating above: the ticket is about this order, so it is
+      // filed under the customer row the order belongs to. A (user, branch) lookup found
+      // nothing for orders filed under another row and the insert then failed RLS.
+      const { data: orderRow } = await supabase
+        .from('orders')
+        .select('customer_id')
+        .eq('id', orderId)
         .maybeSingle();
-      customerId = c?.id ?? null;
+      customerId = orderRow?.customer_id ?? null;
     }
     const { error: insErr } = await supabase.from('support_tickets').insert({
       order_id: orderId,

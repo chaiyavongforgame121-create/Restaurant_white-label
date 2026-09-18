@@ -85,6 +85,7 @@
     "awaitingUpload": "Pendiente de subir",
     "listError": "No se pudieron leer los documentos del repartidor. Cierra y vuelve a intentarlo.",
     "forbidden": "No tienes permiso para revisar documentos de repartidores. Solo un propietario o gerente puede hacerlo.",
+    "sharedForbidden": "Este repartidor también trabaja con una sucursal que no gestionas, así que debe decidir un administrador de la plataforma o el propietario de cada una de esas sucursales.",
     "saveFailed": "No se pudo guardar la revisión de documentos. Inténtalo de nuevo.",
     "rejectHint": "Rechazar le indica al repartidor que debe cambiar un documento, pero no cuál. Para explicar por qué, rechaza su solicitud con un motivo: ese texto se muestra en su app.",
     "reject": "Rechazar",

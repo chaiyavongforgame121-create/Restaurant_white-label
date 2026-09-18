@@ -479,6 +479,45 @@ export type Database = {
           },
         ]
       }
+      branch_loyalty_settings: {
+        Row: {
+          branch_id: string
+          restaurant_id: string
+          settings: Json
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          branch_id: string
+          restaurant_id: string
+          settings?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          branch_id?: string
+          restaurant_id?: string
+          settings?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "branch_loyalty_settings_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: true
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "branch_loyalty_settings_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       branch_schedule_hours: {
         Row: {
           branch_id: string
@@ -712,6 +751,7 @@ export type Database = {
           combo_id: string
           is_swappable: boolean
           menu_item_id: string
+          position: number
           quantity: number
           swap_group: string | null
         }
@@ -719,6 +759,7 @@ export type Database = {
           combo_id: string
           is_swappable?: boolean
           menu_item_id: string
+          position?: number
           quantity?: number
           swap_group?: string | null
         }
@@ -726,6 +767,7 @@ export type Database = {
           combo_id?: string
           is_swappable?: boolean
           menu_item_id?: string
+          position?: number
           quantity?: number
           swap_group?: string | null
         }
@@ -762,9 +804,11 @@ export type Database = {
       }
       combo_sets: {
         Row: {
+          archived_at: string | null
           branch_id: string
           created_at: string
           description: string | null
+          display_order: number
           id: string
           image_url: string | null
           is_active: boolean
@@ -772,9 +816,11 @@ export type Database = {
           total_price: number
         }
         Insert: {
+          archived_at?: string | null
           branch_id: string
           created_at?: string
           description?: string | null
+          display_order?: number
           id?: string
           image_url?: string | null
           is_active?: boolean
@@ -782,9 +828,11 @@ export type Database = {
           total_price: number
         }
         Update: {
+          archived_at?: string | null
           branch_id?: string
           created_at?: string
           description?: string | null
+          display_order?: number
           id?: string
           image_url?: string | null
           is_active?: boolean
@@ -880,6 +928,7 @@ export type Database = {
           phone: string | null
           preferred_language: string
           restaurant_id: string
+          sort_name: string | null
           total_orders: number
           total_spent: number
           updated_at: string
@@ -898,6 +947,7 @@ export type Database = {
           phone?: string | null
           preferred_language?: string
           restaurant_id: string
+          sort_name?: string | null
           total_orders?: number
           total_spent?: number
           updated_at?: string
@@ -916,6 +966,7 @@ export type Database = {
           phone?: string | null
           preferred_language?: string
           restaurant_id?: string
+          sort_name?: string | null
           total_orders?: number
           total_spent?: number
           updated_at?: string
@@ -928,6 +979,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "branches"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customers_branch_in_restaurant_fkey"
+            columns: ["branch_id", "restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id", "restaurant_id"]
           },
           {
             foreignKeyName: "customers_restaurant_id_fkey"
@@ -1832,6 +1890,7 @@ export type Database = {
           id: string
           order_id: string | null
           redeemed_by: string | null
+          returned_at: string | null
         }
         Insert: {
           amount: number
@@ -1840,6 +1899,7 @@ export type Database = {
           id?: string
           order_id?: string | null
           redeemed_by?: string | null
+          returned_at?: string | null
         }
         Update: {
           amount?: number
@@ -1848,6 +1908,7 @@ export type Database = {
           id?: string
           order_id?: string | null
           redeemed_by?: string | null
+          returned_at?: string | null
         }
         Relationships: [
           {
@@ -1925,6 +1986,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "branches"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gift_cards_branch_in_restaurant_fkey"
+            columns: ["branch_id", "restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id", "restaurant_id"]
           },
           {
             foreignKeyName: "gift_cards_restaurant_id_fkey"
@@ -2100,37 +2168,37 @@ export type Database = {
       }
       loyalty_points: {
         Row: {
-          branch_id: string | null
+          branch_id: string
           customer_id: string
           id: string
           lifetime_earned: number
           lifetime_spent: number
           points_balance: number
-          restaurant_id: string | null
+          restaurant_id: string
           tier: Database["public"]["Enums"]["loyalty_tier"]
           tier_expires_at: string | null
           updated_at: string
         }
         Insert: {
-          branch_id?: string | null
+          branch_id: string
           customer_id: string
           id?: string
           lifetime_earned?: number
           lifetime_spent?: number
           points_balance?: number
-          restaurant_id?: string | null
+          restaurant_id: string
           tier?: Database["public"]["Enums"]["loyalty_tier"]
           tier_expires_at?: string | null
           updated_at?: string
         }
         Update: {
-          branch_id?: string | null
+          branch_id?: string
           customer_id?: string
           id?: string
           lifetime_earned?: number
           lifetime_spent?: number
           points_balance?: number
-          restaurant_id?: string | null
+          restaurant_id?: string
           tier?: Database["public"]["Enums"]["loyalty_tier"]
           tier_expires_at?: string | null
           updated_at?: string
@@ -2142,6 +2210,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "branches"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loyalty_points_branch_in_restaurant_fkey"
+            columns: ["branch_id", "restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id", "restaurant_id"]
           },
           {
             foreignKeyName: "loyalty_points_customer_id_fkey"
@@ -2161,6 +2236,7 @@ export type Database = {
       }
       loyalty_rewards: {
         Row: {
+          branch_id: string
           created_at: string
           description: string | null
           id: string
@@ -2177,6 +2253,7 @@ export type Database = {
           value: number
         }
         Insert: {
+          branch_id: string
           created_at?: string
           description?: string | null
           id?: string
@@ -2193,6 +2270,7 @@ export type Database = {
           value?: number
         }
         Update: {
+          branch_id?: string
           created_at?: string
           description?: string | null
           id?: string
@@ -2209,6 +2287,13 @@ export type Database = {
           value?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "loyalty_rewards_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "loyalty_rewards_menu_item_id_fkey"
             columns: ["menu_item_id"]
@@ -2235,7 +2320,7 @@ export type Database = {
       loyalty_transactions: {
         Row: {
           balance_after: number
-          branch_id: string | null
+          branch_id: string
           created_at: string
           customer_id: string
           description: string | null
@@ -2244,12 +2329,12 @@ export type Database = {
           points: number
           reference_id: string | null
           reference_type: string | null
-          restaurant_id: string | null
+          restaurant_id: string
           type: string
         }
         Insert: {
           balance_after: number
-          branch_id?: string | null
+          branch_id: string
           created_at?: string
           customer_id: string
           description?: string | null
@@ -2258,12 +2343,12 @@ export type Database = {
           points: number
           reference_id?: string | null
           reference_type?: string | null
-          restaurant_id?: string | null
+          restaurant_id: string
           type: string
         }
         Update: {
           balance_after?: number
-          branch_id?: string | null
+          branch_id?: string
           created_at?: string
           customer_id?: string
           description?: string | null
@@ -2272,7 +2357,7 @@ export type Database = {
           points?: number
           reference_id?: string | null
           reference_type?: string | null
-          restaurant_id?: string | null
+          restaurant_id?: string
           type?: string
         }
         Relationships: [
@@ -2282,6 +2367,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "branches"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loyalty_transactions_branch_in_restaurant_fkey"
+            columns: ["branch_id", "restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id", "restaurant_id"]
           },
           {
             foreignKeyName: "loyalty_transactions_customer_id_fkey"
@@ -2413,6 +2505,7 @@ export type Database = {
           low_stock_threshold: number
           name: string
           name_translations: Json
+          out_of_stock: boolean
           prep_time_minutes: number | null
           price: number
           rating: number | null
@@ -2448,6 +2541,7 @@ export type Database = {
           low_stock_threshold?: number
           name: string
           name_translations?: Json
+          out_of_stock?: boolean
           prep_time_minutes?: number | null
           price: number
           rating?: number | null
@@ -2483,6 +2577,7 @@ export type Database = {
           low_stock_threshold?: number
           name?: string
           name_translations?: Json
+          out_of_stock?: boolean
           prep_time_minutes?: number | null
           price?: number
           rating?: number | null
@@ -2661,6 +2756,7 @@ export type Database = {
       }
       order_items: {
         Row: {
+          combo_contents: Json | null
           combo_id: string | null
           created_at: string
           id: string
@@ -2674,10 +2770,12 @@ export type Database = {
           prep_status: string
           quantity: number
           station: string | null
+          stock_taken: Json | null
           subtotal: number
           unit_price: number
         }
         Insert: {
+          combo_contents?: Json | null
           combo_id?: string | null
           created_at?: string
           id?: string
@@ -2691,10 +2789,12 @@ export type Database = {
           prep_status?: string
           quantity: number
           station?: string | null
+          stock_taken?: Json | null
           subtotal: number
           unit_price: number
         }
         Update: {
+          combo_contents?: Json | null
           combo_id?: string | null
           created_at?: string
           id?: string
@@ -2708,6 +2808,7 @@ export type Database = {
           prep_status?: string
           quantity?: number
           station?: string | null
+          stock_taken?: Json | null
           subtotal?: number
           unit_price?: number
         }
@@ -3168,27 +3269,30 @@ export type Database = {
       promo_redemptions: {
         Row: {
           amount_off: number
-          customer_id: string
+          customer_id: string | null
           id: string
           order_id: string | null
           promo_id: string
           redeemed_at: string
+          returned_at: string | null
         }
         Insert: {
           amount_off: number
-          customer_id: string
+          customer_id?: string | null
           id?: string
           order_id?: string | null
           promo_id: string
           redeemed_at?: string
+          returned_at?: string | null
         }
         Update: {
           amount_off?: number
-          customer_id?: string
+          customer_id?: string | null
           id?: string
           order_id?: string | null
           promo_id?: string
           redeemed_at?: string
+          returned_at?: string | null
         }
         Relationships: [
           {
@@ -3632,6 +3736,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "branches"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "staff_members_branch_in_restaurant_fkey"
+            columns: ["branch_id", "restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id", "restaurant_id"]
           },
           {
             foreignKeyName: "staff_members_restaurant_id_fkey"
@@ -4502,10 +4613,13 @@ export type Database = {
       v_active_combos: {
         Row: {
           branch_id: string | null
+          created_at: string | null
           description: string | null
+          display_order: number | null
           id: string | null
           image_url: string | null
           is_active: boolean | null
+          is_available: boolean | null
           items: Json | null
           name: string | null
           total_price: number | null
@@ -4525,7 +4639,9 @@ export type Database = {
           branch_id: string | null
           id: string | null
           image_url: string | null
+          is_86: boolean | null
           is_active: boolean | null
+          is_low_stock: boolean | null
           is_sold_out: boolean | null
           low_stock_threshold: number | null
           name: string | null
@@ -4538,7 +4654,9 @@ export type Database = {
           branch_id?: string | null
           id?: string | null
           image_url?: string | null
+          is_86?: never
           is_active?: boolean | null
+          is_low_stock?: never
           is_sold_out?: never
           low_stock_threshold?: number | null
           name?: string | null
@@ -4551,7 +4669,9 @@ export type Database = {
           branch_id?: string | null
           id?: string | null
           image_url?: string | null
+          is_86?: never
           is_active?: boolean | null
+          is_low_stock?: never
           is_sold_out?: never
           low_stock_threshold?: number | null
           name?: string | null
@@ -4574,6 +4694,15 @@ export type Database = {
     Functions: {
       accept_dispatch: { Args: { p_delivery_id: string }; Returns: undefined }
       accept_staff_invite: { Args: { p_staff_id: string }; Returns: Json }
+      adjust_loyalty_points: {
+        Args: {
+          p_branch_id: string
+          p_customer_id: string
+          p_delta: number
+          p_reason: string
+        }
+        Returns: Json
+      }
       admin_edit_order_notes: {
         Args: { p_notes: string; p_order_id: string }
         Returns: {
@@ -4661,7 +4790,10 @@ export type Database = {
         Returns: Json
       }
       cancel_staff_invite: { Args: { p_staff_id: string }; Returns: Json }
-      check_gift_card: { Args: { p_code: string }; Returns: Json }
+      check_gift_card: {
+        Args: { p_branch_id?: string; p_code: string }
+        Returns: Json
+      }
       check_plan_limit: {
         Args: { p_limit_key: string; p_restaurant_id: string }
         Returns: Json
@@ -4691,6 +4823,8 @@ export type Database = {
       copy_branch_setup: {
         Args: {
           p_copy_hours: boolean
+          p_copy_look?: boolean
+          p_copy_loyalty?: boolean
           p_copy_menu: boolean
           p_copy_settings: boolean
           p_source_branch_id: string
@@ -4706,6 +4840,7 @@ export type Database = {
           p_lng?: number
           p_name: string
           p_restaurant_id: string
+          p_sales_tax_rate?: number
           p_slug: string
           p_timezone?: string
         }
@@ -4799,10 +4934,6 @@ export type Database = {
         Returns: string
       }
       duplicate_menu_item: { Args: { p_item_id: string }; Returns: string }
-      edit_pending_order: {
-        Args: { p_items: Json; p_order_id: string }
-        Returns: Json
-      }
       enqueue_sync_job: {
         Args: { p_integration_id: string; p_kind: string; p_payload?: Json }
         Returns: string
@@ -4811,6 +4942,10 @@ export type Database = {
       fail_delivery: {
         Args: { p_delivery_id: string; p_photo_url?: string; p_reason: string }
         Returns: undefined
+      }
+      find_branch_customer_by_phone: {
+        Args: { p_branch_id: string; p_phone: string }
+        Returns: string
       }
       find_dispatch_candidates: {
         Args: {
@@ -5087,7 +5222,7 @@ export type Database = {
         Args: { p_branch_id: string; p_limit?: number }
         Returns: {
           balance_after: number
-          branch_id: string | null
+          branch_id: string
           created_at: string
           customer_id: string
           description: string | null
@@ -5096,7 +5231,7 @@ export type Database = {
           points: number
           reference_id: string | null
           reference_type: string | null
-          restaurant_id: string | null
+          restaurant_id: string
           type: string
         }[]
         SetofOptions: {
@@ -5107,8 +5242,18 @@ export type Database = {
         }
       }
       list_restaurant_subscriptions: { Args: never; Returns: Json }
+      loyalty_debit_for_order: {
+        Args: {
+          p_branch_id: string
+          p_customer_id: string
+          p_description: string
+          p_order_id: string
+          p_points: number
+        }
+        Returns: number
+      }
       loyalty_program: { Args: { p_branch_id: string }; Returns: Json }
-      loyalty_settings_for: { Args: { p_restaurant_id: string }; Returns: Json }
+      loyalty_settings_for: { Args: { p_branch_id: string }; Returns: Json }
       mark_delivery_arriving: {
         Args: { p_delivery_id: string }
         Returns: undefined
@@ -5131,10 +5276,16 @@ export type Database = {
         Returns: undefined
       }
       my_capabilities: { Args: { p_branch_id: string }; Returns: string[] }
+      my_open_shift: { Args: { p_branch_id: string }; Returns: Json }
       my_pending_staff_invite: { Args: never; Returns: string }
+      next_order_number: { Args: { p_branch_id: string }; Returns: string }
       open_table_session: {
         Args: { p_party_size?: number; p_table_id: string }
         Returns: string
+      }
+      patch_branch_settings: {
+        Args: { p_branch_id: string; p_patch: Json }
+        Returns: Json
       }
       pay_driver_withdrawal: {
         Args: { p_reference?: string; p_withdrawal_id: string }
@@ -5181,13 +5332,19 @@ export type Database = {
         Args: { p_order_id: string; p_tendered?: number }
         Returns: string
       }
+      record_counter_transfer: { Args: { p_order_id: string }; Returns: string }
       redeem_gift_card: {
         Args: { p_code: string; p_max_amount: number; p_order_id: string }
         Returns: number
       }
-      redeem_loyalty_points: {
-        Args: { p_branch_id: string; p_order_id?: string; p_points: number }
-        Returns: Json
+      redeem_promo_for_order: {
+        Args: {
+          p_amount_off?: number
+          p_customer_id?: string
+          p_order_id: string
+          p_promo_id: string
+        }
+        Returns: number
       }
       refund_order: {
         Args: { p_amount: number; p_order_id: string; p_reason?: string }
@@ -5211,6 +5368,14 @@ export type Database = {
       reject_driver_withdrawal: {
         Args: { p_reason?: string; p_withdrawal_id: string }
         Returns: Json
+      }
+      release_order_credits: {
+        Args: { p_order_id: string; p_promo_id?: string }
+        Returns: undefined
+      }
+      reorder_combo_sets: {
+        Args: { p_branch_id: string; p_combo_ids: string[] }
+        Returns: undefined
       }
       reorder_item_modifier_groups: {
         Args: { p_group_ids: string[]; p_menu_item_id: string }
@@ -5251,6 +5416,19 @@ export type Database = {
         Args: { p_delivery_id: string }
         Returns: undefined
       }
+      reserve_order_credits: {
+        Args: {
+          p_customer_id?: string
+          p_gift_card_amount?: number
+          p_gift_card_code?: string
+          p_order_id: string
+          p_points?: number
+          p_points_description?: string
+          p_promo_amount?: number
+          p_promo_id?: string
+        }
+        Returns: Json
+      }
       reset_driver_reject_streak: {
         Args: { p_driver_id: string }
         Returns: undefined
@@ -5281,6 +5459,19 @@ export type Database = {
         }[]
       }
       rotate_table_qr_token: { Args: { p_table_id: string }; Returns: string }
+      save_combo: {
+        Args: {
+          p_branch_id: string
+          p_combo_id: string
+          p_description: string
+          p_image_url: string
+          p_is_active: boolean
+          p_items: Json
+          p_name: string
+          p_total_price: number
+        }
+        Returns: string
+      }
       set_branch_delivery_hours: {
         Args: { p_branch_id: string; p_windows: Json }
         Returns: undefined
@@ -5300,6 +5491,10 @@ export type Database = {
       }
       set_branch_schedule_hours: {
         Args: { p_branch_id: string; p_windows: Json }
+        Returns: undefined
+      }
+      set_combo_archived: {
+        Args: { p_archived: boolean; p_combo_id: string }
         Returns: undefined
       }
       set_driver_kyc_status: {
@@ -5326,13 +5521,14 @@ export type Database = {
       }
       set_loyalty_settings: {
         Args: {
+          p_birthday_points?: number
+          p_branch_id: string
           p_expected_version: string
           p_gold: number
           p_labels?: Json
           p_perks?: Json
           p_platinum: number
           p_points_per_currency: number
-          p_restaurant_id: string
           p_silver: number
         }
         Returns: Json
@@ -5346,6 +5542,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      set_order_item_prep_status: {
+        Args: { p_order_item_id: string; p_prep_status: string }
+        Returns: string
+      }
       set_restaurant_name: {
         Args: { p_name: string; p_restaurant_id: string }
         Returns: Json
@@ -5356,6 +5556,10 @@ export type Database = {
       }
       set_staff_branch_scope: {
         Args: { p_branch_id: string; p_staff_id: string }
+        Returns: Json
+      }
+      set_staff_status: {
+        Args: { p_staff_id: string; p_status: string }
         Returns: Json
       }
       set_stock: {
@@ -5381,6 +5585,10 @@ export type Database = {
       staff_assign_driver: {
         Args: { p_delivery_id: string; p_driver_id: string }
         Returns: undefined
+      }
+      staff_can_ring_up: {
+        Args: { p_branch_id: string; p_user_id: string }
+        Returns: boolean
       }
       stamp_batch_offer: {
         Args: {
@@ -5427,7 +5635,7 @@ export type Database = {
       sweep_abandoned_carts: { Args: never; Returns: number }
       tier_for_lifetime_points: { Args: { p_points: number }; Returns: string }
       tier_for_points: {
-        Args: { p_points: number; p_restaurant_id: string }
+        Args: { p_branch_id: string; p_points: number }
         Returns: string
       }
       tip_pool_distribution: {
@@ -5491,7 +5699,12 @@ export type Database = {
         Returns: undefined
       }
       validate_promo_code: {
-        Args: { p_branch_id: string; p_code: string; p_subtotal: number }
+        Args: {
+          p_branch_id: string
+          p_code: string
+          p_customer_id?: string
+          p_subtotal: number
+        }
         Returns: Json
       }
     }

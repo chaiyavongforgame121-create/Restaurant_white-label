@@ -49,7 +49,8 @@
       "instructions": "Instrucciones (opcional)",
       "instructionsPlaceholder": "p. ej., Incluye tu número de pedido en el concepto de la transferencia",
       "onWithoutImage": "La transferencia QR está activada, pero no hay ninguna imagen QR guardada. Se rechazará a los clientes al pagar hasta que subas una.",
-      "savedButOff": "Tu código QR está guardado, pero <strong>la transferencia QR sigue desactivada</strong>, así que los clientes no pueden elegirla. Márcala arriba en Recoger en tienda (ahora) o Programar entrega (o en ambos) y luego guarda."
+      "savedButOff": "Tu código QR está guardado, pero <strong>la transferencia QR sigue desactivada</strong>, así que los clientes no pueden elegirla. Márcala arriba en Recoger en tienda (ahora) o Programar entrega (o en ambos) y luego guarda.",
+      "perBranch": "Este QR es solo de esta sucursal. Los clientes lo ven al pagar en línea y el cajero lo muestra en la caja de esta sucursal cuando alguien paga por transferencia. Cada sucursal sube el suyo: nunca se copia a otra sucursal."
     },
     "save": "Guardar métodos de pago"
   },

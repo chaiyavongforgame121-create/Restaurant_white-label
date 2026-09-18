@@ -49,6 +49,26 @@
       "label": "Delivery is on, but this branch has no map pin",
       "why": "Riders cannot be dispatched to delivery orders from this branch until the pin is set.",
       "link": "Set the pin"
+    },
+    "tax": {
+      "label": "Check the sales tax rate",
+      "why": "Sales tax is 0% here, so orders are charged no tax. Set this branch’s rate, or tick “0% is correct” under Sales tax if your prices already include it.",
+      "link": "Sales tax"
+    },
+    "staff": {
+      "label": "Invite this branch’s staff",
+      "why": "Nobody works at this branch yet: invite its cashier and kitchen so they can use the counter and the kitchen board.",
+      "link": "Staff"
+    },
+    "transferNoQr": {
+      "label": "Bank transfer is on, but this branch has no payment QR",
+      "why": "Customers cannot pay by transfer until this branch uploads its own QR. Another branch’s QR is never used.",
+      "link": "Upload the QR"
+    },
+    "noRiders": {
+      "label": "Delivery is on, but no rider is approved for this branch",
+      "why": "Delivery orders from this branch cannot be offered to anyone until you approve riders for it.",
+      "link": "Riders"
     }
   },
   "overview": {

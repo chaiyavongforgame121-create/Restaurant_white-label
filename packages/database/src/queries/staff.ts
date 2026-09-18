@@ -81,10 +81,10 @@ export async function cancelStaffInvite(supabase: FavornomsClient, staffId: stri
 }
 
 /**
- * True when inviteStaff failed because that email is already an active member of the
- * restaurant. invite-staff keeps one row per restaurant and email and answers 409
- * already_active, which is exactly what an owner hits when trying to "invite" a cashier to
- * their second branch — that is a Branch access change, not an invite.
+ * True when inviteStaff failed because that email already works at the branch it was invited to,
+ * or at every branch (an owner, or a restaurant-wide row). invite-staff keeps one invitation per
+ * (restaurant, email, branch), so an employee of another branch CAN be invited here; this is only
+ * the case where there is nothing to add.
  */
 export function isStaffAlreadyActiveError(err: unknown): boolean {
   return (
@@ -92,6 +92,36 @@ export function isStaffAlreadyActiveError(err: unknown): boolean {
     err.message.startsWith('invite_staff_failed:409:') &&
     err.message.includes('already_active')
   );
+}
+
+/** True when inviteStaff failed because that email is suspended at this branch: bringing them
+ *  back is Reactivate on the staff list, not a new invitation. */
+export function isStaffAlreadySuspendedError(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    err.message.startsWith('invite_staff_failed:409:') &&
+    err.message.includes('already_suspended')
+  );
+}
+
+/**
+ * Suspends, reactivates or removes a team member through set_staff_status, which enforces who
+ * may (staff.manage where the row works; only the owner changes an owner or admin; nobody
+ * changes their own row; the last owner stays) and writes the audit row. A removed row is final:
+ * the person is invited again to come back. Throws `set_staff_status_failed:<reason>`.
+ */
+export async function setStaffStatus(
+  supabase: FavornomsClient,
+  staffId: string,
+  status: 'active' | 'suspended' | 'removed',
+): Promise<{ changed: boolean }> {
+  const { data, error } = await supabase.rpc('set_staff_status', {
+    p_staff_id: staffId,
+    p_status: status,
+  });
+  if (error) throw new Error(`set_staff_status_failed:${error.message}`);
+  const d = (data ?? {}) as Record<string, unknown>;
+  return { changed: d.changed !== false };
 }
 
 /**

@@ -4,7 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
-import { Save } from 'lucide-react';
+import { Lock, Save } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { DEFAULT_UI_LOCALE, billingErrorMessage, describeBillingError, isUiLocale } from '@favornoms/shared';
 import { Badge, Button, Card } from '@favornoms/ui';
@@ -19,6 +19,7 @@ import { ScheduledOrdersCard } from './scheduled-orders-card';
 import { BrandingCard, type BrandingCardData } from './branding-card';
 import { ServiceFeeCard } from './service-fee-card';
 import { TipSettingsCard } from './tip-settings-card';
+import { useSettingsPatch } from './patch-settings';
 import { StorefrontOverrideCard } from './storefront-override-card';
 
 interface Branch {
@@ -42,6 +43,7 @@ export function BranchSettings({
   branding,
   canUseDelivery,
   canUseCard,
+  canEditSettings,
 }: {
   branch: Branch;
   restaurantStorefront: Record<string, unknown> | null;
@@ -49,6 +51,8 @@ export function BranchSettings({
   branding: BrandingCardData;
   canUseDelivery: boolean;
   canUseCard: boolean;
+  /** branch.settings (owner and admin): what patch_branch_settings requires for the cards below. */
+  canEditSettings: boolean;
 }) {
   const t = useTranslations('branch');
   const rawLocale = useLocale();
@@ -60,6 +64,15 @@ export function BranchSettings({
   const [salesTaxPercent, setSalesTaxPercent] = React.useState(
     branch.sales_tax_rate != null ? String(Number(branch.sales_tax_rate) * 100) : '',
   );
+  // 0% can be the right rate (prices that already include tax). The dashboard's setup checklist
+  // asks about a 0% branch until this is ticked; it lives in settings, not in a column.
+  const [zeroTaxConfirmed, setZeroTaxConfirmed] = React.useState(
+    branch.settings?.sales_tax_zero_confirmed === true,
+  );
+  const saveSettingsPatch = useSettingsPatch(branch.id, () => ({
+    sales_tax_zero_confirmed: branch.settings?.sales_tax_zero_confirmed === true,
+  }));
+  const taxIsZero = !(Number(salesTaxPercent) > 0);
   const [primaryColor, setPrimaryColor] = React.useState(
     (branch.theme_override?.primaryColor as string) ?? '#FF6B35',
   );
@@ -89,6 +102,17 @@ export function BranchSettings({
     const parsedRate = salesTaxPercent.trim()
       ? Math.max(0, Math.min(50, Number(salesTaxPercent) || 0)) / 100
       : 0;
+    // First, so a refusal (it needs the branch settings permission) stops the save before the
+    // columns below are written. Nothing is sent when the tick did not change.
+    if (parsedRate === 0) {
+      const { error: flagError } = await saveSettingsPatch({ sales_tax_zero_confirmed: zeroTaxConfirmed });
+      if (flagError) {
+        setSaving(false);
+        console.error('Saving the 0% sales tax answer failed', flagError);
+        setError(flagError.code === '42501' ? t('errors.noPermission') : t('errors.generic'));
+        return;
+      }
+    }
     const { error: updateError } = await supabase
       .from('branches')
       .update({
@@ -237,6 +261,22 @@ export function BranchSettings({
               />
             </Field>
           </div>
+          {taxIsZero && (
+            <label className="mt-3 flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={zeroTaxConfirmed}
+                // Saved through patch_branch_settings, like the cards below.
+                disabled={!canEditSettings}
+                onChange={(e) => setZeroTaxConfirmed(e.target.checked)}
+                className="mt-1"
+              />
+              <span>
+                {t('settings.tax.zeroConfirmed')}
+                <span className="block text-xs text-muted-foreground">{t('settings.tax.zeroConfirmedHint')}</span>
+              </span>
+            </label>
+          )}
         </Card>
 
         <Card className="p-5">
@@ -258,54 +298,63 @@ export function BranchSettings({
 
         <ClosuresManager branchId={branch.id} timezone={branch.timezone} />
 
+        {/* Every card from here to the storefront layout saves through patch_branch_settings,
+            which needs branch.settings. Without it (a manager) they are shown but locked: a
+            disabled fieldset disables every control inside, the QR uploader's included. */}
+        <fieldset disabled={!canEditSettings} className="m-0 min-w-0 space-y-5 border-0 p-0">
+          {!canEditSettings && (
+            <p className="flex items-start gap-2 rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">
+              <Lock className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{t('settings.readOnly')}</span>
+            </p>
+          )}
 
-        {/* Sits directly after Opening hours on purpose: the picker's available times
+          {/* Sits directly after Opening hours on purpose: the picker's available times
+              ARE those hours, so the two are read together. */}
+          <ScheduledOrdersCard branchId={branch.id} settings={branch.settings} />
 
-            ARE those hours, so the two are read together. */}
+          {canUseDelivery ? (
+            <>
+              <DeliverySettingsCard branchId={branch.id} settings={branch.settings} />
+              {/* Grouped with the other delivery settings and behind the same entitlement:
+                  delivery hours and self-delivery are meaningless without the add-on. */}
+              <DeliveryHoursCard branchId={branch.id} settings={branch.settings} />
+            </>
+          ) : (
+            <AddonUpsellCard
+              branchId={branch.id}
+              title={t('settings.delivery.title')}
+              addon="delivery"
+              price={49}
+              description={t('settings.delivery.description')}
+              bullets={[
+                t('settings.delivery.bulletFees'),
+                t('settings.delivery.bulletDispatch'),
+                t('settings.delivery.bulletTracking'),
+              ]}
+            />
+          )}
 
-        <ScheduledOrdersCard branchId={branch.id} settings={branch.settings} />
-
-        {canUseDelivery ? (
-          <>
-            <DeliverySettingsCard branchId={branch.id} settings={branch.settings} />
-            {/* Grouped with the other delivery settings and behind the same entitlement:
-                delivery hours and self-delivery are meaningless without the add-on. */}
-            <DeliveryHoursCard branchId={branch.id} settings={branch.settings} />
-          </>
-        ) : (
-          <AddonUpsellCard
+          <PaymentMethodsCard
             branchId={branch.id}
-            title={t('settings.delivery.title')}
-            addon="delivery"
-            price={49}
-            description={t('settings.delivery.description')}
-            bullets={[
-              t('settings.delivery.bulletFees'),
-              t('settings.delivery.bulletDispatch'),
-              t('settings.delivery.bulletTracking'),
-            ]}
+            restaurantId={branch.restaurant_id}
+            settings={branch.settings}
+            canUseCard={canUseCard}
           />
-        )}
 
-        <PaymentMethodsCard
-          branchId={branch.id}
-          restaurantId={branch.restaurant_id}
-          settings={branch.settings}
-          canUseCard={canUseCard}
-        />
+          {/* Card-only surcharge, so it sits directly under Payment methods — the two are
+              read together, and the fee is dead without the card entitlement. */}
+          <ServiceFeeCard branchId={branch.id} settings={branch.settings} canUseCard={canUseCard} />
 
-        {/* Card-only surcharge, so it sits directly under Payment methods — the two are
-            read together, and the fee is dead without the card entitlement. */}
-        <ServiceFeeCard branchId={branch.id} settings={branch.settings} canUseCard={canUseCard} />
+          <TipSettingsCard branchId={branch.id} settings={branch.settings} />
 
-        <TipSettingsCard branchId={branch.id} settings={branch.settings} />
-
-        <StorefrontOverrideCard
-          branchId={branch.id}
-          restaurantId={branch.restaurant_id}
-          settings={branch.settings}
-          restaurantStorefront={restaurantStorefront}
-        />
+          <StorefrontOverrideCard
+            branchId={branch.id}
+            restaurantId={branch.restaurant_id}
+            settings={branch.settings}
+            restaurantStorefront={restaurantStorefront}
+          />
+        </fieldset>
 
         <Card className="p-5">
           <details>

@@ -131,6 +131,24 @@ function fmtCurrency(amount: number, currency: string) {
   return `${currency} ${amount.toFixed(2)}`;
 }
 
+/**
+ * The "Paid via" line. payments.method is a stored code, and a receipt reading "Paid via
+ * transfer" does not tell a diner it was the branch's QR code they scanned at the counter.
+ * Unknown codes print as they are rather than as nothing.
+ */
+export function receiptPaymentLabel(method: string | null | undefined): string {
+  switch (method) {
+    case 'cash':
+      return 'Cash';
+    case 'card':
+      return 'Card';
+    case 'transfer':
+      return 'QR transfer';
+    default:
+      return method ?? '';
+  }
+}
+
 /** Compose a standard 80mm sales receipt. */
 export function buildReceipt(input: ReceiptInput): Uint8Array {
   const currency = input.currency ?? 'USD';
@@ -165,7 +183,7 @@ export function buildReceipt(input: ReceiptInput): Uint8Array {
   if (input.taxAmount) b.row('Sales tax', fmtCurrency(input.taxAmount, currency));
   if (input.tipAmount) b.row('Tip', fmtCurrency(input.tipAmount, currency));
   b.bold(true).size('wide').row('TOTAL', fmtCurrency(input.total, currency)).size('normal').bold(false);
-  b.row('Paid via', input.paymentMethod);
+  b.row('Paid via', receiptPaymentLabel(input.paymentMethod));
   if (input.cashTendered !== undefined) {
     b.row('Tendered', fmtCurrency(input.cashTendered, currency));
     b.row('Change', fmtCurrency(Math.max(0, input.cashTendered - input.total), currency));

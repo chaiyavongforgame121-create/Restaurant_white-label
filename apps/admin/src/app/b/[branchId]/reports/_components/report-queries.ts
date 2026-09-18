@@ -190,10 +190,15 @@ export interface CustomersReport extends SectionWindow {
     name: string;
     /** False when name is the report's placeholder ('Guest'), not the customer's real name. */
     has_name?: boolean;
+    /** Completed orders in the range at this branch (the Customers page's rule), so never
+     *  more than lifetime_orders. */
     orders: number;
+    /** Total of those completed orders; never more than lifetime_spent. */
     spend: number;
     last_at: string | null;
+    /** Completed orders at THIS branch, all time: the customer row is the branch's own. */
     lifetime_orders: number | null;
+    /** Total of those completed orders, the same figure as the Customers page's spend. */
     lifetime_spent: number | null;
     tier: string | null;
   }[];

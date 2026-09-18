@@ -4,11 +4,13 @@ import { getBrowserClient } from '@favornoms/database/client';
 
 // The ONE way the storefront answers "which customer row am I?".
 //
-// Settings, the address book, reserve and checkout must all resolve identity
-// the same way — when they don't (e.g. querying `customers` by user_id and
-// taking the newest row) they can land on DIFFERENT rows, and a name the diner
-// saves in settings never reaches checkout. `get_or_create_my_customer` is
-// authoritative: it either returns a uuid or raises.
+// A diner has one customers row PER BRANCH: each branch keeps its own record of them (name,
+// phone, email, consent, address book, points). The login is the only thing shared. So the
+// answer always depends on the branch being browsed, and settings, the address book, reserve
+// and checkout must all resolve it the same way — querying `customers` by user_id alone lands
+// on whichever branch's row comes first, and a name saved in this branch's settings never
+// reaches this branch's checkout. `get_or_create_my_customer(branch)` is authoritative: it
+// either returns this branch's row (creating it on first use) or raises.
 
 /**
  * The failures a diner can act on, keyed by the code Postgres raises, to the `account.errors.*`
@@ -36,8 +38,9 @@ export function customerErrorKey(error: unknown): CustomerErrorKey | null {
 }
 
 /**
- * Resolve (creating if needed) the signed-in diner's customer row. Throws on failure, with the
- * server's message (which carries the code customerErrorKey reads) so callers can translate it.
+ * Resolve (creating if needed) the signed-in diner's customer row AT THIS BRANCH. Throws on
+ * failure, with the server's message (which carries the code customerErrorKey reads) so callers
+ * can translate it.
  */
 export async function resolveMyCustomerId(branchId: string): Promise<string> {
   const supabase = getBrowserClient();

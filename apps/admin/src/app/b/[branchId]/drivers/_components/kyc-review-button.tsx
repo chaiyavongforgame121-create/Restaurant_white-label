@@ -100,10 +100,15 @@ export function KycReviewButton({
     });
     setBusy(false);
     if (rpcErr) {
-      // `set_driver_kyc_status` raises 'forbidden' unless the caller holds an active
-      // owner/manager staff row. An alert() here was swallowed by some mobile browsers,
-      // so a denied review looked like a dead button.
-      if (/forbidden/i.test(rpcErr.message)) {
+      // `set_driver_kyc_status` raises 'forbidden' unless the caller holds drivers.manage at a
+      // branch this rider applied to, and 'forbidden: kyc_shared_with_other_branch' when the
+      // rider also works with a branch the caller does not manage (the status is one value for
+      // every branch). The shared case is tested first: its message contains 'forbidden' too.
+      // An alert() here was swallowed by some mobile browsers, so a denied review looked like
+      // a dead button.
+      if (/kyc_shared_with_other_branch/i.test(rpcErr.message)) {
+        setError(t('review.sharedForbidden'));
+      } else if (/forbidden/i.test(rpcErr.message)) {
         setError(t('review.forbidden'));
       } else {
         console.error('set_driver_kyc_status failed:', rpcErr.message);

@@ -11,12 +11,12 @@ import {
   type TipChannel,
   type TipConfig,
 } from '@favornoms/shared';
-import { getBrowserClient } from '@favornoms/database/client';
 import { Button, Card } from '@favornoms/ui';
+import { useSettingsPatch } from './patch-settings';
 
 // Structured editor for branches.settings.tip_config (jsonb). Saves independently
-// from the main BranchSettings form — merges the tip_config key, never clobbers
-// unrelated settings. The distribution math mirrors the SQL trigger
+// from the main BranchSettings form, through patch_branch_settings: only tip_config, and only
+// when it changed, so unrelated settings are never rewritten. The distribution math mirrors the SQL trigger
 // orders_on_complete_record_tip_split() (see migration `tip_config_and_ledger`).
 
 interface Props {
@@ -49,6 +49,8 @@ function saveErrorKey(err: { message: string; code?: string }): string {
 export function TipSettingsCard({ branchId, settings }: Props) {
   const t = useTranslations('branchOps');
   const router = useRouter();
+  // Sends only what changed since this card was rendered or last saved.
+  const savePatch = useSettingsPatch(branchId, settings);
   const [config, setConfig] = React.useState<TipConfig>(() => parseTipConfig(settings));
   const [saving, setSaving] = React.useState(false);
   const [savedAt, setSavedAt] = React.useState<number | null>(null);
@@ -69,11 +71,7 @@ export function TipSettingsCard({ branchId, settings }: Props) {
     // persists the worker/house split; keep qr_ordering aligned with dine_in.
     const next: TipConfig = { ...config };
     next.qr_ordering = { ...next.dine_in };
-    const supabase = getBrowserClient();
-    const { error: updateError } = await supabase
-      .from('branches')
-      .update({ settings: { ...settings, tip_config: serializeTipConfig(next) } })
-      .eq('id', branchId);
+    const { error: updateError } = await savePatch({ tip_config: serializeTipConfig(next) });
     setSaving(false);
     if (updateError) {
       console.error('Saving tip settings failed', updateError);

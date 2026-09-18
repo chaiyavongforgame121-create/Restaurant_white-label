@@ -18,16 +18,21 @@
     "duplicate": "Duplicate",
     "delete": "Delete",
     "soldOut": "Sold out",
-    "stockLeft": "{count} left"
+    "stockLeft": "{count} left",
+    "soldOutUntil": "Sold out until {time}",
+    "backOnSale": "Back on sale"
   },
   "notices": {
     "savedTracking": "Saved “{name}” — tracking stock, {count} left.",
     "savedUntracked": "Saved “{name}” — stock tracking is off, so the storefront will not mark it sold out.",
-    "copied": "Copied. The copy is hidden from customers, and option groups are not copied — add them in Edit, then switch on “Show on customer menu”.",
+    "copied": "Copied. The copy is hidden from customers, has no option groups and does not track stock yet — set them up in Edit, then switch on “Show on customer menu”.",
     "nowVisible": "“{name}” is now on the customer menu.",
     "nowHidden": "“{name}” is hidden from customers.",
     "visibilityUnchanged": "Nothing was changed. This dish may have been deleted, or your role may not be allowed to edit the menu at this branch.",
-    "reloadFailed": "Saved, but this list could not be reloaded. {reason}"
+    "reloadFailed": "Saved, but this list could not be reloaded. {reason}",
+    "backOnSale": "“{name}” is back on sale.",
+    "backOnSaleEmpty": "“{name}” is no longer marked sold out, but it has none in stock, so it stays sold out until you restock it.",
+    "backOnSaleFailed": "Couldn’t put “{name}” back on sale. {reason}"
   },
   "deleteConfirm": {
     "title": "Delete this menu item?",
@@ -60,7 +65,7 @@
     "imageUrlPlaceholder": "…or paste URL",
     "trackStock": "Track stock",
     "trackStockOnHint": "The storefront marks this item sold out when the count reaches zero.",
-    "trackStockOffHint": "Not counted. The storefront will always offer this item.",
+    "trackStockOffHint": "Not counted. The storefront offers this item unless you mark it sold out.",
     "currentStock": "Current stock",
     "lowStockAt": "Low-stock alert at",
     "showOnMenu": "Show on customer menu",
@@ -71,7 +76,13 @@
     "stockReadFailed": "Could not read this item’s stock settings. {reason}",
     "planLimit": "You’ve reached your plan’s limit ({current} of {limit} items). Upgrade your subscription in Preferences → Plan & billing to add more.",
     "nothingSaved": "Nothing was saved. This item may have been deleted, or your role may not be allowed to edit the menu at this branch.",
-    "optionsWarning": "“{name}” was saved, but one of its option groups could not be saved. {reason} Groups that did save were kept — reopen the item to finish its options."
+    "optionsWarning": "“{name}” was saved, but one of its option groups could not be saved. {reason} Groups that did save were kept — reopen the item to finish its options.",
+    "stockRequired": "Enter how many are in stock now, or untick Track stock.",
+    "stockNotSaved": "Saved “{name}”, but its stock count wasn’t saved. {reason}",
+    "soldOutUntil": "Marked sold out until {time}. Use “Back on sale” on the card, or save a count above 0, to put it back on sale sooner.",
+    "station": "Kitchen station",
+    "stationNone": "No station",
+    "stationHint": "Where this dish is made. The kitchen board can show one station’s tickets at a time."
   },
   "allergenPresets": {
     "peanuts": "Peanuts",
@@ -185,5 +196,12 @@
       "notFound": "This category no longer exists. It may already have been deleted.",
       "unchanged": "Nothing was changed. The category may have been deleted, or your role may not be allowed to edit the menu at this branch."
     }
+  },
+  "stations": {
+    "hot": "Hot",
+    "cold": "Cold",
+    "bar": "Bar",
+    "dessert": "Dessert",
+    "expo": "Expo"
   }
 }

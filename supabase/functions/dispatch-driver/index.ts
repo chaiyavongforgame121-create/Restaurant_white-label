@@ -33,11 +33,21 @@
 //   dropoff-proximity radius — claim_batch_sibling pairs two orders only when the
 //   second is roughly on the way (detour = dist(A,B) − |dist(R,A) − dist(R,B)| ≤
 //   settings.batch_max_detour_mi, default 1.0 mi). No edge-fn change; SQL-only.
+// v2.4 (2026-09-18): callers must be authorized. It used to act on any delivery id for
+//   anyone holding the public anon key: offer it, or with { reset: true } wipe its attempts
+//   and history. Now:
+//   • `Bearer <service role key>`: internal callers. The SQL paths that call this through
+//     pg_net (orders_after_ready_dispatch, private.expire_dispatch_offers, reject_dispatch,
+//     driver_cancel_delivery, requeue_failed_delivery) send private.get_setting('service_role_key').
+//   • `Bearer <user access token>`: the kitchen board and the back office's live deliveries.
+//     The user must hold delivery.manage or kitchen.access at the DELIVERY's branch, per
+//     my_capabilities (owner rows cover every branch of the restaurant; active rows only).
+//   Refusals: 401 auth_required, 403 not_authorized; both before anything is written.
 // v1 history: single-shot nearest-driver assign; source committed 2026-06-11
 //   after living only on the remote.
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
-import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2';
 import { edgeOwnsFeature, featureNotEntitledBody, loadEntitlements } from '../_shared/entitlements.ts';
 
 const CORS = {
@@ -99,7 +109,23 @@ Deno.serve(async (req) => {
 
   const url = Deno.env.get('SUPABASE_URL')!;
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
   const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
+
+  // Who is calling. The service role key is an internal caller; anything else must be a
+  // signed-in user, whose capability at the delivery's branch is checked once that is known.
+  const authHeader = req.headers.get('Authorization') ?? '';
+  const token = /^bearer\s+/i.test(authHeader) ? authHeader.replace(/^bearer\s+/i, '').trim() : '';
+  if (!token) return json(401, { error: 'auth_required' });
+  let userClient: SupabaseClient | null = null;
+  if (token !== serviceKey) {
+    userClient = createClient(url, anonKey, {
+      auth: { persistSession: false },
+      global: { headers: { Authorization: `Bearer ${token}` } },
+    });
+    const { data: userData } = await userClient.auth.getUser();
+    if (!userData?.user) return json(401, { error: 'auth_required' });
+  }
 
   const body = await req.json().catch(() => ({}));
   let deliveryId: string | undefined = body.delivery_id;
@@ -116,6 +142,17 @@ Deno.serve(async (req) => {
     .eq('id', deliveryId)
     .single();
   if (dErr || !delivery) return json(404, { error: 'delivery_not_found' });
+
+  // A signed-in caller dispatches only for a branch they run deliveries or the kitchen at.
+  if (userClient) {
+    const { data: caps, error: capErr } = await userClient.rpc('my_capabilities', {
+      p_branch_id: delivery.branch_id,
+    });
+    const held = !capErr && Array.isArray(caps) ? (caps as unknown[]) : [];
+    if (!held.includes('delivery.manage') && !held.includes('kitchen.access')) {
+      return json(403, { error: 'not_authorized' });
+    }
+  }
 
   // Entitlement gate on the FEATURE, deliberately not on `entitled`. A delivery
   // that already exists was accepted while the account was live; suspending

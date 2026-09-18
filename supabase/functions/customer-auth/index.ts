@@ -116,9 +116,10 @@ Deno.serve(async (req) => {
   const email = `c${norm.digits}@${EMAIL_DOMAIN}`;
   const authClient = createClient(url, anonKey, { auth: { persistSession: false } });
 
-  // A returning diner may be signing in at a brand they have never ordered from. The
-  // trigger only fires on account creation, so top up the customers row every time.
-  // Non-fatal: a provisioning hiccup must never block the sign-in itself.
+  // Each branch keeps its own customers row for a diner, and a returning diner may be signing
+  // in at a branch they have never used. The trigger only fires on account creation, so make
+  // sure THIS branch's row exists every time (provision_customer_for_branch resolves by
+  // branch and login). Non-fatal: a provisioning hiccup must never block the sign-in itself.
   const provision = async (accessToken: string) => {
     const userClient = createClient(url, anonKey, {
       auth: { persistSession: false },
@@ -150,7 +151,7 @@ Deno.serve(async (req) => {
     email,
     password,
     email_confirm: true,
-    // handle_new_user trigger reads these and inserts the customers row for this brand.
+    // handle_new_user trigger reads these and inserts the customers row for this branch.
     user_metadata: {
       signup_type: 'customer',
       branch_id: branchId,

@@ -13,10 +13,9 @@ export default async function AccountPage({ params }: Props) {
     <AccountView
       base={base}
       brandName={storefrontNames(tenant).full}
+      // The diner's record is per branch, so the profile read is scoped by it —
+      // `customers_self_read` alone only narrows to the caller, not to this branch.
       branchId={tenant.branch.id}
-      // Identity is per restaurant, so the profile read has to be scoped by it —
-      // `customers_self` alone only narrows to the caller, not to this tenant.
-      restaurantId={tenant.restaurant.id}
     />
   );
 }

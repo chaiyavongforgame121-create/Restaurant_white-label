@@ -46,21 +46,26 @@ export async function GET(request: NextRequest) {
   if (error) return fail('oauth_failed');
 
   // signInWithOAuth has no user_metadata option, so handle_new_user never provisions a
-  // customers row for a Google signup — do it here. Non-fatal: a failure costs the diner
-  // their points balance on this visit, not their session.
+  // customers row for a Google signup — do it here, for the branch the diner signed in at
+  // (each branch keeps its own record of them; another branch gets its row on first use).
+  // Non-fatal: a failure costs the diner their prefilled profile on this visit, not their
+  // session.
+  //
+  // Called as a method on the client. It used to be pulled off as a bare function to retype
+  // it, which dropped `this` inside supabase-js, threw, and was swallowed below — so a Google
+  // sign-in never provisioned anything here.
   if (restaurantSlug && branchSlug) {
     try {
       const tenant = await resolveTenantBySlug(supabase, restaurantSlug, branchSlug);
       if (tenant) {
-        // Ships in docs/AUTH-OTPLESS.sql; types.ts is regenerated once the human applies it.
-        const rpc = supabase.rpc as unknown as (
-          fn: 'provision_customer_for_branch',
-          args: { p_branch_id: string },
-        ) => Promise<{ error: { message: string } | null }>;
-        await rpc('provision_customer_for_branch', { p_branch_id: tenant.branch.id });
+        const { error: provisionError } = await supabase.rpc('provision_customer_for_branch', {
+          p_branch_id: tenant.branch.id,
+        });
+        if (provisionError) console.error('provision_customer_for_branch failed', provisionError.message);
       }
-    } catch {
+    } catch (err) {
       // Ignore — the row is also created lazily by get_or_create_my_customer / place-order.
+      console.error('provisioning the customer row failed', err);
     }
   }
 

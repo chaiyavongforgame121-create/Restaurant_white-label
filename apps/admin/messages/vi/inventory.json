@@ -1,9 +1,16 @@
 {
   "metaTitle": "Tồn kho · Quản trị Favornoms",
   "title": "Tồn kho",
-  "subtitle": "Theo dõi tồn kho, ghi nhập hàng và hao hụt.",
+  "subtitle": "Theo dõi tồn kho, ghi nhập hàng và hao hụt, và đánh dấu món hết hàng.",
+  "accessDenied": {
+    "title": "Không có quyền quản lý tồn kho",
+    "reason": "Chỉ chủ quán, quản trị viên và quản lý mới được quản lý tồn kho tại {branch}."
+  },
+  "loadFailed": "Không tải được một phần của trang này, nên một số mục có thể trống hoặc chưa cập nhật. Hãy tải lại trang để thử lại.",
+  "liveOff": "Cập nhật trực tiếp đang tạm dừng. Số lượng có thể chưa cập nhật cho đến khi có kết nối lại.",
   "stats": {
     "tracked": "Món theo dõi",
+    "soldOut": "Hết hàng",
     "lowStock": "Sắp hết hàng"
   },
   "errors": {
@@ -11,36 +18,86 @@
     "network": "Không kết nối được máy chủ. Kiểm tra kết nối mạng rồi thử lại.",
     "permissionDenied": "Bạn không có quyền thay đổi mục này.",
     "invalidValue": "Giá trị không hợp lệ. Vui lòng kiểm tra rồi thử lại.",
-    "positiveQuantity": "Nhập số lượng lớn hơn 0"
+    "notFound": "Món này không còn ở chi nhánh này. Hãy tải lại trang.",
+    "wholeQuantity": "Nhập một số nguyên lớn hơn 0.",
+    "wholeCount": "Nhập một số nguyên từ 0 trở lên.",
+    "costInvalid": "Nhập giá vốn từ 0 trở lên, hoặc để trống."
   },
   "tracking": {
     "failed": "Không đổi được chế độ theo dõi tồn kho của “{name}”. {reason}",
     "notSaved": "Chưa lưu được gì cho “{name}”. Có thể món đã bị xóa, hoặc vai trò của bạn không được sửa thực đơn ở chi nhánh này.",
-    "off": "Đã tắt theo dõi tồn kho cho “{name}” — trang đặt món sẽ không còn báo món này hết hàng, và số lượng đã được xóa, nên khi đánh dấu lại sẽ bắt đầu từ 0.",
-    "on": "Đang theo dõi tồn kho cho “{name}” — còn {count}.",
-    "onEmpty": "Đang theo dõi tồn kho cho “{name}”, nhưng số lượng còn 0 nên khách sẽ thấy món hết hàng ngay. Hãy ghi nhập hàng để bán lại."
+    "off": "Đã tắt theo dõi tồn kho cho “{name}”. Món này không còn được đếm, và khi đánh dấu lại sẽ hỏi số lượng mới.",
+    "on": "Đang theo dõi tồn kho cho “{name}” — còn {count} trong kho.",
+    "onEmpty": "Đang theo dõi tồn kho cho “{name}”, nhưng trong kho còn 0 nên khách sẽ thấy món hết hàng ngay. Hãy ghi nhập hàng để bán lại."
   },
-  "lowStock": {
-    "title": "Cảnh báo sắp hết hàng",
-    "detail": "Còn {left} · cảnh báo khi còn {threshold}"
+  "soldOutFailed": "Không đổi được trạng thái hết hàng của “{name}”. {reason}",
+  "thresholdFailed": "Không đổi được mức cảnh báo của “{name}”. {reason}",
+  "alerts": {
+    "soldOutTitle": "Hết hàng",
+    "soldOutHint": "Khách và quầy thu ngân hiện không đặt được các món này.",
+    "lowTitle": "Sắp hết hàng",
+    "until": "Hết hàng đến {time}",
+    "untilWithCount": "Hết hàng đến {time} · còn {count} trong kho",
+    "noneLeft": "Không còn món nào",
+    "lowDetail": "Còn {left} · cảnh báo khi còn {threshold}"
+  },
+  "status": {
+    "hidden": "Đang ẩn",
+    "hiddenHint": "Không có trên thực đơn của khách, nên không tính vào tổng số và cảnh báo.",
+    "soldOutUntil": "Hết hàng đến {time}",
+    "soldOut": "Hết hàng",
+    "low": "Sắp hết"
   },
   "actions": {
     "restock": "Nhập hàng",
-    "waste": "Hao hụt"
+    "waste": "Hao hụt",
+    "count": "Đặt số lượng",
+    "backOnSale": "Bán lại",
+    "markSoldOut": "Đánh dấu hết hàng",
+    "editThreshold": "Mức cảnh báo sắp hết hàng của {name}",
+    "saveThreshold": "Lưu",
+    "cancelThreshold": "Hủy"
+  },
+  "markSoldOutConfirm": {
+    "title": "Đánh dấu “{name}” hết hàng?",
+    "body": "Khách và quầy thu ngân sẽ không đặt được món này cho đến nửa đêm (giờ của chi nhánh), hoặc cho đến khi bạn mở bán lại hoặc nhập hàng.",
+    "confirm": "Đánh dấu hết hàng"
+  },
+  "notices": {
+    "restocked": "Đã thêm {delta} cho “{name}” — hiện còn {count} trong kho.",
+    "backOnSale": "Món đã được bán lại.",
+    "wasted": "Đã ghi hao hụt {quantity} “{name}” — còn {count}.",
+    "nowSoldOut": "Không còn món nào, nên khách sẽ thấy món hết hàng.",
+    "counted": "Đã đếm được {count} “{name}” (trước đó {previous}).",
+    "countedFirst": "Đã đếm được {count} “{name}”.",
+    "markedSoldOut": "“{name}” hết hàng đến {time}.",
+    "markedSoldOutNoTime": "Đã đánh dấu “{name}” hết hàng.",
+    "backOnSaleNow": "“{name}” đã được bán lại.",
+    "backOnSaleEmpty": "“{name}” không còn bị đánh dấu hết hàng, nhưng trong kho không còn món nào, nên vẫn hết hàng cho đến khi bạn nhập hàng.",
+    "thresholdSaved": "“{name}” sẽ cảnh báo khi còn {threshold}."
   },
   "table": {
     "item": "Món",
     "trackStock": "Theo dõi tồn kho",
-    "stock": "Tồn kho",
-    "threshold": "Ngưỡng"
+    "trackStockFor": "Theo dõi tồn kho cho {name}",
+    "stock": "Trong kho",
+    "threshold": "Cảnh báo khi còn",
+    "actions": "Thao tác"
   },
   "restocks": {
     "title": "Nhập hàng gần đây",
-    "empty": "Chưa ghi lần nhập hàng nào."
+    "empty": "Chưa ghi lần nhập hàng nào.",
+    "costEach": "{cost} mỗi đơn vị"
   },
   "waste": {
     "title": "Hao hụt gần đây",
     "empty": "Chưa ghi hao hụt nào."
+  },
+  "counts": {
+    "title": "Lần đếm gần đây",
+    "empty": "Chưa có lần đếm tồn kho nào.",
+    "entry": "{previous} → {count}",
+    "entryFirst": "Đặt thành {count}"
   },
   "reasons": {
     "expired": "Hết hạn",
@@ -52,8 +109,10 @@
   },
   "restockDialog": {
     "title": "Nhập hàng: {name}",
-    "quantity": "Số lượng",
-    "cost": "Giá vốn mỗi đơn vị (USD, không bắt buộc)",
+    "inStock": "Hiện còn {count} trong kho.",
+    "clears86": "Món này đang bị đánh dấu hết hàng đến {time}. Nhập hàng sẽ mở bán lại.",
+    "quantity": "Nhận được bao nhiêu?",
+    "cost": "Giá vốn mỗi đơn vị ({currency}, không bắt buộc)",
     "supplier": "Nhà cung cấp (không bắt buộc)",
     "notes": "Ghi chú (không bắt buộc)",
     "cancel": "Hủy",
@@ -61,10 +120,23 @@
   },
   "wasteDialog": {
     "title": "Ghi hao hụt — {name}",
+    "inStock": "Hiện còn {count} trong kho.",
     "quantity": "Số lượng",
     "reason": "Lý do",
     "notes": "Ghi chú (không bắt buộc)",
     "cancel": "Hủy",
     "submit": "Ghi hao hụt"
+  },
+  "countDialog": {
+    "title": "Đếm {name}",
+    "startTitle": "Theo dõi tồn kho cho {name}",
+    "hint": "Thay thế số lượng hiện tại ({count}). Dùng sau khi kiểm kho.",
+    "startHint": "Hiện có bao nhiêu? Khách đặt được cho đến khi số lượng về 0.",
+    "quantity": "Hiện có bao nhiêu?",
+    "notes": "Ghi chú (không bắt buộc)",
+    "clears86": "Số lượng lớn hơn 0 cũng mở bán lại món nếu món đang bị đánh dấu hết hàng.",
+    "cancel": "Hủy",
+    "submit": "Lưu số lượng",
+    "startSubmit": "Bắt đầu theo dõi"
   }
 }

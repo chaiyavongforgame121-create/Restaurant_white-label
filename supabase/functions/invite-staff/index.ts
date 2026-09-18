@@ -26,6 +26,11 @@
 // The response says which happened (`emailed`), because the admin UI has to word those two
 // outcomes differently — see staff-view.tsx.
 //
+// BRANCHES (2026-09-18): every branch is its own team. The branch must belong to the restaurant
+// in the request (400 branch_not_in_restaurant; this closed a cross-tenant takeover), an admin
+// of one branch invites into that branch only, and invitations are de-duplicated per
+// (restaurant, email, branch), so an employee of one branch can be invited to another.
+//
 // RECOVERED 2026-08-28: this function was deployed (v1) but its source was never
 // committed. Pulled back out of the live project so the repo is the source of truth
 // again. Only change on recovery: the caller allow-list gains 'admin'.
@@ -70,6 +75,11 @@ type AssignableRole = (typeof ASSIGNABLE_ROLES)[number];
  *  day-to-day manager should not be able to do, and the owner asked for staff
  *  management to sit above Manager. */
 const INVITER_ROLES = ['owner', 'admin'] as const;
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Which of several rows for one address and branch the invitation acts on: the live one. */
+const STATUS_RANK: Record<string, number> = { active: 0, suspended: 1, pending: 2, removed: 3 };
 
 interface Body {
   email: string;
@@ -117,57 +127,120 @@ Deno.serve(async (req) => {
   if (!ASSIGNABLE_ROLES.includes(body.role)) {
     return json({ error: 'invalid_role', allowed: ASSIGNABLE_ROLES }, 400);
   }
+  // One spelling of the address for the lookup, the row and the email.
+  const email = String(body.email).trim().toLowerCase();
+  if (!email.includes('@')) {
+    return json({ error: 'bad_request', missing: ['email'] }, 400);
+  }
 
   // Admin client for privileged actions
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
   });
 
-  const { data: callerStaff } = await admin
-    .from('staff_members')
-    .select('role, restaurant_id')
-    .eq('user_id', userData.user.id)
-    .eq('restaurant_id', body.restaurant_id)
-    .eq('status', 'active')
-    .in('role', [...INVITER_ROLES])
-    .maybeSingle();
-
-  if (!callerStaff) {
+  // Every row the caller holds here, not maybeSingle(): someone with an owner row and a branch
+  // row (or admin rows at two branches) made maybeSingle() error, which read as "not allowed".
+  const [{ data: callerRows }, { data: restaurant }] = await Promise.all([
+    admin
+      .from('staff_members')
+      .select('role, branch_id')
+      .eq('user_id', userData.user.id)
+      .eq('restaurant_id', body.restaurant_id)
+      .eq('status', 'active')
+      .in('role', [...INVITER_ROLES]),
+    admin.from('restaurants').select('owner_user_id').eq('id', body.restaurant_id).maybeSingle(),
+  ]);
+  const inviterRows = callerRows ?? [];
+  // restaurants.owner_user_id is the owner even without an owner row, as everywhere else.
+  const callerIsOwner =
+    inviterRows.some((r) => r.role === 'owner') || restaurant?.owner_user_id === userData.user.id;
+  if (!callerIsOwner && inviterRows.length === 0) {
     return json({ error: 'forbidden', reason: 'must be owner or admin' }, 403);
   }
+  // An owner, or an admin of every branch (branch_id null), invites anywhere in the restaurant.
+  const callerRestaurantWide = callerIsOwner || inviterRows.some((r) => r.branch_id === null);
 
   // Only an owner may mint another admin — otherwise an admin could clone their own
   // level of access and the owner-only boundary stops meaning anything.
-  if (body.role === 'admin' && callerStaff.role !== 'owner') {
+  if (body.role === 'admin' && !callerIsOwner) {
     return json({ error: 'forbidden', reason: 'only the owner can add an admin' }, 403);
   }
 
-  // Idempotent: re-use existing pending row for same (restaurant, email)
-  const existing = await admin
+  // The branch must belong to the restaurant named in the same request. Nothing checked this, and
+  // being owner or admin of your own restaurant was enough to write a staff row pointing at any
+  // other restaurant's branch: a cross-tenant takeover. The database now refuses such a row too
+  // (staff_members_branch_in_restaurant_fkey); this answers with a clear 400 first.
+  const branchId = body.branch_id ?? null;
+  if (branchId !== null) {
+    const branch = UUID_RE.test(branchId)
+      ? await admin
+          .from('branches')
+          .select('id')
+          .eq('id', branchId)
+          .eq('restaurant_id', body.restaurant_id)
+          .maybeSingle()
+      : { data: null };
+    if (!branch.data) {
+      return json({ error: 'branch_not_in_restaurant' }, 400);
+    }
+  }
+
+  // An admin of one branch hands out access to that branch only: not to another branch, and not
+  // to every branch at once.
+  if (!callerRestaurantWide) {
+    const ownBranches = new Set(inviterRows.map((r) => r.branch_id).filter((id): id is string => !!id));
+    if (branchId === null || !ownBranches.has(branchId)) {
+      return json({ error: 'forbidden', reason: 'branch_scoped_inviter' }, 403);
+    }
+  }
+
+  // One invitation per (restaurant, email, branch). It was one per (restaurant, email), so a
+  // cashier of the first branch could never be invited to the second: they were "already active".
+  const { data: existingRows, error: existingErr } = await admin
     .from('staff_members')
-    .select('id, status, role, user_id')
+    .select('id, status, role, user_id, branch_id')
     .eq('restaurant_id', body.restaurant_id)
-    .eq('invited_email', body.email.toLowerCase())
-    .maybeSingle();
+    .eq('invited_email', email);
+  if (existingErr) {
+    return json({ error: 'lookup_failed', detail: existingErr.message }, 500);
+  }
+  const rows = existingRows ?? [];
+  // Already working everywhere (an owner, or an active row for every branch): nothing to add.
+  const everywhere = rows.find(
+    (r) => r.status === 'active' && (r.role === 'owner' || r.branch_id === null),
+  );
+  if (everywhere) {
+    return json({ error: 'already_active', staff_id: everywhere.id }, 409);
+  }
+  // The live row for this branch wins over a removed one, should both exist for the address.
+  // Rows with an account always carry its address (migration 20260918190000 backfilled the ones
+  // that did not and fills it on insert), so a removed team member is found here and revived
+  // below instead of getting a second row that uniq_staff_user_branch refuses on accept.
+  const existing = rows
+    .filter((r) => (r.branch_id ?? null) === branchId)
+    .sort((a, b) => (STATUS_RANK[a.status] ?? 9) - (STATUS_RANK[b.status] ?? 9))[0];
 
   let staffId: string;
-  if (existing.data?.id) {
-    staffId = existing.data.id;
-    if (existing.data.status === 'active') {
+  if (existing) {
+    staffId = existing.id;
+    if (existing.status === 'active') {
       return json({ error: 'already_active', staff_id: staffId }, 409);
     }
-    // Inviting the same address again is how an owner corrects a mistake (Cashier -> Manager,
-    // one branch -> all). The row used to be reused as it was, so the email went out, the modal
-    // said "Invitation sent", and the person joined with the old role. The newest invitation wins.
-    if (existing.data.status === 'pending' && !existing.data.user_id) {
-      if (existing.data.role === 'admin' && callerStaff.role !== 'owner') {
+    // Suspended here: bringing them back is Reactivate on the Staff page, not a new invitation.
+    if (existing.status === 'suspended') {
+      return json({ error: 'already_suspended', staff_id: staffId }, 409);
+    }
+    // Inviting the same address again is how an owner corrects a mistake (Cashier -> Manager).
+    // The row used to be reused as it was, so the email went out, the modal said "Invitation
+    // sent", and the person joined with the old role. The newest invitation wins.
+    if (existing.status === 'pending' && !existing.user_id) {
+      if (existing.role === 'admin' && !callerIsOwner) {
         return json({ error: 'forbidden', reason: 'only the owner can change an admin invitation' }, 403);
       }
       const updated = await admin
         .from('staff_members')
         .update({
           role: body.role,
-          branch_id: body.branch_id ?? null,
           permissions: body.permissions ?? [],
         })
         .eq('id', staffId)
@@ -179,13 +252,38 @@ Deno.serve(async (req) => {
         return json({ error: 'update_failed', detail: updated.error.message }, 500);
       }
     }
+    // Removed from this branch earlier (set_staff_status): a removed row is final, so inviting the
+    // person again turns it back into an open invitation. A second row for the same account and
+    // branch would be refused by uniq_staff_user_branch the moment they accepted.
+    if (existing.status === 'removed') {
+      if (existing.role === 'admin' && !callerIsOwner) {
+        return json({ error: 'forbidden', reason: 'only the owner can change an admin invitation' }, 403);
+      }
+      const revived = await admin
+        .from('staff_members')
+        .update({
+          role: body.role,
+          permissions: body.permissions ?? [],
+          status: 'pending',
+          user_id: null,
+          accepted_at: null,
+          invited_at: new Date().toISOString(),
+        })
+        .eq('id', staffId)
+        .eq('status', 'removed')
+        .select('id')
+        .single();
+      if (revived.error) {
+        return json({ error: 'update_failed', detail: revived.error.message }, 500);
+      }
+    }
   } else {
     const insert = await admin
       .from('staff_members')
       .insert({
         restaurant_id: body.restaurant_id,
-        branch_id: body.branch_id ?? null,
-        invited_email: body.email.toLowerCase(),
+        branch_id: branchId,
+        invited_email: email,
         role: body.role,
         status: 'pending',
         permissions: body.permissions ?? [],
@@ -217,7 +315,7 @@ Deno.serve(async (req) => {
   // every staff invitation a dead end.
   const acceptPath = `/invite/accept?staff_id=${staffId}`;
   const redirectTo = `${PUBLIC_ADMIN_URL}/auth/callback?next=${encodeURIComponent(acceptPath)}`;
-  const invite = await admin.auth.admin.inviteUserByEmail(body.email, {
+  const invite = await admin.auth.admin.inviteUserByEmail(email, {
     redirectTo,
     data: { signup_type: 'staff', staff_id: staffId },
   });
@@ -248,7 +346,7 @@ Deno.serve(async (req) => {
   // Same three columns acceptStaffInvite writes, so both paths land in the same state.
   const existingAuthUser = await admin.auth.admin.generateLink({
     type: 'magiclink',
-    email: body.email,
+    email,
     options: { redirectTo },
   });
   const existingUser = existingAuthUser.data?.user;
@@ -267,7 +365,7 @@ Deno.serve(async (req) => {
     existingUser?.user_metadata?.password_set === true ||
     (existingUser?.identities ?? []).some((identity) => identity.provider !== 'email');
   if (!canSignIn) {
-    const recovery = await admin.auth.resetPasswordForEmail(body.email, { redirectTo });
+    const recovery = await admin.auth.resetPasswordForEmail(email, { redirectTo });
     if (recovery.error) {
       if (recovery.error.status === 429) {
         return json({ error: 'rate_limited', detail: recovery.error.message }, 429);

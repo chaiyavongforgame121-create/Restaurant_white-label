@@ -18,16 +18,21 @@
     "duplicate": "Duplicar",
     "delete": "Eliminar",
     "soldOut": "Agotado",
-    "stockLeft": "{count, plural, one {Queda #} other {Quedan #}}"
+    "stockLeft": "{count, plural, one {Queda #} other {Quedan #}}",
+    "soldOutUntil": "Agotado hasta {time}",
+    "backOnSale": "Volver a vender"
   },
   "notices": {
     "savedTracking": "Se guardó “{name}”: con control de inventario, {count, plural, one {queda #} other {quedan #}}.",
     "savedUntracked": "Se guardó “{name}”: sin control de inventario, así que la tienda en línea no lo marcará como agotado.",
-    "copied": "Copiado. La copia está oculta para los clientes y los grupos de opciones no se copian: agrégalos en Editar y luego activa “Mostrar en el menú para clientes”.",
+    "copied": "Copiado. La copia está oculta para los clientes y todavía no tiene grupos de opciones ni control de inventario: configúralos en Editar y luego activa “Mostrar en el menú para clientes”.",
     "nowVisible": "“{name}” ya está en el menú para clientes.",
     "nowHidden": "“{name}” está oculto para los clientes.",
     "visibilityUnchanged": "No se cambió nada. Es posible que este producto se haya eliminado o que tu rol no pueda editar el menú en esta sucursal.",
-    "reloadFailed": "Se guardó, pero no se pudo recargar esta lista. {reason}"
+    "reloadFailed": "Se guardó, pero no se pudo recargar esta lista. {reason}",
+    "backOnSale": "“{name}” vuelve a estar a la venta.",
+    "backOnSaleEmpty": "“{name}” ya no está marcado como agotado, pero no hay nada en inventario, así que sigue agotado hasta que lo reabastezcas.",
+    "backOnSaleFailed": "No se pudo volver a poner “{name}” a la venta. {reason}"
   },
   "deleteConfirm": {
     "title": "¿Eliminar este producto del menú?",
@@ -60,7 +65,7 @@
     "imageUrlPlaceholder": "…o pega una URL",
     "trackStock": "Controlar inventario",
     "trackStockOnHint": "La tienda en línea marca este producto como agotado cuando el conteo llega a cero.",
-    "trackStockOffHint": "Sin conteo. La tienda en línea siempre ofrecerá este producto.",
+    "trackStockOffHint": "Sin conteo. La tienda en línea ofrece este producto salvo que lo marques como agotado.",
     "currentStock": "Inventario actual",
     "lowStockAt": "Alerta de inventario bajo en",
     "showOnMenu": "Mostrar en el menú para clientes",
@@ -71,7 +76,13 @@
     "stockReadFailed": "No se pudo leer la configuración de inventario de este producto. {reason}",
     "planLimit": "Llegaste al límite de tu plan ({current} de {limit} productos). Mejora tu suscripción en Preferencias → Plan y facturación para agregar más.",
     "nothingSaved": "No se guardó nada. Es posible que este producto se haya eliminado o que tu rol no pueda editar el menú en esta sucursal.",
-    "optionsWarning": "Se guardó “{name}”, pero uno de sus grupos de opciones no se pudo guardar. {reason} Los grupos que sí se guardaron se conservaron: vuelve a abrir el producto para terminar sus opciones."
+    "optionsWarning": "Se guardó “{name}”, pero uno de sus grupos de opciones no se pudo guardar. {reason} Los grupos que sí se guardaron se conservaron: vuelve a abrir el producto para terminar sus opciones.",
+    "stockRequired": "Ingresa cuántos hay en inventario ahora, o desmarca Controlar inventario.",
+    "stockNotSaved": "Se guardó “{name}”, pero no su cantidad en inventario. {reason}",
+    "soldOutUntil": "Marcado como agotado hasta {time}. Usa “Volver a vender” en la tarjeta, o guarda una cantidad mayor que 0, para ponerlo a la venta antes.",
+    "station": "Estación de cocina",
+    "stationNone": "Sin estación",
+    "stationHint": "Dónde se prepara este plato. La pantalla de cocina puede mostrar los pedidos de una estación a la vez."
   },
   "allergenPresets": {
     "peanuts": "Maní",
@@ -185,5 +196,12 @@
       "notFound": "Esta categoría ya no existe. Puede que ya se haya eliminado.",
       "unchanged": "No se cambió nada. Puede que la categoría se haya eliminado o que tu rol no tenga permiso para editar el menú en esta sucursal."
     }
+  },
+  "stations": {
+    "hot": "Caliente",
+    "cold": "Fría",
+    "bar": "Bar",
+    "dessert": "Postres",
+    "expo": "Pase"
   }
 }

@@ -20,10 +20,16 @@ import {
 import { getBrowserClient } from '@favornoms/database/client';
 import { listItemModifierGroups } from '@favornoms/database/queries';
 import { Button, Sheet } from '@favornoms/ui';
+import { r2 } from './counter-pricing';
 
 interface Props {
-  /** The item being configured, or null when the sheet is closed. */
+  /** The item being configured, or null when the sheet is closed. `price` is what it sells for
+   *  right now, happy hour included. */
   item: MenuItem | null;
+  /** The menu price, when a happy hour has it lower right now. */
+  listPrice?: number | null;
+  /** The happy hour's name, shown beside the struck-through menu price. */
+  priceLabel?: string | null;
   onClose: () => void;
   onAdd: (args: {
     item: MenuItem;
@@ -46,7 +52,7 @@ interface Props {
  * without leaving the keyboard, because the queue does not stop while a cashier hunts for
  * a button.
  */
-export function CounterItemSheet({ item, onClose, onAdd }: Props) {
+export function CounterItemSheet({ item, listPrice, priceLabel, onClose, onAdd }: Props) {
   const t = useTranslations('counter');
   const rawLocale = useLocale();
   const locale = isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE;
@@ -57,8 +63,11 @@ export function CounterItemSheet({ item, onClose, onAdd }: Props) {
   const [loading, setLoading] = React.useState(false);
   const [loadError, setLoadError] = React.useState(false);
 
+  // Keyed on the id, not the object: the till hands the sheet a fresh object whenever the menu
+  // or a happy-hour price is re-read, and that must not wipe the options being picked.
+  const itemId = item?.id ?? null;
   React.useEffect(() => {
-    if (!item) return undefined;
+    if (!itemId) return undefined;
     // A second tap while the first item's groups are in flight must not paint that item's
     // options over this one.
     let cancelled = false;
@@ -70,7 +79,7 @@ export function CounterItemSheet({ item, onClose, onAdd }: Props) {
     setLoading(true);
     void (async () => {
       try {
-        const rows = await listItemModifierGroups(getBrowserClient(), item.id);
+        const rows = await listItemModifierGroups(getBrowserClient(), itemId);
         if (cancelled) return;
         setGroups(rows);
         setSelections(defaultSelections(rows));
@@ -86,15 +95,16 @@ export function CounterItemSheet({ item, onClose, onAdd }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [item]);
+  }, [itemId]);
 
   const delta = React.useMemo(() => modifierDelta(groups, selections), [groups, selections]);
   const problem = React.useMemo(
     () => validateSelections(groups, selections, locale),
     [groups, selections, locale],
   );
-  const unitPrice = (item?.price ?? 0) + delta;
-  const lineTotal = Math.round(unitPrice * qty * 100) / 100;
+  // Rounded the way place-order rounds a line, so the sheet's button and the cart agree.
+  const unitPrice = r2((item?.price ?? 0) + delta);
+  const lineTotal = r2(unitPrice * qty);
   const soldOut = !!item?.outOfStock;
   const blocked = loading || !!problem || soldOut;
 
@@ -150,7 +160,17 @@ export function CounterItemSheet({ item, onClose, onAdd }: Props) {
           <div>
             <p className="font-display text-primary text-2xl font-bold">
               {formatCurrency(item.price)}
+              {listPrice != null && listPrice > item.price && (
+                <span className="text-muted-foreground ml-2 text-base font-normal line-through">
+                  {formatCurrency(listPrice)}
+                </span>
+              )}
             </p>
+            {listPrice != null && listPrice > item.price && (
+              <p className="text-success text-xs font-semibold">
+                {priceLabel ? t('item.happyHourNamed', { name: priceLabel }) : t('item.happyHour')}
+              </p>
+            )}
             {item.description && (
               <p className="text-muted-foreground mt-1 text-sm">{item.description}</p>
             )}
