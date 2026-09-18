@@ -318,8 +318,10 @@ export async function loadBranchDashboard(
           .limit(REFUND_ROW_LIMIT)
       : null,
 
-    // v_low_stock_items has no is_active predicate of its own, so an archived item counts
-    // as out of stock unless it is filtered here.
+    // The same view, and so the same meaning of "sold out" and "low", as the inventory page this
+    // card links to (20260918170000_stock_integrity): is_sold_out covers a kitchen 86 as well as
+    // an empty shelf. The view lists active dishes only; the is_active filter stays as a belt for
+    // a database that has not run that migration yet.
     scope.canManageInventory
       ? supabase
           .from('v_low_stock_items')

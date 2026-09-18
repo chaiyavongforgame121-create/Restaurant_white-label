@@ -4,7 +4,7 @@
     "reason": "Only the owner or an admin can manage the team at {branch}."
   },
   "title": "Staff",
-  "summary": "{count, plural, one {# member} other {# members}} at {branch}",
+  "summary": "{count, plural, one {# person works} other {# people work}} at {branch}",
   "inviteStaff": "Invite staff",
   "empty": {
     "title": "No staff yet",
@@ -73,7 +73,8 @@
       "invalidBranch": "That branch is not part of this restaurant.",
       "notFound": "This team member no longer exists. Reload the page.",
       "generic": "Branch access could not be changed. Try again."
-    }
+    },
+    "everyBranchLocked": "Only the owner or an admin of every branch can change access for someone who works at every branch."
   },
   "pendingInvite": {
     "copyLink": "Copy invite link",
@@ -120,7 +121,7 @@
     "role": "Role",
     "scope": "Scope",
     "thisBranch": "This branch only",
-    "thisBranchHint": "Access limited to this location",
+    "thisBranchHint": "Works at {branch} only",
     "allBranches": "All branches",
     "allBranchesHint": "Full restaurant access (managers)",
     "alsoEmail": "Also send an email invitation",
@@ -129,13 +130,52 @@
     "createLink": "Create invite link",
     "send": "Send invite",
     "errors": {
-      "alreadyActive": "{email} is already on your team. To change which branches they can use, set their Branch access in the staff list instead of inviting them again.",
+      "alreadyActive": "{email} already works at {branch}, or at every branch. There is nothing to add.",
       "rateLimited": "Too many emails were sent in the last hour. The built-in email service allows only a few per hour — try again later, or connect your own email service in Supabase (Authentication → SMTP).",
       "onlyOwnerAdmin": "Only the owner can invite or change an admin.",
       "notAllowed": "Only the owner or an admin can invite staff.",
       "emailFailed": "The invitation email could not be sent. Try again later.",
       "emailNotSent": "The invitation email to {email} could not be sent, but the invitation is saved in your staff list. Untick “Also send an email invitation” and create an invite link to share instead.",
-      "generic": "The invitation could not be created. Try again."
+      "generic": "The invitation could not be created. Try again.",
+      "alreadySuspended": "{email} is suspended at {branch}. Reactivate them in the staff list instead of inviting them again.",
+      "branchNotInRestaurant": "That branch is not part of this restaurant. Reload the page and try again.",
+      "ownBranchOnly": "You can invite people to {branch} only. Ask the owner to invite someone to other branches."
+    }
+  },
+  "sections": {
+    "thisBranch": "Team at {branch}",
+    "allBranches": "Works at every branch",
+    "allBranchesHint": "Owners, and people invited to all branches. They can work here too.",
+    "otherBranches": "{count, plural, one {# person at other branches} other {# people at other branches}}",
+    "otherBranchesHint": "For reference only. Each branch manages its own team from its own Staff page."
+  },
+  "statusActions": {
+    "suspend": "Suspend",
+    "reactivate": "Reactivate",
+    "remove": "Remove",
+    "keep": "Keep access",
+    "suspendFor": "Suspend {email}",
+    "reactivateFor": "Reactivate {email}",
+    "removeFor": "Remove {email}",
+    "suspendDialog": {
+      "title": "Suspend {email}?",
+      "body": "They cannot open the back office, counter or kitchen with this access until you reactivate them. Their history stays."
+    },
+    "removeDialog": {
+      "title": "Remove {email}?",
+      "body": "They lose access here for good. To bring them back later, invite them again."
+    },
+    "removedHint": "Removed. Invite them again to give access back.",
+    "done": {
+      "suspended": "{email} is suspended.",
+      "reactivated": "{email} is active again.",
+      "removed": "{email} was removed."
+    },
+    "errors": {
+      "lastOwner": "A restaurant must keep at least one owner.",
+      "self": "You cannot change your own access. Ask the owner.",
+      "notAuthorized": "Your role cannot change this person’s access.",
+      "generic": "Their access could not be changed. Try again."
     }
   }
 }

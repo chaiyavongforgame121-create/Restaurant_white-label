@@ -5,6 +5,98 @@ the bulk of the file; every deploy had to carry it. The history is the valuable 
 so it lives here rather than being deleted.
 
 ```
+// place-order v11.3 — every branch is its own shop
+//   v11.3 (2026-09-19): a transfer with nothing to pay is not stranded.
+//        - A 'transfer' order whose total is 0 (a gift card or reward covered it all) is inserted
+//          with awaiting_payment false. It had no payment row to approve (payments_amount_check
+//          refuses 0, so the insert failed silently), sat in "awaiting payment" for good and never
+//          reached the kitchen. It now goes through like any other order with nothing to collect.
+//        - No payment row is attempted for a total of 0 (the insert only ever failed there);
+//          payment_id is null in the 201 body, as it already was.
+//        - Unchanged since v11.1: a reserve_order_credits failure that is not a known refusal is
+//          released (release_order_credits) before the order is deleted.
+//   v11.2 (2026-09-19): after a second review.
+//        - A combo line's quantity is held to the dish-line rule: a whole number 1..99, else 400
+//          invalid_quantity {combo_id}. It was clamped silently (0 -> 1, 2.7 -> 2, 150 -> 99), so a
+//          client bug was charged, stock-checked and cooked for a quantity it never sent.
+//        - In SQL (same migration, applied as a delta): find_branch_customer_by_phone reads a number
+//          stored without a country code only under the branch's own calling code (its timezone's,
+//          as the till reads a number typed without a +) or +1; '+44 626 638 6401' no longer finds
+//          the diner who stored '626 638 6401'. reserve_order_credits locks the gift card, then the
+//          promo, then the points, the order a cancel and release_order_credits give them back in,
+//          so a checkout and a cancel of the same diner's other order cannot deadlock.
+//   v11.1 (2026-09-18): after review. SQL half: the same migration, extended and re-applied.
+//        - The till's customer_lookup_phone is matched by digits through
+//          find_branch_customer_by_phone(branch, phone): the same digits in any format, or a number
+//          stored nationally (trunk 0 dropped) behind a 1-3 digit country code. The exact text match
+//          never found a diner who typed '6266386401' when the till sent '+16266386401' (Food Thai
+//          Thai's only customer with a phone). The 201 body carries customer_matched when a number
+//          was looked up, so the counter can say whether the sale was filed under a regular.
+//        - A promo or gift-card refusal carries hint 'stale_client_refresh_required': a storefront
+//          deployed before these refusals existed finds no copy for their codes and showed only
+//          "Something went wrong", while this code it maps to "please refresh and try again", which
+//          clears the code or card. The counter reads `error` only.
+//        - A reservation that fails with anything but a known refusal (a timeout may have committed)
+//          is released before the order is deleted; release_order_credits works only from the rows
+//          the order has, so it is harmless when nothing was taken. A failed delete is logged.
+//        - In SQL: a cancelled or refunded order that never completed now gives its gift-card credit
+//          and promo use back (orders_return_credits_on_cancel), and takes them again if reopened;
+//          a walk-in's promo use has its promo_redemptions row too.
+// place-order v11.0 — every branch is its own shop
+//   v11.0 (2026-09-18): the owner opened a second branch and asked that nothing be shared
+//        between branches but the diner's login. SQL half: 20260918140000_order_pipeline_integrity.
+//        - Staff first, per branch. staffPlaced is decided straight after auth by
+//          staff_can_ring_up(user, branch) (= staff_has_capability(branch,'counter.access'):
+//          owner rows and restaurant-wide rows cover every branch, plus owner_user_id and platform
+//          admins). It used to be any active staff row of the restaurant, decided AFTER the
+//          customer, so a Hamburger cashier could ring up Food Thai Thai around its payment matrix
+//          and every counter sale was filed under the cashier's own customer record. A counter/POS
+//          caller who is not staff here now gets 403 not_staff_at_branch instead of being treated
+//          as a diner. orders.staff_id is set from the caller's staff row for the branch.
+//        - Staff sales are walk-ins (customer_id null) unless the till sends customer_lookup_phone
+//          (E.164) matching an existing customers row at THIS branch; it is only read, never
+//          created or claimed. Web orders resolve and create the diner by (branch_id, user_id);
+//          the phone claim is per branch; a blank existing row gets the typed name/phone filled in
+//          (placeholder phone and 'Walk-in'/'Table N' skipped, a phone held by another row at the
+//          branch left out). The v26 lookup by (user, restaurant) errored for anyone with rows at
+//          two branches and filed their orders as guest orders.
+//        - discount_percent (0-100, staff only; 400 invalid_discount_percent, 403
+//          discount_requires_staff) comes off the food before tax AND the card service fee, is
+//          stored in orders.discount_amount and written to audit_logs ('order.discount'). The
+//          counter used to take it off afterwards and overwrite orders.total from the browser.
+//        - Order numbers from next_order_number(branch): A-YYMM-NNNN per branch, month in the
+//          branch timezone, atomic. The old call to private.generate_order_number could never run
+//          through PostgREST, so every order got a random number that could collide (500). The
+//          insert retries once on a 23505 order-number clash.
+//        - Points, promo and gift card are taken for the order in ONE transaction
+//          (reserve_order_credits) right after the insert; any refusal deletes the order: 409
+//          insufficient_points / promo_exhausted / per_customer_limit_reached / promo_unavailable /
+//          gift_card_changed. The debit is conditional (balance >= cost) and writes the 'redeemed'
+//          ledger row with the order's branch, which the cancel trigger gives back. If the order
+//          lines then fail, release_order_credits gives all three back before the order is deleted.
+//        - Rewards are looked up with branch_id = the order's branch; the loyalty_scope 'brand'
+//          paths are gone (a CHECK pins it to 'branch').
+//        - Promos: validate_promo_code gets p_customer_id, so the per-customer limit is finally
+//          enforced on the server; a code sent as applied that no longer validates is refused
+//          (409 with the promo's own code and promo:true) instead of silently charging more; a use
+//          is counted only when the code gave something (a free-delivery code on a pickup does not
+//          spend the diner's use).
+//        - Gift cards are checked with the branch (check_gift_card(code, branch)); a card that no
+//          longer checks out is 409 gift_card_changed instead of being ignored, and a redeem that
+//          does not return the full credit refuses the order.
+//        - Combos: combo_items are read with the set; 409 combo_empty, 409 combo_item_unavailable
+//          {combo_id, item_id, reason: not_in_branch|inactive|sold_out|insufficient_stock,
+//          available?} (hint combo_inactive for substring matchers); archived sets are
+//          combo_inactive. The combo line stores combo_contents [{menu_item_id, name, quantity
+//          (per ONE combo), station}] for the kitchen and the stock trigger.
+//        - Stock: demand is summed per dish across dish lines and combo contents before it is
+//          compared; a tracked dish with null stock counts as 0. insufficient_stock carries
+//          item_id and available. Quantities must be whole numbers 1..99.
+//        - Counter delivery contract: delivery_address {line1 (required), notes, lat, lng,
+//          dropoff_pref}; a staff sale defaults dropoff_pref to 'hand_to_me' and needs a real
+//          customer_phone (400 customer_phone_required); without lat/lng the flat
+//          settings.delivery_fee (default 3.99) applies and quote_delivery is skipped. A saved
+//          address that resolves to nothing is 400 delivery_address_required.
 // place-order v10.5 — US pivot + modifiers + combos + happy-hour + schedules + gift cards
 //   v10.5 (2026-09-08): dine-in by QR is a SESSION, and this function enforces it.
 //        Two holes closed. First, `payload.table_id` was taken verbatim — the FK proves

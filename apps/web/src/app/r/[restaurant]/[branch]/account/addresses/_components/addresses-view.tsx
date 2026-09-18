@@ -127,7 +127,8 @@ export function AddressesView({ base, branchId }: { base: string; branchId: stri
     setLoadError(null);
     void (async () => {
       try {
-        // One customer identity per restaurant (shared across branches); resolve/create it.
+        // This branch's own record of the diner, whose address book this is (each branch
+        // keeps its own); resolve/create it.
         const cid = await resolveMyCustomerId(branchId);
         if (cancelled) return;
         setCustomerId(cid);

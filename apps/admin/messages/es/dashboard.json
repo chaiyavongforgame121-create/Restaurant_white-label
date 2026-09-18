@@ -49,6 +49,26 @@
       "label": "La entrega a domicilio está activada, pero esta sucursal no tiene pin en el mapa",
       "why": "No se pueden asignar repartidores a los pedidos a domicilio de esta sucursal hasta que se coloque el pin.",
       "link": "Colocar el pin"
+    },
+    "tax": {
+      "label": "Revisa la tasa de impuesto sobre ventas",
+      "why": "El impuesto sobre ventas es 0 % aquí, así que los pedidos no llevan impuesto. Define la tasa de esta sucursal o marca “El 0 % es correcto” en Impuesto sobre ventas si tus precios ya lo incluyen.",
+      "link": "Impuesto sobre ventas"
+    },
+    "staff": {
+      "label": "Invita al personal de esta sucursal",
+      "why": "Todavía nadie trabaja en esta sucursal: invita a su cajero y a la cocina para que usen la caja y la pantalla de cocina.",
+      "link": "Personal"
+    },
+    "transferNoQr": {
+      "label": "La transferencia está activada, pero esta sucursal no tiene QR de pago",
+      "why": "Los clientes no pueden pagar por transferencia hasta que esta sucursal suba su propio QR. Nunca se usa el QR de otra sucursal.",
+      "link": "Subir el QR"
+    },
+    "noRiders": {
+      "label": "La entrega está activada, pero no hay repartidores aprobados para esta sucursal",
+      "why": "Los pedidos a domicilio de esta sucursal no se pueden ofrecer a nadie hasta que apruebes repartidores para ella.",
+      "link": "Repartidores"
     }
   },
   "overview": {

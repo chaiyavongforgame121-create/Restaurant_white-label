@@ -12,7 +12,14 @@
     "unmute": "Activar sonido",
     "fullscreen": "Pantalla completa",
     "connectionLost": "Se perdió la conexión. Reconectando… Puede que las comandas nuevas no aparezcan hasta que se restablezca.",
-    "ordersPaused": "Pedidos en pausa: los clientes no pueden pedir mientras esté activado."
+    "ordersPaused": "Pedidos en pausa: los clientes no pueden pedir mientras esté activado.",
+    "soundOff": "Sonido apagado",
+    "soundLocked": "Toca para activar los sonidos de pedidos",
+    "soundLockedHint": "El navegador mantiene esta pantalla en silencio hasta que alguien la toca.",
+    "soundSettings": "Ajustes de sonido",
+    "testSound": "Probar sonido",
+    "voice": "Leer en voz alta los pedidos nuevos",
+    "soundHelp": "Suena un aviso con cada pedido nuevo. Se repite cada 30 segundos mientras haya una comanda en Nuevos sin aceptar. Una comanda ya aceptada avisa durante 2 minutos como máximo, o hasta que alguien toque la pantalla. Un tono grave suena una vez cuando una comanda se retrasa."
   },
   "stations": {
     "all": "Todas",
@@ -52,10 +59,14 @@
     "redispatch": "Buscar repartidor de nuevo",
     "eightySixHeading": "Marcar agotado",
     "stacked": "🔗 Agrupado · parada {stop}: empaca ambas bolsas para un solo repartidor",
-    "allergyNote": "Alergia / nota: {note}"
+    "allergyNote": "Alergia / nota: {note}",
+    "markLineDone": "Marcar {item} como listo",
+    "markLineNotDone": "Marcar {item} como pendiente",
+    "soldOut": "Agotado"
   },
   "timer": {
-    "hoursMinutes": "{hours} h {minutes} min"
+    "hoursMinutes": "{hours} h {minutes} min",
+    "daysHours": "{days} d {hours} h"
   },
   "rider": {
     "finding": "Buscando repartidor…",
@@ -71,7 +82,8 @@
     "gpsAge": "GPS {minutes} min",
     "gpsStale": "GPS antiguo",
     "gpsStaleHint": "Sin señal GPS en los últimos 5 min: la asignación automática omite a este repartidor, pero una oferta directa sí funciona",
-    "offline": "Desconectado"
+    "offline": "Desconectado",
+    "busy": "En una entrega"
   },
   "vehicle": {
     "motorcycle": "Moto",
@@ -97,7 +109,6 @@
     "recallTooFar": "No se pudo devolver #{ticket}: ya está demasiado avanzado.",
     "recallWindowPassed": "No se pudo devolver #{ticket}: ya pasó el tiempo para hacerlo.",
     "recallFailed": "No se pudo devolver #{ticket}. Inténtalo de nuevo.",
-    "eightySixNotFound": "No se encontró “{item}”; puede que ya esté agotado",
     "eightySixFailed": "No se pudo marcar {item} como agotado. Inténtalo de nuevo.",
     "eightySixDone": "{item} agotado hasta mañana",
     "assignFailed": "No se pudo asignar el repartidor. Inténtalo de nuevo.",
@@ -108,7 +119,17 @@
     "offeredTo": "Ofrecido a {name}",
     "offeredToRider": "Ofrecido a un repartidor",
     "undo": "Deshacer",
-    "dismiss": "Cerrar"
+    "dismiss": "Cerrar",
+    "backOnSaleDone": "{item} vuelve a estar a la venta",
+    "backOnSaleFailed": "No se pudo volver a poner {item} a la venta. Inténtalo de nuevo.",
+    "prepFailed": "No se pudo actualizar {item}. Inténtalo de nuevo.",
+    "settingsFailed": "No se pudo cambiar ese ajuste. Inténtalo de nuevo.",
+    "settingsForbidden": "Tu cuenta no puede cambiar este ajuste.",
+    "undoFailed": "No se pudo deshacer #{ticket}: se cambió en otra pantalla.",
+    "undoPointsSpent": "No se pudo deshacer #{ticket}: el cliente ya gastó los puntos de este pedido.",
+    "recallForbidden": "Tu cuenta no puede recuperar pedidos en esta sucursal.",
+    "cancelledElsewhere": "#{ticket} se canceló: deja de prepararlo.",
+    "changedElsewhere": "#{ticket} se cambió en otra pantalla. El tablero se ha actualizado."
   },
   "dispatch": {
     "maxAttempts": "Se probó con todos los repartidores: sube “Máximo de intentos de asignación” o asigna uno manualmente.",
@@ -123,7 +144,9 @@
     "gpsStale": "{online, plural, one {# conectado} other {# conectados}}, pero sin ubicaciones de menos de {minutes} min. La app de repartidor solo envía el GPS mientras está abierta en pantalla.",
     "allBusy": "{online, plural, one {# conectado, ya en una entrega} other {# conectados, todos ya en una entrega}}.",
     "outOfRangeMiles": "{online, plural, one {# conectado} other {# conectados}}, pero ninguno a menos de {miles} mi: sube “Radio de búsqueda de repartidores”.",
-    "outOfRange": "{online, plural, one {# conectado} other {# conectados}}, pero ninguno dentro del radio de búsqueda: sube “Radio de búsqueda de repartidores”."
+    "outOfRange": "{online, plural, one {# conectado} other {# conectados}}, pero ninguno dentro del radio de búsqueda: sube “Radio de búsqueda de repartidores”.",
+    "notAllowed": "Tu cuenta no tiene permiso para asignar repartidores en esta sucursal.",
+    "signInAgain": "Tu sesión ha caducado. Vuelve a iniciar sesión para buscar un repartidor."
   },
   "ops": {
     "busy": "Ocupado",
@@ -139,5 +162,14 @@
     "title": "Programados · {count}",
     "close": "Cerrar",
     "releasesIn": "Pasa a cocina en {minutes} min"
+  },
+  "voice": {
+    "newOrder": "Pedido nuevo, {channel}, número {ticket}",
+    "test": "Prueba de sonido. Los pedidos nuevos se leerán en voz alta."
+  },
+  "eightySix": {
+    "title": "Agotado",
+    "until": "hasta {time}",
+    "backOnSale": "Volver a vender"
   }
 }

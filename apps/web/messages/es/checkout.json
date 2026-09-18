@@ -147,6 +147,7 @@
     "errors": {
       "invalidCode": "Ese código promocional no es válido.",
       "exhausted": "Este código promocional ya alcanzó su límite de usos.",
+      "unavailable": "Este código promocional no se puede usar en este momento.",
       "minSubtotal": "Gasta al menos {amount} para usar este código.",
       "minSubtotalUnknown": "Tu pedido no alcanza el mínimo para este código.",
       "perCustomerLimit": "Ya usaste este código el máximo de veces permitido."

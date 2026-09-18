@@ -3,10 +3,12 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
-import { ArrowLeft, RefreshCcw, Undo2 } from 'lucide-react';
+import { ArrowLeft, QrCode, RefreshCcw, Undo2 } from 'lucide-react';
 import { DEFAULT_UI_LOCALE, formatCurrency, intlLocaleFor, isUiLocale } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
-import { Badge, Button, Card, useAlert, usePrompt } from '@favornoms/ui';
+import { Badge, Button, Card, useAlert, useConfirm, usePrompt } from '@favornoms/ui';
+import { describeSettleError } from '../../_components/counter-errors';
+import { forgetUnsettled } from '../../_components/unsettled-transfers';
 // The one receipt drawer in the product. It loads the order itself and prints the same
 // 80mm document the till prints after a sale, so the counter reuses it rather than growing
 // a second, drifting copy — /b/[branchId]/orders sits behind backoffice.access, which the
@@ -23,6 +25,9 @@ interface OrderRow {
   channel: string;
   scheduled_for: string | null;
   held: boolean | null;
+  source?: string | null;
+  /** A transfer on this order is not completed yet (payments_sync_awaiting keeps it current). */
+  awaiting_payment?: boolean | null;
 }
 
 interface Props {
@@ -33,7 +38,17 @@ interface Props {
   currency: string;
   /** receipt.reprint, or the orders.view right that lets this account read the order. */
   canPrintReceipt: boolean;
+  /** orders.refund at this branch. Absent means the old behaviour: show the button. */
+  canRefund?: boolean;
 }
+
+/** A QR sale rung up at the till whose payment was never recorded: it is off the kitchen board
+ *  until someone records it, and record_counter_transfer only settles counter/pos orders. */
+const awaitingCounterTransfer = (o: OrderRow) =>
+  o.awaiting_payment === true &&
+  (o.source === 'counter' || o.source === 'pos') &&
+  o.status !== 'cancelled' &&
+  o.status !== 'refunded';
 
 // Statuses and channels are stored codes; only these have a label under `counter.status` /
 // `counter.channel`. Anything newer shows its code rather than a missing-key path.
@@ -67,19 +82,61 @@ export function RecentOrders({
   branchAddress,
   currency,
   canPrintReceipt,
+  canRefund = true,
 }: Props) {
   const t = useTranslations('counter');
   const rawLocale = useLocale();
   const intlLocale = intlLocaleFor(isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE);
   const [orders, setOrders] = React.useState(initial);
   const [refundingId, setRefundingId] = React.useState<string | null>(null);
+  const [settlingId, setSettlingId] = React.useState<string | null>(null);
   const prompt = usePrompt();
   const notify = useAlert();
+  const confirm = useConfirm();
+
+  /**
+   * The till's "Payment received" for a QR sale it placed but could not settle. The till keeps
+   * those on its own screen too; this is the way back after a reload, another device, or Dismiss.
+   */
+  const recordTransfer = async (order: OrderRow) => {
+    const ok = await confirm({
+      title: t('recent.recordQrTitle', { number: order.order_number }),
+      body: t('recent.recordQrBody', { amount: formatCurrency(Number(order.total), currency) }),
+      confirmLabel: t('recent.recordQrConfirm'),
+    });
+    if (!ok) return;
+    setSettlingId(order.id);
+    try {
+      const { error } = await getBrowserClient().rpc('record_counter_transfer', { p_order_id: order.id });
+      if (error) {
+        console.error('counter: record_counter_transfer failed', error.message);
+        const settle = describeSettleError(error.message);
+        await notify({
+          title: t('recent.recordQrFailed'),
+          body: settle.code
+            ? `${t(`settle.${settle.key}`)} (${settle.code})`
+            : t(`settle.${settle.key}`),
+        });
+        return;
+      }
+      forgetUnsettled(branchId, order.id);
+      setOrders((curr) =>
+        curr.map((o) =>
+          o.id === order.id
+            ? { ...o, awaiting_payment: false, status: o.status === 'pending' ? 'confirmed' : o.status }
+            : o,
+        ),
+      );
+    } finally {
+      setSettlingId(null);
+    }
+  };
 
   const refund = async (order: OrderRow) => {
     const raw = await prompt({
       title: t('recent.refundTitle', { number: order.order_number }),
-      body: t('recent.refundBody', { max: `$${Number(order.total).toFixed(2)}` }),
+      // In the branch's own currency: this said "USD" and a dollar sign at every branch.
+      body: t('recent.refundBody', { max: formatCurrency(Number(order.total), currency) }),
       defaultValue: String(Number(order.total).toFixed(2)),
       confirmLabel: t('recent.continue'),
     });
@@ -166,6 +223,9 @@ export function RecentOrders({
                         {o.held ? t('recent.scheduled') : t('recent.dueNow')}
                       </Badge>
                     )}
+                    {awaitingCounterTransfer(o) && (
+                      <Badge variant="danger">{t('recent.awaitingQr')}</Badge>
+                    )}
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {o.scheduled_for
@@ -191,16 +251,30 @@ export function RecentOrders({
                     canPrint={canPrintReceipt}
                     currency={currency}
                   />
-                  <Button
-                    variant="outline"
-                    size="md"
-                    loading={refundingId === o.id}
-                    disabled={o.status === 'refunded' || o.status === 'cancelled'}
-                    onClick={() => refund(o)}
-                    leftIcon={<Undo2 className="h-4 w-4" />}
-                  >
-                    {t('recent.refund')}
-                  </Button>
+                  {awaitingCounterTransfer(o) && (
+                    <Button
+                      variant="gradient"
+                      size="md"
+                      loading={settlingId === o.id}
+                      disabled={settlingId !== null && settlingId !== o.id}
+                      onClick={() => void recordTransfer(o)}
+                      leftIcon={<QrCode className="h-4 w-4" />}
+                    >
+                      {t('recent.recordQr')}
+                    </Button>
+                  )}
+                  {canRefund && (
+                    <Button
+                      variant="outline"
+                      size="md"
+                      loading={refundingId === o.id}
+                      disabled={o.status === 'refunded' || o.status === 'cancelled'}
+                      onClick={() => refund(o)}
+                      leftIcon={<Undo2 className="h-4 w-4" />}
+                    >
+                      {t('recent.refund')}
+                    </Button>
+                  )}
                 </div>
               </Card>
             );

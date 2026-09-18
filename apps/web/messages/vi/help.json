@@ -80,7 +80,7 @@
       "faqs": {
         "loyaltyPoints": {
           "q": "Điểm tích lũy hoạt động thế nào?",
-          "a": "Bạn nhận điểm cho mỗi đơn hàng hoàn tất. Mỗi nhà hàng tự đặt tỷ lệ tích điểm, hạng và phần thưởng — của bạn hiển thị tại Tài khoản → Điểm tích lũy và phần thưởng, nơi bạn cũng chọn phần thưởng để dùng khi thanh toán. Mỗi đơn hàng dùng được một phần thưởng."
+          "a": "Bạn nhận điểm cho mỗi đơn hàng hoàn tất. Mỗi chi nhánh tự đặt tỷ lệ tích điểm, hạng và phần thưởng, và điểm tích ở chi nhánh nào chỉ dùng được ở chi nhánh đó — của bạn hiển thị tại Tài khoản → Điểm tích lũy và phần thưởng, nơi bạn cũng chọn phần thưởng để dùng khi thanh toán. Mỗi đơn hàng dùng được một phần thưởng."
         },
         "usePromoCode": {
           "q": "Làm sao để dùng mã khuyến mãi?",

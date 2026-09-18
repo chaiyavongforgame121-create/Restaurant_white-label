@@ -1,9 +1,16 @@
 {
   "metaTitle": "Inventario · Administración de Favornoms",
   "title": "Inventario",
-  "subtitle": "Controla el inventario, registra reabastecimientos y mermas.",
+  "subtitle": "Controla el inventario, registra reabastecimientos y mermas, y marca platos como agotados.",
+  "accessDenied": {
+    "title": "Sin acceso al inventario",
+    "reason": "Solo los propietarios, administradores y gerentes pueden gestionar el inventario de {branch}."
+  },
+  "loadFailed": "No se pudo cargar parte de esta página, así que algunas secciones pueden estar vacías o desactualizadas. Recarga la página para intentarlo de nuevo.",
+  "liveOff": "Las actualizaciones en vivo están en pausa. Las cantidades pueden estar desactualizadas hasta que vuelva la conexión.",
   "stats": {
     "tracked": "Artículos controlados",
+    "soldOut": "Agotados",
     "lowStock": "Inventario bajo"
   },
   "errors": {
@@ -11,36 +18,86 @@
     "network": "No se pudo conectar con el servidor. Revisa tu conexión e inténtalo de nuevo.",
     "permissionDenied": "No tienes permiso para cambiar esto.",
     "invalidValue": "Ese valor no es válido. Revísalo e inténtalo de nuevo.",
-    "positiveQuantity": "Ingresa una cantidad mayor que 0"
+    "notFound": "Ese plato ya no existe en esta sucursal. Recarga la página.",
+    "wholeQuantity": "Ingresa un número entero mayor que 0.",
+    "wholeCount": "Ingresa un número entero: 0 o más.",
+    "costInvalid": "Ingresa un costo de 0 o más, o déjalo en blanco."
   },
   "tracking": {
     "failed": "No se pudo cambiar el control de inventario de “{name}”. {reason}",
     "notSaved": "No se guardó nada para “{name}”. Puede que se haya eliminado, o que tu rol no tenga permiso para editar el menú en esta sucursal.",
-    "off": "El control de inventario está desactivado para “{name}”: la tienda en línea ya no lo marcará como agotado y su cantidad se borró, así que si vuelves a marcar la casilla empezará en 0.",
-    "on": "Controlando el inventario de “{name}”: quedan {count}.",
-    "onEmpty": "Controlando el inventario de “{name}”, pero quedan 0, así que los clientes lo ven agotado de inmediato. Registra un reabastecimiento para volver a ponerlo a la venta."
+    "off": "El control de inventario está desactivado para “{name}”. Ya no se cuenta, y si vuelves a marcar la casilla te pedirá una cantidad nueva.",
+    "on": "Controlando el inventario de “{name}”: {count} en inventario.",
+    "onEmpty": "Controlando el inventario de “{name}”, pero hay 0 en inventario, así que los clientes lo ven agotado de inmediato. Registra un reabastecimiento para volver a ponerlo a la venta."
   },
-  "lowStock": {
-    "title": "Alertas de inventario bajo",
-    "detail": "Quedan {left} · alerta en {threshold}"
+  "soldOutFailed": "No se pudo cambiar si “{name}” está agotado. {reason}",
+  "thresholdFailed": "No se pudo cambiar el nivel de alerta de “{name}”. {reason}",
+  "alerts": {
+    "soldOutTitle": "Agotados",
+    "soldOutHint": "Ni los clientes ni la caja pueden pedirlos en este momento.",
+    "lowTitle": "Inventario bajo",
+    "until": "Agotado hasta {time}",
+    "untilWithCount": "Agotado hasta {time} · {count} en inventario",
+    "noneLeft": "No queda ninguno",
+    "lowDetail": "Quedan {left} · alerta en {threshold}"
+  },
+  "status": {
+    "hidden": "Oculto",
+    "hiddenHint": "No está en el menú de clientes, así que no cuenta en los totales ni en las alertas.",
+    "soldOutUntil": "Agotado hasta {time}",
+    "soldOut": "Agotado",
+    "low": "Bajo"
   },
   "actions": {
     "restock": "Reabastecer",
-    "waste": "Merma"
+    "waste": "Merma",
+    "count": "Fijar cantidad",
+    "backOnSale": "Volver a vender",
+    "markSoldOut": "Marcar agotado",
+    "editThreshold": "Nivel de alerta de inventario bajo de {name}",
+    "saveThreshold": "Guardar",
+    "cancelThreshold": "Cancelar"
+  },
+  "markSoldOutConfirm": {
+    "title": "¿Marcar “{name}” como agotado?",
+    "body": "Ni los clientes ni la caja podrán pedirlo hasta la medianoche (hora de la sucursal), o hasta que lo vuelvas a poner a la venta o lo reabastezcas.",
+    "confirm": "Marcar agotado"
+  },
+  "notices": {
+    "restocked": "Se agregaron {delta} a “{name}”: ahora hay {count} en inventario.",
+    "backOnSale": "Vuelve a estar a la venta.",
+    "wasted": "Se registró una merma de {quantity} de “{name}”: quedan {count}.",
+    "nowSoldOut": "No queda ninguno, así que los clientes lo ven agotado.",
+    "counted": "Se contaron {count} de “{name}” (antes {previous}).",
+    "countedFirst": "Se contaron {count} de “{name}”.",
+    "markedSoldOut": "“{name}” está agotado hasta {time}.",
+    "markedSoldOutNoTime": "“{name}” está marcado como agotado.",
+    "backOnSaleNow": "“{name}” vuelve a estar a la venta.",
+    "backOnSaleEmpty": "“{name}” ya no está marcado como agotado, pero no hay nada en inventario, así que sigue agotado hasta que lo reabastezcas.",
+    "thresholdSaved": "“{name}” ahora avisa cuando queden {threshold}."
   },
   "table": {
     "item": "Artículo",
     "trackStock": "Controlar inventario",
-    "stock": "Inventario",
-    "threshold": "Alerta en"
+    "trackStockFor": "Controlar inventario de {name}",
+    "stock": "En inventario",
+    "threshold": "Alerta en",
+    "actions": "Acciones"
   },
   "restocks": {
     "title": "Reabastecimientos recientes",
-    "empty": "Aún no hay reabastecimientos registrados."
+    "empty": "Aún no hay reabastecimientos registrados.",
+    "costEach": "{cost} c/u"
   },
   "waste": {
     "title": "Mermas recientes",
     "empty": "Aún no hay mermas registradas."
+  },
+  "counts": {
+    "title": "Conteos recientes",
+    "empty": "Aún no hay conteos de inventario.",
+    "entry": "{previous} → {count}",
+    "entryFirst": "Fijado en {count}"
   },
   "reasons": {
     "expired": "Caducado",
@@ -52,8 +109,10 @@
   },
   "restockDialog": {
     "title": "Reabastecer {name}",
-    "quantity": "Cantidad",
-    "cost": "Costo por unidad (USD, opcional)",
+    "inStock": "Ahora hay {count} en inventario.",
+    "clears86": "Está marcado como agotado hasta {time}. Al reabastecerlo vuelve a estar a la venta.",
+    "quantity": "¿Cuántos llegaron?",
+    "cost": "Costo por unidad ({currency}, opcional)",
     "supplier": "Proveedor (opcional)",
     "notes": "Notas (opcional)",
     "cancel": "Cancelar",
@@ -61,10 +120,23 @@
   },
   "wasteDialog": {
     "title": "Registrar merma — {name}",
+    "inStock": "Ahora hay {count} en inventario.",
     "quantity": "Cantidad",
     "reason": "Motivo",
     "notes": "Notas (opcional)",
     "cancel": "Cancelar",
     "submit": "Registrar merma"
+  },
+  "countDialog": {
+    "title": "Contar {name}",
+    "startTitle": "Controlar inventario de {name}",
+    "hint": "Reemplaza la cantidad actual ({count}). Úsalo después de un conteo de inventario.",
+    "startHint": "¿Cuántos hay ahora mismo? Los clientes pueden pedirlo hasta que la cantidad llegue a 0.",
+    "quantity": "¿Cuántos hay ahora?",
+    "notes": "Notas (opcional)",
+    "clears86": "Una cantidad mayor que 0 también vuelve a poner el plato a la venta si estaba marcado como agotado.",
+    "cancel": "Cancelar",
+    "submit": "Guardar cantidad",
+    "startSubmit": "Empezar a controlar"
   }
 }

@@ -26,7 +26,12 @@ export default async function RecentOrdersPage({ params }: Props) {
   // Keep it in the list while its scheduled slot is recent or still ahead.
   const { data: orders } = await supabase
     .from('orders')
-    .select('id, order_number, status, total, customer_name, created_at, channel, scheduled_for, held')
+    // source + awaiting_payment: a QR sale rung up here whose payment the till could not record
+    // is settled from this page (record_counter_transfer), since the back office's approval
+    // queue only lists storefront transfers that come with a slip.
+    .select(
+      'id, order_number, status, total, customer_name, created_at, channel, scheduled_for, held, source, awaiting_payment',
+    )
     .eq('branch_id', branchId)
     .or(`created_at.gte.${since},scheduled_for.gte.${since}`)
     .order('created_at', { ascending: false })
@@ -48,6 +53,9 @@ export default async function RecentOrdersPage({ params }: Props) {
       branchAddress={branchDetail?.address ?? null}
       currency={currency}
       canPrintReceipt={can('receipt.reprint') || can('orders.view')}
+      // refund_order checks orders.refund at this branch; a cashier does not hold it, and a
+      // button that can only answer "not allowed" is noise at a busy till.
+      canRefund={can('orders.refund')}
     />
   );
 }

@@ -147,6 +147,7 @@
     "errors": {
       "invalidCode": "Mã khuyến mãi không hợp lệ.",
       "exhausted": "Mã khuyến mãi này đã hết lượt sử dụng.",
+      "unavailable": "Mã khuyến mãi này hiện không dùng được.",
       "minSubtotal": "Đơn hàng cần tối thiểu {amount} để dùng mã này.",
       "minSubtotalUnknown": "Đơn hàng chưa đạt mức tối thiểu để dùng mã này.",
       "perCustomerLimit": "Bạn đã dùng mã này đủ số lần cho phép."

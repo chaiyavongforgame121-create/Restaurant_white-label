@@ -48,7 +48,8 @@ import { Badge, Button, Card, IconButton, Sheet } from '@favornoms/ui';
 import { resolveMyCustomerId } from '@/lib/customer';
 import { buildScheduleDays, type ClosurePeriod, type OpeningWindow } from '@/lib/schedule-slots';
 import { pickerLabels } from '@/lib/picker-labels';
-import { linesUsing, useCart, useCartHydrated, type CartPart } from '@/store/cart';
+import { linesUsing, useCart, useCartHydrated } from '@/store/cart';
+import { orderErrorKey, placeOrderBody, refusedCartPart } from './order-errors';
 import { useAuth } from '@/components/auth/use-auth';
 import { LeaveTableButton, useTablePin } from '../../_components/table-pin';
 
@@ -129,161 +130,6 @@ function withCollectableCard(matrix: PaymentMatrix): PaymentMatrix {
 // keep both in sync with EMAIL_DOMAIN in supabase/functions/customer-auth/index.ts.
 const SYNTHETIC_CUSTOMER_EMAIL_SUFFIX = '@customer.favornoms.local';
 
-// place-order's error codes, rendered for a customer: each code maps to the message key that
-// says it (the sentences are errors.order.* in messages/<locale>/errors.json). A message that
-// carries none of these codes shows errors.generic, never the raw server text.
-//
-// The billing codes (402 billing_inactive / 403 feature_not_entitled) are
-// deliberately phrased as restaurant availability: the customer is not the
-// party who owes anything, and telling them the restaurant hasn't paid is a
-// reputational hit we have no right to inflict. Order is significant —
-// `dropoff_other_required` contains `dropoff_required` as a substring.
-const ORDER_ERRORS: Array<[string, string]> = [
-  ['billing_inactive', 'errors.order.billingInactive'],
-  ['feature_not_entitled:delivery', 'errors.order.deliveryNotOffered'],
-  ['delivery_not_entitled', 'errors.order.deliveryNotOffered'],
-  ['feature_not_entitled:card_payment', 'errors.order.cardNotAvailable'],
-  // Must precede `branch_closed` — it contains it as a substring, and the
-  // generic "currently closed" line is wrong here: the restaurant may well be
-  // open now, it's the time they picked that isn't served.
-  ['branch_closed_at_scheduled_time', 'errors.order.closedAtScheduledTime'],
-  // Distinct from being closed: the restaurant may well be open then, it just does not take
-  // advance orders at that hour. Saying "closed" would send the diner to look at opening
-  // hours that already agree with them.
-  ['outside_scheduling_window', 'errors.order.outsideSchedulingWindow'],
-  // Channel-neutral on purpose: a seated dine-in round reaches this too.
-  ['branch_closed', 'errors.order.branchClosed'],
-  // No fixed numbers here any more: how soon and how far ahead are per-branch settings, so
-  // quoting "10 minutes" and "14 days" would state someone else's policy as fact. The
-  // picker only offers times inside the real one, so reaching these is already unusual.
-  ['scheduled_too_soon', 'errors.order.scheduledTooSoon'],
-  ['scheduled_too_far', 'errors.order.scheduledTooFar'],
-  ['scheduling_disabled', 'errors.order.schedulingDisabled'],
-  ['invalid_scheduled_for', 'errors.order.invalidScheduledFor'],
-  ['delivery_out_of_range', 'errors.order.deliveryOutOfRange'],
-  ['payment_method_not_accepted', 'errors.order.paymentMethodNotAccepted'],
-  ['transfer_not_configured', 'errors.order.transferNotConfigured'],
-  ['delivery_not_available_at_that_time', 'errors.order.deliveryNotAvailableAtThatTime'],
-  ['dropoff_other_required', 'errors.order.dropoffOtherRequired'],
-  ['dropoff_required', 'errors.order.dropoffRequired'],
-  // Dine-in is a sitting now, so the ways it can be refused are about the table's session
-  // rather than about a number the diner typed. Every one of these is a server decision —
-  // the phone cannot know a bill was settled while the diner was still choosing dessert.
-  ['table_session_closed', 'errors.order.tableSessionClosed'],
-  ['table_session_changed', 'errors.order.tableSessionChanged'],
-  ['table_not_seated', 'errors.order.tableNotSeated'],
-  ['not_at_this_table', 'errors.order.notAtThisTable'],
-  ['table_not_in_branch', 'errors.order.tableNotInBranch'],
-  ['sign_in_required', 'errors.order.signInRequired'],
-  // There is no table field to send them back to any more — the order reached the server
-  // without a table because the pin was gone by the time they pressed the button.
-  ['table_required', 'errors.order.tableRequired'],
-  // The two ways to order, enforced by place-order for customer orders. Reached only from a tab
-  // opened before the change, since this page no longer offers either combination. They must
-  // come before invalid_channel: place-order puts that code in the same body as a `hint`, so a
-  // tab older than these entries still finds a sentence instead of printing raw JSON.
-  ['delivery_must_be_scheduled', 'errors.order.deliveryMustBeScheduled'],
-  ['pickup_is_asap_only', 'errors.order.pickupIsAsapOnly'],
-  ['invalid_channel', 'errors.order.invalidChannel'],
-  // Wire code is still `google_link_required` (other surfaces match on it), but the
-  // rule is "prove who you are", and a verified email proves it just as well as
-  // Google. Same sentence as the loyalty card's own notice, so it is the same message.
-  ['google_link_required', 'checkout.loyalty.verifyRequired'],
-  // Reward redemption. The server re-prices every reward from the catalog, so
-  // these fire when the catalog moved under a checkout that was already open.
-  ['stale_client_refresh_required', 'errors.order.staleClientRefreshRequired'],
-  ['reward_min_subtotal', 'errors.order.rewardMinSubtotal'],
-  ['reward_item_not_in_cart', 'errors.order.rewardItemNotInCart'],
-  ['reward_not_applicable', 'errors.order.rewardNotApplicable'],
-  ['reward_unavailable', 'errors.order.rewardUnavailable'],
-  ['insufficient_points', 'errors.order.insufficientPoints'],
-  // The cart moved under the diner: something sold out, ran low or left the menu between the
-  // cart page and this button. "Try again" alone would fail the same way every time.
-  ['item_sold_out', 'errors.order.itemSoldOut'],
-  ['insufficient_stock', 'errors.order.insufficientStock'],
-  ['item_inactive', 'errors.order.itemUnavailable'],
-  ['item_not_in_branch', 'errors.order.itemUnavailable'],
-  ['combo_not_in_branch', 'errors.order.itemUnavailable'],
-  ['combo_inactive', 'errors.order.itemUnavailable'],
-  ['modifier_inactive', 'errors.order.itemUnavailable'],
-  ['modifier_branch_mismatch', 'errors.order.itemUnavailable'],
-  // 429 with retry_after_seconds 600: an immediate retry is exactly what will not work.
-  ['rate_limited', 'errors.order.rateLimited'],
-  ['redeem_requires_auth', 'errors.order.signInToOrder'],
-  ['login_required', 'errors.order.signInToOrder'],
-  ['empty_order', 'errors.order.emptyOrder'],
-  ['customer_phone_required', 'errors.order.phoneRequired'],
-  ['delivery_address_required', 'errors.order.addressRequired'],
-  // Same sentence as billing_inactive: to the diner both mean "not taking orders online now".
-  ['branch_not_found_or_inactive', 'errors.order.billingInactive'],
-];
-
-/** The message key for a place-order failure, or null when it carries no code we know. */
-function orderErrorKey(msg: string): string | null {
-  // placeOrder throws `place_order_failed:<status>:<body>`. An entitlement refusal names its
-  // feature in a separate field ({"error":"feature_not_entitled","feature":"delivery"}), so it is
-  // matched as `feature_not_entitled:delivery`; everything else is matched on the text as sent.
-  let subject = msg;
-  const body = msg.replace(/^place_order_failed:\d+:/, '');
-  try {
-    const parsed = JSON.parse(body) as { error?: unknown; feature?: unknown };
-    if (parsed.error === 'feature_not_entitled' && typeof parsed.feature === 'string') {
-      subject = `feature_not_entitled:${parsed.feature} ${msg}`;
-    }
-  } catch {
-    // Not JSON (a network failure, a gateway page): match the text as it is.
-  }
-  for (const [code, key] of ORDER_ERRORS) {
-    if (subject.includes(code)) return key;
-  }
-  return null;
-}
-
-/**
- * The item, combo or option a place-order refusal names, when it names one:
- * 400 {"error":"modifier_inactive"|"modifier_branch_mismatch","option_id"},
- * {"error":"item_not_in_branch"|"item_inactive","item_id"} and
- * {"error":"combo_not_in_branch"|"combo_inactive","combo_id"}.
- *
- * Read from the parsed body's `error` field, not by substring: combo_not_in_branch carries
- * `"hint":"item_not_in_branch"` in the same body.
- */
-function refusedCartPart(msg: string): CartPart | null {
-  const match = /^place_order_failed:\d+:([\s\S]*)$/.exec(msg);
-  if (!match) return null;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(match[1] ?? '');
-  } catch {
-    return null;
-  }
-  if (!parsed || typeof parsed !== 'object') return null;
-  const body = parsed as Record<string, unknown>;
-  const idOf = (value: unknown) => (typeof value === 'string' && value ? value : null);
-  let kind: CartPart['kind'];
-  let id: string | null;
-  switch (body.error) {
-    case 'modifier_inactive':
-    case 'modifier_branch_mismatch':
-      kind = 'option';
-      id = idOf(body.option_id);
-      break;
-    case 'item_not_in_branch':
-    case 'item_inactive':
-      kind = 'item';
-      id = idOf(body.item_id);
-      break;
-    case 'combo_not_in_branch':
-    case 'combo_inactive':
-      kind = 'combo';
-      id = idOf(body.combo_id);
-      break;
-    default:
-      return null;
-  }
-  return id ? { kind, id } : null;
-}
-
 // `datetime-local` reads its value/min/max as LOCAL wall-clock time, so they must
 // never be built from toISOString() — that is UTC, and in every US timezone it
 // reads hours ahead of the diner's actual clock.
@@ -305,8 +151,6 @@ const DROPOFF_OPTIONS: DropoffPref[] = ['leave_at_door', 'hand_to_me', 'at_desk'
 
 interface Props {
   branchId: string;
-  /** Scopes customer-row writes — identity is per restaurant, not global. */
-  restaurantId?: string;
   base: string;
   /** `delivery` entitlement — default false so a missing prop cannot sell it. */
   canDeliver?: boolean;
@@ -353,7 +197,6 @@ interface Props {
 
 export function CheckoutView({
   branchId,
-  restaurantId,
   base,
   canDeliver = false,
   canUseCard = false,
@@ -732,7 +575,18 @@ export function CheckoutView({
     if (!giftCardCode.trim()) return;
     setGiftCardState({ status: 'checking' });
     const supabase = getBrowserClient();
-    const { data, error } = await supabase.rpc('check_gift_card', { p_code: giftCardCode.trim() });
+    // A gift card is good only at the branch that issued it, so the check names this branch.
+    // The cast covers a generated type that still lists the one-argument form; that form is
+    // also the fallback while a database has not taken the branch parameter yet (PGRST202:
+    // no function with these arguments), so the field never breaks during a rollout.
+    const code = giftCardCode.trim();
+    let { data, error } = await supabase.rpc('check_gift_card', {
+      p_code: code,
+      p_branch_id: branchId,
+    } as unknown as { p_code: string });
+    if (error?.code === 'PGRST202') {
+      ({ data, error } = await supabase.rpc('check_gift_card', { p_code: code }));
+    }
     if (error) {
       // The raw text is for us, not the diner.
       console.error('check_gift_card_failed', error.message);
@@ -1090,6 +944,9 @@ export function CheckoutView({
         return t('checkout.promo.errors.invalidCode');
       case 'promo_exhausted':
         return t('checkout.promo.errors.exhausted');
+      // Only from place-order: the code stopped being offered after this page accepted it.
+      case 'promo_unavailable':
+        return t('checkout.promo.errors.unavailable');
       case 'min_subtotal_not_met':
         return state.minSubtotal != null && Number.isFinite(state.minSubtotal)
           ? t('checkout.promo.errors.minSubtotal', { amount: formatCurrency(state.minSubtotal) })
@@ -1219,8 +1076,9 @@ export function CheckoutView({
       // Persist email on the customer row so receipts/notifications can reach
       // them. Prefer the resolved customer id — that is the same single row
       // account settings writes to and this page prefills from. Without it, fall
-      // back to a restaurant-scoped update: identity is per restaurant, so an
-      // unscoped one would overwrite the email on every tenant's row.
+      // back to a branch-scoped update: each branch keeps its own record of the
+      // diner, so an unscoped one would overwrite the email on every branch's
+      // (and every other restaurant's) row.
       if (email.trim()) {
         const nextEmail = email.trim().toLowerCase();
         if (customerId) {
@@ -1228,12 +1086,11 @@ export function CheckoutView({
         } else {
           const { data: user } = await supabase.auth.getUser();
           if (user.user) {
-            let upd = supabase
+            await supabase
               .from('customers')
               .update({ email: nextEmail })
-              .eq('user_id', user.user.id);
-            if (restaurantId) upd = upd.eq('restaurant_id', restaurantId);
-            await upd;
+              .eq('user_id', user.user.id)
+              .eq('branch_id', branchId);
           }
         }
       }
@@ -1340,18 +1197,63 @@ export function CheckoutView({
       router.push(`${base}/orders/${result.order_number}`);
     } catch (err) {
       const raw = (err as Error).message;
+      const body = placeOrderBody(raw);
+      // A promo code or gift card this page accepted was refused when the order was placed (used
+      // up, switched off, spent elsewhere). Put the reason in that code's own box, the way
+      // Apply shows it, which also takes the credit off the total on screen: pressing the button
+      // again then orders at the price the diner can now see, or they fix the code first.
+      if (body?.promo === true) {
+        const min = Number(body.min_subtotal);
+        setPromoState({
+          status: 'error',
+          code: typeof body.error === 'string' ? body.error : 'invalid_code',
+          minSubtotal: body.min_subtotal != null && Number.isFinite(min) ? min : undefined,
+        });
+        setError(t('errors.order.promoRefused'));
+        setSubmitting(false);
+        return;
+      }
+      if (body?.error === 'gift_card_changed') {
+        // `reason` is check_gift_card's (invalid_or_redeemed, expired). A refusal while the card is
+        // being taken carries none: the card was spent in between.
+        setGiftCardState({
+          status: 'error',
+          code: typeof body.reason === 'string' && body.reason ? body.reason : 'invalid_or_redeemed',
+        });
+        setError(t('errors.order.giftCardRefused'));
+        setSubmitting(false);
+        return;
+      }
       // The server named the dish, combo or option it no longer offers. Take out exactly the lines
       // that use it — pressing the button again would only fail the same way — and say so. A code
       // with no id, or an id no line uses any more, falls through to the sentence below.
       const refused = refusedCartPart(raw);
       const refusedLines = refused ? linesUsing(lines, refused) : [];
-      if (refusedLines.length > 0) {
+      if (refused && refusedLines.length > 0) {
         // Before the lines go: a cart emptied while `submitting` is still true reads as an order
         // that went through (the "redirecting" state above).
         setSubmitting(false);
-        setError(t('errors.order.itemRemoved'));
+        // A dish or a set is named; an option can sink several different dishes, so it is not.
+        const name = refused.kind === 'option' ? null : (refusedLines[0]?.name ?? null);
+        setError(name ? t('errors.order.lineRemoved', { name }) : t('errors.order.itemRemoved'));
         for (const line of refusedLines) removeLine(line.id);
         return;
+      }
+      // Sold out or short on stock: name the dish, since the cart may hold several. The line stays;
+      // the diner decides whether to lower the quantity or take it out.
+      if (body && (body.error === 'item_sold_out' || body.error === 'insufficient_stock')) {
+        const itemId = typeof body.item_id === 'string' ? body.item_id : null;
+        const dish = itemId ? lines.find((l) => !l.comboId && l.menuItemId === itemId) : undefined;
+        const available = Number(body.available);
+        if (dish) {
+          setError(
+            body.error === 'insufficient_stock' && Number.isFinite(available) && available > 0
+              ? t('errors.order.insufficientStockNamed', { name: dish.name, available })
+              : t('errors.order.itemSoldOutNamed', { name: dish.name }),
+          );
+          setSubmitting(false);
+          return;
+        }
       }
       const key = orderErrorKey(raw);
       // A failure with no code we know is logged as it came and shown as the generic line —

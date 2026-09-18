@@ -49,7 +49,7 @@ export function SettingsView({ base, branchId }: { base: string; branchId: strin
     const supabase = getBrowserClient();
     void (async () => {
       try {
-        // One customer identity per restaurant (shared across branches); resolve/create it.
+        // This branch's own record of the diner (each branch keeps its own); resolve/create it.
         // Checkout resolves the same way, so what's saved here is what's prefilled there.
         const cid = await resolveMyCustomerId(branchId);
         if (cancelled) return;
@@ -103,10 +103,10 @@ export function SettingsView({ base, branchId }: { base: string; branchId: strin
     setSaving(false);
     if (dbErr) {
       console.error('[settings] saving the profile failed', dbErr);
-      // customers_restaurant_phone_uidx: one profile per phone number per restaurant, so the
-      // number already belongs to another profile here (often a walk-in order under that phone).
-      // Retrying cannot help; say which field to change.
-      const phoneTaken = dbErr.code === '23505' && dbErr.message.includes('customers_restaurant_phone_uidx');
+      // customers_branch_phone_uidx: one profile per phone number per branch, so the number
+      // already belongs to another profile at this branch (often a walk-in order under that
+      // phone). Retrying cannot help; say which field to change.
+      const phoneTaken = dbErr.code === '23505' && dbErr.message.includes('customers_branch_phone_uidx');
       setError(phoneTaken ? 'settings.phoneTaken' : settingsErrorKey(dbErr.message));
       return;
     }

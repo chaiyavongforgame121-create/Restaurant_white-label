@@ -7,6 +7,7 @@ import { Clock, Plus, Save, Trash2 } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { DEFAULT_UI_LOCALE, intlLocaleFor, isUiLocale } from '@favornoms/shared';
 import { Button, Card, RiderIcon } from '@favornoms/ui';
+import { useSettingsPatch } from './patch-settings';
 
 /**
  * Delivery hours and who does the delivering.
@@ -63,6 +64,8 @@ export function DeliveryHoursCard({
   const intlLocale = intlLocaleFor(isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE);
   const days = React.useMemo(() => weekdayNames(intlLocale), [intlLocale]);
   const router = useRouter();
+  // Sends only what changed since this card was rendered or last saved.
+  const savePatch = useSettingsPatch(branchId, settings);
   const [enabled, setEnabled] = React.useState(
     settings?.delivery_hours_enabled === true,
   );
@@ -142,13 +145,9 @@ export function DeliveryHoursCard({
       return;
     }
 
-    const { error: upErr } = await supabase
-      .from('branches')
-      .update({
-        settings: { ...settings, delivery_hours_enabled: enabled, delivery_mode: mode },
-      })
-      .eq('id', branchId)
-      .select('id');
+    // Only the two keys this card owns, and only when they changed (patch_branch_settings
+    // merges them into the row as it is now, not as it was when the page loaded).
+    const { error: upErr } = await savePatch({ delivery_hours_enabled: enabled, delivery_mode: mode });
     setSaving(false);
     if (upErr) {
       console.error('Saving delivery mode failed', upErr);

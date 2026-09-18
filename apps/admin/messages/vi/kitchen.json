@@ -12,7 +12,14 @@
     "unmute": "Bật tiếng",
     "fullscreen": "Toàn màn hình",
     "connectionLost": "Mất kết nối, đang kết nối lại. Phiếu mới có thể không hiện cho đến khi kết nối trở lại.",
-    "ordersPaused": "Đang tạm dừng nhận đơn — khách không thể đặt hàng trong lúc này."
+    "ordersPaused": "Đang tạm dừng nhận đơn — khách không thể đặt hàng trong lúc này.",
+    "soundOff": "Đang tắt tiếng",
+    "soundLocked": "Chạm để bật âm báo đơn hàng",
+    "soundLockedHint": "Trình duyệt giữ màn hình này im lặng cho đến khi có người chạm vào.",
+    "soundSettings": "Cài đặt âm thanh",
+    "testSound": "Thử âm thanh",
+    "voice": "Đọc to đơn hàng mới",
+    "soundHelp": "Chuông kêu khi có đơn mới và lặp lại mỗi 30 giây khi còn phiếu ở cột Mới chưa được nhận. Phiếu đã nhận chỉ nhắc tối đa 2 phút, hoặc đến khi có người chạm vào màn hình. Một tiếng trầm vang một lần khi phiếu bị trễ."
   },
   "stations": {
     "all": "Tất cả",
@@ -52,10 +59,14 @@
     "redispatch": "Tìm tài xế lại từ đầu",
     "eightySixHeading": "Báo hết món",
     "stacked": "🔗 Giao ghép · điểm {stop} — gói cả hai túi cho một tài xế",
-    "allergyNote": "Dị ứng / ghi chú: {note}"
+    "allergyNote": "Dị ứng / ghi chú: {note}",
+    "markLineDone": "Đánh dấu {item} đã xong",
+    "markLineNotDone": "Bỏ đánh dấu {item}",
+    "soldOut": "Hết món"
   },
   "timer": {
-    "hoursMinutes": "{hours} giờ {minutes} ph"
+    "hoursMinutes": "{hours} giờ {minutes} ph",
+    "daysHours": "{days} ngày {hours} giờ"
   },
   "rider": {
     "finding": "Đang tìm tài xế…",
@@ -71,7 +82,8 @@
     "gpsAge": "GPS {minutes} ph",
     "gpsStale": "GPS cũ",
     "gpsStaleHint": "Không có tín hiệu GPS trong 5 phút qua — điều phối tự động sẽ bỏ qua tài xế này, nhưng mời trực tiếp vẫn được",
-    "offline": "Ngoại tuyến"
+    "offline": "Ngoại tuyến",
+    "busy": "Đang giao hàng"
   },
   "vehicle": {
     "motorcycle": "Xe máy",
@@ -97,7 +109,6 @@
     "recallTooFar": "Không trả lại bếp được #{ticket} — đơn đã đi quá xa.",
     "recallWindowPassed": "Không trả lại bếp được #{ticket} — đã hết thời gian cho phép.",
     "recallFailed": "Không trả lại bếp được #{ticket}. Hãy thử lại.",
-    "eightySixNotFound": "Không tìm thấy “{item}” — có thể đã báo hết",
     "eightySixFailed": "Không báo hết được {item}. Hãy thử lại.",
     "eightySixDone": "Đã báo hết {item} đến ngày mai",
     "assignFailed": "Không giao được cho tài xế. Hãy thử lại.",
@@ -108,7 +119,17 @@
     "offeredTo": "Đã mời {name}",
     "offeredToRider": "Đã mời tài xế",
     "undo": "Hoàn tác",
-    "dismiss": "Đóng"
+    "dismiss": "Đóng",
+    "backOnSaleDone": "Đã bán lại {item}",
+    "backOnSaleFailed": "Không thể bán lại {item}. Hãy thử lại.",
+    "prepFailed": "Không thể cập nhật {item}. Hãy thử lại.",
+    "settingsFailed": "Không thể thay đổi cài đặt đó. Hãy thử lại.",
+    "settingsForbidden": "Tài khoản của bạn không thể thay đổi cài đặt này.",
+    "undoFailed": "Không thể hoàn tác #{ticket} — đơn đã được thay đổi trên màn hình khác.",
+    "undoPointsSpent": "Không thể hoàn tác #{ticket} — khách đã dùng số điểm từ đơn này.",
+    "recallForbidden": "Tài khoản của bạn không thể gọi lại đơn tại chi nhánh này.",
+    "cancelledElsewhere": "#{ticket} đã bị hủy — hãy ngừng chuẩn bị.",
+    "changedElsewhere": "#{ticket} đã được thay đổi trên màn hình khác. Bảng đã được làm mới."
   },
   "dispatch": {
     "maxAttempts": "Đã thử mọi tài xế — hãy tăng “Số lần điều phối tối đa” hoặc tự chọn tài xế.",
@@ -123,7 +144,9 @@
     "gpsStale": "{online} tài xế đang bật nhận đơn nhưng không có vị trí nào mới hơn {minutes} phút. Ứng dụng tài xế chỉ gửi GPS khi đang mở trên màn hình.",
     "allBusy": "{online} tài xế đang bật nhận đơn, tất cả đều đang giao đơn.",
     "outOfRangeMiles": "{online} tài xế đang bật nhận đơn nhưng không ai trong phạm vi {miles} dặm — hãy tăng “Bán kính tìm tài xế”.",
-    "outOfRange": "{online} tài xế đang bật nhận đơn nhưng không ai trong bán kính tìm kiếm — hãy tăng “Bán kính tìm tài xế”."
+    "outOfRange": "{online} tài xế đang bật nhận đơn nhưng không ai trong bán kính tìm kiếm — hãy tăng “Bán kính tìm tài xế”.",
+    "notAllowed": "Tài khoản của bạn không được phép điều phối tài xế tại chi nhánh này.",
+    "signInAgain": "Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại để tìm tài xế."
   },
   "ops": {
     "busy": "Đông khách",
@@ -139,5 +162,14 @@
     "title": "Đơn hẹn giờ · {count}",
     "close": "Đóng",
     "releasesIn": "Vào bếp sau {minutes} ph"
+  },
+  "voice": {
+    "newOrder": "Đơn mới, {channel}, số {ticket}",
+    "test": "Kiểm tra âm thanh. Đơn hàng mới sẽ được đọc to."
+  },
+  "eightySix": {
+    "title": "Hết món",
+    "until": "đến {time}",
+    "backOnSale": "Bán lại"
   }
 }

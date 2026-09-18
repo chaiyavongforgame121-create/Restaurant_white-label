@@ -18,7 +18,8 @@
     "available": "Có {count} ưu đãi",
     "more": "… và {count} món khác",
     "save": "Tiết kiệm {amount}",
-    "viewDeal": "Xem ưu đãi"
+    "viewDeal": "Xem ưu đãi",
+    "soldOutHint": "Một phần của ưu đãi này đã hết. Hãy quay lại sau nhé."
   },
   "happyHour": {
     "percentOff": "Giảm {value}%",

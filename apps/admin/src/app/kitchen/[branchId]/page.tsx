@@ -1,6 +1,7 @@
-import { getServerClient } from '@favornoms/database/server';
-import { notFound } from 'next/navigation';
+import { listBranchRiders } from '@favornoms/database/queries';
+import { getBranchAccess } from '@/lib/capabilities';
 import { KitchenView } from './_components/kitchen-view';
+import { KITCHEN_ORDER_SELECT, toDriverLite, type DriverLite, type SoldOutItem } from './_components/kitchen-model';
 
 interface Props {
   params: Promise<{ branchId: string }>;
@@ -10,49 +11,44 @@ interface Props {
 export default async function KitchenPage({ params, searchParams }: Props) {
   const { branchId } = await params;
   const { station } = await searchParams;
-  const supabase = await getServerClient();
+  // The layout already refused anyone without kitchen.access; this call is for the finer
+  // capabilities the board renders by (and 404s an unknown branch).
+  const { supabase, branch, can } = await getBranchAccess(branchId, `/kitchen/${branchId}`);
+  // staff_assign_driver and list_branch_riders both require delivery.manage, which the kitchen
+  // role does not hold: offering the picker to a cook only ever ended in "can't assign riders".
+  const canAssign = can('delivery.manage');
 
-  const { data: branch } = await supabase
-    .from('branches')
-    .select('id, name')
-    .eq('id', branchId)
-    .maybeSingle();
-  if (!branch) notFound();
-
-  const { data: orders } = await supabase
-    .from('orders')
-    .select(
-      'id, order_number, status, channel, created_at, customer_name, customer_notes, kitchen_notes, held, scheduled_for, table_id, tables(table_number, display_name), order_items(id, item_name, quantity, notes, prep_status, station, modifiers), awaiting_payment, deliveries(id, status, driver_id, accepted_at, batch_id, batch_seq)',
-    )
-    .eq('branch_id', branchId)
-    .in('status', ['pending', 'confirmed', 'preparing', 'ready'])
-    .order('created_at', { ascending: false }); // newest first
-
-  const { data: menu } = await supabase
-    .from('menu_items')
-    .select('station')
-    .eq('branch_id', branchId)
-    .not('station', 'is', null);
+  const [{ data: branchRow }, { data: orders }, { data: menu }, { data: soldOut }, riders] = await Promise.all([
+    supabase.from('branches').select('timezone').eq('id', branchId).maybeSingle(),
+    supabase
+      .from('orders')
+      .select(KITCHEN_ORDER_SELECT)
+      .eq('branch_id', branchId)
+      .in('status', ['pending', 'confirmed', 'preparing', 'ready'])
+      .order('created_at', { ascending: false }), // newest first
+    supabase
+      .from('menu_items')
+      .select('station')
+      .eq('branch_id', branchId)
+      .not('station', 'is', null),
+    // Dishes 86'd at this branch right now, for the board's "Sold out" strip. Only dishes on the
+    // menu: an inactive dish is hidden from diners anyway, and "Back on sale" would not show it.
+    // (The view's reload() reads the same list again; keep the two in step.)
+    supabase
+      .from('menu_items')
+      .select('id, name, sold_out_until')
+      .eq('branch_id', branchId)
+      .eq('is_active', true)
+      .gt('sold_out_until', new Date().toISOString())
+      .order('name'),
+    // Per-branch online state comes from list_branch_riders (driver_branch_availability), the
+    // same source dispatch reads; drivers.is_online is global and said "online" for a rider who
+    // was working another branch.
+    canAssign ? listBranchRiders(supabase, branchId).catch(() => []) : Promise.resolve([]),
+  ]);
   const stations = [...new Set((menu ?? []).map((m) => m.station as string).filter(Boolean))].sort();
 
-  // Approved riders for this branch — feeds the kitchen's manual "assign a specific
-  // rider" picker. Online riders are surfaced first client-side.
-  const { data: driverRows } = await supabase
-    .from('driver_approvals')
-    .select('driver:drivers(id, full_name, phone, vehicle_type, is_online, cooldown_until, location_updated_at)')
-    .eq('branch_id', branchId)
-    .eq('status', 'approved');
-  const drivers = (driverRows ?? [])
-    .map((r) => r.driver as unknown as {
-      id: string;
-      full_name: string;
-      phone: string | null;
-      vehicle_type: string;
-      is_online: boolean;
-      cooldown_until: string | null;
-      location_updated_at: string | null;
-    })
-    .filter((d) => d && d.id);
+  const drivers: DriverLite[] = riders.map(toDriverLite);
 
   // PostgREST returns the one-to-one deliveries embed as a single object (or null),
   // but the client expects an array (order.deliveries[0]) — normalise it so the
@@ -67,10 +63,13 @@ export default async function KitchenPage({ params, searchParams }: Props) {
     <KitchenView
       branchId={branchId}
       branchName={branch.name}
+      branchTimezone={branchRow?.timezone ?? null}
       initialOrders={normalizedOrders as never}
       stations={stations}
       activeStation={station ?? null}
       drivers={drivers}
+      canAssign={canAssign}
+      initialSoldOut={(soldOut ?? []) as SoldOutItem[]}
     />
   );
 }

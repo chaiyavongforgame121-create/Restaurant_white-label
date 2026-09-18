@@ -80,7 +80,7 @@
       "faqs": {
         "loyaltyPoints": {
           "q": "How do loyalty points work?",
-          "a": "You earn points on every completed order. Each restaurant sets its own earn rate, tiers and rewards — yours are shown under Account → Loyalty & rewards, where you also pick a reward to use at checkout. One reward per order."
+          "a": "You earn points on every completed order. Each branch sets its own earn rate, tiers and rewards, and points earned at one branch can only be spent at that branch — yours are shown under Account → Loyalty & rewards, where you also pick a reward to use at checkout. One reward per order."
         },
         "usePromoCode": {
           "q": "How do I use a promo code?",

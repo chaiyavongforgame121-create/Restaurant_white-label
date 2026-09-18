@@ -6,40 +6,82 @@ import { Flame, Pause, Play } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 
 // Always-on-screen kitchen controls: pause new orders / busy mode (+prep time).
-// Writes merge into branches.settings — same keys the delivery settings card and
-// is_branch_open()/quote_delivery() consume. Styled for the warm "Sunset" header
-// (translucent-white pills on the gradient). Surfaces `orders_paused` upward so
-// the board can paint a persistent paused banner.
+// They write branches.settings keys — the same keys the delivery settings card and
+// is_branch_open()/quote_delivery() consume — through patch_branch_settings, which merges ONLY
+// the changed key into the stored settings. This used to write back the whole settings object
+// as it was when the board loaded, so a Pause pressed hours later undid every change the owner
+// had made in Branch settings since. Styled for the warm "Sunset" header (translucent-white pills
+// on the gradient). Surfaces the settings upward so the board can paint a persistent paused
+// banner and time scheduled tickets.
 
 const BUSY_OPTIONS = [0, 10, 20, 30];
 
-export function OpsToggles({ branchId, onPaused }: { branchId: string; onPaused?: (paused: boolean) => void }) {
+/** A pause set from the back office, or on another tablet, has to show here too: branches is not
+ *  in the realtime publication, so the settings are re-read on this cadence and on tab focus. */
+const SETTINGS_POLL_MS = 60_000;
+
+type Settings = Record<string, unknown>;
+
+export function OpsToggles({
+  branchId,
+  onSettings,
+  onError,
+}: {
+  branchId: string;
+  onSettings?: (settings: Settings) => void;
+  /** A write was refused or failed; the key names the toast (kitchen.toast.*). */
+  onError?: (key: 'settingsFailed' | 'settingsForbidden') => void;
+}) {
   const t = useTranslations('kitchen');
-  const [settings, setSettings] = React.useState<Record<string, unknown> | null>(null);
+  const [settings, setSettings] = React.useState<Settings | null>(null);
   const [saving, setSaving] = React.useState(false);
   const [busyOpen, setBusyOpen] = React.useState(false);
+  // Bumped by every write, so a read that started before the write cannot land after it and
+  // paint the old value back.
+  const writeSeq = React.useRef(0);
 
   const load = React.useCallback(async () => {
-    const supabase = getBrowserClient();
-    const { data } = await supabase.from('branches').select('settings').eq('id', branchId).single();
-    setSettings((data?.settings ?? {}) as Record<string, unknown>);
+    const seq = writeSeq.current;
+    const { data, error } = await getBrowserClient().from('branches').select('settings').eq('id', branchId).single();
+    if (error || seq !== writeSeq.current) return;
+    setSettings((data?.settings ?? {}) as Settings);
   }, [branchId]);
 
-  React.useEffect(() => { void load(); }, [load]);
+  React.useEffect(() => {
+    void load();
+    const id = window.setInterval(() => void load(), SETTINGS_POLL_MS);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void load();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [load]);
 
   React.useEffect(() => {
-    if (settings) onPaused?.(Boolean(settings.orders_paused));
-  }, [settings, onPaused]);
+    if (settings) onSettings?.(settings);
+  }, [settings, onSettings]);
 
-  const patch = async (changes: Record<string, unknown>) => {
+  const patch = async (changes: Settings) => {
     if (!settings) return;
+    writeSeq.current += 1;
     setSaving(true);
-    const next = { ...settings, ...changes };
-    setSettings(next); // optimistic
-    const supabase = getBrowserClient();
-    const { error } = await supabase.from('branches').update({ settings: next }).eq('id', branchId);
+    setSettings((curr) => ({ ...(curr ?? {}), ...changes })); // optimistic
+    const { data, error } = await getBrowserClient().rpc('patch_branch_settings', {
+      p_branch_id: branchId,
+      p_patch: changes as never,
+    });
+    writeSeq.current += 1;
     setSaving(false);
-    if (error) void load(); // roll back to server truth
+    if (error) {
+      console.error('kitchen: patch_branch_settings failed', error.message);
+      onError?.(error.message.includes('not_authorized') ? 'settingsForbidden' : 'settingsFailed');
+      void load(); // roll back to server truth
+      return;
+    }
+    if (data && typeof data === 'object' && !Array.isArray(data)) setSettings(data as Settings);
   };
 
   if (!settings) return null;

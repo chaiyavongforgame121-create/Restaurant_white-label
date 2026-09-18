@@ -433,6 +433,8 @@ export type DispatchFailureKey =
   | 'maxAttempts'
   | 'notEntitled'
   | 'notDispatchable'
+  | 'authRequired'
+  | 'notAuthorized'
   | 'failed'
   | 'noneAvailable'
   | 'noPin'
@@ -454,12 +456,27 @@ export interface DispatchFailureText {
 
 /** Turn dispatch-driver's gate counts into the one sentence that tells the merchant where
  *  to look. Ordered from "nothing is set up" to "everyone is busy", so the first failing
- *  gate is the one reported. Mirrors the kitchen display's reading of the same payload. */
-export function describeDispatchFailure(body: DispatchFailure): DispatchFailureText {
+ *  gate is the one reported. Mirrors the kitchen display's reading of the same payload.
+ *  `status` is the HTTP status of the response the body came from. */
+export function describeDispatchFailure(body: DispatchFailure | null, status?: number): DispatchFailureText {
+  // Every answer dispatch-driver writes itself carries `error`, and its no-rider answer also
+  // carries `diagnostics`. A body with neither never reached the function: the platform
+  // gateway rejected the JWT itself (401 {"code":401,"message":"Invalid JWT"}, e.g. a stale
+  // token after a key rotation) or failed (5xx). Reading that as "no rider available" sent
+  // the merchant after riders, and nothing was logged.
+  if (!body?.error && !body?.diagnostics) {
+    if (status === 401) return { key: 'authRequired' };
+    if (status === 403) return { key: 'notAuthorized' };
+    return status != null ? { key: 'failed', code: `http_${status}` } : { key: 'failed' };
+  }
   if (body?.error && body.error !== 'no_drivers_available') {
     if (body.error === 'max_attempts_reached') return { key: 'maxAttempts' };
     if (body.error === 'feature_not_entitled') return { key: 'notEntitled' };
     if (body.error === 'delivery_not_dispatchable') return { key: 'notDispatchable' };
+    // dispatch-driver's two refusals (401, 403), both before anything is written: the session
+    // has expired, or the caller lacks delivery.manage at the delivery's branch.
+    if (body.error === 'auth_required') return { key: 'authRequired' };
+    if (body.error === 'not_authorized') return { key: 'notAuthorized' };
     // Any other code is server vocabulary, not a sentence for the merchant.
     return { key: 'failed', code: body.error };
   }

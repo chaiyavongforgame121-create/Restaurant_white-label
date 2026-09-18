@@ -8,22 +8,10 @@
     "title": "Thương hiệu và chi nhánh",
     "subtitle": "Tên thương hiệu, màu sắc và hình ảnh mặc định của {restaurant}, cùng các chi nhánh. Mỗi chi nhánh đặt logo và biểu tượng ứng dụng riêng trong Cài đặt chi nhánh."
   },
-  "loyalty": {
-    "title": "Phạm vi điểm tích lũy",
-    "description": "Chọn điểm tích lũy được dùng chung cho mọi chi nhánh (mặc định) hay chỉ trong một chi nhánh.",
-    "modes": {
-      "brand": "Thương hiệu",
-      "branch": "Chi nhánh"
-    },
-    "modeHints": {
-      "brand": "Điểm được cộng dồn giữa mọi chi nhánh của nhà hàng này.",
-      "branch": "Điểm được tích và đổi trong cùng một chi nhánh."
-    }
-  },
   "storefront": {
-    "title": "Giao diện cửa hàng trực tuyến",
+    "title": "Giao diện cửa hàng mặc định",
     "saved": "Đã lưu ✓",
-    "description": "Cách khách hàng nhìn thấy thực đơn. Áp dụng cho mọi chi nhánh của nhà hàng này.",
+    "description": "Bố cục thực đơn và ảnh bìa mà mọi chi nhánh hiển thị cho đến khi chi nhánh đó tự thiết lập trong Cài đặt chi nhánh → Bố cục thực đơn. Giao diện riêng của chi nhánh luôn được ưu tiên.",
     "menuLayout": "Bố cục thực đơn",
     "cardStyle": "Kiểu thẻ món",
     "heroTitle": "Tiêu đề ảnh bìa",
@@ -46,7 +34,7 @@
     "offlineHidden": "Cửa hàng ngừng hiển thị khi bị ẩn",
     "settings": "Cài đặt",
     "empty": "Chưa có chi nhánh nào.",
-    "copyNote": "Chi nhánh mới có thể sao chép thực đơn, giờ mở cửa và cài đặt thanh toán từ một chi nhánh hiện có. Vị trí trên bản đồ và mã QR của bàn không bao giờ được sao chép — hãy thiết lập trong cài đặt của chi nhánh mới."
+    "copyNote": "Chi nhánh mới có thể sao chép thực đơn, giờ mở cửa, cài đặt thanh toán, giao hàng, thuế, giao diện và chương trình khách hàng thân thiết từ một chi nhánh hiện có. Vị trí trên bản đồ, mã QR của bàn, mã QR thanh toán, số lượng tồn kho, nhân viên và khách hàng không bao giờ được sao chép — hãy thiết lập ở chi nhánh mới."
   },
   "brandList": {
     "default": "Mặc định",
@@ -72,25 +60,23 @@
       "brand": "Thương hiệu (không bắt buộc)",
       "brandNone": "— Không có —",
       "startFrom": "Bắt đầu từ",
-      "startFromNothing": "Không có gì (chi nhánh trống)"
-    },
-    "timezones": {
-      "eastern": "Miền Đông (New York)",
-      "central": "Miền Trung (Chicago)",
-      "mountain": "Miền Núi (Denver)",
-      "mountainNoDst": "Miền Núi — không đổi giờ mùa hè (Phoenix)",
-      "pacific": "Thái Bình Dương (Los Angeles)",
-      "alaska": "Alaska (Anchorage)",
-      "hawaii": "Hawaii (Honolulu)"
+      "startFromNothing": "Không có gì (chi nhánh trống)",
+      "slugHint": "Một phần của địa chỉ web cửa hàng. Chỉ dùng chữ thường, số và dấu gạch ngang.",
+      "timezoneHint": "Giờ mở cửa, đơn đặt trước và báo cáo hằng ngày dùng múi giờ này. Mặc định là múi giờ của thiết bị này."
     },
     "copy": {
       "menu": "Sao chép thực đơn",
-      "menuHint": "Danh mục, món và các nhóm tùy chọn",
+      "menuHint": "Danh mục, món, nhóm tùy chọn và combo. Theo dõi tồn kho sẽ tắt cho đến khi bạn kiểm kho ở đó.",
       "hours": "Sao chép giờ mở cửa",
       "hoursHint": "Lịch hằng tuần, không gồm các ngày nghỉ đột xuất",
-      "settings": "Sao chép cài đặt thanh toán và giao hàng",
-      "settingsHint": "Phương thức thanh toán, giao hàng, tiền tip và phí dịch vụ",
-      "notCopied": "Địa chỉ, vị trí trên bản đồ, logo, biểu tượng ứng dụng, màu sắc và mã QR của bàn không được sao chép."
+      "settings": "Sao chép cài đặt",
+      "settingsHint": "Phương thức thanh toán, giao hàng, tiền tip, phí dịch vụ, thuế bán hàng, thời gian chuẩn bị, ăn tại quán và đơn đặt trước",
+      "notCopied": "Địa chỉ, vị trí trên bản đồ, logo, biểu tượng ứng dụng, mã QR thanh toán, số lượng tồn kho, nhân viên, khách hàng, điểm thưởng và mã QR của bàn không được sao chép.",
+      "look": "Sao chép giao diện",
+      "lookHint": "Màu sắc, bố cục thực đơn và ảnh bìa. Mỗi chi nhánh tự tải lên logo và biểu tượng ứng dụng.",
+      "qrNever": "Mã QR thanh toán không bao giờ được sao chép: đó là tài khoản ngân hàng của chi nhánh kia. Chuyển khoản sẽ tắt ở chi nhánh mới cho đến khi chi nhánh tải lên mã QR của riêng mình.",
+      "loyalty": "Sao chép chương trình khách hàng thân thiết",
+      "loyaltyHint": "Tỷ lệ điểm, hạng thành viên, đặc quyền và danh sách phần thưởng. Thành viên và điểm của họ vẫn ở chi nhánh của mình. Phần thưởng tặng món cần sao chép cả thực đơn."
     },
     "close": "Đóng",
     "cancel": "Hủy",
@@ -106,20 +92,42 @@
       "noBranchId": "Chi nhánh đã được tạo, nhưng phản hồi không cho biết đó là chi nhánh nào nên chưa sao chép gì. Hãy đóng hộp thoại này và thiết lập chi nhánh trong cài đặt riêng của nó.",
       "copyMenuNotEmpty": "Chi nhánh đã được tạo, nhưng sao chép từ {source} thất bại: chi nhánh mới đã có món trong thực đơn. Bỏ chọn “Sao chép thực đơn” rồi thử lại để sao chép phần còn lại, hoặc đóng hộp thoại này và thiết lập chi nhánh trong cài đặt riêng của nó.",
       "copyFailed": "Chi nhánh đã được tạo, nhưng sao chép từ {source} thất bại. Bạn có thể thử sao chép lại, hoặc đóng hộp thoại này và thiết lập chi nhánh trong cài đặt riêng của nó.",
-      "generic": "Đã xảy ra lỗi. Vui lòng thử lại."
+      "generic": "Đã xảy ra lỗi. Vui lòng thử lại.",
+      "invalidSlug": "Slug URL chỉ được dùng chữ thường, số và dấu gạch ngang đơn, dài 2 đến 64 ký tự, ví dụ quan-1-2.",
+      "invalidTimezone": "Không nhận ra múi giờ này. Hãy chọn một múi giờ trong danh sách.",
+      "invalidTaxRate": "Thuế suất bán hàng phải từ 0% đến 50%.",
+      "invalidBrand": "Thương hiệu này không thuộc nhà hàng này. Hãy chọn thương hiệu khác hoặc không chọn.",
+      "copyNotAuthorized": "Chi nhánh đã được tạo, nhưng bạn không có quyền sao chép từ {source}. Hãy đóng hộp thoại này và thiết lập chi nhánh trong cài đặt riêng của nó."
     }
   },
   "created": {
     "title": "Đã tạo chi nhánh",
     "copiedFrom": "Đã sao chép sang {name} từ {source}:",
-    "copiedFromUnknown": "Đã sao chép sang {name} từ chi nhánh nguồn:",
     "menu": "{categories, plural, other {# danh mục}}, {items, plural, other {# món}} và {groups, plural, other {# nhóm tùy chọn}}",
     "hours": "{count, plural, other {# khung giờ mở cửa}}",
-    "settingsCopied": "Cài đặt thanh toán, giao hàng, tiền tip và phí dịch vụ",
+    "settingsCopied": "Cài đặt thanh toán, giao hàng, tiền tip, phí dịch vụ, thuế bán hàng, thời gian chuẩn bị, ăn tại quán và đơn đặt trước",
     "settingsNone": "Không có cài đặt thanh toán hay giao hàng: chi nhánh nguồn chưa lưu cài đặt nào",
-    "todo": "Việc cần làm ở chi nhánh mới: đặt vị trí trên bản đồ và thiết lập mã QR cho bàn. Những mục này không bao giờ được sao chép.",
     "done": "Xong",
-    "openSettings": "Mở cài đặt chi nhánh"
+    "openSettings": "Mở cài đặt chi nhánh",
+    "combos": "{count, plural, other {# combo}}",
+    "scheduleWindows": "{count, plural, other {# khung giờ nhận đơn đặt trước}}",
+    "lookCopied": "Màu sắc, bố cục thực đơn và ảnh bìa",
+    "empty": "{name} bắt đầu trống: không có thực đơn, không có giờ mở cửa (mở cả ngày) và dùng cài đặt tiêu chuẩn.",
+    "transferOff": "Chuyển khoản đang tắt ở đây: mã QR thanh toán thuộc chi nhánh kia và không được sao chép. Hãy tải lên mã QR của chi nhánh này trong cài đặt, sau đó bật chuyển khoản.",
+    "stockOff": "{count, plural, other {# món có theo dõi tồn kho ở chi nhánh nguồn. Ở đây theo dõi tồn kho đang tắt}} cho đến khi bạn kiểm kho ở chi nhánh mới.",
+    "todoTitle": "Việc cần làm ở {name}:",
+    "todo": {
+      "pin": "Đặt vị trí trên bản đồ (phí giao hàng và tài xế được tính từ đó)",
+      "tables": "Thiết lập bàn và in mã QR của bàn",
+      "tax": "Kiểm tra thuế suất bán hàng ({rate})",
+      "paymentQr": "Tải lên mã QR thanh toán riêng nếu nhận chuyển khoản",
+      "stock": "Kiểm kho, sau đó bật theo dõi tồn kho",
+      "staff": "Mời nhân viên của chi nhánh (thu ngân, bếp)",
+      "riders": "Duyệt tài xế cho chi nhánh này",
+      "loyalty": "Thiết lập chương trình khách hàng thân thiết và phần thưởng"
+    },
+    "loyaltyCopied": "{count, plural, =0 {Cài đặt chương trình khách hàng thân thiết (không có phần thưởng)} other {Chương trình khách hàng thân thiết và # phần thưởng}}",
+    "rewardsSkipped": "{count, plural, other {# phần thưởng tặng món không được sao chép vì món đó không được sao chép. Hãy tạo lại khi thực đơn đã sẵn sàng.}}"
   },
   "editor": {
     "title": "Sửa thương hiệu",
@@ -151,5 +159,8 @@
   "errors": {
     "generic": "Đã xảy ra lỗi. Vui lòng thử lại.",
     "permissionDenied": "Bạn không có quyền thực hiện thao tác này."
+  },
+  "shared": {
+    "ownerOnly": "Chỉ chủ nhà hàng hoặc quản trị viên của mọi chi nhánh mới có thể thay đổi các cài đặt dùng chung này. Bạn vẫn có thể thêm chi nhánh."
   }
 }

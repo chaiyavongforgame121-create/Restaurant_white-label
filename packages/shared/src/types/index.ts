@@ -85,6 +85,13 @@ export interface MenuItem {
   saleLabel?: string;
   /** True when the stock counter has run out, or the branch has 86'd the item by hand. */
   outOfStock?: boolean;
+  /** True when the stock counter alone has run out, whatever the 86 says. */
+  stockOut?: boolean;
+  /**
+   * When a hand-set 86 (menu_items.sold_out_until) lifts, as an ISO timestamp; null when the item
+   * is not 86'd or the 86 has already expired. The dish is sold out until then whatever its count.
+   */
+  soldOutUntil?: string | null;
   /**
    * False for a dish the merchant has taken off sale — a fresh duplicate, or one switched off.
    * Only the back office asks for these; the storefront query filters them out entirely.

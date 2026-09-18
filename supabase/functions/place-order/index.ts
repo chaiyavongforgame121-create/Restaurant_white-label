@@ -2,10 +2,10 @@
 // Server-side recalculation never trusts client totals.
 //
 // Version history: see ./CHANGELOG.md (moved out of this file 2026-08-28).
-// Current: v10.5 — dine-in is now a SESSION. A supplied table_id is checked against the
-// branch instead of being trusted, and a dine-in order from the storefront is refused
-// unless a sitting is open at that table AND the signed-in caller has joined it. Auth is
-// resolved before pricing so that gate can run at all.
+// Current: v11.3 — every branch is its own shop. The caller counts as staff only at a branch
+// they may ring up (staff_can_ring_up), a staff sale is never filed under the cashier's own
+// customer record, a diner is resolved by (branch, user), and points, promos and gift cards
+// are taken atomically for the order or the order is not placed.
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
@@ -42,6 +42,10 @@ interface PlaceOrderRequest {
   source?: 'web' | 'counter' | 'pos';
   scheduled_for?: string;
   gift_card_code?: string;
+  /** Staff only: a percentage 0..100 taken off the food before tax and the card service fee. */
+  discount_percent?: number;
+  /** Staff only: an E.164 number the customer gave, matched against THIS branch's customers. */
+  customer_lookup_phone?: string;
   items: Array<{ menu_item_id: string; quantity: number; notes?: string; modifier_option_ids?: string[] }>;
   combos?: Array<{ combo_id: string; quantity: number; notes?: string }>;
 }
@@ -56,6 +60,28 @@ function r2(n: number) { return Math.round(n * 100) / 100; }
 function clip(v: unknown, max: number) { return typeof v === 'string' ? v.trim().slice(0, max) : ''; }
 
 const DROPOFF_PREFS = ['leave_at_door', 'hand_to_me', 'at_desk', 'other'] as const;
+
+// The number the counter sends for a walk-in who gave none. It is nobody's: the customers table
+// refuses it (customers_phone_not_placeholder), so it is never stored on or looked up as a diner.
+const WALK_IN_PHONE = '+10000000000';
+const E164 = /^\+[1-9][0-9]{6,14}$/;
+
+// A phone worth keeping on a customer record: at least seven digits and not the walk-in placeholder.
+function realPhone(v: unknown): string | null {
+  if (typeof v !== 'string') return null;
+  const phone = v.trim();
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length < 7 || digits === WALK_IN_PHONE.slice(1)) return null;
+  return phone.slice(0, 32);
+}
+
+// A name worth keeping on a customer record. The counter's fallbacks ('Walk-in', 'Table 4') are
+// labels for the ticket, not somebody's name.
+function realName(v: unknown): string | null {
+  const name = clip(v, 120);
+  if (!name || /^walk-?in$/i.test(name) || /^table\s+\S+$/i.test(name)) return null;
+  return name;
+}
 
 // `customer-auth` mints every phone-only diner as a synthetic confirmed user
 // `c{digits}@customer.favornoms.local` (email_confirm: true), so those accounts
@@ -90,6 +116,26 @@ const ORDER_CHANNELS = ['dine_in', 'pickup', 'delivery', 'qr_ordering'] as const
 // strictest bucket, so a forged value cannot loosen a rule.
 const ORDER_SOURCES = ['web', 'counter', 'pos'] as const;
 
+// What reserve_order_credits refuses with, and the status each is answered with. Anything else it
+// raises is this function's own fault and stays a 500.
+const CREDIT_REFUSALS: Array<[string, number]> = [
+  ['insufficient_points', 409],
+  ['per_customer_limit_reached', 409],
+  ['promo_exhausted', 409],
+  ['promo_unavailable', 409],
+  ['gift_card_changed', 409],
+  ['redeem_requires_auth', 400],
+];
+// Carried as `hint` on a promo or gift-card refusal. The storefront finds its copy by substring over
+// the whole body, and a checkout deployed before these refusals existed knows none of their codes:
+// without a hint it shows "Something went wrong" and the same button fails the same way. This code
+// it does know ("Rewards changed while you were ordering. Please refresh this page and try again."),
+// and a refresh clears the code or card, which the diner can then re-apply and be told why it fails.
+// The counter reads `error` only, so the hint does not reach it.
+const STALE_CREDIT_HINT = 'stale_client_refresh_required';
+const wantsRefreshHint = (code: string) =>
+  code.startsWith('promo') || code === 'per_customer_limit_reached' || code === 'gift_card_changed';
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: CORS });
   if (req.method !== 'POST') return json(405, { error: 'method_not_allowed' });
@@ -112,6 +158,7 @@ Deno.serve(async (req: Request) => {
   const hasCombos = Array.isArray(payload.combos) && payload.combos.length > 0;
   if (!hasItems && !hasCombos) return json(400, { error: 'empty_order' });
   if (!Array.isArray(payload.items)) payload.items = [];
+  if (!Array.isArray(payload.combos)) payload.combos = [];
   if (payload.channel === 'delivery' && !payload.delivery_address?.line1 && !payload.saved_address_id) return json(400, { error: 'delivery_address_required' });
   if (!payload.customer_phone) return json(400, { error: 'customer_phone_required' });
   // Dine-in ordered by the diner has to say which table, or the food has nowhere
@@ -123,6 +170,23 @@ Deno.serve(async (req: Request) => {
   }
   if (payload.payment_method !== 'card' && payload.payment_method !== 'cash' && payload.payment_method !== 'transfer') {
     return json(400, { error: 'invalid_payment_method' });
+  }
+
+  // The till's discount, as a percentage of the food. Its shape is checked here; whether the caller
+  // may give one at all is decided once we know who they are.
+  let discountPercent = 0;
+  if (payload.discount_percent != null) {
+    const pct = Number(payload.discount_percent);
+    if (!Number.isFinite(pct) || pct < 0 || pct > 100) return json(400, { error: 'invalid_discount_percent' });
+    discountPercent = pct;
+  }
+  // A number typed at the till to find this branch's customer record. Only ever looked up, never
+  // used to create or claim one, so a wrong number just leaves the sale a walk-in.
+  let lookupPhone: string | null = null;
+  if (payload.customer_lookup_phone != null && String(payload.customer_lookup_phone).trim() !== '') {
+    const phone = String(payload.customer_lookup_phone).trim();
+    if (!E164.test(phone) || phone === WALK_IN_PHONE) return json(400, { error: 'invalid_customer_phone' });
+    lookupPhone = phone;
   }
 
   // Rate limiting (v9.5): this endpoint is public (verify_jwt=false), so cap
@@ -143,24 +207,6 @@ Deno.serve(async (req: Request) => {
     if (verdict && (verdict as { allowed?: boolean }).allowed === false) {
       return json(429, { error: 'rate_limited', retry_after_seconds: 600 });
     }
-  }
-
-  // Structured drop-off (delivery only). dropoff_pref is required; the whitelisted
-  // object is merged into delivery_address later so it survives a saved-address rebuild.
-  let dropoff: { dropoff_pref: (typeof DROPOFF_PREFS)[number]; dropoff_other?: string; gate_code?: string; room?: string } | null = null;
-  if (payload.channel === 'delivery') {
-    const pref = payload.delivery_address?.dropoff_pref;
-    if (!pref || !DROPOFF_PREFS.includes(pref)) return json(400, { error: 'dropoff_required' });
-    const dropoffOther = clip(payload.delivery_address?.dropoff_other, 120);
-    if (pref === 'other' && !dropoffOther) return json(400, { error: 'dropoff_other_required' });
-    const gateCode = clip(payload.delivery_address?.gate_code, 40);
-    const room = clip(payload.delivery_address?.room, 40);
-    dropoff = {
-      dropoff_pref: pref,
-      ...(pref === 'other' ? { dropoff_other: dropoffOther } : {}),
-      ...(gateCode ? { gate_code: gateCode } : {}),
-      ...(room ? { room } : {}),
-    };
   }
 
   // Parsed here rather than next to the insert because the store-hours check below needs
@@ -205,6 +251,61 @@ Deno.serve(async (req: Request) => {
       authedUser = user ?? null;
       authedUserId = user?.id ?? null;
     }
+  }
+
+  // STAFF OR DINER, decided before anything else reads either. A counter or POS sale is staff-placed
+  // only when the caller may ring up at THIS branch: the same rule as
+  // private.staff_has_capability(branch, 'counter.access') — owner rows and restaurant-wide rows
+  // cover every branch, other rows only their own, plus the restaurant's owner_user_id and platform
+  // admins. It used to be any active staff row of the restaurant, so a Hamburger cashier could ring
+  // up Food Thai Thai orders around its payment matrix; and it was decided after the customer, so a
+  // counter sale was filed under the cashier's own customer record and would have earned them the
+  // walk-in's points. A staff surface whose caller is not staff here is refused outright rather
+  // than treated as a diner: that is how the cashier's account ended up as a customer.
+  let staffPlaced = false;
+  let staffRowId: string | null = null;
+  if (source !== 'web') {
+    if (!authedUserId) return json(401, { error: 'login_required' });
+    const { data: canRing, error: ringErr } = await admin.rpc('staff_can_ring_up', { p_user_id: authedUserId, p_branch_id: branch.id });
+    if (ringErr) return json(500, { error: 'staff_check_failed', detail: ringErr.message });
+    if (canRing !== true) return json(403, { error: 'not_staff_at_branch' });
+    staffPlaced = true;
+    // orders.staff_id: who rang it up, as their staff row for this branch (the branch's own row
+    // first, then a restaurant-wide one, then an owner row pinned elsewhere). An owner known only
+    // through restaurants.owner_user_id, or a platform admin, has no row, and the column stays null.
+    const { data: rows } = await admin.from('staff_members')
+      .select('id, branch_id, created_at')
+      .eq('user_id', authedUserId)
+      .eq('restaurant_id', branch.restaurant_id)
+      .eq('status', 'active')
+      .or(`branch_id.eq.${branch.id},branch_id.is.null,role.eq.owner`);
+    const rank = (r: { branch_id: string | null }) => (r.branch_id === branch.id ? 0 : r.branch_id == null ? 1 : 2);
+    const best = ((rows ?? []) as Array<{ id: string; branch_id: string | null; created_at: string }>)
+      .sort((a, b) => rank(a) - rank(b) || a.created_at.localeCompare(b.created_at))[0];
+    staffRowId = best?.id ?? null;
+  }
+  if (discountPercent > 0 && !staffPlaced) return json(403, { error: 'discount_requires_staff' });
+
+  // Structured drop-off (delivery only). dropoff_pref is required from the storefront; a staff
+  // sale defaults to 'hand_to_me' (the rider phones the customer). The whitelisted object is
+  // merged into delivery_address later so it survives a saved-address rebuild.
+  let dropoff: { dropoff_pref: (typeof DROPOFF_PREFS)[number]; dropoff_other?: string; gate_code?: string; room?: string } | null = null;
+  if (payload.channel === 'delivery') {
+    const pref = payload.delivery_address?.dropoff_pref ?? (staffPlaced ? 'hand_to_me' : undefined);
+    if (!pref || !DROPOFF_PREFS.includes(pref)) return json(400, { error: 'dropoff_required' });
+    const dropoffOther = clip(payload.delivery_address?.dropoff_other, 120);
+    if (pref === 'other' && !dropoffOther) return json(400, { error: 'dropoff_other_required' });
+    const gateCode = clip(payload.delivery_address?.gate_code, 40);
+    const room = clip(payload.delivery_address?.room, 40);
+    dropoff = {
+      dropoff_pref: pref,
+      ...(pref === 'other' ? { dropoff_other: dropoffOther } : {}),
+      ...(gateCode ? { gate_code: gateCode } : {}),
+      ...(room ? { room } : {}),
+    };
+    // The rider has to be able to call someone. The storefront always sends the diner's number;
+    // the till sends the walk-in placeholder when nobody typed one.
+    if (staffPlaced && !realPhone(payload.customer_phone)) return json(400, { error: 'customer_phone_required' });
   }
 
   // Turn the typed table number into a real table row so the kitchen and the
@@ -261,7 +362,7 @@ Deno.serve(async (req: Request) => {
       .eq('table_id', tableId)
       .neq('status', 'closed')
       .maybeSingle();
-    if (source === 'web') {
+    if (!staffPlaced) {
       if (!sess) return json(409, { error: 'table_not_seated' });
       if (sess.status !== 'open') return json(409, { error: 'table_session_closed' });
       // The sitting the checkout thought it was adding to has been settled and another
@@ -295,6 +396,10 @@ Deno.serve(async (req: Request) => {
     }
   }
 
+  // Login is mandatory for customer-placed orders (defense-in-depth over the
+  // storefront's add-to-cart/checkout gates). Staff surfaces were settled above.
+  if (!staffPlaced && !authedUserId) return json(401, { error: 'login_required' });
+
   // Billing gate. The BEFORE INSERT triggers on orders/payments/deliveries are the
   // real authority — this check exists so a suspended tenant gets one clean 402
   // instead of a half-written order rolled back by a P0001 three steps later.
@@ -304,29 +409,38 @@ Deno.serve(async (req: Request) => {
     return json(403, featureNotEntitledBody('delivery'));
   }
 
-  const menuItemIds = payload.items.map((i) => i.menu_item_id);
-  // deno-lint-ignore no-explicit-any
-  let items: any[] = [];
-  if (menuItemIds.length > 0) {
-    const { data, error: iErr } = await admin.from('menu_items').select('id, branch_id, name, price, image_url, is_active, stock_quantity, track_stock, sold_out_until').in('id', menuItemIds).eq('branch_id', payload.branch_id);
-    if (iErr || !data) return json(500, { error: 'item_lookup_failed', detail: iErr?.message });
-    items = data;
+  // Quantities first: every check below sums them. A combo line is held to the same rule as a
+  // dish line; it used to be clamped silently, so a client sending 0 or 150 was charged for 1 or 99.
+  for (const line of payload.items) {
+    const q = Number(line.quantity);
+    if (!Number.isInteger(q) || q < 1 || q > 99) return json(400, { error: 'invalid_quantity', item_id: line.menu_item_id });
+    line.quantity = q;
+  }
+  for (const cline of payload.combos!) {
+    const q = Number(cline.quantity);
+    if (!Number.isInteger(q) || q < 1 || q > 99) return json(400, { error: 'invalid_quantity', combo_id: cline.combo_id });
+    cline.quantity = q;
   }
 
-  // Look up combos for any combo lines, validate they belong to the branch.
-  // deno-lint-ignore no-explicit-any
-  const comboMap = new Map<string, { id: string; name: string; total_price: number; image_url: string | null }>();
-  if (hasCombos && payload.combos) {
-    const comboIds = payload.combos.map((c) => c.combo_id);
+  // Look up combos for any combo lines, validate they belong to the branch, and read what is in
+  // them: a combo is its dishes, and each one has to be on sale here for the combo to be.
+  type ComboPart = { menu_item_id: string; quantity: number; position: number };
+  const comboMap = new Map<string, { id: string; name: string; total_price: number; image_url: string | null; parts: ComboPart[] }>();
+  if (hasCombos) {
+    const comboIds = payload.combos!.map((c) => c.combo_id);
     const { data: combos, error: cErr } = await admin
       .from('combo_sets')
-      .select('id, name, total_price, image_url, branch_id, is_active')
+      .select('id, name, total_price, image_url, branch_id, is_active, archived_at, combo_items(menu_item_id, quantity, position)')
       .in('id', comboIds)
       .eq('branch_id', payload.branch_id);
     if (cErr) return json(500, { error: 'combo_lookup_failed', detail: cErr.message });
-    for (const c of combos ?? []) {
-      if (!c.is_active) return json(400, { error: 'combo_inactive', combo_id: c.id });
-      comboMap.set(c.id, { id: c.id, name: c.name, total_price: Number(c.total_price), image_url: c.image_url });
+    // deno-lint-ignore no-explicit-any
+    for (const c of (combos ?? []) as any[]) {
+      if (!c.is_active || c.archived_at) return json(400, { error: 'combo_inactive', combo_id: c.id });
+      const parts = ((c.combo_items ?? []) as ComboPart[])
+        .map((p) => ({ menu_item_id: p.menu_item_id, quantity: Number(p.quantity) || 1, position: Number(p.position) || 0 }))
+        .sort((a, b) => a.position - b.position);
+      comboMap.set(c.id, { id: c.id, name: c.name, total_price: Number(c.total_price), image_url: c.image_url, parts });
     }
     // The lookup is scoped to this branch, so a combo from another branch (a cart carried
     // across storefronts on the same host) or a deleted one simply is not returned. Nothing
@@ -334,20 +448,39 @@ Deno.serve(async (req: Request) => {
     // 500 for what is really "this set is not on this menu". `hint` carries a code the
     // checkout and the counter already match by substring, so a client that predates
     // combo_not_in_branch still reads "no longer available" rather than a raw body.
-    for (const cline of payload.combos) {
-      if (!comboMap.has(cline.combo_id)) {
+    for (const cline of payload.combos!) {
+      const combo = comboMap.get(cline.combo_id);
+      if (!combo) {
         return json(400, { error: 'combo_not_in_branch', combo_id: cline.combo_id, hint: 'item_not_in_branch' });
       }
+      // A combo with nothing in it would sell the diner a name at full price.
+      if (combo.parts.length === 0) return json(409, { error: 'combo_empty', combo_id: combo.id, hint: 'combo_inactive' });
     }
+  }
+
+  // Every dish the order touches: the lines' own and the combos' contents, in one read. Not scoped
+  // to the branch in the query, so a line naming another branch's dish is told apart from one that
+  // does not exist; both are refused below.
+  const menuItemIds = Array.from(new Set([
+    ...payload.items.map((i) => i.menu_item_id),
+    ...Array.from(comboMap.values()).flatMap((c) => c.parts.map((p) => p.menu_item_id)),
+  ]));
+  // deno-lint-ignore no-explicit-any
+  let items: any[] = [];
+  if (menuItemIds.length > 0) {
+    const { data, error: iErr } = await admin.from('menu_items').select('id, branch_id, name, price, image_url, is_active, stock_quantity, track_stock, sold_out_until, station').in('id', menuItemIds);
+    if (iErr || !data) return json(500, { error: 'item_lookup_failed', detail: iErr?.message });
+    items = data;
   }
 
   // deno-lint-ignore no-explicit-any
   const itemMap = new Map<string, any>(items.map((i: any) => [i.id, i]));
+  const soldOut = (it: { sold_out_until?: string | null }) => !!it.sold_out_until && new Date(it.sold_out_until).getTime() > Date.now();
 
   // Fetch effective prices (happy-hour aware). Falls back to list price.
   // deno-lint-ignore no-explicit-any
   const priceOverride = new Map<string, number>();
-  if (items.length > 0) {
+  if (payload.items.length > 0) {
     const { data: effective } = await admin.rpc('get_effective_prices', { p_branch_id: payload.branch_id });
     // deno-lint-ignore no-explicit-any
     for (const row of (effective ?? []) as any[]) {
@@ -358,18 +491,45 @@ Deno.serve(async (req: Request) => {
   }
   for (const [id, it] of itemMap.entries()) {
     const override = priceOverride.get(id);
-    if (override !== undefined) it.price = override;
+    if (override !== undefined && it.branch_id === payload.branch_id) it.price = override;
   }
+
+  // How many of each dish the order takes off the shelf, dish lines and combo contents together:
+  // two lines of the same dish with different options, or a dish that is also inside a combo in
+  // the same cart, each passed a per-line check the shelf could not honour.
+  const demand = new Map<string, number>();
+  for (const line of payload.items) demand.set(line.menu_item_id, (demand.get(line.menu_item_id) ?? 0) + line.quantity);
+  for (const cline of payload.combos!) {
+    const combo = comboMap.get(cline.combo_id)!;
+    for (const p of combo.parts) demand.set(p.menu_item_id, (demand.get(p.menu_item_id) ?? 0) + p.quantity * cline.quantity);
+  }
+  // A tracked dish always carries a count (menu_items CHECK), so null only reaches here from an
+  // older row, and it means nothing on the shelf — the menu and the cart read it the same way.
+  const onShelf = (it: { stock_quantity: number | null }) => Number(it.stock_quantity ?? 0);
+
   for (const line of payload.items) {
     const it = itemMap.get(line.menu_item_id);
-    if (!it) return json(400, { error: 'item_not_in_branch', item_id: line.menu_item_id });
+    if (!it || it.branch_id !== payload.branch_id) return json(400, { error: 'item_not_in_branch', item_id: line.menu_item_id });
     if (!it.is_active) return json(400, { error: 'item_inactive', item_id: line.menu_item_id });
     // A manual 86 has to be refused here, not just hidden on the menu. Staff mark an item
     // sold out mid-service, and any diner whose menu was already loaded (or cached by the
     // service worker) still holds a page that offers it.
-    if (it.sold_out_until && new Date(it.sold_out_until).getTime() > Date.now()) return json(409, { error: 'item_sold_out', item_id: line.menu_item_id, until: it.sold_out_until });
-    if (it.track_stock && it.stock_quantity != null && it.stock_quantity < line.quantity) return json(409, { error: 'insufficient_stock', item_id: line.menu_item_id, available: it.stock_quantity });
-    if (line.quantity < 1 || line.quantity > 99) return json(400, { error: 'invalid_quantity', item_id: line.menu_item_id });
+    if (soldOut(it)) return json(409, { error: 'item_sold_out', item_id: line.menu_item_id, until: it.sold_out_until });
+    if (it.track_stock && onShelf(it) < (demand.get(it.id) ?? 0)) return json(409, { error: 'insufficient_stock', item_id: line.menu_item_id, available: Math.max(0, onShelf(it)) });
+  }
+  // A combo is on sale only while every dish in it is: this branch's, on the menu, not 86'd, and
+  // on the shelf in the quantity the whole order needs.
+  for (const cline of payload.combos!) {
+    const combo = comboMap.get(cline.combo_id)!;
+    for (const p of combo.parts) {
+      const it = itemMap.get(p.menu_item_id);
+      const refuse = (reason: string, extra: Record<string, unknown> = {}) =>
+        json(409, { error: 'combo_item_unavailable', combo_id: combo.id, item_id: p.menu_item_id, reason, ...extra, hint: 'combo_inactive' });
+      if (!it || it.branch_id !== payload.branch_id) return refuse('not_in_branch');
+      if (!it.is_active) return refuse('inactive');
+      if (soldOut(it)) return refuse('sold_out', { until: it.sold_out_until });
+      if (it.track_stock && onShelf(it) < (demand.get(it.id) ?? 0)) return refuse('insufficient_stock', { available: Math.max(0, onShelf(it)) });
+    }
   }
 
   // Look up modifier options for all lines that send modifier_option_ids
@@ -456,97 +616,32 @@ Deno.serve(async (req: Request) => {
     const lineSubtotal = r2(unitWithMods * line.quantity);
     return { line, it, lineMods, modDelta, unitWithMods, lineSubtotal };
   });
-  const comboComputations = (payload.combos ?? []).map((cline) => {
+  const comboComputations = payload.combos!.map((cline) => {
     const combo = comboMap.get(cline.combo_id)!;
-    const qty = Math.max(1, Math.min(99, cline.quantity));
+    const qty = cline.quantity;
     return {
       combo,
       qty,
       notes: cline.notes,
       lineSubtotal: r2(combo.total_price * qty),
+      // What the combo held when it was sold, per ONE combo: the kitchen cooks from it, and
+      // order_items_decrement_stock / the cancel restore count the dishes from it.
+      contents: combo.parts.map((p) => {
+        const it = itemMap.get(p.menu_item_id);
+        return { menu_item_id: p.menu_item_id, name: it?.name ?? null, quantity: p.quantity, station: it?.station ?? null };
+      }),
     };
   });
   const subtotal = r2(
     lineComputations.reduce((sum, c) => sum + c.lineSubtotal, 0) +
     comboComputations.reduce((sum, c) => sum + c.lineSubtotal, 0),
   );
+  // The till's discount comes off the food first, before tax and the card fee, exactly as the
+  // counter quotes it (quoteCounterCart): min(subtotal, r2(subtotal x pct / 100)).
+  const staffDiscount = staffPlaced && discountPercent > 0 ? Math.min(subtotal, r2(subtotal * (discountPercent / 100))) : 0;
   const defaultDeliveryFee = Number(settings.delivery_fee ?? 3.99);
   let deliveryFee = payload.channel === 'delivery' ? defaultDeliveryFee : 0;
   const tipAmount = Math.max(0, r2(payload.tip_amount ?? 0));
-
-  let customerId: string | null = null;
-  let promoDiscount = 0;
-  let promoId: string | null = null;
-  // The caller was resolved before pricing, because the dine-in session gate needed it
-  // there. Asking auth again here would be a second round trip for the same answer.
-  {
-    const user = authedUser;
-    if (user) {
-      // Customer identity is per RESTAURANT (shared across its branches), so resolve
-      // by (user, restaurant) and lazily create the row on first order at any branch.
-      const { data: c } = await admin.from('customers').select('id').eq('user_id', user.id).eq('restaurant_id', branch.restaurant_id).maybeSingle();
-      customerId = c?.id ?? null;
-      if (!customerId) {
-        const { data: created } = await admin.from('customers')
-          .insert({ restaurant_id: branch.restaurant_id, branch_id: payload.branch_id, user_id: user.id, phone: payload.customer_phone, full_name: payload.customer_name ?? null, preferred_language: 'en' })
-          .select('id').single();
-        if (created) {
-          customerId = created.id;
-        } else {
-          // The insert lost a partial unique index. Re-read our OWN row first —
-          // a second concurrent order from the same diner trips
-          // customers_restaurant_user_uidx (restaurant_id, user_id).
-          const { data: mine } = await admin.from('customers').select('id')
-            .eq('restaurant_id', branch.restaurant_id).eq('user_id', user.id).maybeSingle();
-          customerId = mine?.id ?? null;
-          if (!customerId) {
-            // Otherwise customers_restaurant_phone_uidx blocked it: some row already
-            // holds this phone. customer_phone is raw request body and phone sign-in
-            // is OTP-less, so it proves NOTHING about who is calling — claim the row
-            // only while it is still UNOWNED, which is the staff-/guest-created row
-            // this fallback was written for. `is('user_id', null)` is part of the
-            // UPDATE, so a row belonging to another diner matches nothing and their
-            // points balance, address book and order history stay theirs. Claiming
-            // (rather than merely reading the id) is what makes the row answer to
-            // private.customer_id_for_user(), so the order shows up under Your orders.
-            const { data: claimed } = await admin.from('customers')
-              .update({ user_id: user.id })
-              .eq('restaurant_id', branch.restaurant_id).eq('phone', payload.customer_phone).is('user_id', null)
-              .select('id').maybeSingle();
-            // Nothing safe to adopt → stay null and file this as a guest order:
-            // orders.customer_id is nullable, the loyalty award trigger skips NULL,
-            // and a redeem_points attempt is rejected below with redeem_requires_auth.
-            customerId = claimed?.id ?? null;
-          }
-        }
-      }
-    }
-  }
-
-  // Is the caller an active staff member of this restaurant? Resolved at most
-  // once — the login gate, the payment matrix and the loyalty identity gate all
-  // need it. callerIsStaff() reads the JWT role, so a tokenless/guest caller is
-  // never staff — which is what makes the `source` spoof below harmless.
-  let staffLookupDone = false;
-  let callerIsStaffCached = false;
-  async function callerIsStaff(): Promise<boolean> {
-    if (staffLookupDone) return callerIsStaffCached;
-    staffLookupDone = true;
-    if (!authedUserId) return false;
-    const { data: staffRow } = await admin.from('staff_members').select('id')
-      .eq('user_id', authedUserId).eq('restaurant_id', branch.restaurant_id)
-      .eq('status', 'active').limit(1).maybeSingle();
-    callerIsStaffCached = !!staffRow;
-    return callerIsStaffCached;
-  }
-
-  // Login is mandatory for customer-placed orders (defense-in-depth over the
-  // storefront's add-to-cart/checkout gates). A staff surface authenticates the
-  // CASHIER, not the diner, so counter/POS stay exempt; a guest who forged
-  // source:'counter' still fails here because callerIsStaff() is false without a
-  // staff JWT. Resolved once and reused by the loyalty identity gate below.
-  const staffPlaced = source !== 'web' && (await callerIsStaff());
-  if (!staffPlaced && !authedUserId) return json(401, { error: 'login_required' });
 
   // Customers order one of two ways: Pickup, prepared now, or Schedule Delivery, booked for a
   // chosen time. The storefront only offers those two, but a tab opened before that change (or a
@@ -579,7 +674,8 @@ Deno.serve(async (req: Request) => {
   }
 
   // A branch that has not uploaded its QR cannot accept transfers, whatever the matrix
-  // says — the diner would reach a payment step with nothing to scan.
+  // says — the diner would reach a payment step with nothing to scan. The counter's QR sale
+  // passes here and is settled straight after by record_counter_transfer.
   if (payload.payment_method === 'transfer') {
     const qr = settings.qr_transfer as { image_url?: string } | undefined;
     if (!qr?.image_url) return json(400, { error: 'transfer_not_configured' });
@@ -592,7 +688,72 @@ Deno.serve(async (req: Request) => {
   // Running that through the matrix would let a branch which turned asap.cash off
   // (a perfectly reasonable delivery/pickup policy) kill every dine-in order.
   if (payload.channel !== 'dine_in' && paymentMethods?.[orderMode]?.[payload.payment_method] === false) {
-    if (!(await callerIsStaff())) return json(400, { error: 'payment_method_not_accepted' });
+    if (!staffPlaced) return json(400, { error: 'payment_method_not_accepted' });
+  }
+
+  // WHOSE ORDER. Customers are one row per (branch, user): each branch keeps its own diners, points
+  // and history, and only the login is shared.
+  //
+  // A staff sale is never the caller's: the cashier's session proves who is at the till, not who is
+  // eating. It stays a walk-in (customer_id null) unless the till looked a number up, and then it
+  // is filed under THIS branch's existing record for that number, which is only read — never
+  // created or claimed — so a mistyped number cannot hand anyone a login or a points balance.
+  let customerId: string | null = null;
+  if (staffPlaced) {
+    if (lookupPhone) {
+      // Matched by digits, not text: the till sends E.164 ('+16266386401') while the storefront
+      // stores what the diner typed ('6266386401', '(626) 638-6401'). An exact text match never
+      // found Food Thai Thai's only customer with a phone. A failed lookup leaves a walk-in.
+      const { data: found, error: findErr } = await admin.rpc('find_branch_customer_by_phone', { p_branch_id: branch.id, p_phone: lookupPhone });
+      if (findErr) console.error('customer_lookup_failed', { branch_id: branch.id, detail: findErr.message });
+      customerId = typeof found === 'string' && found ? found : null;
+    }
+  } else if (authedUser) {
+    const user = authedUser;
+    const phone = realPhone(payload.customer_phone);
+    const name = realName(payload.customer_name);
+    type Row = { id: string; full_name: string | null; phone: string | null };
+    const mine = async (): Promise<Row | null> => {
+      const { data } = await admin.from('customers').select('id, full_name, phone')
+        .eq('branch_id', branch.id).eq('user_id', user.id).maybeSingle();
+      return (data as Row | null) ?? null;
+    };
+    const create = async (withPhone: string | null): Promise<Row | null> => {
+      const { data } = await admin.from('customers')
+        .insert({ restaurant_id: branch.restaurant_id, branch_id: branch.id, user_id: user.id, phone: withPhone, full_name: name, preferred_language: 'en' })
+        .select('id, full_name, phone').single();
+      return (data as Row | null) ?? null;
+    };
+    let row = await mine();
+    if (!row) row = await create(phone);
+    // The insert lost a unique index. A second concurrent order from the same diner trips
+    // customers_branch_user_uidx: re-read our own row first.
+    if (!row) row = await mine();
+    if (!row && phone) {
+      // Otherwise customers_branch_phone_uidx blocked it: a row at this branch already holds
+      // the number. customer_phone is raw request body and phone sign-in is OTP-less, so it
+      // proves NOTHING about who is calling — claim the row only while it is still UNOWNED (a
+      // guest record), which `is('user_id', null)` makes part of the UPDATE. Another diner's
+      // row matches nothing, and their points and history stay theirs; this diner then gets a
+      // record of their own without the number.
+      const { data: claimed } = await admin.from('customers')
+        .update({ user_id: user.id })
+        .eq('branch_id', branch.id).eq('phone', phone).is('user_id', null)
+        .select('id, full_name, phone').maybeSingle();
+      row = (claimed as Row | null) ?? (await create(null)) ?? (await mine());
+    }
+    // A record made before any order (the checkout creates one on load) is often blank. Fill
+    // what is missing from what the diner just typed; each field on its own, so a number another
+    // record at this branch already holds (the unique index refuses it) does not also lose the name.
+    if (row && !row.full_name && name) {
+      await admin.from('customers').update({ full_name: name }).eq('id', row.id).is('full_name', null);
+    }
+    if (row && !row.phone && phone) {
+      await admin.from('customers').update({ phone }).eq('id', row.id).is('phone', null);
+    }
+    // Nothing usable → a guest order: orders.customer_id is nullable, the loyalty award
+    // trigger skips NULL, and a reward attempt is refused below with redeem_requires_auth.
+    customerId = row?.id ?? null;
   }
 
   // The service fee is a CARD-ONLY surcharge. Cash, QR transfer and dine-in (the
@@ -602,8 +763,9 @@ Deno.serve(async (req: Request) => {
   // method that is about to be refused never gets priced. Mirrored by
   // computeServiceFee() in packages/shared/src/utils/pricing.ts — a Deno function
   // cannot import that package, so the two expressions have to be kept identical.
+  // The till's discount is off the food it is charged on (quoteCounterCart does the same).
   const serviceFeePercent = Math.max(0, Math.min(25, Number(settings.service_fee_percent ?? 0) || 0));
-  const serviceFee = payload.payment_method === 'card' ? r2(subtotal * (serviceFeePercent / 100)) : 0;
+  const serviceFee = payload.payment_method === 'card' ? r2(Math.max(0, subtotal - staffDiscount) * (serviceFeePercent / 100)) : 0;
 
   let deliveryAddress = payload.delivery_address ?? null;
   if (payload.saved_address_id && customerId) {
@@ -614,6 +776,10 @@ Deno.serve(async (req: Request) => {
     const typedNotes = clip(payload.delivery_address?.notes, 300);
     if (a) deliveryAddress = { line1: a.address_line1, line2: a.address_line2, city: a.city ?? a.district, state: a.state ?? a.province, postal_code: a.postal_code, notes: typedNotes || a.delivery_notes, lat: a.lat ?? undefined, lng: a.lng ?? undefined } as never;
   }
+  // A saved address that is not this diner's at this branch leaves nothing to deliver to.
+  if (payload.channel === 'delivery' && !clip((deliveryAddress as { line1?: unknown } | null)?.line1, 300)) {
+    return json(400, { error: 'delivery_address_required' });
+  }
   if (dropoff) {
     // Drop any raw drop-off keys from the incoming address; only the validated object wins.
     const { dropoff_pref: _p, dropoff_other: _o, gate_code: _g, room: _r, ...rest } = (deliveryAddress ?? {}) as Record<string, unknown>;
@@ -621,7 +787,8 @@ Deno.serve(async (req: Request) => {
   }
 
   // Distance-based delivery quote (server-authoritative — same RPC the checkout
-  // UI previews with). Falls back to the legacy flat fee when no coordinates.
+  // UI previews with). Without coordinates the branch's flat settings.delivery_fee
+  // (default 3.99) applies: that is the counter's delivery with no map pin.
   let tripDistanceKm: number | null = null;
   let tripEtaMin: number | null = null;
   // quote_delivery has always returned the multiplier it applied; nothing ever stored it,
@@ -652,18 +819,34 @@ Deno.serve(async (req: Request) => {
       }
       // branch_unavailable / invalid_coordinates → keep the legacy flat fee.
     } else {
-      console.warn('delivery_no_coords:legacy_flat_fee', { branch_id: payload.branch_id });
+      console.warn('delivery_no_coords:flat_fee', { branch_id: payload.branch_id, staff: staffPlaced });
     }
   }
 
-  if (payload.promo_code) {
-    const { data: prom } = await admin.rpc('validate_promo_code', { p_branch_id: payload.branch_id, p_code: payload.promo_code, p_subtotal: subtotal });
-    const p = prom as { valid?: boolean; amount_off?: number; free_delivery?: boolean; promo_id?: string };
-    if (p?.valid) {
-      promoDiscount = Number(p.amount_off ?? 0);
-      if (p.free_delivery) deliveryFee = 0;
-      promoId = p.promo_id ?? null;
+  // Promo. Checked against this diner's record at this branch (p_customer_id: this function runs as
+  // the service role, where validate_promo_code has no auth.uid() to go on), and counted atomically
+  // with the order below. A code the checkout showed as applied but that no longer is gets a
+  // refusal, not a silently higher total.
+  let promoDiscount = 0;
+  let promoId: string | null = null;
+  if (payload.promo_code && payload.promo_code.trim()) {
+    const { data: prom, error: promErr } = await admin.rpc('validate_promo_code', {
+      p_branch_id: payload.branch_id,
+      p_code: payload.promo_code.trim(),
+      p_subtotal: subtotal,
+      ...(customerId ? { p_customer_id: customerId } : {}),
+    });
+    if (promErr) return json(500, { error: 'promo_lookup_failed', detail: promErr.message });
+    const p = prom as { valid?: boolean; error?: string; amount_off?: number; free_delivery?: boolean; promo_id?: string; min_subtotal?: number };
+    if (!p?.valid) {
+      return json(409, { error: p?.error ?? 'invalid_code', promo: true, ...(p?.min_subtotal != null ? { min_subtotal: p.min_subtotal } : {}), hint: STALE_CREDIT_HINT });
     }
+    promoDiscount = Number(p.amount_off ?? 0);
+    const freesDelivery = !!p.free_delivery && payload.channel === 'delivery' && deliveryFee > 0;
+    if (p.free_delivery) deliveryFee = 0;
+    // A use is counted only when the code gave something: a free-delivery code on a pickup would
+    // otherwise spend the diner's one use (per_customer_limit) on nothing.
+    promoId = promoDiscount > 0 || freesDelivery ? p.promo_id ?? null : null;
   }
 
   // Loyalty redemption. Points are no longer a free-form currency the diner
@@ -685,42 +868,38 @@ Deno.serve(async (req: Request) => {
   let pointsSpent = 0;
   let loyaltyDollarsOff = 0;
   let rewardName: string | null = null;
-  let loyaltyBrandScope = false;
 
   if (payload.reward_id) {
-    if (!customerId) return json(400, { error: 'redeem_requires_auth' });
+    // Spending points needs the diner's own signed-in account. At the till the session is the
+    // cashier's, and a number typed there proves nothing about who owns the balance.
+    if (staffPlaced || !customerId) return json(400, { error: 'redeem_requires_auth' });
     // Phone sign-in is OTP-less: anyone who knows a number can sign in as that
     // customer. Points are money, so spending them needs a second factor — a
     // linked Google identity or a confirmed real email (see
     // loyaltyIdentityProven). Checked BEFORE the order row is written so a
-    // rejection leaves nothing behind. Staff surfaces are exempt: the diner is
-    // standing at the counter and the authenticated user is the cashier
-    // (staffPlaced was resolved up front, alongside the login gate).
-    if (!staffPlaced) {
-      const { data: authUser } = await admin.auth.admin.getUserById(authedUserId ?? '');
-      // Wire code unchanged (other surfaces match on it) even though a verified
-      // email now satisfies the gate too — the customer-facing copy names both.
-      if (!loyaltyIdentityProven(authUser?.user)) return json(403, { error: 'google_link_required' });
-    }
+    // rejection leaves nothing behind.
+    const { data: authUser } = await admin.auth.admin.getUserById(authedUserId ?? '');
+    // Wire code unchanged (other surfaces match on it) even though a verified
+    // email now satisfies the gate too — the customer-facing copy names both.
+    if (!loyaltyIdentityProven(authUser?.user)) return json(403, { error: 'google_link_required' });
 
-    // Scoped to THIS restaurant so a reward id lifted from another tenant's
-    // storefront cannot be spent here.
+    // Each branch has its own catalogue, so a reward id lifted from another branch's (or another
+    // tenant's) storefront cannot be spent here.
     const { data: reward } = await admin
       .from('loyalty_rewards')
-      .select('id, name, kind, value, max_discount, points_cost, min_subtotal, menu_item_id, is_active, restaurant_id')
+      .select('id, name, kind, value, max_discount, points_cost, min_subtotal, menu_item_id, is_active, branch_id')
       .eq('id', payload.reward_id)
-      .eq('restaurant_id', branch.restaurant_id)
+      .eq('branch_id', payload.branch_id)
       .maybeSingle();
     if (!reward || !reward.is_active) return json(400, { error: 'reward_unavailable' });
     if (subtotal < Number(reward.min_subtotal ?? 0)) {
       return json(400, { error: 'reward_min_subtotal', min_subtotal: Number(reward.min_subtotal) });
     }
 
-    const { data: rest } = await admin.from('restaurants').select('loyalty_scope').eq('id', branch.restaurant_id).maybeSingle();
-    loyaltyBrandScope = rest?.loyalty_scope === 'brand';
-    let q = admin.from('loyalty_points').select('points_balance').eq('customer_id', customerId);
-    q = loyaltyBrandScope ? q.eq('restaurant_id', branch.restaurant_id).is('branch_id', null) : q.eq('branch_id', payload.branch_id);
-    const { data: pts } = await q.maybeSingle();
+    // Points are per branch (restaurants.loyalty_scope is pinned to 'branch'). This read only
+    // gives an early, readable refusal; the debit after the insert is the one that counts.
+    const { data: pts } = await admin.from('loyalty_points').select('points_balance')
+      .eq('branch_id', payload.branch_id).eq('customer_id', customerId).maybeSingle();
     const balance = pts?.points_balance ?? 0;
     const cost = Number(reward.points_cost);
     if (balance < cost) return json(400, { error: 'insufficient_points', balance, required: cost });
@@ -764,26 +943,28 @@ Deno.serve(async (req: Request) => {
 
   // Sales tax computed on the post-discount, pre-tip, pre-delivery food subtotal.
   const taxRate = Number(branch.sales_tax_rate ?? 0);
-  const taxableBase = Math.max(0, subtotal - loyaltyDollarsOff - promoDiscount);
+  const taxableBase = Math.max(0, subtotal - loyaltyDollarsOff - promoDiscount - staffDiscount);
   const taxAmount = r2(taxableBase * taxRate);
+  const discountAmount = r2(loyaltyDollarsOff + promoDiscount + staffDiscount);
 
-  // Gift card credit. We check balance now (server-side) and reserve on insert.
+  // Gift card credit. A card is good only at the branch that issued it. Checked now so the total
+  // can be priced, and taken for real (all of it, or the order is not placed) once the order exists.
   let giftCardCredit = 0;
   let giftCardCode: string | null = null;
   if (payload.gift_card_code && payload.gift_card_code.trim()) {
-    const { data: check } = await admin.rpc('check_gift_card', { p_code: payload.gift_card_code.trim() });
-    const c = check as { valid?: boolean; balance?: number };
-    if (c?.valid) {
-      giftCardCredit = Math.min(Number(c.balance ?? 0), taxableBase);
-      giftCardCode = payload.gift_card_code.trim();
-    }
+    const code = payload.gift_card_code.trim();
+    const { data: check, error: gErr } = await admin.rpc('check_gift_card', { p_code: code, p_branch_id: branch.id });
+    if (gErr) return json(500, { error: 'gift_card_lookup_failed', detail: gErr.message });
+    const c = check as { valid?: boolean; reason?: string; balance?: number };
+    // The checkout sends a code only after it checked out, so a refusal here means the card was
+    // spent, emptied or disabled in between. Charging the full price instead would be a silent
+    // overcharge.
+    if (!c?.valid) return json(409, { error: 'gift_card_changed', reason: c?.reason ?? null, hint: STALE_CREDIT_HINT });
+    giftCardCredit = r2(Math.min(Number(c.balance ?? 0), taxableBase));
+    if (giftCardCredit > 0) giftCardCode = code;
   }
 
   const total = r2(Math.max(0, taxableBase + deliveryFee + serviceFee + tipAmount + taxAmount - giftCardCredit));
-
-  const { data: orderNumberData, error: nErr } = await admin.schema('private').rpc('generate_order_number', { p_branch_id: payload.branch_id });
-  if (nErr) console.error('order_number_rpc_failed', nErr);
-  const orderNumber = (orderNumberData as unknown as string) || `A-${new Date().toISOString().slice(2,7).replace('-','')}-${String(Date.now() % 1000000).padStart(6,'0')}`;
 
   // Hold far-future scheduled orders out of the kitchen. Released by the pg_cron job
   // private.release_scheduled_orders() at scheduled_for − schedule_lead_time_min.
@@ -798,22 +979,41 @@ Deno.serve(async (req: Request) => {
   const held = scheduledFor != null &&
     new Date(scheduledFor).getTime() - Date.now() > leadTimeMin * 60_000;
 
-  const { data: order, error: oErr } = await admin.from('orders').insert({
+  // The branch's own counter (A-YYMM-NNNN, month in the branch's timezone), taken atomically.
+  // The random fallback only covers the RPC being unreachable, and the insert retries once on a
+  // clash.
+  const nextOrderNumber = async (): Promise<string> => {
+    const { data, error } = await admin.rpc('next_order_number', { p_branch_id: branch.id });
+    if (!error && typeof data === 'string' && data) return data;
+    console.error('order_number_rpc_failed', error);
+    return `A-${new Date().toISOString().slice(2, 7).replace('-', '')}-${String(Date.now() % 1000000).padStart(6, '0')}`;
+  };
+  const insertOrder = (orderNumber: string) => admin.from('orders').insert({
     order_number: orderNumber, branch_id: payload.branch_id, customer_id: customerId,
     customer_name: payload.customer_name, customer_phone: payload.customer_phone,
     channel: payload.channel, status: 'pending', subtotal, delivery_fee: deliveryFee,
-    service_fee: serviceFee, tax_amount: taxAmount, discount_amount: loyaltyDollarsOff + promoDiscount,
-    tip_amount: tipAmount, promo_code: promoId ? payload.promo_code : null, promo_discount: promoDiscount,
+    service_fee: serviceFee, tax_amount: taxAmount, discount_amount: discountAmount,
+    tip_amount: tipAmount, promo_code: promoId ? payload.promo_code!.trim() : null, promo_discount: promoDiscount,
     total, delivery_address: deliveryAddress, customer_notes: payload.customer_notes,
     table_id: tableId, session_id: sessionId, source,
+    staff_id: staffRowId,
     scheduled_for: scheduledFor,
     held,
     // Set here as well as by the payments trigger. The order row is inserted BEFORE the
     // payment row, so a kitchen client subscribed to realtime would otherwise see the
     // ticket appear and then vanish a moment later when the trigger fired.
-    awaiting_payment: payload.payment_method === 'transfer',
+    // A transfer of nothing (a gift card or reward covered it all) waits for no slip: there is
+    // no payment row to approve (payments.amount must be above zero), so it would never leave
+    // "awaiting payment". It goes to the kitchen like any other order with nothing to collect.
+    awaiting_payment: payload.payment_method === 'transfer' && total > 0,
     status_history: [{ status: 'pending', at: new Date().toISOString(), scheduled_for: scheduledFor, held }],
-  }).select('id, order_number').single();
+  }).select('id, order_number, customer_id').single();
+
+  let inserted = await insertOrder(await nextOrderNumber());
+  if (inserted.error?.code === '23505' && (inserted.error.message ?? '').includes('order_number')) {
+    inserted = await insertOrder(await nextOrderNumber());
+  }
+  const { data: order, error: oErr } = inserted;
   // The BEFORE INSERT gates on orders (delivery hours, scheduled time) raise P0001 with the
   // wire code as the message. Reporting those as a 500 blames the server for a rule the
   // request broke, and only worked at all because the checkout matches ORDER_ERRORS by
@@ -830,19 +1030,51 @@ Deno.serve(async (req: Request) => {
       'table_session_closed',
       'session_branch_mismatch',
       'session_table_mismatch',
+      // tg_orders_customer_same_branch: the record is another branch's.
+      'customer_branch_mismatch',
     ]) {
       if (detail.includes(code)) return json(409, { error: code });
     }
     return json(500, { error: 'order_insert_failed', detail });
   }
 
-  // Reserve gift card credit (best-effort; if it fails the order still stands).
-  if (giftCardCode && giftCardCredit > 0) {
-    await admin.rpc('redeem_gift_card', {
-      p_code: giftCardCode,
+  // Points, promo and gift card, taken for this order in ONE transaction: any refusal undoes all
+  // three, and the order goes with them. They used to be read-then-write after the insert with
+  // their failures only logged — two checkouts could spend the same points, a promo could pass its
+  // cap, and a gift card that failed to redeem left the credit on the order anyway.
+  // The customer is the order's own (the insert's triggers have the last word on it).
+  const reserveCredits = pointsSpent > 0 || promoId != null || giftCardCode != null;
+  if (reserveCredits) {
+    const { error: rErr } = await admin.rpc('reserve_order_credits', {
       p_order_id: order.id,
-      p_max_amount: giftCardCredit,
+      p_customer_id: order.customer_id ?? null,
+      p_points: pointsSpent,
+      p_points_description: pointsSpent > 0 ? `${rewardName ?? 'Reward'} — ${pointsSpent} pts on order ${order.order_number}` : null,
+      p_promo_id: promoId,
+      p_promo_amount: promoDiscount,
+      p_gift_card_code: giftCardCode,
+      p_gift_card_amount: giftCardCredit,
     });
+    if (rErr) {
+      const detail = rErr.message ?? '';
+      const refusal = CREDIT_REFUSALS.find(([code]) => detail.includes(code));
+      // A known refusal is raised inside the RPC's transaction, so nothing was taken. Anything else
+      // (a timeout, a dropped connection) may have committed after all: give back whatever the
+      // reservation left behind before the order goes. release_order_credits works only from the
+      // redemption and ledger rows the order has, so it is harmless when nothing was reserved.
+      if (!refusal) {
+        const { error: relErr } = await admin.rpc('release_order_credits', { p_order_id: order.id, p_promo_id: promoId });
+        if (relErr) console.error('release_order_credits_failed', { order_id: order.id, detail: relErr.message });
+      }
+      const { error: delErr } = await admin.from('orders').delete().eq('id', order.id);
+      if (delErr) console.error('order_delete_failed', { order_id: order.id, detail: delErr.message });
+      if (refusal) {
+        const [code, status] = refusal;
+        const promo = code.startsWith('promo') || code === 'per_customer_limit_reached';
+        return json(status, { error: code, ...(promo ? { promo: true } : {}), ...(wantsRefreshHint(code) ? { hint: STALE_CREDIT_HINT } : {}) });
+      }
+      return json(500, { error: 'credit_reservation_failed', detail });
+    }
   }
 
   const orderItems = [
@@ -873,34 +1105,36 @@ Deno.serve(async (req: Request) => {
       subtotal: c.lineSubtotal,
       notes: c.notes,
       prep_status: 'pending',
+      combo_contents: c.contents,
     })),
   ];
   const { error: oiErr } = await admin.from('order_items').insert(orderItems);
-  if (oiErr) { await admin.from('orders').delete().eq('id', order.id); return json(500, { error: 'order_items_insert_failed', detail: oiErr.message }); }
-
-  if (promoId && customerId && promoDiscount > 0) {
-    await admin.from('promo_redemptions').insert({ promo_id: promoId, customer_id: customerId, order_id: order.id, amount_off: promoDiscount });
-    await admin.from('promos').update({ redemption_count: ((await admin.from('promos').select('redemption_count').eq('id', promoId).single()).data?.redemption_count ?? 0) + 1 }).eq('id', promoId);
+  if (oiErr) {
+    // Give back what reserve_order_credits took before the order goes: it never reached the kitchen.
+    if (reserveCredits) {
+      const { error: relErr } = await admin.rpc('release_order_credits', { p_order_id: order.id, p_promo_id: promoId });
+      if (relErr) console.error('release_order_credits_failed', { order_id: order.id, detail: relErr.message });
+    }
+    const { error: delErr } = await admin.from('orders').delete().eq('id', order.id);
+    if (delErr) console.error('order_delete_failed', { order_id: order.id, detail: delErr.message });
+    return json(500, { error: 'order_items_insert_failed', detail: oiErr.message });
   }
 
-  if (pointsSpent > 0 && customerId) {
-    let balQ = admin.from('loyalty_points').select('points_balance, lifetime_spent').eq('customer_id', customerId);
-    balQ = loyaltyBrandScope ? balQ.eq('restaurant_id', branch.restaurant_id).is('branch_id', null) : balQ.eq('branch_id', payload.branch_id);
-    const balanceBefore = await balQ.maybeSingle();
-    const newBalance = Math.max(0, (balanceBefore.data?.points_balance ?? 0) - pointsSpent);
-    let updQ = admin.from('loyalty_points').update({ points_balance: newBalance, lifetime_spent: (balanceBefore.data?.lifetime_spent ?? 0) + pointsSpent, updated_at: new Date().toISOString() }).eq('customer_id', customerId);
-    updQ = loyaltyBrandScope ? updQ.eq('restaurant_id', branch.restaurant_id).is('branch_id', null) : updQ.eq('branch_id', payload.branch_id);
-    const { error: debitErr } = await updQ;
-    if (debitErr) console.error('loyalty_debit_failed', debitErr);
-    // reference_type stays 'order' — list_my_loyalty_transactions filters on it
-    // to hide points spent on an order that was never completed. The reward is
-    // named in the description so the diner's history reads as what they got,
-    // not as an unexplained points deduction.
-    const { error: ledgerErr } = await admin.from('loyalty_transactions').insert({ branch_id: loyaltyBrandScope ? null : payload.branch_id, restaurant_id: branch.restaurant_id, customer_id: customerId, points: -pointsSpent, balance_after: newBalance, type: 'redeemed', reference_type: 'order', reference_id: order.id, description: `${rewardName ?? 'Reward'} — ${pointsSpent} pts on order ${order.order_number}` });
-    if (ledgerErr) console.error('loyalty_ledger_failed', ledgerErr);
+  // A till discount is money off by a person, so it is on the record: who, how much, on what.
+  if (staffDiscount > 0) {
+    const { error: auditErr } = await admin.from('audit_logs').insert({
+      restaurant_id: branch.restaurant_id, branch_id: branch.id, actor_id: authedUserId, actor_type: 'staff',
+      action: 'order.discount', entity_type: 'order', entity_id: order.id,
+      metadata: { order_number: order.order_number, source, discount_percent: discountPercent, discount_amount: staffDiscount, subtotal },
+    });
+    if (auditErr) console.error('discount_audit_failed', auditErr);
   }
 
-  const { data: payment } = await admin.from('payments').insert({ order_id: order.id, branch_id: payload.branch_id, amount: total, method: payload.payment_method, status: 'pending', gateway: payload.payment_method === 'card' ? 'stripe' : null, gateway_metadata: { pending: true } }).select('id').single();
+  // Nothing to collect, no payment row: payments_amount_check refuses an amount of 0, and the insert
+  // only ever failed there.
+  const { data: payment } = total > 0
+    ? await admin.from('payments').insert({ order_id: order.id, branch_id: payload.branch_id, amount: total, method: payload.payment_method, status: 'pending', gateway: payload.payment_method === 'card' ? 'stripe' : null, gateway_metadata: { pending: true } }).select('id').single()
+    : { data: null };
   if (payload.channel === 'delivery') {
     // EWKT strings — PostGIS parses them into geography on insert.
     const pickupEwkt = branch.geo_lat != null && branch.geo_lng != null
@@ -923,5 +1157,11 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  return json(201, { order_id: order.id, order_number: order.order_number, total, subtotal, tax_amount: taxAmount, discount_amount: loyaltyDollarsOff + promoDiscount, points_spent: pointsSpent, eta_min: tripEtaMin, payment_id: payment?.id ?? null, payment_method: payload.payment_method });
+  return json(201, {
+    order_id: order.id, order_number: order.order_number, total, subtotal, tax_amount: taxAmount, discount_amount: discountAmount,
+    points_spent: pointsSpent, eta_min: tripEtaMin, payment_id: payment?.id ?? null, payment_method: payload.payment_method,
+    // Only when the till looked a number up: whether it found this branch's customer, so the
+    // cashier can tell a walk-in sale from one filed under a regular.
+    ...(staffPlaced && lookupPhone ? { customer_matched: order.customer_id != null } : {}),
+  });
 });

@@ -6,9 +6,9 @@ export type LoyaltyTxRow = Database['public']['Tables']['loyalty_transactions'][
 export type LoyaltyTier = Database['public']['Enums']['loyalty_tier'];
 
 /**
- * Get the signed-in customer's loyalty balance at a branch. Honors the
- * restaurant's loyalty_scope ('branch' = per-branch pool, 'brand' = pool
- * shared across branches of the same restaurant).
+ * Get the signed-in customer's loyalty balance at a branch. Loyalty is per branch: every branch of
+ * a restaurant keeps its own balance, tier and history, and points earned at one branch are never
+ * spendable at another. `scope` is always 'branch' (kept for older callers).
  */
 export async function getMyLoyalty(
   supabase: FavornomsClient,
@@ -18,7 +18,7 @@ export async function getMyLoyalty(
   lifetime_earned: number;
   lifetime_spent: number;
   tier: string;
-  scope: 'branch' | 'brand';
+  scope: 'branch';
 } | null> {
   const { data, error } = await supabase.rpc('get_loyalty_balance', {
     p_branch_id: branchId,
@@ -29,9 +29,8 @@ export async function getMyLoyalty(
     lifetime_earned: number;
     lifetime_spent: number;
     tier: string;
-    scope: 'branch' | 'brand';
   };
-  return row;
+  return { ...row, scope: 'branch' };
 }
 
 export async function listMyLoyaltyTransactions(
@@ -39,8 +38,9 @@ export async function listMyLoyaltyTransactions(
   branchId: string,
   limit = 20,
 ): Promise<LoyaltyTxRow[]> {
-  // Scope-aware (brand vs branch) + restaurant-level customer resolution lives in the
-  // RPC, so history follows the restaurant's loyalty_scope instead of one branch.
+  // The RPC resolves the diner's own rows at THIS branch: earned, redeemed (including points spent
+  // on an order that has not completed), points returned for a cancelled order (and taken again if
+  // it was reopened), birthday gifts, staff adjustments.
   const { data, error } = await supabase.rpc('list_my_loyalty_transactions', {
     p_branch_id: branchId,
     p_limit: limit,
@@ -49,19 +49,29 @@ export async function listMyLoyaltyTransactions(
   return (data ?? []) as LoyaltyTxRow[];
 }
 
-export async function redeemLoyaltyPoints(
+/**
+ * Staff correction of one member's balance at one branch (loyalty.manage: owner, admin). The
+ * balance and an 'adjusted' history row move together; `reason` (1-200 chars) is that row's text
+ * and the member sees it in their points history. Only the balance moves, never the tier.
+ * Error codes: not_authorized, bad_delta (0, or beyond +/-1,000,000), bad_reason,
+ * customer_not_in_branch, insufficient_points (would go below 0).
+ */
+export async function adjustLoyaltyPoints(
   supabase: FavornomsClient,
   branchId: string,
-  points: number,
-  orderId?: string,
-) {
-  const { data, error } = await supabase.rpc('redeem_loyalty_points', {
+  customerId: string,
+  delta: number,
+  reason: string,
+): Promise<{ ok: boolean; pointsBalance?: number; error?: string }> {
+  const { data, error } = await supabase.rpc('adjust_loyalty_points', {
     p_branch_id: branchId,
-    p_points: points,
-    p_order_id: orderId ?? undefined,
+    p_customer_id: customerId,
+    p_delta: delta,
+    p_reason: reason,
   });
-  if (error) throw new Error(`redeem_failed:${error.message}`);
-  return data as { balance: number; redeemed: number };
+  if (error) return { ok: false, error: error.message };
+  const balance = Number((data as { points_balance?: unknown } | null)?.points_balance);
+  return { ok: true, pointsBalance: Number.isFinite(balance) ? balance : undefined };
 }
 
 export type LoyaltyRewardRow = Database['public']['Tables']['loyalty_rewards']['Row'];
@@ -84,12 +94,11 @@ export interface LoyaltyReward {
 }
 
 /**
- * The merchant's reward catalog for one branch.
+ * The reward catalog of one branch (each branch keeps its own).
  *
  * Goes through the RPC rather than selecting `loyalty_rewards` directly: the
  * table has no public read policy, so paused rewards stay private, and the RPC
- * also drops free-item rewards whose menu item does not exist at THIS branch
- * (menu_items are branch-scoped while the catalog is restaurant-scoped).
+ * also drops free-item rewards whose menu item has been hidden.
  */
 export async function listLoyaltyRewards(
   supabase: FavornomsClient,
@@ -146,14 +155,17 @@ export interface LoyaltyProgramTier {
   perks: string[] | null;
 }
 
-/** The merchant's own programme: what a currency unit earns, and the tier ladder. */
+/** One branch's own programme: what a currency unit earns, the tier ladder, the birthday gift. */
 export interface LoyaltyProgram {
-  /** Hash of the stored settings. An editor sends back the one it loaded, so a stale tab cannot
-   *  overwrite a newer save. */
+  /** Hash of this branch's stored settings. An editor sends back the one it loaded, so a stale tab
+   *  cannot overwrite a newer save. */
   version: string;
   pointsPerCurrency: number;
   tiers: LoyaltyProgramTier[];
-  scope: 'branch' | 'brand';
+  /** Points a member gets at this branch on their birthday; 0 = no birthday gift. */
+  birthdayPoints: number;
+  /** Always 'branch': every branch runs its own programme. */
+  scope: 'branch';
 }
 
 /** What each tier says until the merchant writes their own line. Shared so the admin screen can
@@ -179,7 +191,8 @@ export const DEFAULT_LOYALTY_PROGRAM: LoyaltyProgram = {
     { key: 'gold', threshold: 30000, label: 'Gold', perks: null },
     { key: 'platinum', threshold: 100000, label: 'Platinum', perks: null },
   ],
-  scope: 'brand',
+  birthdayPoints: 500,
+  scope: 'branch',
 };
 
 const FALLBACK_LABEL: Record<string, string> = Object.fromEntries(
@@ -222,10 +235,12 @@ export async function getLoyaltyProgram(
         .filter((t) => t.key && Number.isFinite(t.threshold))
     : [];
   if (!tiers.length || !Number.isFinite(rate) || rate <= 0) return null;
+  const birthday = Number(d.birthday_points);
   return {
     version: typeof d.version === 'string' ? d.version : '',
     pointsPerCurrency: rate,
     tiers,
-    scope: d.scope === 'branch' ? 'branch' : 'brand',
+    birthdayPoints: Number.isFinite(birthday) && birthday >= 0 ? birthday : 0,
+    scope: 'branch',
   };
 }

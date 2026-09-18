@@ -5,7 +5,19 @@ export interface PlaceOrderInput {
   branch_id: string;
   channel: 'dine_in' | 'pickup' | 'delivery' | 'qr_ordering';
   customer_name: string;
+  /**
+   * The customer's number. A counter walk-in who gave none is sent as the placeholder
+   * '+10000000000', which is never stored on or matched to a customer record. A delivery
+   * rung up at the counter needs a real one (400 customer_phone_required): the rider calls it.
+   */
   customer_phone: string;
+  /**
+   * Delivery orders only; `line1` is required (400 delivery_address_required).
+   *
+   * With `lat`/`lng` the fee comes from quote_delivery (409 delivery_out_of_range outside the
+   * branch's radius). Without them the branch's flat `settings.delivery_fee` (default 3.99)
+   * applies and no rider coordinates are stored, which is the counter's delivery with no pin.
+   */
   delivery_address?: {
     line1: string;
     line2?: string;
@@ -15,7 +27,10 @@ export interface PlaceOrderInput {
     notes?: string;
     lat?: number;
     lng?: number;
-    /** Required for delivery orders (place-order rejects without it). */
+    /**
+     * Required for delivery orders from the storefront (400 dropoff_required). A staff-placed
+     * order may leave it out and gets 'hand_to_me'.
+     */
     dropoff_pref?: 'leave_at_door' | 'hand_to_me' | 'at_desk' | 'other';
     /** Required when dropoff_pref === 'other'; max 120 chars. */
     dropoff_other?: string;
@@ -50,7 +65,22 @@ export interface PlaceOrderInput {
    */
   source?: 'web' | 'counter' | 'pos';
   scheduled_for?: string;
+  /** Good only at the branch that issued it; 409 gift_card_changed when it no longer covers the credit. */
   gift_card_code?: string;
+  /**
+   * Staff only (403 discount_requires_staff otherwise): a percentage 0..100 taken off the food
+   * before tax and the card service fee, as min(subtotal, round2(subtotal x pct / 100)). Recorded
+   * in orders.discount_amount and in audit_logs. 400 invalid_discount_percent when out of range.
+   */
+  discount_percent?: number;
+  /**
+   * Staff only: an E.164 number the customer gave at the till. When THIS branch has a customer
+   * record with that number, the sale is filed under it (so it earns that branch's points); it is
+   * never used to create or claim a record. Matched by digits, so a record stored as '6266386401'
+   * or '(626) 638-6401' is found from '+16266386401'. 400 invalid_customer_phone when malformed;
+   * the result's `customer_matched` says whether a record was found.
+   */
+  customer_lookup_phone?: string;
   items: Array<{
     menu_item_id: string;
     quantity: number;
@@ -69,9 +99,15 @@ export interface PlaceOrderResult {
   order_number: string;
   total: number;
   subtotal?: number;
+  tax_amount?: number;
+  /** Every discount on the order: the reward, the promo and the till's discount together. */
   discount_amount?: number;
+  points_spent?: number;
+  eta_min?: number | null;
   payment_id: string | null;
   payment_method: string;
+  /** Present only when `customer_lookup_phone` was sent: whether it found this branch's customer. */
+  customer_matched?: boolean;
 }
 
 /**

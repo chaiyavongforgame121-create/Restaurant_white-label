@@ -4,14 +4,17 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { AlertTriangle, Lock, Save, Wallet } from 'lucide-react';
-import { getBrowserClient } from '@favornoms/database/client';
+import { AlertTriangle, Lock, Save, Store, Wallet } from 'lucide-react';
 import { Button, Card } from '@favornoms/ui';
-import { ImageUpload } from '@/components/image-upload';
+import { useSettingsPatch } from './patch-settings';
+import { QrImageUpload } from './qr-image-upload';
 
-// Editor for the payment_methods key inside branches.settings (jsonb).
-// Saves independently from the main BranchSettings form — merges keys, never
-// clobbers unrelated settings. Absent key/subkey means ENABLED, so existing
+// Editor for the payment_methods and qr_transfer keys inside branches.settings (jsonb).
+// Saves independently from the main BranchSettings form, through patch_branch_settings: only
+// the keys that changed, so unrelated settings are never rewritten.
+//
+// The QR is this branch's own bank account. The storefront checkout and this branch's counter
+// both show it, and copy_branch_setup never copies it to another branch. Absent key/subkey means ENABLED, so existing
 // branches keep accepting everything until staff opt out.
 //
 // Card is additionally gated on the card_payment entitlement. Without it the
@@ -92,6 +95,8 @@ function seedQr(settings: Record<string, unknown>): QrTransfer {
 export function PaymentMethodsCard({ branchId, restaurantId, settings, canUseCard }: Props) {
   const t = useTranslations('branchOps');
   const router = useRouter();
+  // Sends only what changed since this card was rendered or last saved.
+  const savePatch = useSettingsPatch(branchId, settings);
   const [matrix, setMatrix] = React.useState<PaymentMatrix>(() => {
     const seeded = seedFromSettings(settings);
     if (canUseCard) return seeded;
@@ -126,12 +131,14 @@ export function PaymentMethodsCard({ branchId, restaurantId, settings, canUseCar
   const save = async () => {
     setSaving(true);
     setError(null);
-    const supabase = getBrowserClient();
-    // Merge into the existing jsonb — other settings keys stay untouched.
-    const { error: updateError } = await supabase
-      .from('branches')
-      .update({ settings: { ...settings, payment_methods: matrix, qr_transfer: qr } })
-      .eq('id', branchId);
+    const { error: updateError } = await savePatch({
+      payment_methods: matrix,
+      qr_transfer: {
+        ...qr,
+        account_name: qr.account_name.trim(),
+        instructions: qr.instructions.trim(),
+      },
+    });
     setSaving(false);
     if (updateError) {
       console.error('Saving payment methods failed', updateError);
@@ -233,13 +240,15 @@ export function PaymentMethodsCard({ branchId, restaurantId, settings, canUseCar
             b: (chunks) => <span className="font-medium">{chunks}</span>,
           })}
         </p>
+        <p className="mt-2 flex items-start gap-2 rounded-xl bg-muted px-3 py-2 text-xs text-muted-foreground">
+          <Store className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>{t('payments.qr.perBranch')}</span>
+        </p>
         <div className="mt-3 grid gap-4 sm:grid-cols-[10rem_1fr]">
-          <ImageUpload
+          <QrImageUpload
             restaurantId={restaurantId}
-            folder="payment-qr"
             value={qr.image_url}
             onChange={(url) => setQr((v) => ({ ...v, image_url: url }))}
-            aspect="aspect-square"
             label={t('payments.qr.upload')}
           />
           <div className="space-y-3">

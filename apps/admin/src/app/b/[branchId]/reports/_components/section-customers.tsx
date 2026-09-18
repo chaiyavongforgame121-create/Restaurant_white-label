@@ -9,6 +9,22 @@ import { Kpi } from './kpi';
 import { Caption, EmptyNote, SectionFrame } from './section-frame';
 import type { CustomersReport, SectionResult } from './report-queries';
 
+/** The ledger lines get_branch_customers_report added (20260918210000): optional so a response
+ *  from before that migration still renders. Together with earned, redeemed and manual they cover
+ *  every ledger row of the branch, so the card adds up to the net change in points. */
+type LedgerTotals = CustomersReport['totals'] & {
+  /** Signed: points given back on cancelled or refunded orders, less any taken again on reopen. */
+  points_returned?: number;
+  points_birthday?: number;
+};
+
+/** "+12", "−12" (true minus sign) or "0". */
+function signedPoints(n: number): string {
+  if (n > 0) return `+${n}`;
+  if (n < 0) return `−${Math.abs(n)}`;
+  return '0';
+}
+
 export function SectionCustomers({
   result,
   currency,
@@ -16,13 +32,14 @@ export function SectionCustomers({
 }: {
   result: SectionResult<CustomersReport>;
   currency: string;
-  /** The restaurant’s own names for its tiers, so this report agrees with the badge the
+  /** This branch’s own names for its tiers, so this report agrees with the badge the
    *  customer sees. Empty until the programme loads, and for a tier never renamed. */
   tierLabels?: Record<string, string>;
 }) {
   const t = useTranslations('reports.customers');
   const data = result.data;
   const money = (n: number) => formatCurrency(n, currency);
+  const ledger: LedgerTotals | null = data ? data.totals : null;
 
   return (
     <SectionFrame
@@ -127,13 +144,27 @@ export function SectionCustomers({
                   <Gift className="h-4 w-4" /> {t('points')}
                 </h3>
                 <dl className="mt-3 space-y-1.5 text-sm">
-                  <PointRow label={t('earned')} value={`+${data.totals.points_earned}`} tone="success" />
+                  <PointRow
+                    label={t('earned')}
+                    value={signedPoints(data.totals.points_earned)}
+                    tone="success"
+                  />
                   <PointRow
                     label={t('redeemed')}
-                    value={`−${data.totals.points_redeemed}`}
+                    value={signedPoints(-data.totals.points_redeemed)}
                     tone="warning"
                   />
-                  <PointRow label={t('manual')} value={`${data.totals.points_manual}`} />
+                  {ledger?.points_returned != null ? (
+                    <PointRow label={t('returned')} value={signedPoints(ledger.points_returned)} />
+                  ) : null}
+                  {ledger?.points_birthday != null ? (
+                    <PointRow
+                      label={t('birthday')}
+                      value={signedPoints(ledger.points_birthday)}
+                      tone={ledger.points_birthday > 0 ? 'success' : undefined}
+                    />
+                  ) : null}
+                  <PointRow label={t('manual')} value={signedPoints(data.totals.points_manual)} />
                 </dl>
                 <Caption>{t('pointsCaption')}</Caption>
               </Card>

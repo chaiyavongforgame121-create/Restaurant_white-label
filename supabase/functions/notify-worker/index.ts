@@ -5,7 +5,7 @@
 //  - in_app: no-op (driver/staff query outbox directly)
 //  - sms: Twilio REST API
 //  - push: Web Push via VAPID (RFC 8291) — fans out to all push_subscriptions rows for recipient
-//  - email: not yet wired (SendGrid/Resend)
+//  - email: Resend (RESEND_API_KEY); throws resend_not_configured without it
 //
 // Invoke via pg_cron every minute or manually via HTTP w/ x-worker-secret header.
 //
@@ -192,8 +192,7 @@ async function sendEmail(
   if (!RESEND_API_KEY) throw new Error('resend_not_configured');
   let email: string | null = null;
   if (row.recipient_type === 'customer') {
-    const { data } = await supabase.from('customers').select('email').eq('id', row.recipient_id).maybeSingle();
-    email = data?.email ?? null;
+    email = await customerEmail(supabase, row);
   } else if (row.recipient_type === 'driver') {
     const { data } = await supabase.from('drivers').select('email').eq('id', row.recipient_id).maybeSingle();
     email = data?.email ?? null;
@@ -229,13 +228,83 @@ async function sendEmail(
   }
 }
 
+const SYNTHETIC_EMAIL = /@([a-z0-9-]+\.)*favornoms\.local$/i;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * An address mail can be sent to: trimmed, not empty, and not the synthetic @…favornoms.local
+ * address a phone sign-in is given (private.is_synthetic_email), which nothing can receive.
+ */
+function sendableEmail(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const email = value.trim();
+  return email.includes('@') && !SYNTHETIC_EMAIL.test(email) ? email : null;
+}
+
+/**
+ * A diner's address.
+ *
+ * An abandoned-cart reminder goes to the address the cart was saved with (variables.email,
+ * written by sweep_abandoned_carts), because the diner's record at that branch often has no email
+ * of its own (phone sign-ins). That address is only believed when it IS the cart's address and the
+ * cart belongs to this diner at this branch. Whoever can queue an outbox row controls `variables`,
+ * so without this check the worker would mail any address it is handed. Otherwise, and for every
+ * other template, it is the customers row's own email.
+ */
+async function customerEmail(
+  supabase: ReturnType<typeof createClient>,
+  row: OutboxRow,
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('customers')
+    .select('email, user_id, branch_id')
+    .eq('id', row.recipient_id)
+    .maybeSingle();
+  if (error) throw new Error(`recipient_lookup_${error.code ?? 'err'}`);
+  const customer = data as { email: string | null; user_id: string | null; branch_id: string | null } | null;
+  if (!customer) return null;
+  if (row.template === 'abandoned_cart') {
+    const fromCart = await abandonedCartEmail(supabase, row, customer);
+    if (fromCart) return fromCart;
+  }
+  return sendableEmail(customer.email);
+}
+
+/** variables.email of an abandoned_cart row, when the cart it names vouches for it. */
+async function abandonedCartEmail(
+  supabase: ReturnType<typeof createClient>,
+  row: OutboxRow,
+  customer: { user_id: string | null; branch_id: string | null },
+): Promise<string | null> {
+  const wanted = sendableEmail(row.variables.email);
+  const cartId = typeof row.variables.cart_id === 'string' ? row.variables.cart_id : null;
+  if (!wanted || !cartId || !UUID.test(cartId) || !customer.user_id) return null;
+  const { data, error } = await supabase
+    .from('abandoned_carts')
+    .select('customer_email, user_id, branch_id')
+    .eq('id', cartId)
+    .maybeSingle();
+  if (error) throw new Error(`cart_lookup_${error.code ?? 'err'}`);
+  const cart = data as { customer_email: string | null; user_id: string | null; branch_id: string | null } | null;
+  if (!cart || cart.user_id !== customer.user_id || cart.branch_id !== customer.branch_id) return null;
+  if (row.branch_id && cart.branch_id !== row.branch_id) return null;
+  return sendableEmail(cart.customer_email)?.toLowerCase() === wanted.toLowerCase() ? wanted : null;
+}
+
+/** "$12.50", or null when there is no positive amount to show. */
+function money(value: unknown): string | null {
+  const n = Number(value);
+  return value != null && value !== '' && Number.isFinite(n) && n > 0 ? `$${n.toFixed(2)}` : null;
+}
+
 function renderEmailHtml(template: string, vars: Record<string, unknown>): string {
   const title = renderTitle(template, vars);
   const url = renderUrl(template, vars);
   const ctaLabel =
     template.startsWith('order_') ? 'View order' :
     template === 'new_dispatch' ? 'Open driver app' :
-    template === 'promo' ? 'View offer' : 'Open Favornoms';
+    template === 'promo' ? 'View offer' :
+    template === 'abandoned_cart' ? 'Finish your order' : 'Open Favornoms';
 
   // Per-template body. Falls back to renderTemplate() if no rich template.
   const orderNum = escapeHtml(String(vars.order_number ?? ''));
@@ -298,6 +367,17 @@ function renderEmailHtml(template: string, vars: Record<string, unknown>): strin
       hero = `<strong>${escapeHtml(String(vars.name ?? 'Item'))}</strong> is running low.`;
       lede = `${escapeHtml(String(vars.remaining ?? 0))} left · threshold ${escapeHtml(String(vars.threshold ?? 0))}. Restock to avoid disappointing customers.`;
       break;
+    case 'abandoned_cart': {
+      // The button opens the storefront, not the checkout: the cart lives in the browser it was
+      // filled in, and the diner may read this on another device.
+      const subtotal = money(vars.subtotal);
+      pillEmoji = '🛒'; pillText = 'Still in your cart';
+      hero = `Your cart at ${branchName} is still waiting.`;
+      lede = subtotal
+        ? `You left <strong>${escapeHtml(subtotal)}</strong> of food in your cart. Come back and finish your order whenever you&rsquo;re ready.`
+        : `Come back and finish your order whenever you&rsquo;re ready.`;
+      break;
+    }
     default:
       hero = escapeHtml(title);
       lede = escapeHtml(renderTemplate(template, vars));
@@ -322,7 +402,9 @@ function renderEmailHtml(template: string, vars: Record<string, unknown>): strin
       <a href="${escapeHtml(url)}" style="display:inline-block;background:linear-gradient(135deg,#FF6B35,#F7B538);color:#fff;text-decoration:none;padding:14px 28px;border-radius:12px;font-weight:700;font-size:15px;box-shadow:0 4px 12px rgba(255,107,53,0.3)">${ctaLabel} &rarr;</a>
       <hr style="margin:32px 0 16px;border:0;border-top:1px dashed #e5e7ec">
       <p style="margin:0;color:#888;font-size:12px;line-height:1.5">
-        You&rsquo;re getting this because you opted in to order notifications.
+        ${template === 'abandoned_cart'
+          ? 'You&rsquo;re getting this because you started an order and did not finish it.'
+          : 'You&rsquo;re getting this because you opted in to order notifications.'}
         <br><a href="/account" style="color:#999">Manage email preferences</a>
         &middot; <a href="/privacy" style="color:#999">Privacy policy</a>
       </p>
@@ -369,22 +451,134 @@ async function sendSms(
   }
 }
 
+/** The table each recipient type's id points into. */
+const RECIPIENT_TABLE: Record<string, string> = {
+  customer: 'customers',
+  driver: 'drivers',
+  staff: 'staff_members',
+};
+
+/** PostgREST hands an embedded to-one relation back as an object, or as an array. */
+type Embedded<T> = T | T[] | null | undefined;
+
+const embedOne = <T>(value: Embedded<T>): T | null =>
+  Array.isArray(value) ? (value[0] ?? null) : (value ?? null);
+
+const domainOf = (value: unknown): string =>
+  typeof value === 'string' ? value.trim().toLowerCase() : '';
+
+/** A customers row's branch, embedded with what says which host its storefront is on. */
+type BranchHost = Embedded<{
+  custom_domain: string | null;
+  restaurants?: Embedded<{ custom_domain: string | null }>;
+}>;
+
+/**
+ * The PostgREST embed that reads a customers row's BranchHost. Named by its foreign key:
+ * customers reaches branches twice (branch_id alone, and (branch_id, restaurant_id)), and an
+ * unnamed embed is refused as ambiguous (PGRST201).
+ */
+const BRANCH_HOST_EMBED =
+  'branches!customers_branch_id_fkey(custom_domain, restaurants(custom_domain))';
+
+/**
+ * The host a branch's storefront is served on, the way resolve_custom_domain maps hosts: the
+ * branch's own domain, else its restaurant's, else '' for the shared platform host every other
+ * branch lives on. A push subscription belongs to one origin (the service worker that made it),
+ * so this is what says which subscriptions a branch's updates may use.
+ */
+function hostKey(embedded: BranchHost): string {
+  const branch = embedOne(embedded);
+  if (!branch) return '';
+  return domainOf(branch.custom_domain) || domainOf(embedOne(branch.restaurants)?.custom_domain);
+}
+
+/**
+ * The devices a push goes to.
+ *
+ * Only subscriptions the recipient's own login made. register_push_subscription used to record
+ * whatever recipient the browser named, so a signed-in stranger could register their browser
+ * against a rider's id (diners see it on their order) or another diner's row and read their
+ * notifications. It refuses that since 20260918200000_isolation_leftovers, and this stays the
+ * second lock: every subscription must carry the user_id of the login that owns the recipient row.
+ *
+ * A diner has one customers row per branch they use, but their browser registers ONE push
+ * subscription per origin, recorded against the row of the branch they were on (see the
+ * storefront's PushSubscriber). Matching on recipient_id alone reached a diner only for orders
+ * filed under that one row, so an update about their order at a second branch went nowhere. A
+ * customer notification therefore goes to every customer subscription of that login that was
+ * made on the SAME HOST as the notified branch's storefront: the recorded row's branch tells the
+ * origin. Branches on the platform host share one service worker and so one subscription; a
+ * branch on its own domain has its own, and another restaurant's domain never gets this one's
+ * updates in its app. Drivers and staff are unchanged: their recipient id is the one row they
+ * register with.
+ */
+async function pushSubscriptionsFor(
+  supabase: ReturnType<typeof createClient>,
+  row: OutboxRow,
+): Promise<PushSub[]> {
+  const table = RECIPIENT_TABLE[row.recipient_type];
+  if (!table) return [];
+  const { data: recipient, error: recipientErr } = await supabase
+    .from(table)
+    .select(row.recipient_type === 'customer' ? `user_id, ${BRANCH_HOST_EMBED}` : 'user_id')
+    .eq('id', row.recipient_id)
+    .maybeSingle();
+  if (recipientErr) throw new Error(`sub_lookup_${recipientErr.code ?? 'err'}`);
+  const owner = recipient as { user_id: string | null; branches?: BranchHost } | null;
+  // A guest row, or one since deleted: no login owns it, so no device may receive it.
+  if (!owner?.user_id) return [];
+
+  if (row.recipient_type !== 'customer') {
+    const { data: direct, error: directErr } = await supabase
+      .from('push_subscriptions')
+      .select('id, endpoint, p256dh, auth')
+      .eq('recipient_type', row.recipient_type)
+      .eq('recipient_id', row.recipient_id)
+      .eq('user_id', owner.user_id);
+    if (directErr) throw new Error(`sub_lookup_${directErr.code ?? 'err'}`);
+    return (direct ?? []) as PushSub[];
+  }
+
+  const here = hostKey(owner.branches);
+  const { data: owned, error: ownedErr } = await supabase
+    .from('push_subscriptions')
+    .select('id, endpoint, p256dh, auth, recipient_id')
+    .eq('recipient_type', 'customer')
+    .eq('user_id', owner.user_id);
+  if (ownedErr) throw new Error(`sub_lookup_${ownedErr.code ?? 'err'}`);
+  const candidates = (owned ?? []) as (PushSub & { recipient_id: string })[];
+  if (candidates.length === 0) return [];
+
+  // The branch each subscription was made at, and so its host. Only the login's own rows count:
+  // a subscription recorded against someone else's row says nothing trustworthy about its origin.
+  const { data: rows, error: rowsErr } = await supabase
+    .from('customers')
+    .select(`id, ${BRANCH_HOST_EMBED}`)
+    .eq('user_id', owner.user_id)
+    .in('id', [...new Set(candidates.map((s) => s.recipient_id))]);
+  if (rowsErr) throw new Error(`sub_lookup_${rowsErr.code ?? 'err'}`);
+  const hostOf = new Map<string, string>();
+  for (const r of (rows ?? []) as { id: string; branches?: BranchHost }[]) {
+    hostOf.set(r.id, hostKey(r.branches));
+  }
+
+  return candidates
+    .filter((s) => hostOf.get(s.recipient_id) === here)
+    .map(({ id, endpoint, p256dh, auth }) => ({ id, endpoint, p256dh, auth }));
+}
+
 async function sendPush(
   supabase: ReturnType<typeof createClient>,
   row: OutboxRow,
 ) {
   if (!VAPID_PUBLIC || !VAPID_PRIVATE) throw new Error('vapid_not_configured');
-  const { data: subs, error: subErr } = await supabase
-    .from('push_subscriptions')
-    .select('id, endpoint, p256dh, auth')
-    .eq('recipient_type', row.recipient_type)
-    .eq('recipient_id', row.recipient_id);
-  if (subErr) throw new Error(`sub_lookup_${subErr.code ?? 'err'}`);
-  if (!subs || subs.length === 0) throw new Error('no_subscriptions');
+  const subs = await pushSubscriptionsFor(supabase, row);
+  if (subs.length === 0) throw new Error('no_subscriptions');
 
   // A diner's notifications speak as the storefront. Every branch of a restaurant on one host
-  // shares one service worker, so a device has one push subscription for all of them, and the
-  // customer row is shared by the restaurant's branches too: the platform's name and icon could
+  // shares one service worker, so a device has one push subscription for all of them (it reaches
+  // the diner's customers row at every branch on that host, see pushSubscriptionsFor): the platform's name and icon could
   // not say whether this update came from the Hamburger branch or the Food Thai Thai one. The title is the
   // storefront's name and the body says what happened (every order body already stands on its
   // own). Drivers and staff are not diners of a storefront: their titles are unchanged, and the
@@ -456,6 +650,7 @@ function renderTitle(template: string, vars: Record<string, unknown>) {
     dispatch_failed: 'No driver found',
     low_stock: 'Low stock alert',
     promo: (vars.title as string) ?? 'New promotion',
+    abandoned_cart: 'You left something in your cart',
   };
   return dict[template] ?? template;
 }
@@ -663,6 +858,8 @@ function renderUrl(template: string, vars: Record<string, unknown>) {
   // time-critical notification in the product opened a 404.
   if (template === 'new_dispatch') return '/app/home';
   if (template === 'promo' && vars.url) return vars.url as string;
+  // The storefront of the branch the cart was left at.
+  if (template === 'abandoned_cart') return customerFallback;
   return '/';
 }
 
@@ -691,6 +888,9 @@ function renderTemplate(template: string, vars: Record<string, unknown>) {
     new_dispatch: `New delivery offer: ${Number(vars.distance_km ?? 0).toFixed(1)} mi · $${Number(vars.earnings ?? 0).toFixed(2)}. Open the Driver app.`,
     low_stock: `Low stock: ${vars.name} — ${vars.remaining} left (threshold ${vars.threshold}).`,
     promo: (vars.body as string) ?? '',
+    abandoned_cart: `Your cart at ${storefrontLabel(vars) ?? 'the restaurant'} is still waiting${
+      money(vars.subtotal) ? ` (${money(vars.subtotal)})` : ''
+    }. Come back and finish your order.`,
   };
   return dict[template] ?? `${template}: ${JSON.stringify(vars).slice(0, 200)}`;
 }

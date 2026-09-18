@@ -839,7 +839,7 @@ export function LiveOpsView({
         try {
           const ctx = (error as unknown as { context?: Response }).context;
           if (ctx && typeof ctx.json === 'function') {
-            failure = describeDispatchFailure((await ctx.json()) as DispatchFailure);
+            failure = describeDispatchFailure((await ctx.json()) as DispatchFailure, ctx.status);
           }
         } catch {
           /* body unreadable — fall through to the generic sentence */

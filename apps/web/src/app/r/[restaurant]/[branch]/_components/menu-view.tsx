@@ -43,9 +43,12 @@ import {
 import { useRealtime } from '@favornoms/database/realtime';
 import { useCart, type OrderChannel } from '@/store/cart';
 import { useRequireAuth } from '@/components/auth/require-auth';
-import { ComboSheet, type ComboRow as ComboRowType } from './combo-sheet';
+import { cssUrl } from '@/lib/css-url';
+import { ComboArt, ComboSheet, type ComboRow as ComboRowType } from './combo-sheet';
 import { MenuItemSheet } from './menu-item-sheet';
 import { OrderTypeGate } from './order-type-gate';
+import { BranchTimeZoneContext, useSoldOutText } from './sold-out';
+import { earliestSoldOutUntil } from './sold-out-time';
 import { useTableLabel, useTablePin } from './table-pin';
 
 /** Never re-run the server tree more often than this, whatever the kitchen is doing. */
@@ -151,6 +154,75 @@ function useLiveStorefront(branchId: string, restaurantSlug: string, branchSlug:
       if (Date.now() - lastRefresh.current > LIVE_WAKE_MIN_AGE_MS) refresh();
     },
   });
+
+  return refresh;
+}
+
+/** Past the lift time before re-reading, so the server's clock has passed it too. */
+const SOLD_OUT_LIFT_SLACK_MS = 2_000;
+/** A lift the server did not see yet (its clock behind this one) is re-read this often... */
+const SOLD_OUT_RETRY_MS = 15_000;
+/** ...this many times, then left to the live refreshes. */
+const SOLD_OUT_MAX_RETRIES = 4;
+/** setTimeout's ceiling (about 24.8 days); an 86 further out is picked up by a later refresh. */
+const MAX_TIMEOUT_MS = 2_147_483_647;
+
+/**
+ * A hand-set 86 (menu_items.sold_out_until) lifts on its own: nothing is written when it does, so
+ * no realtime event says so, and an open menu kept the dish sold out until the diner reloaded.
+ * This re-reads the menu when the earliest one lifts; the refreshed items carry the next one.
+ */
+function useRefreshWhenSoldOutLifts(items: MenuItem[], refresh: () => void) {
+  const retries = React.useRef(0);
+  React.useEffect(() => {
+    const next = earliestSoldOutUntil(items);
+    if (next === null) {
+      retries.current = 0;
+      return undefined;
+    }
+    const overdue = next <= Date.now();
+    if (overdue && retries.current >= SOLD_OUT_MAX_RETRIES) return undefined;
+    const delay = overdue ? SOLD_OUT_RETRY_MS : next - Date.now() + SOLD_OUT_LIFT_SLACK_MS;
+    if (delay > MAX_TIMEOUT_MS) return undefined;
+    const id = window.setTimeout(() => {
+      retries.current = overdue ? retries.current + 1 : 0;
+      refresh();
+    }, delay);
+    return () => window.clearTimeout(id);
+  }, [items, refresh]);
+}
+
+/**
+ * branches.timezone for the "Sold out until" times. Read only when a dish is 86'd until a time
+ * and the page did not pass the zone, and only after mount, so the server's HTML and the first
+ * client render agree (both say plain "Sold out").
+ */
+function useBranchTimeZone(branchId: string, items: MenuItem[], fromPage?: string): string | undefined {
+  const [mounted, setMounted] = React.useState(false);
+  const [fetched, setFetched] = React.useState<string | undefined>(undefined);
+  const needed = !fromPage && items.some((i) => !!i.soldOutUntil);
+
+  React.useEffect(() => setMounted(true), []);
+
+  React.useEffect(() => {
+    if (!needed || fetched) return undefined;
+    let cancelled = false;
+    void (async () => {
+      const { getBrowserClient } = await import('@favornoms/database/client');
+      const { data } = await getBrowserClient()
+        .from('branches')
+        .select('timezone')
+        .eq('id', branchId)
+        .maybeSingle();
+      const tz = (data as { timezone?: string | null } | null)?.timezone;
+      if (!cancelled && tz) setFetched(tz);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [needed, fetched, branchId]);
+
+  return mounted ? (fromPage ?? fetched) : undefined;
 }
 
 /** The interface language as the shared helpers type it; anything unexpected reads as English. */
@@ -198,9 +270,13 @@ interface MenuViewProps {
   canDeliver?: boolean;
   /** A `?t=` token resolved to a table here, so the order type is already settled. */
   seatingFromScan?: boolean;
+  /** branches.timezone (storefront_status.timezone), for "Sold out until" times. When absent it
+   *  is read in the browser, and only if a dish is 86'd until a time. Not branch.settings.timezone:
+   *  that is a settings key nothing writes, so it is always the America/New_York default. */
+  timeZone?: string;
 }
 
-export function MenuView({ branch, categories, items, isOpen = true, reviews, combos = [], happyHours = [], menuLayout = 'grid4', menuCardStyle = 'standard', heroUrl, heroTitle, heroSubtitle, canDeliver = false, seatingFromScan = false }: MenuViewProps) {
+export function MenuView({ branch, categories, items, isOpen = true, reviews, combos = [], happyHours = [], menuLayout = 'grid4', menuCardStyle = 'standard', heroUrl, heroTitle, heroSubtitle, canDeliver = false, seatingFromScan = false, timeZone }: MenuViewProps) {
   const t = useTranslations();
   const params = useParams<{ restaurant: string; branch: string }>();
   const [search, setSearch] = React.useState('');
@@ -215,7 +291,9 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
   const [dietaryFilters, setDietaryFilters] = React.useState<Set<string>>(new Set());
   const [usuals, setUsuals] = React.useState<MenuItem[]>([]);
 
-  useLiveStorefront(branch.id, params.restaurant, params.branch);
+  const refreshMenu = useLiveStorefront(branch.id, params.restaurant, params.branch);
+  useRefreshWhenSoldOutLifts(items, refreshMenu);
+  const branchTimeZone = useBranchTimeZone(branch.id, items, timeZone);
 
   // A refresh replaces `items`; an open item sheet was still rendering the object captured
   // when it opened, so the one screen a diner is actually reading was the last to hear that
@@ -225,6 +303,19 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
       current ? (items.find((i) => i.id === current.id) ?? current) : current,
     );
   }, [items]);
+
+  // The same for an open combo sheet, which otherwise kept offering Add after the deal sold out.
+  // A deal that left the list meanwhile (archived, emptied, switched off) stays open as sold out.
+  // Returning `current` unchanged once it reads sold out keeps a fresh `combos = []` default from
+  // re-rendering forever.
+  React.useEffect(() => {
+    setActiveCombo((current) => {
+      if (!current) return current;
+      const fresh = combos.find((c) => c.id === current.id);
+      if (fresh) return fresh;
+      return current.is_available ? { ...current, is_available: false } : current;
+    });
+  }, [combos]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -313,128 +404,130 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
     : t('storefront.hero.defaultSubtitle', { branch: branch.name });
 
   return (
-    <div>
-      <OrderTypeGate
-        branchId={branch.id}
-        branchName={branch.name}
-        canDeliver={canDeliver}
-        seatingFromScan={seatingFromScan}
-      />
+    <BranchTimeZoneContext.Provider value={branchTimeZone}>
+      <div>
+        <OrderTypeGate
+          branchId={branch.id}
+          branchName={branch.name}
+          canDeliver={canDeliver}
+          seatingFromScan={seatingFromScan}
+        />
 
-      <Hero
-        title={effectiveHeroTitle}
-        subtitle={effectiveHeroSubtitle}
-        address={branch.address}
-        heroUrl={heroUrl}
-      />
+        <Hero
+          title={effectiveHeroTitle}
+          subtitle={effectiveHeroSubtitle}
+          address={branch.address}
+          heroUrl={heroUrl}
+        />
 
-      <ChannelPicker
-        channel={channel}
-        setChannel={setChannel}
-        canDeliver={canDeliver}
-        lockedTableLabel={pinnedTable ? tableLabel(pinnedTable) : null}
-      />
+        <ChannelPicker
+          channel={channel}
+          setChannel={setChannel}
+          canDeliver={canDeliver}
+          lockedTableLabel={pinnedTable ? tableLabel(pinnedTable) : null}
+        />
 
-      {!isOpen && (
-        <div className="container mt-4">
-          <div className="rounded-2xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning">
-            <strong>{t('storefront.closed.title')}</strong>{' '}
-            {/* Pickup is always prepared now, so it waits for opening hours — but a delivery is
-                booked for a later time, which a closed restaurant can still take. canDeliver is
-                only true with a bookable slot and orders not paused, so this never promises a
-                booking every slot would refuse. */}
-            {canDeliver
-              ? t('storefront.closed.canSchedule')
-              : t('storefront.closed.notTaking')}
+        {!isOpen && (
+          <div className="container mt-4">
+            <div className="rounded-2xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning">
+              <strong>{t('storefront.closed.title')}</strong>{' '}
+              {/* Pickup is always prepared now, so it waits for opening hours — but a delivery is
+                  booked for a later time, which a closed restaurant can still take. canDeliver is
+                  only true with a bookable slot and orders not paused, so this never promises a
+                  booking every slot would refuse. */}
+              {canDeliver
+                ? t('storefront.closed.canSchedule')
+                : t('storefront.closed.notTaking')}
+            </div>
           </div>
-        </div>
-      )}
-
-      {reviews && reviews.summary.count > 0 && (
-        <ReviewsStrip reviews={reviews} />
-      )}
-
-      {combos.length > 0 && (
-        <CombosRow combos={combos} onOpenCombo={setActiveCombo} />
-      )}
-
-      {happyHours.length > 0 && (
-        <HappyHourSections happyHours={happyHours} onOpen={setActiveItem} />
-      )}
-
-      <section className="container mt-6 space-y-6 lg:mt-8">
-        <MenuSearch search={search} setSearch={setSearch} />
-
-        {!search && usuals.length > 0 && (
-          <YourUsualsRow items={usuals} onOpen={setActiveItem} />
         )}
 
-        {!search && recommended.length > 0 && (
-          <RecommendedRow items={recommended} onOpen={setActiveItem} />
+        {reviews && reviews.summary.count > 0 && (
+          <ReviewsStrip reviews={reviews} />
         )}
 
-        {/* Browse region — filters, category chips and the grid live in ONE
-            wrapper so the sticky chip bar stays pinned for the whole scroll of
-            the grid instead of unpinning at the next sibling. Deliberately a
-            plain toolbar, not a tinted band: it must not read as another
-            "special" section like the chef's picks above it. */}
-        <div className="space-y-4">
-          <div className="flex items-center gap-2.5">
-            <span aria-hidden className="h-6 w-1 shrink-0 rounded-full bg-gradient-warm" />
-            <h2 className="font-display text-xl font-semibold tracking-tight sm:text-2xl">
-              {t('menu.title')}
-            </h2>
-          </div>
+        {combos.length > 0 && (
+          <CombosRow combos={combos} onOpenCombo={setActiveCombo} />
+        )}
 
-          {availableDietary.length > 0 && (
-            <DietaryFilters
-              available={availableDietary}
-              selected={dietaryFilters}
-              onToggle={toggleDietary}
-              onClear={() => setDietaryFilters(new Set())}
-            />
+        {happyHours.length > 0 && (
+          <HappyHourSections happyHours={happyHours} onOpen={setActiveItem} />
+        )}
+
+        <section className="container mt-6 space-y-6 lg:mt-8">
+          <MenuSearch search={search} setSearch={setSearch} />
+
+          {!search && usuals.length > 0 && (
+            <YourUsualsRow items={usuals} onOpen={setActiveItem} />
           )}
 
-          {/* Full-bleed: the negative margins cancel the container padding so the
-              bar's own background hides the cards scrolling under it. `top-14`
-              is the AppShell header's `h-14`; z-20 keeps it under that header
-              (z-40) and under the floating cart bar (z-30). */}
-          <div className="sticky top-14 z-20 -mx-4 border-b border-border/60 bg-background/95 pb-1.5 pt-2.5 backdrop-blur-xl sm:-mx-6 lg:-mx-8">
-            <CategoryTabs
-              categories={categories}
-              active={activeCategory}
-              onChange={setActiveCategory}
-              counts={counts}
-            />
-          </div>
-
-          <MenuGrid items={filtered} onOpen={setActiveItem} layout={menuLayout} cardStyle={menuCardStyle} />
-
-          {filtered.length === 0 && (
-            <EmptyState
-              icon={<Utensils className="h-7 w-7" />}
-              title={t('menu.noResults')}
-              description={t('menu.search')}
-            />
+          {!search && recommended.length > 0 && (
+            <RecommendedRow items={recommended} onOpen={setActiveItem} />
           )}
-        </div>
-      </section>
 
-      <FloatingCartBar />
+          {/* Browse region — filters, category chips and the grid live in ONE
+              wrapper so the sticky chip bar stays pinned for the whole scroll of
+              the grid instead of unpinning at the next sibling. Deliberately a
+              plain toolbar, not a tinted band: it must not read as another
+              "special" section like the chef's picks above it. */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2.5">
+              <span aria-hidden className="h-6 w-1 shrink-0 rounded-full bg-gradient-warm" />
+              <h2 className="font-display text-xl font-semibold tracking-tight sm:text-2xl">
+                {t('menu.title')}
+              </h2>
+            </div>
 
-      <MenuItemSheet
-        item={activeItem}
-        items={items}
-        onOpenItem={setActiveItem}
-        onClose={() => setActiveItem(null)}
-      />
-      <ComboSheet
-        combo={activeCombo}
-        branchId={branch.id}
-        onClose={() => setActiveCombo(null)}
-        requireAuthThen={requireAuthThen}
-      />
-    </div>
+            {availableDietary.length > 0 && (
+              <DietaryFilters
+                available={availableDietary}
+                selected={dietaryFilters}
+                onToggle={toggleDietary}
+                onClear={() => setDietaryFilters(new Set())}
+              />
+            )}
+
+            {/* Full-bleed: the negative margins cancel the container padding so the
+                bar's own background hides the cards scrolling under it. `top-14`
+                is the AppShell header's `h-14`; z-20 keeps it under that header
+                (z-40) and under the floating cart bar (z-30). */}
+            <div className="sticky top-14 z-20 -mx-4 border-b border-border/60 bg-background/95 pb-1.5 pt-2.5 backdrop-blur-xl sm:-mx-6 lg:-mx-8">
+              <CategoryTabs
+                categories={categories}
+                active={activeCategory}
+                onChange={setActiveCategory}
+                counts={counts}
+              />
+            </div>
+
+            <MenuGrid items={filtered} onOpen={setActiveItem} layout={menuLayout} cardStyle={menuCardStyle} />
+
+            {filtered.length === 0 && (
+              <EmptyState
+                icon={<Utensils className="h-7 w-7" />}
+                title={t('menu.noResults')}
+                description={t('menu.search')}
+              />
+            )}
+          </div>
+        </section>
+
+        <FloatingCartBar />
+
+        <MenuItemSheet
+          item={activeItem}
+          items={items}
+          onOpenItem={setActiveItem}
+          onClose={() => setActiveItem(null)}
+        />
+        <ComboSheet
+          combo={activeCombo}
+          branchId={branch.id}
+          onClose={() => setActiveCombo(null)}
+          requireAuthThen={requireAuthThen}
+        />
+      </div>
+    </BranchTimeZoneContext.Provider>
   );
 }
 
@@ -585,6 +678,7 @@ function MenuSearch({ search, setSearch }: { search: string; setSearch: (s: stri
 
 function RecommendedRow({ items, onOpen }: { items: MenuItem[]; onOpen: (i: MenuItem) => void }) {
   const t = useTranslations('menu');
+  const soldOutText = useSoldOutText();
   return (
     // Curated band — same idiom as HappyHourCard (rounded-3xl, hairline border,
     // 5–10% tint) so the page keeps one visual family, but tinted `accent`
@@ -625,7 +719,7 @@ function RecommendedRow({ items, onOpen }: { items: MenuItem[]; onOpen: (i: Menu
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
               {item.outOfStock && (
                 <span className="absolute inset-0 z-10 grid place-items-center bg-background/60">
-                  <Badge variant="muted" className="text-sm">{t('soldOut')}</Badge>
+                  <Badge variant="muted" className="text-sm">{soldOutText.label(item)}</Badge>
                 </span>
               )}
               <div className="absolute left-3 top-3 flex gap-1.5">
@@ -772,6 +866,8 @@ function MenuCard({
   const lines = useCart((s) => s.lines);
   const inCartQty = lines.find((l) => l.menuItemId === item.id)?.quantity ?? 0;
   const soldOut = !!item.outOfStock;
+  // The picture carries "Sold out until 5:00 PM"; the button keeps the short word, it is narrow.
+  const soldOutText = useSoldOutText();
 
   if (compact) {
     return (
@@ -788,9 +884,9 @@ function MenuCard({
               <div className={cn('absolute inset-0 bg-gradient-sunset', soldOut && 'opacity-40')} aria-hidden />
             )}
             {soldOut && (
-              <span className="absolute inset-0 grid place-items-center">
-                <span className="rounded-full bg-background/85 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
-                  {t('soldOut')}
+              <span className="absolute inset-0 grid place-items-center px-1">
+                <span className="rounded-full bg-background/85 px-2 py-0.5 text-center text-[10px] font-semibold leading-tight text-muted-foreground">
+                  {soldOutText.label(item)}
                 </span>
               </span>
             )}
@@ -816,7 +912,7 @@ function MenuCard({
                 variant={soldOut ? 'ghost' : inCartQty > 0 ? 'soft' : 'gradient'}
                 onClick={() => { if (!soldOut) onOpen(); }}
                 disabled={soldOut}
-                aria-label={soldOut ? t('itemSoldOut', { name: item.name }) : t('chooseOptions', { name: item.name })}
+                aria-label={soldOut ? soldOutText.ariaLabel(item) : t('chooseOptions', { name: item.name })}
               >
                 {soldOut ? t('soldOut') : inCartQty > 0 ? t('inCartCount', { count: inCartQty }) : t('quickAdd')}
               </Button>
@@ -859,7 +955,7 @@ function MenuCard({
           )}
           {soldOut && (
             <span className="absolute inset-0 grid place-items-center bg-background/60">
-              <Badge variant="muted" className="text-sm">{t('soldOut')}</Badge>
+              <Badge variant="muted" className="text-sm">{soldOutText.label(item)}</Badge>
             </span>
           )}
         </button>
@@ -911,7 +1007,7 @@ function MenuCard({
               variant={soldOut ? 'ghost' : inCartQty > 0 ? 'soft' : 'gradient'}
               onClick={() => { if (!soldOut) onOpen(); }}
               disabled={soldOut}
-              aria-label={soldOut ? t('itemSoldOut', { name: item.name }) : t('chooseOptions', { name: item.name })}
+              aria-label={soldOut ? soldOutText.ariaLabel(item) : t('chooseOptions', { name: item.name })}
             >
               {soldOut ? t('soldOut') : inCartQty > 0 ? t('inCartCount', { count: inCartQty }) : t('quickAdd')}
             </Button>
@@ -1003,11 +1099,14 @@ function CombosRow({
   onOpenCombo: (combo: ComboRow) => void;
 }) {
   const t = useTranslations('storefront');
+  const tMenu = useTranslations('menu');
+  // The merchant's order, with deals that cannot be made right now still shown, greyed.
+  const availableCount = combos.filter((c) => c.is_available).length;
   return (
     <section className="container mt-6">
       <div className="flex items-baseline justify-between">
         <h2 className="font-display text-lg font-bold">{t('combos.title')}</h2>
-        <span className="text-xs text-muted-foreground">{t('combos.available', { count: combos.length })}</span>
+        <span className="text-xs text-muted-foreground">{t('combos.available', { count: availableCount })}</span>
       </div>
       <div className="-mx-2 mt-3 flex snap-x snap-mandatory overflow-x-auto px-2 pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {combos.map((c) => {
@@ -1016,29 +1115,33 @@ function CombosRow({
             0,
           );
           const savings = list - Number(c.total_price);
+          const soldOut = !c.is_available;
           return (
             <article
               key={c.id}
               className="mr-3 inline-block w-72 shrink-0 snap-start overflow-hidden rounded-2xl border border-border bg-card shadow-soft"
             >
-              {c.image_url ? (
-                <div
-                  className="aspect-[16/10] w-full bg-muted bg-cover bg-center"
-                  style={{ backgroundImage: `url(${c.image_url})` }}
-                  role="img"
-                  aria-label={c.name}
-                />
-              ) : (
-                <div className="grid aspect-[16/10] w-full place-items-center bg-gradient-warm text-3xl text-white">🍔</div>
-              )}
-              <div className="p-3">
+              <div className="relative aspect-[16/10] w-full overflow-hidden bg-muted">
+                <ComboArt combo={c} className={cn(soldOut && 'opacity-40 grayscale')} />
+                {soldOut && (
+                  <span className="absolute inset-0 grid place-items-center">
+                    <span className="rounded-full bg-background/85 px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+                      {tMenu('soldOut')}
+                    </span>
+                  </span>
+                )}
+              </div>
+              <div className={cn('p-3', soldOut && 'opacity-70')}>
                 <h3 className="font-display text-base font-bold leading-tight">{c.name}</h3>
                 {c.description && (
                   <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{c.description}</p>
                 )}
                 <ul className="mt-2 space-y-0.5 text-xs text-muted-foreground">
                   {(c.items ?? []).slice(0, 4).map((it, i) => (
-                    <li key={i}>· {it.quantity > 1 ? `${it.quantity}×` : ''}{it.item_name}</li>
+                    // The dish that is holding the deal up, struck through.
+                    <li key={i} className={cn(it.is_available === false && 'line-through')}>
+                      · {it.quantity > 1 ? `${it.quantity}×` : ''}{it.item_name}
+                    </li>
                   ))}
                   {(c.items ?? []).length > 4 && (
                     <li>{t('combos.more', { count: (c.items ?? []).length - 4 })}</li>
@@ -1057,9 +1160,16 @@ function CombosRow({
                   </div>
                   {/* Opens the detail sheet rather than adding straight to the cart — a
                       combo bundles several dishes and a saving, which the diner should be
-                      able to read before committing. The Add button lives in the sheet. */}
-                  <Button size="sm" variant="gradient" onClick={() => onOpenCombo(c)}>
-                    {t('combos.viewDeal')}
+                      able to read before committing. The Add button lives in the sheet.
+                      A sold-out deal is not offered, like a sold-out dish. */}
+                  <Button
+                    size="sm"
+                    variant={soldOut ? 'ghost' : 'gradient'}
+                    onClick={() => { if (!soldOut) onOpenCombo(c); }}
+                    disabled={soldOut}
+                    aria-label={soldOut ? tMenu('itemSoldOut', { name: c.name }) : undefined}
+                  >
+                    {soldOut ? tMenu('soldOut') : t('combos.viewDeal')}
                   </Button>
                 </div>
               </div>
@@ -1181,7 +1291,7 @@ function HappyHourCard({ hh, onOpen }: { hh: HappyHourSection; onOpen: (i: MenuI
             >
               <div
                 className={`aspect-square w-full bg-cover bg-center ${item.imageUrl ? '' : 'bg-gradient-sunset'}`}
-                style={item.imageUrl ? { backgroundImage: `url(${item.imageUrl})` } : undefined}
+                style={item.imageUrl ? { backgroundImage: cssUrl(item.imageUrl) } : undefined}
                 role="img"
                 aria-label={item.name}
               />
@@ -1275,6 +1385,7 @@ function DietaryFilters({
 
 function YourUsualsRow({ items, onOpen }: { items: MenuItem[]; onOpen: (item: MenuItem) => void }) {
   const t = useTranslations();
+  const soldOutText = useSoldOutText();
   return (
     <section>
       <div className="flex items-baseline justify-between">
@@ -1293,13 +1404,13 @@ function YourUsualsRow({ items, onOpen }: { items: MenuItem[]; onOpen: (item: Me
           >
             <div
               className={`relative aspect-square w-full bg-cover bg-center ${item.imageUrl ? '' : 'bg-gradient-sunset'}`}
-              style={item.imageUrl ? { backgroundImage: `url(${item.imageUrl})` } : undefined}
+              style={item.imageUrl ? { backgroundImage: cssUrl(item.imageUrl) } : undefined}
               role="img"
               aria-label={item.name}
             >
               {item.outOfStock && (
-                <span className="absolute inset-0 grid place-items-center bg-background/60">
-                  <Badge variant="muted" className="text-xs">{t('menu.soldOut')}</Badge>
+                <span className="absolute inset-0 grid place-items-center bg-background/60 px-1">
+                  <Badge variant="muted" className="text-center text-xs">{soldOutText.label(item)}</Badge>
                 </span>
               )}
             </div>

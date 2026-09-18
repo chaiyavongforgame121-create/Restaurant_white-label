@@ -110,6 +110,8 @@
     "maxAttempts": "Se probó con todos los repartidores: sube “Máximo de intentos de asignación” o asigna uno manualmente.",
     "notEntitled": "La entrega a domicilio no está incluida en el plan de este restaurante.",
     "notDispatchable": "Esta entrega ya no está esperando repartidor.",
+    "authRequired": "Tu sesión expiró. Vuelve a iniciar sesión y busca un repartidor.",
+    "notAuthorized": "No tienes permiso para enviar repartidores en esta sucursal.",
     "failed": "No se pudo buscar repartidor. Inténtalo de nuevo.",
     "noneAvailable": "No hay repartidores disponibles ahora.",
     "noPin": "Esta sucursal aún no tiene ubicación en el mapa: agrégala en Configuración de sucursal.",

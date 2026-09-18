@@ -85,6 +85,7 @@
     "awaitingUpload": "Awaiting upload",
     "listError": "Could not read the rider’s documents. Close this and try again.",
     "forbidden": "You do not have permission to review driver documents. Only an owner or manager can.",
+    "sharedForbidden": "This rider also works with a branch you do not manage, so a platform admin or the owner of every such branch has to decide.",
     "saveFailed": "Couldn’t save the document review. Try again.",
     "rejectHint": "Rejecting tells the rider a document needs changing, but not which one. To say why, reject their application with a reason — that text is shown in their app.",
     "reject": "Reject",

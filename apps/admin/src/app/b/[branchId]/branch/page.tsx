@@ -37,11 +37,15 @@ export default async function BranchPage({ params }: Props) {
         .limit(1)
         .maybeSingle();
 
-  const [{ data: restaurant }, entitlements, { data: brand }, t] = await Promise.all([
+  const [{ data: restaurant }, entitlements, { data: brand }, t, { data: caps }] = await Promise.all([
     supabase.from('restaurants').select('name, storefront').eq('id', branch.restaurant_id).maybeSingle(),
     getEntitlementsForBranch(supabase, branchId),
     brandQuery,
     getTranslations('branch'),
+    // The settings cards save through patch_branch_settings, which needs branch.settings (owner
+    // and admin). A manager opens this page too, so the cards are shown read-only to them
+    // rather than refusing only after Save.
+    supabase.rpc('my_capabilities', { p_branch_id: branchId }),
   ]);
   return (
     <BranchSettings
@@ -64,6 +68,7 @@ export default async function BranchPage({ params }: Props) {
       }}
       canUseDelivery={hasFeature(entitlements, 'delivery')}
       canUseCard={hasFeature(entitlements, 'card_payment')}
+      canEditSettings={((caps ?? []) as string[]).includes('branch.settings')}
     />
   );
 }

@@ -26,7 +26,8 @@ type LoyaltyT = ReturnType<typeof useTranslations<'loyalty'>>;
  * Every tier used to render in the same brand orange, so a Bronze member's bar
  * was pixel-identical to a Platinum member's. These are the platform-fixed
  * --tier-* tokens (see packages/ui/src/globals.css): deliberately NOT themed per
- * brand, because the thresholds behind them are DB-global.
+ * brand. The four rungs are the same everywhere; their thresholds, names and
+ * benefits are each branch's own (see buildTiers).
  *
  * Written as whole literal class strings — Tailwind's scanner cannot see a class
  * assembled at runtime, so `bg-tier-${key}` would compile to nothing.
@@ -73,7 +74,7 @@ interface Tier {
 }
 
 /**
- * The ladder this restaurant grants, measured against `lifetime_earned`. The thresholds, the name
+ * The ladder this branch grants, measured against `lifetime_earned`. The thresholds, the name
  * of each rung and the lines under it were all written here once, so a merchant who changed them
  * would have had the page promising a tier the server never awarded — or naming it in a language
  * their diners don't read. Only the emoji and the colour are still the platform's.
@@ -136,6 +137,8 @@ export function LoyaltyView({
   branchId,
 }: {
   base: string;
+  /** The storefront's full name ("<brand> - <branch>"): points, rewards and tiers are this
+   *  branch's alone, so the page says whose they are. */
   brandName: string;
   branchId: string;
 }) {
@@ -210,7 +213,7 @@ export function LoyaltyView({
         <div className="space-y-5">
           <Card className="overflow-hidden p-0">
             <div className="bg-gradient-warm p-6 text-white">
-              <p className="text-sm text-white/80">{t('yourPoints')}</p>
+              <p className="text-sm text-white/80">{t('yourPoints', { brandName })}</p>
               <p className="font-display text-5xl font-bold leading-tight">{balance.toLocaleString(intlLocale)}</p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <Badge variant="solid" className="bg-white/25 text-white">
@@ -239,6 +242,9 @@ export function LoyaltyView({
               <Stat label={t('lifetimeEarned')} value={(loyalty?.lifetime_earned ?? 0).toLocaleString(intlLocale)} />
               <Stat label={t('lifetimeRedeemed')} value={(loyalty?.lifetime_spent ?? 0).toLocaleString(intlLocale)} />
             </div>
+            <p className="border-t border-border px-5 py-3 text-xs text-muted-foreground">
+              {t('branchNote', { brandName })}
+            </p>
           </Card>
 
           <RewardsCatalog rewards={rewards} balance={balance} busy={busy} brandName={brandName} />

@@ -11,8 +11,10 @@ import { getBrowserClient } from '@favornoms/database/client';
 import { listItemModifierGroups } from '@favornoms/database/queries';
 import { useCart, type CartLineModifier } from '@/store/cart';
 import { useRequireAuth } from '@/components/auth/require-auth';
+import { cssUrl } from '@/lib/css-url';
 import { stashPendingAdd } from '@/lib/pending-cart';
 import { resolveRecommendations, type RecommendationRow } from '@/lib/recommendations';
+import { useSoldOutText } from './sold-out';
 
 interface Props {
   item: MenuItem | null;
@@ -117,6 +119,8 @@ export function MenuItemSheet({ item, onClose, items, onOpenItem }: Props) {
 
   const view = item ?? cached;
   const soldOut = !!view?.outOfStock;
+  // "Sold out until 5:00 PM" for a hand-set 86, in the branch's time zone.
+  const soldOutText = useSoldOutText();
 
   const modDelta = React.useMemo(() => {
     let sum = 0;
@@ -397,15 +401,15 @@ export function MenuItemSheet({ item, onClose, items, onOpenItem }: Props) {
                   <div
                     className={`relative aspect-square w-full bg-muted bg-cover bg-center ${target.imageUrl ? '' : 'bg-gradient-sunset'}`}
                     style={
-                      target.imageUrl ? { backgroundImage: `url(${target.imageUrl})` } : undefined
+                      target.imageUrl ? { backgroundImage: cssUrl(target.imageUrl) } : undefined
                     }
                     role="img"
                     aria-label={target.name}
                   >
                     {target.outOfStock && (
-                      <span className="absolute inset-0 grid place-items-center bg-background/60">
-                        <Badge variant="muted" className="text-xs">
-                          {t('menu.soldOut')}
+                      <span className="absolute inset-0 grid place-items-center bg-background/60 px-1">
+                        <Badge variant="muted" className="text-center text-xs">
+                          {soldOutText.label(target)}
                         </Badge>
                       </span>
                     )}
@@ -440,7 +444,9 @@ export function MenuItemSheet({ item, onClose, items, onOpenItem }: Props) {
             onClick={handleAdd}
             disabled={!!validation || soldOut}
           >
-            {soldOut ? t('menu.soldOut') : t('menu.addWithPrice', { price: formatCurrency(total) })}
+            {soldOut && view
+              ? soldOutText.label(view)
+              : t('menu.addWithPrice', { price: formatCurrency(total) })}
           </Button>
         </div>
       </motion.div>

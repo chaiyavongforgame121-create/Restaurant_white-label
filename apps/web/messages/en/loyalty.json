@@ -1,7 +1,8 @@
 {
   "loading": "Loading…",
   "signInPrompt": "Sign in to see your {brandName} points and rewards.",
-  "yourPoints": "Your points",
+  "yourPoints": "Your points at {brandName}",
+  "branchNote": "Points, rewards and tiers are separate at every branch. Points you earn at {brandName} can only be spent here.",
   "loadingTier": "Loading tier",
   "memberBadge": "{tier} member",
   "rewardsReady": "{count, plural, one {# reward ready to redeem} other {# rewards ready to redeem}}",
@@ -15,7 +16,7 @@
     "earnFallback": "Earn points on the subtotal of every completed order.",
     "landing": "Points land <strong>once the order is completed</strong> — orders still being prepared or on their way don’t count yet.",
     "checkout": "At checkout, pick <strong>one reward</strong> from the list above — its points come off your balance and the discount comes off that order.",
-    "redeemed": "Redeemed points leave your balance right away, but the entry shows in <strong>Recent activity</strong> once that order is completed.",
+    "redeemed": "Redeemed points leave your balance right away and show in <strong>Recent activity</strong>. If that order is cancelled before it is completed, the points come back.",
     "climb": "Keep ordering to climb tiers and unlock more perks."
   },
   "activity": {

@@ -4,13 +4,14 @@ import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
-import { ExternalLink, Palette, Plus, Save, Settings, Star } from 'lucide-react';
+import { AlertTriangle, ExternalLink, Lock, Palette, Plus, Save, Settings, Star } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import type { Json } from '@favornoms/database/types';
 import {
   DEFAULT_UI_LOCALE,
   canAddBranch,
   describeBillingError,
+  intlLocaleFor,
   isUiLocale,
   menuCardStyleLabel,
   menuLayoutLabel,
@@ -24,6 +25,7 @@ import { ImageUpload } from '@/components/image-upload';
 import { IconUpload, type IconSet } from '@/components/icon-upload';
 import { parseIconStyle, type IconStyle } from '@/components/icon-geometry';
 import { storefrontAppName } from '../../branch/_components/branding-card';
+import { TimezoneSelect, deviceTimeZone } from '../../branch/_components/timezone-select';
 
 interface Brand {
   id: string;
@@ -42,6 +44,8 @@ interface Brand {
 interface BranchRow {
   id: string;
   name: string;
+  /** Null only when the read left it out; used to keep a suggested slug unique. */
+  slug: string | null;
   brand_id: string | null;
   is_active: boolean;
   timezone: string;
@@ -62,16 +66,55 @@ interface Props {
   restaurantId: string;
   restaurantName: string;
   newBrand: NewBrandSeed;
-  loyaltyScope: 'branch' | 'brand';
   currentBranchId: string;
+  /**
+   * The owner, a restaurant-wide admin or a platform admin: the only people the restaurants and
+   * brands policies let change the shared storefront defaults and the brand. A branch-scoped admin
+   * still opens this page (brand.edit) to add a branch, but those editors are read-only for them.
+   */
+  canEditShared: boolean;
+  /** Per active branch, what the viewer may copy from it into a new branch. */
+  copyCaps: Record<string, CopyCaps>;
   brands: Brand[];
   branches: BranchRow[];
   storefront: Record<string, unknown>;
   entitlements: Entitlements;
 }
 
+/** The capabilities copy_branch_setup asks for at the source branch. */
+export interface CopyCaps {
+  /** menu.manage: the menu, combos included. */
+  menu: boolean;
+  /** branch.settings: hours, settings, tax and the look. */
+  settings: boolean;
+  /** loyalty.manage: the loyalty programme and rewards. */
+  loyalty: boolean;
+}
+
 const slugify = (s: string) =>
   s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 64);
+
+/** slugify for a field being typed into: a trailing hyphen stays, or "down-town" could never
+ *  be typed (the hyphen vanished the moment it was pressed). slugify() tidies it on save. */
+const typedSlug = (s: string) =>
+  s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-/, '').slice(0, 64);
+
+/**
+ * The slug suggested for a new branch's name. A Thai or Vietnamese name has no a-z to make one
+ * from, which used to leave the field empty and the dialog answering "Enter a branch name and a
+ * URL slug" to an owner who had typed both they could. Falls back to branch-<n>, and a slug another
+ * branch of this restaurant already uses gets the first free number.
+ */
+function suggestSlug(name: string, taken: ReadonlySet<string>): string {
+  const base = slugify(name);
+  if (base.length >= 2 && !taken.has(base)) return base;
+  const stem = base.length >= 2 ? base.slice(0, 58).replace(/-$/, '') : 'branch';
+  for (let n = Math.max(2, taken.size + 1); n < 10_000; n++) {
+    const candidate = `${stem}-${n}`;
+    if (!taken.has(candidate)) return candidate;
+  }
+  return `${stem}-${Date.now().toString(36)}`;
+}
 
 const BRAND_COLUMNS =
   'id, slug, name, theme, logo_url, favicon_url, icon_192_url, icon_512_url, icon_maskable_512_url, is_default, created_at';
@@ -86,8 +129,9 @@ export function BrandsManager({
   restaurantId,
   restaurantName,
   newBrand,
-  loyaltyScope: initialScope,
   currentBranchId,
+  canEditShared,
+  copyCaps,
   brands: initialBrands,
   branches,
   storefront,
@@ -98,8 +142,6 @@ export function BrandsManager({
   const locale = isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE;
   const router = useRouter();
   const [brands, setBrands] = React.useState(initialBrands);
-  const [scope, setScope] = React.useState(initialScope);
-  const [scopeSaving, setScopeSaving] = React.useState(false);
   const [editing, setEditing] = React.useState<Brand | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [store, setStore] = React.useState(() => parseStorefront(storefront));
@@ -189,35 +231,24 @@ export function BrandsManager({
     );
   };
 
-  const saveScope = async (next: 'branch' | 'brand') => {
-    setScopeSaving(true);
-    setError(null);
-    const supabase = getBrowserClient();
-    const { error: upErr } = await supabase
-      .from('restaurants')
-      .update({ loyalty_scope: next })
-      .eq('id', restaurantId);
-    setScopeSaving(false);
-    if (upErr) {
-      setError(t(dbErrorKey(upErr)));
-      return;
-    }
-    setScope(next);
-    router.refresh();
-  };
-
   const saveStorefront = async (next: StorefrontSettings) => {
+    if (!canEditShared) return;
+    const previous = store;
     setStore(next);
     setStoreSaving(true);
     setError(null);
     const supabase = getBrowserClient();
-    const { error: upErr } = await supabase
+    // .select() so an update RLS filters out (zero rows, no error) is reported as refused
+    // instead of showing "Saved" for a change that never happened.
+    const { data: savedRows, error: upErr } = await supabase
       .from('restaurants')
       .update({ storefront: serializeStorefront(next) })
-      .eq('id', restaurantId);
+      .eq('id', restaurantId)
+      .select('id');
     setStoreSaving(false);
-    if (upErr) {
-      setError(t(dbErrorKey(upErr)));
+    if (upErr || !savedRows || savedRows.length === 0) {
+      setStore(previous);
+      setError(t(upErr ? dbErrorKey(upErr) : 'errors.permissionDenied'));
       return;
     }
     setStoreSaved(true);
@@ -245,26 +276,9 @@ export function BrandsManager({
         </div>
       </header>
 
-      <Card className="mb-6 p-5">
-        <h2 className="font-display text-lg font-semibold">{t('loyalty.title')}</h2>
-        <p className="text-sm text-muted-foreground">{t('loyalty.description')}</p>
-        <div className="mt-3 flex gap-2">
-          {(['brand', 'branch'] as const).map((mode) => (
-            <button
-              key={mode}
-              type="button"
-              disabled={scopeSaving}
-              onClick={() => saveScope(mode)}
-              className={`flex-1 rounded-xl border px-4 py-3 text-left transition ${
-                scope === mode ? 'border-primary bg-primary/5' : 'border-border bg-card'
-              }`}
-            >
-              <p className="font-medium">{t(`loyalty.modes.${mode}`)}</p>
-              <p className="text-xs text-muted-foreground">{t(`loyalty.modeHints.${mode}`)}</p>
-            </button>
-          ))}
-        </div>
-      </Card>
+      {/* No loyalty "pool" switch any more: every branch runs its own loyalty programme, with
+          its own points, rewards and settings, on its own Loyalty page
+          (20260918120000_loyalty_per_branch locks restaurants.loyalty_scope to 'branch'). */}
 
       <Card className="mb-6 p-5">
         <div className="flex items-center justify-between gap-2">
@@ -272,7 +286,14 @@ export function BrandsManager({
           {storeSaved && <span className="text-sm text-success">{t('storefront.saved')}</span>}
         </div>
         <p className="text-sm text-muted-foreground">{t('storefront.description')}</p>
-        <div className="mt-4 space-y-4">
+        {!canEditShared && (
+          <p className="mt-3 flex items-start gap-2 rounded-xl bg-muted px-3 py-2 text-xs text-muted-foreground">
+            <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>{t('shared.ownerOnly')}</span>
+          </p>
+        )}
+        {/* A disabled fieldset disables every control inside it, the image uploader's included. */}
+        <fieldset disabled={!canEditShared} className="mt-4 min-w-0 space-y-4 disabled:opacity-60">
           <div>
             <p className="mb-1.5 text-sm font-medium">{t('storefront.menuLayout')}</p>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -342,7 +363,7 @@ export function BrandsManager({
               label={t('storefront.uploadHero')}
             />
           </div>
-        </div>
+        </fieldset>
       </Card>
 
       <Card className="mb-6 p-5">
@@ -424,6 +445,12 @@ export function BrandsManager({
       {error && <p className="mb-3 rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p>}
 
       <div className="space-y-3 px-2 lg:px-0">
+        {!canEditShared && brands.length > 0 && (
+          <p className="flex items-start gap-2 rounded-xl bg-muted px-3 py-2 text-xs text-muted-foreground">
+            <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>{t('shared.ownerOnly')}</span>
+          </p>
+        )}
         {brands.map((brand) => {
           const branchCount = branchCountByBrand.get(brand.id) ?? 0;
           const primaryColor = (brand.theme?.primaryColor as string) ?? '#FF6B35';
@@ -449,7 +476,7 @@ export function BrandsManager({
                     {t('brandList.meta', { slug: brand.slug, count: branchCount })}
                   </p>
                 </div>
-                <IconButton label={t('brandList.edit')} onClick={() => setEditing(brand)}>
+                <IconButton label={t('brandList.edit')} onClick={() => setEditing(brand)} disabled={!canEditShared}>
                   <Palette className="h-4 w-4" />
                 </IconButton>
               </div>
@@ -476,6 +503,7 @@ export function BrandsManager({
               })}
             </p>
             <p className="text-xs">{t('brandList.createHint', { name: newBrand.name })}</p>
+            {!canEditShared && <p className="text-xs">{t('shared.ownerOnly')}</p>}
             {createBrandError && (
               <p className="rounded-xl bg-destructive/10 px-4 py-3 text-destructive">{createBrandError}</p>
             )}
@@ -484,7 +512,7 @@ export function BrandsManager({
                 variant="gradient"
                 onClick={createBrand}
                 loading={creatingBrand}
-                disabled={!newBrand.name.trim()}
+                disabled={!newBrand.name.trim() || !canEditShared}
                 leftIcon={<Plus className="h-4 w-4" />}
               >
                 {t('brandList.create')}
@@ -513,6 +541,7 @@ export function BrandsManager({
           restaurantId={restaurantId}
           brands={brands}
           branches={branches}
+          copyCaps={copyCaps}
           currentBranchId={currentBranchId}
           onClose={() => setAddingBranch(false)}
           onSaved={() => {
@@ -525,56 +554,118 @@ export function BrandsManager({
   );
 }
 
-const US_TIMEZONES: Array<{ tz: string; key: string }> = [
-  { tz: 'America/New_York', key: 'eastern' },
-  { tz: 'America/Chicago', key: 'central' },
-  { tz: 'America/Denver', key: 'mountain' },
-  { tz: 'America/Phoenix', key: 'mountainNoDst' },
-  { tz: 'America/Los_Angeles', key: 'pacific' },
-  { tz: 'America/Anchorage', key: 'alaska' },
-  { tz: 'Pacific/Honolulu', key: 'hawaii' },
-];
-
-/** What copy_branch_setup reports back. Read defensively: the RPC is untyped here. */
+/** What copy_branch_setup reports back. Read defensively: an older function returns fewer keys. */
 interface CopyResult {
   categories_copied: number;
   items_copied: number;
   modifier_groups_copied: number;
+  combos_copied: number;
+  /** Copied dishes whose stock tracking was switched off: the new kitchen has counted nothing. */
+  stock_tracking_off: number;
   hours_copied: number;
+  schedule_windows_copied: number;
   settings_copied: boolean;
+  tax_copied: boolean;
+  sales_tax_rate: number | null;
+  /** The source took bank transfers, and this branch cannot until it uploads its own QR. */
+  transfer_needs_qr: boolean;
+  look_copied: boolean;
+  loyalty_copied: boolean;
+  rewards_copied: number;
+  /** Free-item rewards left behind: their dish was not copied (the menu box was unticked). */
+  rewards_skipped: number;
 }
 
 function readCopyResult(data: unknown): CopyResult {
   const row = (data && typeof data === 'object' ? data : {}) as Record<string, unknown>;
   const count = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+  const rate = Number(row.sales_tax_rate);
   return {
     categories_copied: count(row.categories_copied),
     items_copied: count(row.items_copied),
     modifier_groups_copied: count(row.modifier_groups_copied),
+    combos_copied: count(row.combos_copied),
+    stock_tracking_off: count(row.stock_tracking_off),
     hours_copied: count(row.hours_copied),
+    schedule_windows_copied: count(row.schedule_windows_copied),
     settings_copied: row.settings_copied === true,
+    tax_copied: row.tax_copied === true,
+    sales_tax_rate: row.sales_tax_rate != null && Number.isFinite(rate) ? rate : null,
+    transfer_needs_qr: row.transfer_needs_qr === true,
+    look_copied: row.look_copied === true,
+    loyalty_copied: row.loyalty_copied === true,
+    rewards_copied: count(row.rewards_copied),
+    rewards_skipped: count(row.rewards_skipped),
   };
 }
 
-// The RPC refuses to copy a menu into a branch that already has items rather than
-// duplicating every dish. Name the box to untick instead of the bare exception.
-const isMenuNotEmpty = (message: string) => message.includes('target_menu_not_empty');
+type CopyErrorCode = 'copyMenuNotEmpty' | 'copyNotAuthorized' | 'copyFailed';
 
-type CreateErrorCode = 'notAuthorized' | 'nameRequired' | 'slugTaken' | 'generic';
+/** copy_branch_setup refusals worth their own words; anything else is logged. The RPC refuses to
+ *  copy a menu into a branch that already has one rather than duplicating every dish, so that
+ *  answer names the box to untick. */
+function copyErrorCode(message: string): CopyErrorCode {
+  if (message.includes('target_menu_not_empty')) return 'copyMenuNotEmpty';
+  if (message.includes('not_authorized')) return 'copyNotAuthorized';
+  console.error(message);
+  return 'copyFailed';
+}
+
+type CreateErrorCode =
+  | 'notAuthorized'
+  | 'nameRequired'
+  | 'slugTaken'
+  | 'invalidSlug'
+  | 'invalidTimezone'
+  | 'invalidTaxRate'
+  | 'invalidBrand'
+  | 'generic';
 
 /** create_branch refusals that are not billing ones; anything unrecognised is logged. */
 function createErrorCode(err: { message: string; code?: string }): CreateErrorCode {
   if (err.message.includes('not_authorized')) return 'notAuthorized';
   if (err.message.includes('name_and_slug_required')) return 'nameRequired';
-  if (err.code === '23505' && err.message.includes('slug')) return 'slugTaken';
+  if (err.message.includes('slug_taken') || (err.code === '23505' && err.message.includes('slug'))) {
+    return 'slugTaken';
+  }
+  if (err.message.includes('invalid_slug')) return 'invalidSlug';
+  if (err.message.includes('invalid_timezone')) return 'invalidTimezone';
+  if (err.message.includes('invalid_tax_rate')) return 'invalidTaxRate';
+  if (err.message.includes('invalid_brand')) return 'invalidBrand';
   console.error(err.message);
   return 'generic';
 }
+
+/** A 0.0701 tax rate as "7.01%" in the viewer's language. */
+function formatTaxRate(rate: number, locale: string): string {
+  try {
+    return new Intl.NumberFormat(intlLocaleFor(isUiLocale(locale) ? locale : DEFAULT_UI_LOCALE), {
+      style: 'percent',
+      maximumFractionDigits: 3,
+    }).format(rate);
+  } catch {
+    return `${Math.round(rate * 100_000) / 1000}%`;
+  }
+}
+
+/** The next steps at a new branch, each a link to the screen that does it. `key` names
+ *  brands.created.todo.<key>; `path` is under /b/<new branch>. */
+const NEXT_STEPS: Array<{ key: 'pin' | 'tables' | 'tax' | 'paymentQr' | 'stock' | 'staff' | 'riders' | 'loyalty'; path: string }> = [
+  { key: 'pin', path: 'branch' },
+  { key: 'tables', path: 'tables' },
+  { key: 'tax', path: 'branch' },
+  { key: 'paymentQr', path: 'branch' },
+  { key: 'stock', path: 'inventory' },
+  { key: 'staff', path: 'staff' },
+  { key: 'riders', path: 'drivers' },
+  { key: 'loyalty', path: 'loyalty' },
+];
 
 function BranchCreator({
   restaurantId,
   brands,
   branches,
+  copyCaps,
   currentBranchId,
   onClose,
   onSaved,
@@ -582,14 +673,28 @@ function BranchCreator({
   restaurantId: string;
   brands: Brand[];
   branches: BranchRow[];
+  copyCaps: Record<string, CopyCaps>;
   currentBranchId: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const t = useTranslations('brands');
-  const activeBranches = React.useMemo(() => branches.filter((b) => b.is_active), [branches]);
+  const locale = useLocale();
+  // Only branches this viewer may copy the menu and settings from. An admin of one branch was
+  // offered every branch; picking another one let create_branch take a seat and the copy then
+  // fail with not_authorized.
+  const activeBranches = React.useMemo(
+    () => branches.filter((b) => b.is_active && copyCaps[b.id]?.menu && copyCaps[b.id]?.settings),
+    [branches, copyCaps],
+  );
+  const takenSlugs = React.useMemo(
+    () => new Set(branches.map((b) => b.slug).filter((s): s is string => !!s)),
+    [branches],
+  );
   const [name, setName] = React.useState('');
-  const [slug, setSlug] = React.useState('');
+  // Follows the name until the owner types a slug of their own.
+  const [slugInput, setSlugInput] = React.useState<string | null>(null);
+  const slug = slugInput ?? (name.trim() ? suggestSlug(name, takenSlugs) : '');
   const [address, setAddress] = React.useState('');
   // A new branch used to start from nothing: an empty menu, no hours (which counts as open
   // 24/7) and default payment settings, with the only copy tool hidden behind "Create a
@@ -601,32 +706,32 @@ function BranchCreator({
   const [copyMenu, setCopyMenu] = React.useState(true);
   const [copyHours, setCopyHours] = React.useState(true);
   const [copySettings, setCopySettings] = React.useState(true);
-  // Opening hours and "today" in reports are read in the branch's own zone, and every new
-  // branch used to start on America/New_York: a second branch of a Los Angeles shop opened
-  // three hours early. Follow the source branch until the owner picks a zone themselves.
-  const [timezone, setTimezone] = React.useState(() => source?.timezone ?? 'America/New_York');
-  const [timezoneTouched, setTimezoneTouched] = React.useState(false);
+  // Off by default: a second branch usually wants its own look, and the brand's colours already
+  // apply to a branch that sets none.
+  const [copyLook, setCopyLook] = React.useState(false);
+  // Off by default too: each branch runs its own loyalty programme, and a new one starts on the
+  // platform defaults with an empty rewards list unless the owner asks for a copy.
+  const [copyLoyaltyTicked, setCopyLoyalty] = React.useState(false);
+  // loyalty.manage at the source is its own capability; without it the option is not offered.
+  const canCopyLoyalty = !!source && !!copyCaps[source.id]?.loyalty;
+  const copyLoyalty = copyLoyaltyTicked && canCopyLoyalty;
+  // Opening hours, scheduling and "today" in reports are read in the branch's own zone. This
+  // used to follow the source branch, which is how a Bangkok branch ended up on America/Chicago;
+  // the device the owner is setting it up on is the better first guess.
+  const [timezone, setTimezone] = React.useState(
+    () => deviceTimeZone() ?? source?.timezone ?? 'America/New_York',
+  );
   const [brandId, setBrandId] = React.useState('');
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   // Set once create_branch has committed. From then on the dialog can only retry the copy:
   // pressing Create again would open a second branch and take a second seat.
-  const [created, setCreated] = React.useState<{ id: string | null } | null>(null);
+  const [created, setCreated] = React.useState<{ id: string | null; salesTaxRate: number | null } | null>(null);
   const [copied, setCopied] = React.useState<CopyResult | null>(null);
+  // Nothing left to do in the dialog but read what happened and what comes next.
+  const [finished, setFinished] = React.useState(false);
 
-  React.useEffect(() => {
-    if (!slug && name) setSlug(slugify(name));
-  }, [name, slug]);
-
-  const pickSource = (id: string) => {
-    setSourceId(id);
-    const next = activeBranches.find((b) => b.id === id);
-    // Once the branch exists its zone is fixed; picking another source for a retried copy
-    // must not change the locked field to a zone the branch was never given.
-    if (next && !timezoneTouched && !created) setTimezone(next.timezone);
-  };
-
-  const wantsCopy = !!source && (copyMenu || copyHours || copySettings);
+  const wantsCopy = !!source && (copyMenu || copyHours || copySettings || copyLook || copyLoyalty);
   // Once the branch exists, dismissing the dialog must still refresh the list behind it.
   const close = created ? onSaved : onClose;
 
@@ -634,32 +739,26 @@ function BranchCreator({
   // with nothing in it. It is separate from create so the owner can retry only the copy.
   const runCopy = async (targetId: string) => {
     if (!source || !wantsCopy) {
-      onSaved();
+      setCopied(null);
+      setFinished(true);
       return;
     }
     const supabase = getBrowserClient();
-    // copy_branch_setup is not in the generated types yet — thin typed escape.
-    const rpcAny = supabase.rpc.bind(supabase) as unknown as (
-      fn: string,
-      args?: Record<string, unknown>,
-    ) => Promise<{ data: unknown; error: { message: string } | null }>;
-    const { data, error: copyErr } = await rpcAny('copy_branch_setup', {
+    const { data, error: copyErr } = await supabase.rpc('copy_branch_setup', {
       p_source_branch_id: source.id,
       p_target_branch_id: targetId,
       p_copy_menu: copyMenu,
       p_copy_hours: copyHours,
       p_copy_settings: copySettings,
+      p_copy_look: copyLook,
+      p_copy_loyalty: copyLoyalty,
     });
     if (copyErr) {
-      console.error(copyErr.message);
-      setError(
-        isMenuNotEmpty(copyErr.message)
-          ? t('creator.errors.copyMenuNotEmpty', { source: source.name })
-          : t('creator.errors.copyFailed', { source: source.name }),
-      );
+      setError(t(`creator.errors.${copyErrorCode(copyErr.message)}`, { source: source.name }));
       return;
     }
     setCopied(readCopyResult(data));
+    setFinished(true);
   };
 
   const create = async () => {
@@ -668,9 +767,9 @@ function BranchCreator({
     const supabase = getBrowserClient();
     const { data, error: rpcErr } = await supabase.rpc('create_branch', {
       p_restaurant_id: restaurantId,
-      p_name: name,
-      p_slug: slug || slugify(name),
-      p_address: address || undefined,
+      p_name: name.trim(),
+      p_slug: slugify(slug) || suggestSlug(name, takenSlugs),
+      p_address: address.trim() || undefined,
       p_timezone: timezone,
       p_brand_id: brandId || undefined,
     });
@@ -688,18 +787,20 @@ function BranchCreator({
       }
       return;
     }
-    const newId = (data as { branch_id?: unknown } | null)?.branch_id;
+    const reply = (data ?? {}) as { branch_id?: unknown; sales_tax_rate?: unknown };
+    const newId = reply.branch_id;
     if (typeof newId !== 'string') {
       setSaving(false);
       if (!wantsCopy) {
         onSaved();
         return;
       }
-      setCreated({ id: null });
+      setCreated({ id: null, salesTaxRate: null });
       setError(t('creator.errors.noBranchId'));
       return;
     }
-    setCreated({ id: newId });
+    const rate = Number(reply.sales_tax_rate);
+    setCreated({ id: newId, salesTaxRate: reply.sales_tax_rate != null && Number.isFinite(rate) ? rate : null });
     await runCopy(newId);
     setSaving(false);
   };
@@ -713,44 +814,92 @@ function BranchCreator({
     setSaving(false);
   };
 
+  const taxRate = copied?.tax_copied ? copied.sales_tax_rate : (created?.salesTaxRate ?? null);
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-6"
       onClick={close}
     >
-      <Card className="w-full max-w-lg space-y-4 overflow-y-auto p-6 sm:max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
-        {created?.id && copied ? (
+      <Card className="max-h-[92dvh] w-full max-w-lg space-y-4 overflow-y-auto p-6 sm:max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
+        {created?.id && finished ? (
           <>
             <h2 className="font-display text-xl font-semibold">{t('created.title')}</h2>
             <div className="space-y-1 text-sm">
-              <p>
-                {source
-                  ? t('created.copiedFrom', { name, source: source.name })
-                  : t('created.copiedFromUnknown', { name })}
+              {copied && source ? (
+                <>
+                  <p>{t('created.copiedFrom', { name, source: source.name })}</p>
+                  <ul className="list-disc space-y-0.5 pl-5 text-muted-foreground">
+                    {copyMenu && (
+                      <li>
+                        {t('created.menu', {
+                          categories: copied.categories_copied,
+                          items: copied.items_copied,
+                          groups: copied.modifier_groups_copied,
+                        })}
+                      </li>
+                    )}
+                    {copyMenu && copied.combos_copied > 0 && (
+                      <li>{t('created.combos', { count: copied.combos_copied })}</li>
+                    )}
+                    {copyHours && <li>{t('created.hours', { count: copied.hours_copied })}</li>}
+                    {copySettings && (
+                      <li>
+                        {copied.settings_copied
+                          ? t('created.settingsCopied')
+                          : t('created.settingsNone')}
+                      </li>
+                    )}
+                    {copySettings && copied.schedule_windows_copied > 0 && (
+                      <li>{t('created.scheduleWindows', { count: copied.schedule_windows_copied })}</li>
+                    )}
+                    {copyLook && copied.look_copied && <li>{t('created.lookCopied')}</li>}
+                    {copyLoyalty && copied.loyalty_copied && (
+                      <li>{t('created.loyaltyCopied', { count: copied.rewards_copied })}</li>
+                    )}
+                  </ul>
+                </>
+              ) : (
+                <p>{t('created.empty', { name })}</p>
+              )}
+            </div>
+            {copied?.transfer_needs_qr && (
+              <p className="flex items-start gap-2 rounded-xl bg-warning/10 px-3 py-2 text-sm">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+                <span>{t('created.transferOff')}</span>
               </p>
-              <ul className="list-disc space-y-0.5 pl-5 text-muted-foreground">
-                {copyMenu && (
-                  <li>
-                    {t('created.menu', {
-                      categories: copied.categories_copied,
-                      items: copied.items_copied,
-                      groups: copied.modifier_groups_copied,
-                    })}
+            )}
+            {copied && copied.rewards_skipped > 0 && (
+              <p className="flex items-start gap-2 rounded-xl bg-muted px-3 py-2 text-sm">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                <span>{t('created.rewardsSkipped', { count: copied.rewards_skipped })}</span>
+              </p>
+            )}
+            {copied && copied.stock_tracking_off > 0 && (
+              <p className="flex items-start gap-2 rounded-xl bg-muted px-3 py-2 text-sm">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                <span>{t('created.stockOff', { count: copied.stock_tracking_off })}</span>
+              </p>
+            )}
+            <div className="rounded-xl bg-muted px-3 py-2 text-sm">
+              <p className="font-medium">{t('created.todoTitle', { name })}</p>
+              <ul className="mt-1 list-disc space-y-1 pl-5 text-muted-foreground">
+                {NEXT_STEPS.map((step) => (
+                  <li key={step.key}>
+                    <Link
+                      href={`/b/${created.id}/${step.path}`}
+                      className="font-medium text-primary hover:underline"
+                    >
+                      {step.key === 'tax'
+                        ? t('created.todo.tax', {
+                            rate: taxRate != null ? formatTaxRate(taxRate, locale) : '0%',
+                          })
+                        : t(`created.todo.${step.key}`)}
+                    </Link>
                   </li>
-                )}
-                {copyHours && <li>{t('created.hours', { count: copied.hours_copied })}</li>}
-                {copySettings && (
-                  <li>
-                    {copied.settings_copied
-                      ? t('created.settingsCopied')
-                      : t('created.settingsNone')}
-                  </li>
-                )}
+                ))}
               </ul>
             </div>
-            <p className="rounded-xl bg-muted px-3 py-2 text-xs text-muted-foreground">
-              {t('created.todo')}
-            </p>
             <div className="flex justify-end gap-2">
               <Button variant="ghost" onClick={onSaved}>{t('created.done')}</Button>
               <Link href={`/b/${created.id}/branch`}>
@@ -763,10 +912,18 @@ function BranchCreator({
             <h2 className="font-display text-xl font-semibold">{t('creator.title')}</h2>
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label={t('creator.fields.name')}>
-                <input value={name} onChange={(e) => setName(e.target.value)} disabled={!!created} className="input disabled:opacity-60" placeholder={t('creator.fields.namePlaceholder')} autoFocus />
+                <input value={name} onChange={(e) => setName(e.target.value)} disabled={!!created} maxLength={120} className="input disabled:opacity-60" placeholder={t('creator.fields.namePlaceholder')} autoFocus />
               </Field>
               <Field label={t('creator.fields.slug')}>
-                <input value={slug} onChange={(e) => setSlug(slugify(e.target.value))} disabled={!!created} className="input disabled:opacity-60" placeholder={t('creator.fields.slugPlaceholder')} />
+                <input
+                  value={slug}
+                  onChange={(e) => setSlugInput(typedSlug(e.target.value))}
+                  disabled={!!created}
+                  dir="ltr"
+                  className="input disabled:opacity-60"
+                  placeholder={t('creator.fields.slugPlaceholder')}
+                />
+                <span className="mt-1 block text-xs text-muted-foreground">{t('creator.fields.slugHint')}</span>
               </Field>
               <div className="sm:col-span-2">
                 <Field label={t('creator.fields.address')}>
@@ -774,24 +931,13 @@ function BranchCreator({
                 </Field>
               </div>
               <Field label={t('creator.fields.timezone')}>
-                <select
+                <TimezoneSelect
                   value={timezone}
-                  onChange={(e) => {
-                    setTimezone(e.target.value);
-                    setTimezoneTouched(true);
-                  }}
+                  onChange={setTimezone}
                   disabled={!!created}
-                  className="input disabled:opacity-60"
-                >
-                  {/* A source branch outside the US list keeps its own zone selectable, so
-                      defaulting to it never silently falls back to New York. */}
-                  {!US_TIMEZONES.some((z) => z.tz === timezone) && (
-                    <option value={timezone}>{timezone}</option>
-                  )}
-                  {US_TIMEZONES.map((z) => (
-                    <option key={z.tz} value={z.tz}>{t(`creator.timezones.${z.key}`)}</option>
-                  ))}
-                </select>
+                  className="h-12 w-full rounded-[0.875rem] border border-border bg-background px-4 text-base outline-none focus-visible:border-primary disabled:opacity-60"
+                />
+                <span className="mt-1 block text-xs text-muted-foreground">{t('creator.fields.timezoneHint')}</span>
               </Field>
               <Field label={t('creator.fields.brand')}>
                 <select value={brandId} onChange={(e) => setBrandId(e.target.value)} disabled={!!created} className="input disabled:opacity-60">
@@ -803,7 +949,7 @@ function BranchCreator({
               </Field>
               <div className="space-y-2 sm:col-span-2">
                 <Field label={t('creator.fields.startFrom')}>
-                  <select value={sourceId} onChange={(e) => pickSource(e.target.value)} disabled={saving} className="input disabled:opacity-60">
+                  <select value={sourceId} onChange={(e) => setSourceId(e.target.value)} disabled={saving} className="input disabled:opacity-60">
                     <option value="">{t('creator.fields.startFromNothing')}</option>
                     {activeBranches.map((b) => (
                       <option key={b.id} value={b.id}>{b.name}</option>
@@ -833,6 +979,28 @@ function BranchCreator({
                         <span className="block text-xs text-muted-foreground">{t('creator.copy.settingsHint')}</span>
                       </span>
                     </label>
+                    <label className="flex items-start gap-2">
+                      <input type="checkbox" checked={copyLook} onChange={(e) => setCopyLook(e.target.checked)} disabled={saving} className="mt-1" />
+                      <span>
+                        {t('creator.copy.look')}
+                        <span className="block text-xs text-muted-foreground">{t('creator.copy.lookHint')}</span>
+                      </span>
+                    </label>
+                    {canCopyLoyalty && (
+                      <label className="flex items-start gap-2">
+                        <input type="checkbox" checked={copyLoyaltyTicked} onChange={(e) => setCopyLoyalty(e.target.checked)} disabled={saving} className="mt-1" />
+                        <span>
+                          {t('creator.copy.loyalty')}
+                          <span className="block text-xs text-muted-foreground">{t('creator.copy.loyaltyHint')}</span>
+                        </span>
+                      </label>
+                    )}
+                    {/* The payment QR is a bank account. Copying it sent the new branch's
+                        transfers to the other branch's account, so it never travels. */}
+                    <p className="flex items-start gap-2 rounded-lg bg-warning/10 px-2.5 py-2 text-xs text-foreground">
+                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
+                      <span>{t('creator.copy.qrNever')}</span>
+                    </p>
                     <p className="text-xs text-muted-foreground">{t('creator.copy.notCopied')}</p>
                   </div>
                 )}
@@ -854,7 +1022,7 @@ function BranchCreator({
                   variant="gradient"
                   onClick={create}
                   loading={saving}
-                  disabled={!name || !!created}
+                  disabled={!name.trim() || !!created}
                   leftIcon={<Plus className="h-4 w-4" />}
                 >
                   {created ? t('creator.copying') : t('creator.create')}
@@ -953,7 +1121,7 @@ function BrandEditor({
       const payload = {
         restaurant_id: restaurantId,
         name,
-        slug: slug || slugify(name),
+        slug: slugify(slug) || slugify(name) || brand.slug,
         theme,
         logo_url: logoUrl || null,
         favicon_url: icons.faviconUrl,
@@ -1034,7 +1202,7 @@ function BrandEditor({
           <Field label={t('editor.slug')}>
             <input
               value={slug}
-              onChange={(e) => setSlug(slugify(e.target.value))}
+              onChange={(e) => setSlug(typedSlug(e.target.value))}
               className="input"
               placeholder={t('editor.slugPlaceholder')}
             />

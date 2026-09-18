@@ -4,40 +4,45 @@ import * as React from 'react';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Copy, Edit3, LayoutGrid, Move, Plus, Save, Sparkles, Tags, Trash2, X } from 'lucide-react';
 import type { MenuCategory, MenuItem } from '@favornoms/shared';
-import { formatCurrency } from '@favornoms/shared';
+import { DEFAULT_UI_LOCALE, formatCurrency, isUiLocale } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
 import { listCategories, listMenuItems } from '@favornoms/database/queries';
 import { Badge, Button, Card, IconButton, Sheet, useConfirm } from '@favornoms/ui';
+import {
+  DEFAULT_LOW_STOCK_THRESHOLD,
+  formatSoldOutUntil,
+  stockState,
+} from '../../inventory/_components/stock-model';
 import { CATEGORY_EMOJIS, CategoryManager } from './category-manager';
 import { MenuReorder } from './menu-reorder';
 import { ItemModifierEditor, type ItemModifierEditorHandle } from './item-modifier-editor';
 import { menuErrorKey } from './menu-errors';
+import { MENU_STOCK_COLUMNS, type MenuItemStockRow } from './menu-stock';
 
-/**
- * The stock columns as the database holds them. They are not part of MenuItem: the
- * storefront only needs `outOfStock` and the mapper in @favornoms/database throws the
- * rest away. The merchant needs the raw numbers — after unticking Track stock the card
- * has to visibly stop saying "Sold out" — so the menu page reads them alongside the
- * items and hands them straight over.
- */
-export interface MenuItemStockRow {
-  id: string;
-  track_stock: boolean | null;
-  stock_quantity: number | null;
-  low_stock_threshold: number | null;
-}
+export type { MenuItemStockRow } from './menu-stock';
 
 interface ItemStock {
   trackStock: boolean;
   stockQuantity: number | null;
   lowStockThreshold: number;
+  /** menu_items.sold_out_until as stored; stockState() decides whether it still holds. */
+  soldOutUntil: string | null;
+  station: string | null;
 }
 
-/** low_stock_threshold is `integer NOT NULL default 5`; the default is mirrored here. */
-const DEFAULT_LOW_STOCK_THRESHOLD = 5;
+/**
+ * Station codes the kitchen board filters on (the same list menu import and the CSV use). The
+ * board builds its station pills from the dishes' stations, so a branch whose menu was built by
+ * hand — Food Thai Thai — had no way to get any.
+ */
+const STATION_CODES = ['hot', 'cold', 'bar', 'dessert', 'expo'] as const;
+
+function isStationCode(value: string): value is (typeof STATION_CODES)[number] {
+  return (STATION_CODES as readonly string[]).includes(value);
+}
 
 function toStockMap(rows: MenuItemStockRow[]): Record<string, ItemStock> {
   const map: Record<string, ItemStock> = {};
@@ -46,6 +51,8 @@ function toStockMap(rows: MenuItemStockRow[]): Record<string, ItemStock> {
       trackStock: row.track_stock === true,
       stockQuantity: row.stock_quantity ?? null,
       lowStockThreshold: row.low_stock_threshold ?? DEFAULT_LOW_STOCK_THRESHOLD,
+      soldOutUntil: row.sold_out_until ?? null,
+      station: row.station ?? null,
     };
   }
   return map;
@@ -58,6 +65,9 @@ interface SavedItemSummary {
   trackStock: boolean;
   stockQuantity: number | null;
   lowStockThreshold: number;
+  station: string | null;
+  /** set_stock lifted a kitchen 86 on the way (a count above 0). */
+  cleared86: boolean;
   /** The item itself saved, but something attached to it did not. Already translated. */
   warning?: string;
 }
@@ -67,6 +77,10 @@ interface Props {
   categories: MenuCategory[];
   items: MenuItem[];
   stockRows: MenuItemStockRow[];
+  /** branches.timezone, for "Sold out until …". */
+  timezone: string;
+  /** branches.settings.currency. */
+  currency: string;
 }
 
 /** Logs the raw failure and returns the translated message the merchant sees instead. */
@@ -83,12 +97,17 @@ export function MenuManager({
   categories: initCategories,
   items: initItems,
   stockRows,
+  timezone,
+  currency,
 }: Props) {
   const t = useTranslations('menu');
+  const rawLocale = useLocale();
+  const locale = isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE;
   const errorText = useMenuErrorText();
   const [items, setItems] = React.useState(initItems);
   const [categories, setCategories] = React.useState(initCategories);
   const [stock, setStock] = React.useState(() => toStockMap(stockRows));
+  const [busyIds, setBusyIds] = React.useState<string[]>([]);
   const [editing, setEditing] = React.useState<MenuItem | null>(null);
   const [creating, setCreating] = React.useState(false);
   const [managingCategories, setManagingCategories] = React.useState(false);
@@ -120,10 +139,7 @@ export function MenuManager({
         // Hidden dishes included, as on first load: this is the screen that switches them back on.
         listMenuItems(supabase, branchId, { includeInactive: true }),
         listCategories(supabase, branchId),
-        supabase
-          .from('menu_items')
-          .select('id, track_stock, stock_quantity, low_stock_threshold')
-          .eq('branch_id', branchId),
+        supabase.from('menu_items').select(MENU_STOCK_COLUMNS).eq('branch_id', branchId),
       ]);
       if (stockRes.error) throw stockRes.error;
       if (seq !== refreshSeq.current) return;
@@ -153,6 +169,9 @@ export function MenuManager({
           trackStock: saved.trackStock,
           stockQuantity: saved.trackStock ? saved.stockQuantity : null,
           lowStockThreshold: saved.lowStockThreshold,
+          // A count above 0 (set_stock) lifts an 86; otherwise it stands until the reload says.
+          soldOutUntil: saved.cleared86 ? null : (cur[savedId]?.soldOutUntil ?? null),
+          station: saved.station,
         },
       }));
     }
@@ -197,6 +216,38 @@ export function MenuManager({
     // reaches customers. Say so, and say how to publish it — the badge alone did not.
     setNotice(t('notices.copied'));
     await refresh();
+  };
+
+  // A dish the kitchen 86'd stayed "Out of stock" for the rest of the day with nothing in the
+  // back office saying so or undoing it; the only way back was the kitchen board's 5-second toast.
+  const handleBackOnSale = async (target: MenuItem) => {
+    setBusyIds((cur) => [...cur, target.id]);
+    const { error } = await getBrowserClient().rpc('set_item_86', {
+      p_menu_item_id: target.id,
+      p_sold_out: false,
+    });
+    setBusyIds((cur) => cur.filter((id) => id !== target.id));
+    if (error) {
+      setProblem(t('notices.backOnSaleFailed', { name: target.name, reason: errorText('set_item_86', error) }));
+      return;
+    }
+    setProblem(null);
+    const cur = stock[target.id];
+    // Lifting the 86 does not conjure stock: a counted dish at 0 is still sold out.
+    const emptyShelf = !!cur?.trackStock && (cur.stockQuantity ?? 0) <= 0;
+    setStock((s) => {
+      const row = s[target.id];
+      return row ? { ...s, [target.id]: { ...row, soldOutUntil: null } } : s;
+    });
+    setItems((curr) =>
+      curr.map((i) => (i.id === target.id ? { ...i, soldOutUntil: null, outOfStock: emptyShelf } : i)),
+    );
+    setNotice(
+      emptyShelf
+        ? t('notices.backOnSaleEmpty', { name: target.name })
+        : t('notices.backOnSale', { name: target.name }),
+    );
+    void refresh();
   };
 
   // One tap from the grid. The update asks for the row back: an RLS-denied update matches no
@@ -360,7 +411,7 @@ export function MenuManager({
                         <div className="flex items-start justify-between gap-2">
                           <h3 className="line-clamp-2 font-semibold leading-tight">{item.name}</h3>
                           <span className="shrink-0 font-display text-base font-bold text-primary">
-                            {formatCurrency(item.price)}
+                            {formatCurrency(item.price, currency)}
                           </span>
                         </div>
                         <div className="flex flex-wrap items-center gap-1.5">
@@ -381,7 +432,13 @@ export function MenuManager({
                               </button>
                             </>
                           )}
-                          <StockBadge stock={stock[item.id]} />
+                          <StockBadge
+                            stock={stock[item.id]}
+                            timezone={timezone}
+                            locale={locale}
+                            busy={busyIds.includes(item.id)}
+                            onBackOnSale={() => void handleBackOnSale(item)}
+                          />
                         </div>
                         <div className="mt-auto flex items-center gap-1">
                           <IconButton label={t('card.edit')} size="sm" onClick={() => setEditing(item)}>
@@ -440,6 +497,8 @@ export function MenuManager({
           categories={categories}
           item={editing}
           initialStock={editing ? stock[editing.id] : undefined}
+          timezone={timezone}
+          locale={locale}
           onCategoryCreated={(cat) => setCategories((cur) => [...cur, cat])}
           onSaved={handleSaved}
         />
@@ -450,17 +509,55 @@ export function MenuManager({
 
 /**
  * What the merchant needs to see from the grid: whether this item is being counted,
- * and whether it has run out. When Track stock goes off the badge disappears — which
- * is the only thing on the card that moves after that save.
+ * whether it has run out, and whether the kitchen has 86'd it — with the way back on
+ * sale right next to it. An 86 shows whether or not the dish is counted: it was the half
+ * of "sold out" this card never showed, so a dish with 29 on the shelf read "29 left"
+ * here while every diner saw "Out of stock". When Track stock goes off the count badge
+ * disappears — which is the only thing on the card that moves after that save.
  */
-function StockBadge({ stock }: { stock: ItemStock | undefined }) {
+function StockBadge({
+  stock,
+  timezone,
+  locale,
+  busy,
+  onBackOnSale,
+}: {
+  stock: ItemStock | undefined;
+  timezone: string;
+  locale: string;
+  busy: boolean;
+  onBackOnSale: () => void;
+}) {
   const t = useTranslations('menu');
-  if (!stock?.trackStock) return null;
-  const left = stock.stockQuantity ?? 0;
+  if (!stock) return null;
+  const st = stockState({
+    track_stock: stock.trackStock,
+    stock_quantity: stock.stockQuantity,
+    low_stock_threshold: stock.lowStockThreshold,
+    sold_out_until: stock.soldOutUntil,
+  });
+  if (st.soldOutUntil) {
+    return (
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Badge variant="danger">
+          {t('card.soldOutUntil', { time: formatSoldOutUntil(st.soldOutUntil, timezone, locale) })}
+        </Badge>
+        <button
+          type="button"
+          onClick={onBackOnSale}
+          disabled={busy}
+          className="focus-ring rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary hover:bg-primary/20 disabled:opacity-50"
+        >
+          {t('card.backOnSale')}
+        </button>
+      </div>
+    );
+  }
+  if (st.count === null) return null;
   return (
     <div className="flex">
-      <Badge variant={left <= 0 ? 'danger' : left <= stock.lowStockThreshold ? 'warning' : 'muted'}>
-        {left <= 0 ? t('card.soldOut') : t('card.stockLeft', { count: left })}
+      <Badge variant={st.isSoldOut ? 'danger' : st.isLow ? 'warning' : 'muted'}>
+        {st.isSoldOut ? t('card.soldOut') : t('card.stockLeft', { count: st.count })}
       </Badge>
     </div>
   );
@@ -483,13 +580,15 @@ const COMMON_ALLERGENS = [
 ] as const;
 
 function ItemEditor({
-  branchId, categories, item, initialStock, onSaved, onCategoryCreated,
+  branchId, categories, item, initialStock, timezone, locale, onSaved, onCategoryCreated,
 }: {
   branchId: string;
   categories: MenuCategory[];
   item: MenuItem | null;
   /** Stock as the page last read it, so the checkbox opens in the right position. */
   initialStock: ItemStock | undefined;
+  timezone: string;
+  locale: string;
   onSaved: (saved: SavedItemSummary) => void;
   onCategoryCreated: (cat: MenuCategory) => void;
 }) {
@@ -517,6 +616,21 @@ function ItemEditor({
   );
   /** Set the moment the merchant moves the checkbox, so a late read cannot undo it. */
   const stockTouched = React.useRef(false);
+  /** Set when the merchant types a count: only then is it written, through set_stock. */
+  const countTouched = React.useRef(false);
+  /**
+   * The stock the database last reported. A save compares against it instead of writing the
+   * editor's copy back: every sale moves the count, and writing an untouched count back used
+   * to undo the sales made while the sheet was open.
+   */
+  const loadedStock = React.useRef({
+    trackStock: initialStock?.trackStock ?? false,
+    stockQuantity: initialStock?.stockQuantity ?? null,
+  });
+  const [soldOutUntil, setSoldOutUntil] = React.useState<string | null>(initialStock?.soldOutUntil ?? null);
+  const [station, setStation] = React.useState(initialStock?.station ?? '');
+  /** Written only when the merchant changes it, like `visible`. */
+  const stationTouched = React.useRef(false);
   const [uploading, setUploading] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -582,16 +696,26 @@ function ItemEditor({
     const supabase = getBrowserClient();
     void supabase
       .from('menu_items')
-      .select('track_stock, stock_quantity, low_stock_threshold')
+      .select('track_stock, stock_quantity, low_stock_threshold, sold_out_until, station')
       .eq('id', item.id)
       .maybeSingle()
       .then(({ data, error: readErr }) => {
-        if (cancelled || stockTouched.current) return;
+        if (cancelled) return;
         if (readErr) {
+          if (stockTouched.current || countTouched.current) return;
           setError(t('editor.stockReadFailed', { reason: errorText('read item stock', readErr) }));
           return;
         }
         if (!data) return;
+        // What the database holds is recorded whatever the merchant has touched: the save
+        // compares against it.
+        loadedStock.current = {
+          trackStock: data.track_stock === true,
+          stockQuantity: data.stock_quantity ?? null,
+        };
+        setSoldOutUntil(data.sold_out_until ?? null);
+        if (!stationTouched.current) setStation(data.station ?? '');
+        if (stockTouched.current || countTouched.current) return;
         setTrackStock(data.track_stock === true);
         setStockQuantity(String(data.stock_quantity ?? 0));
         setLowStockThreshold(String(data.low_stock_threshold ?? DEFAULT_LOW_STOCK_THRESHOLD));
@@ -639,6 +763,21 @@ function ItemEditor({
         return;
       }
     }
+    // A tracked dish always has a count (menu_items_tracked_stock_has_count); a blank one used to
+    // be saved as 0, which put the dish on sale as "Sold out".
+    if (trackStock && stockQuantity.trim() === '') {
+      setError(t('editor.stockRequired'));
+      return;
+    }
+    const count = Number(stockQuantity || 0);
+    const threshold = Number(lowStockThreshold || 0);
+    const loaded = loadedStock.current;
+    // An existing dish's count changes only through set_stock, and only when the merchant gave
+    // one: switching tracking on, or typing a count. set_stock logs it in stock_count_log with
+    // the previous figure and, above 0, lifts a kitchen 86. Writing stock_quantity straight
+    // from this sheet did neither, and saving a price change wrote back the count the sheet
+    // opened with over every sale made since.
+    const countViaSetStock = !!item && trackStock && (!loaded.trackStock || countTouched.current);
     setSaving(true);
     try {
       const supabase = getBrowserClient();
@@ -652,10 +791,14 @@ function ItemEditor({
         is_recommended: recommended,
         is_new: isNew,
         ...(item && !visibleTouched.current ? {} : { is_active: visible }),
-        track_stock: trackStock,
-        stock_quantity: trackStock ? Number(stockQuantity) : null,
-        // low_stock_threshold is NOT NULL (default 5) — never send null, or inserts fail.
-        low_stock_threshold: trackStock ? Number(lowStockThreshold) : DEFAULT_LOW_STOCK_THRESHOLD,
+        ...(item && !stationTouched.current ? {} : { station: station || null }),
+        // A new dish is inserted with its count in one statement: nothing has been sold yet.
+        ...(!item ? { track_stock: trackStock, stock_quantity: trackStock ? count : null } : {}),
+        // Tracking off: no count (the check constraint's other half).
+        ...(item && !trackStock && loaded.trackStock ? { track_stock: false, stock_quantity: null } : {}),
+        // low_stock_threshold is NOT NULL (default 5) — never send null. Left alone while tracking
+        // is off, so switching it back on restores the merchant's own level.
+        ...(trackStock ? { low_stock_threshold: threshold } : {}),
         allergens,
       };
       // Both branches ask for the id back. The insert needs it to attach any option
@@ -696,12 +839,33 @@ function ItemEditor({
           warning = t('editor.optionsWarning', { name, reason: persistRes.error });
         }
       }
+      // What the card should show until the reload lands.
+      let savedTracking = trackStock;
+      let savedCount: number | null = trackStock ? (item ? loaded.stockQuantity : count) : null;
+      let cleared86 = false;
+      if (countViaSetStock && item) {
+        const { data: counted, error: countErr } = await supabase.rpc('set_stock', {
+          p_menu_item_id: item.id,
+          p_counted_qty: count,
+        });
+        if (countErr) {
+          // The rest of the dish is saved; the count is not, and the banner says so.
+          warning = t('editor.stockNotSaved', { name, reason: errorText('set_stock', countErr) });
+          savedTracking = loaded.trackStock;
+          savedCount = loaded.trackStock ? loaded.stockQuantity : null;
+        } else {
+          savedCount = count;
+          cleared86 = (counted as { cleared_86?: boolean } | null)?.cleared_86 === true;
+        }
+      }
       onSaved({
         id: savedId,
         name,
-        trackStock,
-        stockQuantity: trackStock ? Number(stockQuantity) : null,
-        lowStockThreshold: trackStock ? Number(lowStockThreshold) : DEFAULT_LOW_STOCK_THRESHOLD,
+        trackStock: savedTracking,
+        stockQuantity: savedCount,
+        lowStockThreshold: trackStock ? threshold : Number(lowStockThreshold || DEFAULT_LOW_STOCK_THRESHOLD),
+        station: station || null,
+        cleared86,
         warning,
       });
     } catch (err) {
@@ -798,6 +962,26 @@ function ItemEditor({
           required
           className="input"
         />
+      </Field>
+      <Field label={t('editor.station')}>
+        <select
+          value={station}
+          onChange={(e) => {
+            stationTouched.current = true;
+            setStation(e.target.value);
+          }}
+          className="input"
+        >
+          <option value="">{t('editor.stationNone')}</option>
+          {STATION_CODES.map((code) => (
+            <option key={code} value={code}>
+              {t(`stations.${code}`)}
+            </option>
+          ))}
+          {/* A station the list does not know (an older import) is kept as it was, not cleared. */}
+          {station && !isStationCode(station) && <option value={station}>{station}</option>}
+        </select>
+        <p className="mt-1 text-xs text-muted-foreground">{t('editor.stationHint')}</p>
       </Field>
       <Field label={t('editor.description')}>
         <textarea
@@ -906,6 +1090,11 @@ function ItemEditor({
               // Claim the value for the merchant before anything else can set it.
               stockTouched.current = true;
               setTrackStock(e.target.checked);
+              // Starting to count asks for a count: a pre-filled 0 made the dish sold out the
+              // moment it was saved.
+              if (e.target.checked && !loadedStock.current.trackStock && !countTouched.current) {
+                setStockQuantity('');
+              }
             }}
           />
           {t('editor.trackStock')}
@@ -913,10 +1102,31 @@ function ItemEditor({
         <p className="text-xs text-muted-foreground">
           {trackStock ? t('editor.trackStockOnHint') : t('editor.trackStockOffHint')}
         </p>
+        {(() => {
+          const lifts = stockState({
+            track_stock: false,
+            stock_quantity: null,
+            low_stock_threshold: null,
+            sold_out_until: soldOutUntil,
+          }).soldOutUntil;
+          return lifts ? (
+            <p className="rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger">
+              {t('editor.soldOutUntil', { time: formatSoldOutUntil(lifts, timezone, locale) })}
+            </p>
+          ) : null;
+        })()}
         {trackStock && (
           <div className="grid grid-cols-2 gap-2">
             <Field label={t('editor.currentStock')}>
-              <input value={stockQuantity} onChange={(e) => setStockQuantity(e.target.value.replace(/\D/g, ''))} className="input" inputMode="numeric" />
+              <input
+                value={stockQuantity}
+                onChange={(e) => {
+                  countTouched.current = true;
+                  setStockQuantity(e.target.value.replace(/\D/g, ''));
+                }}
+                className="input"
+                inputMode="numeric"
+              />
             </Field>
             <Field label={t('editor.lowStockAt')}>
               <input value={lowStockThreshold} onChange={(e) => setLowStockThreshold(e.target.value.replace(/\D/g, ''))} className="input" inputMode="numeric" />

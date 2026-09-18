@@ -85,6 +85,7 @@
     "awaitingUpload": "Đang chờ tải lên",
     "listError": "Không đọc được giấy tờ của tài xế. Hãy đóng lại và thử lại.",
     "forbidden": "Bạn không có quyền xem xét giấy tờ tài xế. Chỉ chủ sở hữu hoặc quản lý mới làm được.",
+    "sharedForbidden": "Tài xế này cũng làm việc với một chi nhánh bạn không quản lý, nên quản trị viên nền tảng hoặc chủ sở hữu của từng chi nhánh đó phải quyết định.",
     "saveFailed": "Không lưu được kết quả xem xét giấy tờ. Hãy thử lại.",
     "rejectHint": "Từ chối sẽ báo cho tài xế rằng cần thay một giấy tờ, nhưng không nói là giấy tờ nào. Để nêu lý do, hãy từ chối đơn đăng ký của họ kèm lý do — nội dung đó sẽ hiện trong ứng dụng của họ.",
     "reject": "Từ chối",

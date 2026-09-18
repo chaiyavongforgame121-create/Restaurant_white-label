@@ -80,7 +80,7 @@
       "faqs": {
         "loyaltyPoints": {
           "q": "¿Cómo funcionan los puntos?",
-          "a": "Ganas puntos con cada pedido completado. Cada restaurante define cuántos puntos se ganan, sus niveles y sus recompensas; los tuyos aparecen en Cuenta → Puntos y recompensas, donde también eliges la recompensa que usarás al pagar. Una recompensa por pedido."
+          "a": "Ganas puntos con cada pedido completado. Cada sucursal define cuántos puntos se ganan, sus niveles y sus recompensas, y los puntos ganados en una sucursal solo se pueden usar en esa sucursal; los tuyos aparecen en Cuenta → Puntos y recompensas, donde también eliges la recompensa que usarás al pagar. Una recompensa por pedido."
         },
         "usePromoCode": {
           "q": "¿Cómo uso un código promocional?",

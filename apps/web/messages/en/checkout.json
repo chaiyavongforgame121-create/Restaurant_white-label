@@ -147,6 +147,7 @@
     "errors": {
       "invalidCode": "That promo code isn’t valid.",
       "exhausted": "This promo code has reached its limit.",
+      "unavailable": "This promo code can’t be used right now.",
       "minSubtotal": "Spend at least {amount} to use this code.",
       "minSubtotalUnknown": "Your order is below the minimum for this code.",
       "perCustomerLimit": "You’ve already used this code as many times as it allows."

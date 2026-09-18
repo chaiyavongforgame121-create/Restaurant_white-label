@@ -84,14 +84,14 @@ export function useCartReprice(branchId: string, storefrontVersion: number): Car
         itemIds.length
           ? supabase
               .from('menu_items')
-              .select('id, price, is_active, track_stock, stock_quantity, sold_out_until')
+              .select('id, price, is_active, out_of_stock, sold_out_until')
               .eq('branch_id', branchId)
               .in('id', itemIds)
           : null,
         comboIds.length
           ? supabase
               .from('v_active_combos')
-              .select('id, total_price')
+              .select('id, total_price, is_available')
               .eq('branch_id', branchId)
               .in('id', comboIds)
           : null,
@@ -126,7 +126,7 @@ export function useCartReprice(branchId: string, storefrontVersion: number): Car
       for (const id of itemIds) live.set(id, { price: 0, available: false });
       for (const row of itemRows?.data ?? []) {
         const soldOut =
-          (row.track_stock === true && (row.stock_quantity ?? 0) <= 0) ||
+          row.out_of_stock === true ||
           (!!row.sold_out_until && new Date(row.sold_out_until).getTime() > now);
         live.set(row.id, {
           price: discounted.get(row.id) ?? Number(row.price),
@@ -136,10 +136,12 @@ export function useCartReprice(branchId: string, storefrontVersion: number): Car
       for (const id of comboIds) live.set(id, { price: 0, available: false });
       for (const row of comboRows?.data ?? []) {
         if (!row.id) continue;
-        // v_active_combos only lists live combos, so being in it IS availability. A row with
-        // no price is unreadable rather than gone — leave that line alone.
+        // v_active_combos lists only combos on sale, and says whether each can be made right now:
+        // is_available is false while any dish in it is switched off, 86'd or short of stock,
+        // which place-order refuses like the sold-out dish itself. A row with no price is
+        // unreadable rather than gone — leave that line alone.
         if (row.total_price == null) live.delete(row.id);
-        else live.set(row.id, { price: Number(row.total_price), available: true });
+        else live.set(row.id, { price: Number(row.total_price), available: row.is_available === true });
       }
 
       // The same three tests place-order applies, so the cart takes out exactly what the server

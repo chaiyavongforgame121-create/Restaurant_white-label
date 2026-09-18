@@ -4,7 +4,7 @@
     "reason": "Solo el propietario o un administrador pueden gestionar el equipo de {branch}."
   },
   "title": "Personal",
-  "summary": "{count, plural, one {# miembro} other {# miembros}} en {branch}",
+  "summary": "{count, plural, one {# persona trabaja} other {# personas trabajan}} en {branch}",
   "inviteStaff": "Invitar personal",
   "empty": {
     "title": "Aún no hay personal",
@@ -73,7 +73,8 @@
       "invalidBranch": "Esa sucursal no pertenece a este restaurante.",
       "notFound": "Este miembro del equipo ya no existe. Recarga la página.",
       "generic": "No se pudo cambiar el acceso a sucursales. Reintenta."
-    }
+    },
+    "everyBranchLocked": "Solo el propietario o un administrador de todas las sucursales puede cambiar el acceso de alguien que trabaja en todas las sucursales."
   },
   "pendingInvite": {
     "copyLink": "Copiar enlace de invitación",
@@ -120,7 +121,7 @@
     "role": "Rol",
     "scope": "Alcance",
     "thisBranch": "Solo esta sucursal",
-    "thisBranchHint": "Acceso limitado a esta ubicación",
+    "thisBranchHint": "Trabaja solo en {branch}",
     "allBranches": "Todas las sucursales",
     "allBranchesHint": "Acceso a todo el restaurante (gerentes)",
     "alsoEmail": "Enviar también una invitación por correo",
@@ -129,13 +130,52 @@
     "createLink": "Crear enlace de invitación",
     "send": "Enviar invitación",
     "errors": {
-      "alreadyActive": "{email} ya está en tu equipo. Para cambiar las sucursales que puede usar, ajusta su acceso a sucursales en la lista de personal en lugar de invitarlo otra vez.",
+      "alreadyActive": "{email} ya trabaja en {branch} o en todas las sucursales. No hay nada que agregar.",
       "rateLimited": "Se enviaron demasiados correos en la última hora. El servicio de correo integrado permite solo unos pocos por hora: reintenta más tarde o conecta tu propio servicio de correo en Supabase (Authentication → SMTP).",
       "onlyOwnerAdmin": "Solo el propietario puede invitar o cambiar a un administrador.",
       "notAllowed": "Solo el propietario o un administrador pueden invitar personal.",
       "emailFailed": "No se pudo enviar el correo de invitación. Reintenta más tarde.",
       "emailNotSent": "No se pudo enviar el correo de invitación a {email}, pero la invitación quedó guardada en tu lista de personal. Desmarca “Enviar también una invitación por correo” y crea un enlace de invitación para compartir.",
-      "generic": "No se pudo crear la invitación. Reintenta."
+      "generic": "No se pudo crear la invitación. Reintenta.",
+      "alreadySuspended": "{email} está suspendido en {branch}. Reactívalo en la lista de personal en lugar de invitarlo otra vez.",
+      "branchNotInRestaurant": "Esa sucursal no pertenece a este restaurante. Recarga la página e inténtalo de nuevo.",
+      "ownBranchOnly": "Solo puedes invitar personas a {branch}. Pide al dueño que invite a alguien a otras sucursales."
+    }
+  },
+  "sections": {
+    "thisBranch": "Equipo de {branch}",
+    "allBranches": "Trabaja en todas las sucursales",
+    "allBranchesHint": "Dueños y personas invitadas a todas las sucursales. También pueden trabajar aquí.",
+    "otherBranches": "{count, plural, one {# persona en otras sucursales} other {# personas en otras sucursales}}",
+    "otherBranchesHint": "Solo como referencia. Cada sucursal gestiona su propio equipo desde su página de Personal."
+  },
+  "statusActions": {
+    "suspend": "Suspender",
+    "reactivate": "Reactivar",
+    "remove": "Quitar",
+    "keep": "Mantener acceso",
+    "suspendFor": "Suspender a {email}",
+    "reactivateFor": "Reactivar a {email}",
+    "removeFor": "Quitar a {email}",
+    "suspendDialog": {
+      "title": "¿Suspender a {email}?",
+      "body": "No podrá entrar a la administración, la caja ni la cocina con este acceso hasta que lo reactives. Su historial se conserva."
+    },
+    "removeDialog": {
+      "title": "¿Quitar a {email}?",
+      "body": "Pierde el acceso aquí de forma definitiva. Para que vuelva más adelante, invítalo otra vez."
+    },
+    "removedHint": "Quitado. Invítalo otra vez para devolverle el acceso.",
+    "done": {
+      "suspended": "{email} está suspendido.",
+      "reactivated": "{email} vuelve a estar activo.",
+      "removed": "{email} fue quitado."
+    },
+    "errors": {
+      "lastOwner": "Un restaurante debe conservar al menos un dueño.",
+      "self": "No puedes cambiar tu propio acceso. Pídeselo al dueño.",
+      "notAuthorized": "Tu rol no puede cambiar el acceso de esta persona.",
+      "generic": "No se pudo cambiar su acceso. Inténtalo de nuevo."
     }
   }
 }

@@ -4,7 +4,7 @@
     "reason": "Chỉ chủ sở hữu hoặc quản trị viên mới quản lý được nhân viên tại {branch}."
   },
   "title": "Nhân viên",
-  "summary": "{count, plural, other {# thành viên}} tại {branch}",
+  "summary": "{count, plural, other {# người làm việc}} tại {branch}",
   "inviteStaff": "Mời nhân viên",
   "empty": {
     "title": "Chưa có nhân viên",
@@ -73,7 +73,8 @@
       "invalidBranch": "Chi nhánh đó không thuộc nhà hàng này.",
       "notFound": "Thành viên này không còn tồn tại. Hãy tải lại trang.",
       "generic": "Không thể đổi quyền chi nhánh. Hãy thử lại."
-    }
+    },
+    "everyBranchLocked": "Chỉ chủ sở hữu hoặc quản trị viên của mọi chi nhánh mới đổi được quyền của người làm việc ở mọi chi nhánh."
   },
   "pendingInvite": {
     "copyLink": "Sao chép liên kết mời",
@@ -120,7 +121,7 @@
     "role": "Vai trò",
     "scope": "Phạm vi",
     "thisBranch": "Chỉ chi nhánh này",
-    "thisBranchHint": "Chỉ truy cập tại địa điểm này",
+    "thisBranchHint": "Chỉ làm việc tại {branch}",
     "allBranches": "Tất cả chi nhánh",
     "allBranchesHint": "Truy cập toàn bộ nhà hàng (quản lý)",
     "alsoEmail": "Gửi thêm lời mời qua email",
@@ -129,13 +130,52 @@
     "createLink": "Tạo liên kết mời",
     "send": "Gửi lời mời",
     "errors": {
-      "alreadyActive": "{email} đã có trong nhóm của bạn. Để đổi các chi nhánh người này dùng được, hãy chỉnh Quyền chi nhánh trong danh sách nhân viên thay vì mời lại.",
+      "alreadyActive": "{email} đã làm việc tại {branch} hoặc ở mọi chi nhánh. Không cần mời thêm.",
       "rateLimited": "Đã gửi quá nhiều email trong giờ qua. Dịch vụ email có sẵn chỉ cho phép vài email mỗi giờ — hãy thử lại sau, hoặc kết nối dịch vụ email riêng trong Supabase (Authentication → SMTP).",
       "onlyOwnerAdmin": "Chỉ chủ sở hữu mới mời hoặc thay đổi được quản trị viên.",
       "notAllowed": "Chỉ chủ sở hữu hoặc quản trị viên mới mời được nhân viên.",
       "emailFailed": "Không gửi được email mời. Hãy thử lại sau.",
       "emailNotSent": "Không gửi được email mời tới {email}, nhưng lời mời đã được lưu trong danh sách nhân viên. Hãy bỏ chọn “Gửi thêm lời mời qua email” và tạo liên kết mời để chia sẻ.",
-      "generic": "Không tạo được lời mời. Hãy thử lại."
+      "generic": "Không tạo được lời mời. Hãy thử lại.",
+      "alreadySuspended": "{email} đang bị tạm ngưng tại {branch}. Hãy kích hoạt lại trong danh sách nhân viên thay vì mời lại.",
+      "branchNotInRestaurant": "Chi nhánh này không thuộc nhà hàng này. Hãy tải lại trang và thử lại.",
+      "ownBranchOnly": "Bạn chỉ có thể mời người vào {branch}. Hãy nhờ chủ nhà hàng mời người vào các chi nhánh khác."
+    }
+  },
+  "sections": {
+    "thisBranch": "Nhóm tại {branch}",
+    "allBranches": "Làm việc ở mọi chi nhánh",
+    "allBranchesHint": "Chủ nhà hàng và những người được mời vào mọi chi nhánh. Họ cũng có thể làm việc ở đây.",
+    "otherBranches": "{count, plural, other {# người ở các chi nhánh khác}}",
+    "otherBranchesHint": "Chỉ để tham khảo. Mỗi chi nhánh tự quản lý nhóm của mình trên trang Nhân viên riêng."
+  },
+  "statusActions": {
+    "suspend": "Tạm ngưng",
+    "reactivate": "Kích hoạt lại",
+    "remove": "Xóa",
+    "keep": "Giữ quyền truy cập",
+    "suspendFor": "Tạm ngưng {email}",
+    "reactivateFor": "Kích hoạt lại {email}",
+    "removeFor": "Xóa {email}",
+    "suspendDialog": {
+      "title": "Tạm ngưng {email}?",
+      "body": "Người này không thể dùng quyền này để vào trang quản trị, quầy thu ngân hay bếp cho đến khi bạn kích hoạt lại. Lịch sử vẫn được giữ."
+    },
+    "removeDialog": {
+      "title": "Xóa {email}?",
+      "body": "Người này mất quyền truy cập ở đây vĩnh viễn. Để họ quay lại sau, hãy mời lại."
+    },
+    "removedHint": "Đã xóa. Hãy mời lại để cấp lại quyền truy cập.",
+    "done": {
+      "suspended": "Đã tạm ngưng {email}.",
+      "reactivated": "{email} đã hoạt động trở lại.",
+      "removed": "Đã xóa {email}."
+    },
+    "errors": {
+      "lastOwner": "Nhà hàng phải giữ ít nhất một chủ sở hữu.",
+      "self": "Bạn không thể tự thay đổi quyền của mình. Hãy nhờ chủ nhà hàng.",
+      "notAuthorized": "Vai trò của bạn không thể thay đổi quyền của người này.",
+      "generic": "Không thể thay đổi quyền truy cập. Hãy thử lại."
     }
   }
 }

@@ -68,6 +68,22 @@ export function paymentMethodOn(
 }
 
 /**
+ * Bank transfer is ticked for delivery or pickup, but the branch has no payment QR of its own.
+ * place-order refuses transfer without one, so checkout silently loses the option: the merchant
+ * believes they take transfers and no diner can choose it. copy_branch_setup never copies the
+ * source branch's QR, so a new branch is exactly where this happens.
+ */
+export function transferOnWithoutQr(settings: Record<string, unknown>): boolean {
+  const matrix = asRecord(settings.payment_methods);
+  const url = asRecord(settings.qr_transfer)?.image_url;
+  const hasQr = typeof url === 'string' && url.length > 0;
+  const transferOn = (['asap', 'scheduled'] as const).some(
+    (mode) => asRecord(matrix?.[mode])?.transfer === true,
+  );
+  return transferOn && !hasQr;
+}
+
+/**
  * "Get ready to take orders". A store is public the moment onboarding finishes, with an
  * empty menu, no pin and no hours (which the storefront reads as open around the clock),
  * and until this card the only prompt on the dashboard was the trial countdown. The

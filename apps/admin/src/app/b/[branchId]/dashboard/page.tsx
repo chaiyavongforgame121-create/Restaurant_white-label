@@ -57,6 +57,7 @@ import { AutoRefresh } from './_components/auto-refresh';
 import { OverviewTiles, type OverviewTile } from './_components/overview-tiles';
 import {
   paymentMethodOn,
+  transferOnWithoutQr,
   SetupChecklist,
   type SetupStep,
   type SetupWarning,
@@ -148,7 +149,26 @@ export default async function DashboardPage({ params }: Props) {
             .from('branch_hours')
             .select('id', { count: 'exact', head: true })
             .eq('branch_id', branchId),
-          supabase.from('branches').select('geo_lat, geo_lng').eq('id', branchId).maybeSingle(),
+          supabase.from('branches').select('geo_lat, geo_lng, sales_tax_rate').eq('id', branchId).maybeSingle(),
+          // This branch's own team: cashier, kitchen, managers. Owner rows cover every branch and
+          // are not counted. Only asked of someone who can read the roster and invite (staff.manage).
+          can('staff.manage')
+            ? supabase
+                .from('staff_members')
+                .select('id', { count: 'exact', head: true })
+                .eq('branch_id', branchId)
+                .neq('role', 'owner')
+                .in('status', ['active', 'pending'])
+            : Promise.resolve(null),
+          // Riders approved for THIS branch: dispatch only offers an order to those
+          // (find_dispatch_candidates), and a new branch starts with none.
+          deliveryEnabled
+            ? supabase
+                .from('driver_approvals')
+                .select('id', { count: 'exact', head: true })
+                .eq('branch_id', branchId)
+                .eq('status', 'approved')
+            : Promise.resolve(null),
         ])
       : null,
   ]);
@@ -196,7 +216,7 @@ export default async function DashboardPage({ params }: Props) {
   const canRenew = can('billing.manage') || role === 'admin';
 
   const branchSettingsHref = `/b/${branchId}/branch`;
-  const [menuRes, hoursRes, geoRes] = setup ?? [null, null, null];
+  const [menuRes, hoursRes, geoRes, staffRes, ridersRes] = setup ?? [null, null, null, null, null];
   const hasPin = geoRes?.data?.geo_lat != null && geoRes.data.geo_lng != null;
   const setupSteps: SetupStep[] =
     menuRes && hoursRes && geoRes
@@ -240,22 +260,78 @@ export default async function DashboardPage({ params }: Props) {
             href: branchSettingsHref,
             hrefLabel: t('setup.payment.link'),
           },
+          // A new branch used to start at 0% and its first orders went out untaxed. 0% can be
+          // right (prices that already include VAT), so this only asks: it is done once a rate
+          // is saved, or once "0% is correct" is ticked under Sales tax. Only asked of someone
+          // who can change the rate (branch.settings); a manager could never tick it off.
+          ...(can('branch.settings')
+            ? [
+                {
+                  id: 'tax',
+                  label: t('setup.tax.label'),
+                  why: t('setup.tax.why'),
+                  done:
+                    Number(geoRes.data?.sales_tax_rate ?? 0) > 0 ||
+                    settings.sales_tax_zero_confirmed === true,
+                  href: branchSettingsHref,
+                  hrefLabel: t('setup.tax.link'),
+                  error: setupError('tax', geoRes.error),
+                },
+              ]
+            : []),
+          ...(staffRes
+            ? [
+                {
+                  id: 'staff',
+                  label: t('setup.staff.label'),
+                  why: t('setup.staff.why'),
+                  done: (staffRes.count ?? 0) > 0,
+                  href: `/b/${branchId}/staff`,
+                  hrefLabel: t('setup.staff.link'),
+                  error: setupError('staff', staffRes.error),
+                },
+              ]
+            : []),
         ]
       : [];
   // Its own row, not just the unticked pin step: a store selling delivery with no pin takes
   // orders that no rider will ever be offered, which costs a customer, not only a setup tick.
-  const setupWarnings: SetupWarning[] =
-    deliveryEnabled && geoRes && !geoRes.error && !hasPin
-      ? [
-          {
-            id: 'delivery-no-pin',
-            label: t('setup.noPin.label'),
-            why: t('setup.noPin.why'),
-            href: branchSettingsHref,
-            hrefLabel: t('setup.noPin.link'),
-          },
-        ]
-      : [];
+  const setupWarnings: SetupWarning[] = [];
+  if (deliveryEnabled && geoRes && !geoRes.error && !hasPin) {
+    setupWarnings.push({
+      id: 'delivery-no-pin',
+      label: t('setup.noPin.label'),
+      why: t('setup.noPin.why'),
+      href: branchSettingsHref,
+      hrefLabel: t('setup.noPin.link'),
+    });
+  }
+  if (setup && transferOnWithoutQr(settings)) {
+    setupWarnings.push({
+      id: 'transfer-no-qr',
+      label: t('setup.transferNoQr.label'),
+      why: t('setup.transferNoQr.why'),
+      href: branchSettingsHref,
+      hrefLabel: t('setup.transferNoQr.link'),
+    });
+  }
+  // Platform delivery only: a branch whose own staff deliver needs no approved riders.
+  if (
+    deliveryEnabled &&
+    settings.delivery_mode !== 'self' &&
+    ridersRes &&
+    !ridersRes.error &&
+    (ridersRes.count ?? 0) === 0
+  ) {
+    setupWarnings.push({
+      id: 'delivery-no-riders',
+      label: t('setup.noRiders.label'),
+      why: t('setup.noRiders.why'),
+      href: `/b/${branchId}/drivers`,
+      hrefLabel: t('setup.noRiders.link'),
+    });
+  }
+  if (ridersRes?.error) setupError('riders', ridersRes.error);
   const setupPending =
     setupWarnings.length > 0 || setupSteps.some((s) => !s.done || Boolean(s.error));
   const selfDelivery = settings.delivery_mode === 'self';

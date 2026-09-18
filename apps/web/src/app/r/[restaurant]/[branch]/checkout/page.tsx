@@ -37,7 +37,6 @@ export default async function CheckoutPage({ params }: Props) {
       />
       <CheckoutView
         branchId={tenant.branch.id}
-        restaurantId={tenant.restaurant.id}
         base={base}
         canDeliver={scheduleDelivery.canDeliver}
         // Only an explicit false: a failed read must not block ordering, and place-order still

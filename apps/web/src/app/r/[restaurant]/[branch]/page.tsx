@@ -3,6 +3,7 @@ import { getServerClient } from '@favornoms/database/server';
 import { resolveScheduleDelivery } from '@/lib/schedule-delivery';
 import { listCategories, listMenuItems } from '@favornoms/database/queries';
 import { resolveStorefrontStatus, resolveTenant, storefrontNames } from '@/lib/tenant';
+import type { ComboRow } from './_components/combo-sheet';
 import { MenuView } from './_components/menu-view';
 import { SuspendedStorefront } from './_components/suspended-storefront';
 import { TablePinNotice, TableScanPin } from './_components/table-pin';
@@ -66,10 +67,14 @@ export default async function MenuPage({ params, searchParams }: Props) {
     listMenuItems(supabase, tenant.branch.id),
     supabase.rpc('is_branch_open', { p_branch_id: tenant.branch.id }),
     supabase.rpc('get_branch_reviews', { p_branch_id: tenant.branch.id, p_limit: 3 }),
+    // In the merchant's order. Sold-out deals stay in the row, greyed (is_available).
     supabase
       .from('v_active_combos')
-      .select('id, name, description, total_price, image_url, items')
-      .eq('branch_id', tenant.branch.id),
+      .select('id, name, description, total_price, image_url, is_available, items')
+      .eq('branch_id', tenant.branch.id)
+      .order('display_order')
+      .order('created_at')
+      .order('id'),
     supabase.rpc('get_effective_prices', { p_branch_id: tenant.branch.id }),
     rpcAny('get_happy_hours_for_menu', { p_branch_id: tenant.branch.id }),
     // Unknown, retired or rotated tokens come back empty; the diner just gets the
@@ -158,14 +163,10 @@ export default async function MenuPage({ params, searchParams }: Props) {
     summary: { rating: number | null; count: number };
     recent: Array<{ food_stars: number; delivery_stars: number | null; comment: string; created_at: string }>;
   } | null;
-  const combos = (combosCheck.data ?? []) as Array<{
-    id: string;
-    name: string;
-    description: string | null;
-    total_price: number | string;
-    image_url: string | null;
-    items: Array<{ menu_item_id: string; item_name: string; quantity: number; list_price: number }>;
-  }>;
+  const combos = (combosCheck.data ?? []).map((c) => ({
+    ...c,
+    is_available: c.is_available === true,
+  })) as ComboRow[];
   return (
     <>
       {scannedHere && (

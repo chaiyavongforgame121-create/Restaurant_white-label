@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Bike, ChefHat, CheckCircle2, ChevronLeft, MapPin, Phone, Receipt } from 'lucide-react';
+import { Bike, ChefHat, CheckCircle2, ChevronLeft, MapPin, Phone, Receipt, XCircle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { formatCurrency, kmToMi } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
@@ -356,7 +356,10 @@ export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransf
     return Math.max(idx, 0);
   }, [order.status, steps]);
 
-  const Icon = steps[statusIndex]?.icon ?? CheckCircle2;
+  // A cancelled or refunded order has left the step ladder: the header must say so, not keep
+  // showing the step it was on ("Order confirmed") above the cancellation notice.
+  const closed = order.status === 'cancelled' || order.status === 'refunded';
+  const Icon = closed ? XCircle : (steps[statusIndex]?.icon ?? CheckCircle2);
   const delivery = order.deliveries[0];
 
   // Live map only once the driver has actually taken the job and while in flight.
@@ -440,7 +443,11 @@ export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransf
               </motion.div>
               <div>
                 <p className="text-sm uppercase tracking-wider text-white/80">
-                  {statusLabel(steps[statusIndex]?.key ?? 'confirmed')}
+                  {closed
+                    ? order.status === 'refunded'
+                      ? t('closed.refunded')
+                      : t('closed.cancelled')
+                    : statusLabel(steps[statusIndex]?.key ?? 'confirmed')}
                 </p>
                 <h2 className="mt-1 font-display text-2xl font-bold leading-tight">
                   {order.order_items.map((i) => `${i.quantity}× ${i.item_name}`).join(', ')}
@@ -530,7 +537,8 @@ export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransf
             </Card>
           )}
 
-          {order.payments
+          {/* Nothing is left to pay on a closed order, so no QR and no slip upload. */}
+          {!closed && order.payments
             ?.filter((p) => p.method === 'transfer')
             .map((p) => (
               <TransferProof

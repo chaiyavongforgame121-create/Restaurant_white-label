@@ -3,7 +3,7 @@
 // POST { branch_id } → { recommendations: [...] }
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
-import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2';
 import {
   edgeHasFeature,
   featureNotEntitledBody,
@@ -11,6 +11,7 @@ import {
 } from '../_shared/entitlements.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 const MODEL = Deno.env.get('ANTHROPIC_MODEL') ?? 'claude-haiku-4-5-20251001';
@@ -27,14 +28,15 @@ Deno.serve(async (req) => {
   try { body = await req.json(); } catch { return cors(json({ error: 'invalid_json' }, 400)); }
   if (!body.branch_id) return cors(json({ error: 'branch_id_required' }, 400));
 
-  const userClient = createClient(SUPABASE_URL, auth.slice(7), {
+  const userClient = createClient(SUPABASE_URL, ANON_KEY, {
     auth: { persistSession: false },
     global: { headers: { Authorization: auth } },
   });
-  // Authorize: only managers can run.
-  const { data: sm } = await userClient.from('staff_members').select('role')
-    .eq('branch_id', body.branch_id).maybeSingle();
-  if (!sm || !['owner', 'manager'].includes(sm.role)) {
+  // Authorize: whoever may manage this branch's menu. The old `staff_members where branch_id =
+  // <branch>` maybeSingle() did not filter on the caller, so an owner who can read several rows got
+  // a 403, and it found nobody at a branch the owner's row does not name. my_capabilities applies
+  // the same rule as RLS (owner rows cover every branch; active rows only).
+  if (!(await hasCapability(userClient, body.branch_id, 'menu.manage'))) {
     return cors(json({ error: 'not_authorized' }, 403));
   }
 
@@ -113,6 +115,17 @@ Deno.serve(async (req) => {
 
   return cors(json({ recommendations, raw: text.slice(0, 4000) }));
 });
+
+/** Does the signed-in caller hold `capability` at this branch? Fails closed. */
+async function hasCapability(
+  client: SupabaseClient,
+  branchId: string,
+  capability: string,
+): Promise<boolean> {
+  const { data, error } = await client.rpc('my_capabilities', { p_branch_id: branchId });
+  if (error || !Array.isArray(data)) return false;
+  return (data as unknown[]).includes(capability);
+}
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });

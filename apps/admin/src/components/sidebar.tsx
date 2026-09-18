@@ -137,9 +137,9 @@ export function Sidebar({
         { href: `${base}/payouts`, label: t('nav.driverPayouts'), icon: Wallet, feature: 'delivery', capability: 'drivers.manage' },
         { href: `${base}/customers`, label: t('nav.customers'), icon: UserRound, capability: 'customers.view' },
         { href: `${base}/promos`, label: t('nav.promos'), icon: Tag, capability: 'promos.manage' },
-        // Owner-only for the same reason as Head office: the catalog is
-        // restaurant-scoped, so a reward a branch manager creates is redeemable
-        // at every other branch. Writes are refused by RLS regardless.
+        // Each branch runs its own programme (settings, rewards, points), so this is
+        // this branch's loyalty screen. Gated by loyalty.manage (admin and owner):
+        // it sets what points are worth here. Writes are refused by RLS regardless.
         { href: `${base}/loyalty`, label: t('nav.loyaltyRewards'), icon: Gift, capability: 'loyalty.manage' },
       ],
     },

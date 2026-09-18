@@ -49,6 +49,26 @@
       "label": "Đã bật giao hàng nhưng chi nhánh này chưa có ghim bản đồ",
       "why": "Không thể điều phối tài xế cho đơn giao hàng của chi nhánh này cho đến khi đặt ghim.",
       "link": "Đặt ghim"
+    },
+    "tax": {
+      "label": "Kiểm tra thuế suất bán hàng",
+      "why": "Thuế bán hàng ở đây là 0%, nên đơn hàng không bị tính thuế. Hãy đặt thuế suất cho chi nhánh này, hoặc đánh dấu “0% là đúng” trong mục Thuế bán hàng nếu giá đã bao gồm thuế.",
+      "link": "Thuế bán hàng"
+    },
+    "staff": {
+      "label": "Mời nhân viên của chi nhánh này",
+      "why": "Chi nhánh này chưa có nhân viên: hãy mời thu ngân và bếp để họ dùng quầy thu ngân và màn hình bếp.",
+      "link": "Nhân viên"
+    },
+    "transferNoQr": {
+      "label": "Đã bật chuyển khoản, nhưng chi nhánh này chưa có mã QR thanh toán",
+      "why": "Khách không thể chuyển khoản cho đến khi chi nhánh này tải lên mã QR của riêng mình. Mã QR của chi nhánh khác không bao giờ được dùng.",
+      "link": "Tải lên mã QR"
+    },
+    "noRiders": {
+      "label": "Đã bật giao hàng, nhưng chưa có tài xế nào được duyệt cho chi nhánh này",
+      "why": "Đơn giao hàng của chi nhánh này không thể giao cho ai cho đến khi bạn duyệt tài xế cho chi nhánh.",
+      "link": "Tài xế"
     }
   },
   "overview": {

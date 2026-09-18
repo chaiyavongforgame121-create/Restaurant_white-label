@@ -5,7 +5,8 @@
     "managerRequired": "Solo el propietario o un gerente puede cambiar esta configuración de la sucursal.",
     "ownerOnlyDomain": "Solo el propietario del restaurante puede cambiar el dominio propio.",
     "domainTaken": "Otra sucursal ya usa ese dominio.",
-    "noPermission": "Tu rol no tiene permiso para hacer este cambio."
+    "noPermission": "Tu rol no tiene permiso para hacer este cambio.",
+    "busyMinutesRange": "El modo ocupado puede sumar de 0 a {max} minutos de preparación."
   },
   "settings": {
     "title": "Configuración de sucursal",
@@ -30,7 +31,9 @@
     "tax": {
       "title": "Impuesto sobre ventas",
       "description": "Impuesto estatal y local de EE. UU. aplicado a los productos gravables. Ingrésalo como porcentaje (p. ej., <code>8.875</code> para NYC, <code>9.5</code> para LA).",
-      "rate": "Tasa de impuesto (%)"
+      "rate": "Tasa de impuesto (%)",
+      "zeroConfirmed": "El 0 % es correcto para esta sucursal",
+      "zeroConfirmedHint": "Por ejemplo, tus precios ya incluyen impuestos. Así el panel deja de preguntar por la tasa."
     },
     "domain": {
       "title": "Dominio propio",
@@ -50,7 +53,8 @@
       "hint": "Copia de solo lectura de branches.settings. Edítala desde las tarjetas de arriba."
     },
     "seatLimit": "No se guardó nada. {seats, plural, =1 {Tu único cupo de sucursal ya está ocupado} other {Tus # cupos de sucursal ya están ocupados}} por sucursales activas, así que esta sucursal no puede volver a activarse. Agrega un cupo en <link>Plan y facturación</link> u oculta otra sucursal primero.",
-    "save": "Guardar cambios"
+    "save": "Guardar cambios",
+    "readOnly": "Solo el propietario o un administrador puede cambiar la configuración de abajo. Tú puedes verla."
   },
   "location": {
     "title": "Ubicación",
@@ -68,15 +72,6 @@
     "longitude": "Longitud",
     "saveLocation": "Guardar ubicación",
     "timezone": "Zona horaria",
-    "timezones": {
-      "eastern": "Hora del Este — Nueva York, Miami, Atlanta",
-      "central": "Hora del Centro — Chicago, Houston, Dallas",
-      "mountain": "Hora de la Montaña — Denver, Salt Lake City",
-      "arizona": "Arizona — Phoenix (sin horario de verano)",
-      "pacific": "Hora del Pacífico — Los Ángeles, Seattle",
-      "alaska": "Alaska — Anchorage",
-      "hawaii": "Hawái — Honolulu"
-    },
     "timezoneHint": "El horario de atención y las franjas de entrega se leen en esta zona. Elige la zona donde está físicamente el local, no la de la oficina central.",
     "saveTimezone": "Guardar zona horaria",
     "saved": "Guardado.",
@@ -95,7 +90,8 @@
       "pinRequired": "Elige la nueva dirección en el mapa para que el repartidor sepa dónde recoger.",
       "notAuthorized": "Solo el propietario o un gerente puede mover una sucursal.",
       "signedOut": "Se cerró tu sesión. Inicia sesión de nuevo y vuelve a intentarlo.",
-      "branchNotFound": "No se encontró esta sucursal."
+      "branchNotFound": "No se encontró esta sucursal.",
+      "invalidTimezone": "Elige una zona horaria de la lista."
     }
   },
   "hours": {

@@ -17,9 +17,9 @@ import {
   type MenuLayout,
   type StorefrontOverride,
 } from '@favornoms/shared';
-import { getBrowserClient } from '@favornoms/database/client';
 import { Card } from '@favornoms/ui';
 import { ImageUpload } from '@/components/image-upload';
+import { useSettingsPatch } from './patch-settings';
 
 // Per-branch override of the restaurant-wide storefront appearance. Stored under
 // branches.settings.storefront_override (jsonb). Each control can be left on
@@ -37,6 +37,8 @@ export function StorefrontOverrideCard({ branchId, restaurantId, settings, resta
   const rawLocale = useLocale();
   const locale = isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE;
   const router = useRouter();
+  // Sends only what changed since this card was rendered or last saved.
+  const savePatch = useSettingsPatch(branchId, settings);
   const base = React.useMemo(() => parseStorefront(restaurantStorefront), [restaurantStorefront]);
   const [override, setOverride] = React.useState<StorefrontOverride>(() =>
     parseStorefrontOverride(settings?.storefront_override ?? null),
@@ -57,11 +59,7 @@ export function StorefrontOverrideCard({ branchId, restaurantId, settings, resta
     setOverride(next);
     setSaving(true);
     setError(null);
-    const supabase = getBrowserClient();
-    const { error: upErr } = await supabase
-      .from('branches')
-      .update({ settings: { ...settings, storefront_override: serializeStorefrontOverride(next) } })
-      .eq('id', branchId);
+    const { error: upErr } = await savePatch({ storefront_override: serializeStorefrontOverride(next) });
     setSaving(false);
     if (upErr) {
       console.error('Saving the menu layout override failed', upErr);

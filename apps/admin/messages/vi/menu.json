@@ -18,16 +18,21 @@
     "duplicate": "Nhân bản",
     "delete": "Xóa",
     "soldOut": "Hết hàng",
-    "stockLeft": "Còn {count}"
+    "stockLeft": "Còn {count}",
+    "soldOutUntil": "Hết hàng đến {time}",
+    "backOnSale": "Bán lại"
   },
   "notices": {
     "savedTracking": "Đã lưu “{name}” — đang theo dõi tồn kho, còn {count}.",
     "savedUntracked": "Đã lưu “{name}” — đã tắt theo dõi tồn kho, nên trang đặt món sẽ không báo hết hàng.",
-    "copied": "Đã nhân bản. Bản sao đang ẩn với khách và không kèm nhóm tùy chọn — hãy thêm trong phần Sửa, rồi bật “Hiện trên thực đơn của khách”.",
+    "copied": "Đã nhân bản. Bản sao đang ẩn với khách, chưa có nhóm tùy chọn và chưa theo dõi tồn kho — hãy thiết lập trong phần Sửa, rồi bật “Hiện trên thực đơn của khách”.",
     "nowVisible": "“{name}” đã hiện trên thực đơn của khách.",
     "nowHidden": "Đã ẩn “{name}” với khách.",
     "visibilityUnchanged": "Chưa có gì thay đổi. Món này có thể đã bị xóa, hoặc vai trò của bạn không được sửa thực đơn ở chi nhánh này.",
-    "reloadFailed": "Đã lưu, nhưng không tải lại được danh sách này. {reason}"
+    "reloadFailed": "Đã lưu, nhưng không tải lại được danh sách này. {reason}",
+    "backOnSale": "“{name}” đã được bán lại.",
+    "backOnSaleEmpty": "“{name}” không còn bị đánh dấu hết hàng, nhưng trong kho không còn món nào, nên vẫn hết hàng cho đến khi bạn nhập hàng.",
+    "backOnSaleFailed": "Không mở bán lại được “{name}”. {reason}"
   },
   "deleteConfirm": {
     "title": "Xóa món này khỏi thực đơn?",
@@ -60,7 +65,7 @@
     "imageUrlPlaceholder": "…hoặc dán URL",
     "trackStock": "Theo dõi tồn kho",
     "trackStockOnHint": "Trang đặt món sẽ báo món này hết hàng khi số lượng về 0.",
-    "trackStockOffHint": "Không đếm tồn kho. Trang đặt món luôn bán món này.",
+    "trackStockOffHint": "Không đếm tồn kho. Trang đặt món luôn bán món này, trừ khi bạn đánh dấu hết hàng.",
     "currentStock": "Tồn kho hiện tại",
     "lowStockAt": "Cảnh báo sắp hết khi còn",
     "showOnMenu": "Hiện trên thực đơn của khách",
@@ -71,7 +76,13 @@
     "stockReadFailed": "Không đọc được cài đặt tồn kho của món này. {reason}",
     "planLimit": "Bạn đã đạt giới hạn của gói ({current}/{limit} món). Nâng cấp gói đăng ký trong Cài đặt chung → Gói và thanh toán để thêm món.",
     "nothingSaved": "Chưa lưu được gì. Món này có thể đã bị xóa, hoặc vai trò của bạn không được sửa thực đơn ở chi nhánh này.",
-    "optionsWarning": "Đã lưu “{name}”, nhưng một nhóm tùy chọn của món không lưu được. {reason} Các nhóm đã lưu vẫn được giữ — hãy mở lại món để hoàn tất tùy chọn."
+    "optionsWarning": "Đã lưu “{name}”, nhưng một nhóm tùy chọn của món không lưu được. {reason} Các nhóm đã lưu vẫn được giữ — hãy mở lại món để hoàn tất tùy chọn.",
+    "stockRequired": "Nhập số lượng hiện có trong kho, hoặc bỏ chọn Theo dõi tồn kho.",
+    "stockNotSaved": "Đã lưu “{name}”, nhưng chưa lưu được số lượng tồn kho. {reason}",
+    "soldOutUntil": "Đang bị đánh dấu hết hàng đến {time}. Bấm “Bán lại” trên thẻ món, hoặc lưu số lượng lớn hơn 0, để mở bán sớm hơn.",
+    "station": "Khu bếp",
+    "stationNone": "Không có khu bếp",
+    "stationHint": "Nơi làm món này. Màn hình bếp có thể hiện phiếu của từng khu một."
   },
   "allergenPresets": {
     "peanuts": "Đậu phộng",
@@ -185,5 +196,12 @@
       "notFound": "Danh mục này không còn tồn tại. Có thể nó đã bị xóa.",
       "unchanged": "Không có gì thay đổi. Danh mục có thể đã bị xóa, hoặc vai trò của bạn không được phép sửa thực đơn tại chi nhánh này."
     }
+  },
+  "stations": {
+    "hot": "Bếp nóng",
+    "cold": "Bếp lạnh",
+    "bar": "Quầy bar",
+    "dessert": "Tráng miệng",
+    "expo": "Ra món"
   }
 }

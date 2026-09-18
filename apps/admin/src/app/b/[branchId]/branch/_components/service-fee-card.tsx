@@ -4,13 +4,13 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Lock, Percent, Save } from 'lucide-react';
-import { getBrowserClient } from '@favornoms/database/client';
 import { SERVICE_FEE_MAX_PERCENT } from '@favornoms/shared';
 import { Button, Card } from '@favornoms/ui';
+import { useSettingsPatch } from './patch-settings';
 
 // Structured editor for branches.settings.service_fee_percent (jsonb). Saves
-// independently from the main BranchSettings form — merges the one key, never
-// clobbers unrelated settings.
+// independently from the main BranchSettings form, through patch_branch_settings: only this
+// key, and only when it changed, so a save here never rewrites unrelated settings.
 //
 // service_fee_percent is the SAME key the authoritative pricing already reads:
 // supabase/functions/place-order applies `subtotal * service_fee_percent / 100`
@@ -46,6 +46,8 @@ function saveErrorKey(err: { message: string; code?: string }): string {
 export function ServiceFeeCard({ branchId, settings, canUseCard }: Props) {
   const t = useTranslations('branchOps');
   const router = useRouter();
+  // Sends only what changed since this card was rendered or last saved.
+  const savePatch = useSettingsPatch(branchId, settings);
   const [percent, setPercent] = React.useState<string>(() => {
     const n = Number(settings?.service_fee_percent);
     return Number.isFinite(n) && n >= 0 ? String(n) : '0';
@@ -65,11 +67,7 @@ export function ServiceFeeCard({ branchId, settings, canUseCard }: Props) {
   const save = async () => {
     setSaving(true);
     setError(null);
-    const supabase = getBrowserClient();
-    const { error: updateError } = await supabase
-      .from('branches')
-      .update({ settings: { ...settings, service_fee_percent: parsed } })
-      .eq('id', branchId);
+    const { error: updateError } = await savePatch({ service_fee_percent: parsed });
     setSaving(false);
     if (updateError) {
       console.error('Saving service fee failed', updateError);

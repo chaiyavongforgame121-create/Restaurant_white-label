@@ -18,7 +18,8 @@
     "available": "{count} available",
     "more": "… + {count} more",
     "save": "Save {amount}",
-    "viewDeal": "View deal"
+    "viewDeal": "View deal",
+    "soldOutHint": "Part of this deal has sold out. Check back soon."
   },
   "happyHour": {
     "percentOff": "{value}% off",

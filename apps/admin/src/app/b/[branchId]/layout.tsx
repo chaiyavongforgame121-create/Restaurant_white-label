@@ -69,9 +69,54 @@ async function getBranchBrandMark(
   return { logoUrl: theme.logoUrl ?? null, brandName: theme.brandName ?? null };
 }
 
+/**
+ * The branches the switcher offers: the restaurant's active branches whose back office this
+ * viewer can open. It used to list every branch, so a cashier or an admin of one branch was
+ * offered the other and landed on "Access denied".
+ *
+ * An owner (an owner row pins a branch but covers them all), the restaurant's owner_user_id and
+ * a platform admin open every branch without a lookup. Anyone else is asked per candidate
+ * branch through my_capabilities, the same answer the page itself gates on; the candidates
+ * are the branches they have a row at, or all of them when they have a restaurant-wide row.
+ */
+async function openableBranches(
+  supabase: BranchAccess['supabase'],
+  userId: string,
+  restaurantId: string,
+  currentBranchId: string,
+  all: Array<{ id: string; name: string }>,
+  platformAdmin: boolean,
+): Promise<Array<{ id: string; name: string }>> {
+  if (platformAdmin || all.length === 0) return all;
+  const [{ data: rows }, { data: restaurant }] = await Promise.all([
+    supabase
+      .from('staff_members')
+      .select('role, branch_id')
+      .eq('user_id', userId)
+      .eq('restaurant_id', restaurantId)
+      .eq('status', 'active'),
+    supabase.from('restaurants').select('owner_user_id').eq('id', restaurantId).maybeSingle(),
+  ]);
+  const mine = rows ?? [];
+  if (restaurant?.owner_user_id === userId || mine.some((r) => r.role === 'owner')) return all;
+  const restaurantWide = mine.some((r) => r.branch_id === null);
+  const candidates = all.filter(
+    (b) => b.id === currentBranchId || restaurantWide || mine.some((r) => r.branch_id === b.id),
+  );
+  const open = await Promise.all(
+    candidates.map(async (b) => {
+      // Already checked by the caller: this layout only renders past backoffice.access.
+      if (b.id === currentBranchId) return true;
+      const { data } = await supabase.rpc('my_capabilities', { p_branch_id: b.id });
+      return ((data ?? []) as string[]).includes('backoffice.access');
+    }),
+  );
+  return candidates.filter((_, i) => open[i]);
+}
+
 export default async function BranchLayout({ params, children }: Props) {
   const { branchId } = await params;
-  const { supabase, branch, capabilities, can, role } = await getBranchAccess(
+  const { supabase, user, branch, capabilities, can, role } = await getBranchAccess(
     branchId,
     `/b/${branchId}/dashboard`,
   );
@@ -95,7 +140,7 @@ export default async function BranchLayout({ params, children }: Props) {
   // Sibling branches (for the switcher) + entitlements (for nav gating and the
   // suspension gate). getEntitlementsForBranch returns DENIED on any error, so
   // a failed read locks the back office rather than opening it.
-  const [{ data: branches }, entitlements, mark] = await Promise.all([
+  const [{ data: allBranches }, entitlements, mark] = await Promise.all([
     supabase
       .from('branches')
       .select('id, name')
@@ -109,6 +154,15 @@ export default async function BranchLayout({ params, children }: Props) {
     // because this layout sits in front of every back-office page.
     getBranchBrandMark(supabase, branchId, branch.restaurant_id),
   ]);
+
+  const branches = await openableBranches(
+    supabase,
+    user.id,
+    branch.restaurant_id,
+    branchId,
+    allBranches ?? [],
+    platformAdmin,
+  );
 
   // Suspension: lock the back office, but never the billing page itself — that
   // is where the merchant fixes it. Redirecting to a page that redirects would
@@ -133,7 +187,7 @@ export default async function BranchLayout({ params, children }: Props) {
       <Sidebar
         branchId={branchId}
         branchName={branch.name}
-        branches={branches ?? []}
+        branches={branches}
         entitlements={entitlements}
         capabilities={caps}
         logoUrl={mark.logoUrl}

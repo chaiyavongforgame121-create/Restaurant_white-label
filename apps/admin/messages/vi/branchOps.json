@@ -49,7 +49,8 @@
       "instructions": "Hướng dẫn (không bắt buộc)",
       "instructionsPlaceholder": "VD: Ghi mã đơn hàng vào nội dung chuyển khoản",
       "onWithoutImage": "Chuyển khoản QR đang bật nhưng chưa lưu ảnh QR. Khách sẽ bị từ chối khi thanh toán cho đến khi bạn tải ảnh lên.",
-      "savedButOff": "Mã QR của bạn đã được lưu nhưng <strong>Chuyển khoản QR vẫn đang tắt</strong>, nên khách không thể chọn. Hãy đánh dấu ở Tự đến lấy (ngay) và/hoặc Hẹn giờ giao hàng phía trên, rồi lưu."
+      "savedButOff": "Mã QR của bạn đã được lưu nhưng <strong>Chuyển khoản QR vẫn đang tắt</strong>, nên khách không thể chọn. Hãy đánh dấu ở Tự đến lấy (ngay) và/hoặc Hẹn giờ giao hàng phía trên, rồi lưu.",
+      "perBranch": "Mã QR này chỉ thuộc về chi nhánh này. Khách thấy nó khi thanh toán trực tuyến, và thu ngân hiển thị nó tại quầy của chi nhánh này khi khách chuyển khoản. Mỗi chi nhánh tự tải lên mã của mình: mã không bao giờ được sao chép sang chi nhánh khác."
     },
     "save": "Lưu phương thức thanh toán"
   },

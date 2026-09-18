@@ -7,23 +7,30 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Check,
   CheckCircle2,
+  ChevronRight,
   CircleX,
   Copy,
   Link2,
   Mail,
   MessageCircle,
+  PauseCircle,
+  PlayCircle,
   Plus,
   Share2,
+  UserMinus,
   UserPlus,
   X,
 } from 'lucide-react';
+import Link from 'next/link';
 import { Badge, Button, Card, EmptyState, useConfirm } from '@favornoms/ui';
 import { getBrowserClient } from '@favornoms/database/client';
 import {
   cancelStaffInvite,
   inviteStaff,
   isStaffAlreadyActiveError,
+  isStaffAlreadySuspendedError,
   setStaffBranchScope,
+  setStaffStatus,
   staffInviteUrl,
   type StaffRole,
 } from '@favornoms/database/queries';
@@ -54,6 +61,12 @@ interface Props {
    *  can still be named. */
   branches: BranchOption[];
   viewerIsOwner: boolean;
+  /** Owner or admin of every branch: may invite someone to all branches, not only this one. */
+  viewerRestaurantWide: boolean;
+  /** The signed-in person, whose own row offers no suspend or remove. */
+  viewerUserId: string;
+  /** Branches whose Staff page the viewer can open (staff.manage there). */
+  staffBranchIds: string[];
 }
 
 /** Assignable roles, in descending order of access. `owner` is absent on purpose —
@@ -103,6 +116,9 @@ export function StaffView({
   initialStaff,
   branches,
   viewerIsOwner,
+  viewerRestaurantWide,
+  viewerUserId,
+  staffBranchIds,
 }: Props) {
   const t = useTranslations('staff');
   const router = useRouter();
@@ -140,13 +156,107 @@ export function StaffView({
     router.refresh();
   };
 
+  // Every branch is its own team. The roster is split three ways: this branch's people, those
+  // who work at every branch (owners, whose row names the branch they signed up at, and rows
+  // with no branch), and, collapsed and read-only, the teams of other branches the viewer also
+  // manages (the page leaves out every other branch), each managed from its own Staff page.
+  const worksEverywhere = (s: StaffListItem) => s.role === 'owner' || s.branch_id === null;
+  const here = staff.filter((s) => !worksEverywhere(s) && s.branch_id === branchId);
+  const everywhere = staff.filter(worksEverywhere);
+  const elsewhere = staff.filter((s) => !worksEverywhere(s) && s.branch_id !== branchId);
+  // The people who can work here now or once they accept; removed rows are history.
+  const teamCount = [...here, ...everywhere].filter((s) => s.status !== 'removed').length;
+  const branchNameOf = (id: string | null) =>
+    (id && branches.find((b) => b.id === id)?.name) || t('branchAccess.oneBranch');
+
+  const statusChanged = (member: StaffListItem, next: StaffListItem['status']) => {
+    setStaff((prev) => prev.map((m) => (m.id === member.id ? { ...m, status: next } : m)));
+    setNotice(
+      t(`statusActions.done.${next === 'active' ? 'reactivated' : next}`, {
+        email: member.invited_email ?? t('unnamed'),
+      }),
+    );
+    router.refresh();
+  };
+
+  const renderMember = (s: StaffListItem, readOnly: boolean) => (
+    <li key={s.id}>
+      <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary">
+            <Mail className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <p className="truncate font-semibold">{s.invited_email ?? t('unnamed')}</p>
+            <p className="text-xs text-muted-foreground">
+              {KNOWN_ROLES.has(s.role) ? t(`roleNames.${s.role}`) : s.role}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          {readOnly ? (
+            // A link only where the viewer can open that branch's Staff page; anyone else
+            // would land on Access denied.
+            s.branch_id && staffBranchIds.includes(s.branch_id) ? (
+              <Link
+                href={`/b/${s.branch_id}/staff`}
+                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+              >
+                {branchNameOf(s.branch_id)}
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Link>
+            ) : (
+              <span className="text-xs text-muted-foreground">{branchNameOf(s.branch_id)}</span>
+            )
+          ) : (
+            <BranchAccess
+              member={s}
+              branches={branches}
+              viewerIsOwner={viewerIsOwner}
+              viewerRestaurantWide={viewerRestaurantWide}
+              staffBranchIds={staffBranchIds}
+              onChanged={(next) => {
+                setStaff((prev) =>
+                  prev.map((m) => (m.id === s.id ? { ...m, branch_id: next } : m)),
+                );
+                // Without this, a refresh still out from an earlier invite or cancel
+                // would land afterwards and put the old branch back in the select.
+                router.refresh();
+              }}
+            />
+          )}
+          <Badge variant={statusVariant(s.status)}>
+            {KNOWN_STATUSES.has(s.status) ? t(`statuses.${s.status}`) : s.status}
+          </Badge>
+        </div>
+        {!readOnly && s.status === 'pending' && !s.user_id && (
+          <PendingInviteActions
+            member={s}
+            viewerIsOwner={viewerIsOwner}
+            viewerRestaurantWide={viewerRestaurantWide}
+            onSettled={settleInvite}
+          />
+        )}
+        {!readOnly && s.status !== 'pending' && (
+          <StatusActions
+            member={s}
+            viewerIsOwner={viewerIsOwner}
+            viewerRestaurantWide={viewerRestaurantWide}
+            viewerUserId={viewerUserId}
+            onChanged={(next) => statusChanged(s, next)}
+          />
+        )}
+      </Card>
+    </li>
+  );
+
   return (
     <div className="container max-w-4xl py-8">
       <header className="mb-6 flex flex-wrap items-center justify-between gap-4 px-2 pl-16 lg:px-0">
         <div>
           <h1 className="font-display text-3xl font-bold">{t('title')}</h1>
           <p className="mt-1 text-muted-foreground">
-            {t('summary', { count: staff.length, branch: branchName })}
+            {t('summary', { count: teamCount, branch: branchName })}
           </p>
         </div>
         <Button variant="gradient" leftIcon={<Plus className="h-4 w-4" />} onClick={() => setModalOpen(true)}>
@@ -167,7 +277,7 @@ export function StaffView({
         {notice}
       </p>
 
-      {staff.length === 0 ? (
+      {here.length + everywhere.length === 0 ? (
         <EmptyState
           icon={<UserPlus className="h-7 w-7" />}
           title={t('empty.title')}
@@ -179,50 +289,34 @@ export function StaffView({
           }
         />
       ) : (
-        <ul className="space-y-2 px-2 lg:px-0">
-          {staff.map((s) => (
-            <li key={s.id}>
-              <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary">
-                    <Mail className="h-5 w-5" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate font-semibold">{s.invited_email ?? t('unnamed')}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {KNOWN_ROLES.has(s.role) ? t(`roleNames.${s.role}`) : s.role}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <BranchAccess
-                    member={s}
-                    branches={branches}
-                    viewerIsOwner={viewerIsOwner}
-                    onChanged={(next) => {
-                      setStaff((prev) =>
-                        prev.map((m) => (m.id === s.id ? { ...m, branch_id: next } : m)),
-                      );
-                      // Without this, a refresh still out from an earlier invite or cancel
-                      // would land afterwards and put the old branch back in the select.
-                      router.refresh();
-                    }}
-                  />
-                  <Badge variant={statusVariant(s.status)}>
-                    {KNOWN_STATUSES.has(s.status) ? t(`statuses.${s.status}`) : s.status}
-                  </Badge>
-                </div>
-                {s.status === 'pending' && !s.user_id && (
-                  <PendingInviteActions
-                    member={s}
-                    viewerIsOwner={viewerIsOwner}
-                    onSettled={settleInvite}
-                  />
-                )}
-              </Card>
-            </li>
-          ))}
-        </ul>
+        <div className="space-y-6 px-2 lg:px-0">
+          {here.length > 0 && (
+            <section>
+              <h2 className="font-display text-lg font-semibold">
+                {t('sections.thisBranch', { branch: branchName })}
+              </h2>
+              <ul className="mt-2 space-y-2">{here.map((s) => renderMember(s, false))}</ul>
+            </section>
+          )}
+          {everywhere.length > 0 && (
+            <section>
+              <h2 className="font-display text-lg font-semibold">{t('sections.allBranches')}</h2>
+              <p className="text-sm text-muted-foreground">{t('sections.allBranchesHint')}</p>
+              <ul className="mt-2 space-y-2">{everywhere.map((s) => renderMember(s, false))}</ul>
+            </section>
+          )}
+        </div>
+      )}
+
+      {elsewhere.length > 0 && (
+        <details className="group mt-6 px-2 lg:px-0">
+          <summary className="focus-ring flex cursor-pointer list-none items-center gap-1 rounded-lg text-sm font-medium text-muted-foreground">
+            <ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90" />
+            {t('sections.otherBranches', { count: elsewhere.length })}
+          </summary>
+          <p className="mt-1 text-xs text-muted-foreground">{t('sections.otherBranchesHint')}</p>
+          <ul className="mt-2 space-y-2">{elsewhere.map((s) => renderMember(s, true))}</ul>
+        </details>
       )}
 
       <AnimatePresence>
@@ -230,6 +324,8 @@ export function StaffView({
           <InviteModal
             restaurantId={restaurantId}
             branchId={branchId}
+            branchName={branchName}
+            canInviteEverywhere={viewerRestaurantWide}
             onClose={() => setModalOpen(false)}
             // Refresh only — the modal stays up to report which outcome happened and to hold
             // the link, because "share this link", "we emailed them" and "they already have an
@@ -245,33 +341,47 @@ export function StaffView({
 /**
  * Which branches one team member can work at. Each staff row holds a single branch_id, and
  * re-inviting an active member is refused, so without this a branch-only cashier could never
- * be given the second branch. The locks mirror set_staff_branch_scope: the owner row is
- * fixed, and only the owner may move an admin.
+ * be given the second branch. The locks and choices mirror set_staff_branch_scope: the owner
+ * row is fixed, only the owner may move an admin, the viewer needs staff.manage at both the
+ * branch the person leaves and the one they move to, and "All branches" (given or taken away)
+ * needs restaurant-wide authority. Anything else would only end in an error.
  */
 function BranchAccess({
   member,
   branches,
   viewerIsOwner,
+  viewerRestaurantWide,
+  staffBranchIds,
   onChanged,
 }: {
   member: StaffListItem;
   branches: BranchOption[];
   viewerIsOwner: boolean;
+  viewerRestaurantWide: boolean;
+  /** Branches where the viewer holds staff.manage. */
+  staffBranchIds: string[];
   onChanged: (branchId: string | null) => void;
 }) {
   const t = useTranslations('staff');
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const current = member.branch_id ? branches.find((b) => b.id === member.branch_id) : undefined;
+  // Where this viewer may move the person: an open branch they manage, plus where they are now.
+  const choices = branches.filter(
+    (b) => b.id === member.branch_id || (b.is_active && staffBranchIds.includes(b.id)),
+  );
 
   const lockedReason =
     member.role === 'owner'
       ? t('branchAccess.ownerLocked')
       : member.role === 'admin' && !viewerIsOwner
         ? t('branchAccess.adminLocked')
-        : null;
+        : member.branch_id === null && !viewerRestaurantWide
+          ? t('branchAccess.everyBranchLocked')
+          : null;
 
-  if (lockedReason) {
+  // Locked, or nothing to choose between: a branch admin looking at their own branch's cashier.
+  if (lockedReason || (!viewerRestaurantWide && choices.length <= 1)) {
     // An owner row carries the first branch's id, but the owner reaches every branch through
     // the restaurant itself; naming that one branch here would be wrong.
     const label =
@@ -279,7 +389,7 @@ function BranchAccess({
         ? t('branchAccess.allBranches')
         : (current?.name ?? t('branchAccess.oneBranch'));
     return (
-      <span className="text-xs text-muted-foreground" title={lockedReason}>
+      <span className="text-xs text-muted-foreground" title={lockedReason ?? undefined}>
         {label}
       </span>
     );
@@ -326,14 +436,12 @@ function BranchAccess({
           onChange={(e) => void change(e.target.value)}
           className="focus-ring rounded-lg border border-border bg-background px-2 py-1.5 text-sm text-foreground disabled:opacity-60"
         >
-          <option value="">{t('branchAccess.allBranches')}</option>
-          {branches
-            .filter((b) => b.is_active || b.id === member.branch_id)
-            .map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.is_active ? b.name : t('branchAccess.hiddenBranch', { name: b.name })}
-              </option>
-            ))}
+          {viewerRestaurantWide && <option value="">{t('branchAccess.allBranches')}</option>}
+          {choices.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.is_active ? b.name : t('branchAccess.hiddenBranch', { name: b.name })}
+            </option>
+          ))}
           {member.branch_id && !current && (
             <option value={member.branch_id}>{t('branchAccess.oneBranch')}</option>
           )}
@@ -351,16 +459,20 @@ function BranchAccess({
 /**
  * Copy or take back an invitation nobody has claimed yet. Invitations are shared as links now
  * (LINE, chat) rather than mailed, so the owner needs the link again later, and a way to withdraw
- * one sent to the wrong address. cancel_staff_invite enforces who may cancel; an admin's
- * invitation is not offered to a non-owner for the same reason BranchAccess locks the row.
+ * one sent to the wrong address. cancel_staff_invite enforces who may cancel (staff.manage at
+ * the invitation's branch, restaurant-wide authority for one to every branch, the owner for an
+ * admin's); Cancel is only offered where it would succeed.
  */
 function PendingInviteActions({
   member,
   viewerIsOwner,
+  viewerRestaurantWide,
   onSettled,
 }: {
   member: StaffListItem;
   viewerIsOwner: boolean;
+  /** Owner or admin of every branch: the only people who may withdraw an invitation to every branch. */
+  viewerRestaurantWide: boolean;
   /** The invitation is gone or already used: say so, drop the row when gone, refresh. */
   onSettled: (message: string, removedId?: string) => void;
 }) {
@@ -372,7 +484,8 @@ function PendingInviteActions({
   const [cancelling, setCancelling] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const email = member.invited_email ?? t('unnamed');
-  const canCancel = member.role !== 'admin' || viewerIsOwner;
+  const canCancel =
+    (member.role !== 'admin' || viewerIsOwner) && (member.branch_id !== null || viewerRestaurantWide);
   const fieldId = React.useId();
 
   const copy = async () => {
@@ -481,6 +594,135 @@ function PendingInviteActions({
   );
 }
 
+/**
+ * Suspend, reactivate or remove a team member. There was no way to take access away from the
+ * back office at all. set_staff_status decides who may (staff.manage where the row works); the
+ * buttons only hide what it would refuse: the owner row, an admin row for a non-owner, a row for
+ * every branch unless the viewer's own authority is restaurant-wide, and your own row. Suspended
+ * keeps the row and can be undone; removed is final, and the person is invited again to come back.
+ */
+function StatusActions({
+  member,
+  viewerIsOwner,
+  viewerRestaurantWide,
+  viewerUserId,
+  onChanged,
+}: {
+  member: StaffListItem;
+  viewerIsOwner: boolean;
+  /** Owner or admin of every branch: the only people set_staff_status lets change a row with no branch. */
+  viewerRestaurantWide: boolean;
+  viewerUserId: string;
+  onChanged: (next: StaffListItem['status']) => void;
+}) {
+  const t = useTranslations('staff');
+  const confirm = useConfirm();
+  const [busy, setBusy] = React.useState<StaffListItem['status'] | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+  const email = member.invited_email ?? t('unnamed');
+
+  if (member.status === 'removed') {
+    return <p className="w-full text-xs text-muted-foreground">{t('statusActions.removedHint')}</p>;
+  }
+  const locked =
+    member.role === 'owner' ||
+    (member.role === 'admin' && !viewerIsOwner) ||
+    (member.branch_id === null && !viewerRestaurantWide) ||
+    (member.user_id !== null && member.user_id === viewerUserId);
+  if (locked) return null;
+
+  const run = async (next: 'active' | 'suspended' | 'removed') => {
+    setError(null);
+    if (next !== 'active') {
+      const ok = await confirm({
+        title: t(`statusActions.${next === 'removed' ? 'removeDialog' : 'suspendDialog'}.title`, { email }),
+        body: t(`statusActions.${next === 'removed' ? 'removeDialog' : 'suspendDialog'}.body`),
+        confirmLabel: t(`statusActions.${next === 'removed' ? 'remove' : 'suspend'}`),
+        cancelLabel: t('statusActions.keep'),
+        destructive: true,
+      });
+      if (!ok) return;
+    }
+    setBusy(next);
+    try {
+      await setStaffStatus(getBrowserClient(), member.id, next);
+      onChanged(next);
+    } catch (err) {
+      // set_staff_status raises plain codes; anything else is raw database text for the console.
+      const message = (err as Error).message;
+      if (message.includes('last_owner')) {
+        setError(t('statusActions.errors.lastOwner'));
+      } else if (message.includes('cannot_change_self')) {
+        setError(t('statusActions.errors.self'));
+      } else if (message.includes('not_authorized')) {
+        setError(t('statusActions.errors.notAuthorized'));
+      } else if (message.includes('staff_removed')) {
+        setError(t('statusActions.removedHint'));
+      } else if (message.includes('staff_not_found')) {
+        setError(t('branchAccess.errors.notFound'));
+      } else if (message.includes('sign_in_required')) {
+        setError(t('errors.signedOut'));
+      } else {
+        console.error('set_staff_status failed', message);
+        setError(t('statusActions.errors.generic'));
+      }
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="w-full border-t border-border/60 pt-3">
+      <div className="flex flex-wrap items-center gap-2">
+        {member.status === 'suspended' ? (
+          <Button
+            type="button"
+            variant="soft"
+            size="sm"
+            aria-label={t('statusActions.reactivateFor', { email })}
+            leftIcon={<PlayCircle className="h-4 w-4" />}
+            loading={busy === 'active'}
+            disabled={busy !== null}
+            onClick={() => void run('active')}
+          >
+            {t('statusActions.reactivate')}
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-label={t('statusActions.suspendFor', { email })}
+            leftIcon={<PauseCircle className="h-4 w-4" />}
+            loading={busy === 'suspended'}
+            disabled={busy !== null}
+            onClick={() => void run('suspended')}
+          >
+            {t('statusActions.suspend')}
+          </Button>
+        )}
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          aria-label={t('statusActions.removeFor', { email })}
+          leftIcon={<UserMinus className="h-4 w-4" />}
+          loading={busy === 'removed'}
+          disabled={busy !== null}
+          onClick={() => void run('removed')}
+        >
+          {t('statusActions.remove')}
+        </Button>
+      </div>
+      {error && (
+        <p role="alert" className="mt-2 text-xs text-danger">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function statusVariant(s: string): 'success' | 'warning' | 'muted' | 'danger' {
   if (s === 'active') return 'success';
   if (s === 'pending') return 'warning';
@@ -558,11 +800,16 @@ type InviteResult = { kind: 'link' | 'sent' | 'existingAccount'; email: string; 
 function InviteModal({
   restaurantId,
   branchId,
+  branchName,
+  canInviteEverywhere,
   onClose,
   onInvited,
 }: {
   restaurantId: string;
   branchId: string;
+  branchName: string;
+  /** invite-staff refuses an all-branches invitation from an admin of one branch. */
+  canInviteEverywhere: boolean;
   onClose: () => void;
   onInvited: () => void;
 }) {
@@ -600,7 +847,7 @@ function InviteModal({
         email: invitedEmail,
         role,
         restaurant_id: restaurantId,
-        branch_id: scope === 'branch' ? branchId : null,
+        branch_id: scope === 'branch' || !canInviteEverywhere ? branchId : null,
         delivery: sendEmail ? 'email' : 'link',
       });
       // Built here rather than taken from accept_url, exactly as the pending row's "Copy invite
@@ -623,7 +870,13 @@ function InviteModal({
       const message = (err as Error).message;
       const emailRefused = message.includes('rate_limited') || message.includes('email_failed');
       if (isStaffAlreadyActiveError(err)) {
-        setError(t('invite.errors.alreadyActive', { email: invitedEmail }));
+        setError(t('invite.errors.alreadyActive', { email: invitedEmail, branch: branchName }));
+      } else if (isStaffAlreadySuspendedError(err)) {
+        setError(t('invite.errors.alreadySuspended', { email: invitedEmail, branch: branchName }));
+      } else if (message.includes('branch_not_in_restaurant')) {
+        setError(t('invite.errors.branchNotInRestaurant'));
+      } else if (message.includes('branch_scoped_inviter')) {
+        setError(t('invite.errors.ownBranchOnly', { branch: branchName }));
       } else if (emailRefused && sendEmail) {
         // The pending row was saved before the send was tried, so the invitation exists; only
         // the email did not go. A link reaches them without any mailer, so point there.
@@ -782,23 +1035,28 @@ function InviteModal({
                   />
                   <div>
                     <p className="text-sm font-semibold">{t('invite.thisBranch')}</p>
-                    <p className="text-xs text-muted-foreground">{t('invite.thisBranchHint')}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {t('invite.thisBranchHint', { branch: branchName })}
+                    </p>
                   </div>
                 </label>
-                <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border p-3">
-                  <input
-                    type="radio"
-                    name="scope"
-                    value="restaurant"
-                    checked={scope === 'restaurant'}
-                    onChange={() => setScope('restaurant')}
-                    className="mt-1"
-                  />
-                  <div>
-                    <p className="text-sm font-semibold">{t('invite.allBranches')}</p>
-                    <p className="text-xs text-muted-foreground">{t('invite.allBranchesHint')}</p>
-                  </div>
-                </label>
+                {/* An admin of one branch can invite into that branch only (invite-staff). */}
+                {canInviteEverywhere && (
+                  <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border p-3">
+                    <input
+                      type="radio"
+                      name="scope"
+                      value="restaurant"
+                      checked={scope === 'restaurant'}
+                      onChange={() => setScope('restaurant')}
+                      className="mt-1"
+                    />
+                    <div>
+                      <p className="text-sm font-semibold">{t('invite.allBranches')}</p>
+                      <p className="text-xs text-muted-foreground">{t('invite.allBranchesHint')}</p>
+                    </div>
+                  </label>
+                )}
               </fieldset>
 
               <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border p-3">

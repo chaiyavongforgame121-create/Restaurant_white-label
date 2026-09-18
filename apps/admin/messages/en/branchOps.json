@@ -49,7 +49,8 @@
       "instructions": "Instructions (optional)",
       "instructionsPlaceholder": "e.g. Include your order number in the transfer note",
       "onWithoutImage": "QR transfer is switched on but no QR image is saved. Customers will be refused at checkout until you upload one.",
-      "savedButOff": "Your QR code is saved but <strong>QR transfer is still switched off</strong>, so customers cannot choose it. Tick it under Pickup (now) and/or Schedule Delivery above, then save."
+      "savedButOff": "Your QR code is saved but <strong>QR transfer is still switched off</strong>, so customers cannot choose it. Tick it under Pickup (now) and/or Schedule Delivery above, then save.",
+      "perBranch": "This QR belongs to this branch only. Diners see it at checkout, and the cashier shows it at this branch’s counter when a customer pays by transfer. Every branch uploads its own: it is never copied to another branch."
     },
     "save": "Save payment methods"
   },

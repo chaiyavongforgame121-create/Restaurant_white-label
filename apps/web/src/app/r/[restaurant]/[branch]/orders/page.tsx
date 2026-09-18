@@ -30,16 +30,16 @@ export default async function OrdersPage({ params }: Props) {
   // stranger's basket into the cart.
   //
   // Read-only on purpose: this must not call get_or_create_my_customer, or
-  // merely opening the page would write a customers row. Scoped by
-  // restaurant_id because identity is per restaurant
-  // (customers_restaurant_user_uidx), not per branch.
+  // merely opening the page would write a customers row. Scoped by branch_id
+  // because each branch keeps its own record of the diner
+  // (customers_branch_user_uidx): this branch's orders hang off this branch's row.
   const customerId = user
     ? (
         await supabase
           .from('customers')
           .select('id')
           .eq('user_id', user.id)
-          .eq('restaurant_id', tenant.restaurant.id)
+          .eq('branch_id', tenant.branch.id)
           .maybeSingle()
       ).data?.id ?? null
     : null;

@@ -18,7 +18,8 @@
     "available": "{count, plural, one {# disponible} other {# disponibles}}",
     "more": "… y {count} más",
     "save": "Ahorra {amount}",
-    "viewDeal": "Ver oferta"
+    "viewDeal": "Ver oferta",
+    "soldOutHint": "Parte de esta oferta se ha agotado. Vuelve pronto."
   },
   "happyHour": {
     "percentOff": "{value}% de descuento",

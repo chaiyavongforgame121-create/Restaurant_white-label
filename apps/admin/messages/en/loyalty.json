@@ -1,16 +1,18 @@
 {
   "title": "Loyalty rewards",
-  "ownerOnly": {
-    "title": "Owner access only",
-    "body": "A reward listed here can be redeemed at <em>every</em> branch of this restaurant and comes out of the restaurant’s own margin, so the catalog is limited to the owner. Ask them to add or change a reward for you."
+  "titleWithBranch": "Loyalty — {branch}",
+  "branchOnly": "Points, rewards and tiers on this page belong to <strong>{branch}</strong> only. Every branch runs its own programme — nothing here is shared with your other branches.",
+  "accessDenied": {
+    "title": "Loyalty is not available to you here",
+    "reason": "Your role at {branch} cannot manage the loyalty programme. Ask the owner or an admin of this branch."
   },
   "program": {
     "title": "Points & tiers",
     "loadFailed": "The current programme could not be loaded, so it is not shown here — editing it from a blank form would overwrite your real earn rate and tiers. Reload the page to try again.",
-    "description": "How fast customers earn, how far each badge is, and what it is called. Applies to every branch of this restaurant.",
-    "rateLabel": "Points per $1 of subtotal",
-    "rateExample": "A $20 order earns {count, plural, one {<strong>#</strong> point} other {<strong>#</strong> points}}.",
-    "rateExampleEmpty": "A $20 order earns <strong>—</strong> points.",
+    "description": "How fast customers earn, how far each badge is, and what it is called. Applies to this branch only.",
+    "rateLabel": "Points per {unit} of subtotal",
+    "rateExample": "A {amount} order earns {count, plural, one {<strong>#</strong> point} other {<strong>#</strong> points}}.",
+    "rateExampleEmpty": "A {amount} order earns <strong>—</strong> points.",
     "rateBasis": "Points are counted on the subtotal, before tax, fees and tip.",
     "thresholdLabel": {
       "silver": "Silver at",
@@ -18,6 +20,8 @@
       "platinum": "Platinum at"
     },
     "thresholdHint": "Lifetime points earned, not the current balance — spending points never costs a badge. Bronze is where everyone starts.",
+    "birthdayLabel": "Birthday gift (points)",
+    "birthdayHint": "Added once a year, on their birthday, to the balance at this branch of every member whose birthday is on file. 0 turns the gift off.",
     "wordsTitle": "Tier names & benefits",
     "wordsBody": "What each badge is called on the customer’s loyalty page, and what it promises — one benefit per line, in any language. The “unlocked at” line is written for you from the numbers above, so moving a tier can never leave the wrong figure in your text.",
     "starter": "Where every member starts — no minimum spend.",
@@ -35,11 +39,11 @@
     "standardWordingTranslated": "It is shown here in English; customers read it in their own language.",
     "useStandard": "Use the standard wording",
     "save": "Save programme",
-    "saved": "Saved ✓ — every customer’s badge was re-checked against the new tiers",
+    "saved": "Saved ✓ — every member’s badge at this branch was re-checked against the new tiers",
     "errors": {
-      "notAuthorized": "Only the restaurant owner can change the loyalty programme.",
+      "notAuthorized": "Only the owner or an admin of this branch can change its loyalty programme.",
       "stale": "The programme was changed somewhere else (another tab, device or person) after this page opened. Nothing was saved — reload the page to see the latest version, then make your change again.",
-      "badRate": "Points per $1 must be between 0.01 and 100.",
+      "badRate": "Points per {unit} must be between 0.01 and 100.",
       "badTiers": "Tiers must climb, and each must be between 1 and {max, number} points.",
       "labelTooLong": "A tier name can be at most {max} characters.",
       "tooManyPerks": "A tier can list at most {max} benefits.",
@@ -48,35 +52,35 @@
       "wholeNumber": "Each tier needs a whole number of points.",
       "thresholdTooHigh": "A tier can be at most {max, number} points.",
       "mustClimb": "Tiers must climb: Silver below Gold, Gold below Platinum.",
+      "badBirthday": "The birthday gift must be a whole number from 0 to {max, number} points.",
       "saveFailed": "The programme could not be saved. Please try again."
     }
   },
   "rewards": {
-    "subtitle": "What customers can spend their points on. Points can only be redeemed for a reward you list here.",
+    "subtitle": "What customers can spend their points on at this branch. Points can only be redeemed for a reward you list here.",
     "new": "New reward",
     "cancel": "Cancel",
-    "multiBranch": "These rewards apply to every branch of this restaurant. A <strong>free item</strong> reward only appears at branches whose menu actually has that item.",
     "fields": {
       "name": "Reward name",
       "namePlaceholder": "Free dessert",
       "points": "Points to redeem",
       "kind": "Reward type",
       "percent": "Percent (1–100)",
-      "amount": "USD amount",
-      "cap": "Cap the discount at (USD, optional)",
+      "amount": "Amount ({currency})",
+      "cap": "Cap the discount at ({currency}, optional)",
       "capPlaceholder": "no cap",
       "item": "Which item",
       "itemPlaceholder": "Choose an item…",
       "itemOption": "{name} — {price}",
       "itemOptionHidden": "{name} — {price} (hidden)",
-      "minSubtotal": "Minimum order subtotal (USD)",
+      "minSubtotal": "Minimum order subtotal ({currency})",
       "sortOrder": "Sort order",
       "description": "Description (optional)",
       "descriptionPlaceholder": "Shown to customers under the reward name"
     },
     "kinds": {
       "percent_off": "% off the order",
-      "fixed_off": "Fixed USD off",
+      "fixed_off": "Fixed amount off",
       "free_item": "Free menu item",
       "free_delivery": "Free delivery"
     },
@@ -93,7 +97,7 @@
       "percentOffCapped": "{value}% off (max {max})",
       "fixedOff": "{amount} off",
       "freeItem": "Free {item}",
-      "freeItemElsewhere": "Free item from another branch",
+      "freeItemElsewhere": "Free item (no longer on this branch’s menu)",
       "freeDelivery": "Free delivery"
     },
     "status": {
@@ -111,11 +115,13 @@
     },
     "footer": "Customers see these on their Loyalty page and pick one at checkout. <link>Customers</link> shows who has enough points to redeem.",
     "errors": {
-      "denied": "That change was not saved — only the restaurant owner can edit the reward catalog.",
+      "denied": "That change was not saved — only the owner or an admin of this branch can edit its rewards.",
       "menuItemForeign": "That menu item belongs to a different restaurant. Pick an item from your own menu.",
+      "menuItemOtherBranch": "That item is on another branch’s menu. Pick an item from this branch’s menu.",
+      "branchImmutable": "A reward stays at the branch it was created at. Create it again at the other branch instead.",
       "kindShape": "That combination is not valid — a % reward needs 1–100, a fixed reward needs an amount above 0, and a free item needs an item.",
       "pointsCost": "Points to redeem must be above 0.",
-      "permission": "You do not have permission to change this restaurant’s rewards.",
+      "permission": "You do not have permission to change this branch’s rewards.",
       "saveFailed": "The reward could not be saved. Please try again."
     }
   }

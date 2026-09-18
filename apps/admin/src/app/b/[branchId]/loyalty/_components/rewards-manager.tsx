@@ -12,6 +12,7 @@ type Kind = 'percent_off' | 'fixed_off' | 'free_item' | 'free_delivery';
 interface Reward {
   id: string;
   restaurant_id: string;
+  branch_id: string;
   name: string;
   description: string | null;
   kind: Kind;
@@ -47,14 +48,18 @@ type Draft = ReturnType<typeof emptyDraft>;
 export function RewardsManager({
   restaurantId,
   branchId,
-  branchCount,
+  branchName,
+  currency,
   programCard,
   initialRewards,
   menuItems,
 }: {
   restaurantId: string;
   branchId: string;
-  branchCount: number;
+  /** Shown in the heading: this catalogue and programme belong to this branch alone. */
+  branchName: string;
+  /** The branch's own currency (branches.settings.currency), for every amount on this screen. */
+  currency: string;
   /** Rendered under this page’s heading: the two cards are one screen to the merchant. */
   programCard?: React.ReactNode;
   initialRewards: Reward[];
@@ -75,7 +80,7 @@ export function RewardsManager({
     const { data } = await supabase
       .from('loyalty_rewards')
       .select('*')
-      .eq('restaurant_id', restaurantId)
+      .eq('branch_id', branchId)
       .order('sort_order', { ascending: true })
       .order('points_cost', { ascending: true });
     if (data) setList(data as Reward[]);
@@ -89,8 +94,11 @@ export function RewardsManager({
     // The kind decides which columns may carry a number — the DB enforces the
     // same shape in loyalty_rewards_kind_shape, so sending a stale value from a
     // kind the merchant switched away from would be rejected outright.
+    // branch_id is what the reward belongs to; restaurant_id is derived from it by the database
+    // (sent only because the column is required on insert).
     const row = {
       restaurant_id: restaurantId,
+      branch_id: branchId,
       name: draft.name.trim(),
       description: draft.description.trim() || null,
       kind: draft.kind,
@@ -173,16 +181,18 @@ export function RewardsManager({
       sort_order: String(r.sort_order ?? 0),
     });
 
+  const money = (n: number) => formatCurrency(n, currency);
+
   const describeReward = (r: Reward) => {
     if (r.kind === 'percent_off')
       return r.max_discount
         ? t('rewards.describe.percentOffCapped', {
             value: r.value,
-            max: formatCurrency(Number(r.max_discount)),
+            max: money(Number(r.max_discount)),
           })
         : t('rewards.describe.percentOff', { value: r.value });
     if (r.kind === 'fixed_off')
-      return t('rewards.describe.fixedOff', { amount: formatCurrency(Number(r.value)) });
+      return t('rewards.describe.fixedOff', { amount: money(Number(r.value)) });
     if (r.kind === 'free_item') {
       const item = menuItems.find((m) => m.id === r.menu_item_id)?.name;
       return item
@@ -199,8 +209,13 @@ export function RewardsManager({
     <div className="container max-w-5xl py-8">
       <header className="mb-6 flex flex-wrap items-center justify-between gap-3 px-2 pl-16 lg:px-0">
         <div>
-          <h1 className="font-display text-3xl font-bold">{t('title')}</h1>
+          <h1 className="font-display text-3xl font-bold">
+            {t('titleWithBranch', { branch: branchName })}
+          </h1>
           <p className="mt-1 text-muted-foreground">{t('rewards.subtitle')}</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {t.rich('branchOnly', { branch: branchName, strong: (chunks) => <strong>{chunks}</strong> })}
+          </p>
         </div>
         <Button
           onClick={() => setDraft((d) => (d ? null : emptyDraft()))}
@@ -212,12 +227,6 @@ export function RewardsManager({
       </header>
 
       {programCard}
-
-      {branchCount > 1 && (
-        <p className="mb-4 rounded-2xl bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
-          {t.rich('rewards.multiBranch', { strong: (chunks) => <strong>{chunks}</strong> })}
-        </p>
-      )}
 
       {draft && (
         <Card className="mb-6 space-y-3 p-5">
@@ -256,7 +265,7 @@ export function RewardsManager({
                 label={
                   draft.kind === 'percent_off'
                     ? t('rewards.fields.percent')
-                    : t('rewards.fields.amount')
+                    : t('rewards.fields.amount', { currency })
                 }
               >
                 <input
@@ -268,7 +277,7 @@ export function RewardsManager({
               </Field>
             )}
             {draft.kind === 'percent_off' && (
-              <Field label={t('rewards.fields.cap')}>
+              <Field label={t('rewards.fields.cap', { currency })}>
                 <input
                   value={draft.max_discount}
                   onChange={(e) => set('max_discount', e.target.value.replace(/[^0-9.]/g, ''))}
@@ -291,18 +300,18 @@ export function RewardsManager({
                       {m.is_active
                         ? t('rewards.fields.itemOption', {
                             name: m.name,
-                            price: formatCurrency(Number(m.price)),
+                            price: money(Number(m.price)),
                           })
                         : t('rewards.fields.itemOptionHidden', {
                             name: m.name,
-                            price: formatCurrency(Number(m.price)),
+                            price: money(Number(m.price)),
                           })}
                     </option>
                   ))}
                 </select>
               </Field>
             )}
-            <Field label={t('rewards.fields.minSubtotal')}>
+            <Field label={t('rewards.fields.minSubtotal', { currency })}>
               <input
                 value={draft.min_subtotal}
                 onChange={(e) => set('min_subtotal', e.target.value.replace(/[^0-9.]/g, ''))}
@@ -358,7 +367,7 @@ export function RewardsManager({
                     ? t('rewards.lineWithMinimum', {
                         points: r.points_cost,
                         reward: describeReward(r),
-                        min: formatCurrency(Number(r.min_subtotal)),
+                        min: money(Number(r.min_subtotal)),
                       })
                     : t('rewards.line', { points: r.points_cost, reward: describeReward(r) })}
                 </p>
@@ -412,6 +421,12 @@ export function RewardsManager({
  * anything else gets a plain retry message and the raw text goes to the console.
  */
 function describeError(message: string, t: RewardsT): string {
+  if (message.includes('loyalty_reward_menu_item_other_branch'))
+    return t('rewards.errors.menuItemOtherBranch');
+  if (message.includes('loyalty_reward_branch_immutable'))
+    return t('rewards.errors.branchImmutable');
+  if (message.includes('loyalty_reward_branch_required'))
+    return t('rewards.errors.saveFailed');
   if (message.includes('loyalty_reward_menu_item_foreign'))
     return t('rewards.errors.menuItemForeign');
   if (message.includes('loyalty_rewards_kind_shape'))

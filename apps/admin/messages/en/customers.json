@@ -11,7 +11,7 @@
   },
   "empty": {
     "title": "No customers yet",
-    "description": "Once people order via the customer web app they’ll appear here."
+    "description": "People who sign in or order at this branch will appear here."
   },
   "emptyPage": {
     "title": "Nothing on this page",
@@ -25,7 +25,8 @@
     "orders": "Orders",
     "spent": "Lifetime spend",
     "lastSeen": "Last seen",
-    "joined": "Joined"
+    "joined": "Joined",
+    "points": "Points"
   },
   "address": {
     "lastDelivered": "Last delivered {date}",
@@ -46,5 +47,100 @@
     "previous": "Previous",
     "next": "Next",
     "page": "Page {page} of {pages}"
+  },
+  "summaryFiltered": "{count, plural, one {# customer matches} other {# customers match}} “{query}”",
+  "emptySearch": {
+    "title": "No customers match",
+    "description": "Nobody at this branch matches “{query}”. Try part of a name, a phone number or an email.",
+    "action": "Show everyone"
+  },
+  "search": {
+    "label": "Search customers",
+    "placeholder": "Name, phone or email",
+    "submit": "Search",
+    "clear": "Clear"
+  },
+  "points": "{points, plural, one {# pt} other {# pts}}",
+  "unnamed": "Unnamed customer",
+  "nameFromOrder": "Name from their latest order",
+  "phoneFromOrder": "From their latest order",
+  "legend": "Every figure is this branch only. Orders and spend count completed orders; last seen is their latest order here that was not cancelled; points are this branch’s loyalty points.",
+  "detail": {
+    "title": "Customer",
+    "unnamed": "Unnamed customer",
+    "since": "Customer here since {date}",
+    "walkInRecord": "No account",
+    "nameFromOrder": "name from their latest order",
+    "fromOrder": "from their latest order",
+    "never": "Never",
+    "notFound": {
+      "title": "Customer not found",
+      "description": "This customer is not on this branch’s list."
+    },
+    "loadError": "This customer could not be loaded. Reload the page.",
+    "stats": {
+      "orders": "Completed orders",
+      "spent": "Spent",
+      "lastSeen": "Last seen",
+      "points": "Points"
+    },
+    "contact": {
+      "title": "Contact",
+      "phone": "Phone",
+      "email": "Email",
+      "birthday": "Birthday",
+      "marketing": "Marketing",
+      "consentYes": "Agreed to hear from this branch",
+      "consentNo": "Has not agreed",
+      "none": "Not on file"
+    },
+    "orders": {
+      "title": "Orders at this branch",
+      "empty": "No orders at this branch yet.",
+      "showing": "The latest {shown} of {count, plural, one {# order} other {# orders}}"
+    },
+    "addresses": {
+      "title": "Saved addresses",
+      "empty": "No saved addresses.",
+      "default": "Default"
+    },
+    "loyalty": {
+      "title": "Loyalty at this branch",
+      "none": "Has not earned points at this branch yet.",
+      "balance": "Balance",
+      "earned": "Earned",
+      "spent": "Spent",
+      "ledgerTitle": "Recent points activity",
+      "ledgerEmpty": "No points activity yet.",
+      "type": {
+        "earned": "Earned",
+        "redeemed": "Redeemed",
+        "adjusted": "Adjusted",
+        "expired": "Expired"
+      },
+      "adjust": {
+        "open": "Adjust points",
+        "title": "Adjust this member’s points",
+        "add": "Add",
+        "remove": "Remove",
+        "pointsLabel": "Points",
+        "balanceNow": "Balance now: {points, plural, one {# point} other {# points}}",
+        "reasonLabel": "Reason",
+        "reasonPlaceholder": "e.g. Points missed on Friday’s order",
+        "reasonHint": "The member sees this reason in their points history.",
+        "cancel": "Cancel",
+        "submitAdd": "Add points",
+        "submitRemove": "Remove points",
+        "done": "Points updated. New balance: {points, plural, one {# point} other {# points}}.",
+        "error": {
+          "notAuthorized": "You do not have permission to change points at this branch.",
+          "badDelta": "Enter a whole number of points from 1 to {max, number}.",
+          "badReason": "Give a reason of up to {length, number} characters.",
+          "notInBranch": "This customer is not on this branch’s list, so their points cannot be changed here.",
+          "insufficient": "This member does not have that many points to remove.",
+          "generic": "The points could not be changed. Try again."
+        }
+      }
+    }
   }
 }

@@ -8,22 +8,10 @@
     "title": "Marca y sucursales",
     "subtitle": "El nombre de marca, los colores y las imágenes predeterminadas de {restaurant}, y sus sucursales. Cada sucursal pone su propio logo e ícono de la app en su Configuración de sucursal."
   },
-  "loyalty": {
-    "title": "Fondo de puntos",
-    "description": "Elige si los puntos se comparten entre todas las sucursales (predeterminado) o se limitan a una sola sucursal.",
-    "modes": {
-      "brand": "Marca",
-      "branch": "Sucursal"
-    },
-    "modeHints": {
-      "brand": "Los puntos se acumulan entre todas las sucursales de este restaurante.",
-      "branch": "Los puntos se ganan y se canjean dentro de una sola sucursal."
-    }
-  },
   "storefront": {
-    "title": "Apariencia de la tienda en línea",
+    "title": "Apariencia predeterminada de la tienda",
     "saved": "Guardado ✓",
-    "description": "Cómo ven el menú los clientes. Se aplica a todas las sucursales de este restaurante.",
+    "description": "El diseño del menú y la portada que muestra cada sucursal hasta que defina los suyos en Ajustes de la sucursal → Diseño del menú. La apariencia propia de una sucursal siempre tiene prioridad.",
     "menuLayout": "Diseño del menú",
     "cardStyle": "Estilo de tarjeta",
     "heroTitle": "Título de portada",
@@ -46,7 +34,7 @@
     "offlineHidden": "Tienda fuera de línea mientras está oculta",
     "settings": "Configuración",
     "empty": "Aún no hay sucursales.",
-    "copyNote": "Una sucursal nueva puede copiar el menú, el horario de atención y la configuración de pagos de otra existente. El pin del mapa y los códigos QR de mesas nunca se copian: configúralos en los ajustes de la nueva sucursal."
+    "copyNote": "Una sucursal nueva puede copiar el menú, el horario de atención, la configuración de pagos, entregas e impuestos, la apariencia y el programa de fidelidad de otra existente. El pin del mapa, los códigos QR de mesas, el QR de pago, el stock, el personal y los clientes nunca se copian: configúralos en la nueva sucursal."
   },
   "brandList": {
     "default": "Predeterminada",
@@ -72,25 +60,23 @@
       "brand": "Marca (opcional)",
       "brandNone": "— Ninguna —",
       "startFrom": "Partir de",
-      "startFromNothing": "Nada (una sucursal vacía)"
-    },
-    "timezones": {
-      "eastern": "Hora del Este (Nueva York)",
-      "central": "Hora del Centro (Chicago)",
-      "mountain": "Hora de la Montaña (Denver)",
-      "mountainNoDst": "Hora de la Montaña, sin horario de verano (Phoenix)",
-      "pacific": "Hora del Pacífico (Los Ángeles)",
-      "alaska": "Alaska (Anchorage)",
-      "hawaii": "Hawái (Honolulu)"
+      "startFromNothing": "Nada (una sucursal vacía)",
+      "slugHint": "Forma parte de la dirección web de la tienda. Letras minúsculas, números y guiones.",
+      "timezoneHint": "El horario, los pedidos programados y los informes diarios usan esta zona. Empieza con la zona de este dispositivo."
     },
     "copy": {
       "menu": "Copiar menú",
-      "menuHint": "Categorías, productos y sus grupos de opciones",
+      "menuHint": "Categorías, productos, grupos de opciones y combos. El control de stock empieza desactivado hasta que cuentes el stock allí.",
       "hours": "Copiar horario de atención",
       "hoursHint": "El horario semanal, no los cierres puntuales",
-      "settings": "Copiar configuración de pagos y entregas",
-      "settingsHint": "Métodos de pago, entregas, propinas y cargo por servicio",
-      "notCopied": "No se copian la dirección, el pin del mapa, el logo, el ícono de la app, los colores ni los códigos QR de mesas."
+      "settings": "Copiar la configuración",
+      "settingsHint": "Métodos de pago, entregas, propinas, cargo por servicio, impuesto sobre ventas, tiempo de preparación, consumo en el local y pedidos programados",
+      "notCopied": "No se copian la dirección, el pin del mapa, el logo, el ícono de la app, el QR de pago, el stock, el personal, los clientes, los puntos de fidelidad ni los códigos QR de mesas.",
+      "look": "Copiar la apariencia",
+      "lookHint": "Colores, diseño del menú y portada. Cada sucursal sube su propio logo e ícono de la app.",
+      "qrNever": "El QR de pago nunca se copia: es la cuenta bancaria de la otra sucursal. La transferencia queda desactivada en la nueva sucursal hasta que suba su propio QR.",
+      "loyalty": "Copiar el programa de fidelidad",
+      "loyaltyHint": "Tasa de puntos, niveles, beneficios y lista de recompensas. Los miembros y sus puntos se quedan en su propia sucursal. Una recompensa de producto gratis necesita que también se copie el menú."
     },
     "close": "Cerrar",
     "cancel": "Cancelar",
@@ -106,20 +92,42 @@
       "noBranchId": "La sucursal se creó, pero la respuesta no indicó cuál era, así que no se copió nada. Cierra esto y configura la sucursal en sus propios ajustes.",
       "copyMenuNotEmpty": "La sucursal se creó, pero falló la copia desde {source}: la nueva sucursal ya tiene productos en el menú. Desmarca “Copiar menú” y reintenta para copiar el resto, o cierra esto y configura la sucursal en sus propios ajustes.",
       "copyFailed": "La sucursal se creó, pero falló la copia desde {source}. Puedes reintentar la copia, o cerrar esto y configurar la sucursal en sus propios ajustes.",
-      "generic": "Algo salió mal. Inténtalo de nuevo."
+      "generic": "Algo salió mal. Inténtalo de nuevo.",
+      "invalidSlug": "El slug de URL solo admite letras minúsculas, números y guiones simples, de 2 a 64 caracteres, como centro-2.",
+      "invalidTimezone": "No se reconoce esa zona horaria. Elige una de la lista.",
+      "invalidTaxRate": "La tasa de impuesto sobre ventas debe estar entre 0 % y 50 %.",
+      "invalidBrand": "Esa marca no pertenece a este restaurante. Elige otra o ninguna.",
+      "copyNotAuthorized": "La sucursal se creó, pero no tienes permiso para copiar desde {source}. Cierra esto y configura la sucursal en sus propios ajustes."
     }
   },
   "created": {
     "title": "Sucursal creada",
     "copiedFrom": "Se copió a {name} desde {source}:",
-    "copiedFromUnknown": "Se copió a {name} desde la sucursal de origen:",
     "menu": "{categories, plural, one {# categoría} other {# categorías}}, {items, plural, one {# producto} other {# productos}} y {groups, plural, one {# grupo de opciones} other {# grupos de opciones}}",
     "hours": "{count, plural, one {# franja de horario de atención} other {# franjas de horario de atención}}",
-    "settingsCopied": "Configuración de pagos, entregas, propinas y cargo por servicio",
+    "settingsCopied": "Configuración de pagos, entregas, propinas, cargo por servicio, impuesto sobre ventas, tiempo de preparación, consumo en el local y pedidos programados",
     "settingsNone": "Sin configuración de pagos ni entregas: la sucursal de origen no tiene ninguna guardada",
-    "todo": "Pendiente en la nueva sucursal: colocar su pin en el mapa y configurar los códigos QR de sus mesas. Eso nunca se copia.",
     "done": "Listo",
-    "openSettings": "Abrir su configuración"
+    "openSettings": "Abrir su configuración",
+    "combos": "{count, plural, one {# combo} other {# combos}}",
+    "scheduleWindows": "{count, plural, one {# franja para pedidos programados} other {# franjas para pedidos programados}}",
+    "lookCopied": "Colores, diseño del menú y portada",
+    "empty": "{name} empieza vacía: sin menú, sin horario de atención (abierta todo el día) y con la configuración estándar.",
+    "transferOff": "La transferencia está desactivada aquí: el QR de pago es de la otra sucursal y no se copió. Sube el QR propio de esta sucursal en sus ajustes y luego activa la transferencia.",
+    "stockOff": "{count, plural, one {# producto controlaba stock en la sucursal de origen. Aquí el control está desactivado} other {# productos controlaban stock en la sucursal de origen. Aquí el control está desactivado}} hasta que cuentes el stock en la nueva sucursal.",
+    "todoTitle": "Pendiente en {name}:",
+    "todo": {
+      "pin": "Colocar su pin en el mapa (las tarifas de entrega y los repartidores se calculan desde ahí)",
+      "tables": "Configurar sus mesas e imprimir sus códigos QR",
+      "tax": "Revisar la tasa de impuesto sobre ventas ({rate})",
+      "paymentQr": "Subir su propio QR de pago si acepta transferencias",
+      "stock": "Contar el stock y luego activar el control de stock",
+      "staff": "Invitar a su personal (caja, cocina)",
+      "riders": "Aprobar repartidores para esta sucursal",
+      "loyalty": "Configurar su programa de fidelidad y recompensas"
+    },
+    "loyaltyCopied": "{count, plural, =0 {La configuración del programa de fidelidad (sin recompensas)} one {El programa de fidelidad y # recompensa} other {El programa de fidelidad y # recompensas}}",
+    "rewardsSkipped": "{count, plural, one {# recompensa de producto gratis no se copió porque su producto no se copió. Créala de nuevo cuando el menú esté listo.} other {# recompensas de producto gratis no se copiaron porque sus productos no se copiaron. Créalas de nuevo cuando el menú esté listo.}}"
   },
   "editor": {
     "title": "Editar marca",
@@ -151,5 +159,8 @@
   "errors": {
     "generic": "Algo salió mal. Inténtalo de nuevo.",
     "permissionDenied": "No tienes permiso para hacer eso."
+  },
+  "shared": {
+    "ownerOnly": "Solo el dueño del restaurante o un administrador de todas las sucursales puede cambiar esta configuración compartida. Aun así puedes agregar una sucursal."
   }
 }

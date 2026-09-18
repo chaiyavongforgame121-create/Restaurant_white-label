@@ -5,7 +5,8 @@
     "managerRequired": "Only an owner or manager can change these branch settings.",
     "ownerOnlyDomain": "Only the restaurant owner can change the custom domain.",
     "domainTaken": "Another branch already uses that domain.",
-    "noPermission": "Your role isn’t allowed to make this change."
+    "noPermission": "Your role isn’t allowed to make this change.",
+    "busyMinutesRange": "Busy mode can add 0 to {max} minutes of prep time."
   },
   "settings": {
     "title": "Branch settings",
@@ -30,7 +31,9 @@
     "tax": {
       "title": "Sales tax",
       "description": "US state + local sales tax applied to taxable items. Enter as a percent (e.g. <code>8.875</code> for NYC, <code>9.5</code> for LA).",
-      "rate": "Tax rate (%)"
+      "rate": "Tax rate (%)",
+      "zeroConfirmed": "0% is correct for this branch",
+      "zeroConfirmedHint": "For example, your prices already include tax. The dashboard then stops asking about the tax rate."
     },
     "domain": {
       "title": "Custom domain",
@@ -50,7 +53,8 @@
       "hint": "Read-only snapshot of branches.settings — edit via the cards above."
     },
     "seatLimit": "Nothing was saved. {seats, plural, =1 {Your one branch seat is} other {All # of your branch seats are}} already used by active branches, so this branch cannot be made active again. Add a seat on <link>Plan & billing</link>, or hide another branch first.",
-    "save": "Save changes"
+    "save": "Save changes",
+    "readOnly": "Only the owner or an admin can change the settings below. You can still view them."
   },
   "location": {
     "title": "Location",
@@ -68,15 +72,6 @@
     "longitude": "Longitude",
     "saveLocation": "Save location",
     "timezone": "Time zone",
-    "timezones": {
-      "eastern": "Eastern — New York, Miami, Atlanta",
-      "central": "Central — Chicago, Houston, Dallas",
-      "mountain": "Mountain — Denver, Salt Lake City",
-      "arizona": "Arizona — Phoenix (no daylight saving)",
-      "pacific": "Pacific — Los Angeles, Seattle",
-      "alaska": "Alaska — Anchorage",
-      "hawaii": "Hawaii — Honolulu"
-    },
     "timezoneHint": "Opening hours and delivery windows are read in this zone. Set it to the zone the store is physically in, not head office.",
     "saveTimezone": "Save time zone",
     "saved": "Saved.",
@@ -95,7 +90,8 @@
       "pinRequired": "Pick the new address on the map so delivery knows where to collect.",
       "notAuthorized": "Only an owner or manager can move a branch.",
       "signedOut": "You’ve been signed out. Sign in again and retry.",
-      "branchNotFound": "This branch could not be found."
+      "branchNotFound": "This branch could not be found.",
+      "invalidTimezone": "Pick a time zone from the list."
     }
   },
   "hours": {
