@@ -1,4 +1,7 @@
-/* The kitchen board's sounds.
+/* The back office's sounds: the kitchen board's order chimes and the dashboard's "something new
+ * needs you" alert. They share this module (and so one AudioContext per tab) rather than each
+ * carrying a copy, because every lesson below was learned the hard way on the kitchen tablet and a
+ * second copy would have to learn them again.
  *
  * One AudioContext for the whole page. The board used to build a new context for every beep,
  * inside a realtime callback. Browsers create a context 'suspended' until the page has had a
@@ -44,6 +47,18 @@ export function audioContext(): AudioContext | null {
 
 export function audioRunning(): boolean {
   return audioContext()?.state === 'running';
+}
+
+/** Whether the page has already had a tap or key press (sticky activation), so a context started
+ *  now is allowed to run: true after a client-side navigation from a click, false on a fresh load.
+ *  Unlike audioRunning() it never creates the AudioContext, so it is safe to ask before any gesture
+ *  (Chrome logs a warning for every context created too early). False where the browser cannot
+ *  say, and the caller then waits for a gesture of its own. */
+export function hadUserGesture(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const activation = (navigator as Navigator & { userActivation?: { hasBeenActive?: boolean } })
+    .userActivation;
+  return activation?.hasBeenActive === true;
 }
 
 /** How long unlockAudio() waits for resume(). A resume() the browser refuses (no user activation

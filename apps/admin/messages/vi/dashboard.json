@@ -100,6 +100,8 @@
     "allClear": "Đã kiểm tra tất cả, không có việc tồn đọng",
     "checksFailed": "{count, plural, other {# mục kiểm tra không chạy được}}",
     "waiting": "{count, plural, other {# việc đang chờ bạn}}",
+    "upcomingOnly": "{count, plural, other {Không có việc gấp · # đơn hẹn giờ giao hàng sắp tới}}",
+    "needYou": "{count, plural, other {# đơn cần bạn}}",
     "emptyTitle": "Hiện không có việc nào cần bạn",
     "checkedList": "Đã kiểm tra: {list}.",
     "checkedNothing": "Không có gì để kiểm tra.",
@@ -107,12 +109,25 @@
     "checkFailed": "Không chạy được mục kiểm tra này. Hệ thống sẽ thử lại ở lần làm mới tiếp theo.",
     "seeAll": {
       "orders": "Xem tất cả {count} trong Đơn hàng →",
+      "bookings": "Xem tất cả đơn hẹn giờ giao hàng trong Đơn hàng →",
       "deliveries": "Xem tất cả {count} trong Đơn đang giao →",
       "kitchen": "Xem tất cả {count} trên màn hình bếp →",
       "inventory": "Xem tất cả {count} trong Tồn kho →",
       "drivers": "Xem tất cả {count} trong Tài xế →",
       "payouts": "Xem tất cả {count} trong Chi trả tài xế →"
     }
+  },
+  "alerts": {
+    "newBadge": "Mới",
+    "newCount": "{count} mới",
+    "toast": "{count, plural, other {Có # mục mới cần chú ý}}",
+    "view": "Xem",
+    "dismiss": "Đóng",
+    "markSeen": "Đánh dấu đã xem",
+    "soundToggle": "Âm báo",
+    "soundOn": "Âm báo đang bật",
+    "soundOff": "Âm báo đang tắt",
+    "soundLocked": "Nhấp vào bất kỳ đâu trên trang để bật âm báo"
   },
   "buckets": {
     "proofs": "Biên lai chuyển khoản cần duyệt",
@@ -121,6 +136,7 @@
     "deliveryUnaccepted": "Đơn giao chưa ai nhận",
     "customersWaiting": "Khách đang chờ",
     "kitchenLate": "Bếp đang trễ",
+    "scheduledDeliveries": "Đơn hẹn giờ giao hàng",
     "scheduled": "Đơn hẹn giờ sắp đến hạn",
     "stock": "Món hết hàng hoặc sắp hết",
     "riders": "Tài xế đang chờ bạn",
@@ -154,6 +170,27 @@
     "bookingNotAccepted": "Chưa có ai nhận đơn hẹn giờ này",
     "bookingStillHeld": "Lẽ ra đã phải vào bếp — vẫn đang giữ"
   },
+  "bookings": {
+    "at": {
+      "today": "Hôm nay {time}",
+      "tomorrow": "Ngày mai {time}",
+      "yesterday": "Hôm qua {time}",
+      "date": "{date}, {time}"
+    },
+    "state": {
+      "unpaid": "Chưa thanh toán",
+      "stuckHeld": "Chưa chuyển vào bếp",
+      "notAccepted": "Chưa nhận đơn",
+      "accepted": "Đã nhận đơn",
+      "inKitchen": "Đang làm trong bếp",
+      "ready": "Đã sẵn sàng",
+      "onTheWay": "Đang giao"
+    },
+    "why": {
+      "unpaid": "Đang chờ khách chuyển khoản",
+      "releasesAt": "Vào bếp lúc {time}"
+    }
+  },
   "orderStatus": {
     "pending": "đang chờ",
     "confirmed": "đã xác nhận",
@@ -171,7 +208,8 @@
     "hours": "{hours} giờ",
     "hoursMinutes": "{hours} giờ {minutes} phút",
     "days": "{days} ngày",
-    "dueIn": "còn {span}"
+    "dueIn": "còn {span}",
+    "late": "Trễ {span}"
   },
   "trend": {
     "title": "Xu hướng doanh thu",

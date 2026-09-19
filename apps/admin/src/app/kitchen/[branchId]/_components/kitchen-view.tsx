@@ -23,7 +23,7 @@ import {
 } from './kitchen-model';
 import {
   UNLOCK_EVENTS, audioContext, playChime, speak, speechAvailable, speechLang, unlockAudio,
-} from './kitchen-sound';
+} from '@/lib/sound';
 
 /* ──────────────────────────────────────────────────────────────────────────
    "Sunset" theme — warm, light, gradient. Kept local to the kitchen surface so
@@ -355,7 +355,7 @@ export function KitchenView({
     if (playChime(kind)) lastChimeRef.current = Date.now();
   }, []);
 
-  /* One AudioContext for the page (kitchen-sound.ts). Browsers keep it suspended until the page
+  /* One AudioContext for the page (lib/sound.ts). Browsers keep it suspended until the page
      has had a tap or key press, so the first one anywhere on the board unlocks it. It keeps
      listening: iOS suspends the context again after a call or when the tablet sleeps, and the
      next tap has to bring it back. While sound is on and the context is not running, the board

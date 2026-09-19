@@ -2,15 +2,21 @@ import { describe, expect, it } from 'vitest';
 import { branchDayKey, shiftDayKey, startOfBranchDayUtc } from '@favornoms/database/queries';
 import type {
   DashboardKitchenOrder,
+  DashboardScheduledDelivery,
   DashboardScheduledOrder,
   LiveDelivery,
 } from '@favornoms/database/queries';
 import {
+  bookingState,
+  heldOrderIds,
   lastReadyAt,
+  leadTimeMs,
+  ordersListedIn,
   parseStamp,
   readDeliveries,
   readKitchen,
   readScheduled,
+  readScheduledDeliveries,
   spanOf,
   unacceptedReason,
 } from './action-model';
@@ -284,6 +290,48 @@ describe('readDeliveries', () => {
       startedAgo: { unit: 'days', days: 3 },
     });
   });
+
+  it('does not chase the delivery of a booking still held for its time', () => {
+    // The live shape of A-2609-0003: booked at 14:39 for 22:00, its delivery row `pending`
+    // since 14:39 — "overdue" by the board's rule half an hour later.
+    const booked = delivery({ status: 'pending', created_at: minsAgo(63) });
+    const bookedOrder = booked.order!;
+    const held = heldOrderIds([{ id: bookedOrder.id, held: true }, { id: 'other', held: false }]);
+    expect([...held]).toEqual([bookedOrder.id]);
+
+    const reading = readDeliveries([booked], NOW, false, BRANCH, held);
+    expect(reading.unaccepted).toHaveLength(0);
+    // The tile still counts what the Live deliveries board shows.
+    expect(reading.inFlight).toBe(1);
+    // Released (no longer held), the same row is chased again.
+    expect(readDeliveries([booked], NOW, false, BRANCH).unaccepted).toHaveLength(1);
+  });
+
+  it('names the order each row is about', () => {
+    const reading = readDeliveries([delivery({ created_at: minsAgo(45) })], NOW, false, BRANCH);
+    expect(reading.unaccepted[0]?.orderId).toBe('ord1');
+  });
+});
+
+describe('leadTimeMs', () => {
+  const min = 60_000;
+  it('reads the keys the way release_scheduled_orders and place-order do', () => {
+    expect(leadTimeMs({ schedule_lead_time_min: 30, prep_time_min: 15 })).toBe(30 * min);
+    expect(leadTimeMs({ prep_time_min: 20 })).toBe(20 * min);
+    // JSON null is coalesce's null: missing, not zero.
+    expect(leadTimeMs({ schedule_lead_time_min: null, prep_time_min: 25 })).toBe(25 * min);
+    expect(leadTimeMs({ schedule_lead_time_min: '40' })).toBe(40 * min);
+    expect(leadTimeMs({})).toBe(15 * min);
+  });
+
+  it('takes a saved 0 at its word instead of falling through to the prep time', () => {
+    expect(leadTimeMs({ schedule_lead_time_min: 0, prep_time_min: 15 })).toBe(0);
+  });
+
+  it('falls back to fifteen minutes for anything that is not a lead time', () => {
+    expect(leadTimeMs({ schedule_lead_time_min: 'soon' })).toBe(15 * min);
+    expect(leadTimeMs({ schedule_lead_time_min: -5 })).toBe(15 * min);
+  });
 });
 
 describe('unacceptedReason', () => {
@@ -359,6 +407,255 @@ describe('readScheduled', () => {
     );
     expect(rows).toHaveLength(1);
     expect(rows[0]?.why).toEqual({ code: 'bookingStillHeld' });
+  });
+});
+
+function delivered(over: Partial<DashboardScheduledDelivery> = {}): DashboardScheduledDelivery {
+  // The live shape at Food Thai Thai: a confirmed booking, held until its lead time.
+  return {
+    id: 'b1',
+    order_number: 'A-2609-300001',
+    status: 'confirmed',
+    held: true,
+    awaiting_payment: false,
+    scheduled_for: new Date(NOW + 5 * 60 * 60_000).toISOString(),
+    customer_name: 'Somchai',
+    ...over,
+  };
+}
+const inMin = (m: number) => new Date(NOW + m * 60_000).toISOString();
+
+describe('bookingState', () => {
+  const release = (o: DashboardScheduledDelivery) => Date.parse(o.scheduled_for) - LEAD_MS;
+  const stateOf = (over: Partial<DashboardScheduledDelivery>) => {
+    const o = delivered(over);
+    return bookingState(o, release(o), NOW);
+  };
+
+  it('names every stage a booking passes through', () => {
+    expect(stateOf({ status: 'pending' })).toBe('notAccepted');
+    expect(stateOf({ status: 'confirmed', held: true })).toBe('accepted');
+    expect(stateOf({ status: 'confirmed', held: false })).toBe('inKitchen');
+    expect(stateOf({ status: 'preparing', held: false })).toBe('inKitchen');
+    expect(stateOf({ status: 'ready', held: false })).toBe('ready');
+    expect(stateOf({ status: 'out_for_delivery', held: false })).toBe('onTheWay');
+  });
+
+  it('puts an unpaid transfer first: nothing moves until it is paid', () => {
+    expect(stateOf({ status: 'pending', awaiting_payment: true })).toBe('unpaid');
+  });
+
+  it('calls a booking still held after its release time stuck, whatever its status', () => {
+    expect(stateOf({ status: 'confirmed', held: true, scheduled_for: inMin(5) })).toBe('stuckHeld');
+    expect(stateOf({ status: 'pending', held: true, scheduled_for: inMin(5) })).toBe('stuckHeld');
+  });
+});
+
+describe('readScheduledDeliveries', () => {
+  it('lists every booking still to go out, soonest first', () => {
+    const { rows } = readScheduledDeliveries(
+      [
+        delivered({ id: 'late-evening', scheduled_for: inMin(8 * 60) }),
+        delivered({ id: 'next-week', scheduled_for: inMin(7 * 24 * 60) }),
+        delivered({ id: 'soon', status: 'preparing', held: false, scheduled_for: inMin(30) }),
+      ],
+      NOW,
+      LEAD_MS,
+      BRANCH,
+    );
+    expect(rows.map((r) => r.key)).toEqual(['soon', 'late-evening', 'next-week']);
+  });
+
+  it('breaks a tie on the booked time by order number, so rows do not swap on refresh', () => {
+    const slot = inMin(120);
+    const { rows } = readScheduledDeliveries(
+      [
+        delivered({ id: 'b', order_number: 'A-2609-000002', scheduled_for: slot }),
+        delivered({ id: 'a', order_number: 'A-2609-000001', scheduled_for: slot }),
+      ],
+      NOW,
+      LEAD_MS,
+      BRANCH,
+    );
+    expect(rows.map((r) => r.key)).toEqual(['a', 'b']);
+  });
+
+  it('chases a booking nobody has accepted however far off it is', () => {
+    const reading = readScheduledDeliveries(
+      [delivered({ status: 'pending', scheduled_for: inMin(3 * 24 * 60) })],
+      NOW,
+      LEAD_MS,
+      BRANCH,
+    );
+    expect(reading.needsAction).toBe(1);
+    expect(reading.rows[0]).toMatchObject({ state: 'notAccepted', weight: 'strong', late: false });
+  });
+
+  it('only lists an accepted booking, a step louder once it is due within the hour', () => {
+    const reading = readScheduledDeliveries(
+      [
+        delivered({ id: 'tonight', scheduled_for: inMin(5 * 60) }),
+        delivered({ id: 'next', status: 'preparing', held: false, scheduled_for: inMin(45) }),
+      ],
+      NOW,
+      LEAD_MS,
+      BRANCH,
+    );
+    expect(reading.needsAction).toBe(0);
+    const byKey = Object.fromEntries(reading.rows.map((r) => [r.key, r]));
+    expect(byKey.next).toMatchObject({ state: 'inKitchen', dueSoon: true, weight: 'normal' });
+    expect(byKey.tonight).toMatchObject({ state: 'accepted', dueSoon: false, weight: 'quiet' });
+    expect(byKey.tonight?.releaseMs).toBe(Date.parse(inMin(5 * 60)) - LEAD_MS);
+  });
+
+  it('flags a booking past its time that has not left, but not one already on the road', () => {
+    const reading = readScheduledDeliveries(
+      [
+        delivered({ id: 'cooking', status: 'preparing', held: false, scheduled_for: inMin(-20) }),
+        delivered({
+          id: 'riding',
+          status: 'out_for_delivery',
+          held: false,
+          scheduled_for: inMin(-10),
+        }),
+      ],
+      NOW,
+      LEAD_MS,
+      BRANCH,
+    );
+    const byKey = Object.fromEntries(reading.rows.map((r) => [r.key, r]));
+    expect(byKey.cooking).toMatchObject({ late: true, needsAction: true, weight: 'strong' });
+    expect(byKey.cooking?.untilDueMs).toBe(-20 * 60_000);
+    expect(byKey.riding).toMatchObject({ late: false, needsAction: false, weight: 'quiet' });
+    expect(reading.needsAction).toBe(1);
+  });
+
+  it('leaves an unpaid booking to the diner until it is close', () => {
+    const far = readScheduledDeliveries(
+      [delivered({ status: 'pending', awaiting_payment: true, scheduled_for: inMin(6 * 60) })],
+      NOW,
+      LEAD_MS,
+      BRANCH,
+    );
+    expect(far.rows[0]).toMatchObject({ state: 'unpaid', needsAction: false });
+    const close = readScheduledDeliveries(
+      [delivered({ status: 'pending', awaiting_payment: true, scheduled_for: inMin(40) })],
+      NOW,
+      LEAD_MS,
+      BRANCH,
+    );
+    expect(close.rows[0]).toMatchObject({ state: 'unpaid', needsAction: true });
+  });
+
+  it('links to the order by its number and skips a row with no readable time', () => {
+    const { rows } = readScheduledDeliveries(
+      [delivered({ order_number: 'A-2609-300001' }), delivered({ id: 'bad', scheduled_for: 'nope' })],
+      NOW,
+      LEAD_MS,
+      BRANCH,
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.href).toBe(`/b/${BRANCH}/orders?q=A-2609-300001`);
+  });
+
+  it('treats a blank name as no name', () => {
+    const { rows } = readScheduledDeliveries(
+      [delivered({ customer_name: '   ' })],
+      NOW,
+      LEAD_MS,
+      BRANCH,
+    );
+    expect(rows[0]?.customerName).toBeNull();
+  });
+
+  it('with a lead time of 0, lets a booking out at its time and does not call it stuck before', () => {
+    const lead = leadTimeMs({ schedule_lead_time_min: 0, prep_time_min: 15 });
+    const reading = readScheduledDeliveries(
+      [delivered({ scheduled_for: inMin(10) })],
+      NOW,
+      lead,
+      BRANCH,
+    );
+    expect(reading.rows[0]).toMatchObject({ state: 'accepted', needsAction: false });
+    expect(reading.rows[0]?.releaseMs).toBe(Date.parse(inMin(10)));
+  });
+});
+
+describe('a booking that another bucket also lists', () => {
+  // Both live branches run a 15-minute lead, so kitchen-late starts exactly at the booked time.
+  const bookedOrder = (over: Partial<DashboardKitchenOrder>) =>
+    kitchenOrder({ id: 'b1', channel: 'delivery', created_at: minsAgo(6 * 60), ...over });
+
+  it('counts a late booking once: the kitchen lists it, the bookings group draws it', () => {
+    // Released, still `confirmed`, a minute past its time.
+    const kitchen = readKitchen(
+      [bookedOrder({ status: 'confirmed', scheduled_for: inMin(-1) })],
+      NOW,
+      LEAD_MS,
+      BRANCH,
+    );
+    expect(kitchen.kitchenLate.map((r) => r.key)).toEqual(['b1']);
+
+    const reading = readScheduledDeliveries(
+      [delivered({ id: 'b1', status: 'confirmed', held: false, scheduled_for: inMin(-1) })],
+      NOW,
+      LEAD_MS,
+      BRANCH,
+      ordersListedIn([kitchen.kitchenLate, kitchen.customersWaiting]),
+    );
+    expect(reading.rows[0]).toMatchObject({
+      late: true,
+      needsAction: true,
+      listedElsewhere: true,
+      weight: 'strong',
+    });
+    expect(reading.needsAction).toBe(1);
+    expect(reading.needsActionOnlyHere).toBe(0);
+  });
+
+  it('counts a booking nobody accepted once when the diner is also kept waiting', () => {
+    // Placed inside the lead time, so never held, and not accepted for eleven minutes.
+    const kitchen = readKitchen(
+      [bookedOrder({ status: 'pending', created_at: minsAgo(11), scheduled_for: inMin(4) })],
+      NOW,
+      LEAD_MS,
+      BRANCH,
+    );
+    expect(kitchen.customersWaiting.map((r) => r.key)).toEqual(['b1']);
+
+    const reading = readScheduledDeliveries(
+      [delivered({ id: 'b1', status: 'pending', held: false, scheduled_for: inMin(4) })],
+      NOW,
+      LEAD_MS,
+      BRANCH,
+      ordersListedIn([kitchen.kitchenLate, kitchen.customersWaiting]),
+    );
+    expect(reading.needsAction).toBe(1);
+    expect(reading.needsActionOnlyHere).toBe(0);
+  });
+
+  it('counts an unpaid booking with its slip in as the slip to approve', () => {
+    const reading = readScheduledDeliveries(
+      [delivered({ id: 'b1', status: 'pending', awaiting_payment: true, scheduled_for: inMin(30) })],
+      NOW,
+      LEAD_MS,
+      BRANCH,
+      ordersListedIn([], ['b1']),
+    );
+    expect(reading.rows[0]).toMatchObject({ state: 'unpaid', needsAction: true, listedElsewhere: true });
+    expect(reading.needsActionOnlyHere).toBe(0);
+  });
+
+  it('still counts a booking only this group knows about', () => {
+    const reading = readScheduledDeliveries(
+      [delivered({ id: 'b1', status: 'pending', scheduled_for: inMin(3 * 24 * 60) })],
+      NOW,
+      LEAD_MS,
+      BRANCH,
+      ordersListedIn([[]], ['someone-else']),
+    );
+    expect(reading.needsAction).toBe(1);
+    expect(reading.needsActionOnlyHere).toBe(1);
   });
 });
 

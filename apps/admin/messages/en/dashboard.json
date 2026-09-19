@@ -100,6 +100,8 @@
     "allClear": "Everything checked, nothing outstanding",
     "checksFailed": "{count, plural, one {# check could not run} other {# checks could not run}}",
     "waiting": "{count, plural, one {# thing waiting on you} other {# things waiting on you}}",
+    "upcomingOnly": "{count, plural, one {Nothing urgent · # booked delivery coming up} other {Nothing urgent · # booked deliveries coming up}}",
+    "needYou": "{count, plural, one {# needs you} other {# need you}}",
     "emptyTitle": "Nothing needs you right now",
     "checkedList": "Checked {list}.",
     "checkedNothing": "Nothing to check.",
@@ -107,12 +109,25 @@
     "checkFailed": "Couldn’t run this check. It will try again on the next refresh.",
     "seeAll": {
       "orders": "See all {count} in Orders →",
+      "bookings": "See every booked delivery in Orders →",
       "deliveries": "See all {count} in Live deliveries →",
       "kitchen": "See all {count} on the kitchen display →",
       "inventory": "See all {count} in Inventory →",
       "drivers": "See all {count} in Drivers →",
       "payouts": "See all {count} in Driver payouts →"
     }
+  },
+  "alerts": {
+    "newBadge": "New",
+    "newCount": "{count} new",
+    "toast": "{count, plural, one {# new item needs attention} other {# new items need attention}}",
+    "view": "Show me",
+    "dismiss": "Dismiss",
+    "markSeen": "Mark as seen",
+    "soundToggle": "Alert sound",
+    "soundOn": "Alert sound is on",
+    "soundOff": "Alert sound is off",
+    "soundLocked": "Click anywhere on the page to allow the alert sound"
   },
   "buckets": {
     "proofs": "Payment slips to approve",
@@ -121,6 +136,7 @@
     "deliveryUnaccepted": "Deliveries nobody has taken",
     "customersWaiting": "Customers waiting",
     "kitchenLate": "Kitchen running late",
+    "scheduledDeliveries": "Schedule Delivery bookings",
     "scheduled": "Pre-orders due soon",
     "stock": "Menu items out or running low",
     "riders": "Riders waiting on you",
@@ -154,6 +170,27 @@
     "bookingNotAccepted": "Nobody has accepted this booking yet",
     "bookingStillHeld": "Should already be in the kitchen — still held"
   },
+  "bookings": {
+    "at": {
+      "today": "Today {time}",
+      "tomorrow": "Tomorrow {time}",
+      "yesterday": "Yesterday {time}",
+      "date": "{date}, {time}"
+    },
+    "state": {
+      "unpaid": "Unpaid",
+      "stuckHeld": "Not released",
+      "notAccepted": "Not accepted",
+      "accepted": "Accepted",
+      "inKitchen": "In the kitchen",
+      "ready": "Ready",
+      "onTheWay": "On the way"
+    },
+    "why": {
+      "unpaid": "Waiting for the customer’s transfer",
+      "releasesAt": "Goes to the kitchen at {time}"
+    }
+  },
   "orderStatus": {
     "pending": "pending",
     "confirmed": "confirmed",
@@ -171,7 +208,8 @@
     "hours": "{hours} h",
     "hoursMinutes": "{hours} h {minutes} min",
     "days": "{days} d",
-    "dueIn": "due in {span}"
+    "dueIn": "due in {span}",
+    "late": "{span} late"
   },
   "trend": {
     "title": "Sales trend",

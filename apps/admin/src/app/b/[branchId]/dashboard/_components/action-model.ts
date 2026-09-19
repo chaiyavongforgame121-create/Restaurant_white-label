@@ -1,5 +1,6 @@
 import type {
   DashboardKitchenOrder,
+  DashboardScheduledDelivery,
   DashboardScheduledOrder,
   LiveDelivery,
 } from '@favornoms/database/queries';
@@ -34,6 +35,37 @@ export const PASS_LATE_MS = 5 * 60_000;
 export const ACCEPT_LATE_MS = 10 * 60_000;
 /** A booking this close that nobody has accepted is the merchant's problem now. */
 export const SCHEDULED_SOON_MS = 3 * 60 * 60_000;
+/**
+ * A Schedule Delivery booking this close is drawn a step louder even once it is accepted: it
+ * is the next thing out of the door. An hour is the lead time plus a delivery run with room to
+ * spare, and short enough that a normal evening does not light up the whole list.
+ */
+export const BOOKING_DUE_SOON_MS = 60 * 60_000;
+/**
+ * How long past its booked time an unfinished delivery booking stays on the list. Past that it
+ * is either delivered and nobody pressed the button, or forgotten test data — the kitchen and
+ * delivery boards already have their own "stalled" rules for both.
+ */
+export const BOOKING_LATE_WINDOW_MS = 2 * 60 * 60_000;
+/** How many of the upcoming bookings the dashboard lists before "See all". */
+export const BOOKING_ROWS_SHOWN = 10;
+/** kitchen-view's DEFAULT_LEAD_MIN and release_scheduled_orders' last fallback. */
+export const DEFAULT_LEAD_MIN = 15;
+
+/**
+ * How long before its booked time a scheduled order is let into the kitchen, read exactly as the
+ * other three readers of these keys read them — release_scheduled_orders' coalesce, place-order's
+ * `??` and kitchen-view's onSettings: the explicit lead time, else the prep time, else fifteen
+ * minutes. A saved 0 ("let it in at the booked time") is an answer, not a gap. This used `||`,
+ * which read 0 as missing and fell through to the prep time: every booking then said it would go
+ * to the kitchen fifteen minutes before the database actually let it out, and was called stuck
+ * for those fifteen minutes.
+ */
+export function leadTimeMs(settings: Readonly<Record<string, unknown>>): number {
+  const prep = Number(settings.prep_time_min ?? DEFAULT_LEAD_MIN);
+  const lead = Number(settings.schedule_lead_time_min ?? prep);
+  return (Number.isFinite(lead) && lead >= 0 ? lead : DEFAULT_LEAD_MIN) * 60_000;
+}
 
 /**
  * A duration in the parts the screen writes it with: '<1 min', '3 min', '2 h 10 min', '3 d'.
@@ -99,6 +131,11 @@ export interface ActionRow {
   age: RowAge;
   ageMs: number;
   href: string;
+  /**
+   * The order the row is about, when it is about one. A delivery row's key is the delivery's
+   * own id, so this is how one order listed by two buckets is recognised as one thing.
+   */
+  orderId?: string | null;
 }
 
 const byAgeDesc = (a: ActionRow, b: ActionRow) => b.ageMs - a.ageMs;
@@ -220,6 +257,7 @@ export function readKitchen(
 
     const base = {
       key: o.id,
+      orderId: o.id,
       title: `#${o.order_number}`,
       ageMs: elapsed,
       age: { kind: 'waited', span: spanOf(elapsed) } as const,
@@ -288,11 +326,30 @@ export function unacceptedReason(d: LiveDelivery, selfDelivery: boolean): RowRea
   return { code: 'deliveryOfferExpired' };
 }
 
+/**
+ * The orders still held for their booked time, from every read that carries the flag.
+ *
+ * place-order creates a booking's delivery row the moment the diner books, as `pending`, and
+ * neither the live-deliveries read nor describeDelivery knows the order is held — so half an hour
+ * after tonight's booking was taken, its delivery counts as "overdue, nobody has taken it". It is
+ * not waiting on anyone: release_scheduled_orders lets it into the kitchen at its lead time, and
+ * a release that is late is the bookings group's "Not released", not a rider's problem.
+ */
+export function heldOrderIds(
+  ...lists: ReadonlyArray<readonly { id: string; held: boolean }[]>
+): Set<string> {
+  const out = new Set<string>();
+  for (const list of lists) for (const o of list) if (o.held) out.add(o.id);
+  return out;
+}
+
 export function readDeliveries(
   all: readonly LiveDelivery[],
   nowMs: number,
   selfDelivery: boolean,
   branchId: string,
+  /** See heldOrderIds. Only Action Required leaves them out; the tile still counts the board. */
+  heldOrders: ReadonlySet<string> = new Set(),
 ): DeliveryReading {
   const { live, stale } = partitionStale(all, nowMs);
   const counts = boardCounts(live);
@@ -307,6 +364,7 @@ export function readDeliveries(
 
   const row = (d: LiveDelivery, href: string, why: RowReason): ActionRow => ({
     key: d.id,
+    orderId: d.order?.id ?? null,
     href,
     ageMs: nowMs - Date.parse(d.created_at),
     age: { kind: 'waited', span: spanSince(d.created_at, nowMs) },
@@ -322,6 +380,7 @@ export function readDeliveries(
         d.status === 'dispatching' ||
         (d.status === 'assigned' && !d.accepted_at),
     )
+    .filter((d) => !(d.order && heldOrders.has(d.order.id)))
     .filter((d) => describeDelivery(d, nowMs, selfDelivery).overdue)
     .map((d) => row(d, deliveriesHref, unacceptedReason(d, selfDelivery)))
     .sort(byAgeDesc);
@@ -376,4 +435,162 @@ export function readScheduled(
   }
   // Soonest first: the opposite of every other bucket, because here small means urgent.
   return out.sort((a, b) => a.ageMs - b.ageMs);
+}
+
+// ---------------------------------------------------------------------------------------
+// Schedule Delivery bookings
+// ---------------------------------------------------------------------------------------
+
+/**
+ * Where a delivery booking has got to, as the merchant would say it. One state per row, picked
+ * in the order the checks are listed: payment blocks everything after it (the
+ * orders_block_unpaid_transfer trigger keeps an unpaid transfer at `pending`), and a booking
+ * still held past its release time is a fault whatever its status says.
+ */
+export type BookingState =
+  | 'unpaid'
+  | 'stuckHeld'
+  | 'notAccepted'
+  | 'accepted'
+  | 'inKitchen'
+  | 'ready'
+  | 'onTheWay';
+
+/**
+ * How loudly a row is drawn. `strong` needs a human now; `normal` is the next thing out of the
+ * door; `quiet` is simply coming up, listed so the owner can see the evening ahead.
+ */
+export type BookingWeight = 'strong' | 'normal' | 'quiet';
+
+export interface BookingRow {
+  key: string;
+  orderNumber: string;
+  /** As the diner typed it. */
+  customerName: string | null;
+  dueMs: number;
+  /** Negative once the booked time has passed. */
+  untilDueMs: number;
+  /** When release_scheduled_orders lets it into the kitchen: the booked time less the lead. */
+  releaseMs: number;
+  state: BookingState;
+  /** Past its booked time and not on the road yet. */
+  late: boolean;
+  dueSoon: boolean;
+  needsAction: boolean;
+  /**
+   * Another bucket lists this order already: a booking past its time is also a late kitchen
+   * ticket, one nobody accepted is also a diner kept waiting, an unpaid one with its slip in is a
+   * slip to approve. It is still drawn as needing action here; it is only not counted twice.
+   */
+  listedElsewhere: boolean;
+  weight: BookingWeight;
+  href: string;
+}
+
+export interface BookingReading {
+  /** Soonest first, every row read; the page decides how many it lists. */
+  rows: BookingRow[];
+  /** Rows that need a human: the bucket's own "N need you". */
+  needsAction: number;
+  /**
+   * Those of them no other bucket lists — the only ones this group adds to "N things waiting on
+   * you". Counting a late booking in both groups said "2 things" about one order.
+   */
+  needsActionOnlyHere: number;
+}
+
+/**
+ * Every order the given rows are about, plus any ids named directly (a slip is listed by its
+ * payment, but it is about an order all the same).
+ */
+export function ordersListedIn(
+  rowLists: ReadonlyArray<readonly ActionRow[]>,
+  orderIds: readonly string[] = [],
+): Set<string> {
+  const out = new Set<string>(orderIds);
+  for (const rows of rowLists) for (const r of rows) if (r.orderId) out.add(r.orderId);
+  return out;
+}
+
+export function bookingState(
+  o: Pick<DashboardScheduledDelivery, 'status' | 'held' | 'awaiting_payment'>,
+  releaseMs: number,
+  nowMs: number,
+): BookingState {
+  if (o.awaiting_payment) return 'unpaid';
+  // readScheduled's overdueRelease, for the same reason: the release job runs every minute.
+  if (o.held && releaseMs < nowMs) return 'stuckHeld';
+  switch (o.status) {
+    case 'pending':
+      return 'notAccepted';
+    case 'confirmed':
+      return o.held ? 'accepted' : 'inKitchen';
+    case 'preparing':
+      return 'inKitchen';
+    case 'ready':
+      return 'ready';
+    case 'out_for_delivery':
+      return 'onTheWay';
+    default:
+      // The read asks for unfinished statuses only; anything new is shown as accepted
+      // rather than dropped, which would hide a booking.
+      return 'accepted';
+  }
+}
+
+/**
+ * Every Schedule Delivery booking still to go out, with what each one needs. A booking nobody
+ * has accepted needs a human however far off it is — the diner is waiting to hear yes, and
+ * accepting it is the whole job — so unlike readScheduled there is no "due soon" gate on that.
+ * An unpaid one only becomes the merchant's problem close to its time (until then it is the
+ * diner's move, and the slip queue already asks for the decision once a slip is in).
+ */
+export function readScheduledDeliveries(
+  rows: readonly DashboardScheduledDelivery[],
+  nowMs: number,
+  leadMs: number,
+  branchId: string,
+  /** Orders another bucket already lists (ordersListedIn). */
+  listedElsewhere: ReadonlySet<string> = new Set(),
+): BookingReading {
+  const out: BookingRow[] = [];
+  for (const o of rows) {
+    const dueMs = Date.parse(o.scheduled_for);
+    if (!Number.isFinite(dueMs)) continue;
+    const untilDueMs = dueMs - nowMs;
+    const releaseMs = dueMs - leadMs;
+    const state = bookingState(o, releaseMs, nowMs);
+    const late = untilDueMs < 0 && state !== 'onTheWay';
+    const dueSoon = untilDueMs <= BOOKING_DUE_SOON_MS;
+    const needsAction =
+      state === 'notAccepted' ||
+      state === 'stuckHeld' ||
+      (state === 'unpaid' && dueSoon) ||
+      late;
+    out.push({
+      key: o.id,
+      orderNumber: o.order_number,
+      customerName: o.customer_name?.trim() || null,
+      dueMs,
+      untilDueMs,
+      releaseMs,
+      state,
+      late,
+      dueSoon,
+      needsAction,
+      listedElsewhere: listedElsewhere.has(o.id),
+      weight: needsAction ? 'strong' : dueSoon && state !== 'onTheWay' ? 'normal' : 'quiet',
+      // The order itself, found by its number, and not the scheduled filter: that one starts
+      // at now(), so it would not show a booking that is already late.
+      href: `/b/${branchId}/orders?q=${encodeURIComponent(o.order_number)}`,
+    });
+  }
+  // By booked time, as the kitchen needs them; the number breaks a tie so two bookings for the
+  // same slot do not swap places on every refresh.
+  out.sort((a, b) => a.dueMs - b.dueMs || a.orderNumber.localeCompare(b.orderNumber));
+  return {
+    rows: out,
+    needsAction: out.filter((r) => r.needsAction).length,
+    needsActionOnlyHere: out.filter((r) => r.needsAction && !r.listedElsewhere).length,
+  };
 }

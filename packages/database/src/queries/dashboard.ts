@@ -150,6 +150,16 @@ export interface DashboardScheduledOrder {
 }
 
 /**
+ * A Schedule Delivery booking: channel `delivery` with a booked time. The storefront offers
+ * delivery only this way (place-order refuses an ASAP delivery from a customer), so this is
+ * every delivery a diner has booked, whatever state it has reached since.
+ */
+export interface DashboardScheduledDelivery extends DashboardScheduledOrder {
+  /** A transfer booking whose slip nobody has approved yet: it cannot leave `pending`. */
+  awaiting_payment: boolean;
+}
+
+/**
  * One read's worth of answer. `error` is deliberately distinct from an empty `rows`: a
  * screen whose job is "what needs you" must never render an RLS denial as "all clear".
  * `available: false` means the read was never issued — the role or the plan puts that
@@ -193,6 +203,12 @@ export interface DashboardScope {
   now: number;
   /** How far ahead a booking counts as "approaching". */
   scheduledWithinMs: number;
+  /**
+   * How long after its booked time an unfinished Schedule Delivery booking stays listed. A
+   * delivery due twenty minutes ago that is still in the kitchen is the most urgent row of the
+   * lot, so the list cannot simply start at now().
+   */
+  scheduledDeliveryLateWindowMs: number;
 }
 
 export interface DashboardSnapshot {
@@ -208,18 +224,39 @@ export interface DashboardSnapshot {
   riderQueue: DashboardBucket<DashboardRiderQueueRow>;
   withdrawals: DashboardBucket<DashboardWithdrawal>;
   scheduled: DashboardBucket<DashboardScheduledOrder>;
+  scheduledDeliveries: DashboardBucket<DashboardScheduledDelivery>;
 }
 
 /** Eight days, not seven: the branch's local day can start a day away from the server's. */
 const TREND_WINDOW_DAYS = 8;
 /** A cancelled order older than this is an accounting job, not something to chase today. */
 const REFUND_WINDOW_DAYS = 30;
-const ACTION_ROW_LIMIT = 5;
-const STOCK_ROW_LIMIT = 8;
+/**
+ * The dashboard lists five rows a bucket, but reads more than it lists: its new-item alert
+ * compares row keys between refreshes, and with only the oldest five known, the sixth slip
+ * moving up when the first is approved would be announced as new. Fifty small rows cost
+ * nothing next to the kitchen read, and past fifty the alert falls back to the count.
+ */
+const ACTION_ROW_LIMIT = 50;
+const STOCK_ROW_LIMIT = 50;
 const KITCHEN_ROW_LIMIT = 300;
 const TREND_ROW_LIMIT = 5000;
 const RIDER_ROW_LIMIT = 200;
-const REFUND_ROW_LIMIT = 25;
+/** Cancelled paid orders read before the refunded ones are dropped; see `refundable` below. */
+const REFUND_ROW_LIMIT = ACTION_ROW_LIMIT;
+/**
+ * The dashboard shows the next ten bookings, but decides which of them need a human from a wider
+ * read: a booking nobody has accepted, sitting eleventh in line, still has to count.
+ */
+const SCHEDULED_DELIVERY_ROW_LIMIT = 50;
+/** Every status a booking passes through before it is delivered or called off. */
+const UNFINISHED_ORDER_STATUSES = [
+  'pending',
+  'confirmed',
+  'preparing',
+  'ready',
+  'out_for_delivery',
+] as const;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -242,6 +279,7 @@ export async function loadBranchDashboard(
   const sinceTrend = new Date(now - TREND_WINDOW_DAYS * DAY_MS).toISOString();
   const sinceRefund = new Date(now - REFUND_WINDOW_DAYS * DAY_MS).toISOString();
   const soonIso = new Date(now + scope.scheduledWithinMs).toISOString();
+  const lateSinceIso = new Date(now - scope.scheduledDeliveryLateWindowMs).toISOString();
 
   const [
     branchRow,
@@ -254,6 +292,7 @@ export async function loadBranchDashboard(
     riderRes,
     withdrawalRes,
     scheduledRes,
+    scheduledDeliveryRes,
   ] = await Promise.all([
     supabase.from('branches').select('timezone, settings').eq('id', branchId).maybeSingle(),
 
@@ -309,6 +348,7 @@ export async function loadBranchDashboard(
           .from('orders')
           .select(
             'id, order_number, total, created_at, customer_name, status_history, payments!inner(id, status)',
+            { count: 'exact' },
           )
           .eq('branch_id', branchId)
           .eq('status', 'cancelled')
@@ -356,16 +396,39 @@ export async function loadBranchDashboard(
           .limit(ACTION_ROW_LIMIT)
       : null,
 
+    // Every other pre-order. Schedule Delivery bookings have their own read below and their own
+    // group on the dashboard, so they are left out here rather than listed twice; what remains is
+    // a booked pickup or dine-in the counter took. Filtered in the query, not in the model, so
+    // the exact count still means what the bucket says.
     supabase
       .from('orders')
       .select('id, order_number, status, held, scheduled_for, customer_name', { count: 'exact' })
       .eq('branch_id', branchId)
+      .neq('channel', 'delivery')
       .not('scheduled_for', 'is', null)
       .gte('scheduled_for', nowIso)
       .lte('scheduled_for', soonIso)
       .in('status', ['pending', 'confirmed'])
       .order('scheduled_for', { ascending: true })
       .limit(ACTION_ROW_LIMIT),
+
+    // Schedule Delivery bookings still to be delivered, soonest first, from a little before now
+    // (see scheduledDeliveryLateWindowMs) with no upper bound: a booking for next Saturday is
+    // exactly what the owner wants to see coming. Every unfinished status, not just pending and
+    // confirmed, so the list also says which bookings are already cooking or on the road.
+    supabase
+      .from('orders')
+      .select('id, order_number, status, held, awaiting_payment, scheduled_for, customer_name', {
+        count: 'exact',
+      })
+      .eq('branch_id', branchId)
+      .eq('channel', 'delivery')
+      .not('scheduled_for', 'is', null)
+      .gte('scheduled_for', lateSinceIso)
+      .in('status', [...UNFINISHED_ORDER_STATUSES])
+      .order('scheduled_for', { ascending: true })
+      .order('order_number', { ascending: true })
+      .limit(SCHEDULED_DELIVERY_ROW_LIMIT),
   ]);
 
   const settings = (branchRow.data?.settings ?? {}) as Record<string, unknown>;
@@ -435,21 +498,31 @@ export async function loadBranchDashboard(
           proofRes.error?.message ?? null,
         );
 
+  // The refunded ones are dropped after the read, so the read's own count is not the bucket's.
+  // Its total is the rows kept plus every row past the read, taken as still owed: exact until
+  // the branch has more than REFUND_ROW_LIMIT cancelled paid orders in the window, an upper bound
+  // after that. What matters is how it moves: it rises only when a newly cancelled order joins,
+  // and holds or falls when a refund takes one off — including a full refund that lets the next
+  // older order into the read, which the dashboard's alert would otherwise announce as new (a
+  // capped bucket only counts a new key while its total has risen).
+  const refundRaw = (refundRes?.data ?? []) as unknown as DashboardRefundable[];
+  const refundKept = refundRaw
+    .map((o) => ({
+      id: String(o.id),
+      order_number: String(o.order_number ?? ''),
+      total: Number(o.total ?? 0),
+      created_at: String(o.created_at),
+      customer_name: o.customer_name ?? null,
+      status_history: o.status_history,
+    }))
+    .filter((o) => !hasRefundEntry(o.status_history));
+  const refundUnread = Math.max(0, (refundRes?.count ?? refundRaw.length) - refundRaw.length);
   const refundable: DashboardBucket<DashboardRefundable> =
     refundRes == null
       ? outOfScope<DashboardRefundable>()
       : bucketOf(
-          ((refundRes.data ?? []) as unknown as DashboardRefundable[])
-            .map((o) => ({
-              id: String(o.id),
-              order_number: String(o.order_number ?? ''),
-              total: Number(o.total ?? 0),
-              created_at: String(o.created_at),
-              customer_name: o.customer_name ?? null,
-              status_history: o.status_history,
-            }))
-            .filter((o) => !hasRefundEntry(o.status_history)),
-          null,
+          refundKept,
+          refundKept.length + refundUnread,
           refundRes.error?.message ?? null,
         );
 
@@ -536,6 +609,20 @@ export async function loadBranchDashboard(
     scheduledRes.error?.message ?? null,
   );
 
+  const scheduledDeliveries = bucketOf(
+    ((scheduledDeliveryRes.data ?? []) as unknown as DashboardScheduledDelivery[]).map((o) => ({
+      id: String(o.id),
+      order_number: String(o.order_number ?? ''),
+      status: String(o.status ?? ''),
+      held: !!o.held,
+      awaiting_payment: !!o.awaiting_payment,
+      scheduled_for: String(o.scheduled_for),
+      customer_name: o.customer_name ?? null,
+    })),
+    scheduledDeliveryRes.count,
+    scheduledDeliveryRes.error?.message ?? null,
+  );
+
   return {
     timezone: branchRow.data?.timezone ?? 'America/New_York',
     currency: typeof settings.currency === 'string' ? settings.currency : 'USD',
@@ -549,6 +636,7 @@ export async function loadBranchDashboard(
     riderQueue,
     withdrawals,
     scheduled,
+    scheduledDeliveries,
   };
 }
 

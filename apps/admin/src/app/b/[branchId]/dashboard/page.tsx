@@ -1,22 +1,6 @@
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
-import {
-  AlertTriangle,
-  Banknote,
-  Bike,
-  CalendarClock,
-  ChefHat,
-  Clock,
-  DollarSign,
-  Hourglass,
-  Package,
-  Receipt,
-  RotateCcw,
-  Sparkles,
-  Timer,
-  UserPlus,
-  Wallet,
-} from 'lucide-react';
+import { Bike, CalendarClock, ChefHat, DollarSign, Receipt, Sparkles } from 'lucide-react';
 import {
   branchDayKey,
   getEntitlementsForBranch,
@@ -38,12 +22,21 @@ import { Card } from '@favornoms/ui';
 import { getBranchAccess } from '@/lib/capabilities';
 import { AccessDenied } from '@/components/access-denied';
 import {
+  BOOKING_LATE_WINDOW_MS,
+  BOOKING_ROWS_SHOWN,
+  heldOrderIds,
+  leadTimeMs,
+  ordersListedIn,
   readDeliveries,
   readKitchen,
   readScheduled,
+  readScheduledDeliveries,
   SCHEDULED_SOON_MS,
+  spanOf,
   spanSince,
   type ActionRow,
+  type BookingRow,
+  type BookingState,
   type RowAge,
   type RowReason,
   type Span,
@@ -134,6 +127,7 @@ export default async function DashboardPage({ params }: Props) {
       deliveryEnabled,
       now,
       scheduledWithinMs: SCHEDULED_SOON_MS,
+      scheduledDeliveryLateWindowMs: BOOKING_LATE_WINDOW_MS,
     }),
     // Two head-only counts and one two-column row. This page auto-refreshes, and the
     // checklist keeps asking on every refresh until the store is ready, so it must stay
@@ -187,6 +181,7 @@ export default async function DashboardPage({ params }: Props) {
     riderQueue: snapshot.riderQueue.error,
     withdrawals: snapshot.withdrawals.error,
     scheduled: snapshot.scheduled.error,
+    scheduledDeliveries: snapshot.scheduledDeliveries.error,
   };
   for (const [read, error] of Object.entries(reads)) {
     if (error) console.error(`[dashboard] ${read} read failed for branch ${branchId}:`, error);
@@ -335,13 +330,29 @@ export default async function DashboardPage({ params }: Props) {
   const setupPending =
     setupWarnings.length > 0 || setupSteps.some((s) => !s.done || Boolean(s.error));
   const selfDelivery = settings.delivery_mode === 'self';
-  // place-order's own fallback order: the explicit lead time, then the prep time, then 15.
-  const leadMs =
-    60_000 * (Number(settings.schedule_lead_time_min) || Number(settings.prep_time_min) || 15);
+  const leadMs = leadTimeMs(settings);
 
   const kitchen = readKitchen(snapshot.kitchen.rows, now, leadMs, branchId);
-  const deliveries = readDeliveries(snapshot.deliveries.rows, now, selfDelivery, branchId);
+  // Both reads carry the held flag; the kitchen one covers more orders, the bookings one more
+  // time ahead.
+  const deliveries = readDeliveries(
+    snapshot.deliveries.rows,
+    now,
+    selfDelivery,
+    branchId,
+    heldOrderIds(snapshot.kitchen.rows, snapshot.scheduledDeliveries.rows),
+  );
   const scheduled = readScheduled(snapshot.scheduled.rows, now, leadMs, branchId);
+  const bookings = readScheduledDeliveries(
+    snapshot.scheduledDeliveries.rows,
+    now,
+    leadMs,
+    branchId,
+    ordersListedIn(
+      [kitchen.kitchenLate, kitchen.customersWaiting, deliveries.unaccepted, deliveries.failed],
+      snapshot.proofs.rows.map((p) => p.order_id),
+    ),
+  );
 
   // --- Words for the model's codes -------------------------------------------------------
   const spanText = (span: Span): string => {
@@ -570,138 +581,242 @@ export default async function DashboardPage({ params }: Props) {
     href: `/b/${branchId}/payouts`,
   }));
 
+  // --- Schedule Delivery bookings -------------------------------------------------------
+  // Due times are the branch's wall clock, like everything else on this page: a New York
+  // merchant reading a UTC host's "22:00" for a 6 pm delivery is how a booking gets missed.
+  const clock = new Intl.DateTimeFormat(intlLocale, {
+    timeZone: tz,
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+  const dayAndMonth = new Intl.DateTimeFormat(intlLocale, {
+    timeZone: tz,
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  });
+  const bookedFor = (ms: number): string => {
+    const at = new Date(ms);
+    const time = clock.format(at);
+    const day = branchDayKey(at, tz);
+    if (day === todayKey) return t('bookings.at.today', { time });
+    if (day === shiftDayKey(todayKey, 1)) return t('bookings.at.tomorrow', { time });
+    if (day === yesterdayKey) return t('bookings.at.yesterday', { time });
+    return t('bookings.at.date', { date: dayAndMonth.format(at), time });
+  };
+  const BOOKING_PILL: Record<BookingState, NonNullable<ActionLine['pill']>['tone']> = {
+    unpaid: 'warning',
+    stuckHeld: 'danger',
+    notAccepted: 'warning',
+    accepted: 'success',
+    inKitchen: 'info',
+    ready: 'info',
+    onTheWay: 'neutral',
+  };
+  const bookingWhy = (b: BookingRow): string => {
+    switch (b.state) {
+      case 'unpaid':
+        return t('bookings.why.unpaid');
+      case 'stuckHeld':
+        return t('rows.bookingStillHeld');
+      case 'notAccepted':
+        return t('rows.bookingNotAccepted');
+      case 'accepted':
+        return t('bookings.why.releasesAt', { time: clock.format(new Date(b.releaseMs)) });
+      default:
+        // Cooking, ready or on the road: the pill already says it, and the time column says
+        // whether it is late.
+        return '';
+    }
+  };
+  const bookingLines: ActionLine[] = bookings.rows.slice(0, BOOKING_ROWS_SHOWN).map((b) => ({
+    key: b.key,
+    title: `#${b.orderNumber}`,
+    // The diner's name as they typed it.
+    who: b.customerName,
+    pill: { label: t(`bookings.state.${b.state}`), tone: BOOKING_PILL[b.state] },
+    why: bookingWhy(b),
+    at: bookedFor(b.dueMs),
+    age:
+      b.untilDueMs >= 0
+        ? t('age.dueIn', { span: spanText(spanOf(b.untilDueMs)) })
+        : t('age.late', { span: spanText(spanOf(-b.untilDueMs)) }),
+    ageAlarm: b.late,
+    weight: b.weight,
+    href: b.href,
+  }));
+  const bookingsLate = bookings.rows.some((b) => b.late || b.state === 'stuckHeld');
+
   const cap = (rows: ActionLine[]) => rows.slice(0, ROWS_PER_BUCKET);
+  // Every key the page read, listed or not: the new-item alert watches all of them.
+  const keysOf = (rows: readonly { key: string }[]) => rows.map((r) => r.key);
   const deliveriesUnavailable = !snapshot.deliveries.available;
   const buckets: ActionBucket[] = [
     {
       id: 'proofs',
       label: t('buckets.proofs'),
-      icon: Banknote,
+      icon: 'banknote',
       tone: 'danger',
       count: snapshot.proofs.total,
       rows: cap(proofRows),
+      keys: keysOf(proofRows),
       href: `/b/${branchId}/orders`,
       destination: 'orders',
-      error: snapshot.proofs.error,
+      failed: Boolean(snapshot.proofs.error),
       hidden: !snapshot.proofs.available,
     },
     {
       id: 'refunds',
       label: t('buckets.refunds'),
-      icon: RotateCcw,
+      icon: 'rotateCcw',
       tone: 'danger',
-      count: refundRows.length,
+      // The read's total, not the rows kept: it only rises when an order really joins the list,
+      // which is what stops a row coming into the read from being announced as new.
+      count: snapshot.refundable.total,
       rows: cap(refundRows),
+      keys: keysOf(refundRows),
       href: `/b/${branchId}/orders?status=cancelled`,
       destination: 'orders',
-      error: snapshot.refundable.error,
+      failed: Boolean(snapshot.refundable.error),
       hidden: !snapshot.refundable.available,
     },
     {
       id: 'delivery-failed',
       label: t('buckets.deliveryFailed'),
-      icon: AlertTriangle,
+      icon: 'alertTriangle',
       tone: 'danger',
       count: deliveries.failed.length,
       rows: lines(deliveries.failed),
+      keys: keysOf(deliveries.failed),
       href: `/b/${branchId}/orders`,
       destination: 'orders',
-      error: snapshot.deliveries.error,
+      failed: Boolean(snapshot.deliveries.error),
       hidden: deliveriesUnavailable,
     },
     {
       id: 'delivery-unaccepted',
       label: t('buckets.deliveryUnaccepted'),
-      icon: Bike,
+      icon: 'bike',
       tone: 'warning',
       count: deliveries.unaccepted.length,
       rows: lines(deliveries.unaccepted),
+      keys: keysOf(deliveries.unaccepted),
       href: `/b/${branchId}/deliveries`,
       destination: 'deliveries',
-      error: snapshot.deliveries.error,
+      failed: Boolean(snapshot.deliveries.error),
       hidden: deliveriesUnavailable,
     },
     {
       id: 'customers-waiting',
       label: t('buckets.customersWaiting'),
-      icon: Clock,
+      icon: 'clock',
       tone: 'warning',
       count: kitchen.customersWaiting.length,
       rows: lines(kitchen.customersWaiting),
+      keys: keysOf(kitchen.customersWaiting),
       href: `/kitchen/${branchId}`,
       destination: 'kitchen',
-      error: snapshot.kitchen.error,
+      failed: Boolean(snapshot.kitchen.error),
     },
     {
       id: 'kitchen-late',
       label: t('buckets.kitchenLate'),
-      icon: Timer,
+      icon: 'timer',
       tone: 'warning',
       count: kitchen.kitchenLate.length,
       rows: lines(kitchen.kitchenLate),
+      keys: keysOf(kitchen.kitchenLate),
       href: `/kitchen/${branchId}`,
       destination: 'kitchen',
-      error: snapshot.kitchen.error,
+      failed: Boolean(snapshot.kitchen.error),
+    },
+    {
+      // The owner asked for these by name (2026-09-19). Every booking still to go out is
+      // listed, not only the ones in trouble, so this bucket's count is "coming up" and only
+      // `attention` — the ones nobody has accepted, stuck or late — is "waiting on you". Of
+      // those, a booking another bucket already lists (late in the kitchen, a slip to approve)
+      // is drawn strong here but counted there.
+      id: 'scheduled-deliveries',
+      label: t('buckets.scheduledDeliveries'),
+      icon: 'truck',
+      tone: bookingsLate ? 'danger' : bookings.needsAction > 0 ? 'warning' : 'info',
+      count: snapshot.scheduledDeliveries.total,
+      attention: bookings.needsAction,
+      addsToTotal: bookings.needsActionOnlyHere,
+      rows: bookingLines,
+      keys: keysOf(bookings.rows),
+      href: `/b/${branchId}/orders?when=scheduled&channel=delivery`,
+      destination: 'bookings',
+      failed: Boolean(snapshot.scheduledDeliveries.error),
+      // Without the delivery add-on there is nothing to book, but a booking taken before the
+      // plan changed still has to go out, so an existing one keeps the bucket on screen.
+      hidden: !deliveryEnabled && bookings.rows.length === 0,
     },
     {
       id: 'scheduled',
       label: t('buckets.scheduled'),
-      icon: CalendarClock,
+      icon: 'calendarClock',
       tone: 'warning',
       count: scheduled.length,
       rows: lines(scheduled),
+      keys: keysOf(scheduled),
       href: `/b/${branchId}/orders?when=scheduled`,
       destination: 'orders',
-      error: snapshot.scheduled.error,
+      failed: Boolean(snapshot.scheduled.error),
     },
     {
       id: 'stock',
       label: t('buckets.stock'),
-      icon: Package,
+      icon: 'package',
       tone: 'warning',
       count: snapshot.lowStock.total,
       rows: cap(stockRows),
+      keys: keysOf(stockRows),
       href: `/b/${branchId}/inventory`,
       destination: 'inventory',
-      error: snapshot.lowStock.error,
+      failed: Boolean(snapshot.lowStock.error),
       hidden: !snapshot.lowStock.available,
     },
     {
       id: 'riders',
       label: t('buckets.riders'),
-      icon: UserPlus,
+      icon: 'userPlus',
       tone: 'info',
       count: riderRows.length,
       rows: cap(riderRows),
+      keys: keysOf(riderRows),
       href: `/b/${branchId}/drivers`,
       destination: 'drivers',
-      error: snapshot.riderQueue.error,
+      failed: Boolean(snapshot.riderQueue.error),
       hidden: !snapshot.riderQueue.available,
     },
     {
       id: 'withdrawals',
       label: t('buckets.withdrawals'),
-      icon: Wallet,
+      icon: 'wallet',
       tone: 'info',
       count: snapshot.withdrawals.total,
       rows: cap(withdrawalRows),
+      keys: keysOf(withdrawalRows),
       href: `/b/${branchId}/payouts`,
       destination: 'payouts',
-      error: snapshot.withdrawals.error,
+      failed: Boolean(snapshot.withdrawals.error),
       hidden: !snapshot.withdrawals.available,
     },
     {
       // Not on the owner's list, but a board carrying twenty-two forgotten tickets while
       // this page says "nothing needs you" is the one way the section loses its credit.
+      // No keys: abandoned tickets are not news, so they never raise the new-item alert.
       id: 'stalled',
       label: t('buckets.stalled'),
-      icon: Hourglass,
+      icon: 'hourglass',
       tone: 'info',
       count: kitchen.abandoned,
       rows: [],
+      keys: [],
       href: `/kitchen/${branchId}`,
       destination: 'kitchen',
-      error: snapshot.kitchen.error,
+      failed: Boolean(snapshot.kitchen.error),
     },
   ];
 
@@ -787,7 +902,7 @@ export default async function DashboardPage({ params }: Props) {
         <OverviewTiles tiles={tiles} />
       </section>
 
-      <ActionRequired buckets={buckets} checkedAt={checkedAt} />
+      <ActionRequired branchId={branchId} buckets={buckets} checkedAt={checkedAt} />
 
       <div className="mt-8 px-2 lg:px-0">
         <Card className="p-6">
@@ -831,7 +946,7 @@ export default async function DashboardPage({ params }: Props) {
         </Card>
       </div>
 
-      <AutoRefresh />
+      <AutoRefresh branchId={branchId} />
     </div>
   );
 }

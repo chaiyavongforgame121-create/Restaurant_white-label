@@ -100,6 +100,8 @@
     "allClear": "Todo revisado, nada pendiente",
     "checksFailed": "{count, plural, one {# revisión no se pudo ejecutar} other {# revisiones no se pudieron ejecutar}}",
     "waiting": "{count, plural, one {# asunto te espera} other {# asuntos te esperan}}",
+    "upcomingOnly": "{count, plural, one {Nada urgente · # entrega programada próximamente} other {Nada urgente · # entregas programadas próximamente}}",
+    "needYou": "{count, plural, one {# te necesita} other {# te necesitan}}",
     "emptyTitle": "Nada requiere tu atención ahora",
     "checkedList": "Revisamos: {list}.",
     "checkedNothing": "Nada que revisar.",
@@ -107,12 +109,25 @@
     "checkFailed": "No se pudo ejecutar esta revisión. Se volverá a intentar en la próxima actualización.",
     "seeAll": {
       "orders": "Ver los {count} en Pedidos →",
+      "bookings": "Ver todas las entregas programadas en Pedidos →",
       "deliveries": "Ver los {count} en Entregas en curso →",
       "kitchen": "Ver los {count} en la pantalla de cocina →",
       "inventory": "Ver los {count} en Inventario →",
       "drivers": "Ver los {count} en Repartidores →",
       "payouts": "Ver los {count} en Pagos a repartidores →"
     }
+  },
+  "alerts": {
+    "newBadge": "Nuevo",
+    "newCount": "{count, plural, one {# nuevo} other {# nuevos}}",
+    "toast": "{count, plural, one {# elemento nuevo requiere atención} other {# elementos nuevos requieren atención}}",
+    "view": "Ver",
+    "dismiss": "Cerrar",
+    "markSeen": "Marcar como visto",
+    "soundToggle": "Sonido de alerta",
+    "soundOn": "El sonido de alerta está activado",
+    "soundOff": "El sonido de alerta está desactivado",
+    "soundLocked": "Haz clic en cualquier parte de la página para permitir el sonido de alerta"
   },
   "buckets": {
     "proofs": "Comprobantes de pago por aprobar",
@@ -121,6 +136,7 @@
     "deliveryUnaccepted": "Entregas que nadie ha tomado",
     "customersWaiting": "Clientes esperando",
     "kitchenLate": "Cocina con retraso",
+    "scheduledDeliveries": "Pedidos con entrega programada",
     "scheduled": "Pedidos programados próximos",
     "stock": "Productos agotados o por agotarse",
     "riders": "Repartidores esperando tu respuesta",
@@ -154,6 +170,27 @@
     "bookingNotAccepted": "Nadie ha aceptado este pedido programado todavía",
     "bookingStillHeld": "Ya debería estar en cocina, pero sigue en espera"
   },
+  "bookings": {
+    "at": {
+      "today": "Hoy {time}",
+      "tomorrow": "Mañana {time}",
+      "yesterday": "Ayer {time}",
+      "date": "{date}, {time}"
+    },
+    "state": {
+      "unpaid": "Sin pagar",
+      "stuckHeld": "Sin liberar",
+      "notAccepted": "Sin aceptar",
+      "accepted": "Aceptado",
+      "inKitchen": "En cocina",
+      "ready": "Listo",
+      "onTheWay": "En camino"
+    },
+    "why": {
+      "unpaid": "Esperando la transferencia del cliente",
+      "releasesAt": "Pasa a cocina a las {time}"
+    }
+  },
   "orderStatus": {
     "pending": "pendiente",
     "confirmed": "confirmado",
@@ -171,7 +208,8 @@
     "hours": "{hours} h",
     "hoursMinutes": "{hours} h {minutes} min",
     "days": "{days} d",
-    "dueIn": "en {span}"
+    "dueIn": "en {span}",
+    "late": "{span} de retraso"
   },
   "trend": {
     "title": "Tendencia de ventas",
