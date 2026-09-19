@@ -562,14 +562,14 @@ begin
   perform pg_temp.expect('the owner cannot delete an order either', 'ERR permission denied for table orders',
     pg_temp.try_as(c_owner, array[format(
       'delete from public.orders where id = %L returning id::text', v_pending)]));
-  perform pg_temp.expect('the owner cannot rewrite a total either', 'ERR order_money_locked',
+  perform pg_temp.expect('the owner cannot rewrite a total either', 'ERR permission denied for table orders',
     pg_temp.try_as(c_owner, array[format(
       'update public.orders set total = 1 where id = %L returning total::text', v_ready)]));
-  perform pg_temp.expect('a cashier cannot zero a live order''s total', 'ERR order_money_locked',
+  perform pg_temp.expect('a cashier cannot zero a live order''s total', 'ERR permission denied for table orders',
     pg_temp.try_as(c_cash, array[format(
       'update public.orders set discount_amount = 10, total = 0 where id = %L returning total::text', v_ready)]));
-  perform pg_temp.expect('privileges: anon none, authenticated update(status, discount_amount, total) only',
-    'anon i/u/d f f f; auth i/d f f; auth update status t, discount t, total t, subtotal f, tip f, customer_id f, branch f',
+  perform pg_temp.expect('privileges: anon none, authenticated update(status) only',
+    'anon i/u/d f f f; auth i/d f f; auth update status t, discount f, total f, subtotal f, tip f, customer_id f, branch f',
     format('anon i/u/d %s %s %s; auth i/d %s %s; auth update status %s, discount %s, total %s, subtotal %s, tip %s, customer_id %s, branch %s',
       has_table_privilege('anon', 'public.orders', 'insert'),
       has_any_column_privilege('anon', 'public.orders', 'update'),
@@ -583,39 +583,19 @@ begin
       has_column_privilege('authenticated', 'public.orders', 'tip_amount', 'update'),
       has_column_privilege('authenticated', 'public.orders', 'customer_id', 'update'),
       has_column_privilege('authenticated', 'public.orders', 'branch_id', 'update')));
-  -- The counter built before this release discounts the sale it has just rung up (main's
-  -- counter-view.tsx: update discount_amount and total, then record_counter_payment).
+  -- The till discounts through place-order (discount_percent) since 20260919100000; a direct write
+  -- of the amounts is refused even on the sale the cashier has just rung up.
   perform pg_temp.act_as(null);
   insert into public.orders (order_number, branch_id, channel, source, status, subtotal, total, status_history)
   values ('T-LEFTOVERS-C1', c_ham, 'pickup', 'counter', 'pending', 10, 10.70, '[]')
   returning id into v_counter;
   insert into public.payments (order_id, branch_id, amount, method, status)
   values (v_counter, c_ham, 10.70, 'cash', 'pending');
-  insert into public.orders (order_number, branch_id, channel, source, status, subtotal, total, status_history)
-  values ('T-LEFTOVERS-W1', c_ham, 'pickup', 'web', 'pending', 10, 10.70, '[]')
-  returning id into v_web;
-  perform pg_temp.expect('old counter: a discount lands on the sale it just rang up', 'ok 8.70',
+  perform pg_temp.expect('a cashier cannot discount a fresh counter sale directly', 'ERR permission denied for table orders',
     pg_temp.try_as(c_cash, array[format(
       'update public.orders set discount_amount = 2, total = 8.70 where id = %L returning total::text', v_counter)]));
-  perform pg_temp.expect('old counter: ... and a second one is refused', 'ERR order_money_locked',
+  perform pg_temp.expect('record_counter_payment settles the amount place-order priced', 'ok confirmed 10.70 completed 10.70',
     pg_temp.try_as(c_cash, array[
-      format('update public.orders set discount_amount = 2, total = 8.70 where id = %L returning total::text', v_counter),
-      format('update public.orders set discount_amount = 4, total = 4.70 where id = %L returning total::text', v_counter)]));
-  perform pg_temp.expect('old counter: the discount must come off the total', 'ERR order_money_locked',
-    pg_temp.try_as(c_cash, array[format(
-      'update public.orders set discount_amount = 2, total = 1 where id = %L returning total::text', v_counter)]));
-  perform pg_temp.expect('old counter: no more than the subtotal', 'ERR order_money_locked',
-    pg_temp.try_as(c_cash, array[format(
-      'update public.orders set discount_amount = 10.70, total = 0 where id = %L returning total::text', v_counter)]));
-  perform pg_temp.expect('old counter: kitchen (no counter access) cannot discount', 'ERR order_money_locked',
-    pg_temp.try_as(c_kitchen, array[format(
-      'update public.orders set discount_amount = 2, total = 8.70 where id = %L returning total::text', v_counter)]));
-  perform pg_temp.expect('old counter: a storefront order cannot be discounted', 'ERR order_money_locked',
-    pg_temp.try_as(c_cash, array[format(
-      'update public.orders set discount_amount = 2, total = 8.70 where id = %L returning total::text', v_web)]));
-  perform pg_temp.expect('old counter: record_counter_payment then settles the discounted amount', 'ok confirmed 8.70 completed 8.70',
-    pg_temp.try_as(c_cash, array[
-      format('update public.orders set discount_amount = 2, total = 8.70 where id = %L returning total::text', v_counter),
       format('select public.record_counter_payment(%L)::text', v_counter),
       format('select o.status::text || '' '' || o.total::text || '' '' || p.status::text || '' '' || p.amount::text
                 from public.orders o join public.payments p on p.order_id = o.id where o.id = %L', v_counter)]));
