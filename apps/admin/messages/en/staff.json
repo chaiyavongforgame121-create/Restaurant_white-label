@@ -177,5 +177,34 @@
       "notAuthorized": "Your role cannot change this person’s access.",
       "generic": "Their access could not be changed. Try again."
     }
+  },
+  "roleChange": {
+    "label": "Role",
+    "selectFor": "Role for {email}",
+    "apply": "Apply",
+    "applyFor": "Apply the new role for {email}",
+    "applied": "Changed",
+    "done": "{email} now has the role {role}. Their open screens reload to match.",
+    "donePending": "{email}’s invitation now gives the role {role}.",
+    "unchanged": "{email} already has the role {role}.",
+    "hints": {
+      "admin": "Everything except billing and ownership. Can manage the team, but not other admins.",
+      "manager": "Runs the back office day to day. No staff changes, branding or billing.",
+      "cashier": "The counter: orders, payments and receipts.",
+      "server": "Table orders from the counter, their own only.",
+      "kitchen": "The kitchen board only.",
+      "staff": "The counter only.",
+      "driver": "The driver app only. No back office, counter or kitchen."
+    },
+    "errors": {
+      "notAuthorized": "Your role cannot change this person’s role.",
+      "self": "You cannot change your own role. Ask the owner.",
+      "ownerLocked": "An owner’s role cannot be changed.",
+      "notAssignable": "That role cannot be given here.",
+      "adminRequiresOwner": "Only the owner can make someone an admin or change an admin’s role.",
+      "removed": "This person was removed. Invite them again to give them a role.",
+      "notFound": "This team member no longer exists. Reload the page.",
+      "generic": "The role could not be changed. Try again."
+    }
   }
 }

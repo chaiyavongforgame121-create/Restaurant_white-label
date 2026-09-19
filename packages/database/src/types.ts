@@ -5558,6 +5558,13 @@ export type Database = {
         Args: { p_branch_id: string; p_staff_id: string }
         Returns: Json
       }
+      set_staff_role: {
+        Args: {
+          p_role: Database["public"]["Enums"]["staff_role"]
+          p_staff_id: string
+        }
+        Returns: Json
+      }
       set_staff_status: {
         Args: { p_staff_id: string; p_status: string }
         Returns: Json

@@ -14,5 +14,11 @@
   "saved": "Saved",
   "signOut": "Sign out",
   "signOutConfirm": "Tap again to sign out",
-  "signedInAs": "Signed in as {email}"
+  "signedInAs": "Signed in as {email}",
+  "accessChanged": {
+    "title": "Your access has changed",
+    "body": "The restaurant changed your role or access, so this page was reloaded to match.",
+    "startPage": "Go to my start page",
+    "dismiss": "Dismiss"
+  }
 }

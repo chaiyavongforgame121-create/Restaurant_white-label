@@ -14,5 +14,11 @@
   "saved": "Đã lưu",
   "signOut": "Đăng xuất",
   "signOutConfirm": "Chạm lần nữa để đăng xuất",
-  "signedInAs": "Đã đăng nhập: {email}"
+  "signedInAs": "Đã đăng nhập: {email}",
+  "accessChanged": {
+    "title": "Quyền truy cập của bạn đã thay đổi",
+    "body": "Nhà hàng đã thay đổi vai trò hoặc quyền truy cập của bạn, nên trang này đã được tải lại cho khớp.",
+    "startPage": "Về trang bắt đầu của tôi",
+    "dismiss": "Đóng"
+  }
 }

@@ -1,4 +1,5 @@
 import { getTranslations } from 'next-intl/server';
+import { isPlatformAdmin } from '@favornoms/database/queries';
 import { getBranchAccess } from '@/lib/capabilities';
 import { AccessDenied } from '@/components/access-denied';
 import { StaffView } from './_components/staff-view';
@@ -32,23 +33,27 @@ export default async function StaffPage({ params }: Props) {
   // manages. It used to show everyone as "members at <this branch>", so Food Thai Thai listed
   // Hamburger's cashier and kitchen as its own. RLS still returns every branch's rows to anyone
   // with staff.manage somewhere in the restaurant, so the other teams are filtered below.
-  const [{ data: staff }, { data: branches }, { data: restaurant }] = await Promise.all([
-    supabase
-      .from('staff_members')
-      .select('id, role, status, invited_email, branch_id, created_at, accepted_at, user_id')
-      .eq('restaurant_id', branch.restaurant_id)
-      .order('created_at', { ascending: false }),
-    supabase
-      .from('branches')
-      .select('id, name, is_active')
-      .eq('restaurant_id', branch.restaurant_id)
-      .order('name'),
-    supabase
-      .from('restaurants')
-      .select('owner_user_id')
-      .eq('id', branch.restaurant_id)
-      .maybeSingle(),
-  ]);
+  const [{ data: staff }, { data: branches }, { data: restaurant }, platformAdmin] =
+    await Promise.all([
+      supabase
+        .from('staff_members')
+        .select('id, role, status, invited_email, branch_id, created_at, accepted_at, user_id')
+        .eq('restaurant_id', branch.restaurant_id)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('branches')
+        .select('id, name, is_active')
+        .eq('restaurant_id', branch.restaurant_id)
+        .order('name'),
+      supabase
+        .from('restaurants')
+        .select('owner_user_id')
+        .eq('id', branch.restaurant_id)
+        .maybeSingle(),
+      // set_staff_role counts a platform admin working as support as the owner; invite-staff does
+      // not, so this only widens the role controls (roleChangeViewer), not the invite form.
+      isPlatformAdmin(supabase),
+    ]);
 
   // set_staff_branch_scope lets only an owner change an admin's branch access. The
   // restaurant's owner_user_id counts as the owner even without an owner staff row, the same
@@ -106,6 +111,7 @@ export default async function StaffPage({ params }: Props) {
       branches={branches ?? []}
       viewerIsOwner={viewerIsOwner}
       viewerRestaurantWide={viewerRestaurantWide}
+      viewerIsPlatformAdmin={platformAdmin}
       viewerUserId={user.id}
       staffBranchIds={staffBranchIds}
     />

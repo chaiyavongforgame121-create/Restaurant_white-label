@@ -3,6 +3,7 @@
 import * as React from 'react';
 import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 import { getBrowserClient } from './client';
+import { authorizeRealtime } from './realtime-auth';
 
 /**
  * A Supabase realtime subscription that notices when it has stopped working.
@@ -147,7 +148,10 @@ export function useRealtime({
       }, delay);
     }
 
-    const connect = () => {
+    const connect = async () => {
+      if (disposed) return;
+      // Join with the user's token, not the anon key (see authorizeRealtime).
+      await authorizeRealtime(supabase);
       if (disposed) return;
 
       let ch = supabase.channel(topic);
@@ -210,14 +214,14 @@ export function useRealtime({
               // old one off the socket.
               if (current) await supabase.removeChannel(current);
               current = null;
-              connect();
+              await connect();
             })();
           }, delay);
         }
       });
     };
 
-    connect();
+    void connect();
 
     // A backgrounded tab's socket is usually dead by the time it comes back, and the
     // browser does not always tell us. Re-reading on focus is cheap and covers it.

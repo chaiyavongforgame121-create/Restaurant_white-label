@@ -1,4 +1,6 @@
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import type { FavornomsClient } from '../client-type';
+import { authorizeRealtime } from '../realtime-auth';
 
 // Driver ↔ customer chat, scoped to one rider ASSIGNMENT — not to the delivery.
 //
@@ -247,18 +249,25 @@ export function subscribeMessages(
   assignmentId: string,
   onMessage: (message: DeliveryMessage) => void,
 ): () => void {
-  const channel = supabase
-    .channel(`delivery-chat:${assignmentId}`)
-    .on(
-      'postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'delivery_messages', filter: `assignment_id=eq.${assignmentId}` },
-      // payload.new carries every published column, so the attachment fields ride along
-      // with no change here.
-      (payload) => onMessage(payload.new as DeliveryMessage),
-    )
-    .subscribe();
+  let channel: RealtimeChannel | null = null;
+  let closed = false;
+  // delivery_messages is behind RLS, so the channel must join with the participant's token.
+  void authorizeRealtime(supabase).then(() => {
+    if (closed) return;
+    channel = supabase
+      .channel(`delivery-chat:${assignmentId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'delivery_messages', filter: `assignment_id=eq.${assignmentId}` },
+        // payload.new carries every published column, so the attachment fields ride along
+        // with no change here.
+        (payload) => onMessage(payload.new as DeliveryMessage),
+      )
+      .subscribe();
+  });
   return () => {
-    void supabase.removeChannel(channel);
+    closed = true;
+    if (channel) void supabase.removeChannel(channel);
   };
 }
 

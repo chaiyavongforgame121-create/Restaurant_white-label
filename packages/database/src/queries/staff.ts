@@ -125,6 +125,46 @@ export async function setStaffStatus(
 }
 
 /**
+ * Gives a team member another role through set_staff_role, which enforces who may (staff.manage
+ * where the row works; never an owner row or your own; only admin, manager, cashier, kitchen,
+ * server or staff can be given; only the owner makes or changes an admin; not a removed row) and
+ * writes the audit row. A pending invitation can be changed before it is accepted. The same role
+ * again is a no-op (`changed: false`). Throws `set_staff_role_failed:<reason>`.
+ */
+export async function setStaffRole(
+  supabase: FavornomsClient,
+  staffId: string,
+  role: StaffRole,
+): Promise<{ changed: boolean }> {
+  const { data, error } = await supabase.rpc('set_staff_role', {
+    p_staff_id: staffId,
+    p_role: role,
+  });
+  if (error) throw new Error(`set_staff_role_failed:${error.message}`);
+  const d = (data ?? {}) as Record<string, unknown>;
+  return { changed: d.changed !== false };
+}
+
+/**
+ * The signed-in person's own rows at one restaurant, in every status (staff_self_read), which is
+ * what their access there is decided from. Null when the read failed, which proves nothing
+ * either way, so a caller comparing before and after must not treat it as "no rows".
+ */
+export async function getMyStaffAccessRows(
+  supabase: FavornomsClient,
+  userId: string,
+  restaurantId: string,
+): Promise<Array<{ id: string; role: StaffRole; status: StaffStatus; branch_id: string | null }> | null> {
+  const { data, error } = await supabase
+    .from('staff_members')
+    .select('id, role, status, branch_id')
+    .eq('user_id', userId)
+    .eq('restaurant_id', restaurantId);
+  if (error) return null;
+  return data ?? [];
+}
+
+/**
  * Moves an existing team member between one branch and every branch (`branchId` null).
  * Each staff row holds a single branch_id and nothing could change it after the invite, so a
  * branch-only cashier could never work at a second branch short of being made

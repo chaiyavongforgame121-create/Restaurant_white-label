@@ -177,5 +177,34 @@
       "notAuthorized": "Tu rol no puede cambiar el acceso de esta persona.",
       "generic": "No se pudo cambiar su acceso. Inténtalo de nuevo."
     }
+  },
+  "roleChange": {
+    "label": "Rol",
+    "selectFor": "Rol de {email}",
+    "apply": "Aplicar",
+    "applyFor": "Aplicar el nuevo rol de {email}",
+    "applied": "Cambiado",
+    "done": "{email} ahora tiene el rol {role}. Sus pantallas abiertas se recargan para reflejarlo.",
+    "donePending": "La invitación de {email} ahora da el rol {role}.",
+    "unchanged": "{email} ya tiene el rol {role}.",
+    "hints": {
+      "admin": "Todo excepto la facturación y la propiedad. Puede gestionar el equipo, pero no a otros administradores.",
+      "manager": "Lleva el día a día en el panel de administración. Sin cambios de personal, marca ni facturación.",
+      "cashier": "El mostrador: pedidos, cobros y recibos.",
+      "server": "Pedidos de mesa desde el mostrador, solo los suyos.",
+      "kitchen": "Solo la pantalla de cocina.",
+      "staff": "Solo el mostrador.",
+      "driver": "Solo la app de repartidores. Sin panel de administración, mostrador ni cocina."
+    },
+    "errors": {
+      "notAuthorized": "Tu rol no puede cambiar el rol de esta persona.",
+      "self": "No puedes cambiar tu propio rol. Pídeselo al dueño.",
+      "ownerLocked": "El rol de un dueño no se puede cambiar.",
+      "notAssignable": "Ese rol no se puede asignar aquí.",
+      "adminRequiresOwner": "Solo el dueño puede nombrar a un administrador o cambiar el rol de uno.",
+      "removed": "Esta persona fue quitada. Invítala de nuevo para darle un rol.",
+      "notFound": "Este miembro del equipo ya no existe. Recarga la página.",
+      "generic": "No se pudo cambiar el rol. Inténtalo de nuevo."
+    }
   }
 }

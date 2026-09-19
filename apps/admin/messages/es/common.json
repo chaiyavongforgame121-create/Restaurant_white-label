@@ -14,5 +14,11 @@
   "saved": "Guardado",
   "signOut": "Cerrar sesión",
   "signOutConfirm": "Toca de nuevo para cerrar sesión",
-  "signedInAs": "Sesión iniciada como {email}"
+  "signedInAs": "Sesión iniciada como {email}",
+  "accessChanged": {
+    "title": "Tu acceso cambió",
+    "body": "El restaurante cambió tu rol o tu acceso, así que esta página se recargó para reflejarlo.",
+    "startPage": "Ir a mi página de inicio",
+    "dismiss": "Cerrar"
+  }
 }

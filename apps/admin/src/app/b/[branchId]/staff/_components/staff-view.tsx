@@ -30,10 +30,17 @@ import {
   isStaffAlreadyActiveError,
   isStaffAlreadySuspendedError,
   setStaffBranchScope,
+  setStaffRole,
   setStaffStatus,
   staffInviteUrl,
   type StaffRole,
 } from '@favornoms/database/queries';
+import {
+  assignableRoles,
+  roleChangeErrorKey,
+  roleChangeViewer,
+  type RoleChangeViewer,
+} from './role-rules';
 
 interface StaffListItem {
   id: string;
@@ -63,6 +70,8 @@ interface Props {
   viewerIsOwner: boolean;
   /** Owner or admin of every branch: may invite someone to all branches, not only this one. */
   viewerRestaurantWide: boolean;
+  /** A platform admin working as support: the owner as far as set_staff_role is concerned. */
+  viewerIsPlatformAdmin: boolean;
   /** The signed-in person, whose own row offers no suspend or remove. */
   viewerUserId: string;
   /** Branches whose Staff page the viewer can open (staff.manage there). */
@@ -106,6 +115,17 @@ const KNOWN_ROLES = new Set<string>([
 
 const KNOWN_STATUSES = new Set<string>(['pending', 'active', 'suspended', 'removed']);
 
+/** Roles with a label and a one-line hint under staff.roles / staff.roleChange.hints. */
+const ROLES_WITH_HINTS = new Set<string>([
+  'admin',
+  'manager',
+  'cashier',
+  'server',
+  'kitchen',
+  'driver',
+  'staff',
+]);
+
 /** How long "Copied" stays up before the button reads "Copy" again. */
 const COPIED_MS = 2000;
 
@@ -117,6 +137,7 @@ export function StaffView({
   branches,
   viewerIsOwner,
   viewerRestaurantWide,
+  viewerIsPlatformAdmin,
   viewerUserId,
   staffBranchIds,
 }: Props) {
@@ -179,6 +200,29 @@ export function StaffView({
     router.refresh();
   };
 
+  const roleChanged = (member: StaffListItem, next: StaffRole, changed: boolean) => {
+    setStaff((prev) => prev.map((m) => (m.id === member.id ? { ...m, role: next } : m)));
+    const email = member.invited_email ?? t('unnamed');
+    const role = KNOWN_ROLES.has(next) ? t(`roleNames.${next}`) : next;
+    setNotice(
+      !changed
+        ? t('roleChange.unchanged', { email, role })
+        : member.user_id
+          ? t('roleChange.done', { email, role })
+          : t('roleChange.donePending', { email, role }),
+    );
+    // The list, the counts and every lock on the row are rendered from the database, so the
+    // server's view is what the page should show now, not only this row's local copy.
+    router.refresh();
+  };
+
+  const viewer = roleChangeViewer({
+    isOwner: viewerIsOwner,
+    restaurantWide: viewerRestaurantWide,
+    platformAdmin: viewerIsPlatformAdmin,
+    userId: viewerUserId,
+  });
+
   const renderMember = (s: StaffListItem, readOnly: boolean) => (
     <li key={s.id}>
       <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
@@ -229,6 +273,15 @@ export function StaffView({
             {KNOWN_STATUSES.has(s.status) ? t(`statuses.${s.status}`) : s.status}
           </Badge>
         </div>
+        {/* Nothing here for anyone the viewer may not change (owners, their own row, admins for
+            a non-owner, removed rows): the role stays plain text under the email. */}
+        {!readOnly && (
+          <RoleChange
+            member={s}
+            viewer={viewer}
+            onChanged={(next, changed) => roleChanged(s, next, changed)}
+          />
+        )}
         {!readOnly && s.status === 'pending' && !s.user_id && (
           <PendingInviteActions
             member={s}
@@ -449,6 +502,122 @@ function BranchAccess({
       </label>
       {error && (
         <p role="alert" className="max-w-xs text-right text-xs text-danger">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * What one team member can do. A role was fixed at the invitation, so turning a cashier into a
+ * kitchen hand meant removing them and inviting them again. The choice is staged: nothing is
+ * written until Apply, so a wrong pick in the list costs nothing. The choices are the ones
+ * set_staff_role would accept from this viewer (assignableRoles), and the hint under the list
+ * says what the chosen role opens. After Apply the page is refreshed from the database, and the
+ * person's own open screens reload themselves (StaffAccessWatcher).
+ */
+function RoleChange({
+  member,
+  viewer,
+  onChanged,
+}: {
+  member: StaffListItem;
+  viewer: RoleChangeViewer;
+  onChanged: (next: StaffRole, changed: boolean) => void;
+}) {
+  const t = useTranslations('staff');
+  const choices = assignableRoles(member, viewer);
+  const hintId = React.useId();
+  const [chosen, setChosen] = React.useState<StaffRole>(member.role);
+  // The refresh after Apply, or another admin's change, hands down the stored role. The staged
+  // choice follows it rather than offering to apply a change that has already happened.
+  const [roleFrom, setRoleFrom] = React.useState(member.role);
+  if (roleFrom !== member.role) {
+    setRoleFrom(member.role);
+    setChosen(member.role);
+  }
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  // Set on success and cleared by the next pick, so "Changed" never outlives what it describes.
+  const [applied, setApplied] = React.useState(false);
+  if (!choices) return null;
+  const email = member.invited_email ?? t('unnamed');
+  // A driver stays listed as a driver until someone changes it; driver is never offered otherwise.
+  const options: StaffRole[] = (choices as StaffRole[]).includes(member.role)
+    ? choices
+    : [member.role, ...choices];
+  const dirty = chosen !== member.role;
+
+  const apply = async () => {
+    if (!dirty || saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const { changed } = await setStaffRole(getBrowserClient(), member.id, chosen);
+      setApplied(true);
+      onChanged(chosen, changed);
+    } catch (err) {
+      const message = (err as Error).message;
+      const key = roleChangeErrorKey(message);
+      if (key === 'generic') console.error('set_staff_role failed', message);
+      setError(key === 'signedOut' ? t('errors.signedOut') : t(`roleChange.errors.${key}`));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="w-full border-t border-border/60 pt-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          {t('roleChange.label')}
+          <select
+            value={chosen}
+            disabled={saving}
+            // Every row has this list; the name says whose role it is. It starts with the
+            // visible word, so voice control still finds it.
+            aria-label={t('roleChange.selectFor', { email })}
+            aria-describedby={hintId}
+            onChange={(e) => {
+              setChosen(e.target.value as StaffRole);
+              setError(null);
+              setApplied(false);
+            }}
+            className="focus-ring rounded-lg border border-border bg-background px-2 py-1.5 text-sm text-foreground disabled:opacity-60"
+          >
+            {options.map((r) => (
+              <option key={r} value={r}>
+                {ROLES_WITH_HINTS.has(r) ? t(`roles.${r}.label`) : r}
+              </option>
+            ))}
+          </select>
+        </label>
+        <Button
+          type="button"
+          variant="soft"
+          size="sm"
+          aria-label={t('roleChange.applyFor', { email })}
+          disabled={!dirty}
+          loading={saving}
+          onClick={() => void apply()}
+        >
+          {t('roleChange.apply')}
+        </Button>
+        {applied && !dirty && (
+          <span className="inline-flex items-center gap-1 text-xs text-success">
+            <Check className="h-3.5 w-3.5" aria-hidden />
+            {t('roleChange.applied')}
+          </span>
+        )}
+      </div>
+      {ROLES_WITH_HINTS.has(chosen) && (
+        <p id={hintId} className="mt-1.5 text-xs text-muted-foreground">
+          {t(`roleChange.hints.${chosen}`)}
+        </p>
+      )}
+      {error && (
+        <p role="alert" className="mt-2 text-xs text-danger">
           {error}
         </p>
       )}

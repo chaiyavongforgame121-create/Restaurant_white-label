@@ -177,5 +177,34 @@
       "notAuthorized": "Vai trò của bạn không thể thay đổi quyền của người này.",
       "generic": "Không thể thay đổi quyền truy cập. Hãy thử lại."
     }
+  },
+  "roleChange": {
+    "label": "Vai trò",
+    "selectFor": "Vai trò của {email}",
+    "apply": "Áp dụng",
+    "applyFor": "Áp dụng vai trò mới cho {email}",
+    "applied": "Đã đổi",
+    "done": "{email} giờ có vai trò {role}. Các màn hình đang mở của họ sẽ tải lại cho khớp.",
+    "donePending": "Lời mời của {email} giờ cấp vai trò {role}.",
+    "unchanged": "{email} đã có vai trò {role}.",
+    "hints": {
+      "admin": "Mọi thứ trừ thanh toán và quyền sở hữu. Quản lý được đội ngũ, nhưng không đổi được quản trị viên khác.",
+      "manager": "Điều hành công việc hằng ngày trong trang quản trị. Không đổi nhân sự, thương hiệu hay thanh toán.",
+      "cashier": "Quầy thu ngân: đơn hàng, thanh toán và hóa đơn.",
+      "server": "Gọi món cho bàn từ quầy, chỉ đơn của chính mình.",
+      "kitchen": "Chỉ màn hình bếp.",
+      "staff": "Chỉ quầy thu ngân.",
+      "driver": "Chỉ ứng dụng tài xế. Không vào trang quản trị, quầy thu ngân hay bếp."
+    },
+    "errors": {
+      "notAuthorized": "Vai trò của bạn không thể đổi vai trò của người này.",
+      "self": "Bạn không thể tự đổi vai trò của mình. Hãy nhờ chủ nhà hàng.",
+      "ownerLocked": "Không thể đổi vai trò của chủ sở hữu.",
+      "notAssignable": "Không thể cấp vai trò đó ở đây.",
+      "adminRequiresOwner": "Chỉ chủ nhà hàng mới có thể bổ nhiệm quản trị viên hoặc đổi vai trò của quản trị viên.",
+      "removed": "Người này đã bị xóa. Hãy mời lại để cấp vai trò.",
+      "notFound": "Thành viên này không còn tồn tại. Hãy tải lại trang.",
+      "generic": "Không thể đổi vai trò. Hãy thử lại."
+    }
   }
 }

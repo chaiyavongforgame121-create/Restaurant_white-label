@@ -1,13 +1,18 @@
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
-import { getEntitlementsForBranch, isPlatformAdmin } from '@favornoms/database/queries';
+import {
+  getEntitlementsForBranch,
+  getMyStaffAccessRows,
+  isPlatformAdmin,
+} from '@favornoms/database/queries';
 import type { TenantTheme } from '@favornoms/shared';
 import { getBranchAccess, type BranchAccess } from '@/lib/capabilities';
 import { PATHNAME_HEADER } from '@favornoms/database/middleware';
 import { Sidebar } from '@/components/sidebar';
 import { AccessDenied } from '@/components/access-denied';
 import { PlatformAdminBanner } from '@/components/platform-admin-banner';
+import { StaffAccessWatcher } from '@/components/staff-access-watcher';
 
 /** staff_role values with a translated name under shell.branchAccess.roles. */
 const STAFF_ROLES: readonly string[] = ['owner', 'admin', 'manager', 'cashier', 'server', 'kitchen', 'staff', 'driver'];
@@ -124,7 +129,15 @@ export default async function BranchLayout({ params, children }: Props) {
   // A platform superadmin opens branches from /platform to support merchants. They are
   // staff of nobody, so they hold no capabilities via staff_members -- my_capabilities()
   // grants them the owner set separately, and this flag drives the impersonation banner.
-  const platformAdmin = await isPlatformAdmin(supabase);
+  // The viewer's own staff rows go alongside: they are what this render was decided from, and
+  // StaffAccessWatcher reloads the page when the restaurant changes them.
+  const [platformAdmin, myRows] = await Promise.all([
+    isPlatformAdmin(supabase),
+    getMyStaffAccessRows(supabase, user.id, branch.restaurant_id),
+  ]);
+  const watcher = (
+    <StaffAccessWatcher userId={user.id} restaurantId={branch.restaurant_id} initialRows={myRows} />
+  );
 
   if (!can('backoffice.access')) {
     const t = await getTranslations('shell.branchAccess');
@@ -134,7 +147,14 @@ export default async function BranchLayout({ params, children }: Props) {
       : STAFF_ROLES.includes(role)
         ? t('roleCannotOpen', { role: t(`roles.${role}`), branch: branch.name })
         : t('accountCannotOpen', { branch: branch.name });
-    return <AccessDenied title={t('title')} reason={reason} />;
+    // The watcher stays on the denied screen too: a manager made cashier lands here, and one
+    // made manager again is let back in without having to think of reloading.
+    return (
+      <>
+        <AccessDenied title={t('title')} reason={reason} />
+        {watcher}
+      </>
+    );
   }
 
   // Sibling branches (for the switcher) + entitlements (for nav gating and the
@@ -197,6 +217,7 @@ export default async function BranchLayout({ params, children }: Props) {
         {impersonating && <PlatformAdminBanner branchName={branch.name} />}
         {children}
       </main>
+      {watcher}
     </div>
   );
 }
