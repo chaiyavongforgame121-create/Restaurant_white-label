@@ -3,11 +3,55 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useTranslations } from 'next-intl';
-import { ChefHat, ChevronRight, Sparkles, Store, UserRound } from 'lucide-react';
+import dynamic from 'next/dynamic';
+import { useLocale, useTranslations } from 'next-intl';
+import { ChefHat, ChevronRight, MapPin, Sparkles, Store, UserRound } from 'lucide-react';
+import { hasMapboxToken, type ResolvedAddress } from '@favornoms/maps';
 import { getBrowserClient } from '@favornoms/database/client';
-import { describeBillingError, isValidTimeZone } from '@favornoms/shared';
+import { DEFAULT_UI_LOCALE, describeBillingError, isUiLocale, isValidTimeZone } from '@favornoms/shared';
 import { Button, Card, buttonVariants } from '@favornoms/ui';
+
+// Loaded only when the owner opens it: the map is the heaviest thing on this screen by far.
+const LocationPicker = dynamic(() => import('@favornoms/maps').then((m) => m.LocationPicker), {
+  ssr: false,
+  loading: () => <MapLoading />,
+});
+
+function MapLoading() {
+  const t = useTranslations('branch.location');
+  return <div className="grid h-full place-items-center text-sm text-muted-foreground">{t('loadingMap')}</div>;
+}
+
+/** One line for the address field from what the map resolved, as the branch settings card writes it. */
+function formatResolved(a: ResolvedAddress): string {
+  // Mapbox gives some regions as a bare code (Bangkok comes back as "10"), which reads as noise.
+  const state = a.state && !/^\d+$/.test(a.state) ? a.state : undefined;
+  const tail = [state, a.postal_code].filter(Boolean).join(' ');
+  return [a.line1, a.line2, a.city, tail].filter(Boolean).join(', ');
+}
+
+/** Where the map opens for a device in this zone, so its search ranks nearby places first. Without
+ *  it the picker opened on New York and "Bangkok" searches came back with Bangkok, Chile. */
+const ZONE_CENTERS: Record<string, { lat: number; lng: number }> = {
+  'Asia/Bangkok': { lat: 13.7563, lng: 100.5018 },
+  'Asia/Ho_Chi_Minh': { lat: 10.7769, lng: 106.7009 },
+  'Asia/Saigon': { lat: 10.7769, lng: 106.7009 },
+  'Asia/Singapore': { lat: 1.3521, lng: 103.8198 },
+  'Asia/Kuala_Lumpur': { lat: 3.139, lng: 101.6869 },
+  'Asia/Jakarta': { lat: -6.2088, lng: 106.8456 },
+  'Asia/Manila': { lat: 14.5995, lng: 120.9842 },
+  'Asia/Tokyo': { lat: 35.6762, lng: 139.6503 },
+  'Europe/Madrid': { lat: 40.4168, lng: -3.7038 },
+  'Europe/London': { lat: 51.5072, lng: -0.1276 },
+  'America/New_York': { lat: 40.7128, lng: -74.006 },
+  'America/Chicago': { lat: 41.8781, lng: -87.6298 },
+  'America/Denver': { lat: 39.7392, lng: -104.9903 },
+  'America/Phoenix': { lat: 33.4484, lng: -112.074 },
+  'America/Los_Angeles': { lat: 34.0522, lng: -118.2437 },
+  'America/Anchorage': { lat: 61.2181, lng: -149.9003 },
+  'Pacific/Honolulu': { lat: 21.3069, lng: -157.8583 },
+  'America/Mexico_City': { lat: 19.4326, lng: -99.1332 },
+};
 
 const slugify = (s: string) =>
   s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 64);
@@ -63,6 +107,14 @@ export function OnboardingWizard({
   const [branchName, setBranchName] = React.useState('Main');
   const [branchSlug, setBranchSlug] = React.useState('main');
   const [branchAddress, setBranchAddress] = React.useState('');
+  // The map pin. Delivery fees, rider dispatch and batching all measure from it, and a branch
+  // created without one starts life with delivery unable to dispatch.
+  const [branchGeo, setBranchGeo] = React.useState<{ lat: number; lng: number } | null>(null);
+  const [picking, setPicking] = React.useState(false);
+  const mapAvailable = hasMapboxToken();
+  const tLoc = useTranslations('branch.location');
+  const rawLocale = useLocale();
+  const locale = isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE;
   const [timezone, setTimezone] = React.useState(DEFAULT_TIME_ZONE);
   const [deviceZone, setDeviceZone] = React.useState<string | null>(null);
   const [primaryColor, setPrimaryColor] = React.useState('#FF6B35');
@@ -128,6 +180,8 @@ export function OnboardingWizard({
       p_branch_address: branchAddress || null,
       p_timezone: isValidTimeZone(timezone) ? timezone : DEFAULT_TIME_ZONE,
       p_theme: { primaryColor, accentColor, brandName: restaurantName },
+      p_lat: branchGeo?.lat ?? null,
+      p_lng: branchGeo?.lng ?? null,
     });
     setBusy(false);
     if (rpcErr) {
@@ -282,9 +336,24 @@ export function OnboardingWizard({
             >
               <input value={branchSlug} onChange={(e) => setBranchSlug(slugify(e.target.value))} className="input font-mono" placeholder="sukhumvit" />
             </Field>
-            <Field label={t('fields.address')}>
-              <input value={branchAddress} onChange={(e) => setBranchAddress(e.target.value)} className="input" />
-            </Field>
+            <div>
+              <Field label={t('fields.address')}>
+                <input value={branchAddress} onChange={(e) => setBranchAddress(e.target.value)} className="input" />
+              </Field>
+              {/* Outside the Field label, so a tap on it opens the map instead of focusing the input. */}
+              {mapAvailable && (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <Button type="button" variant="outline" size="sm" leftIcon={<MapPin className="h-4 w-4" />} onClick={() => setPicking(true)}>
+                    {branchGeo ? t('fields.changePin') : t('fields.pickOnMap')}
+                  </Button>
+                  {branchGeo && (
+                    <span className="text-xs text-success">
+                      {t('fields.pinned', { coords: `${branchGeo.lat.toFixed(5)}, ${branchGeo.lng.toFixed(5)}` })}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
             <Field label={t('fields.timezone')} hint={t('fields.timezoneHint')}>
               <select value={timezone} onChange={(e) => setTimezone(e.target.value)} className="input">
                 {zoneOptions.map((z) => (
@@ -352,6 +421,46 @@ export function OnboardingWizard({
           .input:focus-visible { outline: none; border-color: hsl(var(--primary)); box-shadow: 0 0 0 3px hsl(var(--primary) / 0.18); }
         `}</style>
       </Card>
+
+      {picking && mapAvailable && (
+        <div
+          className="fixed inset-0 z-[130] grid place-items-center bg-black/60 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-label={tLoc('pickerTitle')}
+          onClick={() => setPicking(false)}
+        >
+          <div
+            className="w-full max-w-2xl overflow-hidden rounded-2xl bg-card shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <header className="flex items-center justify-between border-b border-border p-4">
+              <h3 className="font-display text-lg font-semibold">{tLoc('pickerTitle')}</h3>
+              <Button variant="ghost" size="sm" onClick={() => setPicking(false)}>
+                {tLoc('cancel')}
+              </Button>
+            </header>
+            <div className="h-[60vh]">
+              <LocationPicker
+                initial={branchGeo}
+                fallbackCenter={ZONE_CENTERS[timezone] ?? null}
+                onConfirm={(addr: ResolvedAddress) => {
+                  setBranchGeo({ lat: addr.lat, lng: addr.lng });
+                  const line = formatResolved(addr);
+                  if (line) setBranchAddress(line);
+                  setPicking(false);
+                }}
+                locale={locale}
+                labels={{
+                  confirm: tLoc('pickerConfirm'),
+                  dragHint: tLoc('pickerDragHint'),
+                  searchPlaceholder: tLoc('pickerSearch'),
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

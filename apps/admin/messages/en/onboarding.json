@@ -40,7 +40,10 @@
     "primaryColor": "Primary color",
     "accentColor": "Accent color",
     "preview": "Preview",
-    "previewFallbackName": "Your restaurant"
+    "previewFallbackName": "Your restaurant",
+    "pickOnMap": "Pick the location on the map",
+    "changePin": "Change the map pin",
+    "pinned": "Pinned on the map ({coords})"
   },
   "timezones": {
     "eastern": "Eastern — New York, Miami, Atlanta",

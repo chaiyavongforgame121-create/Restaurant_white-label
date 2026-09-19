@@ -40,7 +40,10 @@
     "primaryColor": "Color principal",
     "accentColor": "Color de acento",
     "preview": "Vista previa",
-    "previewFallbackName": "Tu restaurante"
+    "previewFallbackName": "Tu restaurante",
+    "pickOnMap": "Elige la ubicación en el mapa",
+    "changePin": "Cambiar el pin del mapa",
+    "pinned": "Marcado en el mapa ({coords})"
   },
   "timezones": {
     "eastern": "Hora del Este — Nueva York, Miami, Atlanta",

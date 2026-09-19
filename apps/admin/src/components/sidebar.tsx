@@ -7,8 +7,8 @@ import { motion } from 'framer-motion';
 import { useTranslations } from 'next-intl';
 import {
   BarChart3, Building2, ChefHat, ChevronDown, ClipboardList, Cog,
-  CreditCard, Gift, Landmark, LayoutDashboard, Menu as MenuIcon, MicVocal, Monitor,
-  Network, Package, Palette, QrCode, Receipt, ShieldCheck, Star, Store, Tag, Tv, UserRound,
+  CreditCard, Gift, Landmark, LayoutDashboard, Menu as MenuIcon, Monitor,
+  Network, Package, Palette, QrCode, Receipt, ShieldCheck, Star, Store, Tag, UserRound,
   Users, Wallet, X,
 } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
@@ -120,15 +120,8 @@ export function Sidebar({
         { href: `${base}/inventory`, label: t('nav.inventory'), icon: Package, capability: 'inventory.manage' },
       ],
     },
-    {
-      id: 'ai-suite',
-      title: t('sections.aiSuite'),
-      feature: 'ai_suite',
-      items: [
-        { href: `${base}/signage`, label: t('nav.digitalSignage'), icon: Tv, feature: 'digital_signage' },
-        { href: `${base}/ai-voice`, label: t('nav.aiVoice'), icon: MicVocal, feature: 'ai_voice' },
-      ],
-    },
+    // The AI suite (Digital Signage, AI Voice) is not ready for merchants yet (owner, 2026-09-19),
+    // so it has no entry here; its "coming soon" pages stay unlinked until it is.
     {
       id: 'people',
       title: t('sections.peopleGrowth'),

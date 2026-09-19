@@ -40,7 +40,10 @@
     "primaryColor": "สีหลัก",
     "accentColor": "สีรอง",
     "preview": "ตัวอย่าง",
-    "previewFallbackName": "ร้านอาหารของคุณ"
+    "previewFallbackName": "ร้านอาหารของคุณ",
+    "pickOnMap": "เลือกตำแหน่งจากแผนที่",
+    "changePin": "เปลี่ยนหมุดบนแผนที่",
+    "pinned": "ปักหมุดบนแผนที่แล้ว ({coords})"
   },
   "timezones": {
     "eastern": "เวลาฝั่งตะวันออก — นิวยอร์ก, ไมแอมี, แอตแลนตา",

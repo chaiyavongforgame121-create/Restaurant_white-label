@@ -40,7 +40,10 @@
     "primaryColor": "Màu chính",
     "accentColor": "Màu nhấn",
     "preview": "Xem trước",
-    "previewFallbackName": "Nhà hàng của bạn"
+    "previewFallbackName": "Nhà hàng của bạn",
+    "pickOnMap": "Chọn vị trí trên bản đồ",
+    "changePin": "Đổi ghim trên bản đồ",
+    "pinned": "Đã ghim trên bản đồ ({coords})"
   },
   "timezones": {
     "eastern": "Miền Đông — New York, Miami, Atlanta",
