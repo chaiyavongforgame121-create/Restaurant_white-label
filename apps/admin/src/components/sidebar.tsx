@@ -16,6 +16,7 @@ import { isPlatformAdmin } from '@favornoms/database/queries';
 import { hasFeature, type Entitlements, type FeatureKey } from '@favornoms/shared';
 import { cn, RiderIcon } from '@favornoms/ui';
 import { LocaleSwitcher } from '@/components/locale-switcher';
+import { SignOutButton } from './sign-out';
 import { ThemeToggle } from './theme-toggle';
 
 interface Props {
@@ -336,6 +337,7 @@ export function Sidebar({
           )}
           <LocaleSwitcher className="w-full" />
           <ThemeToggle />
+          <SignOutButton className="pt-1" />
         </div>
       </aside>
     </>

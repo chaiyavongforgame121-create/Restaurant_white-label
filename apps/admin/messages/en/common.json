@@ -12,5 +12,7 @@
   "search": "Search",
   "retry": "Try again",
   "saved": "Saved",
-  "signOut": "Sign out"
+  "signOut": "Sign out",
+  "signOutConfirm": "Tap again to sign out",
+  "signedInAs": "Signed in as {email}"
 }

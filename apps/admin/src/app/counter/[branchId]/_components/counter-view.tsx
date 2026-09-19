@@ -29,6 +29,7 @@ import {
 } from '@favornoms/database/queries';
 import { Badge, Button, RiderIcon, Segmented, Sheet, useConfirm } from '@favornoms/ui';
 import { LocaleSwitcher } from '@/components/locale-switcher';
+import { SignOutIconButton } from '@/components/sign-out';
 import {
   changeDue,
   digitsOnly,
@@ -1173,6 +1174,8 @@ function PosInner({
             />
           </div>
           <LocaleSwitcher compact />
+          {/* A cashier has no back office, so the till is the only place to sign out. */}
+          <SignOutIconButton className="border border-border bg-card text-danger hover:bg-danger/10" />
         </div>
       </header>
 

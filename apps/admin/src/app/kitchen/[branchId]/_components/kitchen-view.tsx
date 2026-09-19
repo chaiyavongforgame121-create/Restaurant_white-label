@@ -12,6 +12,7 @@ import {
 import { getBrowserClient } from '@favornoms/database/client';
 import { useRealtime } from '@favornoms/database/realtime';
 import { LocaleSwitcher } from '@/components/locale-switcher';
+import { SignOutIconButton } from '@/components/sign-out';
 import { OpsToggles } from './ops-toggles';
 import {
   ACTIVE_STATUSES, KITCHEN_ORDER_SELECT, REMINDER_INTERVAL_MS, agingTierKey, eightySixTargets, fmtTimer,
@@ -1260,6 +1261,8 @@ export function KitchenView({
             )}
           </div>
           <HBtn onClick={toggleFs} label={t('header.fullscreen')}>{isFs ? <Minimize2 className="h-[18px] w-[18px]" /> : <Maximize2 className="h-[18px] w-[18px]" />}</HBtn>
+          {/* Kitchen staff have no back office, so the board is the only place to sign out. */}
+          <SignOutIconButton style={{ background: 'rgba(255,255,255,.22)', color: '#fff' }} />
         </div>
       </header>
 

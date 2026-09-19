@@ -12,5 +12,7 @@
   "search": "Buscar",
   "retry": "Reintentar",
   "saved": "Guardado",
-  "signOut": "Cerrar sesión"
+  "signOut": "Cerrar sesión",
+  "signOutConfirm": "Toca de nuevo para cerrar sesión",
+  "signedInAs": "Sesión iniciada como {email}"
 }

@@ -12,5 +12,7 @@
   "search": "Tìm kiếm",
   "retry": "Thử lại",
   "saved": "Đã lưu",
-  "signOut": "Đăng xuất"
+  "signOut": "Đăng xuất",
+  "signOutConfirm": "Chạm lần nữa để đăng xuất",
+  "signedInAs": "Đã đăng nhập: {email}"
 }
