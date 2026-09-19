@@ -32,6 +32,11 @@ export default async function RootPage() {
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) redirect('/login');
 
+  // The platform owner lands on the platform console, even when the account also holds a staff
+  // row somewhere (owner@test.com owns the demo restaurant): the console is their home, and it
+  // links to every restaurant. A deep link (/login?next=/b/…) still goes where it points.
+  if (await isPlatformAdmin(supabase)) redirect('/platform');
+
   const { data: memberships } = await supabase
     .from('staff_members')
     .select('branch_id, restaurant_id, role')
@@ -39,10 +44,6 @@ export default async function RootPage() {
     .eq('status', 'active');
 
   if (!memberships || memberships.length === 0) {
-    // The platform owner is staff of nobody, so this branch used to send them straight into
-    // the new-restaurant wizard on every sign-in — one press of Launch away from creating a
-    // real trial restaurant owned by the platform account, with no link to their console.
-    if (await isPlatformAdmin(supabase)) redirect('/platform');
     // Someone invited to a restaurant who signed in without the link (it was used up, or they
     // reset their password) has no membership yet. They belong on their invitation, not in the
     // wizard that creates a restaurant of their own.
