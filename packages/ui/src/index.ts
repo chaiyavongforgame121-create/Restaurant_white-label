@@ -4,6 +4,7 @@ export * from './components/button';
 export * from './components/card';
 export * from './components/badge';
 export * from './components/sheet';
+export * from './components/portal';
 export * from './components/skeleton';
 export * from './components/tag';
 export * from './components/icon-button';

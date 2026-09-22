@@ -20,6 +20,7 @@ import {
 import { useLocale, useTranslations } from 'next-intl';
 import {
   formatCurrency,
+  formatUnitPrice,
   intlLocaleFor,
   isUiLocale,
   DEFAULT_UI_LOCALE,
@@ -41,7 +42,7 @@ import {
   Segmented,
 } from '@favornoms/ui';
 import { useRealtime } from '@favornoms/database/realtime';
-import { useCart, type OrderChannel } from '@/store/cart';
+import { dishQuantityInCart, useCart, type OrderChannel } from '@/store/cart';
 import { useRequireAuth } from '@/components/auth/require-auth';
 import { cssUrl } from '@/lib/css-url';
 import { ComboArt, ComboSheet, type ComboRow as ComboRowType } from './combo-sheet';
@@ -732,11 +733,11 @@ function RecommendedRow({ items, onOpen }: { items: MenuItem[]; onOpen: (i: Menu
                 <div className="flex flex-col items-end gap-0.5">
                   {item.listPrice && item.listPrice > item.price ? (
                     <span className="text-[10px] text-white/80 line-through">
-                      {formatCurrency(item.listPrice)}
+                      {formatUnitPrice(item.listPrice)}
                     </span>
                   ) : null}
                   <Badge variant="solid" className="shrink-0">
-                    {formatCurrency(item.price)}
+                    {formatUnitPrice(item.price)}
                   </Badge>
                 </div>
               </div>
@@ -863,8 +864,10 @@ function MenuCard({
   compact?: boolean;
 }) {
   const t = useTranslations('menu');
-  const lines = useCart((s) => s.lines);
-  const inCartQty = lines.find((l) => l.menuItemId === item.id)?.quantity ?? 0;
+  // Every line of the dish, not the first one: each set of options is a line of its own, so seven
+  // SET A with No Egg and one with the fried egg are "8 in cart", where this used to say 7. Read as
+  // a number, so a card re-renders only when its own count moves.
+  const inCartQty = useCart((s) => dishQuantityInCart(s.lines, item.id));
   const soldOut = !!item.outOfStock;
   // The picture carries "Sold out until 5:00 PM"; the button keeps the short word, it is narrow.
   const soldOutText = useSoldOutText();
@@ -901,9 +904,9 @@ function MenuCard({
             <div className="mt-auto flex items-center justify-between pt-1">
               <div className="flex items-baseline gap-1.5">
                 {item.listPrice && item.listPrice > item.price ? (
-                  <span className="text-xs text-muted-foreground line-through">{formatCurrency(item.listPrice)}</span>
+                  <span className="text-xs text-muted-foreground line-through">{formatUnitPrice(item.listPrice)}</span>
                 ) : null}
-                <span className="font-display text-lg font-semibold text-primary">{formatCurrency(item.price)}</span>
+                <span className="font-display text-lg font-semibold text-primary">{formatUnitPrice(item.price)}</span>
               </div>
               {/* Opens the item sheet rather than adding straight to the cart —
                   otherwise required modifiers/options are silently skipped. */}
@@ -988,11 +991,11 @@ function MenuCard({
             <div className="flex flex-col leading-tight gap-0">
               {item.listPrice && item.listPrice > item.price ? (
                 <span className="text-xs text-muted-foreground line-through">
-                  {formatCurrency(item.listPrice)}
+                  {formatUnitPrice(item.listPrice)}
                 </span>
               ) : null}
               <span className="font-display text-xl font-semibold text-primary">
-                {formatCurrency(item.price)}
+                {formatUnitPrice(item.price)}
               </span>
               {item.saleLabel ? (
                 <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-600">
@@ -1300,11 +1303,11 @@ function HappyHourCard({ hh, onOpen }: { hh: HappyHourSection; onOpen: (i: MenuI
                 <div className="mt-1 flex items-baseline gap-1.5">
                   {item.listPrice && item.listPrice > item.price ? (
                     <span className="text-[11px] text-muted-foreground line-through">
-                      {formatCurrency(item.listPrice)}
+                      {formatUnitPrice(item.listPrice)}
                     </span>
                   ) : null}
                   <span className="font-display text-sm font-bold text-primary">
-                    {formatCurrency(item.price)}
+                    {formatUnitPrice(item.price)}
                   </span>
                 </div>
               </div>
@@ -1417,7 +1420,7 @@ function YourUsualsRow({ items, onOpen }: { items: MenuItem[]; onOpen: (item: Me
             <div className="p-2.5">
               <p className="line-clamp-2 text-sm font-semibold leading-tight">{item.name}</p>
               <p className="mt-1 font-display text-sm font-bold text-primary">
-                {formatCurrency(item.price)}
+                {formatUnitPrice(item.price)}
               </p>
             </div>
           </button>

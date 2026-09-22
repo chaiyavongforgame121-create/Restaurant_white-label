@@ -1,4 +1,5 @@
 import type { Locale, LocalizedText } from '../types';
+import { unitPrice4 } from './money';
 
 export function cn(...inputs: Array<string | undefined | null | false>): string {
   return inputs.filter(Boolean).join(' ');
@@ -17,6 +18,32 @@ export function formatCurrency(amount: number, currency = 'USD', locale: Locale 
     currencyFormatters.set(key, f);
   }
   return f.format(amount);
+}
+
+const unitPriceFormatters = new Map<string, Intl.NumberFormat>();
+/**
+ * A UNIT price for display: at least the currency's own decimals (two for USD), up to four when
+ * the price has them. A percent happy hour makes $7.995 out of $15.99, and showing it as $8.00
+ * next to a $55.97 line for seven of them is a bill that does not add up. Line totals, subtotals
+ * and everything else that is money keep formatCurrency. See money.ts.
+ */
+export function formatUnitPrice(amount: number, currency = 'USD', locale: Locale = 'en'): string {
+  const key = `${locale}:${currency}`;
+  let f = unitPriceFormatters.get(key);
+  if (!f) {
+    const bcp47 = localeToBcp47(locale);
+    const minimumFractionDigits =
+      new Intl.NumberFormat(bcp47, { style: 'currency', currency }).resolvedOptions()
+        .minimumFractionDigits ?? 2;
+    f = new Intl.NumberFormat(bcp47, {
+      style: 'currency',
+      currency,
+      minimumFractionDigits,
+      maximumFractionDigits: Math.max(minimumFractionDigits, 4),
+    });
+    unitPriceFormatters.set(key, f);
+  }
+  return f.format(unitPrice4(amount));
 }
 
 export function localeToBcp47(_locale: Locale): string {
@@ -80,6 +107,8 @@ export * from './safe-next';
 export * from './storefront';
 export * from './platform-settings';
 export * from './pricing';
+export * from './money';
+export * from './order-lines';
 export * from './tip-settings';
 export * from './entitlements';
 export * from './customer-sort';

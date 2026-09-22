@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { Button } from './button';
+import { Portal } from './portal';
 import { useUiStrings } from './ui-strings';
 
 /**
@@ -125,16 +126,25 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
 
   // Escape always cancels. A question nobody can dismiss is worse than the native dialog
   // this replaces.
+  //
+  // And it cancels only the question. Sheet also closes on Escape, through a bubble-phase
+  // window listener that it added when it opened, so before the question existed; a
+  // bubble-phase listener here ran after it, and one press meant to keep a modifier group
+  // closed the dish editor it was asked from, losing the unsaved dish. The question is
+  // always the top layer (see the Portal below), so it listens in the capture phase, which
+  // runs before any bubble-phase listener, and stops the key there, the same way the chat's
+  // photo viewer does. The screens' own window shortcuts (the counter's and the kitchen's
+  // Escape) stay out of it for the same reason.
   React.useEffect(() => {
     if (!pending) return undefined;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        settle(pending.kind === 'prompt' ? null : false);
-      }
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      settle(pending.kind === 'prompt' ? null : false);
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
   }, [pending, settle]);
 
   const promptEmpty = pending?.kind === 'prompt' && !!pending.req.required && !draft.trim();
@@ -144,63 +154,69 @@ export function DialogProvider({ children }: { children: React.ReactNode }) {
       <PromptCtx.Provider value={prompt}>
         <AlertCtx.Provider value={notify}>
         {children}
+        {/* Portalled even though the provider sits at the root. Sheets are portalled to the
+            end of <body> at the same z-[100], so a question left inline here would come
+            earlier in the page than the drawer it was asked from and paint underneath it.
+            Appended when asked, it is always the newest layer. */}
         {pending && (
-          <div
-            className="fixed inset-0 z-[100] grid place-items-center bg-black/50 p-4"
-            role="dialog"
-            aria-modal="true"
-            aria-label={pending.req.title}
-            onClick={() => settle(pending.kind === 'prompt' ? null : false)}
-          >
+          <Portal>
             <div
-              className="bg-card w-full max-w-sm space-y-3 rounded-3xl p-6 shadow-warm"
-              onClick={(e) => e.stopPropagation()}
+              className="fixed inset-0 z-[100] grid place-items-center bg-black/50 p-4"
+              role="dialog"
+              aria-modal="true"
+              aria-label={pending.req.title}
+              onClick={() => settle(pending.kind === 'prompt' ? null : false)}
             >
-              <h2 className="font-display text-lg font-semibold">{pending.req.title}</h2>
-              {pending.req.body && (
-                <p className="text-muted-foreground text-sm">{pending.req.body}</p>
-              )}
-
-              {pending.kind === 'prompt' && (
-                <input
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !promptEmpty) settle(draft);
-                  }}
-                  autoFocus
-                  placeholder={pending.req.placeholder}
-                  className="focus-ring border-border bg-background h-12 w-full rounded-xl border px-3 text-base"
-                />
-              )}
-
-              <div className="flex justify-end gap-2 pt-1">
-                {/* An alert is a statement, not a question, so it gets no way to say no. */}
-                {pending.kind !== 'alert' && (
-                  <Button
-                    variant="ghost"
-                    onClick={() => settle(pending.kind === 'prompt' ? null : false)}
-                  >
-                    {(pending.kind === 'confirm' ? pending.req.cancelLabel : undefined) ?? strings.cancel}
-                  </Button>
+              <div
+                className="bg-card w-full max-w-sm space-y-3 rounded-3xl p-6 shadow-warm"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h2 className="font-display text-lg font-semibold">{pending.req.title}</h2>
+                {pending.req.body && (
+                  <p className="text-muted-foreground text-sm">{pending.req.body}</p>
                 )}
-                <Button
-                  variant={
-                    pending.kind === 'confirm' && pending.req.destructive ? 'danger' : 'gradient'
-                  }
-                  disabled={promptEmpty}
-                  onClick={() => settle(pending.kind === 'prompt' ? draft : true)}
-                >
-                  {pending.req.confirmLabel ??
-                    (pending.kind === 'prompt'
-                      ? strings.save
-                      : pending.kind === 'alert'
-                        ? strings.ok
-                        : strings.confirm)}
-                </Button>
+
+                {pending.kind === 'prompt' && (
+                  <input
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !promptEmpty) settle(draft);
+                    }}
+                    autoFocus
+                    placeholder={pending.req.placeholder}
+                    className="focus-ring border-border bg-background h-12 w-full rounded-xl border px-3 text-base"
+                  />
+                )}
+
+                <div className="flex justify-end gap-2 pt-1">
+                  {/* An alert is a statement, not a question, so it gets no way to say no. */}
+                  {pending.kind !== 'alert' && (
+                    <Button
+                      variant="ghost"
+                      onClick={() => settle(pending.kind === 'prompt' ? null : false)}
+                    >
+                      {(pending.kind === 'confirm' ? pending.req.cancelLabel : undefined) ?? strings.cancel}
+                    </Button>
+                  )}
+                  <Button
+                    variant={
+                      pending.kind === 'confirm' && pending.req.destructive ? 'danger' : 'gradient'
+                    }
+                    disabled={promptEmpty}
+                    onClick={() => settle(pending.kind === 'prompt' ? draft : true)}
+                  >
+                    {pending.req.confirmLabel ??
+                      (pending.kind === 'prompt'
+                        ? strings.save
+                        : pending.kind === 'alert'
+                          ? strings.ok
+                          : strings.confirm)}
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
+          </Portal>
         )}
         </AlertCtx.Provider>
       </PromptCtx.Provider>

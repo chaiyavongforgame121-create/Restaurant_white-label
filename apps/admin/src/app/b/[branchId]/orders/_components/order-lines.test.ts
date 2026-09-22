@@ -4,8 +4,10 @@ import {
   countItems,
   hasSpecialRequests,
   isRemovedOption,
+  lineUnitPrice,
   modifierLabel,
   parseLineModifiers,
+  refundLineAmount,
   summarizeLines,
   type OrderLine,
 } from './order-lines';
@@ -114,6 +116,54 @@ describe('isRemovedOption', () => {
     expect(isRemovedOption('no-onion')).toBe(true);
     expect(isRemovedOption('Normal spice')).toBe(false);
     expect(isRemovedOption('Jalapeños')).toBe(false);
+  });
+});
+
+// Food Thai Thai, 2026-09: SET A ($15.99) at the 50% happy hour, seven of them. The line was
+// charged $55.97; the bill printed "7 × $8.00".
+const setA: OrderLine = {
+  id: 'l4',
+  item_name: 'SET A : Green Curry Chicken',
+  quantity: 7,
+  unit_price: '7.9950',
+  subtotal: '55.97',
+  modifiers: [],
+  notes: null,
+};
+
+describe('lineUnitPrice', () => {
+  it('prints the four-decimal unit a happy hour made, not the line split and rounded', () => {
+    expect(lineUnitPrice(setA)).toBe(7.995);
+  });
+
+  it('folds the options in so quantity × unit reaches the line', () => {
+    // From the modifiers jsonb when modifier_total was not read...
+    expect(lineUnitPrice(burger)).toBe(8.75);
+    // ...and from modifier_total when it was.
+    expect(lineUnitPrice({ ...burger, modifiers: [], modifier_total: '1.50' })).toBe(8.75);
+  });
+
+  it('reads a line charged before unit prices kept their decimals as it was charged', () => {
+    expect(lineUnitPrice({ ...setA, unit_price: '8.00', subtotal: '56.00' })).toBe(8);
+  });
+});
+
+describe('refundLineAmount', () => {
+  it('gives back exactly what the whole line was charged', () => {
+    expect(refundLineAmount(setA, 7)).toBe(55.97);
+    expect(refundLineAmount(burger, 2)).toBe(17.5);
+  });
+
+  it('prices part of a line as a line of its own, rounded once', () => {
+    expect(refundLineAmount(setA, 1)).toBe(8);
+    expect(refundLineAmount(setA, 3)).toBe(23.99); // 3 × 7.995 = 23.985
+    expect(refundLineAmount(burger, 1)).toBe(8.75);
+  });
+
+  it('is nothing for nothing, and never more than the line', () => {
+    expect(refundLineAmount(setA, 0)).toBe(0);
+    expect(refundLineAmount(setA, -2)).toBe(0);
+    expect(refundLineAmount(setA, 99)).toBe(55.97);
   });
 });
 

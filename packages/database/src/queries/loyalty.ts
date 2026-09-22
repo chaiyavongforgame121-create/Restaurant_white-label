@@ -1,3 +1,4 @@
+import { lineTotal } from '@favornoms/shared';
 import type { FavornomsClient } from '../client-type';
 import type { Database } from '../types';
 
@@ -90,7 +91,21 @@ export interface LoyaltyReward {
   menu_item_id: string | null;
   menu_item_name: string | null;
   menu_item_image_url: string | null;
+  /**
+   * The dish's LIST price (list_loyalty_rewards reads menu_items.price). During a happy hour the
+   * dish sells for less, so this is only what the reward is worth before the dish is in the cart;
+   * loyaltyRewardDiscount prices it from the cart line once it is.
+   */
   menu_item_price: number | null;
+}
+
+/** A cart line as loyaltyRewardDiscount reads it, to price a free-item reward. */
+export interface RewardCartLine {
+  menuItemId: string;
+  /** Set on a combo line, whose menuItemId slot carries the combo id: never the reward's dish. */
+  comboId?: string | null;
+  /** What one of the dish costs in this cart, before options: a happy-hour 7.995, not 15.99. */
+  unitPrice: number;
 }
 
 /**
@@ -119,10 +134,17 @@ export async function listLoyaltyRewards(
  * server will actually charge instead of one the diner has to discover is wrong
  * on the receipt. `free_delivery` returns 0 because it zeroes the delivery fee
  * rather than discounting the food.
+ *
+ * `lines` is the cart, for `free_item`: place-order takes off one of the dish at the price the
+ * order charges for it, which in a happy hour is the discounted unit, not the list price
+ * list_loyalty_rewards reports. Without the cart the reward was priced at the list price, so a
+ * 50% happy hour on a $15.99 dish showed $15.99 off while place-order took $8.00 off and charged
+ * the diner $7.99 more than the checkout had shown.
  */
 export function loyaltyRewardDiscount(
-  reward: Pick<LoyaltyReward, 'kind' | 'value' | 'max_discount' | 'menu_item_price'>,
+  reward: Pick<LoyaltyReward, 'kind' | 'value' | 'max_discount' | 'menu_item_id' | 'menu_item_price'>,
   subtotal: number,
+  lines: readonly RewardCartLine[] = [],
 ): number {
   const r2 = (n: number) => Math.round(n * 100) / 100;
   switch (reward.kind) {
@@ -134,8 +156,15 @@ export function loyaltyRewardDiscount(
     }
     case 'fixed_off':
       return r2(Math.min(Number(reward.value), subtotal));
-    case 'free_item':
-      return r2(Math.min(Number(reward.menu_item_price ?? 0), subtotal));
+    case 'free_item': {
+      // place-order's rule: the first dish line of the reward's item (a combo line never counts),
+      // one of it charged as a line of one, so a happy-hour 7.995 is $8.00 off, the cent the diner
+      // would pay for it alone. Options stay paid for. A reward whose dish is not in the cart yet
+      // cannot be redeemed (the checkout says to add it) and only previews the list price.
+      const line = lines.find((l) => !l.comboId && l.menuItemId === reward.menu_item_id);
+      const unit = line ? Number(line.unitPrice) : Number(reward.menu_item_price ?? 0);
+      return Math.min(lineTotal(Number.isFinite(unit) ? unit : 0, 0, 1), subtotal);
+    }
     default:
       return 0;
   }

@@ -13,9 +13,13 @@ import {
   billingErrorMessage,
   describeBillingError,
   formatCurrency,
+  formatUnitPrice,
   intlLocaleFor,
   isUiLocale,
-  lineSignature,
+  MAX_LINE_QUANTITY,
+  menuLinePositions,
+  mergeIdenticalLines,
+  sortOrderLines,
   type MenuCategory,
   type MenuItem,
   type SelectedModifier,
@@ -58,6 +62,9 @@ import {
 } from './counter-errors';
 import { WALK_IN_PHONE, countryForTimezone, readCounterPhone } from './counter-phone';
 import {
+  addCounterLine,
+  counterLineKey,
+  counterLineSubtotals,
   lineSubtotal,
   quoteCounterCart,
   r2,
@@ -478,7 +485,9 @@ function PosInner({
         return;
       }
     }
-    setLines(target.lines);
+    // Folded to one line per selection, the way place-order will bill it: a cart parked by an
+    // older build can hold the same dish twice.
+    setLines(mergeIdenticalLines(target.lines, counterLineKey));
     // Parked orders live in localStorage indefinitely, so one can outlive the
     // delivery add-on. Fall back to pickup rather than resuming into a channel
     // place-order will now refuse.
@@ -549,6 +558,25 @@ function PosInner({
   );
 
   /**
+   * The cart in menu order, category by category with the combos first (as the tiles show them),
+   * the way the receipt, the kitchen ticket and the bill will list the order. Display only:
+   * `lines` keeps the order things were rung up in.
+   */
+  const positionOf = React.useMemo(
+    () => menuLinePositions({ categories, items, combos }),
+    [categories, items, combos],
+  );
+  const menuOrderedLines = React.useMemo(
+    () =>
+      sortOrderLines(pricedLines, (l) => ({
+        ...positionOf(isCombo(l) ? { comboId: l.menuItemId } : { menuItemId: l.menuItemId }),
+        item_name: l.name,
+        modifiers: l.modifiers,
+      })),
+    [pricedLines, positionOf],
+  );
+
+  /**
    * Why a line in the cart cannot be sold any more, or null. Live updates grey the tiles, but a
    * dish added before the kitchen 86'd it used to ride all the way to Charge, and for a QR sale
    * past the customer's transfer, before place-order refused it.
@@ -586,12 +614,8 @@ function PosInner({
   const quoteFor = React.useCallback(
     (method: CounterPayMethod) =>
       quoteCounterCart({
-        itemSubtotals: pricedLines
-          .filter((l) => !isCombo(l))
-          .map((l) => lineSubtotal(l.unitPrice, l.quantity)),
-        comboSubtotals: pricedLines
-          .filter(isCombo)
-          .map((l) => lineSubtotal(l.unitPrice, l.quantity)),
+        // Lines of one selection priced as the one line place-order bills them as.
+        ...counterLineSubtotals(pricedLines),
         discountPercent,
         salesTaxRate,
         serviceFeePercent,
@@ -650,9 +674,10 @@ function PosInner({
   /**
    * Add what the sheet was configured with.
    *
-   * Merging is keyed on the item AND its options AND its note, not the item alone. With
-   * options in play the old key is actively wrong: a plain burger and a burger with bacon
-   * would have collapsed into one line at one of the two prices.
+   * Merging is keyed on the item AND its options (in any order) AND its trimmed note, not the
+   * item alone (counterLineKey, the key place-order bills on). With options in play the old key
+   * is actively wrong: a plain burger and a burger with bacon would have collapsed into one
+   * line at one of the two prices.
    */
   const addConfigured = React.useCallback(
     (args: {
@@ -663,30 +688,18 @@ function PosInner({
       unitPrice: number;
     }) => {
       const { item, quantity, notes, modifiers, unitPrice } = args;
-      const signature = lineSignature(item.id, modifiers, notes);
-      setLines((curr) => {
-        const existing = curr.find(
-          (l) => lineSignature(l.menuItemId, l.modifiers ?? [], l.notes) === signature,
-        );
-        if (existing) {
-          return curr.map((l) =>
-            l.id === existing.id ? { ...l, quantity: l.quantity + quantity } : l,
-          );
-        }
-        return [
-          ...curr,
-          {
-            id: `${item.id}-${Date.now()}-${curr.length}`,
-            menuItemId: item.id,
-            name: item.name,
-            unitPrice,
-            imageUrl: item.imageUrl,
-            quantity,
-            modifiers,
-            notes: notes || undefined,
-          },
-        ];
-      });
+      setLines((curr) =>
+        addCounterLine<Line>(curr, {
+          id: `${item.id}-${Date.now()}-${curr.length}`,
+          menuItemId: item.id,
+          name: item.name,
+          unitPrice,
+          imageUrl: item.imageUrl,
+          quantity,
+          modifiers,
+          notes: notes.trim() || undefined,
+        }),
+      );
     },
     [],
   );
@@ -700,38 +713,33 @@ function PosInner({
   const addCombo = React.useCallback(
     (args: { combo: ComboSet; quantity: number; notes: string }) => {
       const { combo, quantity, notes } = args;
-      setLines((curr) => {
-        const existing = curr.find(
-          (l) => isCombo(l) && l.menuItemId === combo.id && (l.notes ?? '') === notes,
-        );
-        if (existing) {
-          return curr.map((l) =>
-            l.id === existing.id ? { ...l, quantity: l.quantity + quantity } : l,
-          );
-        }
-        return [
-          ...curr,
-          {
-            id: `combo-${combo.id}-${Date.now()}-${curr.length}`,
-            kind: 'combo' as const,
-            menuItemId: combo.id,
-            name: combo.name,
-            unitPrice: combo.total_price,
-            imageUrl: combo.image_url,
-            quantity,
-            notes: notes || undefined,
-            contents: combo.items.map((it) => ({ name: it.item_name, quantity: it.quantity })),
-          },
-        ];
-      });
+      setLines((curr) =>
+        addCounterLine<Line>(curr, {
+          id: `combo-${combo.id}-${Date.now()}-${curr.length}`,
+          kind: 'combo' as const,
+          menuItemId: combo.id,
+          name: combo.name,
+          unitPrice: combo.total_price,
+          imageUrl: combo.image_url,
+          quantity,
+          notes: notes.trim() || undefined,
+          contents: combo.items.map((it) => ({ name: it.item_name, quantity: it.quantity })),
+        }),
+      );
     },
     [],
   );
 
+  // Held to MAX_LINE_QUANTITY: place-order refuses the whole sale for a line above it, with a
+  // message that cannot say which line.
   const updateQty = (lineId: string, delta: number) => {
     setLines((curr) =>
       curr
-        .map((l) => (l.id === lineId ? { ...l, quantity: Math.max(0, l.quantity + delta) } : l))
+        .map((l) =>
+          l.id === lineId
+            ? { ...l, quantity: Math.min(MAX_LINE_QUANTITY, Math.max(0, l.quantity + delta)) }
+            : l,
+        )
         .filter((l) => l.quantity > 0),
     );
   };
@@ -875,7 +883,8 @@ function PosInner({
     setSubmitting(true);
     setPayError(null);
     setCustomerFiled(null);
-    const snapshotLines = pricedLines;
+    // In menu order: the printed receipt lists the lines the way the bill and the kitchen do.
+    const snapshotLines = menuOrderedLines;
     const expected = quoteFor(method);
     const name = customerName.trim();
     const supabase = getBrowserClient();
@@ -994,9 +1003,11 @@ function PosInner({
         items: snapshotLines.map((l) => ({
           name: l.name,
           quantity: l.quantity,
-          // Already the price with options in it, which is what keeps quantity × unit_price
-          // matching the Subtotal printed below the lines.
+          // Already the price with options in it, to four decimals. The line is printed as
+          // place-order charged it (rounded once), which is what keeps the lines matching the
+          // Subtotal printed below them: 7 × $7.995 is $55.97, never 7 × $8.00.
           unit_price: l.unitPrice,
+          line_total: lineSubtotal(l.unitPrice, l.quantity),
           notes:
             [
               l.modifiers?.length ? l.modifiers.map((m) => m.option_name).join(', ') : null,
@@ -1379,12 +1390,12 @@ function PosInner({
                       <div className="p-2.5">
                         <p className="line-clamp-2 text-sm font-semibold leading-tight">{item.name}</p>
                         <p className="mt-0.5 font-display text-base font-bold text-primary">
-                          {formatCurrency(item.price)}
+                          {formatUnitPrice(item.price)}
                           {/* Happy hour: the till says so, because the customer is looking at
                               the menu board's price while the cashier reads this one out. */}
                           {listPrice != null && (
                             <span className="text-muted-foreground ml-1.5 text-xs font-normal line-through">
-                              {formatCurrency(listPrice)}
+                              {formatUnitPrice(listPrice)}
                             </span>
                           )}
                         </p>
@@ -1421,7 +1432,7 @@ function PosInner({
             ) : (
               <ul className="space-y-2">
                 <AnimatePresence>
-                  {pricedLines.map((line) => {
+                  {menuOrderedLines.map((line) => {
                     const problem = lineProblem(line);
                     return (
                     <motion.li
@@ -1455,7 +1466,7 @@ function PosInner({
                           <p className="text-warning line-clamp-2 text-xs">{line.notes}</p>
                         )}
                         <p className="text-xs text-muted-foreground">
-                          {t('cart.each', { price: formatCurrency(line.unitPrice) })}
+                          {t('cart.each', { price: formatUnitPrice(line.unitPrice) })}
                         </p>
                       </div>
                       <div className="flex items-center gap-1">
@@ -1469,7 +1480,7 @@ function PosInner({
                         <span className="w-6 text-center font-bold tabular-nums">{line.quantity}</span>
                         <button
                           onClick={() => updateQty(line.id, 1)}
-                          disabled={!!problem}
+                          disabled={!!problem || line.quantity >= MAX_LINE_QUANTITY}
                           className="focus-ring grid h-8 w-8 place-items-center rounded-full bg-primary text-primary-foreground disabled:opacity-40"
                           aria-label={t('cart.increase')}
                         >

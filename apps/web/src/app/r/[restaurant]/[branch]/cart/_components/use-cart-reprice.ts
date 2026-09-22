@@ -105,7 +105,7 @@ export function useCartReprice(branchId: string, storefrontVersion: number): Car
         optionIds.length
           ? supabase
               .from('modifier_options')
-              .select('id, is_active, modifier_groups!inner(branch_id)')
+              .select('id, is_active, price_delta, modifier_groups!inner(branch_id)')
               .in('id', optionIds)
           : null,
       ]);
@@ -147,12 +147,18 @@ export function useCartReprice(branchId: string, storefrontVersion: number): Car
       // The same three tests place-order applies, so the cart takes out exactly what the server
       // would refuse: no row (deleted), switched off, or a group at another branch.
       const unavailableOptions = new Set(optionIds);
+      // What each option still on offer adds today: place-order charges the current delta, not the
+      // one the line was added with, so a fried egg that went up must move the cart's quote too.
+      const optionPrices = new Map<string, number>();
       for (const row of optionRows?.data ?? []) {
         const group = Array.isArray(row.modifier_groups) ? row.modifier_groups[0] : row.modifier_groups;
-        if (row.is_active && group?.branch_id === branchId) unavailableOptions.delete(row.id);
+        if (row.is_active && group?.branch_id === branchId) {
+          unavailableOptions.delete(row.id);
+          optionPrices.set(row.id, Number(row.price_delta));
+        }
       }
 
-      const { changed, removed } = reprice(live, unavailableOptions);
+      const { changed, removed } = reprice(live, unavailableOptions, optionPrices);
       if (cancelled) return;
       // The words are the cart view's: a hook has no business picking a language.
       setNotice(removed > 0 || changed > 0 ? { removed, changed } : null);

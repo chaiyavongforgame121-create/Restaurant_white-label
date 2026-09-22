@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import type { TenantTheme } from '@favornoms/shared';
+import { ThemeVarsContext } from '../lib/theme-vars';
 
 type Mode = 'light' | 'dark';
 
@@ -198,6 +199,12 @@ export function ThemeProvider({
     return out;
   }, [theme]);
 
+  // The wrapper below only needs this provider's own variables, because CSS inheritance
+  // supplies the outer provider's. A portalled overlay gets no such inheritance, so it is
+  // handed the merged set: the root's defaults with the tenant's colours laid over them.
+  const inheritedVars = React.useContext(ThemeVarsContext);
+  const vars = React.useMemo(() => ({ ...inheritedVars, ...style }), [inheritedVars, style]);
+
   // A fresh object here re-rendered every useTheme() consumer on every parent render.
   const value = React.useMemo<ThemeContextValue>(
     () => ({
@@ -217,9 +224,11 @@ export function ThemeProvider({
           dangerouslySetInnerHTML={{ __html: modeScript(storageKey, defaultMode) }}
         />
       )}
-      <div style={style as React.CSSProperties} className="contents">
-        {children}
-      </div>
+      <ThemeVarsContext.Provider value={vars}>
+        <div style={style as React.CSSProperties} className="contents">
+          {children}
+        </div>
+      </ThemeVarsContext.Provider>
     </ThemeContext.Provider>
   );
 }

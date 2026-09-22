@@ -165,10 +165,15 @@ export function MenuReorder({ branchId, categories: initCategories, items: initI
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between rounded-2xl bg-card px-4 py-3 shadow-warm">
-        <p className="text-sm text-muted-foreground">
-          {dirty ? t('reorder.unsavedHint') : t('reorder.idleHint')}
-        </p>
+      <div className="mb-4 flex items-center justify-between gap-3 rounded-2xl bg-card px-4 py-3 shadow-warm">
+        <div className="min-w-0">
+          <p className="text-sm text-muted-foreground">
+            {dirty ? t('reorder.unsavedHint') : t('reorder.idleHint')}
+          </p>
+          {/* The owner asked for bills to run category by category; this is the order they
+              follow (order_items.category_position / item_position), so say so where it is set. */}
+          <p className="mt-0.5 text-xs text-muted-foreground">{t('reorder.billOrderHint')}</p>
+        </div>
         <Button
           variant="gradient"
           onClick={save}

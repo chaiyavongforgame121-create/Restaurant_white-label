@@ -3,8 +3,10 @@ import {
   computeSalesTax,
   computeServiceFee,
   formatCurrency,
+  lineTotal,
   parseServiceFeePercent,
   serviceFeeApplies,
+  sumMoney,
 } from './index';
 
 /**
@@ -17,8 +19,9 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 
 interface Line { unitPrice: number; quantity: number }
 
+// Each line rounded to the cent once, then summed exactly (money.ts).
 function subtotalOf(lines: Line[]) {
-  return r2(lines.reduce((s, l) => s + l.unitPrice * l.quantity, 0));
+  return sumMoney(lines.map((l) => lineTotal(l.unitPrice, 0, l.quantity)));
 }
 
 function computeTotal({
@@ -133,6 +136,16 @@ describe('place-order math', () => {
     expect(result.serviceFee).toBe(0.62);
     expect(result.tax).toBe(0.74);
     expect(result.total).toBe(15.7);
+  });
+
+  it('prices a happy-hour unit unrounded: 7 x $7.995 is $55.97, not 7 x $8.00', () => {
+    const result = computeTotal({
+      lines: [{ unitPrice: 15.99 * 0.5, quantity: 7 }, { unitPrice: 2.5, quantity: 1 }],
+      taxRate: 0.1,
+    });
+    expect(result.subtotal).toBe(58.47);
+    expect(result.tax).toBe(5.85);
+    expect(result.total).toBe(64.32);
   });
 
   it('zero quantities → zero total', () => {

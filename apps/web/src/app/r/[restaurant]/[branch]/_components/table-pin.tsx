@@ -16,6 +16,7 @@ import { useRealtime } from '@favornoms/database/realtime';
 import { Badge, Button, Sheet, cn } from '@favornoms/ui';
 import { useAuth } from '@/components/auth/use-auth';
 import { useCartHydrated, useCartStoreApi } from '@/store/cart';
+import { billLineOptions } from './table-bill-lines';
 
 export interface PinnedTable {
   id: string;
@@ -622,17 +623,32 @@ function TableBillSheet({ open, onClose }: { open: boolean; onClose: () => void 
                   </p>
                 </div>
                 <ul className="mt-2 space-y-1">
-                  {order.items.map((item, i) => (
-                    <li
-                      key={`${order.order_id}-${i}`}
-                      className="flex justify-between gap-3 text-sm text-muted-foreground"
-                    >
-                      <span>
-                        {item.quantity}× {item.name}
-                      </span>
-                      <span className="tabular-nums">{formatCurrency(Number(item.subtotal))}</span>
-                    </li>
-                  ))}
+                  {order.items.map((item, i) => {
+                    // The options and the note are what tell two lines of one dish apart: a
+                    // SET A with no egg beside a SET A with a fried egg otherwise reads as the
+                    // same dish listed twice, as if the round had been split by mistake.
+                    const options = billLineOptions(item);
+                    return (
+                      <li key={`${order.order_id}-${i}`} className="text-sm text-muted-foreground">
+                        <div className="flex justify-between gap-3">
+                          <span>
+                            {item.quantity}× {item.name}
+                          </span>
+                          <span className="tabular-nums">{formatCurrency(Number(item.subtotal))}</span>
+                        </div>
+                        {options.length > 0 && (
+                          <ul className="pl-4 text-xs">
+                            {options.map((label, j) => (
+                              <li key={j}>+ {label}</li>
+                            ))}
+                          </ul>
+                        )}
+                        {item.notes && (
+                          <p className="pl-4 text-xs italic">{t('bill.lineNote', { note: item.notes })}</p>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
                 {order.paid && (
                   <p className="mt-2 text-xs font-semibold text-success">{t('bill.paid')}</p>

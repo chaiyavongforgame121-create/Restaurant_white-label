@@ -2756,12 +2756,14 @@ export type Database = {
       }
       order_items: {
         Row: {
+          category_position: number | null
           combo_contents: Json | null
           combo_id: string | null
           created_at: string
           id: string
           item_image_url: string | null
           item_name: string
+          item_position: number | null
           menu_item_id: string | null
           modifier_total: number
           modifiers: Json
@@ -2775,12 +2777,14 @@ export type Database = {
           unit_price: number
         }
         Insert: {
+          category_position?: number | null
           combo_contents?: Json | null
           combo_id?: string | null
           created_at?: string
           id?: string
           item_image_url?: string | null
           item_name: string
+          item_position?: number | null
           menu_item_id?: string | null
           modifier_total?: number
           modifiers?: Json
@@ -2794,12 +2798,14 @@ export type Database = {
           unit_price: number
         }
         Update: {
+          category_position?: number | null
           combo_contents?: Json | null
           combo_id?: string | null
           created_at?: string
           id?: string
           item_image_url?: string | null
           item_name?: string
+          item_position?: number | null
           menu_item_id?: string | null
           modifier_total?: number
           modifiers?: Json

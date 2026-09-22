@@ -1,9 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
+  comboLineSignature,
+  consolidateOrderLines,
   defaultSelections,
+  distinctOptionIds,
   flattenSelections,
   lineSignature,
+  MAX_LINE_QUANTITY,
+  mergeIdenticalLines,
   modifierDelta,
+  normalizeLineNotes,
+  optionLineSignature,
   toggleOption,
   validateSelections,
   type ModifierGroup,
@@ -183,5 +190,142 @@ describe('lineSignature', () => {
 
   it('separates different items', () => {
     expect(lineSignature('i1', [])).not.toBe(lineSignature('i2', []));
+  });
+
+  it('counts a repeated option once', () => {
+    expect(lineSignature('i1', mods('a', 'a'))).toBe(lineSignature('i1', mods('a')));
+  });
+
+  it('is the key place-order consolidates on, built from option ids alone', () => {
+    expect(optionLineSignature('i1', ['b', 'a'], ' no salt ')).toBe(lineSignature('i1', mods('a', 'b'), 'no salt'));
+    expect(optionLineSignature('i1', undefined)).toBe(lineSignature('i1', []));
+  });
+});
+
+describe('normalizeLineNotes', () => {
+  it('trims, and reads blank or missing as no note', () => {
+    expect(normalizeLineNotes('  extra rice ')).toBe('extra rice');
+    expect(normalizeLineNotes('   ')).toBeUndefined();
+    expect(normalizeLineNotes('')).toBeUndefined();
+    expect(normalizeLineNotes(undefined)).toBeUndefined();
+    expect(normalizeLineNotes(null)).toBeUndefined();
+    // Not a string: nothing a kitchen can read.
+    expect(normalizeLineNotes(42)).toBeUndefined();
+  });
+});
+
+describe('distinctOptionIds', () => {
+  it('drops repeats and keeps the order they were first chosen in', () => {
+    expect(distinctOptionIds(['b', 'a', 'b'])).toEqual(['b', 'a']);
+    expect(distinctOptionIds(undefined)).toEqual([]);
+  });
+});
+
+describe('comboLineSignature', () => {
+  it('is the combo and its trimmed note', () => {
+    expect(comboLineSignature('c1')).toBe(comboLineSignature('c1', '  '));
+    expect(comboLineSignature('c1', 'no ice')).toBe(comboLineSignature('c1', ' no ice '));
+    expect(comboLineSignature('c1', 'no ice')).not.toBe(comboLineSignature('c1'));
+    expect(comboLineSignature('c1')).not.toBe(comboLineSignature('c2'));
+  });
+
+  it('never matches a dish line, even one with the same id', () => {
+    expect(comboLineSignature('x')).not.toBe(lineSignature('x', []));
+  });
+});
+
+describe('mergeIdenticalLines', () => {
+  const line = (id: string, key: string, quantity: number) => ({ id, key, quantity });
+
+  it('folds later lines into the first of their key, which keeps its place and its fields', () => {
+    const merged = mergeIdenticalLines(
+      [line('1', 'a', 7), line('2', 'b', 1), line('3', 'a', 1), line('4', 'a', 2)],
+      (l) => l.key,
+    );
+    expect(merged).toEqual([line('1', 'a', 10), line('2', 'b', 1)]);
+  });
+
+  it('hands back the same array when nothing was folded', () => {
+    const lines = [line('1', 'a', 1), line('2', 'b', 1)];
+    expect(mergeIdenticalLines(lines, (l) => l.key)).toBe(lines);
+  });
+});
+
+describe('consolidateOrderLines', () => {
+  it('bills SET A added from the Happy Hour strip and from the menu as one line', () => {
+    const { items } = consolidateOrderLines([
+      { menu_item_id: 'set-a', quantity: 7, modifier_option_ids: ['no-egg'] },
+      { menu_item_id: 'tom-yum', quantity: 1 },
+      { menu_item_id: 'set-a', quantity: 1, notes: '   ', modifier_option_ids: ['no-egg'] },
+    ]);
+    expect(items).toEqual([
+      { menu_item_id: 'set-a', quantity: 8, notes: undefined, modifier_option_ids: ['no-egg'] },
+      { menu_item_id: 'tom-yum', quantity: 1, notes: undefined, modifier_option_ids: [] },
+    ]);
+  });
+
+  it('keeps different options, and different notes, on lines of their own', () => {
+    // The bill the owner showed: seven with No Egg and one with the default fried egg (+$2.00).
+    const { items } = consolidateOrderLines([
+      { menu_item_id: 'set-a', quantity: 7, modifier_option_ids: ['no-egg'] },
+      { menu_item_id: 'set-a', quantity: 1, modifier_option_ids: ['runny-egg'] },
+      { menu_item_id: 'set-a', quantity: 1, notes: 'extra spicy', modifier_option_ids: ['no-egg'] },
+    ]);
+    expect(items.map((l) => [l.quantity, l.modifier_option_ids, l.notes])).toEqual([
+      [7, ['no-egg'], undefined],
+      [1, ['runny-egg'], undefined],
+      [1, ['no-egg'], 'extra spicy'],
+    ]);
+  });
+
+  it('ignores the order options were chosen in and drops a repeated option', () => {
+    const { items } = consolidateOrderLines([
+      { menu_item_id: 'pad-thai', quantity: 1, modifier_option_ids: ['chicken', 'medium'] },
+      { menu_item_id: 'pad-thai', quantity: 2, modifier_option_ids: ['medium', 'chicken', 'medium'] },
+    ]);
+    expect(items).toEqual([
+      { menu_item_id: 'pad-thai', quantity: 3, notes: undefined, modifier_option_ids: ['chicken', 'medium'] },
+    ]);
+  });
+
+  it('merges identical combos, keeps combos with other notes apart, and trims notes', () => {
+    const { combos } = consolidateOrderLines(
+      [],
+      [
+        { combo_id: 'lunch', quantity: 1 },
+        { combo_id: 'lunch', quantity: 2, notes: '' },
+        { combo_id: 'lunch', quantity: 1, notes: ' no ice ' },
+        { combo_id: 'dinner', quantity: 1 },
+      ],
+    );
+    expect(combos).toEqual([
+      { combo_id: 'lunch', quantity: 3, notes: undefined },
+      { combo_id: 'lunch', quantity: 1, notes: 'no ice' },
+      { combo_id: 'dinner', quantity: 1, notes: undefined },
+    ]);
+  });
+
+  it('never merges a combo into a dish line', () => {
+    const merged = consolidateOrderLines([{ menu_item_id: 'x', quantity: 1 }], [{ combo_id: 'x', quantity: 1 }]);
+    expect(merged.items).toHaveLength(1);
+    expect(merged.combos).toHaveLength(1);
+  });
+
+  it('adds up past MAX_LINE_QUANTITY rather than dropping units, and leaves the refusal to place-order', () => {
+    // 60 + 50 of one combo is 110 of one selection. Clamping here would bill 99 for 110 ordered;
+    // place-order refuses the folded line instead (invalid_quantity), and the carts never send one.
+    const { items, combos } = consolidateOrderLines(
+      [
+        { menu_item_id: 'set-a', quantity: 60 },
+        { menu_item_id: 'set-a', quantity: 50, notes: ' ' },
+      ],
+      [
+        { combo_id: 'lunch', quantity: 60 },
+        { combo_id: 'lunch', quantity: 50 },
+      ],
+    );
+    expect(MAX_LINE_QUANTITY).toBe(99);
+    expect(items.map((l) => l.quantity)).toEqual([110]);
+    expect(combos.map((c) => c.quantity)).toEqual([110]);
   });
 });

@@ -2,11 +2,12 @@
    server page can share the select and the rules can be unit-tested. */
 
 import type { BranchRider } from '@favornoms/database/queries';
+import { sortOrderLines } from '@favornoms/shared';
 
 /** Everything the board reads per ticket. page.tsx (first paint) and the view's reload() must
  *  select the same shape, or a refetch silently drops a field a card relies on. */
 export const KITCHEN_ORDER_SELECT =
-  'id, order_number, status, status_history, channel, created_at, customer_name, customer_notes, kitchen_notes, held, awaiting_payment, scheduled_for, table_id, tables(table_number, display_name), order_items(id, menu_item_id, combo_id, combo_contents, item_name, quantity, notes, prep_status, station, modifiers), deliveries(id, status, driver_id, accepted_at, batch_id, batch_seq)';
+  'id, order_number, status, status_history, channel, created_at, customer_name, customer_notes, kitchen_notes, held, awaiting_payment, scheduled_for, table_id, tables(table_number, display_name), order_items(id, menu_item_id, combo_id, combo_contents, item_name, quantity, notes, prep_status, station, modifiers, category_position, item_position, created_at), deliveries(id, status, driver_id, accepted_at, batch_id, batch_seq)';
 
 export const ACTIVE_STATUSES = ['pending', 'confirmed', 'preparing', 'ready'];
 
@@ -22,6 +23,10 @@ export interface OrderItem {
   combo_id?: string | null;
   /** The dishes inside a combo line, snapshotted by place-order. Shape is read defensively. */
   combo_contents?: unknown;
+  /** Where the dish sits on the menu. A ticket lists its lines in that order (linesInMenuOrder). */
+  category_position?: number | null;
+  item_position?: number | null;
+  created_at?: string | null;
 }
 export interface Delivery {
   id: string;
@@ -186,9 +191,39 @@ export function isOnBoard(o: Order): boolean {
   return !o.held && !o.awaiting_payment && ACTIVE_STATUSES.includes(o.status) && o.order_items.length > 0;
 }
 
+/** What the board says about itself, as keys under kitchen.header. */
+export interface BoardHealth {
+  /** The full-width red bar: the board is not to be trusted while it is up. One at a time. */
+  banner: 'connectionLost' | 'readFailed' | null;
+  /** The header's status line. */
+  status: 'statusLive' | 'statusReconnecting' | 'statusRetrying';
+  /** May an empty lane say "All clear"? */
+  allClear: boolean;
+}
+
+/** `socketHealthy`: realtime is connected. `readFailed`: the last read of the tickets was refused.
+ *  A refused read used to leave an empty board saying "0 active · live" and "All clear, chef."
+ *  (the select named a column the database did not have yet, and no ticket reached the kitchen);
+ *  an empty lane is only "clear" when the read that emptied it worked. A dropped socket keeps its
+ *  own bar and wins: it is the one that explains a failed read as well. */
+export function boardHealth(socketHealthy: boolean, readFailed: boolean): BoardHealth {
+  if (!socketHealthy) return { banner: 'connectionLost', status: 'statusReconnecting', allClear: !readFailed };
+  if (readFailed) return { banner: 'readFailed', status: 'statusRetrying', allClear: false };
+  return { banner: null, status: 'statusLive', allClear: true };
+}
+
 /** A line the cook has ticked off. */
 export function isLineDone(it: Pick<OrderItem, 'prep_status'>): boolean {
   return it.prep_status === 'ready' || it.prep_status === 'served';
+}
+
+/** A ticket with its lines in menu order, category by category, as the bill lists them. Applied
+ *  wherever lines reach the board (first paint, a re-read, a line's realtime UPDATE, which is how
+ *  the owner reordering the menu arrives), so the cards, the batch view and the 86 list all read
+ *  the same order. The same ticket comes back when its lines are already in order. */
+export function linesInMenuOrder<T extends Pick<Order, 'order_items'>>(o: T): T {
+  const sorted = sortOrderLines(o.order_items);
+  return sorted.every((it, i) => it === o.order_items[i]) ? o : { ...o, order_items: sorted };
 }
 
 /** Fold a menu_items row (a realtime UPDATE, or this board's own 86) into the sold-out strip.
@@ -247,6 +282,11 @@ export function overlaySnapshot<T extends { id: string }>(
 
 /* ── combos and stations ───────────────────────────────────────────────── */
 
+/** The station key, filter value and ?station= value of the "No station" pill: lines whose dish has
+ *  no station. The underscore keeps it apart from the station codes the menu editor, menu import and
+ *  the CSV write (hot, cold, bar, dessert, expo). */
+export const NO_STATION = '_none';
+
 export function parseComboContents(raw: unknown): ComboPart[] {
   if (!Array.isArray(raw)) return [];
   const out: ComboPart[] = [];
@@ -269,25 +309,125 @@ export function parseComboContents(raw: unknown): ComboPart[] {
   return out;
 }
 
-/** Does this line belong on a station's screen?
- *  - a line with a station: only that station;
- *  - a combo: any station one of its dishes cooks at; a dish with no station puts it everywhere;
- *  - a line with no station at all (hand-built menus, old combos): every station, so no ticket
- *    can vanish from every screen but "All". */
-export function lineMatchesStation(it: OrderItem, station: string | null): boolean {
-  if (!station) return true;
-  if (it.station) return it.station === station;
-  const parts = parseComboContents(it.combo_contents);
-  if (parts.length === 0) return true;
-  return parts.some((p) => p.station === null || p.station === station);
+/** The dishes of a combo line, as the card lists them; none for a dish line. */
+export function comboParts(it: OrderItem): ComboPart[] {
+  return it.menu_item_id ? [] : parseComboContents(it.combo_contents);
 }
 
-/** The station pills a line counts toward (same rule as lineMatchesStation). */
-export function lineStations(it: OrderItem, stations: string[]): string[] {
-  if (it.station) return stations.includes(it.station) ? [it.station] : [];
-  const parts = parseComboContents(it.combo_contents);
-  if (parts.length === 0 || parts.some((p) => p.station === null)) return stations;
-  return stations.filter((s) => parts.some((p) => p.station === s));
+/** Where one dish of a combo is made: its station, or NO_STATION. */
+export function partStation(p: ComboPart): string {
+  return p.station ?? NO_STATION;
+}
+
+/** Where a line is made, as the station keys it counts toward:
+ *  - a combo: the stations of the dishes inside it;
+ *  - any other line (and a combo whose dishes are unreadable): its own station;
+ *  - no station at all: NO_STATION, and nothing else.
+ *  A line with no station used to be put on EVERY station, so that no ticket could vanish from every
+ *  screen but "All". That filled the Dessert screen with the soups and the drink of a ticket placed
+ *  before the owner had given those dishes a station. Such a line is now found under "No station",
+ *  and order_items.station follows the menu while the order is in the kitchen (migration
+ *  20260922110000_kitchen_station_follows_menu), so giving the dish a station moves the line. */
+export function lineStationKeys(it: OrderItem): string[] {
+  const parts = comboParts(it);
+  if (parts.length > 0) return [...new Set(parts.map(partStation))];
+  return [it.station || NO_STATION];
+}
+
+/** Does this line belong on the screen filtered to `station` (null: All)? */
+export function lineMatchesStation(it: OrderItem, station: string | null): boolean {
+  return !station || lineStationKeys(it).includes(station);
+}
+
+/** Within a combo only the filtered station's dishes count: the card greys the others, and the
+ *  batch strip leaves them out. */
+export function partMatchesStation(p: ComboPart, station: string | null): boolean {
+  return !station || partStation(p) === station;
+}
+
+/** The station pills after "All", in order: every station the menu uses and every station a line on
+ *  the board is made at (a dish moved to a new station mid-service brings its pill along), sorted;
+ *  then "No station", only while a line on the board has none. The active filter always keeps its
+ *  pill, so the board is never filtered by something the bar does not show (the last ticket without
+ *  a station bumped, a bookmarked ?station= the menu no longer uses). */
+export function stationPills(menuStations: string[], board: Order[], active: string | null): string[] {
+  const named = new Set(menuStations.filter((s) => s !== '' && s !== NO_STATION));
+  let unassigned = active === NO_STATION;
+  for (const o of board) {
+    for (const it of o.order_items) {
+      for (const key of lineStationKeys(it)) {
+        if (key === NO_STATION) unassigned = true;
+        else named.add(key);
+      }
+    }
+  }
+  if (active && active !== NO_STATION) named.add(active);
+  const pills = [...named].sort();
+  if (unassigned) pills.push(NO_STATION);
+  return pills;
+}
+
+export interface StationStat {
+  /** Tickets on the board with at least one line made at this station. */
+  count: number;
+  /** One of those tickets is late or critical. */
+  drown: boolean;
+}
+
+/** Each pill's figure, in TICKETS: the unit "All" counts in. Counting lines put "Hot 11" beside
+ *  "All 5" on a board of five tickets. */
+export function stationStats(board: Order[], pills: string[], isLate: (o: Order) => boolean): Record<string, StationStat> {
+  const stats: Record<string, StationStat> = {};
+  for (const s of pills) stats[s] = { count: 0, drown: false };
+  for (const o of board) {
+    const keys = new Set(o.order_items.flatMap(lineStationKeys));
+    const late = isLate(o);
+    for (const key of keys) {
+      const stat = stats[key];
+      if (!stat) continue;
+      stat.count += 1;
+      if (late) stat.drown = true;
+    }
+  }
+  return stats;
+}
+
+export interface BatchGroup {
+  name: string;
+  qty: number;
+  /** "#1234 ×2", one per line that went into the total. */
+  sources: string[];
+}
+
+/** The batch strip: how many of each dish the tickets being cooked add up to, under the station
+ *  filter. A combo counts as the dishes inside it (the cook makes two soups, not "a Family Meal"),
+ *  and only the filtered station's dishes; any other line by the same rule as the cards. Dishes are
+ *  grouped by name and modifiers (`modsKey`), the largest total first. */
+export function batchGroups(
+  cooking: Order[],
+  station: string | null,
+  modsKey: (modifiers: unknown) => string,
+): BatchGroup[] {
+  const map = new Map<string, BatchGroup>();
+  const add = (name: string, mods: string, qty: number, ticket: string) => {
+    const sig = `${name}|${mods}`;
+    const g = map.get(sig) ?? { name, qty: 0, sources: [] };
+    g.qty += qty;
+    g.sources.push(`#${ticket} ×${qty}`);
+    map.set(sig, g);
+  };
+  for (const o of cooking) {
+    const ticket = o.order_number.slice(-4);
+    for (const it of o.order_items) {
+      const parts = comboParts(it);
+      if (parts.length > 0) {
+        for (const p of parts) if (partMatchesStation(p, station)) add(p.name, '', p.quantity * it.quantity, ticket);
+        continue;
+      }
+      if (lineMatchesStation(it, station)) add(it.item_name, modsKey(it.modifiers), it.quantity, ticket);
+    }
+  }
+  return [...map.values()].sort((a, b) => b.qty - a.qty);
 }
 
 /** What the card's 86 menu may mark sold out: a dish by its menu item id, and for a combo each

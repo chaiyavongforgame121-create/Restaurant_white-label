@@ -45,6 +45,7 @@
     "rateLimited": "Demasiados pedidos en poco tiempo. Espera unos minutos antes de volver a intentarlo.",
     "signInToOrder": "Inicia sesión para hacer tu pedido.",
     "emptyOrder": "Tu carrito está vacío. Agrega algo antes de hacer tu pedido.",
+    "quantityTooHigh": "Un producto de tu carrito supera el límite de 99 por pedido. Reduce la cantidad e inténtalo de nuevo.",
     "phoneRequired": "Agrega un número de teléfono para que el restaurante pueda contactarte.",
     "addressRequired": "Agrega una dirección de entrega."
   }

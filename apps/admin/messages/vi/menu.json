@@ -144,6 +144,7 @@
   "reorder": {
     "unsavedHint": "Có thay đổi chưa lưu — kéo món sang danh mục khác hoặc lên/xuống để sắp xếp.",
     "idleHint": "Kéo tay nắm để sắp xếp danh mục và món.",
+    "billOrderHint": "Hóa đơn, biên nhận và phiếu bếp cũng liệt kê món theo thứ tự này, sau các combo.",
     "saveLayout": "Lưu thứ tự",
     "dragCategory": "Kéo danh mục",
     "dragItem": "Kéo món",

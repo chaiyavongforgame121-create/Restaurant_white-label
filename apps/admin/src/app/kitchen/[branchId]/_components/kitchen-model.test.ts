@@ -1,5 +1,10 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  NO_STATION,
+  batchGroups,
+  boardHealth,
   eightySixTargets,
   fmtTimer,
   heardOnTap,
@@ -7,15 +12,19 @@ import {
   isOnBoard,
   lateTicketIds,
   lineMatchesStation,
-  lineStations,
+  lineStationKeys,
+  linesInMenuOrder,
   mergeSoldOut,
   overlaySnapshot,
   parseComboContents,
   parseTimestamp,
+  partMatchesStation,
   readyStartedMs,
   reminderDue,
   safeElapsedSec,
   speakableTicket,
+  stationPills,
+  stationStats,
   type Order,
   type OrderItem,
 } from './kitchen-model';
@@ -120,21 +129,91 @@ describe('stations and combos', () => {
     ]);
   });
 
-  it('shows a line with no station on every station, and a combo where its dishes cook', () => {
+  it('shows a line only where it is made, and a line with no station only under "No station"', () => {
     expect(lineMatchesStation(hot, 'hot')).toBe(true);
     expect(lineMatchesStation(hot, 'bar')).toBe(false);
-    expect(lineMatchesStation(none, 'bar')).toBe(true);
-    expect(lineMatchesStation(combo, 'bar')).toBe(true);
-    expect(lineMatchesStation(combo, 'cold')).toBe(false);
-    expect(lineMatchesStation({ ...combo, combo_contents: null }, 'cold')).toBe(true);
+    expect(lineMatchesStation(hot, NO_STATION)).toBe(false);
+    // Order #0005: Tom Yum with no station no longer shows on the Dessert screen.
+    expect(lineMatchesStation(none, 'dessert')).toBe(false);
+    expect(lineMatchesStation(none, NO_STATION)).toBe(true);
+    expect(lineMatchesStation({ ...hot, station: '' }, NO_STATION)).toBe(true);
+    // All shows everything.
     expect(lineMatchesStation(hot, null)).toBe(true);
+    expect(lineMatchesStation(none, null)).toBe(true);
   });
 
-  it('counts a line toward the matching station pills', () => {
-    const stations = ['bar', 'cold', 'hot'];
-    expect(lineStations(hot, stations)).toEqual(['hot']);
-    expect(lineStations(none, stations)).toEqual(stations);
-    expect(lineStations(combo, stations)).toEqual(['bar', 'hot']);
+  it('shows a combo where one of its dishes is made, and only that station counts inside it', () => {
+    expect(lineStationKeys(combo)).toEqual(['hot', 'bar']);
+    expect(lineMatchesStation(combo, 'bar')).toBe(true);
+    expect(lineMatchesStation(combo, 'cold')).toBe(false);
+    expect(lineMatchesStation(combo, NO_STATION)).toBe(false);
+    const [curry, tea] = parseComboContents(combo.combo_contents);
+    expect(partMatchesStation(curry!, 'bar')).toBe(false);
+    expect(partMatchesStation(tea!, 'bar')).toBe(true);
+    expect(partMatchesStation(tea!, null)).toBe(true);
+    // A dish of the combo with no station is "No station"'s, not every station's.
+    const mixed: OrderItem = {
+      ...combo,
+      combo_contents: [
+        { menu_item_id: 'm3', name: 'Green Curry', quantity: 1, station: 'hot' },
+        { menu_item_id: 'm5', name: 'Rice', quantity: 1, station: null },
+      ],
+    };
+    expect(lineStationKeys(mixed)).toEqual(['hot', NO_STATION]);
+    expect(lineMatchesStation(mixed, 'bar')).toBe(false);
+    expect(partMatchesStation(parseComboContents(mixed.combo_contents)[1]!, 'hot')).toBe(false);
+    expect(partMatchesStation(parseComboContents(mixed.combo_contents)[1]!, NO_STATION)).toBe(true);
+    // A combo whose dishes cannot be read falls back to the line's own station.
+    expect(lineStationKeys({ ...combo, combo_contents: null })).toEqual([NO_STATION]);
+    expect(lineMatchesStation({ ...combo, combo_contents: null }, 'cold')).toBe(false);
+  });
+
+  it('lists the pills: menu stations and board stations, then "No station" only while a line has none', () => {
+    const board = [order({ order_items: [hot, combo] })];
+    expect(stationPills(['cold', 'hot'], board, null)).toEqual(['bar', 'cold', 'hot']);
+    expect(stationPills(['cold', 'hot'], [order({ order_items: [hot, none] })], null)).toEqual(['cold', 'hot', NO_STATION]);
+    // The active filter keeps its pill even with nothing left under it.
+    expect(stationPills(['hot'], board, NO_STATION)).toEqual(['bar', 'hot', NO_STATION]);
+    expect(stationPills(['hot'], [], 'grill')).toEqual(['grill', 'hot']);
+    expect(stationPills(['', NO_STATION, 'hot'], [], null)).toEqual(['hot']);
+  });
+
+  it('counts TICKETS per pill, like All, and flags a pill when one of its tickets is late', () => {
+    // The owner's board: five tickets, "Hot 11" counted lines.
+    const t1 = order({ id: 't1', order_items: [hot, { ...hot, id: 'a2' }, { ...hot, id: 'a3' }] });
+    const t2 = order({ id: 't2', order_items: [hot, none, combo] });
+    const t3 = order({ id: 't3', order_items: [{ ...hot, id: 'd', station: 'dessert' }] });
+    const pills = stationPills(['dessert', 'hot'], [t1, t2, t3], null);
+    const stats = stationStats([t1, t2, t3], pills, (o) => o.id === 't3');
+    expect(stats).toEqual({
+      bar: { count: 1, drown: false },
+      dessert: { count: 1, drown: true },
+      hot: { count: 2, drown: false },
+      [NO_STATION]: { count: 1, drown: false },
+    });
+  });
+
+  it('adds up the batch strip by the same rule as the cards', () => {
+    const cooking = [
+      order({ id: 'k1', order_number: 'A-2609-000001', order_items: [hot, none, combo] }),
+      order({ id: 'k2', order_number: 'A-2609-000002', order_items: [{ ...hot, id: 'a2', quantity: 2 }] }),
+    ];
+    const mods = () => '';
+    expect(batchGroups(cooking, 'hot', mods)).toEqual([
+      { name: 'Curry', qty: 3, sources: ['#0001 ×1', '#0002 ×2'] },
+      { name: 'Green Curry', qty: 2, sources: ['#0001 ×2'] },
+    ]);
+    expect(batchGroups(cooking, 'bar', mods)).toEqual([{ name: 'Iced Tea', qty: 4, sources: ['#0001 ×4'] }]);
+    expect(batchGroups(cooking, NO_STATION, mods)).toEqual([{ name: 'Soup', qty: 1, sources: ['#0001 ×1'] }]);
+    expect(batchGroups(cooking, null, mods).map((g) => [g.name, g.qty])).toEqual([
+      ['Iced Tea', 4],
+      ['Curry', 3],
+      ['Green Curry', 2],
+      ['Soup', 1],
+    ]);
+    // Modifiers split a dish into its own group.
+    const spicy = (m: unknown) => (m ? 'spicy' : '');
+    expect(batchGroups([order({ order_items: [hot, { ...hot, id: 'x', modifiers: ['spicy'] }] })], 'hot', spicy)).toHaveLength(2);
   });
 
   it('86es dishes by id, and a combo by the dishes inside it', () => {
@@ -246,5 +325,75 @@ describe('sound rules', () => {
 
   it('spells the ticket number for speech', () => {
     expect(speakableTicket('A-2609-001234')).toBe('1 2 3 4');
+  });
+});
+
+describe('lines in menu order', () => {
+  // Order A-2609-0005 as tapped: SET A, a drink, two soups, another SET A.
+  const lines: OrderItem[] = [
+    { id: 'l1', item_name: 'SET A', quantity: 1, category_position: 10, item_position: 0, modifiers: [{ name: 'No Egg' }] },
+    { id: 'l2', item_name: 'Fountain Drink', quantity: 1, category_position: 11, item_position: 0 },
+    { id: 'l3', item_name: 'Tom Yum Soup', quantity: 1, category_position: 2, item_position: 1 },
+    { id: 'l4', item_name: 'Tom Kha Soup', quantity: 1, category_position: 2, item_position: 3 },
+    { id: 'l5', item_name: 'SET A', quantity: 1, category_position: 10, item_position: 0, modifiers: [{ name: 'Runny-Yolk Fried Egg' }] },
+  ];
+
+  it('lists a ticket category by category: soups, the two sets side by side, then the drink', () => {
+    const sorted = linesInMenuOrder(order({ order_items: lines }));
+    expect(sorted.order_items.map((it) => it.id)).toEqual(['l3', 'l4', 'l1', 'l5', 'l2']);
+  });
+
+  it('hands back the same ticket when its lines are already in order', () => {
+    const sorted = linesInMenuOrder(order({ order_items: lines }));
+    expect(linesInMenuOrder(sorted)).toBe(sorted);
+  });
+
+  it('re-sorts after a realtime UPDATE moves a line (the owner reordered the menu)', () => {
+    const sorted = linesInMenuOrder(order({ order_items: lines }));
+    // Drink moved above the soups: its line arrives as an UPDATE of category_position.
+    const merged = sorted.order_items.map((it) => (it.id === 'l2' ? { ...it, category_position: 1 } : it));
+    expect(linesInMenuOrder({ ...sorted, order_items: merged }).order_items.map((it) => it.id)).toEqual([
+      'l2', 'l3', 'l4', 'l1', 'l5',
+    ]);
+  });
+});
+
+describe('what the board says about itself', () => {
+  it('is live and may say "All clear" when connected and the last read worked', () => {
+    expect(boardHealth(true, false)).toEqual({ banner: null, status: 'statusLive', allClear: true });
+  });
+
+  it('does not pass off a refused read as a quiet kitchen', () => {
+    // The admin app shipped before the migration its select needs: every read is refused.
+    const h = boardHealth(true, true);
+    expect(h.banner).toBe('readFailed');
+    expect(h.status).toBe('statusRetrying');
+    expect(h.allClear).toBe(false);
+  });
+
+  it('shows one bar at a time: a dropped socket explains a failed read too', () => {
+    expect(boardHealth(false, true)).toEqual({ banner: 'connectionLost', status: 'statusReconnecting', allClear: false });
+    expect(boardHealth(false, false)).toEqual({ banner: 'connectionLost', status: 'statusReconnecting', allClear: true });
+  });
+
+  it('has every sentence it can pick in all four languages', () => {
+    const keys = new Set<string>();
+    for (const socket of [true, false]) {
+      for (const failed of [true, false]) {
+        const h = boardHealth(socket, failed);
+        if (h.banner) keys.add(h.banner);
+        keys.add(h.status);
+      }
+    }
+    expect([...keys].sort()).toEqual(['connectionLost', 'readFailed', 'statusLive', 'statusReconnecting', 'statusRetrying']);
+    for (const locale of ['en', 'th', 'es', 'vi']) {
+      const file = path.resolve(__dirname, `../../../../../messages/${locale}/kitchen.json`);
+      const header = (JSON.parse(readFileSync(file, 'utf8')) as { header: Record<string, unknown> }).header;
+      for (const key of keys) expect(typeof header[key], `${locale} kitchen.header.${key}`).toBe('string');
+      // The status lines are formatted with the ticket count.
+      for (const key of ['statusLive', 'statusReconnecting', 'statusRetrying']) {
+        expect(header[key], `${locale} kitchen.header.${key}`).toMatch(/\{count[,}]/);
+      }
+    }
   });
 });

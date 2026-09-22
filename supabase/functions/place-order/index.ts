@@ -2,10 +2,12 @@
 // Server-side recalculation never trusts client totals.
 //
 // Version history: see ./CHANGELOG.md (moved out of this file 2026-08-28).
-// Current: v11.3 — every branch is its own shop. The caller counts as staff only at a branch
+// Current: v11.5 — every branch is its own shop. The caller counts as staff only at a branch
 // they may ring up (staff_can_ring_up), a staff sale is never filed under the cashier's own
 // customer record, a diner is resolved by (branch, user), and points, promos and gift cards
-// are taken atomically for the order or the order is not placed.
+// are taken atomically for the order or the order is not placed. A unit price is never
+// rounded to the cent; each line is, once (lineTotal), and the subtotal is their exact sum.
+// Lines of one selection (dish, options, note) are consolidated into one before any of it.
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
@@ -56,8 +58,89 @@ function json(status: number, body: unknown) { return new Response(JSON.stringif
 // Round to two decimals.
 function r2(n: number) { return Math.round(n * 100) / 100; }
 
+// Money on an order line. Mirror of packages/shared/src/utils/money.ts (money.test.ts pins that
+// side); a Deno function cannot import the workspace package, so the two are edited together.
+//
+// A unit price is NOT money yet and is never rounded to the cent: half of SET A's $15.99 is
+// $7.995, and rounding that to $8.00 before multiplying billed seven of them as $56.00 while the
+// storefront's cart line said $55.97. A line is (unit + options) x quantity, rounded half-up to
+// the cent once, worked in whole ten-thousandths so no float product decides the cent. The order
+// subtotal is the exact sum of the lines.
+
+// Postgres round(): half away from zero. `+ 0` turns a -0 into 0.
+function roundHalfUp(n: number) { return (n < 0 ? -Math.round(-n) : Math.round(n)) + 0; }
+
+// A unit price to the four decimals order_items.unit_price (numeric(12,4)) keeps.
+function unitPrice4(n: number) { return roundHalfUp(Number(n) * 10000) / 10000; }
+
+// (unit + options) x quantity, to the cent, rounded once. lineTotal() in money.ts.
+function lineTotal(unit: number, modDelta: number, quantity: number) {
+  const u4 = roundHalfUp((Number(unit) + (Number(modDelta) || 0)) * 10000);
+  return roundHalfUp((u4 * (Number(quantity) || 0)) / 100) / 100;
+}
+
+// The exact sum of amounts that are already whole cents. sumMoney() in money.ts.
+function sumMoney(amounts: number[]) {
+  let cents = 0;
+  for (const a of amounts) cents += roundHalfUp(Number(a) * 100);
+  return cents / 100;
+}
+
 // Trim a free-text field and hard-cap its length (non-strings become '').
 function clip(v: unknown, max: number) { return typeof v === 'string' ? v.trim().slice(0, max) : ''; }
+
+// One line per selection. Mirror of consolidateOrderLines() in packages/shared/src/utils/modifiers.ts
+// (modifiers.test.ts pins that side, and the storefront cart and the till key their lines the same
+// way); a Deno function cannot import the workspace package, so the two are edited together.
+//
+// The same dish with the same options, in any order, and the same note is ONE line on the bill,
+// its quantities added: SET A added from the storefront's Happy Hour strip and again from the menu
+// is "8 x SET A", not two SET A lines. Different options are different food at a different price
+// and stay apart. A combo line is the combo and its note. A note is trimmed and a blank one is no
+// note; an option id sent twice on one line counts once (it used to be charged twice). The first
+// line of a selection keeps its place.
+type ItemLine = PlaceOrderRequest['items'][number];
+type ComboLine = NonNullable<PlaceOrderRequest['combos']>[number];
+
+// normalizeLineNotes() in modifiers.ts.
+function lineNotes(v: unknown): string | undefined {
+  if (typeof v !== 'string') return undefined;
+  const trimmed = v.trim();
+  return trimmed === '' ? undefined : trimmed;
+}
+
+function consolidateLines(items: ItemLine[], combos: ComboLine[]): { items: ItemLine[]; combos: ComboLine[] } {
+  const outItems: ItemLine[] = [];
+  const itemByKey = new Map<string, ItemLine>();
+  for (const line of items) {
+    const optionIds = [...new Set(line.modifier_option_ids ?? [])];
+    const notes = lineNotes(line.notes);
+    const key = `${line.menu_item_id}|${[...optionIds].sort().join(',')}|${notes ?? ''}`;
+    const first = itemByKey.get(key);
+    if (first) {
+      first.quantity += line.quantity;
+      continue;
+    }
+    const merged: ItemLine = { menu_item_id: line.menu_item_id, quantity: line.quantity, notes, modifier_option_ids: optionIds };
+    itemByKey.set(key, merged);
+    outItems.push(merged);
+  }
+  const outCombos: ComboLine[] = [];
+  const comboByKey = new Map<string, ComboLine>();
+  for (const cline of combos) {
+    const notes = lineNotes(cline.notes);
+    const key = `combo:${cline.combo_id}|${notes ?? ''}`;
+    const first = comboByKey.get(key);
+    if (first) {
+      first.quantity += cline.quantity;
+      continue;
+    }
+    const merged: ComboLine = { combo_id: cline.combo_id, quantity: cline.quantity, notes };
+    comboByKey.set(key, merged);
+    outCombos.push(merged);
+  }
+  return { items: outItems, combos: outCombos };
+}
 
 const DROPOFF_PREFS = ['leave_at_door', 'hand_to_me', 'at_desk', 'other'] as const;
 
@@ -415,11 +498,34 @@ Deno.serve(async (req: Request) => {
     const q = Number(line.quantity);
     if (!Number.isInteger(q) || q < 1 || q > 99) return json(400, { error: 'invalid_quantity', item_id: line.menu_item_id });
     line.quantity = q;
+    // A list of option ids, or nothing. Anything else is a client bug: a string used to be read
+    // as one id, or throw a TypeError (a bare 500) further down.
+    if (line.modifier_option_ids != null && !Array.isArray(line.modifier_option_ids)) {
+      return json(400, { error: 'invalid_modifiers', item_id: line.menu_item_id });
+    }
   }
   for (const cline of payload.combos!) {
     const q = Number(cline.quantity);
     if (!Number.isInteger(q) || q < 1 || q > 99) return json(400, { error: 'invalid_quantity', combo_id: cline.combo_id });
     cline.quantity = q;
+  }
+
+  // One line per selection (consolidateLines), before anything is looked up, checked or priced, so
+  // every rule below -- stock and demand, sold out, options, the free-item reward, the price --
+  // sees exactly the lines the bill and the kitchen ticket will have. Each line as sent was held to
+  // 1..99 above; a line they fold into is held to the same rule, as the storefront cart (which
+  // merges them too, and stops a merge at 99: MAX_LINE_QUANTITY in modifiers.ts) would have sent
+  // it. Refused rather than clamped: billing 99 for 110 ordered would drop food without a word.
+  {
+    const consolidated = consolidateLines(payload.items, payload.combos!);
+    for (const line of consolidated.items) {
+      if (line.quantity > 99) return json(400, { error: 'invalid_quantity', item_id: line.menu_item_id });
+    }
+    for (const cline of consolidated.combos) {
+      if (cline.quantity > 99) return json(400, { error: 'invalid_quantity', combo_id: cline.combo_id });
+    }
+    payload.items = consolidated.items;
+    payload.combos = consolidated.combos;
   }
 
   // Look up combos for any combo lines, validate they belong to the branch, and read what is in
@@ -606,15 +712,17 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  // Per-line subtotal: (unit_price + mod_delta) * quantity. Modifier total saved per line.
+  // Per-line subtotal: lineTotal(unit_price, mod_delta, quantity), the only rounding a line gets.
+  // The unit is kept to four decimals (a happy-hour 7.995 stays 7.995) and stored that way.
+  // Modifier total saved per line.
   const lineComputations = payload.items.map((line) => {
     const it = itemMap.get(line.menu_item_id)!;
     const modIds = line.modifier_option_ids ?? [];
     const lineMods = modIds.map((id) => modMap.get(id)).filter((m): m is NonNullable<typeof m> => !!m);
     const modDelta = lineMods.reduce((s, m) => s + Number(m.price_delta), 0);
-    const unitWithMods = r2(Number(it.price) + modDelta);
-    const lineSubtotal = r2(unitWithMods * line.quantity);
-    return { line, it, lineMods, modDelta, unitWithMods, lineSubtotal };
+    const unitPrice = unitPrice4(Number(it.price));
+    const lineSubtotal = lineTotal(unitPrice, modDelta, line.quantity);
+    return { line, it, lineMods, modDelta, unitPrice, lineSubtotal };
   });
   const comboComputations = payload.combos!.map((cline) => {
     const combo = comboMap.get(cline.combo_id)!;
@@ -623,7 +731,7 @@ Deno.serve(async (req: Request) => {
       combo,
       qty,
       notes: cline.notes,
-      lineSubtotal: r2(combo.total_price * qty),
+      lineSubtotal: lineTotal(combo.total_price, 0, qty),
       // What the combo held when it was sold, per ONE combo: the kitchen cooks from it, and
       // order_items_decrement_stock / the cancel restore count the dishes from it.
       contents: combo.parts.map((p) => {
@@ -632,10 +740,11 @@ Deno.serve(async (req: Request) => {
       }),
     };
   });
-  const subtotal = r2(
-    lineComputations.reduce((sum, c) => sum + c.lineSubtotal, 0) +
-    comboComputations.reduce((sum, c) => sum + c.lineSubtotal, 0),
-  );
+  // Exactly the lines added up: each is whole cents already, so nothing is rounded here.
+  const subtotal = sumMoney([
+    ...lineComputations.map((c) => c.lineSubtotal),
+    ...comboComputations.map((c) => c.lineSubtotal),
+  ]);
   // The till's discount comes off the food first, before tax and the card fee, exactly as the
   // counter quotes it (quoteCounterCart): min(subtotal, r2(subtotal x pct / 100)).
   const staffDiscount = staffPlaced && discountPercent > 0 ? Math.min(subtotal, r2(subtotal * (discountPercent / 100))) : 0;
@@ -919,9 +1028,13 @@ Deno.serve(async (req: Request) => {
         // paid add-ons paid — "free fries" should not also hand over $3 of
         // extra toppings. Rejecting (rather than silently discounting nothing)
         // stops the diner from spending points for no benefit.
+        // One unit is worth what it would be charged as a line of one: a happy-hour $7.995 is
+        // $8.00 off, the same cent the diner would pay for it on its own. The checkout quotes it
+        // with loyaltyRewardDiscount (packages/database/src/queries/loyalty.ts) from the same
+        // line of its cart; edit the two together.
         const match = lineComputations.find((c) => c.line.menu_item_id === reward.menu_item_id);
         if (!match) return json(400, { error: 'reward_item_not_in_cart', menu_item_id: reward.menu_item_id });
-        loyaltyDollarsOff = r2(Math.min(Number(match.it.price), subtotal));
+        loyaltyDollarsOff = Math.min(lineTotal(match.unitPrice, 0, 1), subtotal);
         break;
       }
       case 'free_delivery':
@@ -1083,7 +1196,8 @@ Deno.serve(async (req: Request) => {
       menu_item_id: c.line.menu_item_id,
       item_name: c.it.name,
       item_image_url: c.it.image_url,
-      unit_price: c.it.price,
+      // Unrounded, to four decimals, so the bill can say 7 x $7.995 = $55.97.
+      unit_price: c.unitPrice,
       quantity: c.line.quantity,
       // order_items.modifiers is NOT NULL (default '[]'::jsonb) — never send null.
       modifiers: c.lineMods.map((m) => ({ group_id: m.group_id, option_id: m.id, name: m.name, price_delta: m.price_delta })),

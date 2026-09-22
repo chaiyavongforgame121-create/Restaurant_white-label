@@ -1,7 +1,9 @@
+import { sortOrderLines } from '@favornoms/shared';
 import type { ReceiptInput } from '@favornoms/ui/printer';
-import { parseLineModifiers } from './order-lines';
+import { lineUnitPrice, parseLineModifiers } from './order-lines';
 
 export interface ReceiptOrderItem {
+  id?: string;
   item_name: string;
   quantity: number;
   unit_price: number | string;
@@ -9,6 +11,12 @@ export interface ReceiptOrderItem {
   notes?: string | null;
   /** order_items.modifiers jsonb — the options the diner picked, priced into subtotal. */
   modifiers?: unknown;
+  /** The options' share of subtotal. Read from the modifiers jsonb when absent. */
+  modifier_total?: number | string | null;
+  /** Where the dish sits on the menu: the receipt lists lines category by category. */
+  category_position?: number | null;
+  item_position?: number | null;
+  created_at?: string | null;
 }
 
 /** The order shape a receipt needs — money columns arrive as strings over PostgREST. */
@@ -84,18 +92,14 @@ export function toReceiptInput(order: ReceiptOrder, ctx: ReceiptContext): Receip
     channel: order.channel.replace('_', ' '),
     createdAt: order.created_at,
     // unit_price is the price of the plain dish; subtotal is what the line actually cost,
-    // options included (place-order: subtotal = r2((price + modDelta) x qty)). buildReceipt
-    // prints quantity × unit_price, so handing it the base price made every modified line
-    // fall short of the Subtotal printed two rows below it. The option names ride on the
-    // notes line, which is the one piece of free text the 80mm format gives a line.
-    items: order.order_items.map((item) => {
-      const qty = Math.max(1, Number(item.quantity) || 1);
+    // options included (place-order: lineTotal(price, modDelta, qty), rounded once). The
+    // printer prints line_total as it is, so the lines always reach the Subtotal printed two
+    // rows below them. The unit carries the options and keeps its four decimals: the charged
+    // line split and rounded to the cent turned seven $7.995 happy-hour sets into "7 × $8.00".
+    // The option names ride on the notes line, which is the one piece of free text the 80mm
+    // format gives a line. Lines go in menu order, category by category, as on the drawer.
+    items: sortOrderLines(order.order_items).map((item) => {
       const lineTotal = num(item.subtotal);
-      // A line with no readable subtotal still has to print something a cashier can read,
-      // so it falls back to the base price rather than to NaN.
-      const effectiveUnit = Number.isFinite(lineTotal)
-        ? Math.round((lineTotal / qty) * 100) / 100
-        : num(item.unit_price);
       const options = parseLineModifiers(item.modifiers).map((m) => m.name);
       const notes = [options.length > 0 ? options.join(', ') : null, item.notes ?? null]
         .filter(Boolean)
@@ -103,8 +107,13 @@ export function toReceiptInput(order: ReceiptOrder, ctx: ReceiptContext): Receip
       return {
         name: item.item_name,
         quantity: item.quantity,
-        unit_price: effectiveUnit,
+        // A line with no readable subtotal still has to print something a cashier can read,
+        // so it falls back to the base price (and the printer's own line) rather than to NaN.
+        unit_price: lineUnitPrice(item),
+        ...(Number.isFinite(lineTotal) ? { line_total: lineTotal } : {}),
         notes: notes || null,
+        category_position: item.category_position ?? null,
+        item_position: item.item_position ?? null,
       };
     }),
     subtotal: num(order.subtotal),

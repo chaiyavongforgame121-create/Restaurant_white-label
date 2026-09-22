@@ -7,11 +7,13 @@
     "title": "{branch} · Bếp",
     "statusLive": "{count} đơn đang làm · trực tiếp",
     "statusReconnecting": "{count} đơn đang làm · đang kết nối lại…",
+    "statusRetrying": "{count} đơn đang làm · đang thử lại…",
     "scheduled": "{count} đơn hẹn giờ",
     "mute": "Tắt tiếng",
     "unmute": "Bật tiếng",
     "fullscreen": "Toàn màn hình",
     "connectionLost": "Mất kết nối, đang kết nối lại. Phiếu mới có thể không hiện cho đến khi kết nối trở lại.",
+    "readFailed": "Không tải được phiếu, đang thử lại. Màn hình này có thể thiếu đơn cho đến khi thông báo này biến mất.",
     "ordersPaused": "Đang tạm dừng nhận đơn — khách không thể đặt hàng trong lúc này.",
     "soundOff": "Đang tắt tiếng",
     "soundLocked": "Chạm để bật âm báo đơn hàng",
@@ -27,7 +29,8 @@
     "cold": "Bếp lạnh",
     "bar": "Quầy bar",
     "dessert": "Tráng miệng",
-    "expo": "Ra món"
+    "expo": "Ra món",
+    "none": "Không có khu bếp"
   },
   "batch": {
     "toggle": "Gộp món",

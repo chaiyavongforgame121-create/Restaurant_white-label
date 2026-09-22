@@ -20,6 +20,7 @@
     "empty": "Aún no se ha pedido nada en esta mesa. Todo lo que pidan tú y tu grupo va a una sola cuenta.",
     "round": "Ronda {round}",
     "yours": "Tuyo",
+    "lineNote": "Nota: {note}",
     "paid": "Pagado",
     "total": "Total de la mesa",
     "stillToPay": "Falta pagar {amount}",

@@ -8,7 +8,7 @@
 //
 // Nothing here returns interface words. Counts and summaries come back as numbers and the
 // merchant's own dish names; the row puts them into a sentence in the reader's language.
-import { formatCurrency } from '@favornoms/shared';
+import { formatCurrency, lineTotal, orderLineUnitPrice } from '@favornoms/shared';
 
 export interface OrderLineModifier {
   name: string;
@@ -25,6 +25,10 @@ export interface OrderLine {
   modifiers: unknown;
   notes: string | null;
   combo_id?: string | null;
+  /** Where the dish sits on the menu; the list shows lines in that order (sortOrderLines). */
+  category_position?: number | null;
+  item_position?: number | null;
+  created_at?: string | null;
 }
 
 export function parseLineModifiers(raw: unknown): OrderLineModifier[] {
@@ -48,6 +52,51 @@ export function parseLineModifiers(raw: unknown): OrderLineModifier[] {
     out.push({ name: name.trim(), priceDelta: Number.isFinite(delta) ? delta : 0 });
   }
   return out;
+}
+
+/** What lineUnitPrice and refundLineAmount need of an order_items row. */
+export interface PricedLine {
+  unit_price: number | string;
+  quantity: number | string;
+  subtotal: number | string;
+  modifiers?: unknown;
+  modifier_total?: number | string | null;
+}
+
+/**
+ * The unit printed beside a line, options included, to four decimals: "7 × $7.995" beside a
+ * $55.97 line. It used to be the charged line divided by the quantity and rounded to the cent,
+ * which printed $55.97 / 7 as $8.00, the "7 × $8.00" the owner saw on the bill.
+ *
+ * The options' share is order_items.modifier_total where the query read it, else the price_delta
+ * of each option in the modifiers jsonb (the kitchen tolerates rows with neither, so this does).
+ */
+export function lineUnitPrice(line: PricedLine): number {
+  const qty = Math.max(1, Number(line.quantity) || 1);
+  const modifierTotal =
+    line.modifier_total != null
+      ? line.modifier_total
+      : parseLineModifiers(line.modifiers).reduce((sum, m) => sum + m.priceDelta, 0) * qty;
+  return orderLineUnitPrice({
+    unit_price: line.unit_price,
+    quantity: qty,
+    subtotal: line.subtotal,
+    modifier_total: modifierTotal,
+  });
+}
+
+/**
+ * What giving back `refundQty` of a line is worth. All of it is exactly what the line was
+ * charged; part of it is that many units priced as a line of their own (rounded once, like
+ * place-order), never a unit rounded to the cent and multiplied.
+ */
+export function refundLineAmount(line: PricedLine, refundQty: number): number {
+  const qty = Math.max(0, Number(line.quantity) || 0);
+  const n = Math.max(0, Math.min(qty, Math.floor(Number(refundQty) || 0)));
+  if (n === 0) return 0;
+  const charged = Number(line.subtotal);
+  if (n === qty && Number.isFinite(charged)) return charged;
+  return lineTotal(lineUnitPrice(line), 0, n);
 }
 
 /** "Jalapeños (+$0.75)", "No cheese (−$0.50)", or just "Regular" when the option is free. */

@@ -1,4 +1,9 @@
-import { receiptPaymentLabel, type ReceiptInput } from './escpos';
+import {
+  receiptLineTotal,
+  receiptLinesInMenuOrder,
+  receiptPaymentLabel,
+  type ReceiptInput,
+} from './escpos';
 
 /**
  * Fallback when WebUSB isn't available: open a print-friendly window with the
@@ -26,9 +31,9 @@ export function printReceiptViaBrowser(input: ReceiptInput) {
   if (input.customerName) lines.push(`Customer ${input.customerName}`);
   if (input.customerPhone) lines.push(`Phone    ${input.customerPhone}`);
   lines.push(hr);
-  for (const item of input.items) {
+  for (const item of receiptLinesInMenuOrder(input.items)) {
     const left = `${item.quantity}x ${item.name}`;
-    const right = `${(item.unit_price * item.quantity).toFixed(2)} ${currency}`;
+    const right = `${receiptLineTotal(item).toFixed(2)} ${currency}`;
     lines.push(padTo(left, right, 42));
     if (item.notes) lines.push(`  Note: ${item.notes}`);
   }

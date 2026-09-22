@@ -3,7 +3,17 @@
 import * as React from 'react';
 import { createStore, useStore } from 'zustand';
 import { persist, type PersistStorage, type StorageValue } from 'zustand/middleware';
-import type { MenuItem } from '@favornoms/shared';
+import {
+  comboLineSignature,
+  lineSignature,
+  lineTotal,
+  MAX_LINE_QUANTITY,
+  mergeIdenticalLines,
+  normalizeLineNotes,
+  sumMoney,
+  unitPrice4,
+  type MenuItem,
+} from '@favornoms/shared';
 
 export interface CartLineModifier {
   group_id: string;
@@ -75,10 +85,71 @@ export function linesUsing(lines: readonly CartLine[], part: CartPart): CartLine
   }
 }
 
-// place-order's r2. The cart subtotal feeds the loyalty cap (`subtotal * 50`),
-// so a float tail here — 0.25 + 0.33 sums to 0.5800000000000001 — lets the
-// slider offer a point the server then refuses to honour.
-const r2 = (n: number) => Math.round(n * 100) / 100;
+/** What one cart line costs: place-order's own lineTotal (money.ts), options included. */
+export function cartLineTotal(line: Pick<CartLine, 'unitPrice' | 'quantity' | 'modifiers'>): number {
+  return lineTotal(
+    line.unitPrice,
+    (line.modifiers ?? []).map((m) => Number(m.price_delta ?? 0)),
+    line.quantity,
+  );
+}
+
+/**
+ * Which selection a line is: the dish, the SET of options chosen on it and its trimmed note, or
+ * the combo and its note. Two lines with the same key are the same food at the same price, and
+ * place-order bills them as one line (consolidateOrderLines in @favornoms/shared), so the cart
+ * keeps them as one line too.
+ */
+export function cartLineKey(line: Pick<CartLine, 'menuItemId' | 'comboId' | 'modifiers' | 'notes'>): string {
+  if (line.comboId) return comboLineSignature(line.comboId, line.notes);
+  // Read from storage on every load, where only the line's outline is checked (isLineShaped): a
+  // malformed options value must not throw here and leave the cart un-hydrated for good.
+  const options = Array.isArray(line.modifiers) ? line.modifiers.filter((m) => !!m) : [];
+  return lineSignature(line.menuItemId, options, line.notes);
+}
+
+/**
+ * The lines with each selection (cartLineKey) on one line, the first of them keeping its place,
+ * and none above MAX_LINE_QUANTITY. The array itself when nothing changed.
+ *
+ * Capped because place-order folds identical lines the same way and then refuses a line above the
+ * limit, for the whole order: 60 + 50 of one combo, which an older build kept on two lines, would
+ * otherwise sit in the cart as a line of 110 that cannot be ordered and that no stepper explains.
+ */
+export function foldCartLines(lines: readonly CartLine[]): CartLine[] {
+  const merged = mergeIdenticalLines(lines, cartLineKey);
+  if (!merged.some((l) => l.quantity > MAX_LINE_QUANTITY)) return merged;
+  return merged.map((l) => (l.quantity > MAX_LINE_QUANTITY ? { ...l, quantity: MAX_LINE_QUANTITY } : l));
+}
+
+/**
+ * How many of one selection (a cartLineKey) the cart holds: what an add of it is added to. An item
+ * sheet caps its stepper at MAX_LINE_QUANTITY less this, so the diner sees the limit before
+ * tapping Add instead of an add that quietly stops at it.
+ */
+export function cartQuantityOf(lines: readonly CartLine[], key: string): number {
+  return lines.reduce((n, l) => (cartLineKey(l) === key ? n + l.quantity : n), 0);
+}
+
+/**
+ * How many of a dish the cart holds, over every line of it: each set of options is a line of its
+ * own, so "7 x SET A No Egg" and "1 x SET A Fried egg" are 8 in the cart, not the first line's 7.
+ * Never a combo line, which carries its combo id in the same `menuItemId` slot.
+ */
+export function dishQuantityInCart(lines: readonly CartLine[], menuItemId: string): number {
+  return linesUsing(lines, { kind: 'item', id: menuItemId }).reduce((n, l) => n + l.quantity, 0);
+}
+
+/** The chosen options without a repeated one: place-order counts each option once. */
+function distinctModifiers(modifiers: readonly CartLineModifier[] | undefined): CartLineModifier[] | undefined {
+  if (!modifiers || modifiers.length === 0) return undefined;
+  const seen = new Set<string>();
+  return modifiers.filter((m) => {
+    if (seen.has(m.option_id)) return false;
+    seen.add(m.option_id);
+    return true;
+  });
+}
 
 /**
  * One branch's cart.
@@ -113,11 +184,27 @@ export interface CartState {
    */
   resolveChannel: (canDeliver: boolean, hasTablePin: boolean) => void;
   setNotes: (notes: string) => void;
-  /** Refused (a no-op and a console warning) for an item from any other branch. */
-  add: (item: MenuItem, quantity?: number, notes?: string, modifiers?: CartLineModifier[]) => void;
-  /** Refused (a no-op and a console warning) for a combo from any other branch. */
-  addCombo: (combo: ComboPick, quantity?: number) => void;
+  /**
+   * Adds to the line of the same selection (cartLineKey) when the cart has one, else starts a
+   * line, never taking a line past MAX_LINE_QUANTITY. Returns how many were added: fewer than
+   * asked when the line was near the limit, 0 when it was full. Refused (0, and a console
+   * warning) for an item from any other branch.
+   */
+  add: (item: MenuItem, quantity?: number, notes?: string, modifiers?: CartLineModifier[]) => number;
+  /**
+   * Adds to the line of the same combo with no note when the cart has one, else starts a line,
+   * never taking a line past MAX_LINE_QUANTITY. Returns how many were added, as `add` does.
+   * Refused (0, and a console warning) for a combo from any other branch.
+   */
+  addCombo: (combo: ComboPick, quantity?: number) => number;
   setLineNotes: (lineId: string, notes: string) => void;
+  /**
+   * Folds lines of one selection into the first of them (foldCartLines). A note edit can make
+   * two lines the same selection, and setLineNotes leaves them apart while the diner types; the
+   * cart calls this when the note box loses focus, so the lines it shows are the lines place-order
+   * bills, each rounded once, and never two lines it would refuse as one above the limit.
+   */
+  foldIdenticalLines: () => void;
   remove: (lineId: string) => void;
   setQuantity: (lineId: string, quantity: number) => void;
   clear: () => void;
@@ -138,10 +225,16 @@ export interface CartState {
    * off, deleted, or not this branch's). Every line carrying one is removed and counted in
    * `removed`: place-order refuses the whole order for it, and quietly dropping just the option
    * would sell the diner a different dish at a different price.
+   *
+   * `optionPrices` is what each option adds now (modifier_options.price_delta), by option id. A
+   * line stores the delta it was added with, and place-order charges the current one, so a raised
+   * fried egg left the cart quoting less than the charge. A line whose unit or any option moved
+   * counts once in `changed`; options absent from the map are left as they are.
    */
   reprice: (
     current: Map<string, CurrentPrice>,
     unavailableOptionIds?: ReadonlySet<string>,
+    optionPrices?: ReadonlyMap<string, number>,
   ) => { changed: number; removed: number };
   subtotal: () => number;
   itemCount: () => number;
@@ -294,6 +387,8 @@ function cartPersistStorage(): PersistStorage<PersistedCart> | undefined {
 /**
  * Stored values over the defaults, keeping only what belongs here. The branch id is the
  * store's own, never storage's, and a line from any other branch is dropped rather than shown.
+ * Lines of one selection are folded into one (foldCartLines): a cart saved by an older build, or
+ * one where a note was edited to match another line's, would otherwise show the dish twice.
  *
  * `keepChannel` leaves this window's order type exactly as it is and takes only the lines and
  * notes from storage (see createCartStore's merge).
@@ -309,7 +404,7 @@ function mergePersistedCart(
   return {
     ...current,
     lines: Array.isArray(p.lines)
-      ? p.lines.filter((l): l is CartLine => isLineShaped(l) && l.branchId === branchId)
+      ? foldCartLines(p.lines.filter((l): l is CartLine => isLineShaped(l) && l.branchId === branchId))
       : current.lines,
     notes: typeof p.notes === 'string' ? p.notes : current.notes,
     channel: keepChannel ? current.channel : isChannel(p.channel) ? p.channel : null,
@@ -363,27 +458,34 @@ export function createCartStore(branchId: string) {
               itemBranchId: item.branchId,
               menuItemId: item.id,
             });
-            return;
+            return 0;
           }
-          const trimmed = notes?.trim() || undefined;
-          const modSig = modifiers && modifiers.length > 0
-            ? modifiers.map((m) => m.option_id).sort().join('|')
-            : '';
-          // Merge with existing line only when notes AND modifier selection match.
-          const existing = get().lines.find((l) => {
-            if (l.menuItemId !== item.id) return false;
-            if ((l.notes ?? undefined) !== trimmed) return false;
-            const sig = (l.modifiers ?? []).map((m) => m.option_id).sort().join('|');
-            return sig === modSig;
-          });
+          const trimmed = normalizeLineNotes(notes);
+          const chosen = distinctModifiers(modifiers);
+          // One line per selection, whichever card, row or sheet it was added from: the same dish
+          // with the same options (in any order) and the same note (blank and whitespace are no
+          // note) adds to the line already there. Different options are different food at a
+          // different price and stay a line of their own.
+          const key = lineSignature(item.id, chosen ?? [], trimmed);
+          const existing = get().lines.find((l) => !l.comboId && cartLineKey(l) === key);
           if (existing) {
+            // Up to the limit place-order holds a line to, and no further: past it the whole order
+            // would be refused for a line the diner built one valid add at a time.
+            const added = Math.max(0, Math.min(quantity, MAX_LINE_QUANTITY - existing.quantity));
             set({
               lines: get().lines.map((l) =>
-                l.id === existing.id ? { ...l, quantity: l.quantity + quantity } : l,
+                l.id === existing.id
+                  ? // The line as the diner was just shown it, which is how place-order charges every
+                    // unit on it: today's price for the dish AND for each option. The options are
+                    // the same ones (that is what the key says), but what each adds may have moved
+                    // since the first add, and keeping the old delta quoted less than the charge.
+                    { ...l, quantity: l.quantity + added, unitPrice: item.price, modifiers: chosen }
+                  : l,
               ),
             });
-            return;
+            return added;
           }
+          const added = Math.min(quantity, MAX_LINE_QUANTITY);
           set({
             lines: [
               ...get().lines,
@@ -394,12 +496,13 @@ export function createCartStore(branchId: string) {
                 name: item.name,
                 unitPrice: item.price,
                 imageUrl: item.imageUrl,
-                quantity,
+                quantity: added,
                 notes: trimmed,
-                modifiers: modifiers && modifiers.length > 0 ? modifiers : undefined,
+                modifiers: chosen,
               },
             ],
           });
+          return added;
         },
         addCombo: (combo, quantity = 1) => {
           if (combo.branchId !== branchId) {
@@ -408,9 +511,32 @@ export function createCartStore(branchId: string) {
               comboBranchId: combo.branchId,
               comboId: combo.comboId,
             });
-            return;
+            return 0;
           }
-          // Combos always get their own line (no merging with item lines).
+          // The same deal with no note adds to the line already there, as a dish does. Combos
+          // used to get a line per tap, so two taps on the Lunch Set were two lines on the bill.
+          // A combo never merges into a dish line, even one sharing the id slot.
+          const key = comboLineSignature(combo.comboId);
+          const existing = get().lines.find((l) => l.comboId === combo.comboId && cartLineKey(l) === key);
+          if (existing) {
+            // Held to the limit as a dish line is. Two adds of 60 used to be two lines, each one
+            // place-order accepted; merged without a cap they were one line of 120 it refuses.
+            const added = Math.max(0, Math.min(quantity, MAX_LINE_QUANTITY - existing.quantity));
+            set({
+              lines: get().lines.map((l) =>
+                l.id === existing.id
+                  ? {
+                      ...l,
+                      quantity: l.quantity + added,
+                      unitPrice: combo.totalPrice,
+                      comboContents: combo.contents,
+                    }
+                  : l,
+              ),
+            });
+            return added;
+          }
+          const added = Math.min(quantity, MAX_LINE_QUANTITY);
           set({
             lines: [
               ...get().lines,
@@ -421,32 +547,46 @@ export function createCartStore(branchId: string) {
                 name: combo.name,
                 unitPrice: combo.totalPrice,
                 imageUrl: combo.imageUrl,
-                quantity,
+                quantity: added,
                 comboId: combo.comboId,
                 comboContents: combo.contents,
               },
             ],
           });
+          return added;
         },
-        setLineNotes: (lineId, notes) =>
-          set({
-            lines: get().lines.map((l) =>
-              l.id === lineId ? { ...l, notes: notes.trim() || undefined } : l,
-            ),
-          }),
+        // Kept as typed, because the cart's note box writes here on every keystroke: trimming
+        // each one ate the space after a word, so "no egg" could not be typed. A blank note is
+        // no note, and every comparison (cartLineKey) and place-order trim the rest.
+        //
+        // Not merged into an identical line here, though a note edit can make one: folding on a
+        // keystroke would either pull the line being typed in out from under the diner's cursor,
+        // or, folded the other way, hand the next letters they type to the other line's units
+        // too. The cart folds the pair when the note box loses focus (foldIdenticalLines); until
+        // then subtotal() prices the pair as one line, as place-order bills it.
+        setLineNotes: (lineId, notes) => {
+          const typed = normalizeLineNotes(notes) === undefined ? undefined : notes;
+          set({ lines: get().lines.map((l) => (l.id === lineId ? { ...l, notes: typed } : l)) });
+        },
+        foldIdenticalLines: () => {
+          const lines = get().lines;
+          const folded = foldCartLines(lines);
+          if (folded !== lines) set({ lines: folded });
+        },
         remove: (lineId) =>
           set({ lines: get().lines.filter((l) => l.id !== lineId) }),
+        // Held to MAX_LINE_QUANTITY like every add: the stepper stops there, and so does the store.
         setQuantity: (lineId, quantity) =>
           set({
             lines:
               quantity <= 0
                 ? get().lines.filter((l) => l.id !== lineId)
                 : get().lines.map((l) =>
-                    l.id === lineId ? { ...l, quantity } : l,
+                    l.id === lineId ? { ...l, quantity: Math.min(quantity, MAX_LINE_QUANTITY) } : l,
                   ),
           }),
         clear: () => set({ lines: [], notes: '' }),
-        reprice: (current, unavailableOptionIds) => {
+        reprice: (current, unavailableOptionIds, optionPrices) => {
           let changed = 0;
           let removed = 0;
           const lines = get().lines.flatMap((l) => {
@@ -458,31 +598,45 @@ export function createCartStore(branchId: string) {
               removed += 1;
               return [];
             }
+            let next = l;
             const now = current.get(l.comboId ?? l.menuItemId);
-            if (!now) return [l];
-            if (!now.available) {
-              removed += 1;
-              return [];
+            if (now) {
+              if (!now.available) {
+                removed += 1;
+                return [];
+              }
+              // Compared to the four decimals a unit price carries. Rounding both sides to the cent
+              // would store a happy-hour 7.995 as 8.00 (or 7.99: 7.995 is 7.99499... times 100) and
+              // quote a line place-order does not charge.
+              const price = unitPrice4(now.price);
+              if (price !== unitPrice4(l.unitPrice)) next = { ...next, unitPrice: price };
             }
-            const price = r2(now.price);
-            if (price !== r2(l.unitPrice)) {
-              changed += 1;
-              return [{ ...l, unitPrice: price }];
+            // What each chosen option adds today. Combo lines send place-order no options.
+            if (optionPrices && optionPrices.size > 0 && !l.comboId && l.modifiers && l.modifiers.length > 0) {
+              let moved = false;
+              const modifiers = l.modifiers.map((m) => {
+                const live = optionPrices.get(m.option_id);
+                if (live === undefined || !Number.isFinite(live)) return m;
+                const delta = unitPrice4(live);
+                if (delta === unitPrice4(Number(m.price_delta ?? 0))) return m;
+                moved = true;
+                return { ...m, price_delta: delta };
+              });
+              if (moved) next = { ...next, modifiers };
             }
-            return [l];
+            if (next !== l) changed += 1;
+            return [next];
           });
           if (changed > 0 || removed > 0) set({ lines });
           return { changed, removed };
         },
-        // Rounded exactly the way place-order rounds: unit price with modifiers,
-        // then the line, then the sum. Anything looser drifts off the server's cent.
-        subtotal: () =>
-          r2(
-            get().lines.reduce((sum, l) => {
-              const modDelta = (l.modifiers ?? []).reduce((s, m) => s + Number(m.price_delta ?? 0), 0);
-              return sum + r2(r2(l.unitPrice + modDelta) * l.quantity);
-            }, 0),
-          ),
+        // Exactly what place-order charges: each line rounded to the cent once (the unit never
+        // is), then the lines added up with nothing rounded after. This feeds the loyalty cap
+        // and every fee on the checkout, so it cannot carry a float tail either: 0.25 + 0.33 is
+        // 0.58 here, not 0.5800000000000001. Two lines of one selection (a note edited to match
+        // another line's) are priced as the single line place-order makes of them: 2 x $7.995 is
+        // $15.99, where $8.00 + $8.00 would quote a cent more than is charged.
+        subtotal: () => sumMoney(mergeIdenticalLines(get().lines, cartLineKey).map(cartLineTotal)),
         itemCount: () => get().lines.reduce((sum, l) => sum + l.quantity, 0),
       }),
       {

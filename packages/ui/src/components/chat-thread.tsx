@@ -4,6 +4,7 @@ import * as React from 'react';
 import { Camera, Image as ImageIcon, X } from 'lucide-react';
 import { intlLocaleFor } from '@favornoms/shared';
 import { cn } from '../lib/cn';
+import { Portal } from './portal';
 import { useUiLocale, useUiStrings } from './ui-strings';
 
 // Pure presentational chat thread — no supabase/network deps so it stays
@@ -361,24 +362,30 @@ function Lightbox({ src, onClose }: { src: string; onClose: () => void }) {
     return () => window.removeEventListener('keydown', onKey, true);
   }, [onClose]);
 
+  // Portalled for the same reason Sheet is (see Portal). The thread lives inside a sheet
+  // panel that is transformed while it slides, and a fixed layer inside a transformed
+  // parent is sized to that parent rather than the screen; on the body the viewer does
+  // not depend on what the thread happens to be nested in.
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={strings.chatPhotoViewer}
-      onClick={onClose}
-      // Above Sheet's own z-[100], or it opens behind the conversation it came from.
-      className="fixed inset-0 z-[200] grid place-items-center bg-black/90 p-4"
-    >
-      <img src={src} alt="" className="max-h-full max-w-full object-contain" />
-      <button
-        type="button"
+    <Portal>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={strings.chatPhotoViewer}
         onClick={onClose}
-        aria-label={strings.chatClosePhoto}
-        className="focus-ring absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-full bg-white/15 text-white"
+        // Above Sheet's own z-[100], or it opens behind the conversation it came from.
+        className="fixed inset-0 z-[200] grid place-items-center bg-black/90 p-4"
       >
-        <X className="h-5 w-5" />
-      </button>
-    </div>
+        <img src={src} alt="" className="max-h-full max-w-full object-contain" />
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label={strings.chatClosePhoto}
+          className="focus-ring absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-full bg-white/15 text-white"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+    </Portal>
   );
 }

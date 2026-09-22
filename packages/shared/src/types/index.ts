@@ -80,6 +80,8 @@ export interface MenuItem {
   reviewCount?: number;
   prepTimeMinutes?: number;
   calories?: number;
+  /** The dish's place in its category (menu_items.display_order), which bills list lines by too. */
+  displayOrder?: number;
   /** When happy hour applies, `price` is the discounted price and `listPrice` is the original. */
   listPrice?: number;
   saleLabel?: string;

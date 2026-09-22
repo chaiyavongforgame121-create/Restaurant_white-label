@@ -144,6 +144,7 @@
   "reorder": {
     "unsavedHint": "Cambios sin guardar: arrastra productos entre categorías o hacia arriba y abajo para ordenarlos.",
     "idleHint": "Arrastra el controlador para ordenar categorías y productos.",
+    "billOrderHint": "Las cuentas, los recibos y las comandas de cocina también muestran los platos en este orden, después de los combos.",
     "saveLayout": "Guardar orden",
     "dragCategory": "Arrastrar categoría",
     "dragItem": "Arrastrar producto",

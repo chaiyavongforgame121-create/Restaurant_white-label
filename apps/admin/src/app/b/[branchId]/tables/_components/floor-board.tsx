@@ -483,6 +483,21 @@ export function FloorBoard({
                     >
                       <span>
                         {item.quantity}× {item.name}
+                        {/* The options tell two lines of one dish apart: without them a SET A with
+                            no egg and one with a fried egg read as the same dish listed twice. */}
+                        {(item.options ?? []).some((o) => o?.name?.trim()) && (
+                          <span className="block text-xs">
+                            {(item.options ?? [])
+                              .filter((o) => o?.name?.trim())
+                              .map((o) => {
+                                const delta = Number(o.price_delta);
+                                return Number.isFinite(delta) && delta !== 0
+                                  ? `${o.name.trim()} (${delta > 0 ? '+' : ''}${formatCurrency(delta)})`
+                                  : o.name.trim();
+                              })
+                              .join(', ')}
+                          </span>
+                        )}
                       </span>
                       <span className="tabular-nums">{formatCurrency(Number(item.subtotal))}</span>
                     </li>

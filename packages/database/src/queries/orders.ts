@@ -1,3 +1,4 @@
+import { sortOrderLines } from '@favornoms/shared';
 import type { FavornomsClient } from '../client-type';
 import { getSupabaseEnv } from '../env';
 
@@ -154,7 +155,8 @@ export async function getOrderByNumber(
        delivery_fee, service_fee, customer_name, customer_phone,
        delivery_address, customer_notes, created_at, confirmed_at, completed_at,
        cancellation_reason, awaiting_payment, session_id,
-       order_items(id, item_name, item_image_url, unit_price, quantity, subtotal),
+       order_items(id, item_name, item_image_url, unit_price, quantity, subtotal, modifiers,
+         category_position, item_position, created_at),
        payments(id, method, status, proof_image_url, gateway_metadata),
        deliveries(id, status, driver_id, distance_km, estimated_duration_min, assigned_at, accepted_at, picked_up_at, delivered_at,
          driver_lat, driver_lng, driver_location_updated_at, current_eta_min, arriving_at, dropoff_lat, dropoff_lng, batch_seq)`,
@@ -162,5 +164,6 @@ export async function getOrderByNumber(
     .eq('branch_id', branchId)
     .eq('order_number', orderNumber)
     .maybeSingle();
-  return data;
+  // The lines in menu order, category by category, as the bill and the kitchen list them.
+  return data ? { ...data, order_items: sortOrderLines(data.order_items ?? []) } : data;
 }

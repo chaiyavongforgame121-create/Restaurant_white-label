@@ -26,6 +26,7 @@
   "inCartCount": "{count} trong giỏ",
   "quickAdd": "+ Thêm",
   "addWithPrice": "Thêm · {price}",
+  "lineLimit": "Giỏ hàng đã có {inCart} phần món này, và mỗi đơn chỉ nhận tối đa {max} phần.",
   "dietary": {
     "vegan": "Thuần chay",
     "glutenFree": "Không gluten",

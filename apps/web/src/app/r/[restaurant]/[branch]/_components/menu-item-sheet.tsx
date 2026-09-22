@@ -5,11 +5,20 @@ import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { AlertTriangle, Clock, Flame, Star } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
-import { formatCurrency, validateSelections, type MenuItem, type UiLocale } from '@favornoms/shared';
+import {
+  defaultSelections,
+  formatCurrency,
+  formatUnitPrice,
+  lineTotal,
+  MAX_LINE_QUANTITY,
+  validateSelections,
+  type MenuItem,
+  type UiLocale,
+} from '@favornoms/shared';
 import { Badge, Button, DietaryBadge, QuantityStepper, Sheet } from '@favornoms/ui';
 import { getBrowserClient } from '@favornoms/database/client';
 import { listItemModifierGroups } from '@favornoms/database/queries';
-import { useCart, type CartLineModifier } from '@/store/cart';
+import { cartLineKey, cartQuantityOf, useCart, type CartLineModifier } from '@/store/cart';
 import { useRequireAuth } from '@/components/auth/require-auth';
 import { cssUrl } from '@/lib/css-url';
 import { stashPendingAdd } from '@/lib/pending-cart';
@@ -54,7 +63,8 @@ export function MenuItemSheet({ item, onClose, items, onOpenItem }: Props) {
   const [notes, setNotes] = React.useState('');
   const [groups, setGroups] = React.useState<ModifierGroup[]>([]);
   const [selections, setSelections] = React.useState<Record<string, Set<string>>>({});
-  const [loadingGroups, setLoadingGroups] = React.useState(false);
+  /** The item whose option groups (and default picks) `groups` and `selections` hold. */
+  const [groupsFor, setGroupsFor] = React.useState<string | null>(null);
   const [recommended, setRecommended] = React.useState<RecommendationRow[]>([]);
   const add = useCart((s) => s.add);
   // Adding to the cart requires a signed-in diner; a guest is sent to sign-in
@@ -64,16 +74,28 @@ export function MenuItemSheet({ item, onClose, items, onOpenItem }: Props) {
   const [cached, setCached] = React.useState<MenuItem | null>(item);
   const heroRef = React.useRef<HTMLDivElement>(null);
 
+  // The newest copy of the open item: its price and sold-out flag, and what the sheet keeps
+  // showing while it animates closed.
   React.useEffect(() => {
-    if (item) {
+    if (item) setCached(item);
+  }, [item]);
+
+  // Keyed on the id, not the object, as the counter's item sheet is. A live menu refresh (any
+  // dish edited, a stock count moving, the window regaining focus) hands the open sheet a fresh
+  // object for the same dish, and keying on the object reset the sheet under the diner: a SET A
+  // set to "No Egg" and seven went back to the default fried egg and one, and Add then put a
+  // second, different SET A line on the bill.
+  const itemId = item?.id ?? null;
+  React.useEffect(() => {
+    if (itemId) {
       // A recommendation tap swaps `item` while the sheet stays mounted, so a slow
       // response for the item the diner just left must not land on the new one.
       let cancelled = false;
-      setCached(item);
       setQty(1);
       setNotes('');
       setGroups([]);
       setSelections({});
+      setGroupsFor(null);
       // Cleared here rather than left to the RPC: the previous item's strip must not
       // linger under the new item while its own recommendations are on the way.
       setRecommended([]);
@@ -81,30 +103,28 @@ export function MenuItemSheet({ item, onClose, items, onOpenItem }: Props) {
       // new item's photo back in view instead of leaving the diner at the bottom.
       heroRef.current?.scrollIntoView({ block: 'start' });
       // Load modifier groups for this item
-      setLoadingGroups(true);
       void (async () => {
         const supabase = getBrowserClient();
         // The same reader as the counter's item sheet, so both show the options in the order the
         // merchant arranged them. This copy sorted them by price, which shuffled a group whose
         // options all cost the same. A failed read shows no options, as the inline query did.
-        const groupRows: ModifierGroup[] = await listItemModifierGroups(supabase, item.id).catch((err) => {
+        const groupRows: ModifierGroup[] = await listItemModifierGroups(supabase, itemId).catch((err) => {
           console.error('[menu-item-sheet] loading option groups failed', err);
           return [];
         });
         if (cancelled) return;
         setGroups(groupRows);
-        // Pre-select defaults
+        // The defaults the counter's sheet starts from too (defaultSelections), so a dish opened
+        // from any card, row or search result, on either surface, starts the same way.
+        const defaults = defaultSelections(groupRows);
         const init: Record<string, Set<string>> = {};
-        for (const g of groupRows) {
-          const defaults = g.options.filter((o) => o.is_default).map((o) => o.id);
-          init[g.id] = new Set(defaults.slice(0, g.max_select));
-        }
+        for (const g of groupRows) init[g.id] = new Set(defaults[g.id] ?? []);
         setSelections(init);
-        setLoadingGroups(false);
+        setGroupsFor(itemId);
 
         // Fetch co-purchase recommendations.
         const { data: recs } = await supabase.rpc('recommendations_for_item', {
-          p_menu_item_id: item.id,
+          p_menu_item_id: itemId,
           p_limit: 4,
         });
         if (cancelled) return;
@@ -115,10 +135,15 @@ export function MenuItemSheet({ item, onClose, items, onOpenItem }: Props) {
       };
     }
     return undefined;
-  }, [item]);
+  }, [itemId]);
 
   const view = item ?? cached;
   const soldOut = !!view?.outOfStock;
+  // Add waits for this item's options, as the counter's sheet does. Tapped before they arrived it
+  // added the dish with none -- not even a default the diner could see -- so the same dish added
+  // a moment later, with its default picked, landed on a separate line; and it skipped any group
+  // the merchant made required, which place-order does not check.
+  const optionsReady = !!view && groupsFor === view.id;
   // "Sold out until 5:00 PM" for a hand-set 86, in the branch's time zone.
   const soldOutText = useSoldOutText();
 
@@ -146,10 +171,46 @@ export function MenuItemSheet({ item, onClose, items, onOpenItem }: Props) {
     [recommended, items, view?.id],
   );
 
+  // The chosen options, in group order, with the price each adds right now: what goes on the line.
+  const chosen = React.useMemo(() => {
+    const out: CartLineModifier[] = [];
+    for (const g of groups) {
+      const picked = selections[g.id] ?? new Set();
+      for (const optId of picked) {
+        const opt = g.options.find((o) => o.id === optId);
+        if (opt) {
+          out.push({
+            group_id: g.id,
+            group_name: g.name,
+            option_id: opt.id,
+            option_name: opt.name,
+            price_delta: Number(opt.price_delta),
+          });
+        }
+      }
+    }
+    return out;
+  }, [groups, selections]);
+
+  // How many of exactly this selection the cart already holds: Add lands on that line, and
+  // place-order refuses a line above MAX_LINE_QUANTITY. The stepper stops at what still fits, so
+  // the diner sees the limit here rather than an add that quietly stops at it.
+  const lineKey = view ? cartLineKey({ menuItemId: view.id, modifiers: chosen, notes }) : null;
+  const inCart = useCart((s) => (lineKey ? cartQuantityOf(s.lines, lineKey) : 0));
+  const room = Math.max(0, MAX_LINE_QUANTITY - inCart);
+  const lineFull = room === 0;
+  // Brought down to what fits once the options or the note land on a fuller line. Rendered from
+  // `addQty` meanwhile, so the stepper never shows a count Add would not put in.
+  React.useEffect(() => {
+    if (room > 0) setQty((q) => Math.min(q, room));
+  }, [room]);
+  const addQty = Math.min(qty, Math.max(1, room));
+
   if (!view) return null;
 
-  const unitWithMods = view.price + modDelta;
-  const total = unitWithMods * qty;
+  // The line as place-order will charge it, and as the cart will show it: the unit (a happy-hour
+  // $7.995 stays $7.995) plus options, times the quantity, rounded to the cent once.
+  const total = lineTotal(view.price, modDelta, addQty);
 
   const toggleOption = (group: ModifierGroup, optId: string) => {
     setSelections((curr) => {
@@ -170,27 +231,11 @@ export function MenuItemSheet({ item, onClose, items, onOpenItem }: Props) {
   };
 
   const handleAdd = () => {
-    if (validation || soldOut) return;
-    const flatMods: CartLineModifier[] = [];
-    for (const g of groups) {
-      const picked = selections[g.id] ?? new Set();
-      for (const optId of picked) {
-        const opt = g.options.find((o) => o.id === optId);
-        if (opt) {
-          flatMods.push({
-            group_id: g.id,
-            group_name: g.name,
-            option_id: opt.id,
-            option_name: opt.name,
-            price_delta: Number(opt.price_delta),
-          });
-        }
-      }
-    }
-    const modifiers = flatMods.length > 0 ? flatMods : undefined;
+    if (!optionsReady || validation || soldOut || lineFull) return;
+    const modifiers = chosen.length > 0 ? chosen : undefined;
     requireAuthThen(
       () => {
-        add(view, qty, notes, modifiers);
+        add(view, addQty, notes, modifiers);
         onClose();
       },
       undefined,
@@ -202,7 +247,7 @@ export function MenuItemSheet({ item, onClose, items, onOpenItem }: Props) {
           kind: 'item',
           branchId: view.branchId,
           item: view,
-          quantity: qty,
+          quantity: addQty,
           notes: notes || undefined,
           modifiers,
         }),
@@ -245,11 +290,11 @@ export function MenuItemSheet({ item, onClose, items, onOpenItem }: Props) {
           <span className="text-right">
             {view.listPrice && view.listPrice > view.price && (
               <span className="block text-xs text-muted-foreground line-through">
-                {formatCurrency(view.listPrice)}
+                {formatUnitPrice(view.listPrice)}
               </span>
             )}
             <span className="font-display text-2xl font-bold text-primary">
-              {formatCurrency(view.price)}
+              {formatUnitPrice(view.price)}
             </span>
             {view.saleLabel && (
               <span className="block text-[10px] font-bold uppercase tracking-wider text-success">
@@ -303,7 +348,7 @@ export function MenuItemSheet({ item, onClose, items, onOpenItem }: Props) {
         )}
 
         {/* Modifier groups */}
-        {!loadingGroups && groups.length > 0 && (
+        {optionsReady && groups.length > 0 && (
           <div className="mt-6 space-y-5">
             {groups.map((g) => {
               const picked = selections[g.id] ?? new Set();
@@ -384,6 +429,14 @@ export function MenuItemSheet({ item, onClose, items, onOpenItem }: Props) {
           </p>
         )}
 
+        {/* Why the stepper stops short of 99, or Add is off: this exact selection is already in
+            the cart, and one order takes at most MAX_LINE_QUANTITY of it. */}
+        {inCart > 0 && addQty >= room && (
+          <p className="mt-3 rounded-xl bg-muted px-3 py-2 text-sm text-muted-foreground" role="status">
+            {t('menu.lineLimit', { inCart, max: MAX_LINE_QUANTITY })}
+          </p>
+        )}
+
         {openableRecs.length > 0 && (
           <div className="mt-7">
             <p className="font-display text-sm font-semibold">{t('menu.alsoLike')}</p>
@@ -419,7 +472,7 @@ export function MenuItemSheet({ item, onClose, items, onOpenItem }: Props) {
                       {target.name}
                     </p>
                     <p className="mt-0.5 text-xs font-bold text-primary">
-                      {formatCurrency(target.price)}
+                      {formatUnitPrice(target.price)}
                     </p>
                   </div>
                 </button>
@@ -436,13 +489,19 @@ export function MenuItemSheet({ item, onClose, items, onOpenItem }: Props) {
         className="sticky inset-x-0 bottom-0 border-t border-border/60 bg-card/95 px-5 pb-safe pt-4 backdrop-blur"
       >
         <div className="flex items-center gap-3">
-          <QuantityStepper value={qty} onChange={setQty} min={1} size="lg" />
+          <QuantityStepper
+            value={addQty}
+            onChange={setQty}
+            min={1}
+            max={Math.max(1, room)}
+            size="lg"
+          />
           <Button
             variant="gradient"
             size="xl"
             fullWidth
             onClick={handleAdd}
-            disabled={!!validation || soldOut}
+            disabled={!optionsReady || !!validation || soldOut || lineFull}
           >
             {soldOut && view
               ? soldOutText.label(view)

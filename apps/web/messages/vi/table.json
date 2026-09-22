@@ -20,6 +20,7 @@
     "empty": "Bàn này chưa gọi món nào. Mọi món bạn và cả nhóm gọi sẽ vào chung một hóa đơn.",
     "round": "Lượt {round}",
     "yours": "Của bạn",
+    "lineNote": "Ghi chú: {note}",
     "paid": "Đã thanh toán",
     "total": "Tổng cộng của bàn",
     "stillToPay": "Còn phải trả {amount}",

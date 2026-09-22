@@ -1,5 +1,6 @@
 import { getTranslations } from 'next-intl/server';
 import { branchDayKey, shiftDayKey, startOfBranchDayUtc } from '@favornoms/database/queries';
+import { sortOrderLines } from '@favornoms/shared';
 import { Card } from '@favornoms/ui';
 import { getBranchAccess } from '@/lib/capabilities';
 import { OrderFilters } from './_components/order-filters';
@@ -64,7 +65,8 @@ export default async function OrdersPage({ params, searchParams }: Props) {
       `id, order_number, channel, status, total, customer_name, customer_phone, created_at,
        scheduled_for, held, awaiting_payment, customer_notes, kitchen_notes, delivery_address,
        tables(table_number, display_name),
-       order_items(id, item_name, quantity, unit_price, subtotal, modifiers, notes, combo_id)`,
+       order_items(id, item_name, quantity, unit_price, subtotal, modifiers, notes, combo_id,
+         category_position, item_position, created_at)`,
       // The header said "{rows.length} matching", which was really "rows returned" — with
       // no date filter and a cap of 100, "all orders" quietly meant "the newest 100 ever".
       { count: 'exact' },
@@ -154,7 +156,9 @@ export default async function OrdersPage({ params, searchParams }: Props) {
       // the fallback built from the number is interface text.
       table_label: tbl ? tbl.display_name || t('page.tableLabel', { number: tbl.table_number }) : null,
       delivery_notes: deliveryNotes,
-      lines: (o.order_items ?? []) as OrderLine[],
+      // Menu order, category by category, the way the receipt and the kitchen list them; the
+      // summary's first two lines come from this order too.
+      lines: sortOrderLines((o.order_items ?? []) as OrderLine[]),
     };
   });
 

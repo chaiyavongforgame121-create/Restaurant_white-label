@@ -7,6 +7,7 @@ import { formatCurrency } from '@favornoms/shared';
 import type { ComboSet } from '@favornoms/database/queries';
 import { Button, Sheet } from '@favornoms/ui';
 import { ComboArt } from './combo-art';
+import { lineSubtotal } from './counter-pricing';
 
 interface Props {
   combo: ComboSet | null;
@@ -71,7 +72,7 @@ export function CounterComboSheet({
     ? combo.items.reduce((sum, it) => sum + it.list_price * it.quantity, 0)
     : 0;
   const saving = combo ? Math.round((listTotal - combo.total_price) * 100) / 100 : 0;
-  const lineTotal = combo ? Math.round(combo.total_price * qty * 100) / 100 : 0;
+  const lineTotal = combo ? lineSubtotal(combo.total_price, qty) : 0;
 
   return (
     <Sheet

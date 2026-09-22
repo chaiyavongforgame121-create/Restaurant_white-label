@@ -15,10 +15,10 @@ import { LocaleSwitcher } from '@/components/locale-switcher';
 import { SignOutIconButton } from '@/components/sign-out';
 import { OpsToggles } from './ops-toggles';
 import {
-  ACTIVE_STATUSES, KITCHEN_ORDER_SELECT, REMINDER_INTERVAL_MS, agingTierKey, eightySixTargets, fmtTimer,
-  heardOnTap, isLineDone, isOnBoard, laneOf, lateTicketIds, lineMatchesStation, lineStations, mergeSoldOut,
-  overlaySnapshot, parseComboContents, parseTimestamp, readyStartedMs, reminderDue, safeElapsedSec,
-  speakableTicket, workStartedMs,
+  ACTIVE_STATUSES, KITCHEN_ORDER_SELECT, NO_STATION, REMINDER_INTERVAL_MS, agingTierKey, batchGroups, boardHealth,
+  comboParts, eightySixTargets, fmtTimer, heardOnTap, isLineDone, isOnBoard, laneOf, lateTicketIds,
+  lineMatchesStation, linesInMenuOrder, mergeSoldOut, overlaySnapshot, parseTimestamp, partMatchesStation, readyStartedMs,
+  reminderDue, safeElapsedSec, speakableTicket, stationPills, stationStats, workStartedMs,
   type Delivery, type DriverLite, type Order, type OrderItem, type SoldOutItem, type TierKey,
 } from './kitchen-model';
 import {
@@ -111,6 +111,10 @@ const BOARD_TICK_MS = 30_000;
 const REMINDER_CHECK_MS = 5_000;
 /** Coalesce a burst of realtime events (an order and its lines land as several) into one read. */
 const RELOAD_COALESCE_MS = 250;
+/** How soon a board whose tickets could not be read asks again. It keeps asking for as long as
+ *  the read fails: a wall tablet has nobody to press reload, and the next read that works (the
+ *  network is back, the database has the columns the select names) has to bring the tickets. */
+const READ_RETRY_MS = 10_000;
 /** A tap on the "Tap to enable order sounds" bar plays the test chime once the context starts,
  *  if it starts within this long (a refused tap must not chime at some later, unrelated one). */
 const BAR_CHIME_WINDOW_MS = 3_000;
@@ -150,6 +154,11 @@ function parseMods(m: unknown): { label: string; remove: boolean }[] {
     }
   }
   return out;
+}
+
+/** What makes two lines the same dish in the batch strip: their modifiers, in any order. */
+function modsKey(m: unknown): string {
+  return parseMods(m).map((x) => x.label).sort().join(',');
 }
 
 /** Station codes the platform assigns (menu import, CSV). The code stays the filter and URL value;
@@ -194,6 +203,9 @@ interface Props {
   /** The branch's IANA zone, for "sold out until" times. */
   branchTimezone: string | null;
   initialOrders: Order[];
+  /** The server's read of the tickets failed, so `initialOrders` is empty for that reason and
+   *  not because the kitchen is quiet. */
+  initialReadFailed: boolean;
   stations: string[];
   activeStation: string | null;
   drivers: DriverLite[];
@@ -277,13 +289,15 @@ function chipText(order: Order, t: Translate): string {
 type AudioState = 'unknown' | 'unsupported' | 'locked' | 'running';
 
 export function KitchenView({
-  branchId, branchName, branchTimezone, initialOrders, stations, activeStation, drivers, canAssign, initialSoldOut,
+  branchId, branchName, branchTimezone, initialOrders, initialReadFailed, stations, activeStation, drivers, canAssign,
+  initialSoldOut,
 }: Props) {
   const t = useTranslations('kitchen');
   const locale = useLocale();
-  const stationLabel = (s: string) => (isStationCode(s) ? t(`stations.${s}`) : s);
+  const stationLabel = (s: string) =>
+    s === NO_STATION ? t('stations.none') : isStationCode(s) ? t(`stations.${s}`) : s;
   const [orders, setOrders] = React.useState<Order[]>(() =>
-    initialOrders.map((o) => ({ ...o, deliveries: asArray(o.deliveries) })),
+    initialOrders.map((o) => linesInMenuOrder({ ...o, deliveries: asArray(o.deliveries) })),
   );
   const [station, setStation] = React.useState<string | null>(activeStation);
   // Aging colours and the "drowning" station pills turn on minute-scale thresholds, so the
@@ -295,6 +309,9 @@ export function KitchenView({
   const [batchOpen, setBatchOpen] = React.useState(false);
   const [toast, setToast] = React.useState<{ text: string; onUndo: (() => void) | null } | null>(null);
   const [soldOut, setSoldOut] = React.useState<SoldOutItem[]>(initialSoldOut);
+  // The last read of the tickets failed. An empty board then means "could not look", not "all
+  // clear", and says so (see the header).
+  const [readFailed, setReadFailed] = React.useState(initialReadFailed);
 
   const seenVisibleRef = React.useRef<Set<string> | null>(null);
   const beepStationRef = React.useRef<string | null>(null);
@@ -519,8 +536,20 @@ export function KitchenView({
           .sort((a, b) => a.name.localeCompare(b.name)),
       );
     }
-    if (error || !data) return;
-    const rows = (data as unknown as Order[]).map((o) => ({ ...o, deliveries: asArray(o.deliveries) }));
+    // A failed read used to return here without a word: a board whose select the database
+    // refused (a column it does not have yet) showed "0 active · live" and an empty "All clear"
+    // for as long as it stayed open, and no ticket reached the kitchen. It now says so and asks
+    // again; the tickets already on the board stay, since they are still the best it knows.
+    if (error || !data) {
+      console.error('kitchen: orders read failed', error?.message ?? 'no rows');
+      setReadFailed(true);
+      requestReloadRef.current(READ_RETRY_MS);
+      return;
+    }
+    setReadFailed(false);
+    const rows = (data as unknown as Order[]).map((o) =>
+      linesInMenuOrder({ ...o, deliveries: asArray(o.deliveries) }),
+    );
     setOrders((curr) => {
       const withDeliveries = rows.map((r) => {
         // A refetch must never REMOVE a delivery already on the board either. This runs on
@@ -579,6 +608,10 @@ export function KitchenView({
   requestReloadRef.current = requestReload;
   React.useEffect(() => () => {
     if (reloadState.current.timer) window.clearTimeout(reloadState.current.timer);
+    // A read still in flight is now stale, so it lands nowhere and, failing, schedules no
+    // retry: a failed read asks again every READ_RETRY_MS, and without this a board left
+    // mid-read would keep asking after it has gone.
+    reloadSeq.current += 1;
   }, []);
 
   /* realtime: orders, their lines, deliveries, and this branch's sold-out dishes */
@@ -634,7 +667,12 @@ export function KitchenView({
             if (idx < 0 || !curr[idx]!.order_items.some((it) => it.id === row.id)) return curr;
             const next = curr.slice();
             const o = curr[idx]!;
-            next[idx] = { ...o, order_items: o.order_items.map((it) => (it.id === row.id ? { ...it, ...row } : it)) };
+            // Re-sorted after the merge: the owner reordering the menu reaches the board as
+            // UPDATEs of category_position / item_position (order_lines_menu_order migration).
+            next[idx] = linesInMenuOrder({
+              ...o,
+              order_items: o.order_items.map((it) => (it.id === row.id ? { ...it, ...row } : it)),
+            });
             return next;
           });
           return;
@@ -971,8 +1009,8 @@ export function KitchenView({
   // orders_block_unpaid_transfer would refuse the transition anyway, but only AFTER the cook
   // had tried it mid-service. A ticket whose lines have not landed yet is not work either.
   const onBoard = orders.filter(isOnBoard);
-  // A line with no station (a hand-built menu, a combo whose dishes span stations) shows on
-  // every station's screen: it used to match none of them and vanish from all but "All".
+  // A station's screen shows the tickets with a line made there. A line whose dish has no station
+  // is under "No station" (and All), not on every screen: see lineStationKeys.
   const visible = station ? onBoard.filter((o) => o.order_items.some((it) => lineMatchesStation(it, station))) : onBoard;
   const scheduled = orders.filter((o) => o.held);
   const visibleRef = React.useRef(visible);
@@ -1086,51 +1124,19 @@ export function KitchenView({
     return () => observer.disconnect();
   }, [newCount, baseTitle]);
 
-  /* station counts + "drowning" (any item on a station is Late/Critical) */
-  const stationStat: Record<string, { count: number; drown: boolean }> = {};
-  for (const s of stations) stationStat[s] = { count: 0, drown: false };
-  for (const o of onBoard) {
+  /* The station pills (the menu's stations, those of the lines on the board, "No station" while a
+     line has none), each counting TICKETS like "All" does, and "drowning" when one of those
+     tickets is Late/Critical. */
+  const pills = stationPills(stations, onBoard, station);
+  const stationStat = stationStats(onBoard, pills, (o) => {
     const lane = laneOf(o.status);
     const from = lane === 'ready' ? readyStartedMs(o, readyAtRef.current[o.id]) : workStartedMs(o, leadMs);
     const tier = agingTierKey(safeElapsedSec(from, now), lane);
-    for (const it of o.order_items) {
-      for (const s of lineStations(it, stations)) {
-        const stat = stationStat[s];
-        if (!stat) continue;
-        stat.count += 1;
-        if (tier === 'late' || tier === 'crit') stat.drown = true;
-      }
-    }
-  }
+    return tier === 'late' || tier === 'crit';
+  });
 
-  /* batch groups across COOKING (optionally station-filtered). A combo counts as the dishes
-     inside it: the cook makes two soups, not "a Family Meal". */
-  const batchGroups = React.useMemo(() => {
-    const map = new Map<string, { name: string; qty: number; sources: string[] }>();
-    const add = (name: string, mods: string, qty: number, ticket: string) => {
-      const sig = `${name}|${mods}`;
-      const g = map.get(sig) ?? { name, qty: 0, sources: [] };
-      g.qty += qty;
-      g.sources.push(`#${ticket} ×${qty}`);
-      map.set(sig, g);
-    };
-    for (const o of byLane.cooking ?? []) {
-      const ticket = o.order_number.slice(-4);
-      for (const it of o.order_items) {
-        const parts = it.menu_item_id ? [] : parseComboContents(it.combo_contents);
-        if (parts.length > 0) {
-          for (const p of parts) {
-            if (station && p.station !== null && p.station !== station) continue;
-            add(p.name, '', p.quantity * it.quantity, ticket);
-          }
-          continue;
-        }
-        if (!lineMatchesStation(it, station)) continue;
-        add(it.item_name, parseMods(it.modifiers).map((m) => m.label).sort().join(','), it.quantity, ticket);
-      }
-    }
-    return [...map.values()].sort((a, b) => b.qty - a.qty);
-  }, [byLane.cooking, station]);
+  /* batch groups across COOKING, under the station filter */
+  const batches = React.useMemo(() => batchGroups(byLane.cooking ?? [], station, modsKey), [byLane.cooking, station]);
 
   /* the sold-out strip: dishes 86'd at this branch whose time has not run out */
   const liveSoldOut = soldOut.filter((s) => parseTimestamp(s.sold_out_until) > now);
@@ -1149,20 +1155,22 @@ export function KitchenView({
   };
 
   const soundLocked = soundOn && audioState === 'locked';
+  const health = boardHealth(liveHealthy, readFailed);
 
   return (
     <div className="flex min-h-dynamic-screen flex-col" style={{ background: SUN.page, color: SUN.text }}>
       {/* header */}
-      {/* A dropped socket used to look identical to a quiet kitchen. On a wall-mounted
-          tablet nobody is watching for a subtle status word, so a lost connection gets a
-          full-width bar — the board is not to be trusted while this is up. */}
-      {!liveHealthy && (
+      {/* A dropped socket used to look identical to a quiet kitchen, and so did a read of the
+          tickets that the database refused. On a wall-mounted tablet nobody is watching for a
+          subtle status word, so either gets a full-width bar (boardHealth) — the board is not
+          to be trusted while this is up. */}
+      {health.banner && (
         <div
           role="status"
           className="px-4 py-2 text-center text-sm font-semibold text-white"
           style={{ background: '#B62D25' }}
         >
-          {t('header.connectionLost')}
+          {t(`header.${health.banner}`)}
         </div>
       )}
       {/* The browser keeps sound locked until someone touches the page, so a board that was
@@ -1187,9 +1195,7 @@ export function KitchenView({
         <div className="leading-tight">
           <h1 className="text-[15px] font-semibold">{baseTitle}</h1>
           <p className="text-[11px] tracking-wide" style={{ opacity: 0.85 }}>
-            {liveHealthy
-              ? t('header.statusLive', { count: visible.length })
-              : t('header.statusReconnecting', { count: visible.length })}
+            {t(`header.${health.status}`, { count: visible.length })}
             {station ? ` · ${stationLabel(station)}` : ''}
           </p>
         </div>
@@ -1275,8 +1281,16 @@ export function KitchenView({
       {/* station bar */}
       <div className="flex items-center gap-2 overflow-x-auto px-4 py-2.5" style={{ borderBottom: `1px solid ${SUN.line}` }}>
         <StationPill label={t('stations.all')} count={onBoard.length} active={!station} onClick={() => setStationFilter(null)} />
-        {stations.map((s) => (
-          <StationPill key={s} label={stationLabel(s)} count={stationStat[s]?.count ?? 0} drown={stationStat[s]?.drown} active={station === s} onClick={() => setStationFilter(s)} />
+        {pills.map((s) => (
+          <StationPill
+            key={s}
+            label={stationLabel(s)}
+            raw={s !== NO_STATION && !isStationCode(s)}
+            count={stationStat[s]?.count ?? 0}
+            drown={stationStat[s]?.drown}
+            active={station === s}
+            onClick={() => setStationFilter(s)}
+          />
         ))}
         <button onClick={() => setBatchOpen((b) => !b)} className="ml-auto flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium" style={batchOpen ? { background: SUN.accentBg, color: SUN.accentTx, border: `1px solid ${SUN.accent}` } : { color: SUN.muted, border: `1px solid ${SUN.cardBorder}` }}>
           <Layers className="h-4 w-4" /> {t('batch.toggle')}
@@ -1309,11 +1323,11 @@ export function KitchenView({
 
       {batchOpen && (
         <div className="px-4 py-2.5" style={{ background: SUN.panel, borderBottom: `1px solid ${SUN.line}` }}>
-          {batchGroups.length === 0 ? (
+          {batches.length === 0 ? (
             <p className="text-xs" style={{ color: SUN.muted }}>{t('batch.empty')}</p>
           ) : (
             <div className="flex flex-wrap gap-2">
-              {batchGroups.map((g, i) => (
+              {batches.map((g, i) => (
                 <div key={i} className="flex items-center gap-2.5 rounded-xl px-3 py-2" style={{ background: SUN.card, border: `1px solid ${SUN.cardBorder}` }}>
                   <span className="text-2xl font-semibold tabular-nums" style={{ color: SUN.qty }}>{g.qty}×</span>
                   <div className="leading-tight">
@@ -1333,7 +1347,11 @@ export function KitchenView({
           <Column key={lane.key} lane={lane} count={byLane[lane.key]!.length}>
             <AnimatePresence initial={false}>
               {byLane[lane.key]!.length === 0 ? (
-                <div className="m-auto px-2 py-6 text-center text-xs" style={{ color: SUN.faint }}>{t('lanes.empty')}</div>
+                // "All clear" only from a read that worked: after a failed one the lane may be
+                // empty because nothing could be read, and the bar above says so.
+                health.allClear ? (
+                  <div className="m-auto px-2 py-6 text-center text-xs" style={{ color: SUN.faint }}>{t('lanes.empty')}</div>
+                ) : null
               ) : (
                 byLane[lane.key]!.map((order) => (
                   <OrderCard
@@ -1378,14 +1396,16 @@ function HBtn({ children, onClick, label }: { children: React.ReactNode; onClick
   );
 }
 
-function StationPill({ label, count, drown, active, onClick }: { label: string; count: number; drown?: boolean; active: boolean; onClick: () => void }) {
+/** `raw`: the label is a station code as stored (one the board has no translation for), so it is
+ *  capitalised for display; a translated label is shown exactly as written ("No station"). */
+function StationPill({ label, raw, count, drown, active, onClick }: { label: string; raw?: boolean; count: number; drown?: boolean; active: boolean; onClick: () => void }) {
   const style: React.CSSProperties = active
     ? { background: SUN.accentBg, borderColor: SUN.accent, color: SUN.accentTx }
     : drown
       ? { background: '#FBE3E1', borderColor: '#F0A8A4', color: '#C0382F' }
       : { background: SUN.card, borderColor: SUN.cardBorder, color: SUN.muted };
   return (
-    <button onClick={onClick} className="flex shrink-0 items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium capitalize" style={{ border: '1px solid', ...style }}>
+    <button onClick={onClick} className={`flex shrink-0 items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium ${raw ? 'capitalize' : ''}`} style={{ border: '1px solid', ...style }}>
       {label}
       <span className="rounded-full px-1.5 text-[11px] tabular-nums" style={{ background: drown && !active ? 'rgba(229,72,77,.2)' : 'rgba(0,0,0,.08)' }}>{count}</span>
     </button>
@@ -1573,7 +1593,7 @@ function OrderCard({
       <div className="mt-1">
         {items.map((it) => {
           const mods = parseMods(it.modifiers);
-          const parts = it.menu_item_id ? [] : parseComboContents(it.combo_contents);
+          const parts = comboParts(it);
           const done = isLineDone(it);
           const tickLabel = done ? t('card.markLineNotDone', { item: it.item_name }) : t('card.markLineDone', { item: it.item_name });
           return (
@@ -1582,11 +1602,12 @@ function OrderCard({
               <div className="min-w-0 flex-1" style={done ? { opacity: 0.55 } : undefined}>
                 <div className={`text-[15px] font-medium leading-tight ${done ? 'line-through' : ''}`} style={{ color: SUN.text }}>{it.item_name}</div>
                 {/* A combo is cooked as its dishes: list them, each counted for the whole line.
-                    Under a station filter, the dishes another station makes are greyed. */}
+                    Under a station filter, the dishes made elsewhere (or with no station, under a
+                    station's own filter) are greyed. */}
                 {parts.length > 0 && (
                   <ul className="mt-0.5">
                     {parts.map((p, i) => {
-                      const here = !station || p.station === null || p.station === station;
+                      const here = partMatchesStation(p, station);
                       return (
                         <li key={`${p.menu_item_id ?? p.name}-${i}`} className="text-[13px] leading-snug" style={{ color: here ? SUN.text : SUN.faint }}>
                           · {p.quantity * it.quantity}× {p.name}

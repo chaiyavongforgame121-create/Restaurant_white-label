@@ -6,6 +6,8 @@
  * Output is a Uint8Array; pipe to WebUSB or any binary transport.
  */
 
+import { lineTotal, sortOrderLines } from '@favornoms/shared';
+
 const ESC = 0x1b;
 const GS = 0x1d;
 const LF = 0x0a;
@@ -93,8 +95,45 @@ export class EscPosBuilder {
 export interface ReceiptLine {
   name: string;
   quantity: number;
+  /** One unit with its options, to up to four decimals (a happy-hour $7.995 is not rounded). */
   unit_price: number;
+  /**
+   * What the line was charged: order_items.subtotal, or place-order's lineTotal for a sale that
+   * was just rung up. Printed as it is when given. Without it the line is worked out the same
+   * way, rounded once, never as unit_price rounded to the cent and then multiplied.
+   */
+  line_total?: number;
   notes?: string | null;
+  /**
+   * Where the dish sits on the menu (order_items.category_position / item_position). The paper
+   * lists lines category by category. The counter's sale receipt passes none: it hands over its
+   * cart already in menu order (menuLinePositions), which is kept.
+   */
+  category_position?: number | null;
+  item_position?: number | null;
+}
+
+/** The amount a receipt prints for a line: the charged total, as place-order computes it. */
+export function receiptLineTotal(item: ReceiptLine): number {
+  return item.line_total != null && Number.isFinite(item.line_total)
+    ? item.line_total
+    : lineTotal(item.unit_price, 0, item.quantity);
+}
+
+/**
+ * The lines in the order the paper prints them: the menu's, as on the bill on screen and the
+ * kitchen ticket. The same dish twice (other options) keeps the order the caller gave, which
+ * callers take from sortOrderLines. A receipt whose lines carry no position at all (the legacy
+ * POS) keeps the order it was given rather than coming out alphabetical.
+ */
+export function receiptLinesInMenuOrder(items: readonly ReceiptLine[]): ReceiptLine[] {
+  const positioned = items.some((item) => item.category_position != null || item.item_position != null);
+  if (!positioned) return [...items];
+  return sortOrderLines(items, (item) => ({
+    category_position: item.category_position,
+    item_position: item.item_position,
+    item_name: item.name,
+  }));
 }
 
 export interface ReceiptInput {
@@ -168,9 +207,9 @@ export function buildReceipt(input: ReceiptInput): Uint8Array {
   if (input.customerPhone) b.row('Phone', input.customerPhone);
   b.hr();
 
-  for (const item of input.items) {
+  for (const item of receiptLinesInMenuOrder(input.items)) {
     const left = `${item.quantity}x ${item.name}`;
-    const right = fmtCurrency(item.unit_price * item.quantity, currency);
+    const right = fmtCurrency(receiptLineTotal(item), currency);
     b.row(left.length > 28 ? left.slice(0, 28) : left, right);
     if (item.notes) b.line(`  Note: ${item.notes}`);
   }

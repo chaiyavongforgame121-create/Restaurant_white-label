@@ -4,6 +4,7 @@ import * as React from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
 import { cn } from '../lib/cn';
+import { Portal } from './portal';
 import { useUiStrings } from './ui-strings';
 
 interface SheetProps {
@@ -73,55 +74,62 @@ export function Sheet({
 
   const isBottom = side === 'bottom';
 
+  // Portalled, because a sheet is opened from wherever its button happens to live -- a
+  // sticky table cell, a card mid-animation -- and inline it could only rise as high as
+  // that ancestor let it (see Portal). The portal sits inside AnimatePresence so it stays
+  // mounted while the exit animation plays and leaves the body once the sheet has gone,
+  // rather than parking an empty node there for every closed sheet on the page.
   return (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-[100]" role="dialog" aria-modal="true" aria-label={ariaLabel}>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            onClick={onClose}
-            className="absolute inset-0 bg-black/55 backdrop-blur-sm"
-          />
-          <motion.div
-            initial={
-              isBottom
-                ? { y: '100%' }
-                : { x: '100%' }
-            }
-            animate={isBottom ? { y: 0 } : { x: 0 }}
-            exit={isBottom ? { y: '100%' } : { x: '100%' }}
-            transition={{ type: 'spring', stiffness: 360, damping: 36 }}
-            className={cn(
-              'absolute bg-card text-card-foreground shadow-2xl',
-              isBottom
-                ? 'inset-x-0 bottom-0 max-h-[92dvh] rounded-t-3xl flex flex-col'
-                : 'inset-y-0 right-0 w-full max-w-md flex flex-col',
-              className,
-            )}
-          >
-            {isBottom && (
-              <div className="mx-auto mt-2 h-1.5 w-12 rounded-full bg-border/70" aria-hidden />
-            )}
-            {(title || !hideCloseButton) && (
-              <div className="flex items-center justify-between px-5 pt-4 pb-2">
-                <div className="font-display text-xl font-semibold">{title}</div>
-                {!hideCloseButton && (
-                  <button
-                    aria-label={strings.close}
-                    onClick={onClose}
-                    className="focus-ring inline-flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                )}
-              </div>
-            )}
-            <div className="flex-1 overflow-y-auto">{children}</div>
-          </motion.div>
-        </div>
+        <Portal>
+          <div className="fixed inset-0 z-[100]" role="dialog" aria-modal="true" aria-label={ariaLabel}>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={onClose}
+              className="absolute inset-0 bg-black/55 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={
+                isBottom
+                  ? { y: '100%' }
+                  : { x: '100%' }
+              }
+              animate={isBottom ? { y: 0 } : { x: 0 }}
+              exit={isBottom ? { y: '100%' } : { x: '100%' }}
+              transition={{ type: 'spring', stiffness: 360, damping: 36 }}
+              className={cn(
+                'absolute bg-card text-card-foreground shadow-2xl',
+                isBottom
+                  ? 'inset-x-0 bottom-0 max-h-[92dvh] rounded-t-3xl flex flex-col'
+                  : 'inset-y-0 right-0 w-full max-w-md flex flex-col',
+                className,
+              )}
+            >
+              {isBottom && (
+                <div className="mx-auto mt-2 h-1.5 w-12 rounded-full bg-border/70" aria-hidden />
+              )}
+              {(title || !hideCloseButton) && (
+                <div className="flex items-center justify-between px-5 pt-4 pb-2">
+                  <div className="font-display text-xl font-semibold">{title}</div>
+                  {!hideCloseButton && (
+                    <button
+                      aria-label={strings.close}
+                      onClick={onClose}
+                      className="focus-ring inline-flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  )}
+                </div>
+              )}
+              <div className="flex-1 overflow-y-auto">{children}</div>
+            </motion.div>
+          </div>
+        </Portal>
       )}
     </AnimatePresence>
   );

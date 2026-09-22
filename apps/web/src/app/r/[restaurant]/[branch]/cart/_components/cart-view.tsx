@@ -8,9 +8,10 @@ import { ChevronLeft, ShoppingBag, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { formatCurrency } from '@favornoms/shared';
 import { Button, Card, EmptyState, IconButton, QuantityStepper } from '@favornoms/ui';
-import { useCart, useCartHydrated } from '@/store/cart';
+import { cartLineTotal, useCart, useCartHydrated } from '@/store/cart';
 import { useAuth } from '@/components/auth/use-auth';
 import { useCartReprice } from './use-cart-reprice';
+import { useLinesInMenuOrder } from './use-menu-order';
 
 interface Props {
   branchId: string;
@@ -41,6 +42,7 @@ export function CartView({ branchId, storefrontVersion }: Props) {
   const setQuantity = useCart((s) => s.setQuantity);
   const remove = useCart((s) => s.remove);
   const setLineNotes = useCart((s) => s.setLineNotes);
+  const foldIdenticalLines = useCart((s) => s.foldIdenticalLines);
   const notes = useCart((s) => s.notes);
   const setNotes = useCart((s) => s.setNotes);
 
@@ -48,6 +50,9 @@ export function CartView({ branchId, storefrontVersion }: Props) {
   // the alternative is finding out from a payment total that does not match, or from an order
   // the server refuses outright.
   const priceNotice = useCartReprice(branchId, storefrontVersion);
+
+  // Listed in menu order, category by category, the way the bill and the kitchen will list them.
+  const shownLines = useLinesInMenuOrder(branchId, lines);
 
   if (!hydrated) return <div className="container max-w-2xl pt-4 text-sm text-muted-foreground">{t('common.loading')}</div>;
 
@@ -90,7 +95,7 @@ export function CartView({ branchId, storefrontVersion }: Props) {
         <div className="space-y-5">
           <ul className="space-y-3">
             <AnimatePresence initial={false}>
-              {lines.map((line) => (
+              {shownLines.map((line) => (
                 <motion.li
                   key={line.id}
                   layout
@@ -150,10 +155,9 @@ export function CartView({ branchId, storefrontVersion }: Props) {
                       )}
                       <div className="flex items-center justify-between">
                         <span className="font-semibold text-primary">
-                          {formatCurrency(
-                            (line.unitPrice + (line.modifiers ?? []).reduce((s, m) => s + Number(m.price_delta ?? 0), 0))
-                            * line.quantity,
-                          )}
+                          {/* The line place-order will charge, rounded once, so the lines add
+                              up to the Subtotal below to the cent. */}
+                          {formatCurrency(cartLineTotal(line))}
                         </span>
                         <QuantityStepper
                           value={line.quantity}
@@ -166,6 +170,11 @@ export function CartView({ branchId, storefrontVersion }: Props) {
                         type="text"
                         value={line.notes ?? ''}
                         onChange={(e) => setLineNotes(line.id, e.target.value)}
+                        // A finished note edit can leave two lines of the same selection (clear
+                        // the note on one of two SET A lines). Fold them into one here, not per
+                        // keystroke, so the box being typed in does not vanish mid-word, and so
+                        // the lines on screen add up to the Subtotal the way place-order bills them.
+                        onBlur={foldIdenticalLines}
                         placeholder={t('cart.notesPlaceholder')}
                         className="focus-ring w-full rounded-lg border border-border/60 bg-background px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground"
                         aria-label={t('cart.lineNoteLabel', { name: line.name })}

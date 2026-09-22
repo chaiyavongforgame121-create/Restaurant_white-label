@@ -3,7 +3,12 @@
 import * as React from 'react';
 import { ArrowLeft, Printer } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { formatCurrency, intlLocaleFor } from '@favornoms/shared';
+import {
+  formatCurrency,
+  formatUnitPrice,
+  intlLocaleFor,
+  orderLineUnitPrice,
+} from '@favornoms/shared';
 import { Button, Card, useUiLocale } from '@favornoms/ui';
 
 interface OrderRow {
@@ -27,6 +32,8 @@ interface OrderRow {
     quantity: number;
     unit_price: number | string;
     subtotal: number | string;
+    /** The options' share of subtotal; the unit printed beside the line includes it. */
+    modifier_total?: number | string | null;
   }>;
 }
 
@@ -119,7 +126,9 @@ export function CustomerReceipt({ order, storeName, branchAddress }: Props) {
                 <td className="py-2">
                   <div className="font-medium">{it.item_name}</div>
                   <div className="text-xs text-muted-foreground">
-                    {it.quantity} × {formatCurrency(n(it.unit_price))}
+                    {/* The unit as charged, options included and never rounded to the cent,
+                        so 7 × $7.995 sits beside the $55.97 it adds up to. */}
+                    {it.quantity} × {formatUnitPrice(orderLineUnitPrice(it))}
                   </div>
                 </td>
                 <td className="py-2 text-right font-display font-semibold tabular-nums">

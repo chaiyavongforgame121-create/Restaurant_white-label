@@ -20,6 +20,7 @@
     "empty": "Nothing ordered at this table yet. Everything you and the rest of your party order lands on one bill.",
     "round": "Round {round}",
     "yours": "Yours",
+    "lineNote": "Note: {note}",
     "paid": "Paid",
     "total": "Table total",
     "stillToPay": "Still to pay {amount}",

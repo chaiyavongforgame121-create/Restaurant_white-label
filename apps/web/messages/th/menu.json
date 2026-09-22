@@ -26,6 +26,7 @@
   "inCartCount": "{count} ในตะกร้า",
   "quickAdd": "+ เพิ่ม",
   "addWithPrice": "เพิ่ม · {price}",
+  "lineLimit": "ในตะกร้ามีรายการนี้แล้ว {inCart} ที่ และหนึ่งคำสั่งซื้อสั่งได้สูงสุด {max} ที่",
   "dietary": {
     "vegan": "วีแกน",
     "glutenFree": "ไม่มีกลูเตน",

@@ -144,6 +144,7 @@
   "reorder": {
     "unsavedHint": "Unsaved changes — drag items between categories or up/down to reorder.",
     "idleHint": "Drag the handle to reorder categories and items.",
+    "billOrderHint": "Bills, receipts and kitchen tickets list dishes in this order too, after any combos.",
     "saveLayout": "Save layout",
     "dragCategory": "Drag category",
     "dragItem": "Drag item",

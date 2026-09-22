@@ -11,6 +11,9 @@ import {
   billingErrorMessage,
   describeBillingError,
   formatCurrency,
+  formatUnitPrice,
+  lineTotal,
+  sumMoney,
   type MenuCategory,
   type MenuItem,
 } from '@favornoms/shared';
@@ -151,7 +154,8 @@ function PosInner({
     });
   }, [items, activeCategory, search]);
 
-  const subtotal = lines.reduce((s, l) => s + l.unitPrice * l.quantity, 0);
+  // Each line rounded to the cent once and the lines summed exactly, as place-order does.
+  const subtotal = sumMoney(lines.map((l) => lineTotal(l.unitPrice, 0, l.quantity)));
   const discountAmount = Math.round(subtotal * (discountPercent / 100));
   const total = subtotal - discountAmount; // POS — no delivery fee, no svc fee for in-store
   const perPerson = splitN > 1 ? Math.ceil(total / splitN) : 0;
@@ -439,7 +443,7 @@ function PosInner({
                     <div className="p-2.5">
                       <p className="line-clamp-2 text-sm font-semibold leading-tight">{item.name}</p>
                       <p className="mt-0.5 font-display text-base font-bold text-primary">
-                        {formatCurrency(item.price)}
+                        {formatUnitPrice(item.price)}
                       </p>
                     </div>
                   </motion.button>
@@ -484,7 +488,7 @@ function PosInner({
                     >
                       <div className="flex-1 min-w-0">
                         <p className="line-clamp-1 text-sm font-semibold">{line.name}</p>
-                        <p className="text-xs text-muted-foreground">{formatCurrency(line.unitPrice)} ea</p>
+                        <p className="text-xs text-muted-foreground">{formatUnitPrice(line.unitPrice)} ea</p>
                       </div>
                       <div className="flex items-center gap-1">
                         <button

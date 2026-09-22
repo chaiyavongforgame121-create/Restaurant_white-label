@@ -7,11 +7,13 @@
     "title": "{branch} · Cocina",
     "statusLive": "{count, plural, one {# activo} other {# activos}} · en vivo",
     "statusReconnecting": "{count, plural, one {# activo} other {# activos}} · reconectando…",
+    "statusRetrying": "{count, plural, one {# activo} other {# activos}} · reintentando…",
     "scheduled": "{count, plural, one {# programado} other {# programados}}",
     "mute": "Silenciar",
     "unmute": "Activar sonido",
     "fullscreen": "Pantalla completa",
     "connectionLost": "Se perdió la conexión. Reconectando… Puede que las comandas nuevas no aparezcan hasta que se restablezca.",
+    "readFailed": "No se pudieron cargar las comandas. Reintentando… Puede que falten pedidos en esta pantalla hasta que se resuelva.",
     "ordersPaused": "Pedidos en pausa: los clientes no pueden pedir mientras esté activado.",
     "soundOff": "Sonido apagado",
     "soundLocked": "Toca para activar los sonidos de pedidos",
@@ -27,7 +29,8 @@
     "cold": "Fría",
     "bar": "Bar",
     "dessert": "Postres",
-    "expo": "Pase"
+    "expo": "Pase",
+    "none": "Sin estación"
   },
   "batch": {
     "toggle": "Agrupar",

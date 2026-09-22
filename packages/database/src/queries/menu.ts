@@ -11,7 +11,11 @@ import type { FavornomsClient } from '../client-type';
 type RowCat = Database['public']['Tables']['menu_categories']['Row'];
 type RowItem = Database['public']['Tables']['menu_items']['Row'];
 
-/** Fetch all active categories for a branch, ordered. */
+/**
+ * Fetch all active categories for a branch, ordered. Two categories saved with the same position
+ * fall back to age, then id: the order bills and kitchen tickets count categories in
+ * (private.order_line_menu_position), so the cart lists them the way the bill will.
+ */
 export async function listCategories(
   supabase: FavornomsClient,
   branchId: string,
@@ -21,7 +25,9 @@ export async function listCategories(
     .select('id, branch_id, name, name_translations, display_order, icon_emoji, is_active')
     .eq('branch_id', branchId)
     .eq('is_active', true)
-    .order('display_order', { ascending: true });
+    .order('display_order', { ascending: true })
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true });
 
   if (error) throw error;
   return (data ?? []).map(mapCategory);
@@ -116,6 +122,7 @@ function mapItem(row: Partial<RowItem>): MenuItem {
     reviewCount: row.review_count ?? 0,
     prepTimeMinutes: row.prep_time_minutes ?? undefined,
     calories: row.calories ?? undefined,
+    displayOrder: row.display_order ?? 0,
     // Sold out has two halves, and reading only the stock counter meant a manual 86 -- which
     // writes sold_out_until and touches nothing else -- reached no client at all: the cashier
     // and the diner both saw the item on sale and first heard of it when place-order refused

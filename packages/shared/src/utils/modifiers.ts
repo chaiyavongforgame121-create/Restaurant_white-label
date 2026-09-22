@@ -172,6 +172,38 @@ export function toggleOption(
 }
 
 /**
+ * A line's kitchen note as lines are compared, and as place-order stores it: trimmed, and absent
+ * when nothing is left. No note, '' and '   ' are the same note, so they are the same line.
+ */
+export function normalizeLineNotes(notes: unknown): string | undefined {
+  if (typeof notes !== 'string') return undefined;
+  const trimmed = notes.trim();
+  return trimmed === '' ? undefined : trimmed;
+}
+
+/**
+ * The chosen option ids with repeats dropped, in the order they were first chosen. An option is
+ * either on the dish or not -- every sheet picks from a set -- so a repeat can only come from a
+ * client bug, and counting it twice would bill one fried egg as two.
+ */
+export function distinctOptionIds(ids: readonly string[] | null | undefined): string[] {
+  return [...new Set(ids ?? [])];
+}
+
+/**
+ * lineSignature from the option ids alone, which is all place-order is sent. Option order does
+ * not matter and neither does a repeated option.
+ */
+export function optionLineSignature(
+  menuItemId: string,
+  optionIds: readonly string[] | null | undefined,
+  notes?: unknown,
+): string {
+  const opts = distinctOptionIds(optionIds).sort().join(',');
+  return `${menuItemId}|${opts}|${normalizeLineNotes(notes) ?? ''}`;
+}
+
+/**
  * A stable key for "the same item configured the same way".
  *
  * The till merged cart lines on menu item id alone. Once options exist that is wrong: two
@@ -180,13 +212,106 @@ export function toggleOption(
  */
 export function lineSignature(
   menuItemId: string,
-  modifiers: readonly SelectedModifier[],
+  modifiers: readonly Pick<SelectedModifier, 'option_id'>[],
   notes?: string | null,
 ): string {
-  const opts = modifiers
-    .map((m) => m.option_id)
-    .slice()
-    .sort()
-    .join(',');
-  return `${menuItemId}|${opts}|${(notes ?? '').trim()}`;
+  return optionLineSignature(
+    menuItemId,
+    modifiers.map((m) => m.option_id),
+    notes,
+  );
+}
+
+/**
+ * The most of one selection an order can hold. place-order refuses a line above it (400
+ * invalid_quantity), both as sent and once identical lines are folded into one, and every
+ * quantity stepper stops here. Carts that merge an add into the line already there hold their
+ * lines to it too: a merge past it used to build a line the order was then refused for, when the
+ * same units on two lines had been accepted.
+ */
+export const MAX_LINE_QUANTITY = 99;
+
+/** The same key for a combo line, which has no options: the combo and its note. */
+export function comboLineSignature(comboId: string, notes?: unknown): string {
+  return `combo:${comboId}|${normalizeLineNotes(notes) ?? ''}`;
+}
+
+/**
+ * Lines that share a key folded into one, its quantity the sum of theirs. The first line of each
+ * key keeps its place and everything else about it; the later ones only add to its count.
+ *
+ * Returns the input array itself when nothing was folded, so a store can tell "no change".
+ */
+export function mergeIdenticalLines<T extends { quantity: number }>(
+  lines: readonly T[],
+  keyOf: (line: T) => string,
+): T[] {
+  const out: T[] = [];
+  const indexOf = new Map<string, number>();
+  let folded = false;
+  for (const line of lines) {
+    const key = keyOf(line);
+    const at = indexOf.get(key);
+    const first = at === undefined ? undefined : out[at];
+    if (at === undefined || first === undefined) {
+      indexOf.set(key, out.length);
+      out.push(line);
+      continue;
+    }
+    out[at] = { ...first, quantity: first.quantity + line.quantity };
+    folded = true;
+  }
+  return folded ? out : (lines as T[]);
+}
+
+/** A dish line as place-order is sent it. */
+export interface OrderItemLineInput {
+  menu_item_id: string;
+  quantity: number;
+  notes?: string | null;
+  modifier_option_ids?: readonly string[] | null;
+}
+
+/** A combo line as place-order is sent it. */
+export interface OrderComboLineInput {
+  combo_id: string;
+  quantity: number;
+  notes?: string | null;
+}
+
+/**
+ * The lines place-order bills: each selection once, however many times it was added.
+ *
+ * The same dish with the same options and the same note is one line on the bill, with the
+ * quantities added up: SET A tapped from the Happy Hour strip and again from the menu is "8 x SET
+ * A", not two SET A lines. Different options stay different lines, because they are different
+ * food at a different price. Each note comes back trimmed (absent when blank) and each dish line's
+ * options without repeats; the first line of a selection keeps its place.
+ *
+ * Mirrored by hand as consolidateLines() in supabase/functions/place-order/index.ts, which cannot
+ * import this package; edit the two together. Quantities are not checked here: place-order holds
+ * each incoming line, and then each consolidated one, to 1..99.
+ */
+export function consolidateOrderLines(
+  items: readonly OrderItemLineInput[],
+  combos: readonly OrderComboLineInput[] = [],
+): {
+  items: Array<{ menu_item_id: string; quantity: number; notes?: string; modifier_option_ids: string[] }>;
+  combos: Array<{ combo_id: string; quantity: number; notes?: string }>;
+} {
+  return {
+    items: mergeIdenticalLines(
+      items.map((l) => ({
+        menu_item_id: l.menu_item_id,
+        quantity: l.quantity,
+        notes: normalizeLineNotes(l.notes),
+        modifier_option_ids: distinctOptionIds(l.modifier_option_ids),
+      })),
+      (l) => optionLineSignature(l.menu_item_id, l.modifier_option_ids, l.notes),
+    ),
+    combos: mergeIdenticalLines(
+      combos.map((c) => ({ combo_id: c.combo_id, quantity: c.quantity, notes: normalizeLineNotes(c.notes) })),
+      (c) => comboLineSignature(c.combo_id, c.notes),
+    ),
+  };
 }

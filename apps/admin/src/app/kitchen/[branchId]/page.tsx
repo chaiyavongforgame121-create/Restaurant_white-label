@@ -18,7 +18,7 @@ export default async function KitchenPage({ params, searchParams }: Props) {
   // role does not hold: offering the picker to a cook only ever ended in "can't assign riders".
   const canAssign = can('delivery.manage');
 
-  const [{ data: branchRow }, { data: orders }, { data: menu }, { data: soldOut }, riders] = await Promise.all([
+  const [{ data: branchRow }, { data: orders, error: ordersError }, { data: menu }, { data: soldOut }, riders] = await Promise.all([
     supabase.from('branches').select('timezone').eq('id', branchId).maybeSingle(),
     supabase
       .from('orders')
@@ -46,6 +46,9 @@ export default async function KitchenPage({ params, searchParams }: Props) {
     // was working another branch.
     canAssign ? listBranchRiders(supabase, branchId).catch(() => []) : Promise.resolve([]),
   ]);
+  // A refused read (the select names a column this database does not have yet, a policy error)
+  // used to paint an empty, healthy-looking board. The view is told, says so, and keeps asking.
+  if (ordersError) console.error('kitchen: orders read failed', ordersError.message);
   const stations = [...new Set((menu ?? []).map((m) => m.station as string).filter(Boolean))].sort();
 
   const drivers: DriverLite[] = riders.map(toDriverLite);
@@ -65,6 +68,7 @@ export default async function KitchenPage({ params, searchParams }: Props) {
       branchName={branch.name}
       branchTimezone={branchRow?.timezone ?? null}
       initialOrders={normalizedOrders as never}
+      initialReadFailed={ordersError != null}
       stations={stations}
       activeStation={station ?? null}
       drivers={drivers}

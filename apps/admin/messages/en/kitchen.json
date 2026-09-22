@@ -7,11 +7,13 @@
     "title": "{branch} · Kitchen",
     "statusLive": "{count} active · live",
     "statusReconnecting": "{count} active · reconnecting…",
+    "statusRetrying": "{count} active · retrying…",
     "scheduled": "{count} scheduled",
     "mute": "Mute",
     "unmute": "Unmute",
     "fullscreen": "Fullscreen",
     "connectionLost": "Connection lost — reconnecting. New tickets may not appear until this clears.",
+    "readFailed": "Tickets could not be loaded — retrying. Orders may be missing from this board until this clears.",
     "ordersPaused": "Orders paused — customers cannot order while this is on.",
     "soundOff": "Sound off",
     "soundLocked": "Tap to enable order sounds",
@@ -27,7 +29,8 @@
     "cold": "Cold",
     "bar": "Bar",
     "dessert": "Dessert",
-    "expo": "Expo"
+    "expo": "Expo",
+    "none": "No station"
   },
   "batch": {
     "toggle": "Batch view",

@@ -88,15 +88,55 @@ interface InvoiceRow {
   subtotal: number | string;
   vat_amount: number | string;
   total: number | string;
-  line_items?: Array<{ name: string; quantity: number; unit_price: number; line_total: number }>;
+  line_items?: InvoiceLine[];
   branches?: { name?: string; address?: string; settings?: { currency?: string }; timezone?: string };
   orders?: { order_number?: string; tip_amount?: number | string };
+}
+
+/** One line of the snapshot issue_tax_invoice keeps. Numbers may arrive as JSON numbers or text. */
+interface InvoiceLine {
+  name: string;
+  quantity: number | string;
+  unit_price: number | string;
+  line_total: number | string | null;
 }
 
 interface Seller {
   name: string;
   address: string;
   phone: string;
+}
+
+// Postgres round(): half away from zero. `+ 0` turns a -0 into 0.
+function roundHalfUp(n: number): number {
+  return (n < 0 ? -Math.round(-n) : Math.round(n)) + 0;
+}
+
+/**
+ * The unit to print beside a line: the one it was charged at, so quantity x unit is the line.
+ *
+ * issue_tax_invoice snapshots that unit, options included, from migration
+ * 20260922120000_order_lines_menu_order. A snapshot taken before copied order_items.unit_price, the
+ * plain dish without its options, which printed "1 | $8.00 | $10.00" for a dish with a $2.00
+ * option. When the unit cannot reproduce the line (qty x unit, rounded to the cent once, as
+ * lineTotal does) the line is split evenly instead, to four decimals: the fallback of
+ * orderLineUnitPrice in packages/shared/src/utils/money.ts, which a Deno function cannot import.
+ * Never line / qty to the cent: $55.97 / 7 would print as the $8.00 the owner saw on the bill.
+ */
+function chargedUnitPrice(line: InvoiceLine): number {
+  const qty = Math.max(1, Number(line.quantity) || 1);
+  const unit = Number(line.unit_price);
+  // A missing total is unknown, not $0 (Number(null) is 0): the unit is then all there is.
+  const charged =
+    line.line_total == null || line.line_total === '' ? Number.NaN : Number(line.line_total);
+  if (!Number.isFinite(charged)) return Number.isFinite(unit) ? unit : 0;
+  if (
+    Number.isFinite(unit) &&
+    roundHalfUp((roundHalfUp(unit * 10000) * qty) / 100) === roundHalfUp(charged * 100)
+  ) {
+    return unit;
+  }
+  return roundHalfUp((charged / qty) * 10000) / 10000;
 }
 
 /**
@@ -155,6 +195,11 @@ function buildReceiptHtml(invoice: Record<string, unknown>, seller: Seller): str
   const currency = (branch.settings as { currency?: string } | undefined)?.currency ?? 'USD';
   const fmt = (n: number | string) =>
     `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  // A UNIT price keeps up to four decimals (order_items.unit_price is numeric(12,4)): a 50% happy
+  // hour on $15.99 is $7.995, and printing it as $8.00 beside a $55.97 line for seven is a receipt
+  // that does not add up. formatUnitPrice() in packages/shared does the same for the apps.
+  const fmtUnit = (n: number | string) =>
+    `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
   const sellerName = seller.name;
   const sellerAddr = seller.address;
   const sellerPhone = seller.phone;
@@ -171,8 +216,8 @@ function buildReceiptHtml(invoice: Record<string, unknown>, seller: Seller): str
       (l) => `<tr>
       <td>${escape(l.name)}</td>
       <td style="text-align:center">${l.quantity}</td>
-      <td style="text-align:right">${fmt(l.unit_price)}</td>
-      <td style="text-align:right">${fmt(l.line_total)}</td>
+      <td style="text-align:right">${fmtUnit(chargedUnitPrice(l))}</td>
+      <td style="text-align:right">${fmt(l.line_total ?? 0)}</td>
     </tr>`,
     )
     .join('');

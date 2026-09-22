@@ -5,9 +5,9 @@ import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { Package } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { formatCurrency } from '@favornoms/shared';
+import { formatCurrency, lineTotal, MAX_LINE_QUANTITY } from '@favornoms/shared';
 import { Badge, Button, cn, QuantityStepper, Sheet } from '@favornoms/ui';
-import { useCart } from '@/store/cart';
+import { cartLineKey, cartQuantityOf, useCart } from '@/store/cart';
 import { stashPendingAdd } from '@/lib/pending-cart';
 import { cssUrl } from '@/lib/css-url';
 
@@ -121,6 +121,14 @@ export function ComboSheet({
     if (combo) setQty(1);
   }, [combo?.id]);
 
+  // The same deal already in the cart: Add lands on that line, and place-order refuses a line
+  // above MAX_LINE_QUANTITY. The stepper stops at what still fits, as the dish sheet's does.
+  const inCart = useCart((s) =>
+    combo ? cartQuantityOf(s.lines, cartLineKey({ menuItemId: combo.id, comboId: combo.id })) : 0,
+  );
+  const room = Math.max(0, MAX_LINE_QUANTITY - inCart);
+  const addQty = Math.min(qty, Math.max(1, room));
+
   // Every hook above runs unconditionally, so this early return keeps hook order stable.
   if (!combo) return null;
 
@@ -130,11 +138,12 @@ export function ComboSheet({
     0,
   );
   const savings = list - unit;
-  const total = unit * qty;
+  const total = lineTotal(unit, 0, addQty);
   const soldOut = !combo.is_available;
+  const lineFull = room === 0;
 
   const handleAdd = () => {
-    if (soldOut) return;
+    if (soldOut || lineFull) return;
     const pick = {
       comboId: combo.id,
       name: combo.name,
@@ -149,12 +158,12 @@ export function ComboSheet({
     };
     requireAuthThen(
       () => {
-        addCombo(pick, qty);
+        addCombo(pick, addQty);
         onClose();
       },
       undefined,
       // Signed out: park it so the trip through sign-in keeps the deal and quantity.
-      () => stashPendingAdd({ kind: 'combo', branchId, combo: pick, quantity: qty }),
+      () => stashPendingAdd({ kind: 'combo', branchId, combo: pick, quantity: addQty }),
     );
   };
 
@@ -247,14 +256,23 @@ export function ComboSheet({
         transition={{ delay: 0.05, type: 'spring', stiffness: 350, damping: 28 }}
         className="sticky inset-x-0 bottom-0 border-t border-border/60 bg-card/95 px-5 pb-safe pt-4 backdrop-blur"
       >
+        {/* Why the stepper stops short of 99, or Add is off: this deal is already in the cart,
+            and one order takes at most MAX_LINE_QUANTITY of it. */}
+        {!soldOut && inCart > 0 && addQty >= room && (
+          <p className="mb-3 rounded-xl bg-muted px-3 py-2 text-sm text-muted-foreground" role="status">
+            {t('menu.lineLimit', { inCart, max: MAX_LINE_QUANTITY })}
+          </p>
+        )}
         <div className="flex items-center gap-3">
-          {!soldOut && <QuantityStepper value={qty} onChange={setQty} min={1} size="lg" />}
+          {!soldOut && (
+            <QuantityStepper value={addQty} onChange={setQty} min={1} max={Math.max(1, room)} size="lg" />
+          )}
           <Button
             variant={soldOut ? 'ghost' : 'gradient'}
             size="xl"
             fullWidth
             onClick={handleAdd}
-            disabled={soldOut}
+            disabled={soldOut || lineFull}
             aria-label={soldOut ? t('menu.itemSoldOut', { name: combo.name }) : undefined}
           >
             {soldOut ? t('menu.soldOut') : t('menu.addWithPrice', { price: formatCurrency(total) })}

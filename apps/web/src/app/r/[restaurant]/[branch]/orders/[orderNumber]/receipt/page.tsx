@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
+import { sortOrderLines } from '@favornoms/shared';
 import { getServerClient } from '@favornoms/database/server';
 import { resolveTenant, storefrontNames } from '@/lib/tenant';
 import { CustomerReceipt } from './_components/customer-receipt';
@@ -28,7 +29,8 @@ export default async function CustomerReceiptPage({ params }: Props) {
        subtotal, delivery_fee, service_fee, tax_amount, tip_amount,
        discount_amount, total, customer_name, customer_phone,
        delivery_address,
-       order_items(item_name, quantity, unit_price, subtotal)`,
+       order_items(id, item_name, quantity, unit_price, subtotal, modifier_total, modifiers,
+         category_position, item_position, created_at)`,
     )
     .eq('branch_id', tenant.branch.id)
     .eq('order_number', orderNumber)
@@ -37,7 +39,8 @@ export default async function CustomerReceiptPage({ params }: Props) {
 
   return (
     <CustomerReceipt
-      order={order as never}
+      // Menu order, category by category, as the restaurant's own receipt prints it.
+      order={{ ...order, order_items: sortOrderLines(order.order_items ?? []) } as never}
       storeName={storefrontNames(tenant).full}
       branchAddress={tenant.branch.address}
     />

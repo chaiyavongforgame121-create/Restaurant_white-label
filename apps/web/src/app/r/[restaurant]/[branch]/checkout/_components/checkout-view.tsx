@@ -50,6 +50,7 @@ import { buildScheduleDays, type ClosurePeriod, type OpeningWindow } from '@/lib
 import { pickerLabels } from '@/lib/picker-labels';
 import { linesUsing, useCart, useCartHydrated } from '@/store/cart';
 import { orderErrorKey, placeOrderBody, refusedCartPart } from './order-errors';
+import { orderLinesFromCart } from './cart-order-lines';
 import { useAuth } from '@/components/auth/use-auth';
 import { LeaveTableButton, useTablePin } from '../../_components/table-pin';
 
@@ -212,6 +213,8 @@ export function CheckoutView({
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
 
+  // place-order's subtotal to the cent: each line rounded once from its unrounded unit price
+  // (lineTotal), then summed exactly. Everything below is priced off it, as on the server.
   const subtotal = useCart((s) => s.subtotal());
   const lines = useCart((s) => s.lines);
   const notes = useCart((s) => s.notes);
@@ -547,8 +550,12 @@ export function CheckoutView({
   const appliedReward =
     selectedReward && identityVerified && !rewardBlocker(selectedReward) ? selectedReward : null;
   // Mirrors the switch in place-order. The server is authoritative; this only
-  // keeps the on-screen total honest.
-  const loyaltyDollarsOff = appliedReward ? loyaltyRewardDiscount(appliedReward, subtotal) : 0;
+  // keeps the on-screen total honest. The cart goes in so a free item is priced
+  // at the unit this cart charges for it (a happy-hour $7.995 is $8.00 off), not
+  // at the list price the reward catalog reports.
+  const loyaltyDollarsOff = appliedReward
+    ? loyaltyRewardDiscount(appliedReward, subtotal, lines)
+    : 0;
   // Declared here rather than beside deliveryFeeBase because a free-delivery
   // REWARD can zero the fee too, and that depends on the reward being applicable
   // — which in turn is measured against deliveryFeeBase, never against this.
@@ -1095,6 +1102,11 @@ export function CheckoutView({
         }
       }
 
+      // One line per selection, exactly the lines subtotal() priced: two cart lines left the same
+      // (a note edited to match another line's) go as the one line place-order would make of them
+      // anyway (consolidateLines, v11.5), so the payload never differs from the quote on screen.
+      const orderLines = orderLinesFromCart(lines);
+
       // place-order v10.5 takes the sitting a dine-in round belongs to. PlaceOrderInput in
       // queries/orders.ts has not caught up with the field yet, so it is widened here
       // rather than asserted over the whole payload — the rest still type-checks.
@@ -1153,21 +1165,8 @@ export function CheckoutView({
             ? scheduledFor
             : undefined,
         gift_card_code: giftCardState.status === 'valid' ? giftCardCode.trim() : undefined,
-        items: lines
-          .filter((l) => !l.comboId)
-          .map((l) => ({
-            menu_item_id: l.menuItemId,
-            quantity: l.quantity,
-            notes: l.notes,
-            modifier_option_ids: l.modifiers?.map((m) => m.option_id),
-          })),
-        combos: lines
-          .filter((l) => l.comboId)
-          .map((l) => ({
-            combo_id: l.comboId!,
-            quantity: l.quantity,
-            notes: l.notes,
-          })),
+        items: orderLines.items,
+        combos: orderLines.combos,
       };
 
       const result = await placeOrder(supabase, orderInput);
@@ -1979,7 +1978,7 @@ export function CheckoutView({
               {rewards.map((r) => {
                 const blocker = rewardBlocker(r);
                 const selected = rewardId === r.id;
-                const off = loyaltyRewardDiscount(r, subtotal);
+                const off = loyaltyRewardDiscount(r, subtotal, lines);
                 return (
                   <button
                     key={r.id}

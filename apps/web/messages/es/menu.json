@@ -26,6 +26,7 @@
   "inCartCount": "{count} en el carrito",
   "quickAdd": "+ Agregar",
   "addWithPrice": "Agregar · {price}",
+  "lineLimit": "Tu carrito ya tiene {inCart} de este, y un pedido admite como máximo {max}.",
   "dietary": {
     "vegan": "Vegano",
     "glutenFree": "Sin gluten",

@@ -96,6 +96,9 @@ export const ORDER_ERRORS: Array<[string, string]> = [
   ['redeem_requires_auth', 'errors.order.signInToOrder'],
   ['login_required', 'errors.order.signInToOrder'],
   ['empty_order', 'errors.order.emptyOrder'],
+  // place-order folds the same selection into one line before pricing, and holds that line to 99.
+  // The cart caps every add there too, so this is reached only by a cart older than that cap.
+  ['invalid_quantity', 'errors.order.quantityTooHigh'],
   ['customer_phone_required', 'errors.order.phoneRequired'],
   ['delivery_address_required', 'errors.order.addressRequired'],
   // Same sentence as billing_inactive: to the diner both mean "not taking orders online now".

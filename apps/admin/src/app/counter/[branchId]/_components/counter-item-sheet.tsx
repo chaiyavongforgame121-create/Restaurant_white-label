@@ -9,9 +9,11 @@ import {
   defaultSelections,
   flattenSelections,
   formatCurrency,
+  formatUnitPrice,
   isUiLocale,
   modifierDelta,
   toggleOption,
+  unitPrice4,
   validateSelections,
   type MenuItem,
   type ModifierGroup,
@@ -20,7 +22,7 @@ import {
 import { getBrowserClient } from '@favornoms/database/client';
 import { listItemModifierGroups } from '@favornoms/database/queries';
 import { Button, Sheet } from '@favornoms/ui';
-import { r2 } from './counter-pricing';
+import { lineSubtotal } from './counter-pricing';
 
 interface Props {
   /** The item being configured, or null when the sheet is closed. `price` is what it sells for
@@ -102,9 +104,10 @@ export function CounterItemSheet({ item, listPrice, priceLabel, onClose, onAdd }
     () => validateSelections(groups, selections, locale),
     [groups, selections, locale],
   );
-  // Rounded the way place-order rounds a line, so the sheet's button and the cart agree.
-  const unitPrice = r2((item?.price ?? 0) + delta);
-  const lineTotal = r2(unitPrice * qty);
+  // Priced the way place-order prices a line, so the sheet's button and the cart agree: the unit
+  // keeps its four decimals (a happy-hour $7.995 stays $7.995) and only the line is rounded.
+  const unitPrice = unitPrice4((item?.price ?? 0) + delta);
+  const lineTotal = lineSubtotal(unitPrice, qty);
   const soldOut = !!item?.outOfStock;
   const blocked = loading || !!problem || soldOut;
 
@@ -159,10 +162,10 @@ export function CounterItemSheet({ item, listPrice, priceLabel, onClose, onAdd }
 
           <div>
             <p className="font-display text-primary text-2xl font-bold">
-              {formatCurrency(item.price)}
+              {formatUnitPrice(item.price)}
               {listPrice != null && listPrice > item.price && (
                 <span className="text-muted-foreground ml-2 text-base font-normal line-through">
-                  {formatCurrency(listPrice)}
+                  {formatUnitPrice(listPrice)}
                 </span>
               )}
             </p>

@@ -45,6 +45,7 @@
     "rateLimited": "Too many orders in a short time. Please wait a few minutes before trying again.",
     "signInToOrder": "Please sign in to place your order.",
     "emptyOrder": "Your cart is empty. Add something before placing your order.",
+    "quantityTooHigh": "One item in your cart is over the limit of 99 per order. Lower its quantity and try again.",
     "phoneRequired": "Please add a phone number so the restaurant can reach you.",
     "addressRequired": "Please add a delivery address."
   }

@@ -98,13 +98,26 @@ export interface TableSessionBillOrder {
   paid: boolean;
   /** Staff only — the bill RPC redacts it for diners, and never returns a phone number. */
   customer_name?: string;
+  /** In menu order (category, dish, options), as the bill, the receipt and the kitchen list them. */
   items: Array<{
     name: string;
     quantity: number;
     unit_price: number;
     subtotal: number;
     notes: string | null;
+    /**
+     * The chosen options, in the order chosen: what tells two lines of the same dish apart.
+     * Absent from a bill served before migration 20260922120000.
+     */
+    options?: TableSessionBillOption[];
   }>;
+}
+
+/** One chosen option on a bill line (private.order_line_options). */
+export interface TableSessionBillOption {
+  name: string;
+  /** What the option adds to one unit; 0 for a free choice, negative for a removal that is cheaper. */
+  price_delta: number;
 }
 
 export interface TableSessionBill {

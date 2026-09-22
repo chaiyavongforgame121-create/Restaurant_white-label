@@ -5,7 +5,60 @@ the bulk of the file; every deploy had to carry it. The history is the valuable 
 so it lives here rather than being deleted.
 
 ```
-// place-order v11.3 — every branch is its own shop
+// place-order v11.5 — every branch is its own shop
+//   v11.5 (2026-09-22): one line per selection. No SQL half.
+//        - The owner's report: SET A tapped from the storefront's Happy Hour strip and again from
+//          the menu came out as two SET A lines on the bill. On the bill in question (A-2609-0005)
+//          the two differed by an option (7 x "No Egg", 1 x the default "Runny-Yolk Fried Egg"
+//          +$2.00), which is rightly two lines; this makes sure identical ones never are.
+//        - Before anything is looked up or priced, payload lines are consolidated
+//          (consolidateLines, a hand mirror of consolidateOrderLines in
+//          packages/shared/src/utils/modifiers.ts): dish lines with the same menu_item_id, the same
+//          SET of modifier_option_ids (any order) and the same trimmed note become one line with
+//          the quantities added; combo lines with the same combo_id and trimmed note likewise.
+//          The first line of a selection keeps its place. Stock/demand, sold-out, option, reward
+//          and price checks all run on the consolidated lines (their sums are unchanged).
+//        - Each line as sent is still held to 1..99 (400 invalid_quantity); a consolidated line
+//          above 99 is refused the same way (not clamped: that would bill 99 for 110 ordered).
+//          Two lines that each passed can now fold into one that does not, e.g. two combo adds of
+//          60 and 50, which v11.3 took as two lines; the storefront cart therefore stops every
+//          merge at 99 (MAX_LINE_QUANTITY in modifiers.ts) and never sends such a pair.
+//        - A line's note is stored trimmed, and a blank one as null (it was stored as sent). An
+//          option id repeated on one line counts once: it was charged, and listed, twice.
+//        - modifier_option_ids that is present but not an array is refused with 400
+//          invalid_modifiers (a string was read as one id, or threw a TypeError: a bare 500).
+//        - Quote and charge still agree: the storefront cart's subtotal() and the till's
+//          quoteCounterCart (counterLineSubtotals) price lines of one selection as the one line
+//          this function makes of them, because lineTotal rounds a line once on its whole quantity
+//          (2 x $7.995 is $15.99 as one line, $16.00 as two). The storefront checkout also sends
+//          its lines already consolidated (consolidateOrderLines), so the payload is the lines it
+//          priced.
+//        - No change to the free_item rule here, but the checkout's quote of it was wrong in a
+//          happy hour and is fixed on that side: loyaltyRewardDiscount priced the reward at
+//          list_loyalty_rewards.menu_item_price, the LIST price ($15.99 off for a dish selling at
+//          $7.995), while this function takes off lineTotal(unit, 0, 1) of the happy-hour unit
+//          ($8.00), so the diner was charged $7.99 more than the checkout showed. It now reads the
+//          unit from the same cart line this function matches (the first dish line of the item,
+//          never a combo line). v11.4's "the quote and the charge agree" did not hold for this
+//          one case until then.
+//   v11.4 (2026-09-22): a unit price is never rounded to the cent. SQL half:
+//        20260922100000_exact_unit_prices (order_items.unit_price numeric(12,4), and
+//        get_effective_prices returns round(eff_price, 4)).
+//        - The owner's report: seven SET A at Food Thai Thai's 50% happy hour ($15.99 -> $7.995)
+//          showed $55.97 on the cart line but $56.00 as the Subtotal, on "Proceed to checkout" and
+//          on the saved bill (7 x $8.00). Each line was r2(r2(price + options) x qty), so the unit
+//          was rounded to $8.00 before it was multiplied, and numeric(10,2) rounded it again.
+//        - A line is now lineTotal(unit, options, qty): (unit + options) x qty in whole
+//          ten-thousandths, rounded half-up to the cent ONCE (7 x 7.995 = 55.965 -> $55.97). The
+//          subtotal is sumMoney() of the lines, the exact sum with nothing rounded after it. Both
+//          are hand mirrors of packages/shared/src/utils/money.ts, which the storefront cart, the
+//          checkout and the counter's quoteCounterCart use, so the quote and the charge agree.
+//        - order_items.unit_price is stored to four decimals (7.995, not 8.00); subtotal and
+//          modifier_total stay cents. A combo line goes through lineTotal() too.
+//        - A free_item reward takes off what that one unit is charged as a line of one,
+//          lineTotal(unit, 0, 1): $8.00 for a $7.995 dish, never a fraction of a cent.
+//        - Tax, fees, discounts, the tip, gift-card credit and the total are unchanged: computed
+//          from the subtotal in cents, as before.
 //   v11.3 (2026-09-19): a transfer with nothing to pay is not stranded.
 //        - A 'transfer' order whose total is 0 (a gift card or reward covered it all) is inserted
 //          with awaiting_payment false. It had no payment row to approve (payments_amount_check

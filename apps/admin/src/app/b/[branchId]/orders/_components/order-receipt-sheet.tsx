@@ -4,10 +4,10 @@ import * as React from 'react';
 import { useTranslations } from 'next-intl';
 import { Printer, ReceiptText } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
-import { formatPhone, formatCurrency } from '@favornoms/shared';
+import { formatPhone, formatCurrency, formatUnitPrice, sortOrderLines } from '@favornoms/shared';
 import { Button, Card, Sheet } from '@favornoms/ui';
 import { printReceiptViaBrowser } from '@favornoms/ui/printer';
-import { modifierLabel, parseLineModifiers } from './order-lines';
+import { lineUnitPrice, modifierLabel, parseLineModifiers } from './order-lines';
 import { useIntlLocale, useOrderLabels } from './order-labels';
 import { formatReceiptAddress, toReceiptInput, type ReceiptOrder } from './receipt-input';
 
@@ -52,7 +52,8 @@ export function OrderReceiptButton({
           `order_number, status, channel, created_at,
            subtotal, delivery_fee, service_fee, tax_amount, tip_amount,
            discount_amount, total, customer_name, customer_phone, delivery_address,
-           order_items(item_name, quantity, unit_price, subtotal, notes, modifiers),
+           order_items(id, item_name, quantity, unit_price, subtotal, modifier_total, notes, modifiers,
+             category_position, item_position, created_at),
            payments(method, status),
            tax_invoices(invoice_number, issued_at)`,
         )
@@ -78,7 +79,9 @@ export function OrderReceiptButton({
       // owner sees [] here. The pill falls back to the order number rather than blanking.
       const invoices = (data.tax_invoices ?? []) as Array<{ invoice_number: string }>;
       setReceiptNumber(invoices[invoices.length - 1]?.invoice_number ?? null);
-      setOrder(data as unknown as ReceiptOrder);
+      // Menu order, category by category, on screen and on the paper printed from it.
+      const read = data as unknown as ReceiptOrder;
+      setOrder({ ...read, order_items: sortOrderLines(read.order_items ?? []) });
     })();
     return () => {
       cancelled = true;
@@ -239,17 +242,17 @@ function ReceiptCard({
       <table className="w-full text-sm">
         <tbody>
           {order.order_items.map((item, i) => {
-            // The unit shown is derived from the line, not read from unit_price: subtotal
-            // carries the options the diner chose, so the base price beside it read as a
-            // receipt that could not add up (2 × $8.00 against a $17.50 line).
-            const qty = Math.max(1, Number(item.quantity) || 1);
+            // The unit shown carries the options (the plain unit_price beside a $17.50 line read
+            // as 2 × $8.00, a receipt that could not add up) and keeps its four decimals: the
+            // charged line divided and rounded to the cent printed seven $7.995 happy-hour sets
+            // as "7 × $8.00" beside $55.97. The line itself is always the charged subtotal.
             const mods = parseLineModifiers(item.modifiers);
             return (
               <tr key={i} className="border-b border-dashed border-border/60 last:border-0">
                 <td className="py-2">
                   <div className="font-medium">{item.item_name}</div>
                   <div className="text-xs text-muted-foreground">
-                    {item.quantity} × {money(n(item.subtotal) / qty)}
+                    {item.quantity} × {formatUnitPrice(lineUnitPrice(item), currency)}
                   </div>
                   {mods.length > 0 && (
                     <div className="text-xs text-muted-foreground">

@@ -45,6 +45,7 @@
     "rateLimited": "Bạn đã đặt quá nhiều đơn trong thời gian ngắn. Vui lòng đợi vài phút rồi thử lại.",
     "signInToOrder": "Vui lòng đăng nhập để đặt hàng.",
     "emptyOrder": "Giỏ hàng đang trống. Hãy thêm món trước khi đặt hàng.",
+    "quantityTooHigh": "Một món trong giỏ vượt quá giới hạn 99 phần mỗi đơn. Hãy giảm số lượng rồi thử lại.",
     "phoneRequired": "Vui lòng thêm số điện thoại để nhà hàng có thể liên hệ với bạn.",
     "addressRequired": "Vui lòng thêm địa chỉ giao hàng."
   }

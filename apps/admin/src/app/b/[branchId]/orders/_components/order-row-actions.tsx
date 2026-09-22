@@ -5,8 +5,10 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { FileText, MoreHorizontal, Pencil, RefreshCcw, XCircle } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
-import { Button, Card, IconButton } from '@favornoms/ui';
+import { formatCurrency, formatUnitPrice, sortOrderLines, sumMoney } from '@favornoms/shared';
+import { Button, Card, IconButton, Portal } from '@favornoms/ui';
 import { orderErrorKey, type OrderAction } from './order-errors';
+import { lineUnitPrice, refundLineAmount } from './order-lines';
 
 interface Props {
   orderId: string;
@@ -125,138 +127,153 @@ export function OrderRowActions({ orderId, orderTotal, orderStatus, customerNote
         <MoreHorizontal className="h-4 w-4" />
       </IconButton>
 
+      {/* Everything below opens from the sticky actions cell, and sticky with a z-index is
+          a stacking context: inline, the menu and these dialogs could rise no higher than
+          that one cell, so every later row's sticky cell and the ACTIONS header painted
+          over them. Each is portalled on its own, only while open, so a closed row leaves
+          nothing behind in <body>. */}
       {open && (
-        <div
-          className="fixed inset-0 z-40"
-          onClick={() => setOpen(false)}
-        >
-          <div className="fixed right-4 top-1/2 z-50 w-64 -translate-y-1/2" onClick={(e) => e.stopPropagation()}>
-            <Card className="space-y-1 p-2">
-              {canRefund && (
-                <button
-                  type="button"
-                  onClick={() => setRefundOpen(true)}
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted"
-                >
-                  <RefreshCcw className="h-4 w-4" /> {t('actions.issueRefund')}
-                </button>
-              )}
-              {canCancel && (
-                <button
-                  type="button"
-                  onClick={() => { setOpen(false); setError(null); setCancelOpen(true); }}
-                  disabled={busy}
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-destructive hover:bg-destructive/10"
-                >
-                  <XCircle className="h-4 w-4" /> {t('actions.cancelOrder')}
-                </button>
-              )}
-              {canEdit && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOpen(false);
-                    setError(null);
-                    setNotesDraft(customerNotes ?? '');
-                    setNotesOpen(true);
-                  }}
-                  disabled={busy}
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted"
-                >
-                  <Pencil className="h-4 w-4" /> {t('actions.editNote')}
-                </button>
-              )}
-              {canIssueReceipt && (
-                <button
-                  type="button"
-                  onClick={issueTaxInvoice}
-                  disabled={busy}
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted"
-                >
-                  <FileText className="h-4 w-4" /> {t('actions.issueReceipt')}
-                </button>
-              )}
-              {error && (
-                <p role="alert" className="rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger">
-                  {error}
-                </p>
-              )}
-            </Card>
+        <Portal>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setOpen(false)}
+          >
+            <div className="fixed right-4 top-1/2 z-50 w-64 -translate-y-1/2" onClick={(e) => e.stopPropagation()}>
+              <Card className="space-y-1 p-2">
+                {canRefund && (
+                  <button
+                    type="button"
+                    onClick={() => setRefundOpen(true)}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted"
+                  >
+                    <RefreshCcw className="h-4 w-4" /> {t('actions.issueRefund')}
+                  </button>
+                )}
+                {canCancel && (
+                  <button
+                    type="button"
+                    onClick={() => { setOpen(false); setError(null); setCancelOpen(true); }}
+                    disabled={busy}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-destructive hover:bg-destructive/10"
+                  >
+                    <XCircle className="h-4 w-4" /> {t('actions.cancelOrder')}
+                  </button>
+                )}
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpen(false);
+                      setError(null);
+                      setNotesDraft(customerNotes ?? '');
+                      setNotesOpen(true);
+                    }}
+                    disabled={busy}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted"
+                  >
+                    <Pencil className="h-4 w-4" /> {t('actions.editNote')}
+                  </button>
+                )}
+                {canIssueReceipt && (
+                  <button
+                    type="button"
+                    onClick={issueTaxInvoice}
+                    disabled={busy}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted"
+                  >
+                    <FileText className="h-4 w-4" /> {t('actions.issueReceipt')}
+                  </button>
+                )}
+                {error && (
+                  <p role="alert" className="rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger">
+                    {error}
+                  </p>
+                )}
+              </Card>
+            </div>
           </div>
-        </div>
+        </Portal>
       )}
 
       {refundOpen && (
-        <RefundDialog
-          orderId={orderId}
-          orderTotal={orderTotal}
-          onClose={() => setRefundOpen(false)}
-          onRefunded={() => { setRefundOpen(false); setOpen(false); router.refresh(); }}
-        />
+        <Portal>
+          <RefundDialog
+            orderId={orderId}
+            orderTotal={orderTotal}
+            onClose={() => setRefundOpen(false)}
+            onRefunded={() => { setRefundOpen(false); setOpen(false); router.refresh(); }}
+          />
+        </Portal>
       )}
 
       {cancelOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          onClick={() => !busy && setCancelOpen(false)}
-        >
-          <Card className="w-full max-w-sm space-y-3 p-5" onClick={(e) => e.stopPropagation()}>
-            <h2 className="font-display text-lg font-semibold">{t('actions.cancelDialog.title')}</h2>
-            <p className="text-sm text-muted-foreground">{t('actions.cancelDialog.body')}</p>
-            {error && <p className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
-            <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setCancelOpen(false)}>
-                {t('actions.cancelDialog.keep')}
-              </Button>
-              <Button variant="danger" onClick={doCancel} loading={busy}>
-                {t('actions.cancelDialog.confirm')}
-              </Button>
-            </div>
-          </Card>
-        </div>
+        <Portal>
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+            onClick={() => !busy && setCancelOpen(false)}
+          >
+            <Card className="w-full max-w-sm space-y-3 p-5" onClick={(e) => e.stopPropagation()}>
+              <h2 className="font-display text-lg font-semibold">{t('actions.cancelDialog.title')}</h2>
+              <p className="text-sm text-muted-foreground">{t('actions.cancelDialog.body')}</p>
+              {error && <p className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" onClick={() => setCancelOpen(false)}>
+                  {t('actions.cancelDialog.keep')}
+                </Button>
+                <Button variant="danger" onClick={doCancel} loading={busy}>
+                  {t('actions.cancelDialog.confirm')}
+                </Button>
+              </div>
+            </Card>
+          </div>
+        </Portal>
       )}
 
       {notesOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          onClick={() => !busy && setNotesOpen(false)}
-        >
-          <Card className="w-full max-w-md space-y-3 p-5" onClick={(e) => e.stopPropagation()}>
-            <h2 className="font-display text-lg font-semibold">{t('actions.noteDialog.title')}</h2>
-            <p className="text-xs text-muted-foreground">{t('actions.noteDialog.body')}</p>
-            <textarea
-              value={notesDraft}
-              onChange={(e) => setNotesDraft(e.target.value)}
-              rows={3}
-              autoFocus
-              placeholder={t('actions.noteDialog.placeholder')}
-              className="focus-ring w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
-            />
-            {error && <p className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
-            <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setNotesOpen(false)}>
-                {t('actions.noteDialog.cancel')}
-              </Button>
-              <Button variant="gradient" onClick={saveNotes} loading={busy}>
-                {t('actions.noteDialog.save')}
-              </Button>
-            </div>
-          </Card>
-        </div>
+        <Portal>
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+            onClick={() => !busy && setNotesOpen(false)}
+          >
+            <Card className="w-full max-w-md space-y-3 p-5" onClick={(e) => e.stopPropagation()}>
+              <h2 className="font-display text-lg font-semibold">{t('actions.noteDialog.title')}</h2>
+              <p className="text-xs text-muted-foreground">{t('actions.noteDialog.body')}</p>
+              <textarea
+                value={notesDraft}
+                onChange={(e) => setNotesDraft(e.target.value)}
+                rows={3}
+                autoFocus
+                placeholder={t('actions.noteDialog.placeholder')}
+                className="focus-ring w-full rounded-xl border border-border bg-background px-3 py-2 text-sm"
+              />
+              {error && <p className="rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" onClick={() => setNotesOpen(false)}>
+                  {t('actions.noteDialog.cancel')}
+                </Button>
+                <Button variant="gradient" onClick={saveNotes} loading={busy}>
+                  {t('actions.noteDialog.save')}
+                </Button>
+              </div>
+            </Card>
+          </div>
+        </Portal>
       )}
 
       {invoiceMsg && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          onClick={() => setInvoiceMsg(null)}
-        >
-          <Card className="w-full max-w-sm space-y-3 p-5 text-center" onClick={(e) => e.stopPropagation()}>
-            <p className="text-sm font-medium text-success">{invoiceMsg}</p>
-            <Button variant="gradient" fullWidth onClick={() => setInvoiceMsg(null)}>
-              {t('actions.done')}
-            </Button>
-          </Card>
-        </div>
+        <Portal>
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+            onClick={() => setInvoiceMsg(null)}
+          >
+            <Card className="w-full max-w-sm space-y-3 p-5 text-center" onClick={(e) => e.stopPropagation()}>
+              <p className="text-sm font-medium text-success">{invoiceMsg}</p>
+              <Button variant="gradient" fullWidth onClick={() => setInvoiceMsg(null)}>
+                {t('actions.done')}
+              </Button>
+            </Card>
+          </div>
+        </Portal>
       )}
     </>
   );
@@ -268,6 +285,13 @@ interface OrderLine {
   unit_price: number;
   quantity: number;
   subtotal: number;
+  /** The options' share of subtotal: a line's unit is unit_price plus this per unit. */
+  modifier_total: number | null;
+  /** Read for the menu order the dialog lists lines in (sortOrderLines). */
+  modifiers?: unknown;
+  category_position?: number | null;
+  item_position?: number | null;
+  created_at?: string;
 }
 
 function RefundDialog({
@@ -296,9 +320,10 @@ function RefundDialog({
       const supabase = getBrowserClient();
       const { data } = await supabase
         .from('order_items')
-        .select('id, item_name, unit_price, quantity, subtotal')
+        .select('id, item_name, unit_price, quantity, subtotal, modifier_total, modifiers, category_position, item_position, created_at')
         .eq('order_id', orderId);
-      setLines((data ?? []) as OrderLine[]);
+      // The same menu order as the receipt drawer, so the line being refunded is easy to find.
+      setLines(sortOrderLines((data ?? []) as OrderLine[]));
       const init: Record<string, number> = {};
       for (const l of (data ?? []) as OrderLine[]) init[l.id] = 0;
       setQty(init);
@@ -308,10 +333,10 @@ function RefundDialog({
   const computedAmount = React.useMemo(() => {
     if (mode === 'amount') return Number(customAmount) || 0;
     if (!lines) return 0;
-    return lines.reduce((s, l) => {
-      const q = qty[l.id] ?? 0;
-      return s + q * Number(l.unit_price);
-    }, 0);
+    // Each line gives back what that many units were charged, options included: the whole
+    // line is its own subtotal, part of it is priced as a line of its own (refundLineAmount).
+    // quantity × unit_price left the options out and re-rounded a happy-hour unit.
+    return sumMoney(lines.map((l) => refundLineAmount(l, qty[l.id] ?? 0)));
   }, [mode, customAmount, qty, lines]);
 
   const submit = async () => {
@@ -393,7 +418,7 @@ function RefundDialog({
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium">{l.item_name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {l.quantity}× ${Number(l.unit_price).toFixed(2)} = ${Number(l.subtotal).toFixed(2)}
+                        {l.quantity}× {formatUnitPrice(lineUnitPrice(l))} = {formatCurrency(Number(l.subtotal))}
                       </p>
                     </div>
                     <label className="flex items-center gap-1 text-xs">

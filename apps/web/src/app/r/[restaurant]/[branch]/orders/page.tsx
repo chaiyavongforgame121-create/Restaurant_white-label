@@ -1,5 +1,6 @@
 import { Receipt } from 'lucide-react';
 import { getTranslations } from 'next-intl/server';
+import { sortOrderLines } from '@favornoms/shared';
 import { EmptyState } from '@favornoms/ui';
 import { getServerClient } from '@favornoms/database/server';
 import { resolveTenant } from '@/lib/tenant';
@@ -48,7 +49,7 @@ export default async function OrdersPage({ params }: Props) {
     ? await supabase
         .from('orders')
         .select(
-          'id, order_number, total, status, channel, created_at, order_items(id, menu_item_id, combo_id, item_name, quantity, notes, modifiers)',
+          'id, order_number, total, status, channel, created_at, order_items(id, menu_item_id, combo_id, item_name, quantity, notes, modifiers, category_position, item_position, created_at)',
         )
         .eq('customer_id', customerId)
         .eq('branch_id', tenant.branch.id)
@@ -85,5 +86,7 @@ export default async function OrdersPage({ params }: Props) {
     );
   }
 
-  return <OrdersList orders={orders as never[]} base={base} branchId={tenant.branch.id} />;
+  // Each order's dishes in menu order, category by category, as its receipt lists them.
+  const listed = orders.map((o) => ({ ...o, order_items: sortOrderLines(o.order_items ?? []) }));
+  return <OrdersList orders={listed as never[]} base={base} branchId={tenant.branch.id} />;
 }
