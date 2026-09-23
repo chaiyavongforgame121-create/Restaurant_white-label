@@ -11,16 +11,17 @@
     "saveFailed": "Could not save.",
     "decisionFailed": "Could not save that decision.",
     "permission": "You don’t have permission to do that.",
-    "network": "Couldn’t reach the server. Check your connection and try again."
+    "network": "Couldn’t reach the server. Check your connection and try again.",
+    "alreadyDecided": "Someone already decided this request. Reload to see what happened to it.",
+    "requestNotFound": "That request no longer exists. Reload the queue."
   },
   "plans": {
     "metaTitle": "Product catalog · Favornoms",
     "title": "Product catalog",
-    "subtitle": "What restaurants can buy. Prices are monthly USD.",
+    "subtitle": "What restaurants can buy. Every product carries two prices in USD: one paid once, and one paid every month.",
     "newProduct": "New product",
     "stripeDormant": "<strong>Stripe is dormant.</strong> {count, plural, one {# active product has} other {# active products have}} no Stripe price ID ({codes}). Until every one is filled in, merchants are activated manually from Subscriptions instead of paying by card.",
     "newProductCode": "new product",
-    "inactive": "Inactive",
     "noStripePrice": "No Stripe price",
     "markInactive": "Mark inactive",
     "markActive": "Mark active",
@@ -44,12 +45,19 @@
       "stripePriceIdHint": "price_… — required before Stripe can go live.",
       "description": "Description",
       "isQuantity": "Quantity product (billed per unit — needs quantity pricing on the Stripe price)",
-      "features": "Features granted"
+      "features": "Features granted",
+      "monthlyPriceHint": "Charged every month, on top of the one-time price.",
+      "oneTimePrice": "One-time price ($)",
+      "oneTimePriceHint": "Paid once, ever. 0 for anything sold by the month only."
     },
     "createProduct": "Create product",
     "save": "Save",
     "cancel": "Cancel",
-    "codeRequired": "Product code is required."
+    "codeRequired": "Product code is required.",
+    "priceSummary": "<b>{once}</b> once, then <b>{monthly}</b> every month",
+    "withdrawn": "Withdrawn",
+    "withdrawnHint": "Not on sale. Restaurants already on it keep it and their history still resolves, but nobody new can buy it. Mark it active to sell it again.",
+    "featureWithdrawn": "{feature} (withdrawn)"
   },
   "reports": {
     "title": "Financial reports",
@@ -135,7 +143,7 @@
   "subscriptions": {
     "metaTitle": "Subscriptions · Favornoms",
     "title": "Subscriptions",
-    "subtitle": "Set a restaurant’s package directly. Changes take effect immediately.",
+    "subtitle": "Set a restaurant's package directly, branch by branch. Changes take effect immediately.",
     "searchPlaceholder": "Search restaurants",
     "noMatches": "No restaurants match.",
     "live": "Live",
@@ -144,7 +152,8 @@
       "monthly": "Monthly",
       "seats": "Seats",
       "paidThrough": "Paid through",
-      "trialEnds": "Trial ends"
+      "trialEnds": "Trial ends",
+      "paidOnce": "Paid once"
     },
     "close": "Close",
     "changePackage": "Change package",
@@ -167,13 +176,33 @@
     "blankTrial": "Leave blank to restart from today: a {days}-day trial, to {date}.",
     "blankMonth": "Leave blank to restart the month from today: paid through becomes {date}.",
     "blankShortens": "That is earlier than the current {date}. Pick a date to keep the time they already have.",
-    "addons": "Add-ons",
     "branchSeats": "Branch seats",
     "removeSeat": "Remove a seat",
     "addSeat": "Add a seat",
     "minSeats": "min {count} (branches open)",
     "applyPackage": "Apply package",
-    "saved": "Saved"
+    "saved": "Saved",
+    "deliveringCount": "Delivery at {count} of {total}",
+    "deliveringNone": "No delivery",
+    "delivery": {
+      "title": "Which branches deliver",
+      "hint": "Every branch that delivers adds the delivery price to the monthly bill. Nothing here charges the one-time unlock — what you grant by hand is not owed.",
+      "trialHint": "On a trial every branch delivers, so there is nothing to pick. Move the restaurant to a paid plan to choose.",
+      "noBranches": "This restaurant has no branches yet.",
+      "hiddenBranch": "hidden",
+      "branchMonthly": "{amount} a month",
+      "on": "Delivers",
+      "off": "No delivery"
+    },
+    "noOneTimeCharge": "Applying a package here raises no one-time charge.",
+    "oneTime": {
+      "show": "One-time history",
+      "title": "Paid once",
+      "empty": "Nothing one-time has ever been charged to this restaurant.",
+      "unavailable": "The one-time ledger could not be read, so this card cannot say what has already been paid. Reload before charging anything.",
+      "lineForBranch": "{product} — {branch}",
+      "discount": "code {code}, −{amount}"
+    }
   },
   "switches": {
     "intro": "Show or hide a feature for this restaurant only. <strong>Plan</strong> follows the package above; <strong>On</strong> and <strong>Off</strong> ignore it. Hiding a feature removes it from the merchant’s sidebar; if they open the URL directly they get the locked page instead of the feature.",
@@ -186,7 +215,8 @@
     "visibleOverridden": "Merchant sees it · overridden",
     "hiddenOverridden": "Hidden from the merchant · overridden",
     "hiddenNotInPackage": "Hidden from the merchant · not in their package",
-    "groupLabel": "{feature} availability"
+    "groupLabel": "{feature} availability",
+    "deliveryNote": "Delivery is the exception: this switch says the account may have delivery at all, while the branch list above says where. Forcing it On grants nothing until a branch is switched on."
   },
   "requests": {
     "metaTitle": "Package requests · Favornoms",
@@ -206,7 +236,6 @@
     "empty": "Nothing here.",
     "thisRestaurant": "this restaurant",
     "requested": "Requested",
-    "seatCount": "{count, plural, one {# seat} other {# seats}}",
     "decisionNote": "Decision note: {note}",
     "loadFailed": "Could not load {name}’s current package, so this card cannot show what approving removes. Approving replaces whatever they have now.",
     "notePlaceholder": "Note (optional)",
@@ -235,6 +264,112 @@
       "smallerTitle": "Approve a smaller package?",
       "body": "Approving replaces {name}’s whole package with this request.{removes, select, yes { It removes {items}.} other {}}{seats, select, yes { It cuts branch seats from {seatsFrom} to {seatsTo}.} other {}}{shortens, select, yes { It moves paid through back from {paidFrom} to {paidTo} ({days, plural, one {# day fewer} other {# days fewer}}).} other {}} They lose that as soon as you approve, and getting it back means setting the package again on Subscriptions.",
       "approveRemove": "Approve & remove"
+    },
+    "asking": "{seats, plural, one {# branch} other {# branches}}, {delivery}",
+    "deliveryNone": "no delivery",
+    "deliveryAt": "delivery at {branches}",
+    "unnamedBranches": "{count, plural, one {# branch that no longer exists} other {# branches that no longer exist}}",
+    "payOnce": "Pay once",
+    "thenMonthly": "Then every month",
+    "discountApplied": "Code {code} took {amount} off {list}",
+    "discountNothingOff": "Code {code} took nothing off.",
+    "nothingOnce": "Nothing to pay once — it is all bought already.",
+    "deliveryOn": "This switches delivery ON at: {branches}",
+    "deliveryOff": "This switches delivery OFF at: {branches}",
+    "deliveryLossItem": "Delivery at {branch}",
+    "marksPaid": "Marks {amount} of one-time charges paid",
+    "keepsCode": "Code {code} stays used — its use was reserved when the merchant sent this request"
+  },
+  "chargeStatus": {
+    "pending": "awaiting payment",
+    "paid": "paid",
+    "void": "cancelled"
+  },
+  "discounts": {
+    "metaTitle": "Discount codes · Favornoms",
+    "title": "Discount codes",
+    "subtitle": "Codes you hand out. The server prices every one of them.",
+    "oneTimeOnly": "<strong>Codes come off the one-time charges only</strong> — the base, an extra branch, a branch's delivery unlock. They never change the monthly bill.",
+    "newCode": "New code",
+    "emptyTitle": "No codes yet",
+    "emptyBody": "Create one when you want to take something off what a restaurant pays to start.",
+    "givesPercent": "{value}% off",
+    "givesFixed": "{amount} off",
+    "appliesAll": "All one-time charges",
+    "state": {
+      "live": "Live",
+      "scheduled": "Starts later",
+      "expired": "Expired",
+      "exhausted": "All used",
+      "inactive": "Off"
+    },
+    "stats": {
+      "appliesTo": "Applies to",
+      "used": "Used",
+      "perRestaurant": "Per restaurant",
+      "givenAway": "Given away"
+    },
+    "usedUnlimited": "{count} (no cap)",
+    "usedOfMax": "{count} of {max}",
+    "perRestaurantValue": "{count, plural, one {# time} other {# times}}",
+    "reservedNote": "{amount} more is held on requests waiting for approval.",
+    "windowBetween": "{from} → {to}",
+    "windowFrom": "From {from}, no end date",
+    "close": "Close",
+    "edit": "Edit",
+    "showUses": "{count, plural, one {# use} other {# uses}}",
+    "deactivate": "Deactivate",
+    "reactivate": "Reactivate",
+    "confirmDeactivate": {
+      "title": "Turn off {code}?",
+      "body": "Nobody can apply it after this. Requests already sent with it keep their discount when you approve them. It stays on this page with everything it has already given away — a code that has been used is never deleted.",
+      "confirm": "Turn it off"
+    },
+    "usesTitle": "Where it went",
+    "usesUnavailable": "The redemptions for this code could not be read.",
+    "unknownRestaurant": "Deleted restaurant",
+    "reserved": "Reserved · waiting for approval",
+    "onRequest": "request {id}",
+    "form": {
+      "newTitle": "New code",
+      "editTitle": "Edit code",
+      "code": "Code",
+      "codeHint": "Letters, digits and dashes. Stored upper-case; this is what a merchant types.",
+      "codeLocked": "A code keeps the string it was given away as, so it cannot be renamed.",
+      "description": "What it is for",
+      "descriptionHint": "Shown to the merchant when the code applies.",
+      "kind": "Kind",
+      "kindPercent": "Percent off",
+      "kindFixed": "Dollars off",
+      "valuePercent": "Percent (1–100)",
+      "valueFixed": "Dollars off ($)",
+      "appliesTo": "Applies to",
+      "appliesToHint": "Pick the one-time charges it comes off. Nothing picked means every one of them.",
+      "productChip": "{name} ({amount} once)",
+      "maxRedemptions": "Total uses",
+      "maxRedemptionsHint": "Leave blank for no cap.",
+      "perRestaurant": "Uses per restaurant",
+      "perRestaurantHint": "Counted from the redemptions, so a pending request already uses one.",
+      "startsAt": "Starts",
+      "startsAtHint": "Blank means now. Dates are read in UTC.",
+      "endsAt": "Ends",
+      "endsAtHint": "Usable through the end of this day, UTC. Blank means no end.",
+      "isActive": "Active",
+      "create": "Create code",
+      "save": "Save",
+      "cancel": "Cancel"
+    },
+    "errors": {
+      "codeRequired": "Give the code a name.",
+      "codeCharset": "A code can only hold letters, digits and dashes.",
+      "codeDuplicate": "That code already exists. Pick another one.",
+      "valueRequired": "Set how much the code takes off.",
+      "percentRange": "A percent cannot be more than 100.",
+      "maxRedemptions": "Total uses must be a whole number of 1 or more, or blank.",
+      "perRestaurantLimit": "Uses per restaurant must be a whole number of 1 or more.",
+      "datesBackwards": "The end date is before the start date, so the code could never be used.",
+      "kindInvalid": "The server does not accept that kind of discount.",
+      "notFound": "That code no longer exists. Reload the page."
     }
   }
 }

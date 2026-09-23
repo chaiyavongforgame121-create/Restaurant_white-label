@@ -36,7 +36,6 @@
   "sections": {
     "advanced": "Avanzado",
     "operations": "Operaciones",
-    "aiSuite": "AI Suite",
     "peopleGrowth": "Equipo y crecimiento",
     "records": "Registros",
     "setup": "Configuración"
@@ -100,7 +99,9 @@
   },
   "addon": {
     "pricePerMonth": "+${price}<unit>/mes</unit>",
-    "addToPackage": "Agregar a mi paquete"
+    "addToPackage": "Agregar a mi paquete",
+    "priceOnceThenMonthly": "${once} una sola vez y luego +${monthly}/mes por esta sucursal",
+    "priceOnce": "${once} una sola vez"
   },
   "lockedFeature": {
     "comingSoon": "Próximamente",

@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Favornoms — Plataforma de pedidos todo en uno para restaurantes",
-    "description": "Gestiona entregas a domicilio, pedidos para recoger, consumo en el local, pantalla de cocina, POS y despacho de repartidores desde una sola plataforma. $199/mes, prueba gratuita de 14 días. Hecha para restaurantes de EE. UU."
+    "description": "Gestiona entregas a domicilio, pedidos para recoger, consumo en el local, pantalla de cocina, POS y despacho de repartidores desde una sola plataforma. Un pago único al empezar y una cuota mensual por sucursal, con 14 días de prueba gratuita. Hecha para restaurantes de EE. UU."
   },
   "site": {
     "description": "Gestiona pedidos en línea, pantalla de cocina, POS, despacho de repartidores y pagos con Stripe desde una sola plataforma. Hecha para restaurantes de EE. UU.",
@@ -50,31 +50,32 @@
   },
   "pricing": {
     "title": "Un plan base. Agrega lo que necesites.",
-    "subtitle": "Sin límite de platos en el menú. Sin tope de pedidos. Cancela cuando quieras.",
+    "subtitle": "Pagas una vez al empezar y luego una cuota fija por sucursal cada mes. Sin límite de platos en el menú y sin tope de pedidos.",
     "baseName": "Base",
-    "perMonth": "{price}<unit>/mes</unit>",
-    "baseSummary": "Todo lo que necesitas para operar un local, incluido el pago con tarjeta.",
+    "once": "{price} una vez",
+    "thenMonthly": "y luego {price} al mes",
+    "monthlyOnly": "{price} al mes",
+    "baseSummary": "Todo lo que necesitas para operar una sucursal, con el pago con tarjeta incluido. Tu primera sucursal ya viene dentro.",
     "includes": {
       "storefront": "Tienda con tu marca en tu propio dominio",
       "payments": "Pagos con tarjeta y en efectivo al pagar",
       "kitchen": "Pantalla de cocina, POS y pedidos en mostrador",
       "growth": "Puntos, promociones, tarjetas de regalo e informes",
-      "aiImport": "Importación de menú con IA: toma una foto del menú y listo"
+      "oneBranch": "1 sucursal incluida: agrega más cuando las necesites"
     },
-    "trialNote": "Gratis por 14 días con todos los complementos incluidos. Sin tarjeta hasta que lo decidas.",
+    "trialNote": "Gratis por 14 días, con entrega a domicilio en todas las sucursales. Sin tarjeta hasta que lo decidas.",
     "addOnsTitle": "Agrega complementos cuando los necesites",
+    "addOnPrice": "+{once} una vez y luego +{monthly}/mes",
+    "addOnOnce": "+{price} una vez",
+    "addOnMonthly": "+{price}/mes",
     "addOns": {
-      "delivery": {
-        "name": "Entrega a domicilio",
-        "description": "Tus propios repartidores, asignación automática y seguimiento en vivo."
-      },
-      "aiSuite": {
-        "name": "AI Suite",
-        "description": "Señalización digital y el asistente de voz con IA."
-      },
       "extraBranch": {
         "name": "Sucursal adicional",
-        "description": "Cada local adicional, con todas las funciones de tu sucursal principal."
+        "description": "Cada sucursal después de la primera, con todas las funciones de tu sucursal principal."
+      },
+      "delivery": {
+        "name": "Entrega a domicilio",
+        "description": "Por sucursal, en las que tú elijas: tus propios repartidores, asignación automática y seguimiento en vivo."
       }
     }
   },

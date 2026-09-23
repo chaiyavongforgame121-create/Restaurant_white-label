@@ -2,7 +2,7 @@
   "generic": "Something went wrong. Please try again.",
   "order": {
     "billingInactive": "This restaurant is not taking online orders right now. Please try again later.",
-    "deliveryNotOffered": "This restaurant is not offering delivery right now. Please choose pickup instead.",
+    "deliveryNotOffered": "This branch does not deliver. Please choose pickup instead.",
     "cardNotAvailable": "Card payment is not available here right now. Please pay with cash.",
     "closedAtScheduledTime": "The restaurant is closed at the delivery time you picked. Please choose another time.",
     "outsideSchedulingWindow": "This restaurant only takes orders in advance at certain times. Please pick one of the times offered.",

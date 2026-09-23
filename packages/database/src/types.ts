@@ -128,6 +128,182 @@ export type Database = {
           },
         ]
       }
+      billing_charges: {
+        Row: {
+          amount: number
+          branch_id: string | null
+          code: string
+          created_at: string
+          created_by: string | null
+          discount_amount: number
+          discount_code: string | null
+          id: string
+          net_amount: number
+          paid_at: string | null
+          request_id: string | null
+          restaurant_id: string
+          status: string
+        }
+        Insert: {
+          amount: number
+          branch_id?: string | null
+          code: string
+          created_at?: string
+          created_by?: string | null
+          discount_amount?: number
+          discount_code?: string | null
+          id?: string
+          net_amount: number
+          paid_at?: string | null
+          request_id?: string | null
+          restaurant_id: string
+          status: string
+        }
+        Update: {
+          amount?: number
+          branch_id?: string | null
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          discount_amount?: number
+          discount_code?: string | null
+          id?: string
+          net_amount?: number
+          paid_at?: string | null
+          request_id?: string | null
+          restaurant_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_charges_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "billing_charges_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "billing_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "billing_charges_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      billing_discount_codes: {
+        Row: {
+          code: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          ends_at: string | null
+          id: string
+          is_active: boolean
+          kind: string
+          max_redemptions: number | null
+          per_restaurant_limit: number
+          product_codes: string[]
+          redemption_count: number
+          starts_at: string
+          updated_at: string
+          value: number
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          ends_at?: string | null
+          id?: string
+          is_active?: boolean
+          kind: string
+          max_redemptions?: number | null
+          per_restaurant_limit?: number
+          product_codes?: string[]
+          redemption_count?: number
+          starts_at?: string
+          updated_at?: string
+          value: number
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          ends_at?: string | null
+          id?: string
+          is_active?: boolean
+          kind?: string
+          max_redemptions?: number | null
+          per_restaurant_limit?: number
+          product_codes?: string[]
+          redemption_count?: number
+          starts_at?: string
+          updated_at?: string
+          value?: number
+        }
+        Relationships: []
+      }
+      billing_discount_redemptions: {
+        Row: {
+          amount_off: number
+          code_id: string
+          id: string
+          redeemed_at: string
+          request_id: string | null
+          restaurant_id: string
+          status: string
+        }
+        Insert: {
+          amount_off: number
+          code_id: string
+          id?: string
+          redeemed_at?: string
+          request_id?: string | null
+          restaurant_id: string
+          status?: string
+        }
+        Update: {
+          amount_off?: number
+          code_id?: string
+          id?: string
+          redeemed_at?: string
+          request_id?: string | null
+          restaurant_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_discount_redemptions_code_id_fkey"
+            columns: ["code_id"]
+            isOneToOne: false
+            referencedRelation: "billing_discount_codes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "billing_discount_redemptions_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "billing_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "billing_discount_redemptions_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       billing_entitlements: {
         Row: {
           addons: string[]
@@ -229,6 +405,7 @@ export type Database = {
           kind: string
           monthly_price: number
           name: string
+          one_time_price: number
           seats_per_unit: number
           sort_order: number
           stripe_price_id: string | null
@@ -247,6 +424,7 @@ export type Database = {
           kind: string
           monthly_price?: number
           name: string
+          one_time_price?: number
           seats_per_unit?: number
           sort_order?: number
           stripe_price_id?: string | null
@@ -265,6 +443,7 @@ export type Database = {
           kind?: string
           monthly_price?: number
           name?: string
+          one_time_price?: number
           seats_per_unit?: number
           sort_order?: number
           stripe_price_id?: string | null
@@ -281,9 +460,13 @@ export type Database = {
           decided_at: string | null
           decided_by: string | null
           decision_note: string | null
+          delivery_branch_ids: string[]
+          discount_amount: number
+          discount_code: string | null
           id: string
           monthly_total: number
           note: string | null
+          one_time_total: number
           plan_code: string
           requested_by: string | null
           restaurant_id: string
@@ -297,9 +480,13 @@ export type Database = {
           decided_at?: string | null
           decided_by?: string | null
           decision_note?: string | null
+          delivery_branch_ids?: string[]
+          discount_amount?: number
+          discount_code?: string | null
           id?: string
           monthly_total?: number
           note?: string | null
+          one_time_total?: number
           plan_code: string
           requested_by?: string | null
           restaurant_id: string
@@ -313,9 +500,13 @@ export type Database = {
           decided_at?: string | null
           decided_by?: string | null
           decision_note?: string | null
+          delivery_branch_ids?: string[]
+          discount_amount?: number
+          discount_code?: string | null
           id?: string
           monthly_total?: number
           note?: string | null
+          one_time_total?: number
           plan_code?: string
           requested_by?: string | null
           restaurant_id?: string
@@ -370,6 +561,38 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      branch_addons: {
+        Row: {
+          active: boolean
+          branch_id: string
+          code: string
+          unlocked_at: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          branch_id: string
+          code: string
+          unlocked_at?: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          branch_id?: string
+          code?: string
+          unlocked_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "branch_addons_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
             referencedColumns: ["id"]
           },
         ]
@@ -4775,8 +4998,8 @@ export type Database = {
       }
       billing_set_package: {
         Args: {
-          p_addons?: string[]
           p_branch_seats?: number
+          p_delivery_branch_ids?: string[]
           p_period_end?: string
           p_plan_code: string
           p_restaurant_id: string
@@ -4966,6 +5189,7 @@ export type Database = {
         }[]
       }
       forecast_orders: { Args: { p_branch_id: string }; Returns: Json }
+      get_billing_overview: { Args: { p_restaurant_id: string }; Returns: Json }
       get_branch_customers_report: {
         Args: { p_branch_id: string; p_from: string; p_to: string }
         Returns: Json
@@ -5297,11 +5521,93 @@ export type Database = {
         Args: { p_reference?: string; p_withdrawal_id: string }
         Returns: Json
       }
+      platform_create_discount_code: {
+        Args: { p: Json }
+        Returns: {
+          code: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          ends_at: string | null
+          id: string
+          is_active: boolean
+          kind: string
+          max_redemptions: number | null
+          per_restaurant_limit: number
+          product_codes: string[]
+          redemption_count: number
+          starts_at: string
+          updated_at: string
+          value: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "billing_discount_codes"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       platform_financial_summary: { Args: never; Returns: Json }
+      platform_list_discount_codes: {
+        Args: never
+        Returns: {
+          code: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          ends_at: string | null
+          id: string
+          is_active: boolean
+          kind: string
+          max_redemptions: number | null
+          per_restaurant_limit: number
+          product_codes: string[]
+          redemption_count: number
+          starts_at: string
+          updated_at: string
+          value: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "billing_discount_codes"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      platform_list_discount_redemptions: {
+        Args: { p_code_id: string }
+        Returns: Json
+      }
       platform_ops_summary: { Args: never; Returns: Json }
       platform_set_feature_override: {
         Args: { p_feature: string; p_restaurant_id: string; p_state: string }
         Returns: Json
+      }
+      platform_update_discount_code: {
+        Args: { p: Json; p_id: string }
+        Returns: {
+          code: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          ends_at: string | null
+          id: string
+          is_active: boolean
+          kind: string
+          max_redemptions: number | null
+          per_restaurant_limit: number
+          product_codes: string[]
+          redemption_count: number
+          starts_at: string
+          updated_at: string
+          value: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "billing_discount_codes"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       progress_delivery: {
         Args: {
@@ -5410,8 +5716,9 @@ export type Database = {
       }
       request_package_change: {
         Args: {
-          p_addons?: string[]
           p_branch_seats?: number
+          p_delivery_branch_ids?: string[]
+          p_discount_code?: string
           p_note?: string
           p_plan_code: string
           p_restaurant_id: string
@@ -5677,6 +5984,7 @@ export type Database = {
           p_kind?: string
           p_monthly_price?: number
           p_name?: string
+          p_one_time_price?: number
           p_seats_per_unit?: number
           p_sort_order?: number
           p_stripe_price_id?: string
@@ -5710,6 +6018,16 @@ export type Database = {
           p_name: string
         }
         Returns: undefined
+      }
+      validate_billing_discount: {
+        Args: {
+          p_branch_seats: number
+          p_code: string
+          p_delivery_branch_ids: string[]
+          p_plan_code: string
+          p_restaurant_id: string
+        }
+        Returns: Json
       }
       validate_promo_code: {
         Args: {

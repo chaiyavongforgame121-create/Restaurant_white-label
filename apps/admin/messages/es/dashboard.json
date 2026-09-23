@@ -90,9 +90,10 @@
     },
     "deliveries": {
       "label": "Entregas activas",
-      "notOnPlan": "La entrega a domicilio no está en tu plan",
       "failed": "No se pudieron leer las entregas",
-      "stalled": "{count, plural, one {# estancada} other {# estancadas}}"
+      "stalled": "{count, plural, one {# estancada} other {# estancadas}}",
+      "notOffered": "Esta sucursal no hace entregas",
+      "windingDown": "Las entregas están desactivadas aquí; los últimos repartos siguen en curso"
     }
   },
   "action": {

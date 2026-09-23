@@ -9,6 +9,7 @@ import { getBrowserClient } from '@favornoms/database/client';
 import { DEFAULT_UI_LOCALE, billingErrorMessage, describeBillingError, isUiLocale } from '@favornoms/shared';
 import { Badge, Button, Card } from '@favornoms/ui';
 import { AddonUpsellCard } from '@/components/addon-upsell-card';
+import { oneTimePriceToShow } from '@/lib/delivery-gate-model';
 import { ClosuresManager } from './closures-manager';
 import { DeliverySettingsCard } from './delivery-settings-card';
 import { HoursEditor } from './hours-editor';
@@ -42,6 +43,7 @@ export function BranchSettings({
   restaurantStorefront,
   branding,
   canUseDelivery,
+  deliveryPrices,
   canUseCard,
   canEditSettings,
 }: {
@@ -49,7 +51,18 @@ export function BranchSettings({
   restaurantStorefront: Record<string, unknown> | null;
   /** This branch's own logo and icons, and the brand name and defaults the card previews with. */
   branding: BrandingCardData;
+  /** Delivery is sold per branch — THIS branch's answer, not the restaurant's. */
   canUseDelivery: boolean;
+  /** What turning delivery on for THIS branch costs, straight from billing_products. Either
+   *  number is null when it could not be read; the card then leaves it out. `once` is 0 when
+   *  `alreadyUnlocked`: the branch paid its one-time unlock before and switched delivery off,
+   *  so switching it back on costs only the monthly price. */
+  deliveryPrices: {
+    once: number | null;
+    monthly: number | null;
+    alreadyUnlocked: boolean;
+    planHref: string;
+  };
   canUseCard: boolean;
   /** branch.settings (owner and admin): what patch_branch_settings requires for the cards below. */
   canEditSettings: boolean;
@@ -325,8 +338,19 @@ export function BranchSettings({
               branchId={branch.id}
               title={t('settings.delivery.title')}
               addon="delivery"
-              price={49}
-              description={t('settings.delivery.description')}
+              // Read from billing_products, never written here: this card said $49 while the
+              // catalog said $59 for months. Delivery is bought per branch, so the link
+              // carries the branch and the description names it.
+              price={deliveryPrices.monthly ?? undefined}
+              // A 0 (the unlock was paid before) is left out rather than printed as "$0
+              // once", and the description says why.
+              oneTimePrice={oneTimePriceToShow(deliveryPrices.once)}
+              href={deliveryPrices.planHref}
+              description={
+                deliveryPrices.alreadyUnlocked
+                  ? t('settings.delivery.descriptionUnlocked', { branch: branch.name })
+                  : t('settings.delivery.description', { branch: branch.name })
+              }
               bullets={[
                 t('settings.delivery.bulletFees'),
                 t('settings.delivery.bulletDispatch'),

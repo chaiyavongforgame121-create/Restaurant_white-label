@@ -24,6 +24,17 @@ interface Props {
    */
   canDeliver?: boolean;
   /**
+   * This branch sells delivery at all (storefront_status.delivery_entitled, per branch
+   * since docs/PACKAGING-2026-09-23.md §2).
+   *
+   * Only ever used for the words under the tiles, never to offer delivery — canDeliver
+   * alone decides that. A diner who is told "closed right now" about a branch that never
+   * delivers comes back tomorrow for nothing; one told "does not deliver" about a branch
+   * that is merely shut gives up on it for good. Defaults true, so a missing prop falls
+   * back to the softer, temporary sentence rather than declaring the branch delivery-free.
+   */
+  deliveryOffered?: boolean;
+  /**
    * A table token in the URL resolved to a table at THIS branch, so a scan is being
    * seated right now.
    *
@@ -55,6 +66,7 @@ interface Props {
 export function OrderTypeGate({
   branchName,
   canDeliver = false,
+  deliveryOffered = true,
   seatingFromScan = false,
 }: Props) {
   const t = useTranslations();
@@ -220,6 +232,15 @@ export function OrderTypeGate({
                   </span>
                 </button>
               ))}
+              {/* The Delivery tile is dropped, never greyed out — but dropping it silently
+                  left the diner to guess. One line says which of the two it is. */}
+              {!canDeliver && (
+                <p className="px-1 text-center text-xs text-muted-foreground">
+                  {deliveryOffered
+                    ? t('orderType.deliveryClosedNow')
+                    : t('orderType.deliveryNotOffered')}
+                </p>
+              )}
               <p className="px-1 text-center text-xs text-muted-foreground">{t('orderType.changeLater')}</p>
             </div>
           </motion.div>

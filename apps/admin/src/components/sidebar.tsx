@@ -13,9 +13,15 @@ import {
 } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { isPlatformAdmin } from '@favornoms/database/queries';
-import { hasFeature, type Entitlements, type FeatureKey } from '@favornoms/shared';
+import type { Entitlements, FeatureKey } from '@favornoms/shared';
 import { cn, RiderIcon } from '@favornoms/ui';
 import { LocaleSwitcher } from '@/components/locale-switcher';
+import {
+  navEntryAllowed,
+  NO_WIND_DOWN,
+  type DeliveryWindDown,
+  type GatedEntry,
+} from '@/lib/delivery-gate-model';
 import { SignOutButton } from './sign-out';
 import { ThemeToggle } from './theme-toggle';
 
@@ -35,6 +41,14 @@ interface Props {
   /** What the logo stands for, for alt text. The visible name stays the branch, which is
    *  what a merchant is actually working inside. */
   brandName?: string | null;
+  /**
+   * Delivery is OFF at this branch, but riders are still out or still owed (the layout asks
+   * resolveDeliveryWindDown). The Live deliveries board and Driver payouts keep themselves
+   * open in exactly those states, so the entries that reach them have to survive the switch
+   * too — otherwise the screens kept open for a rider mid-run are reachable only by typing
+   * the URL. Defaults to nothing outstanding: a missing prop hides them, never invents access.
+   */
+  deliveryWindDown?: DeliveryWindDown;
 }
 
 type NavItem = {
@@ -42,6 +56,12 @@ type NavItem = {
   label: string;
   icon: typeof LayoutDashboard;
   feature?: FeatureKey;
+  /**
+   * The one exception to `feature`: shown anyway while this kind of delivery work is still
+   * outstanding here. Named per entry because each screen stays open for its own reason —
+   * the board for runs still out, payouts for riders still owed, Drivers for neither.
+   */
+  windDown?: keyof DeliveryWindDown;
   /** Hidden unless the user holds this capability. Absent = visible to anyone who
    *  already passed the backoffice.access gate in the layout. */
   capability?: string;
@@ -59,6 +79,7 @@ export function Sidebar({
   capabilities = [],
   logoUrl = null,
   brandName = null,
+  deliveryWindDown = NO_WIND_DOWN,
 }: Props) {
   const t = useTranslations('shell');
   const pathname = usePathname();
@@ -86,7 +107,17 @@ export function Sidebar({
   // explicit `true` on a live subscription, so an unknown plan hides the add-on
   // surfaces instead of advertising them. Only add-on features are gated here —
   // everything in Base stays visible for every paying tenant.
-  const allowed = (feature?: FeatureKey) => !feature || hasFeature(entitlements, feature);
+  //
+  // `entitlements` comes from the branch layout's getEntitlementsForBranch, i.e. it is
+  // resolved FOR the branch in the URL. Delivery is sold per branch (docs/
+  // PACKAGING-2026-09-23.md §2), so `delivery` here means "this branch delivers" and the
+  // three delivery entries below follow the branch switcher. Everything else in the map is
+  // restaurant-wide and reads the same at every branch.
+  // `delivery` has one exception the other keys do not: the two screens that finish work
+  // already started stay reachable while that work is out, each for its own kind of work
+  // (NavItem.windDown). It widens nothing else — Drivers, every other feature, and each of
+  // those two once its last piece of work is done, is the plain fail-closed answer.
+  const allowed = (entry: GatedEntry) => navEntryAllowed(entry, entitlements, deliveryWindDown);
   // Capability gating sits alongside the entitlement gate: entitlements answer "did the
   // restaurant pay for this", capabilities answer "may this person use it". Both must pass.
   const capSet = React.useMemo(() => new Set(capabilities), [capabilities]);
@@ -97,7 +128,7 @@ export function Sidebar({
     { href: `${base}/orders`, label: t('nav.orders'), icon: Receipt, capability: 'orders.view' },
     // "Live deliveries" alone read as a report of past deliveries to more than one
     // merchant; the hover says which of the two screens this is.
-    { href: `${base}/deliveries`, label: t('nav.liveDeliveries'), icon: RiderIcon, feature: 'delivery', capability: 'delivery.manage', description: t('nav.liveDeliveriesHint') },
+    { href: `${base}/deliveries`, label: t('nav.liveDeliveries'), icon: RiderIcon, feature: 'delivery', windDown: 'runsOut', capability: 'delivery.manage', description: t('nav.liveDeliveriesHint') },
     { href: `${base}/menu`, label: t('nav.menu'), icon: ChefHat, capability: 'menu.manage' },
     { href: `/kitchen/${branchId}`, label: t('nav.kitchenDisplay'), icon: Monitor, capability: 'kitchen.access' },
     { href: `/counter/${branchId}`, label: t('nav.counter'), icon: Store, capability: 'counter.access' },
@@ -128,7 +159,7 @@ export function Sidebar({
       items: [
         { href: `${base}/staff`, label: t('nav.staff'), icon: Users, capability: 'staff.manage' },
         { href: `${base}/drivers`, label: t('nav.drivers'), icon: RiderIcon, feature: 'delivery', capability: 'drivers.manage' },
-        { href: `${base}/payouts`, label: t('nav.driverPayouts'), icon: Wallet, feature: 'delivery', capability: 'drivers.manage' },
+        { href: `${base}/payouts`, label: t('nav.driverPayouts'), icon: Wallet, feature: 'delivery', windDown: 'ridersOwed', capability: 'drivers.manage' },
         { href: `${base}/customers`, label: t('nav.customers'), icon: UserRound, capability: 'customers.view' },
         { href: `${base}/promos`, label: t('nav.promos'), icon: Tag, capability: 'promos.manage' },
         // Each branch runs its own programme (settings, rewards, points), so this is
@@ -293,7 +324,7 @@ export function Sidebar({
 
         <nav className="flex-1 space-y-2 overflow-y-auto px-3 pb-6">
           <ul className="space-y-0.5">
-            {core.filter((i) => allowed(i.feature) && permitted(i.capability)).map(renderItem)}
+            {core.filter((i) => allowed(i) && permitted(i.capability)).map(renderItem)}
           </ul>
 
           <button
@@ -308,10 +339,10 @@ export function Sidebar({
 
           {advancedOpen &&
             advanced
-              .filter((section) => allowed(section.feature))
+              .filter((section) => allowed(section))
               .map((section) => {
                 const items = section.items.filter(
-                  (i) => allowed(i.feature) && permitted(i.capability),
+                  (i) => allowed(i) && permitted(i.capability),
                 );
                 if (items.length === 0) return null;
                 return (

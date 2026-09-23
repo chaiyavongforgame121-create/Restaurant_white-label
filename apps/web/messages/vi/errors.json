@@ -2,7 +2,7 @@
   "generic": "Đã xảy ra lỗi. Vui lòng thử lại.",
   "order": {
     "billingInactive": "Nhà hàng hiện không nhận đơn hàng trực tuyến. Vui lòng thử lại sau.",
-    "deliveryNotOffered": "Nhà hàng hiện không giao hàng. Vui lòng chọn Tự đến lấy.",
+    "deliveryNotOffered": "Chi nhánh này không giao hàng. Vui lòng chọn Tự đến lấy.",
     "cardNotAvailable": "Hiện chưa thể thanh toán bằng thẻ tại đây. Vui lòng thanh toán bằng tiền mặt.",
     "closedAtScheduledTime": "Nhà hàng đóng cửa vào giờ giao hàng bạn đã chọn. Vui lòng chọn giờ khác.",
     "outsideSchedulingWindow": "Nhà hàng chỉ nhận đặt trước vào một số khung giờ. Vui lòng chọn một trong các giờ được hiển thị.",

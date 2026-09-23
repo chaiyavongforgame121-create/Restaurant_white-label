@@ -200,37 +200,9 @@
     }
   },
   "import": {
-    "title": "Import menu with AI",
-    "subtitle": "Upload a photo of a printed menu — Claude extracts items, prices, and categories for review.",
-    "menuImage": "Menu image",
-    "upload": "Upload",
-    "hint": "Hint to AI (optional)",
-    "hintPlaceholder": "e.g. American casual, prices in USD",
-    "uploaded": "Image uploaded. Click Analyze to extract menu items.",
-    "analyze": "Analyze with AI",
-    "analyzing": "Analyzing image with Claude…",
+    "title": "Import menu from CSV",
+    "subtitle": "Add a whole menu at once from a spreadsheet — one row per dish, with its category, name, price and kitchen station.",
     "imported": "{count, plural, one {Imported # item.} other {Imported # items.}}",
-    "selected": "{selected} of {total} items selected",
-    "importSelected": "Import selected",
-    "descriptionPlaceholder": "Description",
-    "remove": "Remove",
-    "stations": {
-      "hot": "Hot",
-      "cold": "Cold",
-      "bar": "Bar",
-      "dessert": "Dessert",
-      "expo": "Expo"
-    },
-    "errors": {
-      "uploadFailed": "The upload didn’t go through. Please try again.",
-      "fileTooLarge": "That image is too large to upload.",
-      "fileTypeNotAllowed": "That file type can’t be uploaded. Choose an image.",
-      "signedOut": "Your session has ended. Sign in again and try once more.",
-      "notAllowed": "Only owners and managers can import a menu at this branch.",
-      "aiUnavailable": "AI menu import isn’t available right now.",
-      "rateLimited": "This branch has reached its hourly import limit. Try again in an hour.",
-      "analyzeFailed": "We couldn’t read a menu from that image. Try a clearer photo."
-    },
     "csv": {
       "title": "CSV bulk import",
       "columns": "Columns: <code>{columns}</code> (station optional). First row must be headers.",

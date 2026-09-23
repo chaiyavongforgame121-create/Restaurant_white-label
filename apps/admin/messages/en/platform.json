@@ -7,7 +7,8 @@
     "requests": "Requests",
     "catalog": "Catalog",
     "settings": "Settings",
-    "pendingBadge": "{count}<sr> pending</sr>"
+    "pendingBadge": "{count}<sr> pending</sr>",
+    "discounts": "Discounts"
   },
   "accessDenied": {
     "title": "Access denied",
@@ -31,7 +32,8 @@
       "needsAttention": "Needs attention",
       "ordersToday": "Orders today",
       "revenueToday": "Revenue today",
-      "driversOnline": "Drivers online"
+      "driversOnline": "Drivers online",
+      "oneTimePaid": "One-time revenue"
     },
     "decisions": {
       "ariaLabel": "Needs a decision",

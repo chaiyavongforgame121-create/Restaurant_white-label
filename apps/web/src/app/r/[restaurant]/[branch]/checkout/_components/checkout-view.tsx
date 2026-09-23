@@ -155,6 +155,14 @@ interface Props {
   base: string;
   /** `delivery` entitlement — default false so a missing prop cannot sell it. */
   canDeliver?: boolean;
+  /**
+   * This branch sells delivery at all (storefront_status.delivery_entitled, per branch
+   * since docs/PACKAGING-2026-09-23.md §2).
+   *
+   * Words only — canDeliver alone decides whether delivery can be chosen. Defaults true so
+   * a missing prop says "not right now" instead of declaring the branch delivery-free.
+   */
+  deliveryOffered?: boolean;
   /** `card_payment` entitlement — same. */
   canUseCard?: boolean;
   /**
@@ -200,6 +208,7 @@ export function CheckoutView({
   branchId,
   base,
   canDeliver = false,
+  deliveryOffered = true,
   canUseCard = false,
   salesTaxRate = 0,
   serviceFeePercent = 0,
@@ -450,9 +459,10 @@ export function CheckoutView({
   // place-order runs the same quote_delivery formula); legacy flat fee otherwise.
   const outOfRange =
     channel === 'delivery' && quote != null && !quote.deliverable && quote.reason === 'out_of_range';
-  // The branch has no delivery add-on. place-order answers 403 for this, so quoting ANY
-  // fee would be selling something that cannot be bought — the flat-fee fallback below is
-  // for a missing pin, not for a branch that does not deliver.
+  // THIS branch does not deliver — quote_delivery asks branch_has_feature, which is per
+  // branch (docs/PACKAGING-2026-09-23.md §2). place-order answers 403 for it, so quoting
+  // ANY fee would be selling something that cannot be bought; the flat-fee fallback below
+  // is for a missing map pin, not for a branch that does not deliver.
   const deliveryNotSold =
     channel === 'delivery' &&
     quote != null &&
@@ -1335,11 +1345,17 @@ export function CheckoutView({
                 {t('checkout.orderType.pickupReady')}
               </p>
             )}
+            {/* Two different statements, never the same sentence: a branch that does not
+                deliver at all, and one that simply cannot take a booking right now. */}
             {channel === 'delivery' && !canDeliver && (
               <p className="mt-2 text-xs text-muted-foreground">
-                {pickupAvailable
-                  ? t('checkout.orderType.deliveryUnavailablePickupOpen')
-                  : t('checkout.orderType.deliveryUnavailable')}
+                {!deliveryOffered
+                  ? pickupAvailable
+                    ? t('checkout.orderType.deliveryNotOfferedPickupOpen')
+                    : t('checkout.orderType.deliveryNotOffered')
+                  : pickupAvailable
+                    ? t('checkout.orderType.deliveryUnavailablePickupOpen')
+                    : t('checkout.orderType.deliveryUnavailable')}
               </p>
             )}
             {channel === 'delivery' && canDeliver && !scheduledPayable && (

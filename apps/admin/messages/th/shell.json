@@ -36,7 +36,6 @@
   "sections": {
     "advanced": "ขั้นสูง",
     "operations": "การดำเนินงาน",
-    "aiSuite": "AI Suite",
     "peopleGrowth": "ทีมงานและการเติบโต",
     "records": "บันทึกและเอกสาร",
     "setup": "การตั้งค่า"
@@ -100,7 +99,9 @@
   },
   "addon": {
     "pricePerMonth": "+${price}<unit>/เดือน</unit>",
-    "addToPackage": "เพิ่มในแพ็กเกจของฉัน"
+    "addToPackage": "เพิ่มในแพ็กเกจของฉัน",
+    "priceOnceThenMonthly": "${once} จ่ายครั้งเดียว จากนั้น +${monthly}/เดือน สำหรับสาขานี้",
+    "priceOnce": "${once} จ่ายครั้งเดียว"
   },
   "lockedFeature": {
     "comingSoon": "เร็วๆ นี้",

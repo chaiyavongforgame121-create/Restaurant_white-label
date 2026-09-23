@@ -43,7 +43,8 @@
     },
     "delivery": {
       "title": "Giao hàng",
-      "description": "Tài xế riêng, theo dõi trực tiếp và điều phối tự động. Chưa có trong gói hiện tại của bạn.",
+      "description": "Tài xế của riêng bạn, theo dõi trực tiếp và điều phối tự động. {branch} không giao hàng — giao hàng được bật theo từng chi nhánh.",
+      "descriptionUnlocked": "Tài xế của riêng bạn, theo dõi trực tiếp và điều phối tự động. {branch} đang tắt giao hàng và đã được mở khóa trước đây — bật lại không mất phí một lần, chỉ có phí hằng tháng.",
       "bulletFees": "Phí giao hàng, bán kính và thời gian chuẩn bị",
       "bulletDispatch": "Tự động điều phối tài xế, có thời hạn nhận đơn",
       "bulletTracking": "Bản đồ theo dõi trực tiếp cho khách"

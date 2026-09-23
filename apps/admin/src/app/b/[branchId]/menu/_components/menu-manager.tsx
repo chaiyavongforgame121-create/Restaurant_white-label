@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
-import { Copy, Edit3, LayoutGrid, Move, Plus, Save, Sparkles, Tags, Trash2, X } from 'lucide-react';
+import { Copy, Edit3, FileSpreadsheet, LayoutGrid, Move, Plus, Save, Tags, Trash2 } from 'lucide-react';
 import type { MenuCategory, MenuItem } from '@favornoms/shared';
 import { DEFAULT_UI_LOCALE, formatCurrency, isUiLocale } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
@@ -283,6 +283,12 @@ export function MenuManager({
           <p className="mt-1 text-muted-foreground">
             {t('header.summary', { items: items.length, categories: categories.length })}
           </p>
+          {/* The sections below are in the order diners see, and that order is set by dragging
+              inside the Categories panel — which looked like a plain list of names, so nobody
+              found it. Say where it is, next to the button that opens it. */}
+          {mode === 'grid' && categories.length > 1 && (
+            <p className="mt-1 text-sm text-muted-foreground">{t('header.orderHint')}</p>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex rounded-xl border border-border bg-card p-1">
@@ -328,8 +334,8 @@ export function MenuManager({
                 </Button>
               </Link>
               <Link href={`/b/${branchId}/menu/import`}>
-                <Button variant="ghost" leftIcon={<Sparkles className="h-4 w-4" />}>
-                  {t('header.aiImport')}
+                <Button variant="ghost" leftIcon={<FileSpreadsheet className="h-4 w-4" />}>
+                  {t('header.csvImport')}
                 </Button>
               </Link>
               <Button variant="gradient" leftIcon={<Plus className="h-4 w-4" />} onClick={() => setCreating(true)}>

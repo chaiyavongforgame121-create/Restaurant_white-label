@@ -12,26 +12,25 @@
   "plan": {
     "metaTitle": "Gói và thanh toán · Favornoms",
     "title": "Gói và thanh toán",
-    "subtitle": "Chọn những gì nhà hàng của bạn cần. Có thể thay đổi bất cứ lúc nào.",
+    "subtitle": "Hai khoản tách bạch: khoản trả một lần và khoản trả hằng tháng.",
     "perMonth": "/tháng",
-    "selection": "{products}, {seats, plural, other {# suất chi nhánh}}",
-    "pricedSummary": "{summary} — {price}/tháng.",
     "notYours": {
       "inactiveTitle": "Gói của nhà hàng đang ngừng hoạt động — hãy liên hệ chủ sở hữu",
-      "lockedTitle": "Chỉ chủ sở hữu hoặc quản trị viên mới có thể đổi gói",
-      "inactiveBody": "Trang đặt hàng và trang quản lý của {branch} đang tạm dừng cho đến khi chủ nhà hàng hoặc quản trị viên chọn một gói. Không có dữ liệu nào bị xóa, mọi thứ sẽ trở lại ngay khi gói hoạt động trở lại.",
+      "lockedTitle": "Chỉ chủ nhà hàng mới có thể đổi gói",
+      "inactiveBody": "Trang đặt hàng và trang quản lý của {branch} đang tạm dừng cho đến khi chủ nhà hàng chọn một gói. Không có dữ liệu nào bị xóa, mọi thứ sẽ trở lại ngay khi gói hoạt động trở lại.",
       "lockedBody": "Gói của {branch} do chủ nhà hàng quản lý. Hãy liên hệ họ nếu bạn cần một tính năng chưa được bật."
     },
     "replaceDialog": {
       "title": "Thay thế yêu cầu đang chờ?",
       "body": "Yêu cầu trước đó ({summary}) sẽ bị rút lại và yêu cầu này sẽ được gửi đến đội ngũ Favornoms thay thế.",
+      "codeReleased": "Yêu cầu đó có mã {code}. Hãy áp dụng lại mã ở đây để giữ; nếu không, lượt dùng sẽ được trả lại.",
       "confirm": "Thay thế yêu cầu"
     },
     "errors": {
       "sendFailed": "Không gửi được yêu cầu. Vui lòng thử lại.",
       "generic": "Đã xảy ra lỗi. Vui lòng thử lại.",
       "signedOut": "Phiên đăng nhập đã hết. Hãy đăng nhập lại rồi gửi yêu cầu.",
-      "forbidden": "Chỉ chủ nhà hàng hoặc quản trị viên mới có thể đổi gói.",
+      "forbidden": "Chỉ chủ nhà hàng mới có thể đổi gói.",
       "planUnavailable": "Gói này không còn được cung cấp. Hãy tải lại trang và chọn lại."
     },
     "action": {
@@ -41,44 +40,96 @@
       "reactivate": "Kích hoạt lại tài khoản",
       "confirm": "Xác nhận gói",
       "renew": "Yêu cầu gia hạn",
-      "current": "Gói hiện tại"
+      "current": "Gói hiện tại",
+      "pricesUnavailable": "Chưa có bảng giá"
+    },
+    "now": {
+      "title": "Những gì bạn đang có",
+      "plan": "Gói",
+      "trialPlan": "Dùng thử miễn phí",
+      "noPlan": "Chưa có gói",
+      "branches": "Chi nhánh",
+      "branchesValue": "{used} đang mở · {seats} đã trả phí",
+      "delivery": "Giao hàng",
+      "deliveryNone": "Chưa chi nhánh nào giao hàng",
+      "deliveryTrial": "Mọi chi nhánh, miễn phí đến hết thời gian dùng thử",
+      "nextPayment": "Lần thanh toán tới",
+      "trialEnds": "Dùng thử kết thúc",
+      "noNextPayment": "Chưa có lịch",
+      "includedTitle": "Có trong mọi gói"
     },
     "base": {
       "name": "Cơ bản",
-      "description": "Mọi thứ bạn cần để vận hành một chi nhánh.",
       "included": {
         "cardPayment": "Thanh toán bằng thẻ khi đặt hàng",
-        "aiMenuImport": "Nhập thực đơn bằng AI",
         "onlineOrdering": "Đặt hàng trực tuyến và QR",
-        "kitchenCounter": "Màn hình bếp và quầy",
         "reportsLoyalty": "Báo cáo và tích điểm",
+        "kitchenCounter": "Màn hình bếp và quầy",
         "oneBranch": "Bao gồm 1 chi nhánh"
       }
     },
-    "seats": {
-      "title": "Chi nhánh",
-      "body": "Đã bao gồm 1. Mỗi chi nhánh thêm {price}/tháng, đầy đủ tính năng như chi nhánh chính.",
-      "usage": "Đang dùng {used}/{seats, plural, other {# suất}}.",
-      "remove": "Bớt một suất chi nhánh",
-      "add": "Thêm một suất chi nhánh",
-      "floor": "Bạn đang có {count, plural, other {# chi nhánh hoạt động}}, nên không thể giảm xuống dưới {min} suất. Để bớt một suất, hãy ẩn chi nhánh không còn dùng: mở Cài đặt chi nhánh của chi nhánh đó và đặt Trạng thái thành Đã ẩn. Chi nhánh đã ẩn không chiếm suất."
+    "branches": {
+      "title": "Chi nhánh của bạn",
+      "subtitle": "Mỗi chi nhánh là {price} một tháng. Hãy bật Giao hàng cho những chi nhánh có giao hàng.",
+      "subtitleNoPrice": "Hãy bật Giao hàng cho những chi nhánh có giao hàng.",
+      "empty": "Nhà hàng này chưa có chi nhánh nào đang hoạt động.",
+      "delivery": "Giao hàng",
+      "switchLabel": "Giao hàng tại {branch}",
+      "eachMonth": "{price}/tháng",
+      "costOnceAndMonthly": "+{once} một lần, rồi +{monthly}/tháng",
+      "costMonthly": "+{monthly}/tháng",
+      "alreadyUnlocked": "Đã mở khóa trước đây — chi nhánh này không phải trả thêm khoản một lần nào.",
+      "offWarning": "{branch} sẽ ngừng nhận giao hàng trên trang đặt hàng.",
+      "dropsTo": "Chi nhánh này giảm còn {price}/tháng.",
+      "trialNote": "Mọi chi nhánh đều giao hàng miễn phí đến hết thời gian dùng thử. Những chi nhánh bạn để bật ở đây là những chi nhánh bạn sẽ trả phí sau đó."
     },
-    "summary": {
-      "title": "Gói của bạn",
+    "seats": {
+      "title": "Thêm chi nhánh",
+      "body": "+{once} một lần và +{monthly}/tháng cho mỗi chi nhánh sau chi nhánh đầu tiên.",
+      "usage": "Đang dùng {used}/{seats, plural, other {# chi nhánh bạn đã trả phí}}.",
+      "remove": "Bớt một chi nhánh",
+      "add": "Thêm một chi nhánh",
+      "floor": "Bạn đang có {count, plural, other {# chi nhánh hoạt động}}, nên không thể giảm xuống dưới {min}. Để trả phí ít hơn một chi nhánh, hãy ẩn chi nhánh không còn dùng: mở Cài đặt chi nhánh của chi nhánh đó và đặt Trạng thái thành Đã ẩn. Chi nhánh đã ẩn không bị tính phí.",
+      "newSeats": "{count, plural, other {# chi nhánh bạn chưa tạo}}. Hãy tạo chi nhánh mới trong mục Chi nhánh khi yêu cầu này được duyệt."
+    },
+    "pay": {
+      "title": "Số tiền bạn trả",
+      "onceTitle": "Trả một lần hôm nay",
+      "onceNothing": "Không có. Mọi thứ trong gói này đều đã được trả.",
+      "onceOnRequest": "Nằm trong yêu cầu bạn đã gửi",
+      "onceCode": "Mã {code}",
+      "onceAwaiting": "Chưa có khoản nào bị tính phí. Bạn sẽ trả khoản này khi đội ngũ Favornoms kích hoạt yêu cầu của bạn.",
+      "monthlyTitle": "Rồi mỗi tháng",
+      "withDelivery": "{branch} + giao hàng",
+      "unusedSeats": "{count, plural, other {# chi nhánh chưa tạo}}",
+      "forBranch": "{product} — {branch}",
       "total": "Tổng cộng",
-      "trialNote": "Bạn đang dùng thử miễn phí. Chưa bị tính phí cho đến khi hết thời gian dùng thử.",
+      "summary": {
+        "branches": "{count, plural, other {# chi nhánh}}",
+        "delivery": "giao hàng tại {names}",
+        "noDelivery": "không giao hàng",
+        "line": "{branches}, {delivery} — {price} mỗi tháng.",
+        "plusOnce": "Cộng thêm {price} trả một lần."
+      },
+      "trialNote": "Không bị tính phí trong thời gian dùng thử miễn phí. Đây là hóa đơn đầu tiên khi bạn xác nhận.",
       "footnote": "Yêu cầu của bạn sẽ được gửi đến đội ngũ Favornoms để kích hoạt. Hóa đơn được gửi hằng tháng."
     },
-    "addon": {
-      "aiSuiteComingSoon": "Bảng hiệu và Giọng nói AI — sắp ra mắt.",
-      "add": "Thêm",
-      "added": "Đã thêm"
+    "discount": {
+      "title": "Mã giảm giá",
+      "placeholder": "Nhập mã",
+      "apply": "Áp dụng",
+      "remove": "Bỏ mã",
+      "applied": "{label}: giảm {amount}",
+      "appliedPlain": "giảm {amount}",
+      "repriced": "Bạn đã đổi gói. Hãy nhấn Áp dụng để kiểm tra mã với tổng mới.",
+      "notApplied": "Mã này chưa được áp dụng. Hãy nhấn Áp dụng để dùng mã, hoặc xóa ô này để gửi yêu cầu mà không dùng mã.",
+      "onlyOnce": "Mã giảm giá chỉ trừ vào khoản trả một lần, không trừ vào hóa đơn hằng tháng."
     },
     "trial": {
       "active": "Đang dùng thử miễn phí",
       "endsToday": "Thời gian dùng thử miễn phí kết thúc hôm nay",
       "daysLeft": "{days, plural, other {Còn # ngày dùng thử miễn phí}}",
-      "body": "Mọi tính năng đều đã mở. Chọn một gói bên dưới để tiếp tục dùng sau khi hết dùng thử — chưa cần thẻ cho đến lúc đó."
+      "body": "Mọi tính năng đều đã mở, gồm cả giao hàng ở mọi chi nhánh. Hãy chọn bên dưới những gì bạn muốn giữ — chưa cần thẻ cho đến khi hết dùng thử."
     },
     "suspended": {
       "title": "Tài khoản của bạn chưa hoạt động",
@@ -92,6 +143,11 @@
       "title": "Gia hạn gói",
       "paidThrough": "Gói của bạn đã được thanh toán đến {date}.",
       "body": "Gói hiện tại đã được chọn sẵn bên dưới. Nhấn Yêu cầu gia hạn để gửi đến đội ngũ Favornoms — gói chỉ được gia hạn khi họ duyệt. Bạn cũng có thể đổi gói trước khi gửi."
+    },
+    "pricesUnavailable": {
+      "title": "Không tải được bảng giá",
+      "body": "Hiện chúng tôi không đọc được bảng giá, nên trang này chưa thể báo giá gói. Tài khoản của bạn không có gì thay đổi. Vui lòng tải lại trang sau giây lát.",
+      "pay": "Chưa hiển thị số tiền nào cho đến khi bảng giá tải xong, và trong lúc này chưa thể gửi yêu cầu."
     },
     "decision": {
       "approvedOn": "Yêu cầu đã được duyệt ngày {date}",

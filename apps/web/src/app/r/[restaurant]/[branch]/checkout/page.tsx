@@ -34,11 +34,15 @@ export default async function CheckoutPage({ params }: Props) {
         branchId={tenant.branch.id}
         branchName={tenant.branch.name}
         canDeliver={scheduleDelivery.canDeliver}
+        // Delivery is sold per branch, so "not offered here" and "not bookable right now"
+        // are different sentences on the gate.
+        deliveryOffered={scheduleDelivery.offered}
       />
       <CheckoutView
         branchId={tenant.branch.id}
         base={base}
         canDeliver={scheduleDelivery.canDeliver}
+        deliveryOffered={scheduleDelivery.offered}
         // Only an explicit false: a failed read must not block ordering, and place-order still
         // refuses a pickup at a closed branch.
         pickupOpenNow={openNow !== false}

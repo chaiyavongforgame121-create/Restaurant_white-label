@@ -234,7 +234,12 @@
       "tips": "Tip"
     },
     "unnamedRider": "Tài xế",
-    "minutesShort": "{minutes} ph"
+    "minutesShort": "{minutes} ph",
+    "notOffered": {
+      "title": "{branch} không giao hàng",
+      "body": "Giao hàng được bật theo từng chi nhánh nên ở đây không có gì để báo cáo. Các chi nhánh khác vẫn có báo cáo giao hàng riêng.",
+      "link": "Bật giao hàng cho chi nhánh này"
+    }
   },
   "customers": {
     "title": "Khách hàng và tích điểm",

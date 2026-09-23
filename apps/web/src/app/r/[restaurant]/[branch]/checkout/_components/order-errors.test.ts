@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { orderErrorKey, placeOrderBody, refusedCartPart } from './order-errors';
 
@@ -47,6 +49,23 @@ describe('orderErrorKey', () => {
       'errors.order.insufficientStock',
     );
     expect(orderErrorKey(refusal(409, { error: 'item_sold_out', item_id: 'i1' }))).toBe('errors.order.itemSoldOut');
+  });
+
+  it('reads the mid-checkout delivery refusal as "this branch does not deliver" (DELIV-6)', () => {
+    // place-order's up-front gate and its quote race both send this for a branch whose
+    // delivery is off; the diner is at ONE branch of a restaurant that may deliver elsewhere.
+    expect(orderErrorKey(refusal(403, { error: 'feature_not_entitled', feature: 'delivery' }))).toBe(
+      'errors.order.deliveryNotOffered',
+    );
+    for (const locale of ['en', 'es', 'th', 'vi']) {
+      const dir = path.resolve(__dirname, '../../../../../../../messages', locale);
+      const read = (ns: string) => JSON.parse(fs.readFileSync(path.join(dir, `${ns}.json`), 'utf8'));
+      const refusalCopy: string = read('errors').order.deliveryNotOffered;
+      const branchCopy: string = read('checkout').orderType.deliveryNotOffered;
+      // The same permanent, branch-scoped sentence the checkout's order-type picker uses —
+      // not "this restaurant", and not the temporary "right now" wording.
+      expect(refusalCopy.startsWith(branchCopy), `${locale}: ${refusalCopy}`).toBe(true);
+    }
   });
 
   it('knows nothing it was not told', () => {

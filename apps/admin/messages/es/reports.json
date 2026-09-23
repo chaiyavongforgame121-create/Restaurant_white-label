@@ -234,7 +234,12 @@
       "tips": "Propinas"
     },
     "unnamedRider": "Repartidor",
-    "minutesShort": "{minutes} min"
+    "minutesShort": "{minutes} min",
+    "notOffered": {
+      "title": "{branch} no hace entregas",
+      "body": "La entrega se elige sucursal por sucursal, así que aquí no hay nada que informar. Tus otras sucursales conservan sus propios informes de entrega.",
+      "link": "Activar la entrega en esta sucursal"
+    }
   },
   "customers": {
     "title": "Clientes y fidelización",

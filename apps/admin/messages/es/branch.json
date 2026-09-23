@@ -43,7 +43,8 @@
     },
     "delivery": {
       "title": "Entrega a domicilio",
-      "description": "Tus propios repartidores, seguimiento en vivo y asignación automática. No está incluido en tu paquete actual.",
+      "description": "Tus propios repartidores, seguimiento en vivo y envío automático. {branch} no hace entregas: la entrega se activa sucursal por sucursal.",
+      "descriptionUnlocked": "Tus propios repartidores, seguimiento en vivo y envío automático. {branch} tiene la entrega desactivada y ya se desbloqueó aquí: volver a activarla no tiene cargo único, solo el precio mensual.",
       "bulletFees": "Costo de envío, radio y tiempo de preparación",
       "bulletDispatch": "Asignación automática de repartidores con límite de tiempo para aceptar",
       "bulletTracking": "Mapa de seguimiento en vivo para clientes"

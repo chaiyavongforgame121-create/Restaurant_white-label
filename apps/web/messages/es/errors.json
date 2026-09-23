@@ -2,7 +2,7 @@
   "generic": "Algo salió mal. Inténtalo de nuevo.",
   "order": {
     "billingInactive": "Este restaurante no está recibiendo pedidos en línea en este momento. Inténtalo más tarde.",
-    "deliveryNotOffered": "Este restaurante no ofrece entrega a domicilio en este momento. Elige Recoger en tienda.",
+    "deliveryNotOffered": "Esta sucursal no hace entregas a domicilio. Elige Recoger en tienda.",
     "cardNotAvailable": "El pago con tarjeta no está disponible aquí por ahora. Paga en efectivo.",
     "closedAtScheduledTime": "El restaurante está cerrado a la hora de entrega que elegiste. Elige otra hora.",
     "outsideSchedulingWindow": "Este restaurante solo acepta pedidos anticipados en ciertos horarios. Elige uno de los horarios disponibles.",

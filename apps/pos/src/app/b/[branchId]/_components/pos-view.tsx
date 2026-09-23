@@ -131,9 +131,9 @@ function PosInner({
       if (!window.confirm('Replace current cart with this parked order?')) return;
     }
     setLines(target.lines);
-    // Parked orders live in localStorage indefinitely, so one can outlive the
-    // delivery add-on. Fall back to pickup rather than resuming into a channel
-    // place-order will now refuse.
+    // Parked orders live in localStorage indefinitely, so one can outlive delivery at
+    // this branch (it is switched on branch by branch now). Fall back to pickup rather
+    // than resuming into a channel place-order will refuse with a 403.
     setChannel(target.channel === 'delivery' && !canDeliver ? 'pickup' : target.channel);
     setTableNumber(target.tableNumber);
     persistParked(parked.filter((p) => p.id !== parkedId));

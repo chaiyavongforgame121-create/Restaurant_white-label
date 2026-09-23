@@ -471,6 +471,9 @@ export function describeDispatchFailure(body: DispatchFailure | null, status?: n
   }
   if (body?.error && body.error !== 'no_drivers_available') {
     if (body.error === 'max_attempts_reached') return { key: 'maxAttempts' };
+    // Only a dispatch-driver older than v2.5 sends this. From v2.5 a delivery that exists is
+    // dispatched whatever the branch's switch or billing says (the rule in
+    // supabase/functions/_shared/entitlements.ts); kept so a stale deployment still reads right.
     if (body.error === 'feature_not_entitled') return { key: 'notEntitled' };
     if (body.error === 'delivery_not_dispatchable') return { key: 'notDispatchable' };
     // dispatch-driver's two refusals (401, 403), both before anything is written: the session

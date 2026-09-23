@@ -11,6 +11,16 @@ import type { CartPart } from '@/store/cart';
 // `dropoff_other_required` contains `dropoff_required` as a substring.
 export const ORDER_ERRORS: Array<[string, string]> = [
   ['billing_inactive', 'errors.order.billingInactive'],
+  // Both of these mean "this BRANCH does not deliver", not "the restaurant stopped offering
+  // delivery": delivery is bought per branch (docs/PACKAGING-2026-09-23.md §2), so a diner at
+  // Hamburger can be refused while Food Thai Thai is still delivering. The sentence was
+  // "This restaurant is not offering delivery right now", which is wrong twice over — wrong
+  // scope, and "right now" promises a temporary state that nothing will change. It now opens
+  // with checkout.orderType.deliveryNotOffered word for word and says what
+  // orderType.deliveryNotOffered says; the only temporary delivery sentence on the storefront
+  // is orderType.deliveryClosedNow, and place-order never produces it. Reached by a checkout
+  // page rendered before the switch was thrown, and by the quote race place-order refuses
+  // after its up-front gate (the quote_delivery `delivery_not_entitled` branch).
   ['feature_not_entitled:delivery', 'errors.order.deliveryNotOffered'],
   ['delivery_not_entitled', 'errors.order.deliveryNotOffered'],
   ['feature_not_entitled:card_payment', 'errors.order.cardNotAvailable'],

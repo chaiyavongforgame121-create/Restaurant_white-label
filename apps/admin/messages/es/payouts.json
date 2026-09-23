@@ -77,5 +77,8 @@
       "signedOut": "Tu sesión terminó. Inicia sesión de nuevo.",
       "generic": "No se pudo actualizar la solicitud. Reintenta."
     }
+  },
+  "notOffered": {
+    "stillOwed": "Aún se les debe a los repartidores por los envíos que completaron. Esta página seguirá disponible hasta liquidar todas las solicitudes."
   }
 }

@@ -25,6 +25,20 @@ export interface ScheduleDeliveryState {
   canDeliver: boolean;
   /** The kitchen paused orders (branches.settings.orders_paused). Nothing can be ordered. */
   paused: boolean;
+  /**
+   * This branch sells delivery at all (storefront_status.delivery_entitled).
+   *
+   * Delivery is bought per branch (docs/PACKAGING-2026-09-23.md §2), so `false` here is
+   * "this branch does not deliver" — a permanent fact about the branch, not "delivery is
+   * closed right now". The two must never share a sentence: a diner told the wrong one
+   * comes back tomorrow for a delivery that will never be offered, or gives up on a branch
+   * that would have delivered in an hour.
+   *
+   * A status that could not be read at all (`known: false`) reports `true` here: it is not
+   * evidence of anything, and the temporary sentence is the safe one to be wrong about. It
+   * never widens what is on sale — `canDeliver` is the only thing that does that.
+   */
+  offered: boolean;
 }
 
 /** Read the way is_branch_open() reads it: `(settings->>'orders_paused')::boolean`. */
@@ -58,8 +72,21 @@ export async function resolveScheduleDelivery(
     client.rpc('branch_schedule_policy', { p_branch_id: branchId }),
   ]);
   const paused = ordersPaused((branchRow?.settings ?? null) as Record<string, unknown> | null);
-  if (paused || !status.delivery_entitled || !status.scheduling_enabled) {
-    return { canDeliver: false, paused };
+  // storefront_status is keyed by branch, so delivery_entitled is this branch's answer —
+  // when there IS an answer. getStorefrontStatus returns STOREFRONT_UNKNOWN after two failed
+  // RPC attempts, and that constant sets delivery_entitled:false on purpose (it must not
+  // offer a delivery it cannot prove). Reading that `false` as a fact told the diners of a
+  // branch that does deliver "Delivery is not offered at this branch" every time the database
+  // was cold — the permanent sentence, over a transient failure, on a branch of a paying
+  // tenant. `known` is the one field that distinguishes the two, so an unknown status falls
+  // back to the softer "cannot be booked right now" — which is exactly what the callers'
+  // `deliveryOffered = true` defaults were already written to do.
+  //
+  // This only changes the WORDS: canDeliver is false either way, because STOREFRONT_UNKNOWN
+  // also carries scheduling_enabled:false and the early return below still fires.
+  const offered = status.known === false || status.delivery_entitled === true;
+  if (paused || !offered || !status.scheduling_enabled) {
+    return { canDeliver: false, paused, offered };
   }
   // Same parsing as the checkout picker: a failed policy read means opening hours alone decide,
   // and `windows: null` (never armed) is not the same statement as an empty list.
@@ -78,5 +105,5 @@ export async function resolveScheduleDelivery(
     slotMinutes: status.schedule_slot_minutes,
     now,
   });
-  return { canDeliver: days.length > 0, paused };
+  return { canDeliver: days.length > 0, paused, offered };
 }

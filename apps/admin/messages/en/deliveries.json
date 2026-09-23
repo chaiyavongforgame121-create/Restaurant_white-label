@@ -178,5 +178,8 @@
     "otherPlaceholder": "Tell the customer what happened",
     "keep": "Keep order",
     "confirm": "Yes, cancel"
+  },
+  "notOffered": {
+    "stillInFlight": "Runs that were already out still finish here. This board closes once the last one lands."
   }
 }

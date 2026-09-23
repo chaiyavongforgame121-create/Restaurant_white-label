@@ -28,6 +28,9 @@ export default async function CartPage({ params }: Props) {
         branchId={tenant.branch.id}
         branchName={tenant.branch.name}
         canDeliver={scheduleDelivery.canDeliver}
+        // Delivery is sold per branch, so "not offered here" and "not bookable right now"
+        // are different sentences on the gate.
+        deliveryOffered={scheduleDelivery.offered}
       />
       <TablePinNotice />
       <CartView branchId={tenant.branch.id} storefrontVersion={version.version} />

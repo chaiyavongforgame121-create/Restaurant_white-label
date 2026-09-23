@@ -2,12 +2,13 @@
   "header": {
     "title": "Thực đơn",
     "summary": "{items, plural, other {# món}} trong {categories, plural, other {# danh mục}}",
+    "orderHint": "Khách xem danh mục theo thứ tự bên dưới. Mở Danh mục để kéo và sắp xếp lại.",
     "modeEdit": "Sửa",
     "modeReorder": "Sắp xếp",
     "modifiers": "Tùy chọn",
     "combos": "Combo",
     "happyHours": "Giờ vàng",
-    "aiImport": "Nhập bằng AI",
+    "csvImport": "Nhập CSV",
     "addItem": "Thêm món"
   },
   "card": {
@@ -162,10 +163,18 @@
     "fileType": "Không tải lên được loại tệp này. Hãy chọn một tệp ảnh."
   },
   "categories": {
-    "button": "Danh mục",
-    "manage": "Quản lý danh mục",
+    "button": "Danh mục & thứ tự",
+    "manage": "Quản lý danh mục và thứ tự",
     "title": "Danh mục",
-    "intro": "Đổi tên hoặc xóa danh mục. Xóa danh mục không xóa các món trong đó — bạn chọn nơi chuyển món đến.",
+    "intro": "Kéo tay nắm để đặt thứ tự khách nhìn thấy. Bạn cũng có thể đổi tên hoặc xóa danh mục — xóa danh mục không xóa các món trong đó, bạn chọn nơi chuyển món đến.",
+    "order": {
+      "hint": "Đây là thứ tự khách nhìn thấy. Hóa đơn, biên nhận và phiếu bếp cũng theo thứ tự này.",
+      "drag": "Kéo {name} để sắp xếp lại",
+      "saving": "Đang lưu thứ tự mới…",
+      "saved": "Đã lưu thứ tự.",
+      "failed": "Chưa lưu được thứ tự mới. {reason}",
+      "retry": "Thử lại"
+    },
     "itemCount": "{count, plural, =0 {Chưa có món} other {# món}}",
     "hiddenCount": "{count, plural, other {# món đã ẩn}}",
     "rename": "Đổi tên {name}",

@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Favornoms — All-in-one ordering platform for restaurants",
-    "description": "Run delivery, pickup, dine-in, KDS, POS, and driver dispatch from one platform. $199/mo, 14-day free trial. Built for US restaurants."
+    "description": "Run delivery, pickup, dine-in, KDS, POS, and driver dispatch from one platform. A one-time setup fee plus a monthly fee per branch, with a 14-day free trial. Built for US restaurants."
   },
   "site": {
     "description": "Run online ordering, kitchen display, POS, driver dispatch, and Stripe payments from one platform. Built for US restaurants.",
@@ -50,31 +50,32 @@
   },
   "pricing": {
     "title": "One base plan. Add what you need.",
-    "subtitle": "No menu-item limits. No cap on orders. Cancel any time.",
+    "subtitle": "Pay once to start, then a flat fee per branch every month. No menu-item limits, no cap on orders.",
     "baseName": "Base",
-    "perMonth": "{price}<unit>/mo</unit>",
-    "baseSummary": "Everything you need to run one location, including card payment.",
+    "once": "{price} once",
+    "thenMonthly": "then {price} a month",
+    "monthlyOnly": "{price} a month",
+    "baseSummary": "Everything you need to run one branch, card payment included. Your first branch is part of it.",
     "includes": {
       "storefront": "Branded storefront on your own domain",
       "payments": "Card and cash payments at checkout",
       "kitchen": "Kitchen Display, POS and counter ordering",
       "growth": "Loyalty, promos, gift cards and reports",
-      "aiImport": "AI menu import — photograph a menu, get a menu"
+      "oneBranch": "1 branch included — add more whenever you need them"
     },
-    "trialNote": "Free for 14 days with every add-on included. No card until you decide.",
+    "trialNote": "Free for 14 days, delivery included at every branch. No card until you decide.",
     "addOnsTitle": "Add on when you need it",
+    "addOnPrice": "+{once} once, then +{monthly}/mo",
+    "addOnOnce": "+{price} once",
+    "addOnMonthly": "+{price}/mo",
     "addOns": {
-      "delivery": {
-        "name": "Delivery",
-        "description": "Your own riders, automatic dispatch and live tracking."
-      },
-      "aiSuite": {
-        "name": "AI Suite",
-        "description": "Digital Signage and the AI Voice Assistant."
-      },
       "extraBranch": {
         "name": "Extra branch",
-        "description": "Each additional location, with the full feature set of your main branch."
+        "description": "Each branch after the first, with the full feature set of your main branch."
+      },
+      "delivery": {
+        "name": "Delivery",
+        "description": "Per branch, on the branches you choose: your own riders, automatic dispatch and live tracking."
       }
     }
   },

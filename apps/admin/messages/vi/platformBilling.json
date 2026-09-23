@@ -11,16 +11,17 @@
     "saveFailed": "Không lưu được.",
     "decisionFailed": "Không lưu được quyết định.",
     "permission": "Bạn không có quyền thực hiện thao tác này.",
-    "network": "Không kết nối được máy chủ. Hãy kiểm tra kết nối và thử lại."
+    "network": "Không kết nối được máy chủ. Hãy kiểm tra kết nối và thử lại.",
+    "alreadyDecided": "Ai đó đã quyết định yêu cầu này rồi. Hãy tải lại để xem kết quả.",
+    "requestNotFound": "Yêu cầu này không còn nữa. Hãy tải lại hàng chờ."
   },
   "plans": {
     "metaTitle": "Danh mục sản phẩm · Favornoms",
     "title": "Danh mục sản phẩm",
-    "subtitle": "Những gì nhà hàng có thể mua. Giá tính theo tháng, bằng USD.",
+    "subtitle": "Những gì nhà hàng có thể mua. Mỗi sản phẩm có hai mức giá bằng USD: một khoản trả một lần và một khoản trả hằng tháng.",
     "newProduct": "Sản phẩm mới",
     "stripeDormant": "<strong>Stripe đang tạm ngưng.</strong> {count, plural, other {# sản phẩm đang hoạt động chưa có}} mã giá Stripe ({codes}). Cho đến khi điền đủ, người bán được kích hoạt thủ công ở trang Gói đăng ký thay vì thanh toán bằng thẻ.",
     "newProductCode": "sản phẩm mới",
-    "inactive": "Không hoạt động",
     "noStripePrice": "Chưa có giá Stripe",
     "markInactive": "Tắt sản phẩm",
     "markActive": "Bật sản phẩm",
@@ -44,12 +45,19 @@
       "stripePriceIdHint": "price_… — bắt buộc trước khi bật Stripe.",
       "description": "Mô tả",
       "isQuantity": "Sản phẩm theo số lượng (tính phí theo đơn vị — cần giá theo số lượng trên Stripe)",
-      "features": "Tính năng được cấp"
+      "features": "Tính năng được cấp",
+      "monthlyPriceHint": "Thu mỗi tháng, ngoài khoản trả một lần.",
+      "oneTimePrice": "Giá trả một lần ($)",
+      "oneTimePriceHint": "Chỉ trả một lần duy nhất. Đặt 0 nếu chỉ bán theo tháng."
     },
     "createProduct": "Tạo sản phẩm",
     "save": "Lưu",
     "cancel": "Hủy",
-    "codeRequired": "Cần nhập mã sản phẩm."
+    "codeRequired": "Cần nhập mã sản phẩm.",
+    "priceSummary": "<b>{once}</b> một lần, sau đó <b>{monthly}</b> mỗi tháng",
+    "withdrawn": "Đã ngừng bán",
+    "withdrawnHint": "Không còn bán nữa. Nhà hàng đang dùng vẫn giữ được và lịch sử vẫn nguyên vẹn, nhưng không ai mua mới được. Đánh dấu hoạt động để bán lại.",
+    "featureWithdrawn": "{feature} (đã ngừng bán)"
   },
   "reports": {
     "title": "Báo cáo tài chính",
@@ -135,7 +143,7 @@
   "subscriptions": {
     "metaTitle": "Gói đăng ký · Favornoms",
     "title": "Gói đăng ký",
-    "subtitle": "Thiết lập trực tiếp gói của nhà hàng. Thay đổi có hiệu lực ngay.",
+    "subtitle": "Đặt gói của nhà hàng trực tiếp, theo từng chi nhánh. Thay đổi có hiệu lực ngay lập tức.",
     "searchPlaceholder": "Tìm nhà hàng",
     "noMatches": "Không có nhà hàng phù hợp.",
     "live": "Đang hoạt động",
@@ -144,7 +152,8 @@
       "monthly": "Hằng tháng",
       "seats": "Suất",
       "paidThrough": "Đã trả đến",
-      "trialEnds": "Hết dùng thử"
+      "trialEnds": "Hết dùng thử",
+      "paidOnce": "Đã trả một lần"
     },
     "close": "Đóng",
     "changePackage": "Đổi gói",
@@ -167,13 +176,33 @@
     "blankTrial": "Để trống để bắt đầu lại từ hôm nay: dùng thử {days} ngày, đến {date}.",
     "blankMonth": "Để trống để bắt đầu lại tháng từ hôm nay: ngày đã trả đến sẽ là {date}.",
     "blankShortens": "Ngày này sớm hơn ngày hiện tại ({date}). Hãy chọn một ngày để giữ lại thời gian họ đang có.",
-    "addons": "Tiện ích bổ sung",
     "branchSeats": "Suất chi nhánh",
     "removeSeat": "Bớt một suất",
     "addSeat": "Thêm một suất",
     "minSeats": "tối thiểu {count} (chi nhánh đang mở)",
     "applyPackage": "Áp dụng gói",
-    "saved": "Đã lưu"
+    "saved": "Đã lưu",
+    "deliveringCount": "Giao hàng tại {count} trong {total}",
+    "deliveringNone": "Không giao hàng",
+    "delivery": {
+      "title": "Chi nhánh nào giao hàng",
+      "hint": "Mỗi chi nhánh giao hàng sẽ cộng thêm phí giao hàng vào hoá đơn hằng tháng. Thao tác ở đây không thu phí mở khoá một lần: những gì bạn cấp bằng tay thì nhà hàng không nợ.",
+      "trialHint": "Trong thời gian dùng thử, mọi chi nhánh đều giao hàng nên không có gì để chọn. Hãy chuyển nhà hàng sang gói trả phí để chọn.",
+      "noBranches": "Nhà hàng này chưa có chi nhánh nào.",
+      "hiddenBranch": "đang ẩn",
+      "branchMonthly": "{amount} mỗi tháng",
+      "on": "Có giao hàng",
+      "off": "Không giao hàng"
+    },
+    "noOneTimeCharge": "Áp dụng gói ở đây không tạo ra khoản thu một lần nào.",
+    "oneTime": {
+      "show": "Lịch sử trả một lần",
+      "title": "Đã trả một lần",
+      "empty": "Nhà hàng này chưa từng bị thu khoản một lần nào.",
+      "unavailable": "Không đọc được sổ các khoản trả một lần, nên thẻ này không thể nói đã trả những gì. Hãy tải lại trước khi thu bất cứ khoản nào.",
+      "lineForBranch": "{product} — {branch}",
+      "discount": "mã {code}, −{amount}"
+    }
   },
   "switches": {
     "intro": "Hiện hoặc ẩn một tính năng chỉ cho nhà hàng này. <strong>Theo gói</strong> làm theo gói ở trên; <strong>Bật</strong> và <strong>Tắt</strong> bỏ qua gói. Ẩn một tính năng sẽ gỡ nó khỏi thanh bên của người bán; nếu họ mở URL trực tiếp, họ sẽ thấy trang bị khóa thay vì tính năng.",
@@ -186,7 +215,8 @@
     "visibleOverridden": "Người bán thấy được · đã ghi đè",
     "hiddenOverridden": "Ẩn với người bán · đã ghi đè",
     "hiddenNotInPackage": "Ẩn với người bán · không có trong gói",
-    "groupLabel": "Hiển thị {feature}"
+    "groupLabel": "Hiển thị {feature}",
+    "deliveryNote": "Giao hàng là ngoại lệ: công tắc này chỉ nói tài khoản có được phép giao hàng hay không, còn danh sách chi nhánh ở trên nói giao ở đâu. Bật cưỡng bức cũng chưa cấp gì cho tới khi bật ở một chi nhánh."
   },
   "requests": {
     "metaTitle": "Yêu cầu đổi gói · Favornoms",
@@ -206,7 +236,6 @@
     "empty": "Không có gì ở đây.",
     "thisRestaurant": "nhà hàng này",
     "requested": "Đã yêu cầu",
-    "seatCount": "{count, plural, other {# suất}}",
     "decisionNote": "Ghi chú quyết định: {note}",
     "loadFailed": "Không tải được gói hiện tại của {name}, nên thẻ này không thể cho thấy việc duyệt sẽ gỡ bỏ những gì. Duyệt sẽ thay thế mọi thứ họ đang có.",
     "notePlaceholder": "Ghi chú (không bắt buộc)",
@@ -235,6 +264,112 @@
       "smallerTitle": "Duyệt gói nhỏ hơn?",
       "body": "Duyệt sẽ thay toàn bộ gói của {name} bằng yêu cầu này.{removes, select, yes { Gỡ bỏ {items}.} other {}}{seats, select, yes { Giảm suất chi nhánh từ {seatsFrom} xuống {seatsTo}.} other {}}{shortens, select, yes { Lùi ngày đã trả đến từ {paidFrom} về {paidTo} (ít hơn {days} ngày).} other {}} Họ mất những thứ này ngay khi bạn duyệt, và muốn lấy lại phải thiết lập lại gói ở trang Gói đăng ký.",
       "approveRemove": "Duyệt và gỡ bỏ"
+    },
+    "asking": "{seats, plural, other {# chi nhánh}}, {delivery}",
+    "deliveryNone": "không giao hàng",
+    "deliveryAt": "giao hàng tại {branches}",
+    "unnamedBranches": "{count, plural, other {# chi nhánh không còn tồn tại}}",
+    "payOnce": "Trả một lần",
+    "thenMonthly": "Sau đó mỗi tháng",
+    "discountApplied": "Mã {code} đã giảm {amount} từ {list}",
+    "discountNothingOff": "Mã {code} không giảm được đồng nào.",
+    "nothingOnce": "Không có khoản nào phải trả một lần — tất cả đã mua rồi.",
+    "deliveryOn": "Việc này BẬT giao hàng tại: {branches}",
+    "deliveryOff": "Việc này TẮT giao hàng tại: {branches}",
+    "deliveryLossItem": "Giao hàng tại {branch}",
+    "marksPaid": "Đánh dấu {amount} khoản thu một lần là đã trả",
+    "keepsCode": "Mã {code} được tính là đã dùng — lượt dùng đã được giữ từ lúc nhà hàng gửi yêu cầu này"
+  },
+  "chargeStatus": {
+    "pending": "chờ thanh toán",
+    "paid": "đã thanh toán",
+    "void": "đã huỷ"
+  },
+  "discounts": {
+    "metaTitle": "Mã giảm giá · Favornoms",
+    "title": "Mã giảm giá",
+    "subtitle": "Những mã bạn phát ra. Máy chủ tính toán mức giảm cho từng mã.",
+    "oneTimeOnly": "<strong>Mã chỉ giảm các khoản trả một lần</strong> — gói nền, chi nhánh thêm, phí mở khoá giao hàng của một chi nhánh. Mã không bao giờ đổi hoá đơn hằng tháng.",
+    "newCode": "Mã mới",
+    "emptyTitle": "Chưa có mã nào",
+    "emptyBody": "Hãy tạo một mã khi bạn muốn bớt đi khoản nhà hàng phải trả lúc bắt đầu.",
+    "givesPercent": "giảm {value}%",
+    "givesFixed": "giảm {amount}",
+    "appliesAll": "Mọi khoản trả một lần",
+    "state": {
+      "live": "Đang dùng được",
+      "scheduled": "Bắt đầu sau",
+      "expired": "Hết hạn",
+      "exhausted": "Đã dùng hết",
+      "inactive": "Đang tắt"
+    },
+    "stats": {
+      "appliesTo": "Áp dụng cho",
+      "used": "Đã dùng",
+      "perRestaurant": "Mỗi nhà hàng",
+      "givenAway": "Đã giảm"
+    },
+    "usedUnlimited": "{count} (không giới hạn)",
+    "usedOfMax": "{count} trên {max}",
+    "perRestaurantValue": "{count, plural, other {# lần}}",
+    "reservedNote": "Thêm {amount} đang được giữ cho các yêu cầu chờ duyệt.",
+    "windowBetween": "{from} → {to}",
+    "windowFrom": "Từ {from}, không có ngày kết thúc",
+    "close": "Đóng",
+    "edit": "Sửa",
+    "showUses": "{count, plural, other {# lượt dùng}}",
+    "deactivate": "Tắt mã",
+    "reactivate": "Bật lại",
+    "confirmDeactivate": {
+      "title": "Tắt mã {code}?",
+      "body": "Sau đó sẽ không ai áp dụng được nữa. Các yêu cầu đã gửi kèm mã này vẫn giữ phần giảm khi bạn duyệt. Mã vẫn nằm trên trang này cùng toàn bộ phần đã giảm — một mã đã được dùng thì không bao giờ bị xoá.",
+      "confirm": "Tắt mã"
+    },
+    "usesTitle": "Đã dùng ở đâu",
+    "usesUnavailable": "Không đọc được các lượt dùng của mã này.",
+    "unknownRestaurant": "Nhà hàng đã xoá",
+    "reserved": "Đã giữ · chờ duyệt",
+    "onRequest": "yêu cầu {id}",
+    "form": {
+      "newTitle": "Mã mới",
+      "editTitle": "Sửa mã",
+      "code": "Mã",
+      "codeHint": "Chữ cái, chữ số và dấu gạch ngang. Lưu ở dạng in hoa; đây là thứ nhà hàng sẽ gõ.",
+      "codeLocked": "Mã giữ nguyên chuỗi đã phát ra nên không thể đổi tên.",
+      "description": "Dùng để làm gì",
+      "descriptionHint": "Hiển thị cho nhà hàng khi mã được áp dụng.",
+      "kind": "Loại",
+      "kindPercent": "Giảm theo phần trăm",
+      "kindFixed": "Giảm số tiền cố định",
+      "valuePercent": "Phần trăm (1–100)",
+      "valueFixed": "Số đô la được giảm ($)",
+      "appliesTo": "Áp dụng cho",
+      "appliesToHint": "Chọn những khoản trả một lần mà mã này giảm. Không chọn gì nghĩa là áp dụng cho tất cả.",
+      "productChip": "{name} ({amount} một lần)",
+      "maxRedemptions": "Tổng số lượt dùng",
+      "maxRedemptionsHint": "Để trống nếu không giới hạn.",
+      "perRestaurant": "Số lượt mỗi nhà hàng",
+      "perRestaurantHint": "Đếm từ các lượt đã ghi nhận, nên một yêu cầu đang chờ cũng đã tiêu mất một lượt.",
+      "startsAt": "Bắt đầu",
+      "startsAtHint": "Để trống nghĩa là từ bây giờ. Ngày được đọc theo giờ UTC.",
+      "endsAt": "Kết thúc",
+      "endsAtHint": "Dùng được đến hết ngày đó theo giờ UTC. Để trống nghĩa là không kết thúc.",
+      "isActive": "Đang bật",
+      "create": "Tạo mã",
+      "save": "Lưu",
+      "cancel": "Huỷ"
+    },
+    "errors": {
+      "codeRequired": "Hãy đặt tên cho mã.",
+      "codeCharset": "Mã chỉ được chứa chữ cái, chữ số và dấu gạch ngang.",
+      "codeDuplicate": "Mã này đã tồn tại. Hãy chọn mã khác.",
+      "valueRequired": "Hãy đặt mức giảm của mã.",
+      "percentRange": "Phần trăm không được lớn hơn 100.",
+      "maxRedemptions": "Tổng số lượt dùng phải là số nguyên từ 1 trở lên, hoặc để trống.",
+      "perRestaurantLimit": "Số lượt mỗi nhà hàng phải là số nguyên từ 1 trở lên.",
+      "datesBackwards": "Ngày kết thúc trước ngày bắt đầu, nên mã sẽ không bao giờ dùng được.",
+      "kindInvalid": "Máy chủ không chấp nhận loại giảm giá đó.",
+      "notFound": "Mã này không còn nữa. Hãy tải lại trang."
     }
   }
 }

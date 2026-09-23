@@ -488,9 +488,9 @@ function PosInner({
     // Folded to one line per selection, the way place-order will bill it: a cart parked by an
     // older build can hold the same dish twice.
     setLines(mergeIdenticalLines(target.lines, counterLineKey));
-    // Parked orders live in localStorage indefinitely, so one can outlive the
-    // delivery add-on. Fall back to pickup rather than resuming into a channel
-    // place-order will now refuse.
+    // Parked orders live in localStorage indefinitely, so one can outlive delivery at
+    // this branch (it is switched on branch by branch now). Fall back to pickup rather
+    // than resuming into a channel place-order will refuse with a 403.
     setChannel(target.channel === 'delivery' && !canDeliver ? 'pickup' : target.channel);
     setTableNumber(target.tableNumber);
     // Re-resolved from the current floor rather than carried in the parked order: a cart

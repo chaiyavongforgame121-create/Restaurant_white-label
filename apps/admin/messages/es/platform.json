@@ -7,7 +7,8 @@
     "requests": "Solicitudes",
     "catalog": "Catálogo",
     "settings": "Configuración",
-    "pendingBadge": "{count}<sr> pendientes</sr>"
+    "pendingBadge": "{count}<sr> pendientes</sr>",
+    "discounts": "Descuentos"
   },
   "accessDenied": {
     "title": "Acceso denegado",
@@ -31,7 +32,8 @@
       "needsAttention": "Requieren atención",
       "ordersToday": "Pedidos hoy",
       "revenueToday": "Ingresos hoy",
-      "driversOnline": "Repartidores conectados"
+      "driversOnline": "Repartidores conectados",
+      "oneTimePaid": "Ingresos únicos"
     },
     "decisions": {
       "ariaLabel": "Requiere una decisión",

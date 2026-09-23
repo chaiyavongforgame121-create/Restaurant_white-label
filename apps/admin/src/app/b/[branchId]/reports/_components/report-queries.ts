@@ -276,12 +276,19 @@ export async function getReportSections(
   supabase: ReportClient,
   branchId: string,
   range: ReportRange,
+  // Delivery is sold per branch (docs/PACKAGING-2026-09-23.md §2) and
+  // get_branch_delivery_report has no entitlement check of its own, so a branch that does
+  // not deliver is not asked at all. `{ data: null, error: null }` is the shape a quiet
+  // section already has, so nothing downstream reads it as a failure.
+  includeDelivery = true,
 ): Promise<ReportSections> {
   const [sales, orders, menu, delivery, customers, payments] = await Promise.all([
     callSection<SalesReport>(supabase, 'get_branch_sales_report', branchId, range),
     callSection<OrdersReport>(supabase, 'get_branch_orders_report', branchId, range),
     callSection<MenuReport>(supabase, 'get_branch_menu_report', branchId, range),
-    callSection<DeliveryReport>(supabase, 'get_branch_delivery_report', branchId, range),
+    includeDelivery
+      ? callSection<DeliveryReport>(supabase, 'get_branch_delivery_report', branchId, range)
+      : Promise.resolve<SectionResult<DeliveryReport>>({ data: null, error: null }),
     callSection<CustomersReport>(supabase, 'get_branch_customers_report', branchId, range),
     callSection<PaymentsReport>(supabase, 'get_branch_payments_report', branchId, range),
   ]);

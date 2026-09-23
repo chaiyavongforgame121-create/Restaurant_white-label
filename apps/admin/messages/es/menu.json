@@ -2,12 +2,13 @@
   "header": {
     "title": "Menú",
     "summary": "{items, plural, one {# producto} other {# productos}} en {categories, plural, one {# categoría} other {# categorías}}",
+    "orderHint": "Los clientes ven tus categorías en el orden de abajo. Abre Categorías para arrastrarlas y cambiar el orden.",
     "modeEdit": "Editar",
     "modeReorder": "Ordenar",
     "modifiers": "Opciones",
     "combos": "Combos",
     "happyHours": "Happy hour",
-    "aiImport": "Importar con IA",
+    "csvImport": "Importar CSV",
     "addItem": "Agregar producto"
   },
   "card": {
@@ -162,10 +163,18 @@
     "fileType": "Ese tipo de archivo no se puede subir. Elige una imagen."
   },
   "categories": {
-    "button": "Categorías",
-    "manage": "Administrar categorías",
+    "button": "Categorías y orden",
+    "manage": "Administrar categorías y su orden",
     "title": "Categorías",
-    "intro": "Cambia el nombre de las categorías o elimínalas. Eliminar una categoría no elimina sus productos: tú eliges a dónde se mueven.",
+    "intro": "Arrastra el controlador para definir el orden que ven los clientes. También puedes cambiar el nombre de una categoría o eliminarla: eliminarla no elimina sus productos, tú eliges a dónde se mueven.",
+    "order": {
+      "hint": "Este es el orden que ven los clientes. Las cuentas, los recibos y las comandas de cocina también lo siguen.",
+      "drag": "Arrastrar {name} para reordenar",
+      "saving": "Guardando el nuevo orden…",
+      "saved": "Orden guardado.",
+      "failed": "No se guardó el nuevo orden. {reason}",
+      "retry": "Intentar de nuevo"
+    },
     "itemCount": "{count, plural, =0 {Sin productos} one {# producto} other {# productos}}",
     "hiddenCount": "{count, plural, one {# oculto} other {# ocultos}}",
     "rename": "Cambiar el nombre de {name}",

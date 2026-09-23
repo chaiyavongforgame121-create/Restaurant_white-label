@@ -178,5 +178,8 @@
     "otherPlaceholder": "Cho khách biết chuyện gì đã xảy ra",
     "keep": "Giữ đơn",
     "confirm": "Đồng ý hủy"
+  },
+  "notOffered": {
+    "stillInFlight": "Các chuyến đã xuất phát vẫn hoàn tất tại đây. Bảng này sẽ đóng khi chuyến cuối cùng giao xong."
   }
 }

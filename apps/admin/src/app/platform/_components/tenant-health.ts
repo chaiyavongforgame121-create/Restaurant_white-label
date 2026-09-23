@@ -23,6 +23,7 @@ import {
   PLAN_TRIAL,
   intlLocaleFor,
   type Entitlements,
+  type PackageSelection,
   type UiLocale,
 } from '@favornoms/shared';
 
@@ -468,12 +469,25 @@ export function resolvePrimaryAction(
   };
 }
 
-/** The package a conversion would buy: Base, keeping the add-ons already owned. */
-export function conversionSelection(row: TenantRow, branchesUsed: number) {
+/**
+ * Which branches keep delivering when a package is re-sent from this page.
+ *
+ * A trial delivers from EVERY branch by rule, without any of them having paid the
+ * one-time unlock, so carrying that list into a paid package would both hand the
+ * delivery add-on away for free and bill $29 a month per branch that nobody chose.
+ * A paid store's list is what it actually owns, so that one carries over untouched.
+ * Picking delivery branch by branch is Subscriptions' job, not a dashboard button's.
+ */
+function deliveringBranchIds(row: TenantRow): string[] {
+  return isPaidPlan(row.ent.planCode) ? [...row.ent.deliveryBranchIds] : [];
+}
+
+/** The package a conversion would buy: Base, keeping the delivery already paid for. */
+export function conversionSelection(row: TenantRow, branchesUsed: number): PackageSelection {
   return {
     planCode: PLAN_BASE,
-    addons: [...row.ent.addons],
     branchSeats: Math.max(1, row.ent.branchSeats, row.ent.branchesUsed, branchesUsed),
+    deliveryBranchIds: deliveringBranchIds(row),
   };
 }
 
@@ -493,11 +507,11 @@ export function extensionPeriodEnd(row: TenantRow, nowMs: number): string | null
 }
 
 /** The package a tenant already has, re-billed from now(). */
-export function renewalSelection(row: TenantRow, branchesUsed: number) {
+export function renewalSelection(row: TenantRow, branchesUsed: number): PackageSelection {
   return {
     planCode: row.ent.planCode,
-    addons: [...row.ent.addons],
     branchSeats: Math.max(1, row.ent.branchSeats, row.ent.branchesUsed, branchesUsed),
+    deliveryBranchIds: deliveringBranchIds(row),
   };
 }
 

@@ -27,7 +27,7 @@
     "title": "Chi nhánh",
     "description": "Các địa điểm thuộc {restaurant}. Mỗi chi nhánh có URL cửa hàng và mã QR riêng.",
     "add": "Thêm chi nhánh",
-    "addSeat": "Thêm suất chi nhánh +$99/tháng",
+    "addSeat": "Thêm chi nhánh tại trang Gói",
     "seatsUsed": "Bạn đang dùng {used}/{seats, plural, other {# suất chi nhánh}}. Hãy thêm suất để mở địa điểm mới — chi nhánh mới có đầy đủ tính năng như chi nhánh chính.",
     "hidden": "Đã ẩn",
     "noStorefront": "Chưa có địa chỉ cửa hàng",
@@ -84,7 +84,7 @@
     "copying": "Đang sao chép…",
     "create": "Tạo chi nhánh",
     "errors": {
-      "seats": "{limit, plural, other {Bạn đã dùng hết # suất chi nhánh.}} Hãy thêm suất (+$99/tháng) tại trang Gói, rồi tạo chi nhánh.",
+      "seats": "{limit, plural, other {Bạn đã dùng hết # suất chi nhánh.}} Hãy thêm chi nhánh tại trang Gói, rồi tạo tại đây.",
       "inactive": "Gói đăng ký của bạn chưa hoạt động. Hãy chọn một gói tại trang Gói để tiếp tục.",
       "notAuthorized": "Chỉ chủ sở hữu hoặc quản trị viên mới có thể thêm chi nhánh.",
       "nameRequired": "Hãy nhập tên chi nhánh và slug URL.",

@@ -234,7 +234,12 @@
       "tips": "Tips"
     },
     "unnamedRider": "Rider",
-    "minutesShort": "{minutes}m"
+    "minutesShort": "{minutes}m",
+    "notOffered": {
+      "title": "{branch} does not deliver",
+      "body": "Delivery is chosen branch by branch, so there is nothing to report here. Your other branches keep their own delivery reports.",
+      "link": "Turn delivery on for this branch"
+    }
   },
   "customers": {
     "title": "Customers & loyalty",

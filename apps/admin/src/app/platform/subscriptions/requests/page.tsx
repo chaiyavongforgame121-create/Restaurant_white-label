@@ -10,6 +10,7 @@ import {
   type RestaurantSubscriptionRow,
 } from '@favornoms/database/queries';
 import { PlatformAccessDenied } from '../../_components/platform-nav';
+import type { PlatformBranchLite } from '../../_components/platform-billing';
 import { RequestsView } from './_components/requests-view';
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -52,11 +53,26 @@ export default async function BillingRequestsPage({ searchParams }: Props) {
     if (wanted.has(row.restaurant_id)) packages[row.restaurant_id] = row;
   }
 
+  // Delivery is per branch, so a request asks for delivery at particular branches.
+  // Without their names the card can only say "delivery × 2", which is exactly the
+  // sentence an operator cannot act on. Hidden branches are included: a request may
+  // legitimately name one, and leaving it unnamed would read as a deleted branch.
+  const branches: Record<string, PlatformBranchLite[]> = {};
+  const { data: branchRows } = await supabase
+    .from('branches')
+    .select('id, restaurant_id, name, is_active')
+    .in('restaurant_id', [...wanted])
+    .order('created_at', { ascending: true });
+  for (const b of branchRows ?? []) {
+    (branches[b.restaurant_id] ??= []).push({ id: b.id, name: b.name, isActive: b.is_active });
+  }
+
   return (
     <RequestsView
       requests={requests}
       status={status ?? 'pending'}
       packages={packages}
+      branches={branches}
       catalog={catalog}
       nowMs={Date.now()}
     />

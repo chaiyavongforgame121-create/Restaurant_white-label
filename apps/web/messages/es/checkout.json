@@ -52,7 +52,7 @@
     "dropoffRequired": "Elige dónde debe dejar tu pedido el repartidor.",
     "dropoffOtherRequired": "Describe el lugar de entrega.",
     "outOfRange": "Esta dirección está fuera del área de entrega.",
-    "deliveryNotSold": "Esta sucursal no está recibiendo pedidos a domicilio en este momento. Prueba con Recoger en tienda.",
+    "deliveryNotSold": "Esta sucursal no hace entregas a domicilio. Prueba con recoger en tienda.",
     "pickupClosedScheduleInstead": "Este restaurante está cerrado en este momento, así que no puedes recoger en tienda. Puedes programar una entrega."
   },
   "promoCode": "¿Tienes un código promocional?",
@@ -96,7 +96,9 @@
     "deliveryNoPaymentPickupOpen": "Con los métodos de pago actuales de este restaurante no puedes programar una entrega, pero aún puedes recoger en tienda.",
     "deliveryNoPayment": "Con los métodos de pago actuales de este restaurante no puedes programar una entrega.",
     "pickupPaused": "Recoger en tienda no está disponible por ahora: el restaurante pausó los pedidos.",
-    "pickupClosedNow": "Recoger en tienda no está disponible por ahora: el restaurante está cerrado."
+    "pickupClosedNow": "Recoger en tienda no está disponible por ahora: el restaurante está cerrado.",
+    "deliveryNotOfferedPickupOpen": "Esta sucursal no hace entregas a domicilio; puedes recoger tu pedido.",
+    "deliveryNotOffered": "Esta sucursal no hace entregas a domicilio."
   },
   "schedule": {
     "loading": "Cargando los horarios en que este restaurante acepta pedidos…",
@@ -116,7 +118,7 @@
     "calculating": "Calculando el envío…",
     "distanceFee": "A {distance} mi · envío {fee}",
     "outOfRangeMax": "Lo sentimos, esta dirección está fuera del área de entrega (máx. {max} mi).",
-    "notSold": "Lo sentimos, esta sucursal no está recibiendo pedidos a domicilio en este momento. Aún puedes recoger en tienda.",
+    "notSold": "Esta sucursal no ofrece entrega a domicilio. Elige recoger en tienda.",
     "pickSuggestion": "Elige tu dirección de las sugerencias para confirmar la entrega y ver el costo exacto."
   },
   "dropoff": {

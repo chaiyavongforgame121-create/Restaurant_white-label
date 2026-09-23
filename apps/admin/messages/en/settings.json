@@ -12,26 +12,25 @@
   "plan": {
     "metaTitle": "Plan & billing · Favornoms",
     "title": "Plan & billing",
-    "subtitle": "Choose what your restaurant runs on. Change it any time.",
+    "subtitle": "Two totals, kept apart: what you pay once, and what you pay every month.",
     "perMonth": "/mo",
-    "selection": "{products}, {seats, plural, one {# branch seat} other {# branch seats}}",
-    "pricedSummary": "{summary} — {price}/mo.",
     "notYours": {
       "inactiveTitle": "Your restaurant’s package is inactive — ask the owner",
-      "lockedTitle": "Only the owner or an admin can change the package",
-      "inactiveBody": "The storefront and back office for {branch} are paused until the restaurant owner or an admin chooses a package. Nothing has been deleted, and your work comes back as soon as it is active again.",
+      "lockedTitle": "Only the restaurant owner can change the package",
+      "inactiveBody": "The storefront and back office for {branch} are paused until the restaurant owner chooses a package. Nothing has been deleted, and your work comes back as soon as it is active again.",
       "lockedBody": "{branch}’s package is managed by the restaurant owner. Ask them if you need a feature that is not switched on."
     },
     "replaceDialog": {
       "title": "Replace your pending request?",
       "body": "Your earlier request ({summary}) is withdrawn and this one goes to the Favornoms team instead.",
+      "codeReleased": "Code {code} was on that request. Apply it again here to keep it; otherwise it is given back.",
       "confirm": "Replace request"
     },
     "errors": {
       "sendFailed": "Could not send your request. Please try again.",
       "generic": "Something went wrong. Please try again.",
       "signedOut": "Your session has ended. Sign in again, then send the request.",
-      "forbidden": "Only the restaurant owner or an admin can change the package.",
+      "forbidden": "Only the restaurant owner can change the package.",
       "planUnavailable": "That package is not available any more. Reload the page and choose again."
     },
     "action": {
@@ -41,44 +40,96 @@
       "reactivate": "Reactivate my account",
       "confirm": "Confirm package",
       "renew": "Request renewal",
-      "current": "Current package"
+      "current": "Current package",
+      "pricesUnavailable": "Prices unavailable"
+    },
+    "now": {
+      "title": "What you have now",
+      "plan": "Plan",
+      "trialPlan": "Free trial",
+      "noPlan": "No package yet",
+      "branches": "Branches",
+      "branchesValue": "{used} open · {seats} paid for",
+      "delivery": "Delivery",
+      "deliveryNone": "No branch delivers yet",
+      "deliveryTrial": "Every branch, free until the trial ends",
+      "nextPayment": "Next payment",
+      "trialEnds": "Trial ends",
+      "noNextPayment": "Nothing scheduled",
+      "includedTitle": "In every package"
     },
     "base": {
       "name": "Base",
-      "description": "Everything you need to run one branch.",
       "included": {
         "cardPayment": "Card payment at checkout",
-        "aiMenuImport": "AI menu import",
         "onlineOrdering": "Online ordering & QR",
-        "kitchenCounter": "Kitchen display & counter",
         "reportsLoyalty": "Reports & loyalty",
+        "kitchenCounter": "Kitchen display & counter",
         "oneBranch": "1 branch included"
       }
     },
+    "branches": {
+      "title": "Your branches",
+      "subtitle": "Every branch is {price} a month. Switch on Delivery for the branches that deliver.",
+      "subtitleNoPrice": "Switch on Delivery for the branches that deliver.",
+      "empty": "This restaurant has no active branch yet.",
+      "delivery": "Delivery",
+      "switchLabel": "Delivery at {branch}",
+      "eachMonth": "{price}/mo",
+      "costOnceAndMonthly": "+{once} once, then +{monthly}/mo",
+      "costMonthly": "+{monthly}/mo",
+      "alreadyUnlocked": "Already unlocked — nothing more to pay once for this branch.",
+      "offWarning": "{branch} will stop offering delivery on its storefront.",
+      "dropsTo": "This branch drops to {price}/mo.",
+      "trialNote": "Every branch delivers free until your trial ends. What you leave switched on here is what you pay for afterwards."
+    },
     "seats": {
-      "title": "Branches",
-      "body": "1 included. Each extra branch is {price}/mo with the full feature set of your main branch.",
-      "usage": "Using {used} of {seats, plural, one {# seat} other {# seats}}.",
-      "remove": "Remove a branch seat",
-      "add": "Add a branch seat",
-      "floor": "You run {count, plural, one {# active branch} other {# active branches}}, so you cannot go below {min} seats. To give up a seat, hide a branch you no longer use: open its Branch settings and set Status to Hidden. A hidden branch does not use a seat."
+      "title": "Add a branch",
+      "body": "+{once} once, +{monthly}/mo for each branch after the first.",
+      "usage": "Using {used} of {seats, plural, one {# branch you pay for} other {# branches you pay for}}.",
+      "remove": "Remove a branch",
+      "add": "Add a branch",
+      "floor": "You run {count, plural, one {# active branch} other {# active branches}}, so you cannot go below {min}. To pay for one less, hide a branch you no longer use: open its Branch settings and set Status to Hidden. A hidden branch is not billed.",
+      "newSeats": "{count, plural, one {# branch you have not created yet} other {# branches you have not created yet}}. Create new branches from the Branches page once this is approved."
     },
-    "summary": {
-      "title": "Your package",
+    "pay": {
+      "title": "What you pay",
+      "onceTitle": "Pay once today",
+      "onceNothing": "Nothing. Everything in this package is already paid for.",
+      "onceOnRequest": "On the request you sent",
+      "onceCode": "Code {code}",
+      "onceAwaiting": "Nothing has been charged yet. You pay this when the Favornoms team activates your request.",
+      "monthlyTitle": "Then every month",
+      "withDelivery": "{branch} + delivery",
+      "unusedSeats": "{count, plural, one {# branch not created yet} other {# branches not created yet}}",
+      "forBranch": "{product} — {branch}",
       "total": "Total",
-      "trialNote": "You are on the free trial. Nothing is charged until it ends.",
-      "footnote": "Your request goes to the Favornoms team for activation. You will be invoiced monthly."
+      "summary": {
+        "branches": "{count, plural, one {# branch} other {# branches}}",
+        "delivery": "delivery at {names}",
+        "noDelivery": "no delivery",
+        "line": "{branches}, {delivery} — {price} every month.",
+        "plusOnce": "Plus {price} once."
+      },
+      "trialNote": "Nothing is charged while your free trial runs. This is your first bill when you confirm.",
+      "footnote": "Your request goes to the Favornoms team for activation. You are invoiced monthly."
     },
-    "addon": {
-      "aiSuiteComingSoon": "Signage & AI Voice — coming soon.",
-      "add": "Add",
-      "added": "Added"
+    "discount": {
+      "title": "Discount code",
+      "placeholder": "Enter a code",
+      "apply": "Apply",
+      "remove": "Remove",
+      "applied": "{label}: {amount} off",
+      "appliedPlain": "{amount} off",
+      "repriced": "You changed the package. Press Apply to check the code against the new total.",
+      "notApplied": "This code has not been applied. Press Apply to use it, or clear the box to send the request without it.",
+      "onlyOnce": "A code comes off what you pay once, never off the monthly bill."
     },
     "trial": {
       "active": "Free trial active",
       "endsToday": "Your free trial ends today",
       "daysLeft": "{days, plural, one {# day left in your free trial} other {# days left in your free trial}}",
-      "body": "Everything is unlocked. Choose a package below to keep it after the trial — no card needed until then."
+      "body": "Everything is unlocked, delivery included at every branch. Choose what you keep below — no card needed until the trial ends."
     },
     "suspended": {
       "title": "Your account is not active",
@@ -92,6 +143,11 @@
       "title": "Renew your package",
       "paidThrough": "Your package is paid through {date}.",
       "body": "Your current package is selected below. Press Request renewal to send it to the Favornoms team — nothing renews until they approve it. You can also change the package before sending."
+    },
+    "pricesUnavailable": {
+      "title": "Prices could not be loaded",
+      "body": "We could not read the price list just now, so this page cannot quote a package. Nothing on your account has changed. Reload the page in a moment.",
+      "pay": "No figures until the price list loads, and nothing can be sent in the meantime."
     },
     "decision": {
       "approvedOn": "Request approved on {date}",

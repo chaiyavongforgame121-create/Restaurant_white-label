@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Favornoms — Nền tảng đặt món tất cả trong một cho nhà hàng",
-    "description": "Quản lý giao hàng, tự đến lấy, ăn tại quán, màn hình bếp, POS và điều phối tài xế trên cùng một nền tảng. $199/tháng, dùng thử miễn phí 14 ngày. Dành cho nhà hàng tại Mỹ."
+    "description": "Quản lý giao hàng, tự đến lấy, ăn tại quán, màn hình bếp, POS và điều phối tài xế trên cùng một nền tảng. Trả một lần khi bắt đầu, rồi trả phí hằng tháng cho mỗi chi nhánh, kèm 14 ngày dùng thử miễn phí. Dành cho nhà hàng tại Mỹ."
   },
   "site": {
     "description": "Quản lý đặt món trực tuyến, màn hình bếp, POS, điều phối tài xế và thanh toán Stripe trên cùng một nền tảng. Dành cho nhà hàng tại Mỹ.",
@@ -50,31 +50,32 @@
   },
   "pricing": {
     "title": "Một gói cơ bản. Thêm những gì bạn cần.",
-    "subtitle": "Không giới hạn số món. Không giới hạn số đơn. Hủy bất cứ lúc nào.",
+    "subtitle": "Trả một lần khi bắt đầu, rồi một mức phí cố định cho mỗi chi nhánh mỗi tháng. Không giới hạn số món, không giới hạn số đơn.",
     "baseName": "Cơ bản",
-    "perMonth": "{price}<unit>/tháng</unit>",
-    "baseSummary": "Mọi thứ bạn cần để vận hành một cơ sở, bao gồm thanh toán bằng thẻ.",
+    "once": "{price} trả một lần",
+    "thenMonthly": "rồi {price} mỗi tháng",
+    "monthlyOnly": "{price} mỗi tháng",
+    "baseSummary": "Mọi thứ bạn cần để vận hành một chi nhánh, đã gồm thanh toán bằng thẻ. Chi nhánh đầu tiên nằm sẵn trong gói.",
     "includes": {
       "storefront": "Cửa hàng trực tuyến mang thương hiệu trên tên miền riêng",
       "payments": "Thanh toán bằng thẻ và tiền mặt khi đặt hàng",
       "kitchen": "Màn hình bếp, POS và gọi món tại quầy",
       "growth": "Điểm tích lũy, khuyến mãi, thẻ quà tặng và báo cáo",
-      "aiImport": "Nhập thực đơn bằng AI — chụp ảnh thực đơn là có ngay thực đơn"
+      "oneBranch": "Bao gồm 1 chi nhánh — thêm chi nhánh bất cứ lúc nào"
     },
-    "trialNote": "Miễn phí 14 ngày, bao gồm mọi tiện ích bổ sung. Không cần thẻ cho đến khi bạn quyết định.",
+    "trialNote": "Miễn phí 14 ngày, giao hàng mở ở mọi chi nhánh. Không cần thẻ cho đến khi bạn quyết định.",
     "addOnsTitle": "Thêm tiện ích khi bạn cần",
+    "addOnPrice": "+{once} một lần, rồi +{monthly}/tháng",
+    "addOnOnce": "+{price} một lần",
+    "addOnMonthly": "+{price}/tháng",
     "addOns": {
-      "delivery": {
-        "name": "Giao hàng",
-        "description": "Đội tài xế riêng, điều phối tự động và theo dõi trực tiếp."
-      },
-      "aiSuite": {
-        "name": "AI Suite",
-        "description": "Bảng hiệu kỹ thuật số và trợ lý giọng nói AI."
-      },
       "extraBranch": {
         "name": "Thêm chi nhánh",
-        "description": "Mỗi chi nhánh thêm đều có đầy đủ tính năng như chi nhánh chính."
+        "description": "Mỗi chi nhánh sau chi nhánh đầu tiên, đầy đủ tính năng như chi nhánh chính."
+      },
+      "delivery": {
+        "name": "Giao hàng",
+        "description": "Tính theo từng chi nhánh bạn chọn: đội tài xế riêng, điều phối tự động và theo dõi trực tiếp."
       }
     }
   },

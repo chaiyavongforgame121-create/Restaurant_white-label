@@ -108,6 +108,9 @@ export default async function CounterPage({ params }: Props) {
       tables={tables}
       combos={combos}
       canUseCard={hasFeature(entitlements, 'card_payment')}
+      // getEntitlementsForBranch resolves the payload FOR this branch, so this is "THIS
+      // branch delivers" — delivery is bought per branch (docs/PACKAGING-2026-09-23.md §2).
+      // The till the cashier is standing at is the branch being asked about.
       canDeliver={hasFeature(entitlements, 'delivery')}
       salesTaxRate={Number(branch.sales_tax_rate ?? 0)}
       serviceFeePercent={parseServiceFeePercent(settings)}

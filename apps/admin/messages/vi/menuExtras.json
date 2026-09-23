@@ -200,37 +200,9 @@
     }
   },
   "import": {
-    "title": "Nhập thực đơn bằng AI",
-    "subtitle": "Tải lên ảnh chụp thực đơn in sẵn — Claude sẽ trích xuất món, giá và danh mục để bạn duyệt.",
-    "menuImage": "Ảnh thực đơn",
-    "upload": "Tải lên",
-    "hint": "Gợi ý cho AI (không bắt buộc)",
-    "hintPlaceholder": "ví dụ: đồ ăn Mỹ bình dân, giá bằng USD",
-    "uploaded": "Đã tải ảnh lên. Bấm Phân tích bằng AI để trích xuất các món.",
-    "analyze": "Phân tích bằng AI",
-    "analyzing": "Claude đang phân tích ảnh…",
+    "title": "Nhập thực đơn từ CSV",
+    "subtitle": "Thêm cả thực đơn cùng lúc từ một bảng tính — mỗi dòng một món, kèm danh mục, tên, giá và bếp phụ trách.",
     "imported": "{count, plural, other {Đã nhập # món.}}",
-    "selected": "Đã chọn {selected}/{total} món",
-    "importSelected": "Nhập các món đã chọn",
-    "descriptionPlaceholder": "Mô tả",
-    "remove": "Gỡ",
-    "stations": {
-      "hot": "Bếp nóng",
-      "cold": "Bếp lạnh",
-      "bar": "Quầy bar",
-      "dessert": "Tráng miệng",
-      "expo": "Ra món"
-    },
-    "errors": {
-      "uploadFailed": "Tải lên không thành công. Vui lòng thử lại.",
-      "fileTooLarge": "Ảnh quá lớn, không tải lên được.",
-      "fileTypeNotAllowed": "Không tải lên được loại tệp này. Hãy chọn một tệp ảnh.",
-      "signedOut": "Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại rồi thử lại.",
-      "notAllowed": "Chỉ chủ sở hữu và quản lý mới được nhập thực đơn ở chi nhánh này.",
-      "aiUnavailable": "Tính năng nhập thực đơn bằng AI hiện chưa dùng được.",
-      "rateLimited": "Chi nhánh này đã đạt giới hạn số lần nhập mỗi giờ. Vui lòng thử lại sau một giờ.",
-      "analyzeFailed": "Không đọc được thực đơn từ ảnh này. Hãy thử ảnh rõ nét hơn."
-    },
     "csv": {
       "title": "Nhập hàng loạt từ CSV",
       "columns": "Các cột: <code>{columns}</code> (cột station không bắt buộc). Dòng đầu tiên phải là tiêu đề cột.",

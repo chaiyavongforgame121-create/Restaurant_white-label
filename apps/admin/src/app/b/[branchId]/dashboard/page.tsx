@@ -20,6 +20,7 @@ import {
 } from '@favornoms/shared';
 import { Card } from '@favornoms/ui';
 import { getBranchAccess } from '@/lib/capabilities';
+import { deliveryPlanHref, resolveDeliveryWindDown } from '@/lib/delivery-gate';
 import { AccessDenied } from '@/components/access-denied';
 import {
   BOOKING_LATE_WINDOW_MS,
@@ -106,7 +107,27 @@ export default async function DashboardPage({ params }: Props) {
   // surfacing here is the trial clock — it is the only thing that expires.
   const entitlements = await getEntitlementsForBranch(supabase, branchId);
   const trialDays = trialDaysLeft(entitlements);
-  const deliveryEnabled = hasFeature(entitlements, 'delivery');
+  // Resolved FOR this branch, so `delivery` is this branch's answer and not the
+  // restaurant's: delivery is bought per branch (docs/PACKAGING-2026-09-23.md §2). Every
+  // delivery thing on this page — the rider and withdrawal reads, the no-pin and no-riders
+  // warnings, the Deliveries tile, the bookings bucket — hangs off this one value, so they
+  // all follow the branch switcher together.
+  const deliverySold = hasFeature(entitlements, 'delivery');
+  // Switched off here, but riders still out or still owed. The Live deliveries board and
+  // Driver payouts stay open for that (their own pages decide it again), and the Schedule
+  // Delivery bookings bucket already had the same exception a few hundred lines below — but
+  // the Deliveries tile pointed at the plan page and showed "—", and the delivery-failed /
+  // delivery-unaccepted buckets vanished, because loadBranchDashboard was told delivery was
+  // off and never issued the read. A rider failing on an in-flight run was then surfaced
+  // nowhere at all. A few head counts, and only while delivery is off.
+  const windDown = await resolveDeliveryWindDown(supabase, branchId, deliverySold);
+  // The Live deliveries board is open: the add-on, or runs it still shows (the page's own
+  // rule, hasRunsOut). The Deliveries tile and the delivery-failed / delivery-unaccepted
+  // alerts follow it and link to it, so none of them ever leads to a locked screen.
+  const deliveryBoardOpen = deliverySold || windDown.runsOut;
+  // What the delivery READS cover: the board's runs, and the withdrawals riders are still
+  // waiting on — Driver payouts stays open for those with no run out at all.
+  const deliveryEnabled = deliveryBoardOpen || windDown.ridersOwed;
 
   const now = Date.now();
   const yesterdaySameTime = now - 24 * 60 * 60 * 1000;
@@ -155,8 +176,9 @@ export default async function DashboardPage({ params }: Props) {
                 .in('status', ['active', 'pending'])
             : Promise.resolve(null),
           // Riders approved for THIS branch: dispatch only offers an order to those
-          // (find_dispatch_candidates), and a new branch starts with none.
-          deliveryEnabled
+          // (find_dispatch_candidates), and a new branch starts with none. Read only for the
+          // no-riders warning, which follows deliverySold.
+          deliverySold
             ? supabase
                 .from('driver_approvals')
                 .select('id', { count: 'exact', head: true })
@@ -206,9 +228,10 @@ export default async function DashboardPage({ params }: Props) {
     paidThroughMs - now <= EXPIRY_WARN_DAYS * 86_400_000
       ? Math.max(0, Math.ceil((paidThroughMs - now) / 86_400_000))
       : null;
-  // Same rule as the plan page: billing.manage is owner-only in the matrix, but the owner's
-  // admin may file package requests too.
-  const canRenew = can('billing.manage') || role === 'admin';
+  // Same rule as the plan page and request_package_change: only whoever holds billing.manage
+  // (the owner, in the role matrix) can buy or renew. Anyone else is told to ask the owner
+  // rather than sent to a plan page that would only say the same.
+  const canRenew = can('billing.manage');
 
   const branchSettingsHref = `/b/${branchId}/branch`;
   const [menuRes, hoursRes, geoRes, staffRes, ridersRes] = setup ?? [null, null, null, null, null];
@@ -250,7 +273,10 @@ export default async function DashboardPage({ params }: Props) {
             done: paymentMethodOn(
               settings,
               hasFeature(entitlements, 'card_payment'),
-              deliveryEnabled && settings.scheduling_enabled !== false,
+              // deliverySold, not deliveryEnabled: this asks which payment methods the
+              // branch needs for the delivery it SELLS. A branch winding down is not being
+              // set up for anything.
+              deliverySold && settings.scheduling_enabled !== false,
             ),
             href: branchSettingsHref,
             hrefLabel: t('setup.payment.link'),
@@ -292,7 +318,9 @@ export default async function DashboardPage({ params }: Props) {
   // Its own row, not just the unticked pin step: a store selling delivery with no pin takes
   // orders that no rider will ever be offered, which costs a customer, not only a setup tick.
   const setupWarnings: SetupWarning[] = [];
-  if (deliveryEnabled && geoRes && !geoRes.error && !hasPin) {
+  // Setup nags follow deliverySold too: telling a branch that just switched delivery off to
+  // drop a map pin or recruit riders is advice for a business it no longer runs.
+  if (deliverySold && geoRes && !geoRes.error && !hasPin) {
     setupWarnings.push({
       id: 'delivery-no-pin',
       label: t('setup.noPin.label'),
@@ -312,7 +340,7 @@ export default async function DashboardPage({ params }: Props) {
   }
   // Platform delivery only: a branch whose own staff deliver needs no approved riders.
   if (
-    deliveryEnabled &&
+    deliverySold &&
     settings.delivery_mode !== 'self' &&
     ridersRes &&
     !ridersRes.error &&
@@ -495,17 +523,24 @@ export default async function DashboardPage({ params }: Props) {
     },
     {
       label: t('overview.deliveries.label'),
-      href: deliveryEnabled ? `/b/${branchId}/deliveries` : `/b/${branchId}/settings/plan`,
-      value: !deliveryEnabled || snapshot.deliveries.error ? '—' : deliveries.inFlight.toString(),
+      // Straight to this branch's Delivery switch, not the bare plan page: the merchant
+      // may already deliver from another branch, so "add delivery" is a question about
+      // which branch.
+      href: deliveryBoardOpen ? `/b/${branchId}/deliveries` : deliveryPlanHref(branchId),
+      value: !deliveryBoardOpen || snapshot.deliveries.error ? '—' : deliveries.inFlight.toString(),
       // Without the stalled line a truthful 0 reads as a broken tile: one branch carries
       // thirteen June test runs that the board itself parks as forgotten.
-      sub: !deliveryEnabled
-        ? t('overview.deliveries.notOnPlan')
+      sub: !deliveryBoardOpen
+        ? t('overview.deliveries.notOffered')
         : snapshot.deliveries.error
           ? t('overview.deliveries.failed')
-          : deliveries.stalled > 0
-            ? t('overview.deliveries.stalled', { count: deliveries.stalled })
-            : null,
+          : !deliverySold
+            ? // Delivery is off but the count above is real: say which it is, or the tile
+              // reads as if the merchant never turned it off.
+              t('overview.deliveries.windingDown')
+            : deliveries.stalled > 0
+              ? t('overview.deliveries.stalled', { count: deliveries.stalled })
+              : null,
       icon: Bike,
       tone: 'success',
     },
@@ -748,8 +783,9 @@ export default async function DashboardPage({ params }: Props) {
       href: `/b/${branchId}/orders?when=scheduled&channel=delivery`,
       destination: 'bookings',
       failed: Boolean(snapshot.scheduledDeliveries.error),
-      // Without the delivery add-on there is nothing to book, but a booking taken before the
-      // plan changed still has to go out, so an existing one keeps the bucket on screen.
+      // A branch that does not deliver has nothing to book, but a booking taken before
+      // delivery was switched off here still has to go out, so an existing one keeps the
+      // bucket on screen. Same rule as dispatch-driver: never strand work in flight.
       hidden: !deliveryEnabled && bookings.rows.length === 0,
     },
     {
@@ -788,7 +824,9 @@ export default async function DashboardPage({ params }: Props) {
       href: `/b/${branchId}/drivers`,
       destination: 'drivers',
       failed: Boolean(snapshot.riderQueue.error),
-      hidden: !snapshot.riderQueue.available,
+      // Rider applications go to the Drivers page, which has no wind-down: it is locked the
+      // moment delivery is off here, so an application is not something to act on then.
+      hidden: !snapshot.riderQueue.available || !deliverySold,
     },
     {
       id: 'withdrawals',

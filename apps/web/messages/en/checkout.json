@@ -52,7 +52,7 @@
     "dropoffRequired": "Please choose where the driver should leave your order.",
     "dropoffOtherRequired": "Please describe the drop-off spot.",
     "outOfRange": "This address is outside the delivery area.",
-    "deliveryNotSold": "This branch isn’t taking delivery orders right now. Try pickup instead.",
+    "deliveryNotSold": "This branch does not deliver. Try pickup instead.",
     "pickupClosedScheduleInstead": "This restaurant is closed right now, so pickup is not available. You can schedule a delivery instead."
   },
   "promoCode": "Have a promo code?",
@@ -96,7 +96,9 @@
     "deliveryNoPaymentPickupOpen": "Scheduled delivery is not available with this restaurant’s current payment options — pickup is still available.",
     "deliveryNoPayment": "Scheduled delivery is not available with this restaurant’s current payment options.",
     "pickupPaused": "Pickup is not available right now — the restaurant has paused orders.",
-    "pickupClosedNow": "Pickup is not available right now — the restaurant is closed."
+    "pickupClosedNow": "Pickup is not available right now — the restaurant is closed.",
+    "deliveryNotOfferedPickupOpen": "This branch does not deliver — pickup is available.",
+    "deliveryNotOffered": "This branch does not deliver."
   },
   "schedule": {
     "loading": "Loading the times this restaurant takes bookings…",
@@ -116,7 +118,7 @@
     "calculating": "Calculating delivery…",
     "distanceFee": "{distance} mi away · delivery {fee}",
     "outOfRangeMax": "Sorry, this address is outside the delivery area (max {max} mi).",
-    "notSold": "Sorry, this branch isn’t taking delivery orders right now. Pickup is still available.",
+    "notSold": "Delivery is not offered at this branch. Please choose pickup instead.",
     "pickSuggestion": "Select your address from the suggestions to confirm delivery and see the exact fee."
   },
   "dropoff": {

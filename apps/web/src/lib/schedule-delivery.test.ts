@@ -6,6 +6,7 @@ import { ordersPaused, resolveScheduleDelivery } from './schedule-delivery';
 const SUNDAY_NOON_UTC = new Date('2026-08-30T12:00:00Z');
 
 const status = (over: Partial<StorefrontStatus> = {}): StorefrontStatus => ({
+  known: true,
   entitled: true,
   delivery: false,
   delivery_entitled: true,
@@ -49,12 +50,12 @@ describe('ordersPaused', () => {
 describe('resolveScheduleDelivery', () => {
   it('offers delivery booked ahead even though delivery is not open right now', async () => {
     const r = await resolveScheduleDelivery(fakeClient({}), 'b', status(), SUNDAY_NOON_UTC);
-    expect(r).toEqual({ canDeliver: true, paused: false });
+    expect(r).toEqual({ canDeliver: true, paused: false, offered: true });
   });
 
   it('offers nothing while orders are paused', async () => {
     const r = await resolveScheduleDelivery(fakeClient({ orders_paused: true }), 'b', status(), SUNDAY_NOON_UTC);
-    expect(r).toEqual({ canDeliver: false, paused: true });
+    expect(r).toEqual({ canDeliver: false, paused: true, offered: true });
   });
 
   it('offers nothing without the add-on or without advance orders', async () => {
@@ -66,6 +67,50 @@ describe('resolveScheduleDelivery', () => {
       (await resolveScheduleDelivery(fakeClient({}), 'b', status({ scheduling_enabled: false }), SUNDAY_NOON_UTC))
         .canDeliver,
     ).toBe(false);
+  });
+
+  // Delivery is bought per branch, and the storefront has to say which of the two it is:
+  // "this branch does not deliver" is permanent, "not right now" is not. Every other way
+  // of getting canDeliver:false leaves `offered` true, so the copy can tell them apart.
+  it('separates "this branch does not deliver" from "not bookable right now"', async () => {
+    const notSold = await resolveScheduleDelivery(
+      fakeClient({}),
+      'b',
+      status({ delivery_entitled: false }),
+      SUNDAY_NOON_UTC,
+    );
+    expect(notSold).toEqual({ canDeliver: false, paused: false, offered: false });
+
+    // A status that could not be read (STOREFRONT_UNKNOWN: known:false, every flag closed)
+    // is NOT evidence that the branch stopped delivering. It used to take the same path as
+    // `delivery_entitled: false` and print the permanent sentence over a cold database.
+    const unreadable = await resolveScheduleDelivery(
+      fakeClient({}),
+      'b',
+      status({ known: false, delivery_entitled: false, scheduling_enabled: false }),
+      SUNDAY_NOON_UTC,
+    );
+    expect(unreadable).toEqual({ canDeliver: false, paused: false, offered: true });
+
+    for (const closed of [
+      // Booked ahead is switched off at this branch.
+      status({ scheduling_enabled: false }),
+      // Delivery hours are armed with no window, so no slot survives.
+      status({ delivery_hours_on: true, delivery_windows: [] }),
+    ]) {
+      const r = await resolveScheduleDelivery(fakeClient({}), 'b', closed, SUNDAY_NOON_UTC);
+      expect(r.canDeliver).toBe(false);
+      expect(r.offered).toBe(true);
+    }
+
+    // Paused is about the whole kitchen, not about delivery being sold here.
+    const paused = await resolveScheduleDelivery(
+      fakeClient({ orders_paused: true }),
+      'b',
+      status(),
+      SUNDAY_NOON_UTC,
+    );
+    expect(paused.offered).toBe(true);
   });
 
   it('offers nothing when no slot survives delivery hours', async () => {

@@ -27,7 +27,7 @@
     "title": "Sucursales",
     "description": "Locales de {restaurant}. Cada uno tiene su propia URL de tienda y su código QR.",
     "add": "Agregar sucursal",
-    "addSeat": "Agregar cupo de sucursal +$99/mes",
+    "addSeat": "Agregar una sucursal en la página del plan",
     "seatsUsed": "Usas {used} de {seats, plural, one {# cupo de sucursal} other {# cupos de sucursal}}. Agrega un cupo para abrir otro local: tendrá todas las funciones de tu sucursal principal.",
     "hidden": "Oculta",
     "noStorefront": "Aún no tiene dirección de tienda",
@@ -84,7 +84,7 @@
     "copying": "Copiando…",
     "create": "Crear sucursal",
     "errors": {
-      "seats": "{limit, plural, one {Ya usas tu único cupo de sucursal.} other {Ya usas los # cupos de sucursal.}} Agrega un cupo (+$99/mes) en la página del plan y luego crea la sucursal.",
+      "seats": "{limit, plural, one {Ya usas tu único cupo de sucursal.} other {Ya usas los # cupos de sucursal.}} Agrega una sucursal en la página del plan y luego créala aquí.",
       "inactive": "Tu suscripción no está activa. Elige un paquete en la página del plan para continuar.",
       "notAuthorized": "Solo el propietario o un administrador pueden agregar una sucursal.",
       "nameRequired": "Escribe un nombre de sucursal y un slug de URL.",

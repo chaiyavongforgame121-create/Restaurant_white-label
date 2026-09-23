@@ -6,11 +6,13 @@
     "emptyBody": "Các thao tác quan trọng (hoàn tiền, hủy giao dịch, thay đổi cài đặt) sẽ hiển thị tại đây."
   },
   "lockedFeature": {
-    "metaTitle": "{feature} · Favornoms",
-    "aiVoiceLocked": "Trợ lý AI trả lời điện thoại và nhận đơn. Thuộc tiện ích bổ sung AI Suite.",
-    "aiVoiceIncluded": "Trợ lý giọng nói AI đã có trong gói của bạn và đang được phát triển. Chúng tôi sẽ bật cho bạn ngay khi ra mắt — không tốn thêm phí.",
-    "signageLocked": "Bảng thực đơn và màn hình khuyến mãi lấy dữ liệu trực tiếp từ thực đơn của bạn. Thuộc tiện ích bổ sung AI Suite.",
-    "signageIncluded": "Bảng hiệu kỹ thuật số đã có trong gói của bạn và đang được phát triển. Chúng tôi sẽ bật cho bạn ngay khi ra mắt — không tốn thêm phí."
+    "deliveryNotAtThisBranch": "{branch} không giao hàng. Giao hàng được bật theo từng chi nhánh — bật tại đây sẽ có tài xế, phí giao hàng và theo dõi trực tiếp cho riêng chi nhánh này.",
+    "deliveryStoppedTitle": "{branch} không còn giao hàng.",
+    "deliveryTurnBackOn": "Bật lại giao hàng",
+    "deliveryNotHere": "Chi nhánh này không giao hàng. Giao hàng được bật theo từng chi nhánh — bật tại đây sẽ có tài xế, phí giao hàng và theo dõi trực tiếp cho riêng chi nhánh này.",
+    "deliveryUnlockedAtThisBranch": "{branch} đang tắt giao hàng. Giao hàng đã được mở khóa tại chi nhánh này trước đây, nên bật lại không mất phí một lần — chỉ cộng thêm phí hằng tháng của chi nhánh này.",
+    "deliveryUnlockedHere": "Chi nhánh này đang tắt giao hàng. Giao hàng đã được mở khóa tại đây trước đây, nên bật lại không mất phí một lần — chỉ cộng thêm phí hằng tháng của chi nhánh này.",
+    "deliveryStoppedHere": "Chi nhánh này không còn giao hàng."
   },
   "receipts": {
     "title": "Hóa đơn",

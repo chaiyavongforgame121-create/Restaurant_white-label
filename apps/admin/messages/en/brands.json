@@ -27,7 +27,7 @@
     "title": "Branches",
     "description": "Locations under {restaurant}. Each gets its own storefront URL + QR code.",
     "add": "Add branch",
-    "addSeat": "Add a branch seat +$99/mo",
+    "addSeat": "Add a branch on the Plan page",
     "seatsUsed": "You are using {used} of {seats, plural, one {# branch seat} other {# branch seats}}. Add a seat to open another location — it gets the full feature set of your main branch.",
     "hidden": "Hidden",
     "noStorefront": "No storefront address yet",
@@ -84,7 +84,7 @@
     "copying": "Copying…",
     "create": "Create branch",
     "errors": {
-      "seats": "{limit, plural, one {You are using your only branch seat.} other {You are using all # of your branch seats.}} Add a seat (+$99/mo) on the Plan page, then create the branch.",
+      "seats": "{limit, plural, one {You are using your only branch seat.} other {You are using all # of your branch seats.}} Add a branch on the Plan page, then create it here.",
       "inactive": "Your subscription is not active. Choose a package on the Plan page to continue.",
       "notAuthorized": "Only the owner or an admin can add a branch.",
       "nameRequired": "Enter a branch name and a URL slug.",

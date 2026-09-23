@@ -26,7 +26,7 @@ export default async function PlatformPage() {
 
   // Scope the child reads to the rows actually being rendered, so the result
   // sets are consistent by construction instead of by four limits.
-  const [restaurantsRes, branchesRes, subsRes, catalog] = await Promise.all([
+  const [restaurantsRes, branchesRes, subsRes, catalog, chargesRes] = await Promise.all([
     supabase.from('restaurants').select('id, franchise_group_id').in('id', ids),
     // The closure filters are on the EMBEDDED resource, so they prune the child
     // rows to the window that is open right now without dropping the branch.
@@ -44,6 +44,10 @@ export default async function PlatformPage() {
     // Only for cancel_at_period_end — entitlements_json does not expose it.
     supabase.from('subscriptions').select('restaurant_id, cancel_at_period_end').in('restaurant_id', ids),
     listBillingProducts(supabase),
+    // The one-time ledger. Under the 2026-09-23 packaging the monthly totals no
+    // longer contain the $228 / $99 / $59 fees, so without this the console's
+    // only revenue figures are the restaurants' own takings.
+    supabase.from('billing_charges').select('net_amount').eq('status', 'paid'),
   ]);
 
   const meta = new Map((restaurantsRes.data ?? []).map((r) => [r.id, r]));
@@ -100,6 +104,14 @@ export default async function PlatformPage() {
     });
   }
 
+  // Deliberately NOT in `failed` above: the branch and subscription reads decide
+  // whether the tenant table can be trusted, while this one only feeds a single
+  // stat. A missing ledger shows that stat as a dash instead of putting a
+  // page-wide warning over a table that is perfectly fine.
+  const oneTimePaid = chargesRes.error
+    ? null
+    : (chargesRes.data ?? []).reduce((sum, c) => sum + Number(c.net_amount ?? 0), 0);
+
   return (
     <PlatformDashboard
       summary={summary as Record<string, number>}
@@ -107,6 +119,7 @@ export default async function PlatformPage() {
       branches={branches}
       nowMs={Date.now()}
       catalog={catalog}
+      oneTimePaid={oneTimePaid}
       siteBase={storefrontBase()}
       loadError={loadError}
     />

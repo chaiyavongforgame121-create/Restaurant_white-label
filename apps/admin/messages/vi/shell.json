@@ -36,7 +36,6 @@
   "sections": {
     "advanced": "Nâng cao",
     "operations": "Vận hành",
-    "aiSuite": "AI Suite",
     "peopleGrowth": "Nhân sự và tăng trưởng",
     "records": "Sổ sách",
     "setup": "Thiết lập"
@@ -100,7 +99,9 @@
   },
   "addon": {
     "pricePerMonth": "+${price}<unit>/tháng</unit>",
-    "addToPackage": "Thêm vào gói của tôi"
+    "addToPackage": "Thêm vào gói của tôi",
+    "priceOnceThenMonthly": "${once} một lần, sau đó +${monthly}/tháng cho chi nhánh này",
+    "priceOnce": "${once} một lần"
   },
   "lockedFeature": {
     "comingSoon": "Sắp ra mắt",

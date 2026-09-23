@@ -7,7 +7,8 @@
     "requests": "Yêu cầu",
     "catalog": "Danh mục gói",
     "settings": "Cài đặt",
-    "pendingBadge": "{count}<sr> đang chờ</sr>"
+    "pendingBadge": "{count}<sr> đang chờ</sr>",
+    "discounts": "Giảm giá"
   },
   "accessDenied": {
     "title": "Không có quyền truy cập",
@@ -31,7 +32,8 @@
       "needsAttention": "Cần chú ý",
       "ordersToday": "Đơn hôm nay",
       "revenueToday": "Doanh thu hôm nay",
-      "driversOnline": "Tài xế đang nhận đơn"
+      "driversOnline": "Tài xế đang nhận đơn",
+      "oneTimePaid": "Doanh thu một lần"
     },
     "decisions": {
       "ariaLabel": "Cần quyết định",

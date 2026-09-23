@@ -4,5 +4,7 @@
   "subtitleNamed": "Elige una opción para empezar tu pedido en {branch}.",
   "deliveryHint": "Elige día y hora, y te lo llevamos a tu dirección",
   "pickupHint": "Recógelo en el restaurante mientras esté abierto",
-  "changeLater": "Puedes cambiarlo cuando quieras desde el menú."
+  "changeLater": "Puedes cambiarlo cuando quieras desde el menú.",
+  "deliveryNotOffered": "Esta sucursal no ofrece entrega a domicilio.",
+  "deliveryClosedNow": "Ahora mismo no se puede reservar una entrega."
 }

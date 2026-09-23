@@ -178,5 +178,8 @@
     "otherPlaceholder": "Cuéntale al cliente qué pasó",
     "keep": "Mantener pedido",
     "confirm": "Sí, cancelar"
+  },
+  "notOffered": {
+    "stillInFlight": "Los repartos que ya salieron terminan aquí. Este tablero se cerrará cuando llegue el último."
   }
 }

@@ -65,6 +65,7 @@ export function PlatformDashboard({
   branches,
   nowMs,
   catalog,
+  oneTimePaid,
   siteBase,
   loadError,
 }: {
@@ -76,6 +77,10 @@ export function PlatformDashboard({
   /** The live price list. Every quote on this page is priced from it at the
    *  point of use, so no button can name a number the RPC will not charge. */
   catalog: BillingProduct[];
+  /** Every one-time fee actually collected, net of discounts — the money the
+   *  monthly figures do not contain. `null` when the ledger could not be read,
+   *  which must not render as "$0 taken". */
+  oneTimePaid: number | null;
   siteBase: string;
   /** Set when a child read failed, so a partial page says so instead of
    *  rendering "No branches" for every tenant on the platform. */
@@ -322,7 +327,7 @@ export function PlatformDashboard({
         </div>
       )}
 
-      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
         <Stat label={t('dashboard.stats.restaurants')} value={String(scored.length)} />
         {/* Not `active_branches`: that counts is_active and ignores billing, so a
             dead tenant inflates the headline. This one counts entitlement, which
@@ -333,6 +338,13 @@ export function PlatformDashboard({
           value={String(counts.attention)}
           warn={counts.attention > 0}
           onSelect={counts.attention > 0 ? () => setFilter('attention') : undefined}
+        />
+        {/* Paid once, ever — deliberately apart from the monthly figures and from
+            the restaurants' own takings below. An unreadable ledger shows a dash
+            rather than a zero nobody earned. */}
+        <Stat
+          label={t('dashboard.stats.oneTimePaid')}
+          value={oneTimePaid === null ? '—' : formatCurrency(oneTimePaid)}
         />
         <Stat label={t('dashboard.stats.ordersToday')} value={String(summary.orders_today ?? 0)} />
         <Stat

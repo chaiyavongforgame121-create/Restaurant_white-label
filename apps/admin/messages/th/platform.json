@@ -7,7 +7,8 @@
     "requests": "คำขอ",
     "catalog": "แคตตาล็อก",
     "settings": "ตั้งค่า",
-    "pendingBadge": "{count}<sr> รายการรอดำเนินการ</sr>"
+    "pendingBadge": "{count}<sr> รายการรอดำเนินการ</sr>",
+    "discounts": "ส่วนลด"
   },
   "accessDenied": {
     "title": "ไม่มีสิทธิ์เข้าถึง",
@@ -31,7 +32,8 @@
       "needsAttention": "ต้องดูแล",
       "ordersToday": "ออร์เดอร์วันนี้",
       "revenueToday": "รายได้วันนี้",
-      "driversOnline": "คนขับที่รับงานอยู่"
+      "driversOnline": "คนขับที่รับงานอยู่",
+      "oneTimePaid": "รายได้จ่ายครั้งเดียว"
     },
     "decisions": {
       "ariaLabel": "รอการตัดสินใจ",

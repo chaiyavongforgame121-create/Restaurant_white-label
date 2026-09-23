@@ -6,11 +6,13 @@
     "emptyBody": "Important actions (refunds, voids, settings changes) will appear here."
   },
   "lockedFeature": {
-    "metaTitle": "{feature} · Favornoms",
-    "aiVoiceLocked": "An AI assistant that answers the phone and takes orders. Part of the AI Suite add-on.",
-    "aiVoiceIncluded": "AI Voice is included in your package and is being built. We’ll turn it on for you the moment it ships — no extra charge.",
-    "signageLocked": "Menu boards and promo screens driven straight from your live menu. Part of the AI Suite add-on.",
-    "signageIncluded": "Digital Signage is included in your package and is being built. We’ll turn it on for you the moment it ships — no extra charge."
+    "deliveryNotAtThisBranch": "{branch} does not deliver. Delivery is chosen branch by branch, so switching it on here adds riders, delivery fees and live tracking for this branch only.",
+    "deliveryStoppedTitle": "{branch} no longer delivers.",
+    "deliveryTurnBackOn": "Turn delivery back on",
+    "deliveryNotHere": "This branch does not deliver. Delivery is chosen branch by branch, so switching it on here adds riders, delivery fees and live tracking for this branch only.",
+    "deliveryUnlockedAtThisBranch": "{branch} has delivery switched off. Delivery was unlocked here before, so switching it back on has no one-time fee — it only adds this branch's monthly price.",
+    "deliveryUnlockedHere": "Delivery is switched off at this branch. It was unlocked here before, so switching it back on has no one-time fee — it only adds this branch's monthly price.",
+    "deliveryStoppedHere": "This branch no longer delivers."
   },
   "receipts": {
     "title": "Receipts",

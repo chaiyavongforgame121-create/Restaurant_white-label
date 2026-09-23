@@ -4,5 +4,7 @@
   "subtitleNamed": "Chọn một hình thức để bắt đầu đặt hàng tại {branch}.",
   "deliveryHint": "Chọn ngày giờ, chúng tôi sẽ giao đến địa chỉ của bạn",
   "pickupHint": "Đến nhà hàng lấy trong giờ mở cửa",
-  "changeLater": "Bạn có thể đổi lại bất cứ lúc nào từ thực đơn."
+  "changeLater": "Bạn có thể đổi lại bất cứ lúc nào từ thực đơn.",
+  "deliveryNotOffered": "Chi nhánh này không giao hàng.",
+  "deliveryClosedNow": "Hiện chưa thể đặt lịch giao hàng."
 }

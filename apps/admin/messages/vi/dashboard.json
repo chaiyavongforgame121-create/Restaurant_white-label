@@ -90,9 +90,10 @@
     },
     "deliveries": {
       "label": "Đơn đang giao",
-      "notOnPlan": "Gói của bạn chưa có giao hàng",
       "failed": "Không đọc được đơn giao",
-      "stalled": "{count} bị treo"
+      "stalled": "{count} bị treo",
+      "notOffered": "Chi nhánh này không giao hàng",
+      "windingDown": "Chi nhánh này đã tắt giao hàng — vẫn còn chuyến đang chạy"
     }
   },
   "action": {

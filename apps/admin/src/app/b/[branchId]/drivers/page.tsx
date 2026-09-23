@@ -2,7 +2,9 @@ import { getLocale, getTranslations } from 'next-intl/server';
 import { DEFAULT_UI_LOCALE, formatPhone, intlLocaleFor, isUiLocale } from '@favornoms/shared';
 import { Badge, Card } from '@favornoms/ui';
 import { getBranchAccess } from '@/lib/capabilities';
+import { resolveDeliveryGate } from '@/lib/delivery-gate';
 import { AccessDenied } from '@/components/access-denied';
+import { DeliveryLocked } from '@/components/delivery-locked';
 import { ApproveButton } from './_components/approve-button';
 import { KycReviewButton } from './_components/kyc-review-button';
 import {
@@ -86,6 +88,14 @@ export default async function DriversPage({ params }: Props) {
         reason={t('accessDenied.reason', { branch: branch.name })}
       />
     );
+  }
+
+  // A rider roster for a branch that does not deliver is a roster nothing can dispatch:
+  // find_dispatch_candidates only ever offers a run to riders approved at a delivering
+  // branch. The entitlement was never asked here, so the screen worked regardless.
+  const gate = await resolveDeliveryGate(supabase, branchId);
+  if (!gate.delivers) {
+    return <DeliveryLocked branchId={branchId} branchName={branch.name} gate={gate} />;
   }
 
   // `driver_approvals.reviewed_by` references auth.users(id) (verified against the live

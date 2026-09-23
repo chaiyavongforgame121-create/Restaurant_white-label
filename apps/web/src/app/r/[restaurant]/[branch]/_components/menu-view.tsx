@@ -269,6 +269,10 @@ interface MenuViewProps {
   /** Schedule Delivery can be booked here (resolveScheduleDelivery). Defaults false so a missing prop
    *  cannot sell delivery. */
   canDeliver?: boolean;
+  /** This branch sells delivery at all (per branch since docs/PACKAGING-2026-09-23.md §2).
+   *  Words only — canDeliver alone decides whether delivery is offered. Defaults true so a
+   *  missing prop says "not right now" rather than declaring the branch delivery-free. */
+  deliveryOffered?: boolean;
   /** A `?t=` token resolved to a table here, so the order type is already settled. */
   seatingFromScan?: boolean;
   /** branches.timezone (storefront_status.timezone), for "Sold out until" times. When absent it
@@ -277,7 +281,7 @@ interface MenuViewProps {
   timeZone?: string;
 }
 
-export function MenuView({ branch, categories, items, isOpen = true, reviews, combos = [], happyHours = [], menuLayout = 'grid4', menuCardStyle = 'standard', heroUrl, heroTitle, heroSubtitle, canDeliver = false, seatingFromScan = false, timeZone }: MenuViewProps) {
+export function MenuView({ branch, categories, items, isOpen = true, reviews, combos = [], happyHours = [], menuLayout = 'grid4', menuCardStyle = 'standard', heroUrl, heroTitle, heroSubtitle, canDeliver = false, deliveryOffered = true, seatingFromScan = false, timeZone }: MenuViewProps) {
   const t = useTranslations();
   const params = useParams<{ restaurant: string; branch: string }>();
   const [search, setSearch] = React.useState('');
@@ -411,6 +415,7 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
           branchId={branch.id}
           branchName={branch.name}
           canDeliver={canDeliver}
+          deliveryOffered={deliveryOffered}
           seatingFromScan={seatingFromScan}
         />
 
@@ -425,6 +430,7 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
           channel={channel}
           setChannel={setChannel}
           canDeliver={canDeliver}
+          deliveryOffered={deliveryOffered}
           lockedTableLabel={pinnedTable ? tableLabel(pinnedTable) : null}
         />
 
@@ -606,17 +612,20 @@ function ChannelPicker({
   channel,
   setChannel,
   canDeliver,
+  deliveryOffered,
   lockedTableLabel = null,
 }: {
   channel: OrderChannel | null;
   setChannel: (c: OrderChannel) => void;
   canDeliver: boolean;
+  /** This branch sells delivery at all — the words below, not the options. */
+  deliveryOffered: boolean;
   /** Set when the diner scanned a table code — the order type is no longer a choice. */
   lockedTableLabel?: string | null;
 }) {
   const t = useTranslations();
   // Delivery is dropped from the options entirely rather than shown disabled —
-  // a restaurant without the add-on does not offer delivery at all, so a greyed
+  // a branch that does not deliver does not offer delivery at all, so a greyed
   // "Delivery" tab would only advertise something the customer cannot have.
   // Dine-in is not a tab at all: tapping it was a claim to be sitting at a table
   // that nothing had proved, and the round then had no session to land on. It is
@@ -643,6 +652,16 @@ function ChannelPicker({
           onChange={(c) => setChannel(c as OrderChannel)}
           options={options}
         />
+      )}
+      {/* Which of the two it is. "This branch does not deliver" is a fact about the
+          branch; "not right now" is about today. Saying the wrong one sends the diner
+          back tomorrow for nothing, or away from a branch that delivers at 5pm. */}
+      {!lockedTableLabel && !canDeliver && (
+        <p className="mt-2 text-xs text-muted-foreground">
+          {deliveryOffered
+            ? t('orderType.deliveryClosedNow')
+            : t('orderType.deliveryNotOffered')}
+        </p>
       )}
     </section>
   );

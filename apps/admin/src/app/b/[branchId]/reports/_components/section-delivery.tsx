@@ -14,16 +14,50 @@ export function SectionDelivery({
   result,
   currency,
   branchId,
+  delivers,
+  branchName,
+  planHref,
 }: {
   result: SectionResult<DeliveryReport>;
   currency: string;
   branchId: string;
+  /** Delivery is sold per branch — THIS branch's answer. */
+  delivers: boolean;
+  branchName: string;
+  /** The plan page with this branch's Delivery switch pre-selected. */
+  planHref: string;
 }) {
   const t = useTranslations('reports.delivery');
   const data = result.data;
   const money = (n: number) => formatCurrency(n, currency);
   const minutes = (n: number) => (n > 0 ? t('minutes', { minutes: n }) : '—');
   const maxStars = Math.max(1, ...(data?.star_distribution ?? []).map((s) => s.count));
+
+  // A branch that does not deliver keeps its heading and its place in the tab strip — the
+  // five other sections would otherwise renumber under the merchant — and says which branch
+  // it is. Dropping the section instead would read as "the report is broken", and showing
+  // an empty one as "no deliveries this week", which is a different statement.
+  if (!delivers) {
+    return (
+      <SectionFrame
+        id="delivery"
+        title={t('title')}
+        icon={<Bike className="h-5 w-5" />}
+        caption={t('caption')}
+      >
+        <Card className="p-5">
+          <p className="text-sm font-semibold">{t('notOffered.title', { branch: branchName })}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{t('notOffered.body')}</p>
+          <Link
+            href={planHref}
+            className="focus-ring mt-3 inline-block text-sm font-medium text-primary underline-offset-2 hover:underline"
+          >
+            {t('notOffered.link')}
+          </Link>
+        </Card>
+      </SectionFrame>
+    );
+  }
 
   return (
     <SectionFrame

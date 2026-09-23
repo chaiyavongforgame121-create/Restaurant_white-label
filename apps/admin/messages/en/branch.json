@@ -43,7 +43,8 @@
     },
     "delivery": {
       "title": "Delivery",
-      "description": "Your own riders, live tracking and automatic dispatch. Not included in your current package.",
+      "description": "Your own riders, live tracking and automatic dispatch. {branch} does not deliver — delivery is switched on one branch at a time.",
+      "descriptionUnlocked": "Your own riders, live tracking and automatic dispatch. {branch} has delivery switched off, and it was unlocked here before — switching it back on has no one-time fee, only the monthly price.",
       "bulletFees": "Delivery fees, radius and prep time",
       "bulletDispatch": "Automatic driver dispatch with offer timeouts",
       "bulletTracking": "Live customer tracking map"

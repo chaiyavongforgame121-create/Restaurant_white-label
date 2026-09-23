@@ -5,7 +5,21 @@ the bulk of the file; every deploy had to carry it. The history is the valuable 
 so it lives here rather than being deleted.
 
 ```
-// place-order v11.5 — every branch is its own shop
+// place-order v11.6 — every branch is its own shop
+//   v11.6 (2026-09-23): delivery is the BRANCH's answer, not the restaurant's.
+//        - Delivery is sold per branch now (docs/PACKAGING-2026-09-23.md §2): a restaurant can
+//          deliver from one branch and not from the next. The billing gate therefore loads
+//          entitlements for { restaurantId, branchId } instead of the restaurant alone, so
+//          `delivery` means "this branch delivers".
+//        - A delivery order at a branch that does not deliver is refused with the same
+//          403 { error: 'feature_not_entitled', feature: 'delivery' } as before, and with
+//          nothing written. Without this it reached orders_billing_gate instead, which raises
+//          feature_not_entitled:delivery as a P0001 in the middle of the handler — the exact
+//          half-written-order failure the up-front check exists to avoid.
+//        - The quote_delivery `delivery_not_entitled` → 403 below is unchanged and now only
+//          covers the race where a merchant switches the branch's delivery off mid-checkout.
+//        - No change to pickup, dine-in or QR ordering, and none to the 402 billing_inactive
+//          path: being paid up is still a question about the restaurant.
 //   v11.5 (2026-09-22): one line per selection. No SQL half.
 //        - The owner's report: SET A tapped from the storefront's Happy Hour strip and again from
 //          the menu came out as two SET A lines on the bill. On the bill in question (A-2609-0005)

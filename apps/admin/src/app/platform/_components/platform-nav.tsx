@@ -13,6 +13,7 @@ const TABS = [
   { href: '/platform/subscriptions', key: 'subscriptions', exact: true },
   { href: '/platform/subscriptions/requests', key: 'requests', pendingBadge: true },
   { href: '/platform/plans', key: 'catalog' },
+  { href: '/platform/discounts', key: 'discounts' },
   { href: '/platform/settings', key: 'settings' },
 ] as const;
 
@@ -21,7 +22,7 @@ export function PlatformNav() {
   const pathname = usePathname();
   const pending = usePendingRequestCount();
   return (
-    // One scrolling row rather than flex-wrap: six tabs wrapped to three ragged
+    // One scrolling row rather than flex-wrap: the tabs wrapped to three ragged
     // lines on a phone, and the border-b then cut through the middle of them.
     // The console is where a platform admin lands after sign-in and it has no sidebar, so the way
     // out sits at the end of the tab row.

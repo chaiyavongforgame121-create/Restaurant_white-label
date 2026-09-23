@@ -12,26 +12,25 @@
   "plan": {
     "metaTitle": "Plan y facturación · Favornoms",
     "title": "Plan y facturación",
-    "subtitle": "Elige con qué funciona tu restaurante. Puedes cambiarlo cuando quieras.",
+    "subtitle": "Dos totales, siempre separados: lo que pagas una vez y lo que pagas cada mes.",
     "perMonth": "/mes",
-    "selection": "{products}, {seats, plural, one {# cupo de sucursal} other {# cupos de sucursal}}",
-    "pricedSummary": "{summary} — {price}/mes.",
     "notYours": {
       "inactiveTitle": "El paquete de tu restaurante está inactivo: habla con el propietario",
-      "lockedTitle": "Solo el propietario o un administrador pueden cambiar el paquete",
-      "inactiveBody": "La tienda en línea y el panel de gestión de {branch} están en pausa hasta que el propietario del restaurante o un administrador elija un paquete. No se borró nada y tu trabajo vuelve en cuanto se active de nuevo.",
+      "lockedTitle": "Solo el propietario del restaurante puede cambiar el paquete",
+      "inactiveBody": "La tienda en línea y el panel de gestión de {branch} están en pausa hasta que el propietario del restaurante elija un paquete. No se borró nada y tu trabajo vuelve en cuanto se active de nuevo.",
       "lockedBody": "El paquete de {branch} lo gestiona el propietario del restaurante. Pídeselo si necesitas una función que no está activada."
     },
     "replaceDialog": {
       "title": "¿Reemplazar tu solicitud pendiente?",
       "body": "Tu solicitud anterior ({summary}) se retira y esta se envía al equipo de Favornoms en su lugar.",
+      "codeReleased": "Esa solicitud tenía el código {code}. Vuelve a aplicarlo aquí para conservarlo; si no, se libera.",
       "confirm": "Reemplazar solicitud"
     },
     "errors": {
       "sendFailed": "No se pudo enviar tu solicitud. Inténtalo de nuevo.",
       "generic": "Algo salió mal. Inténtalo de nuevo.",
       "signedOut": "Tu sesión terminó. Vuelve a iniciar sesión y envía la solicitud.",
-      "forbidden": "Solo el propietario del restaurante o un administrador pueden cambiar el paquete.",
+      "forbidden": "Solo el propietario del restaurante puede cambiar el paquete.",
       "planUnavailable": "Ese paquete ya no está disponible. Recarga la página y vuelve a elegir."
     },
     "action": {
@@ -41,44 +40,96 @@
       "reactivate": "Reactivar mi cuenta",
       "confirm": "Confirmar paquete",
       "renew": "Solicitar renovación",
-      "current": "Paquete actual"
+      "current": "Paquete actual",
+      "pricesUnavailable": "Precios no disponibles"
+    },
+    "now": {
+      "title": "Lo que tienes ahora",
+      "plan": "Plan",
+      "trialPlan": "Prueba gratuita",
+      "noPlan": "Todavía sin paquete",
+      "branches": "Sucursales",
+      "branchesValue": "{used} abiertas · {seats} pagadas",
+      "delivery": "Entrega a domicilio",
+      "deliveryNone": "Ninguna sucursal entrega todavía",
+      "deliveryTrial": "Todas las sucursales, gratis hasta que termine la prueba",
+      "nextPayment": "Próximo pago",
+      "trialEnds": "La prueba termina",
+      "noNextPayment": "Sin fecha prevista",
+      "includedTitle": "En todos los paquetes"
     },
     "base": {
       "name": "Base",
-      "description": "Todo lo que necesitas para operar una sucursal.",
       "included": {
         "cardPayment": "Pago con tarjeta al pagar",
-        "aiMenuImport": "Importación de menú con IA",
         "onlineOrdering": "Pedidos en línea y QR",
-        "kitchenCounter": "Pantalla de cocina y mostrador",
         "reportsLoyalty": "Informes y fidelidad",
+        "kitchenCounter": "Pantalla de cocina y mostrador",
         "oneBranch": "1 sucursal incluida"
       }
     },
-    "seats": {
-      "title": "Sucursales",
-      "body": "1 incluida. Cada sucursal adicional cuesta {price}/mes, con todas las funciones de tu sucursal principal.",
-      "usage": "En uso: {used} de {seats, plural, one {# cupo} other {# cupos}}.",
-      "remove": "Quitar un cupo de sucursal",
-      "add": "Agregar un cupo de sucursal",
-      "floor": "Tienes {count, plural, one {# sucursal activa} other {# sucursales activas}}, así que no puedes bajar de {min} cupos. Para liberar un cupo, oculta una sucursal que ya no uses: abre su Configuración de sucursal y cambia Estado a Oculta. Una sucursal oculta no usa cupo."
+    "branches": {
+      "title": "Tus sucursales",
+      "subtitle": "Cada sucursal cuesta {price} al mes. Activa Entrega a domicilio en las sucursales que entregan.",
+      "subtitleNoPrice": "Activa Entrega a domicilio en las sucursales que entregan.",
+      "empty": "Este restaurante todavía no tiene ninguna sucursal activa.",
+      "delivery": "Entrega a domicilio",
+      "switchLabel": "Entrega a domicilio en {branch}",
+      "eachMonth": "{price}/mes",
+      "costOnceAndMonthly": "+{once} una vez y luego +{monthly}/mes",
+      "costMonthly": "+{monthly}/mes",
+      "alreadyUnlocked": "Ya desbloqueada: no hay nada más que pagar una vez por esta sucursal.",
+      "offWarning": "{branch} dejará de ofrecer entrega a domicilio en su tienda en línea.",
+      "dropsTo": "Esta sucursal baja a {price}/mes.",
+      "trialNote": "Todas las sucursales entregan gratis hasta que termine tu prueba. Lo que dejes activado aquí es lo que pagarás después."
     },
-    "summary": {
-      "title": "Tu paquete",
+    "seats": {
+      "title": "Agregar una sucursal",
+      "body": "+{once} una vez y +{monthly}/mes por cada sucursal después de la primera.",
+      "usage": "En uso: {used} de {seats, plural, one {# sucursal que pagas} other {# sucursales que pagas}}.",
+      "remove": "Quitar una sucursal",
+      "add": "Agregar una sucursal",
+      "floor": "Tienes {count, plural, one {# sucursal activa} other {# sucursales activas}}, así que no puedes bajar de {min}. Para pagar una menos, oculta una sucursal que ya no uses: abre su Configuración de sucursal y cambia Estado a Oculta. Una sucursal oculta no se factura.",
+      "newSeats": "{count, plural, one {# sucursal que aún no creaste} other {# sucursales que aún no creaste}}. Crea las sucursales nuevas desde Sucursales en cuanto se apruebe."
+    },
+    "pay": {
+      "title": "Lo que pagas",
+      "onceTitle": "Pago único de hoy",
+      "onceNothing": "Nada. Todo lo de este paquete ya está pagado.",
+      "onceOnRequest": "En la solicitud que enviaste",
+      "onceCode": "Código {code}",
+      "onceAwaiting": "Todavía no se ha cobrado nada. Lo pagarás cuando el equipo de Favornoms active tu solicitud.",
+      "monthlyTitle": "Y luego cada mes",
+      "withDelivery": "{branch} + entrega a domicilio",
+      "unusedSeats": "{count, plural, one {# sucursal sin crear} other {# sucursales sin crear}}",
+      "forBranch": "{product} — {branch}",
       "total": "Total",
-      "trialNote": "Estás en la prueba gratuita. No se cobra nada hasta que termine.",
+      "summary": {
+        "branches": "{count, plural, one {# sucursal} other {# sucursales}}",
+        "delivery": "entrega a domicilio en {names}",
+        "noDelivery": "sin entrega a domicilio",
+        "line": "{branches}, {delivery}: {price} al mes.",
+        "plusOnce": "Más {price} una sola vez."
+      },
+      "trialNote": "No se cobra nada mientras dura tu prueba gratuita. Esta es tu primera factura cuando confirmes.",
       "footnote": "Tu solicitud llega al equipo de Favornoms para activarla. Recibirás una factura mensual."
     },
-    "addon": {
-      "aiSuiteComingSoon": "Señalización y voz con IA: próximamente.",
-      "add": "Agregar",
-      "added": "Agregado"
+    "discount": {
+      "title": "Código de descuento",
+      "placeholder": "Escribe un código",
+      "apply": "Aplicar",
+      "remove": "Quitar",
+      "applied": "{label}: {amount} menos",
+      "appliedPlain": "{amount} menos",
+      "repriced": "Cambiaste el paquete. Pulsa Aplicar para comprobar el código con el nuevo total.",
+      "notApplied": "Este código no se ha aplicado. Pulsa Aplicar para usarlo, o borra el campo para enviar la solicitud sin él.",
+      "onlyOnce": "Un código se descuenta del pago único, nunca de la factura mensual."
     },
     "trial": {
       "active": "Prueba gratuita activa",
       "endsToday": "Tu prueba gratuita termina hoy",
       "daysLeft": "{days, plural, one {Te queda # día de prueba gratuita} other {Te quedan # días de prueba gratuita}}",
-      "body": "Todo está desbloqueado. Elige un paquete abajo para conservarlo después de la prueba; no necesitas tarjeta hasta entonces."
+      "body": "Todo está desbloqueado, con entrega a domicilio en todas las sucursales. Elige abajo lo que quieres conservar; no necesitas tarjeta hasta que termine la prueba."
     },
     "suspended": {
       "title": "Tu cuenta no está activa",
@@ -92,6 +143,11 @@
       "title": "Renueva tu paquete",
       "paidThrough": "Tu paquete está pagado hasta el {date}.",
       "body": "Tu paquete actual está seleccionado abajo. Pulsa Solicitar renovación para enviarlo al equipo de Favornoms; nada se renueva hasta que lo aprueben. También puedes cambiar el paquete antes de enviarlo."
+    },
+    "pricesUnavailable": {
+      "title": "No se pudieron cargar los precios",
+      "body": "No pudimos leer la lista de precios en este momento, así que esta página no puede cotizar un paquete. No ha cambiado nada en tu cuenta. Vuelve a cargar la página en un momento.",
+      "pay": "No se muestran cifras hasta que cargue la lista de precios, y mientras tanto no se puede enviar nada."
     },
     "decision": {
       "approvedOn": "Solicitud aprobada el {date}",

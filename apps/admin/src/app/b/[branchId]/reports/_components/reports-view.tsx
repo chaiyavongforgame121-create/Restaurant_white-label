@@ -28,6 +28,12 @@ interface Props {
    *  with the report about which day "today" is. */
   today: string;
   sections: ReportSections;
+  /** Delivery is sold per branch: this is THIS branch's answer, not the restaurant's. */
+  canUseDelivery: boolean;
+  /** Named in the Delivery section so "does not deliver" says which branch. */
+  branchName: string;
+  /** The plan page with this branch's Delivery switch pre-selected. */
+  deliveryPlanHref: string;
 }
 
 const ANCHORS = ['sales', 'orders', 'menu', 'delivery', 'customers', 'payments'] as const;
@@ -39,6 +45,9 @@ export function ReportsView({
   range,
   today,
   sections,
+  canUseDelivery,
+  branchName,
+  deliveryPlanHref,
 }: Props) {
   const t = useTranslations('reports');
   // The tier names are the restaurant’s to set, so the customers table has to ask for them
@@ -162,7 +171,14 @@ export function ReportsView({
       <SectionSales result={sections.sales} currency={currency} />
       <SectionOrders result={sections.orders} currency={currency} timezone={timezone} />
       <SectionMenu result={sections.menu} currency={currency} />
-      <SectionDelivery result={sections.delivery} currency={currency} branchId={branchId} />
+      <SectionDelivery
+        result={sections.delivery}
+        currency={currency}
+        branchId={branchId}
+        delivers={canUseDelivery}
+        branchName={branchName}
+        planHref={deliveryPlanHref}
+      />
       <SectionCustomers result={sections.customers} currency={currency} tierLabels={tierLabels} />
       <SectionPayments result={sections.payments} currency={currency} branchId={branchId} />
     </div>

@@ -2,7 +2,7 @@
 // Server-side recalculation never trusts client totals.
 //
 // Version history: see ./CHANGELOG.md (moved out of this file 2026-08-28).
-// Current: v11.5 — every branch is its own shop. The caller counts as staff only at a branch
+// Current: v11.6 — every branch is its own shop. Delivery is asked of the BRANCH. The caller counts as staff only at a branch
 // they may ring up (staff_can_ring_up), a staff sale is never filed under the cashier's own
 // customer record, a diner is resolved by (branch, user), and points, promos and gift cards
 // are taken atomically for the order or the order is not placed. A unit price is never
@@ -486,7 +486,15 @@ Deno.serve(async (req: Request) => {
   // Billing gate. The BEFORE INSERT triggers on orders/payments/deliveries are the
   // real authority — this check exists so a suspended tenant gets one clean 402
   // instead of a half-written order rolled back by a P0001 three steps later.
-  const ent = await loadEntitlements(admin, { restaurantId: branch.restaurant_id });
+  //
+  // Loaded for THIS branch, not the restaurant: delivery is sold per branch
+  // (docs/PACKAGING-2026-09-23.md §2), so a branch that does not deliver has to be
+  // refused here rather than by orders_billing_gate mid-handler. The restaurant id
+  // is passed as well because it is already in hand — it saves the branch lookup.
+  const ent = await loadEntitlements(admin, {
+    restaurantId: branch.restaurant_id,
+    branchId: payload.branch_id,
+  });
   if (!ent.entitled) return json(402, billingInactiveBody('orders'));
   if (payload.channel === 'delivery' && !edgeHasFeature(ent, 'delivery')) {
     return json(403, featureNotEntitledBody('delivery'));
@@ -923,7 +931,9 @@ Deno.serve(async (req: Request) => {
         return json(409, { error: 'delivery_out_of_range', distance_km: quote.distance_km, radius_km: quote.radius_km });
       } else if (quote?.reason === 'delivery_not_entitled') {
         // Must NOT fall through to the legacy flat fee below — that would quietly
-        // sell a delivery the account has not paid for.
+        // sell a delivery this branch has not paid for. Unreachable for a branch
+        // that does not deliver (the gate above answers that first); it still
+        // stands for the race where delivery is switched off mid-checkout.
         return json(403, featureNotEntitledBody('delivery'));
       }
       // branch_unavailable / invalid_coordinates → keep the legacy flat fee.

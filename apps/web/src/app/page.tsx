@@ -1,9 +1,13 @@
 import Link from 'next/link';
+import { unstable_cache } from 'next/cache';
 import { getTranslations } from 'next-intl/server';
 import {
   Check, ChefHat, ChevronRight, CreditCard, LineChart,
-  Megaphone, MonitorPlay, ShoppingBag, Star, Store, Zap,
+  Megaphone, ShoppingBag, Star, Store, Zap,
 } from 'lucide-react';
+import { getAnonServerClient } from '@favornoms/database/server';
+import { listBillingProducts } from '@favornoms/database/queries';
+import type { BillingProduct } from '@favornoms/shared';
 import { RiderIcon } from '@favornoms/ui';
 
 export async function generateMetadata() {
@@ -23,6 +27,9 @@ const MERCHANT_URL = (
 const SIGNUP_URL = `${MERCHANT_URL}/signup`;
 
 // What the base plan includes, in display order. The words live in landing.pricing.includes.
+// "AI menu import" left this list on 2026-09-23 with the screen that sold it
+// (docs/PACKAGING-2026-09-23.md §1); the CSV importer it sat beside is still there, but it
+// was never part of what the base is sold on.
 const BASE_INCLUDES = [
   'storefront',
   // Deliberately does NOT say "into your own Stripe account" yet:
@@ -33,16 +40,58 @@ const BASE_INCLUDES = [
   'payments',
   'kitchen',
   'growth',
-  'aiImport',
+  'oneBranch',
 ] as const;
+
+// Money is shown in US format in every interface language, as it is everywhere else.
+const money = (n: number) => `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+
+/**
+ * The catalog, read once an hour.
+ *
+ * Prices live in `billing_products` and nowhere else (docs/PACKAGING-2026-09-23.md §5.1),
+ * so this page and the merchant's plan page cannot quote different numbers — which is
+ * exactly what this section did for months, offering "$199/mo" and an AI Suite the catalog
+ * had already moved on from. The anon role may read active products, so the cookie-less
+ * client is enough and the page stays static between revalidations.
+ */
+const billingCatalog = unstable_cache(
+  async (): Promise<BillingProduct[]> => {
+    try {
+      return await listBillingProducts(getAnonServerClient());
+    } catch {
+      // A marketing page has to render even when the database cannot be reached. It then
+      // states the model in words and leaves the numbers out rather than inventing them.
+      return [];
+    }
+  },
+  ['landing-billing-products-v1'],
+  { revalidate: 3600, tags: ['billing-products'] },
+);
+
+/** A catalog row's two prices, or null for a price this deployment does not have. */
+function prices(catalog: BillingProduct[], code: string): { once: number | null; monthly: number | null } {
+  const product = catalog.find((p) => p.code === code);
+  const positive = (n: number | undefined) => (typeof n === 'number' && n > 0 ? n : null);
+  return { once: positive(product?.one_time_price), monthly: positive(product?.monthly_price) };
+}
 
 export default async function RootPage() {
   const t = await getTranslations('landing');
-  const perMonth = (price: string, unitClassName: string) =>
-    t.rich('pricing.perMonth', {
-      price,
-      unit: (chunks) => <span className={unitClassName}>{chunks}</span>,
-    });
+  const catalog = await billingCatalog();
+  const base = prices(catalog, 'base');
+  const extraBranch = prices(catalog, 'extra_branch');
+  const delivery = prices(catalog, 'delivery');
+
+  /** "+$59 once, then +$29/mo" — one string, so each language orders it itself. */
+  const addOnPrice = (p: { once: number | null; monthly: number | null }): string | null => {
+    if (p.once !== null && p.monthly !== null) {
+      return t('pricing.addOnPrice', { once: money(p.once), monthly: money(p.monthly) });
+    }
+    if (p.once !== null) return t('pricing.addOnOnce', { price: money(p.once) });
+    if (p.monthly !== null) return t('pricing.addOnMonthly', { price: money(p.monthly) });
+    return null;
+  };
 
   return (
     <main className="overflow-hidden">
@@ -166,9 +215,24 @@ export default async function RootPage() {
 
           <div className="mx-auto mt-10 max-w-md rounded-3xl border-2 border-primary bg-card p-7 shadow-warm">
             <p className="text-xs font-semibold uppercase tracking-wider text-primary">{t('pricing.baseName')}</p>
-            <p className="mt-2 font-display text-5xl font-bold">
-              {perMonth('$199', 'text-lg font-normal text-muted-foreground')}
-            </p>
+            {/* Two numbers, never added together: what a restaurant pays to start, and what it
+                pays every month after that. A price the catalog could not give is left out, and
+                a catalog that only has one of the two leads with the one it has. */}
+            {base.once !== null && (
+              <p className="mt-2 font-display text-5xl font-bold">
+                {t('pricing.once', { price: money(base.once) })}
+              </p>
+            )}
+            {base.monthly !== null &&
+              (base.once !== null ? (
+                <p className="mt-1 font-display text-xl font-semibold text-muted-foreground">
+                  {t('pricing.thenMonthly', { price: money(base.monthly) })}
+                </p>
+              ) : (
+                <p className="mt-2 font-display text-5xl font-bold">
+                  {t('pricing.monthlyOnly', { price: money(base.monthly) })}
+                </p>
+              ))}
             <p className="mt-2 text-sm text-muted-foreground">
               {t('pricing.baseSummary')}
             </p>
@@ -194,24 +258,18 @@ export default async function RootPage() {
           <p className="mt-12 text-center text-sm font-semibold uppercase tracking-wider text-muted-foreground">
             {t('pricing.addOnsTitle')}
           </p>
-          <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <AddonTile
-              icon={<RiderIcon className="h-5 w-5" />}
-              name={t('pricing.addOns.delivery.name')}
-              price={perMonth('+$49', 'text-sm font-normal text-muted-foreground')}
-              tag={t('pricing.addOns.delivery.description')}
-            />
-            <AddonTile
-              icon={<MonitorPlay className="h-5 w-5" />}
-              name={t('pricing.addOns.aiSuite.name')}
-              price={perMonth('+$59', 'text-sm font-normal text-muted-foreground')}
-              tag={t('pricing.addOns.aiSuite.description')}
-            />
+          <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <AddonTile
               icon={<Store className="h-5 w-5" />}
               name={t('pricing.addOns.extraBranch.name')}
-              price={perMonth('+$99', 'text-sm font-normal text-muted-foreground')}
+              price={addOnPrice(extraBranch)}
               tag={t('pricing.addOns.extraBranch.description')}
+            />
+            <AddonTile
+              icon={<RiderIcon className="h-5 w-5" />}
+              name={t('pricing.addOns.delivery.name')}
+              price={addOnPrice(delivery)}
+              tag={t('pricing.addOns.delivery.description')}
             />
           </div>
         </div>
@@ -265,17 +323,16 @@ function Feature({ icon, title, description }: { icon: React.ReactNode; title: s
   );
 }
 
-function AddonTile({ icon, name, price, tag }: { icon: React.ReactNode; name: string; price: React.ReactNode; tag: string }) {
+function AddonTile({ icon, name, price, tag }: { icon: React.ReactNode; name: string; price: string | null; tag: string }) {
   return (
     <div className="rounded-2xl border border-border bg-card p-5">
       <span className="grid h-10 w-10 place-items-center rounded-xl bg-accent/20 text-accent-foreground">
         {icon}
       </span>
       <p className="mt-4 font-display text-lg font-semibold">{name}</p>
-      {/* `price` is the whole "+$49/mo" line, unit included, so each language orders it itself. */}
-      <p className="mt-1 font-display text-2xl font-bold">
-        {price}
-      </p>
+      {/* `price` is the whole "+$59 once, then +$29/mo" line, so each language orders it
+          itself — and it is absent, rather than wrong, when the catalog could not be read. */}
+      {price && <p className="mt-1 font-display text-xl font-bold">{price}</p>}
       <p className="mt-2 text-sm text-muted-foreground">{tag}</p>
     </div>
   );

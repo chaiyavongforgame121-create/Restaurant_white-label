@@ -77,5 +77,8 @@
       "signedOut": "Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại.",
       "generic": "Không cập nhật được yêu cầu. Hãy thử lại."
     }
+  },
+  "notOffered": {
+    "stillOwed": "Tài xế vẫn được trả cho các chuyến đã hoàn tất. Trang này vẫn mở cho đến khi thanh toán xong mọi yêu cầu."
   }
 }

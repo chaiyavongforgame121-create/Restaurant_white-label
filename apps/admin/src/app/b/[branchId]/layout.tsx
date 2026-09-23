@@ -6,8 +6,9 @@ import {
   getMyStaffAccessRows,
   isPlatformAdmin,
 } from '@favornoms/database/queries';
-import type { TenantTheme } from '@favornoms/shared';
+import { hasFeature, type TenantTheme } from '@favornoms/shared';
 import { getBranchAccess, type BranchAccess } from '@/lib/capabilities';
+import { resolveDeliveryWindDown } from '@/lib/delivery-gate';
 import { PATHNAME_HEADER } from '@favornoms/database/middleware';
 import { Sidebar } from '@/components/sidebar';
 import { AccessDenied } from '@/components/access-denied';
@@ -184,6 +185,17 @@ export default async function BranchLayout({ params, children }: Props) {
     platformAdmin,
   );
 
+  // Delivery switched off here, but riders still out or still owed. The Live deliveries board
+  // and Driver payouts deliberately stay open in that state; without this the nav dropped them
+  // the instant the switch moved and the merchant had no way in but the URL. Each flag is the
+  // exact rule its page locks on (resolveDeliveryWindDown), so an entry is shown precisely
+  // while its screen is open. Asked only when delivery is off, so the common path pays nothing.
+  const deliveryWindDown = await resolveDeliveryWindDown(
+    supabase,
+    branchId,
+    hasFeature(entitlements, 'delivery'),
+  );
+
   // Suspension: lock the back office, but never the billing page itself — that
   // is where the merchant fixes it. Redirecting to a page that redirects would
   // be an infinite loop, so the exemption is load-bearing, not a nicety.
@@ -209,6 +221,7 @@ export default async function BranchLayout({ params, children }: Props) {
         branchName={branch.name}
         branches={branches}
         entitlements={entitlements}
+        deliveryWindDown={deliveryWindDown}
         capabilities={caps}
         logoUrl={mark.logoUrl}
         brandName={mark.brandName}

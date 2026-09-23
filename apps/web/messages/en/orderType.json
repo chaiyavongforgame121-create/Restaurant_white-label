@@ -4,5 +4,7 @@
   "subtitleNamed": "Pick one to start your order from {branch}.",
   "deliveryHint": "Pick a day and time, and we bring it to your address",
   "pickupHint": "Collect it at the restaurant while it's open",
-  "changeLater": "You can change this any time from the menu."
+  "changeLater": "You can change this any time from the menu.",
+  "deliveryNotOffered": "Delivery is not offered at this branch.",
+  "deliveryClosedNow": "Delivery cannot be booked right now."
 }

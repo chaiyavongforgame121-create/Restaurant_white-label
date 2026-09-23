@@ -43,12 +43,17 @@
 //     The user must hold delivery.manage or kitchen.access at the DELIVERY's branch, per
 //     my_capabilities (owner rows cover every branch of the restaurant; active rows only).
 //   Refusals: 401 auth_required, 403 not_authorized; both before anything is written.
+// v2.5 (2026-09-23): no entitlement gate. A delivery that exists is dispatched whatever the
+//   branch's delivery switch or the restaurant's billing says now (the rule in
+//   ../_shared/entitlements.ts); the 403 feature_not_entitled this used to send stranded
+//   every run at a restaurant that switched off its last delivering branch. Delivery is sold
+//   per branch from this date (docs/PACKAGING-2026-09-23.md §2). This function no longer
+//   imports ../_shared, so it deploys as its own index.ts.
 // v1 history: single-shot nearest-driver assign; source committed 2026-06-11
 //   after living only on the remote.
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2';
-import { edgeOwnsFeature, featureNotEntitledBody, loadEntitlements } from '../_shared/entitlements.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -154,16 +159,18 @@ Deno.serve(async (req) => {
     }
   }
 
-  // Entitlement gate on the FEATURE, deliberately not on `entitled`. A delivery
-  // that already exists was accepted while the account was live; suspending
-  // billing must not strand cooked food with no rider. What it does block is a
-  // restaurant that never bought the delivery add-on at all.
+  // No entitlement gate, on purpose: this function only offers, re-offers and resets
+  // deliveries rows that already exist, and never creates one. A row that exists passed
+  // deliveries_billing_gate when it was inserted, so it is dispatched whatever this branch's
+  // delivery switch or the restaurant's billing says now — the one in-flight rule, written
+  // out in ../_shared/entitlements.ts. The gate this replaced (v2.4 and earlier) asked
+  // whether the branch "owned" delivery, and answered no the moment a restaurant switched
+  // off its last delivering branch or a trial ended without buying the add-on: a paid order,
+  // cooked and marked ready, then sat in 'dispatching' for ever with no rider offered it.
   //
-  // Checked before the `reset` block below, which writes to deliveries — an
-  // unentitled caller must not be able to clear dispatch state and only then
-  // be refused.
-  const ent = await loadEntitlements(admin, { branchId: delivery.branch_id as string });
-  if (!edgeOwnsFeature(ent, 'delivery')) return json(403, featureNotEntitledBody('delivery'));
+  // The caller check above is still the only thing in front of the `reset` block below,
+  // and it is enough: only the service role, or staff holding delivery.manage or
+  // kitchen.access at this delivery's own branch, reach it.
 
   let status = delivery.status as string;
   let attempts = Number(delivery.dispatch_attempts ?? 0);

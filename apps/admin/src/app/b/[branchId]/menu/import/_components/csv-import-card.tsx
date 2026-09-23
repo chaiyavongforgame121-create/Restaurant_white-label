@@ -136,7 +136,7 @@ export function CsvImportCard({
   const rowsWithErrors = parsed.filter((r) => r.error);
 
   return (
-    <Card className="mt-6 space-y-4 p-5">
+    <Card className="space-y-4 p-5">
       <header className="flex items-center gap-3">
         <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary">
           <FileSpreadsheet className="h-5 w-5" />

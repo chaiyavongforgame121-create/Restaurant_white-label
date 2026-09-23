@@ -11,16 +11,17 @@
     "saveFailed": "No se pudo guardar.",
     "decisionFailed": "No se pudo guardar la decisión.",
     "permission": "No tienes permiso para hacer eso.",
-    "network": "No se pudo conectar con el servidor. Revisa tu conexión e inténtalo de nuevo."
+    "network": "No se pudo conectar con el servidor. Revisa tu conexión e inténtalo de nuevo.",
+    "alreadyDecided": "Alguien ya decidió esta solicitud. Recarga para ver qué pasó con ella.",
+    "requestNotFound": "Esa solicitud ya no existe. Recarga la cola."
   },
   "plans": {
     "metaTitle": "Catálogo de productos · Favornoms",
     "title": "Catálogo de productos",
-    "subtitle": "Lo que pueden comprar los restaurantes. Precios mensuales en USD.",
+    "subtitle": "Lo que pueden comprar los restaurantes. Cada producto tiene dos precios en USD: uno que se paga una sola vez y otro que se paga cada mes.",
     "newProduct": "Nuevo producto",
     "stripeDormant": "<strong>Stripe está inactivo.</strong> {count, plural, one {# producto activo no tiene} other {# productos activos no tienen}} ID de precio de Stripe ({codes}). Hasta completarlos todos, los comercios se activan manualmente desde Suscripciones en lugar de pagar con tarjeta.",
     "newProductCode": "nuevo producto",
-    "inactive": "Inactivo",
     "noStripePrice": "Sin precio de Stripe",
     "markInactive": "Desactivar",
     "markActive": "Activar",
@@ -44,12 +45,19 @@
       "stripePriceIdHint": "price_… — obligatorio antes de activar Stripe.",
       "description": "Descripción",
       "isQuantity": "Producto por cantidad (se cobra por unidad; requiere precio por cantidad en Stripe)",
-      "features": "Funciones incluidas"
+      "features": "Funciones incluidas",
+      "monthlyPriceHint": "Se cobra cada mes, además del precio único.",
+      "oneTimePrice": "Precio único ($)",
+      "oneTimePriceHint": "Se paga una sola vez. Pon 0 si solo se vende por mes."
     },
     "createProduct": "Crear producto",
     "save": "Guardar",
     "cancel": "Cancelar",
-    "codeRequired": "El código del producto es obligatorio."
+    "codeRequired": "El código del producto es obligatorio.",
+    "priceSummary": "<b>{once}</b> una vez y luego <b>{monthly}</b> cada mes",
+    "withdrawn": "Retirado",
+    "withdrawnHint": "Ya no está a la venta. Los restaurantes que lo tienen lo conservan y su historial sigue siendo válido, pero nadie nuevo puede comprarlo. Márcalo activo para volver a venderlo.",
+    "featureWithdrawn": "{feature} (retirada)"
   },
   "reports": {
     "title": "Informes financieros",
@@ -135,7 +143,7 @@
   "subscriptions": {
     "metaTitle": "Suscripciones · Favornoms",
     "title": "Suscripciones",
-    "subtitle": "Configura directamente el paquete de un restaurante. Los cambios se aplican de inmediato.",
+    "subtitle": "Define el paquete de un restaurante directamente, sucursal por sucursal. Los cambios se aplican de inmediato.",
     "searchPlaceholder": "Buscar restaurantes",
     "noMatches": "Ningún restaurante coincide.",
     "live": "Activo",
@@ -144,7 +152,8 @@
       "monthly": "Mensual",
       "seats": "Cupos",
       "paidThrough": "Pagado hasta",
-      "trialEnds": "Fin de la prueba"
+      "trialEnds": "Fin de la prueba",
+      "paidOnce": "Pagado una vez"
     },
     "close": "Cerrar",
     "changePackage": "Cambiar paquete",
@@ -167,13 +176,33 @@
     "blankTrial": "Déjalo vacío para reiniciar desde hoy: {days, plural, one {una prueba de # día} other {una prueba de # días}}, hasta el {date}.",
     "blankMonth": "Déjalo vacío para reiniciar el mes desde hoy: quedará pagado hasta el {date}.",
     "blankShortens": "Es anterior a la fecha actual ({date}). Elige una fecha para conservar el tiempo que ya tienen.",
-    "addons": "Complementos",
     "branchSeats": "Cupos de sucursal",
     "removeSeat": "Quitar un cupo",
     "addSeat": "Agregar un cupo",
     "minSeats": "mín. {count} (sucursales abiertas)",
     "applyPackage": "Aplicar paquete",
-    "saved": "Guardado"
+    "saved": "Guardado",
+    "deliveringCount": "Entrega en {count} de {total}",
+    "deliveringNone": "Sin entrega",
+    "delivery": {
+      "title": "Qué sucursales hacen entregas",
+      "hint": "Cada sucursal que entrega suma el precio de entrega a la cuenta mensual. Nada de esto cobra el desbloqueo único: lo que concedes a mano no se debe.",
+      "trialHint": "Durante la prueba todas las sucursales entregan, así que no hay nada que elegir. Pasa el restaurante a un plan de pago para decidirlo.",
+      "noBranches": "Este restaurante aún no tiene sucursales.",
+      "hiddenBranch": "oculta",
+      "branchMonthly": "{amount} al mes",
+      "on": "Entrega",
+      "off": "Sin entrega"
+    },
+    "noOneTimeCharge": "Aplicar un paquete aquí no genera ningún cargo único.",
+    "oneTime": {
+      "show": "Historial de pagos únicos",
+      "title": "Pagado una vez",
+      "empty": "A este restaurante nunca se le ha cobrado nada de una sola vez.",
+      "unavailable": "No se pudo leer el registro de pagos únicos, así que esta tarjeta no puede decir qué está pagado. Recarga antes de cobrar nada.",
+      "lineForBranch": "{product} — {branch}",
+      "discount": "código {code}, −{amount}"
+    }
   },
   "switches": {
     "intro": "Muestra u oculta una función solo para este restaurante. <strong>Según plan</strong> sigue el paquete de arriba; <strong>Activado</strong> y <strong>Desactivado</strong> lo ignoran. Ocultar una función la quita del menú lateral del comercio; si abren la URL directamente, ven la página bloqueada en lugar de la función.",
@@ -186,7 +215,8 @@
     "visibleOverridden": "El comercio la ve · forzado",
     "hiddenOverridden": "Oculta para el comercio · forzado",
     "hiddenNotInPackage": "Oculta para el comercio · no está en su paquete",
-    "groupLabel": "Disponibilidad de {feature}"
+    "groupLabel": "Disponibilidad de {feature}",
+    "deliveryNote": "La entrega es la excepción: este interruptor dice si la cuenta puede tener entrega, y la lista de sucursales de arriba dice dónde. Forzarlo en Sí no concede nada hasta que se active una sucursal."
   },
   "requests": {
     "metaTitle": "Solicitudes de paquete · Favornoms",
@@ -206,7 +236,6 @@
     "empty": "No hay nada aquí.",
     "thisRestaurant": "este restaurante",
     "requested": "Solicitado",
-    "seatCount": "{count, plural, one {# cupo} other {# cupos}}",
     "decisionNote": "Nota de la decisión: {note}",
     "loadFailed": "No se pudo cargar el paquete actual de {name}, así que esta tarjeta no puede mostrar qué quita la aprobación. Aprobar reemplaza lo que tengan ahora.",
     "notePlaceholder": "Nota (opcional)",
@@ -235,6 +264,112 @@
       "smallerTitle": "¿Aprobar un paquete más pequeño?",
       "body": "Aprobar reemplaza todo el paquete de {name} por esta solicitud.{removes, select, yes { Quita {items}.} other {}}{seats, select, yes { Reduce los cupos de sucursal de {seatsFrom} a {seatsTo}.} other {}}{shortens, select, yes { Cambia la fecha de pagado hasta del {paidFrom} al {paidTo} ({days, plural, one {# día menos} other {# días menos}}).} other {}} Lo pierden en cuanto apruebas y, para recuperarlo, hay que volver a configurar el paquete en Suscripciones.",
       "approveRemove": "Aprobar y quitar"
+    },
+    "asking": "{seats, plural, one {# sucursal} other {# sucursales}}, {delivery}",
+    "deliveryNone": "sin entrega",
+    "deliveryAt": "entrega en {branches}",
+    "unnamedBranches": "{count, plural, one {# sucursal que ya no existe} other {# sucursales que ya no existen}}",
+    "payOnce": "Pago único",
+    "thenMonthly": "Y luego cada mes",
+    "discountApplied": "El código {code} descontó {amount} de {list}",
+    "discountNothingOff": "El código {code} no descontó nada.",
+    "nothingOnce": "No hay nada que pagar una vez: ya está todo comprado.",
+    "deliveryOn": "Esto ACTIVA la entrega en: {branches}",
+    "deliveryOff": "Esto DESACTIVA la entrega en: {branches}",
+    "deliveryLossItem": "Entrega en {branch}",
+    "marksPaid": "Marca {amount} de cargos únicos como pagados",
+    "keepsCode": "El código {code} queda usado: su uso se reservó cuando el comercio envió esta solicitud"
+  },
+  "chargeStatus": {
+    "pending": "pendiente de pago",
+    "paid": "pagado",
+    "void": "anulado"
+  },
+  "discounts": {
+    "metaTitle": "Códigos de descuento · Favornoms",
+    "title": "Códigos de descuento",
+    "subtitle": "Los códigos que repartes. El servidor calcula el importe de cada uno.",
+    "oneTimeOnly": "<strong>Los códigos solo descuentan los cargos únicos</strong>: la base, una sucursal extra, el desbloqueo de entrega de una sucursal. Nunca cambian la cuenta mensual.",
+    "newCode": "Nuevo código",
+    "emptyTitle": "Aún no hay códigos",
+    "emptyBody": "Crea uno cuando quieras rebajar lo que un restaurante paga para empezar.",
+    "givesPercent": "{value}% de descuento",
+    "givesFixed": "{amount} de descuento",
+    "appliesAll": "Todos los cargos únicos",
+    "state": {
+      "live": "Activo",
+      "scheduled": "Empieza más tarde",
+      "expired": "Caducado",
+      "exhausted": "Agotado",
+      "inactive": "Apagado"
+    },
+    "stats": {
+      "appliesTo": "Se aplica a",
+      "used": "Usos",
+      "perRestaurant": "Por restaurante",
+      "givenAway": "Descontado"
+    },
+    "usedUnlimited": "{count} (sin tope)",
+    "usedOfMax": "{count} de {max}",
+    "perRestaurantValue": "{count, plural, one {# vez} other {# veces}}",
+    "reservedNote": "Otros {amount} están reservados en solicitudes pendientes de aprobación.",
+    "windowBetween": "{from} → {to}",
+    "windowFrom": "Desde {from}, sin fecha de fin",
+    "close": "Cerrar",
+    "edit": "Editar",
+    "showUses": "{count, plural, one {# uso} other {# usos}}",
+    "deactivate": "Desactivar",
+    "reactivate": "Reactivar",
+    "confirmDeactivate": {
+      "title": "¿Apagar {code}?",
+      "body": "Después de esto nadie podrá aplicarlo. Las solicitudes que ya se enviaron con él conservan su descuento cuando las apruebes. Se queda en esta página con todo lo que ya ha descontado: un código que se ha usado no se borra nunca.",
+      "confirm": "Apagarlo"
+    },
+    "usesTitle": "Dónde se usó",
+    "usesUnavailable": "No se pudieron leer los usos de este código.",
+    "unknownRestaurant": "Restaurante eliminado",
+    "reserved": "Reservado · pendiente de aprobación",
+    "onRequest": "solicitud {id}",
+    "form": {
+      "newTitle": "Nuevo código",
+      "editTitle": "Editar código",
+      "code": "Código",
+      "codeHint": "Letras, números y guiones. Se guarda en mayúsculas; esto es lo que escribe el comercio.",
+      "codeLocked": "Un código conserva el texto con el que se repartió, así que no se puede renombrar.",
+      "description": "Para qué es",
+      "descriptionHint": "Se muestra al comercio cuando el código se aplica.",
+      "kind": "Tipo",
+      "kindPercent": "Porcentaje",
+      "kindFixed": "Importe fijo",
+      "valuePercent": "Porcentaje (1–100)",
+      "valueFixed": "Dólares de descuento ($)",
+      "appliesTo": "Se aplica a",
+      "appliesToHint": "Elige los cargos únicos de los que se descuenta. Si no eliges ninguno, se aplica a todos.",
+      "productChip": "{name} ({amount} una vez)",
+      "maxRedemptions": "Usos totales",
+      "maxRedemptionsHint": "Déjalo en blanco para no poner tope.",
+      "perRestaurant": "Usos por restaurante",
+      "perRestaurantHint": "Se cuentan desde los usos registrados, así que una solicitud pendiente ya gasta uno.",
+      "startsAt": "Empieza",
+      "startsAtHint": "En blanco significa ahora. Las fechas se leen en UTC.",
+      "endsAt": "Termina",
+      "endsAtHint": "Se puede usar hasta el final de ese día, en UTC. En blanco significa sin fin.",
+      "isActive": "Activo",
+      "create": "Crear código",
+      "save": "Guardar",
+      "cancel": "Cancelar"
+    },
+    "errors": {
+      "codeRequired": "Dale un nombre al código.",
+      "codeCharset": "Un código solo puede tener letras, números y guiones.",
+      "codeDuplicate": "Ese código ya existe. Elige otro.",
+      "valueRequired": "Indica cuánto descuenta el código.",
+      "percentRange": "Un porcentaje no puede ser mayor que 100.",
+      "maxRedemptions": "Los usos totales deben ser un número entero de 1 o más, o quedar en blanco.",
+      "perRestaurantLimit": "Los usos por restaurante deben ser un número entero de 1 o más.",
+      "datesBackwards": "La fecha de fin es anterior a la de inicio, así que el código nunca se podría usar.",
+      "kindInvalid": "El servidor no acepta ese tipo de descuento.",
+      "notFound": "Ese código ya no existe. Recarga la página."
     }
   }
 }

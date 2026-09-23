@@ -3,6 +3,7 @@ import { getTranslations } from 'next-intl/server';
 import { getServerClient } from '@favornoms/database/server';
 import { getEntitlementsForBranch } from '@favornoms/database/queries';
 import { hasFeature } from '@favornoms/shared';
+import { resolveDeliveryGate } from '@/lib/delivery-gate';
 import { BranchSettings } from './_components/branch-settings';
 
 interface Props { params: Promise<{ branchId: string }> }
@@ -37,9 +38,13 @@ export default async function BranchPage({ params }: Props) {
         .limit(1)
         .maybeSingle();
 
-  const [{ data: restaurant }, entitlements, { data: brand }, t, { data: caps }] = await Promise.all([
+  // The delivery gate carries the catalog's prices as well as the answer: the upsell shown
+  // in place of the delivery cards used to hardcode $49 while the catalog said $59, and
+  // delivery is now $59 once plus $29/month FOR THIS BRANCH (docs/PACKAGING-2026-09-23.md).
+  const [{ data: restaurant }, entitlements, deliveryGate, { data: brand }, t, { data: caps }] = await Promise.all([
     supabase.from('restaurants').select('name, storefront').eq('id', branch.restaurant_id).maybeSingle(),
     getEntitlementsForBranch(supabase, branchId),
+    resolveDeliveryGate(supabase, branchId),
     brandQuery,
     getTranslations('branch'),
     // The settings cards save through patch_branch_settings, which needs branch.settings (owner
@@ -47,6 +52,9 @@ export default async function BranchPage({ params }: Props) {
     // rather than refusing only after Save.
     supabase.rpc('my_capabilities', { p_branch_id: branchId }),
   ]);
+  // resolveDeliveryGate asks getEntitlementsForBranch the same question hasFeature would,
+  // and carries the catalog prices with it, so the upsell's answer and its numbers cannot
+  // disagree.
   return (
     <BranchSettings
       branch={branch as never}
@@ -66,7 +74,15 @@ export default async function BranchPage({ params }: Props) {
           iconUrl: brand?.icon_192_url || brand?.favicon_url || null,
         },
       }}
-      canUseDelivery={hasFeature(entitlements, 'delivery')}
+      canUseDelivery={deliveryGate.delivers}
+      deliveryPrices={{
+        // This branch's one-time price: 0 when its unlock was paid before, so switching
+        // delivery back on is quoted as the monthly price alone, as the plan page prices it.
+        once: deliveryGate.oneTimePrice,
+        monthly: deliveryGate.monthlyPrice,
+        alreadyUnlocked: deliveryGate.alreadyUnlocked === true,
+        planHref: deliveryGate.planHref,
+      }}
       canUseCard={hasFeature(entitlements, 'card_payment')}
       canEditSettings={((caps ?? []) as string[]).includes('branch.settings')}
     />

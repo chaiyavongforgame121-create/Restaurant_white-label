@@ -90,9 +90,10 @@
     },
     "deliveries": {
       "label": "Active Deliveries",
-      "notOnPlan": "Delivery isn’t on your plan",
       "failed": "Could not read deliveries",
-      "stalled": "{count} stalled"
+      "stalled": "{count} stalled",
+      "notOffered": "This branch does not deliver",
+      "windingDown": "Delivery is off here — the last runs are still out"
     }
   },
   "action": {

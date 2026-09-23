@@ -1,13 +1,20 @@
 import { getTranslations } from 'next-intl/server';
 import { Clock, Lock } from 'lucide-react';
 import {
+  getBillingOverview,
   getEntitlementsForBranch,
   getPendingBillingRequest,
   listBillingProducts,
 } from '@favornoms/database/queries';
-import { isValidTimeZone, type BillingProduct } from '@favornoms/shared';
+import {
+  ADDON_DELIVERY,
+  isValidTimeZone,
+  type BillingPaidState,
+  type BillingProduct,
+} from '@favornoms/shared';
 import { Card } from '@favornoms/ui';
 import { getBranchAccess } from '@/lib/capabilities';
+import { fallbackOverview, type PlanBranch } from './_components/plan-model';
 import { PlanView, type DecidedRequest } from './_components/plan-view';
 
 interface Props {
@@ -16,6 +23,7 @@ interface Props {
     suspended?: string;
     checkout?: string;
     add?: string;
+    branch?: string;
     no_trial?: string;
     renew?: string;
   }>;
@@ -27,19 +35,18 @@ export async function generateMetadata() {
 }
 
 /**
- * `?add=` arrives from an upsell card, which may only know its own title ("Delivery"),
- * so it is matched against the catalog code and the product name alike. Anything that
- * is not a live add-on is dropped: pre-ticking a code the catalog does not sell would
- * price a line the server then refuses.
+ * `?add=` arrives from an upsell card, which may only know its own title ("Delivery"), so
+ * it is matched against the catalog code and the product name alike. Delivery is the only
+ * thing left to add — the AI Suite was withdrawn on 2026-09-23 — so this answers yes or no
+ * rather than returning a code: anything else in the query string adds nothing.
  */
-function resolveAddon(raw: string | undefined, catalog: BillingProduct[]): string | null {
-  if (!raw) return null;
+function wantsDelivery(raw: string | undefined, catalog: BillingProduct[]): boolean {
+  if (!raw) return false;
   const slug = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_');
   const wanted = slug(raw);
-  const match = catalog.find(
-    (p) => p.kind === 'addon' && (p.code === wanted || slug(p.name) === wanted),
-  );
-  return match?.code ?? null;
+  const delivery = catalog.find((p) => p.code === ADDON_DELIVERY && p.kind === 'addon');
+  if (!delivery) return false;
+  return wanted === delivery.code || slug(delivery.name) === wanted;
 }
 
 /**
@@ -47,9 +54,19 @@ function resolveAddon(raw: string | undefined, catalog: BillingProduct[]): strin
  * as unknown because the RPC is not in the generated types, so every field is checked here
  * rather than trusted.
  */
+/**
+ * When the all-monthly catalog was retired (docs/PACKAGING-2026-09-23.md). A request filed
+ * before it was priced in dollars that no longer exist: Coastal Grill's last one reads
+ * "3 branches, no delivery — $397 every month", which on today's page looks like today's
+ * price. Such a decision is history, not news, so the banner leaves it out.
+ */
+const REPRICED_AT_MS = Date.parse('2026-09-23T00:00:00Z');
+
 function readDecision(raw: unknown): DecidedRequest | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const r = raw as Record<string, unknown>;
+  const filedMs = typeof r.created_at === 'string' ? Date.parse(r.created_at) : NaN;
+  if (Number.isFinite(filedMs) && filedMs < REPRICED_AT_MS) return null;
   const status = r.status === 'approved' ? 'approved' : r.status === 'rejected' ? 'rejected' : null;
   const id = r.id;
   const planCode = r.plan_code;
@@ -59,14 +76,19 @@ function readDecision(raw: unknown): DecidedRequest | null {
     typeof decided === 'string' ? decided : typeof created === 'string' ? created : null;
   if (!status || typeof id !== 'string' || typeof planCode !== 'string' || !decidedAt) return null;
   const note = r.decision_note;
-  const addons = r.addons;
+  const delivery = r.delivery_branch_ids;
   return {
     id,
     status,
     planCode,
-    addons: Array.isArray(addons) ? addons.filter((a): a is string => typeof a === 'string') : [],
     branchSeats: Math.max(1, Math.trunc(Number(r.branch_seats) || 1)),
+    deliveryBranchIds: Array.isArray(delivery)
+      ? delivery.filter((b): b is string => typeof b === 'string')
+      : [],
     monthlyTotal: Number(r.monthly_total ?? 0),
+    // A row written before the packaging migration has no one-time total, and 0 is the
+    // truth for it: nothing one-time was ever charged under the old all-monthly model.
+    oneTimeTotal: Number(r.one_time_total ?? 0),
     decisionNote: typeof note === 'string' && note.trim() !== '' ? note : null,
     decidedAt,
   };
@@ -77,16 +99,16 @@ function readDecision(raw: unknown): DecidedRequest | null {
 export default async function PlanPage({ params, searchParams }: Props) {
   const { branchId } = await params;
   const query = await searchParams;
-  const { supabase, branch, can, role } = await getBranchAccess(
-    branchId,
-    `/b/${branchId}/settings/plan`,
-  );
+  const { supabase, branch, can } = await getBranchAccess(branchId, `/b/${branchId}/settings/plan`);
 
-  // The matrix gives billing.manage to the owner only, but request_package_change
-  // accepts the owner's admin as well, so an admin is let through here too. Everyone
-  // else still lands on this page whenever the store is suspended (the layout sends
-  // every user here), and used to get a package builder whose submit the server refused.
-  const canManageBilling = can('billing.manage') || role === 'admin';
+  // Whoever holds billing.manage in public.role_capabilities — today the owner alone. It is
+  // the same question request_package_change, validate_billing_discount and
+  // get_billing_overview ask (private.user_can_manage_billing), and the one the sidebar asks
+  // before it shows this page. An admin used to be let through here as well, on the theory
+  // that the RPC accepted them; it no longer does, so the builder would only have produced a
+  // submit the server refuses. Everyone else still lands on this page whenever the store is
+  // suspended (the layout sends every user here) and reads PlanNotYours instead.
+  const canManageBilling = can('billing.manage');
 
   const { data: branchRow } = await supabase
     .from('branches')
@@ -109,8 +131,13 @@ export default async function PlanPage({ params, searchParams }: Props) {
     args?: Record<string, unknown>,
   ) => Promise<{ data: unknown; error: { message: string } | null }>;
 
-  const [entitlements, catalog, pendingRequest, decidedRes] = await Promise.all([
+  const [entitlements, overview, catalog, pendingRequest, decidedRes] = await Promise.all([
+    // Read on its own as well as inside the overview: this RPC predates get_billing_overview
+    // and answers even when that one cannot, and whether the store is suspended is what
+    // decides the whole page. Everything this page reads from it (seats, branches used, the
+    // delivering branches, the deadline) is restaurant-wide in both payloads.
     getEntitlementsForBranch(supabase, branchId),
+    getBillingOverview(supabase, branch.restaurant_id),
     listBillingProducts(supabase),
     getPendingBillingRequest(supabase, branch.restaurant_id),
     // Only the pending request used to be read, so a rejection simply made the banner
@@ -121,19 +148,41 @@ export default async function PlanPage({ params, searchParams }: Props) {
     rpcAny('get_latest_billing_decision', { p_restaurant_id: branch.restaurant_id }),
   ]);
 
+  // A successful overview always carries the restaurant it was asked about; the denied
+  // value carries an empty id. That is the one signal that separates "nothing is bought"
+  // from "we could not read what is bought".
+  const overviewOk = overview.entitlements.restaurantId === branch.restaurant_id;
+
+  let branches: PlanBranch[] = overview.branches;
+  let paid: BillingPaidState = overview.paid;
+  if (!overviewOk) {
+    const { data: rows } = await supabase
+      .from('branches')
+      .select('id, name')
+      .eq('restaurant_id', branch.restaurant_id)
+      .eq('is_active', true)
+      .order('created_at', { ascending: true });
+    ({ branches, paid } = fallbackOverview(entitlements, rows ?? []));
+  }
+
   const latestDecision = decidedRes.error ? null : readDecision(decidedRes.data);
+  const preselect = typeof query.branch === 'string' ? query.branch : null;
 
   return (
     <PlanView
       branchId={branchId}
       restaurantId={branch.restaurant_id}
-      entitlements={entitlements}
+      entitlements={overviewOk ? overview.entitlements : entitlements}
       catalog={catalog}
+      branches={branches}
+      paid={paid}
       pendingRequest={pendingRequest}
       latestDecision={latestDecision}
       timezone={timezone}
       suspended={!entitlements.entitled}
-      preselectAddon={resolveAddon(query.add, catalog)}
+      addDelivery={wantsDelivery(query.add, catalog)}
+      // Only a branch of this restaurant may be pre-selected; the view drops anything else.
+      preselectBranchId={branches.some((b) => b.id === preselect) ? preselect : null}
       noTrial={query.no_trial === '1'}
       renew={query.renew === '1'}
     />

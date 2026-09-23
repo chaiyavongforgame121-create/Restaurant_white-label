@@ -200,37 +200,9 @@
     }
   },
   "import": {
-    "title": "Importar menú con IA",
-    "subtitle": "Sube una foto de un menú impreso: Claude extrae los artículos, precios y categorías para que los revises.",
-    "menuImage": "Imagen del menú",
-    "upload": "Subir",
-    "hint": "Indicaciones para la IA (opcional)",
-    "hintPlaceholder": "p. ej., comida casual estadounidense, precios en USD",
-    "uploaded": "Imagen subida. Haz clic en Analizar con IA para extraer los artículos del menú.",
-    "analyze": "Analizar con IA",
-    "analyzing": "Analizando la imagen con Claude…",
+    "title": "Importar menú desde CSV",
+    "subtitle": "Agrega un menú completo de una vez desde una hoja de cálculo: una fila por plato, con su categoría, nombre, precio y estación de cocina.",
     "imported": "{count, plural, one {Se importó # artículo.} other {Se importaron # artículos.}}",
-    "selected": "{selected} de {total} artículos seleccionados",
-    "importSelected": "Importar seleccionados",
-    "descriptionPlaceholder": "Descripción",
-    "remove": "Quitar",
-    "stations": {
-      "hot": "Caliente",
-      "cold": "Fría",
-      "bar": "Bar",
-      "dessert": "Postres",
-      "expo": "Pase"
-    },
-    "errors": {
-      "uploadFailed": "No se pudo subir el archivo. Inténtalo de nuevo.",
-      "fileTooLarge": "La imagen es demasiado grande para subirla.",
-      "fileTypeNotAllowed": "Ese tipo de archivo no se puede subir. Elige una imagen.",
-      "signedOut": "Tu sesión terminó. Vuelve a iniciar sesión e inténtalo otra vez.",
-      "notAllowed": "Solo los propietarios y gerentes pueden importar un menú en esta sucursal.",
-      "aiUnavailable": "La importación de menú con IA no está disponible en este momento.",
-      "rateLimited": "Esta sucursal alcanzó el límite de importaciones por hora. Inténtalo de nuevo en una hora.",
-      "analyzeFailed": "No pudimos leer un menú en esa imagen. Prueba con una foto más nítida."
-    },
     "csv": {
       "title": "Importación masiva por CSV",
       "columns": "Columnas: <code>{columns}</code> (station es opcional). La primera fila debe tener los encabezados.",

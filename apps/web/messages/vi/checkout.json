@@ -52,7 +52,7 @@
     "dropoffRequired": "Vui lòng chọn nơi tài xế để đơn hàng của bạn.",
     "dropoffOtherRequired": "Vui lòng mô tả nơi giao.",
     "outOfRange": "Địa chỉ này nằm ngoài khu vực giao hàng.",
-    "deliveryNotSold": "Chi nhánh này hiện không nhận đơn giao hàng. Hãy thử Tự đến lấy.",
+    "deliveryNotSold": "Chi nhánh này không giao hàng. Hãy chọn đến lấy.",
     "pickupClosedScheduleInstead": "Nhà hàng hiện đã đóng cửa nên không thể Tự đến lấy. Bạn có thể hẹn giờ giao hàng."
   },
   "promoCode": "Bạn có mã khuyến mãi?",
@@ -96,7 +96,9 @@
     "deliveryNoPaymentPickupOpen": "Không thể hẹn giờ giao hàng với các phương thức thanh toán hiện tại của nhà hàng — bạn vẫn có thể Tự đến lấy.",
     "deliveryNoPayment": "Không thể hẹn giờ giao hàng với các phương thức thanh toán hiện tại của nhà hàng.",
     "pickupPaused": "Hiện không thể Tự đến lấy — nhà hàng đang tạm dừng nhận đơn.",
-    "pickupClosedNow": "Hiện không thể Tự đến lấy — nhà hàng đã đóng cửa."
+    "pickupClosedNow": "Hiện không thể Tự đến lấy — nhà hàng đã đóng cửa.",
+    "deliveryNotOfferedPickupOpen": "Chi nhánh này không giao hàng — bạn vẫn có thể đến lấy.",
+    "deliveryNotOffered": "Chi nhánh này không giao hàng."
   },
   "schedule": {
     "loading": "Đang tải các khung giờ nhà hàng nhận đặt trước…",
@@ -116,7 +118,7 @@
     "calculating": "Đang tính phí giao hàng…",
     "distanceFee": "Cách {distance} mi · phí giao {fee}",
     "outOfRangeMax": "Rất tiếc, địa chỉ này nằm ngoài khu vực giao hàng (tối đa {max} mi).",
-    "notSold": "Rất tiếc, chi nhánh này hiện không nhận đơn giao hàng. Bạn vẫn có thể Tự đến lấy.",
+    "notSold": "Chi nhánh này không giao hàng. Vui lòng chọn đến lấy.",
     "pickSuggestion": "Hãy chọn địa chỉ từ gợi ý để xác nhận giao hàng và xem phí chính xác."
   },
   "dropoff": {

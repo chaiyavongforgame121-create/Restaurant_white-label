@@ -1,5 +1,6 @@
 import { getTranslations } from 'next-intl/server';
 import { getBranchAccess } from '@/lib/capabilities';
+import { resolveDeliveryGate } from '@/lib/delivery-gate';
 import { AccessDenied } from '@/components/access-denied';
 import { ReportsView } from './_components/reports-view';
 import { getReportSections } from './_components/report-queries';
@@ -42,7 +43,12 @@ export default async function ReportsPage({ params, searchParams }: Props) {
 
   const now = new Date();
   const range = parseReportRange(sp, timezone, now);
-  const sections = await getReportSections(supabase, branchId, range);
+  // The Delivery section was rendered for every branch, delivery or not, and its RPC has no
+  // entitlement check — so a branch that does not deliver got a full delivery report. It is
+  // the branch's own answer now, and the section says so rather than disappearing without a
+  // word (a merchant who pays for delivery at their other branch would read that as a bug).
+  const gate = await resolveDeliveryGate(supabase, branchId);
+  const sections = await getReportSections(supabase, branchId, range, gate.delivers);
 
   return (
     <ReportsView
@@ -52,6 +58,9 @@ export default async function ReportsPage({ params, searchParams }: Props) {
       range={range}
       today={localDay(now, timezone)}
       sections={sections}
+      canUseDelivery={gate.delivers}
+      branchName={branch.name}
+      deliveryPlanHref={gate.planHref}
     />
   );
 }

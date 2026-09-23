@@ -77,5 +77,8 @@
       "signedOut": "Your session has ended. Sign in again.",
       "generic": "The request could not be updated. Try again."
     }
+  },
+  "notOffered": {
+    "stillOwed": "Riders are still owed for the runs they finished. This page stays open until every request is settled."
   }
 }
