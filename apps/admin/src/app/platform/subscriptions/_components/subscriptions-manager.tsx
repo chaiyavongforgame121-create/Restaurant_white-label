@@ -69,7 +69,13 @@ const CHARGE_STATUSES = ['pending', 'paid', 'void'] as const;
 const isChargeStatus = (s: string): s is (typeof CHARGE_STATUSES)[number] =>
   (CHARGE_STATUSES as readonly string[]).includes(s);
 
-const money = (n: number) => `$${Number(n ?? 0).toFixed(0)}`;
+// Whole dollars as "$99", cents kept when there are any: a discounted one-time fee can be
+// $49.50, and a rounded figure here would disagree with the ledger it summarises.
+const money = (n: number) => {
+  const v = Number(n ?? 0);
+  if (!Number.isFinite(v)) return '$0';
+  return Number.isInteger(v) ? `$${v.toFixed(0)}` : `$${v.toFixed(2)}`;
+};
 
 // Pin the locale: an unpinned toLocaleDateString() renders in whatever locale the
 // *server* runs under (a Thai dev box turned "8/8/2026" into the Buddhist-calendar

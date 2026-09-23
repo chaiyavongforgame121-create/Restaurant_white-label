@@ -39,7 +39,13 @@ const INPUT_CLS =
   'h-11 w-full rounded-xl border border-border bg-background px-3 text-base outline-none transition-colors focus-visible:border-primary';
 
 /** Catalog prices are whole dollars; the cents would be noise on every row. */
-const money = (n: number) => `$${Number(n ?? 0).toFixed(0)}`;
+// Whole dollars as "$99", cents kept when there are any: a discounted one-time fee can be
+// $49.50, and a rounded figure here would disagree with the ledger it summarises.
+const money = (n: number) => {
+  const v = Number(n ?? 0);
+  if (!Number.isFinite(v)) return '$0';
+  return Number.isInteger(v) ? `$${v.toFixed(0)}` : `$${v.toFixed(2)}`;
+};
 
 const EMPTY: BillingProduct = {
   code: '',

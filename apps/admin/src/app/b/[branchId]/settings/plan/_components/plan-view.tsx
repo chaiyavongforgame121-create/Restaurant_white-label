@@ -130,9 +130,13 @@ interface Props {
 
 type PlanT = ReturnType<typeof useTranslations>;
 
-// Money stays in the restaurant's US format in every interface language.
+// Money stays in the restaurant's US format in every interface language. Whole dollars read
+// as "$99"; anything with cents keeps them, because a discount can leave cents behind (50% off
+// $99 is $49.50) and the owner's rule is that a total is never rounded to look tidier.
 const money = (n: number) =>
-  `$${n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  Number.isInteger(n)
+    ? `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
+    : `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 function usePlanLocale(): UiLocale {
   const raw = useLocale();

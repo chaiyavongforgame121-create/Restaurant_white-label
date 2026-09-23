@@ -44,7 +44,11 @@ const BASE_INCLUDES = [
 ] as const;
 
 // Money is shown in US format in every interface language, as it is everywhere else.
-const money = (n: number) => `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+// Whole dollars as "$228"; a catalog price with cents keeps them rather than being rounded.
+const money = (n: number) =>
+  Number.isInteger(n)
+    ? `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
+    : `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 /**
  * The catalog, read once an hour.

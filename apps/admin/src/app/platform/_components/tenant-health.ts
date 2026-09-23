@@ -159,7 +159,13 @@ function dateFormat(locale: UiLocale): Intl.DateTimeFormat {
 export const fmtDate = (v?: string | null, locale: UiLocale = DEFAULT_UI_LOCALE) =>
   v ? dateFormat(locale).format(new Date(v)) : '—';
 
-export const money = (n: number) => `$${Number(n ?? 0).toFixed(0)}`;
+// Whole dollars as "$116", cents kept when there are any (a discounted one-time fee can be
+// $49.50): a rounded figure would disagree with the ledger it summarises.
+export const money = (n: number) => {
+  const v = Number(n ?? 0);
+  if (!Number.isFinite(v)) return '$0';
+  return Number.isInteger(v) ? `$${v.toFixed(0)}` : `$${v.toFixed(2)}`;
+};
 
 export const branchEntitled = (b: BranchLite, nowMs: number) =>
   b.entitled_through !== null && Date.parse(b.entitled_through) > nowMs;
