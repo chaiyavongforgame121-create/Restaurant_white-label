@@ -617,7 +617,12 @@ export function PlanView({
             </div>
             {totals.unusedSeats > 0 && (
               <p className="mt-3 rounded-xl bg-muted px-3 py-2 text-xs text-muted-foreground">
-                {t('seats.newSeats', { count: totals.unusedSeats })}
+                {/* Seats already paid for can be used today; seats this change adds wait for the
+                    request to be approved. Saying "once this is approved" about a seat the
+                    restaurant already owns sent owners looking for a request that was not there. */}
+                {sel.branchSeats <= entitlements.branchSeats
+                  ? t('seats.newSeatsReady', { count: totals.unusedSeats })
+                  : t('seats.newSeats', { count: totals.unusedSeats })}
               </p>
             )}
             {sel.branchSeats <= minSeats && entitlements.branchesUsed > 1 && (

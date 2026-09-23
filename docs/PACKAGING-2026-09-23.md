@@ -5,24 +5,31 @@ price in it is dead.
 
 ## 1. What the owner sells now
 
+**Prices amended 2026-09-24** (migration `20260924100000_reprice_catalog.sql`). The model below is unchanged; only the
+numbers moved, and delivery lost its one-time fee.
+
 | What | Paid once | Every month |
 |---|---|---|
-| **Base** — includes the first branch | **$228** | **$29** (that branch) |
-| **Extra branch** — each branch after the first | **$99** | **$29** (that branch) |
-| **Delivery** — per branch, chosen by the owner | **$59** | **$29** (that branch) |
+| **Base** — includes the first branch | **$170** | **$29** (that branch) |
+| **Extra branch** — each branch after the first | **$70** | **$29** (that branch) |
+| **Delivery** — per branch, chosen by the owner | **—** (none) | **+$30** (that branch) |
 
 The base covers: card payment at checkout, online ordering & QR, reports & loyalty, kitchen display & counter, one
 branch. **Delivery is never in the base.**
 
-Monthly, in one sentence: **every branch is $29, and a branch with delivery is $58.**
+Monthly, in one sentence: **every branch is $29, and a branch with delivery is $59.**
 
     1 branch, no delivery                        $29 / month
-    2 branches, delivery on one         29 + 58 = $87 / month
-    2 branches, delivery on both        58 + 58 = $116 / month
+    1 branch with delivery                       $59 / month
+    2 branches, delivery on one         29 + 59 = $88 / month
+    2 branches, delivery on both        59 + 59 = $118 / month
 
-One-time, in one sentence: **$228 for the first branch, $99 for each branch after it, $59 to unlock delivery on a
-branch.** A branch's $59 is paid once ever. Switching that branch's delivery off and on again later costs nothing
-one-time; it only changes the monthly bill.
+One-time, in one sentence: **$170 for the first branch and $70 for each branch after it.** Switching delivery on or off
+on a branch only changes the monthly bill.
+
+The first version of this decision (2026-09-23) was $228 / $99 once, and delivery $59 once + $29 a month. One-time
+charges already recorded at those prices stay as they were paid. Where the sections below say $228, $99 or $59, read
+them as that first version: the rules they describe are the same, and every price is read from `billing_products`.
 
 The **AI Suite** add-on is withdrawn. So is the **AI menu import** screen (the CSV importer on the same page stays).
 

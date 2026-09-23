@@ -90,7 +90,8 @@
       "remove": "Bớt một chi nhánh",
       "add": "Thêm một chi nhánh",
       "floor": "Bạn đang có {count, plural, other {# chi nhánh hoạt động}}, nên không thể giảm xuống dưới {min}. Để trả phí ít hơn một chi nhánh, hãy ẩn chi nhánh không còn dùng: mở Cài đặt chi nhánh của chi nhánh đó và đặt Trạng thái thành Đã ẩn. Chi nhánh đã ẩn không bị tính phí.",
-      "newSeats": "{count, plural, other {# chi nhánh bạn chưa tạo}}. Hãy tạo chi nhánh mới trong mục Chi nhánh khi yêu cầu này được duyệt."
+      "newSeats": "{count, plural, other {# chi nhánh bạn chưa tạo}}. Hãy tạo chi nhánh mới trong mục Chi nhánh khi yêu cầu này được duyệt.",
+      "newSeatsReady": "{count, plural, other {# chi nhánh bạn đã trả tiền nhưng chưa tạo}}. Hãy tạo trong mục Chi nhánh bất cứ lúc nào."
     },
     "pay": {
       "title": "Số tiền bạn trả",

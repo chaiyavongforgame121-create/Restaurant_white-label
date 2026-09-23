@@ -303,6 +303,52 @@ describe('one-time — 228 + 99 + 59, and nothing charged twice', () => {
   });
 });
 
+// The owner's prices of 2026-09-24: base $170 once, $70 per extra branch once, no one-time
+// fee for delivery; $29 a month per branch and $59 for a branch that delivers.
+const CATALOG_0924: BillingProduct[] = CATALOG.map((p) =>
+  p.code === PLAN_BASE
+    ? { ...p, one_time_price: 170 }
+    : p.code === PRODUCT_EXTRA_BRANCH
+      ? { ...p, one_time_price: 70 }
+      : p.code === ADDON_DELIVERY
+        ? { ...p, one_time_price: 0, monthly_price: 30 }
+        : p,
+);
+
+describe('the 2026-09-24 prices — $29 a month, $59 with delivery, delivery free once', () => {
+  it('a branch is $29 a month without delivery and $59 with it', () => {
+    expect(packageMonthlyTotal(sel(), CATALOG_0924)).toBe(29);
+    expect(packageMonthlyTotal(sel({ deliveryBranchIds: [BRANCH_A] }), CATALOG_0924)).toBe(59);
+    expect(
+      packageMonthlyTotal(sel({ branchSeats: 2, deliveryBranchIds: [BRANCH_A] }), CATALOG_0924),
+    ).toBe(88);
+    expect(
+      packageMonthlyTotal(
+        sel({ branchSeats: 2, deliveryBranchIds: [BRANCH_A, BRANCH_B] }),
+        CATALOG_0924,
+      ),
+    ).toBe(118);
+  });
+
+  it('pays $170 for the first branch and $70 for each branch after it', () => {
+    expect(packageOneTimeTotal(sel(), CATALOG_0924, paid())).toBe(170);
+    expect(packageOneTimeTotal(sel({ branchSeats: 3 }), CATALOG_0924, paid())).toBe(310);
+  });
+
+  it('raises no one-time line for delivery, which has no one-time price', () => {
+    const lines = oneTimeLines(
+      sel({ branchSeats: 2, deliveryBranchIds: [BRANCH_A, BRANCH_B] }),
+      CATALOG_0924,
+      paid(),
+    );
+    expect(lines.map((l) => l.code)).toEqual([PLAN_BASE, PRODUCT_EXTRA_BRANCH]);
+    expect(packageOneTimeTotal(sel({ deliveryBranchIds: [BRANCH_A] }), CATALOG_0924, paid({ basePaid: true, seatsPaid: 1 }))).toBe(0);
+    expect(
+      oneTimeLines(sel({ deliveryBranchIds: [BRANCH_A] }), CATALOG_0924, paid({ basePaid: true, seatsPaid: 1 })),
+    ).toEqual([]);
+  });
+});
+
 describe('per-branch delivery', () => {
   const branchPayload = (delivery: boolean) =>
     parseEntitlements({

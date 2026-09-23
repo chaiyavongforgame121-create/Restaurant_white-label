@@ -593,6 +593,7 @@ const USED: Array<[string, Record<string, string | number>?]> = [
   ['seats.add'],
   ['seats.floor', { count: 2, min: 2 }],
   ['seats.newSeats', { count: 1 }],
+  ['seats.newSeatsReady', { count: 1 }],
   ['pay.title'],
   ['pay.onceTitle'],
   ['pay.onceNothing'],

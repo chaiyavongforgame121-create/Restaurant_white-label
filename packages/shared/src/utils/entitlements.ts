@@ -10,9 +10,10 @@
 // parse error or a lapsed deadline all read as "no".
 //
 // Pricing model locked 2026-09-23 — see docs/PACKAGING-2026-09-23.md. Money is
-// paid once AND every month: $228 for the base (first branch), $99 for each
-// branch after it, $59 to unlock delivery on a branch; then $29 per branch and
-// $29 more for every branch that delivers. Delivery is PER BRANCH, so an
+// paid once AND every month. Prices live in billing_products; as of 2026-09-24 they are
+// $170 for the base (first branch), $70 for each branch after it, no one-time fee for
+// delivery; then $29 a month per branch and $30 more for every branch that
+// delivers ($59 for a delivery branch). Delivery is PER BRANCH, so an
 // Entitlements payload loaded for a branch answers features.delivery for THAT
 // branch, and carries deliveryBranchIds for the whole restaurant.
 //
@@ -403,6 +404,10 @@ export function branchMonthly(
  *
  * The server writes one billing_charges row per seat; this returns one line of
  * quantity N, because that is what the merchant reads.
+ *
+ * A product with no one-time price raises no line. Delivery has none since the
+ * 2026-09-24 prices (it is a monthly add-on only), and a "Delivery — Hamburger $0"
+ * line would read as something to pay, or keep "Nothing to pay once" from showing.
  */
 export function oneTimeLines(
   sel: PackageSelection,
@@ -414,7 +419,7 @@ export function oneTimeLines(
   // The trial is granted once at signup and never sold, so it raises nothing.
   if (!plan || (plan.trial_days ?? 0) > 0) return lines;
 
-  if (!paid.basePaid) {
+  if (!paid.basePaid && plan.one_time_price > 0) {
     lines.push({
       code: plan.code,
       label: plan.name,
@@ -427,7 +432,7 @@ export function oneTimeLines(
   const covered = paid.basePaid ? Math.max(0, paid.seatsPaid) : (plan.included_seats ?? 0);
   const seat = findProduct(catalog, PRODUCT_EXTRA_BRANCH);
   const extra = Math.max(seatsOf(sel) - covered, 0);
-  if (seat && extra > 0) {
+  if (seat && extra > 0 && seat.one_time_price > 0) {
     lines.push({
       code: seat.code,
       label: seat.name,
@@ -438,7 +443,7 @@ export function oneTimeLines(
   }
 
   const delivery = findProduct(catalog, ADDON_DELIVERY);
-  if (delivery) {
+  if (delivery && delivery.one_time_price > 0) {
     const unlocked = new Set(paid.deliveryUnlockedBranchIds ?? []);
     for (const branchId of deliveryIdsOf(sel)) {
       if (unlocked.has(branchId)) continue;

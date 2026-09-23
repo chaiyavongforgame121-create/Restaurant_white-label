@@ -90,7 +90,8 @@
       "remove": "Quitar una sucursal",
       "add": "Agregar una sucursal",
       "floor": "Tienes {count, plural, one {# sucursal activa} other {# sucursales activas}}, así que no puedes bajar de {min}. Para pagar una menos, oculta una sucursal que ya no uses: abre su Configuración de sucursal y cambia Estado a Oculta. Una sucursal oculta no se factura.",
-      "newSeats": "{count, plural, one {# sucursal que aún no creaste} other {# sucursales que aún no creaste}}. Crea las sucursales nuevas desde Sucursales en cuanto se apruebe."
+      "newSeats": "{count, plural, one {# sucursal que aún no creaste} other {# sucursales que aún no creaste}}. Crea las sucursales nuevas desde Sucursales en cuanto se apruebe.",
+      "newSeatsReady": "{count, plural, one {# sucursal que ya pagaste aún no está creada} other {# sucursales que ya pagaste aún no están creadas}}. Créala desde Sucursales cuando quieras."
     },
     "pay": {
       "title": "Lo que pagas",

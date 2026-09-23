@@ -90,7 +90,8 @@
       "remove": "Remove a branch",
       "add": "Add a branch",
       "floor": "You run {count, plural, one {# active branch} other {# active branches}}, so you cannot go below {min}. To pay for one less, hide a branch you no longer use: open its Branch settings and set Status to Hidden. A hidden branch is not billed.",
-      "newSeats": "{count, plural, one {# branch you have not created yet} other {# branches you have not created yet}}. Create new branches from the Branches page once this is approved."
+      "newSeats": "{count, plural, one {# branch you have not created yet} other {# branches you have not created yet}}. Create new branches from the Branches page once this is approved.",
+      "newSeatsReady": "{count, plural, one {# branch you have paid for is not created yet} other {# branches you have paid for are not created yet}}. Create it from the Branches page whenever you are ready."
     },
     "pay": {
       "title": "What you pay",
