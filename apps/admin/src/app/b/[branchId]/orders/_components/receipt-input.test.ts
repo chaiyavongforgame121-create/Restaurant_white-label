@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest';
-import { receiptLineTotal, receiptLinesInMenuOrder } from '@favornoms/ui/printer';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  buildReceipt,
+  printReceiptViaBrowser,
+  receiptLineTotal,
+  receiptLinesInMenuOrder,
+} from '@favornoms/ui/printer';
 import { formatReceiptAddress, toReceiptInput, type ReceiptOrder } from './receipt-input';
 
 /**
@@ -257,6 +262,62 @@ describe('toReceiptInput', () => {
       { branchName: 'Coastal Grill', refunds: [{ amount: 27.6, status: 'succeeded', createdAt: '2026-09-24T12:00:00Z' }] },
     );
     expect(plain.footerNote).toBe('Refunded -27.60');
+  });
+});
+
+/**
+ * Orders store numbers as E.164, and the paper used to print them that way ("+15552345678") while
+ * every screen showed "+1 (555) 234-5678". The printers format them now, so the mapping keeps
+ * handing over the stored value and both printers are checked here with what they actually emit.
+ */
+describe('printed phone numbers', () => {
+  const us = { ...order, customer_phone: '+15552345678' };
+  const ctx = { branchName: 'Coastal Grill', branchPhone: '+66980358264' };
+
+  /** What printReceiptViaBrowser wrote into its print window. */
+  function browserReceipt(input: ReturnType<typeof toReceiptInput>): string {
+    let html = '';
+    const win = {
+      document: { open: () => undefined, write: (s: string) => (html = s), close: () => undefined },
+      focus: () => undefined,
+      print: () => undefined,
+    };
+    vi.useFakeTimers();
+    vi.stubGlobal('window', { open: () => win });
+    printReceiptViaBrowser(input);
+    return html;
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('hands the printers the stored number, not a formatted one', () => {
+    // Formatting once, in the printer, is what keeps a caller from formatting twice or not at all.
+    expect(toReceiptInput(us, ctx).customerPhone).toBe('+15552345678');
+  });
+
+  it('prints the customer and branch numbers the way the screens show them (thermal)', () => {
+    const paper = new TextDecoder().decode(buildReceipt(toReceiptInput(us, ctx)));
+    expect(paper).toMatch(/Phone +\+1 \(555\) 234-5678/);
+    expect(paper).toContain('Tel: +66 98 035 8264');
+    expect(paper).not.toContain('+15552345678');
+    expect(paper).not.toContain('+66980358264');
+  });
+
+  it('prints them the same way through the browser fallback', () => {
+    const html = browserReceipt(toReceiptInput(us, ctx));
+    expect(html).toContain('Phone    +1 (555) 234-5678');
+    expect(html).toContain('Tel: +66 98 035 8264');
+    expect(html).not.toContain('+15552345678');
+  });
+
+  it('prints no Phone row for the till’s walk-in stand-in', () => {
+    const walkIn = toReceiptInput({ ...order, customer_phone: '+10000000000' }, { branchName: 'Coastal Grill' });
+    const paper = new TextDecoder().decode(buildReceipt(walkIn));
+    expect(paper).not.toMatch(/Phone|0000000000|\(000\)/);
+    expect(browserReceipt(walkIn)).not.toMatch(/Phone|0000000000|\(000\)/);
   });
 });
 

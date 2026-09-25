@@ -16,6 +16,7 @@ type LoyaltyBalance = NonNullable<Awaited<ReturnType<typeof getMyLoyalty>>>;
 import { Badge, Button, Card } from '@favornoms/ui';
 import { useAuth } from '@/components/auth/use-auth';
 import { InstallAppButton } from '@/components/install-app-button';
+import { accountPhoneLabel } from '@/lib/account-phone';
 
 // Phone-only diners are backed by a synthetic auth email they never chose. It is an
 // implementation detail of OTP-less sign-in and must never reach the screen.
@@ -117,8 +118,9 @@ export function AccountView({
   // diner asserted at signup, and a NULL phone on the row is often get_or_create_my_customer
   // deliberately REFUSING to hand over a number another account already claimed — rendering
   // the asserted one here would undo that at the display layer. user.phone is the real
-  // verified auth column, so it is the only acceptable fallback.
-  const displayPhone = profile?.phone?.trim() || user?.phone || null;
+  // verified auth column, so it is the only acceptable fallback. Formatted for reading
+  // ("+1 (555) 234-5678"): the raw E.164 used to sit under the name as one run of digits.
+  const displayPhone = accountPhoneLabel(profile?.phone, user?.phone);
   // A display name is not an identity key, so the signup metadata is a fine last resort.
   const displayName =
     profile?.full_name?.trim() || (user?.user_metadata?.full_name as string | undefined)?.trim() || null;

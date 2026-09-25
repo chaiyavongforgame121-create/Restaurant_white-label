@@ -289,8 +289,18 @@ export function formatPhone(input: string | null | undefined): string {
   // number with no information in it is not a number.
   if (/^0+$/.test(digits.slice(1))) return '';
 
-  // NANP, with or without the leading 1.
-  if ((digits.length === 11 && digits.startsWith('1')) || digits.length === 10) {
+  // NANP: eleven digits led by the country code 1, or ten digits with no "+" that look like a
+  // North American number. A number written with a "+" is NANP only when its country code is 1:
+  // "+6581234567" (Singapore) is ten digits too, and used to come out as "+1 (658) 123-4567".
+  // Without a "+", ten digits count only when an area code and an exchange could be real (they
+  // never start with 0 or 1), so a Thai "0812345678" typed with no country code is left as typed
+  // rather than turned into a wrong American number.
+  const plus = raw.startsWith('+');
+  const nanpTen = (ten: string) => /^[2-9]\d{2}[2-9]\d{6}$/.test(ten);
+  if (
+    (digits.length === 11 && digits.startsWith('1')) ||
+    (!plus && digits.length === 10 && nanpTen(digits))
+  ) {
     const ten = digits.length === 11 ? digits.slice(1) : digits;
     return `+1 (${ten.slice(0, 3)}) ${ten.slice(3, 6)}-${ten.slice(6)}`;
   }

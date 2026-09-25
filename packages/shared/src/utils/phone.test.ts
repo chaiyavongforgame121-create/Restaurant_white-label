@@ -182,6 +182,27 @@ describe('countryForIso', () => {
 });
 
 describe('formatPhone', () => {
+  it('never shows a ten-digit number from another country as an American one', () => {
+    // Singapore, Denmark and Norway have eight-digit national numbers, so their E.164 is ten
+    // digits — the NANP branch used to take them.
+    expect(formatPhone('+6581234567')).not.toMatch(/^\+1 /);
+    expect(formatPhone('+4532123456')).not.toMatch(/^\+1 /);
+    expect(formatPhone('+4740612345')).not.toMatch(/^\+1 /);
+    expect(formatPhone('+6581234567').startsWith('+65')).toBe(true);
+  });
+
+  it('formats a bare ten-digit number as +1 only when it looks North American', () => {
+    expect(formatPhone('6266386401')).toBe('+1 (626) 638-6401');
+    expect(formatPhone('(626) 638-6401')).toBe('+1 (626) 638-6401');
+    // A Thai mobile typed without its country code: left as typed, not turned into +1 (081).
+    expect(formatPhone('0812345678')).toBe('0812345678');
+  });
+
+  it("keeps the owner's format for every US number and the grouping for a Thai one", () => {
+    expect(formatPhone('+16266386401')).toBe('+1 (626) 638-6401');
+    expect(formatPhone('+66980358264')).toBe('+66 98 035 8264');
+  });
+
   it('is the format the owner asked for', () => {
     expect(formatPhone('+15552345678')).toBe('+1 (555) 234-5678');
   });

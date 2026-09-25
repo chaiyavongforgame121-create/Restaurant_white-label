@@ -1,3 +1,4 @@
+import { formatPhone } from '@favornoms/shared';
 import {
   receiptLineTotal,
   receiptLinesInMenuOrder,
@@ -21,7 +22,8 @@ export function printReceiptViaBrowser(input: ReceiptInput) {
   const hr = '-'.repeat(42);
   lines.push(input.branchName.toUpperCase());
   if (input.branchAddress) lines.push(input.branchAddress);
-  if (input.branchPhone) lines.push(`Tel: ${input.branchPhone}`);
+  const branchPhone = formatPhone(input.branchPhone);
+  if (branchPhone) lines.push(`Tel: ${branchPhone}`);
   lines.push('');
   lines.push(hr);
   lines.push(`Order   ${input.orderNumber}`);
@@ -29,7 +31,8 @@ export function printReceiptViaBrowser(input: ReceiptInput) {
   if (input.cashierName) lines.push(`Cashier ${input.cashierName}`);
   lines.push(`Date    ${new Date(input.createdAt).toLocaleString()}`);
   if (input.customerName) lines.push(`Customer ${input.customerName}`);
-  if (input.customerPhone) lines.push(`Phone    ${input.customerPhone}`);
+  const customerPhone = formatPhone(input.customerPhone);
+  if (customerPhone) lines.push(`Phone    ${customerPhone}`);
   lines.push(hr);
   for (const item of receiptLinesInMenuOrder(input.items)) {
     const left = `${item.quantity}x ${item.name}`;

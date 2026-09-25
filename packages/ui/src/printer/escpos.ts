@@ -6,7 +6,7 @@
  * Output is a Uint8Array; pipe to WebUSB or any binary transport.
  */
 
-import { lineTotal, sortOrderLines } from '@favornoms/shared';
+import { formatPhone, lineTotal, sortOrderLines } from '@favornoms/shared';
 
 const ESC = 0x1b;
 const GS = 0x1d;
@@ -139,6 +139,7 @@ export function receiptLinesInMenuOrder(items: readonly ReceiptLine[]): ReceiptL
 export interface ReceiptInput {
   branchName: string;
   branchAddress?: string;
+  /** As stored (E.164). Both printers format it; see customerPhone. */
   branchPhone?: string;
   orderNumber: string;
   channel: string;
@@ -159,6 +160,11 @@ export interface ReceiptInput {
   paymentMethod: string;
   cashTendered?: number;
   customerName?: string | null;
+  /**
+   * As stored (E.164). Both printers put it through formatPhone, so the paper reads
+   * "+1 (555) 234-5678" like every screen and no caller has to remember to. That also prints
+   * no Phone row for the till's +10000000000 walk-in stand-in, a number nobody answers.
+   */
   customerPhone?: string | null;
   customerAddress?: string | null;
   footerNote?: string;
@@ -195,7 +201,8 @@ export function buildReceipt(input: ReceiptInput): Uint8Array {
 
   b.align('center').bold(true).size('large').line(input.branchName).size('normal').bold(false);
   if (input.branchAddress) b.line(input.branchAddress);
-  if (input.branchPhone) b.line(`Tel: ${input.branchPhone}`);
+  const branchPhone = formatPhone(input.branchPhone);
+  if (branchPhone) b.line(`Tel: ${branchPhone}`);
   b.feed(1);
 
   b.align('left').hr();
@@ -204,7 +211,8 @@ export function buildReceipt(input: ReceiptInput): Uint8Array {
   if (input.cashierName) b.row('Cashier', input.cashierName);
   b.row('Date', new Date(input.createdAt).toLocaleString());
   if (input.customerName) b.row('Customer', input.customerName);
-  if (input.customerPhone) b.row('Phone', input.customerPhone);
+  const customerPhone = formatPhone(input.customerPhone);
+  if (customerPhone) b.row('Phone', customerPhone);
   b.hr();
 
   for (const item of receiptLinesInMenuOrder(input.items)) {

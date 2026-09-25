@@ -10,6 +10,11 @@
 // as branch-local calendar dates with `to` inclusive — the same contract as the six
 // get_branch_*_report RPCs. Without it the CSV was "the last 10 000 rows of all time",
 // which never matched the report the merchant was looking at when they clicked Export.
+//
+// Phone columns stay E.164 (+15552345678) on purpose, although every screen shows
+// "+1 (555) 234-5678": a CSV is as much for the next program as for a person, and SMS and
+// mailing-list imports, de-duplication and matching rows back to these tables all want the
+// number exactly as it is stored.
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';

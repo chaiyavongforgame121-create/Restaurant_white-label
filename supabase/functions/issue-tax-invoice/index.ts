@@ -17,6 +17,7 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2';
 import { billingInactiveBody, loadEntitlements } from '../_shared/entitlements.ts';
+import { formatPhone } from '../_shared/phone-display.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -202,7 +203,9 @@ function buildReceiptHtml(invoice: Record<string, unknown>, seller: Seller): str
     `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
   const sellerName = seller.name;
   const sellerAddr = seller.address;
-  const sellerPhone = seller.phone;
+  // The paper shows a number the way every screen does, "+1 (555) 234-5678", not as the E.164
+  // it is stored in: the same answer as packages/shared's formatPhone, through its Deno mirror.
+  const sellerPhone = formatPhone(seller.phone);
   const issuedAt = inv.issued_at ?? new Date().toISOString();
   const issuedDate = new Date(issuedAt).toLocaleString('en-US', {
     timeZone: branch.timezone ?? 'America/New_York',
