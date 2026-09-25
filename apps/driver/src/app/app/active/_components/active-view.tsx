@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Bike, CheckCircle2, Coffee, MapPin, Navigation, Package, Phone } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { formatCurrency, kmToMi } from '@favornoms/shared';
+import { formatCurrency, formatPhone, kmToMi } from '@favornoms/shared';
 import { Button, Card, EmptyState } from '@favornoms/ui';
 import { DeliveryMap, fetchRoute, hasMapboxToken, haversineKm } from '@favornoms/maps';
 import { getBrowserClient } from '@favornoms/database/client';
@@ -525,6 +525,8 @@ export function ActiveDeliveryView() {
               title={mate ? t('steps.dropoffStop1') : t('steps.dropoff')}
               primary={active.customerName}
               secondary={active.customerAddress}
+              phone={active.customerPhone}
+              callLabel={t('callName', { name: active.customerName })}
             />
             {mate && (
               <Step
@@ -533,6 +535,8 @@ export function ActiveDeliveryView() {
                 title={t('steps.dropoffStop2')}
                 primary={mate.customerName}
                 secondary={mate.customerAddress}
+                phone={mate.customerPhone}
+                callLabel={t('callName', { name: mate.customerName })}
               />
             )}
 
@@ -555,7 +559,7 @@ export function ActiveDeliveryView() {
                   {formatCurrency(active.driverEarnings + (mate?.driverEarnings ?? 0))}
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-2">
                 {/* Gated on the turn, not on the delivery. Without an open assignment there
                     is no thread to open, and falling back to the delivery is exactly how a
                     replacement rider used to inherit the last one's conversation. */}
@@ -566,10 +570,19 @@ export function ActiveDeliveryView() {
                     deliveryStatus={active.status}
                   />
                 )}
+                {/* One button per stop. A batched run used to offer only the first stop's
+                    customer, so the rider had no way to reach the second one from here. */}
                 {active.customerPhone && (
                   <a href={`tel:${active.customerPhone}`}>
                     <Button variant="soft" leftIcon={<Phone className="h-4 w-4" />} size="md">
-                      {t('callCustomer')}
+                      {mate ? t('callStop1') : t('callCustomer')}
+                    </Button>
+                  </a>
+                )}
+                {mate?.customerPhone && (
+                  <a href={`tel:${mate.customerPhone}`}>
+                    <Button variant="soft" leftIcon={<Phone className="h-4 w-4" />} size="md">
+                      {t('callStop2')}
                     </Button>
                   </a>
                 )}
@@ -1041,13 +1054,23 @@ function Step({
   title,
   primary,
   secondary,
+  phone,
+  callLabel,
 }: {
   done: boolean;
   icon: React.ReactNode;
   title: string;
   primary: string;
   secondary: string;
+  /** The stop's stored E.164. Shown formatted; dialled raw. */
+  phone?: string | null;
+  /** Accessible name of the dial link, e.g. "Call Bobby". */
+  callLabel?: string;
 }) {
+  // The rider reads the number the way every screen writes it, "+1 (555) 234-5678", and can tap
+  // it to dial. The href keeps the raw E.164: the parentheses and spaces are for eyes only.
+  // formatPhone answers '' for a number with no information in it, which then shows nothing.
+  const shownPhone = formatPhone(phone);
   return (
     <div className={`flex items-start gap-3 ${done ? 'opacity-60' : ''}`}>
       <div
@@ -1061,6 +1084,16 @@ function Step({
         <p className="text-xs uppercase tracking-wider text-muted-foreground">{title}</p>
         <p className="font-display text-base font-semibold leading-tight">{primary}</p>
         <p className="text-sm text-muted-foreground">{secondary}</p>
+        {shownPhone && phone && (
+          <a
+            href={`tel:${phone}`}
+            aria-label={callLabel}
+            className="mt-1 inline-flex items-center gap-1.5 text-sm font-medium tabular-nums text-primary"
+          >
+            <Phone className="h-3.5 w-3.5" aria-hidden />
+            {shownPhone}
+          </a>
+        )}
       </div>
     </div>
   );

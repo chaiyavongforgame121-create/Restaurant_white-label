@@ -5,6 +5,7 @@ import { ArrowLeft, Printer } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import {
   formatCurrency,
+  formatPhone,
   formatUnitPrice,
   intlLocaleFor,
   orderLineUnitPrice,
@@ -113,6 +114,14 @@ export function CustomerReceipt({ order, storeName, branchAddress }: Props) {
             <>
               <dt className="text-muted-foreground">{t('receipt.customer')}</dt>
               <dd className="text-right">{order.customer_name}</dd>
+            </>
+          )}
+          {/* The number the order was placed with, the way every screen writes it. formatPhone
+              answers '' for the till's walk-in stand-in, so a counter sale prints no phone line. */}
+          {formatPhone(order.customer_phone) && (
+            <>
+              <dt className="text-muted-foreground">{t('receipt.phone')}</dt>
+              <dd className="text-right tabular-nums">{formatPhone(order.customer_phone)}</dd>
             </>
           )}
         </dl>
