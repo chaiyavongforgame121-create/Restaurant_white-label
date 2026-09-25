@@ -1,5 +1,5 @@
 {
-  "title": "Install Favornoms Driver",
+  "title": "Install FavorGO",
   "body": "Add it to your home screen — opens full screen and keeps dispatch alerts on.",
   "cta": "Install",
   "iosHint": "Tap Share in Safari, then Add to Home Screen.",
@@ -7,7 +7,7 @@
   "rowSubtitle": "Full screen · home-screen icon · dispatch alerts",
   "rowSubtitleHelp": "Add it to your home screen — tap to see how",
   "installed": "Installed — open it from your home screen",
-  "alreadyInstalled": "Already installed? Your browser will not offer it again — open Favornoms Driver from your home screen or desktop instead.",
+  "alreadyInstalled": "Already installed? Your browser will not offer it again — open FavorGO from your home screen or desktop instead.",
   "steps": {
     "iosSafari": "Tap the Share button at the bottom of Safari, then choose Add to Home Screen.",
     "iosOtherBrowser": "Tap the Share button, then choose Add to Home Screen. If it is not there, open this page in Safari and do the same.",

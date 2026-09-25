@@ -51,7 +51,7 @@
     },
     "driver": {
       "label": "Tài xế",
-      "description": "Có trong danh sách nhân viên nhưng hoàn toàn không vào được trang quản lý — tài xế làm việc trên ứng dụng Tài xế, chỉ thấy chuyến và thu nhập của chính mình."
+      "description": "Có trong danh sách nhân viên nhưng hoàn toàn không vào được trang quản lý — tài xế làm việc trên ứng dụng FavorGO, chỉ thấy chuyến và thu nhập của chính mình."
     },
     "staff": {
       "label": "Nhân viên (chung)",
@@ -194,7 +194,7 @@
       "server": "Gọi món cho bàn từ quầy, chỉ đơn của chính mình.",
       "kitchen": "Chỉ màn hình bếp.",
       "staff": "Chỉ quầy thu ngân.",
-      "driver": "Chỉ ứng dụng tài xế. Không vào trang quản trị, quầy thu ngân hay bếp."
+      "driver": "Chỉ ứng dụng FavorGO. Không vào trang quản trị, quầy thu ngân hay bếp."
     },
     "errors": {
       "notAuthorized": "Vai trò của bạn không thể đổi vai trò của người này.",

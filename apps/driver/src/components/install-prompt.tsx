@@ -3,8 +3,9 @@
 import * as React from 'react';
 import { usePathname } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Download, Share, X } from 'lucide-react';
+import { Share, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { FavorGoCar } from './brand-mark';
 
 /** Session-scoped: quiet for the rest of this shift, offered again next sign-in. */
 const DISMISS_KEY = 'driver_a2hs_dismissed';
@@ -177,8 +178,10 @@ export function DriverInstallPrompt() {
             <X className="h-4 w-4" />
           </button>
           <div className="flex items-start gap-3 pr-7">
+            {/* A preview of the tile the rider is about to get on their home screen rather than a
+                generic download glyph: public/icon.svg's car on the app's warm gradient. */}
             <span className="bg-gradient-warm grid h-10 w-10 shrink-0 place-items-center rounded-xl text-white">
-              <Download className="h-5 w-5" />
+              <FavorGoCar variant="compact" className="h-5 w-6" />
             </span>
             <div className="flex-1">
               <p className="font-display text-sm font-semibold">{t('title')}</p>

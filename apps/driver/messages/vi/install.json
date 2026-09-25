@@ -1,5 +1,5 @@
 {
-  "title": "Cài đặt Favornoms Driver",
+  "title": "Cài đặt FavorGO",
   "body": "Thêm vào màn hình chính — mở toàn màn hình và luôn nhận thông báo đơn mới.",
   "cta": "Cài đặt",
   "iosHint": "Nhấn Chia sẻ trong Safari, rồi chọn Thêm vào MH chính.",
@@ -7,7 +7,7 @@
   "rowSubtitle": "Toàn màn hình · biểu tượng trên màn hình chính · báo đơn mới",
   "rowSubtitleHelp": "Thêm vào màn hình chính — nhấn để xem cách làm",
   "installed": "Đã cài đặt — mở từ màn hình chính",
-  "alreadyInstalled": "Đã cài rồi? Trình duyệt sẽ không đề xuất lại — hãy mở Favornoms Driver từ màn hình chính hoặc màn hình máy tính.",
+  "alreadyInstalled": "Đã cài rồi? Trình duyệt sẽ không đề xuất lại — hãy mở FavorGO từ màn hình chính hoặc màn hình máy tính.",
   "steps": {
     "iosSafari": "Nhấn nút Chia sẻ ở cuối màn hình Safari, rồi chọn Thêm vào MH chính.",
     "iosOtherBrowser": "Nhấn nút Chia sẻ, rồi chọn Thêm vào MH chính. Nếu không thấy, hãy mở trang này bằng Safari và làm tương tự.",

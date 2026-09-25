@@ -74,7 +74,7 @@
   },
   "noAccess": {
     "title": "Aquí eres repartidor",
-    "body": "Las cuentas de repartidor no usan el panel de administración del restaurante. Abre la app Favornoms Driver para ver las entregas que tienes asignadas, tu historial de entregas y tus ganancias.",
+    "body": "Las cuentas de repartidor no usan el panel de administración del restaurante. Abre la app FavorGO para ver las entregas que tienes asignadas, tu historial de entregas y tus ganancias.",
     "askOwner": "Si también deberías tener acceso al panel de administración, pide al propietario del restaurante que te invite de nuevo con el rol de gerente o administrador.",
     "signInAsSomeoneElse": "Iniciar sesión con otra cuenta"
   },

@@ -32,13 +32,33 @@
 //  5. No pushsubscriptionchange handler. Browsers rotate push endpoints; notify-worker deletes
 //     the stale row on the next 410 and nothing re-subscribed, so the installed app went
 //     permanently silent. Re-subscribe here and hand the result to the page, which owns the RPC.
-const CACHE_VERSION = 'favornoms-driver-v3';
+//
+// v4 — the app is FavorGO now, with a car where the bicycle was. The icons kept their URLs, and
+// v3 served every /icon*, /apple-touch-icon* and *.png|svg cache-first — which, for a file whose
+// name carries no hash, means for good: an installed rider would have kept the bicycle until
+// some later version bump. This bump purges v3's cache, and public/ files are now network-first
+// (the cache only as the offline fallback), like the manifest, so the next icon change needs no
+// bump. Only /_next/static/, whose file names carry a build hash, is still cache-first. The
+// notification badge is also a car silhouette of its own now; see the push handler.
+const CACHE_VERSION = 'favornoms-driver-v4';
 
 // The offline path, and only the offline path: the shell a signed-in rider lands on, the
-// screen an expired session lands on, and the icons both of them draw.
-const CACHE_FILES = ['/app/home', '/login', '/manifest.webmanifest', '/icon.svg', '/icon-192.png'];
+// screen an expired session lands on, and the icons their tab and the manifest point at.
+const CACHE_FILES = [
+  '/app/home',
+  '/login',
+  '/manifest.webmanifest',
+  '/favicon.svg',
+  '/icon.svg',
+  '/icon-192.png',
+];
 
-const STATIC_PREFIXES = ['/_next/static/', '/icon', '/apple-touch-icon'];
+// Content-addressed: every file under here has a build hash in its name, so a cached copy can
+// never be the wrong one.
+const IMMUTABLE_PREFIX = '/_next/static/';
+// Files from public/, which keep their URL when their content changes. The prefixes catch any
+// extensionless icon route; everything in public/ today has one of the extensions.
+const PUBLIC_PREFIXES = ['/icon', '/apple-touch-icon', '/favicon', '/badge'];
 const STATIC_EXTENSIONS = /\.(?:css|js|woff2?|ttf|otf|eot|png|jpe?g|gif|webp|avif|svg|ico)$/i;
 
 // Last resort when the network is gone and nothing useful is in the cache. Inline rather than a
@@ -70,9 +90,9 @@ function offlineResponse() {
   });
 }
 
-function isStaticAsset(url) {
+function isPublicFile(url) {
   return (
-    STATIC_PREFIXES.some((p) => url.pathname.startsWith(p)) || STATIC_EXTENSIONS.test(url.pathname)
+    PUBLIC_PREFIXES.some((p) => url.pathname.startsWith(p)) || STATIC_EXTENSIONS.test(url.pathname)
   );
 }
 
@@ -132,9 +152,10 @@ self.addEventListener('push', (event) => {
   try {
     data = event.data ? event.data.json() : {};
   } catch {
-    data = { title: 'Favornoms Driver', body: event.data ? event.data.text() : '' };
+    data = { title: 'FavorGO', body: event.data ? event.data.text() : '' };
   }
-  const title = data.title || 'Favornoms Driver';
+  // The app's name, as in src/components/brand-mark.tsx (APP_NAME); a worker cannot import it.
+  const title = data.title || 'FavorGO';
   const tag = typeof data.tag === 'string' && data.tag ? data.tag : undefined;
   // notify-worker tags dispatch offers 'new_dispatch:<delivery id>' so each offer is its own
   // notification; order-status updates keep collapsing on one tag, which is what you want there.
@@ -143,7 +164,9 @@ self.addEventListener('push', (event) => {
     body: data.body || '',
     // PNG, not SVG — Android notification icons do not render SVG.
     icon: '/icon-192.png',
-    badge: '/icon-192.png',
+    // Android paints the badge in the status bar from its alpha channel alone. icon-192 is a
+    // solid rounded square, so it came out as a blank white tile; this is the car cut out.
+    badge: '/badge-96.png',
     tag,
     // renotify without a tag is a TypeError, which rejects showNotification and produces no
     // notification at all — worse than the silent replacement it is here to prevent.
@@ -237,19 +260,36 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Cache-first ONLY for content-addressed static assets. Everything else same-origin falls
-  // through untouched — which is where the RSC payloads behind every tab tap (`?_rsc=`, request
-  // mode "cors", no file extension) land, and where they belong.
-  if (!isStaticAsset(url)) return;
+  // Cache-first ONLY for content-addressed static assets.
+  if (url.pathname.startsWith(IMMUTABLE_PREFIX)) {
+    event.respondWith(
+      caches.match(req).then(
+        (cached) =>
+          cached ||
+          fetch(req).then((res) => {
+            cacheIfServable(event, req, res);
+            return res;
+          }),
+      ),
+    );
+    return;
+  }
 
-  event.respondWith(
-    caches.match(req).then(
-      (cached) =>
-        cached ||
-        fetch(req).then((res) => {
+  // public/ files (icons, favicons, the badge): same URL, new content whenever the brand
+  // changes, so the network decides and the cache only covers being offline.
+  if (isPublicFile(url)) {
+    event.respondWith(
+      fetch(req)
+        .then((res) => {
           cacheIfServable(event, req, res);
           return res;
-        }),
-    ),
-  );
+        })
+        .catch(() => caches.match(req).then((cached) => cached || Response.error())),
+    );
+    return;
+  }
+
+  // Everything else same-origin falls through untouched — which is where the RSC payloads
+  // behind every tab tap (`?_rsc=`, request mode "cors", no file extension) land, and where
+  // they belong.
 });

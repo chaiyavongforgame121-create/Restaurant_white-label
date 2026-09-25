@@ -13,6 +13,7 @@ import { useDriverSession } from '@/components/driver-session';
 import { DriverInstallRow } from '@/components/install-app-button';
 import { LocaleSwitcher } from '@/components/locale-switcher';
 import { listDriverDocuments } from './document-storage';
+import { ShareAppRow } from './share-app-row';
 import { documentsStage, documentsSummary, type DocFile, type DocsStage } from './documents';
 import { formatPhone } from '@favornoms/shared';
 
@@ -197,6 +198,8 @@ export function ProfileView() {
         </li>
         {/* Renders its own <li>, or nothing when already installed / no install path. */}
         <DriverInstallRow />
+        {/* Next to installing it yourself: passing the app on to another rider. */}
+        <ShareAppRow />
         <li>
           <Button
             variant="ghost"

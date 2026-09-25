@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Bike, Sparkles } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { getBrowserClient } from '@favornoms/database/client';
 import {
@@ -14,6 +14,7 @@ import {
   type UiLocale,
 } from '@favornoms/shared';
 import { Button } from '@favornoms/ui';
+import { APP_NAME, FavorGoCar } from '@/components/brand-mark';
 import { LocaleSwitcher } from '@/components/locale-switcher';
 
 // Password-based phone auth (no SMS): the `driver-auth` edge function takes an explicit
@@ -165,13 +166,25 @@ export function LoginView() {
           transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
           className="grid h-24 w-24 place-items-center rounded-[28px] bg-white/20 backdrop-blur"
         >
-          <Bike className="h-12 w-12" />
+          <FavorGoCar className="h-10 w-16" />
         </motion.div>
+        {/* Installed, the app has no title bar, so nothing else on the first screen names it —
+            and riders who installed it as "Favornoms Driver" need to see this is the same app.
+            translate="no" keeps in-browser translation from turning the brand into words. */}
+        <motion.p
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1, duration: 0.5 }}
+          translate="no"
+          className="mt-4 font-display text-lg font-bold tracking-wide text-white/90"
+        >
+          {APP_NAME}
+        </motion.p>
         <motion.h1
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15, duration: 0.5 }}
-          className="mt-6 text-center font-display text-4xl font-bold leading-tight"
+          className="mt-2 text-center font-display text-4xl font-bold leading-tight"
         >
           {mode === 'login' ? t('title') : t('registerTitle')}
         </motion.h1>

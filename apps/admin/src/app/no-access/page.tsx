@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { Card, RiderIcon } from '@favornoms/ui';
+import { DriverAppCard } from '@/app/b/[branchId]/drivers/_components/driver-app-card';
+import { configuredDriverAppUrl } from '@/app/b/[branchId]/drivers/_lib/driver-app-url';
 
 /**
  * Where a rider lands if they sign in to the merchant back office.
@@ -9,6 +11,10 @@ import { Card, RiderIcon } from '@favornoms/ui';
  * carries no back-office capability — riders work in the Driver app, where access is
  * scoped by drivers.user_id and driver_approvals. Bouncing them to a login loop or an
  * "access denied" they cannot resolve reads as a broken account.
+ *
+ * Telling a rider to "open the FavorGO app" is only half an answer when nothing says where
+ * it is, so the page carries the app's code and link too: a rider at a desktop scans it with
+ * their phone, and one already on their phone taps straight through.
  */
 export default async function NoAccessPage() {
   const t = await getTranslations('shell.noAccess');
@@ -20,6 +26,7 @@ export default async function NoAccessPage() {
         </span>
         <h1 className="mt-4 font-display text-2xl font-bold">{t('title')}</h1>
         <p className="mt-2 text-muted-foreground">{t('body')}</p>
+        <DriverAppCard url={configuredDriverAppUrl()} audience="self" />
         <p className="mt-4 text-sm text-muted-foreground">{t('askOwner')}</p>
         <Link
           href="/login"

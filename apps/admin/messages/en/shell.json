@@ -74,7 +74,7 @@
   },
   "noAccess": {
     "title": "You’re a driver here",
-    "body": "Driver accounts don’t use the restaurant back office. Open the Favornoms Driver app to see the jobs assigned to you, your delivery history and your earnings.",
+    "body": "Driver accounts don’t use the restaurant back office. Open the FavorGO app to see the jobs assigned to you, your delivery history and your earnings.",
     "askOwner": "If you should also have back-office access, ask the restaurant owner to invite you again with a manager or admin role.",
     "signInAsSomeoneElse": "Sign in as someone else"
   },

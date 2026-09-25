@@ -16,7 +16,26 @@
   },
   "empty": {
     "title": "Chưa có tài xế nào đăng ký",
-    "body": "Tài xế đăng ký từ ứng dụng Tài xế. Họ chỉ có thể đăng ký sau khi tải lên đủ ba giấy tờ xác minh (bằng lái, giấy đăng ký xe và ảnh selfie), nên tài xế đã tạo tài khoản nhưng chưa tải lên xong sẽ chưa hiện ở đây."
+    "body": "Tài xế đăng ký từ ứng dụng FavorGO. Họ chỉ có thể đăng ký sau khi tải lên đủ ba giấy tờ xác minh (bằng lái, giấy đăng ký xe và ảnh selfie), nên tài xế đã tạo tài khoản nhưng chưa tải lên xong sẽ chưa hiện ở đây."
+  },
+  "appCard": {
+    "title": "Tải ứng dụng FavorGO",
+    "teamIntro": "Tài xế giao hàng bằng FavorGO. Hãy cho họ quét mã này để cài ứng dụng, rồi đăng ký với {branch} từ danh sách Nhà hàng trong ứng dụng.",
+    "teamIntroNoBranch": "Tài xế giao hàng bằng FavorGO. Hãy cho họ quét mã này để cài ứng dụng, rồi đăng ký với chi nhánh này từ danh sách Nhà hàng trong ứng dụng.",
+    "selfIntro": "Quét mã này bằng camera điện thoại để mở FavorGO.",
+    "steps": {
+      "scan": "Quét mã bằng camera điện thoại.",
+      "open": "Mở liên kết, rồi đăng nhập hoặc tạo tài khoản tài xế.",
+      "install": "Thêm vào màn hình chính: trên Android chọn Cài đặt ứng dụng, trên iPhone chọn Chia sẻ › Thêm vào MH chính."
+    },
+    "inAppHint": "Đang mở trong LINE hoặc Facebook? Hãy chọn Mở bằng trình duyệt trước — không thể cài ứng dụng từ đó.",
+    "qrLabel": "Mã QR mở FavorGO",
+    "copyLink": "Sao chép liên kết",
+    "copied": "Đã sao chép",
+    "copyFailed": "Không sao chép được — hãy chọn liên kết ở trên và tự sao chép.",
+    "downloadPng": "Tải mã QR (PNG)",
+    "pngHint": "Ảnh PNG {size}×{size} px, đủ nét để in.",
+    "open": "Mở FavorGO"
   },
   "card": {
     "unknownDriver": "Tài xế không xác định",

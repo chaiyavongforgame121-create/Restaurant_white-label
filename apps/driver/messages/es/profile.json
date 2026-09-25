@@ -24,6 +24,18 @@
   "approvedCount": "{count, plural, one {# aprobada} other {# aprobadas}}",
   "supportCenter": "Centro de ayuda",
   "signOut": "Cerrar sesión",
+  "share": {
+    "rowTitle": "Compartir FavorGO",
+    "rowSubtitle": "Muestra un código que otro repartidor escanea para obtener la app",
+    "sheetTitle": "Compartir FavorGO",
+    "intro": "Deja que otro repartidor lo escanee con la cámara de su teléfono. Se abre FavorGO, donde se registra y la instala.",
+    "qrLabel": "Código QR que abre FavorGO",
+    "copyLink": "Copiar enlace",
+    "copied": "Copiado",
+    "copyFailed": "No se pudo copiar: selecciona el enlace de arriba y cópialo tú.",
+    "shareLink": "Compartir",
+    "shareText": "Reparte con FavorGO: consigue la app de repartidores aquí:"
+  },
   "summary": {
     "unreadable": "No pudimos revisar tus documentos ahora",
     "incomplete": "{missing, plural, one {Falta # de {total}} other {Faltan # de {total}}} por enviar",

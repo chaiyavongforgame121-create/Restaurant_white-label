@@ -51,7 +51,7 @@
     },
     "driver": {
       "label": "Driver",
-      "description": "Appears in your staff list but has no back-office access at all — riders work in the Driver app, where they see only their own jobs and earnings."
+      "description": "Appears in your staff list but has no back-office access at all — riders work in the FavorGO app, where they see only their own jobs and earnings."
     },
     "staff": {
       "label": "Staff (general)",
@@ -194,7 +194,7 @@
       "server": "Table orders from the counter, their own only.",
       "kitchen": "The kitchen board only.",
       "staff": "The counter only.",
-      "driver": "The driver app only. No back office, counter or kitchen."
+      "driver": "The FavorGO app only. No back office, counter or kitchen."
     },
     "errors": {
       "notAuthorized": "Your role cannot change this person’s role.",

@@ -1,5 +1,5 @@
 {
-  "title": "Instala Favornoms Driver",
+  "title": "Instala FavorGO",
   "body": "Agrégala a tu pantalla de inicio: se abre en pantalla completa y mantiene activas las alertas de entregas.",
   "cta": "Instalar",
   "iosHint": "Toca Compartir en Safari y luego Agregar a la pantalla de inicio.",
@@ -7,7 +7,7 @@
   "rowSubtitle": "Pantalla completa · ícono en inicio · alertas de entregas",
   "rowSubtitleHelp": "Agrégala a tu pantalla de inicio: toca para ver cómo",
   "installed": "Instalada: ábrela desde tu pantalla de inicio",
-  "alreadyInstalled": "¿Ya la instalaste? Tu navegador no volverá a ofrecerla; abre Favornoms Driver desde tu pantalla de inicio o tu escritorio.",
+  "alreadyInstalled": "¿Ya la instalaste? Tu navegador no volverá a ofrecerla; abre FavorGO desde tu pantalla de inicio o tu escritorio.",
   "steps": {
     "iosSafari": "Toca el botón Compartir en la parte inferior de Safari y elige Agregar a la pantalla de inicio.",
     "iosOtherBrowser": "Toca el botón Compartir y elige Agregar a la pantalla de inicio. Si no aparece, abre esta página en Safari y haz lo mismo.",

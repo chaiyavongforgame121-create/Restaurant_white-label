@@ -144,7 +144,7 @@
     "title": "Delivery",
     "whoDelivers": "Who delivers?",
     "platform": {
-      "title": "Favornoms drivers",
+      "title": "FavorGO drivers",
       "body": "Orders are offered to nearby riders automatically. They pick up, navigate and mark the order delivered."
     },
     "self": {

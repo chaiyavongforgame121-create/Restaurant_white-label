@@ -24,6 +24,18 @@
   "approvedCount": "{count} đã duyệt",
   "supportCenter": "Trung tâm hỗ trợ",
   "signOut": "Đăng xuất",
+  "share": {
+    "rowTitle": "Chia sẻ FavorGO",
+    "rowSubtitle": "Hiện mã để tài xế khác quét và cài ứng dụng",
+    "sheetTitle": "Chia sẻ FavorGO",
+    "intro": "Cho tài xế khác quét mã này bằng camera điện thoại. FavorGO sẽ mở ra để họ đăng ký và cài đặt.",
+    "qrLabel": "Mã QR mở FavorGO",
+    "copyLink": "Sao chép liên kết",
+    "copied": "Đã sao chép",
+    "copyFailed": "Không sao chép được — hãy chọn liên kết ở trên và tự sao chép.",
+    "shareLink": "Chia sẻ",
+    "shareText": "Giao hàng cùng FavorGO — tải ứng dụng tài xế tại đây:"
+  },
   "summary": {
     "unreadable": "Chưa kiểm tra được giấy tờ của bạn lúc này",
     "incomplete": "Còn {missing}/{total} giấy tờ cần gửi",

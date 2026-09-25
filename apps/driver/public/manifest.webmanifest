@@ -1,8 +1,8 @@
 {
   "id": "/app/home",
-  "name": "Favornoms Driver",
-  "short_name": "FN Driver",
-  "description": "Driver app for the Favornoms delivery platform.",
+  "name": "FavorGO",
+  "short_name": "FavorGO",
+  "description": "FavorGO, the driver app for the Favornoms delivery platform.",
   "start_url": "/app/home",
   "scope": "/",
   "display": "standalone",

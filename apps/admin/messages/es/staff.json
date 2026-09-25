@@ -51,7 +51,7 @@
     },
     "driver": {
       "label": "Repartidor",
-      "description": "Aparece en tu lista de personal, pero no tiene ningún acceso a la administración: los repartidores trabajan en la app de repartidores, donde solo ven sus propios viajes y ganancias."
+      "description": "Aparece en tu lista de personal, pero no tiene ningún acceso a la administración: los repartidores trabajan en la app FavorGO, donde solo ven sus propios viajes y ganancias."
     },
     "staff": {
       "label": "Personal (general)",
@@ -194,7 +194,7 @@
       "server": "Pedidos de mesa desde el mostrador, solo los suyos.",
       "kitchen": "Solo la pantalla de cocina.",
       "staff": "Solo el mostrador.",
-      "driver": "Solo la app de repartidores. Sin panel de administración, mostrador ni cocina."
+      "driver": "Solo la app FavorGO. Sin panel de administración, mostrador ni cocina."
     },
     "errors": {
       "notAuthorized": "Tu rol no puede cambiar el rol de esta persona.",

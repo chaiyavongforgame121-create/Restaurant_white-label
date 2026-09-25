@@ -144,7 +144,7 @@
     "title": "Entrega a domicilio",
     "whoDelivers": "¿Quién entrega?",
     "platform": {
-      "title": "Repartidores de Favornoms",
+      "title": "Repartidores de FavorGO",
       "body": "Los pedidos se ofrecen automáticamente a repartidores cercanos. Ellos recogen, navegan y marcan el pedido como entregado."
     },
     "self": {

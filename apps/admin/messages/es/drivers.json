@@ -16,7 +16,26 @@
   },
   "empty": {
     "title": "Aún no hay solicitudes de repartidores",
-    "body": "Los repartidores se postulan desde la app de repartidor. Solo pueden hacerlo después de subir los tres documentos de verificación (licencia, registro del vehículo y una selfie), así que un repartidor que se registró pero no terminó de subirlos todavía no aparecerá aquí."
+    "body": "Los repartidores se postulan desde la app FavorGO. Solo pueden hacerlo después de subir los tres documentos de verificación (licencia, registro del vehículo y una selfie), así que un repartidor que se registró pero no terminó de subirlos todavía no aparecerá aquí."
+  },
+  "appCard": {
+    "title": "Descarga la app FavorGO",
+    "teamIntro": "Los repartidores entregan con FavorGO. Pídeles que escaneen este código para instalarla y que luego se postulen a {branch} desde la lista de Restaurantes de la app.",
+    "teamIntroNoBranch": "Los repartidores entregan con FavorGO. Pídeles que escaneen este código para instalarla y que luego se postulen a esta sucursal desde la lista de Restaurantes de la app.",
+    "selfIntro": "Escanea este código con la cámara de tu teléfono para abrir FavorGO.",
+    "steps": {
+      "scan": "Escanea el código con la cámara del teléfono.",
+      "open": "Abre el enlace e inicia sesión o crea una cuenta de repartidor.",
+      "install": "Agrégala a la pantalla de inicio: Instalar app en Android, o Compartir › Agregar a la pantalla de inicio en iPhone."
+    },
+    "inAppHint": "¿Se abrió dentro de LINE o Facebook? Elige primero Abrir en el navegador: desde ahí no se pueden instalar apps.",
+    "qrLabel": "Código QR que abre FavorGO",
+    "copyLink": "Copiar enlace",
+    "copied": "Copiado",
+    "copyFailed": "No se pudo copiar: selecciona el enlace de arriba y cópialo tú.",
+    "downloadPng": "Descargar QR (PNG)",
+    "pngHint": "El PNG mide {size}×{size} px, con nitidez suficiente para imprimirlo.",
+    "open": "Abrir FavorGO"
   },
   "card": {
     "unknownDriver": "Repartidor desconocido",

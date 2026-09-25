@@ -16,7 +16,26 @@
   },
   "empty": {
     "title": "No driver applications yet",
-    "body": "Riders apply from the Driver app. They can only apply after uploading all three KYC documents (licence, vehicle registration and a selfie), so a rider who has signed up but not finished uploading will not appear here yet."
+    "body": "Riders apply from the FavorGO app. They can only apply after uploading all three KYC documents (licence, vehicle registration and a selfie), so a rider who has signed up but not finished uploading will not appear here yet."
+  },
+  "appCard": {
+    "title": "Get the FavorGO app",
+    "teamIntro": "Riders deliver with FavorGO. Have them scan this code to install it, then apply to {branch} from the Restaurants list in the app.",
+    "teamIntroNoBranch": "Riders deliver with FavorGO. Have them scan this code to install it, then apply to this branch from the Restaurants list in the app.",
+    "selfIntro": "Scan this code with your phone’s camera to open FavorGO.",
+    "steps": {
+      "scan": "Scan the code with the phone’s camera.",
+      "open": "Open the link, then sign in or create a rider account.",
+      "install": "Add it to the home screen: Install app on Android, or Share › Add to Home Screen on iPhone."
+    },
+    "inAppHint": "Opened inside LINE or Facebook? Choose Open in browser first — apps can’t be installed from there.",
+    "qrLabel": "QR code that opens FavorGO",
+    "copyLink": "Copy link",
+    "copied": "Copied",
+    "copyFailed": "Couldn’t copy — select the link above and copy it yourself.",
+    "downloadPng": "Download QR (PNG)",
+    "pngHint": "The PNG is {size}×{size} px — sharp enough to print.",
+    "open": "Open FavorGO"
   },
   "card": {
     "unknownDriver": "Unknown driver",

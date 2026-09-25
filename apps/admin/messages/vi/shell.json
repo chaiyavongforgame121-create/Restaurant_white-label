@@ -74,7 +74,7 @@
   },
   "noAccess": {
     "title": "Bạn là tài xế tại đây",
-    "body": "Tài khoản tài xế không dùng trang quản trị của nhà hàng. Hãy mở ứng dụng Favornoms Driver để xem các đơn được giao cho bạn, lịch sử giao hàng và thu nhập.",
+    "body": "Tài khoản tài xế không dùng trang quản trị của nhà hàng. Hãy mở ứng dụng FavorGO để xem các đơn được giao cho bạn, lịch sử giao hàng và thu nhập.",
     "askOwner": "Nếu bạn cũng cần quyền vào trang quản trị, hãy nhờ chủ nhà hàng mời lại bạn với vai trò quản lý hoặc quản trị viên.",
     "signInAsSomeoneElse": "Đăng nhập bằng tài khoản khác"
   },

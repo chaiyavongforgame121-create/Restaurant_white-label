@@ -7,6 +7,8 @@ import { AccessDenied } from '@/components/access-denied';
 import { DeliveryLocked } from '@/components/delivery-locked';
 import { ApproveButton } from './_components/approve-button';
 import { KycReviewButton } from './_components/kyc-review-button';
+import { DriverAppCard } from './_components/driver-app-card';
+import { configuredDriverAppUrl } from './_lib/driver-app-url';
 import {
   decidedBeforeUpload,
   DOC_TYPES,
@@ -94,8 +96,18 @@ export default async function DriversPage({ params }: Props) {
   // find_dispatch_candidates only ever offers a run to riders approved at a delivering
   // branch. The entitlement was never asked here, so the screen worked regardless.
   const gate = await resolveDeliveryGate(supabase, branchId);
+  const driverAppUrl = configuredDriverAppUrl();
   if (!gate.delivers) {
-    return <DeliveryLocked branchId={branchId} branchName={branch.name} gate={gate} />;
+    // The rider app's code stays reachable while delivery is off: a merchant can line up
+    // riders before switching delivery on, and riders apply to any active branch.
+    return (
+      <>
+        <DeliveryLocked branchId={branchId} branchName={branch.name} gate={gate} />
+        <div className="container -mt-10 max-w-2xl pb-16">
+          <DriverAppCard url={driverAppUrl} audience="team" branchName={branch.name} />
+        </div>
+      </>
+    );
   }
 
   // `driver_approvals.reviewed_by` references auth.users(id) (verified against the live
@@ -166,6 +178,12 @@ export default async function DriversPage({ params }: Props) {
         <h1 className="font-display text-3xl font-bold">{t('header.title')}</h1>
         <p className="mt-1 text-muted-foreground">{summary}</p>
       </header>
+
+      {/* Above the roster rather than under it: with nobody applied yet it is the next step,
+          and a long roster would otherwise bury the only place the app's address is given. */}
+      <div className="mb-6 px-2 lg:px-0">
+        <DriverAppCard url={driverAppUrl} audience="team" branchName={branch.name} />
+      </div>
 
       {/* A failed read used to render as the friendly empty state, so an RLS denial or a 500
           was indistinguishable from "nobody has applied". */}

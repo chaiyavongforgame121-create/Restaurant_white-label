@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- FavorGO mark: a white car on the brand gradient. icon-*.png and apple-touch-icon.png are rasterised from this same car (favicon.* from its tab-sized cut), and src/components/brand-mark.tsx draws it in the app, so change them together. -->
+  <!-- Tab-sized FavorGO mark: the car from icon.svg without speed lines and with solid wheels, both of which blur to noise at 16-32px, and drawn larger. -->
   <defs>
     <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#FF6B35"/>
@@ -8,14 +8,9 @@
     </linearGradient>
   </defs>
   <rect width="512" height="512" rx="112" fill="url(#g)"/>
-  <g fill="#fff" transform="translate(276 242) scale(0.94) translate(-256 -256)">
+  <g fill="#fff" transform="translate(248 262) scale(1.4) translate(-256 -256)">
     <path fill-rule="evenodd" d="M112 328L112 292C112 276 122 268 138 266L160 262C170 222 186 184 208 168C216 162 224 160 234 160L284 160C298 160 306 164 314 174L346 248C350 255 354 258 362 259L382 262C400 265 412 276 412 294L412 328C412 338 406 344 396 344L388 344A54 54 0 1 0 280 344L244 344A54 54 0 1 0 136 344L128 344C118 344 112 338 112 328ZM186 250C194 222 206 196 222 184C228 180 234 178 242 178L258 178L258 250ZM274 178L292 178Q297 178 299 182L328 250L274 250Z"/>
-    <circle cx="190" cy="342" r="34" fill="none" stroke="#fff" stroke-width="20"/><circle cx="190" cy="342" r="11"/>
-    <circle cx="334" cy="342" r="34" fill="none" stroke="#fff" stroke-width="20"/><circle cx="334" cy="342" r="11"/>
-    <g fill="none" stroke="#fff" stroke-width="16" stroke-linecap="round">
-      <path d="M60 226H88" opacity=".7"/>
-      <path d="M40 262H88"/>
-      <path d="M60 298H88" opacity=".7"/>
-    </g>
+    <circle cx="190" cy="342" r="44"/>
+    <circle cx="334" cy="342" r="44"/>
   </g>
 </svg>

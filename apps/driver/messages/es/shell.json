@@ -1,5 +1,5 @@
 {
-  "metaDescription": "App para repartidores de la plataforma de entrega de comida Favornoms.",
+  "metaDescription": "FavorGO, la app para repartidores de la plataforma de entrega de comida Favornoms.",
   "crash": {
     "title": "Algo salió mal",
     "body": "Tus entregas están a salvo. Reintenta o vuelve al inicio.",
@@ -8,7 +8,7 @@
   "session": {
     "noProfileTitle": "Aún no tienes perfil de repartidor",
     "noProfileBody": "Esta cuenta inició sesión, pero no tiene perfil de repartidor. Cierra sesión y vuelve a entrar, o pide a tu restaurante que te agregue.",
-    "unreachableTitle": "No se puede conectar con Favornoms",
+    "unreachableTitle": "No se puede conectar con FavorGO",
     "offlineBody": "Parece que no tienes conexión. Tus entregas están a salvo; vuelve a intentarlo cuando tengas señal.",
     "unreachableBody": "No pudimos cargar tu perfil de repartidor. Inténtalo de nuevo."
   },
