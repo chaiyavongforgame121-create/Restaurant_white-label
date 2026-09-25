@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { getServerClient } from '@favornoms/database/server';
 import { getEntitlementsForBranch, listCategories, listMenuItems } from '@favornoms/database/queries';
-import { hasFeature } from '@favornoms/shared';
+import { hasFeature, sortItemsInMenuOrder } from '@favornoms/shared';
 import { PosView } from './_components/pos-view';
 
 interface Props {
@@ -17,11 +17,14 @@ export default async function PosPage({ params }: Props) {
     .eq('id', branchId)
     .maybeSingle();
   if (!branch) notFound();
-  const [categories, items, entitlements] = await Promise.all([
+  const [categories, unsortedItems, entitlements] = await Promise.all([
     listCategories(supabase, branchId),
     listMenuItems(supabase, branchId),
     getEntitlementsForBranch(supabase, branchId),
   ]);
+  // In the admin's order: category by category, then dish by dish. display_order is a position
+  // inside a category, so listing by it alone interleaved every category's first dishes.
+  const items = sortItemsInMenuOrder(unsortedItems, categories);
   return (
     <PosView
       branchId={branchId}

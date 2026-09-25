@@ -205,3 +205,41 @@ export function menuLinePositions(
     return (menuItemId ? items.get(menuItemId) : undefined) ?? none;
   };
 }
+
+/**
+ * The dishes in the menu's own order: category by category in the order the owner arranged them
+ * (the Categories sheet and Reorder mode), then dish by dish inside each category.
+ *
+ * The storefront, the counter and the POS used to list their dishes by display_order alone. That
+ * number is a position INSIDE a category, so every category's first dish shared 0, every second
+ * dish shared 1, and the "All" view interleaved the categories: a test dish in the last category
+ * could open the menu while the admin showed it at the bottom. Sorting here keeps every screen in
+ * the order the admin shows, which is also the order bills and kitchen tickets use
+ * (menuLinePositions ranks categories the same way).
+ *
+ * A dish whose category is missing from `categories` (none, hidden, or not read) goes after every
+ * ranked one. Ties fall back to the name and then the id, so the order is the same on every load.
+ * Returns a new array; the input is not reordered.
+ */
+export function sortItemsInMenuOrder<
+  T extends { id: string; name?: string | null; categoryId?: string | null; displayOrder?: number | null },
+>(items: readonly T[], categories: MenuOrderSource['categories']): T[] {
+  const categoryRank = new Map<string, number>();
+  categories
+    .filter((c) => c.isActive !== false)
+    .map((c, index) => ({ id: c.id, order: c.displayOrder ?? index, index }))
+    .sort((a, b) => a.order - b.order || a.index - b.index)
+    .forEach((c, rank) => categoryRank.set(c.id, rank));
+  const unranked = Number.MAX_SAFE_INTEGER;
+  const rankOf = (item: T) => (item.categoryId ? (categoryRank.get(item.categoryId) ?? unranked) : unranked);
+  const orderOf = (item: T) =>
+    typeof item.displayOrder === 'number' && Number.isFinite(item.displayOrder) ? item.displayOrder : unranked;
+  const byCode = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+  return [...items].sort(
+    (a, b) =>
+      rankOf(a) - rankOf(b) ||
+      orderOf(a) - orderOf(b) ||
+      byCode(a.name ?? '', b.name ?? '') ||
+      byCode(a.id, b.id),
+  );
+}

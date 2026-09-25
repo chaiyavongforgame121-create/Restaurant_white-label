@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  sortItemsInMenuOrder,
   compareOrderLines,
   menuLinePositions,
   orderLineOptionsKey,
@@ -209,5 +210,51 @@ describe('menuLinePositions', () => {
     ];
     const sorted = sortOrderLines(cart, (l) => ({ ...positionOf(l), item_name: l.name }));
     expect(sorted.map((l) => l.id)).toEqual(['2', '3', '1']);
+  });
+});
+
+describe('sortItemsInMenuOrder', () => {
+  // Hamburger's menu as the admin shows it: Sides, Burgers, Drinks, then a test category the
+  // owner added last. Every category's first dish has display_order 0.
+  const categories = [
+    { id: 'sides', displayOrder: 1 },
+    { id: 'burgers', displayOrder: 2 },
+    { id: 'drinks', displayOrder: 3 },
+    { id: 'test', displayOrder: 5 },
+  ];
+  const items = [
+    { id: 'a', name: 'aaaaaaaaaaaa', categoryId: 'test', displayOrder: 0 },
+    { id: 'cola', name: 'Fountain Cola', categoryId: 'drinks', displayOrder: 0 },
+    { id: 'rings', name: 'Onion Rings', categoryId: 'sides', displayOrder: 1 },
+    { id: 'cheese', name: 'Cheese Burger', categoryId: 'burgers', displayOrder: 0 },
+    { id: 'fries', name: 'Sea Salt Fries', categoryId: 'sides', displayOrder: 0 },
+  ];
+
+  it('lists category by category in the admin order, then dish by dish', () => {
+    expect(sortItemsInMenuOrder(items, categories).map((i) => i.id)).toEqual([
+      'fries',
+      'rings',
+      'cheese',
+      'cola',
+      'a',
+    ]);
+  });
+
+  it('puts dishes of a missing or hidden category last, and leaves the input alone', () => {
+    const withLoose = [...items, { id: 'loose', name: 'Loose', categoryId: null, displayOrder: 0 }];
+    const hidden = categories.map((c) => (c.id === 'sides' ? { ...c, isActive: false } : c));
+    const sorted = sortItemsInMenuOrder(withLoose, hidden).map((i) => i.id);
+    expect(sorted.slice(0, 3)).toEqual(['cheese', 'cola', 'a']);
+    expect(sorted.slice(3)).toEqual(['loose', 'fries', 'rings']);
+    expect(withLoose[0]?.id).toBe('a');
+  });
+
+  it('breaks ties by name, then id, so every load agrees', () => {
+    const tied = [
+      { id: '2', name: 'B', categoryId: 'sides', displayOrder: 0 },
+      { id: '1', name: 'B', categoryId: 'sides', displayOrder: 0 },
+      { id: '3', name: 'A', categoryId: 'sides', displayOrder: 0 },
+    ];
+    expect(sortItemsInMenuOrder(tied, categories).map((i) => i.id)).toEqual(['3', '1', '2']);
   });
 });

@@ -2,6 +2,7 @@ import { getTranslations } from 'next-intl/server';
 import { getServerClient } from '@favornoms/database/server';
 import { resolveScheduleDelivery } from '@/lib/schedule-delivery';
 import { listCategories, listMenuItems } from '@favornoms/database/queries';
+import { sortItemsInMenuOrder } from '@favornoms/shared';
 import { resolveStorefrontStatus, resolveTenant, storefrontNames } from '@/lib/tenant';
 import type { ComboRow } from './_components/combo-sheet';
 import { MenuView } from './_components/menu-view';
@@ -55,7 +56,7 @@ export default async function MenuPage({ params, searchParams }: Props) {
 
   const [
     categories,
-    items,
+    unsortedItems,
     openCheck,
     reviewsCheck,
     combosCheck,
@@ -83,6 +84,9 @@ export default async function MenuPage({ params, searchParams }: Props) {
       ? rpcAny('resolve_table_qr', { p_token: tableToken })
       : Promise.resolve({ data: null }),
   ]);
+  // In the admin's order: category by category, then dish by dish. display_order is a position
+  // inside a category, so listing by it alone interleaved every category's first dishes.
+  const items = sortItemsInMenuOrder(unsortedItems, categories);
 
   // The storefront in the URL wins. A token belonging to another branch must not pin
   // anything here — otherwise a code lifted from one restaurant's table tent would seat

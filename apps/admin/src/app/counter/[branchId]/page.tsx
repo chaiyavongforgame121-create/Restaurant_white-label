@@ -7,7 +7,7 @@ import {
   listMenuItems,
   listTableStates,
 } from '@favornoms/database/queries';
-import { hasFeature, parseServiceFeePercent } from '@favornoms/shared';
+import { hasFeature, parseServiceFeePercent, sortItemsInMenuOrder } from '@favornoms/shared';
 import { getBranchAccess } from '@/lib/capabilities';
 import { SuspensionScreen } from '@/components/suspension-screen';
 import { CounterView, type CounterQrTransfer } from './_components/counter-view';
@@ -39,7 +39,7 @@ export default async function CounterPage({ params }: Props) {
   if (!branch) notFound();
   const settings = (branch.settings ?? {}) as Record<string, unknown>;
   const nowIso = new Date().toISOString();
-  const [categories, items, entitlements, floor, combos, effective, soldOut] = await Promise.all([
+  const [categories, unsortedItems, entitlements, floor, combos, effective, soldOut] = await Promise.all([
     listCategories(supabase, branchId),
     listMenuItems(supabase, branchId),
     getEntitlementsForBranch(supabase, branchId),
@@ -67,6 +67,9 @@ export default async function CounterPage({ params }: Props) {
       .gt('sold_out_until', nowIso)
       .order('sold_out_until', { ascending: true }),
   ]);
+  // In the admin's order: category by category, then dish by dish. display_order is a position
+  // inside a category, so listing by it alone interleaved every category's first dishes.
+  const items = sortItemsInMenuOrder(unsortedItems, categories);
   const seatedTableIds = new Set(floor.sessions.map((s) => s.table_id));
   const tables = floor.tables
     .filter((t) => t.is_active)
