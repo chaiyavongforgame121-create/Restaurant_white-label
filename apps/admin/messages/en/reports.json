@@ -307,17 +307,29 @@
       "refunded": "Refunded",
       "voided": "Voided"
     },
-    "gridCaption": "A card payment sitting in Pending has not been charged — no card gateway key is configured yet, so those rows are waiting rather than failing.",
+    "gridCaption": "A card payment in Pending is an online order whose customer hasn’t finished paying by card yet (it is cancelled after 30 minutes if they don’t), or a card sale at the counter that hasn’t been recorded yet.",
     "refunds": "Refunds",
     "refundedToDiners": "Refunded to diners",
     "refundEvents": "Refund events",
     "markedRefunded": "Marked refunded on the payment",
     "voided": "Voided payments",
-    "refundsCaption": "A refund is recorded against the order, not against the payment, so the Refunded column in the grid above reads zero by design. The figure to trust is the first line here.",
+    "refundsCaption": "Refunds of cash, QR transfers and cards taken on your own reader are recorded against the order. A card paid online is refunded through this branch’s Stripe account and counts here once Stripe confirms it; only those payments can show as Refunded in the grid above.",
     "awaiting": "Awaiting settlement",
     "awaitingBody": "Orders already handed to the diner whose payment is still pending.",
     "settleLink": "Settle these at the counter",
     "serviceFees": "Service fees collected",
-    "backfilled": "Settled by the historical backfill"
+    "backfilled": "Settled by the historical backfill",
+    "cardRefunds": "Of which, refunded to cards through Stripe",
+    "cardRefundsPending": "Card refunds Stripe is still processing",
+    "cardRefundFailures": "Card refunds that failed",
+    "cardRefundFailedNote": "A failed card refund means the customer didn’t get that money back. Refund the order again from Orders, or from this branch’s Stripe Dashboard.",
+    "disputes": "Card disputes",
+    "disputesEmpty": "No card payment was disputed in this range.",
+    "disputesCount": "Disputes opened",
+    "disputesOpen": "Waiting for your answer or the bank’s decision",
+    "disputesAmount": "Amount disputed",
+    "disputesLost": "Lost",
+    "disputesWon": "Won",
+    "disputesCaption": "A dispute is a customer asking their bank to take back a card payment. Stripe takes the amount from this branch’s Stripe balance while the bank decides. Answer each one in this branch’s Stripe Dashboard before its deadline."
   }
 }

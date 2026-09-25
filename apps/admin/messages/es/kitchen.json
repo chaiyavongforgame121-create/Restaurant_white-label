@@ -132,7 +132,12 @@
     "undoPointsSpent": "No se pudo deshacer #{ticket}: el cliente ya gastó los puntos de este pedido.",
     "recallForbidden": "Tu cuenta no puede recuperar pedidos en esta sucursal.",
     "cancelledElsewhere": "#{ticket} se canceló: deja de prepararlo.",
-    "changedElsewhere": "#{ticket} se cambió en otra pantalla. El tablero se ha actualizado."
+    "changedElsewhere": "#{ticket} se cambió en otra pantalla. El tablero se ha actualizado.",
+    "updateCardUnpaid": "#{ticket} no puede avanzar hasta que se complete el pago con tarjeta del cliente.",
+    "rejectedRefunded": "#{ticket} rechazado. Se está reembolsando la tarjeta del cliente.",
+    "rejectRefundFailed": "No se pudo rechazar #{ticket}: no se pudo reembolsar la tarjeta del cliente, así que el pedido sigue abierto y no se movió dinero. Pide a un gerente que lo revise en Pedidos.",
+    "rejectRefundUnknown": "No se pudo confirmar el reembolso a la tarjeta de #{ticket}. Toca Rechazar otra vez; al cliente no se le puede reembolsar dos veces.",
+    "rejectRefundedStillOpen": "Se reembolsó la tarjeta del cliente de #{ticket}, pero el pedido sigue abierto. Toca Rechazar otra vez para terminar."
   },
   "dispatch": {
     "maxAttempts": "Se probó con todos los repartidores: sube “Máximo de intentos de asignación” o asigna uno manualmente.",

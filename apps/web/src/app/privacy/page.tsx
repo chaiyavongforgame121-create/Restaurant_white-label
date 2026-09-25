@@ -12,7 +12,10 @@ export default function PrivacyPage() {
         <p>
           When you sign in we collect your phone number (used for one-time codes) and the name you
           choose to display. When you place an order we store the items, delivery address, and any
-          notes you add. We do not collect payment-card data directly — that is handled by Stripe.
+          notes you add. We never see or store your card number: card details go straight into
+          Stripe&apos;s payment form, and Stripe processes the payment for the restaurant, into the
+          restaurant&apos;s own Stripe account. We keep only a reference to the payment and whether
+          it succeeded or was refunded.
         </p>
       </Section>
 
@@ -27,9 +30,11 @@ export default function PrivacyPage() {
       <Section title="3. Sharing">
         <p>
           We share order details with the restaurant you ordered from and the driver assigned to
-          your delivery. We use service providers (Supabase for hosting, Stripe for payments,
-          Resend for email, web-push providers for notifications) under data-processing agreements.
-          We do not sell your personal information.
+          your delivery. We use service providers (Supabase for hosting, Resend for email, web-push
+          providers for notifications) under data-processing agreements. Card payments are
+          processed by Stripe on the restaurant&apos;s behalf and paid to the restaurant&apos;s own
+          Stripe account; Favornoms does not hold the money you pay. Stripe handles your card
+          details under its own privacy policy. We do not sell your personal information.
         </p>
       </Section>
 

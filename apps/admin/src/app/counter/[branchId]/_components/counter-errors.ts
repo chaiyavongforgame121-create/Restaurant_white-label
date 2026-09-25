@@ -226,6 +226,7 @@ export type SettleErrorKey =
   | 'paymentNotFound'
   | 'paymentNotSettleable'
   | 'orderNotSettleable'
+  | 'onlineCardUnpaid'
   | 'failed';
 
 /** record_counter_transfer's raised codes. */
@@ -237,6 +238,11 @@ const SETTLE_CODES = new Map<string, SettleErrorKey>([
   ['payment_not_found', 'paymentNotFound'],
   ['payment_not_settleable', 'paymentNotSettleable'],
   ['order_not_settleable', 'orderNotSettleable'],
+  // A diner's online card order that Stripe has not been paid for: only Stripe may settle its
+  // payment (stripe_payment_server_only) and it cannot move on unpaid (card_payment_not_completed).
+  // The till cannot fix that, so the cashier is told to cancel it and ring the sale up again.
+  ['stripe_payment_server_only', 'onlineCardUnpaid'],
+  ['card_payment_not_completed', 'onlineCardUnpaid'],
 ]);
 
 /** Asking again cannot change these answers; the others (a lapsed session, a dropped call) can. */
@@ -247,6 +253,7 @@ const SETTLE_PERMANENT: ReadonlySet<SettleErrorKey> = new Set([
   'paymentNotFound',
   'paymentNotSettleable',
   'orderNotSettleable',
+  'onlineCardUnpaid',
 ]);
 
 export interface SettleError {

@@ -93,7 +93,17 @@
       "customer": "Nota del cliente",
       "kitchen": "Nota de cocina",
       "delivery": "Instrucciones de entrega"
-    }
+    },
+    "unpaidCardHint": "Esperando el pago con tarjeta del cliente. La cocina recibe el pedido cuando se complete.",
+    "refundPending": "Reembolso pendiente",
+    "refundPendingHint": "{amount} está volviendo a la tarjeta del cliente; Stripe aún no lo ha confirmado.",
+    "partRefunded": "Reembolso parcial",
+    "refundedHint": "{amount} reembolsado a la tarjeta del cliente.",
+    "cardRefunded": "Tarjeta reembolsada",
+    "cardNotRefunded": "Tarjeta sin reembolsar",
+    "cardNotRefundedHint": "Este pedido está cerrado, pero el restaurante aún tiene {amount} pagados con tarjeta. Reembólsalo desde Acciones.",
+    "cardDisputed": "En disputa",
+    "cardDisputedHint": "El cliente disputó este pago con tarjeta ante su banco, que ya retiró el dinero. Responde la disputa en el panel de Stripe de esta sucursal."
   },
   "receipt": {
     "button": "Recibo",
@@ -118,7 +128,9 @@
     "tip": "Propina",
     "total": "Total ({currency})",
     "paidVia": "Pagado con",
-    "deliverTo": "Entregar en: {address}"
+    "deliverTo": "Entregar en: {address}",
+    "refundedToCard": "Reembolsado a la tarjeta · {date}",
+    "refundPendingToCard": "Reembolso pendiente · {date}"
   },
   "actions": {
     "menu": "Acciones",
@@ -130,7 +142,12 @@
       "title": "¿Cancelar este pedido?",
       "body": "Se cancelará el pedido y se repondrá el inventario. No se puede deshacer.",
       "keep": "Mantener pedido",
-      "confirm": "Sí, cancelar"
+      "confirm": "Sí, cancelar",
+      "bodyCard": "Se cancelará el pedido, se repondrá el inventario y se reembolsarán {amount} a la tarjeta del cliente desde la cuenta de Stripe de esta sucursal. No se puede deshacer.",
+      "bodyCardUnpaid": "El pago con tarjeta del cliente no se ha completado, así que no hay nada que reembolsar. Se cancelará el pedido y se repondrá el inventario. No se puede deshacer.",
+      "bodyCardNothingLeft": "El pago con tarjeta ya se reembolsó o se está reembolsando, así que no se devuelve nada más. Se cancelará el pedido y se repondrá el inventario. No se puede deshacer.",
+      "bodyCardDisputed": "El cliente disputó este pago con tarjeta ante su banco, que ya retiró el dinero, así que aquí no se reembolsa nada. Se cancelará el pedido y se repondrá el inventario. No se puede deshacer.",
+      "confirmRefund": "Reembolsar y cancelar"
     },
     "noteDialog": {
       "title": "Nota del cliente",
@@ -141,7 +158,8 @@
     },
     "invoiceIssued": "Recibo {number} emitido",
     "invoiceIssuedNoNumber": "Recibo emitido",
-    "done": "Aceptar"
+    "done": "Aceptar",
+    "refundCard": "Reembolsar pago con tarjeta"
   },
   "refund": {
     "title": "Emitir reembolso",
@@ -205,6 +223,56 @@
     "deliveryNotFailed": "Esta entrega ya no figura como fallida. Actualiza la página para ver en qué estado está.",
     "deliveryForbidden": "Tu cuenta no puede reasignar entregas en esta sucursal.",
     "paymentNotFound": "Ese pago ya no existe.",
-    "paymentForbidden": "Solo el propietario o un gerente puede aprobar pagos."
+    "paymentForbidden": "Solo el propietario o un gerente puede aprobar pagos.",
+    "onlineCardUnpaid": "Este pedido se hizo en línea para pagarse con tarjeta y el cliente todavía no ha pagado, así que no se puede cobrar ni avanzar desde aquí. Cancélalo y vuelve a registrar la venta en el mostrador para cobrarla ahí.",
+    "cardRefundRequired": "El cliente pagó este pedido en línea con tarjeta, y hay que reembolsar la tarjeta antes de poder cancelarlo. El reembolso todavía no está registrado: espera un minuto e inténtalo de nuevo.",
+    "cardRefundNotRecorded": "Stripe ya hizo el reembolso a la tarjeta, pero todavía no aparece en los registros de esta sucursal, así que el pedido no puede mostrarlo. Espera un minuto y pulsa el botón otra vez; la tarjeta no se reembolsará dos veces.",
+    "refundExceedsRemaining": "Es más de lo que queda por reembolsar en este pedido: los reembolsos anteriores ya cuentan para su total."
+  },
+  "cardRefund": {
+    "title": "Reembolsar pago con tarjeta",
+    "checking": "Revisando cómo se pagó este pedido…",
+    "loadFailed": "No se pudo comprobar cómo se pagó este pedido, así que ahora no se puede reembolsar ni cancelar. Cierra esto e inténtalo de nuevo.",
+    "notPaidYet": "El pago con tarjeta del cliente no se ha completado, así que no hay nada que reembolsar. Si el pedido no debe seguir, cancélalo.",
+    "paidBy": "Pagado con tarjeta: {amount}",
+    "alreadyRefunded": "Ya reembolsado: {amount}",
+    "waitingOnStripe": "Esperando la confirmación de Stripe: {amount}",
+    "refundableNow": "Aún se pueden reembolsar hasta {amount}.",
+    "nothingLeft": "El pago con tarjeta se reembolsó por completo.",
+    "disputed": "El cliente disputó este pago ante su banco, que ya retiró el dinero del saldo de Stripe de la sucursal. No hay nada que reembolsar aquí; responde la disputa en el panel de Stripe de esta sucursal.",
+    "whereItGoes": "El reembolso vuelve a la tarjeta del cliente desde la cuenta de Stripe de esta sucursal. Los bancos suelen mostrarlo en 5 a 10 días hábiles.",
+    "history": "Reembolsos de este pago",
+    "status": {
+      "pending": "En proceso",
+      "succeeded": "Reembolsado",
+      "failed": "Fallido",
+      "canceled": "Cancelado"
+    },
+    "amountTooHigh": "A esta tarjeta solo se le pueden reembolsar hasta {amount}.",
+    "notCancelled": "El pedido no se canceló.",
+    "refundedNotCancelled": "Se reembolsaron {amount} a la tarjeta del cliente, pero el pedido no se pudo cancelar: {reason} Pulsa el botón otra vez para cancelarlo; la tarjeta no se reembolsará dos veces.",
+    "orderNotUpdated": "Se reembolsaron {amount} a la tarjeta del cliente, pero el pedido no se pudo marcar como reembolsado: {reason} Pulsa el botón otra vez para registrarlo; la tarjeta no se reembolsará dos veces.",
+    "sentSucceeded": "Se reembolsaron {amount} a la tarjeta del cliente. Los bancos suelen mostrarlo en 5 a 10 días hábiles.",
+    "sentPending": "Stripe aceptó el reembolso de {amount} y lo está procesando. El pedido lo mostrará como reembolsado cuando Stripe lo confirme.",
+    "notRecordedYet": "Aparecerá en el pedido en unos minutos, cuando Stripe lo informe.",
+    "retryRecord": "Registrar en el pedido",
+    "errors": {
+      "generic": "El reembolso no se completó. No se devolvió dinero. Inténtalo de nuevo.",
+      "authRequired": "Tu sesión expiró. Inicia sesión de nuevo. No se devolvió dinero.",
+      "notConfigured": "Los reembolsos con tarjeta aún no están configurados: faltan las claves de Stripe de la plataforma. No se devolvió dinero.",
+      "notAuthorized": "Solo un propietario, administrador o gerente de esta sucursal puede reembolsar un pago con tarjeta. No se devolvió dinero.",
+      "orderNotFound": "Ese pedido ya no existe.",
+      "notPaid": "El pago con tarjeta de este pedido no se ha completado, así que no hay nada que reembolsar.",
+      "nothingToRefund": "Este pago con tarjeta ya se reembolsó por completo.",
+      "overRefund": "Es más de lo que queda en la tarjeta. Aún se pueden reembolsar como máximo {amount}.",
+      "invalidAmount": "Ingresa un monto mayor que cero, en dólares y centavos.",
+      "noAccount": "Esta sucursal no tiene una cuenta de Stripe conectada, así que el pago con tarjeta no se puede reembolsar desde aquí. Reembólsalo en el panel de Stripe.",
+      "mismatch": "Este pago no coincide con el cargo que Stripe tiene registrado, así que no se puede reembolsar desde aquí. No se devolvió dinero. Reembólsalo en el panel de Stripe de esta sucursal.",
+      "stripeRefused": "Stripe rechazó el reembolso. No se devolvió dinero. Revisa el pago en el panel de Stripe de esta sucursal.",
+      "stripeDisputed": "El cliente disputó este pago con su banco, así que Stripe no lo reembolsará. No se devolvió dinero. Responde la disputa en el panel de Stripe de esta sucursal.",
+      "stripeAlreadyRefunded": "Stripe indica que este pago ya se reembolsó por completo. No se devolvió dinero.",
+      "stripeInsufficientFunds": "El saldo de Stripe de esta sucursal no alcanza para cubrir el reembolso. No se devolvió dinero. Agrega fondos en el panel de Stripe e inténtalo de nuevo.",
+      "unreachable": "No se pudo confirmar el reembolso con Stripe. Puede que se haya hecho o no. Pulsa el botón otra vez: la tarjeta no se reembolsará dos veces."
+    }
   }
 }

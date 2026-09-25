@@ -230,6 +230,34 @@ describe('toReceiptInput', () => {
       toReceiptInput(order, { branchName: 'Coastal Grill', paymentMethod: 'card' }).paymentMethod,
     ).toBe('card');
   });
+
+  it('prints card refunds, so a reprint of a refunded card order does not read as fully paid', () => {
+    const input = toReceiptInput(order, {
+      branchName: 'Coastal Grill',
+      paymentMethod: 'card',
+      refunds: [
+        { amount: 5, status: 'succeeded', createdAt: '2026-09-24T12:00:00Z' },
+        { amount: 0.1, status: 'succeeded', createdAt: '2026-09-24T12:30:00Z' },
+        { amount: 2.5, status: 'pending', createdAt: '2026-09-24T13:00:00Z' },
+        // A refund Stripe refused moved no money and is not printed.
+        { amount: 9, status: 'failed', createdAt: '2026-09-24T14:00:00Z' },
+      ],
+    });
+    // One total per state however many refunds there were: the footer is a single line.
+    expect(input.footerNote).toBe(
+      'Tax 1.60 · Tip 4.00 · Discount -2.00 · Refunded -5.10 · Refund pending -2.50',
+    );
+    // The charged total stays what the card was charged; the refunds are their own lines.
+    expect(input.total).toBe(27.6);
+  });
+
+  it('prints a refund on an order with nothing else to adjust', () => {
+    const plain = toReceiptInput(
+      { ...order, tax_amount: 0, tip_amount: 0, discount_amount: 0 },
+      { branchName: 'Coastal Grill', refunds: [{ amount: 27.6, status: 'succeeded', createdAt: '2026-09-24T12:00:00Z' }] },
+    );
+    expect(plain.footerNote).toBe('Refunded -27.60');
+  });
 });
 
 describe('receiptLinesInMenuOrder', () => {

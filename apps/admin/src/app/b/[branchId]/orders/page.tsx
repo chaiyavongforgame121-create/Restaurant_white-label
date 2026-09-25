@@ -13,6 +13,13 @@ import {
   type OrderRowData,
 } from './_components/order-row';
 import type { OrderLine } from './_components/order-lines';
+import {
+  isStripeCardPayment,
+  summarizeCardPaymentsByOrder,
+  type CardPaymentRow,
+  type CardPaymentSummary,
+  type PaymentRefundRow,
+} from './_components/card-refund';
 
 interface Props {
   params: Promise<{ branchId: string }>;
@@ -128,6 +135,39 @@ export default async function OrdersPage({ params, searchParams }: Props) {
     : query.order('created_at', { ascending: false })
   ).limit(100);
 
+  // Card payments made through Stripe, and what has gone back on them, for the rows on screen.
+  // Read apart from the orders query, not embedded in it: payments and payment_refunds need
+  // payments.view, and a failed or refused read here must cost the refund pills, never the list.
+  const orderIds = (orders ?? []).map((o) => o.id);
+  let cardByOrder: Record<string, CardPaymentSummary> = {};
+  if (orderIds.length > 0) {
+    // The dispute status alone, not all of gateway_metadata: a charge a dispute has taken back has
+    // nothing left to refund, so it must not be flagged "Card not refunded" (card-refund.ts).
+    const { data: cardRows, error: cardErr } = await supabase
+      .from('payments')
+      .select(
+        'id, order_id, amount, status, method, gateway, gateway_charge_id, created_at, dispute_status:gateway_metadata->>dispute_status',
+      )
+      .eq('branch_id', branchId)
+      .eq('method', 'card')
+      .in('order_id', orderIds);
+    if (cardErr) console.error('[orders] card payments read failed', cardErr.message);
+    const stripeRows = ((cardRows ?? []) as CardPaymentRow[]).filter(isStripeCardPayment);
+    if (stripeRows.length > 0) {
+      const { data: refundRows, error: refundErr } = await supabase
+        .from('payment_refunds')
+        .select('id, payment_id, order_id, amount, status, reason, created_at')
+        .eq('branch_id', branchId)
+        .in('order_id', Array.from(new Set(stripeRows.map((p) => p.order_id))));
+      if (refundErr) console.error('[orders] card refunds read failed', refundErr.message);
+      // Without the refunds, a summary would claim money is still on the card that may already
+      // be back with the diner, so no pills at all rather than wrong ones.
+      if (!refundErr) {
+        cardByOrder = summarizeCardPaymentsByOrder(stripeRows, (refundRows ?? []) as PaymentRefundRow[]);
+      }
+    }
+  }
+
   const rows: OrderRowData[] = (orders ?? []).map((o) => {
     // tables is a many-to-one embed, so PostgREST hands back one object (or null), but the
     // loosened client type cannot promise that — normalise the same way the kitchen does.
@@ -159,6 +199,7 @@ export default async function OrdersPage({ params, searchParams }: Props) {
       // Menu order, category by category, the way the receipt and the kitchen list them; the
       // summary's first two lines come from this order too.
       lines: sortOrderLines((o.order_items ?? []) as OrderLine[]),
+      card: cardByOrder[o.id] ?? null,
     };
   });
 

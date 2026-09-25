@@ -14,6 +14,8 @@ import { ClosuresManager } from './closures-manager';
 import { DeliverySettingsCard } from './delivery-settings-card';
 import { HoursEditor } from './hours-editor';
 import { PaymentMethodsCard } from './payment-methods-card';
+import { CardPaymentsCard, type CardPaymentsAccountRow } from './card-payments-card';
+import type { CardAccountState } from './card-payments-model';
 import { DeliveryHoursCard } from './delivery-hours-card';
 import { LocationCard } from './location-card';
 import { ScheduledOrdersCard } from './scheduled-orders-card';
@@ -46,6 +48,7 @@ export function BranchSettings({
   deliveryPrices,
   canUseCard,
   canEditSettings,
+  cardPayments,
 }: {
   branch: Branch;
   restaurantStorefront: Record<string, unknown> | null;
@@ -66,6 +69,15 @@ export function BranchSettings({
   canUseCard: boolean;
   /** branch.settings (owner and admin): what patch_branch_settings requires for the cards below. */
   canEditSettings: boolean;
+  /** The branch's Stripe account and the restaurant's other ones, as RLS let the page read them. */
+  cardPayments: {
+    account: CardAccountState | null;
+    restaurantAccounts: CardPaymentsAccountRow[];
+    /** billing.manage: may connect, share and disconnect. */
+    canConnect: boolean;
+    /** branch.settings: may see the account at all. */
+    canView: boolean;
+  };
 }) {
   const t = useTranslations('branch');
   const rawLocale = useLocale();
@@ -358,6 +370,18 @@ export function BranchSettings({
               ]}
             />
           )}
+
+          {/* Where the branch's card money is paid, directly above the methods it enables: the
+              card method reaches diners only once this account can take charges. */}
+          <CardPaymentsCard
+            branchId={branch.id}
+            branchName={branch.name}
+            account={cardPayments.account}
+            restaurantAccounts={cardPayments.restaurantAccounts}
+            canConnect={cardPayments.canConnect}
+            canView={cardPayments.canView}
+            canUseCard={canUseCard}
+          />
 
           <PaymentMethodsCard
             branchId={branch.id}

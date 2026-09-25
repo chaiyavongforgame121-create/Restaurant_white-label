@@ -13,9 +13,12 @@
   },
   "dependencies": {
     "@favornoms/database": "workspace:*",
+    "@favornoms/maps": "workspace:*",
     "@favornoms/shared": "workspace:*",
     "@favornoms/ui": "workspace:*",
     "@sentry/nextjs": "^8.45.0",
+    "@stripe/react-stripe-js": "^6.12.0",
+    "@stripe/stripe-js": "^9.17.0",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.47.10",
     "framer-motion": "^11.15.0",
@@ -24,8 +27,7 @@
     "next-intl": "^3.26.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "zustand": "^5.0.2",
-    "@favornoms/maps": "workspace:*"
+    "zustand": "^5.0.2"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

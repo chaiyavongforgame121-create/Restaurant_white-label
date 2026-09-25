@@ -268,7 +268,9 @@
     "recordQrTitle": "Ghi nhận chuyển khoản QR cho đơn {number}?",
     "recordQrBody": "Chỉ làm việc này khi bạn đã thấy khoản chuyển {amount} thành công trên điện thoại của khách. Sau đó đơn sẽ được chuyển vào bếp.",
     "recordQrConfirm": "Đã nhận tiền",
-    "recordQrFailed": "Chưa ghi nhận được thanh toán"
+    "recordQrFailed": "Chưa ghi nhận được thanh toán",
+    "refundExceedsRemaining": "Số tiền này nhiều hơn phần còn có thể hoàn của đơn: các lần hoàn tiền trước đã được tính vào tổng đơn.",
+    "refundOnlineCard": "Khách đã thanh toán đơn này trực tuyến bằng thẻ. Hãy hoàn tiền từ mục Đơn hàng trong trang quản lý, nơi tiền được trả về thẻ của khách."
   },
   "settle": {
     "authRequired": "Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại rồi ghi nhận thanh toán.",
@@ -278,6 +280,7 @@
     "paymentNotFound": "Đơn này không có khoản chuyển khoản QR nào đang chờ ghi nhận.",
     "paymentNotSettleable": "Khoản chuyển khoản QR của đơn này đã bị hủy hoặc hoàn tiền nên không thể ghi nhận.",
     "orderNotSettleable": "Đơn đã bị hủy hoặc hoàn tiền trong lúc đó nên không thể ghi nhận thanh toán. Hãy hoàn lại khoản chuyển khoản cho khách.",
-    "failed": "Chưa thể ghi nhận thanh toán lúc này. Hãy thử lại sau giây lát."
+    "failed": "Chưa thể ghi nhận thanh toán lúc này. Hãy thử lại sau giây lát.",
+    "onlineCardUnpaid": "Đơn này được đặt trực tuyến để thanh toán bằng thẻ và khách chưa thanh toán. Không thể ghi nhận thanh toán tại quầy: hãy hủy đơn, rồi nhập lại giao dịch và thu tiền tại đây."
   }
 }

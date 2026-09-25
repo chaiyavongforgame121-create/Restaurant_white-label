@@ -21,6 +21,7 @@ const status = (over: Partial<StorefrontStatus> = {}): StorefrontStatus => ({
   schedule_min_lead_min: 15,
   schedule_max_days: 0,
   schedule_slot_minutes: 60,
+  card_ready: false,
   ...over,
 });
 

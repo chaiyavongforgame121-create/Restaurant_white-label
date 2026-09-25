@@ -1,20 +1,34 @@
-// Stripe webhook — verify signature, then reconcile BOTH:
-//   (A) customer<->restaurant order payments  (payment_intent.*, charge.*)
-//   (B) platform<->restaurant subscription billing (checkout, subscription.*, invoice.*)
+// Stripe webhook for the PLATFORM's own account — verify signature, then reconcile the
+// platform<->restaurant subscription billing (checkout, subscription.*, invoice.*).
 //
-// Configure in Stripe Dashboard → Developers → Webhooks
+// Diners' card payments are NOT handled here any more (2026-09-24). They are direct charges on
+// each branch's own connected Stripe account (docs/PAYMENTS-STRIPE-CONNECT-2026-09-24.md), so
+// their events (payment_intent.*, charge.refunded, charge.dispute.*, refund.*) arrive on the
+// Connect endpoint, stripe-connect-webhook, with its own signing secret. The branch that used to
+// mark payments here matched diners' payments against charges on the platform's balance, which by
+// design never happen now; the only payment_intent events this endpoint still sees are the
+// platform's own subscription invoices, and those are answered 200 and left alone.
+//
+// Configure in Stripe Dashboard → Developers → Webhooks, "Events on your account"
 //   Endpoint URL: https://<project>.supabase.co/functions/v1/stripe-webhook
-//   Events (13 — see docs/CONFIG-CHECKLIST.md):
+//   Events (9):
 //     checkout.session.completed            customer.subscription.created
 //     customer.subscription.updated         customer.subscription.deleted
 //     customer.subscription.trial_will_end
 //     invoice.paid                          invoice.payment_failed
 //     invoice.payment_action_required       invoice.marked_uncollectible
-//     payment_intent.succeeded              payment_intent.payment_failed
-//     charge.refunded                       charge.dispute.created
+//   An endpoint set up before 2026-09-24 may still send payment_intent.succeeded,
+//   payment_intent.payment_failed, charge.refunded and charge.dispute.created. They are
+//   harmless (200, no effect) and can be unticked.
 //
 // This function must be deployed with verify_jwt = false (Stripe sends no JWT);
 // authenticity is enforced by the HMAC signature check below.
+//
+// De-duplication marks an event seen (stripe_event_seen) BEFORE it is handled, so a repeat that
+// arrives while the first delivery is still running is not applied twice. A handler that fails
+// un-marks it again (stripe_event_forget, migration 20260925100000) before answering 500:
+// otherwise Stripe's retry would be answered "duplicate" and a subscription change whose sync
+// failed once would never be applied. stripe-connect-webhook does the same.
 //
 // Division of labour: this function does transport only — verify, de-duplicate,
 // normalise the payload, and hand it to SQL. All entitlement arithmetic lives in
@@ -39,6 +53,8 @@ interface StripeEvent {
   id: string;
   type: string;
   api_version?: string;
+  /** Set only on events from a connected account (a branch's own Stripe account). */
+  account?: string;
   data: { object: Record<string, unknown> };
 }
 
@@ -81,6 +97,21 @@ Deno.serve(async (req) => {
     return new Response('invalid_json', { status: 400 });
   }
 
+  // An event from a branch's connected account belongs to stripe-connect-webhook. It can only get
+  // here if this endpoint was also ticked for "events on connected accounts", and then it must
+  // be ignored, for two reasons:
+  //   - A restaurant may run its own Stripe Billing on its own account. Its customers'
+  //     customer.subscription.* and invoice.* events would otherwise be synced into the
+  //     PLATFORM's subscriptions, suspending or entitling restaurants at random.
+  //   - The check comes before stripe_event_seen on purpose. Both endpoints de-duplicate on the
+  //     event id, so marking the event seen here would make the Connect endpoint drop it as a
+  //     repeat, and a diner's payment would never reach the kitchen.
+  // 200, so Stripe does not retry into the same place.
+  if (event.account) {
+    console.warn(`stripe-webhook: ignored ${event.type} from connected account ${event.account}`);
+    return new Response('connected_account_event_ignored', { status: 200 });
+  }
+
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
   if (event.api_version && event.api_version !== STRIPE_API_VERSION) {
@@ -114,99 +145,8 @@ Deno.serve(async (req) => {
 
   try {
     switch (event.type) {
-      // ----- (A) order payments (customer pays restaurant) -----
-      case 'payment_intent.succeeded': {
-        const intent = event.data.object as unknown as { id: string; metadata?: { order_id?: string } };
-        const orderId = intent.metadata?.order_id;
-        if (orderId) {
-          await admin
-            .from('payments')
-            .update({ status: 'completed', paid_at: new Date().toISOString() })
-            .eq('gateway_charge_id', intent.id);
-          await admin.from('orders').update({ status: 'confirmed' }).eq('id', orderId).eq('status', 'pending');
-        }
-        break;
-      }
-      case 'payment_intent.payment_failed': {
-        const intent = event.data.object as unknown as {
-          id: string;
-          last_payment_error?: { message?: string };
-        };
-        await admin
-          .from('payments')
-          .update({
-            status: 'failed',
-            gateway_metadata: { last_payment_error: intent.last_payment_error?.message ?? 'unknown' },
-          })
-          .eq('gateway_charge_id', intent.id);
-        break;
-      }
-      case 'charge.refunded': {
-        const charge = event.data.object as unknown as {
-          id: string;
-          payment_intent?: string;
-          amount_refunded?: number;
-        };
-        if (charge.payment_intent) {
-          await admin
-            .from('payments')
-            .update({
-              status: 'refunded',
-              gateway_metadata: {
-                refund_charge_id: charge.id,
-                amount_refunded: (charge.amount_refunded ?? 0) / 100,
-              },
-            })
-            .eq('gateway_charge_id', charge.payment_intent);
-        }
-        break;
-      }
-      case 'charge.dispute.created': {
-        // A dispute is not a refund — the money is held, not returned, and the
-        // restaurant needs to know a human has to respond within Stripe's window.
-        const dispute = event.data.object as unknown as {
-          id: string;
-          charge?: string;
-          payment_intent?: string;
-          amount?: number;
-          reason?: string;
-        };
-        const ref = dispute.payment_intent ?? dispute.charge;
-        if (ref) {
-          // payment_status has no 'disputed' member and the money has not moved
-          // yet, so the status stays as-is; the dispute is recorded alongside it.
-          // Read-modify-write because a bare .update() on a jsonb column replaces
-          // it wholesale, which would erase the original gateway response.
-          const { data: existing } = await admin
-            .from('payments')
-            .select('id, gateway_metadata')
-            .eq('gateway_charge_id', ref)
-            .maybeSingle();
-          if (existing) {
-            await admin
-              .from('payments')
-              .update({
-                gateway_metadata: {
-                  ...((existing.gateway_metadata as Record<string, unknown> | null) ?? {}),
-                  dispute_id: dispute.id,
-                  dispute_reason: dispute.reason ?? 'unknown',
-                  dispute_amount: (dispute.amount ?? 0) / 100,
-                  disputed_at: new Date().toISOString(),
-                },
-              })
-              .eq('id', existing.id);
-          }
-        }
-        await logEvent(admin, 'stripe.dispute_created', 'warn', 'a charge was disputed', null, {
-          dispute_id: dispute.id,
-          charge: dispute.charge,
-          payment_intent: dispute.payment_intent,
-          reason: dispute.reason,
-        });
-        break;
-      }
-
-      // ----- (B) subscription billing (platform charges restaurant) -----
+      // Subscription billing (the platform charges a restaurant). Diners' payments, refunds and
+      // disputes are stripe-connect-webhook's; see the header.
       case 'checkout.session.completed': {
         // The subscription.created event carries the same information and
         // usually lands first, but ordering is not guaranteed. Syncing here too
@@ -271,7 +211,7 @@ Deno.serve(async (req) => {
           patch.current_period_end = new Date(periodEnd * 1000).toISOString();
           patch.next_billing_at = new Date(periodEnd * 1000).toISOString();
         }
-        await admin.from('subscriptions').update(patch).eq('stripe_subscription_id', subId);
+        await updateSubscription(admin, subId, patch);
         await assertResolvable(admin, inv, subId);
         break;
       }
@@ -280,10 +220,7 @@ Deno.serve(async (req) => {
         const inv = event.data.object as unknown as StripeInvoice;
         const subId = invoiceSubscription(inv);
         if (!subId) break;
-        await admin
-          .from('subscriptions')
-          .update({ status: 'past_due', updated_at: new Date().toISOString() })
-          .eq('stripe_subscription_id', subId);
+        await updateSubscription(admin, subId, { status: 'past_due', updated_at: new Date().toISOString() });
         await assertResolvable(admin, inv, subId);
         break;
       }
@@ -293,25 +230,38 @@ Deno.serve(async (req) => {
         const inv = event.data.object as unknown as StripeInvoice;
         const subId = invoiceSubscription(inv);
         if (!subId) break;
-        await admin
-          .from('subscriptions')
-          .update({ status: 'expired', updated_at: new Date().toISOString() })
-          .eq('stripe_subscription_id', subId);
+        await updateSubscription(admin, subId, { status: 'expired', updated_at: new Date().toISOString() });
         await assertResolvable(admin, inv, subId);
         break;
       }
 
       default:
-        // Unhandled → 200 so Stripe doesn't retry.
+        // Unhandled → 200 so Stripe doesn't retry. This includes the payment_intent.* events of
+        // the platform's own subscription invoices.
         break;
     }
   } catch (err) {
     console.error('webhook error', event?.type, err);
+    // Un-mark the event, or the retry this 500 asks for is answered "duplicate" and never applied.
+    // If this call fails too the event stays marked, which is how every failure was treated
+    // before: logged, and visible as a 'received' row in billing_events with no sync after it.
+    const { error: forgetErr } = await admin.rpc('stripe_event_forget', { p_event_id: event.id });
+    if (forgetErr) console.error('stripe_event_forget failed', event.id, forgetErr);
     return new Response('internal_error', { status: 500 });
   }
 
   return new Response('ok', { status: 200 });
 });
+
+/**
+ * Write an invoice's effect on the subscription row. A failed write throws, so the event is
+ * un-marked and retried: the UPDATE used to be fire-and-forget, so a paid renewal whose write
+ * failed still answered 200 and left the subscription row as it was, past due included.
+ */
+async function updateSubscription(admin: SupabaseClient, subId: string, patch: Record<string, unknown>) {
+  const { error } = await admin.from('subscriptions').update(patch).eq('stripe_subscription_id', subId);
+  if (error) throw new Error(`subscriptions update failed for ${subId}: ${error.message}`);
+}
 
 /**
  * `invoice.subscription` was a top-level string until 2025, when it moved under

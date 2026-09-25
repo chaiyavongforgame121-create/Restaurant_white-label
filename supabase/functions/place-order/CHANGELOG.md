@@ -5,7 +5,46 @@ the bulk of the file; every deploy had to carry it. The history is the valuable 
 so it lives here rather than being deleted.
 
 ```
-// place-order v11.6 — every branch is its own shop
+// place-order v11.7 — a card is paid into the branch's own Stripe account
+//   v11.7 (2026-09-24): Stripe Connect, direct charges (docs/PAYMENTS-STRIPE-CONNECT-2026-09-24.md).
+//        SQL half: 20260925100000_stripe_connect_payments (branch_payment_accounts,
+//        branch_card_ready, storefront_status.card_ready, the card-aware awaiting-payment sync and
+//        unpaid-progress guard, and the 30-minute expiry job).
+//        - A STOREFRONT card order (source 'web') needs the branch to be card-ready: a row in
+//          branch_payment_accounts with charges_enabled and a well-formed acct_ id, read with the
+//          service role. Otherwise 400 { error: 'card_not_configured' }, before anything is
+//          written; the storefront says "this restaurant can't take cards online right now". An
+//          unreadable row counts as not ready. The card_payment entitlement check (403
+//          feature_not_entitled) still comes first and still applies to staff too.
+//        - Such an order is inserted with awaiting_payment = true (as a transfer is) when its
+//          total is above zero, so it stays off the kitchen board until Stripe says it is paid.
+//          Its pending payments row carries gateway 'stripe' and gateway_metadata
+//          { pending: true, stripe_account: 'acct_…' } — the account it will be charged on,
+//          recorded at order time. stripe-create-payment-intent then creates the PaymentIntent on
+//          that account and stores its pi_ id in gateway_charge_id.
+//        - A storefront card order whose total is above 0 but under Stripe's 50-cent minimum is
+//          refused with 400 { error: 'card_amount_too_small', minimum: 0.5 } (it could never be
+//          charged). A total of exactly 0 is placed as before, with no payment row and no wait.
+//        - If the payment row of a storefront card order cannot be written, the order is called
+//          off (status 'cancelled', reason "The card payment could not be set up.") and the answer
+//          is 500 { error: 'payment_insert_failed' } — it used to be ignored, which would have
+//          stranded the order awaiting a payment that did not exist. Cancelled rather than
+//          deleted, exactly as the expiry job cancels: the orders cancel triggers put back the
+//          stock and the points, promo and gift card, and the status history is the trigger's.
+//        - Counter and POS card sales are unchanged in what they do: no connected account is
+//          asked for, no wait, recorded by record_counter_payment. Their payments row now has
+//          gateway NULL instead of 'stripe' — they are terminal sales and never went through
+//          Stripe, and the Stripe refund and the awaiting-payment sync key on gateway 'stripe'.
+//        - The card service fee is clamped to SERVICE_FEE_MAX_PERCENT = 3 (was a literal 25), a
+//          hand mirror of the constant in packages/shared/src/utils/pricing.ts; the US card
+//          networks cap a credit-card surcharge at 3%. A branch stored above it is charged 3%.
+//        - The card rules live in a new ./card.ts (pure, no imports): SERVICE_FEE_MAX_PERCENT,
+//          CARD_MIN_CHARGE, serviceFeePercentOf, isStorefrontCard, readyStripeAccount,
+//          orderAwaitsPayment, cardTotalTooSmall, pendingPaymentGateway.
+//          apps/web/src/lib/card-payment-edge.test.ts imports it and pins each rule, and fails if
+//          the fee cap ever differs from the shared constant. A Management API / MCP deploy must
+//          pass card.ts along with index.ts and _shared/entitlements.ts; the CLI uploads the tree.
+//        - Cash, transfer and dine-in are untouched.
 //   v11.6 (2026-09-23): delivery is the BRANCH's answer, not the restaurant's.
 //        - Delivery is sold per branch now (docs/PACKAGING-2026-09-23.md §2): a restaurant can
 //          deliver from one branch and not from the next. The billing gate therefore loads

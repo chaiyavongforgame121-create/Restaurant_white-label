@@ -25,6 +25,7 @@ import { AccessDenied } from '@/components/access-denied';
 import {
   BOOKING_LATE_WINDOW_MS,
   BOOKING_ROWS_SHOWN,
+  bookingPaymentMethods,
   heldOrderIds,
   leadTimeMs,
   ordersListedIn,
@@ -36,6 +37,7 @@ import {
   spanOf,
   spanSince,
   type ActionRow,
+  type BookingPaymentMethod,
   type BookingRow,
   type BookingState,
   type RowAge,
@@ -190,6 +192,22 @@ export default async function DashboardPage({ params }: Props) {
   ]);
 
   const { currency, settings, timezone: tz } = snapshot;
+
+  // How each unpaid booking is being paid. The bookings read carries no payment method, and an
+  // unpaid storefront card booking is waiting on the diner's own card, not on a transfer the
+  // restaurant has to check. Asked only for the unpaid rows, and only of someone who may read
+  // payments (payments.view); without an answer the booking is worded neutrally.
+  const unpaidBookingIds = snapshot.scheduledDeliveries.rows.filter((o) => o.awaiting_payment).map((o) => o.id);
+  let bookingMethods = new Map<string, BookingPaymentMethod>();
+  if (unpaidBookingIds.length > 0 && can('payments.view')) {
+    const { data: payRows, error: payErr } = await supabase
+      .from('payments')
+      .select('order_id, method, gateway')
+      .eq('branch_id', branchId)
+      .in('order_id', unpaidBookingIds);
+    if (payErr) console.error(`[dashboard] booking payments read failed for branch ${branchId}:`, payErr.message);
+    else bookingMethods = bookingPaymentMethods((payRows ?? []) as Array<{ order_id: string; method: string; gateway: string | null }>);
+  }
 
   // Raw database text belongs in the server log, not on a merchant's screen: every card that
   // depends on a failed read says "couldn't check" in the reader's language instead.
@@ -380,6 +398,7 @@ export default async function DashboardPage({ params }: Props) {
       [kitchen.kitchenLate, kitchen.customersWaiting, deliveries.unaccepted, deliveries.failed],
       snapshot.proofs.rows.map((p) => p.order_id),
     ),
+    bookingMethods,
   );
 
   // --- Words for the model's codes -------------------------------------------------------
@@ -651,7 +670,10 @@ export default async function DashboardPage({ params }: Props) {
   const bookingWhy = (b: BookingRow): string => {
     switch (b.state) {
       case 'unpaid':
-        return t('bookings.why.unpaid');
+        // "unpaid" is the transfer wording, as it always was; a card booking and one whose method
+        // this reader may not see get their own.
+        if (b.unpaidBy === 'card') return t('bookings.why.unpaidCard');
+        return b.unpaidBy === 'transfer' ? t('bookings.why.unpaid') : t('bookings.why.unpaidAny');
       case 'stuckHeld':
         return t('rows.bookingStillHeld');
       case 'notAccepted':

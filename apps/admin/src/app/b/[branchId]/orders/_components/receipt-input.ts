@@ -1,4 +1,4 @@
-import { sortOrderLines } from '@favornoms/shared';
+import { sortOrderLines, sumMoney } from '@favornoms/shared';
 import type { ReceiptInput } from '@favornoms/ui/printer';
 import { lineUnitPrice, parseLineModifiers } from './order-lines';
 
@@ -38,6 +38,13 @@ export interface ReceiptOrder {
   order_items: ReceiptOrderItem[];
 }
 
+/** A card refund made through Stripe (payment_refunds), pending or succeeded. */
+export interface ReceiptRefund {
+  amount: number;
+  status: string;
+  createdAt: string;
+}
+
 export interface ReceiptContext {
   branchName: string;
   branchAddress?: string | null;
@@ -45,6 +52,8 @@ export interface ReceiptContext {
   /** payments.method for the settled payment, when the reader may see payments at all. */
   paymentMethod?: string | null;
   currency?: string;
+  /** Card refunds, oldest first. Failed and canceled ones moved no money and are not passed. */
+  refunds?: readonly ReceiptRefund[];
 }
 
 const num = (v: number | string) => Number(v);
@@ -78,10 +87,20 @@ export function toReceiptInput(order: ReceiptOrder, ctx: ReceiptContext): Receip
   // order would print a TOTAL its own lines never reach. Until the printer package grows
   // rows of its own, these ride on the one free-text line the format has, which keeps the
   // paper adding up. Kept short: the 80mm page is 42 columns and does not wrap.
+  //
+  // Card refunds ride there too, one total for those Stripe has confirmed and one for those it
+  // is still processing, however many there were: a reprint for an order whose card was given
+  // back, in part or whole, must not read as fully paid, and the line has no room for a list.
+  const refundTotal = (status: string) =>
+    sumMoney((ctx.refunds ?? []).filter((r) => r.status === status && r.amount > 0).map((r) => r.amount));
+  const refunded = refundTotal('succeeded');
+  const refundPending = refundTotal('pending');
   const adjustments = [
     tax > 0 ? `Tax ${tax.toFixed(2)}` : null,
     tip > 0 ? `Tip ${tip.toFixed(2)}` : null,
     discount > 0 ? `Discount -${discount.toFixed(2)}` : null,
+    refunded > 0 ? `Refunded -${refunded.toFixed(2)}` : null,
+    refundPending > 0 ? `Refund pending -${refundPending.toFixed(2)}` : null,
   ].filter((line): line is string => line !== null);
 
   return {

@@ -21,10 +21,11 @@
 - [ ] §5 **Deploy 7+ edge functions via CLI** (~5 min — see §5)
 - [ ] §6 Edge Function secrets — Stripe + AI + Resend + VAPID + Sentry
 - [ ] §7 `private.app_settings` SQL insert (1 paste)
-- [ ] §8 Stripe webhook in Stripe Dashboard
+- [ ] §8 Stripe webhooks in Stripe Dashboard — two endpoints: platform billing (§8a) and
+      Connect, for diners' card payments (§8b)
 - [ ] §9 Per-branch `sales_tax_rate` in admin app
 - [ ] §10 App `.env.local` files
-- [ ] §11 **(Optional)** Mount Stripe `<PaymentElement>` properly — see HANDOFF.md §8
+- [x] §11 Mount Stripe `<PaymentElement>` — done with Stripe Connect (2026-09-24); see §11
 
 ---
 
@@ -153,12 +154,17 @@ supabase functions deploy place-order            # v4 → v8 (modifiers + combos
 supabase functions deploy notify-worker          # adds gift_card_issued, birthday_reward, abandoned_cart, waitlist_ready templates
 supabase functions deploy issue-tax-invoice      # Thai E-Tax XML → US HTML receipt
 
-# Stripe — ALL FOUR ARE ALREADY DEPLOYED AND ACTIVE (2026-07-25).
-# They ship DORMANT: with no STRIPE_SECRET_KEY set they return 503
+# Stripe. They ship DORMANT: with no STRIPE_SECRET_KEY set they return 503
 # stripe_not_configured, and the plan page falls back to the manual
 # request queue. Setting the secrets in §6 is what switches them on.
-supabase functions deploy stripe-create-payment-intent   # order payments  → platform Stripe (see §6)
-supabase functions deploy stripe-webhook                 # both rails; verify_jwt MUST stay false
+# Diners' card payments go to each BRANCH's own connected Stripe account
+# (docs/PAYMENTS-STRIPE-CONNECT-2026-09-24.md). Apply migrations 20260925100000,
+# 20260925110000 and 20260925120000 BEFORE deploying the order-payment functions.
+supabase functions deploy stripe-create-payment-intent   # diner card payment → the branch's connected account
+supabase functions deploy stripe-refund                  # back-office refunds, and the refund a cancel of a paid card order makes
+supabase functions deploy stripe-connect-onboard         # a branch connects its own Stripe account
+supabase functions deploy stripe-connect-webhook --no-verify-jwt  # §8b; verify_jwt MUST be false
+supabase functions deploy stripe-webhook --no-verify-jwt # §8a, platform billing only; verify_jwt MUST be false
 supabase functions deploy stripe-create-checkout-session # subscriptions   → platform's Stripe
 supabase functions deploy stripe-billing-portal          # merchant self-manages card / cancels
 supabase functions deploy integration-sync       # DoorDash/UberEats/QuickBooks worker (stubbed)
@@ -188,19 +194,20 @@ supabase link --project-ref ayyfczidnzxetndiijmv
 | Key | Where to get |
 |-----|--------------|
 | `STRIPE_SECRET_KEY` | dashboard.stripe.com → Developers → API keys |
-| `STRIPE_WEBHOOK_SECRET` | After creating webhook (see §8) |
+| `STRIPE_WEBHOOK_SECRET` | After creating the platform webhook (see §8a) |
+| `STRIPE_CONNECT_WEBHOOK_SECRET` | After creating the Connect webhook (see §8b) |
 | `STRIPE_PUBLISHABLE_KEY` | API keys (also set as `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` in app envs) |
 
 > **Two different money flows share these keys — don't confuse them.**
 > - *Subscriptions* (Base $199 / +$99 branch / +$49 Delivery / +$59 AI Suite) are
 >   billed by **the platform** to the restaurant, on **our** Stripe account.
 >   This flow is fully built.
-> - *Order payments* are **meant** to be collected by the restaurant, into its own
->   account, with the platform taking no cut (owner decision, 2026-07-25). ⚠️ **Not
->   built yet.** `stripe-create-payment-intent` charges through the single
->   `STRIPE_SECRET_KEY` above with no Connect account, so today order money would
->   settle into the *platform's* Stripe. Do not switch on card payments for a real
->   merchant until per-restaurant Connect onboarding ships (`docs/AUDIT-2026-06-24.md` D2-A).
+> - *Order payments* are **direct charges on each branch's own connected Stripe
+>   account** (Stripe Connect, owner decision 2026-09-24,
+>   `docs/PAYMENTS-STRIPE-CONNECT-2026-09-24.md`). The payment function refuses to charge
+>   without the branch's connected account, so a diner's money never reaches the
+>   platform's balance, and the platform takes no cut. Each branch connects its account
+>   under Branch settings → Card payments. Their events go to the Connect endpoint (§8b).
 
 **Setting the keys is not sufficient to sell subscriptions.** Every row in
 `billing_products` ships with `stripe_price_id = NULL`, and
@@ -280,24 +287,22 @@ on conflict (key) do update set value = excluded.value, updated_at = now();
 
 ---
 
-## 8. Stripe Dashboard — Create webhook
+## 8. Stripe Dashboard — Create the two webhooks
 
-**dashboard.stripe.com → Developers → Webhooks → Add endpoint**
+**dashboard.stripe.com → Developers → Webhooks → Add endpoint**, twice. The two endpoints
+receive different events and have different signing secrets; do not tick one event on both.
 
+Both use **API version** `2025-08-27.basil`, pinned in every function we ship. If an
+endpoint is created on a different version the handler still runs, but the platform one
+logs a `stripe.api_version_mismatch` row into `billing_events`; check there first if a
+handler goes quiet. Signatures older than **300s** are rejected, so the Supabase project
+clock must be sane. A "bad_signature" storm with a correct secret is a clock-skew symptom.
+
+### 8a. Platform billing — the platform charges the restaurant
+
+- **Events from:** Your account
 - **Endpoint URL:** `https://ayyfczidnzxetndiijmv.supabase.co/functions/v1/stripe-webhook`
-- **API version:** `2025-08-27.basil` — pinned in every function we ship. If the
-  endpoint is created on a different version the handler still runs, but it logs
-  a `stripe.api_version_mismatch` row into `billing_events`; check there first if
-  a handler goes quiet.
-- **Events to send (13):**
-
-  *Order payments — customer pays the restaurant*
-  - `payment_intent.succeeded`
-  - `payment_intent.payment_failed`
-  - `charge.refunded`
-  - `charge.dispute.created`
-
-  *Subscription billing — the platform charges the restaurant*
+- **Events to send (9)**, as listed in the header of `supabase/functions/stripe-webhook/index.ts`:
   - `checkout.session.completed`
   - `customer.subscription.created`
   - `customer.subscription.updated`
@@ -307,10 +312,37 @@ on conflict (key) do update set value = excluded.value, updated_at = now();
   - `invoice.payment_failed`
   - `invoice.payment_action_required`
   - `invoice.marked_uncollectible`
-
 - Copy the **Signing secret** → paste as `STRIPE_WEBHOOK_SECRET` in §6.
-- Signatures older than **300s** are rejected, so the Supabase project clock must
-  be sane. A "bad_signature" storm with a correct secret is a clock-skew symptom.
+- An endpoint created before 2026-09-24 may still have `payment_intent.succeeded`,
+  `payment_intent.payment_failed`, `charge.refunded` and `charge.dispute.created` ticked.
+  Untick them: diners' payments are no longer on the platform's account, and this endpoint
+  answers them 200 and ignores them.
+
+### 8b. Connect — diners pay each branch's own Stripe account
+
+- **Events from:** Connected accounts
+- **Endpoint URL:** `https://ayyfczidnzxetndiijmv.supabase.co/functions/v1/stripe-connect-webhook`
+- **Events to send (14)**, as listed in the header of
+  `supabase/functions/stripe-connect-webhook/index.ts`:
+  - `account.updated`
+  - `account.application.deauthorized`
+  - `payment_intent.succeeded`
+  - `payment_intent.payment_failed`
+  - `payment_intent.canceled`
+  - `payment_intent.processing`
+  - `charge.refunded`
+  - `refund.created`
+  - `refund.updated`
+  - `refund.failed`
+  - `charge.dispute.created`
+  - `charge.dispute.updated`
+  - `charge.dispute.closed`
+  - `charge.dispute.funds_withdrawn`
+- Copy the **Signing secret** → paste as `STRIPE_CONNECT_WEBHOOK_SECRET` in §6.
+- Without this endpoint a diner's card payment is still confirmed by the order page's own
+  re-check, but a branch never becomes "ready to take cards" by itself, refunds and disputes
+  made in a branch's Stripe Dashboard are never recorded, and a payment that lands after its
+  order expired is not refunded automatically.
 
 ---
 
@@ -336,9 +368,14 @@ NEXT_PUBLIC_SITE_URL=<your prod domain>
 
 ---
 
-## 11. Mount Stripe Elements properly (deferred — see HANDOFF §8)
+## 11. Mount Stripe Elements properly — DONE (2026-09-24)
 
-Current state: `<StripePayment>` component loads Stripe.js from CDN and calls `confirmCardPayment`. There's **no `<PaymentElement>` mounted**, so customers can't enter card details end-to-end.
+Superseded by Stripe Connect (`docs/PAYMENTS-STRIPE-CONNECT-2026-09-24.md`): the checkout and the
+order page mount Stripe's Payment Element for the branch's connected account, and
+`stripe-refund` refunds on that account from the back office, including when a paid card order
+is cancelled or rejected. What follows is kept as history only; do not follow it.
+
+Former state: `<StripePayment>` loaded Stripe.js from a CDN and called `confirmCardPayment`, with **no `<PaymentElement>` mounted**.
 
 **To finish:**
 ```bash

@@ -93,7 +93,17 @@
       "customer": "Customer note",
       "kitchen": "Kitchen note",
       "delivery": "Delivery instructions"
-    }
+    },
+    "unpaidCardHint": "Waiting for the customer’s card payment. The kitchen gets the order once it goes through.",
+    "refundPending": "Refund pending",
+    "refundPendingHint": "{amount} is on its way back to the customer’s card; Stripe hasn’t confirmed it yet.",
+    "partRefunded": "Part refunded",
+    "refundedHint": "{amount} refunded to the customer’s card.",
+    "cardRefunded": "Card refunded",
+    "cardNotRefunded": "Card not refunded",
+    "cardNotRefundedHint": "This order is closed, but {amount} paid by card is still with the restaurant. Refund it from Actions.",
+    "cardDisputed": "Disputed",
+    "cardDisputedHint": "The customer disputed this card payment with their bank, which has taken the money back. Answer the dispute in this branch’s Stripe Dashboard."
   },
   "receipt": {
     "button": "Receipt",
@@ -118,7 +128,9 @@
     "tip": "Tip",
     "total": "Total ({currency})",
     "paidVia": "Paid via",
-    "deliverTo": "Deliver to: {address}"
+    "deliverTo": "Deliver to: {address}",
+    "refundedToCard": "Refunded to card · {date}",
+    "refundPendingToCard": "Refund pending · {date}"
   },
   "actions": {
     "menu": "Actions",
@@ -130,7 +142,12 @@
       "title": "Cancel this order?",
       "body": "This cancels the order and restores stock. It can’t be undone.",
       "keep": "Keep order",
-      "confirm": "Yes, cancel"
+      "confirm": "Yes, cancel",
+      "bodyCard": "This cancels the order, restores stock and refunds {amount} to the customer’s card from this branch’s Stripe account. It can’t be undone.",
+      "bodyCardUnpaid": "The customer’s card payment hasn’t gone through, so there is nothing to refund. This cancels the order and restores stock. It can’t be undone.",
+      "bodyCardNothingLeft": "The card payment has already been refunded or is being refunded, so nothing more goes back. This cancels the order and restores stock. It can’t be undone.",
+      "bodyCardDisputed": "The customer disputed this card payment with their bank, which has already taken the money back, so nothing is refunded here. This cancels the order and restores stock. It can’t be undone.",
+      "confirmRefund": "Refund and cancel"
     },
     "noteDialog": {
       "title": "Customer note",
@@ -141,7 +158,8 @@
     },
     "invoiceIssued": "Issued invoice {number}",
     "invoiceIssuedNoNumber": "Invoice issued",
-    "done": "Done"
+    "done": "Done",
+    "refundCard": "Refund card payment"
   },
   "refund": {
     "title": "Issue refund",
@@ -205,6 +223,56 @@
     "deliveryNotFailed": "This delivery is no longer marked as failed. Refresh to see where it is.",
     "deliveryForbidden": "Your account can’t re-dispatch deliveries at this branch.",
     "paymentNotFound": "That payment no longer exists.",
-    "paymentForbidden": "Only an owner or manager can approve payments."
+    "paymentForbidden": "Only an owner or manager can approve payments.",
+    "onlineCardUnpaid": "This order was placed online to be paid by card, and the customer hasn’t paid yet, so it can’t be settled or moved on here. Cancel it, then ring the sale up again at the counter and take the payment there.",
+    "cardRefundRequired": "The customer paid this order online by card, and the card has to be refunded before the order can be cancelled. The refund isn’t recorded yet: wait a minute and try again.",
+    "cardRefundNotRecorded": "Stripe has made the card refund, but it isn’t in this branch’s records yet, so the order can’t show it. Wait a minute and press the button again; the card won’t be refunded twice.",
+    "refundExceedsRemaining": "That’s more than is left to refund on this order: earlier refunds already count toward its total."
+  },
+  "cardRefund": {
+    "title": "Refund card payment",
+    "checking": "Checking how this order was paid…",
+    "loadFailed": "Couldn’t check how this order was paid, so it can’t be refunded or cancelled right now. Close this and try again.",
+    "notPaidYet": "The customer’s card payment hasn’t gone through, so there is nothing to refund. Cancel the order instead if it shouldn’t go ahead.",
+    "paidBy": "Paid by card: {amount}",
+    "alreadyRefunded": "Already refunded: {amount}",
+    "waitingOnStripe": "Waiting for Stripe to confirm: {amount}",
+    "refundableNow": "Up to {amount} can still be refunded.",
+    "nothingLeft": "The whole card payment has been refunded.",
+    "disputed": "The customer disputed this payment with their bank, which has taken the money back from the branch’s Stripe balance. There is nothing to refund here; answer the dispute in this branch’s Stripe Dashboard.",
+    "whereItGoes": "The refund goes back to the customer’s card from this branch’s Stripe account. Banks usually show it within 5–10 business days.",
+    "history": "Refunds on this payment",
+    "status": {
+      "pending": "Processing",
+      "succeeded": "Refunded",
+      "failed": "Failed",
+      "canceled": "Canceled"
+    },
+    "amountTooHigh": "No more than {amount} can still be refunded to this card.",
+    "notCancelled": "The order was not cancelled.",
+    "refundedNotCancelled": "{amount} was refunded to the customer’s card, but the order could not be cancelled: {reason} Press the button again to cancel it — the card won’t be refunded twice.",
+    "orderNotUpdated": "{amount} was refunded to the customer’s card, but the order could not be marked as refunded: {reason} Press the button again to record it — the card won’t be refunded twice.",
+    "sentSucceeded": "{amount} was refunded to the customer’s card. Banks usually show it within 5–10 business days.",
+    "sentPending": "Stripe accepted the refund of {amount} and is processing it. The order shows it as refunded once Stripe confirms it.",
+    "notRecordedYet": "It will appear on the order within a few minutes, once Stripe reports it.",
+    "retryRecord": "Record on the order",
+    "errors": {
+      "generic": "The refund didn’t go through. No money was returned. Please try again.",
+      "authRequired": "Your session has expired. Sign in again. No money was returned.",
+      "notConfigured": "Card refunds aren’t set up yet: the platform’s Stripe keys are missing. No money was returned.",
+      "notAuthorized": "Only an owner, admin or manager at this branch can refund a card payment. No money was returned.",
+      "orderNotFound": "That order no longer exists.",
+      "notPaid": "This order’s card payment hasn’t gone through, so there is nothing to refund.",
+      "nothingToRefund": "This card payment has already been refunded in full.",
+      "overRefund": "That’s more than is left on the card. At most {amount} can still be refunded.",
+      "invalidAmount": "Enter an amount above zero, in dollars and cents.",
+      "noAccount": "This branch has no Stripe account connected, so the card payment can’t be refunded from here. Refund it in the Stripe Dashboard.",
+      "mismatch": "This payment doesn’t match the charge Stripe holds for it, so it can’t be refunded from here. No money was returned. Refund it in this branch’s Stripe Dashboard.",
+      "stripeRefused": "Stripe refused the refund. No money was returned. Check the payment in this branch’s Stripe Dashboard.",
+      "stripeDisputed": "The customer has disputed this payment with their bank, so Stripe won’t refund it. No money was returned. Answer the dispute in this branch’s Stripe Dashboard.",
+      "stripeAlreadyRefunded": "Stripe says this payment has already been refunded in full. No money was returned.",
+      "stripeInsufficientFunds": "This branch’s Stripe balance is too low to cover the refund. No money was returned. Add funds in the Stripe Dashboard and try again.",
+      "unreachable": "Couldn’t confirm the refund with Stripe. It may or may not have gone through. Press the button again: the card won’t be refunded twice."
+    }
   }
 }

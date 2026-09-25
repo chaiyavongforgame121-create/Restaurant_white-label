@@ -26,6 +26,7 @@ import {
   MAX_LINE_QUANTITY,
   mergeIdenticalLines,
   optionLineSignature,
+  SERVICE_FEE_MAX_PERCENT,
   sumMoney,
   unitPrice4,
 } from '@favornoms/shared';
@@ -34,9 +35,6 @@ export type CounterPayMethod = 'cash' | 'card' | 'transfer';
 
 /** place-order's r2, character for character. */
 export const r2 = (n: number) => Math.round(n * 100) / 100;
-
-/** Ceiling place-order clamps the service fee to (SERVICE_FEE_MAX_PERCENT in @favornoms/shared). */
-const SERVICE_FEE_MAX_PERCENT = 25;
 
 /** One row of get_effective_prices. numeric columns arrive as strings over PostgREST. */
 export interface EffectivePriceRow {
@@ -205,6 +203,9 @@ export function quoteCounterCart(input: CounterQuoteInput): CounterQuote {
   const discount = Math.min(subtotal, r2(subtotal * (pct / 100)));
   const taxableBase = Math.max(0, subtotal - discount);
 
+  // The one ceiling in @favornoms/shared (the US 3% card-surcharge cap), not a copy of it: a
+  // private 25 here kept quoting a branch saved at 5% at 5% after the cap came down to 3, so the
+  // till would ask a card customer for more than place-order charges.
   const feePct = Math.max(0, Math.min(SERVICE_FEE_MAX_PERCENT, Number(input.serviceFeePercent) || 0));
   const serviceFee = input.method === 'card' ? r2(taxableBase * (feePct / 100)) : 0;
   const tax = r2(taxableBase * (Number(input.salesTaxRate) || 0));

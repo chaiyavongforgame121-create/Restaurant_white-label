@@ -7,6 +7,7 @@ import { formatPhone, formatCurrency } from '@favornoms/shared';
 import { Badge, Card, cn } from '@favornoms/ui';
 import { OrderReceiptButton } from './order-receipt-sheet';
 import { OrderRowActions } from './order-row-actions';
+import type { CardPaymentSummary } from './card-refund';
 import { useIntlLocale, useOrderLabels } from './order-labels';
 import {
   ALLERGY_RE,
@@ -45,6 +46,9 @@ export interface OrderRowData {
   /** delivery_address.notes — the "Delivery instructions" field on the storefront. */
   delivery_notes: string | null;
   lines: OrderLine[];
+  /** The order's Stripe card payment and what has gone back on it, or null for cash, transfer
+   *  and cards taken on the restaurant's own terminal (and for readers without payments.view). */
+  card: CardPaymentSummary | null;
 }
 
 export interface OrderRowContext {
@@ -78,21 +82,92 @@ const statusVariant = (status: string): React.ComponentProps<typeof Badge>['vari
   return 'danger';
 };
 
-// A QR order is invisible to the kitchen until the money is confirmed, so say so here
-// rather than leaving it looking like an untouched ticket.
-function AwaitingPill() {
+// A QR or online card order is invisible to the kitchen until the money is confirmed, so say
+// so here rather than leaving it looking like an untouched ticket.
+function AwaitingPill({ card }: { card: CardPaymentSummary | null }) {
   const t = useTranslations('orders');
   // One word, one line. The sentence this used to spell out broke into four stacked
   // fragments in a column narrow enough to fit the rest of the table, and the full
-  // meaning is a hover away.
+  // meaning is a hover away. A card order waits on the diner's card, not on a slip.
   return (
     <span
-      title={t('row.unpaidHint')}
+      title={card && !card.paid ? t('row.unpaidCardHint') : t('row.unpaidHint')}
       className="bg-warning/15 text-warning mt-1 inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold"
     >
       {t('row.unpaid')}
     </span>
   );
+}
+
+/**
+ * Where the card money stands, when it is not simply "paid": a refund Stripe is still working
+ * on, part or all of it given back, or, on a closed order, card money nobody has refunded. Since
+ * 20260925120000 no one can close a paid card order without its refund, so that last case is an
+ * order closed before then, or one whose refund Stripe later failed; it comes before "part
+ * refunded" because it is the one the owner has to act on.
+ */
+function CardRefundPill({
+  card,
+  status,
+  currency,
+}: {
+  card: CardPaymentSummary | null;
+  status: string;
+  currency: string;
+}) {
+  const t = useTranslations('orders');
+  if (!card || !card.paid) return null;
+  const cls = 'mt-1 inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold';
+  // The bank has taken the payment back through a dispute: there is nothing to refund, only a
+  // dispute to answer in the branch's Stripe Dashboard, so that is what the row says.
+  if (card.disputed) {
+    return (
+      <span title={t('row.cardDisputedHint')} className={cn(cls, 'bg-warning/15 text-warning')}>
+        {t('row.cardDisputed')}
+      </span>
+    );
+  }
+  if (card.refundPending > 0) {
+    return (
+      <span
+        title={t('row.refundPendingHint', { amount: formatCurrency(card.refundPending, currency) })}
+        className={cn(cls, 'bg-warning/15 text-warning')}
+      >
+        {t('row.refundPending')}
+      </span>
+    );
+  }
+  if ((status === 'cancelled' || status === 'refunded') && card.refundable > 0) {
+    return (
+      <span
+        title={t('row.cardNotRefundedHint', { amount: formatCurrency(card.refundable, currency) })}
+        className={cn(cls, 'bg-danger/10 text-danger')}
+      >
+        {t('row.cardNotRefunded')}
+      </span>
+    );
+  }
+  if (card.refunded > 0 && card.refundable > 0) {
+    return (
+      <span
+        title={t('row.refundedHint', { amount: formatCurrency(card.refunded, currency) })}
+        className={cn(cls, 'bg-muted text-foreground')}
+      >
+        {t('row.partRefunded')}
+      </span>
+    );
+  }
+  if (card.refunded > 0 && status !== 'refunded') {
+    return (
+      <span
+        title={t('row.refundedHint', { amount: formatCurrency(card.refunded, currency) })}
+        className={cn(cls, 'bg-muted text-foreground')}
+      >
+        {t('row.cardRefunded')}
+      </span>
+    );
+  }
+  return null;
 }
 
 function ItemsToggle({
@@ -295,7 +370,8 @@ export function OrderTableRow({ order: o, ctx }: { order: OrderRowData; ctx: Ord
               separate facts. */}
           <span className="block whitespace-nowrap">{fmtDay(o.created_at, intlLocale)}</span>
           <span className="block whitespace-nowrap">{fmtTime(o.created_at, intlLocale)}</span>
-          {o.awaiting_payment && <AwaitingPill />}
+          {o.awaiting_payment && <AwaitingPill card={o.card} />}
+          <CardRefundPill card={o.card} status={o.status} currency={ctx.currency} />
           {/* Without this a pre-order looks like it needs cooking now:
               it sits at pending/confirmed and only its created_at showed. */}
           {o.scheduled_for && (
@@ -332,6 +408,8 @@ export function OrderTableRow({ order: o, ctx }: { order: OrderRowData; ctx: Ord
               orderTotal={o.total}
               orderStatus={o.status}
               customerNotes={o.customer_notes}
+              card={o.card}
+              currency={ctx.currency}
             />
           </div>
         </td>
@@ -360,7 +438,8 @@ export function OrderMobileCard({ order: o, ctx }: { order: OrderRowData; ctx: O
           <p className="text-muted-foreground font-mono text-xs">{o.order_number}</p>
           <p className="mt-1 font-semibold">{o.customer_name ?? t('row.walkIn')}</p>
           <p className="text-muted-foreground text-xs">{labels.channel(o.channel)}</p>
-          {o.awaiting_payment && <AwaitingPill />}
+          {o.awaiting_payment && <AwaitingPill card={o.card} />}
+          <CardRefundPill card={o.card} status={o.status} currency={ctx.currency} />
           {o.scheduled_for && (
             <p className="mt-1 text-xs font-medium">
               {t(o.held ? 'row.scheduledOn' : 'row.dueOn', {

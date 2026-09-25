@@ -268,7 +268,9 @@
     "recordQrTitle": "Record the QR payment for order {number}?",
     "recordQrBody": "Only do this once you have seen the successful transfer of {amount} on the customer’s phone. The order then goes to the kitchen.",
     "recordQrConfirm": "Payment received",
-    "recordQrFailed": "Payment not recorded"
+    "recordQrFailed": "Payment not recorded",
+    "refundExceedsRemaining": "That’s more than is left to refund on this order: earlier refunds already count toward its total.",
+    "refundOnlineCard": "The customer paid this order online by card. Refund it from Orders in the back office, which sends the money back to their card."
   },
   "settle": {
     "authRequired": "Your session has expired. Sign in again, then record the payment.",
@@ -278,6 +280,7 @@
     "paymentNotFound": "This order has no QR payment waiting to be recorded.",
     "paymentNotSettleable": "This order’s QR payment was already voided or refunded, so it cannot be recorded.",
     "orderNotSettleable": "The order was cancelled or refunded in the meantime, so the payment cannot be recorded. Refund the customer’s transfer.",
-    "failed": "The payment could not be recorded just now. Try again in a moment."
+    "failed": "The payment could not be recorded just now. Try again in a moment.",
+    "onlineCardUnpaid": "This order was placed online to be paid by card, and the customer hasn’t paid yet. It can’t be settled at the till: cancel it, then ring the sale up again and take the payment here."
   }
 }

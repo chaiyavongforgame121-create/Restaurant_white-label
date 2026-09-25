@@ -137,7 +137,9 @@
     "orderNotFound": "Đơn hàng này không còn tồn tại.",
     "notAuthorized": "Tài khoản của bạn không thể hủy đơn này.",
     "cannotCancelStatus": "Đơn hàng này không thể hủy nữa.",
-    "generic": "Đã xảy ra lỗi. Hãy thử lại."
+    "generic": "Đã xảy ra lỗi. Hãy thử lại.",
+    "cardUnpaid": "Khách chưa thanh toán thẻ thành công cho đơn này nên đơn chưa thể chuyển bước. Nếu khách sẽ không thanh toán, hãy hủy đơn rồi nhập lại giao dịch tại quầy.",
+    "cardRefundRequired": "Khách đã thanh toán đơn này trực tuyến bằng thẻ và khoản hoàn tiền về thẻ chưa được ghi nhận. Hãy chờ một phút rồi thử lại."
   },
   "assign": {
     "title": "Giao {number} cho tài xế",
@@ -177,7 +179,8 @@
     "otherLabel": "Chuyện gì đã xảy ra",
     "otherPlaceholder": "Cho khách biết chuyện gì đã xảy ra",
     "keep": "Giữ đơn",
-    "confirm": "Đồng ý hủy"
+    "confirm": "Đồng ý hủy",
+    "cardNote": "Nếu khách đã thanh toán trực tuyến bằng thẻ, toàn bộ số tiền sẽ được hoàn về thẻ từ tài khoản Stripe của chi nhánh này."
   },
   "notOffered": {
     "stillInFlight": "Các chuyến đã xuất phát vẫn hoàn tất tại đây. Bảng này sẽ đóng khi chuyến cuối cùng giao xong."

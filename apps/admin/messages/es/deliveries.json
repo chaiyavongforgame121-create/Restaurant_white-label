@@ -137,7 +137,9 @@
     "orderNotFound": "Ese pedido ya no existe.",
     "notAuthorized": "Tu cuenta no puede cancelar este pedido.",
     "cannotCancelStatus": "Este pedido ya no se puede cancelar.",
-    "generic": "Algo salió mal. Inténtalo de nuevo."
+    "generic": "Algo salió mal. Inténtalo de nuevo.",
+    "cardUnpaid": "El pago con tarjeta del cliente para este pedido todavía no se ha completado, así que no puede avanzar. Si no se va a pagar, cancélalo y vuelve a registrar la venta en el mostrador.",
+    "cardRefundRequired": "El cliente pagó este pedido en línea con tarjeta y el reembolso a su tarjeta todavía no está registrado. Espera un minuto e inténtalo de nuevo."
   },
   "assign": {
     "title": "Asignar {number} a un repartidor",
@@ -177,7 +179,8 @@
     "otherLabel": "Qué pasó",
     "otherPlaceholder": "Cuéntale al cliente qué pasó",
     "keep": "Mantener pedido",
-    "confirm": "Sí, cancelar"
+    "confirm": "Sí, cancelar",
+    "cardNote": "Si el cliente pagó en línea con tarjeta, se le reembolsa el total a la tarjeta desde la cuenta de Stripe de esta sucursal."
   },
   "notOffered": {
     "stillInFlight": "Los repartos que ya salieron terminan aquí. Este tablero se cerrará cuando llegue el último."

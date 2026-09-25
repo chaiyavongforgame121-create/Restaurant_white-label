@@ -32,11 +32,12 @@ const SIGNUP_URL = `${MERCHANT_URL}/signup`;
 // was never part of what the base is sold on.
 const BASE_INCLUDES = [
   'storefront',
-  // Deliberately does NOT say "into your own Stripe account" yet:
-  // stripe-create-payment-intent still charges through a single
-  // platform key with no Connect account, so order money would not
-  // land in the restaurant's Stripe. Restore that wording (in every
-  // language) the day Connect onboarding ships.
+  // Still does not say "into your own Stripe account". The code does
+  // now: stripe-create-payment-intent charges each branch's own
+  // connected account (Stripe Connect, direct charges,
+  // docs/PAYMENTS-STRIPE-CONNECT-2026-09-24.md). The wording (in every
+  // language) waits until card payments are live and the owner signs
+  // off on the claim.
   'payments',
   'kitchen',
   'growth',

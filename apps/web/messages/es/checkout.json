@@ -66,8 +66,8 @@
     "transfer": "Transferencia QR",
     "cardFeeNote": "Se aplica un cargo por servicio del {percent}% solo a pagos con tarjeta; en efectivo o con transferencia QR no se cobra.",
     "transferNote": "Primero haz tu pedido. El código QR y la opción para subir el comprobante aparecen justo después en la página del pedido; no se cobra nada hasta que confirmes que ya pagaste.",
-    "cardWithheldChooseOther": "El pago con tarjeta aún no está disponible en este sitio. Elige una de las opciones de arriba; igual puedes pagar con tarjeta en persona en el restaurante.",
-    "cardWithheldOnly": "El pago con tarjeta aún no está disponible en este sitio. Es el único método que este restaurante tiene activado, así que por ahora no puedes hacer este pedido en línea. Llama al restaurante para pedir.",
+    "cardWithheldChooseOther": "Este restaurante aún no acepta pagos con tarjeta en línea. Elige una de las opciones de arriba; igual puedes pagar con tarjeta en persona en el restaurante.",
+    "cardWithheldOnly": "Este restaurante aún no acepta pagos con tarjeta en línea. Es el único método que tiene activado, así que por ahora no puedes hacer este pedido en línea. Llama al restaurante para pedir.",
     "noneAvailable": "Este restaurante no tiene métodos de pago disponibles en este momento."
   },
   "signIn": {
@@ -194,5 +194,13 @@
     "promo": "Promoción ({code})",
     "reward": "Recompensa ({name})",
     "deliveryFree": "Envío gratis"
+  },
+  "card": {
+    "loading": "Cargando el formulario seguro de tarjeta…",
+    "securedNote": "Tu tarjeta se verifica ahora y se cobra al hacer el pedido. El pago va directo al restaurante a través de Stripe.",
+    "notReady": "El formulario de tarjeta aún se está cargando. Espera un momento y vuelve a hacer tu pedido.",
+    "checkDetails": "Revisa los datos de tu tarjeta e inténtalo de nuevo.",
+    "loadFailedChooseOther": "No se pudo cargar el formulario de tarjeta; puede pasar si un script está bloqueado o la conexión es débil. Elige una de las opciones de arriba o recarga la página para volver a intentar con tarjeta.",
+    "loadFailedOnly": "No se pudo cargar el formulario de tarjeta; puede pasar si un script está bloqueado o la conexión es débil. Recarga la página para volver a intentarlo."
   }
 }

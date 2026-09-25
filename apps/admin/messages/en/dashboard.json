@@ -189,6 +189,8 @@
     },
     "why": {
       "unpaid": "Waiting for the customer’s transfer",
+      "unpaidCard": "Waiting for the customer’s card payment",
+      "unpaidAny": "Waiting for the customer’s payment",
       "releasesAt": "Goes to the kitchen at {time}"
     }
   },

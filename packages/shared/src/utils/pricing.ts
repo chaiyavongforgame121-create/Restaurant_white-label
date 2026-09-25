@@ -7,8 +7,16 @@
 
 export type OrderPaymentMethod = 'card' | 'cash' | 'transfer';
 
-/** Ceiling shared by the admin editor, this helper and the place-order clamp. */
-export const SERVICE_FEE_MAX_PERCENT = 25;
+/**
+ * Ceiling shared by the admin editor, the counter quote, this helper and the place-order clamp.
+ *
+ * 3, not the 25 it used to be: the fee is a surcharge on card payments, and the US card
+ * networks cap a credit-card surcharge at 3% of the transaction (Visa and Mastercard rules;
+ * some states allow less or none at all). A branch cannot be set above what a US merchant may
+ * lawfully charge, and a branch stored above it (live branches were saved at 5%) is read as 3%
+ * everywhere, so no card order is ever priced over the cap.
+ */
+export const SERVICE_FEE_MAX_PERCENT = 3;
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -20,15 +28,26 @@ export function serviceFeeApplies(paymentMethod: string | null | undefined): boo
   return paymentMethod === 'card';
 }
 
-/** Read branches.settings.service_fee_percent as a whole percent clamped to 0..25.
+/** Read branches.settings.service_fee_percent as a percent clamped to 0..SERVICE_FEE_MAX_PERCENT.
  *  Absent, non-numeric or negative reads as 0, so a malformed row can only undercharge. */
 export function parseServiceFeePercent(
   settings: Record<string, unknown> | null | undefined,
 ): number {
+  const stored = storedServiceFeePercent(settings);
+  if (stored === null || stored < 0) return 0;
+  return Math.min(SERVICE_FEE_MAX_PERCENT, stored);
+}
+
+/** The percent a branch has STORED, before any clamp, or null when it is absent or not a
+ *  number. The service-fee card needs the raw figure to tell an owner whose branch was saved
+ *  at 5% that card orders are now charged the 3% cap, rather than silently showing 3. */
+export function storedServiceFeePercent(
+  settings: Record<string, unknown> | null | undefined,
+): number | null {
   const raw = ((settings ?? {}) as Record<string, unknown>).service_fee_percent;
-  const n = typeof raw === 'string' ? Number(raw) : (raw as number);
-  if (typeof n !== 'number' || !Number.isFinite(n) || n < 0) return 0;
-  return Math.min(SERVICE_FEE_MAX_PERCENT, n);
+  if (raw === null || raw === undefined || raw === '') return null;
+  const n = typeof raw === 'string' ? Number(raw) : raw;
+  return typeof n === 'number' && Number.isFinite(n) ? n : null;
 }
 
 /** Fee on the food subtotal for the method the order will actually be placed with.

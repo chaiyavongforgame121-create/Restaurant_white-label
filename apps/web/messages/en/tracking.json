@@ -21,7 +21,19 @@
   "closed": {
     "refunded": "This order was refunded",
     "cancelled": "This order was cancelled",
-    "contactRestaurant": "Please contact the restaurant if you were not expecting this."
+    "contactRestaurant": "Please contact the restaurant if you were not expecting this.",
+    "reasons": {
+      "cardExpired": "The card payment wasn’t completed within the {minutes} minutes allowed, so the order was cancelled automatically.",
+      "cardSetupFailed": "The card payment couldn’t be set up, so the order was cancelled. Your card was not charged.",
+      "slipRejected": "The restaurant couldn’t accept your transfer slip.",
+      "customerCancelled": "You cancelled this order before it was paid.",
+      "kitchenRejected": "The kitchen couldn’t take this order.",
+      "restaurantCancelled": "The restaurant cancelled this order.",
+      "kitchenCannotMake": "The kitchen can’t make this order.",
+      "customerAsked": "Cancelled at your request.",
+      "noRider": "No delivery rider was available for this order.",
+      "duplicate": "This order was a duplicate of another one."
+    }
   },
   "driver": {
     "almostThere": "Your driver is almost there!",
@@ -40,10 +52,48 @@
     "viewReceipt": "View full receipt →"
   },
   "cardPayment": {
-    "title": "Card payment isn’t available here",
-    "body": "This order was placed as a card payment, but we can’t take the card online yet. Please pay the restaurant directly — they can take it when you collect your order or when it arrives. Your order is not cancelled.",
-    "devNote": "Development build only: mark the order paid so the rest of the flow can be tested.",
-    "devConfirm": "Mock confirm (dev only)"
+    "payTitle": "Pay {amount} by card",
+    "payBody": "Your order goes to the restaurant as soon as the payment goes through. Pay within {minutes, plural, one {# minute} other {# minutes}} or the order is cancelled.",
+    "payNow": "Pay {amount}",
+    "preparing": "Getting the secure card form ready…",
+    "checking": "Checking your payment…",
+    "paidTitle": "Paid by card",
+    "paidBody": "Your payment went through and the restaurant has your order.",
+    "processingTitle": "Your payment is processing",
+    "processingBody": "Your bank is confirming it. This page updates on its own — there is no need to pay again.",
+    "failedTitle": "Your card was not charged",
+    "failedBody": "Try again with the same card or another one.",
+    "expiredTitle": "The time to pay has run out",
+    "expiredBody": "This order was not paid within {minutes} minutes, so it is being cancelled. Nothing was charged. Place a new order when you are ready.",
+    "payAtRestaurantTitle": "Pay the restaurant directly",
+    "payAtRestaurantBody": "This order was placed before card payments were taken online here. Please pay when you collect your order or when it arrives. Your order is not cancelled.",
+    "refundedTitle": "Refunded to your card",
+    "refundedBody": "{amount} has been sent back to the card you paid with. Banks usually show it within 5–10 business days.",
+    "refundingTitle": "Your refund is on its way",
+    "refundingBody": "A refund of {amount} to the card you paid with is being processed. Once it goes through, banks usually show it within 5–10 business days.",
+    "refundFailedTitle": "Your refund didn’t go through",
+    "refundFailedBody": "The refund to your card couldn’t be completed. Please contact the restaurant so they can sort it out.",
+    "partlyRefunded": "{amount} of this payment has been refunded to your card.",
+    "retry": "Try again",
+    "securedNote": "Paid securely through Stripe, straight to the restaurant.",
+    "reasons": {
+      "declined": "Your card was declined.",
+      "insufficientFunds": "The card has insufficient funds.",
+      "expired": "The card has expired.",
+      "cvc": "The security code was incorrect.",
+      "number": "The card number was incorrect.",
+      "authentication": "The card’s verification was not completed.",
+      "processing": "The card could not be processed.",
+      "generic": "The payment did not go through."
+    },
+    "errors": {
+      "unavailable": "This restaurant can’t take card payments online right now. Please contact them to pay another way.",
+      "expired": "The time to pay for this order has run out.",
+      "notPayable": "This order no longer needs a card payment.",
+      "tooSmall": "This amount is too small to pay by card.",
+      "inProgress": "A payment for this order is already under way. Wait a moment, then try again.",
+      "generic": "We couldn’t load the card payment. Check your connection and try again."
+    }
   },
   "transfer": {
     "confirmedTitle": "Transfer confirmed",
@@ -73,13 +123,15 @@
   },
   "actions": {
     "cancelPrompt": "Changed your mind? Nothing has been prepared yet — the restaurant has not confirmed your transfer, so you can still call this order off.",
+    "cancelPromptCard": "Changed your mind? Your card payment hasn’t gone through and nothing has been prepared, so you can still call this order off.",
     "cancelOrder": "Cancel this order",
     "contactToChange": "Need to change or cancel this order? Please contact the restaurant directly — they can update it for you while it’s still being prepared.",
     "cancelErrors": {
       "signIn": "Please sign in with the account you ordered with to cancel this order.",
       "otherAccount": "This order belongs to a different account. Please contact the restaurant to cancel it.",
       "tooLate": "This order has moved on and can no longer be cancelled here — please contact the restaurant.",
-      "generic": "That didn’t go through. Please try again, or contact the restaurant."
+      "generic": "That didn’t go through. Please try again, or contact the restaurant.",
+      "cardPaid": "Your card payment has gone through, so only the restaurant can cancel this order now. Please contact them; they will refund your card when they cancel it."
     }
   },
   "rating": {

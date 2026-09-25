@@ -22,6 +22,17 @@ describe('orderErrorKey', () => {
     expect(orderErrorKey('decidePayment', 'forbidden')).toBe('paymentForbidden');
   });
 
+  it('names the card payment rules of 20260925100000 and 20260925120000', () => {
+    // Staff trying to settle or move on an online card order the diner has not paid for.
+    expect(orderErrorKey('decidePayment', 'stripe_payment_server_only')).toBe('onlineCardUnpaid');
+    expect(orderErrorKey('cancel', 'card_payment_not_completed')).toBe('onlineCardUnpaid');
+    expect(orderErrorKey('refund', 'stripe_payment_server_only')).toBe('onlineCardUnpaid');
+    expect(orderErrorKey('cancel', 'card_refund_required')).toBe('cardRefundRequired');
+    expect(orderErrorKey('refund', 'card_refund_required')).toBe('cardRefundNotRecorded');
+    expect(orderErrorKey('refund', 'refund_exceeds_remaining:4.00')).toBe('refundExceedsRemaining');
+    expect(orderErrorKey('cancel', 'refund_exceeds_remaining:4.00')).toBe('generic');
+  });
+
   it('treats a signed-out session the same everywhere', () => {
     expect(orderErrorKey('refund', 'auth_required')).toBe('authRequired');
     expect(orderErrorKey('requeue', 'auth_required')).toBe('authRequired');

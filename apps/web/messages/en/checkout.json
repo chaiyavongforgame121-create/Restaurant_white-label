@@ -66,8 +66,8 @@
     "transfer": "QR transfer",
     "cardFeeNote": "A {percent}% service fee applies to card payments only — cash and QR transfer pay none.",
     "transferNote": "Place your order first. The QR code and the slip upload appear on the order page straight after — nothing is charged until you confirm you have paid.",
-    "cardWithheldChooseOther": "Card payment isn’t available on this site yet. Choose one of the options above — you can still pay the restaurant by card in person.",
-    "cardWithheldOnly": "Card payment isn’t available on this site yet. It is the only method this restaurant has switched on, so this order cannot be placed online right now. Please call them to order.",
+    "cardWithheldChooseOther": "This restaurant doesn’t take card payments online yet. Choose one of the options above — you can still pay the restaurant by card in person.",
+    "cardWithheldOnly": "This restaurant doesn’t take card payments online yet. It is the only method they have switched on, so this order cannot be placed online right now. Please call them to order.",
     "noneAvailable": "This restaurant has no payment options available right now."
   },
   "signIn": {
@@ -194,5 +194,13 @@
     "promo": "Promo ({code})",
     "reward": "Reward ({name})",
     "deliveryFree": "Delivery free"
+  },
+  "card": {
+    "loading": "Loading the secure card form…",
+    "securedNote": "Your card is checked now and charged when you place the order. The payment goes straight to the restaurant through Stripe.",
+    "notReady": "The card form is still loading. Wait a moment, then place your order again.",
+    "checkDetails": "Check your card details and try again.",
+    "loadFailedChooseOther": "The card form could not load — a blocked script or a weak connection can do this. Choose one of the options above, or reload the page to try the card again.",
+    "loadFailedOnly": "The card form could not load — a blocked script or a weak connection can do this. Reload the page to try again."
   }
 }

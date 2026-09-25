@@ -70,6 +70,11 @@ const REFUND_ERRORS: Array<[string, string]> = [
   ['invalid_refund_amount', 'recent.refundInvalidAmount'],
   ['order_not_found', 'recent.refundNotFound'],
   ['auth_required', 'recent.refundAuthRequired'],
+  // Earlier refunds of the order already count toward its total (refund_order keeps a running sum).
+  ['refund_exceeds_remaining', 'recent.refundExceedsRemaining'],
+  // The diner paid online by card: the money has to go back through Stripe, which the back
+  // office's Orders page does. This button only ever wrote the order's status.
+  ['card_refund_required', 'recent.refundOnlineCard'],
 ];
 
 /** The placeholder the till writes when nobody gave a name. Stored in English. */
@@ -160,7 +165,7 @@ export function RecentOrders({
     setRefundingId(order.id);
     try {
       const supabase = getBrowserClient();
-      const { error } = await supabase.rpc('refund_order', {
+      const { data, error } = await supabase.rpc('refund_order', {
         p_order_id: order.id,
         p_amount: amount,
         p_reason: reason.trim() || null,
@@ -175,8 +180,12 @@ export function RecentOrders({
         });
         return;
       }
+      // refund_order says whether this refund, with the ones before it, covered the order; the
+      // amount alone does not, since two partial refunds can add up to the whole.
+      const inFull = (data as { refunded_in_full?: unknown } | null)?.refunded_in_full;
+      const refundedNow = typeof inFull === 'boolean' ? inFull : amount >= Number(order.total);
       setOrders((curr) =>
-        curr.map((o) => (o.id === order.id ? { ...o, status: amount >= Number(order.total) ? 'refunded' : o.status } : o)),
+        curr.map((o) => (o.id === order.id ? { ...o, status: refundedNow ? 'refunded' : o.status } : o)),
       );
     } finally {
       setRefundingId(null);

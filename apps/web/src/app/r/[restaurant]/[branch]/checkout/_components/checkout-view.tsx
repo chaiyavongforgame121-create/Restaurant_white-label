@@ -45,6 +45,22 @@ import {
   type ResolvedAddress,
 } from '@favornoms/maps';
 import { Badge, Button, Card, IconButton, Sheet } from '@favornoms/ui';
+import {
+  CARD_MIN_CHARGE_CENTS,
+  fetchCardConfig,
+  forgetCartToClear,
+  rememberCardError,
+  rememberCartToClear,
+  startCardPayment,
+  toCents,
+  type CardConfig,
+  type CardIntent,
+} from '@/lib/card-payment';
+import {
+  StripeCardForm,
+  type CardFormApi,
+  type CardFormState,
+} from '@/components/card-payment/stripe-card-form';
 import { resolveMyCustomerId } from '@/lib/customer';
 import { buildScheduleDays, type ClosurePeriod, type OpeningWindow } from '@/lib/schedule-slots';
 import { pickerLabels } from '@/lib/picker-labels';
@@ -93,31 +109,20 @@ function parsePaymentMatrix(
 }
 
 /**
- * Whether this storefront can actually take a card.
- *
- * It cannot, and no environment variable changes that. Nothing in apps/web mounts Stripe
- * Elements, and `stripe-create-payment-intent` creates the intent with
- * `automatic_payment_methods`, which can only be confirmed through a PaymentElement and
- * `stripe.confirmPayment({ elements, confirmParams: { return_url } })`. The order page's
- * card box therefore had no card to attach and no way to attach one — every card order
- * ever placed here is still sitting at `payments.status = 'pending'`.
- *
- * Offering the tile anyway sold the diner an order they could not pay for and then
- * stranded them on a tracking screen with a dead button, so the tile comes down and the
- * reason is said out loud. Flip this to `!!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
- * in the same change that mounts Elements — never before it.
- */
-const CARD_CHECKOUT_AVAILABLE: boolean = false;
-
-/**
  * The merchant's matrix, masked down to what the app can genuinely collect.
+ *
+ * A card is collectable only where the branch can be paid by card: it has connected its own
+ * Stripe account and Stripe lets that account take charges (storefront_status.card_ready), and the
+ * card form's configuration came back. The money goes straight to the branch's account
+ * (docs/PAYMENTS-STRIPE-CONNECT-2026-09-24.md), so a branch without one has nowhere to send it —
+ * and a card form that cannot be paid is worse than no card option.
  *
  * Kept separate from parsePaymentMatrix so the checkout can still tell the difference
  * between "this restaurant does not take card" (say nothing) and "this restaurant takes
- * card but we cannot process it here" (say so).
+ * card but cannot take it online" (say so).
  */
-function withCollectableCard(matrix: PaymentMatrix): PaymentMatrix {
-  if (CARD_CHECKOUT_AVAILABLE) return matrix;
+function withCollectableCard(matrix: PaymentMatrix, cardCollectable: boolean): PaymentMatrix {
+  if (cardCollectable) return matrix;
   return {
     asap: { ...matrix.asap, card: false },
     scheduled: { ...matrix.scheduled, card: false },
@@ -166,6 +171,12 @@ interface Props {
   /** `card_payment` entitlement — same. */
   canUseCard?: boolean;
   /**
+   * The branch can be paid by card online: a connected Stripe account that can take charges
+   * (storefront_status.card_ready). Default false, so a missing prop never shows a card form that
+   * cannot be paid. place-order refuses a card order at a branch that is not ready either way.
+   */
+  cardReady?: boolean;
+  /**
    * branches.sales_tax_rate as a decimal (0.0701 = 7.01%). Defaults to 0 like
    * place-order's `Number(branch.sales_tax_rate ?? 0)` — a branch that charges
    * no tax and a missing prop are the same number, so neither can invent one.
@@ -210,6 +221,7 @@ export function CheckoutView({
   canDeliver = false,
   deliveryOffered = true,
   canUseCard = false,
+  cardReady = false,
   salesTaxRate = 0,
   serviceFeePercent = 0,
   scheduling,
@@ -295,12 +307,42 @@ export function CheckoutView({
   const [merchantPaymentMatrix, setMerchantPaymentMatrix] = React.useState<PaymentMatrix>(() =>
     parsePaymentMatrix({}, canUseCard),
   );
+  // The card form's configuration: the publishable key and the branch's connected account, which
+  // Stripe's Payment Element needs before any order exists (the deferred-intent flow). Asked for
+  // only where a card could be offered at all. 'unavailable' — the account stopped being able to
+  // take charges since the page rendered, or the keys are not set — takes the card option away
+  // rather than showing a form nobody can pay through.
+  const [cardConfig, setCardConfig] = React.useState<
+    { status: 'idle' | 'loading' | 'unavailable' } | { status: 'ready'; config: CardConfig }
+  >({ status: 'idle' });
+  // The Payment Element, once Stripe has drawn it, and what the submit handler can ask of it.
+  const [cardFormState, setCardFormState] = React.useState<CardFormState>('loading');
+  const cardForm = React.useRef<CardFormApi | null>(null);
+  const userId = user?.id ?? null;
+  React.useEffect(() => {
+    if (!cardReady || !canUseCard || !userId) return;
+    let cancelled = false;
+    setCardConfig({ status: 'loading' });
+    fetchCardConfig(branchId).then(
+      (config) => {
+        if (!cancelled) setCardConfig({ status: 'ready', config });
+      },
+      (err: unknown) => {
+        console.error('card_config_failed', (err as Error)?.message);
+        if (!cancelled) setCardConfig({ status: 'unavailable' });
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [cardReady, canUseCard, userId, branchId]);
+  const cardCollectable = cardReady && cardConfig.status !== 'unavailable' && cardFormState !== 'failed';
   // Everything downstream — the tiles, the enabled-method fallback, the empty state and
   // the service fee — reads the masked matrix, so no part of the checkout can offer a
   // method another part knows cannot be collected.
   const paymentMatrix = React.useMemo(
-    () => withCollectableCard(merchantPaymentMatrix),
-    [merchantPaymentMatrix],
+    () => withCollectableCard(merchantPaymentMatrix, cardCollectable),
+    [merchantPaymentMatrix, cardCollectable],
   );
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -587,6 +629,14 @@ export function CheckoutView({
   const total = r2(
     Math.max(0, taxableBase + deliveryFee + serviceFee + tipAmount + taxAmount - giftCardCredit),
   );
+  // A card is charged only when there is something to charge: a gift card or reward that covers
+  // the whole order places it with no payment at all, card or not, exactly as place-order does.
+  const payingByCard = !isDineIn && effectivePaymentMethod === 'card' && total > 0;
+  // Stripe's form is drawn once the branch's account is known, and stays mounted (hidden) while the
+  // diner looks at another method, so switching back does not lose what they typed.
+  const cardFormShown =
+    !isDineIn && cardConfig.status === 'ready' && paymentMatrix[paymentModeKey].card && total > 0;
+  const cardFormPending = payingByCard && (!cardFormShown || cardFormState !== 'ready');
 
   const checkGiftCard = async () => {
     if (!giftCardCode.trim()) return;
@@ -993,6 +1043,78 @@ export function CheckoutView({
     <span className="font-normal text-muted-foreground">{chunks}</span>
   );
 
+  /**
+   * Pay a card order that has just been placed: the PaymentIntent is made on the branch's own
+   * Stripe account for the order's server-side total, and confirmed with the details on screen.
+   *
+   * The order exists from here on, whatever happens to the card, so every path ends on its order
+   * page — never back on this form, where pressing the button again would place a second order.
+   * That page re-checks the payment with Stripe, says paid, processing or failed, and offers the
+   * retry until the order runs out of time.
+   *
+   * The cart is emptied only once Stripe has answered: emptying it earlier swaps this form for the
+   * "order placed" screen and unmounts the element Stripe confirms from. A method that leaves for
+   * its bank or wallet page never comes back here, so the order page empties the cart instead
+   * (rememberCartToClear).
+   */
+  const payForOrder = async (orderId: string, orderNumber: string, card: CardFormApi, shownCents: number) => {
+    const orderPath = `${base}/orders/${orderNumber}`;
+    const toOrderPage = (query = '') => {
+      forgetCartToClear(branchId);
+      clear();
+      router.refresh();
+      router.push(`${orderPath}${query}`);
+    };
+    rememberCartToClear(branchId, orderNumber);
+    try {
+      let intent: CardIntent;
+      try {
+        intent = await startCardPayment(orderId);
+      } catch (err) {
+        console.error('card_payment_start_failed', (err as Error)?.message);
+        toOrderPage('?card=retry');
+        return;
+      }
+      if (intent.state !== 'awaiting') {
+        // Already paid (a second tab) or already on its way: the order page says which.
+        toOrderPage();
+        return;
+      }
+      // The form was built for the account the branch had when this page loaded. If the branch
+      // has connected another since, the intent lives there, and the order page builds a form
+      // for it.
+      if (intent.stripe_account !== card.stripeAccount || !intent.client_secret) {
+        toOrderPage('?card=retry');
+        return;
+      }
+      // The server priced the order (it always does) and the intent is for that figure. If it is
+      // not the total this page showed — a delivery quote that moved at the last second — the
+      // card is not charged from here: a wallet sheet may have shown the old amount. The order
+      // page shows the real total on its own Pay button.
+      if (intent.amount !== shownCents) {
+        toOrderPage('?card=retry');
+        return;
+      }
+      const outcome = await card.confirm(intent.client_secret, `${window.location.origin}${orderPath}`);
+      if (outcome.error) {
+        // Declined, cancelled 3-D Secure, and the like. Stripe's message is already in the diner's
+        // language; the order page shows it beside the retry.
+        rememberCardError(orderId, outcome.error.message ?? '');
+        toOrderPage('?card=retry');
+        return;
+      }
+      const pi = outcome.paymentIntent;
+      toOrderPage(
+        pi
+          ? `?payment_intent=${encodeURIComponent(pi.id)}&redirect_status=${encodeURIComponent(pi.status)}`
+          : '',
+      );
+    } catch (err) {
+      console.error('card_payment_failed', (err as Error)?.message);
+      toOrderPage('?card=retry');
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -1086,6 +1208,25 @@ export function CheckoutView({
             : t('checkout.orderType.pickupClosed'),
       );
       return;
+    }
+    // A card is checked BEFORE the order is placed, so a mistyped number costs nothing: no order,
+    // no cart emptied. elements.submit() is the first thing awaited, as Stripe requires — a wallet
+    // (Apple Pay, Google Pay) can only open its sheet inside the diner's tap.
+    const card = payingByCard ? cardForm.current : null;
+    if (payingByCard) {
+      if (!card || cardFormPending) {
+        setError(t('checkout.card.notReady'));
+        return;
+      }
+      setSubmitting(true);
+      const { error: cardError } = await card.submit();
+      if (cardError) {
+        // Stripe marks the field itself; the line here says why the button did nothing, in the
+        // diner's language (Stripe.js localises its own messages).
+        setError(cardError.message ?? t('checkout.card.checkDetails'));
+        setSubmitting(false);
+        return;
+      }
     }
     setSubmitting(true);
     try {
@@ -1196,6 +1337,12 @@ export function CheckoutView({
           notes: addressNotes.trim() || null,
           is_default: savedAddresses.length === 0,
         }).catch(() => undefined);
+      }
+      // A card order is placed but not yet paid: it waits off the kitchen board until Stripe says
+      // it is. Take the payment now, on this page, with the details already typed in.
+      if (card && result.payment_id) {
+        await payForOrder(result.order_id, result.order_number, card, toCents(total));
+        return;
       }
       clear();
       // Invalidate the client Router Cache before navigating: the order was placed by a
@@ -1797,12 +1944,48 @@ export function CheckoutView({
                 {t('checkout.payment.transferNote')}
               </p>
             )}
-            {cardWithheld && (
+            {/* Stripe's own form, for the branch's own account. The card is checked when the
+                order is placed and charged straight after; until Stripe says it is paid, the
+                order waits off the kitchen board. */}
+            {cardFormShown && cardConfig.status === 'ready' && (
+              <div className={method === 'card' ? 'mt-3' : 'hidden'} aria-hidden={method !== 'card'}>
+                {cardFormState === 'loading' && (
+                  <p role="status" className="mb-2 text-xs text-muted-foreground">
+                    {t('checkout.card.loading')}
+                  </p>
+                )}
+                <StripeCardForm
+                  publishableKey={cardConfig.config.publishable_key}
+                  stripeAccount={cardConfig.config.stripe_account}
+                  locale={locale}
+                  amountCents={Math.max(toCents(total), CARD_MIN_CHARGE_CENTS)}
+                  onApi={(api) => {
+                    cardForm.current = api;
+                  }}
+                  onStateChange={setCardFormState}
+                />
+                <p className="mt-2 text-xs text-muted-foreground">{t('checkout.card.securedNote')}</p>
+              </div>
+            )}
+            {method === 'card' && cardConfig.status === 'loading' && paymentMatrix[paymentModeKey].card && (
+              <p role="status" className="mt-3 text-xs text-muted-foreground">
+                {t('checkout.card.loading')}
+              </p>
+            )}
+            {cardFormState === 'failed' && merchantPaymentMatrix[paymentModeKey].card && !isDineIn ? (
               <p role="status" className="mt-3 rounded-2xl bg-warning/10 px-4 py-3 text-xs text-warning">
                 {enabledMethods.length > 0
-                  ? t('checkout.payment.cardWithheldChooseOther')
-                  : t('checkout.payment.cardWithheldOnly')}
+                  ? t('checkout.card.loadFailedChooseOther')
+                  : t('checkout.card.loadFailedOnly')}
               </p>
+            ) : (
+              cardWithheld && (
+                <p role="status" className="mt-3 rounded-2xl bg-warning/10 px-4 py-3 text-xs text-warning">
+                  {enabledMethods.length > 0
+                    ? t('checkout.payment.cardWithheldChooseOther')
+                    : t('checkout.payment.cardWithheldOnly')}
+                </p>
+              )
             )}
             {enabledMethods.length === 0 && !cardWithheld && (
               <p className="mt-3 text-sm text-muted-foreground">
@@ -2119,7 +2302,9 @@ export function CheckoutView({
               (channel === 'pickup' && !openNow) ||
               (channel === 'delivery' && (!deliveryBookable || (deliverySlotsKnown && !deliveryHasSlots))) ||
               (channel === 'delivery' && quoting) ||
-              (channel === 'delivery' && enteringNewAddress && !addressCoords)
+              (channel === 'delivery' && enteringNewAddress && !addressCoords) ||
+              // Paying by card needs Stripe's form on screen and ready to be checked.
+              cardFormPending
             }
           >
             {/* At a table nothing is being paid for here — the round goes to the kitchen and

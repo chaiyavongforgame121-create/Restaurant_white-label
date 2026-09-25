@@ -215,17 +215,35 @@ export interface PaymentsReport extends SectionWindow {
     settled: number;
     pending: number;
     failed: number;
-    /** 0.00 by construction: refund_order() never writes payments. */
+    /** Card payments taken online and refunded in full through Stripe; every other payment is
+     *  never marked refunded (refund_order records against the order, not the payment). */
     refunded_on_payments: number;
     voided_on_payments: number;
-    /** The real refund figure, from audit_logs. */
+    /** The real refund figure: refund_order's audit rows for cash, transfer and counter card
+     *  orders, and the refunds Stripe confirmed for card payments taken online. */
     refunds: number;
     refund_count: number;
+    /** Of `refunds`, what went back to cards through Stripe (20260925110000). Optional, like the
+     *  three below: a database without that migration does not return them. */
+    card_refunds?: number;
+    /** Stripe card refunds asked for and not confirmed yet. Not inside `refunds`. */
+    card_refunds_pending?: number;
+    /** How many Stripe card refunds failed or were canceled: money that did not go back. */
+    card_refund_failures?: number;
     service_fee_collected: number;
     unsettled_on_completed_orders: number;
     backfilled_settlements: number;
   };
   refunds_daily: { day: string; amount: number }[];
+  /** Disputes Stripe reported on this branch's card payments, by the day they were opened. */
+  disputes?: {
+    count: number;
+    /** Not yet won, lost or closed: the restaurant still has to answer in its Stripe Dashboard. */
+    open: number;
+    amount: number;
+    lost_amount: number;
+    won_amount: number;
+  };
 }
 
 export interface ReportSections {

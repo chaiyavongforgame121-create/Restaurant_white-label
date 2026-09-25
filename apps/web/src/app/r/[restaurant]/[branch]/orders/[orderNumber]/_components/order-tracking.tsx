@@ -18,8 +18,11 @@ import {
   type LatLng,
 } from '@favornoms/maps';
 import { Badge, Button, Card, IconButton, useUiLocale } from '@favornoms/ui';
+import { CARD_PAYMENT_TIME_TO_PAY_MINUTES } from '@/lib/card-payment';
+import { cancellationReasonKey } from '@/lib/cancellation-reason';
 import { DeliveryChat } from './delivery-chat';
 import { OrderActions, type ExistingRating } from './order-actions';
+import { OrderCardPayment } from './order-card-payment';
 
 // Pickup and dine-in orders jump ready → completed; showing them a bike stage
 // they can never reach reads like the order is stuck. Delivery keeps all 5.
@@ -48,8 +51,9 @@ type OrderRow = {
    * fell through to the generic line below; cancel_order writes it now (20260908111000).
    */
   cancellation_reason?: string | null;
-  /** A QR-transfer order the merchant has not confirmed payment for. It is deliberately not
-   *  on the kitchen board yet, which is what makes self-cancel safe here. */
+  /** A QR-transfer order the merchant has not confirmed payment for, or a card order Stripe has
+   *  not yet said is paid. It is deliberately not on the kitchen board yet, which is what makes
+   *  self-cancel safe here. */
   awaiting_payment?: boolean | null;
   /** The table sitting this round belongs to, set when the diner scanned the table. Null
    *  for every other order, a dine-in order rung up at the till included. */
@@ -361,6 +365,13 @@ export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransf
   const closed = order.status === 'cancelled' || order.status === 'refunded';
   const Icon = closed ? XCircle : (steps[statusIndex]?.icon ?? CheckCircle2);
   const delivery = order.deliveries[0];
+  const cardPayment = order.payments?.find((p) => p.method === 'card') ?? null;
+  // Why the order closed, in the diner's language when the reason is one a machine or a preset
+  // wrote (see cancellation-reason.ts); anything a person typed is shown exactly as written.
+  const reasonKey = cancellationReasonKey(order.cancellation_reason);
+  const closedReasonText = reasonKey
+    ? t(`closed.reasons.${reasonKey}`, { minutes: CARD_PAYMENT_TIME_TO_PAY_MINUTES })
+    : order.cancellation_reason || t('closed.contactRestaurant');
 
   // Live map only once the driver has actually taken the job and while in flight.
   const liveDelivery =
@@ -508,18 +519,6 @@ export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransf
             })}
           </ol>
 
-          {/* Card orders only — a cash order sitting in 'pending' is normal
-              (staff confirm it) and must not be told its payment is unavailable.
-              Guests can't read their payments row (RLS), so the box simply does
-              not render for them, which is the right answer either way. */}
-          {order.status === 'pending' && order.payments?.some((p) => p.method === 'card') && (
-            <CardPaymentNotice orderId={order.id} />
-          )}
-
-          {/* QR transfer: the diner has already scanned and paid outside the app, so what
-              is left is proving it. The order deliberately stays 'pending' until the
-              restaurant approves the slip — a DB trigger enforces the same rule, so the
-              kitchen cannot start early even from its own screen. */}
           {/* A refused slip now cancels the order. Say so plainly and give the reason the
               merchant typed, rather than leaving the customer on a progress bar that has
               quietly stopped advancing. */}
@@ -529,13 +528,37 @@ export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransf
                 {order.status === 'refunded' ? t('closed.refunded') : t('closed.cancelled')}
               </p>
               <p className="mt-1 text-sm text-muted-foreground">
-                {/* The merchant's or the diner's own words — shown exactly as written. */}
-                {order.cancellation_reason
-                  ? order.cancellation_reason
-                  : t('closed.contactRestaurant')}
+                {closedReasonText}
               </p>
             </Card>
           )}
+
+          {/* Card orders only. A storefront card order is paid into the branch's own Stripe
+              account and waits off the kitchen board until it is: this box re-checks the payment
+              when the diner lands here (from the checkout, or back from 3-D Secure), says paid,
+              processing or failed, and takes the payment — or a retry — until the order runs out
+              of time. On a closed order it says what went back to the card, so it sits under the
+              cancellation notice it follows on from. Guests can't read their payments row (RLS),
+              so the box simply does not render for them; a card order always has a signed-in
+              diner. */}
+          {cardPayment && (
+            <OrderCardPayment
+              key={cardPayment.id ?? 'card'}
+              orderId={order.id}
+              orderNumber={order.order_number}
+              branchId={branchId}
+              orderStatus={order.status}
+              awaitingPayment={order.awaiting_payment === true}
+              createdAt={order.created_at}
+              total={Number(order.total)}
+              payment={cardPayment}
+            />
+          )}
+
+          {/* QR transfer: the diner has already scanned and paid outside the app, so what
+              is left is proving it. The order deliberately stays 'pending' until the
+              restaurant approves the slip — a DB trigger enforces the same rule, so the
+              kitchen cannot start early even from its own screen. */}
 
           {/* Nothing is left to pay on a closed order, so no QR and no slip upload. */}
           {!closed && order.payments
@@ -649,6 +672,7 @@ export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransf
       <div className="mt-4">
         <OrderActions
           awaitingPayment={order.awaiting_payment === true}
+          cardOrder={cardPayment !== null}
           orderId={order.id}
           branchId={branchId}
           orderStatus={order.status}
@@ -765,66 +789,6 @@ function CallDriverButton({ deliveryId, label }: { deliveryId: string; label: st
     <Button variant="soft" size="md" leftIcon={<Phone className="h-4 w-4" />} onClick={call} loading={loading}>
       {label}
     </Button>
-  );
-}
-
-// Card money cannot be collected on this storefront, and no key changes that.
-//
-// Nothing in apps/web mounts Stripe Elements, and `stripe-create-payment-intent` creates
-// the intent with `automatic_payment_methods` — an intent only a PaymentElement plus
-// `stripe.confirmPayment({ elements, confirmParams: { return_url } })` can confirm. What
-// stood here instead was `stripe.confirmCardPayment(clientSecret)` with no card attached:
-// it could never succeed, so the diner's one card button led to an error and every card
-// payment ever taken on this project is still sitting at 'pending'.
-//
-// A half-working card flow is worse than an honest one, so the button is gone and the box
-// says where to actually pay. Checkout no longer offers the card tile for the same reason
-// (CARD_CHECKOUT_AVAILABLE in checkout-view); these are the orders placed before it did.
-// Restoring the button means mounting Elements and letting the existing stripe-webhook
-// `payment_intent.succeeded` handler flip payments+orders — not re-adding a confirm call.
-const ALLOW_MOCK_PAY = process.env.NODE_ENV !== 'production';
-
-function CardPaymentNotice({ orderId }: { orderId: string }) {
-  const t = useTranslations('tracking');
-  const [confirming, setConfirming] = React.useState(false);
-
-  const mockConfirm = async () => {
-    if (!ALLOW_MOCK_PAY) return;
-    setConfirming(true);
-    const supabase = getBrowserClient();
-    await supabase
-      .from('payments')
-      .update({ status: 'completed', paid_at: new Date().toISOString() })
-      .eq('order_id', orderId);
-    await supabase.from('orders').update({ status: 'confirmed' }).eq('id', orderId);
-  };
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      role="status"
-      className="mt-6 rounded-2xl border border-warning/40 bg-warning/5 p-4"
-    >
-      <p className="text-sm font-semibold text-warning">{t('cardPayment.title')}</p>
-      <p className="mt-1 text-xs text-muted-foreground">{t('cardPayment.body')}</p>
-      {ALLOW_MOCK_PAY && (
-        <div className="mt-3 space-y-2">
-          <p className="text-xs text-muted-foreground">
-            {t('cardPayment.devNote')}
-          </p>
-          <Button
-            variant="outline"
-            size="md"
-            fullWidth
-            loading={confirming}
-            onClick={mockConfirm}
-          >
-            {t('cardPayment.devConfirm')}
-          </Button>
-        </div>
-      )}
-    </motion.div>
   );
 }
 

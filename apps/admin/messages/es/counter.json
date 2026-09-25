@@ -268,7 +268,9 @@
     "recordQrTitle": "¿Registrar el pago QR del pedido {number}?",
     "recordQrBody": "Hazlo solo después de ver en el teléfono del cliente la transferencia de {amount} completada. Entonces el pedido pasa a cocina.",
     "recordQrConfirm": "Pago recibido",
-    "recordQrFailed": "Pago no registrado"
+    "recordQrFailed": "Pago no registrado",
+    "refundExceedsRemaining": "Es más de lo que queda por reembolsar en este pedido: los reembolsos anteriores ya cuentan para su total.",
+    "refundOnlineCard": "El cliente pagó este pedido en línea con tarjeta. Reembólsalo desde Pedidos en el panel de gestión, que devuelve el dinero a su tarjeta."
   },
   "settle": {
     "authRequired": "Tu sesión expiró. Vuelve a iniciar sesión y registra el pago.",
@@ -278,6 +280,7 @@
     "paymentNotFound": "Este pedido no tiene ningún pago por QR pendiente de registrar.",
     "paymentNotSettleable": "El pago por QR de este pedido ya se anuló o se reembolsó, así que no se puede registrar.",
     "orderNotSettleable": "El pedido se canceló o se reembolsó mientras tanto, así que el pago no se puede registrar. Reembolsa la transferencia del cliente.",
-    "failed": "No se pudo registrar el pago en este momento. Inténtalo de nuevo en un momento."
+    "failed": "No se pudo registrar el pago en este momento. Inténtalo de nuevo en un momento.",
+    "onlineCardUnpaid": "Este pedido se hizo en línea para pagarse con tarjeta y el cliente todavía no ha pagado. No se puede cobrar en la caja: cancélalo y vuelve a registrar la venta para cobrarla aquí."
   }
 }

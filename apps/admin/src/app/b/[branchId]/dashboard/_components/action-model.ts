@@ -478,6 +478,12 @@ export interface BookingRow {
   dueSoon: boolean;
   needsAction: boolean;
   /**
+   * How an unpaid booking is being paid, when the page could tell (bookingPaymentMethods):
+   * 'transfer' waits on a slip, 'card' on the diner's own card online. Null when it is paid, or
+   * when the caller may not read payments (payments.view), so the words stay neutral.
+   */
+  unpaidBy: BookingPaymentMethod | null;
+  /**
    * Another bucket lists this order already: a booking past its time is also a late kitchen
    * ticket, one nobody accepted is also a diner kept waiting, an unpaid one with its slip in is a
    * slip to approve. It is still drawn as needing action here; it is only not counted twice.
@@ -512,6 +518,26 @@ export function ordersListedIn(
   return out;
 }
 
+/** How a booking is paid, as far as the dashboard needs to know it. */
+export type BookingPaymentMethod = 'card' | 'transfer';
+
+/**
+ * The payment method of each unpaid booking, from its payments rows. A storefront card order is
+ * a Stripe card row (docs/PAYMENTS-STRIPE-CONNECT-2026-09-24.md); it waits on the diner's card
+ * and is cancelled by itself if not paid in time, so it must not be worded as a transfer or flagged
+ * as the restaurant's job. A card row wins over a transfer row: an order has one or the other.
+ */
+export function bookingPaymentMethods(
+  rows: ReadonlyArray<{ order_id: string; method: string; gateway?: string | null }>,
+): Map<string, BookingPaymentMethod> {
+  const out = new Map<string, BookingPaymentMethod>();
+  for (const r of rows) {
+    if (r.method === 'card' && r.gateway === 'stripe') out.set(r.order_id, 'card');
+    else if (r.method === 'transfer' && !out.has(r.order_id)) out.set(r.order_id, 'transfer');
+  }
+  return out;
+}
+
 export function bookingState(
   o: Pick<DashboardScheduledDelivery, 'status' | 'held' | 'awaiting_payment'>,
   releaseMs: number,
@@ -543,7 +569,9 @@ export function bookingState(
  * has accepted needs a human however far off it is — the diner is waiting to hear yes, and
  * accepting it is the whole job — so unlike readScheduled there is no "due soon" gate on that.
  * An unpaid one only becomes the merchant's problem close to its time (until then it is the
- * diner's move, and the slip queue already asks for the decision once a slip is in).
+ * diner's move, and the slip queue already asks for the decision once a slip is in). An unpaid
+ * card booking never does: only the diner can pay it, online, and the expiry job cancels it if
+ * they do not, so there is nothing for the restaurant to chase.
  */
 export function readScheduledDeliveries(
   rows: readonly DashboardScheduledDelivery[],
@@ -552,6 +580,8 @@ export function readScheduledDeliveries(
   branchId: string,
   /** Orders another bucket already lists (ordersListedIn). */
   listedElsewhere: ReadonlySet<string> = new Set(),
+  /** How each unpaid booking is paid (bookingPaymentMethods); missing when unknown. */
+  paymentMethods: ReadonlyMap<string, BookingPaymentMethod> = new Map(),
 ): BookingReading {
   const out: BookingRow[] = [];
   for (const o of rows) {
@@ -560,12 +590,13 @@ export function readScheduledDeliveries(
     const untilDueMs = dueMs - nowMs;
     const releaseMs = dueMs - leadMs;
     const state = bookingState(o, releaseMs, nowMs);
+    const unpaidBy = state === 'unpaid' ? (paymentMethods.get(o.id) ?? null) : null;
     const late = untilDueMs < 0 && state !== 'onTheWay';
     const dueSoon = untilDueMs <= BOOKING_DUE_SOON_MS;
     const needsAction =
       state === 'notAccepted' ||
       state === 'stuckHeld' ||
-      (state === 'unpaid' && dueSoon) ||
+      (state === 'unpaid' && dueSoon && unpaidBy !== 'card') ||
       late;
     out.push({
       key: o.id,
@@ -578,6 +609,7 @@ export function readScheduledDeliveries(
       late,
       dueSoon,
       needsAction,
+      unpaidBy,
       listedElsewhere: listedElsewhere.has(o.id),
       weight: needsAction ? 'strong' : dueSoon && state !== 'onTheWay' ? 'normal' : 'quiet',
       // The order itself, found by its number, and not the scheduled filter: that one starts

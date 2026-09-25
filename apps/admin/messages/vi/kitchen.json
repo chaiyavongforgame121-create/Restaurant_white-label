@@ -132,7 +132,12 @@
     "undoPointsSpent": "Không thể hoàn tác #{ticket} — khách đã dùng số điểm từ đơn này.",
     "recallForbidden": "Tài khoản của bạn không thể gọi lại đơn tại chi nhánh này.",
     "cancelledElsewhere": "#{ticket} đã bị hủy — hãy ngừng chuẩn bị.",
-    "changedElsewhere": "#{ticket} đã được thay đổi trên màn hình khác. Bảng đã được làm mới."
+    "changedElsewhere": "#{ticket} đã được thay đổi trên màn hình khác. Bảng đã được làm mới.",
+    "updateCardUnpaid": "#{ticket} chưa thể chuyển bước cho đến khi khách thanh toán thẻ thành công.",
+    "rejectedRefunded": "Đã từ chối #{ticket}. Đang hoàn tiền về thẻ của khách.",
+    "rejectRefundFailed": "Không từ chối được #{ticket}: không hoàn được tiền về thẻ của khách, nên đơn vẫn mở và không có tiền nào được chuyển. Hãy nhờ quản lý kiểm tra trong mục Đơn hàng.",
+    "rejectRefundUnknown": "Không xác nhận được việc hoàn tiền thẻ cho #{ticket}. Hãy nhấn Từ chối lần nữa; khách sẽ không bị hoàn tiền hai lần.",
+    "rejectRefundedStillOpen": "Đã hoàn tiền về thẻ của khách cho #{ticket}, nhưng đơn vẫn mở. Hãy nhấn Từ chối lần nữa để hoàn tất."
   },
   "dispatch": {
     "maxAttempts": "Đã thử mọi tài xế — hãy tăng “Số lần điều phối tối đa” hoặc tự chọn tài xế.",

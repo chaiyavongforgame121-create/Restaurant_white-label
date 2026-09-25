@@ -113,6 +113,10 @@ export interface StorefrontStatus {
   delivery_mode: 'platform' | 'self';
   delivery_windows: Array<{ day_of_week: number; opens_at: string; closes_at: string }>;
   card_payment: boolean;
+  /** The branch's own Stripe account can take charges (private.branch_card_ready: its connected
+   *  account has charges_enabled). The storefront offers card only when this AND card_payment
+   *  are true; the account id itself is never part of this answer. */
+  card_ready: boolean;
   /** The BRANCH's zone. Scheduling slots must be built in it, not in the phone's — a diner
    *  in California ordering from a Texas branch would otherwise be offered windows shifted
    *  two hours from the ones the kitchen actually keeps. */
@@ -141,6 +145,7 @@ const STOREFRONT_DENIED: StorefrontStatus = Object.freeze({
   delivery_mode: 'platform',
   delivery_windows: [],
   card_payment: false,
+  card_ready: false,
   timezone: 'America/New_York',
   opening_hours: [],
   scheduling_enabled: false,
@@ -181,6 +186,7 @@ const STOREFRONT_UNKNOWN: StorefrontStatus = Object.freeze({
   delivery_mode: 'platform',
   delivery_windows: [],
   card_payment: false,
+  card_ready: false,
   timezone: 'America/New_York',
   opening_hours: [],
   // Same reasoning as the two feature flags above: on an unreadable status, offering a
@@ -229,6 +235,9 @@ export async function getStorefrontStatus(
             ? (d.delivery_windows as StorefrontStatus['delivery_windows'])
             : [],
           card_payment: d.card_payment === true,
+          // A storefront_status from before 20260925100000 has no key: no card online, which is
+          // exactly what such a database can take (no connected accounts exist there).
+          card_ready: d.card_ready === true,
           // Older deployments of storefront_status predate these keys. Defaulting
           // scheduling_enabled to true keeps a stale function from silently removing
           // "Schedule for later" from a storefront that has always had it; the server

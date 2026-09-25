@@ -22,15 +22,29 @@ export default function TermsPage() {
       <Section title="3. Orders & payment">
         <p>
           Orders are an offer to purchase that the restaurant may accept or decline. Prices, item
-          availability, and delivery zones are set by each restaurant. Payment is processed by
-          Stripe. Cash payments are settled directly with the driver or restaurant.
+          availability, and delivery zones are set by each restaurant, and you buy from the
+          restaurant, not from Favornoms.
+        </p>
+        <p>
+          Card payments are processed by Stripe and paid straight into the restaurant&apos;s own
+          Stripe account. Favornoms does not receive, hold or pass on the money you pay for an
+          order, and takes no share of it. Your card statement shows the restaurant as the
+          merchant. Cash and QR-transfer payments are settled directly with the restaurant or its
+          driver.
+        </p>
+        <p>
+          A restaurant may add a card surcharge of up to 3% of the food subtotal. It applies to card
+          payments only, never to cash or transfer, and is shown at checkout before you pay.
         </p>
       </Section>
 
       <Section title="4. Refunds">
         <p>
-          Refund policy is set by each restaurant. We facilitate refund requests but the
-          restaurant has final authority. Stripe refunds typically appear within 5–10 business days.
+          Refund policy is set by each restaurant, and the restaurant decides whether to refund.
+          A card refund is made by the restaurant from its own Stripe account back to the card you
+          paid with, and usually appears within 5–10 business days. A dispute or chargeback is
+          between you, your card issuer and the restaurant; Favornoms is not a party to the
+          payment.
         </p>
       </Section>
 

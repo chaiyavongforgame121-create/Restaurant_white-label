@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { orderErrorKey, placeOrderBody, refusedCartPart } from './order-errors';
+import { ORDER_ERRORS, orderErrorKey, placeOrderBody, refusedCartPart } from './order-errors';
 
 /** What placeOrder throws for a refusal: `place_order_failed:<status>:<body>`. */
 const refusal = (status: number, body: Record<string, unknown>) =>
@@ -65,6 +65,34 @@ describe('orderErrorKey', () => {
       // The same permanent, branch-scoped sentence the checkout's order-type picker uses —
       // not "this restaurant", and not the temporary "right now" wording.
       expect(refusalCopy.startsWith(branchCopy), `${locale}: ${refusalCopy}`).toBe(true);
+    }
+  });
+
+  it('reads the card refusals as "pick another way to pay", not "try again"', () => {
+    // The branch has no Stripe account that can take charges: the money would have nowhere to go.
+    expect(orderErrorKey(refusal(400, { error: 'card_not_configured' }))).toBe('errors.order.cardNotConfigured');
+    expect(orderErrorKey(refusal(400, { error: 'card_amount_too_small', minimum: 0.5 }))).toBe(
+      'errors.order.cardAmountTooSmall',
+    );
+    expect(orderErrorKey(refusal(500, { error: 'payment_insert_failed' }))).toBe('errors.order.cardSetupFailed');
+    // The entitlement refusal keeps its own sentence.
+    expect(orderErrorKey(refusal(403, { error: 'feature_not_entitled', feature: 'card_payment' }))).toBe(
+      'errors.order.cardNotAvailable',
+    );
+  });
+
+  it('has every sentence it can pick in all four languages', () => {
+    for (const locale of ['en', 'es', 'th', 'vi']) {
+      const dir = path.resolve(__dirname, '../../../../../../../messages', locale);
+      for (const [code, key] of ORDER_ERRORS) {
+        const [ns, ...rest] = key.split('.');
+        const messages = JSON.parse(fs.readFileSync(path.join(dir, `${ns}.json`), 'utf8')) as Record<string, unknown>;
+        const value = rest.reduce<unknown>(
+          (o, k) => (o && typeof o === 'object' ? (o as Record<string, unknown>)[k] : undefined),
+          messages,
+        );
+        expect(typeof value === 'string' && value.length > 0, `${locale}: ${code} -> ${key}`).toBe(true);
+      }
     }
   });
 

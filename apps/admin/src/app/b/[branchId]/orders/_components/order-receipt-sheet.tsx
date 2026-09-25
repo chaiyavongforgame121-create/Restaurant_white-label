@@ -9,7 +9,12 @@ import { Button, Card, Sheet } from '@favornoms/ui';
 import { printReceiptViaBrowser } from '@favornoms/ui/printer';
 import { lineUnitPrice, modifierLabel, parseLineModifiers } from './order-lines';
 import { useIntlLocale, useOrderLabels } from './order-labels';
-import { formatReceiptAddress, toReceiptInput, type ReceiptOrder } from './receipt-input';
+import {
+  formatReceiptAddress,
+  toReceiptInput,
+  type ReceiptOrder,
+  type ReceiptRefund,
+} from './receipt-input';
 
 interface Props {
   orderId: string;
@@ -34,6 +39,7 @@ export function OrderReceiptButton({
   const [order, setOrder] = React.useState<ReceiptOrder | null>(null);
   const [paymentMethod, setPaymentMethod] = React.useState<string | null>(null);
   const [receiptNumber, setReceiptNumber] = React.useState<string | null>(null);
+  const [refunds, setRefunds] = React.useState<ReceiptRefund[]>([]);
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
 
@@ -46,21 +52,39 @@ export function OrderReceiptButton({
     setError(null);
     void (async () => {
       const supabase = getBrowserClient();
-      const { data, error: readErr } = await supabase
-        .from('orders')
-        .select(
-          `order_number, status, channel, created_at,
-           subtotal, delivery_fee, service_fee, tax_amount, tip_amount,
-           discount_amount, total, customer_name, customer_phone, delivery_address,
-           order_items(id, item_name, quantity, unit_price, subtotal, modifier_total, notes, modifiers,
-             category_position, item_position, created_at),
-           payments(method, status),
-           tax_invoices(invoice_number, issued_at)`,
-        )
-        .eq('id', orderId)
-        .maybeSingle();
+      const [{ data, error: readErr }, { data: refundRows, error: refundErr }] = await Promise.all([
+        supabase
+          .from('orders')
+          .select(
+            `order_number, status, channel, created_at,
+             subtotal, delivery_fee, service_fee, tax_amount, tip_amount,
+             discount_amount, total, customer_name, customer_phone, delivery_address,
+             order_items(id, item_name, quantity, unit_price, subtotal, modifier_total, notes, modifiers,
+               category_position, item_position, created_at),
+             payments(method, status),
+             tax_invoices(invoice_number, issued_at)`,
+          )
+          .eq('id', orderId)
+          .maybeSingle(),
+        // Card refunds made through Stripe, pending ones included: a receipt for an order whose
+        // card was given back, in part or whole, must not read as fully paid. Read on its own so
+        // a refused read (payments.view) costs these lines and not the receipt; failed and
+        // canceled refunds moved no money and are left off.
+        supabase
+          .from('payment_refunds')
+          .select('amount, status, created_at')
+          .eq('order_id', orderId)
+          .in('status', ['pending', 'succeeded'])
+          .order('created_at', { ascending: true }),
+      ]);
       if (cancelled) return;
       setLoading(false);
+      if (refundErr) console.error('[orders] receipt refunds read failed', refundErr.message);
+      setRefunds(
+        ((refundRows ?? []) as Array<{ amount: number | string; status: string; created_at: string }>).map(
+          (r) => ({ amount: Number(r.amount), status: r.status, createdAt: r.created_at }),
+        ),
+      );
       if (readErr || !data) {
         // The database's own wording is for the console, not for the person at the counter.
         if (readErr) console.error('[orders] receipt read failed', readErr.message);
@@ -101,7 +125,7 @@ export function OrderReceiptButton({
   const print = () => {
     if (!order) return;
     printReceiptViaBrowser(
-      toReceiptInput(order, { branchName, branchAddress, paymentMethod, currency }),
+      toReceiptInput(order, { branchName, branchAddress, paymentMethod, currency, refunds }),
     );
   };
 
@@ -171,6 +195,7 @@ export function OrderReceiptButton({
                 paymentMethod={paymentMethod}
                 receiptNumber={receiptNumber}
                 currency={currency}
+                refunds={refunds}
               />
             </>
           )}
@@ -187,6 +212,7 @@ function ReceiptCard({
   paymentMethod,
   receiptNumber,
   currency,
+  refunds,
 }: {
   order: ReceiptOrder;
   branchName: string;
@@ -194,6 +220,7 @@ function ReceiptCard({
   paymentMethod: string | null;
   receiptNumber: string | null;
   currency: string;
+  refunds: ReceiptRefund[];
 }) {
   const t = useTranslations('orders');
   const labels = useOrderLabels();
@@ -292,6 +319,17 @@ function ReceiptCard({
         {paymentMethod && (
           <Row label={t('receipt.paidVia')} value={labels.paymentMethod(paymentMethod)} />
         )}
+        {refunds.map((r, i) => (
+          <Row
+            key={i}
+            label={
+              r.status === 'succeeded'
+                ? t('receipt.refundedToCard', { date: fmtRefundDate(r.createdAt, intlLocale) })
+                : t('receipt.refundPendingToCard', { date: fmtRefundDate(r.createdAt, intlLocale) })
+            }
+            value={`-${money(r.amount)}`}
+          />
+        ))}
       </dl>
 
       {address && (
@@ -302,6 +340,9 @@ function ReceiptCard({
     </Card>
   );
 }
+
+const fmtRefundDate = (iso: string, intlLocale: string) =>
+  new Date(iso).toLocaleDateString(intlLocale, { month: 'short', day: 'numeric' });
 
 function Row({ label, value, emphasize }: { label: string; value: string; emphasize?: boolean }) {
   return (

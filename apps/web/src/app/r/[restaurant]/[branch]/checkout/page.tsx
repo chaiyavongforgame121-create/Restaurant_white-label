@@ -1,4 +1,5 @@
 import { getServerClient } from '@favornoms/database/server';
+import { parseServiceFeePercent } from '@favornoms/shared';
 import { resolveStorefrontStatus, resolveTenant, storefrontNames } from '@/lib/tenant';
 import { CheckoutView } from './_components/checkout-view';
 import { OrderTypeGate } from '../_components/order-type-gate';
@@ -48,10 +49,18 @@ export default async function CheckoutPage({ params }: Props) {
         pickupOpenNow={openNow !== false}
         ordersPaused={scheduleDelivery.paused}
         canUseCard={status.card_payment}
+        // The branch's own Stripe account can take charges, so a card paid here lands there. Read
+        // off the status this page already has; a status that could not be read says false, and
+        // place-order refuses a card order at a branch that is not ready (card_not_configured).
+        cardReady={status.card_ready}
         // Both money inputs mirror place-order's `?? 0` fallback: a branch with
-        // neither configured is charged nothing, so it must be shown nothing.
+        // neither configured is charged nothing, so it must be shown nothing. The card fee is
+        // read through the same 3% cap place-order charges at, so a branch still stored at 5%
+        // is shown the 3% it is actually charged, in the summary and in the note by the tiles.
         salesTaxRate={Number(taxRow?.sales_tax_rate ?? 0)}
-        serviceFeePercent={Number(tenant.branch.settings.serviceFeePercent ?? 0)}
+        serviceFeePercent={parseServiceFeePercent({
+          service_fee_percent: tenant.branch.settings.serviceFeePercent,
+        })}
         // The branch's own hours and scheduling policy, so the picker offers times the
         // server will actually accept instead of any moment the diner's clock can express.
         scheduling={{

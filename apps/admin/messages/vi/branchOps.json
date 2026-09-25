@@ -14,7 +14,7 @@
   },
   "payments": {
     "title": "Phương thức thanh toán",
-    "description": "Chọn phương thức thanh toán khách có thể dùng cho Tự đến lấy (làm ngay) và Hẹn giờ giao hàng (đặt trước). Thanh toán thẻ do bạn tự thu khi giao bằng máy đọc thẻ của mình — hiện chưa thu tiền trực tuyến. Đơn nhân viên nhận tại quầy hoặc POS không bị ảnh hưởng.",
+    "description": "Chọn phương thức thanh toán khách có thể dùng cho Tự đến lấy (làm ngay) và Hẹn giờ giao hàng (đặt trước). Thẻ được thanh toán trực tuyến khi đặt hàng, tiền vào thẳng tài khoản Stripe riêng của chi nhánh này, và khách chỉ thấy lựa chọn này sau khi Stripe được kết nối ở mục Thanh toán thẻ phía trên. Các giao dịch thẻ nhân viên thu tại quầy hoặc POS bằng máy của bạn vẫn được ghi nhận như trước và không bị ảnh hưởng.",
     "dineInNote": "Phần này chỉ áp dụng cho giao hàng và tự đến lấy. Khách ăn tại quán bỏ qua bước thanh toán và trả tiền trực tiếp tại nhà hàng.",
     "modes": {
       "asap": "Tự đến lấy (ngay)",
@@ -27,7 +27,7 @@
       },
       "card": {
         "label": "Thẻ",
-        "hint": "Thu khi giao bằng máy đọc thẻ của bạn"
+        "hint": "Khách thanh toán trực tuyến khi đặt hàng, tiền vào tài khoản Stripe của bạn (kết nối ở mục Thanh toán thẻ)"
       },
       "transfer": {
         "label": "Chuyển khoản QR",
@@ -182,15 +182,87 @@
     "armedButEmpty": "Khung giờ đặt trước đang bật nhưng chưa có khung nào — khách hoàn toàn không thể hẹn giờ đơn. Hãy thêm khung giờ hoặc tắt tùy chọn này.",
     "save": "Lưu cài đặt hẹn giờ"
   },
+  "cardPayments": {
+    "title": "Thanh toán thẻ",
+    "description": "Khách thanh toán bằng thẻ khi đặt hàng, tiền vào thẳng tài khoản Stripe riêng của chi nhánh này. Stripe thu thập thông tin doanh nghiệp và ngân hàng của bạn rồi chuyển tiền về ngân hàng của bạn. Nền tảng không bao giờ giữ tiền của bạn và không lấy phần trăm nào.",
+    "status": {
+      "not_connected": "Chưa kết nối",
+      "onboarding": "Hoàn tất thiết lập",
+      "under_review": "Đang xét duyệt",
+      "ready": "Sẵn sàng nhận thẻ",
+      "action_needed": "Cần xử lý"
+    },
+    "statusBody": {
+      "not_connected": "Kết nối tài khoản Stripe để nhận thanh toán thẻ trực tuyến. Việc thiết lập diễn ra trên trang của Stripe và mất khoảng 10 phút: thông tin doanh nghiệp, chủ sở hữu và tài khoản ngân hàng nhận tiền.",
+      "onboarding": "Stripe vẫn cần thêm vài thông tin trước khi chi nhánh này có thể nhận thẻ. Hãy tiếp tục từ chỗ bạn đã dừng.",
+      "under_review": "Bạn đã gửi đủ thông tin. Stripe đang kiểm tra, thường chỉ mất vài phút và có thể mất vài ngày. Thanh toán thẻ sẽ tự bật khi hoàn tất.",
+      "ready": "Khách có thể thanh toán thẻ cho chi nhánh này khi đặt hàng. Tiền vào số dư Stripe của bạn và được chuyển về ngân hàng của bạn.",
+      "action_needed": "Stripe cần thêm thông tin trước khi chi nhánh này có thể nhận thẻ.",
+      "action_needed_charges_on": "Bạn vẫn nhận thẻ được, nhưng Stripe cần thêm thông tin. Nếu không gửi trước hạn của Stripe, thanh toán thẻ sẽ bị dừng."
+    },
+    "disabled": {
+      "rejected": "Stripe đã từ chối tài khoản này. Hãy liên hệ bộ phận hỗ trợ của Stripe từ trang quản lý Stripe của bạn.",
+      "review": "Stripe đang xét duyệt tài khoản này.",
+      "pastDue": "Có thông tin đã quá hạn nên Stripe đã tạm dừng thanh toán thẻ trên tài khoản này.",
+      "paused": "Thanh toán thẻ trên tài khoản này đang tạm dừng.",
+      "other": "Stripe đã tạm dừng thanh toán thẻ trên tài khoản này. Mở trang quản lý Stripe để xem lý do."
+    },
+    "requirementsTitle": "Stripe đang yêu cầu:",
+    "requirements": {
+      "bank": "Tài khoản ngân hàng nhận tiền",
+      "people": "Thông tin về chủ sở hữu hoặc người quản lý tài khoản",
+      "business": "Thông tin doanh nghiệp của bạn",
+      "profile": "Hồ sơ doanh nghiệp công khai (trang web, mặt hàng bạn bán)",
+      "terms": "Chấp nhận điều khoản của Stripe",
+      "other": "Thông tin khác (xem trang quản lý Stripe)"
+    },
+    "payoutsOff": "Việc chuyển tiền về ngân hàng của bạn chưa được bật. Stripe giữ tiền trong số dư của bạn cho đến khi bật.",
+    "sharedWith": "Tài khoản Stripe này cũng nhận thanh toán thẻ cho {branches}.",
+    "packageLocked": "Thanh toán thẻ không có trong gói hiện tại của bạn. Bạn có thể kết nối Stripe ngay; khách sẽ thấy lựa chọn thẻ khi gói của bạn bao gồm tính năng này.",
+    "viewPackages": "Xem các gói",
+    "notConfigured": "Nền tảng chưa bật thanh toán thẻ trực tuyến.",
+    "returned": "Chào mừng bạn quay lại. Đây là trạng thái Stripe báo hiện tại.",
+    "refreshExpired": "Liên kết Stripe đã hết hạn. Đang mở liên kết mới…",
+    "refreshExpiredNoPermission": "Liên kết Stripe đã hết hạn. Hãy nhờ chủ nhà hàng tiếp tục thiết lập.",
+    "actions": {
+      "connect": "Kết nối Stripe",
+      "continue": "Tiếp tục thiết lập",
+      "dashboard": "Mở trang quản lý Stripe",
+      "refresh": "Kiểm tra trạng thái",
+      "share": "Dùng chung tài khoản với {branches}",
+      "disconnect": "Ngắt kết nối"
+    },
+    "shareHint": "Nhận tiền về cùng ngân hàng với chi nhánh khác? Dùng tài khoản Stripe của chi nhánh đó và bỏ qua bước thiết lập.",
+    "disconnectConfirm": {
+      "title": "Ngắt kết nối Stripe khỏi {branch}?",
+      "body": "Khách sẽ không thể thanh toán thẻ cho chi nhánh này nữa. Tài khoản Stripe, số dư và các khoản chuyển tiền vẫn giữ nguyên, và bạn có thể kết nối lại bất cứ lúc nào.",
+      "confirm": "Ngắt kết nối"
+    },
+    "ownerOnly": "Chỉ chủ nhà hàng mới có thể kết nối hoặc thay đổi tài khoản Stripe.",
+    "readOnly": "Chỉ chủ nhà hàng và quản trị viên mới xem được thiết lập thanh toán thẻ.",
+    "errors": {
+      "generic": "Có lỗi khi kết nối với Stripe. Hãy thử lại sau giây lát.",
+      "stripeRefused": "Stripe không chấp nhận yêu cầu này. Hãy thử lại sau vài phút; nếu vẫn xảy ra, hãy liên hệ bộ phận hỗ trợ.",
+      "forbidden": "Vai trò của bạn không thể thay đổi tài khoản Stripe.",
+      "alreadyConnected": "Chi nhánh này đã có tài khoản Stripe. Hãy ngắt kết nối trước.",
+      "sourceNotConnected": "Chi nhánh đó không còn kết nối với Stripe.",
+      "otherRestaurant": "Chi nhánh đó thuộc nhà hàng khác.",
+      "notConnected": "Chi nhánh này chưa kết nối với Stripe.",
+      "adminUrl": "Địa chỉ trang quản trị của nền tảng chưa được thiết lập nên Stripe không thể đưa bạn quay lại đây. Hãy liên hệ bộ phận hỗ trợ."
+    }
+  },
   "serviceFee": {
     "title": "Phí dịch vụ",
-    "description": "Một tỷ lệ phần trăm trên tạm tính tiền món, chỉ thu <strong>khi khách thanh toán bằng thẻ tín dụng / ghi nợ</strong>. Đơn tiền mặt, chuyển khoản QR và ăn tại quán không bao giờ phải trả. Đặt <strong>0</strong> để không thu phí dịch vụ.",
+    "description": "Phụ phí thẻ: một tỷ lệ phần trăm trên tạm tính tiền món, chỉ thu <strong>khi khách thanh toán bằng thẻ tín dụng / ghi nợ</strong>. Đơn tiền mặt, chuyển khoản QR và ăn tại quán không bao giờ phải trả. Đặt <strong>0</strong> để không thu phí dịch vụ.",
     "label": "Phí dịch vụ (%)",
     "hint": "0 – {max}%. Chỉ áp dụng khi thanh toán thẻ. Tính trên tạm tính — không bao giờ tính trên thuế, tiền tip hay phí giao hàng.",
     "previewTitle": "Xem trước phí (thanh toán thẻ)",
     "previewOrder": "Đơn ${amount}",
     "cardLocked": "Thanh toán thẻ không có trong gói hiện tại của bạn, nên hiện tại phí này không bao giờ được thu.",
-    "save": "Lưu phí dịch vụ"
+    "save": "Lưu phí dịch vụ",
+    "capNote": "Tại Mỹ, quy định của các mạng thẻ giới hạn phụ phí thẻ ở mức {max}%, nên không thể đặt cao hơn. Phí chỉ cộng vào thanh toán bằng thẻ, không bao giờ áp dụng cho tiền mặt hay chuyển khoản QR. Một số bang hạn chế phụ phí thẻ và các mạng thẻ không cho phép thu trên thẻ ghi nợ, vì vậy hãy kiểm tra quy định áp dụng cho chi nhánh này.",
+    "storedAboveCap": "Chi nhánh này đã lưu mức phí {stored}%. Phụ phí thẻ tối đa là {max}%, nên đơn thanh toán thẻ được tính {max}%. Hãy lưu để cập nhật thành {max}%.",
+    "typedAboveCap": "Phụ phí thẻ tối đa là {max}% — đơn thanh toán thẻ sẽ được tính {max}%."
   },
   "tips": {
     "title": "Tiền tip",

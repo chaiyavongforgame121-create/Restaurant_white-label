@@ -24,6 +24,14 @@ export const ORDER_ERRORS: Array<[string, string]> = [
   ['feature_not_entitled:delivery', 'errors.order.deliveryNotOffered'],
   ['delivery_not_entitled', 'errors.order.deliveryNotOffered'],
   ['feature_not_entitled:card_payment', 'errors.order.cardNotAvailable'],
+  // The branch has no Stripe account that can take charges right now (never connected, still
+  // under review, or restricted since this page loaded). The checkout only offers card where it
+  // can be paid, so this is the race; the diner is told to pick another method, not to retry.
+  ['card_not_configured', 'errors.order.cardNotConfigured'],
+  // Under Stripe's 50-cent minimum: a card cannot be charged that little.
+  ['card_amount_too_small', 'errors.order.cardAmountTooSmall'],
+  // The order was called off because its card payment could not be set up; nothing was charged.
+  ['payment_insert_failed', 'errors.order.cardSetupFailed'],
   // Must precede `branch_closed` — it contains it as a substring, and the
   // generic "currently closed" line is wrong here: the restaurant may well be
   // open now, it's the time they picked that isn't served.

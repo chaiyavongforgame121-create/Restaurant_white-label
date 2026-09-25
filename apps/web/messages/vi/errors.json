@@ -47,6 +47,9 @@
     "emptyOrder": "Giỏ hàng đang trống. Hãy thêm món trước khi đặt hàng.",
     "quantityTooHigh": "Một món trong giỏ vượt quá giới hạn 99 phần mỗi đơn. Hãy giảm số lượng rồi thử lại.",
     "phoneRequired": "Vui lòng thêm số điện thoại để nhà hàng có thể liên hệ với bạn.",
-    "addressRequired": "Vui lòng thêm địa chỉ giao hàng."
+    "addressRequired": "Vui lòng thêm địa chỉ giao hàng.",
+    "cardNotConfigured": "Nhà hàng này hiện chưa thể nhận thanh toán thẻ trực tuyến. Vui lòng chọn cách thanh toán khác.",
+    "cardAmountTooSmall": "Thanh toán bằng thẻ phải từ $0.50 trở lên. Vui lòng chọn cách thanh toán khác cho đơn này.",
+    "cardSetupFailed": "Chúng tôi không thể thiết lập thanh toán thẻ, nên đơn hàng chưa được đặt và bạn không bị trừ tiền. Vui lòng thử lại."
   }
 }

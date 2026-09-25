@@ -20,7 +20,7 @@ import {
   type BranchRider,
   type LiveDelivery,
 } from '@favornoms/database/queries';
-import { formatPhone } from '@favornoms/shared';
+import { formatCurrency, formatPhone } from '@favornoms/shared';
 import { Badge, Button, Card, EmptyState } from '@favornoms/ui';
 import { AssignRiderSheet } from './assign-rider-sheet';
 import {
@@ -46,6 +46,9 @@ import {
   type DispatchFailureText,
 } from './live-ops-model';
 import { useLiveOpsText } from './live-ops-text';
+// Cancelling here is the same cancel as on Orders: a card the diner paid online is refunded first.
+import { cardRefundErrorKey, keepIdempotencyKey } from '../../orders/_components/card-refund';
+import { cancelOrderWithCardRefund, newIdempotencyKey } from '../../orders/_components/card-refund-client';
 
 // Live delivery operations board. Two questions, one screen: where is every order that has
 // not been handed over yet, and where are the riders who could take it. The map draws both;
@@ -485,6 +488,10 @@ export function LiveOpsView({
   const [cancelFor, setCancelFor] = React.useState<LiveDelivery | null>(null);
   const [cancelBusy, setCancelBusy] = React.useState(false);
   const [cancelError, setCancelError] = React.useState<string | null>(null);
+  // Made when the dialog opens and kept across retries of that one cancel while a card refund's
+  // outcome is unknown, so a second press gets Stripe's first refund back instead of another.
+  const cancelKeyRef = React.useRef('');
+  const tOrders = useTranslations('orders');
   const [cancelReason, setCancelReason] = React.useState<string | null>(null);
   const [cancelOther, setCancelOther] = React.useState('');
   const [assignments, setAssignments] = React.useState<DeliveryAssignmentRef[]>([]);
@@ -869,21 +876,40 @@ export function LiveOpsView({
     if (!d?.order || !finalCancelReason) return;
     setCancelBusy(true);
     setCancelError(null);
-    const supabase = getBrowserClient();
     // cancel_order only ever touched orders; the delivery follows because of the
-    // orders_cancel_syncs_delivery trigger that ships with this screen.
-    const { error } = await supabase.rpc('cancel_order', {
-      p_order_id: d.order.id,
-      p_reason: finalCancelReason,
+    // orders_cancel_syncs_delivery trigger that ships with this screen. An order the diner paid
+    // online by card is refunded in full first (cancelOrderWithCardRefund), because the database
+    // will not cancel it while the diner's money is still with the branch.
+    const outcome = await cancelOrderWithCardRefund({
+      orderId: d.order.id,
+      reason: finalCancelReason,
+      idempotencyKey: cancelKeyRef.current,
     });
     setCancelBusy(false);
-    if (error) {
-      setCancelError(text.rpcError(error.message));
+    if (!outcome.ok) {
+      if (outcome.stage === 'refund') {
+        if (!keepIdempotencyKey(outcome.status)) cancelKeyRef.current = newIdempotencyKey();
+        const why = tOrders(`cardRefund.errors.${cardRefundErrorKey(outcome.status, outcome.body)}`, {
+          amount: formatCurrency(outcome.body?.refundable ?? 0),
+        });
+        setCancelError(`${why} ${tOrders('cardRefund.notCancelled')}`);
+        return;
+      }
+      if (outcome.stage === 'cancelAfterRefund') {
+        setCancelError(
+          tOrders('cardRefund.refundedNotCancelled', {
+            amount: formatCurrency(outcome.amount),
+            reason: text.rpcError(outcome.code),
+          }),
+        );
+        return;
+      }
+      setCancelError(text.rpcError(outcome.code));
       return;
     }
     setCancelFor(null);
     await refresh();
-  }, [cancelFor, finalCancelReason, refresh, text]);
+  }, [cancelFor, finalCancelReason, refresh, text, tOrders]);
 
   const assignmentsByDelivery = React.useMemo(() => {
     const m = new Map<string, DeliveryAssignmentRef[]>();
@@ -919,6 +945,7 @@ export function LiveOpsView({
       onSelect={() => selectCard(d)}
       onAssign={() => setAssignFor(d)}
       onCancel={() => {
+        cancelKeyRef.current = newIdempotencyKey();
         setCancelError(null);
         setCancelReason(null);
         setCancelOther('');
@@ -1174,6 +1201,7 @@ export function LiveOpsView({
                 : t('cancel.titleNoNumber')}
             </h2>
             <p className="text-sm text-muted-foreground">{t('cancel.body')}</p>
+            <p className="text-xs text-muted-foreground">{t('cancel.cardNote')}</p>
             <fieldset className="space-y-1.5">
               <legend className="text-sm font-medium">{t('cancel.why')}</legend>
               {cancelChoices.map((r) => (

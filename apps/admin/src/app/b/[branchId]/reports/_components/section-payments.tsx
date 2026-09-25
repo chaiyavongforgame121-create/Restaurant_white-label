@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { Banknote, CreditCard, QrCode, Undo2, Wallet } from 'lucide-react';
+import { Banknote, CreditCard, QrCode, ShieldAlert, Undo2, Wallet } from 'lucide-react';
 import { Card } from '@favornoms/ui';
 import { formatCurrency } from '@favornoms/shared';
 import { Kpi } from './kpi';
@@ -167,7 +167,32 @@ export function SectionPayments({
                   value={money(data.totals.refunded_on_payments)}
                 />
                 <PayRow label={t('voided')} value={money(data.totals.voided_on_payments)} />
+                {/* Card refunds made through the branch's Stripe account. Only a database with
+                    20260925110000 returns these keys; without them the rows stay hidden rather
+                    than claim a zero nobody measured. */}
+                {data.totals.card_refunds !== undefined && (
+                  <PayRow label={t('cardRefunds')} value={money(data.totals.card_refunds)} />
+                )}
+                {data.totals.card_refunds_pending !== undefined && (
+                  <PayRow
+                    label={t('cardRefundsPending')}
+                    value={money(data.totals.card_refunds_pending)}
+                    tone={data.totals.card_refunds_pending > 0 ? 'warning' : undefined}
+                  />
+                )}
+                {data.totals.card_refund_failures !== undefined && (
+                  <PayRow
+                    label={t('cardRefundFailures')}
+                    value={data.totals.card_refund_failures.toString()}
+                    tone={data.totals.card_refund_failures > 0 ? 'danger' : undefined}
+                  />
+                )}
               </dl>
+              {(data.totals.card_refund_failures ?? 0) > 0 && (
+                <p role="note" className="mt-3 rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">
+                  {t('cardRefundFailedNote')}
+                </p>
+              )}
               <Caption>{t('refundsCaption')}</Caption>
             </Card>
 
@@ -197,17 +222,53 @@ export function SectionPayments({
               </dl>
             </Card>
           </div>
+
+          {data.disputes && (
+            <Card className="mt-4 p-5">
+              <h3 className="flex items-center gap-2 font-display text-lg font-semibold">
+                <ShieldAlert className="h-5 w-5 text-muted-foreground" /> {t('disputes')}
+              </h3>
+              {data.disputes.count === 0 ? (
+                <EmptyNote>{t('disputesEmpty')}</EmptyNote>
+              ) : (
+                <dl className="mt-3 grid gap-x-8 gap-y-1.5 text-sm sm:grid-cols-2">
+                  <PayRow label={t('disputesCount')} value={data.disputes.count.toString()} />
+                  <PayRow
+                    label={t('disputesOpen')}
+                    value={data.disputes.open.toString()}
+                    tone={data.disputes.open > 0 ? 'warning' : undefined}
+                  />
+                  <PayRow label={t('disputesAmount')} value={money(data.disputes.amount)} />
+                  <PayRow
+                    label={t('disputesLost')}
+                    value={money(data.disputes.lost_amount)}
+                    tone={data.disputes.lost_amount > 0 ? 'danger' : undefined}
+                  />
+                  <PayRow label={t('disputesWon')} value={money(data.disputes.won_amount)} />
+                </dl>
+              )}
+              <Caption>{t('disputesCaption')}</Caption>
+            </Card>
+          )}
         </>
       ) : null}
     </SectionFrame>
   );
 }
 
-function PayRow({ label, value }: { label: string; value: string }) {
+/** A money or count line. `tone` colours the figure when it needs someone's attention: a card
+ *  refund Stripe has not finished, one that failed, a dispute still open or lost. */
+function PayRow({ label, value, tone }: { label: string; value: string; tone?: 'warning' | 'danger' }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
       <dt className="text-muted-foreground">{label}</dt>
-      <dd className="font-semibold tabular-nums">{value}</dd>
+      <dd
+        className={`font-semibold tabular-nums ${
+          tone === 'danger' ? 'text-danger' : tone === 'warning' ? 'text-warning' : ''
+        }`}
+      >
+        {value}
+      </dd>
     </div>
   );
 }

@@ -37,9 +37,13 @@ interface Props {
   /** The rider being rated. order_ratings.driver_id was never set by this component, so
    *  every star the customer gave attached to nobody and no rider average could move. */
   driverId?: string | null;
-  /** QR-transfer order the merchant has not confirmed payment for. Nothing is cooking — the
-   *  kitchen board filters these out — so the customer may still call it off themselves. */
+  /** QR-transfer order the merchant has not confirmed payment for, or a card order Stripe has not
+   *  said is paid. Nothing is cooking — the kitchen board filters these out — so the customer may
+   *  still call it off themselves. */
   awaitingPayment?: boolean;
+  /** The order is paid by card online. Its cancel prompt must not speak of a transfer the
+   *  restaurant has not confirmed: the diner is waiting on their own card, not on the restaurant. */
+  cardOrder?: boolean;
 }
 
 /**
@@ -64,8 +68,12 @@ const RATEABLE_STATUSES = ['completed'];
  * powers (admin Orders kebab, kitchen "Reject order").
  */
 /** cancel_order's error codes, as the `tracking.actions.cancelErrors` key a diner can act on. */
-function cancelOrderErrorKey(raw: string): 'signIn' | 'otherAccount' | 'tooLate' | 'generic' {
+function cancelOrderErrorKey(raw: string): 'signIn' | 'otherAccount' | 'tooLate' | 'cardPaid' | 'generic' {
   if (raw.includes('auth_required')) return 'signIn';
+  // The card payment went through a moment before the diner pressed Cancel (the button is only
+  // shown while the order waits for its payment). Only the restaurant can refund a card, so only
+  // the restaurant may cancel from here on (20260925120000_card_refund_followups).
+  if (raw.includes('card_paid_ask_restaurant')) return 'cardPaid';
   if (raw.includes('not_authorized')) return 'otherAccount';
   if (raw.includes('too_late_for_customer_cancel') || raw.includes('cannot_cancel_status')) {
     return 'tooLate';
@@ -82,6 +90,7 @@ export function OrderActions({
   hasDriver,
   driverId = null,
   awaitingPayment = false,
+  cardOrder = false,
 }: Props) {
   const t = useTranslations('tracking');
   const router = useRouter();
@@ -247,7 +256,9 @@ export function OrderActions({
           order nobody has started is the wrong ask. */}
       {awaitingPayment && canStillChange && signedIn === true && (
         <div className="space-y-2 rounded-2xl border border-border bg-muted/40 p-3">
-          <p className="text-sm text-muted-foreground">{t('actions.cancelPrompt')}</p>
+          <p className="text-sm text-muted-foreground">
+            {cardOrder ? t('actions.cancelPromptCard') : t('actions.cancelPrompt')}
+          </p>
           <Button
             variant="outline"
             size="md"

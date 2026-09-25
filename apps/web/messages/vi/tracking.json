@@ -21,7 +21,19 @@
   "closed": {
     "refunded": "Đơn hàng này đã được hoàn tiền",
     "cancelled": "Đơn hàng này đã bị hủy",
-    "contactRestaurant": "Nếu điều này nằm ngoài dự kiến của bạn, vui lòng liên hệ nhà hàng."
+    "contactRestaurant": "Nếu điều này nằm ngoài dự kiến của bạn, vui lòng liên hệ nhà hàng.",
+    "reasons": {
+      "cardExpired": "Thanh toán thẻ không hoàn tất trong {minutes} phút cho phép nên đơn hàng đã tự động bị hủy.",
+      "cardSetupFailed": "Không thể thiết lập thanh toán thẻ nên đơn hàng đã bị hủy. Thẻ của bạn không bị trừ tiền.",
+      "slipRejected": "Nhà hàng không thể chấp nhận biên lai chuyển khoản của bạn.",
+      "customerCancelled": "Bạn đã hủy đơn này trước khi thanh toán.",
+      "kitchenRejected": "Bếp không thể nhận đơn này.",
+      "restaurantCancelled": "Nhà hàng đã hủy đơn này.",
+      "kitchenCannotMake": "Bếp không thể làm đơn này.",
+      "customerAsked": "Đã hủy theo yêu cầu của bạn.",
+      "noRider": "Không có tài xế nào sẵn sàng giao đơn này.",
+      "duplicate": "Đơn này bị trùng với một đơn khác."
+    }
   },
   "driver": {
     "almostThere": "Tài xế sắp đến rồi!",
@@ -40,10 +52,48 @@
     "viewReceipt": "Xem hóa đơn đầy đủ →"
   },
   "cardPayment": {
-    "title": "Chưa thể thanh toán bằng thẻ tại đây",
-    "body": "Đơn hàng này được đặt với phương thức thanh toán bằng thẻ, nhưng hiện chúng tôi chưa thể thu tiền qua thẻ trực tuyến. Vui lòng thanh toán trực tiếp cho nhà hàng — bạn có thể trả khi đến lấy đơn hoặc khi đơn được giao đến. Đơn hàng của bạn không bị hủy.",
-    "devNote": "Chỉ dành cho bản phát triển: đánh dấu đơn đã thanh toán để thử phần còn lại của quy trình.",
-    "devConfirm": "Xác nhận thử (chỉ bản phát triển)"
+    "payTitle": "Thanh toán {amount} bằng thẻ",
+    "payBody": "Đơn hàng sẽ được gửi đến nhà hàng ngay khi thanh toán thành công. Vui lòng thanh toán trong {minutes} phút, nếu không đơn hàng sẽ bị hủy.",
+    "payNow": "Thanh toán {amount}",
+    "preparing": "Đang chuẩn bị biểu mẫu thẻ bảo mật…",
+    "checking": "Đang kiểm tra khoản thanh toán…",
+    "paidTitle": "Đã thanh toán bằng thẻ",
+    "paidBody": "Thanh toán đã thành công và nhà hàng đã nhận đơn của bạn.",
+    "processingTitle": "Khoản thanh toán đang được xử lý",
+    "processingBody": "Ngân hàng của bạn đang xác nhận giao dịch. Trang này sẽ tự cập nhật — bạn không cần thanh toán lại.",
+    "failedTitle": "Thẻ của bạn chưa bị trừ tiền",
+    "failedBody": "Vui lòng thử lại bằng thẻ này hoặc thẻ khác.",
+    "expiredTitle": "Đã hết thời gian thanh toán",
+    "expiredBody": "Đơn hàng này không được thanh toán trong {minutes} phút nên đang bị hủy. Bạn không bị trừ tiền. Hãy đặt đơn mới khi bạn sẵn sàng.",
+    "payAtRestaurantTitle": "Thanh toán trực tiếp cho nhà hàng",
+    "payAtRestaurantBody": "Đơn hàng này được đặt trước khi trang nhận thanh toán thẻ trực tuyến. Vui lòng thanh toán khi nhận món hoặc khi đơn được giao đến. Đơn hàng của bạn không bị hủy.",
+    "refundedTitle": "Đã hoàn tiền về thẻ",
+    "refundedBody": "{amount} đã được hoàn về thẻ bạn dùng để thanh toán. Ngân hàng thường hiển thị khoản này trong vòng 5–10 ngày làm việc.",
+    "refundingTitle": "Khoản hoàn tiền đang được xử lý",
+    "refundingBody": "Khoản hoàn {amount} về thẻ bạn dùng để thanh toán đang được xử lý. Sau khi hoàn tất, ngân hàng thường hiển thị trong vòng 5–10 ngày làm việc.",
+    "refundFailedTitle": "Hoàn tiền không thành công",
+    "refundFailedBody": "Không thể hoàn tiền về thẻ của bạn. Vui lòng liên hệ nhà hàng để được hỗ trợ.",
+    "partlyRefunded": "{amount} của khoản thanh toán này đã được hoàn về thẻ của bạn.",
+    "retry": "Thử lại",
+    "securedNote": "Thanh toán an toàn qua Stripe, chuyển thẳng đến nhà hàng.",
+    "reasons": {
+      "declined": "Thẻ của bạn đã bị từ chối.",
+      "insufficientFunds": "Thẻ không đủ số dư.",
+      "expired": "Thẻ đã hết hạn.",
+      "cvc": "Mã bảo mật không đúng.",
+      "number": "Số thẻ không đúng.",
+      "authentication": "Việc xác minh thẻ chưa hoàn tất.",
+      "processing": "Không thể xử lý thẻ này.",
+      "generic": "Thanh toán không thành công."
+    },
+    "errors": {
+      "unavailable": "Nhà hàng này hiện chưa thể nhận thanh toán thẻ trực tuyến. Vui lòng liên hệ nhà hàng để thanh toán cách khác.",
+      "expired": "Đã hết thời gian thanh toán cho đơn hàng này.",
+      "notPayable": "Đơn hàng này không còn cần thanh toán bằng thẻ.",
+      "tooSmall": "Số tiền này quá nhỏ để thanh toán bằng thẻ.",
+      "inProgress": "Một khoản thanh toán cho đơn này đang được xử lý. Vui lòng đợi một chút rồi thử lại.",
+      "generic": "Không tải được thanh toán thẻ. Vui lòng kiểm tra kết nối và thử lại."
+    }
   },
   "transfer": {
     "confirmedTitle": "Đã xác nhận chuyển khoản",
@@ -73,13 +123,15 @@
   },
   "actions": {
     "cancelPrompt": "Bạn đổi ý? Nhà hàng chưa xác nhận chuyển khoản nên chưa chuẩn bị gì cả — bạn vẫn có thể hủy đơn này.",
+    "cancelPromptCard": "Bạn đổi ý? Thanh toán thẻ của bạn chưa hoàn tất và nhà hàng chưa chuẩn bị gì cả — bạn vẫn có thể hủy đơn này.",
     "cancelOrder": "Hủy đơn này",
     "contactToChange": "Cần thay đổi hoặc hủy đơn này? Vui lòng liên hệ trực tiếp với nhà hàng — họ có thể cập nhật giúp bạn khi đơn vẫn đang được chuẩn bị.",
     "cancelErrors": {
       "signIn": "Vui lòng đăng nhập bằng tài khoản đã đặt hàng để hủy đơn này.",
       "otherAccount": "Đơn hàng này thuộc tài khoản khác. Vui lòng liên hệ nhà hàng để hủy.",
       "tooLate": "Đơn hàng này đã được xử lý tiếp nên không thể hủy tại đây — vui lòng liên hệ nhà hàng.",
-      "generic": "Chưa thực hiện được. Vui lòng thử lại hoặc liên hệ nhà hàng."
+      "generic": "Chưa thực hiện được. Vui lòng thử lại hoặc liên hệ nhà hàng.",
+      "cardPaid": "Khoản thanh toán thẻ của bạn đã thành công, nên giờ chỉ nhà hàng mới có thể hủy đơn này. Vui lòng liên hệ nhà hàng; họ sẽ hoàn tiền về thẻ của bạn khi hủy đơn."
     }
   },
   "rating": {

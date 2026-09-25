@@ -115,6 +115,13 @@ describe('record_counter_transfer failures', () => {
     expect(describeSettleError('payment_not_found')).toMatchObject({ key: 'paymentNotFound', permanent: true });
     expect(describeSettleError('forbidden')).toMatchObject({ key: 'forbidden', permanent: true });
     expect(describeSettleError('auth_required')).toMatchObject({ key: 'authRequired', permanent: false });
+    // An online card order the diner has not paid: nothing the till does can settle it.
+    expect(describeSettleError('stripe_payment_server_only')).toEqual({
+      key: 'onlineCardUnpaid',
+      code: 'stripe_payment_server_only',
+      permanent: true,
+    });
+    expect(describeSettleError('card_payment_not_completed')).toMatchObject({ key: 'onlineCardUnpaid', permanent: true });
   });
 
   it('treats a dropped call as worth another try, and keeps a bare code for display', () => {

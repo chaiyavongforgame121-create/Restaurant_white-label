@@ -14,7 +14,7 @@
   },
   "payments": {
     "title": "Payment methods",
-    "description": "Choose which payment methods customers can pick for Pickup (prepared now) and Schedule Delivery (booked ahead). Card payments are collected by you at handoff with your own reader — nothing is charged online yet. Orders your staff take at the counter or POS are not affected.",
+    "description": "Choose which payment methods customers can pick for Pickup (prepared now) and Schedule Delivery (booked ahead). Card is paid online at checkout, straight into this branch’s own Stripe account, and customers only see it once Stripe is connected under Card payments above. Card sales your staff take at the counter or POS on your own terminal are recorded as before and are not affected.",
     "dineInNote": "This covers delivery and pickup only. Dine-in customers skip the payment step entirely and settle with you at the restaurant.",
     "modes": {
       "asap": "Pickup (now)",
@@ -27,7 +27,7 @@
       },
       "card": {
         "label": "Card",
-        "hint": "Collected at handoff with your own reader"
+        "hint": "Paid online at checkout into your Stripe account (connect it under Card payments)"
       },
       "transfer": {
         "label": "QR transfer",
@@ -182,15 +182,87 @@
     "armedButEmpty": "Booking windows are switched on but none are set — customers cannot schedule an order at all. Add a window, or switch this off.",
     "save": "Save scheduling"
   },
+  "cardPayments": {
+    "title": "Card payments",
+    "description": "Diners pay by card at checkout, straight into this branch’s own Stripe account. Stripe collects your business and bank details and pays out to your bank. The platform never holds your money and takes no cut.",
+    "status": {
+      "not_connected": "Not connected",
+      "onboarding": "Finish setting up",
+      "under_review": "Under review",
+      "ready": "Ready to take cards",
+      "action_needed": "Action needed"
+    },
+    "statusBody": {
+      "not_connected": "Connect a Stripe account to take card payments online. Setup happens on Stripe’s own page and takes about 10 minutes: your business, its owners and the bank account payouts go to.",
+      "onboarding": "Stripe still needs a few details before this branch can take cards. Pick up where you left off.",
+      "under_review": "You’ve sent everything. Stripe is checking the details, which usually takes minutes and can take a couple of days. Card payments switch on by themselves when it’s done.",
+      "ready": "Diners can pay this branch by card at checkout. The money goes to your Stripe balance and is paid out to your bank.",
+      "action_needed": "Stripe needs more information before this branch can take cards.",
+      "action_needed_charges_on": "You can still take cards, but Stripe needs more information. If it isn’t sent by Stripe’s deadline, card payments stop."
+    },
+    "disabled": {
+      "rejected": "Stripe has rejected this account. Contact Stripe support from your Stripe Dashboard.",
+      "review": "Stripe is reviewing this account.",
+      "pastDue": "Some information is overdue, so Stripe has paused card payments on this account.",
+      "paused": "Card payments on this account are paused.",
+      "other": "Stripe has paused card payments on this account. Open your Stripe Dashboard to see why."
+    },
+    "requirementsTitle": "Stripe is asking for:",
+    "requirements": {
+      "bank": "The bank account payouts go to",
+      "people": "Details about the owners or the person who runs the account",
+      "business": "Your business details",
+      "profile": "Your public business profile (website, what you sell)",
+      "terms": "Accepting Stripe’s terms",
+      "other": "Other details (see your Stripe Dashboard)"
+    },
+    "payoutsOff": "Payouts to your bank aren’t switched on yet. Stripe keeps the money in your balance until they are.",
+    "sharedWith": "This Stripe account also takes card payments for {branches}.",
+    "packageLocked": "Card payments aren’t included in your current package. You can connect Stripe now; diners see the card option once your package includes it.",
+    "viewPackages": "View packages",
+    "notConfigured": "Online card payments aren’t switched on for this platform yet.",
+    "returned": "Welcome back. This is what Stripe says right now.",
+    "refreshExpired": "The Stripe link expired. Opening a new one…",
+    "refreshExpiredNoPermission": "The Stripe link expired. Ask the restaurant owner to continue the setup.",
+    "actions": {
+      "connect": "Connect Stripe",
+      "continue": "Continue setup",
+      "dashboard": "Open Stripe Dashboard",
+      "refresh": "Check status",
+      "share": "Use the same account as {branches}",
+      "disconnect": "Disconnect"
+    },
+    "shareHint": "Paid into the same bank as another branch? Use its Stripe account and skip the setup.",
+    "disconnectConfirm": {
+      "title": "Disconnect Stripe from {branch}?",
+      "body": "Diners won’t be able to pay this branch by card any more. Your Stripe account, its balance and its payouts stay as they are, and you can connect again at any time.",
+      "confirm": "Disconnect"
+    },
+    "ownerOnly": "Only the restaurant owner can connect or change the Stripe account.",
+    "readOnly": "Only the restaurant owner and admins can see the card payment setup.",
+    "errors": {
+      "generic": "Something went wrong talking to Stripe. Try again in a moment.",
+      "stripeRefused": "Stripe didn’t accept the request. Try again in a few minutes; if it keeps happening, contact support.",
+      "forbidden": "Your role can’t change the Stripe account.",
+      "alreadyConnected": "This branch already has a Stripe account. Disconnect it first.",
+      "sourceNotConnected": "That branch isn’t connected to Stripe any more.",
+      "otherRestaurant": "That branch belongs to another restaurant.",
+      "notConnected": "This branch isn’t connected to Stripe.",
+      "adminUrl": "The platform’s admin address isn’t set up, so Stripe can’t send you back here. Contact support."
+    }
+  },
   "serviceFee": {
     "title": "Service fee",
-    "description": "A percentage of the food subtotal, charged <strong>only when the customer pays by credit / debit card</strong>. Cash, QR transfer and dine-in orders never pay it. Set it to <strong>0</strong> to charge no service fee at all.",
+    "description": "A card surcharge: a percentage of the food subtotal added <strong>only when the customer pays by credit / debit card</strong>. Cash, QR transfer and dine-in orders never pay it. Set it to <strong>0</strong> to charge no service fee at all.",
     "label": "Service fee (%)",
     "hint": "0 – {max}%. Card payments only. Charged on the subtotal — never on tax, tips or the delivery fee.",
     "previewTitle": "Fee preview (card payments)",
     "previewOrder": "${amount} order",
     "cardLocked": "Card payment is not included in your current package, so this fee is never charged right now.",
-    "save": "Save service fee"
+    "save": "Save service fee",
+    "capNote": "Card-network rules in the US cap a card surcharge at {max}%, so it can’t be set higher. It is added to card payments only — never to cash or QR transfer. Some states restrict card surcharges and the networks don’t allow them on debit cards, so check what applies to this branch.",
+    "storedAboveCap": "This branch was saved with a {stored}% fee. Card surcharges are capped at {max}%, so card orders are charged {max}%. Save to store {max}%.",
+    "typedAboveCap": "Card surcharges are capped at {max}% — card orders will be charged {max}%."
   },
   "tips": {
     "title": "Tips",

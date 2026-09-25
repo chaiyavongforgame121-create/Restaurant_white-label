@@ -24,6 +24,10 @@ import {
 import {
   UNLOCK_EVENTS, audioContext, playChime, speak, speechAvailable, speechLang, unlockAudio,
 } from '@/lib/sound';
+// The same cancel the back office's Orders page makes: a card the diner paid online is refunded as
+// part of it, because the database will not let an order with the diner's money be cancelled.
+import { cardRefundErrorKey, keepIdempotencyKey } from '@/app/b/[branchId]/orders/_components/card-refund';
+import { cancelOrderWithCardRefund, newIdempotencyKey } from '@/app/b/[branchId]/orders/_components/card-refund-client';
 
 /* ──────────────────────────────────────────────────────────────────────────
    "Sunset" theme — warm, light, gradient. Kept local to the kitchen surface so
@@ -325,6 +329,9 @@ export function KitchenView({
   const toastTimer = React.useRef<number | null>(null);
   // Orders this tab rejected itself: their 'cancelled' echo is not news to the cook.
   const selfCancelledRef = React.useRef<Set<string>>(new Set());
+  // One idempotency key per order being rejected, kept while a card refund's outcome is unknown,
+  // so a second tap on Reject gets Stripe's first refund back instead of making another.
+  const rejectKeysRef = React.useRef<Map<string, string>>(new Map());
   // Orders announced by an INSERT whose lines may still be on their way (place-order writes the
   // order and its lines in separate requests).
   const awaitingLinesRef = React.useRef<Set<string>>(new Set());
@@ -811,6 +818,7 @@ export function KitchenView({
       console.error('kitchen: order status update failed', error.message);
       const key = errorKey(error.message, {
         transfer_payment_not_approved: 'toast.updateUnpaid',
+        card_payment_not_completed: 'toast.updateCardUnpaid',
         bad_transition: 'toast.updateNotAllowed',
         invalid_status: 'toast.updateNotAllowed',
       }, 'toast.updateFailed');
@@ -849,22 +857,52 @@ export function KitchenView({
   const reject = async (order: Order) => {
     const ticket = order.order_number.slice(-4);
     selfCancelledRef.current.add(order.id);
-    // The reason is WRITTEN to orders.cancellation_reason — it stays English whatever the board shows.
-    const { error } = await supa().rpc('cancel_order', { p_order_id: order.id, p_reason: 'Rejected by kitchen' });
-    if (!error) {
+    const idempotencyKey = rejectKeysRef.current.get(order.id) ?? newIdempotencyKey();
+    rejectKeysRef.current.set(order.id, idempotencyKey);
+    // The reason is WRITTEN to orders.cancellation_reason and to the card refund — it stays
+    // English whatever the board shows. An order the diner paid online by card is refunded in
+    // full as part of the Reject; nothing else changes for cash and transfer orders.
+    const outcome = await cancelOrderWithCardRefund({
+      orderId: order.id,
+      reason: 'Rejected by kitchen',
+      idempotencyKey,
+    });
+    if (outcome.ok) {
+      rejectKeysRef.current.delete(order.id);
       markOrderChanged(order.id);
       setOrders((curr) => curr.filter((o) => o.id !== order.id));
-      showToast(t('toast.rejected', { ticket }), null);
+      showToast(t(outcome.refunded ? 'toast.rejectedRefunded' : 'toast.rejected', { ticket }), null);
+      return;
     }
-    else {
-      selfCancelledRef.current.delete(order.id);
-      console.error('kitchen: cancel_order failed', error.message);
-      const key = errorKey(error.message, {
-        cannot_cancel_status: 'toast.rejectClosed',
-        not_authorized: 'toast.rejectForbidden',
-      }, 'toast.rejectFailed');
+    selfCancelledRef.current.delete(order.id);
+    if (outcome.stage === 'refund') {
+      // Nothing was cancelled and, unless the answer was lost, nothing was refunded. The ticket
+      // stays on the board; a lost answer keeps its key so the next tap cannot refund twice.
+      if (!keepIdempotencyKey(outcome.status)) rejectKeysRef.current.delete(order.id);
+      const why = cardRefundErrorKey(outcome.status, outcome.body);
+      const key = why === 'unreachable'
+        ? 'toast.rejectRefundUnknown'
+        : why === 'notAuthorized'
+          ? 'toast.rejectForbidden'
+          : why === 'authRequired'
+            ? 'toast.rejectFailed'
+            : 'toast.rejectRefundFailed';
       showToast(t(key, { ticket }), null);
+      return;
     }
+    if (outcome.stage === 'cancelAfterRefund') {
+      // The diner has their money back; only the cancel is left, and the next tap does just that.
+      console.error('kitchen: cancel after card refund failed', outcome.code);
+      showToast(t('toast.rejectRefundedStillOpen', { ticket }), null);
+      return;
+    }
+    rejectKeysRef.current.delete(order.id);
+    console.error('kitchen: cancel_order failed', outcome.code);
+    const key = errorKey(outcome.code, {
+      cannot_cancel_status: 'toast.rejectClosed',
+      not_authorized: 'toast.rejectForbidden',
+    }, 'toast.rejectFailed');
+    showToast(t(key, { ticket }), null);
   };
 
   const recall = async (order: Order) => {

@@ -93,7 +93,17 @@
       "customer": "Ghi chú của khách",
       "kitchen": "Ghi chú cho bếp",
       "delivery": "Hướng dẫn giao hàng"
-    }
+    },
+    "unpaidCardHint": "Đang chờ khách thanh toán bằng thẻ. Bếp sẽ nhận đơn khi thanh toán thành công.",
+    "refundPending": "Đang hoàn tiền",
+    "refundPendingHint": "{amount} đang được hoàn về thẻ của khách; Stripe chưa xác nhận.",
+    "partRefunded": "Hoàn một phần",
+    "refundedHint": "Đã hoàn {amount} về thẻ của khách.",
+    "cardRefunded": "Đã hoàn tiền thẻ",
+    "cardNotRefunded": "Chưa hoàn tiền thẻ",
+    "cardNotRefundedHint": "Đơn này đã đóng nhưng {amount} khách trả bằng thẻ vẫn nằm ở nhà hàng. Hãy hoàn tiền trong mục Thao tác.",
+    "cardDisputed": "Đang khiếu nại",
+    "cardDisputedHint": "Khách đã khiếu nại khoản thanh toán thẻ này với ngân hàng và ngân hàng đã lấy lại tiền. Hãy phản hồi khiếu nại trong Stripe Dashboard của chi nhánh."
   },
   "receipt": {
     "button": "Hóa đơn",
@@ -118,7 +128,9 @@
     "tip": "Tiền tip",
     "total": "Tổng cộng ({currency})",
     "paidVia": "Thanh toán bằng",
-    "deliverTo": "Giao đến: {address}"
+    "deliverTo": "Giao đến: {address}",
+    "refundedToCard": "Đã hoàn về thẻ · {date}",
+    "refundPendingToCard": "Đang hoàn tiền · {date}"
   },
   "actions": {
     "menu": "Thao tác",
@@ -130,7 +142,12 @@
       "title": "Hủy đơn này?",
       "body": "Đơn sẽ bị hủy và tồn kho được cộng lại. Không thể hoàn tác.",
       "keep": "Giữ đơn",
-      "confirm": "Có, hủy đơn"
+      "confirm": "Có, hủy đơn",
+      "bodyCard": "Đơn sẽ bị hủy, tồn kho được cộng lại và {amount} được hoàn về thẻ của khách từ tài khoản Stripe của chi nhánh này. Không thể hoàn tác.",
+      "bodyCardUnpaid": "Khách chưa thanh toán thẻ thành công nên không có gì để hoàn. Đơn sẽ bị hủy và tồn kho được cộng lại. Không thể hoàn tác.",
+      "bodyCardNothingLeft": "Khoản thanh toán thẻ đã được hoàn hoặc đang được hoàn nên không hoàn thêm. Đơn sẽ bị hủy và tồn kho được cộng lại. Không thể hoàn tác.",
+      "bodyCardDisputed": "Khách đã khiếu nại khoản thanh toán thẻ này với ngân hàng và ngân hàng đã lấy lại tiền, nên không hoàn tiền tại đây. Đơn sẽ bị hủy và tồn kho được cộng lại. Không thể hoàn tác.",
+      "confirmRefund": "Hoàn tiền và hủy"
     },
     "noteDialog": {
       "title": "Ghi chú của khách",
@@ -141,7 +158,8 @@
     },
     "invoiceIssued": "Đã xuất hóa đơn {number}",
     "invoiceIssuedNoNumber": "Đã xuất hóa đơn",
-    "done": "Xong"
+    "done": "Xong",
+    "refundCard": "Hoàn tiền thanh toán thẻ"
   },
   "refund": {
     "title": "Hoàn tiền",
@@ -205,6 +223,56 @@
     "deliveryNotFailed": "Chuyến giao này không còn ở trạng thái thất bại. Hãy tải lại trang để xem tình trạng hiện tại.",
     "deliveryForbidden": "Tài khoản của bạn không thể điều phối lại chuyến giao tại chi nhánh này.",
     "paymentNotFound": "Khoản thanh toán này không còn tồn tại.",
-    "paymentForbidden": "Chỉ chủ sở hữu hoặc quản lý mới có thể duyệt thanh toán."
+    "paymentForbidden": "Chỉ chủ sở hữu hoặc quản lý mới có thể duyệt thanh toán.",
+    "onlineCardUnpaid": "Đơn này được đặt trực tuyến để thanh toán bằng thẻ và khách chưa thanh toán, nên không thể ghi nhận thanh toán hay chuyển bước tại đây. Hãy hủy đơn, rồi nhập lại giao dịch tại quầy và thu tiền ở đó.",
+    "cardRefundRequired": "Khách đã thanh toán đơn này trực tuyến bằng thẻ, và phải hoàn tiền về thẻ trước khi hủy được đơn. Khoản hoàn tiền chưa được ghi nhận: hãy chờ một phút rồi thử lại.",
+    "cardRefundNotRecorded": "Stripe đã hoàn tiền về thẻ nhưng khoản này chưa có trong hồ sơ của chi nhánh, nên đơn chưa hiển thị được. Hãy chờ một phút rồi nhấn nút lần nữa; thẻ sẽ không bị hoàn tiền hai lần.",
+    "refundExceedsRemaining": "Số tiền này nhiều hơn phần còn có thể hoàn của đơn: các lần hoàn tiền trước đã được tính vào tổng đơn."
+  },
+  "cardRefund": {
+    "title": "Hoàn tiền thanh toán thẻ",
+    "checking": "Đang kiểm tra đơn này được thanh toán thế nào…",
+    "loadFailed": "Không kiểm tra được đơn này được thanh toán thế nào nên hiện không thể hoàn tiền hay hủy. Hãy đóng cửa sổ này và thử lại.",
+    "notPaidYet": "Khách chưa thanh toán thẻ thành công nên không có gì để hoàn. Nếu đơn không nên tiếp tục, hãy hủy đơn.",
+    "paidBy": "Đã thanh toán bằng thẻ: {amount}",
+    "alreadyRefunded": "Đã hoàn: {amount}",
+    "waitingOnStripe": "Đang chờ Stripe xác nhận: {amount}",
+    "refundableNow": "Còn có thể hoàn tối đa {amount}.",
+    "nothingLeft": "Khoản thanh toán thẻ đã được hoàn toàn bộ.",
+    "disputed": "Khách đã khiếu nại khoản thanh toán này với ngân hàng và ngân hàng đã lấy lại tiền từ số dư Stripe của chi nhánh. Không có gì để hoàn ở đây; hãy phản hồi khiếu nại trong Stripe Dashboard của chi nhánh.",
+    "whereItGoes": "Tiền được hoàn về thẻ của khách từ tài khoản Stripe của chi nhánh này. Ngân hàng thường hiển thị trong 5–10 ngày làm việc.",
+    "history": "Các lần hoàn tiền của khoản thanh toán này",
+    "status": {
+      "pending": "Đang xử lý",
+      "succeeded": "Đã hoàn",
+      "failed": "Thất bại",
+      "canceled": "Đã hủy"
+    },
+    "amountTooHigh": "Thẻ này chỉ còn có thể hoàn tối đa {amount}.",
+    "notCancelled": "Đơn chưa bị hủy.",
+    "refundedNotCancelled": "Đã hoàn {amount} về thẻ của khách nhưng không hủy được đơn: {reason} Nhấn nút lần nữa để hủy — thẻ sẽ không bị hoàn tiền hai lần.",
+    "orderNotUpdated": "Đã hoàn {amount} về thẻ của khách nhưng không ghi nhận được việc hoàn tiền trên đơn: {reason} Nhấn nút lần nữa để ghi nhận — thẻ sẽ không bị hoàn tiền hai lần.",
+    "sentSucceeded": "Đã hoàn {amount} về thẻ của khách. Ngân hàng thường hiển thị trong 5–10 ngày làm việc.",
+    "sentPending": "Stripe đã nhận yêu cầu hoàn {amount} và đang xử lý. Đơn sẽ hiện là đã hoàn tiền khi Stripe xác nhận.",
+    "notRecordedYet": "Khoản hoàn sẽ hiện trên đơn trong vài phút, khi Stripe báo kết quả.",
+    "retryRecord": "Ghi nhận trên đơn",
+    "errors": {
+      "generic": "Hoàn tiền không thành công. Chưa có tiền nào được hoàn. Vui lòng thử lại.",
+      "authRequired": "Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại. Chưa có tiền nào được hoàn.",
+      "notConfigured": "Chưa thiết lập hoàn tiền thẻ: nền tảng chưa có khóa Stripe. Chưa có tiền nào được hoàn.",
+      "notAuthorized": "Chỉ chủ, quản trị viên hoặc quản lý của chi nhánh này mới có thể hoàn tiền thẻ. Chưa có tiền nào được hoàn.",
+      "orderNotFound": "Đơn này không còn tồn tại.",
+      "notPaid": "Khoản thanh toán thẻ của đơn này chưa thành công nên không có gì để hoàn.",
+      "nothingToRefund": "Khoản thanh toán thẻ này đã được hoàn toàn bộ.",
+      "overRefund": "Số tiền này nhiều hơn phần còn lại trên thẻ. Chỉ còn có thể hoàn tối đa {amount}.",
+      "invalidAmount": "Nhập số tiền lớn hơn 0, tính bằng đô la và xu.",
+      "noAccount": "Chi nhánh này chưa kết nối tài khoản Stripe nên không thể hoàn tiền thẻ từ đây. Hãy hoàn tiền trong Stripe Dashboard.",
+      "mismatch": "Khoản thanh toán này không khớp với giao dịch Stripe đang giữ nên không thể hoàn tiền từ đây. Chưa có tiền nào được hoàn. Hãy hoàn tiền trong Stripe Dashboard của chi nhánh.",
+      "stripeRefused": "Stripe từ chối hoàn tiền. Chưa có tiền nào được hoàn. Hãy kiểm tra khoản thanh toán trong Stripe Dashboard của chi nhánh.",
+      "stripeDisputed": "Khách đã khiếu nại khoản thanh toán này với ngân hàng nên Stripe không hoàn tiền. Chưa có tiền nào được hoàn. Hãy phản hồi khiếu nại trong Stripe Dashboard của chi nhánh.",
+      "stripeAlreadyRefunded": "Stripe cho biết khoản thanh toán này đã được hoàn toàn bộ. Không hoàn thêm tiền.",
+      "stripeInsufficientFunds": "Số dư Stripe của chi nhánh không đủ để hoàn tiền. Chưa có tiền nào được hoàn. Hãy nạp thêm tiền trong Stripe Dashboard rồi thử lại.",
+      "unreachable": "Không xác nhận được việc hoàn tiền với Stripe. Có thể đã hoàn hoặc chưa. Hãy nhấn nút lần nữa: thẻ sẽ không bị hoàn tiền hai lần."
+    }
   }
 }

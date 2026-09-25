@@ -14,7 +14,7 @@
   },
   "payments": {
     "title": "Métodos de pago",
-    "description": "Elige qué métodos de pago pueden usar los clientes en Recoger en tienda (se prepara ahora) y Programar entrega (se reserva con anticipación). Los pagos con tarjeta los cobras tú en la entrega con tu propio lector; por ahora no se cobra nada en línea. Los pedidos que tu personal toma en el mostrador o en el POS no se ven afectados.",
+    "description": "Elige qué métodos de pago pueden usar los clientes en Recoger en tienda (se prepara ahora) y Programar entrega (se reserva con anticipación). La tarjeta se paga en línea al finalizar el pedido, directamente en la cuenta de Stripe de esta sucursal, y los clientes solo la ven cuando Stripe está conectado en Pagos con tarjeta, más arriba. Las ventas con tarjeta que tu personal cobra en el mostrador o en el POS con tu propia terminal se registran como antes y no se ven afectadas.",
     "dineInNote": "Esto aplica solo a entregas a domicilio y pedidos para recoger. Los clientes que comen en el local se saltan el paso de pago y te pagan directamente en el restaurante.",
     "modes": {
       "asap": "Recoger en tienda (ahora)",
@@ -27,7 +27,7 @@
       },
       "card": {
         "label": "Tarjeta",
-        "hint": "Se cobra en la entrega con tu propio lector"
+        "hint": "Se paga en línea al finalizar el pedido, en tu cuenta de Stripe (conéctala en Pagos con tarjeta)"
       },
       "transfer": {
         "label": "Transferencia QR",
@@ -182,15 +182,87 @@
     "armedButEmpty": "Las franjas de reserva están activadas, pero no hay ninguna: los clientes no pueden programar ningún pedido. Agrega una franja o desactiva esta opción.",
     "save": "Guardar programación"
   },
+  "cardPayments": {
+    "title": "Pagos con tarjeta",
+    "description": "Los clientes pagan con tarjeta al finalizar el pedido, directamente en la cuenta de Stripe de esta sucursal. Stripe recopila los datos de tu negocio y de tu banco y te deposita en tu banco. La plataforma nunca retiene tu dinero ni se queda con ninguna parte.",
+    "status": {
+      "not_connected": "Sin conectar",
+      "onboarding": "Termina la configuración",
+      "under_review": "En revisión",
+      "ready": "Lista para cobrar con tarjeta",
+      "action_needed": "Requiere acción"
+    },
+    "statusBody": {
+      "not_connected": "Conecta una cuenta de Stripe para cobrar con tarjeta en línea. La configuración se hace en la página de Stripe y toma unos 10 minutos: tu negocio, sus propietarios y la cuenta bancaria donde recibes los depósitos.",
+      "onboarding": "Stripe todavía necesita algunos datos antes de que esta sucursal pueda cobrar con tarjeta. Continúa donde te quedaste.",
+      "under_review": "Ya enviaste todo. Stripe está verificando los datos; suele tardar unos minutos y puede tardar un par de días. Los pagos con tarjeta se activan solos cuando termina.",
+      "ready": "Los clientes pueden pagar con tarjeta a esta sucursal al finalizar el pedido. El dinero llega a tu saldo de Stripe y se deposita en tu banco.",
+      "action_needed": "Stripe necesita más información antes de que esta sucursal pueda cobrar con tarjeta.",
+      "action_needed_charges_on": "Todavía puedes cobrar con tarjeta, pero Stripe necesita más información. Si no la envías antes del plazo de Stripe, los pagos con tarjeta se detienen."
+    },
+    "disabled": {
+      "rejected": "Stripe rechazó esta cuenta. Contacta al soporte de Stripe desde tu panel de Stripe.",
+      "review": "Stripe está revisando esta cuenta.",
+      "pastDue": "Hay información vencida, así que Stripe pausó los pagos con tarjeta en esta cuenta.",
+      "paused": "Los pagos con tarjeta en esta cuenta están en pausa.",
+      "other": "Stripe pausó los pagos con tarjeta en esta cuenta. Abre tu panel de Stripe para ver el motivo."
+    },
+    "requirementsTitle": "Stripe está pidiendo:",
+    "requirements": {
+      "bank": "La cuenta bancaria donde recibes los depósitos",
+      "people": "Datos de los propietarios o de la persona que administra la cuenta",
+      "business": "Los datos de tu negocio",
+      "profile": "El perfil público de tu negocio (sitio web, qué vendes)",
+      "terms": "Aceptar los términos de Stripe",
+      "other": "Otros datos (consulta tu panel de Stripe)"
+    },
+    "payoutsOff": "Los depósitos a tu banco todavía no están activados. Stripe guarda el dinero en tu saldo hasta entonces.",
+    "sharedWith": "Esta cuenta de Stripe también cobra con tarjeta para {branches}.",
+    "packageLocked": "Los pagos con tarjeta no están incluidos en tu plan actual. Puedes conectar Stripe ahora; los clientes verán la opción de tarjeta cuando tu plan la incluya.",
+    "viewPackages": "Ver planes",
+    "notConfigured": "Los pagos con tarjeta en línea todavía no están activados en esta plataforma.",
+    "returned": "Bienvenido de nuevo. Esto es lo que Stripe indica en este momento.",
+    "refreshExpired": "El enlace de Stripe venció. Abriendo uno nuevo…",
+    "refreshExpiredNoPermission": "El enlace de Stripe venció. Pide al propietario del restaurante que continúe la configuración.",
+    "actions": {
+      "connect": "Conectar Stripe",
+      "continue": "Continuar la configuración",
+      "dashboard": "Abrir el panel de Stripe",
+      "refresh": "Revisar el estado",
+      "share": "Usar la misma cuenta que {branches}",
+      "disconnect": "Desconectar"
+    },
+    "shareHint": "¿Recibes el dinero en el mismo banco que otra sucursal? Usa su cuenta de Stripe y omite la configuración.",
+    "disconnectConfirm": {
+      "title": "¿Desconectar Stripe de {branch}?",
+      "body": "Los clientes ya no podrán pagar con tarjeta a esta sucursal. Tu cuenta de Stripe, su saldo y sus depósitos quedan como están, y puedes volver a conectarla cuando quieras.",
+      "confirm": "Desconectar"
+    },
+    "ownerOnly": "Solo el propietario del restaurante puede conectar o cambiar la cuenta de Stripe.",
+    "readOnly": "Solo el propietario y los administradores del restaurante pueden ver la configuración de pagos con tarjeta.",
+    "errors": {
+      "generic": "Algo salió mal al comunicarse con Stripe. Inténtalo de nuevo en un momento.",
+      "stripeRefused": "Stripe no aceptó la solicitud. Inténtalo de nuevo en unos minutos; si sigue pasando, contacta a soporte.",
+      "forbidden": "Tu rol no puede cambiar la cuenta de Stripe.",
+      "alreadyConnected": "Esta sucursal ya tiene una cuenta de Stripe. Desconéctala primero.",
+      "sourceNotConnected": "Esa sucursal ya no está conectada a Stripe.",
+      "otherRestaurant": "Esa sucursal pertenece a otro restaurante.",
+      "notConnected": "Esta sucursal no está conectada a Stripe.",
+      "adminUrl": "La dirección del panel de la plataforma no está configurada, así que Stripe no puede devolverte aquí. Contacta a soporte."
+    }
+  },
   "serviceFee": {
     "title": "Cargo por servicio",
-    "description": "Un porcentaje del subtotal de la comida que se cobra <strong>solo cuando el cliente paga con tarjeta de crédito o débito</strong>. Los pedidos en efectivo, por transferencia QR y para comer en el local nunca lo pagan. Ponlo en <strong>0</strong> para no cobrar cargo por servicio.",
+    "description": "Un recargo por tarjeta: un porcentaje del subtotal de la comida que se añade <strong>solo cuando el cliente paga con tarjeta de crédito o débito</strong>. Los pedidos en efectivo, por transferencia QR y para comer en el local nunca lo pagan. Ponlo en <strong>0</strong> para no cobrar cargo por servicio.",
     "label": "Cargo por servicio (%)",
     "hint": "De 0 a {max}%. Solo pagos con tarjeta. Se cobra sobre el subtotal, nunca sobre impuestos, propinas ni el costo de envío.",
     "previewTitle": "Vista previa del cargo (pagos con tarjeta)",
     "previewOrder": "Pedido de ${amount}",
     "cardLocked": "El pago con tarjeta no está incluido en tu plan actual, así que por ahora este cargo nunca se cobra.",
-    "save": "Guardar cargo por servicio"
+    "save": "Guardar cargo por servicio",
+    "capNote": "En EE. UU., las reglas de las redes de tarjetas limitan el recargo por tarjeta al {max}%, así que no se puede fijar más alto. Se añade solo a los pagos con tarjeta, nunca al efectivo ni a la transferencia QR. Algunos estados restringen los recargos por tarjeta y las redes no los permiten en tarjetas de débito, así que verifica qué se aplica a esta sucursal.",
+    "storedAboveCap": "Esta sucursal tenía guardado un cargo del {stored}%. Los recargos por tarjeta tienen un tope del {max}%, así que a los pedidos con tarjeta se les cobra el {max}%. Guarda para dejar el {max}%.",
+    "typedAboveCap": "Los recargos por tarjeta tienen un tope del {max}%: a los pedidos con tarjeta se les cobrará el {max}%."
   },
   "tips": {
     "title": "Propinas",

@@ -21,7 +21,19 @@
   "closed": {
     "refunded": "Este pedido fue reembolsado",
     "cancelled": "Este pedido fue cancelado",
-    "contactRestaurant": "Si no esperabas esto, comunícate con el restaurante."
+    "contactRestaurant": "Si no esperabas esto, comunícate con el restaurante.",
+    "reasons": {
+      "cardExpired": "El pago con tarjeta no se completó dentro de los {minutes} minutos disponibles, así que el pedido se canceló automáticamente.",
+      "cardSetupFailed": "No se pudo preparar el pago con tarjeta, así que el pedido se canceló. No se cobró nada a tu tarjeta.",
+      "slipRejected": "El restaurante no pudo aceptar tu comprobante de transferencia.",
+      "customerCancelled": "Cancelaste este pedido antes de pagarlo.",
+      "kitchenRejected": "La cocina no pudo aceptar este pedido.",
+      "restaurantCancelled": "El restaurante canceló este pedido.",
+      "kitchenCannotMake": "La cocina no puede preparar este pedido.",
+      "customerAsked": "Se canceló a petición tuya.",
+      "noRider": "No había ningún repartidor disponible para este pedido.",
+      "duplicate": "Este pedido estaba duplicado."
+    }
   },
   "driver": {
     "almostThere": "¡Tu repartidor está por llegar!",
@@ -40,10 +52,48 @@
     "viewReceipt": "Ver recibo completo →"
   },
   "cardPayment": {
-    "title": "Aquí no se puede pagar con tarjeta",
-    "body": "Este pedido se hizo con pago con tarjeta, pero aún no podemos cobrar tarjetas en línea. Paga directamente al restaurante: pueden cobrarte cuando recojas tu pedido o cuando llegue. Tu pedido no está cancelado.",
-    "devNote": "Solo en desarrollo: marca el pedido como pagado para probar el resto del flujo.",
-    "devConfirm": "Confirmar de prueba (solo desarrollo)"
+    "payTitle": "Paga {amount} con tarjeta",
+    "payBody": "Tu pedido llega al restaurante en cuanto se complete el pago. Paga en {minutes, plural, one {# minuto} other {# minutos}} o el pedido se cancelará.",
+    "payNow": "Pagar {amount}",
+    "preparing": "Preparando el formulario seguro de tarjeta…",
+    "checking": "Revisando tu pago…",
+    "paidTitle": "Pagado con tarjeta",
+    "paidBody": "Tu pago se completó y el restaurante ya tiene tu pedido.",
+    "processingTitle": "Tu pago se está procesando",
+    "processingBody": "Tu banco lo está confirmando. Esta página se actualiza sola; no hace falta pagar de nuevo.",
+    "failedTitle": "No se cobró tu tarjeta",
+    "failedBody": "Inténtalo de nuevo con la misma tarjeta o con otra.",
+    "expiredTitle": "Se acabó el tiempo para pagar",
+    "expiredBody": "Este pedido no se pagó en {minutes} minutos, así que se está cancelando. No se cobró nada. Haz un pedido nuevo cuando quieras.",
+    "payAtRestaurantTitle": "Paga directamente al restaurante",
+    "payAtRestaurantBody": "Este pedido se hizo antes de que aquí se aceptaran pagos con tarjeta en línea. Paga al recoger tu pedido o cuando llegue. Tu pedido no está cancelado.",
+    "refundedTitle": "Reembolsado a tu tarjeta",
+    "refundedBody": "Se devolvieron {amount} a la tarjeta con la que pagaste. Los bancos suelen reflejarlo en un plazo de 5 a 10 días hábiles.",
+    "refundingTitle": "Tu reembolso está en camino",
+    "refundingBody": "Se está procesando un reembolso de {amount} a la tarjeta con la que pagaste. Una vez completado, los bancos suelen reflejarlo en un plazo de 5 a 10 días hábiles.",
+    "refundFailedTitle": "Tu reembolso no se completó",
+    "refundFailedBody": "No se pudo completar el reembolso a tu tarjeta. Comunícate con el restaurante para que lo resuelvan.",
+    "partlyRefunded": "Se reembolsaron {amount} de este pago a tu tarjeta.",
+    "retry": "Intentar de nuevo",
+    "securedNote": "Pago seguro a través de Stripe, directo al restaurante.",
+    "reasons": {
+      "declined": "Tu tarjeta fue rechazada.",
+      "insufficientFunds": "La tarjeta no tiene fondos suficientes.",
+      "expired": "La tarjeta está vencida.",
+      "cvc": "El código de seguridad no es correcto.",
+      "number": "El número de tarjeta no es correcto.",
+      "authentication": "No se completó la verificación de la tarjeta.",
+      "processing": "No se pudo procesar la tarjeta.",
+      "generic": "El pago no se completó."
+    },
+    "errors": {
+      "unavailable": "Este restaurante no puede aceptar pagos con tarjeta en línea en este momento. Comunícate con ellos para pagar de otra forma.",
+      "expired": "Se acabó el tiempo para pagar este pedido.",
+      "notPayable": "Este pedido ya no necesita un pago con tarjeta.",
+      "tooSmall": "Este monto es demasiado bajo para pagar con tarjeta.",
+      "inProgress": "Ya hay un pago en curso para este pedido. Espera un momento e inténtalo de nuevo.",
+      "generic": "No pudimos cargar el pago con tarjeta. Revisa tu conexión e inténtalo de nuevo."
+    }
   },
   "transfer": {
     "confirmedTitle": "Transferencia confirmada",
@@ -73,13 +123,15 @@
   },
   "actions": {
     "cancelPrompt": "¿Cambiaste de opinión? Aún no se ha preparado nada: el restaurante no ha confirmado tu transferencia, así que todavía puedes cancelar este pedido.",
+    "cancelPromptCard": "¿Cambiaste de opinión? Tu pago con tarjeta aún no se ha completado y no se ha preparado nada, así que todavía puedes cancelar este pedido.",
     "cancelOrder": "Cancelar este pedido",
     "contactToChange": "¿Necesitas cambiar o cancelar este pedido? Comunícate directamente con el restaurante: pueden modificarlo mientras aún se esté preparando.",
     "cancelErrors": {
       "signIn": "Inicia sesión con la cuenta con la que hiciste el pedido para cancelarlo.",
       "otherAccount": "Este pedido pertenece a otra cuenta. Comunícate con el restaurante para cancelarlo.",
       "tooLate": "Este pedido ya avanzó y no se puede cancelar aquí. Comunícate con el restaurante.",
-      "generic": "No se pudo completar. Inténtalo de nuevo o comunícate con el restaurante."
+      "generic": "No se pudo completar. Inténtalo de nuevo o comunícate con el restaurante.",
+      "cardPaid": "Tu pago con tarjeta ya se completó, así que ahora solo el restaurante puede cancelar este pedido. Comunícate con ellos; te reembolsarán la tarjeta al cancelarlo."
     }
   },
   "rating": {

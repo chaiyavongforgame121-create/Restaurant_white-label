@@ -47,6 +47,9 @@
     "emptyOrder": "Your cart is empty. Add something before placing your order.",
     "quantityTooHigh": "One item in your cart is over the limit of 99 per order. Lower its quantity and try again.",
     "phoneRequired": "Please add a phone number so the restaurant can reach you.",
-    "addressRequired": "Please add a delivery address."
+    "addressRequired": "Please add a delivery address.",
+    "cardNotConfigured": "This restaurant can’t take card payments online right now. Please choose another way to pay.",
+    "cardAmountTooSmall": "Card payments need to be at least $0.50. Please choose another way to pay for this order.",
+    "cardSetupFailed": "We couldn’t set up the card payment, so the order was not placed and nothing was charged. Please try again."
   }
 }

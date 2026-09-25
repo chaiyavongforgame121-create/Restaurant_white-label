@@ -47,6 +47,9 @@
     "emptyOrder": "Tu carrito está vacío. Agrega algo antes de hacer tu pedido.",
     "quantityTooHigh": "Un producto de tu carrito supera el límite de 99 por pedido. Reduce la cantidad e inténtalo de nuevo.",
     "phoneRequired": "Agrega un número de teléfono para que el restaurante pueda contactarte.",
-    "addressRequired": "Agrega una dirección de entrega."
+    "addressRequired": "Agrega una dirección de entrega.",
+    "cardNotConfigured": "Este restaurante no puede aceptar pagos con tarjeta en línea en este momento. Elige otra forma de pago.",
+    "cardAmountTooSmall": "Los pagos con tarjeta deben ser de al menos $0.50. Elige otra forma de pago para este pedido.",
+    "cardSetupFailed": "No pudimos preparar el pago con tarjeta, así que el pedido no se realizó y no se cobró nada. Inténtalo de nuevo."
   }
 }

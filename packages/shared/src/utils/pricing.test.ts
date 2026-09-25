@@ -5,7 +5,9 @@ import {
   formatCurrency,
   lineTotal,
   parseServiceFeePercent,
+  SERVICE_FEE_MAX_PERCENT,
   serviceFeeApplies,
+  storedServiceFeePercent,
   sumMoney,
 } from './index';
 
@@ -71,14 +73,14 @@ describe('place-order math', () => {
       lines: [{ unitPrice: 14.95, quantity: 2 }, { unitPrice: 4.95, quantity: 1 }],
       taxRate: 0.08875,
       deliveryFee: 3.99,
-      serviceFeePercent: 5,
+      serviceFeePercent: 3,
       tipAmount: 5,
     });
-    // subtotal 34.85, service 1.74, tax 3.09, total 48.67
+    // subtotal 34.85, service 1.05 (3% of 34.85 = 1.0455), tax 3.09, total 47.98
     expect(result.subtotal).toBe(34.85);
-    expect(result.serviceFee).toBe(1.74);
+    expect(result.serviceFee).toBe(1.05);
     expect(result.tax).toBe(3.09);
-    expect(result.total).toBeCloseTo(48.67, 2);
+    expect(result.total).toBeCloseTo(47.98, 2);
   });
 
   it('promo discount lowers the taxable base', () => {
@@ -130,12 +132,12 @@ describe('place-order math', () => {
     const result = computeTotal({
       lines: [{ unitPrice: 12.34, quantity: 1 }],
       taxRate: 0.06,
-      serviceFeePercent: 5,
+      serviceFeePercent: 3,
       tipAmount: 2,
     });
-    expect(result.serviceFee).toBe(0.62);
+    expect(result.serviceFee).toBe(0.37);
     expect(result.tax).toBe(0.74);
-    expect(result.total).toBe(15.7);
+    expect(result.total).toBe(15.45);
   });
 
   it('prices a happy-hour unit unrounded: 7 x $7.995 is $55.97, not 7 x $8.00', () => {
@@ -177,38 +179,65 @@ describe('service fee is card-only', () => {
   });
 
   it('charges the percentage on card, zero on cash and transfer', () => {
-    expect(computeServiceFee(34.85, 5, 'card')).toBe(1.74);
-    expect(computeServiceFee(34.85, 5, 'cash')).toBe(0);
-    expect(computeServiceFee(34.85, 5, 'transfer')).toBe(0);
+    expect(computeServiceFee(34.85, 3, 'card')).toBe(1.05);
+    expect(computeServiceFee(34.85, 3, 'cash')).toBe(0);
+    expect(computeServiceFee(34.85, 3, 'transfer')).toBe(0);
   });
 
   it('rounds to the cent and clamps the percentage', () => {
-    expect(computeServiceFee(12.34, 5, 'card')).toBe(0.62);
+    expect(computeServiceFee(12.34, 3, 'card')).toBe(0.37);
+    expect(computeServiceFee(100, 2.5, 'card')).toBe(2.5);
     expect(computeServiceFee(100, 0, 'card')).toBe(0);
-    expect(computeServiceFee(100, 40, 'card')).toBe(25);
+    expect(computeServiceFee(100, 40, 'card')).toBe(3);
     expect(computeServiceFee(100, -3, 'card')).toBe(0);
-    expect(computeServiceFee(-5, 5, 'card')).toBe(0);
+    expect(computeServiceFee(-5, 3, 'card')).toBe(0);
   });
 
   it('reads the branch setting out of the raw jsonb', () => {
-    expect(parseServiceFeePercent({ service_fee_percent: '7.5' })).toBe(7.5);
+    expect(parseServiceFeePercent({ service_fee_percent: '2.5' })).toBe(2.5);
     expect(parseServiceFeePercent({})).toBe(0);
     expect(parseServiceFeePercent(null)).toBe(0);
-    expect(parseServiceFeePercent({ service_fee_percent: 99 })).toBe(25);
+    expect(parseServiceFeePercent({ service_fee_percent: 99 })).toBe(3);
     expect(parseServiceFeePercent({ service_fee_percent: 'abc' })).toBe(0);
+    expect(parseServiceFeePercent({ service_fee_percent: -1 })).toBe(0);
+  });
+});
+
+describe('card surcharge cap (US card-network rules)', () => {
+  // The networks cap a credit-card surcharge at 3%. Live branches were saved at 5% under the
+  // old 25% ceiling; they must price card orders at 3% without anyone re-saving them.
+
+  it('is 3%', () => {
+    expect(SERVICE_FEE_MAX_PERCENT).toBe(3);
+  });
+
+  it('reads a branch stored above the cap as the cap', () => {
+    expect(parseServiceFeePercent({ service_fee_percent: 5 })).toBe(3);
+    expect(parseServiceFeePercent({ service_fee_percent: '7.5' })).toBe(3);
+    expect(computeServiceFee(20, 5, 'card')).toBe(0.6);
+  });
+
+  it('keeps the stored figure available so the settings card can say it was above the cap', () => {
+    expect(storedServiceFeePercent({ service_fee_percent: 5 })).toBe(5);
+    expect(storedServiceFeePercent({ service_fee_percent: '7.5' })).toBe(7.5);
+    expect(storedServiceFeePercent({ service_fee_percent: 3 })).toBe(3);
+    expect(storedServiceFeePercent({})).toBeNull();
+    expect(storedServiceFeePercent(null)).toBeNull();
+    expect(storedServiceFeePercent({ service_fee_percent: '' })).toBeNull();
+    expect(storedServiceFeePercent({ service_fee_percent: 'abc' })).toBeNull();
   });
 
   it('changes the order total with the method the diner picks', () => {
     const lines = [{ unitPrice: 20, quantity: 1 }];
-    expect(computeTotal({ lines, serviceFeePercent: 5, paymentMethod: 'card' }).total).toBe(21);
-    expect(computeTotal({ lines, serviceFeePercent: 5, paymentMethod: 'cash' }).total).toBe(20);
-    expect(computeTotal({ lines, serviceFeePercent: 5, paymentMethod: 'transfer' }).total).toBe(20);
+    expect(computeTotal({ lines, serviceFeePercent: 3, paymentMethod: 'card' }).total).toBe(20.6);
+    expect(computeTotal({ lines, serviceFeePercent: 3, paymentMethod: 'cash' }).total).toBe(20);
+    expect(computeTotal({ lines, serviceFeePercent: 3, paymentMethod: 'transfer' }).total).toBe(20);
   });
 
   it('dine-in pays none — the checkout submits it as cash', () => {
     const result = computeTotal({
       lines: [{ unitPrice: 20, quantity: 1 }],
-      serviceFeePercent: 5,
+      serviceFeePercent: 3,
       paymentMethod: 'cash',
     });
     expect(result.serviceFee).toBe(0);

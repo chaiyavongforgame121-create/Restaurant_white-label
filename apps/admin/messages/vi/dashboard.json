@@ -189,6 +189,8 @@
     },
     "why": {
       "unpaid": "Đang chờ khách chuyển khoản",
+      "unpaidCard": "Đang chờ khách thanh toán bằng thẻ",
+      "unpaidAny": "Đang chờ khách thanh toán",
       "releasesAt": "Vào bếp lúc {time}"
     }
   },

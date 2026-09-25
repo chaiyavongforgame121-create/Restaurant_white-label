@@ -2,7 +2,10 @@
 // Server-side recalculation never trusts client totals.
 //
 // Version history: see ./CHANGELOG.md (moved out of this file 2026-08-28).
-// Current: v11.6 — every branch is its own shop. Delivery is asked of the BRANCH. The caller counts as staff only at a branch
+// Current: v11.7 — a storefront card order is paid into the branch's own Stripe account: it needs a
+// card-ready connected account, waits off the kitchen board until Stripe says it is paid, and its
+// card fee is capped at 3%.
+// v11.6 — every branch is its own shop. Delivery is asked of the BRANCH. The caller counts as staff only at a branch
 // they may ring up (staff_can_ring_up), a staff sale is never filed under the cashier's own
 // customer record, a diner is resolved by (branch, user), and points, promos and gift cards
 // are taken atomically for the order or the order is not placed. A unit price is never
@@ -17,6 +20,17 @@ import {
   featureNotEntitledBody,
   loadEntitlements,
 } from '../_shared/entitlements.ts';
+// The card rules (who needs a connected account, who waits for Stripe, the 3% fee cap), pure and
+// unit-tested from apps/web/src/lib/card-payment-edge.test.ts.
+import {
+  CARD_MIN_CHARGE,
+  cardTotalTooSmall,
+  isStorefrontCard,
+  orderAwaitsPayment,
+  pendingPaymentGateway,
+  readyStripeAccount,
+  serviceFeePercentOf,
+} from './card.ts';
 
 interface PlaceOrderRequest {
   branch_id: string;
@@ -790,6 +804,29 @@ Deno.serve(async (req: Request) => {
     return json(403, featureNotEntitledBody('card_payment'));
   }
 
+  // A diner's card is charged on the branch's own Stripe account (Connect, direct charges:
+  // docs/PAYMENTS-STRIPE-CONNECT-2026-09-24.md), so a storefront card order needs a connected
+  // account that Stripe lets take charges — private.branch_card_ready(), read here as the row
+  // itself because the account id is also recorded on the payment below. Without one the diner
+  // would be handed an order nobody can take their card for, so it is refused before anything is
+  // written. Fail closed: an unreadable row is not a ready account.
+  //
+  // Staff are exempt, and on purpose. A counter or POS card sale is taken on the shop's own
+  // terminal and only recorded here (record_counter_payment); it never touches Stripe, so it
+  // needs no connected account and is not held for one.
+  const webCard = isStorefrontCard(payload.payment_method, staffPlaced);
+  let stripeAccount: string | null = null;
+  if (webCard) {
+    const { data: acct, error: acctErr } = await admin
+      .from('branch_payment_accounts')
+      .select('stripe_account_id, charges_enabled')
+      .eq('branch_id', branch.id)
+      .maybeSingle();
+    if (acctErr) console.error('branch_payment_account_read_failed', { branch_id: branch.id, detail: acctErr.message });
+    stripeAccount = readyStripeAccount(acct as { stripe_account_id?: string | null; charges_enabled?: boolean | null } | null);
+    if (!stripeAccount) return json(400, { error: 'card_not_configured' });
+  }
+
   // A branch that has not uploaded its QR cannot accept transfers, whatever the matrix
   // says — the diner would reach a payment step with nothing to scan. The counter's QR sale
   // passes here and is settled straight after by record_counter_transfer.
@@ -881,7 +918,9 @@ Deno.serve(async (req: Request) => {
   // computeServiceFee() in packages/shared/src/utils/pricing.ts — a Deno function
   // cannot import that package, so the two expressions have to be kept identical.
   // The till's discount is off the food it is charged on (quoteCounterCart does the same).
-  const serviceFeePercent = Math.max(0, Math.min(25, Number(settings.service_fee_percent ?? 0) || 0));
+  // Capped at SERVICE_FEE_MAX_PERCENT (3, in ./card.ts): a branch saved at 5% under the old 25%
+  // ceiling is charged 3% on the next order, without anyone re-saving it.
+  const serviceFeePercent = serviceFeePercentOf(settings);
   const serviceFee = payload.payment_method === 'card' ? r2(Math.max(0, subtotal - staffDiscount) * (serviceFeePercent / 100)) : 0;
 
   let deliveryAddress = payload.delivery_address ?? null;
@@ -1089,6 +1128,13 @@ Deno.serve(async (req: Request) => {
 
   const total = r2(Math.max(0, taxableBase + deliveryFee + serviceFee + tipAmount + taxAmount - giftCardCredit));
 
+  // A storefront card order under Stripe's 50-cent minimum could never be charged: refused here,
+  // before anything is taken, so the diner picks another method instead of meeting a payment form
+  // that cannot work. Nothing to pay at all is fine — there is no payment to take.
+  if (cardTotalTooSmall(webCard, total)) {
+    return json(400, { error: 'card_amount_too_small', minimum: CARD_MIN_CHARGE });
+  }
+
   // Hold far-future scheduled orders out of the kitchen. Released by the pg_cron job
   // private.release_scheduled_orders() at scheduled_for − schedule_lead_time_min.
   //
@@ -1128,7 +1174,12 @@ Deno.serve(async (req: Request) => {
     // A transfer of nothing (a gift card or reward covered it all) waits for no slip: there is
     // no payment row to approve (payments.amount must be above zero), so it would never leave
     // "awaiting payment". It goes to the kitchen like any other order with nothing to collect.
-    awaiting_payment: payload.payment_method === 'transfer' && total > 0,
+    // A storefront card order waits the same way, for Stripe: nothing reaches the kitchen unpaid.
+    // The payment is taken right after this answer (stripe-create-payment-intent), and Stripe's
+    // success — the webhook, or the order page's re-check — is what releases it. An order left
+    // unpaid is cancelled by the expiry job. A counter card sale does not wait: its money was
+    // taken on the terminal and is recorded straight after.
+    awaiting_payment: orderAwaitsPayment(payload.payment_method, staffPlaced, total),
     status_history: [{ status: 'pending', at: new Date().toISOString(), scheduled_for: scheduledFor, held }],
   }).select('id, order_number, customer_id').single();
 
@@ -1256,9 +1307,36 @@ Deno.serve(async (req: Request) => {
 
   // Nothing to collect, no payment row: payments_amount_check refuses an amount of 0, and the insert
   // only ever failed there.
-  const { data: payment } = total > 0
-    ? await admin.from('payments').insert({ order_id: order.id, branch_id: payload.branch_id, amount: total, method: payload.payment_method, status: 'pending', gateway: payload.payment_method === 'card' ? 'stripe' : null, gateway_metadata: { pending: true } }).select('id').single()
-    : { data: null };
+  //
+  // Only a storefront card payment is a Stripe payment: gateway 'stripe', and the branch account it
+  // will be charged on, recorded now so the webhook and the refund can be matched to the account
+  // the money went to even if the branch later connects another. A counter card sale is a terminal
+  // sale with no gateway (it used to be labelled 'stripe' too, which it never was).
+  const { data: payment, error: payErr } = total > 0
+    ? await admin.from('payments').insert({
+      order_id: order.id,
+      branch_id: payload.branch_id,
+      amount: total,
+      method: payload.payment_method,
+      status: 'pending',
+      ...pendingPaymentGateway(webCard, stripeAccount),
+    }).select('id').single()
+    : { data: null, error: null };
+  // A storefront card order is paid against this row and nothing else; without it the order would
+  // sit "awaiting payment" with nothing the diner could pay. Call it off rather than strand it,
+  // the way every other path cancels (the 30-minute expiry included): a status update, after
+  // which the orders cancel triggers put back the stock its lines took and the points, promo and
+  // gift card it reserved, and orders_status_history_trigger records the step.
+  if (webCard && total > 0 && (payErr || !payment)) {
+    console.error('card_payment_insert_failed', { order_id: order.id, detail: payErr?.message ?? null });
+    const { error: cancelErr } = await admin.from('orders').update({
+      status: 'cancelled',
+      awaiting_payment: false,
+      cancellation_reason: 'The card payment could not be set up.',
+    }).eq('id', order.id).eq('status', 'pending');
+    if (cancelErr) console.error('card_order_cancel_failed', { order_id: order.id, detail: cancelErr.message });
+    return json(500, { error: 'payment_insert_failed' });
+  }
   if (payload.channel === 'delivery') {
     // EWKT strings — PostGIS parses them into geography on insert.
     const pickupEwkt = branch.geo_lat != null && branch.geo_lng != null

@@ -132,7 +132,12 @@
     "undoPointsSpent": "Couldn’t undo #{ticket} — the diner has already spent the points from it.",
     "recallForbidden": "Your account can’t recall orders at this branch.",
     "cancelledElsewhere": "#{ticket} was cancelled — stop making it.",
-    "changedElsewhere": "#{ticket} was changed on another screen. The board has been refreshed."
+    "changedElsewhere": "#{ticket} was changed on another screen. The board has been refreshed.",
+    "updateCardUnpaid": "#{ticket} can’t move on until the customer’s card payment goes through.",
+    "rejectedRefunded": "#{ticket} rejected. The customer’s card is being refunded.",
+    "rejectRefundFailed": "Couldn’t reject #{ticket}: the customer’s card couldn’t be refunded, so the order is still open and no money moved. Ask a manager to check it in Orders.",
+    "rejectRefundUnknown": "Couldn’t confirm the card refund for #{ticket}. Tap Reject again; the customer can’t be refunded twice.",
+    "rejectRefundedStillOpen": "The customer’s card for #{ticket} was refunded, but the order is still open. Tap Reject again to finish."
   },
   "dispatch": {
     "maxAttempts": "Tried every rider — raise “Max dispatch attempts” or assign one by hand.",

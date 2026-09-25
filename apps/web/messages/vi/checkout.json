@@ -66,8 +66,8 @@
     "transfer": "Chuyển khoản QR",
     "cardFeeNote": "Phí dịch vụ {percent}% chỉ áp dụng khi thanh toán bằng thẻ — tiền mặt và chuyển khoản QR không mất phí.",
     "transferNote": "Hãy đặt hàng trước. Mã QR và mục tải ảnh biên lai sẽ hiện ngay trên trang đơn hàng — bạn không bị tính tiền cho đến khi xác nhận đã thanh toán.",
-    "cardWithheldChooseOther": "Trang này chưa hỗ trợ thanh toán bằng thẻ. Hãy chọn một phương thức ở trên — bạn vẫn có thể trả bằng thẻ trực tiếp tại nhà hàng.",
-    "cardWithheldOnly": "Trang này chưa hỗ trợ thanh toán bằng thẻ. Đây là phương thức duy nhất nhà hàng đang bật, nên hiện chưa thể đặt đơn này trực tuyến. Vui lòng gọi điện cho nhà hàng để đặt.",
+    "cardWithheldChooseOther": "Nhà hàng này chưa nhận thanh toán thẻ trực tuyến. Hãy chọn một phương thức ở trên — bạn vẫn có thể trả bằng thẻ trực tiếp tại nhà hàng.",
+    "cardWithheldOnly": "Nhà hàng này chưa nhận thanh toán thẻ trực tuyến. Đây là phương thức duy nhất nhà hàng đang bật, nên hiện chưa thể đặt đơn này trực tuyến. Vui lòng gọi điện cho nhà hàng để đặt.",
     "noneAvailable": "Nhà hàng hiện không có phương thức thanh toán nào."
   },
   "signIn": {
@@ -194,5 +194,13 @@
     "promo": "Khuyến mãi ({code})",
     "reward": "Phần thưởng ({name})",
     "deliveryFree": "Miễn phí giao hàng"
+  },
+  "card": {
+    "loading": "Đang tải biểu mẫu thẻ bảo mật…",
+    "securedNote": "Thẻ của bạn được kiểm tra ngay bây giờ và bị trừ tiền khi bạn đặt hàng. Khoản thanh toán chuyển thẳng đến nhà hàng qua Stripe.",
+    "notReady": "Biểu mẫu thẻ vẫn đang tải. Vui lòng đợi một chút rồi đặt hàng lại.",
+    "checkDetails": "Vui lòng kiểm tra thông tin thẻ và thử lại.",
+    "loadFailedChooseOther": "Không tải được biểu mẫu thẻ — có thể do tập lệnh bị chặn hoặc kết nối yếu. Hãy chọn một phương thức ở trên, hoặc tải lại trang để thử thẻ lần nữa.",
+    "loadFailedOnly": "Không tải được biểu mẫu thẻ — có thể do tập lệnh bị chặn hoặc kết nối yếu. Vui lòng tải lại trang để thử lại."
   }
 }

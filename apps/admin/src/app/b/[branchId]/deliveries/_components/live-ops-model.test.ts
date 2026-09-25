@@ -509,6 +509,8 @@ describe('rpcErrorKey', () => {
     expect(rpcErrorKey('cannot_cancel_status:picked_up')).toBe('cannotCancelStatus');
     expect(rpcErrorKey('P0001: order_not_found')).toBe('orderNotFound');
     expect(rpcErrorKey('delivery_not_found')).toBe('notFound');
+    expect(rpcErrorKey('card_payment_not_completed')).toBe('cardUnpaid');
+    expect(rpcErrorKey('card_refund_required')).toBe('cardRefundRequired');
   });
 
   it('does not recognise a message that is none of ours', () => {

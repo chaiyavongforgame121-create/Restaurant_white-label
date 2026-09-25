@@ -74,11 +74,21 @@ describe('quoteCounterCart', () => {
       itemSubtotals: [12, 8],
       discountPercent: 10,
       salesTaxRate: 0.075,
-      serviceFeePercent: 5,
+      serviceFeePercent: 3,
       method: 'card',
     });
-    expect(card.serviceFee).toBe(0.9);
-    expect(card.total).toBe(20.25);
+    // 3% of the discounted $18.00, not of the $20.00 before the discount.
+    expect(card.serviceFee).toBe(0.54);
+    expect(card.total).toBe(19.89);
+  });
+
+  it('quotes a branch saved above the 3% card-surcharge cap at 3%, as place-order charges it', () => {
+    // Live branches were saved at 5% under the old 25% ceiling.
+    const input = { ...base, itemSubtotals: [20], method: 'card' as const };
+    expect(quoteCounterCart({ ...input, serviceFeePercent: 5 }).serviceFee).toBe(0.6);
+    expect(quoteCounterCart({ ...input, serviceFeePercent: 5 })).toEqual(
+      quoteCounterCart({ ...input, serviceFeePercent: 3 }),
+    );
   });
 
   it('charges a QR transfer like cash: the service fee is card-only', () => {

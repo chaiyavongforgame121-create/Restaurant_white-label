@@ -307,17 +307,29 @@
       "refunded": "Reembolsado",
       "voided": "Anulado"
     },
-    "gridCaption": "Un pago con tarjeta en Pendiente no se ha cobrado: todavía no hay una clave de pasarela de tarjetas configurada, así que esas filas están en espera, no fallidas.",
+    "gridCaption": "Un pago con tarjeta en Pendiente es un pedido en línea cuyo cliente todavía no terminó de pagar con tarjeta (se cancela a los 30 minutos si no lo hace), o una venta con tarjeta en el mostrador que todavía no se ha registrado.",
     "refunds": "Reembolsos",
     "refundedToDiners": "Reembolsado a clientes",
     "refundEvents": "Reembolsos registrados",
     "markedRefunded": "Marcado como reembolsado en el pago",
     "voided": "Pagos anulados",
-    "refundsCaption": "Un reembolso se registra en el pedido, no en el pago, así que la columna Reembolsado de la tabla de arriba marca cero a propósito. La cifra confiable es la primera línea de aquí.",
+    "refundsCaption": "Los reembolsos de efectivo, transferencias QR y tarjetas cobradas con tu propio lector se registran en el pedido. Una tarjeta pagada en línea se reembolsa a través de la cuenta de Stripe de esta sucursal y cuenta aquí cuando Stripe lo confirma; solo esos pagos pueden aparecer como Reembolsado en la tabla de arriba.",
     "awaiting": "Pendiente de cobro",
     "awaitingBody": "Pedidos ya entregados al cliente cuyo pago sigue pendiente.",
     "settleLink": "Cobrarlos en el mostrador",
     "serviceFees": "Cargos por servicio cobrados",
-    "backfilled": "Cobrados por la carga de datos históricos"
+    "backfilled": "Cobrados por la carga de datos históricos",
+    "cardRefunds": "De ello, reembolsado a tarjetas a través de Stripe",
+    "cardRefundsPending": "Reembolsos a tarjeta que Stripe aún está procesando",
+    "cardRefundFailures": "Reembolsos a tarjeta que fallaron",
+    "cardRefundFailedNote": "Un reembolso a tarjeta fallido significa que el cliente no recibió ese dinero. Vuelve a reembolsar el pedido desde Pedidos o desde el Dashboard de Stripe de esta sucursal.",
+    "disputes": "Disputas de tarjeta",
+    "disputesEmpty": "No se disputó ningún pago con tarjeta en este periodo.",
+    "disputesCount": "Disputas iniciadas",
+    "disputesOpen": "Esperando tu respuesta o la decisión del banco",
+    "disputesAmount": "Monto disputado",
+    "disputesLost": "Perdidas",
+    "disputesWon": "Ganadas",
+    "disputesCaption": "Una disputa es un cliente que pide a su banco que revierta un pago con tarjeta. Stripe descuenta el monto del saldo de Stripe de esta sucursal mientras el banco decide. Responde cada una en el Dashboard de Stripe de esta sucursal antes de su fecha límite."
   }
 }

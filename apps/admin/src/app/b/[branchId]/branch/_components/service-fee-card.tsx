@@ -3,8 +3,8 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { Lock, Percent, Save } from 'lucide-react';
-import { SERVICE_FEE_MAX_PERCENT } from '@favornoms/shared';
+import { AlertTriangle, Lock, Percent, Save } from 'lucide-react';
+import { SERVICE_FEE_MAX_PERCENT, storedServiceFeePercent } from '@favornoms/shared';
 import { Button, Card } from '@favornoms/ui';
 import { useSettingsPatch } from './patch-settings';
 
@@ -17,6 +17,10 @@ import { useSettingsPatch } from './patch-settings';
 // ONLY when payment_method is 'card' (Stripe) — cash, QR transfer and dine-in
 // orders store 0, whether they were rung up by a diner or by staff at the
 // counter. Blank/0 here means "no service fee" end to end.
+//
+// It is a card surcharge, so it is capped at SERVICE_FEE_MAX_PERCENT (3%), the ceiling the US
+// card networks put on credit-card surcharges. Branches saved above it under the old 25%
+// ceiling are charged the cap everywhere; the card says so rather than quietly showing 3.
 
 interface Props {
   branchId: string;
@@ -48,10 +52,14 @@ export function ServiceFeeCard({ branchId, settings, canUseCard }: Props) {
   const router = useRouter();
   // Sends only what changed since this card was rendered or last saved.
   const savePatch = useSettingsPatch(branchId, settings);
-  const [percent, setPercent] = React.useState<string>(() => {
-    const n = Number(settings?.service_fee_percent);
-    return Number.isFinite(n) && n >= 0 ? String(n) : '0';
-  });
+  // What the row holds, unclamped. A branch saved at 5% under the old 25% ceiling is charged 3%
+  // today; the card shows that figure beside the cap until the owner saves the capped value.
+  const [stored, setStored] = React.useState<number | null>(() => storedServiceFeePercent(settings));
+  // The box opens on what card orders are actually charged, so pressing Save on a branch stored
+  // above the cap writes the cap rather than re-saving a figure nobody is charged.
+  const [percent, setPercent] = React.useState<string>(() =>
+    stored !== null && stored >= 0 ? String(Math.min(MAX_PCT, stored)) : '0',
+  );
   const [saving, setSaving] = React.useState(false);
   const [savedAt, setSavedAt] = React.useState<number | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -63,6 +71,8 @@ export function ServiceFeeCard({ branchId, settings, canUseCard }: Props) {
     if (!Number.isFinite(n) || n < 0) return 0;
     return Math.min(MAX_PCT, n);
   }, [percent]);
+  const storedAboveCap = stored !== null && stored > MAX_PCT;
+  const typedAboveCap = Number(percent) > MAX_PCT;
 
   const save = async () => {
     setSaving(true);
@@ -74,6 +84,8 @@ export function ServiceFeeCard({ branchId, settings, canUseCard }: Props) {
       setError(t(saveErrorKey(updateError)));
       return;
     }
+    setStored(parsed);
+    setPercent(String(parsed));
     setSavedAt(Date.now());
     router.refresh();
   };
@@ -94,7 +106,7 @@ export function ServiceFeeCard({ branchId, settings, canUseCard }: Props) {
             type="number"
             min={0}
             max={MAX_PCT}
-            step="0.5"
+            step="0.1"
             inputMode="decimal"
             value={percent}
             onChange={(e) => setPercent(e.target.value)}
@@ -103,8 +115,25 @@ export function ServiceFeeCard({ branchId, settings, canUseCard }: Props) {
           <span className="mt-1 block text-xs text-muted-foreground">
             {t('serviceFee.hint', { max: MAX_PCT })}
           </span>
+          {typedAboveCap && (
+            <span role="status" className="mt-1 block text-xs font-medium text-warning">
+              {t('serviceFee.typedAboveCap', { max: MAX_PCT })}
+            </span>
+          )}
         </label>
       </div>
+
+      <p className="mt-3 text-xs text-muted-foreground">{t('serviceFee.capNote', { max: MAX_PCT })}</p>
+
+      {storedAboveCap && (
+        <p
+          role="status"
+          className="mt-3 flex items-start gap-2 rounded-xl bg-warning/10 px-4 py-3 text-sm text-foreground"
+        >
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+          <span>{t('serviceFee.storedAboveCap', { stored: stored ?? 0, max: MAX_PCT })}</span>
+        </p>
+      )}
 
       <div className="mt-4 rounded-xl bg-muted/50 p-3">
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">

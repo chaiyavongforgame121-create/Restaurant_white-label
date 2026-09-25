@@ -307,17 +307,29 @@
       "refunded": "Đã hoàn tiền",
       "voided": "Đã hủy"
     },
-    "gridCaption": "Thanh toán thẻ ở trạng thái Đang chờ là chưa bị trừ tiền — chưa cấu hình khóa cổng thanh toán thẻ, nên các dòng này đang chờ chứ không phải thất bại.",
+    "gridCaption": "Thanh toán thẻ ở trạng thái Đang chờ là đơn trực tuyến mà khách chưa thanh toán thẻ xong (đơn bị hủy sau 30 phút nếu khách không thanh toán), hoặc giao dịch thẻ tại quầy chưa được ghi nhận.",
     "refunds": "Hoàn tiền",
     "refundedToDiners": "Đã hoàn cho khách",
     "refundEvents": "Số lần hoàn tiền",
     "markedRefunded": "Đánh dấu hoàn tiền trên thanh toán",
     "voided": "Thanh toán đã hủy",
-    "refundsCaption": "Hoàn tiền được ghi nhận theo đơn, không theo khoản thanh toán, nên cột Đã hoàn tiền ở bảng trên luôn bằng 0. Con số đáng tin là dòng đầu tiên ở đây.",
+    "refundsCaption": "Hoàn tiền cho tiền mặt, chuyển khoản QR và thẻ thu bằng máy của bạn được ghi nhận theo đơn. Thẻ thanh toán trực tuyến được hoàn qua tài khoản Stripe của chi nhánh này và được tính ở đây khi Stripe xác nhận; chỉ những khoản thanh toán này mới có thể hiện là Đã hoàn tiền trong bảng trên.",
     "awaiting": "Chờ thu tiền",
     "awaitingBody": "Đơn đã giao cho khách nhưng thanh toán vẫn đang chờ.",
     "settleLink": "Thu tiền các đơn này tại quầy",
     "serviceFees": "Phí dịch vụ đã thu",
-    "backfilled": "Đã thu qua bổ sung dữ liệu cũ"
+    "backfilled": "Đã thu qua bổ sung dữ liệu cũ",
+    "cardRefunds": "Trong đó, hoàn về thẻ qua Stripe",
+    "cardRefundsPending": "Khoản hoàn thẻ Stripe đang xử lý",
+    "cardRefundFailures": "Khoản hoàn thẻ không thành công",
+    "cardRefundFailedNote": "Hoàn tiền thẻ không thành công nghĩa là khách chưa nhận lại số tiền đó. Hãy hoàn tiền đơn lại từ mục Đơn hàng, hoặc từ Stripe Dashboard của chi nhánh này.",
+    "disputes": "Khiếu nại thanh toán thẻ",
+    "disputesEmpty": "Không có khoản thanh toán thẻ nào bị khiếu nại trong khoảng thời gian này.",
+    "disputesCount": "Khiếu nại đã mở",
+    "disputesOpen": "Đang chờ bạn phản hồi hoặc ngân hàng quyết định",
+    "disputesAmount": "Số tiền bị khiếu nại",
+    "disputesLost": "Thua",
+    "disputesWon": "Thắng",
+    "disputesCaption": "Khiếu nại là khi khách yêu cầu ngân hàng thu hồi một khoản thanh toán thẻ. Stripe trừ số tiền đó khỏi số dư Stripe của chi nhánh này trong khi ngân hàng xem xét. Hãy phản hồi từng khiếu nại trong Stripe Dashboard của chi nhánh này trước hạn chót."
   }
 }

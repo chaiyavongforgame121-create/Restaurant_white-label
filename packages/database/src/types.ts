@@ -741,6 +741,50 @@ export type Database = {
           },
         ]
       }
+      branch_payment_accounts: {
+        Row: {
+          branch_id: string
+          charges_enabled: boolean
+          created_at: string
+          details_submitted: boolean
+          disabled_reason: string | null
+          payouts_enabled: boolean
+          requirements_due: string[]
+          stripe_account_id: string
+          updated_at: string
+        }
+        Insert: {
+          branch_id: string
+          charges_enabled?: boolean
+          created_at?: string
+          details_submitted?: boolean
+          disabled_reason?: string | null
+          payouts_enabled?: boolean
+          requirements_due?: string[]
+          stripe_account_id: string
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string
+          charges_enabled?: boolean
+          created_at?: string
+          details_submitted?: boolean
+          disabled_reason?: string | null
+          payouts_enabled?: boolean
+          requirements_due?: string[]
+          stripe_account_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "branch_payment_accounts_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: true
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       branch_schedule_hours: {
         Row: {
           branch_id: string
@@ -3348,6 +3392,70 @@ export type Database = {
           },
         ]
       }
+      payment_refunds: {
+        Row: {
+          amount: number
+          branch_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          order_id: string
+          payment_id: string
+          reason: string | null
+          status: string
+          stripe_refund_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          branch_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          order_id: string
+          payment_id: string
+          reason?: string | null
+          status?: string
+          stripe_refund_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          branch_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          order_id?: string
+          payment_id?: string
+          reason?: string | null
+          status?: string
+          stripe_refund_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_refunds_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_refunds_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_refunds_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payments: {
         Row: {
           amount: number
@@ -5926,6 +6034,28 @@ export type Database = {
         Args: { p_branch_slug: string; p_restaurant_slug: string }
         Returns: number
       }
+      stripe_connect_apply_charge_refunded: {
+        Args: { p_account: string; p_charge: Json }
+        Returns: Json
+      }
+      stripe_connect_apply_payment_intent: {
+        Args: { p_account: string; p_intent: Json }
+        Returns: Json
+      }
+      stripe_connect_record_dispute: {
+        Args: { p_account: string; p_dispute: Json; p_event_type: string }
+        Returns: Json
+      }
+      stripe_connect_record_refund: {
+        Args: {
+          p_account: string
+          p_created_by?: string
+          p_reason?: string
+          p_refund: Json
+        }
+        Returns: Json
+      }
+      stripe_event_forget: { Args: { p_event_id: string }; Returns: boolean }
       stripe_event_seen: {
         Args: { p_event_id: string; p_type?: string }
         Returns: boolean

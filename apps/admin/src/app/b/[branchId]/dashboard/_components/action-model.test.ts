@@ -7,6 +7,7 @@ import type {
   LiveDelivery,
 } from '@favornoms/database/queries';
 import {
+  bookingPaymentMethods,
   bookingState,
   heldOrderIds,
   lastReadyAt,
@@ -547,6 +548,41 @@ describe('readScheduledDeliveries', () => {
     expect(close.rows[0]).toMatchObject({ state: 'unpaid', needsAction: true });
   });
 
+  it('never asks the restaurant to chase an unpaid card booking, and says it waits on the card', () => {
+    // Only the diner can pay it, online, and the expiry job cancels it if they do not.
+    const rows = [
+      delivered({ id: 'card', status: 'pending', awaiting_payment: true, scheduled_for: inMin(40) }),
+      delivered({ id: 'slip', status: 'pending', awaiting_payment: true, scheduled_for: inMin(40) }),
+      delivered({ id: 'unknown', status: 'pending', awaiting_payment: true, scheduled_for: inMin(40) }),
+      delivered({ id: 'paid', status: 'confirmed', held: true, scheduled_for: inMin(40) }),
+    ];
+    const methods = bookingPaymentMethods([
+      { order_id: 'card', method: 'card', gateway: 'stripe' },
+      { order_id: 'slip', method: 'transfer', gateway: null },
+      { order_id: 'paid', method: 'card', gateway: 'stripe' },
+    ]);
+    const reading = readScheduledDeliveries(rows, NOW, LEAD_MS, BRANCH, new Set(), methods);
+    const byKey = Object.fromEntries(reading.rows.map((r) => [r.key, r]));
+    expect(byKey.card).toMatchObject({ state: 'unpaid', unpaidBy: 'card', needsAction: false, weight: 'normal' });
+    expect(byKey.slip).toMatchObject({ state: 'unpaid', unpaidBy: 'transfer', needsAction: true });
+    // A reader who may not see payments gets neutral words, and the booking is still flagged.
+    expect(byKey.unknown).toMatchObject({ state: 'unpaid', unpaidBy: null, needsAction: true });
+    // A paid booking has no "unpaid by".
+    expect(byKey.paid?.unpaidBy).toBeNull();
+  });
+
+  it('still flags an unpaid card booking once its time has passed', () => {
+    const reading = readScheduledDeliveries(
+      [delivered({ id: 'card', status: 'pending', awaiting_payment: true, scheduled_for: inMin(-5) })],
+      NOW,
+      LEAD_MS,
+      BRANCH,
+      new Set(),
+      bookingPaymentMethods([{ order_id: 'card', method: 'card', gateway: 'stripe' }]),
+    );
+    expect(reading.rows[0]).toMatchObject({ state: 'unpaid', late: true, needsAction: true });
+  });
+
   it('links to the order by its number and skips a row with no readable time', () => {
     const { rows } = readScheduledDeliveries(
       [delivered({ order_number: 'A-2609-300001' }), delivered({ id: 'bad', scheduled_for: 'nope' })],
@@ -681,5 +717,21 @@ describe('branch-local days', () => {
   it('steps whole days across a DST boundary', () => {
     expect(shiftDayKey('2026-03-08', -1)).toBe('2026-03-07');
     expect(shiftDayKey('2026-01-01', -1)).toBe('2025-12-31');
+  });
+});
+
+describe('the booking payment copy', () => {
+  it.each(['en', 'es', 'th', 'vi'])('words an unpaid booking by how it is paid in %s', async (locale) => {
+    const { readFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const json = JSON.parse(readFileSync(resolve(__dirname, '../../../../../../messages', locale, 'dashboard.json'), 'utf8')) as {
+      bookings: { why: Record<string, unknown> };
+    };
+    for (const key of ['unpaid', 'unpaidCard', 'unpaidAny']) {
+      const value = json.bookings.why[key];
+      expect(typeof value === 'string' && value.trim().length > 0, `${locale} bookings.why.${key}`).toBe(true);
+    }
+    // Three different sentences: a card booking must not read as the transfer one.
+    expect(new Set(['unpaid', 'unpaidCard', 'unpaidAny'].map((k) => json.bookings.why[k])).size).toBe(3);
   });
 });

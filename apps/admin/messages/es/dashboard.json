@@ -189,6 +189,8 @@
     },
     "why": {
       "unpaid": "Esperando la transferencia del cliente",
+      "unpaidCard": "Esperando el pago con tarjeta del cliente",
+      "unpaidAny": "Esperando el pago del cliente",
       "releasesAt": "Pasa a cocina a las {time}"
     }
   },

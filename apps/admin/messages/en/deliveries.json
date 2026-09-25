@@ -137,7 +137,9 @@
     "orderNotFound": "That order no longer exists.",
     "notAuthorized": "Your account cannot cancel this order.",
     "cannotCancelStatus": "This order can no longer be cancelled.",
-    "generic": "Something went wrong. Please try again."
+    "generic": "Something went wrong. Please try again.",
+    "cardUnpaid": "The customer’s card payment for this order hasn’t gone through yet, so it can’t move on. If it won’t be paid, cancel it and ring the sale up again at the counter.",
+    "cardRefundRequired": "The customer paid this order online by card, and the refund to their card isn’t recorded yet. Wait a minute and try again."
   },
   "assign": {
     "title": "Assign {number} to a rider",
@@ -177,7 +179,8 @@
     "otherLabel": "What happened",
     "otherPlaceholder": "Tell the customer what happened",
     "keep": "Keep order",
-    "confirm": "Yes, cancel"
+    "confirm": "Yes, cancel",
+    "cardNote": "If the customer paid online by card, the card is refunded in full from this branch’s Stripe account."
   },
   "notOffered": {
     "stillInFlight": "Runs that were already out still finish here. This board closes once the last one lands."

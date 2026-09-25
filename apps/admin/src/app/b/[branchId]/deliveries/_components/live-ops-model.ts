@@ -522,6 +522,12 @@ export const RPC_ERRORS = {
   order_not_found: 'orderNotFound',
   not_authorized: 'notAuthorized',
   cannot_cancel_status: 'cannotCancelStatus',
+  // The online card rules (20260925100000, 20260925120000). An order waiting on the diner's card
+  // cannot be moved on or settled here; a paid one is refunded as part of the cancel, so this
+  // board only sees card_refund_required if that refund has not reached the books yet.
+  card_payment_not_completed: 'cardUnpaid',
+  stripe_payment_server_only: 'cardUnpaid',
+  card_refund_required: 'cardRefundRequired',
 } as const;
 
 export type RpcErrorKey = (typeof RPC_ERRORS)[keyof typeof RPC_ERRORS];

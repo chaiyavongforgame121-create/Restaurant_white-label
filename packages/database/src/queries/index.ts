@@ -7,7 +7,7 @@ export * from './staff';
 export * from './reports';
 export * from './ratings';
 export * from './loyalty';
-export * from './stripe';
+export * from './payment-accounts';
 export * from './plan';
 export * from './addresses';
 export * from './delivery';

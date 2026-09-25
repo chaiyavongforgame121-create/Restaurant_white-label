@@ -1,7 +1,11 @@
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { getServerClient } from '@favornoms/database/server';
-import { getEntitlementsForBranch } from '@favornoms/database/queries';
+import {
+  getBranchPaymentAccount,
+  getEntitlementsForBranch,
+  listRestaurantPaymentAccounts,
+} from '@favornoms/database/queries';
 import { hasFeature } from '@favornoms/shared';
 import { resolveDeliveryGate } from '@/lib/delivery-gate';
 import { BranchSettings } from './_components/branch-settings';
@@ -41,7 +45,16 @@ export default async function BranchPage({ params }: Props) {
   // The delivery gate carries the catalog's prices as well as the answer: the upsell shown
   // in place of the delivery cards used to hardcode $49 while the catalog said $59, and
   // delivery is now $59 once plus $29/month FOR THIS BRANCH (docs/PACKAGING-2026-09-23.md).
-  const [{ data: restaurant }, entitlements, deliveryGate, { data: brand }, t, { data: caps }] = await Promise.all([
+  const [
+    { data: restaurant },
+    entitlements,
+    deliveryGate,
+    { data: brand },
+    t,
+    { data: caps },
+    paymentAccount,
+    restaurantPaymentAccounts,
+  ] = await Promise.all([
     supabase.from('restaurants').select('name, storefront').eq('id', branch.restaurant_id).maybeSingle(),
     getEntitlementsForBranch(supabase, branchId),
     resolveDeliveryGate(supabase, branchId),
@@ -51,7 +64,12 @@ export default async function BranchPage({ params }: Props) {
     // and admin). A manager opens this page too, so the cards are shown read-only to them
     // rather than refusing only after Save.
     supabase.rpc('my_capabilities', { p_branch_id: branchId }),
+    // The Stripe account rows are readable with branch.settings only (RLS); anyone else gets none,
+    // and the card says the setup is for the owner and admins to see.
+    getBranchPaymentAccount(supabase, branchId),
+    listRestaurantPaymentAccounts(supabase, branch.restaurant_id),
   ]);
+  const capabilities = (caps ?? []) as string[];
   // resolveDeliveryGate asks getEntitlementsForBranch the same question hasFeature would,
   // and carries the catalog prices with it, so the upsell's answer and its numbers cannot
   // disagree.
@@ -84,7 +102,15 @@ export default async function BranchPage({ params }: Props) {
         planHref: deliveryGate.planHref,
       }}
       canUseCard={hasFeature(entitlements, 'card_payment')}
-      canEditSettings={((caps ?? []) as string[]).includes('branch.settings')}
+      canEditSettings={capabilities.includes('branch.settings')}
+      cardPayments={{
+        account: paymentAccount,
+        restaurantAccounts: restaurantPaymentAccounts,
+        // Connecting, sharing and disconnecting choose where the branch's card money is paid:
+        // billing.manage, the owner's. stripe-connect-onboard checks the same thing itself.
+        canConnect: capabilities.includes('billing.manage'),
+        canView: capabilities.includes('branch.settings'),
+      }}
     />
   );
 }
