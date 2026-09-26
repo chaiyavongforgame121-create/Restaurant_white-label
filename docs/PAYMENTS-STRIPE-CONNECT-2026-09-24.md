@@ -121,7 +121,10 @@ In the platform's **US Stripe account** (start in **Test mode**):
 2. **Connect → Settings → Branding**: name, icon, colour (shown on Stripe's onboarding pages).
 3. **Developers → Webhooks → Add endpoint**, "Events on connected accounts", pointing at
    `https://ayyfczidnzxetndiijmv.supabase.co/functions/v1/stripe-connect-webhook`, with the events listed in the
-   function's header.
+   function's header, API version `2026-08-26.dahlia` (the function's `EVENT_API_VERSION`; the Dashboard no longer
+   offers basil for a new destination, and calls stay pinned to basil). Done in the sandbox on 2026-09-26:
+   destination `we_1UJvkVGJ7DLbSpMcTXZn1j2L` ("favorgo-connect-payments"). Business model chosen in Connect:
+   "merchants collect directly" (direct charges).
 4. In **Supabase → Edge Functions → Secrets**: `STRIPE_SECRET_KEY` (the test secret key), `STRIPE_PUBLISHABLE_KEY`
    (the test publishable key), `STRIPE_CONNECT_WEBHOOK_SECRET` (from step 3). Keys are entered by the owner only.
 

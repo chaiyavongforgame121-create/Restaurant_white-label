@@ -8,7 +8,11 @@
 // Configure in the platform's Stripe Dashboard -> Developers -> Webhooks -> Add endpoint
 //   Events from:  Connected accounts
 //   Endpoint URL: https://<project>.supabase.co/functions/v1/stripe-connect-webhook
-//   API version:  2025-08-27.basil (the version every Stripe caller here is pinned to)
+//   API version:  2026-08-26.dahlia (EVENT_API_VERSION below). The Dashboard no longer offers
+//                 basil for a new destination. Events arrive in this shape, while every call made
+//                 here stays pinned to STRIPE_API_VERSION (basil). Every field the SQL reads from a
+//                 snapshot (PaymentIntent, Refund, Charge, Dispute) is the same in both; clover and
+//                 dahlia broke nothing in them. Account and refund state is re-read anyway.
 //   Events (14):
 //     account.updated                       account.application.deauthorized
 //     payment_intent.succeeded              payment_intent.payment_failed
@@ -47,7 +51,6 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient, SupabaseClient } from 'jsr:@supabase/supabase-js@2';
 import {
-  STRIPE_API_VERSION,
   type StripeAccountLike,
   accountState,
   currentRefund,
@@ -65,6 +68,9 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const STRIPE_CONNECT_WEBHOOK_SECRET = Deno.env.get('STRIPE_CONNECT_WEBHOOK_SECRET');
 const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY');
+
+/** The API version the endpoint is set to in the Stripe Dashboard, so the shape events arrive in. */
+const EVENT_API_VERSION = '2026-08-26.dahlia';
 
 interface StripeEvent {
   id: string;
@@ -132,10 +138,10 @@ Deno.serve(async (req) => {
     return new Response('ignored_no_account', { status: 200 });
   }
 
-  if (event.api_version && event.api_version !== STRIPE_API_VERSION) {
-    // Not fatal, but every field path below was written against the pinned version, so this is
-    // the first thing to check when a handler goes quiet.
-    console.warn(`stripe api_version mismatch: event=${event.api_version} pinned=${STRIPE_API_VERSION} (${event.type})`);
+  if (event.api_version && event.api_version !== EVENT_API_VERSION) {
+    // Not fatal, but every field path below was checked against the endpoint's version, so this is
+    // the first thing to check when a handler goes quiet (someone changed the endpoint's version).
+    console.warn(`stripe api_version mismatch: event=${event.api_version} expected=${EVENT_API_VERSION} (${event.type})`);
   }
 
   // Idempotency. Stripe retries on any non-2xx and may deliver twice even on success.
