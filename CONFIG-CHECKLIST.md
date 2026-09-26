@@ -156,7 +156,8 @@ supabase functions deploy issue-tax-invoice      # Thai E-Tax XML → US HTML re
 
 # Stripe. They ship DORMANT: with no STRIPE_SECRET_KEY set they return 503
 # stripe_not_configured, and the plan page falls back to the manual
-# request queue. Setting the secrets in §6 is what switches them on.
+# request queue. Setting the secrets in §6 is what switches them on; the two
+# subscription functions also need STRIPE_BILLING_ENABLED=true (§6).
 # Diners' card payments go to each BRANCH's own connected Stripe account
 # (docs/PAYMENTS-STRIPE-CONNECT-2026-09-24.md). Apply migrations 20260925100000,
 # 20260925110000 and 20260925120000 BEFORE deploying the order-payment functions.
@@ -196,7 +197,8 @@ supabase link --project-ref ayyfczidnzxetndiijmv
 | `STRIPE_SECRET_KEY` | dashboard.stripe.com → Developers → API keys |
 | `STRIPE_WEBHOOK_SECRET` | After creating the platform webhook (see §8a) |
 | `STRIPE_CONNECT_WEBHOOK_SECRET` | After creating the Connect webhook (see §8b) |
-| `STRIPE_PUBLISHABLE_KEY` | API keys (also set as `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` in app envs) |
+| `STRIPE_PUBLISHABLE_KEY` | API keys. The storefront gets it from `stripe-create-payment-intent`, so no app env is needed |
+| `STRIPE_BILLING_ENABLED` | Leave unset. `true` moves Confirm package to Stripe Checkout; see below |
 
 > **Two different money flows share these keys — don't confuse them.**
 > - *Subscriptions* (Base $199 / +$99 branch / +$49 Delivery / +$59 AI Suite) are
@@ -209,13 +211,16 @@ supabase link --project-ref ayyfczidnzxetndiijmv
 >   platform's balance, and the platform takes no cut. Each branch connects its account
 >   under Branch settings → Card payments. Their events go to the Connect endpoint (§8b).
 
-**Setting the keys is not sufficient to sell subscriptions.** Every row in
-`billing_products` ships with `stripe_price_id = NULL`, and
-`stripe-create-checkout-session` refuses with `400 product_missing_stripe_price`
-(naming the product) until they are filled. That refusal is deliberate — a
-half-mapped catalog would otherwise sell a package and silently under-grant it.
+**Setting the keys does not switch on subscription checkout.** `STRIPE_SECRET_KEY` is also
+what diners' card payments need, so the subscription functions (`stripe-create-checkout-session`,
+`stripe-billing-portal`) stay dormant, and Confirm package keeps filing a request for manual
+approval, until a separate secret `STRIPE_BILLING_ENABLED=true` is set. Leave it unset: that
+flow charges neither the one-time fees ($170 base, $70 extra branch) nor a discount code yet, and
+every row in `billing_products` ships with `stripe_price_id = NULL`, which it refuses with
+`400 product_missing_stripe_price` (naming the product). Switched on with the prices still
+missing, every Confirm package would fail instead of reaching the request queue.
 
-To switch on:
+To switch on (after the one-time fees and discount codes are built into it):
 1. In Stripe, create one **recurring monthly USD Price** per sellable product —
    `base` $199, `extra_branch` $99, `delivery` $49, `ai_suite` $59.
    Do **not** create one for `trial`; it is granted, never purchased.
@@ -232,6 +237,7 @@ To switch on:
    ```
 Prices must be **recurring**, not one-off: a one-off Price makes Checkout reject
 the session in `subscription` mode.
+4. Set `STRIPE_BILLING_ENABLED=true` (and `STRIPE_WEBHOOK_SECRET`, §8a).
 
 ### 🤖 AI (required for chatbot, menu import, voice order, review responder, menu optimizer)
 | Key | Where to get |

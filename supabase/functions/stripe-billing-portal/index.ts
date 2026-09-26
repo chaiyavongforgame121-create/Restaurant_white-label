@@ -3,6 +3,9 @@
 // Owner-only. Returns a short-lived Stripe-hosted portal URL for the restaurant's
 // Stripe Customer, where they can update the payment method, view invoices, or
 // cancel the subscription. Cancellation flows back via stripe-webhook.
+//
+// Dormant, like stripe-create-checkout-session, until STRIPE_BILLING_ENABLED=true: the secret
+// key alone is also set for diners' card payments and must not wake the subscription rail.
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
@@ -10,11 +13,12 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY');
+const STRIPE_BILLING_ENABLED = Deno.env.get('STRIPE_BILLING_ENABLED') === 'true';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return cors(new Response('ok'));
   if (req.method !== 'POST') return cors(json({ error: 'method_not_allowed' }, 405));
-  if (!STRIPE_SECRET_KEY) return cors(json({ error: 'stripe_not_configured' }, 503));
+  if (!STRIPE_SECRET_KEY || !STRIPE_BILLING_ENABLED) return cors(json({ error: 'stripe_not_configured' }, 503));
 
   let body: { restaurant_id?: string; return_url?: string } = {};
   try {

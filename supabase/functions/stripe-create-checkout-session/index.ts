@@ -4,10 +4,16 @@
 // from each restaurant. This is SEPARATE from customer<->restaurant order payments
 // (those restaurants collect themselves, into their own account).
 //
-// DORMANT until the owner supplies STRIPE_SECRET_KEY. Until then this returns
-// 503 stripe_not_configured, and packages/database/src/queries/billing.ts turns
-// that into {dormant:true} so the plan page silently falls back to the manual
-// request queue. No UI change is needed at switch-on.
+// DORMANT until the owner supplies STRIPE_SECRET_KEY AND sets STRIPE_BILLING_ENABLED=true.
+// Until then this returns 503 stripe_not_configured, and
+// packages/database/src/queries/billing.ts turns that into {dormant:true} so the plan page
+// silently falls back to the manual request queue. No UI change is needed at switch-on.
+//
+// The key alone is not the switch: it is also what diners' card payments need
+// (docs/PAYMENTS-STRIPE-CONNECT-2026-09-24.md), and setting it for them must not move the
+// package flow here. That flow is not finished: no billing product has a stripe_price_id yet,
+// which fails every Confirm package with product_missing_stripe_price, and it charges neither
+// the one-time fees nor a discount code. Turn it on only once it does.
 //
 // Flow:
 //   1. Owner opens /b/[branchId]/settings/plan and picks a package.
@@ -26,6 +32,7 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY');
+const STRIPE_BILLING_ENABLED = Deno.env.get('STRIPE_BILLING_ENABLED') === 'true';
 
 /** Pinned so payload shapes match what stripe-webhook parses. */
 const STRIPE_API_VERSION = '2025-08-27.basil';
@@ -50,7 +57,7 @@ interface Product {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return cors(new Response('ok'));
   if (req.method !== 'POST') return cors(json({ error: 'method_not_allowed' }, 405));
-  if (!STRIPE_SECRET_KEY) return cors(json({ error: 'stripe_not_configured' }, 503));
+  if (!STRIPE_SECRET_KEY || !STRIPE_BILLING_ENABLED) return cors(json({ error: 'stripe_not_configured' }, 503));
 
   let body: {
     restaurant_id?: string;
