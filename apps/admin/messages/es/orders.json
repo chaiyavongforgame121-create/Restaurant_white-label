@@ -253,7 +253,7 @@
     "refundedNotCancelled": "Se reembolsaron {amount} a la tarjeta del cliente, pero el pedido no se pudo cancelar: {reason} Pulsa el botón otra vez para cancelarlo; la tarjeta no se reembolsará dos veces.",
     "orderNotUpdated": "Se reembolsaron {amount} a la tarjeta del cliente, pero el pedido no se pudo marcar como reembolsado: {reason} Pulsa el botón otra vez para registrarlo; la tarjeta no se reembolsará dos veces.",
     "sentSucceeded": "Se reembolsaron {amount} a la tarjeta del cliente. Los bancos suelen mostrarlo en 5 a 10 días hábiles.",
-    "sentPending": "Stripe aceptó el reembolso de {amount} y lo está procesando. El pedido lo mostrará como reembolsado cuando Stripe lo confirme.",
+    "sentPending": "Stripe aceptó el reembolso de {amount} y aún lo está procesando. El dinero llega a la tarjeta del cliente cuando Stripe lo complete.",
     "notRecordedYet": "Aparecerá en el pedido en unos minutos, cuando Stripe lo informe.",
     "retryRecord": "Registrar en el pedido",
     "errors": {

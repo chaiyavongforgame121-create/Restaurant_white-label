@@ -62,7 +62,7 @@ describe('creating the connected account (Accounts v2)', () => {
     restaurantId: 'r1',
     restaurantName: 'Coastal  Grill',
     branchName: 'Downtown',
-    contactEmail: ' owner@coastal.example ',
+    contactEmail: ' owner@coastalgrill.com ',
   };
 
   it('asks for the full Dashboard, Stripe-collected fees and losses, card payments, in the US', () => {
@@ -73,7 +73,7 @@ describe('creating the connected account (Accounts v2)', () => {
       configuration: { merchant: { capabilities: { card_payments: { requested: true } } } },
       metadata: { branch_id: 'b1', restaurant_id: 'r1' },
       include: ['configuration.merchant'],
-      contact_email: 'owner@coastal.example',
+      contact_email: 'owner@coastalgrill.com',
       display_name: 'Coastal Grill – Downtown',
     });
   });
@@ -94,6 +94,26 @@ describe('creating the connected account (Accounts v2)', () => {
     expect(connect.accountDisplayName('Pho 99', 'pho 99')).toBe('Pho 99');
     expect(connect.accountDisplayName(null, null)).toBeNull();
     expect(connect.accountDisplayName('x'.repeat(80), 'y'.repeat(80))).toHaveLength(100);
+  });
+
+  it('leaves out an owner email no mail can reach, as seeded and demo owners have', () => {
+    const emailOf = (contactEmail: string) =>
+      connect.connectedAccountBody({ branchId: 'b1', restaurantId: 'r1', contactEmail }).contact_email;
+    for (const unreachable of [
+      'demo-owner@favornoms.local',
+      'a@shop.test',
+      'b@coastal.example',
+      'c@example.com',
+      'd@mail.example.org',
+      'e@nowhere.invalid',
+      'f@box.localhost',
+    ]) {
+      expect(emailOf(unreachable)).toBeUndefined();
+    }
+    // Real domains that merely contain those words are kept.
+    expect(emailOf('owner@test.com')).toBe('owner@test.com');
+    expect(emailOf('owner@localshop.com')).toBe('owner@localshop.com');
+    expect(emailOf('owner@myexample.com')).toBe('owner@myexample.com');
   });
 
   it('stores a new account as not able to take cards until Stripe says card_payments is active', () => {

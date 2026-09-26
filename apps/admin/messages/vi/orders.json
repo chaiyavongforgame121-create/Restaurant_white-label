@@ -253,7 +253,7 @@
     "refundedNotCancelled": "Đã hoàn {amount} về thẻ của khách nhưng không hủy được đơn: {reason} Nhấn nút lần nữa để hủy — thẻ sẽ không bị hoàn tiền hai lần.",
     "orderNotUpdated": "Đã hoàn {amount} về thẻ của khách nhưng không ghi nhận được việc hoàn tiền trên đơn: {reason} Nhấn nút lần nữa để ghi nhận — thẻ sẽ không bị hoàn tiền hai lần.",
     "sentSucceeded": "Đã hoàn {amount} về thẻ của khách. Ngân hàng thường hiển thị trong 5–10 ngày làm việc.",
-    "sentPending": "Stripe đã nhận yêu cầu hoàn {amount} và đang xử lý. Đơn sẽ hiện là đã hoàn tiền khi Stripe xác nhận.",
+    "sentPending": "Stripe đã nhận yêu cầu hoàn {amount} và vẫn đang xử lý. Tiền sẽ về thẻ của khách khi Stripe xử lý xong.",
     "notRecordedYet": "Khoản hoàn sẽ hiện trên đơn trong vài phút, khi Stripe báo kết quả.",
     "retryRecord": "Ghi nhận trên đơn",
     "errors": {

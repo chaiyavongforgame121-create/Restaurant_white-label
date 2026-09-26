@@ -247,8 +247,17 @@ export function accountDisplayName(restaurantName?: string | null, branchName?: 
   return name ? name.slice(0, DISPLAY_NAME_MAX) : null;
 }
 
-function isEmail(value: unknown): value is string {
-  return typeof value === 'string' && value.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+/**
+ * Domains no mailbox can exist under (RFC 2606 and RFC 6761, plus mDNS .local). Seeded and demo
+ * owners use them: the test restaurant's owner is demo-owner@favornoms.local. Stripe would either
+ * refuse the create over such an address or offer it as the owner's Stripe login, so the account
+ * is made without one and Stripe's own form asks the owner for a real one.
+ */
+const UNDELIVERABLE_EMAIL_DOMAIN = /(^|\.)(test|example|invalid|localhost|local)$|(^|\.)example\.(com|net|org)$/i;
+
+function isDeliverableEmail(value: unknown): value is string {
+  if (typeof value !== 'string' || value.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return false;
+  return !UNDELIVERABLE_EMAIL_DOMAIN.test(value.slice(value.lastIndexOf('@') + 1));
 }
 
 /**
@@ -262,7 +271,8 @@ function isEmail(value: unknown): value is string {
  *   merchant.card_payments requested   the capability a direct charge needs;
  *   identity.country US                the platform's own country (the owner confirmed it).
  * The business type, bank and people are left to Stripe's hosted form: KYC is never collected here.
- * The contact email is the restaurant owner's, the person the account belongs to.
+ * The contact email is the restaurant owner's, the person the account belongs to, unless it is on
+ * a domain no mail can reach (isDeliverableEmail).
  */
 export function connectedAccountBody(input: {
   branchId: string;
@@ -280,7 +290,7 @@ export function connectedAccountBody(input: {
     include: [...CREATE_ACCOUNT_INCLUDE],
   };
   const email = typeof input.contactEmail === 'string' ? input.contactEmail.trim() : '';
-  if (isEmail(email)) body.contact_email = email;
+  if (isDeliverableEmail(email)) body.contact_email = email;
   const name = accountDisplayName(input.restaurantName, input.branchName);
   if (name) body.display_name = name;
   return body;

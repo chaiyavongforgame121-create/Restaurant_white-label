@@ -253,7 +253,7 @@
     "refundedNotCancelled": "{amount} was refunded to the customer’s card, but the order could not be cancelled: {reason} Press the button again to cancel it — the card won’t be refunded twice.",
     "orderNotUpdated": "{amount} was refunded to the customer’s card, but the order could not be marked as refunded: {reason} Press the button again to record it — the card won’t be refunded twice.",
     "sentSucceeded": "{amount} was refunded to the customer’s card. Banks usually show it within 5–10 business days.",
-    "sentPending": "Stripe accepted the refund of {amount} and is processing it. The order shows it as refunded once Stripe confirms it.",
+    "sentPending": "Stripe accepted the refund of {amount} and is still processing it. The money reaches the customer’s card once Stripe completes it.",
     "notRecordedYet": "It will appear on the order within a few minutes, once Stripe reports it.",
     "retryRecord": "Record on the order",
     "errors": {
