@@ -1,89 +1,24 @@
-// Stripe — Billing Portal session (restaurant self-manages its card / cancels).
+// Retired (docs/PLATFORM-BILLING-STRIPE-2026-09-26.md §4.4). The customer portal moved to the
+// `stripe-billing` function (action portal), which opens it with the platform's own portal
+// configuration (card, invoices, cancel at period end, no plan switching) and a return URL built
+// on the server; this function used the account's default configuration and a client-given URL.
 //
-// Owner-only. Returns a short-lived Stripe-hosted portal URL for the restaurant's
-// Stripe Customer, where they can update the payment method, view invoices, or
-// cancel the subscription. Cancellation flows back via stripe-webhook.
-//
-// Dormant, like stripe-create-checkout-session, until STRIPE_BILLING_ENABLED=true: the secret
-// key alone is also set for diners' card payments and must not wake the subscription rail.
+// It stays deployed only so an old tab gets a clear answer rather than a 404, and answers every
+// call with 410 { error: 'moved', use: 'stripe-billing' }. It reads no secret and calls nothing.
+// The owner can delete it from the Supabase dashboard.
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
-import { createClient } from 'jsr:@supabase/supabase-js@2';
 
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
-const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY');
-const STRIPE_BILLING_ENABLED = Deno.env.get('STRIPE_BILLING_ENABLED') === 'true';
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return cors(new Response('ok'));
-  if (req.method !== 'POST') return cors(json({ error: 'method_not_allowed' }, 405));
-  if (!STRIPE_SECRET_KEY || !STRIPE_BILLING_ENABLED) return cors(json({ error: 'stripe_not_configured' }, 503));
-
-  let body: { restaurant_id?: string; return_url?: string } = {};
-  try {
-    body = await req.json();
-  } catch {
-    return cors(json({ error: 'invalid_body' }, 400));
-  }
-  if (!body.restaurant_id) return cors(json({ error: 'restaurant_id_required' }, 400));
-
-  const authHeader = req.headers.get('Authorization') ?? '';
-  if (!authHeader.startsWith('Bearer ')) return cors(json({ error: 'auth_required' }, 401));
-  const userClient = createClient(SUPABASE_URL, authHeader.slice(7), {
-    auth: { persistSession: false },
-    global: { headers: { Authorization: authHeader } },
+Deno.serve((req) => {
+  if (req.method === 'OPTIONS') return new Response(null, { headers: CORS });
+  return new Response(JSON.stringify({ error: 'moved', use: 'stripe-billing' }), {
+    status: 410,
+    headers: { ...CORS, 'Content-Type': 'application/json' },
   });
-  const { data: { user }, error: userErr } = await userClient.auth.getUser();
-  if (userErr || !user) return cors(json({ error: 'invalid_token' }, 401));
-
-  const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
-
-  const { data: staff } = await admin
-    .from('staff_members')
-    .select('id')
-    .eq('user_id', user.id)
-    .eq('restaurant_id', body.restaurant_id)
-    .eq('role', 'owner')
-    .maybeSingle();
-  if (!staff) return cors(json({ error: 'owner_only' }, 403));
-
-  const { data: rest } = await admin
-    .from('restaurants')
-    .select('stripe_customer_id')
-    .eq('id', body.restaurant_id)
-    .single();
-  if (!rest?.stripe_customer_id) return cors(json({ error: 'no_stripe_customer' }, 400));
-
-  const origin = req.headers.get('origin') ?? '';
-  const params = new URLSearchParams({
-    customer: rest.stripe_customer_id,
-    return_url: body.return_url || `${origin}/`,
-  });
-
-  const res = await fetch('https://api.stripe.com/v1/billing_portal/sessions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-      // Pinned like the other Stripe callers so a future account-default bump
-      // cannot change the response shape under us.
-      'Stripe-Version': '2025-08-27.basil',
-    },
-    body: params,
-  });
-  const data = await res.json();
-  if (!res.ok) return cors(json({ error: 'stripe_error', detail: data }, 502));
-
-  return cors(json({ url: data.url }));
 });
-
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
-}
-function cors(res: Response) {
-  res.headers.set('Access-Control-Allow-Origin', '*');
-  res.headers.set('Access-Control-Allow-Headers', 'authorization, x-client-info, apikey, content-type');
-  res.headers.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  return res;
-}

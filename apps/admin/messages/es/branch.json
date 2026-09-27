@@ -6,7 +6,8 @@
     "ownerOnlyDomain": "Solo el propietario del restaurante puede cambiar el dominio propio.",
     "domainTaken": "Otra sucursal ya usa ese dominio.",
     "noPermission": "Tu rol no tiene permiso para hacer este cambio.",
-    "busyMinutesRange": "El modo ocupado puede sumar de 0 a {max} minutos de preparación."
+    "busyMinutesRange": "El modo ocupado puede sumar de 0 a {max} minutos de preparación.",
+    "stripeDeliveryActive": "Esta sucursal tiene entregas y se cobran a tu tarjeta. Primero desactiva las entregas de esta sucursal en la página Plan y facturación, y luego ocúltala."
   },
   "settings": {
     "title": "Configuración de sucursal",

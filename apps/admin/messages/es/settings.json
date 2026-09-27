@@ -163,6 +163,142 @@
       "titleSent": "Solicitud en espera del equipo de Favornoms · enviada el {date}",
       "body": "Nada cambia hasta que se apruebe. Si quieres pedir otra cosa, cambia el paquete abajo y pulsa Reemplazar solicitud pendiente.",
       "badge": "Pendiente"
+    },
+    "stripe": {
+      "action": {
+        "payNow": "Pagar {amount} ahora",
+        "addCard": "Agregar tarjeta · primer cobro el {date}",
+        "confirmChange": "Confirmar cambio",
+        "continue": "Continuar al pago",
+        "processing": "Procesando el pago…",
+        "finishPayment": "Terminar el pago",
+        "finishFirst": "Primero termina el pago pendiente",
+        "checking": "Comprobando el pago…",
+        "sendToTeam": "Enviar al equipo de Favornoms"
+      },
+      "footnote": {
+        "firstLater": "Pago con tarjeta a través de Stripe. A partir del {date}, se cobran {monthly} a tu tarjeta automáticamente cada mes; la página de pago de Stripe muestra el importe exacto antes de cobrar nada. Puedes cancelar cuando quieras; conservas lo que pagaste hasta el final de ese mes.",
+        "firstNow": "Pago con tarjeta a través de Stripe. El pago de hoy incluye tu primer mes; después se cobran {monthly} a tu tarjeta automáticamente cada mes. Puedes cancelar cuando quieras; conservas lo que pagaste hasta el final de ese mes.",
+        "change": "Se cobra a tu tarjeta guardada en cuanto confirmes. Tu cuota mensual de {monthly} se renueva automáticamente en la misma tarjeta.",
+        "renews": "Tu cuota mensual de {monthly} se renueva automáticamente en tu tarjeta. Cambia la tarjeta o cancela en Administrar tarjeta y facturas."
+      },
+      "prorationNote": "Más la diferencia de tu cuota mensual por lo que queda de este periodo de facturación, que se cobra o se abona a tu tarjeta ahora.",
+      "trialNote": {
+        "later": "Tu prueba gratuita sigue: los pagos únicos se cobran ahora y tu cuota mensual debería empezar el {date}, cuando termina la prueba. La página de pago de Stripe muestra el importe exacto antes de que pagues.",
+        "now": "Tu prueba termina en menos de dos días, así que tu primer mes se cobra ahora junto con los pagos únicos."
+      },
+      "trialBody": "Todo está desbloqueado, con entrega a domicilio en todas las sucursales. Compra tu paquete cuando quieras: los pagos únicos se cobran a tu tarjeta en ese momento y la cuota mensual empieza cuando termine la prueba.",
+      "onceAwaiting": "Todavía no se ha cobrado nada. Lo pagarás al completar el pago con tarjeta.",
+      "newSeats": "{count, plural, one {# sucursal que aún no creaste} other {# sucursales que aún no creaste}}. Crea las sucursales nuevas desde Sucursales en cuanto se complete el pago.",
+      "renewBody": "Tu paquete actual está seleccionado abajo. Págalo con tarjeta para renovarlo; a partir de ahí la cuota mensual se cobra automáticamente a tu tarjeta, así que no tendrás que renovarlo a mano. También puedes cambiar el paquete antes.",
+      "noTrialBody": "Tu cuenta ya usó su prueba gratuita de 14 días en otro restaurante. Este seguirá desconectado hasta tener un paquete: elige uno abajo y págalo con tarjeta, y se activará al instante.",
+      "replaceBody": "Tu solicitud anterior ({summary}) se retira y esta ocupa su lugar. No se cobró nada por la anterior.",
+      "chargeDialog": {
+        "title": "¿Cobrar a tu tarjeta ahora?",
+        "amount": "Se cobran {amount} a {card} en cuanto confirmes.",
+        "proration": "Tu cuota mensual pasa a {monthly}; la diferencia por lo que queda de este periodo se cobra o se abona ahora en la misma tarjeta.",
+        "nothing": "Este cambio no tiene ningún cobro adicional.",
+        "cardOnFile": "tu tarjeta guardada",
+        "confirm": "Confirmar"
+      },
+      "now": {
+        "nextCharge": "Próximo cobro",
+        "endsOn": "Termina el",
+        "chargeValue": "{amount} el {date}"
+      },
+      "pending": {
+        "title": "Esperando el pago con tarjeta",
+        "titleSent": "Esperando el pago con tarjeta · solicitado el {date}",
+        "body": "Todavía no se ha cobrado nada. Pulsa Continuar al pago para terminar, o cambia el paquete abajo.",
+        "badge": "Pago pendiente",
+        "orPayByCard": "También puedes pagarla ahora con tarjeta en lugar de esperar.",
+        "invoiceTitle": "Falta que termines el pago con tarjeta",
+        "invoiceBody": "Tu banco pidió que confirmes este pago, o la tarjeta fue rechazada. Termínalo en la página de Stripe con Terminar el pago. Hasta entonces esta solicitud no se puede cambiar; si no se termina en aproximadamente un día, se cancela y no se cobra nada.",
+        "unconfirmedTitle": "Comprobando tu pago con tarjeta",
+        "unconfirmedBody": "Es posible que ya se haya cobrado a tu tarjeta por esta solicitud, así que no se puede pagar de nuevo desde esta página. Vuelve a cargar la página en un minuto para ver en qué quedó.",
+        "unconfirmedBadge": "Comprobando",
+        "pausedTitle": "Los pagos con tarjeta están en pausa",
+        "pausedBody": "Esta solicitud estaba esperando un pago con tarjeta, que ahora no se puede cobrar. Envíala al equipo de Favornoms y ellos la activarán."
+      },
+      "result": {
+        "confirmingTitle": "Pago recibido: activando tu paquete…",
+        "confirmingBody": "Esto tarda unos segundos. Mantén esta página abierta.",
+        "activeTitle": "Pago recibido: tu paquete está activo",
+        "activeBody": "Gracias. Tu próximo cobro y la tarjeta guardada aparecen abajo, en Facturación.",
+        "processingTitle": "Pago recibido: aún se está confirmando",
+        "processingBody": "Stripe todavía no nos ha confirmado el pago. Suele tardar menos de un minuto y tu paquete se activará solo en cuanto llegue. Por favor, no pagues de nuevo.",
+        "checkAgain": "Comprobar de nuevo",
+        "appliedTitle": "Pago recibido: tu cambio ya está activo",
+        "appliedBody": "Se cobró a tu tarjeta guardada.",
+        "cancelledTitle": "Pago cancelado: no se cobró nada",
+        "cancelledBody": "Tu solicitud está guardada. Continúa al pago cuando quieras, o cambia el paquete abajo.",
+        "refundedStaleTitle": "Este pago se está reembolsando",
+        "refundedStaleBody": "Era para una solicitud que ya no está abierta: la solicitud se cambió o se cerró después de abrir la página de pago. El importe completo se reembolsa a tu tarjeta automáticamente, así que no tienes que hacer nada. Tu paquete no cambió; lo que siga pendiente aparece abajo.",
+        "refundedFailedTitle": "No se pudo activar tu paquete, así que el pago se está reembolsando",
+        "refundedFailedBody": "El pago se realizó, pero el paquete no se pudo aplicar, así que el importe completo se reembolsa a tu tarjeta automáticamente. Tu paquete no cambió. Si no ves el reembolso en unos días, comunícate con el equipo de Favornoms.",
+        "notAppliedTitle": "Tu paquete no cambió: no se cobró nada",
+        "notAppliedBody": "La página de Stripe terminó, pero la solicitud para la que era no se pudo aplicar: se cambió o se cerró mientras esa página estaba abierta, o ya no corresponde a tus sucursales. No se cobró dinero. Lo que siga pendiente aparece abajo."
+      },
+      "pastDue": {
+        "title": "No se pudo cobrar a tu tarjeta",
+        "body": "Stripe volverá a intentar el cobro en los próximos días. Actualiza tu tarjeta antes del {date} para que tu tienda siga en línea.",
+        "bodyNoDate": "Stripe volverá a intentar el cobro en los próximos días. Actualiza tu tarjeta para que tu tienda siga en línea.",
+        "cta": "Actualizar tarjeta"
+      },
+      "cancelling": {
+        "title": "Tu paquete se cancela el {date}",
+        "titleNoDate": "Tu paquete está programado para cancelarse",
+        "body": "Sigue activo hasta entonces y no se renovará. Para conservarlo, abre Administrar tarjeta y facturas y renuévalo."
+      },
+      "billing": {
+        "title": "Facturación",
+        "subtitle": "Pago con tarjeta a través de Stripe. La cuota mensual se renueva sola.",
+        "nextCharge": "Próximo cobro",
+        "noNextCharge": "Nada programado",
+        "cancelsOn": "Ninguno: termina el {date}",
+        "card": "Tarjeta",
+        "cardValue": "{brand} •••• {last4}",
+        "cardExpires": "Vence {date}",
+        "noCard": "No hay tarjeta guardada",
+        "cardExpiring": "Esta tarjeta vence antes del próximo cobro. Actualízala para que el pago no falle.",
+        "lastInvoice": "Última factura",
+        "invoiceValue": "{amount} · {status}",
+        "viewInvoice": "Ver factura",
+        "noInvoice": "Todavía no hay facturas",
+        "manage": "Administrar tarjeta y facturas",
+        "manageHint": "Actualiza tu tarjeta, descarga facturas o cancela. La cancelación se aplica al final del mes que ya pagaste."
+      },
+      "invoiceStatus": {
+        "paid": "Pagada",
+        "open": "Sin pagar",
+        "void": "Anulada",
+        "other": "Pendiente"
+      },
+      "decision": {
+        "paidOn": "Pagado con tarjeta el {date}",
+        "paid": "Pagado"
+      },
+      "errors": {
+        "requestGone": "Esta solicitud ya no está esperando un pago: se pagó, se reemplazó o se rechazó. Vuelve a cargar la página para ver en qué quedó.",
+        "startFailed": "No se pudo iniciar el pago con tarjeta. No se cobró nada y tu solicitud está guardada; vuelve a intentarlo con Continuar al pago en un momento.",
+        "portalFailed": "No se pudo abrir el portal de facturación. Inténtalo de nuevo en un momento.",
+        "portalOff": "El cobro con tarjeta está desactivado en este momento. Comunícate con el equipo de Favornoms sobre tu facturación.",
+        "noCustomer": "Todavía no hay una tarjeta guardada. Se agrega la primera vez que pagas con tarjeta.",
+        "chargedNotApplied": "Se cobró a tu tarjeta, pero el cambio no se aplicó y el dinero no se pudo devolver automáticamente. No vuelvas a pagar: el equipo de Favornoms lo solucionará.",
+        "changeNotApplied": "Tu paquete no cambió y no se cobró nada. Vuelve a cargar la página antes de intentarlo de nuevo; si vuelve a pasar, comunícate con el equipo de Favornoms.",
+        "needsTeam": "Este cambio no se puede cobrar a tu tarjeta automáticamente en este momento. No se cobró nada; comunícate con el equipo de Favornoms.",
+        "chargedRefunded": "Se cobró a tu tarjeta, pero el cambio no se pudo aplicar, así que el importe completo se está reembolsando a tu tarjeta. Tu paquete no cambió. Vuelve a cargar la página antes de intentarlo de nuevo.",
+        "resultUnknown": "No pudimos confirmar si se cobró a tu tarjeta. Por favor, no pagues de nuevo todavía: vuelve a cargar la página en un minuto. Si el pago se realizó, tu cambio se activará solo.",
+        "paymentInProgress": "Un pago con tarjeta de tu solicitud anterior sigue esperando en la página de Stripe (tu banco pidió que lo confirmes, o la tarjeta fue rechazada). Termínalo, o espera a que caduque en aproximadamente un día, antes de cambiar el paquete.",
+        "busy": "Este pago ya se está procesando. Espera un momento y vuelve a intentarlo; no se cobrará dos veces.",
+        "planLimit": "Este paquete tiene menos sucursales de las que el restaurante tiene abiertas. Agrega sucursales al paquete o cierra una sucursal primero. No se cobró nada.",
+        "cardPaused": "Los pagos con tarjeta están en pausa en este momento, así que no se pudo cobrar. No se cobró nada y tu solicitud está guardada. Inténtalo más tarde o comunícate con el equipo de Favornoms.",
+        "changeConflict": "Este cambio ya se envió a tu tarjeta una vez y todavía no está claro qué hizo. No se cobró nada más ahora. Por favor, no pagues de nuevo: comunícate con el equipo de Favornoms y ellos lo resolverán.",
+        "paymentExpired": "El pago con tarjeta de este cambio no se terminó a tiempo, así que el cambio se canceló. No se cobró nada. Vuelve a elegir el paquete para intentarlo otra vez."
+      },
+      "onceSettling": "Tu pago por esto se está registrando.",
+      "onceUnconfirmed": "Es posible que ya se haya cobrado a tu tarjeta por esto. Vuelve a cargar la página en un minuto para ver en qué quedó.",
+      "replaceBodyUnconfirmed": "Tu solicitud anterior ({summary}) se retira y esta ocupa su lugar. Si ya se cobró a tu tarjeta por la anterior, ese pago se reembolsa a tu tarjeta."
     }
   }
 }

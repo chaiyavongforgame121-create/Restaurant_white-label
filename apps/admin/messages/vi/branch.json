@@ -6,7 +6,8 @@
     "ownerOnlyDomain": "Chỉ chủ nhà hàng mới có thể đổi tên miền riêng.",
     "domainTaken": "Tên miền này đã được một chi nhánh khác sử dụng.",
     "noPermission": "Vai trò của bạn không được phép thực hiện thay đổi này.",
-    "busyMinutesRange": "Chế độ bận chỉ có thể cộng thêm từ 0 đến {max} phút chuẩn bị."
+    "busyMinutesRange": "Chế độ bận chỉ có thể cộng thêm từ 0 đến {max} phút chuẩn bị.",
+    "stripeDeliveryActive": "Chi nhánh này có giao hàng và phí giao hàng đang được trừ vào thẻ của bạn. Hãy tắt giao hàng cho chi nhánh này ở trang Gói và thanh toán trước, rồi mới ẩn chi nhánh."
   },
   "settings": {
     "title": "Cài đặt chi nhánh",

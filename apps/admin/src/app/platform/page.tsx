@@ -80,6 +80,11 @@ export default async function PlatformPage() {
     // Loyalty is always per branch (restaurants.loyalty_scope is pinned to 'branch' and legacy).
     loyaltyScope: 'branch',
     cancelAtPeriodEnd: subs.get(row.restaurant_id)?.cancel_at_period_end === true,
+    // How it pays: a card-paying store renews by itself and takes no manual repair.
+    billing: row.billing,
+    stripeCustomerId: row.stripe_customer_id,
+    stripeSubscriptionId: row.stripe_subscription_id,
+    openInvoice: row.open_invoice,
   }));
 
   // A discarded `.error` turns "the read was denied" into "this tenant has no

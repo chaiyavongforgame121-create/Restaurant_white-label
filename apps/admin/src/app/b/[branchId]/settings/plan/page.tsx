@@ -14,6 +14,7 @@ import {
 } from '@favornoms/shared';
 import { Card } from '@favornoms/ui';
 import { getBranchAccess } from '@/lib/capabilities';
+import { readCheckoutReturn, readPortalReturn } from './_components/plan-billing';
 import { fallbackOverview, type PlanBranch } from './_components/plan-model';
 import { PlanView, type DecidedRequest } from './_components/plan-view';
 
@@ -21,7 +22,12 @@ interface Props {
   params: Promise<{ branchId: string }>;
   searchParams: Promise<{
     suspended?: string;
+    /** 'success' | 'cancelled': Stripe Checkout sending the merchant back. */
     checkout?: string;
+    /** The Checkout Session, on the success URL only ({CHECKOUT_SESSION_ID}). */
+    session_id?: string;
+    /** 'return': Stripe's customer portal sending the merchant back. */
+    portal?: string;
     add?: string;
     branch?: string;
     no_trial?: string;
@@ -91,6 +97,10 @@ function readDecision(raw: unknown): DecidedRequest | null {
     oneTimeTotal: Number(r.one_time_total ?? 0),
     decisionNote: typeof note === 'string' && note.trim() !== '' ? note : null,
     decidedAt,
+    // Settled by a card payment (billing_settle_stripe_request), not decided by the team: its
+    // decision_note is the settlement's own "Paid by card (Stripe)", which is no note to the
+    // merchant. Paid is also the truer word than "approved" for money the owner just paid.
+    paidByCard: status === 'approved' && r.rail === 'stripe',
   };
 }
 
@@ -185,6 +195,11 @@ export default async function PlanPage({ params, searchParams }: Props) {
       preselectBranchId={branches.some((b) => b.id === preselect) ? preselect : null}
       noTrial={query.no_trial === '1'}
       renew={query.renew === '1'}
+      // How the restaurant pays. The denied overview carries MANUAL_RAIL (card billing off), so
+      // a failed read keeps today's manual page rather than guessing that a card is on file.
+      billing={overview.billing}
+      checkoutReturn={readCheckoutReturn(query.checkout, query.session_id)}
+      portalReturn={readPortalReturn(query.portal)}
     />
   );
 }

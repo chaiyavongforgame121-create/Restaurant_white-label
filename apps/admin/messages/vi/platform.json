@@ -8,7 +8,8 @@
     "catalog": "Danh mục gói",
     "settings": "Cài đặt",
     "pendingBadge": "{count}<sr> đang chờ</sr>",
-    "discounts": "Giảm giá"
+    "discounts": "Giảm giá",
+    "stripe": "Stripe"
   },
   "accessDenied": {
     "title": "Không có quyền truy cập",
@@ -244,6 +245,46 @@
       "bodyRebill": "Tính phí lại gói {plan} nhà hàng đang dùng{hasPrice, select, yes {, giá {price}/tháng,} other {}} cho {seats, plural, other {# chi nhánh}}, thanh toán đến {to}. Trang đặt món hoạt động lại ngay lượt truy cập tiếp theo của khách.",
       "bodyConvert": "Chuyển {name} từ gói {current} sang gói {plan}{hasPrice, select, yes {, giá {price}/tháng,} other {}} cho {seats, plural, other {# chi nhánh}}, thanh toán đến {to}. Trang đặt món hoạt động lại ngay lượt truy cập tiếp theo của khách.",
       "warningSuspended": "{suspended}/{total} chi nhánh cũng đang bị nền tảng tạm ngưng và sẽ vẫn trả về 404 sau thao tác này. Hãy khôi phục riêng các chi nhánh đó."
+    }
+  },
+  "stripe": {
+    "rail": {
+      "stripe": "Thẻ (Stripe)",
+      "manual": "Thủ công"
+    },
+    "clause": {
+      "renewsOn": "gia hạn {date}",
+      "graceUntil": "Thanh toán thất bại · ân hạn đến {date}"
+    },
+    "reason": {
+      "pastDue": "Thanh toán bằng thẻ thất bại. Stripe đang thử lại, và cửa hàng vẫn hoạt động đến {date}. Nếu mọi lần thử lại đều thất bại, Stripe sẽ huỷ gói đăng ký và cửa hàng ngừng hoạt động.",
+      "lapsed": "Cửa hàng này thanh toán bằng thẻ qua Stripe nên ở đây không có nút Gia hạn — hãy mở trên Stripe để xem vì sao chưa nhận được tiền."
+    },
+    "errors": {
+      "managed": "Nhà hàng này thanh toán bằng thẻ qua Stripe nên gói chỉ thay đổi được qua Stripe. Chưa có gì thay đổi.",
+      "deliveryActive": "Một chi nhánh đang giao hàng được tính phí trong gói đăng ký trả bằng thẻ của nhà hàng này, nên Stripe sẽ tiếp tục thu phí giao hàng cho chi nhánh đó. Người bán cần tắt giao hàng cho chi nhánh đó trên trang gói của mình trước (việc này cập nhật Stripe). Chưa có gì thay đổi."
+    },
+    "links": {
+      "customer": "Khách hàng trên Stripe",
+      "subscription": "Gói đăng ký trên Stripe",
+      "invoice": "Xem hoá đơn"
+    },
+    "drawer": {
+      "renewsOn": "Gia hạn",
+      "graceUntil": "Ân hạn đến",
+      "endsOn": "Kết thúc",
+      "nextCharge": "Lần thu tiếp theo",
+      "noNextCharge": "Không có — đang huỷ",
+      "cancelsLater": "Stripe sẽ huỷ vào {date}; trước ngày đó vẫn gia hạn bình thường.",
+      "card": "Thẻ",
+      "openInvoice": "Hoá đơn chưa thanh toán: {amount} · đã thử {count, plural, other {# lần}}",
+      "managedNote": "Thu phí bằng thẻ qua Stripe. Gia hạn, đổi thẻ và huỷ đều diễn ra ở đó, nên ở đây không có nút Gia hạn hay Chuyển gói."
+    },
+    "card": {
+      "value": "{brand} •••• {last4}",
+      "none": "Chưa có thẻ",
+      "expires": "hết hạn {expiry}",
+      "expired": "đã hết hạn {expiry}"
     }
   }
 }

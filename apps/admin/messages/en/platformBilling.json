@@ -231,7 +231,8 @@
     "status": {
       "pending": "pending",
       "approved": "approved",
-      "rejected": "rejected"
+      "rejected": "rejected",
+      "cancelled": "cancelled"
     },
     "empty": "Nothing here.",
     "thisRestaurant": "this restaurant",
@@ -370,6 +371,233 @@
       "datesBackwards": "The end date is before the start date, so the code could never be used.",
       "kindInvalid": "The server does not accept that kind of discount.",
       "notFound": "That code no longer exists. Reload the page."
+    }
+  },
+  "stripe": {
+    "errors": {
+      "managed": "This restaurant pays by card through Stripe, so its package only changes through Stripe. Nothing was changed.",
+      "paymentInProgress": "This change is waiting on the merchant’s card payment at Stripe (3-D Secure or a declined card), and that payment could still go through, so it cannot be rejected yet. It switches on by itself when paid. Once its payment window closes, about a day after it started, it can be rejected. Nothing was changed.",
+      "deliveryActive": "A branch that delivers is paid for on this restaurant’s card subscription, so Stripe would keep charging delivery for it. The merchant turns delivery off for that branch on their plan page first (that updates Stripe). Nothing was changed."
+    },
+    "links": {
+      "customer": "Customer in Stripe",
+      "subscription": "Subscription in Stripe",
+      "invoice": "View invoice",
+      "invoiceInStripe": "Invoice in Stripe"
+    },
+    "card": {
+      "value": "{brand} •••• {last4}",
+      "none": "No card on file",
+      "expires": "exp {expiry}",
+      "expired": "expired {expiry}"
+    },
+    "subscriptions": {
+      "nextCharge": "Next charge",
+      "noNextCharge": "None — cancelling",
+      "chargeOn": "{amount} on {date}",
+      "card": "Card",
+      "graceUntil": "Grace until",
+      "cancelsOn": "Cancels on",
+      "cancelsLater": "Stripe is set to cancel this subscription on {date}. It still renews until then.",
+      "lastPayment": "Last payment",
+      "paidOn": "{amount} on {date}",
+      "pastDue": "The last renewal failed. Stripe is retrying the card, and the store keeps working until {date}.",
+      "openInvoice": "Unpaid invoice: {amount} · {count, plural, one {# attempt} other {# attempts}}",
+      "managedNote": "Billed by card through Stripe, so there is no package editor here: the package changes when the merchant changes it on their plan page (charged to their card then), and a cancellation or refund is done in Stripe."
+    },
+    "requests": {
+      "subtitle": "Merchants who chose a package. Card payments settle by themselves; only requests paid another way wait for you to approve.",
+      "awaitingCard": "Awaiting card payment",
+      "paymentInProgress": "Payment in progress",
+      "paymentExpired": "Payment window expired",
+      "paidByCard": "Paid by card",
+      "awaitingCardNote": "The merchant was sent to Stripe’s checkout page to pay this by card. It switches on by itself when Stripe confirms the payment, so there is nothing to approve. Reject it only to clear a checkout they abandoned.",
+      "awaitingCardPausedNote": "Card payments are switched off, so {name}’s plan page now asks them to send this request to the Favornoms team instead. When they do, it comes back here as an ordinary request for you to approve. Until then it stays here: a checkout they already opened can still be paid, and then it switches on by itself. Reject it only if it should not go ahead.",
+      "paymentInProgressNote": "{name} is finishing this payment on Stripe’s page: their card needs confirming (3-D Secure) or was declined, so the change waits until it is paid. It switches on by itself once paid. For about a day it cannot be rejected, because the payment could still go through. After that the payment window closes: the request is cleared when the merchant chooses a package again, or you can reject it here.",
+      "paymentExpiredNote": "Payment window expired — Reject to clear it. {name} did not finish paying this change on Stripe within about a day, so it does not go ahead and nothing changes. If they pay that old invoice anyway, the payment is refunded automatically.",
+      "managedRestaurantNote": "{name} already pays by card through Stripe, so this change is paid for on their plan page and switches on by itself, whether card billing is switched on or off. It cannot be approved here; reject it only if it should not go ahead.",
+      "paidByCardNote": "Paid by card on {date}. The package switched on by itself.",
+      "rejectTitle": "Reject {name}’s card payment?",
+      "rejectBody": "Do this only for a checkout the merchant abandoned. If they pay it anyway, the payment is refunded automatically and nothing changes.",
+      "rejectExpiredBody": "The merchant did not pay this change within Stripe’s payment window. Rejecting clears it and their package stays as it is. If they pay the old invoice anyway, the payment is refunded automatically.",
+      "rejectConfirm": "Reject"
+    },
+    "plans": {
+      "note": "Card billing makes its own Stripe prices from the amounts on this page, so no Stripe price ID is needed (<link>Stripe setup</link>). Changing a monthly price creates a new Stripe price: restaurants already paying by card keep their old price until their package changes.",
+      "priceIdHint": "Not needed any more: card billing finds or creates its Stripe prices from the prices above."
+    },
+    "setup": {
+      "metaTitle": "Stripe · Favornoms",
+      "title": "Stripe",
+      "subtitle": "Restaurants pay their package by card into the platform’s own Stripe account. Set it up once for test mode and once for live mode, then switch it on.",
+      "mode": {
+        "test": "Test mode",
+        "live": "Live mode",
+        "unknown": "Mode unknown"
+      },
+      "load": {
+        "loading": "Asking Stripe…",
+        "refresh": "Refresh",
+        "dormant": "The stripe-billing function says Stripe is not set up yet (no secret key). Follow the steps below; this page fills in once the key is saved.",
+        "notDeployed": "The stripe-billing function is not deployed yet, so Stripe’s status cannot be read. The steps below still apply.",
+        "forbidden": "The stripe-billing function refused: only a platform admin can read Stripe’s status.",
+        "notSignedIn": "Your session has expired. Sign in again to read Stripe’s status.",
+        "network": "Couldn’t reach the stripe-billing function. Check your connection and refresh.",
+        "failed": "Could not read Stripe’s status. The steps below still apply."
+      },
+      "switch": {
+        "title": "Charge packages by card",
+        "onBody": "On. A merchant who confirms a package pays by card on Stripe’s checkout page and the package switches on by itself. The monthly fee is charged to the card every month.",
+        "offBody": "Off. No restaurant starts paying by card: new package requests wait for you on the Requests tab. A request whose card checkout had already started stays “Awaiting card payment” until the merchant pays that checkout or sends the request to the team from their plan page. Restaurants already paying by card keep renewing, can still change their package (charged to their card) and use the customer portal.",
+        "unknownBody": "Its state cannot be shown until Stripe’s status can be read.",
+        "on": "On",
+        "off": "Off",
+        "saving": "Saving…",
+        "blockers": {
+          "noStatus": "The switch is unavailable until Stripe’s status can be read.",
+          "secretKey": "Set STRIPE_SECRET_KEY first (Stripe account connected).",
+          "webhookSecret": "Set STRIPE_WEBHOOK_SECRET first (Webhook for package payments)."
+        },
+        "warnings": {
+          "testMode": "Stripe is in test mode: merchants would pay with Stripe’s test cards, no real money moves, and their package still switches on. Switch it on in test mode only to try it yourself.",
+          "chargesOff": "Stripe has not enabled payments on this account yet, so checkouts will fail until the account is activated.",
+          "noBank": "No bank account for payouts yet: Stripe will collect payments but cannot pay them out."
+        },
+        "confirmOnTitle": "Charge packages by card?",
+        "confirmOnBodyLive": "From now on, a merchant who confirms a package is sent to Stripe to pay by card, and the monthly fee renews by itself. Requests already waiting stay on the Requests tab for you.",
+        "confirmOnBodyTest": "Stripe is in TEST mode. Merchants who confirm a package will be sent to a test checkout: no real money moves, and their package switches on anyway. Only do this to try it yourself.",
+        "confirmOn": "Switch on",
+        "confirmOffTitle": "Stop charging packages by card?",
+        "confirmOffBody": "New card purchases stop. Restaurants that do not pay by card yet send their package requests to the Requests tab for you to approve. A request whose card checkout had already started stays “Awaiting card payment” until the merchant pays that checkout or sends the request to the team from their plan page. Restaurants already paying by card are not affected: they keep their Stripe subscription, renew every month until they cancel, and can still change their package by card and use the customer portal.",
+        "confirmOff": "Switch off",
+        "errors": {
+          "notReady": "Stripe is not ready: set the secret key and the webhook secret first. Nothing was changed.",
+          "catalogIncomplete": "The Catalog is missing an active monthly price for Base, an extra branch or Delivery, so there is nothing to make the Stripe prices from. Fix it on the Catalog tab first. Card billing was not switched on.",
+          "forbidden": "Only a platform admin can do this. Nothing was changed.",
+          "notSignedIn": "Your session has expired. Sign in again, then try the switch. Nothing was changed.",
+          "network": "Couldn’t reach the server. Nothing was changed — check your connection and try again.",
+          "stripeError": "Stripe refused while the prices or the customer portal were being prepared, so card billing was not switched on. Try again in a minute.",
+          "failed": "Could not change the switch. Nothing was changed.",
+          "dormant": "The stripe-billing function says Stripe is not configured. Nothing was changed."
+        }
+      },
+      "stepsTitle": "Setup checklist",
+      "stepsIntro": "Once for test mode and once for live mode. Each step links to the page in Stripe where it is done.",
+      "state": {
+        "done": "Done",
+        "todo": "To do",
+        "auto": "Automatic",
+        "notNeeded": "Not needed",
+        "manual": "Check in Stripe",
+        "unknown": "Unknown"
+      },
+      "steps": {
+        "account": {
+          "title": "Stripe account connected",
+          "body": "The secret key (STRIPE_SECRET_KEY in the Supabase secrets) connects the platform to your Stripe account. A key starting sk_test_ is test mode; sk_live_ is live.",
+          "connected": "{id} · {mode, select, live {live mode} test {test mode} other {mode unknown}}",
+          "noKey": "STRIPE_SECRET_KEY is not set.",
+          "noAnswer": "The key is set but Stripe did not answer — it may be wrong or revoked."
+        },
+        "publishableKey": {
+          "title": "Publishable key",
+          "body": "STRIPE_PUBLISHABLE_KEY in the Supabase secrets. Package payments use Stripe’s own checkout page, so this one is for completeness.",
+          "missing": "STRIPE_PUBLISHABLE_KEY is not set."
+        },
+        "activation": {
+          "title": "Account activated",
+          "body": "Stripe needs your business details before the account can take payments and pay out.",
+          "due": "{count, plural, one {Stripe needs # more detail} other {Stripe needs # more details}} before it activates the account.",
+          "chargesOff": "Stripe has not enabled payments on this account yet.",
+          "payoutsOff": "Payouts are paused until Stripe has what it needs.",
+          "testMode": "Test mode needs none: Stripe’s test cards work before the account is activated. Activate it before going live."
+        },
+        "bank": {
+          "title": "Bank account for payouts",
+          "body": "Where Stripe pays the package money out to you.",
+          "missing": "No bank account on file yet.",
+          "testMode": "Test mode needs none. Add one before going live."
+        },
+        "webhook": {
+          "title": "Webhook for package payments",
+          "body": "Stripe tells the platform through this webhook when a package is paid, renewed or fails. Without it, no card payment switches a package on.",
+          "missing": "STRIPE_WEBHOOK_SECRET is not set.",
+          "lastEvent": "Last event received {date}.",
+          "noEventYet": "No event received yet — Stripe sends the first one when a merchant pays."
+        },
+        "retries": {
+          "title": "Failed-payment retries",
+          "body": "In Stripe, Billing → Revenue recovery → Retries. A restaurant keeps working for 7 days after a failed renewal while Stripe retries the card, so Stripe has to give up within that week and then cancel the subscription: a longer retry window would keep charging a card after the store has gone dark. This page cannot read that setting.",
+          "setting": "Set Smart Retries to retry within 1 week, and when all retries for a payment fail, cancel the subscription."
+        },
+        "prices": {
+          "title": "Prices in Stripe",
+          "body": "Made from the Catalog’s monthly prices.",
+          "auto": "Made automatically when you switch card billing on.",
+          "missingWhileOn": "Card billing is on but the prices are missing. Switch it off and on again to recreate them."
+        },
+        "portal": {
+          "title": "Customer portal",
+          "body": "Where merchants update their card, see their invoices and cancel at the end of the paid month. Plan changes stay on the Favornoms plan page.",
+          "auto": "Set up automatically when you switch card billing on.",
+          "missingWhileOn": "Card billing is on but the portal is not set up. Switch it off and on again to set it up."
+        }
+      },
+      "webhook": {
+        "how1": "In Stripe, open Workbench → Webhooks and create a new destination.",
+        "how2": "Events from: Your account. API version: <code>{version}</code> if offered. Payload: snapshot, not thin events.",
+        "how3": "Tick the {count} events below — no others.",
+        "how4": "Destination type: Webhook endpoint. Paste the endpoint URL below.",
+        "how5": "Open the new destination, reveal its signing secret (<code>whsec_…</code>) and save it in Supabase as the secret <code>STRIPE_WEBHOOK_SECRET</code>.",
+        "endpoint": "Endpoint URL",
+        "events": "Events to tick ({count})",
+        "notConnect": "This is not the webhook for diners’ card payments (Connect). That one has its own destination and its own secret; do not reuse it."
+      },
+      "copy": {
+        "copy": "Copy",
+        "copyAll": "Copy all",
+        "copied": "Copied",
+        "failed": "Select and copy it by hand"
+      },
+      "linksTitle": "In Stripe",
+      "links": {
+        "apiKeys": "API keys",
+        "onboarding": "Activate account",
+        "payouts": "Payouts & bank account",
+        "webhooks": "Webhooks",
+        "secrets": "Supabase secrets",
+        "retries": "Failed-payment retries",
+        "invoices": "Invoices",
+        "customers": "Customers",
+        "subscriptions": "Subscriptions"
+      },
+      "events": {
+        "title": "Recent package-payment events",
+        "subtitle": "From the Stripe webhook and the card-payment code, newest first, times in UTC. Diners’ card payments (Connect) are not listed.",
+        "empty": "No package-payment events to show.",
+        "level": {
+          "warn": "Warning",
+          "error": "Error"
+        },
+        "types": {
+          "checkoutCompleted": "Checkout paid",
+          "checkoutExpired": "Checkout expired",
+          "invoicePaid": "Invoice paid",
+          "invoiceFailed": "Payment failed",
+          "invoiceActionRequired": "Card needs confirming",
+          "subscriptionCreated": "Subscription created",
+          "subscriptionUpdated": "Subscription updated",
+          "subscriptionDeleted": "Subscription cancelled",
+          "changeApplied": "Package change paid",
+          "changeExpired": "Package change expired unpaid",
+          "trialWillEnd": "Trial ends soon",
+          "customerUpdated": "Customer updated",
+          "requestSettled": "Package paid and switched on",
+          "settleFailed": "Paid, but the package could not be applied",
+          "staleRefunded": "Stale checkout refunded",
+          "accessExpired": "Access expired"
+        }
+      }
     }
   }
 }

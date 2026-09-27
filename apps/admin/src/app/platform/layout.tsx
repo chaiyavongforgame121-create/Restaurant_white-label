@@ -11,5 +11,9 @@ export default async function PlatformLayout({ children }: { children: React.Rea
   // helper resolves that to [], so a signed-out or denied visitor gets no badge
   // and each page still decides access on its own.
   const pending = await listBillingRequests(supabase, 'pending');
-  return <PendingRequestsProvider count={pending.length}>{children}</PendingRequestsProvider>;
+  // A request the merchant is paying by card (rail 'stripe') settles itself when Stripe
+  // confirms the payment — nobody here has to decide it, so it does not light the badge
+  // or the dashboard's "waiting for a decision" line. It is still listed on Requests.
+  const waiting = pending.filter((r) => r.rail !== 'stripe').length;
+  return <PendingRequestsProvider count={waiting}>{children}</PendingRequestsProvider>;
 }

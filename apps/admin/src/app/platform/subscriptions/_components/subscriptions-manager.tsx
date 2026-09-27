@@ -17,11 +17,16 @@
 // restaurant pays every month, and what it has already paid once. Applying a
 // package here raises no one-time charge at all — what an operator grants by hand
 // is not owed — so the one-time panel is history, not a bill.
+//
+// Since 2026-09-26 a restaurant can pay by card through Stripe instead
+// (docs/PLATFORM-BILLING-STRIPE-2026-09-26.md). Its package then lives in Stripe:
+// billing_set_package refuses it with `stripe_managed`, so its card has no editor —
+// it shows what Stripe holds (next charge, card, a failing invoice) and links to it.
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
-import { Check, Minus, Plus, Search } from 'lucide-react';
+import { Check, ExternalLink, Minus, Plus, Search } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import {
   setFeatureOverride,
@@ -50,6 +55,21 @@ import {
 import { Badge, Button, Card } from '@favornoms/ui';
 import { PlatformNav } from '../../_components/platform-nav';
 import type { PlatformBranchLite } from '../../_components/platform-billing';
+import { RailChip } from '../../_components/rail-chip';
+import {
+  cardBrandName,
+  cardExpired,
+  cardExpiry,
+  isStripeDeliveryActiveError,
+  isStripeManagedError,
+  monthlyFigure,
+  nextChargeView,
+  safeHttpsUrl,
+  stripeCancelling,
+  stripeCancelsLater,
+  stripeEndsOn,
+  stripeObjectLinks,
+} from '../../_components/stripe-rail';
 import { addOneMonthUtc } from '../../_components/tenant-health';
 
 const INPUT_CLS =
@@ -98,6 +118,12 @@ const fmtDate = (v: string | null | undefined, locale: UiLocale) =>
 function saveErrorKey(raw: string | undefined): string {
   if (!raw) return 'errors.saveFailed';
   console.error('[platform/subscriptions] save failed:', raw);
+  // The card hides the editor for a card-paying store, but a tab opened before the
+  // merchant paid still has it: say why the database refused, not "could not save".
+  if (isStripeManagedError(raw)) return 'stripe.errors.managed';
+  // A branch that delivers on a card subscription keeps delivery until the merchant turns it
+  // off on the plan page, which updates Stripe (§9.6).
+  if (isStripeDeliveryActiveError(raw)) return 'stripe.errors.deliveryActive';
   if (/forbidden|not[ _]authori[sz]ed|permission denied|platform[ _]admin/i.test(raw)) {
     return 'errors.permission';
   }
@@ -218,6 +244,8 @@ function SubscriptionCard({
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [saved, setSaved] = React.useState(false);
+  const stripe = row.billing.rail === 'stripe';
+  const stripeLinks = stripeObjectLinks(row.stripe_customer_id, row.stripe_subscription_id);
 
   const plans = catalog.filter((p) => p.kind === 'plan');
   const total = packageMonthlyTotal(sel, catalog);
@@ -300,6 +328,7 @@ function SubscriptionCard({
           <Badge variant={ent.entitled ? 'success' : 'danger'}>
             {ent.entitled ? t('subscriptions.live') : t('subscriptions.suspended')}
           </Badge>
+          <RailChip billing={row.billing} className="px-2.5 text-xs" />
           <Badge variant="muted">{ent.planCode}</Badge>
           <Badge variant="outline">
             {isStatus(ent.status) ? t(`subscriptionStatus.${ent.status}`) : ent.status}
@@ -318,7 +347,8 @@ function SubscriptionCard({
       </div>
 
       <dl className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3 lg:grid-cols-5">
-        <Stat label={t('subscriptions.stats.monthly')} value={money(ent.monthlyTotal)} />
+        {/* A card store's monthly figure is what Stripe bills, not the catalog-priced total. */}
+        <Stat label={t('subscriptions.stats.monthly')} value={money(monthlyFigure(row.billing, ent.monthlyTotal))} />
         <Stat label={t('subscriptions.stats.seats')} value={`${ent.branchesUsed} / ${ent.branchSeats}`} />
         <Stat
           label={t('subscriptions.stats.paidThrough')}
@@ -336,14 +366,20 @@ function SubscriptionCard({
         />
       </dl>
 
+      {stripe && <StripeBilling row={row} nowMs={nowMs} locale={locale} />}
+
       <div className="mt-3 flex flex-wrap gap-4">
-        <button
-          type="button"
-          onClick={() => setOpen((o) => !o)}
-          className="text-sm text-primary underline-offset-2 hover:underline"
-        >
-          {open ? t('subscriptions.close') : t('subscriptions.changePackage')}
-        </button>
+        {/* No editor for a card-paying store: billing_set_package would refuse it, and
+            a package set here would disagree with what Stripe charges next month. */}
+        {!stripe && (
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            className="text-sm text-primary underline-offset-2 hover:underline"
+          >
+            {open ? t('subscriptions.close') : t('subscriptions.changePackage')}
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setHistoryOpen((o) => !o)}
@@ -358,6 +394,20 @@ function SubscriptionCard({
         >
           {featuresOpen ? t('subscriptions.close') : t('subscriptions.featureSwitches')}
         </button>
+        {/* Also for a store that USED to pay by card: its customer and old subscription
+            are still where its invoices are. */}
+        {stripeLinks.map((link) => (
+          <a
+            key={link.kind}
+            href={link.href}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-sm text-primary underline-offset-2 hover:underline"
+          >
+            <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+            {t(`stripe.links.${link.kind}`)}
+          </a>
+        ))}
       </div>
 
       {historyOpen && (
@@ -366,7 +416,7 @@ function SubscriptionCard({
 
       {featuresOpen && <FeatureSwitches row={row} />}
 
-      {open && (
+      {open && !stripe && (
         <div className="mt-4 space-y-4 border-t border-border pt-4">
           {error && (
             <p className="rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -556,6 +606,133 @@ function SubscriptionCard({
         </div>
       )}
     </Card>
+  );
+}
+
+/**
+ * What Stripe holds for a card-paying restaurant. Read-only on purpose: the package
+ * changes when the merchant changes it on their plan page (charged to the card then),
+ * and a cancellation or refund is done in Stripe, which is one click away.
+ */
+function StripeBilling({
+  row,
+  nowMs,
+  locale,
+}: {
+  row: RestaurantSubscriptionRow;
+  nowMs: number;
+  locale: UiLocale;
+}) {
+  const t = useTranslations('platformBilling');
+  const { billing, open_invoice: invoice } = row;
+  const status = row.entitlements.status;
+  const card = billing.card;
+  const expiry = card ? cardExpiry(card) : null;
+  const expired = card ? cardExpired(card, nowMs) : false;
+  // Set to cancel either way Stripe records it: cancel_at_period_end, or a cancel_at that
+  // comes before the next renewal (the Dashboard's "cancel on a custom date").
+  const cancelling = status === 'cancelled' || stripeCancelling(billing);
+  const next = nextChargeView(billing, status);
+  // Cancelled on a custom date after the next renewal: that charge still happens (shown
+  // above), and the store stops on the later date.
+  const cancelsLater = status === 'cancelled' ? null : stripeCancelsLater(billing);
+  const invoiceUrl = safeHttpsUrl(invoice?.hostedInvoiceUrl);
+
+  return (
+    <div className="mt-3 space-y-3 rounded-xl border border-border p-3">
+      <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+        <Stat
+          label={t('stripe.subscriptions.nextCharge')}
+          value={
+            // A store set to cancel is not charged again, whatever the monthly total says.
+            // The amount is Stripe's recurring total, never re-priced from the catalog.
+            next.kind === 'none'
+              ? t('stripe.subscriptions.noNextCharge')
+              : next.kind === 'charge'
+                ? next.amount !== null
+                  ? t('stripe.subscriptions.chargeOn', {
+                      amount: money(next.amount),
+                      date: fmtDate(next.at, locale),
+                    })
+                  : fmtDate(next.at, locale)
+                : '—'
+          }
+        />
+        <div>
+          <dt className="text-xs text-muted-foreground">{t('stripe.subscriptions.card')}</dt>
+          <dd className={`font-semibold ${expired ? 'text-danger' : ''}`}>
+            {card
+              ? t('stripe.card.value', { brand: cardBrandName(card.brand), last4: card.last4 })
+              : t('stripe.card.none')}
+            {expiry && (
+              <span className="ml-1 text-xs font-normal">
+                {expired ? t('stripe.card.expired', { expiry }) : t('stripe.card.expires', { expiry })}
+              </span>
+            )}
+          </dd>
+        </div>
+        {status === 'past_due' ? (
+          <Stat
+            label={t('stripe.subscriptions.graceUntil')}
+            value={fmtDate(billing.graceUntil ?? row.entitlements.entitledThrough, locale)}
+          />
+        ) : cancelling ? (
+          <Stat
+            label={t('stripe.subscriptions.cancelsOn')}
+            value={fmtDate(stripeEndsOn(billing, status, row.entitlements.entitledThrough), locale)}
+          />
+        ) : (
+          <Stat
+            label={t('stripe.subscriptions.lastPayment')}
+            value={
+              billing.lastInvoice && billing.lastInvoice.paidAt
+                ? t('stripe.subscriptions.paidOn', {
+                    amount: money(billing.lastInvoice.amountPaid),
+                    date: fmtDate(billing.lastInvoice.paidAt, locale),
+                  })
+                : '—'
+            }
+          />
+        )}
+      </dl>
+
+      {cancelsLater && (
+        <p className="text-sm text-muted-foreground">
+          {t('stripe.subscriptions.cancelsLater', { date: fmtDate(cancelsLater, locale) })}
+        </p>
+      )}
+
+      {status === 'past_due' && (
+        <p className="rounded-lg bg-warning/10 px-3 py-2 text-sm text-warning">
+          {t('stripe.subscriptions.pastDue', {
+            date: fmtDate(billing.graceUntil ?? row.entitlements.entitledThrough, locale),
+          })}
+        </p>
+      )}
+
+      {invoice && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-warning/10 px-3 py-2 text-sm text-warning">
+          <span>
+            {t('stripe.subscriptions.openInvoice', {
+              amount: money(invoice.amountDue),
+              count: invoice.attemptCount,
+            })}
+          </span>
+          {invoiceUrl && (
+            <a
+              href={invoiceUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium underline-offset-2 hover:underline"
+            >
+              {t('stripe.links.invoice')}
+            </a>
+          )}
+        </div>
+      )}
+
+      <p className="text-xs text-muted-foreground">{t('stripe.subscriptions.managedNote')}</p>
+    </div>
   );
 }
 

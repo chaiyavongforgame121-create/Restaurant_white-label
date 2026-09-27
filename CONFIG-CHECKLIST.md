@@ -156,8 +156,9 @@ supabase functions deploy issue-tax-invoice      # Thai E-Tax XML → US HTML re
 
 # Stripe. They ship DORMANT: with no STRIPE_SECRET_KEY set they return 503
 # stripe_not_configured, and the plan page falls back to the manual
-# request queue. Setting the secrets in §6 is what switches them on; the two
-# subscription functions also need STRIPE_BILLING_ENABLED=true (§6).
+# request queue. Setting the secrets in §6 is what switches them on. Package
+# payments by card (restaurants paying the platform) are switched on from
+# /platform/billing-setup (docs/PLATFORM-BILLING-STRIPE-2026-09-26.md).
 # Diners' card payments go to each BRANCH's own connected Stripe account
 # (docs/PAYMENTS-STRIPE-CONNECT-2026-09-24.md). Apply migrations 20260925100000,
 # 20260925110000 and 20260925120000 BEFORE deploying the order-payment functions.
@@ -165,9 +166,10 @@ supabase functions deploy stripe-create-payment-intent   # diner card payment �
 supabase functions deploy stripe-refund                  # back-office refunds, and the refund a cancel of a paid card order makes
 supabase functions deploy stripe-connect-onboard         # a branch connects its own Stripe account
 supabase functions deploy stripe-connect-webhook --no-verify-jwt  # §8b; verify_jwt MUST be false
-supabase functions deploy stripe-webhook --no-verify-jwt # §8a, platform billing only; verify_jwt MUST be false
-supabase functions deploy stripe-create-checkout-session # subscriptions   → platform's Stripe
-supabase functions deploy stripe-billing-portal          # merchant self-manages card / cancels
+supabase functions deploy stripe-webhook --no-verify-jwt # §8a, package payments only; verify_jwt MUST be false
+supabase functions deploy stripe-billing                 # package checkout, changes, portal, setup page status/switch
+supabase functions deploy stripe-create-checkout-session # retired: answers 410 moved (delete from the Dashboard when convenient)
+supabase functions deploy stripe-billing-portal          # retired: answers 410 moved (delete from the Dashboard when convenient)
 supabase functions deploy integration-sync       # DoorDash/UberEats/QuickBooks worker (stubbed)
 supabase functions deploy ai-chat-support        # Claude customer chatbot
 supabase functions deploy ai-review-response     # Brand-voiced review replies
@@ -198,12 +200,11 @@ supabase link --project-ref ayyfczidnzxetndiijmv
 | `STRIPE_WEBHOOK_SECRET` | After creating the platform webhook (see §8a) |
 | `STRIPE_CONNECT_WEBHOOK_SECRET` | After creating the Connect webhook (see §8b) |
 | `STRIPE_PUBLISHABLE_KEY` | API keys. The storefront gets it from `stripe-create-payment-intent`, so no app env is needed |
-| `STRIPE_BILLING_ENABLED` | Leave unset. `true` moves Confirm package to Stripe Checkout; see below |
 
 > **Two different money flows share these keys — don't confuse them.**
-> - *Subscriptions* (Base $199 / +$99 branch / +$49 Delivery / +$59 AI Suite) are
->   billed by **the platform** to the restaurant, on **our** Stripe account.
->   This flow is fully built.
+> - *Packages* ($170 once for the base with its first branch, $70 once per extra branch, $29 a month
+>   per branch, +$30 a month per branch with delivery; prices live in `billing_products`) are paid by
+>   the restaurant to **the platform**, on **our** Stripe account, when card billing is switched on.
 > - *Order payments* are **direct charges on each branch's own connected Stripe
 >   account** (Stripe Connect, owner decision 2026-09-24,
 >   `docs/PAYMENTS-STRIPE-CONNECT-2026-09-24.md`). The payment function refuses to charge
@@ -211,33 +212,14 @@ supabase link --project-ref ayyfczidnzxetndiijmv
 >   platform's balance, and the platform takes no cut. Each branch connects its account
 >   under Branch settings → Card payments. Their events go to the Connect endpoint (§8b).
 
-**Setting the keys does not switch on subscription checkout.** `STRIPE_SECRET_KEY` is also
-what diners' card payments need, so the subscription functions (`stripe-create-checkout-session`,
-`stripe-billing-portal`) stay dormant, and Confirm package keeps filing a request for manual
-approval, until a separate secret `STRIPE_BILLING_ENABLED=true` is set. Leave it unset: that
-flow charges neither the one-time fees ($170 base, $70 extra branch) nor a discount code yet, and
-every row in `billing_products` ships with `stripe_price_id = NULL`, which it refuses with
-`400 product_missing_stripe_price` (naming the product). Switched on with the prices still
-missing, every Confirm package would fail instead of reaching the request queue.
-
-To switch on (after the one-time fees and discount codes are built into it):
-1. In Stripe, create one **recurring monthly USD Price** per sellable product —
-   `base` $199, `extra_branch` $99, `delivery` $49, `ai_suite` $59.
-   Do **not** create one for `trial`; it is granted, never purchased.
-2. Paste each Price ID into the catalog (platform admin → Plans, or directly):
-   ```sql
-   select public.upsert_billing_product(
-     p_code => 'base', p_stripe_price_id => 'price_...', /* other args unchanged */);
-   ```
-3. Verify none are left unmapped:
-   ```sql
-   select code, kind, monthly_price from public.billing_products
-   where is_active and stripe_price_id is null and code <> 'trial';
-   -- must return 0 rows
-   ```
-Prices must be **recurring**, not one-off: a one-off Price makes Checkout reject
-the session in `subscription` mode.
-4. Set `STRIPE_BILLING_ENABLED=true` (and `STRIPE_WEBHOOK_SECRET`, §8a).
+**Package payments by card** (restaurants paying the platform its one-time fees and monthly fee) follow
+`docs/PLATFORM-BILLING-STRIPE-2026-09-26.md`. Nothing is created by hand in Stripe: prices are made from
+the Catalog by lookup key and the customer portal is configured by code. The switch is **Charge packages by
+card** on `/platform/billing-setup`, which refuses to turn on until `STRIPE_SECRET_KEY` and
+`STRIPE_WEBHOOK_SECRET` are set, and which lists every remaining step with links into Stripe (bank account
+for payouts, account activation for live mode, the §8a webhook, Smart Retries within 1 week then cancel).
+The old env flag `STRIPE_BILLING_ENABLED` is retired. While the switch is off, Confirm package files a
+request for manual approval, exactly as before.
 
 ### 🤖 AI (required for chatbot, menu import, voice order, review responder, menu optimizer)
 | Key | Where to get |
@@ -308,16 +290,14 @@ clock must be sane. A "bad_signature" storm with a correct secret is a clock-ske
 
 - **Events from:** Your account
 - **Endpoint URL:** `https://ayyfczidnzxetndiijmv.supabase.co/functions/v1/stripe-webhook`
-- **Events to send (9)**, as listed in the header of `supabase/functions/stripe-webhook/index.ts`:
-  - `checkout.session.completed`
-  - `customer.subscription.created`
-  - `customer.subscription.updated`
-  - `customer.subscription.deleted`
-  - `customer.subscription.trial_will_end`
-  - `invoice.paid`
-  - `invoice.payment_failed`
-  - `invoice.payment_action_required`
-  - `invoice.marked_uncollectible`
+- **API version:** 2026-08-26.dahlia
+- **Events to send (12)** — never `invoice.created`:
+  - `checkout.session.completed`, `checkout.session.expired`
+  - `invoice.paid`, `invoice.payment_failed`, `invoice.payment_action_required`
+  - `customer.subscription.created`, `.updated`, `.deleted`, `.trial_will_end`,
+    `.pending_update_applied`, `.pending_update_expired`
+  - `customer.updated`
+- Sandbox: created 2026-09-27 as `we_1UK61xGJ7DLbSpMctrUnktjx` ("favornoms-package-payments").
 - Copy the **Signing secret** → paste as `STRIPE_WEBHOOK_SECRET` in §6.
 - An endpoint created before 2026-09-24 may still have `payment_intent.succeeded`,
   `payment_intent.payment_failed`, `charge.refunded` and `charge.dispute.created` ticked.

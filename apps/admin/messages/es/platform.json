@@ -8,7 +8,8 @@
     "catalog": "Catálogo",
     "settings": "Configuración",
     "pendingBadge": "{count}<sr> pendientes</sr>",
-    "discounts": "Descuentos"
+    "discounts": "Descuentos",
+    "stripe": "Stripe"
   },
   "accessDenied": {
     "title": "Acceso denegado",
@@ -244,6 +245,46 @@
       "bodyRebill": "Vuelve a facturar el paquete {plan} que ya tiene el restaurante{hasPrice, select, yes { a {price}/mes} other {}} para {seats, plural, one {# sucursal} other {# sucursales}}, pagado hasta el {to}. La tienda en línea vuelve con la siguiente visita de un cliente.",
       "bodyConvert": "Pasa {name} de {current} a {plan}{hasPrice, select, yes { a {price}/mes} other {}} para {seats, plural, one {# sucursal} other {# sucursales}}, pagado hasta el {to}. La tienda en línea vuelve con la siguiente visita de un cliente.",
       "warningSuspended": "{suspended} de {total} sucursales también están suspendidas por la plataforma y seguirán devolviendo 404 después de esto. Restablécelas por separado."
+    }
+  },
+  "stripe": {
+    "rail": {
+      "stripe": "Tarjeta (Stripe)",
+      "manual": "Manual"
+    },
+    "clause": {
+      "renewsOn": "se renueva el {date}",
+      "graceUntil": "Pago fallido · gracia hasta el {date}"
+    },
+    "reason": {
+      "pastDue": "El pago con tarjeta falló. Stripe lo está reintentando y la tienda sigue funcionando hasta el {date}. Si fallan todos los reintentos, Stripe cancela la suscripción y la tienda se apaga.",
+      "lapsed": "Paga con tarjeta a través de Stripe, así que aquí no se ofrece Extender: ábrelo en Stripe para ver por qué no llegó el pago."
+    },
+    "errors": {
+      "managed": "Este restaurante paga con tarjeta a través de Stripe, así que su paquete solo cambia a través de Stripe. No se cambió nada.",
+      "deliveryActive": "Una sucursal que hace entregas se paga en la suscripción con tarjeta de este restaurante, así que Stripe seguiría cobrando la entrega por ella. Primero el comercio desactiva la entrega de esa sucursal en su página de plan (eso actualiza Stripe). No se cambió nada."
+    },
+    "links": {
+      "customer": "Cliente en Stripe",
+      "subscription": "Suscripción en Stripe",
+      "invoice": "Ver factura"
+    },
+    "drawer": {
+      "renewsOn": "Se renueva",
+      "graceUntil": "Gracia hasta",
+      "endsOn": "Termina",
+      "nextCharge": "Próximo cargo",
+      "noNextCharge": "Ninguno: se está cancelando",
+      "cancelsLater": "Stripe cancelará la suscripción el {date}; hasta entonces sigue renovándose.",
+      "card": "Tarjeta",
+      "openInvoice": "Factura sin pagar: {amount} · {count, plural, one {# intento} other {# intentos}}",
+      "managedNote": "Se cobra con tarjeta a través de Stripe. Las renovaciones, los cambios de tarjeta y las cancelaciones ocurren allí, por eso aquí no se ofrecen Extender ni Convertir."
+    },
+    "card": {
+      "value": "{brand} •••• {last4}",
+      "none": "Sin tarjeta registrada",
+      "expires": "vence {expiry}",
+      "expired": "venció {expiry}"
     }
   }
 }

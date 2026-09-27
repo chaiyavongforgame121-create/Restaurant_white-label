@@ -6,7 +6,8 @@
     "ownerOnlyDomain": "Only the restaurant owner can change the custom domain.",
     "domainTaken": "Another branch already uses that domain.",
     "noPermission": "Your role isn’t allowed to make this change.",
-    "busyMinutesRange": "Busy mode can add 0 to {max} minutes of prep time."
+    "busyMinutesRange": "Busy mode can add 0 to {max} minutes of prep time.",
+    "stripeDeliveryActive": "This branch delivers and its delivery is billed to your card. Turn delivery off for it on the Plan & billing page first, then hide it."
   },
   "settings": {
     "title": "Branch settings",

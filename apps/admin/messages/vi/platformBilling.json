@@ -231,7 +231,8 @@
     "status": {
       "pending": "đang chờ",
       "approved": "đã duyệt",
-      "rejected": "bị từ chối"
+      "rejected": "bị từ chối",
+      "cancelled": "đã huỷ"
     },
     "empty": "Không có gì ở đây.",
     "thisRestaurant": "nhà hàng này",
@@ -370,6 +371,233 @@
       "datesBackwards": "Ngày kết thúc trước ngày bắt đầu, nên mã sẽ không bao giờ dùng được.",
       "kindInvalid": "Máy chủ không chấp nhận loại giảm giá đó.",
       "notFound": "Mã này không còn nữa. Hãy tải lại trang."
+    }
+  },
+  "stripe": {
+    "errors": {
+      "managed": "Nhà hàng này thanh toán bằng thẻ qua Stripe nên gói chỉ thay đổi được qua Stripe. Chưa có gì thay đổi.",
+      "paymentInProgress": "Thay đổi này đang chờ người bán thanh toán bằng thẻ trên Stripe (xác thực 3-D Secure hoặc thẻ bị từ chối), và khoản thanh toán đó vẫn có thể thành công, nên chưa thể từ chối. Gói sẽ tự kích hoạt khi được thanh toán. Khi hạn thanh toán kết thúc, khoảng một ngày sau khi bắt đầu, yêu cầu mới có thể bị từ chối. Chưa có gì thay đổi.",
+      "deliveryActive": "Một chi nhánh đang giao hàng được tính phí trong gói đăng ký trả bằng thẻ của nhà hàng này, nên Stripe sẽ tiếp tục thu phí giao hàng cho chi nhánh đó. Người bán cần tắt giao hàng cho chi nhánh đó trên trang gói của mình trước (việc này cập nhật Stripe). Chưa có gì thay đổi."
+    },
+    "links": {
+      "customer": "Khách hàng trên Stripe",
+      "subscription": "Gói đăng ký trên Stripe",
+      "invoice": "Xem hoá đơn",
+      "invoiceInStripe": "Hoá đơn trên Stripe"
+    },
+    "card": {
+      "value": "{brand} •••• {last4}",
+      "none": "Chưa có thẻ",
+      "expires": "hết hạn {expiry}",
+      "expired": "đã hết hạn {expiry}"
+    },
+    "subscriptions": {
+      "nextCharge": "Lần thu tiếp theo",
+      "noNextCharge": "Không có — đang huỷ",
+      "chargeOn": "{amount} vào {date}",
+      "card": "Thẻ",
+      "graceUntil": "Ân hạn đến",
+      "cancelsOn": "Huỷ vào",
+      "cancelsLater": "Stripe sẽ huỷ gói đăng ký này vào {date}. Trước ngày đó vẫn gia hạn bình thường.",
+      "lastPayment": "Lần thanh toán gần nhất",
+      "paidOn": "{amount} vào {date}",
+      "pastDue": "Lần gia hạn gần nhất thất bại. Stripe đang thử lại thẻ, và cửa hàng vẫn hoạt động đến {date}.",
+      "openInvoice": "Hoá đơn chưa thanh toán: {amount} · đã thử {count, plural, other {# lần}}",
+      "managedNote": "Thu phí bằng thẻ qua Stripe nên ở đây không có phần chỉnh gói: gói thay đổi khi người bán tự đổi trên trang gói của họ (lúc đó sẽ trừ vào thẻ), còn huỷ hoặc hoàn tiền thì làm trên Stripe."
+    },
+    "requests": {
+      "subtitle": "Người bán đã chọn gói. Thanh toán bằng thẻ tự hoàn tất; chỉ những yêu cầu thanh toán bằng cách khác mới chờ bạn duyệt.",
+      "awaitingCard": "Chờ thanh toán thẻ",
+      "paymentInProgress": "Đang thanh toán",
+      "paymentExpired": "Hết hạn thanh toán",
+      "paidByCard": "Đã thanh toán bằng thẻ",
+      "awaitingCardNote": "Người bán đã được chuyển tới trang thanh toán của Stripe để trả yêu cầu này bằng thẻ. Gói sẽ tự kích hoạt khi Stripe xác nhận thanh toán, nên không cần duyệt. Chỉ từ chối khi họ đã bỏ dở trang thanh toán.",
+      "awaitingCardPausedNote": "Thanh toán bằng thẻ đang tắt, nên trang gói của {name} giờ đề nghị họ gửi yêu cầu này cho đội ngũ Favornoms. Khi họ gửi, yêu cầu sẽ quay lại đây như một yêu cầu thường để bạn duyệt. Trong lúc chờ, yêu cầu vẫn ở đây: trang thanh toán họ đã mở vẫn có thể được thanh toán, và khi đó gói tự kích hoạt. Chỉ từ chối nếu không nên tiếp tục.",
+      "paymentInProgressNote": "{name} đang hoàn tất khoản thanh toán này trên trang của Stripe: thẻ của họ cần xác thực (3-D Secure) hoặc đã bị từ chối, nên thay đổi chờ cho đến khi được thanh toán. Gói sẽ tự kích hoạt khi đã thanh toán. Trong khoảng một ngày không thể từ chối, vì khoản thanh toán vẫn có thể thành công. Sau đó hạn thanh toán kết thúc: yêu cầu được xoá khi người bán chọn gói lại, hoặc bạn có thể từ chối ở đây.",
+      "paymentExpiredNote": "Hết hạn thanh toán — từ chối để xoá. {name} không hoàn tất thanh toán thay đổi này trên Stripe trong khoảng một ngày, nên thay đổi không được áp dụng và không có gì thay đổi. Nếu sau đó họ vẫn trả hoá đơn cũ, tiền sẽ được hoàn lại tự động.",
+      "managedRestaurantNote": "{name} đã thanh toán bằng thẻ qua Stripe, nên thay đổi này được thanh toán trên trang gói của họ và tự kích hoạt, dù thu phí bằng thẻ đang bật hay tắt. Không thể duyệt ở đây; chỉ từ chối nếu không nên tiếp tục.",
+      "paidByCardNote": "Đã thanh toán bằng thẻ vào {date}. Gói đã tự kích hoạt.",
+      "rejectTitle": "Từ chối thanh toán thẻ của {name}?",
+      "rejectBody": "Chỉ làm vậy khi người bán đã bỏ dở trang thanh toán. Nếu sau đó họ vẫn thanh toán, tiền sẽ được hoàn lại tự động và không có gì thay đổi.",
+      "rejectExpiredBody": "Người bán không thanh toán thay đổi này trong hạn thanh toán của Stripe. Từ chối sẽ xoá yêu cầu và gói của họ giữ nguyên. Nếu sau đó họ vẫn trả hoá đơn cũ, tiền sẽ được hoàn lại tự động.",
+      "rejectConfirm": "Từ chối"
+    },
+    "plans": {
+      "note": "Thu phí bằng thẻ tự tạo giá trên Stripe từ các mức giá ở trang này, nên không cần mã giá Stripe (<link>Thiết lập Stripe</link>). Đổi giá hằng tháng sẽ tạo một giá mới trên Stripe: nhà hàng đang trả bằng thẻ vẫn giữ giá cũ cho đến khi họ đổi gói.",
+      "priceIdHint": "Không còn cần nữa: thu phí bằng thẻ tự tìm hoặc tạo giá trên Stripe từ các mức giá ở trên."
+    },
+    "setup": {
+      "metaTitle": "Stripe · Favornoms",
+      "title": "Stripe",
+      "subtitle": "Nhà hàng thanh toán gói bằng thẻ vào chính tài khoản Stripe của nền tảng. Thiết lập một lần cho chế độ thử nghiệm và một lần cho chế độ thật, rồi bật lên.",
+      "mode": {
+        "test": "Chế độ thử nghiệm",
+        "live": "Chế độ thật",
+        "unknown": "Không rõ chế độ"
+      },
+      "load": {
+        "loading": "Đang hỏi Stripe…",
+        "refresh": "Làm mới",
+        "dormant": "Hàm stripe-billing báo Stripe chưa được thiết lập (chưa có khoá bí mật). Hãy làm theo các bước bên dưới; trang này sẽ hiện đủ thông tin khi khoá được lưu.",
+        "notDeployed": "Hàm stripe-billing chưa được triển khai nên chưa đọc được trạng thái Stripe. Các bước bên dưới vẫn áp dụng.",
+        "forbidden": "Hàm stripe-billing từ chối: chỉ quản trị viên nền tảng mới đọc được trạng thái Stripe.",
+        "notSignedIn": "Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại để đọc trạng thái Stripe.",
+        "network": "Không kết nối được hàm stripe-billing. Hãy kiểm tra kết nối và làm mới.",
+        "failed": "Không đọc được trạng thái Stripe. Các bước bên dưới vẫn áp dụng."
+      },
+      "switch": {
+        "title": "Thu phí gói bằng thẻ",
+        "onBody": "Đang bật. Người bán xác nhận gói sẽ thanh toán bằng thẻ trên trang thanh toán của Stripe và gói tự kích hoạt. Phí hằng tháng được trừ vào thẻ mỗi tháng.",
+        "offBody": "Đang tắt. Không nhà hàng nào bắt đầu trả bằng thẻ: yêu cầu gói mới chờ bạn ở thẻ Yêu cầu. Yêu cầu đã bắt đầu thanh toán bằng thẻ vẫn ở trạng thái “Chờ thanh toán thẻ” cho đến khi người bán hoàn tất khoản thanh toán đó hoặc gửi yêu cầu cho đội ngũ từ trang gói của họ. Nhà hàng đang trả bằng thẻ vẫn tự gia hạn, vẫn đổi được gói (thu vào thẻ của họ) và dùng cổng khách hàng.",
+        "unknownBody": "Chưa hiện được trạng thái cho đến khi đọc được trạng thái Stripe.",
+        "on": "Bật",
+        "off": "Tắt",
+        "saving": "Đang lưu…",
+        "blockers": {
+          "noStatus": "Công tắc chưa dùng được cho đến khi đọc được trạng thái Stripe.",
+          "secretKey": "Hãy đặt STRIPE_SECRET_KEY trước (bước Kết nối tài khoản Stripe).",
+          "webhookSecret": "Hãy đặt STRIPE_WEBHOOK_SECRET trước (bước Webhook cho thanh toán gói)."
+        },
+        "warnings": {
+          "testMode": "Stripe đang ở chế độ thử nghiệm: người bán sẽ trả bằng thẻ thử của Stripe, không có tiền thật, nhưng gói của họ vẫn được kích hoạt. Chỉ bật ở chế độ thử nghiệm khi bạn muốn tự thử.",
+          "chargesOff": "Stripe chưa cho tài khoản này nhận thanh toán, nên việc thanh toán sẽ thất bại cho đến khi tài khoản được kích hoạt.",
+          "noBank": "Chưa có tài khoản ngân hàng nhận tiền: Stripe sẽ thu tiền nhưng không chuyển ra được."
+        },
+        "confirmOnTitle": "Thu phí gói bằng thẻ?",
+        "confirmOnBodyLive": "Từ bây giờ, người bán xác nhận gói sẽ được chuyển sang Stripe để thanh toán bằng thẻ, và phí hằng tháng tự gia hạn. Các yêu cầu đang chờ vẫn ở thẻ Yêu cầu cho bạn.",
+        "confirmOnBodyTest": "Stripe đang ở chế độ THỬ NGHIỆM. Người bán xác nhận gói sẽ được chuyển tới trang thanh toán thử: không có tiền thật, nhưng gói của họ vẫn được kích hoạt. Chỉ làm vậy khi bạn muốn tự thử.",
+        "confirmOn": "Bật",
+        "confirmOffTitle": "Ngừng thu phí gói bằng thẻ?",
+        "confirmOffBody": "Các giao dịch mua mới bằng thẻ sẽ dừng. Nhà hàng chưa trả bằng thẻ sẽ gửi yêu cầu gói về thẻ Yêu cầu để bạn duyệt. Yêu cầu đã bắt đầu thanh toán bằng thẻ vẫn ở trạng thái “Chờ thanh toán thẻ” cho đến khi người bán hoàn tất khoản thanh toán đó hoặc gửi yêu cầu cho đội ngũ từ trang gói của họ. Nhà hàng đang trả bằng thẻ không bị ảnh hưởng: họ giữ gói đăng ký trên Stripe, gia hạn mỗi tháng cho đến khi huỷ, và vẫn đổi gói bằng thẻ và dùng cổng khách hàng được.",
+        "confirmOff": "Tắt",
+        "errors": {
+          "notReady": "Stripe chưa sẵn sàng: hãy đặt khoá bí mật và secret của webhook trước. Chưa có gì thay đổi.",
+          "catalogIncomplete": "Danh mục đang thiếu giá hằng tháng đang hoạt động cho Base, chi nhánh thêm hoặc Giao hàng, nên không có gì để tạo giá trên Stripe. Hãy sửa ở thẻ Danh mục trước. Thu phí bằng thẻ chưa được bật.",
+          "forbidden": "Chỉ quản trị viên nền tảng mới làm được việc này. Chưa có gì thay đổi.",
+          "notSignedIn": "Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại rồi thử lại công tắc. Chưa có gì thay đổi.",
+          "network": "Không kết nối được máy chủ. Chưa có gì thay đổi — hãy kiểm tra kết nối và thử lại.",
+          "stripeError": "Stripe từ chối trong lúc chuẩn bị giá hoặc cổng khách hàng, nên thu phí bằng thẻ chưa được bật. Hãy thử lại sau một phút.",
+          "failed": "Không đổi được công tắc. Chưa có gì thay đổi.",
+          "dormant": "Hàm stripe-billing báo Stripe chưa được cấu hình. Chưa có gì thay đổi."
+        }
+      },
+      "stepsTitle": "Danh sách thiết lập",
+      "stepsIntro": "Một lần cho chế độ thử nghiệm và một lần cho chế độ thật. Mỗi bước có liên kết tới trang trên Stripe để làm bước đó.",
+      "state": {
+        "done": "Xong",
+        "todo": "Cần làm",
+        "auto": "Tự động",
+        "notNeeded": "Không cần",
+        "manual": "Kiểm tra trên Stripe",
+        "unknown": "Không rõ"
+      },
+      "steps": {
+        "account": {
+          "title": "Kết nối tài khoản Stripe",
+          "body": "Khoá bí mật (STRIPE_SECRET_KEY trong Supabase secrets) kết nối nền tảng với tài khoản Stripe của bạn. Khoá bắt đầu bằng sk_test_ là chế độ thử nghiệm; sk_live_ là chế độ thật.",
+          "connected": "{id} · {mode, select, live {chế độ thật} test {chế độ thử nghiệm} other {không rõ chế độ}}",
+          "noKey": "Chưa đặt STRIPE_SECRET_KEY.",
+          "noAnswer": "Đã đặt khoá nhưng Stripe không phản hồi — khoá có thể sai hoặc đã bị thu hồi."
+        },
+        "publishableKey": {
+          "title": "Khoá công khai",
+          "body": "STRIPE_PUBLISHABLE_KEY trong Supabase secrets. Thanh toán gói dùng trang thanh toán riêng của Stripe, nên khoá này chỉ để cho đầy đủ.",
+          "missing": "Chưa đặt STRIPE_PUBLISHABLE_KEY."
+        },
+        "activation": {
+          "title": "Kích hoạt tài khoản",
+          "body": "Stripe cần thông tin doanh nghiệp của bạn trước khi tài khoản có thể nhận thanh toán và chuyển tiền ra.",
+          "due": "Stripe cần thêm {count, plural, other {# thông tin}} trước khi kích hoạt tài khoản.",
+          "chargesOff": "Stripe chưa cho tài khoản này nhận thanh toán.",
+          "payoutsOff": "Việc chuyển tiền ra đang tạm dừng cho đến khi Stripe có đủ thông tin cần thiết.",
+          "testMode": "Chế độ thử nghiệm chưa cần: thẻ thử của Stripe dùng được trước khi kích hoạt tài khoản. Hãy kích hoạt trước khi chạy thật."
+        },
+        "bank": {
+          "title": "Tài khoản ngân hàng nhận tiền",
+          "body": "Nơi Stripe chuyển tiền gói cho bạn.",
+          "missing": "Chưa có tài khoản ngân hàng.",
+          "testMode": "Chế độ thử nghiệm không cần. Hãy thêm trước khi chạy thật."
+        },
+        "webhook": {
+          "title": "Webhook cho thanh toán gói",
+          "body": "Stripe báo cho nền tảng qua webhook này khi một gói được thanh toán, gia hạn hoặc thất bại. Không có nó, không khoản thanh toán thẻ nào kích hoạt được gói.",
+          "missing": "Chưa đặt STRIPE_WEBHOOK_SECRET.",
+          "lastEvent": "Nhận sự kiện gần nhất lúc {date}.",
+          "noEventYet": "Chưa nhận sự kiện nào — Stripe gửi sự kiện đầu tiên khi có người bán thanh toán."
+        },
+        "retries": {
+          "title": "Thử lại khi thanh toán thất bại",
+          "body": "Trên Stripe, vào Billing → Revenue recovery → Retries. Nhà hàng vẫn hoạt động 7 ngày sau khi gia hạn thất bại trong lúc Stripe thử lại thẻ, nên Stripe phải dừng trong tuần đó rồi huỷ gói đăng ký: khoảng thử lại dài hơn sẽ tiếp tục thu tiền thẻ sau khi cửa hàng đã ngừng hoạt động. Trang này không đọc được cài đặt đó.",
+          "setting": "Đặt Smart Retries thử lại trong vòng 1 tuần, và khi mọi lần thử lại cho một khoản thanh toán đều thất bại thì huỷ gói đăng ký."
+        },
+        "prices": {
+          "title": "Giá trên Stripe",
+          "body": "Được tạo từ giá hằng tháng trong Danh mục gói.",
+          "auto": "Tự tạo khi bạn bật thu phí bằng thẻ.",
+          "missingWhileOn": "Thu phí bằng thẻ đang bật nhưng thiếu giá. Hãy tắt rồi bật lại để tạo lại."
+        },
+        "portal": {
+          "title": "Cổng khách hàng",
+          "body": "Nơi người bán cập nhật thẻ, xem hoá đơn và huỷ vào cuối tháng đã trả. Việc đổi gói vẫn làm trên trang gói của Favornoms.",
+          "auto": "Tự thiết lập khi bạn bật thu phí bằng thẻ.",
+          "missingWhileOn": "Thu phí bằng thẻ đang bật nhưng cổng chưa được thiết lập. Hãy tắt rồi bật lại để thiết lập."
+        }
+      },
+      "webhook": {
+        "how1": "Trên Stripe, mở Workbench → Webhooks và tạo một destination mới.",
+        "how2": "Events from: Your account. API version: <code>{version}</code> nếu có. Payload: snapshot, không phải thin events.",
+        "how3": "Chọn đúng {count} sự kiện bên dưới — không chọn thêm.",
+        "how4": "Destination type: Webhook endpoint. Dán Endpoint URL bên dưới.",
+        "how5": "Mở destination vừa tạo, hiện signing secret (<code>whsec_…</code>) và lưu vào Supabase thành secret <code>STRIPE_WEBHOOK_SECRET</code>.",
+        "endpoint": "Endpoint URL",
+        "events": "Sự kiện cần chọn ({count})",
+        "notConnect": "Đây không phải webhook cho thanh toán thẻ của thực khách (Connect). Webhook đó có destination và secret riêng; đừng dùng lại."
+      },
+      "copy": {
+        "copy": "Sao chép",
+        "copyAll": "Sao chép tất cả",
+        "copied": "Đã sao chép",
+        "failed": "Hãy chọn và sao chép thủ công"
+      },
+      "linksTitle": "Trên Stripe",
+      "links": {
+        "apiKeys": "Khoá API",
+        "onboarding": "Kích hoạt tài khoản",
+        "payouts": "Chuyển tiền & tài khoản ngân hàng",
+        "webhooks": "Webhooks",
+        "secrets": "Supabase secrets",
+        "retries": "Thử lại thanh toán thất bại",
+        "invoices": "Hoá đơn",
+        "customers": "Khách hàng",
+        "subscriptions": "Gói đăng ký"
+      },
+      "events": {
+        "title": "Sự kiện thanh toán gói gần đây",
+        "subtitle": "Từ webhook của Stripe và phần xử lý thanh toán thẻ, mới nhất trước, giờ theo UTC. Không gồm thanh toán thẻ của thực khách (Connect).",
+        "empty": "Không có sự kiện thanh toán gói nào để hiển thị.",
+        "level": {
+          "warn": "Cảnh báo",
+          "error": "Lỗi"
+        },
+        "types": {
+          "checkoutCompleted": "Đã thanh toán",
+          "checkoutExpired": "Trang thanh toán hết hạn",
+          "invoicePaid": "Hoá đơn đã thanh toán",
+          "invoiceFailed": "Thanh toán thất bại",
+          "invoiceActionRequired": "Thẻ cần xác nhận",
+          "subscriptionCreated": "Đã tạo gói đăng ký",
+          "subscriptionUpdated": "Đã cập nhật gói đăng ký",
+          "subscriptionDeleted": "Đã huỷ gói đăng ký",
+          "changeApplied": "Đã thanh toán đổi gói",
+          "changeExpired": "Đổi gói hết hạn chưa thanh toán",
+          "trialWillEnd": "Sắp hết dùng thử",
+          "customerUpdated": "Đã cập nhật khách hàng",
+          "requestSettled": "Đã thanh toán và kích hoạt gói",
+          "settleFailed": "Đã thanh toán nhưng không áp dụng được gói",
+          "staleRefunded": "Đã hoàn tiền thanh toán cũ",
+          "accessExpired": "Hết quyền truy cập"
+        }
+      }
     }
   }
 }

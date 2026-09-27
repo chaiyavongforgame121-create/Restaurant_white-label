@@ -75,6 +75,15 @@ export default async function BillingRequestsPage({ searchParams }: Props) {
       branches={branches}
       catalog={catalog}
       nowMs={Date.now()}
+      // The platform switch rides on every row's `billing` (it is one setting), so any
+      // row answers it; with no restaurants at all there is nothing to settle either way.
+      // With the switch off, a restaurant already paying by card still changes its package
+      // by card (the switch stops NEW card purchases only), so its requests settle too.
+      cardPayments={subscriptions.some((row) => row.billing.stripeEnabled || row.billing.rail === 'stripe')}
+      // The switch itself, read the same way (any readable row answers it). Off, a Checkout the
+      // merchant already opened is not closed: it stays "Awaiting card payment" until they pay
+      // it or send the request to the team from their plan page. No rows: unknown, not off.
+      cardSwitchOn={subscriptions.length > 0 ? subscriptions.some((row) => row.billing.stripeEnabled) : null}
     />
   );
 }

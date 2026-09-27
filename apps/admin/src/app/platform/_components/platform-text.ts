@@ -57,6 +57,13 @@ export function platformErrorKey(
 ): string {
   if (raw || code) console.error('[platform] write failed', code ?? '', raw ?? '');
   const text = (raw ?? '').toLowerCase();
+  // First: the refusal names its own cause. A card-paying store's package is Stripe's
+  // (D11), and "something went wrong" would send the operator to retry a write the
+  // database will refuse every time.
+  if (text.includes('stripe_managed')) return 'stripe.errors.managed';
+  // Hiding a branch that delivers on a card subscription would leave Stripe charging
+  // delivery for it every month (§9.6): delivery is switched off on the plan page first.
+  if (text.includes('stripe_delivery_active')) return 'stripe.errors.deliveryActive';
   if (
     code === '42501' ||
     text.includes('not_platform_admin') ||

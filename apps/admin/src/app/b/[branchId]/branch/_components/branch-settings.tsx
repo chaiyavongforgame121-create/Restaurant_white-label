@@ -167,6 +167,11 @@ export function BranchSettings({
       console.error('Saving branch settings failed', updateError);
       if (billing) {
         setError(billingErrorMessage(billing, locale));
+      } else if (updateError.message.includes('stripe_delivery_active')) {
+        // A card-paying restaurant is billed by Stripe for this branch's delivery; hiding the branch
+        // here would stop the service but not the charge, so delivery is switched off on the plan
+        // page first, which updates Stripe.
+        setError(t('errors.stripeDeliveryActive'));
       } else if (updateError.message.includes('branch_privileged_column_forbidden')) {
         setError(t('errors.ownerOnlyDomain'));
       } else if (updateError.message.includes('branch_manager_required')) {

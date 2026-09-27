@@ -8,7 +8,8 @@
     "catalog": "Catalog",
     "settings": "Settings",
     "pendingBadge": "{count}<sr> pending</sr>",
-    "discounts": "Discounts"
+    "discounts": "Discounts",
+    "stripe": "Stripe"
   },
   "accessDenied": {
     "title": "Access denied",
@@ -244,6 +245,46 @@
       "bodyRebill": "Re-bills the {plan} package the tenant already has{hasPrice, select, yes { at {price}/mo} other {}} for {seats, plural, one {# branch} other {# branches}}, paid through {to}. The storefront comes back on the diner’s next request.",
       "bodyConvert": "Moves {name} off {current} and onto {plan}{hasPrice, select, yes { at {price}/mo} other {}} for {seats, plural, one {# branch} other {# branches}}, paid through {to}. The storefront comes back on the diner’s next request.",
       "warningSuspended": "{suspended} of {total} branches are also platform-suspended and will keep returning 404 after this. Restore them separately."
+    }
+  },
+  "stripe": {
+    "rail": {
+      "stripe": "Card (Stripe)",
+      "manual": "Manual"
+    },
+    "clause": {
+      "renewsOn": "renews {date}",
+      "graceUntil": "Payment failed · grace until {date}"
+    },
+    "reason": {
+      "pastDue": "The card payment failed. Stripe is retrying it, and the store keeps working until {date}. If every retry fails, Stripe cancels the subscription and the store goes dark.",
+      "lapsed": "It pays by card through Stripe, so Extend is not offered here — open it in Stripe to see why the payment did not arrive."
+    },
+    "errors": {
+      "managed": "This restaurant pays by card through Stripe, so its package only changes through Stripe. Nothing was changed.",
+      "deliveryActive": "A branch that delivers is paid for on this restaurant’s card subscription, so Stripe would keep charging delivery for it. The merchant turns delivery off for that branch on their plan page first (that updates Stripe). Nothing was changed."
+    },
+    "links": {
+      "customer": "Customer in Stripe",
+      "subscription": "Subscription in Stripe",
+      "invoice": "View invoice"
+    },
+    "drawer": {
+      "renewsOn": "Renews",
+      "graceUntil": "Grace until",
+      "endsOn": "Ends",
+      "nextCharge": "Next charge",
+      "noNextCharge": "None — cancelling",
+      "cancelsLater": "Stripe is set to cancel on {date}; it still renews until then.",
+      "card": "Card",
+      "openInvoice": "Unpaid invoice: {amount} · {count, plural, one {# attempt} other {# attempts}}",
+      "managedNote": "Billed by card through Stripe. Renewals, card changes and cancellations happen there, so Extend and Convert are not offered here."
+    },
+    "card": {
+      "value": "{brand} •••• {last4}",
+      "none": "No card on file",
+      "expires": "exp {expiry}",
+      "expired": "expired {expiry}"
     }
   }
 }

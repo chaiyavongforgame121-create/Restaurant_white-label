@@ -24,6 +24,8 @@ import {
 } from 'lucide-react';
 import { Badge, Button, cn } from '@favornoms/ui';
 import { usePlatformText } from './platform-text';
+import { RailChip } from './rail-chip';
+import { monthlyFigure, showRailInIndex } from './stripe-rail';
 import {
   money,
   type ChipIcon,
@@ -124,12 +126,16 @@ export function TenantIndexRow({
                 {t('index.franchise')}
               </Badge>
             )}
+            {/* Which controls this row has depends on the rail, so once card billing
+                exists the row says which one it is on. */}
+            {showRailInIndex(row.billing) && <RailChip billing={row.billing} />}
           </span>
           <span className="mt-0.5 block truncate text-xs text-muted-foreground">
             {t.rich('index.slugLine', {
               slug: row.slug,
               plan: p.plan(row.ent.planCode),
-              price: money(row.ent.monthlyTotal),
+              // Stripe's own monthly amount for a card store; the package total otherwise.
+              price: money(monthlyFigure(row.billing, row.ent.monthlyTotal)),
               mono: (chunks) => <span className="font-mono">{chunks}</span>,
             })}
           </span>

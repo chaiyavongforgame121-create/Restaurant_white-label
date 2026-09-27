@@ -3,8 +3,11 @@
 // Catalog manager over billing_products.
 //
 // Two things this fixes versus the plans editor it replaces:
-//   • stripe_price_id is editable. It was not editable anywhere before, which
-//     made switching Stripe on impossible without hand-writing SQL.
+//   • stripe_price_id is editable. Since 2026-09-26 nothing needs it: card billing
+//     (docs/PLATFORM-BILLING-STRIPE-2026-09-26.md §4.1) finds or creates its Stripe
+//     prices by lookup key from the amounts on this page, so the page no longer warns
+//     about an empty one — that warning told the owner card billing could not start
+//     until they typed ids the new code never reads.
 //   • Partial saves no longer clobber the features jsonb. upsert_billing_product
 //     treats null as "leave alone", and the feature grid always sends the full
 //     map, so a price edit cannot silently drop a feature key.
@@ -20,6 +23,7 @@
 // like something a merchant can still buy.
 
 import * as React from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { Plus, Save } from 'lucide-react';
@@ -88,10 +92,6 @@ export function PlansManager({ products }: { products: BillingProduct[] }) {
   const [error, setError] = React.useState<string | null>(null);
   const [creating, setCreating] = React.useState(false);
 
-  const missingPrices = products.filter(
-    (p) => p.is_active && p.code !== 'trial' && !p.stripe_price_id,
-  );
-
   // What is on sale comes first: a withdrawn product is history, and reading the
   // catalog top-down should read the price list a merchant is actually offered.
   const ordered = [...products].sort(
@@ -120,15 +120,18 @@ export function PlansManager({ products }: { products: BillingProduct[] }) {
       </header>
       <PlatformNav />
 
-      {missingPrices.length > 0 && (
-        <p className="mb-4 rounded-xl bg-warning/15 px-4 py-3 text-sm">
-          {t.rich('plans.stripeDormant', {
-            count: missingPrices.length,
-            codes: missingPrices.map((p) => p.code).join(', '),
-            strong: (chunks) => <strong>{chunks}</strong>,
-          })}
-        </p>
-      )}
+      {/* What a price edit does to card billing: the amount is in the Stripe price's
+          lookup key, so a new monthly price is a new Stripe price and nobody already
+          paying by card is repriced by it. */}
+      <p className="mb-4 rounded-xl bg-info/10 px-4 py-3 text-sm text-info">
+        {t.rich('stripe.plans.note', {
+          link: (chunks) => (
+            <Link href="/platform/billing-setup" className="font-medium underline underline-offset-2">
+              {chunks}
+            </Link>
+          ),
+        })}
+      </p>
 
       {error && (
         <p className="mb-4 rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -258,9 +261,6 @@ function ProductEditor({
           </span>
           <Badge variant="muted">{isKnownKind(d.kind) ? t(`plans.kinds.${d.kind}`) : d.kind}</Badge>
           {!d.is_active && <Badge variant="danger">{t('plans.withdrawn')}</Badge>}
-          {d.is_active && d.code !== 'trial' && !d.stripe_price_id && (
-            <Badge variant="warning">{t('plans.noStripePrice')}</Badge>
-          )}
         </div>
         <button
           type="button"
@@ -315,7 +315,7 @@ function ProductEditor({
         {num(t('plans.fields.seatsPerUnit'), 'seats_per_unit', t('plans.fields.seatsPerUnitHint'))}
         {num(t('plans.fields.trialDays'), 'trial_days')}
         {num(t('plans.fields.sortOrder'), 'sort_order')}
-        {text(t('plans.fields.stripePriceId'), 'stripe_price_id', t('plans.fields.stripePriceIdHint'))}
+        {text(t('plans.fields.stripePriceId'), 'stripe_price_id', t('stripe.plans.priceIdHint'))}
       </div>
 
       <label className="mt-3 block">

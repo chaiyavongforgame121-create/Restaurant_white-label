@@ -8,11 +8,15 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { discountReasonMessage } from '@favornoms/shared';
 import {
+  cardMayBeCharged,
+  cardStepError,
+  cardStepErrorMessage,
   codeNeedsApplying,
   discountAfterTyping,
   filedFacts,
   filedRequest,
   payOnceView,
+  portalErrorMessage,
   requestErrorMessage,
   showsFiledRequest,
   type FiledRequest,
@@ -111,6 +115,16 @@ describe('the Pay-once box never says "already paid" for money nobody has taken'
     // "waiting for the Favornoms team" would tell the merchant a request exists that does not.
     const refusal = { id: '', plan_code: '', branch_seats: 1, delivery_branch_ids: [] };
     expect(filedRequest(refusal)).toBeNull();
+  });
+
+  it('carries the rail the request is paid on, and reads anything unknown as manual', () => {
+    // A card request waits for the merchant's card, never for the team (who cannot approve it).
+    expect(filedRequest({ ...ROW, rail: 'stripe' })?.rail).toBe('stripe');
+    expect(filedRequest({ ...ROW, rail: 'manual' })?.rail).toBe('manual');
+    // A row from before card billing has no rail: it was a request for the team.
+    expect(filedRequest(ROW)?.rail).toBe('manual');
+    expect(filedRequest({ ...ROW, rail: 'paypal' })?.rail).toBe('manual');
+    expect(filedRequest({ ...ROW, rail: null })?.rail).toBe('manual');
   });
 
   it('never invents a negative or a stray total from a malformed row', () => {
@@ -241,6 +255,223 @@ describe('a refused request says why in the shared words', () => {
     expect(requestErrorMessage('unknown_plan:gold', t, 'en')).toBe('[errors.planUnavailable]');
     expect(requestErrorMessage(undefined, t, 'en')).toBe('[errors.sendFailed]');
     expect(requestErrorMessage('something odd', t, 'en')).toBe('[errors.sendFailed]');
+  });
+});
+
+describe('a card step that failed never says the request was not sent', () => {
+  // callStripeBilling throws `stripe_billing_failed:<code>` AFTER request_package_change filed the
+  // request. "Could not send your request" would send the merchant to file it again.
+  const t = (key: string) => `[${key}]`;
+
+  it('says the payment could not be started, and that nothing was charged', () => {
+    for (const code of ['stripe_error', '502', '500', 'unexpected_answer', 'write_failed', 'internal_error']) {
+      const message = requestErrorMessage(`stripe_billing_failed:${code}`, t, 'en');
+      expect(message, code).toBe('[stripe.errors.startFailed]');
+      expect(message).not.toBe('[errors.sendFailed]');
+    }
+  });
+
+  it('says so when the request is no longer there to pay', () => {
+    for (const code of ['request_not_pending', 'request_not_found', 'not_found']) {
+      expect(requestErrorMessage(`stripe_billing_failed:${code}`, t, 'en'), code).toBe(
+        '[stripe.errors.requestGone]',
+      );
+    }
+    // The prefix must be the code, not a word that happens to contain it.
+    expect(requestErrorMessage('stripe_billing_failed:not_foundry', t, 'en')).toBe('[stripe.errors.startFailed]');
+  });
+
+  it('never says "nothing was charged" after the card on file was charged', () => {
+    // stripe-billing charged the change and then could not apply it (settleChange): the merchant
+    // must not be sent to pay a second time.
+    expect(requestErrorMessage('stripe_billing_failed:charged_not_applied', t, 'en')).toBe(
+      '[stripe.errors.chargedNotApplied]',
+    );
+    expect(requestErrorMessage('stripe_billing_failed:charged_refunded', t, 'en')).toBe(
+      '[stripe.errors.chargedRefunded]',
+    );
+  });
+
+  it('never says the card was charged for a change put back with nothing charged (edge-rr-4)', () => {
+    expect(requestErrorMessage('stripe_billing_failed:change_not_applied', t, 'en')).toBe(
+      '[stripe.errors.changeNotApplied]',
+    );
+    // What an edge from before change_not_applied sent in the same case: only ever with nothing paid.
+    expect(requestErrorMessage('stripe_billing_failed:settle_failed', t, 'en')).toBe(
+      '[stripe.errors.changeNotApplied]',
+    );
+  });
+
+  it('sends a merchant whose card billing is out of step to a person, not to retry', () => {
+    for (const code of [
+      'no_subscription',
+      'subscription_mismatch',
+      'subscription_not_active',
+      'subscription_unexpected_items',
+      'customer_mismatch',
+      'branch_not_in_restaurant',
+      'cannot_bill',
+      'admin_url_not_configured',
+    ]) {
+      expect(requestErrorMessage(`stripe_billing_failed:${code}`, t, 'en'), code).toBe('[stripe.errors.needsTeam]');
+    }
+  });
+
+  it('keeps the sign-in and permission sentences for the card step too', () => {
+    expect(requestErrorMessage('not_signed_in', t, 'en')).toBe('[errors.signedOut]');
+    expect(requestErrorMessage('stripe_billing_failed:auth_required', t, 'en')).toBe('[errors.signedOut]');
+    expect(requestErrorMessage('stripe_billing_failed:invalid_token', t, 'en')).toBe('[errors.signedOut]');
+    expect(requestErrorMessage('stripe_billing_failed:forbidden', t, 'en')).toBe('[errors.forbidden]');
+    expect(requestErrorMessage('stripe_billing_failed:other_restaurant', t, 'en')).toBe('[errors.forbidden]');
+  });
+
+  it('reads a switched-off function as the manual rail, in the shared words', () => {
+    // Only reachable if the dormant answer ever arrived as an error: the request stays for the team.
+    expect(requestErrorMessage('stripe_billing_failed:stripe_not_configured', t, 'en')).toBe(
+      requestErrorMessage('stripe_not_configured', t, 'en'),
+    );
+    expect(requestErrorMessage('stripe_not_configured', t, 'en')).not.toMatch(/^\[/);
+  });
+
+  it('says a change held on Stripe’s invoice page must be finished before another is sent', () => {
+    // request_package_change's own refusal (§9.3), however PostgREST words it.
+    expect(requestErrorMessage('payment_in_progress', t, 'en')).toBe('[stripe.errors.paymentInProgress]');
+    expect(requestErrorMessage('ERROR: payment_in_progress', t, 'en')).toBe('[stripe.errors.paymentInProgress]');
+  });
+
+  it('says a card step answered payment_in_progress is busy, to be tried again in a moment (edge-rr-3)', () => {
+    // From `start` the word means another call is taking the same payment right now (Stripe's
+    // idempotency key in use), not the invoice lock.
+    expect(requestErrorMessage('stripe_billing_failed:payment_in_progress', t, 'en')).toBe('[stripe.errors.busy]');
+    expect(requestErrorMessage('stripe_billing_failed:payment_in_progress', t, 'en', true)).toBe(
+      '[stripe.errors.busy]',
+    );
+  });
+});
+
+describe('every code stripe-billing answers says what happened to the money (UIM-1, UIM-2)', () => {
+  const FIRST_PURCHASE = false; // through Checkout: nothing is charged until Stripe's page
+  const CARD_ON_FILE = true; // on the card rail: `start` charges the card directly
+  const both = (raw: string) => [cardStepError(raw, FIRST_PURCHASE), cardStepError(raw, CARD_ON_FILE)];
+  const code = (c: string) => `stripe_billing_failed:${c}`;
+
+  it('says the card was charged when it was, on either rail', () => {
+    expect(both(code('charged_refunded'))).toEqual(['chargedRefunded', 'chargedRefunded']);
+    expect(both(code('charged_not_applied'))).toEqual(['chargedNotApplied', 'chargedNotApplied']);
+    expect(cardMayBeCharged('chargedRefunded')).toBe(true);
+    expect(cardMayBeCharged('chargedNotApplied')).toBe(true);
+  });
+
+  it('says a change Stripe took and our records refused was put back with nothing charged (edge-rr-4)', () => {
+    expect(both(code('change_not_applied'))).toEqual(['changeNotApplied', 'changeNotApplied']);
+    // The bare settle reasons an older edge sent in that case, with nothing paid.
+    for (const c of ['settle_failed', 'invalid_arguments', 'not_settled']) {
+      expect(both(code(c)), c).toEqual(['changeNotApplied', 'changeNotApplied']);
+    }
+    expect(cardMayBeCharged('changeNotApplied')).toBe(false);
+    // A request that is gone is still said to be gone, not "not applied".
+    expect(both(code('request_not_pending'))).toEqual(['requestGone', 'requestGone']);
+  });
+
+  it('never claims "nothing was charged" for a card-on-file failure that does not say (UIM-1)', () => {
+    for (const c of ['internal_error', 'write_failed', 'stripe_error', '500', '502', '504', 'unexpected_answer', 'no_url', 'something_new']) {
+      expect(cardStepError(code(c), CARD_ON_FILE), c).toBe('resultUnknown');
+    }
+    // A dropped connection throws no code at all.
+    expect(cardStepError('Failed to fetch', CARD_ON_FILE)).toBe('resultUnknown');
+    expect(cardStepError('', CARD_ON_FILE)).toBe('resultUnknown');
+    expect(cardMayBeCharged('resultUnknown')).toBe(true);
+  });
+
+  it('says nothing was charged by a first purchase that never reached Checkout', () => {
+    for (const c of ['internal_error', 'write_failed', 'stripe_error', '500', 'unexpected_answer', 'something_new']) {
+      expect(cardStepError(code(c), FIRST_PURCHASE), c).toBe('startFailed');
+    }
+    expect(cardStepError('Failed to fetch', FIRST_PURCHASE)).toBe('startFailed');
+    expect(cardMayBeCharged('startFailed')).toBe(false);
+  });
+
+  it('knows the refusals made before any charge, on either rail', () => {
+    expect(both(code('request_not_pending'))).toEqual(['requestGone', 'requestGone']);
+    // Another call is taking the same payment right now (§10.6): busy, try again in a moment.
+    expect(both(code('payment_in_progress'))).toEqual(['busy', 'busy']);
+    expect(cardMayBeCharged('busy')).toBe(false);
+    expect(both(code('plan_limit_exceeded'))).toEqual(['planLimit', 'planLimit']);
+    // cannot_bill's detail, should the client ever pass it on.
+    expect(both(code('cannot_bill:plan_limit_exceeded'))).toEqual(['planLimit', 'planLimit']);
+    for (const c of ['subscription_not_active', 'cannot_bill', 'admin_url_not_configured', 'branch_not_in_restaurant', 'no_subscription']) {
+      expect(both(code(c)), c).toEqual(['needsTeam', 'needsTeam']);
+    }
+    for (const c of ['bad_request', 'read_failed']) {
+      expect(both(code(c)), c).toEqual(['startFailed', 'startFailed']);
+    }
+    expect(both(code('forbidden'))).toEqual(['forbidden', 'forbidden']);
+    expect(both(code('auth_required'))).toEqual(['signedOut', 'signedOut']);
+    expect(both('not_signed_in')).toEqual(['signedOut', 'signedOut']);
+  });
+
+  it('tells a card restaurant card payments are paused, and a first purchase that it went to the team', () => {
+    expect(both(code('stripe_not_configured'))).toEqual(['dormant', 'cardPaused']);
+  });
+
+  it('sends a change Stripe cannot account for to a person, without offering to pay again', () => {
+    // §9.4: sent before, and what it did cannot be told; this call charged nothing more.
+    expect(both(code('change_conflict'))).toEqual(['changeConflict', 'changeConflict']);
+    expect(cardMayBeCharged('changeConflict')).toBe(true);
+  });
+
+  it('says a change whose invoice expired was cancelled, with nothing charged', () => {
+    expect(both(code('payment_expired'))).toEqual(['paymentExpired', 'paymentExpired']);
+    expect(cardMayBeCharged('paymentExpired')).toBe(false);
+  });
+
+  it('reaches a real sentence for every kind', () => {
+    const t = (key: string) => `[${key}]`;
+    for (const kind of [
+      'chargedRefunded',
+      'chargedNotApplied',
+      'changeNotApplied',
+      'changeConflict',
+      'resultUnknown',
+      'requestGone',
+      'busy',
+      'paymentExpired',
+      'planLimit',
+      'needsTeam',
+      'cardPaused',
+      'startFailed',
+    ] as const) {
+      expect(cardStepErrorMessage(kind, t, 'en')).toBe(`[stripe.errors.${kind}]`);
+    }
+    expect(cardStepErrorMessage('signedOut', t, 'en')).toBe('[errors.signedOut]');
+    expect(cardStepErrorMessage('forbidden', t, 'en')).toBe('[errors.forbidden]');
+    expect(cardStepErrorMessage('dormant', t, 'en')).not.toMatch(/^\[/);
+  });
+
+  it('keeps the card-on-file reading when a request-step message carries a card code', () => {
+    const t = (key: string) => `[${key}]`;
+    expect(requestErrorMessage(code('internal_error'), t, 'en', CARD_ON_FILE)).toBe('[stripe.errors.resultUnknown]');
+    expect(requestErrorMessage(code('internal_error'), t, 'en')).toBe('[stripe.errors.startFailed]');
+  });
+});
+
+describe('the billing portal says why it did not open', () => {
+  const t = (key: string) => `[${key}]`;
+
+  it('tells a merchant card billing is off when the function answers dormant', () => {
+    expect(portalErrorMessage(null, t)).toBe('[stripe.errors.portalOff]');
+  });
+
+  it('tells a merchant with no Stripe customer that there is no card yet', () => {
+    expect(portalErrorMessage('stripe_billing_failed:no_stripe_customer', t)).toBe('[stripe.errors.noCustomer]');
+  });
+
+  it('keeps the access sentences and falls back to a plain retry', () => {
+    expect(portalErrorMessage('not_signed_in', t)).toBe('[errors.signedOut]');
+    expect(portalErrorMessage('stripe_billing_failed:forbidden', t)).toBe('[errors.forbidden]');
+    expect(portalErrorMessage('stripe_billing_failed:stripe_error', t)).toBe('[stripe.errors.portalFailed]');
+    expect(portalErrorMessage('', t)).toBe('[stripe.errors.portalFailed]');
+    expect(portalErrorMessage(undefined, t)).toBe('[stripe.errors.portalFailed]');
   });
 });
 

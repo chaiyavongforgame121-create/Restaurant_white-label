@@ -25,8 +25,20 @@ import { getBrowserClient } from '@favornoms/database/client';
 import { featureLabel, hasFeature, ownsFeature, FEATURE_KEYS } from '@favornoms/shared';
 import { Badge, Button, Sheet, Skeleton, buttonVariants, cn } from '@favornoms/ui';
 import { usePlatformText, type PlatformText } from './platform-text';
+import { RailChip } from './rail-chip';
+import {
+  cardBrandName,
+  cardExpired,
+  cardExpiry,
+  monthlyFigure,
+  safeHttpsUrl,
+  nextChargeView,
+  stripeCancelsLater,
+  stripeObjectLinks,
+} from './stripe-rail';
 import {
   branchVerdict,
+  deadlineFact,
   money,
   needsOpenProbe,
   storefrontUrl,
@@ -82,6 +94,7 @@ export function TenantDrawer({
   const actionRef = React.useRef<HTMLButtonElement>(null);
   const firstLinkRef = React.useRef<HTMLAnchorElement>(null);
   const anyActive = branches.some((b) => b.is_active);
+  const stripeLinks = stripeObjectLinks(row.stripeCustomerId, row.stripeSubscriptionId);
 
   // Land on the recommended repair, so the common fix is Tab → Enter → Enter.
   // A healthy tenant has no repair, so focus falls to the first Back office link.
@@ -165,6 +178,7 @@ export function TenantDrawer({
           <SwitchRow
             icon={<CreditCard className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />}
             label={t('drawer.subscriptionLabel')}
+            badge={<RailChip billing={row.billing} />}
             state={billingState(row, health, p)}
             consequence={t('drawer.subscriptionConsequence')}
           >
@@ -197,6 +211,20 @@ export function TenantDrawer({
               >
                 {t('drawer.manageSubscription')}
               </Link>
+              {/* A card-paying store's package lives in Stripe, and resolvePrimaryAction
+                  offers it no Extend or Convert — so the way to act on it is here. */}
+              {stripeLinks.map((link) => (
+                <a
+                  key={link.kind}
+                  href={link.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={buttonVariants({ size: 'sm', variant: 'ghost' })}
+                >
+                  <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                  {t(`stripe.links.${link.kind}`)}
+                </a>
+              ))}
               {actionDone && (
                 <span role="status" className="flex items-center gap-1 text-xs text-success">
                   <Check className="h-3.5 w-3.5" aria-hidden /> {t('index.reactivated')}
@@ -211,7 +239,7 @@ export function TenantDrawer({
           </SwitchRow>
         </section>
 
-        <Package row={row} health={health} p={p} />
+        <Package row={row} health={health} nowMs={nowMs} p={p} />
 
         {health.reason && (
           <p className="border-t border-border/60 pt-3 text-xs text-muted-foreground">
@@ -291,12 +319,14 @@ function BranchBlock({
 function SwitchRow({
   icon,
   label,
+  badge,
   state,
   consequence,
   children,
 }: {
   icon: React.ReactNode;
   label: string;
+  badge?: React.ReactNode;
   state: string;
   consequence: string;
   children: React.ReactNode;
@@ -304,9 +334,10 @@ function SwitchRow({
   return (
     <div className="flex items-start justify-between gap-3 rounded-xl border border-border/60 p-3">
       <div className="min-w-0">
-        <p className="flex items-center gap-2 text-sm font-semibold">
+        <p className="flex flex-wrap items-center gap-2 text-sm font-semibold">
           {icon}
           {label}
+          {badge}
         </p>
         <p className="mt-0.5 text-sm text-muted-foreground">{state}</p>
         <p className="mt-0.5 text-xs text-muted-foreground">{consequence}</p>
@@ -316,9 +347,20 @@ function SwitchRow({
   );
 }
 
-function Package({ row, health, p }: { row: TenantRow; health: TenantHealth; p: PlatformText }) {
+function Package({
+  row,
+  health,
+  nowMs,
+  p,
+}: {
+  row: TenantRow;
+  health: TenantHealth;
+  nowMs: number;
+  p: PlatformText;
+}) {
   const { t, locale } = p;
   const { ent } = row;
+  const deadline = deadlineFact(row, health.entitled);
   const overQuota = ent.branchesUsed > ent.branchSeats;
   // billing_compute never clears features on expiry, so a dead tenant still
   // carries a full grant blob. Split it rather than painting it as provisioned.
@@ -335,14 +377,14 @@ function Package({ row, health, p }: { row: TenantRow; health: TenantHealth; p: 
         </div>
         <div>
           <dt className="text-xs text-muted-foreground">{t('drawer.package.monthly')}</dt>
-          <dd className="font-semibold tabular-nums">{money(ent.monthlyTotal)}</dd>
+          {/* What Stripe bills every month for a card store, not the catalog-priced total. */}
+          <dd className="font-semibold tabular-nums">{money(monthlyFigure(row.billing, ent.monthlyTotal))}</dd>
         </div>
         <div>
-          {/* Not "Renews": nothing renews by itself, the store goes dark on this date. */}
-          <dt className="text-xs text-muted-foreground">
-            {health.entitled ? t('drawer.package.paidThrough') : t('drawer.package.lapsed')}
-          </dt>
-          <dd className="font-semibold tabular-nums">{p.date(ent.entitledThrough ?? ent.trialEndsAt)}</dd>
+          {/* "Paid through" on the manual rail, where nothing renews by itself and the
+              store goes dark on this date; "Renews" only for a card Stripe charges. */}
+          <dt className="text-xs text-muted-foreground">{p.text(deadline.label)}</dt>
+          <dd className="font-semibold tabular-nums">{p.date(deadline.date)}</dd>
         </div>
         <div>
           <dt className="text-xs text-muted-foreground">{t('drawer.package.seats')}</dt>
@@ -354,6 +396,8 @@ function Package({ row, health, p }: { row: TenantRow; health: TenantHealth; p: 
           </dd>
         </div>
       </dl>
+
+      {row.billing.rail === 'stripe' && <StripeFacts row={row} nowMs={nowMs} p={p} />}
 
       {live.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
@@ -384,6 +428,75 @@ function Package({ row, health, p }: { row: TenantRow; health: TenantHealth; p: 
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * What Stripe holds for a card-paying store: the next charge, the card it goes on, and —
+ * while a renewal is failing — the invoice Stripe is still trying to collect.
+ */
+function StripeFacts({ row, nowMs, p }: { row: TenantRow; nowMs: number; p: PlatformText }) {
+  const { t } = p;
+  const { billing, openInvoice, ent } = row;
+  const card = billing.card;
+  const expiry = card ? cardExpiry(card) : null;
+  const expired = card ? cardExpired(card, nowMs) : false;
+  const next = nextChargeView(billing, ent.status, row.cancelAtPeriodEnd);
+  // Cancelled on a custom date after the next renewal: that charge still happens, and the
+  // store stops on the later date.
+  const cancelsLater = row.cancelAtPeriodEnd ? null : stripeCancelsLater(billing);
+  const invoiceUrl = safeHttpsUrl(openInvoice?.hostedInvoiceUrl);
+  return (
+    <div className="space-y-2 rounded-xl border border-border/60 p-3">
+      <dl className="grid grid-cols-2 gap-3 text-sm">
+        <div>
+          <dt className="text-xs text-muted-foreground">{t('stripe.drawer.nextCharge')}</dt>
+          <dd className="font-semibold tabular-nums">
+            {/* A store set to cancel is not charged again: no amount, whatever the total says.
+                The amount is Stripe's own recurring total, never re-priced from the catalog. */}
+            {next.kind === 'none'
+              ? t('stripe.drawer.noNextCharge')
+              : next.kind === 'charge' && next.amount !== null
+                ? money(next.amount)
+                : '—'}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs text-muted-foreground">{t('stripe.drawer.card')}</dt>
+          <dd className={cn('font-semibold', expired && 'text-danger')}>
+            {card
+              ? t('stripe.card.value', { brand: cardBrandName(card.brand), last4: card.last4 })
+              : t('stripe.card.none')}
+            {expiry && (
+              <span className="ml-1 text-xs font-normal">
+                {expired ? t('stripe.card.expired', { expiry }) : t('stripe.card.expires', { expiry })}
+              </span>
+            )}
+          </dd>
+        </div>
+      </dl>
+      {cancelsLater && (
+        <p className="text-xs text-muted-foreground">
+          {t('stripe.drawer.cancelsLater', { date: p.date(cancelsLater) })}
+        </p>
+      )}
+      {openInvoice && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-warning/10 px-3 py-2 text-xs text-warning">
+          <span>
+            {t('stripe.drawer.openInvoice', {
+              amount: money(openInvoice.amountDue),
+              count: openInvoice.attemptCount,
+            })}
+          </span>
+          {invoiceUrl && (
+            <a href={invoiceUrl} target="_blank" rel="noreferrer" className="font-medium underline-offset-2 hover:underline">
+              {t('stripe.links.invoice')}
+            </a>
+          )}
+        </div>
+      )}
+      <p className="text-xs text-muted-foreground">{t('stripe.drawer.managedNote')}</p>
+    </div>
   );
 }
 

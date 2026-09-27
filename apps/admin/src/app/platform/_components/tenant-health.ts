@@ -16,7 +16,14 @@
 // Nothing here is worded: every label is a Msg — a key in the `platform` message
 // namespace plus its values — and platform-text.ts turns it into the reader's
 // language where it is rendered. Only the decisions live in this module.
+//
+// Since 2026-09-26 (docs/PLATFORM-BILLING-STRIPE-2026-09-26.md) a restaurant can pay by
+// card through Stripe. That changes three sentences and one button: a Stripe restaurant
+// RENEWS on its date instead of going dark, a failed renewal has a grace date instead of
+// a bare countdown, and no manual repair (Extend, Convert) is offered for it, because
+// billing_set_package refuses a Stripe-managed restaurant with `stripe_managed`.
 
+import type { BillingInvoiceSummary, BillingRailInfo } from '@favornoms/database/queries';
 import {
   DEFAULT_UI_LOCALE,
   PLAN_BASE,
@@ -26,6 +33,7 @@ import {
   type PackageSelection,
   type UiLocale,
 } from '@favornoms/shared';
+import { renewsByItself, stripeCancelling, stripeEndsOn } from './stripe-rail';
 
 export interface BranchClosureLite {
   starts_at: string;
@@ -58,6 +66,12 @@ export interface TenantRow {
   franchise: boolean;
   loyaltyScope: string;
   cancelAtPeriodEnd: boolean;
+  /** How it pays the platform: card through Stripe, or the manual rail. */
+  billing: BillingRailInfo;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+  /** past_due on the Stripe rail: the renewal Stripe is still trying to collect. */
+  openInvoice: BillingInvoiceSummary | null;
 }
 
 /** A value inside a message. `{ date }` is an ISO timestamp, formatted in the reader's language. */
@@ -106,8 +120,10 @@ export interface TenantHealth {
   offline: boolean;
   /**
    * A paid (non-trial) store that is still live but whose paid-through date is
-   * within EXPIRY_WARN_DAYS. Nothing renews by itself while Stripe is dormant, so
-   * this is the cohort that goes dark next unless the platform owner extends it.
+   * within EXPIRY_WARN_DAYS. Nothing on the manual rail renews by itself, so this is
+   * the cohort that goes dark next unless the platform owner extends it. A Stripe
+   * restaurant that renews by itself is never in it; one whose renewal failed (past
+   * due) or that is set to cancel is, because it does go dark on that date.
    */
   expiringSoon: boolean;
   /** Whole sentences, rendered in order; null when there is nothing to explain. */
@@ -204,12 +220,22 @@ export function tenantHealth(row: TenantRow, branches: BranchLite[], nowMs: numb
   const suspended = total - active;
   const unpaid = branches.filter((b) => !branchEntitled(b, nowMs)).length;
 
+  // Set to cancel, whichever way: cancel_at_period_end, or a Stripe cancel_at that comes
+  // before the next renewal (the Dashboard's "cancel on a custom date" sets only that one).
+  const cancelling = row.cancelAtPeriodEnd || stripeCancelling(row.billing);
+  const renews = renewsByItself(row.billing, ent.status, cancelling);
+  const ends = endOf(row, cancelling, nowMs, daysLeft);
+
   // Trials are excluded on purpose: their end is the conversion conversation, and
   // re-sending a trial plan would hand out another free period.
   const expiringSoon =
-    entitled && isPaidPlan(ent.planCode) && ent.status !== 'trialing' && daysLeft <= EXPIRY_WARN_DAYS;
+    entitled &&
+    isPaidPlan(ent.planCode) &&
+    ent.status !== 'trialing' &&
+    ends.days <= EXPIRY_WARN_DAYS &&
+    !renews;
 
-  const billing = billingChip(ent, row.cancelAtPeriodEnd, entitled, daysLeft, expiringSoon);
+  const billing = billingChip(ent, cancelling, entitled, daysLeft, ends.days, expiringSoon);
   const access = accessChip(total, active);
 
   // Both switches off must show BOTH lamps — a single pill would hide one, and
@@ -248,24 +274,38 @@ export function tenantHealth(row: TenantRow, branches: BranchLite[], nowMs: numb
     billing,
     access,
     lamps,
-    clause: clauseFor(ent, entitled, daysLeft, total, active, row.cancelAtPeriodEnd, expiringSoon),
+    clause: clauseFor(row, entitled, daysLeft, total, active, cancelling, ends.at, expiringSoon, renews),
     branchCount: msg('health.branchCount', { count: total }),
     branchQualifier: qualifierFor(total, suspended, unpaid, paused),
     rail: platformSuspended || !entitled ? 'danger' : warned ? 'warning' : 'none',
     severity,
     offline: !entitled || platformSuspended,
     expiringSoon,
-    reason: reasonFor(
-      ent,
-      entitled,
-      daysLeft,
-      total,
-      active,
-      paused,
-      row.cancelAtPeriodEnd,
-      expiringSoon,
-    ),
+    reason: reasonFor(row, entitled, daysLeft, total, active, paused, cancelling, expiringSoon),
   };
+}
+
+/**
+ * When the store actually stops, as a date and whole days from now.
+ *
+ * The paid-through date, except for a card store that is cancelled or set to cancel: its
+ * paid-through date carries the 7-day renewal grace (§9.1), but Stripe ends the
+ * subscription on its own cancel date and the store goes dark then, so the countdown,
+ * the "expiring soon" cohort and "Ends {date}" all follow Stripe's date.
+ */
+function endOf(
+  row: TenantRow,
+  cancelling: boolean,
+  nowMs: number,
+  daysLeft: number,
+): { at: string | null; days: number } {
+  const { ent, billing } = row;
+  if (billing.rail !== 'stripe' || !(cancelling || ent.status === 'cancelled')) {
+    return { at: ent.entitledThrough, days: daysLeft };
+  }
+  const at = stripeEndsOn(billing, ent.status, ent.entitledThrough);
+  const ms = at ? Date.parse(at) : NaN;
+  return { at, days: Number.isFinite(ms) ? Math.max(0, Math.ceil((ms - nowMs) / DAY)) : daysLeft };
 }
 
 // past_due and cancelled are NOT off — billing_compute grants
@@ -273,9 +313,11 @@ export function tenantHealth(row: TenantRow, branches: BranchLite[], nowMs: numb
 // they warn rather than alarm. A naive status→label map reds a paying tenant.
 function billingChip(
   ent: Entitlements,
-  cancelAtPeriodEnd: boolean,
+  cancelling: boolean,
   entitled: boolean,
   daysLeft: number,
+  /** Days until the store actually stops (Stripe's cancel date for a cancelling card store). */
+  daysToEnd: number,
   expiringSoon: boolean,
 ): HealthChip {
   if (!entitled) {
@@ -295,13 +337,13 @@ function billingChip(
   if (ent.status === 'past_due') {
     return { label: msg('health.chip.pastDue', { days: daysLeft }), variant: 'warning', icon: 'billing' };
   }
-  if (ent.status === 'cancelled' || cancelAtPeriodEnd) {
-    return { label: msg('health.chip.cancelling', { days: daysLeft }), variant: 'warning', icon: 'clock' };
+  if (ent.status === 'cancelled' || cancelling) {
+    return { label: msg('health.chip.cancelling', { days: daysToEnd }), variant: 'warning', icon: 'clock' };
   }
   // A green "Live" a few days before the deadline is how a paying store went dark
   // with nobody warned: the lamp only changed once diners were already turned away.
   if (expiringSoon) {
-    return { label: msg('health.chip.expiresIn', { days: daysLeft }), variant: 'warning', icon: 'clock' };
+    return { label: msg('health.chip.expiresIn', { days: daysToEnd }), variant: 'warning', icon: 'clock' };
   }
   return { label: msg('health.chip.live'), variant: 'success', icon: 'billing' };
 }
@@ -318,14 +360,18 @@ function accessChip(total: number, active: number): HealthChip | null {
 }
 
 function clauseFor(
-  ent: Entitlements,
+  row: TenantRow,
   entitled: boolean,
   daysLeft: number,
   total: number,
   active: number,
-  cancelAtPeriodEnd: boolean,
+  cancelling: boolean,
+  /** The day the store stops: Stripe's cancel date for a cancelling card store. */
+  endsAt: string | null,
   expiringSoon: boolean,
+  renews: boolean,
 ): Msg {
+  const { ent, billing } = row;
   // No branches means no storefront, so every diner-facing clause below would be
   // a claim about a page that does not exist. Say what is actually true instead.
   if (total === 0) return msg(entitled ? 'health.clause.noStorefront' : 'health.clause.noStorefrontUnpaid');
@@ -343,12 +389,23 @@ function clauseFor(
       ? msg('health.clause.trialEndsToday')
       : msg('health.clause.trialEndsIn', { days: daysLeft });
   }
-  if (ent.status === 'past_due') return msg('health.clause.graceLeft', { days: daysLeft });
-  if (ent.status === 'cancelled' || cancelAtPeriodEnd) {
-    return msg('health.clause.ends', { date: { date: ent.entitledThrough } });
+  if (ent.status === 'past_due') {
+    // On the Stripe rail a failed renewal has a date, not just a countdown: Stripe keeps
+    // retrying until grace_until, and the store works until then.
+    return billing.rail === 'stripe'
+      ? msg('stripe.clause.graceUntil', { date: { date: billing.graceUntil ?? ent.entitledThrough } })
+      : msg('health.clause.graceLeft', { days: daysLeft });
   }
-  // Not "renews": nothing renews on its own while there is no payment rail, and
-  // that word is what let an owner assume a store would carry on past its date.
+  if (ent.status === 'cancelled' || cancelling) {
+    return msg('health.clause.ends', { date: { date: endsAt } });
+  }
+  // "Renews" only where it is true: a card on file that Stripe charges by itself, on the
+  // date it charges (renewsByItself requires one).
+  if (renews && billing.nextChargeAt) {
+    return msg('stripe.clause.renewsOn', { date: { date: billing.nextChargeAt } });
+  }
+  // Not "renews" on the manual rail: nothing renews there on its own, and that word
+  // is what let an owner assume a store would carry on past its date.
   if (expiringSoon) return msg('health.clause.goesDark', { date: { date: ent.entitledThrough } });
   return msg('health.clause.paidThrough', { date: { date: ent.entitledThrough } });
 }
@@ -363,15 +420,17 @@ function qualifierFor(total: number, suspended: number, unpaid: number, paused: 
 }
 
 function reasonFor(
-  ent: Entitlements,
+  row: TenantRow,
   entitled: boolean,
   daysLeft: number,
   total: number,
   active: number,
   paused: number,
-  cancelAtPeriodEnd: boolean,
+  cancelling: boolean,
   expiringSoon: boolean,
 ): Msg[] | null {
+  const { ent, billing } = row;
+  const stripe = billing.rail === 'stripe';
   const parts: Msg[] = [];
 
   if (total > 0 && active === 0) {
@@ -395,6 +454,9 @@ function reasonFor(
               : 'health.reason.noSubscriptionStorefront',
           ),
     );
+    // No Extend is offered for a card-paying store (the SQL refuses it), so the
+    // sentence says where the repair is instead of pointing at a missing button.
+    if (stripe) parts.push(msg('stripe.reason.lapsed'));
     if (active > 0) {
       parts.push(msg('health.reason.accessFine'));
     }
@@ -405,10 +467,15 @@ function reasonFor(
         : msg('health.reason.trialEndsIn', { days: daysLeft }),
     );
   } else if (ent.status === 'past_due') {
-    parts.push(msg('health.reason.pastDue', { days: daysLeft }));
-  } else if (expiringSoon && ent.status !== 'cancelled' && !cancelAtPeriodEnd) {
+    parts.push(
+      stripe
+        ? msg('stripe.reason.pastDue', { date: { date: billing.graceUntil ?? ent.entitledThrough } })
+        : msg('health.reason.pastDue', { days: daysLeft }),
+    );
+  } else if (expiringSoon && !stripe && ent.status !== 'cancelled' && !cancelling) {
     // Never for a cancelling store: resolvePrimaryAction offers it no Extend, so
-    // "unless you extend it" pointed the owner at a button that is not there.
+    // "unless you extend it" pointed the owner at a button that is not there. Nor for a
+    // card store, which has no Extend either.
     parts.push(msg('health.reason.expiring', { date: { date: ent.entitledThrough } }));
   }
 
@@ -453,12 +520,17 @@ export function resolvePrimaryAction(
   if (health.total > 0 && health.active === 0) {
     return { kind: 'restore', label: msg('health.action.restore') };
   }
+  // Platform access is ours to switch; the package of a card-paying store is Stripe's.
+  // billing_set_package refuses it with `stripe_managed` (D11), so no button that
+  // calls it is offered — the drawer links to the customer in Stripe instead.
+  if (row.billing.rail === 'stripe') return null;
   if (health.entitled) {
     // Offered BEFORE the deadline, not only after it: waiting for the lapse meant
     // the button appeared once diners were already seeing the suspended screen.
     // A cancellation is left alone — extending it would silently undo a decision
     // somebody made on purpose.
-    const cancelling = row.ent.status === 'cancelled' || row.cancelAtPeriodEnd;
+    const cancelling =
+      row.ent.status === 'cancelled' || row.cancelAtPeriodEnd || row.billing.cancelAtPeriodEnd;
     return health.expiringSoon && !cancelling
       ? { kind: 'extend', label: msg('health.action.extend') }
       : null;
@@ -473,6 +545,31 @@ export function resolvePrimaryAction(
         ? msg('health.action.convert')
         : msg('health.action.convertPriced', { price: money(convertPrice) }),
   };
+}
+
+/**
+ * The date the drawer's Package block leads with, and what to call it.
+ *
+ * On the manual rail it is "Paid through" — the store goes dark on it. A card-paying
+ * store is different: Stripe charges it again on that date ("Renews"), a failed renewal
+ * keeps it working until the grace date ("Grace until"), and a store set to cancel stops
+ * on the day Stripe cancels it ("Ends"). A lapsed store says "Lapsed" whatever its rail.
+ */
+export function deadlineFact(row: TenantRow, entitled: boolean): { label: Msg; date: string | null } {
+  const { ent, billing } = row;
+  if (!entitled) return { label: msg('drawer.package.lapsed'), date: ent.entitledThrough ?? ent.trialEndsAt };
+  if (billing.rail === 'stripe') {
+    if (ent.status === 'past_due') {
+      return { label: msg('stripe.drawer.graceUntil'), date: billing.graceUntil ?? ent.entitledThrough };
+    }
+    if (ent.status === 'cancelled' || row.cancelAtPeriodEnd || stripeCancelling(billing)) {
+      return { label: msg('stripe.drawer.endsOn'), date: stripeEndsOn(billing, ent.status, ent.entitledThrough) };
+    }
+    // "Renews" needs the date Stripe charges on. Without one nothing is scheduled, and the
+    // paid-through date (a week past the period end on this rail) is called what it is.
+    if (billing.nextChargeAt) return { label: msg('stripe.drawer.renewsOn'), date: billing.nextChargeAt };
+  }
+  return { label: msg('drawer.package.paidThrough'), date: ent.entitledThrough ?? ent.trialEndsAt };
 }
 
 /**

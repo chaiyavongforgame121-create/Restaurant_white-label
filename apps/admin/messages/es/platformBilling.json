@@ -231,7 +231,8 @@
     "status": {
       "pending": "pendiente",
       "approved": "aprobada",
-      "rejected": "rechazada"
+      "rejected": "rechazada",
+      "cancelled": "cancelada"
     },
     "empty": "No hay nada aquí.",
     "thisRestaurant": "este restaurante",
@@ -370,6 +371,233 @@
       "datesBackwards": "La fecha de fin es anterior a la de inicio, así que el código nunca se podría usar.",
       "kindInvalid": "El servidor no acepta ese tipo de descuento.",
       "notFound": "Ese código ya no existe. Recarga la página."
+    }
+  },
+  "stripe": {
+    "errors": {
+      "managed": "Este restaurante paga con tarjeta a través de Stripe, así que su paquete solo cambia a través de Stripe. No se cambió nada.",
+      "paymentInProgress": "Este cambio está esperando el pago con tarjeta del comercio en Stripe (3-D Secure o una tarjeta rechazada) y ese pago todavía puede completarse, así que aún no se puede rechazar. Se activa solo cuando se paga. Cuando se cierre su plazo de pago, aproximadamente un día después de empezar, se podrá rechazar. No se cambió nada.",
+      "deliveryActive": "Una sucursal que hace entregas se paga en la suscripción con tarjeta de este restaurante, así que Stripe seguiría cobrando la entrega por ella. Primero el comercio desactiva la entrega de esa sucursal en su página de plan (eso actualiza Stripe). No se cambió nada."
+    },
+    "links": {
+      "customer": "Cliente en Stripe",
+      "subscription": "Suscripción en Stripe",
+      "invoice": "Ver factura",
+      "invoiceInStripe": "Factura en Stripe"
+    },
+    "card": {
+      "value": "{brand} •••• {last4}",
+      "none": "Sin tarjeta registrada",
+      "expires": "vence {expiry}",
+      "expired": "venció {expiry}"
+    },
+    "subscriptions": {
+      "nextCharge": "Próximo cargo",
+      "noNextCharge": "Ninguno: se está cancelando",
+      "chargeOn": "{amount} el {date}",
+      "card": "Tarjeta",
+      "graceUntil": "Gracia hasta",
+      "cancelsOn": "Se cancela el",
+      "cancelsLater": "Stripe cancelará esta suscripción el {date}. Hasta entonces sigue renovándose.",
+      "lastPayment": "Último pago",
+      "paidOn": "{amount} el {date}",
+      "pastDue": "La última renovación falló. Stripe está reintentando la tarjeta y la tienda sigue funcionando hasta el {date}.",
+      "openInvoice": "Factura sin pagar: {amount} · {count, plural, one {# intento} other {# intentos}}",
+      "managedNote": "Se cobra con tarjeta a través de Stripe, así que aquí no hay editor de paquete: el paquete cambia cuando el comercio lo cambia en su página de plan (y se cobra a su tarjeta en ese momento), y las cancelaciones o reembolsos se hacen en Stripe."
+    },
+    "requests": {
+      "subtitle": "Comercios que eligieron un paquete. Los pagos con tarjeta se liquidan solos; solo esperan tu aprobación las solicitudes pagadas de otra forma.",
+      "awaitingCard": "Esperando pago con tarjeta",
+      "paymentInProgress": "Pago en curso",
+      "paymentExpired": "Plazo de pago vencido",
+      "paidByCard": "Pagado con tarjeta",
+      "awaitingCardNote": "Se envió al comercio a la página de pago de Stripe para pagar esto con tarjeta. Se activa solo cuando Stripe confirma el pago, así que no hay nada que aprobar. Recházala solo para limpiar un pago que abandonaron.",
+      "awaitingCardPausedNote": "Los pagos con tarjeta están desactivados, así que la página de plan de {name} ahora le pide enviar esta solicitud al equipo de Favornoms. Cuando lo haga, volverá aquí como una solicitud normal para que la apruebes. Hasta entonces sigue aquí: un pago que ya abrió todavía se puede completar, y entonces se activa solo. Recházala solo si no debe seguir adelante.",
+      "paymentInProgressNote": "{name} está terminando este pago en la página de Stripe: su tarjeta necesita confirmación (3-D Secure) o fue rechazada, así que el cambio espera hasta que se pague. Se activa solo en cuanto se paga. Durante aproximadamente un día no se puede rechazar, porque el pago todavía puede completarse. Después se cierra el plazo de pago: la solicitud se descarta cuando el comercio vuelva a elegir un paquete, o puedes rechazarla aquí.",
+      "paymentExpiredNote": "Plazo de pago vencido: recházala para limpiarla. {name} no terminó de pagar este cambio en Stripe en aproximadamente un día, así que no sigue adelante y no cambia nada. Si de todos modos paga esa factura antigua, el pago se reembolsa automáticamente.",
+      "managedRestaurantNote": "{name} ya paga con tarjeta a través de Stripe, así que este cambio se paga en su página de plan y se activa solo, esté activado o no el cobro con tarjeta. No se puede aprobar aquí; recházalo solo si no debe seguir adelante.",
+      "paidByCardNote": "Pagado con tarjeta el {date}. El paquete se activó solo.",
+      "rejectTitle": "¿Rechazar el pago con tarjeta de {name}?",
+      "rejectBody": "Hazlo solo si el comercio abandonó el pago. Si de todos modos lo paga, el pago se reembolsa automáticamente y no cambia nada.",
+      "rejectExpiredBody": "El comercio no pagó este cambio dentro del plazo de pago de Stripe. Rechazarla la limpia y su paquete sigue igual. Si de todos modos paga la factura antigua, el pago se reembolsa automáticamente.",
+      "rejectConfirm": "Rechazar"
+    },
+    "plans": {
+      "note": "El cobro con tarjeta crea sus propios precios en Stripe a partir de los montos de esta página, así que no hace falta ningún ID de precio de Stripe (<link>Configuración de Stripe</link>). Cambiar un precio mensual crea un precio nuevo en Stripe: los restaurantes que ya pagan con tarjeta conservan su precio anterior hasta que cambien de paquete.",
+      "priceIdHint": "Ya no es necesario: el cobro con tarjeta busca o crea sus precios en Stripe a partir de los precios de arriba."
+    },
+    "setup": {
+      "metaTitle": "Stripe · Favornoms",
+      "title": "Stripe",
+      "subtitle": "Los restaurantes pagan su paquete con tarjeta a la cuenta de Stripe de la propia plataforma. Configúralo una vez para el modo de prueba y otra para el modo real, y luego actívalo.",
+      "mode": {
+        "test": "Modo de prueba",
+        "live": "Modo real",
+        "unknown": "Modo desconocido"
+      },
+      "load": {
+        "loading": "Consultando a Stripe…",
+        "refresh": "Actualizar",
+        "dormant": "La función stripe-billing dice que Stripe aún no está configurado (no hay clave secreta). Sigue los pasos de abajo; esta página se completa en cuanto se guarde la clave.",
+        "notDeployed": "La función stripe-billing aún no está desplegada, así que no se puede leer el estado de Stripe. Los pasos de abajo siguen valiendo.",
+        "forbidden": "La función stripe-billing se negó: solo un administrador de la plataforma puede leer el estado de Stripe.",
+        "notSignedIn": "Tu sesión expiró. Vuelve a iniciar sesión para leer el estado de Stripe.",
+        "network": "No se pudo conectar con la función stripe-billing. Revisa tu conexión y actualiza.",
+        "failed": "No se pudo leer el estado de Stripe. Los pasos de abajo siguen valiendo."
+      },
+      "switch": {
+        "title": "Cobrar los paquetes con tarjeta",
+        "onBody": "Activado. El comercio que confirma un paquete paga con tarjeta en la página de pago de Stripe y el paquete se activa solo. La cuota mensual se cobra a la tarjeta cada mes.",
+        "offBody": "Desactivado. Ningún restaurante empieza a pagar con tarjeta: las nuevas solicitudes de paquete te esperan en la pestaña Solicitudes. Una solicitud cuyo pago con tarjeta ya había empezado sigue en «Esperando pago con tarjeta» hasta que el comercio complete ese pago o envíe la solicitud al equipo desde su página de plan. Los restaurantes que ya pagan con tarjeta siguen renovando, pueden seguir cambiando su paquete (cobrado a su tarjeta) y usar el portal de clientes.",
+        "unknownBody": "No se puede mostrar su estado hasta poder leer el estado de Stripe.",
+        "on": "Activado",
+        "off": "Desactivado",
+        "saving": "Guardando…",
+        "blockers": {
+          "noStatus": "El interruptor no está disponible hasta poder leer el estado de Stripe.",
+          "secretKey": "Configura primero STRIPE_SECRET_KEY (paso: Cuenta de Stripe conectada).",
+          "webhookSecret": "Configura primero STRIPE_WEBHOOK_SECRET (paso: Webhook para pagos de paquetes)."
+        },
+        "warnings": {
+          "testMode": "Stripe está en modo de prueba: los comercios pagarían con las tarjetas de prueba de Stripe, no se mueve dinero real y su paquete se activa igual. Actívalo en modo de prueba solo para probarlo tú.",
+          "chargesOff": "Stripe aún no habilitó los pagos en esta cuenta, así que los pagos fallarán hasta que se active la cuenta.",
+          "noBank": "Todavía no hay cuenta bancaria para los depósitos: Stripe cobrará los pagos pero no podrá depositarlos."
+        },
+        "confirmOnTitle": "¿Cobrar los paquetes con tarjeta?",
+        "confirmOnBodyLive": "Desde ahora, el comercio que confirme un paquete irá a Stripe a pagar con tarjeta, y la cuota mensual se renovará sola. Las solicitudes que ya esperan siguen en la pestaña Solicitudes para ti.",
+        "confirmOnBodyTest": "Stripe está en modo de PRUEBA. Los comercios que confirmen un paquete irán a un pago de prueba: no se mueve dinero real y su paquete se activa igual. Hazlo solo para probarlo tú.",
+        "confirmOn": "Activar",
+        "confirmOffTitle": "¿Dejar de cobrar los paquetes con tarjeta?",
+        "confirmOffBody": "Se detienen las nuevas compras con tarjeta. Los restaurantes que aún no pagan con tarjeta envían sus solicitudes de paquete a la pestaña Solicitudes para que las apruebes. Una solicitud cuyo pago con tarjeta ya había empezado sigue en «Esperando pago con tarjeta» hasta que el comercio complete ese pago o envíe la solicitud al equipo desde su página de plan. Los restaurantes que ya pagan con tarjeta no se ven afectados: conservan su suscripción de Stripe, renuevan cada mes hasta que cancelen y pueden seguir cambiando su paquete con tarjeta y usar el portal de clientes.",
+        "confirmOff": "Desactivar",
+        "errors": {
+          "notReady": "Stripe no está listo: configura primero la clave secreta y el secreto del webhook. No se cambió nada.",
+          "catalogIncomplete": "Al Catálogo le falta un precio mensual activo para Base, sucursal adicional o Entrega, así que no hay de dónde crear los precios de Stripe. Corrígelo primero en la pestaña Catálogo. El cobro con tarjeta no se activó.",
+          "forbidden": "Solo un administrador de la plataforma puede hacer esto. No se cambió nada.",
+          "notSignedIn": "Tu sesión expiró. Vuelve a iniciar sesión y prueba el interruptor de nuevo. No se cambió nada.",
+          "network": "No se pudo conectar con el servidor. No se cambió nada: revisa tu conexión e inténtalo de nuevo.",
+          "stripeError": "Stripe se negó mientras se preparaban los precios o el portal de clientes, así que el cobro con tarjeta no se activó. Inténtalo de nuevo en un minuto.",
+          "failed": "No se pudo cambiar el interruptor. No se cambió nada.",
+          "dormant": "La función stripe-billing dice que Stripe no está configurado. No se cambió nada."
+        }
+      },
+      "stepsTitle": "Lista de configuración",
+      "stepsIntro": "Una vez para el modo de prueba y otra para el modo real. Cada paso enlaza a la página de Stripe donde se hace.",
+      "state": {
+        "done": "Listo",
+        "todo": "Pendiente",
+        "auto": "Automático",
+        "notNeeded": "No hace falta",
+        "manual": "Revisar en Stripe",
+        "unknown": "Desconocido"
+      },
+      "steps": {
+        "account": {
+          "title": "Cuenta de Stripe conectada",
+          "body": "La clave secreta (STRIPE_SECRET_KEY en los secretos de Supabase) conecta la plataforma con tu cuenta de Stripe. Una clave que empieza por sk_test_ es modo de prueba; sk_live_ es modo real.",
+          "connected": "{id} · {mode, select, live {modo real} test {modo de prueba} other {modo desconocido}}",
+          "noKey": "STRIPE_SECRET_KEY no está configurada.",
+          "noAnswer": "La clave está configurada pero Stripe no respondió: puede ser incorrecta o estar revocada."
+        },
+        "publishableKey": {
+          "title": "Clave publicable",
+          "body": "STRIPE_PUBLISHABLE_KEY en los secretos de Supabase. Los pagos de paquetes usan la propia página de pago de Stripe, así que esta clave es solo para completar.",
+          "missing": "STRIPE_PUBLISHABLE_KEY no está configurada."
+        },
+        "activation": {
+          "title": "Cuenta activada",
+          "body": "Stripe necesita los datos de tu negocio antes de que la cuenta pueda cobrar y depositar.",
+          "due": "{count, plural, one {Stripe necesita # dato más} other {Stripe necesita # datos más}} antes de activar la cuenta.",
+          "chargesOff": "Stripe aún no habilitó los pagos en esta cuenta.",
+          "payoutsOff": "Los depósitos están en pausa hasta que Stripe tenga lo que necesita.",
+          "testMode": "El modo de prueba no lo necesita: las tarjetas de prueba de Stripe funcionan antes de activar la cuenta. Actívala antes de pasar a producción."
+        },
+        "bank": {
+          "title": "Cuenta bancaria para depósitos",
+          "body": "Donde Stripe te deposita el dinero de los paquetes.",
+          "missing": "Todavía no hay una cuenta bancaria registrada.",
+          "testMode": "El modo de prueba no la necesita. Agrégala antes de pasar a modo real."
+        },
+        "webhook": {
+          "title": "Webhook para pagos de paquetes",
+          "body": "Por este webhook Stripe avisa a la plataforma cuando un paquete se paga, se renueva o falla. Sin él, ningún pago con tarjeta activa un paquete.",
+          "missing": "STRIPE_WEBHOOK_SECRET no está configurado.",
+          "lastEvent": "Último evento recibido el {date}.",
+          "noEventYet": "Aún no se recibió ningún evento: Stripe envía el primero cuando un comercio paga."
+        },
+        "retries": {
+          "title": "Reintentos de pagos fallidos",
+          "body": "En Stripe, Billing → Revenue recovery → Retries. Un restaurante sigue funcionando 7 días después de una renovación fallida mientras Stripe reintenta la tarjeta, así que Stripe tiene que rendirse dentro de esa semana y luego cancelar la suscripción: un plazo de reintentos más largo seguiría cobrando una tarjeta después de que la tienda se apagó. Esta página no puede leer ese ajuste.",
+          "setting": "Configura Smart Retries para reintentar dentro de 1 semana y, cuando fallen todos los reintentos de un pago, cancelar la suscripción."
+        },
+        "prices": {
+          "title": "Precios en Stripe",
+          "body": "Se crean a partir de los precios mensuales del Catálogo.",
+          "auto": "Se crean automáticamente al activar el cobro con tarjeta.",
+          "missingWhileOn": "El cobro con tarjeta está activado pero faltan los precios. Desactívalo y vuelve a activarlo para crearlos de nuevo."
+        },
+        "portal": {
+          "title": "Portal del cliente",
+          "body": "Donde los comercios actualizan su tarjeta, ven sus facturas y cancelan al final del mes pagado. Los cambios de plan siguen en la página de plan de Favornoms.",
+          "auto": "Se configura automáticamente al activar el cobro con tarjeta.",
+          "missingWhileOn": "El cobro con tarjeta está activado pero el portal no está configurado. Desactívalo y vuelve a activarlo para configurarlo."
+        }
+      },
+      "webhook": {
+        "how1": "En Stripe, abre Workbench → Webhooks y crea un destino nuevo.",
+        "how2": "Events from: Your account. API version: <code>{version}</code> si aparece. Payload: snapshot, no thin events.",
+        "how3": "Marca los {count} eventos de abajo, ninguno más.",
+        "how4": "Tipo de destino: Webhook endpoint. Pega la URL del endpoint de abajo.",
+        "how5": "Abre el destino nuevo, muestra su secreto de firma (<code>whsec_…</code>) y guárdalo en Supabase como el secreto <code>STRIPE_WEBHOOK_SECRET</code>.",
+        "endpoint": "URL del endpoint",
+        "events": "Eventos a marcar ({count})",
+        "notConnect": "Este no es el webhook de los pagos con tarjeta de los comensales (Connect). Ese tiene su propio destino y su propio secreto; no lo reutilices."
+      },
+      "copy": {
+        "copy": "Copiar",
+        "copyAll": "Copiar todo",
+        "copied": "Copiado",
+        "failed": "Selecciónalo y cópialo a mano"
+      },
+      "linksTitle": "En Stripe",
+      "links": {
+        "apiKeys": "Claves de API",
+        "onboarding": "Activar la cuenta",
+        "payouts": "Depósitos y cuenta bancaria",
+        "webhooks": "Webhooks",
+        "secrets": "Secretos de Supabase",
+        "retries": "Reintentos de pagos fallidos",
+        "invoices": "Facturas",
+        "customers": "Clientes",
+        "subscriptions": "Suscripciones"
+      },
+      "events": {
+        "title": "Eventos recientes de pagos de paquetes",
+        "subtitle": "Del webhook de Stripe y del código de pagos con tarjeta, los más recientes primero, horas en UTC. No incluye los pagos con tarjeta de los comensales (Connect).",
+        "empty": "No hay eventos de pagos de paquetes para mostrar.",
+        "level": {
+          "warn": "Aviso",
+          "error": "Error"
+        },
+        "types": {
+          "checkoutCompleted": "Pago completado",
+          "checkoutExpired": "Pago vencido",
+          "invoicePaid": "Factura pagada",
+          "invoiceFailed": "Pago fallido",
+          "invoiceActionRequired": "La tarjeta requiere confirmación",
+          "subscriptionCreated": "Suscripción creada",
+          "subscriptionUpdated": "Suscripción actualizada",
+          "subscriptionDeleted": "Suscripción cancelada",
+          "changeApplied": "Cambio de paquete pagado",
+          "changeExpired": "Cambio de paquete vencido sin pagar",
+          "trialWillEnd": "La prueba termina pronto",
+          "customerUpdated": "Cliente actualizado",
+          "requestSettled": "Paquete pagado y activado",
+          "settleFailed": "Pagado, pero no se pudo aplicar el paquete",
+          "staleRefunded": "Pago obsoleto reembolsado",
+          "accessExpired": "Acceso vencido"
+        }
+      }
     }
   }
 }

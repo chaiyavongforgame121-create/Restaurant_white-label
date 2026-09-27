@@ -143,6 +143,7 @@ export type Database = {
           request_id: string | null
           restaurant_id: string
           status: string
+          stripe_invoice_id: string | null
         }
         Insert: {
           amount: number
@@ -158,6 +159,7 @@ export type Database = {
           request_id?: string | null
           restaurant_id: string
           status: string
+          stripe_invoice_id?: string | null
         }
         Update: {
           amount?: number
@@ -173,6 +175,7 @@ export type Database = {
           request_id?: string | null
           restaurant_id?: string
           status?: string
+          stripe_invoice_id?: string | null
         }
         Relationships: [
           {
@@ -392,6 +395,71 @@ export type Database = {
           },
         ]
       }
+      billing_invoices: {
+        Row: {
+          amount_due: number
+          amount_paid: number
+          attempt_count: number
+          billing_reason: string | null
+          created_at: string
+          currency: string
+          hosted_invoice_url: string | null
+          id: string
+          paid_at: string | null
+          period_end: string | null
+          period_start: string | null
+          restaurant_id: string
+          status: string
+          stripe_invoice_id: string
+          stripe_subscription_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount_due?: number
+          amount_paid?: number
+          attempt_count?: number
+          billing_reason?: string | null
+          created_at?: string
+          currency?: string
+          hosted_invoice_url?: string | null
+          id?: string
+          paid_at?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          restaurant_id: string
+          status: string
+          stripe_invoice_id: string
+          stripe_subscription_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount_due?: number
+          amount_paid?: number
+          attempt_count?: number
+          billing_reason?: string | null
+          created_at?: string
+          currency?: string
+          hosted_invoice_url?: string | null
+          id?: string
+          paid_at?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          restaurant_id?: string
+          status?: string
+          stripe_invoice_id?: string
+          stripe_subscription_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_invoices_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       billing_products: {
         Row: {
           code: string
@@ -467,10 +535,17 @@ export type Database = {
           monthly_total: number
           note: string | null
           one_time_total: number
+          paid_at: string | null
           plan_code: string
+          rail: string
           requested_by: string | null
           restaurant_id: string
           status: string
+          stripe_change_started_at: string | null
+          stripe_checkout_session_id: string | null
+          stripe_invoice_id: string | null
+          stripe_invoice_marked_at: string | null
+          stripe_invoice_url: string | null
           updated_at: string
         }
         Insert: {
@@ -487,10 +562,17 @@ export type Database = {
           monthly_total?: number
           note?: string | null
           one_time_total?: number
+          paid_at?: string | null
           plan_code: string
+          rail?: string
           requested_by?: string | null
           restaurant_id: string
           status?: string
+          stripe_change_started_at?: string | null
+          stripe_checkout_session_id?: string | null
+          stripe_invoice_id?: string | null
+          stripe_invoice_marked_at?: string | null
+          stripe_invoice_url?: string | null
           updated_at?: string
         }
         Update: {
@@ -507,10 +589,17 @@ export type Database = {
           monthly_total?: number
           note?: string | null
           one_time_total?: number
+          paid_at?: string | null
           plan_code?: string
+          rail?: string
           requested_by?: string | null
           restaurant_id?: string
           status?: string
+          stripe_change_started_at?: string | null
+          stripe_checkout_session_id?: string | null
+          stripe_invoice_id?: string | null
+          stripe_invoice_marked_at?: string | null
+          stripe_invoice_url?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -518,6 +607,44 @@ export type Database = {
             foreignKeyName: "billing_requests_restaurant_id_fkey"
             columns: ["restaurant_id"]
             isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      billing_stripe_customers: {
+        Row: {
+          card_brand: string | null
+          card_exp_month: number | null
+          card_exp_year: number | null
+          card_last4: string | null
+          restaurant_id: string
+          stripe_customer_id: string
+          updated_at: string
+        }
+        Insert: {
+          card_brand?: string | null
+          card_exp_month?: number | null
+          card_exp_year?: number | null
+          card_last4?: string | null
+          restaurant_id: string
+          stripe_customer_id: string
+          updated_at?: string
+        }
+        Update: {
+          card_brand?: string | null
+          card_exp_month?: number | null
+          card_exp_year?: number | null
+          card_last4?: string | null
+          restaurant_id?: string
+          stripe_customer_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_stripe_customers_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: true
             referencedRelation: "restaurants"
             referencedColumns: ["id"]
           },
@@ -3575,6 +3702,7 @@ export type Database = {
       }
       platform_settings: {
         Row: {
+          billing: Json
           defaults: Json
           features: Json
           id: number
@@ -3584,6 +3712,7 @@ export type Database = {
           updated_by: string | null
         }
         Insert: {
+          billing?: Json
           defaults?: Json
           features?: Json
           id?: number
@@ -3593,6 +3722,7 @@ export type Database = {
           updated_by?: string | null
         }
         Update: {
+          billing?: Json
           defaults?: Json
           features?: Json
           id?: number
@@ -4304,11 +4434,17 @@ export type Database = {
         Row: {
           billing_cycle: string
           branch_count: number
+          cancel_at: string | null
           cancel_at_period_end: boolean
           cancelled_at: string | null
+          card_brand: string | null
+          card_exp_month: number | null
+          card_exp_year: number | null
+          card_last4: string | null
           created_at: string
           current_period_end: string
           current_period_start: string
+          grace_until: string | null
           id: string
           next_billing_at: string | null
           payment_method_id: string | null
@@ -4316,6 +4452,7 @@ export type Database = {
           restaurant_id: string
           status: Database["public"]["Enums"]["subscription_status"]
           stripe_customer_id: string | null
+          stripe_monthly_amount: number | null
           stripe_subscription_id: string | null
           trial_ends_at: string | null
           unit_price: number
@@ -4324,11 +4461,17 @@ export type Database = {
         Insert: {
           billing_cycle?: string
           branch_count?: number
+          cancel_at?: string | null
           cancel_at_period_end?: boolean
           cancelled_at?: string | null
+          card_brand?: string | null
+          card_exp_month?: number | null
+          card_exp_year?: number | null
+          card_last4?: string | null
           created_at?: string
           current_period_end: string
           current_period_start: string
+          grace_until?: string | null
           id?: string
           next_billing_at?: string | null
           payment_method_id?: string | null
@@ -4336,6 +4479,7 @@ export type Database = {
           restaurant_id: string
           status?: Database["public"]["Enums"]["subscription_status"]
           stripe_customer_id?: string | null
+          stripe_monthly_amount?: number | null
           stripe_subscription_id?: string | null
           trial_ends_at?: string | null
           unit_price: number
@@ -4344,11 +4488,17 @@ export type Database = {
         Update: {
           billing_cycle?: string
           branch_count?: number
+          cancel_at?: string | null
           cancel_at_period_end?: boolean
           cancelled_at?: string | null
+          card_brand?: string | null
+          card_exp_month?: number | null
+          card_exp_year?: number | null
+          card_last4?: string | null
           created_at?: string
           current_period_end?: string
           current_period_start?: string
+          grace_until?: string | null
           id?: string
           next_billing_at?: string | null
           payment_method_id?: string | null
@@ -4356,6 +4506,7 @@ export type Database = {
           restaurant_id?: string
           status?: Database["public"]["Enums"]["subscription_status"]
           stripe_customer_id?: string | null
+          stripe_monthly_amount?: number | null
           stripe_subscription_id?: string | null
           trial_ends_at?: string | null
           unit_price?: number
@@ -5094,6 +5245,15 @@ export type Database = {
         Args: { p_path: string; p_withdrawal_id: string }
         Returns: Json
       }
+      billing_branch_context: { Args: { p_branch_id: string }; Returns: Json }
+      billing_cancel_stripe_request: {
+        Args: { p_reason: string; p_request_id: string }
+        Returns: undefined
+      }
+      billing_checkout_context: {
+        Args: { p_request_id: string }
+        Returns: Json
+      }
       billing_log_event: {
         Args: {
           p_level?: string
@@ -5103,6 +5263,35 @@ export type Database = {
           p_type: string
         }
         Returns: undefined
+      }
+      billing_mark_change_started: {
+        Args: { p_request_id: string }
+        Returns: undefined
+      }
+      billing_mark_invoice_refunded: {
+        Args: { p_invoice_id: string }
+        Returns: Json
+      }
+      billing_mark_request_stripe: {
+        Args: {
+          p_checkout_session_id: string
+          p_invoice_id: string
+          p_invoice_url?: string
+          p_request_id: string
+        }
+        Returns: undefined
+      }
+      billing_record_stripe_invoice: {
+        Args: { p_invoice: Json; p_paid_through: string }
+        Returns: Json
+      }
+      billing_record_stripe_invoice_failed: {
+        Args: { p_invoice: Json }
+        Returns: Json
+      }
+      billing_request_for_invoice: {
+        Args: { p_invoice_id: string }
+        Returns: string
       }
       billing_set_package: {
         Args: {
@@ -5115,7 +5304,45 @@ export type Database = {
         }
         Returns: Json
       }
+      billing_set_stripe_customer: {
+        Args: { p_customer_id: string; p_restaurant_id: string }
+        Returns: undefined
+      }
+      billing_settings_merge: {
+        Args: { p_patch: Json; p_updated_by?: string }
+        Returns: Json
+      }
+      billing_settle_stripe_request: {
+        Args: {
+          p_card: Json
+          p_invoice_id: string
+          p_items: Json
+          p_monthly_amount?: number
+          p_paid_through: string
+          p_request_id: string
+          p_stripe_customer_id: string
+          p_stripe_subscription_id: string
+        }
+        Returns: Json
+      }
       billing_start_trial: { Args: { p_restaurant_id: string }; Returns: Json }
+      billing_stripe_enabled: { Args: never; Returns: boolean }
+      billing_subscription_is_current: {
+        Args: { p_stripe_subscription_id: string }
+        Returns: boolean
+      }
+      billing_sync_stripe_status: {
+        Args: {
+          p_cancel_at: string
+          p_cancel_at_period_end: boolean
+          p_card: Json
+          p_monthly_amount?: number
+          p_next_billing_at: string
+          p_status: string
+          p_stripe_subscription_id: string
+        }
+        Returns: Json
+      }
       branch_schedule_policy: { Args: { p_branch_id: string }; Returns: Json }
       broadcast_franchise_menu: {
         Args: { p_source_branch_id: string; p_target_branch_ids: string[] }
@@ -5629,6 +5856,10 @@ export type Database = {
         Args: { p_reference?: string; p_withdrawal_id: string }
         Returns: Json
       }
+      platform_billing_events: {
+        Args: { p_limit?: number; p_restaurant_id?: string }
+        Returns: Json[]
+      }
       platform_create_discount_code: {
         Args: { p: Json }
         Returns: {
@@ -6055,6 +6286,11 @@ export type Database = {
         }
         Returns: Json
       }
+      stripe_event_claim: {
+        Args: { p_event_id: string; p_lease_seconds?: number; p_type: string }
+        Returns: string
+      }
+      stripe_event_done: { Args: { p_event_id: string }; Returns: undefined }
       stripe_event_forget: { Args: { p_event_id: string }; Returns: boolean }
       stripe_event_seen: {
         Args: { p_event_id: string; p_type?: string }

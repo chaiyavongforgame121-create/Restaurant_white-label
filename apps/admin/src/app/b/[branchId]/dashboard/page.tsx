@@ -1,8 +1,17 @@
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { Bike, CalendarClock, ChefHat, DollarSign, Receipt, Sparkles } from 'lucide-react';
+import {
+  Bike,
+  CalendarClock,
+  ChefHat,
+  CreditCard,
+  DollarSign,
+  Receipt,
+  Sparkles,
+} from 'lucide-react';
 import {
   branchDayKey,
+  getBillingOverview,
   getEntitlementsForBranch,
   loadBranchDashboard,
   shiftDayKey,
@@ -13,7 +22,6 @@ import {
   formatInZone,
   hasFeature,
   intlLocaleFor,
-  isTrialing,
   isUiLocale,
   trialDaysLeft,
   type UiLocale,
@@ -22,6 +30,11 @@ import { Card } from '@favornoms/ui';
 import { getBranchAccess } from '@/lib/capabilities';
 import { deliveryPlanHref, resolveDeliveryWindDown } from '@/lib/delivery-gate';
 import { AccessDenied } from '@/components/access-denied';
+// The plan page's card-rail rules, so the two screens cannot disagree about one bill.
+import {
+  dashboardBillingCard,
+  dashboardNeedsRail,
+} from '../settings/plan/_components/plan-billing';
 import {
   BOOKING_LATE_WINDOW_MS,
   BOOKING_ROWS_SHOWN,
@@ -134,6 +147,17 @@ export default async function DashboardPage({ params }: Props) {
   const now = Date.now();
   const yesterdaySameTime = now - 24 * 60 * 60 * 1000;
 
+  // How the restaurant pays comes with the entitlements every role reads (`billingRail`), and so
+  // does when a card subscription set to end ends (`billingEndsAt`). The owner's billing overview
+  // adds the fuller answer (the stored grace date, a cancellation Stripe gave no date for) for the
+  // billing card further down. Started here so it runs beside the dashboard reads instead of
+  // after them, and only when it can change that card — see dashboardNeedsRail().
+  // getBillingOverview never throws: a failed read is the manual rail, which adds nothing to what
+  // the entitlements say.
+  const billingRailRead = dashboardNeedsRail(entitlements, now, can('billing.manage'))
+    ? getBillingOverview(supabase, branch.restaurant_id).then((o) => o.billing)
+    : Promise.resolve(null);
+
   // The capability set has to be resolved before the reads: it decides which of them are
   // issued at all, and firing everything at once on a freshly-expired token races the
   // refresh the awaits above have already settled.
@@ -232,24 +256,24 @@ export default async function DashboardPage({ params }: Props) {
     return error.message;
   };
 
-  // A paid package runs for a fixed month and the expiry job switches the store off at the
-  // deadline, mid-service if that is when it falls. Nothing warned anyone before it
-  // happened, so this counts down the last week. Trials already have their own banner.
-  const EXPIRY_WARN_DAYS = 7;
-  const paidThroughMs = entitlements.entitledThrough
-    ? Date.parse(entitlements.entitledThrough)
-    : Number.NaN;
-  const expiryDaysLeft =
-    entitlements.entitled &&
-    !isTrialing(entitlements) &&
-    Number.isFinite(paidThroughMs) &&
-    paidThroughMs - now <= EXPIRY_WARN_DAYS * 86_400_000
-      ? Math.max(0, Math.ceil((paidThroughMs - now) / 86_400_000))
-      : null;
+  // A paid package on the manual rail runs for a fixed month and the expiry job switches the
+  // store off at the deadline, mid-service if that is when it falls. Nothing warned anyone
+  // before it happened, so the last week is counted down. Trials already have their own banner.
+  //
+  // On the card rail (docs/PLATFORM-BILLING-STRIPE-2026-09-26.md §5, §9.9) the package renews on
+  // the card by itself, so that countdown would be false — for every role, which is why the rail
+  // comes with the entitlements and not only with the owner's overview. It is dropped, and what
+  // can really end a card-rail package is shown instead: a failed renewal, or a subscription set
+  // to end (both for everyone: the entitlements carry the status and `billingEndsAt`, and the
+  // owner's overview adds the fuller answer) — see dashboardBillingCard().
+  //
   // Same rule as the plan page and request_package_change: only whoever holds billing.manage
   // (the owner, in the role matrix) can buy or renew. Anyone else is told to ask the owner
   // rather than sent to a plan page that would only say the same.
   const canRenew = can('billing.manage');
+  const billingRail = await billingRailRead;
+  const billingCard = dashboardBillingCard({ entitlements, billing: billingRail, nowMs: now });
+  const expiryDaysLeft = billingCard.kind === 'expiry' ? billingCard.daysLeft : null;
 
   const branchSettingsHref = `/b/${branchId}/branch`;
   const [menuRes, hoursRes, geoRes, staffRes, ridersRes] = setup ?? [null, null, null, null, null];
@@ -948,6 +972,74 @@ export default async function DashboardPage({ params }: Props) {
               className="focus-ring inline-flex items-center rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white shadow-soft hover:bg-amber-600"
             >
               {t('expiry.cta')}
+            </Link>
+          )}
+        </Card>
+      )}
+
+      {/* Card rail: the renewal failed. The store keeps working until the grace date while
+          Stripe retries (D9); the plan page has the portal to change the card. Everyone sees it,
+          because the storefront really does stop if nobody acts; only the owner can act, so
+          everyone else is told to ask them, as the manual countdown does. */}
+      {billingCard.kind === 'paymentFailed' && (
+        <Card className="mb-6 flex flex-wrap items-center justify-between gap-4 border-destructive/40 bg-destructive/5 p-4 px-2 lg:px-4">
+          <div className="flex items-center gap-3">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-destructive/15 text-destructive">
+              <CreditCard className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold">{t('stripe.paymentFailed.title')}</p>
+              <p className="text-xs text-muted-foreground">
+                {billingCard.graceUntil
+                  ? t(canRenew ? 'stripe.paymentFailed.body' : 'stripe.paymentFailed.bodyStaff', {
+                      date: formatInZone(billingCard.graceUntil, tz, {}, locale),
+                    })
+                  : t(canRenew ? 'stripe.paymentFailed.bodyNoDate' : 'stripe.paymentFailed.bodyStaffNoDate')}
+              </p>
+            </div>
+          </div>
+          {canRenew && (
+            <Link
+              href={`/b/${branchId}/settings/plan`}
+              className="focus-ring inline-flex items-center rounded-xl bg-destructive px-4 py-2 text-sm font-semibold text-white shadow-soft hover:brightness-110"
+            >
+              {t('stripe.paymentFailed.cta')}
+            </Link>
+          )}
+        </Card>
+      )}
+
+      {/* Card rail, set to end (cancelled in the portal or in Stripe): unlike a renewing package it
+          really does end. Everyone sees it, because the storefront stops for the staff running it
+          too (ui-rr-3); only the owner can keep the package, so only the owner gets the link. */}
+      {billingCard.kind === 'cancelling' && (
+        <Card className="mb-6 flex flex-wrap items-center justify-between gap-4 border-amber-500/40 bg-amber-500/5 p-4 px-2 lg:px-4">
+          <div className="flex items-center gap-3">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-amber-500/15 text-amber-600">
+              <CalendarClock className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold">
+                {billingCard.daysLeft <= 1
+                  ? t(canRenew ? 'stripe.cancelling.titleUnderDay' : 'stripe.cancelling.titleUnderDayStaff', {
+                      date: formatInZone(billingCard.on, tz, {}, locale),
+                    })
+                  : t(canRenew ? 'stripe.cancelling.titleDays' : 'stripe.cancelling.titleDaysStaff', {
+                      date: formatInZone(billingCard.on, tz, {}, locale),
+                      days: billingCard.daysLeft,
+                    })}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {t(canRenew ? 'stripe.cancelling.body' : 'stripe.cancelling.bodyStaff')}
+              </p>
+            </div>
+          </div>
+          {canRenew && (
+            <Link
+              href={`/b/${branchId}/settings/plan`}
+              className="focus-ring inline-flex items-center rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white shadow-soft hover:bg-amber-600"
+            >
+              {t('stripe.cancelling.cta')}
             </Link>
           )}
         </Card>

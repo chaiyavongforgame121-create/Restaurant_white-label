@@ -14,6 +14,8 @@ const TABS = [
   { href: '/platform/subscriptions/requests', key: 'requests', pendingBadge: true },
   { href: '/platform/plans', key: 'catalog' },
   { href: '/platform/discounts', key: 'discounts' },
+  // The platform's own Stripe: setup checklist and the "charge packages by card" switch.
+  { href: '/platform/billing-setup', key: 'stripe' },
   { href: '/platform/settings', key: 'settings' },
 ] as const;
 

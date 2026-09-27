@@ -20,11 +20,26 @@
 // The two money figures are shown apart and never summed (the owner's rule): what
 // is payable ONCE if this is approved — already net of any code — and what the
 // store will pay every month afterwards.
+//
+// Card payments (docs/PLATFORM-BILLING-STRIPE-2026-09-26.md) settle themselves: a request
+// the merchant is paying by card (rail 'stripe') is approved by the payment, never by
+// hand, and a restaurant that already pays by card cannot have a package approved here
+// at all — decide_billing_request refuses both with `stripe_managed`. So neither card
+// offers Approve. Reject stays for a Checkout: it is how an abandoned checkout is
+// cleared, and a stale checkout that is paid anyway is refunded automatically (D12).
+// A card CHANGE waiting on its invoice (3-D Secure, a declined card) offers no Reject while
+// its payment window is open: the payment can still go through and Stripe would then bill
+// the new package every month while the database never granted it. The server refuses it
+// (`payment_in_progress`, §9.3). After 23 h the server treats that hold as released, and the
+// card offers Reject to clear it ("Payment window expired"); a late payment is refunded
+// (§10.1). With card billing switched off, a Checkout already opened stays "Awaiting card
+// payment" until the merchant pays it or sends it to the team from their plan page, and the
+// card says so. requestRailView decides all of this; the card only renders it.
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { useFormatter, useLocale, useTranslations } from 'next-intl';
-import { Check, X } from 'lucide-react';
+import { Check, ExternalLink, X } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import {
   decideBillingRequest,
@@ -55,6 +70,13 @@ import {
   requestOneTime,
   type PlatformBranchLite,
 } from '../../../_components/platform-billing';
+import {
+  isPaymentInProgressError,
+  isStripeManagedError,
+  railKey,
+  requestRailView,
+  stripeInvoiceLink,
+} from '../../../_components/stripe-rail';
 import { addOneMonthUtc } from '../../../_components/tenant-health';
 
 type T = ReturnType<typeof useTranslations<'platformBilling'>>;
@@ -82,7 +104,7 @@ const FILTERS = [
   { value: '', key: 'all' },
 ] as const;
 
-const REQUEST_STATUSES = ['pending', 'approved', 'rejected'] as const;
+const REQUEST_STATUSES = ['pending', 'approved', 'rejected', 'cancelled'] as const;
 const isRequestStatus = (s: string): s is (typeof REQUEST_STATUSES)[number] =>
   (REQUEST_STATUSES as readonly string[]).includes(s);
 
@@ -98,6 +120,8 @@ export function RequestsView({
   branches,
   catalog,
   nowMs,
+  cardPayments = false,
+  cardSwitchOn = null,
 }: {
   requests: BillingRequest[];
   status: string;
@@ -111,6 +135,16 @@ export function RequestsView({
   catalog: BillingProduct[];
   /** The server clock, so dates render identically on both sides. */
   nowMs: number;
+  /**
+   * Some requests settle by card without anyone here: card billing is on, or a restaurant
+   * still pays by card after it was switched off.
+   */
+  cardPayments?: boolean;
+  /**
+   * The platform's card switch (true on, false off), or null when no restaurant row was
+   * there to read it from. Off, a Checkout already opened waits on the merchant.
+   */
+  cardSwitchOn?: boolean | null;
 }) {
   const router = useRouter();
   const t = useTranslations('platformBilling');
@@ -120,7 +154,9 @@ export function RequestsView({
     <div className="container max-w-4xl py-8">
       <header className="mb-2">
         <h1 className="font-display text-3xl font-bold">{t('requests.title')}</h1>
-        <p className="mt-1 text-muted-foreground">{t('requests.subtitle')}</p>
+        <p className="mt-1 text-muted-foreground">
+          {cardPayments ? t('stripe.requests.subtitle') : t('requests.subtitle')}
+        </p>
       </header>
       <PlatformNav />
 
@@ -161,6 +197,7 @@ export function RequestsView({
               branches={branches[r.restaurant_id] ?? []}
               catalog={catalog}
               nowMs={nowMs}
+              cardSwitchOn={cardSwitchOn}
               onError={setError}
             />
           ))}
@@ -176,6 +213,7 @@ function RequestCard({
   branches,
   catalog,
   nowMs,
+  cardSwitchOn,
   onError,
 }: {
   request: BillingRequest;
@@ -183,6 +221,7 @@ function RequestCard({
   branches: PlatformBranchLite[];
   catalog: BillingProduct[];
   nowMs: number;
+  cardSwitchOn: boolean | null;
   onError: (m: string | null) => void;
 }) {
   const router = useRouter();
@@ -194,6 +233,14 @@ function RequestCard({
   const [note, setNote] = React.useState('');
 
   const pending = request.status === 'pending';
+  const rail = requestRailView(request, current ? railKey(current.billing) : null, {
+    invoiceUrl: current?.billing.pendingInvoiceUrl ?? null,
+    nowMs,
+    // One platform setting, read once for the page: a single unreadable row (which parses as
+    // "off") must not make its card claim the switch is off.
+    cardSwitchOn,
+  });
+  const invoiceHref = stripeInvoiceLink(rail.invoiceId);
   const name = request.restaurant_name ?? t('requests.thisRestaurant');
   const noPackage = t('requests.noPackage');
   const diff = React.useMemo(
@@ -231,6 +278,23 @@ function RequestCard({
     if (approve) {
       const question = approvalQuestion(name, diff, t, locale);
       if (question && !(await confirm(question))) return;
+    } else if (!rail.canReject) {
+      // Never offered (a change waiting on its invoice); the server would refuse it anyway.
+      return;
+    } else if (rail.confirmReject) {
+      // The merchant may be on Stripe's checkout page paying this right now, or may still
+      // pay an expired change's invoice. Rejecting is right for a checkout they abandoned or
+      // a payment window that closed; say what happens if they pay it anyway.
+      const ok = await confirm({
+        title: t('stripe.requests.rejectTitle', { name }),
+        body:
+          rail.badge === 'paymentExpired'
+            ? t('stripe.requests.rejectExpiredBody')
+            : t('stripe.requests.rejectBody'),
+        confirmLabel: t('stripe.requests.rejectConfirm'),
+        destructive: true,
+      });
+      if (!ok) return;
     }
     setBusy(approve ? 'approve' : 'reject');
     onError(null);
@@ -243,6 +307,9 @@ function RequestCard({
     setBusy(null);
     if (res.ok !== true) {
       onError(decisionMessage(res.error, t, locale));
+      // The card was opened before the merchant's card change began waiting on its invoice:
+      // reload it so it shows "Payment in progress" instead of a Reject that cannot work.
+      if (isPaymentInProgressError(res.error)) router.refresh();
       return;
     }
     router.refresh();
@@ -259,17 +326,31 @@ function RequestCard({
             {new Date(request.created_at).toLocaleString(intlLocaleFor(locale))}
           </p>
         </div>
-        <Badge
-          variant={
-            request.status === 'pending'
-              ? 'warning'
-              : request.status === 'approved'
+        {rail.badge ? (
+          <Badge
+            variant={
+              rail.badge === 'paidByCard'
                 ? 'success'
-                : 'muted'
-          }
-        >
-          {isRequestStatus(request.status) ? t(`requests.status.${request.status}`) : request.status}
-        </Badge>
+                : rail.badge === 'paymentInProgress' || rail.badge === 'paymentExpired'
+                  ? 'warning'
+                  : 'info'
+            }
+          >
+            {t(`stripe.requests.${rail.badge}`)}
+          </Badge>
+        ) : (
+          <Badge
+            variant={
+              request.status === 'pending'
+                ? 'warning'
+                : request.status === 'approved'
+                  ? 'success'
+                  : 'muted'
+            }
+          >
+            {isRequestStatus(request.status) ? t(`requests.status.${request.status}`) : request.status}
+          </Badge>
+        )}
       </div>
 
       {pending && (
@@ -328,7 +409,44 @@ function RequestCard({
         </p>
       )}
 
-      {pending &&
+      {rail.note && (
+        <p
+          className={`mt-4 rounded-xl px-3 py-2 text-sm ${
+            rail.note === 'paidByCard'
+              ? 'bg-success/10 text-success'
+              : rail.note === 'paymentExpired'
+                ? 'bg-warning/10 text-warning'
+                : 'bg-info/10 text-info'
+          }`}
+        >
+          {rail.note === 'paidByCard'
+            ? t('stripe.requests.paidByCardNote', { date: fmtDate(request.paid_at, locale) })
+            : rail.note === 'managedRestaurant'
+              ? t('stripe.requests.managedRestaurantNote', { name })
+              : rail.note === 'paymentInProgress'
+                ? t('stripe.requests.paymentInProgressNote', { name })
+                : rail.note === 'paymentExpired'
+                  ? t('stripe.requests.paymentExpiredNote', { name })
+                  : rail.note === 'awaitingCardPaused'
+                    ? t('stripe.requests.awaitingCardPausedNote', { name })
+                    : t('stripe.requests.awaitingCardNote')}
+          {invoiceHref && (
+            <a
+              href={invoiceHref}
+              target="_blank"
+              rel="noreferrer"
+              className="ml-2 inline-flex items-center gap-1 font-medium underline-offset-2 hover:underline"
+            >
+              <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+              {t('stripe.links.invoiceInStripe')}
+            </a>
+          )}
+        </p>
+      )}
+
+      {/* The comparison describes a MANUAL approval (the month restarts from now()), so
+          it is only shown where Approve is. */}
+      {rail.showDiff &&
         (diff ? (
           <PackageComparison diff={diff} nameList={nameList} />
         ) : (
@@ -337,7 +455,9 @@ function RequestCard({
           </p>
         ))}
 
-      {pending && (
+      {/* No note field when there is nothing to decide: a change waiting on its invoice
+          while its payment window is open. */}
+      {pending && (rail.canApprove || rail.canReject) && (
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <input
             value={note}
@@ -345,25 +465,29 @@ function RequestCard({
             placeholder={t('requests.notePlaceholder')}
             className="h-10 min-w-[12rem] flex-1 rounded-xl border border-border bg-background px-3 text-sm outline-none focus-visible:border-primary"
           />
-          <Button
-            size="sm"
-            loading={busy === 'approve'}
-            disabled={busy !== null}
-            onClick={() => decide(true)}
-            leftIcon={<Check className="h-4 w-4" />}
-          >
-            {t('requests.approve')}
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            loading={busy === 'reject'}
-            disabled={busy !== null}
-            onClick={() => decide(false)}
-            leftIcon={<X className="h-4 w-4" />}
-          >
-            {t('requests.reject')}
-          </Button>
+          {rail.canApprove && (
+            <Button
+              size="sm"
+              loading={busy === 'approve'}
+              disabled={busy !== null}
+              onClick={() => decide(true)}
+              leftIcon={<Check className="h-4 w-4" />}
+            >
+              {t('requests.approve')}
+            </Button>
+          )}
+          {rail.canReject && (
+            <Button
+              size="sm"
+              variant="ghost"
+              loading={busy === 'reject'}
+              disabled={busy !== null}
+              onClick={() => decide(false)}
+              leftIcon={<X className="h-4 w-4" />}
+            >
+              {t('requests.reject')}
+            </Button>
+          )}
         </div>
       )}
     </Card>
@@ -605,6 +729,18 @@ function packageDiff(
  * PostgREST text is logged by decisionErrorKey, never shown.
  */
 function decisionMessage(raw: string | undefined, t: T, locale: UiLocale): string {
+  // First, before the shared decoder: a card-paying store or a card-paid request is
+  // settled by Stripe, and retrying the approval would be refused every time (D11).
+  if (isStripeManagedError(raw)) {
+    console.error('[platform/requests] decide_billing_request refused:', raw);
+    return t('stripe.errors.managed');
+  }
+  // A card change waiting on its invoice: the payment could still go through, so it cannot
+  // be rejected (§9.3). A card opened before the merchant started paying still has Reject.
+  if (isPaymentInProgressError(raw)) {
+    console.error('[platform/requests] decide_billing_request refused:', raw);
+    return t('stripe.errors.paymentInProgress');
+  }
   const decoded = billingErrorOf(raw);
   if (decoded) {
     // A code's use is reserved when the merchant submits (decide_billing_request only

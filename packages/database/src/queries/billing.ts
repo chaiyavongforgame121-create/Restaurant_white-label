@@ -332,6 +332,123 @@ export interface BillingCharge {
   paidAt?: string | null;
 }
 
+export interface BillingCard {
+  brand: string;
+  last4: string;
+  expMonth: number | null;
+  expYear: number | null;
+}
+
+export interface BillingInvoiceSummary {
+  amountPaid: number;
+  amountDue: number;
+  status: 'paid' | 'open' | 'uncollectible' | 'void' | string;
+  paidAt: string | null;
+  hostedInvoiceUrl: string | null;
+  billingReason: string | null;
+  attemptCount: number;
+}
+
+/**
+ * How the restaurant pays the platform (docs/PLATFORM-BILLING-STRIPE-2026-09-26.md).
+ * `rail` is 'stripe' while it has a live Stripe subscription (billing_is_stripe_managed),
+ * otherwise 'manual'. On the Stripe rail the monthly fee renews by itself.
+ */
+export interface BillingRailInfo {
+  /** The platform has switched card billing on. */
+  stripeEnabled: boolean;
+  rail: 'stripe' | 'manual';
+  status: string;
+  /** A Stripe customer exists for the restaurant (it has paid by card before). */
+  hasStripeCustomer: boolean;
+  nextChargeAt: string | null;
+  nextChargeAmount: number | null;
+  cancelAtPeriodEnd: boolean;
+  cancelAt: string | null;
+  /** past_due only: the restaurant keeps working until then. */
+  graceUntil: string | null;
+  card: BillingCard | null;
+  lastInvoice: BillingInvoiceSummary | null;
+  /** The pending request's rail: 'stripe' means it is waiting for the card payment to finish. */
+  pendingRequestRail: 'stripe' | 'manual' | null;
+  /**
+   * A change to a card subscription that is waiting on 3-D Secure or a declined card: Stripe's
+   * invoice page where the merchant finishes paying it. While it is set the request cannot be
+   * replaced (the server answers payment_in_progress).
+   */
+  pendingInvoiceUrl: string | null;
+}
+
+/** Manual, card billing off: what an unreadable or missing payload means. */
+export const MANUAL_RAIL: BillingRailInfo = Object.freeze({
+  stripeEnabled: false,
+  rail: 'manual',
+  status: 'none',
+  hasStripeCustomer: false,
+  nextChargeAt: null,
+  nextChargeAmount: null,
+  cancelAtPeriodEnd: false,
+  cancelAt: null,
+  graceUntil: null,
+  card: null,
+  lastInvoice: null,
+  pendingRequestRail: null,
+  pendingInvoiceUrl: null,
+}) as BillingRailInfo;
+
+function parseCard(raw: unknown): BillingCard | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const c = raw as Record<string, unknown>;
+  const brand = str(c.brand);
+  const last4 = str(c.last4);
+  if (!brand || !last4) return null;
+  const month = Math.trunc(num(c.exp_month, NaN));
+  const year = Math.trunc(num(c.exp_year, NaN));
+  return {
+    brand,
+    last4,
+    expMonth: Number.isFinite(month) ? month : null,
+    expYear: Number.isFinite(year) ? year : null,
+  };
+}
+
+function parseInvoiceSummary(raw: unknown): BillingInvoiceSummary | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const i = raw as Record<string, unknown>;
+  return {
+    amountPaid: num(i.amount_paid),
+    amountDue: num(i.amount_due),
+    status: String(i.status ?? ''),
+    paidAt: str(i.paid_at),
+    hostedInvoiceUrl: str(i.hosted_invoice_url),
+    billingReason: str(i.billing_reason),
+    attemptCount: Math.max(0, Math.trunc(num(i.attempt_count))),
+  };
+}
+
+/** Parses the `billing` object of get_billing_overview / list_restaurant_subscriptions. Never throws. */
+export function parseBillingRailInfo(raw: unknown): BillingRailInfo {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return MANUAL_RAIL;
+  const b = raw as Record<string, unknown>;
+  const amount = num(b.next_charge_amount, NaN);
+  return {
+    stripeEnabled: b.stripe_enabled === true,
+    rail: b.rail === 'stripe' ? 'stripe' : 'manual',
+    status: String(b.status ?? 'none'),
+    hasStripeCustomer: b.stripe_customer === true,
+    nextChargeAt: str(b.next_charge_at),
+    nextChargeAmount: Number.isFinite(amount) ? amount : null,
+    cancelAtPeriodEnd: b.cancel_at_period_end === true,
+    cancelAt: str(b.cancel_at),
+    graceUntil: str(b.grace_until),
+    card: parseCard(b.card),
+    lastInvoice: parseInvoiceSummary(b.last_invoice),
+    pendingRequestRail:
+      b.pending_request_rail === 'stripe' ? 'stripe' : b.pending_request_rail === 'manual' ? 'manual' : null,
+    pendingInvoiceUrl: str(b.pending_invoice_url),
+  };
+}
+
 export interface BillingOverview {
   entitlements: Entitlements;
   branches: BillingOverviewBranch[];
@@ -343,6 +460,8 @@ export interface BillingOverview {
    */
   pendingRequest: BillingRequest | null;
   charges: BillingCharge[];
+  /** How the restaurant pays: card through Stripe, or the manual rail. */
+  billing: BillingRailInfo;
 }
 
 /** Denied, and denied in a way that sells nothing: no branch delivers, nothing is paid. */
@@ -352,6 +471,7 @@ const DENIED_OVERVIEW: BillingOverview = Object.freeze({
   paid: NOTHING_PAID,
   pendingRequest: null,
   charges: [] as BillingCharge[],
+  billing: MANUAL_RAIL,
 }) as BillingOverview;
 
 function parsePaidState(raw: unknown): BillingPaidState {
@@ -422,6 +542,7 @@ export async function getBillingOverview(
             };
           })
         : [],
+      billing: parseBillingRailInfo(d.billing),
     };
   } catch {
     return DENIED_OVERVIEW;
@@ -633,6 +754,24 @@ export interface BillingRequest {
   decided_at: string | null;
   created_at: string;
   updated_at: string;
+  /** 'stripe' once the merchant started paying it by card; such a request is never approved by hand. */
+  rail: 'manual' | 'stripe';
+  stripe_checkout_session_id: string | null;
+  /**
+   * A change to a card subscription waiting on this invoice (3-D Secure or a declined card), and
+   * Stripe's page for paying it. While set, the request can be neither replaced nor rejected.
+   */
+  stripe_invoice_id: string | null;
+  stripe_invoice_url: string | null;
+  /**
+   * When the request was tied to its invoice, and when a subscription change for it was sent to
+   * Stripe. A card lock lasts 23 hours from the later of the two; after that the server releases it
+   * on the next request or rejection (docs/PLATFORM-BILLING-STRIPE-2026-09-26.md §10.1).
+   */
+  stripe_invoice_marked_at: string | null;
+  stripe_change_started_at: string | null;
+  /** Set when a card payment settled it. */
+  paid_at: string | null;
   /** Present only in the platform-admin list. */
   restaurant_name?: string;
   restaurant_slug?: string;
@@ -661,6 +800,13 @@ function normalizeRequest(row: unknown): BillingRequest {
     decided_at: str(r.decided_at),
     created_at: String(r.created_at ?? ''),
     updated_at: String(r.updated_at ?? ''),
+    rail: r.rail === 'stripe' ? 'stripe' : 'manual',
+    stripe_checkout_session_id: str(r.stripe_checkout_session_id),
+    stripe_invoice_id: str(r.stripe_invoice_id),
+    stripe_invoice_url: str(r.stripe_invoice_url),
+    stripe_invoice_marked_at: str(r.stripe_invoice_marked_at),
+    stripe_change_started_at: str(r.stripe_change_started_at),
+    paid_at: str(r.paid_at),
     ...(typeof r.restaurant_name === 'string' ? { restaurant_name: r.restaurant_name } : {}),
     ...(typeof r.restaurant_slug === 'string' ? { restaurant_slug: r.restaurant_slug } : {}),
   };
@@ -763,10 +909,14 @@ export async function decideBillingRequest(
   });
   if (error) return { ok: false, error: error.message };
   const d = (data ?? {}) as Record<string, unknown>;
+  // The refusals (stripe_managed, payment_in_progress) are raised today, but an answer of
+  // { ok: false, reason } must not lose its reason on the way to the console either.
+  const refusal = str(d.error) ?? str(d.reason);
   return {
     ok: d.ok === true,
     approved: d.approved === true,
     entitlements: d.entitlements ? parseEntitlements(d.entitlements) : undefined,
+    ...(d.ok !== true && refusal ? { error: refusal } : {}),
   };
 }
 
@@ -805,6 +955,12 @@ export interface RestaurantSubscriptionRow {
   entitlements: Entitlements;
   /** The platform switch, NOT the resolved grants. See featureOverrideState(). */
   feature_overrides: Record<string, boolean>;
+  /** How it pays: card through Stripe, or manual. */
+  billing: BillingRailInfo;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  /** past_due on the Stripe rail: the renewal Stripe is still trying to collect. */
+  open_invoice: BillingInvoiceSummary | null;
 }
 
 export async function listRestaurantSubscriptions(
@@ -821,6 +977,10 @@ export async function listRestaurantSubscriptions(
       created_at: String(r.created_at ?? ''),
       entitlements: parseEntitlements(r.entitlements),
       feature_overrides: parseFeatureOverrides(r.feature_overrides),
+      billing: parseBillingRailInfo(r.billing),
+      stripe_customer_id: str(r.stripe_customer_id),
+      stripe_subscription_id: str(r.stripe_subscription_id),
+      open_invoice: parseInvoiceSummary(r.open_invoice),
     };
   });
 }
@@ -888,26 +1048,26 @@ export async function upsertBillingProduct(
   return { ok: true, product: normalizeProduct(data) };
 }
 
-// --- Stripe (dormant until the owner supplies keys) --------------------------
+// --- Stripe: restaurants paying the platform by card ------------------------
+//
+// docs/PLATFORM-BILLING-STRIPE-2026-09-26.md. Every call goes to the one edge function
+// `stripe-billing`, which answers 503 { error: 'stripe_not_configured' } while the platform
+// has not switched card billing on. That is not a failure: the request the merchant just
+// filed stays a request for manual approval, exactly as before.
 
-export type CheckoutResult = { url: string } | { dormant: true; reason: string };
+/** What an edge call answered: its JSON, or `dormant` while card billing is off. */
+type EdgeAnswer = { dormant: true } | { dormant: false; body: Record<string, unknown> };
 
-function isDormant(body: unknown): boolean {
-  const e = (body as { error?: unknown } | null)?.error;
-  return e === 'stripe_not_configured';
-}
-
-async function callEdge(
+async function callStripeBilling(
   supabase: FavornomsClient,
-  fn: string,
-  body: unknown,
-): Promise<CheckoutResult> {
+  body: Record<string, unknown>,
+): Promise<EdgeAnswer> {
   const { data: session } = await supabase.auth.getSession();
   const accessToken = session?.session?.access_token;
   if (!accessToken) throw new Error('not_signed_in');
 
   const { url, publishableKey } = getSupabaseEnv();
-  const res = await fetch(`${url}/functions/v1/${fn}`, {
+  const res = await fetch(`${url}/functions/v1/stripe-billing`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -917,57 +1077,185 @@ async function callEdge(
     body: JSON.stringify(body),
   });
 
-  let parsed: unknown = null;
+  let parsed: Record<string, unknown> = {};
   try {
-    parsed = await res.json();
+    const json: unknown = await res.json();
+    if (json && typeof json === 'object' && !Array.isArray(json)) parsed = json as Record<string, unknown>;
   } catch {
-    /* non-JSON body — handled below */
+    /* non-JSON body: a gateway page, handled below */
   }
 
-  // 503 + stripe_not_configured is the expected state today, not a failure:
-  // the caller falls back to the manual request queue.
-  if (res.status === 503 || isDormant(parsed)) {
-    return { dormant: true, reason: 'stripe_not_configured' };
-  }
+  // Only the function's own answer means "switched off". A bare 503 from the gateway is an
+  // outage, and an outage must not quietly turn a card payment into a manual request.
+  if (res.status === 503 && parsed.error === 'stripe_not_configured') return { dormant: true };
   if (!res.ok) {
-    const detail = (parsed as { error?: string } | null)?.error ?? String(res.status);
-    throw new Error(`${fn}_failed:${detail}`);
+    const detail = typeof parsed.error === 'string' && parsed.error ? parsed.error : String(res.status);
+    throw new Error(`stripe_billing_failed:${detail}`);
   }
-  const u = (parsed as { url?: unknown } | null)?.url;
-  if (typeof u !== 'string' || !u) throw new Error(`${fn}_failed:no_url`);
-  return { url: u };
+  return { dormant: false, body: parsed };
 }
 
-export async function createBillingCheckoutSession(
+/**
+ * What taking payment for a filed request led to:
+ * - `checkout`: send the browser to Stripe Checkout (`url`) — the restaurant's first card purchase.
+ * - `applied`: the change was charged to the card on file and is live now.
+ * - `action_required`: the card needs 3-D Secure or was declined; `url` is Stripe's invoice page.
+ * - `dormant`: card billing is off; the request waits for manual approval.
+ */
+export type CardPaymentStart =
+  | { kind: 'checkout'; url: string }
+  | { kind: 'applied' }
+  | { kind: 'action_required'; url: string }
+  | { kind: 'dormant' };
+
+export async function startCardPayment(
   supabase: FavornomsClient,
-  restaurantId: string,
-  selection: PackageSelection,
-  urls: { successUrl: string; cancelUrl: string },
-): Promise<CheckoutResult> {
-  // A Stripe line item cannot name a branch, so the selection carries both: the
-  // add-on list the dormant function still reads, and the branch ids it will need
-  // when it is woken up and taught about the one-time fees.
-  const deliveryBranchIds = deliveryIdsOf(selection);
-  return callEdge(supabase, 'stripe-create-checkout-session', {
-    restaurant_id: restaurantId,
-    selection: {
-      plan_code: selection.planCode,
-      addons: deliveryBranchIds.length > 0 ? ['delivery'] : [],
-      branch_seats: seatsOf(selection),
-      delivery_branch_ids: deliveryBranchIds,
-    },
-    success_url: urls.successUrl,
-    cancel_url: urls.cancelUrl,
-  });
+  requestId: string,
+  branchId: string,
+): Promise<CardPaymentStart> {
+  const answer = await callStripeBilling(supabase, { action: 'start', request_id: requestId, branch_id: branchId });
+  if (answer.dormant) return { kind: 'dormant' };
+  const kind = answer.body.kind;
+  const url = str(answer.body.url);
+  if (kind === 'checkout' && url) return { kind: 'checkout', url };
+  if (kind === 'action_required' && url) return { kind: 'action_required', url };
+  if (kind === 'applied') return { kind: 'applied' };
+  throw new Error('stripe_billing_failed:unexpected_answer');
 }
 
+/** After Stripe Checkout sends the merchant back: settles the request without waiting for the webhook. */
+export async function confirmCheckout(
+  supabase: FavornomsClient,
+  sessionId: string,
+): Promise<{ settled: boolean; status: string | null; reason: string | null }> {
+  const answer = await callStripeBilling(supabase, { action: 'confirm', session_id: sessionId });
+  if (answer.dormant) return { settled: false, status: 'dormant', reason: null };
+  // `reason` tells a refund for a request that was replaced apart from one that could not be applied.
+  return {
+    settled: answer.body.settled === true,
+    status: str(answer.body.status),
+    reason: str(answer.body.reason),
+  };
+}
+
+/** Stripe's customer portal (update card, invoices, cancel at period end). Null while card billing is off. */
 export async function openBillingPortal(
   supabase: FavornomsClient,
-  restaurantId: string,
-  returnUrl: string,
-): Promise<CheckoutResult> {
-  return callEdge(supabase, 'stripe-billing-portal', {
-    restaurant_id: restaurantId,
-    return_url: returnUrl,
+  branchId: string,
+): Promise<string | null> {
+  const answer = await callStripeBilling(supabase, { action: 'portal', branch_id: branchId });
+  if (answer.dormant) return null;
+  const url = str(answer.body.url);
+  if (!url) throw new Error('stripe_billing_failed:no_url');
+  return url;
+}
+
+// --- Stripe: the platform owner's setup page ---------------------------------
+
+export interface StripeBillingStatus {
+  /** From the secret key's prefix; null when no key is set. */
+  mode: 'test' | 'live' | null;
+  secretKeySet: boolean;
+  publishableKeySet: boolean;
+  /** STRIPE_WEBHOOK_SECRET: the endpoint for package payments. */
+  webhookSecretSet: boolean;
+  /** STRIPE_CONNECT_WEBHOOK_SECRET: diners' card payments (Connect), shown for completeness. */
+  connectWebhookSecretSet: boolean;
+  /** The switch: packages are charged by card. */
+  stripeEnabled: boolean;
+  account: {
+    id: string;
+    chargesEnabled: boolean;
+    payoutsEnabled: boolean;
+    detailsSubmitted: boolean;
+    /** How many requirements Stripe says are due now. */
+    currentlyDue: number;
+    /** A bank account (or card) for payouts is on file. */
+    hasBank: boolean;
+  } | null;
+  portalConfigured: boolean;
+  pricesReady: boolean;
+  lastEventAt: string | null;
+  /** https://dashboard.stripe.com/<acct>/ plus test/ in test mode; links on the page append a path. */
+  dashboardBase: string | null;
+}
+
+function parseStripeBillingStatus(b: Record<string, unknown>): StripeBillingStatus {
+  const a = b.account && typeof b.account === 'object' ? (b.account as Record<string, unknown>) : null;
+  return {
+    mode: b.mode === 'test' || b.mode === 'live' ? b.mode : null,
+    secretKeySet: b.secret_key_set === true,
+    publishableKeySet: b.publishable_key_set === true,
+    webhookSecretSet: b.webhook_secret_set === true,
+    connectWebhookSecretSet: b.connect_webhook_secret_set === true,
+    stripeEnabled: b.stripe_enabled === true,
+    account: a
+      ? {
+          id: String(a.id ?? ''),
+          chargesEnabled: a.charges_enabled === true,
+          payoutsEnabled: a.payouts_enabled === true,
+          detailsSubmitted: a.details_submitted === true,
+          currentlyDue: Math.max(0, Math.trunc(num(a.currently_due))),
+          hasBank: a.has_bank === true,
+        }
+      : null,
+    portalConfigured: b.portal_configured === true,
+    pricesReady: b.prices_ready === true,
+    lastEventAt: str(b.last_event_at),
+    dashboardBase: str(b.dashboard_base),
+  };
+}
+
+/** Platform admin only. Booleans and ids, never a secret. Null while the function answers dormant. */
+export async function getStripeBillingStatus(supabase: FavornomsClient): Promise<StripeBillingStatus | null> {
+  const answer = await callStripeBilling(supabase, { action: 'status' });
+  if (answer.dormant) return null;
+  return parseStripeBillingStatus(answer.body);
+}
+
+/**
+ * Platform admin only. Turning it on is refused (`stripe_billing_failed:not_ready`) until the
+ * secret key and the webhook secret are set; the function prepares the prices and the customer
+ * portal first. Returns the new status.
+ */
+export async function setStripeBillingEnabled(
+  supabase: FavornomsClient,
+  enabled: boolean,
+): Promise<StripeBillingStatus | null> {
+  const answer = await callStripeBilling(supabase, { action: 'set_enabled', enabled });
+  if (answer.dormant) return null;
+  return parseStripeBillingStatus(answer.body);
+}
+
+export interface PlatformBillingEvent {
+  id: string;
+  type: string;
+  level: 'info' | 'warn' | 'error' | string;
+  note: string | null;
+  restaurantId: string | null;
+  createdAt: string;
+}
+
+/** Package-payment events (Connect events excluded), newest first. Platform admin only. */
+export async function listPlatformBillingEvents(
+  supabase: FavornomsClient,
+  restaurantId: string | null = null,
+  limit = 50,
+): Promise<PlatformBillingEvent[]> {
+  const { data, error } = await supabase.rpc('platform_billing_events' as never, {
+    p_restaurant_id: restaurantId,
+    p_limit: limit,
+  } as never);
+  if (error || !Array.isArray(data)) return [];
+  return (data as unknown[]).map((row) => {
+    const r = (row ?? {}) as Record<string, unknown>;
+    return {
+      id: String(r.id ?? ''),
+      type: String(r.type ?? ''),
+      level: String(r.level ?? 'info'),
+      note: str(r.note),
+      restaurantId: str(r.restaurant_id),
+      createdAt: String(r.created_at ?? ''),
+    };
   });
 }

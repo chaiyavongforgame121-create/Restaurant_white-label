@@ -463,6 +463,9 @@ async function send<T>(url: string, init: RequestInit, label: string): Promise<S
   return { ok: true, status: res.status, data: parsed as T };
 }
 
+/** How long one v1 call may take before it counts as a network failure. */
+export const STRIPE_REQUEST_TIMEOUT_MS = 20_000;
+
 /**
  * One Stripe API v1 call (form-encoded). `account` sends the Stripe-Account header, which is what
  * makes a call act ON the connected account (a direct charge, its refunds) instead of on the
@@ -493,7 +496,13 @@ export async function stripeRequest<T>(
       headers['Content-Type'] = 'application/x-www-form-urlencoded';
     }
   }
-  return send<T>(url, { method, headers, body }, `${method} ${path}`);
+  // A hung call must end well inside a webhook claim's lease and the function's wall clock. A call
+  // that times out is a network failure (status 0), which every caller already retries or reports;
+  // a timeout while the answer's body is still arriving is the same, not an empty success.
+  const signal = AbortSignal.timeout(STRIPE_REQUEST_TIMEOUT_MS);
+  const result = await send<T>(url, { method, headers, body, signal }, `${method} ${path}`);
+  if (result.ok && result.data == null && signal.aborted) return { ok: false, status: 0, error: null };
+  return result;
 }
 
 /**

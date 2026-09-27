@@ -83,7 +83,30 @@ export interface Entitlements {
    * the real price without reading the billing ledger, which is the owner's.
    */
   deliveryUnlockedBranchIds: string[];
+  /**
+   * How the restaurant pays the platform (docs/PLATFORM-BILLING-STRIPE-2026-09-26.md §9.9).
+   * 'stripe' while a live card subscription renews the package by itself, 'manual' otherwise.
+   *
+   * It is here, and not only in the owner's billing overview, because every staff member's
+   * dashboard decides from it whether to count down to the deadline: on the card rail that
+   * deadline moves forward every month, and "the storefront stops on {date}" would be false.
+   * Anything but 'stripe' — an older payload, a typo — reads as 'manual', the rail that warns.
+   */
+  billingRail: BillingRail;
+  /**
+   * On the card rail, when a subscription that is set to end (cancelled in the portal, or a
+   * cancel date set in Stripe) ends; null while it renews (§10.10, ui-rr-3). The server fills it
+   * in only when the end falls on or before the next renewal — the same rule as the owner's "next
+   * charge" — so a far-off cancel date is not read as the end.
+   *
+   * It is here for the same reason as `billingRail`: every staff member's dashboard warns before
+   * the storefront switches off, and the owner's billing overview is the owner's alone. Not
+   * sensitive — a date, no Stripe ids. Absent (an older payload) reads as null: no warning.
+   */
+  billingEndsAt: string | null;
 }
+
+export type BillingRail = 'stripe' | 'manual';
 
 const NO_FEATURES: Record<string, boolean> = Object.freeze({});
 
@@ -102,6 +125,8 @@ export const DENIED_ENTITLEMENTS: Entitlements = Object.freeze({
   addons: [] as string[],
   deliveryBranchIds: [] as string[],
   deliveryUnlockedBranchIds: [] as string[],
+  billingRail: 'manual',
+  billingEndsAt: null,
 }) as Entitlements;
 
 function asNumber(v: unknown, fallback = 0): number {
@@ -111,6 +136,12 @@ function asNumber(v: unknown, fallback = 0): number {
 
 function asIsoOrNull(v: unknown): string | null {
   return typeof v === 'string' && v.length > 0 ? v : null;
+}
+
+/** asIsoOrNull(), and the string must also parse as a date. */
+function asReadableIsoOrNull(v: unknown): string | null {
+  const s = asIsoOrNull(v);
+  return s !== null && Number.isFinite(Date.parse(s)) ? s : null;
 }
 
 /** A jsonb array of ids; anything that is not one reads as "none". */
@@ -157,6 +188,9 @@ export function parseEntitlements(raw: unknown): Entitlements {
     // Absent from a payload older than the 2026-09-23 fixes, which reads as "nothing unlocked":
     // the worst that does is quote a $59 the plan page then does not charge.
     deliveryUnlockedBranchIds: asIdList(r.delivery_unlocked_branch_ids),
+    billingRail: r.billing_rail === 'stripe' ? 'stripe' : 'manual',
+    // A date nobody can read is no date: the dashboard would count down to nothing.
+    billingEndsAt: asReadableIsoOrNull(r.billing_ends_at),
   };
 }
 

@@ -515,3 +515,35 @@ describe('what is already unlocked, and what is withdrawn', () => {
     expect(FEATURE_KEYS).toContain('ai_suite');
   });
 });
+
+describe('how the restaurant pays the platform', () => {
+  it('reads the card rail from billing_rail', () => {
+    expect(parseEntitlements({ restaurant_id: 'r1', billing_rail: 'stripe' }).billingRail).toBe('stripe');
+    expect(parseEntitlements({ restaurant_id: 'r1', billing_rail: 'manual' }).billingRail).toBe('manual');
+  });
+
+  it('reads anything else as the manual rail, the one whose deadline is warned about', () => {
+    // An older payload has no key; a typo or another type must not silence the countdown.
+    for (const raw of [undefined, null, '', 'STRIPE', 'card', true, 1, { rail: 'stripe' }]) {
+      expect(parseEntitlements({ restaurant_id: 'r1', billing_rail: raw }).billingRail, String(raw)).toBe('manual');
+    }
+    expect(parseEntitlements(null).billingRail).toBe('manual');
+    expect(DENIED_ENTITLEMENTS.billingRail).toBe('manual');
+  });
+
+  it('reads when a card subscription set to end ends, for every role (ui-rr-3)', () => {
+    const at = '2026-10-26T12:00:00+00:00';
+    expect(
+      parseEntitlements({ restaurant_id: 'r1', billing_rail: 'stripe', billing_ends_at: at }).billingEndsAt,
+    ).toBe(at);
+  });
+
+  it('reads no end date as a subscription that renews', () => {
+    // An older payload has no key; a value that is not a readable date is no date to count down to.
+    for (const raw of [undefined, null, '', 'soon', 42, true, { at: '2026-10-26' }]) {
+      expect(parseEntitlements({ restaurant_id: 'r1', billing_ends_at: raw }).billingEndsAt, String(raw)).toBeNull();
+    }
+    expect(parseEntitlements(null).billingEndsAt).toBeNull();
+    expect(DENIED_ENTITLEMENTS.billingEndsAt).toBeNull();
+  });
+});

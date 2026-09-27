@@ -221,5 +221,24 @@
     "bar": "{day} · {amount}",
     "failed": "No se pudieron leer las ventas de esta sucursal. Se volverá a intentar en la próxima actualización.",
     "empty": "Aún no hay ventas en los últimos 7 días."
+  },
+  "stripe": {
+    "paymentFailed": {
+      "title": "No se pudo cobrar a tu tarjeta",
+      "body": "Stripe volverá a intentarlo. Actualiza la tarjeta antes del {date} para que tu tienda siga en línea.",
+      "bodyNoDate": "Stripe volverá a intentarlo. Actualiza la tarjeta para que tu tienda siga en línea.",
+      "cta": "Actualizar tarjeta",
+      "bodyStaff": "Stripe volverá a intentarlo. Pide al propietario del restaurante que actualice la tarjeta antes del {date} para que la tienda siga en línea.",
+      "bodyStaffNoDate": "Stripe volverá a intentarlo. Pide al propietario del restaurante que actualice la tarjeta para que la tienda siga en línea."
+    },
+    "cancelling": {
+      "titleDays": "Tu paquete termina el {date}: {days, plural, one {queda # día} other {quedan # días}}",
+      "titleUnderDay": "Tu paquete termina el {date}: queda menos de un día",
+      "titleDaysStaff": "El cobro con tarjeta termina el {date}: {days, plural, one {queda # día} other {quedan # días}}",
+      "titleUnderDayStaff": "El cobro con tarjeta termina el {date}: queda menos de un día",
+      "body": "Se canceló y no se renovará. Después, la tienda en línea deja de recibir pedidos y el panel de administración se bloquea.",
+      "bodyStaff": "El paquete se canceló y no se renovará. Después, la tienda en línea deja de recibir pedidos y el panel de administración se bloquea. Pregunta al propietario del restaurante si debe continuar.",
+      "cta": "Conservar mi paquete"
+    }
   }
 }

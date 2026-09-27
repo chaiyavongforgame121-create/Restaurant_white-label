@@ -221,5 +221,24 @@
     "bar": "{day} · {amount}",
     "failed": "Không đọc được doanh thu của chi nhánh này. Hệ thống sẽ thử lại ở lần làm mới tiếp theo.",
     "empty": "Chưa có doanh thu trong 7 ngày qua."
+  },
+  "stripe": {
+    "paymentFailed": {
+      "title": "Thanh toán bằng thẻ không thành công",
+      "body": "Stripe sẽ thử trừ lại vào thẻ. Hãy cập nhật thẻ trước {date} để cửa hàng trực tuyến tiếp tục hoạt động.",
+      "bodyNoDate": "Stripe sẽ thử trừ lại vào thẻ. Hãy cập nhật thẻ để cửa hàng trực tuyến tiếp tục hoạt động.",
+      "cta": "Cập nhật thẻ",
+      "bodyStaff": "Stripe sẽ thử trừ lại vào thẻ. Hãy nhờ chủ nhà hàng cập nhật thẻ trước {date} để cửa hàng trực tuyến tiếp tục hoạt động.",
+      "bodyStaffNoDate": "Stripe sẽ thử trừ lại vào thẻ. Hãy nhờ chủ nhà hàng cập nhật thẻ để cửa hàng trực tuyến tiếp tục hoạt động."
+    },
+    "cancelling": {
+      "titleDays": "Gói của bạn kết thúc vào {date} — {days, plural, other {còn # ngày}}",
+      "titleUnderDay": "Gói của bạn kết thúc vào {date} — còn chưa đến một ngày",
+      "titleDaysStaff": "Thanh toán bằng thẻ kết thúc vào {date} — {days, plural, other {còn # ngày}}",
+      "titleUnderDayStaff": "Thanh toán bằng thẻ kết thúc vào {date} — còn chưa đến một ngày",
+      "body": "Gói đã bị hủy và sẽ không gia hạn. Sau thời điểm đó, cửa hàng trực tuyến ngừng nhận đơn và trang quản trị bị khóa.",
+      "bodyStaff": "Gói đã bị hủy và sẽ không gia hạn. Sau thời điểm đó, cửa hàng trực tuyến ngừng nhận đơn và trang quản trị bị khóa. Hãy hỏi chủ nhà hàng xem có tiếp tục gói hay không.",
+      "cta": "Giữ gói của tôi"
+    }
   }
 }

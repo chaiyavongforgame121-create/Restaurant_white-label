@@ -221,5 +221,24 @@
     "bar": "{day} · {amount}",
     "failed": "Couldn’t read this branch’s sales. It will try again on the next refresh.",
     "empty": "No sales in the last 7 days yet."
+  },
+  "stripe": {
+    "paymentFailed": {
+      "title": "Your card payment failed",
+      "body": "Stripe will try your card again. Update it before {date} to keep your storefront online.",
+      "bodyNoDate": "Stripe will try your card again. Update it to keep your storefront online.",
+      "cta": "Update card",
+      "bodyStaff": "Stripe will try the card again. Ask the restaurant owner to update it before {date} to keep the storefront online.",
+      "bodyStaffNoDate": "Stripe will try the card again. Ask the restaurant owner to update it to keep the storefront online."
+    },
+    "cancelling": {
+      "titleDays": "Your package ends on {date} — {days, plural, one {# day left} other {# days left}}",
+      "titleUnderDay": "Your package ends on {date} — less than a day left",
+      "titleDaysStaff": "Card billing ends on {date} — {days, plural, one {# day left} other {# days left}}",
+      "titleUnderDayStaff": "Card billing ends on {date} — less than a day left",
+      "body": "It was cancelled and will not renew. After that the storefront stops taking orders and the back office locks.",
+      "bodyStaff": "The package was cancelled and will not renew. After that the storefront stops taking orders and the back office locks. Ask the restaurant owner if it should continue.",
+      "cta": "Keep my package"
+    }
   }
 }

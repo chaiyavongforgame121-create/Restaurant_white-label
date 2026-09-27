@@ -163,6 +163,142 @@
       "titleSent": "Request waiting for the Favornoms team · sent {date}",
       "body": "Nothing changes until it is approved. To ask for something else, change the package below and press Replace pending request.",
       "badge": "Pending"
+    },
+    "stripe": {
+      "action": {
+        "payNow": "Pay {amount} now",
+        "addCard": "Add card · first charge {date}",
+        "confirmChange": "Confirm change",
+        "continue": "Continue to payment",
+        "processing": "Payment processing…",
+        "finishPayment": "Finish payment",
+        "finishFirst": "Finish the waiting payment first",
+        "checking": "Checking the payment…",
+        "sendToTeam": "Send to the Favornoms team instead"
+      },
+      "footnote": {
+        "firstLater": "Paid by card through Stripe. From {date}, {monthly} is charged to your card automatically every month; Stripe’s payment page shows the exact amount before anything is charged. Cancel any time; you keep what you paid for until the end of that month.",
+        "firstNow": "Paid by card through Stripe. Today’s payment includes your first month; after that {monthly} is charged to your card automatically every month. Cancel any time; you keep what you paid for until the end of that month.",
+        "change": "Charged to your card on file as soon as you confirm. Your monthly fee of {monthly} renews on the same card automatically.",
+        "renews": "Your monthly fee of {monthly} renews on your card automatically. Change the card or cancel under Manage card & invoices."
+      },
+      "prorationNote": "Plus the difference in your monthly fee for the rest of this billing period, charged or credited to your card now.",
+      "trialNote": {
+        "later": "Your free trial keeps running: the one-time fees are charged now and your monthly fee is due to start on {date}, when the trial ends. Stripe’s payment page shows the exact amount before you pay.",
+        "now": "Your trial ends within two days, so your first month is charged now together with the one-time fees."
+      },
+      "trialBody": "Everything is unlocked, delivery included at every branch. Buy your package whenever you are ready: the one-time fees are charged to your card then, and the monthly fee only starts when the trial ends.",
+      "onceAwaiting": "Nothing has been charged yet. You pay this when you complete the card payment.",
+      "newSeats": "{count, plural, one {# branch you have not created yet} other {# branches you have not created yet}}. Create new branches from the Branches page once the payment goes through.",
+      "renewBody": "Your current package is selected below. Pay for it by card to renew — after that the monthly fee is charged to your card automatically, so there is nothing to renew by hand. You can also change the package first.",
+      "noTrialBody": "Your account already used its 14-day free trial on another restaurant. This one stays offline until it has a package: choose one below and pay by card, and it turns on straight away.",
+      "replaceBody": "Your earlier request ({summary}) is withdrawn and this one takes its place. Nothing was charged for the earlier one.",
+      "chargeDialog": {
+        "title": "Charge your card now?",
+        "amount": "{amount} is charged to {card} as soon as you confirm.",
+        "proration": "Your monthly fee becomes {monthly}; the difference for the rest of this billing period is charged or credited on the same card now.",
+        "nothing": "Nothing extra is charged for this change.",
+        "cardOnFile": "your card on file",
+        "confirm": "Confirm"
+      },
+      "now": {
+        "nextCharge": "Next charge",
+        "endsOn": "Ends on",
+        "chargeValue": "{amount} on {date}"
+      },
+      "pending": {
+        "title": "Waiting for card payment",
+        "titleSent": "Waiting for card payment · requested {date}",
+        "body": "Nothing has been charged yet. Press Continue to payment to finish, or change the package below.",
+        "badge": "Awaiting payment",
+        "orPayByCard": "You can also pay for it by card now instead of waiting.",
+        "invoiceTitle": "Waiting for you to finish the card payment",
+        "invoiceBody": "Your bank asked you to confirm this payment, or the card was declined. Finish it on Stripe’s page with Finish payment. Until then this request cannot be changed; if it is not finished within about a day, it is cancelled and nothing is charged.",
+        "unconfirmedTitle": "Checking your card payment",
+        "unconfirmedBody": "Your card may already have been charged for this request, so it cannot be paid again from this page. Reload the page in a minute to see where it stands.",
+        "unconfirmedBadge": "Checking",
+        "pausedTitle": "Card payments are paused",
+        "pausedBody": "This request was waiting for a card payment, which cannot be taken right now. Send it to the Favornoms team instead and they will activate it."
+      },
+      "result": {
+        "confirmingTitle": "Payment received — turning your package on…",
+        "confirmingBody": "This takes a few seconds. Keep this page open.",
+        "activeTitle": "Payment received — your package is active",
+        "activeBody": "Thank you. Your next charge and the card on file are under Billing below.",
+        "processingTitle": "Payment received — still being confirmed",
+        "processingBody": "Stripe has not confirmed the payment to us yet. It usually takes under a minute, and your package turns on by itself as soon as it does. Please do not pay again.",
+        "checkAgain": "Check again",
+        "appliedTitle": "Payment received — your change is active",
+        "appliedBody": "It was charged to your card on file.",
+        "cancelledTitle": "Payment cancelled — nothing was charged",
+        "cancelledBody": "Your request is saved. Continue to payment when you are ready, or change the package below.",
+        "refundedStaleTitle": "This payment is being refunded",
+        "refundedStaleBody": "It was for a request that is no longer open: the request was changed or closed after the payment page opened. The full amount is refunded to your card automatically, so there is nothing you need to do. Nothing changed on your package; anything still waiting is shown below.",
+        "refundedFailedTitle": "Your package could not be turned on, so the payment is being refunded",
+        "refundedFailedBody": "The payment went through, but the package could not be applied, so the full amount is refunded to your card automatically. Nothing changed on your package. If you do not see the refund within a few days, contact the Favornoms team.",
+        "notAppliedTitle": "Your package was not changed — nothing was charged",
+        "notAppliedBody": "Stripe’s page finished, but the request it was for could not be applied: it was changed or closed while that page was open, or it no longer fits your branches. No money was taken. Anything still waiting is shown below."
+      },
+      "pastDue": {
+        "title": "Your card payment failed",
+        "body": "Stripe will try your card again over the next few days. Update your card before {date} to keep your storefront online.",
+        "bodyNoDate": "Stripe will try your card again over the next few days. Update your card to keep your storefront online.",
+        "cta": "Update card"
+      },
+      "cancelling": {
+        "title": "Your package cancels on {date}",
+        "titleNoDate": "Your package is set to cancel",
+        "body": "It stays active until then and will not renew. To keep it, open Manage card & invoices and renew it."
+      },
+      "billing": {
+        "title": "Billing",
+        "subtitle": "Paid by card through Stripe. The monthly fee renews by itself.",
+        "nextCharge": "Next charge",
+        "noNextCharge": "Nothing scheduled",
+        "cancelsOn": "None — ends {date}",
+        "card": "Card",
+        "cardValue": "{brand} •••• {last4}",
+        "cardExpires": "Expires {date}",
+        "noCard": "No card on file",
+        "cardExpiring": "This card expires before the next charge. Update it so the payment does not fail.",
+        "lastInvoice": "Last invoice",
+        "invoiceValue": "{amount} · {status}",
+        "viewInvoice": "View invoice",
+        "noInvoice": "No invoice yet",
+        "manage": "Manage card & invoices",
+        "manageHint": "Update your card, download invoices or cancel. Cancelling takes effect at the end of the month you paid for."
+      },
+      "invoiceStatus": {
+        "paid": "Paid",
+        "open": "Unpaid",
+        "void": "Voided",
+        "other": "Pending"
+      },
+      "decision": {
+        "paidOn": "Paid by card on {date}",
+        "paid": "Paid"
+      },
+      "errors": {
+        "requestGone": "This request is no longer waiting for payment — it was paid, replaced or declined. Reload the page to see where it stands.",
+        "startFailed": "The card payment could not be started. Nothing was charged and your request is saved — try Continue to payment again in a moment.",
+        "portalFailed": "The billing portal could not be opened. Please try again in a moment.",
+        "portalOff": "Card billing is switched off right now. Contact the Favornoms team about your billing.",
+        "noCustomer": "There is no card on file yet. One is added the first time you pay by card.",
+        "chargedNotApplied": "Your card was charged, but the change was not applied and the money could not be returned automatically. Please do not pay again — the Favornoms team will fix it.",
+        "changeNotApplied": "Your package was not changed and nothing was charged. Reload the page before you try again; if it happens again, contact the Favornoms team.",
+        "needsTeam": "This change cannot be charged to your card automatically right now. Nothing was charged — please contact the Favornoms team.",
+        "chargedRefunded": "Your card was charged, but the change could not be applied, so the full amount is being refunded to your card. Nothing changed on your package. Reload the page before you try again.",
+        "resultUnknown": "We could not confirm whether your card was charged. Please do not pay again yet: reload the page in a minute. If the payment went through, your change turns on by itself.",
+        "paymentInProgress": "A card payment for your earlier request is still waiting on Stripe’s page (your bank asked you to confirm it, or the card was declined). Finish it, or wait until it expires in about a day, before you change the package.",
+        "busy": "This payment is already being processed. Wait a moment and try again — it will not be charged twice.",
+        "planLimit": "This package has fewer branches than the restaurant has open. Add branches to the package, or close a branch first. Nothing was charged.",
+        "cardPaused": "Card payments are paused right now, so this could not be charged. Nothing was charged and your request is saved. Try again later, or contact the Favornoms team.",
+        "changeConflict": "This change was already sent to your card once, and what it did is not clear yet. Nothing more was charged just now. Please do not pay again: contact the Favornoms team and they will sort it out.",
+        "paymentExpired": "The card payment for this change was not finished in time, so the change was cancelled. Nothing was charged. Choose the package again to try once more."
+      },
+      "onceSettling": "Your payment for this is being recorded.",
+      "onceUnconfirmed": "Your card may already have been charged for this. Reload the page in a minute to see where it stands.",
+      "replaceBodyUnconfirmed": "Your earlier request ({summary}) is withdrawn and this one takes its place. If your card was already charged for the earlier one, that payment is refunded to your card."
     }
   }
 }
