@@ -201,6 +201,8 @@
     "notReady": "Biểu mẫu thẻ vẫn đang tải. Vui lòng đợi một chút rồi đặt hàng lại.",
     "checkDetails": "Vui lòng kiểm tra thông tin thẻ và thử lại.",
     "loadFailedChooseOther": "Không tải được biểu mẫu thẻ — có thể do tập lệnh bị chặn hoặc kết nối yếu. Hãy chọn một phương thức ở trên, hoặc tải lại trang để thử thẻ lần nữa.",
-    "loadFailedOnly": "Không tải được biểu mẫu thẻ — có thể do tập lệnh bị chặn hoặc kết nối yếu. Vui lòng tải lại trang để thử lại."
+    "loadFailedOnly": "Không tải được biểu mẫu thẻ — có thể do tập lệnh bị chặn hoặc kết nối yếu. Vui lòng tải lại trang để thử lại.",
+    "declinedTryAnother": "Thẻ của bạn chưa bị trừ tiền và chưa có đơn hàng nào được tạo: {reason} Hãy thử thẻ khác hoặc chọn cách thanh toán khác.",
+    "startFailedTryAnother": "Không thể bắt đầu thanh toán bằng thẻ, nên chưa bị trừ tiền và chưa có đơn hàng nào được tạo. Hãy thử lại hoặc chọn cách thanh toán khác."
   }
 }

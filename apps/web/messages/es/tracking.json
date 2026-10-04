@@ -32,7 +32,8 @@
       "kitchenCannotMake": "La cocina no puede preparar este pedido.",
       "customerAsked": "Se canceló a petición tuya.",
       "noRider": "No había ningún repartidor disponible para este pedido.",
-      "duplicate": "Este pedido estaba duplicado."
+      "duplicate": "Este pedido estaba duplicado.",
+      "checkoutCardFailed": "No se cobró tu tarjeta, así que este pedido no se realizó. Volviste al pago para pagar de otra forma."
     }
   },
   "driver": {

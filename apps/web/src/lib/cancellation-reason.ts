@@ -13,6 +13,7 @@
 export type CancellationReasonKey =
   | 'cardExpired'
   | 'cardSetupFailed'
+  | 'checkoutCardFailed'
   | 'slipRejected'
   | 'customerCancelled'
   | 'kitchenRejected'
@@ -28,6 +29,10 @@ export const KNOWN_CANCELLATION_REASONS: ReadonlyArray<{ stored: string; key: Ca
   { stored: 'The card payment was not completed within 30 minutes.', key: 'cardExpired' },
   // place-order, when the card payment row could not be written.
   { stored: 'The card payment could not be set up.', key: 'cardSetupFailed' },
+  // The checkout, when the card certainly was not charged and the diner went back to pay another
+  // way (CHECKOUT_CARD_FAILED_REASON in card-payment.ts). Hidden from the history; seen here only
+  // if the diner lands on the order page anyway (the cancel's answer was lost on the way back).
+  { stored: 'Card payment failed at checkout; the diner went back to pay another way.', key: 'checkoutCardFailed' },
   // decide_payment_proof, when the restaurant refused a slip without typing a note.
   { stored: 'Payment slip was not accepted.', key: 'slipRejected' },
   // The diner's own Cancel on this page (order-actions.tsx).

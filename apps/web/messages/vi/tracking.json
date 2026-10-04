@@ -32,7 +32,8 @@
       "kitchenCannotMake": "Bếp không thể làm đơn này.",
       "customerAsked": "Đã hủy theo yêu cầu của bạn.",
       "noRider": "Không có tài xế nào sẵn sàng giao đơn này.",
-      "duplicate": "Đơn này bị trùng với một đơn khác."
+      "duplicate": "Đơn này bị trùng với một đơn khác.",
+      "checkoutCardFailed": "Thẻ của bạn chưa bị trừ tiền nên đơn hàng này chưa được đặt. Bạn đã quay lại trang thanh toán để trả bằng cách khác."
     }
   },
   "driver": {

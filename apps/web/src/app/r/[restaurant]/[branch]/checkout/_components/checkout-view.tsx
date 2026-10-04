@@ -48,7 +48,9 @@ import { Badge, Button, Card, IconButton, Sheet } from '@favornoms/ui';
 import {
   CARD_MIN_CHARGE_CENTS,
   fetchCardConfig,
+  CHECKOUT_CARD_FAILED_REASON,
   forgetCartToClear,
+  isDefiniteCardFailure,
   rememberCardError,
   rememberCartToClear,
   startCardPayment,
@@ -1047,10 +1049,14 @@ export function CheckoutView({
    * Pay a card order that has just been placed: the PaymentIntent is made on the branch's own
    * Stripe account for the order's server-side total, and confirmed with the details on screen.
    *
-   * The order exists from here on, whatever happens to the card, so every path ends on its order
-   * page — never back on this form, where pressing the button again would place a second order.
-   * That page re-checks the payment with Stripe, says paid, processing or failed, and offers the
-   * retry until the order runs out of time.
+   * The order exists from here on. When the card certainly was not charged — Stripe declined it,
+   * 3-D Secure failed, or the payment could not even be started — the order is called off at once
+   * (CHECKOUT_CARD_FAILED_REASON, which the diner's history leaves out) and the diner stays here
+   * with their cart and the reason, free to try another card or pay another way (owner request
+   * 2026-10-04). Every other path ends on the order page, never back on this form with the order
+   * still open, where pressing the button again would place a second one: that page re-checks
+   * the payment with Stripe, says paid, processing or failed, and offers the retry until the order
+   * runs out of time. That includes a call-off the server refused (a payment that did go through).
    *
    * The cart is emptied only once Stripe has answered: emptying it earlier swaps this form for the
    * "order placed" screen and unmounts the element Stripe confirms from. A method that leaves for
@@ -1065,6 +1071,29 @@ export function CheckoutView({
       router.refresh();
       router.push(`${orderPath}${query}`);
     };
+    // Calls off the order just placed and keeps the diner here. False when the server refused (the
+    // payment went through after all) or could not be reached: the order page then decides.
+    const backToCheckout = async (message: string): Promise<boolean> => {
+      try {
+        const { error: cancelErr } = await getBrowserClient().rpc('cancel_order', {
+          p_order_id: orderId,
+          p_reason: CHECKOUT_CARD_FAILED_REASON,
+        });
+        if (cancelErr) {
+          console.error('card_failure_cancel_refused', cancelErr.message);
+          return false;
+        }
+      } catch (err) {
+        console.error('card_failure_cancel_failed', (err as Error)?.message);
+        return false;
+      }
+      forgetCartToClear(branchId);
+      // The cancel gave back stock and credits; let the page re-read what it shows.
+      router.refresh();
+      setError(message);
+      setSubmitting(false);
+      return true;
+    };
     rememberCartToClear(branchId, orderNumber);
     try {
       let intent: CardIntent;
@@ -1072,6 +1101,8 @@ export function CheckoutView({
         intent = await startCardPayment(orderId);
       } catch (err) {
         console.error('card_payment_start_failed', (err as Error)?.message);
+        // Nothing was confirmed, so nothing was charged.
+        if (await backToCheckout(t('checkout.card.startFailedTryAnother'))) return;
         toOrderPage('?card=retry');
         return;
       }
@@ -1098,7 +1129,18 @@ export function CheckoutView({
       const outcome = await card.confirm(intent.client_secret, `${window.location.origin}${orderPath}`);
       if (outcome.error) {
         // Declined, cancelled 3-D Secure, and the like. Stripe's message is already in the diner's
-        // language; the order page shows it beside the retry.
+        // language. When the card certainly was not charged the diner stays here with it; anything
+        // less certain (a dropped connection) goes to the order page, which asks Stripe.
+        if (
+          isDefiniteCardFailure(outcome.error) &&
+          (await backToCheckout(
+            t('checkout.card.declinedTryAnother', {
+              reason: outcome.error.message ?? t('checkout.card.checkDetails'),
+            }),
+          ))
+        ) {
+          return;
+        }
         rememberCardError(orderId, outcome.error.message ?? '');
         toOrderPage('?card=retry');
         return;
@@ -1325,7 +1367,7 @@ export function CheckoutView({
       // Save the address (with coordinates) if it was a new entry and the
       // customer is signed in. Best-effort — the order already went through.
       if (channel === 'delivery' && selectedAddressId === 'new' && address && customerId) {
-        await upsertCustomerAddress(supabase, {
+        const savedId = await upsertCustomerAddress(supabase, {
           customer_id: customerId,
           line1: address,
           line2: addressMeta?.line2 ?? null,
@@ -1336,7 +1378,15 @@ export function CheckoutView({
           lng: addressCoords?.lng ?? null,
           notes: addressNotes.trim() || null,
           is_default: savedAddresses.length === 0,
-        }).catch(() => undefined);
+        }).catch(() => null);
+        // A declined card keeps the diner on this page (payForOrder). Point the form at the row
+        // just saved, so pressing the button again does not save the same address a second time.
+        if (savedId) {
+          setSelectedAddressId(savedId);
+          void listCustomerAddresses(supabase, customerId)
+            .then(setSavedAddresses)
+            .catch(() => undefined);
+        }
       }
       // A card order is placed but not yet paid: it waits off the kitchen board until Stripe says
       // it is. Take the payment now, on this page, with the details already typed in.

@@ -393,3 +393,29 @@ export function takeCardError(orderId: string): string | null {
     return null;
   }
 }
+
+// A card the checkout could not charge (owner request 2026-10-04): the diner stays on the checkout
+// with their cart and the reason, and can try another card or pay another way. The order placed a
+// moment before is cancelled with this reason, which the diner's order history leaves out, so to
+// them no order was made; the restaurant still sees it, cancelled, with this note.
+
+export const CHECKOUT_CARD_FAILED_REASON =
+  'Card payment failed at checkout; the diner went back to pay another way.';
+
+/**
+ * Whether a stripe.confirmPayment error means the PaymentIntent certainly did not succeed, so the
+ * order can be called off on the spot: a decline or a card the bank refused (card_error), details
+ * Stripe would not accept (validation_error), or 3-D Secure the diner failed or closed. A network
+ * or Stripe-side error is NOT one of them: the payment may have gone through, so the order page
+ * asks Stripe instead of cancelling an order that might be paid.
+ */
+export function isDefiniteCardFailure(error: { type?: string | null; code?: string | null } | null | undefined): boolean {
+  if (!error) return false;
+  if (error.type === 'card_error' || error.type === 'validation_error') return true;
+  return error.type === 'invalid_request_error' && error.code === 'payment_intent_authentication_failure';
+}
+
+/** An order the checkout called off because its card failed: not shown in the diner's history. */
+export function isCheckoutCardFailure(order: { status?: string | null; cancellation_reason?: string | null }): boolean {
+  return order.status === 'cancelled' && order.cancellation_reason === CHECKOUT_CARD_FAILED_REASON;
+}

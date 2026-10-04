@@ -30,6 +30,7 @@ describe('cancellationReasonKey', () => {
   const WRITERS: Record<string, string[]> = {
     cardExpired: ['supabase/migrations/20260925100000_stripe_connect_payments.sql'],
     cardSetupFailed: ['supabase/functions/place-order/index.ts'],
+    checkoutCardFailed: ['apps/web/src/lib/card-payment.ts'],
     slipRejected: ['supabase/migrations/20260918100000_branch_staff_parity.sql'],
     customerCancelled: ['apps/web/src/app/r/[restaurant]/[branch]/orders/[orderNumber]/_components/order-actions.tsx'],
     kitchenRejected: ['apps/admin/src/app/kitchen/[branchId]/_components/kitchen-view.tsx'],

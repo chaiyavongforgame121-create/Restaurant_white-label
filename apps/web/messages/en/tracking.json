@@ -32,7 +32,8 @@
       "kitchenCannotMake": "The kitchen can’t make this order.",
       "customerAsked": "Cancelled at your request.",
       "noRider": "No delivery rider was available for this order.",
-      "duplicate": "This order was a duplicate of another one."
+      "duplicate": "This order was a duplicate of another one.",
+      "checkoutCardFailed": "Your card was not charged, so this order was not placed. You went back to the checkout to pay another way."
     }
   },
   "driver": {

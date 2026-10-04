@@ -201,6 +201,8 @@
     "notReady": "The card form is still loading. Wait a moment, then place your order again.",
     "checkDetails": "Check your card details and try again.",
     "loadFailedChooseOther": "The card form could not load — a blocked script or a weak connection can do this. Choose one of the options above, or reload the page to try the card again.",
-    "loadFailedOnly": "The card form could not load — a blocked script or a weak connection can do this. Reload the page to try again."
+    "loadFailedOnly": "The card form could not load — a blocked script or a weak connection can do this. Reload the page to try again.",
+    "declinedTryAnother": "Your card was not charged and no order was placed: {reason} Try another card, or choose another way to pay.",
+    "startFailedTryAnother": "The card payment could not be started, so nothing was charged and no order was placed. Try again, or choose another way to pay."
   }
 }

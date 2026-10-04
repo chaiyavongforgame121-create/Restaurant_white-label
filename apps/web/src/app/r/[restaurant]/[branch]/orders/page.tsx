@@ -3,6 +3,7 @@ import { getTranslations } from 'next-intl/server';
 import { sortOrderLines } from '@favornoms/shared';
 import { EmptyState } from '@favornoms/ui';
 import { getServerClient } from '@favornoms/database/server';
+import { isCheckoutCardFailure } from '@/lib/card-payment';
 import { resolveTenant } from '@/lib/tenant';
 import { OrdersList } from './_components/orders-list';
 
@@ -49,12 +50,13 @@ export default async function OrdersPage({ params }: Props) {
     ? await supabase
         .from('orders')
         .select(
-          'id, order_number, total, status, channel, created_at, order_items(id, menu_item_id, combo_id, item_name, quantity, notes, modifiers, category_position, item_position, created_at)',
+          'id, order_number, total, status, channel, created_at, cancellation_reason, order_items(id, menu_item_id, combo_id, item_name, quantity, notes, modifiers, category_position, item_position, created_at)',
         )
         .eq('customer_id', customerId)
         .eq('branch_id', tenant.branch.id)
         .order('created_at', { ascending: false })
-        .limit(20)
+        // A few more than shown, so the attempts left out below do not shorten the list.
+        .limit(30)
     : { data: null, error: null };
 
   // A failed query must NOT read as "No orders yet" — that is what made a just-placed
@@ -73,7 +75,11 @@ export default async function OrdersPage({ params }: Props) {
     );
   }
 
-  if (!orders || orders.length === 0) {
+  // A card the checkout could not charge called its order off and kept the diner on the checkout
+  // (CHECKOUT_CARD_FAILED_REASON): to them no order was placed, so it is not listed here.
+  const shown = (orders ?? []).filter((o) => !isCheckoutCardFailure(o)).slice(0, 20);
+
+  if (shown.length === 0) {
     return (
       <div className="container pt-6">
         <h1 className="font-display text-2xl font-bold">{t('title')}</h1>
@@ -87,6 +93,6 @@ export default async function OrdersPage({ params }: Props) {
   }
 
   // Each order's dishes in menu order, category by category, as its receipt lists them.
-  const listed = orders.map((o) => ({ ...o, order_items: sortOrderLines(o.order_items ?? []) }));
+  const listed = shown.map((o) => ({ ...o, order_items: sortOrderLines(o.order_items ?? []) }));
   return <OrdersList orders={listed as never[]} base={base} branchId={tenant.branch.id} />;
 }

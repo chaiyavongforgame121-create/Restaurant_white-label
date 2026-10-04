@@ -201,6 +201,8 @@
     "notReady": "El formulario de tarjeta aún se está cargando. Espera un momento y vuelve a hacer tu pedido.",
     "checkDetails": "Revisa los datos de tu tarjeta e inténtalo de nuevo.",
     "loadFailedChooseOther": "No se pudo cargar el formulario de tarjeta; puede pasar si un script está bloqueado o la conexión es débil. Elige una de las opciones de arriba o recarga la página para volver a intentar con tarjeta.",
-    "loadFailedOnly": "No se pudo cargar el formulario de tarjeta; puede pasar si un script está bloqueado o la conexión es débil. Recarga la página para volver a intentarlo."
+    "loadFailedOnly": "No se pudo cargar el formulario de tarjeta; puede pasar si un script está bloqueado o la conexión es débil. Recarga la página para volver a intentarlo.",
+    "declinedTryAnother": "No se cobró tu tarjeta y no se hizo ningún pedido: {reason} Prueba con otra tarjeta o elige otra forma de pago.",
+    "startFailedTryAnother": "No se pudo iniciar el pago con tarjeta, así que no se cobró nada ni se hizo ningún pedido. Inténtalo de nuevo o elige otra forma de pago."
   }
 }

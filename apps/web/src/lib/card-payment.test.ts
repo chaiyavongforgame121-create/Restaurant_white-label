@@ -3,6 +3,9 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   CARD_PAYMENT_TIME_TO_PAY_MINUTES,
+  CHECKOUT_CARD_FAILED_REASON,
+  isCheckoutCardFailure,
+  isDefiniteCardFailure,
   cardFailureReasonKey,
   cardPaymentDeadline,
   cardPaymentErrorCode,
@@ -355,5 +358,26 @@ describe('the card payment copy', () => {
         at(read('en', 'tracking'), `cardPayment.${key}`),
       );
     }
+  });
+});
+
+describe('a card the checkout could not charge', () => {
+  it('cancels on the spot only when Stripe says the payment certainly failed', () => {
+    expect(isDefiniteCardFailure({ type: 'card_error', code: 'card_declined' })).toBe(true);
+    expect(isDefiniteCardFailure({ type: 'card_error', code: 'insufficient_funds' })).toBe(true);
+    expect(isDefiniteCardFailure({ type: 'validation_error' })).toBe(true);
+    expect(isDefiniteCardFailure({ type: 'invalid_request_error', code: 'payment_intent_authentication_failure' })).toBe(true);
+    // The payment may have gone through: the order page asks Stripe instead.
+    expect(isDefiniteCardFailure({ type: 'api_connection_error' })).toBe(false);
+    expect(isDefiniteCardFailure({ type: 'api_error' })).toBe(false);
+    expect(isDefiniteCardFailure({ type: 'invalid_request_error', code: 'payment_intent_unexpected_state' })).toBe(false);
+    expect(isDefiniteCardFailure(null)).toBe(false);
+  });
+
+  it('hides only the orders it called off from the history', () => {
+    expect(isCheckoutCardFailure({ status: 'cancelled', cancellation_reason: CHECKOUT_CARD_FAILED_REASON })).toBe(true);
+    expect(isCheckoutCardFailure({ status: 'cancelled', cancellation_reason: 'Out of stock' })).toBe(false);
+    expect(isCheckoutCardFailure({ status: 'cancelled', cancellation_reason: null })).toBe(false);
+    expect(isCheckoutCardFailure({ status: 'confirmed', cancellation_reason: CHECKOUT_CARD_FAILED_REASON })).toBe(false);
   });
 });
