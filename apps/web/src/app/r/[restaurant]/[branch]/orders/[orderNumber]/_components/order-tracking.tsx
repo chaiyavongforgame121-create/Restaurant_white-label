@@ -206,7 +206,7 @@ export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransf
     const { data } = await supabase
       .from('orders')
       .select(
-        'id, status, deliveries(id, status, driver_id, distance_km, estimated_duration_min, assigned_at, accepted_at, picked_up_at, delivered_at, driver_lat, driver_lng, driver_location_updated_at, current_eta_min, arriving_at, dropoff_lat, dropoff_lng, batch_seq)',
+        'id, status, awaiting_payment, deliveries(id, status, driver_id, distance_km, estimated_duration_min, assigned_at, accepted_at, picked_up_at, delivered_at, driver_lat, driver_lng, driver_location_updated_at, current_eta_min, arriving_at, dropoff_lat, dropoff_lng, batch_seq)',
       )
       .eq('id', order.id)
       .maybeSingle();
@@ -224,6 +224,14 @@ export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransf
       return next;
     });
   }, [order.id]);
+
+  // The card box has confirmed the payment with the server. Realtime normally brings the order row
+  // with awaiting_payment cleared, but it can lag or miss it, and until then the page would still
+  // offer the unpaid order's cancel under a box that says paid. Clear it here and re-read the row.
+  const onCardPaid = React.useCallback(() => {
+    setOrder((curr) => (curr.awaiting_payment ? { ...curr, awaiting_payment: false } : curr));
+    void reload();
+  }, [reload]);
 
   const { healthy: liveHealthy } = useRealtime({
     channel: `order:${order.id}`,
@@ -552,6 +560,7 @@ export function OrderTracking({ initialOrder, branchId, branchLocation, qrTransf
               createdAt={order.created_at}
               total={Number(order.total)}
               payment={cardPayment}
+              onPaid={onCardPaid}
             />
           )}
 

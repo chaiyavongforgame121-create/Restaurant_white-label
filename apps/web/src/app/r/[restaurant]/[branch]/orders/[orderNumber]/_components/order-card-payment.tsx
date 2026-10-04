@@ -41,6 +41,12 @@ interface Props {
   createdAt: string;
   total: number;
   payment: { status: string; gateway_metadata?: Record<string, unknown> | null };
+  /**
+   * Called once this box knows the payment went through while the page still holds the order as
+   * awaiting payment (realtime can lag or miss the update), so the rest of the page stops offering
+   * the unpaid order's cancel.
+   */
+  onPaid?: () => void;
 }
 
 /** How often, and for how long, a payment Stripe reports as processing is asked about again. */
@@ -70,6 +76,7 @@ export function OrderCardPayment({
   createdAt,
   total,
   payment,
+  onPaid,
 }: Props) {
   const t = useTranslations('tracking.cardPayment');
   const locale = useLocale();
@@ -209,6 +216,9 @@ export function OrderCardPayment({
   // box as it was; the page is re-read on the next visit.
   const paidOnLoad = payment.status === 'completed' || payment.status === 'refunded';
   const paidNow = paidOnLoad || status?.state === 'paid';
+  React.useEffect(() => {
+    if (paidNow && awaitingPayment) onPaid?.();
+  }, [paidNow, awaitingPayment, onPaid]);
   React.useEffect(() => {
     if (!hasStripeAccount || !(closed || paidNow)) return;
     let stale = false;
