@@ -14,6 +14,10 @@ interface DriverSessionContextValue {
 
 const DriverSessionContext = React.createContext<DriverSessionContextValue | null>(null);
 
+/** A return to the app re-reads the rider row at most this often: visibilitychange and focus
+ *  usually arrive together, and one read answers both. */
+const RETURN_REREAD_GAP_MS = 5_000;
+
 /**
  * Why the session check could not reach a conclusion. 'no_profile' is a real answer from the
  * server; the other two mean we never got one, which is not the same thing and must never be
@@ -82,7 +86,10 @@ export function DriverSessionProvider({ children }: { children: React.ReactNode 
 
     try {
       const d = await getMyDriver(supabase, userId);
-      setDriver(d);
+      // Keep the object on screen when nothing changed. Every return to the app re-reads the
+      // row now, and a new object each time re-rendered every screen keyed on it (and reset the
+      // restaurant checklist on Home under the rider's thumb).
+      setDriver((prev) => (prev && d && JSON.stringify(prev) === JSON.stringify(d) ? prev : d));
       setProblem(d ? null : 'no_profile');
     } catch {
       // Keep whatever we already have on screen — a rider mid-delivery loses nothing to one
@@ -107,9 +114,25 @@ export function DriverSessionProvider({ children }: { children: React.ReactNode 
     // Coming back into signal should not cost the rider a tap.
     const onOnline = () => void load();
     window.addEventListener('online', onOnline);
+    // Coming back to the app re-reads the row too. Nothing pushes changes to it, so a cooldown
+    // staff lifted from the back office (or one that a decline just started) stayed as it was
+    // on this phone until the app was closed and opened again: a rider told "Lift cooldown"
+    // had worked still saw the countdown and a disabled Go online button.
+    let lastReturnAt = 0;
+    const onReturn = () => {
+      if (document.visibilityState !== 'visible') return;
+      const now = Date.now();
+      if (now - lastReturnAt < RETURN_REREAD_GAP_MS) return;
+      lastReturnAt = now;
+      void load();
+    };
+    document.addEventListener('visibilitychange', onReturn);
+    window.addEventListener('focus', onReturn);
     return () => {
       sub.subscription.unsubscribe();
       window.removeEventListener('online', onOnline);
+      document.removeEventListener('visibilitychange', onReturn);
+      window.removeEventListener('focus', onReturn);
     };
   }, [load, router]);
 

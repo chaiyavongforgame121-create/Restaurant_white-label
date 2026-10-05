@@ -59,24 +59,22 @@
     "moreActions": "More actions",
     "reject": "Reject order",
     "recall": "Recall to kitchen",
-    "redispatch": "Re-dispatch (start over)",
+    "redispatch": "Find rider again (new round)",
     "eightySixHeading": "86 an item",
     "stacked": "🔗 Stacked · stop {stop} — pack both bags for one rider",
     "allergyNote": "Allergy / note: {note}",
     "markLineDone": "Mark {item} done",
     "markLineNotDone": "Mark {item} not done",
-    "soldOut": "Sold out"
+    "soldOut": "Sold out",
+    "stackedWith": "🔗 Stacked with #{other} · stop {stop} — pack both bags for one rider"
   },
   "timer": {
     "hoursMinutes": "{hours}h {minutes}m",
     "daysHours": "{days}d {hours}h"
   },
   "rider": {
-    "finding": "Finding a rider…",
     "assigned": "Rider assigned ✓",
-    "offered": "Rider offered…",
     "onTheWay": "Rider on the way",
-    "notFound": "No rider found — tap to retry",
     "searching": "Searching for a rider…",
     "find": "Find a rider",
     "assign": "Assign to a rider",
@@ -86,7 +84,16 @@
     "gpsStale": "GPS stale",
     "gpsStaleHint": "No GPS ping in the last 5 min — auto-dispatch skips this rider; a targeted offer still works",
     "offline": "Offline",
-    "busy": "On a delivery"
+    "busy": "On a delivery",
+    "searchingAsked": "Searching — asked {count, plural, one {# rider} other {# riders}}",
+    "noRiderFound": "{reason, select, everyoneAsked {No rider found — every rider was asked} cooldown {No rider found — riders on a cooldown} nobodyOnline {No rider found — nobody online} noFreshGps {No rider found — no fresh GPS} allBusy {No rider found — every rider busy} notSetUp {No rider found — rider or branch setup} other {No rider found — search time ran out}}",
+    "offeredTo": "Offered to {name} · {countdown}",
+    "offeredToRider": "Offered to a rider · {countdown}",
+    "offerLapsed": "Offer ran out — asking the next rider…",
+    "findAgain": "Find rider again",
+    "findAgainStack": "Find rider again (both stops)",
+    "notStarted": "Nothing is looking for a rider for this order.",
+    "waiting": "{reason, select, everyoneAsked {Every free rider has been asked — the next one to come online gets it.} cooldown {Riders are on a cooldown — it goes out as soon as one ends.} nobodyOnline {Nobody is online — it goes out when a rider comes online.} noFreshGps {No rider has a fresh GPS fix — it goes out when one does.} allBusy {Every rider is on a delivery — it goes out when one is free.} notSetUp {No rider can be offered it yet — check the riders on Drivers and the branch’s map pin.} other {Waiting for a free rider.}}"
   },
   "vehicle": {
     "motorcycle": "Motorcycle",
@@ -153,8 +160,13 @@
     "allBusy": "{online} online, all already on a delivery.",
     "outOfRangeMiles": "{online} online, but none within {miles} mi — raise “Driver search radius”.",
     "outOfRange": "{online} online, but none within the search radius — raise “Driver search radius”.",
-    "notAllowed": "Your account isn’t allowed to dispatch riders at this branch.",
-    "signInAgain": "Your sign-in has expired. Sign in again to find a rider."
+    "notAuthorized": "Your account isn’t allowed to dispatch riders at this branch.",
+    "authRequired": "Your sign-in has expired. Sign in again to find a rider.",
+    "alreadyAccepted": "A rider has already accepted this one, so there is nothing left to search for.",
+    "noneVerified": "{online} online, but none has verified documents yet.",
+    "allCoolingDown": "{online} online, but all are on a cooldown after missed or declined offers. A manager can lift it on Drivers.",
+    "alreadyAsked": "{asked, plural, one {# rider has} other {# riders have}} already been asked for this order. Find rider again starts a new round that asks everyone.",
+    "someCoolingDown": "{online} online, {cooling} of them on a cooldown after missed or declined offers; the rest are busy or already asked."
   },
   "ops": {
     "busy": "Busy",

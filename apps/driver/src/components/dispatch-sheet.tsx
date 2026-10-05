@@ -6,7 +6,11 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Bike, Check, MapPin, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { formatCurrency, kmToMi } from '@favornoms/shared';
-import { useDelivery, type ActiveDeliveryUI } from './delivery-provider';
+import { secondsLeft, type DispatchNotice } from '@/lib/alerts';
+import { useDelivery, type ActiveDeliveryUI, type DispatchAnswer } from './delivery-provider';
+
+/** How long "this offer is no longer yours" stays up once the sheet has gone. */
+const GONE_TOAST_MS = 6_000;
 
 /**
  * The offer overlay for every screen in the app.
@@ -22,90 +26,151 @@ import { useDelivery, type ActiveDeliveryUI } from './delivery-provider';
  */
 export function DispatchOfferOverlay() {
   const router = useRouter();
-  const { offered, accept, reject } = useDelivery();
+  const t = useTranslations('dispatch');
+  const { offered, offerDeadlineMs, accept, reject } = useDelivery();
 
-  // A buzz is the only alert a rider gets while push is dead, so it follows the sheet out
-  // of Home rather than firing only when they happen to be on that tab.
-  const offeredId = offered?.id;
+  // The arrival alert (an urgent chime every few seconds, and vibration) lives in DriverAlerts
+  // now, keyed on the same offer. It used to be one buzz from here, which an iPhone never felt
+  // and Chrome blocked until the rider had touched the screen.
+
+  // What the server said when it did not take the rider's answer, for the offer it was about.
+  const [notice, setNotice] = React.useState<{ offerId: string; kind: DispatchNotice } | null>(null);
+
+  const answer = async (offerId: string, run: () => Promise<DispatchAnswer>): Promise<boolean> => {
+    const result = await run();
+    if (result.ok) {
+      setNotice(null);
+      return true;
+    }
+    setNotice({ offerId, kind: result.notice });
+    return false;
+  };
+
+  // A refused answer keeps the sheet up while the server is asked what the offer is now. When the
+  // answer is that it moved on, the sheet goes, and this says why rather than letting the offer
+  // simply vanish under the rider's thumb.
+  const goneToast =
+    !offered && notice && (notice.kind === 'offerGone' || notice.kind === 'offerExpired') ? notice.kind : null;
   React.useEffect(() => {
-    if (offeredId && 'vibrate' in navigator) navigator.vibrate([200, 100, 200]);
-  }, [offeredId]);
+    if (!goneToast) return;
+    const id = window.setTimeout(() => setNotice(null), GONE_TOAST_MS);
+    return () => window.clearTimeout(id);
+  }, [goneToast, notice]);
 
   return (
-    <AnimatePresence>
-      {offered && (
-        <DispatchSheet
-          offer={offered}
-          timeoutSeconds={
-            // Server truth (dispatch v2 offer_expires_at); the pg_cron sweep
-            // enforces it even if the app is closed. 45s fallback for legacy offers.
-            offered.offerExpiresAt
-              ? Math.max(
-                  5,
-                  Math.round((new Date(offered.offerExpiresAt).getTime() - Date.now()) / 1000),
-                )
-              : 45
-          }
-          onAccept={() => {
-            void (async () => {
-              const ok = await accept();
+    <>
+      <AnimatePresence>
+        {offered && offerDeadlineMs != null && (
+          <DispatchSheet
+            offer={offered}
+            deadlineMs={offerDeadlineMs}
+            notice={notice?.offerId === offered.id ? notice.kind : null}
+            onAccept={async () => {
+              const ok = await answer(offered.id, accept);
               // Hand the rider straight to the active run instead of leaving them on
               // whatever screen the offer interrupted.
               if (ok) router.push('/app/active');
-            })();
-          }}
-          onReject={() => {
-            void reject('declined');
-          }}
-          onTimeout={() => {
-            void reject('timeout');
-          }}
-        />
+              return ok;
+            }}
+            onReject={() => answer(offered.id, () => reject('declined'))}
+            onTimeout={() => answer(offered.id, () => reject('timeout'))}
+          />
+        )}
+      </AnimatePresence>
+      {goneToast && (
+        <p
+          role="status"
+          className="fixed inset-x-3 bottom-24 z-[125] rounded-2xl bg-foreground/90 px-4 py-3 text-center text-sm font-medium text-background shadow-warm"
+        >
+          {t(`notice.${goneToast}`)}
+        </p>
       )}
-    </AnimatePresence>
+    </>
   );
 }
 
 interface DispatchSheetProps {
   offer: ActiveDeliveryUI;
-  timeoutSeconds: number;
-  onAccept: () => void;
-  onReject: () => void;
-  onTimeout: () => void;
+  /** When the offer is over on this phone (DeliveryProvider offerDeadlineMs). */
+  deadlineMs: number;
+  /** Why the last answer did not go through, if it did not. */
+  notice: DispatchNotice | null;
+  /** Each resolves true when the server took the answer; false leaves the sheet up to retry. */
+  onAccept: () => Promise<boolean>;
+  onReject: () => Promise<boolean>;
+  onTimeout: () => Promise<boolean>;
 }
 
 export function DispatchSheet({
   offer,
-  timeoutSeconds,
+  deadlineMs,
+  notice,
   onAccept,
   onReject,
   onTimeout,
 }: DispatchSheetProps) {
   const t = useTranslations('dispatch');
-  const [remaining, setRemaining] = React.useState(timeoutSeconds);
+  const [now, setNow] = React.useState(() => Date.now());
+  // The full length of the countdown as this sheet first showed it, for the ring around it. Per
+  // offer: a refreshed row for the same offer must not restart the ring.
+  const totalRef = React.useRef<{ id: string; seconds: number } | null>(null);
+  if (totalRef.current?.id !== offer.id) {
+    totalRef.current = { id: offer.id, seconds: Math.max(1, secondsLeft(deadlineMs, Date.now())) };
+  }
+  const total = totalRef.current.seconds;
+  const remaining = secondsLeft(deadlineMs, now);
   const [busy, setBusy] = React.useState(false);
   // Mirror busy in a ref so the countdown closure can see an in-flight accept/reject and
   // suppress the timeout — otherwise a tap at ~0s races a reject('timeout') on the same offer.
   const busyRef = React.useRef(false);
   const onTimeoutRef = React.useRef(onTimeout);
   onTimeoutRef.current = onTimeout;
-
+  const mountedRef = React.useRef(true);
   React.useEffect(() => {
-    setRemaining(timeoutSeconds);
-    const id = setInterval(() => {
-      setRemaining((r) => {
-        if (r <= 1) {
-          clearInterval(id);
-          if (!busyRef.current) onTimeoutRef.current();
-          return 0;
-        }
-        return r - 1;
-      });
-    }, 1000);
-    return () => clearInterval(id);
-  }, [offer.id, timeoutSeconds]);
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
-  const pct = (remaining / timeoutSeconds) * 100;
+  // The countdown reads the clock against the deadline on every tick instead of counting ticks:
+  // a phone that dimmed slows or stops its timers, and a count of ticks then shows seconds the
+  // offer no longer has.
+  React.useEffect(() => {
+    let fired = false;
+    const tick = () => {
+      const at = Date.now();
+      setNow(at);
+      if (at < deadlineMs || fired) return;
+      fired = true;
+      window.clearInterval(id);
+      if (!busyRef.current) void onTimeoutRef.current();
+    };
+    const id = window.setInterval(tick, 1000);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') tick();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    tick();
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [offer.id, deadlineMs]);
+
+  // A tap that the server did not take hands the buttons back, so the rider can try again.
+  const answer = (run: () => Promise<boolean>) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
+    void run().then((ok) => {
+      if (ok || !mountedRef.current) return;
+      busyRef.current = false;
+      setBusy(false);
+    });
+  };
+
+  const pct = (remaining / total) * 100;
   const circumference = 2 * Math.PI * 36;
   const offset = circumference * (1 - pct / 100);
 
@@ -265,16 +330,19 @@ export function DispatchSheet({
           )}
         </div>
 
+        {notice && (
+          <p
+            role="alert"
+            className="mx-5 mb-1 rounded-xl bg-danger/10 px-3 py-2 text-sm font-medium text-danger"
+          >
+            {t(`notice.${notice}`)}
+          </p>
+        )}
         <div className="grid grid-cols-2 gap-3 border-t border-border/60 bg-card px-5 pb-safe pt-4">
           <motion.button
             whileTap={{ scale: 0.96 }}
             disabled={busy}
-            onClick={() => {
-              if (busy) return;
-              busyRef.current = true;
-              setBusy(true);
-              onReject();
-            }}
+            onClick={() => answer(onReject)}
             className="focus-ring inline-flex h-16 items-center justify-center gap-2 rounded-2xl border-2 border-border bg-card text-base font-semibold text-foreground transition-colors hover:bg-muted disabled:opacity-50"
           >
             <X className="h-5 w-5" />
@@ -284,11 +352,9 @@ export function DispatchSheet({
             whileTap={{ scale: 0.96 }}
             disabled={busy}
             onClick={() => {
-              if (busy) return;
-              busyRef.current = true;
-              setBusy(true);
+              if (busyRef.current) return;
               if ('vibrate' in navigator) navigator.vibrate([60, 30, 60]);
-              onAccept();
+              answer(onAccept);
             }}
             className="focus-ring relative inline-flex h-16 items-center justify-center gap-2 overflow-hidden rounded-2xl bg-gradient-warm text-base font-semibold text-white shadow-warm disabled:opacity-60"
           >

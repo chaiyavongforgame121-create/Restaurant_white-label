@@ -1,4 +1,22 @@
 import type { BranchRider, LiveDelivery } from '@favornoms/database/queries';
+import {
+  dispatchLine,
+  findRiderAction,
+  type DispatchAnswer,
+  type DispatchLine,
+  type FindRiderAction,
+  type NoRiderReason,
+  type OfferRef,
+} from './dispatch-model';
+
+// The dispatch wording both boards share lives in dispatch-model; re-exported so this board's
+// callers keep one import.
+export {
+  describeDispatchFailure,
+  type DispatchFailure,
+  type DispatchFailureKey,
+  type DispatchFailureText,
+} from './dispatch-model';
 
 // Everything the Live deliveries board decides without touching React or the network:
 // what a card says (as keys and values — the view words it in the reader's language),
@@ -69,6 +87,8 @@ export type AgeSpan =
 export type StatusLabelKey =
   | 'waitingKitchen'
   | 'findingRider'
+  | 'noRiderFound'
+  | 'notSearching'
   | 'readyToGo'
   | 'riderAccepted'
   | 'offered'
@@ -97,6 +117,12 @@ export type DeliveryDetail =
   | { key: 'riderCancelled'; reason: string }
   | { key: 'askedRiders'; count: number }
   | { key: 'lookingForRider' }
+  /** Every eligible rider has been asked; the server waits for one to become free. */
+  | { key: 'waiting'; count: number; reason: NoRiderReason | 'none' }
+  /** The round's search window ran out (only ever on the server's word). */
+  | { key: 'noRiderFound'; reason: NoRiderReason }
+  /** Ready, waiting for a rider, and nothing on the server is looking. */
+  | { key: 'notSearching' }
   | { key: 'selfStaff' }
   | { key: 'noRiderHolds' }
   | { key: 'acceptedAgo'; age: AgeSpan }
@@ -197,11 +223,42 @@ export function offerOpen(d: Pick<LiveDelivery, 'status' | 'driver_id' | 'accept
   return Number.isFinite(exp) && exp > nowMs;
 }
 
+/** What else a card's dispatch line is read with, beyond its own row. */
+export interface DispatchContext {
+  /** The other stops of this delivery's stack (same batch_id): one round, one rider count. */
+  stack?: readonly LiveDelivery[];
+  /** This screen's last dispatch-driver answer for the delivery. */
+  answer?: DispatchAnswer | null;
+  /** The rider turns of the other stops, so a rider asked for either stop counts once. */
+  stackAssignments?: readonly DeliveryAssignmentRef[];
+}
+
+/** Rider turns as the dispatch model counts them: who was offered, and when. */
+function offersOf(assignments: readonly DeliveryAssignmentRef[]): OfferRef[] {
+  return assignments.map((a) => ({ driver_id: a.driver_id, offered_at: a.offered_at }));
+}
+
+/** The server's dispatch state for one card, read with its stack, turns and last answer. */
+export function liveDispatchLine(
+  d: LiveDelivery,
+  nowMs: number,
+  assignments: readonly DeliveryAssignmentRef[] = [],
+  ctx: DispatchContext = {},
+): DispatchLine {
+  return dispatchLine(d, {
+    nowMs,
+    stack: ctx.stack ?? [],
+    answer: ctx.answer ?? null,
+    offers: offersOf([...assignments, ...(ctx.stackAssignments ?? [])]),
+  });
+}
+
 export function describeDelivery(
   d: LiveDelivery,
   nowMs: number,
   selfDelivery: boolean,
   assignments: readonly DeliveryAssignmentRef[] = [],
+  ctx: DispatchContext = {},
 ): DeliveryDescription {
   const age = msSince(d.created_at, nowMs) ?? 0;
   const kitchen = d.order?.status;
@@ -217,18 +274,45 @@ export function describeDelivery(
       return { label: { key: 'waitingKitchen' }, variant: 'muted', detail, overdue: age > OVERDUE_AFTER_MS };
     }
     case 'dispatching': {
-      const n = d.dispatch_attempts;
+      const line = liveDispatchLine(d, nowMs, assignments, ctx);
+      const overdue = age > OVERDUE_AFTER_MS;
+      // The verdict is the server's (deliveries.dispatch_state), never a clock on this side.
+      if (line.kind === 'noRiderFound') {
+        return {
+          label: { key: 'noRiderFound' },
+          variant: 'danger',
+          detail: { key: 'noRiderFound', reason: line.reason },
+          overdue: true,
+        };
+      }
+      if (line.kind === 'notStarted') {
+        return { label: { key: 'notSearching' }, variant: 'danger', detail: { key: 'notSearching' }, overdue };
+      }
       // A row back in the pool because a rider walked away is not the same as a row nobody has
       // answered yet, and "Asked 3 riders so far" said nothing about which one it was. The
-      // rider's own words win over the attempt count whenever there are any.
+      // rider's own words win over the count whenever there are any.
       const walked = lastEndedWithReason(assignments);
-      const detail: DeliveryDetail =
-        walked?.end_reason && walked.end_kind?.startsWith('driver_cancelled')
-          ? { key: 'riderCancelled', reason: walked.end_reason }
-          : n > 0
-            ? { key: 'askedRiders', count: n }
-            : { key: 'lookingForRider' };
-      return { label: { key: 'findingRider' }, variant: 'warning', detail, overdue: age > OVERDUE_AFTER_MS };
+      if (walked?.end_reason && walked.end_kind?.startsWith('driver_cancelled')) {
+        return {
+          label: { key: 'findingRider' },
+          variant: 'warning',
+          detail: { key: 'riderCancelled', reason: walked.end_reason },
+          overdue,
+        };
+      }
+      if (line.kind === 'waiting') {
+        return {
+          label: { key: 'findingRider' },
+          variant: 'warning',
+          detail: { key: 'waiting', count: line.asked, reason: line.why ?? 'none' },
+          overdue,
+        };
+      }
+      // Searching, or read without dispatch_state (the count then falls back to the attempts the
+      // row records, which is what this card printed before the server ran rounds).
+      const n = line.kind === 'unknown' ? Math.max(line.asked, d.dispatch_attempts) : 'asked' in line ? line.asked : 0;
+      const detail: DeliveryDetail = n > 0 ? { key: 'askedRiders', count: n } : { key: 'lookingForRider' };
+      return { label: { key: 'findingRider' }, variant: 'warning', detail, overdue };
     }
     case 'assigned': {
       if (!d.driver_id) {
@@ -322,14 +406,18 @@ export function canAssign(d: LiveDelivery, selfDelivery: boolean): boolean {
 }
 
 /**
- * Auto-dispatch only makes sense once there is food to collect: dispatch-driver offers
- * the job the moment it is called, and a rider sent to a kitchen that has not started is
- * a rider who leaves.
+ * The rider-search button a card offers, if any. Only once there is food to collect: the
+ * server offers the job the moment it is asked, and a rider sent to a kitchen that has not
+ * started is a rider who leaves. `start` when nothing is looking for a rider; `restart` ("Find
+ * rider again", a new round) only once the server has said no rider was found. While a round
+ * is searching or waiting there is no button: the server is already on it, and a second
+ * search on top of it is how one rider used to be offered the same order three times.
  */
-export function canFindRider(d: LiveDelivery, selfDelivery: boolean): boolean {
-  if (selfDelivery) return false;
-  if (d.status !== 'pending' && d.status !== 'dispatching') return false;
-  return d.order?.status === 'ready';
+export function findRiderFor(d: LiveDelivery, selfDelivery: boolean, line: DispatchLine): FindRiderAction {
+  if (selfDelivery) return null;
+  if (d.status !== 'pending' && d.status !== 'dispatching') return null;
+  if (d.order?.status !== 'ready') return null;
+  return findRiderAction(line);
 }
 
 /** Cancelling from here is only offered while the food is still in the shop. */
@@ -353,6 +441,27 @@ export function riderPinState(r: BranchRider, nowMs: number, maxGpsAgeMin: numbe
   return 'stale';
 }
 
+/**
+ * Whether a rider is on the strike cooldown right now. cooldown_until is the truth when the
+ * server sends it (it also says until when); an older list_branch_riders only sent the flag.
+ */
+export function riderCoolingDown(r: Pick<BranchRider, 'cooling_down' | 'cooldown_until'>, nowMs: number): boolean {
+  if (r.cooldown_until) {
+    const until = new Date(r.cooldown_until).getTime();
+    return Number.isFinite(until) ? until > nowMs : r.cooling_down;
+  }
+  return r.cooling_down;
+}
+
+/**
+ * A rider the server could offer a job to right now: online with a fresh fix, free, and not on
+ * a cooldown. "Ready" on the header used to count a rider on a cooldown, so the board said a
+ * rider was ready while every search skipped them.
+ */
+export function riderReady(r: BranchRider, nowMs: number, maxGpsAgeMin: number): boolean {
+  return riderPinState(r, nowMs, maxGpsAgeMin) === 'available' && !riderCoolingDown(r, nowMs);
+}
+
 export function riderMapPosition(r: BranchRider): { lat: number; lng: number } | null {
   if (r.lat == null || r.lng == null) return null;
   if (!Number.isFinite(r.lat) || !Number.isFinite(r.lng)) return null;
@@ -363,6 +472,8 @@ export function riderMapPosition(r: BranchRider): { lat: number; lng: number } |
 export interface BoardCounts {
   waitingKitchen: number;
   findingRider: number;
+  /** The server's round ended with nobody (dispatch_state no_rider_found): someone has to act. */
+  noRiderFound: number;
   offered: number;
   accepted: number;
   onTheWay: number;
@@ -370,14 +481,23 @@ export interface BoardCounts {
 }
 
 export function boardCounts(ds: readonly LiveDelivery[]): BoardCounts {
-  const c: BoardCounts = { waitingKitchen: 0, findingRider: 0, offered: 0, accepted: 0, onTheWay: 0, failed: 0 };
+  const c: BoardCounts = {
+    waitingKitchen: 0,
+    findingRider: 0,
+    noRiderFound: 0,
+    offered: 0,
+    accepted: 0,
+    onTheWay: 0,
+    failed: 0,
+  };
   for (const d of ds) {
     switch (d.status) {
       case 'pending':
         c.waitingKitchen += 1;
         break;
       case 'dispatching':
-        c.findingRider += 1;
+        if (d.dispatch_state === 'no_rider_found') c.noRiderFound += 1;
+        else c.findingRider += 1;
         break;
       case 'assigned':
         if (!d.driver_id) c.findingRider += 1;
@@ -412,94 +532,6 @@ export function partitionStale(ds: readonly LiveDelivery[], nowMs: number): { li
   const stale: LiveDelivery[] = [];
   for (const d of ds) (isStale(d, nowMs) ? stale : live).push(d);
   return { live, stale };
-}
-
-export interface DispatchFailure {
-  error?: string;
-  diagnostics?: {
-    branch_has_pin?: boolean;
-    max_gps_age_min?: number;
-    radius_km?: number;
-    approved?: number;
-    online?: number;
-    has_location?: number;
-    gps_fresh?: number;
-    in_radius?: number;
-    not_busy?: number;
-  } | null;
-}
-
-export type DispatchFailureKey =
-  | 'maxAttempts'
-  | 'notEntitled'
-  | 'notDispatchable'
-  | 'authRequired'
-  | 'notAuthorized'
-  | 'failed'
-  | 'noneAvailable'
-  | 'noPin'
-  | 'noneApproved'
-  | 'noneOnline'
-  | 'noLocation'
-  | 'gpsStale'
-  | 'allBusy'
-  | 'outOfRangeMiles'
-  | 'outOfRange';
-
-/** A sentence to show, as a key under `deliveries.dispatch` plus its values. */
-export interface DispatchFailureText {
-  key: DispatchFailureKey;
-  values?: Record<string, number>;
-  /** The server's own code when this screen does not know it — for the log, never the screen. */
-  code?: string;
-}
-
-/** Turn dispatch-driver's gate counts into the one sentence that tells the merchant where
- *  to look. Ordered from "nothing is set up" to "everyone is busy", so the first failing
- *  gate is the one reported. Mirrors the kitchen display's reading of the same payload.
- *  `status` is the HTTP status of the response the body came from. */
-export function describeDispatchFailure(body: DispatchFailure | null, status?: number): DispatchFailureText {
-  // Every answer dispatch-driver writes itself carries `error`, and its no-rider answer also
-  // carries `diagnostics`. A body with neither never reached the function: the platform
-  // gateway rejected the JWT itself (401 {"code":401,"message":"Invalid JWT"}, e.g. a stale
-  // token after a key rotation) or failed (5xx). Reading that as "no rider available" sent
-  // the merchant after riders, and nothing was logged.
-  if (!body?.error && !body?.diagnostics) {
-    if (status === 401) return { key: 'authRequired' };
-    if (status === 403) return { key: 'notAuthorized' };
-    return status != null ? { key: 'failed', code: `http_${status}` } : { key: 'failed' };
-  }
-  if (body?.error && body.error !== 'no_drivers_available') {
-    if (body.error === 'max_attempts_reached') return { key: 'maxAttempts' };
-    // Only a dispatch-driver older than v2.5 sends this. From v2.5 a delivery that exists is
-    // dispatched whatever the branch's switch or billing says (the rule in
-    // supabase/functions/_shared/entitlements.ts); kept so a stale deployment still reads right.
-    if (body.error === 'feature_not_entitled') return { key: 'notEntitled' };
-    if (body.error === 'delivery_not_dispatchable') return { key: 'notDispatchable' };
-    // dispatch-driver's two refusals (401, 403), both before anything is written: the session
-    // has expired, or the caller lacks delivery.manage at the delivery's branch.
-    if (body.error === 'auth_required') return { key: 'authRequired' };
-    if (body.error === 'not_authorized') return { key: 'notAuthorized' };
-    // Any other code is server vocabulary, not a sentence for the merchant.
-    return { key: 'failed', code: body.error };
-  }
-  const d = body?.diagnostics;
-  if (!d) return { key: 'noneAvailable' };
-  if (d.branch_has_pin === false) return { key: 'noPin' };
-  if (!d.approved) return { key: 'noneApproved' };
-  if (!d.online) return { key: 'noneOnline', values: { approved: d.approved } };
-  if (!d.has_location) return { key: 'noLocation', values: { online: d.online } };
-  if (!d.gps_fresh) {
-    return { key: 'gpsStale', values: { online: d.online, minutes: d.max_gps_age_min ?? 5 } };
-  }
-  if (!d.not_busy) return { key: 'allBusy', values: { online: d.online } };
-  if (!d.in_radius) {
-    const mi = d.radius_km != null ? Math.round(d.radius_km / 1.609344) : null;
-    return mi != null
-      ? { key: 'outOfRangeMiles', values: { online: d.online, miles: mi } }
-      : { key: 'outOfRange', values: { online: d.online } };
-  }
-  return { key: 'noneAvailable' };
 }
 
 /**

@@ -18,7 +18,8 @@
     "failed": "{count} thất bại",
     "ridersReady": "{ready}/{total} tài xế đã duyệt sẵn sàng",
     "live": "Trực tiếp",
-    "reconnecting": "Đang kết nối lại…"
+    "reconnecting": "Đang kết nối lại…",
+    "noRiderFound": "{count} không tìm thấy tài xế"
   },
   "map": {
     "fitAll": "Xem tất cả",
@@ -49,7 +50,8 @@
     "riders": "Tài xế",
     "riderOnJob": "Đang giao đơn",
     "riderOffline": "Ngoại tuyến",
-    "riderGps": "GPS {age}"
+    "riderGps": "GPS {age}",
+    "riderCooldown": "Tạm khóa đến {time}"
   },
   "card": {
     "waiting": "Đã chờ {age}",
@@ -67,7 +69,10 @@
     "cancelOrder": "Hủy đơn",
     "viewOrder": "Xem đơn",
     "withRider": "Món đã ở chỗ tài xế — nếu không giao được, hãy hoàn tiền trong Đơn hàng.",
-    "retryFromScratch": "Thử lại từ đầu"
+    "retryFromScratch": "Thử lại từ đầu",
+    "findAgain": "Tìm tài xế lại",
+    "findAgainStack": "Tìm tài xế lại (cả hai điểm)",
+    "stackedWith": "Giao ghép với {number}"
   },
   "status": {
     "waitingKitchen": "Đang chờ bếp",
@@ -79,7 +84,9 @@
     "arriving": "Sắp đến nơi",
     "onTheWay": "Đang giao",
     "failed": "Thất bại — cần bạn xử lý",
-    "unknown": "{status}"
+    "unknown": "{status}",
+    "noRiderFound": "Không tìm thấy tài xế",
+    "notSearching": "Chưa tìm"
   },
   "detail": {
     "kitchenReady": "Bếp báo đã xong — chưa mời tài xế nào",
@@ -96,7 +103,11 @@
     "pickedUpAgo": "Đã lấy hàng {age} trước",
     "atDoor": "Tài xế đã đến cửa",
     "etaUnknown": "Chưa rõ giờ đến — đang chờ GPS của tài xế",
-    "noReason": "Không ghi lý do"
+    "noReason": "Không ghi lý do",
+    "waiting": "{reason, select, everyoneAsked {Đã mời hết tài xế đang rảnh — người đầu tiên bật nhận đơn sẽ nhận đơn này.} cooldown {Các tài xế đang bị tạm khóa nhận đơn — đơn sẽ được gửi ngay khi có người hết hạn.} nobodyOnline {Không có tài xế nào bật nhận đơn — đơn sẽ được gửi khi có người bật.} noFreshGps {Không tài xế nào có GPS mới — đơn sẽ được gửi khi có người cập nhật vị trí.} allBusy {Mọi tài xế đều đang giao đơn — đơn sẽ được gửi khi có người rảnh.} notSetUp {Chưa thể mời tài xế nào — hãy kiểm tra tài xế trong mục Tài xế và vị trí chi nhánh trên bản đồ.} other {Đang chờ tài xế rảnh.}}",
+    "noRiderFound": "{reason, select, everyoneAsked {Đã mời hết mọi tài xế nhưng không ai nhận} cooldown {Các tài xế có thể nhận đang bị tạm khóa} nobodyOnline {Không có tài xế nào bật nhận đơn} noFreshGps {Không tài xế nào có GPS mới} allBusy {Mọi tài xế đều đang giao đơn khác} notSetUp {Không thể mời tài xế nào — hãy kiểm tra tài xế trong mục Tài xế và vị trí chi nhánh trên bản đồ} other {Đã hết thời gian tìm}}",
+    "notSearching": "Chưa có ai tìm tài xế — nhấn Tìm tài xế",
+    "offeredTo": "Đã mời {name} · {countdown}"
   },
   "age": {
     "unknown": "—",
@@ -121,7 +132,12 @@
     "gpsStale": "{online} tài xế đang bật nhận đơn nhưng không có vị trí nào mới hơn {minutes} phút. Ứng dụng tài xế chỉ gửi GPS khi đang mở trên màn hình.",
     "allBusy": "{online} tài xế đang bật nhận đơn, tất cả đều đang giao đơn.",
     "outOfRangeMiles": "{online} tài xế đang bật nhận đơn nhưng không ai trong phạm vi {miles} dặm — hãy tăng “Bán kính tìm tài xế”.",
-    "outOfRange": "{online} tài xế đang bật nhận đơn nhưng không ai trong bán kính tìm kiếm — hãy tăng “Bán kính tìm tài xế”."
+    "outOfRange": "{online} tài xế đang bật nhận đơn nhưng không ai trong bán kính tìm kiếm — hãy tăng “Bán kính tìm tài xế”.",
+    "alreadyAccepted": "Đã có tài xế nhận đơn này, không cần tìm thêm.",
+    "noneVerified": "{online} tài xế đang bật nhận đơn nhưng chưa ai được xác minh giấy tờ.",
+    "allCoolingDown": "{online} tài xế đang bật nhận đơn nhưng tất cả đều bị tạm khóa do bỏ lỡ hoặc từ chối lời mời. Quản lý có thể gỡ khóa trong mục Tài xế.",
+    "alreadyAsked": "Đã mời {asked} tài xế cho đơn này. “Tìm tài xế lại” sẽ bắt đầu vòng mới, mời lại tất cả.",
+    "someCoolingDown": "{online} tài xế đang bật nhận đơn, {cooling} người bị tạm khóa do bỏ lỡ hoặc từ chối lời mời; số còn lại đang bận hoặc đã được mời."
   },
   "rpcErrors": {
     "driverBusy": "Tài xế này đang giao đơn khác.",
@@ -154,9 +170,10 @@
     },
     "blockedBusy": "Đang giao đơn khác",
     "blockedDocs": "Giấy tờ chưa xác minh",
-    "blockedCooldown": "Đang tạm khóa do từ chối đơn",
+    "blockedCooldown": "Đang tạm khóa — gỡ khóa trong mục Tài xế",
     "lastSeen": "{vehicle} · hoạt động {age} trước",
-    "close": "Đóng"
+    "close": "Đóng",
+    "blockedCooldownUntil": "Tạm khóa đến {time} — gỡ khóa trong mục Tài xế"
   },
   "vehicle": {
     "motorcycle": "Xe máy",

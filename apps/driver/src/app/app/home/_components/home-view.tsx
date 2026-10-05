@@ -13,6 +13,7 @@ import { Card, cn } from '@favornoms/ui';
 import { useDriver } from '@/store/driver';
 import { useDriverSession } from '@/components/driver-session';
 import { useDelivery } from '@/components/delivery-provider';
+import { SoundQuickToggle } from '@/components/alert-settings';
 import { DriverInstallRow } from '@/components/install-app-button';
 import { AvailabilitySheet } from './availability-sheet';
 
@@ -253,6 +254,8 @@ export function HomeView() {
 
         {/* Content */}
         <div className="relative z-10 px-5 pt-6 text-center text-white">
+          {/* The offer ring's switch, where a rider about to go online can see it is on. */}
+          <SoundQuickToggle className="absolute left-5 top-6" />
           {driver.battery_level != null && (
             <div className="absolute right-5 top-6 flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold ring-1 ring-white/20 backdrop-blur">
               <Battery className="h-4 w-4" />

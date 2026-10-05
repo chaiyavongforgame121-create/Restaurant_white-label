@@ -53,6 +53,9 @@ export async function quoteDelivery(
 // geography (PostgREST hands it back as WKB hex) and drivers is not in the realtime
 // publication, so the board polls it rather than subscribing.
 
+/** deliveries.dispatch_state — see LiveDelivery.dispatch_state. */
+export type DeliveryDispatchState = 'searching' | 'waiting' | 'no_rider_found';
+
 export type LiveDeliveryStatus = Extract<
   DeliveryStatus,
   'pending' | 'dispatching' | 'assigned' | 'picked_up' | 'in_transit' | 'failed'
@@ -117,6 +120,22 @@ export interface LiveDelivery {
   created_at: string;
   failed_reason: string | null;
   dispatch_attempts: number;
+  /**
+   * Where the server's dispatch round stands (docs/DISPATCH-FIXES-2026-10-05.md D2/D7):
+   * `searching` while riders are being offered it one by one, `waiting` once every eligible
+   * rider has been asked and the sweep is waiting for a new one, `no_rider_found` when the
+   * search window ran out. Null outside a round. The boards print this instead of guessing
+   * from a clock, which is how "No rider found" used to appear while nothing was running.
+   * Optional because rows built by hand (tests, realtime payloads) may not carry it.
+   */
+  dispatch_state?: DeliveryDispatchState | null;
+  /** When the current round started: the ready trigger, or a staff "Find rider again". */
+  dispatch_round_started_at?: string | null;
+  /** The per-offer log (offered / rejected / offer_expired / withdrawn / waiting / no_rider_found). */
+  dispatch_history?: unknown;
+  /** Set on both stops of a stacked offer (one rider, two orders). */
+  batch_id?: string | null;
+  batch_seq?: number | null;
   order: LiveDeliveryOrder | null;
   driver: LiveDeliveryRider | null;
 }
@@ -127,7 +146,8 @@ export interface LiveDelivery {
 const LIVE_DELIVERY_SELECT =
   'id, status, driver_id, driver_lat, driver_lng, driver_location_updated_at, dropoff_lat, dropoff_lng, ' +
   'current_eta_min, estimated_duration_min, arriving_at, offered_at, offer_expires_at, accepted_at, ' +
-  'picked_up_at, created_at, failed_reason, dispatch_attempts, ' +
+  'picked_up_at, created_at, failed_reason, dispatch_attempts, dispatch_state, dispatch_round_started_at, ' +
+  'dispatch_history, batch_id, batch_seq, ' +
   'orders!inner(id, order_number, status, customer_name, customer_phone, delivery_address), ' +
   'driver:drivers(id, full_name, phone, vehicle_type)';
 
@@ -147,6 +167,11 @@ export function normalizeLiveDelivery(raw: RawLiveDelivery): LiveDelivery {
   return {
     ...rest,
     dispatch_attempts: Number(rest.dispatch_attempts ?? 0),
+    dispatch_state: rest.dispatch_state ?? null,
+    dispatch_round_started_at: rest.dispatch_round_started_at ?? null,
+    dispatch_history: rest.dispatch_history ?? null,
+    batch_id: rest.batch_id ?? null,
+    batch_seq: rest.batch_seq == null ? null : Number(rest.batch_seq),
     order: firstOf(orders),
     driver: firstOf(driver),
   };
@@ -183,6 +208,13 @@ export interface BranchRider {
   online: boolean;
   kyc_verified: boolean;
   cooling_down: boolean;
+  /**
+   * drivers.cooldown_until: set by the strike rule (2 missed or declined offers in 24 h) and
+   * lifted early only by lift_driver_cooldown. The cooldown is the rider's, not the branch's, so
+   * it stops offers at every branch they ride for. Null when not cooling down, and on a database
+   * whose list_branch_riders predates the column.
+   */
+  cooldown_until: string | null;
   lat: number | null;
   lng: number | null;
   location_updated_at: string | null;
@@ -206,8 +238,105 @@ export async function listBranchRiders(
   if (error) throw new Error(`branch_riders_read_failed: ${error.message}`);
   return ((data ?? []) as unknown as BranchRider[]).map((r) => ({
     ...r,
+    cooldown_until: r.cooldown_until ?? null,
     lat: r.lat == null ? null : Number(r.lat),
     lng: r.lng == null ? null : Number(r.lng),
     battery_level: r.battery_level == null ? null : Number(r.battery_level),
   }));
+}
+
+// ---------------------------------------------------------------------------------------
+// Staff dispatch. The kitchen board and Live deliveries ask the dispatch-driver edge function
+// (a thin authenticated wrapper over public.staff_dispatch_delivery) for a rider. Both read
+// the answer the same way, so the call lives here once.
+
+/** What dispatch-driver answered: its HTTP status and JSON body, exactly as sent. */
+export interface DispatchDriverReply {
+  /** Null when no answer came back at all (offline, the request was cut off). */
+  status: number | null;
+  /** The parsed JSON body, or null when there was none or it was not JSON. */
+  body: unknown;
+}
+
+/**
+ * Ask the server for a rider for one delivery. `restart: false` continues the current round
+ * (or starts one when none is running); `restart: true` is "Find rider again": a new round in
+ * which every rider may be asked again, refused with 409 already_accepted once a rider has
+ * accepted (docs/DISPATCH-FIXES-2026-10-05.md D6). Never throws: supabase-js hides a non-2xx
+ * body behind error.context, and that body (why no rider was found) is the whole point.
+ */
+export async function invokeDispatchDriver(
+  supabase: FavornomsClient,
+  target: { deliveryId: string } | { orderId: string },
+  restart = false,
+): Promise<DispatchDriverReply> {
+  const base = 'deliveryId' in target ? { delivery_id: target.deliveryId } : { order_id: target.orderId };
+  try {
+    const result = await supabase.functions.invoke('dispatch-driver', {
+      body: restart ? { ...base, reset: true } : base,
+    });
+    const { data, error } = result;
+    // 200 is an offer, 202 a round still waiting for a free rider: both arrive as success.
+    if (!error) {
+      const res = (result as { response?: Response }).response;
+      return { status: typeof res?.status === 'number' ? res.status : 200, body: data ?? null };
+    }
+    const ctx = (error as unknown as { context?: unknown }).context;
+    if (ctx && typeof (ctx as Response).json === 'function') {
+      const res = ctx as Response;
+      const body = await res.json().catch(() => null);
+      return { status: typeof res.status === 'number' ? res.status : null, body };
+    }
+    return { status: null, body: null };
+  } catch {
+    return { status: null, body: null };
+  }
+}
+
+// ---------------------------------------------------------------------------------------
+// Rider cooldown. Two missed or declined offers in 24 hours put a rider on a cooldown
+// (drivers.cooldown_until) that stops every offer at every branch they ride for. Staff can
+// lift it early through public.lift_driver_cooldown (D8): a platform admin, or a manager with
+// drivers.manage at EVERY branch where the rider is not rejected — the same rule as KYC,
+// because the cooldown is one value for all of them.
+
+/** Why a lift did not happen, as a key under drivers.cooldown. */
+export type LiftCooldownFailure = 'alreadyOver' | 'forbidden' | 'sharedForbidden' | 'failed';
+
+export type LiftCooldownOutcome =
+  | { ok: true; /** The cooldown end that was cleared. */ wasUntil: string }
+  | { ok: false; reason: LiftCooldownFailure; /** The database's words, for the log only. */ message?: string };
+
+/**
+ * The exception lift_driver_cooldown raised, as the rule it stands for. The shared case is
+ * tested first: its message ('forbidden: cooldown_shared_with_other_branch') contains
+ * 'forbidden' too. Anything unrecognised (a dropped connection, a missing function before the
+ * migration ran) is 'failed', and the caller logs the raw message.
+ */
+export function liftCooldownFailure(message: string): Exclude<LiftCooldownFailure, 'alreadyOver'> {
+  if (/shared_with_other_branch/i.test(message)) return 'sharedForbidden';
+  if (/\bforbidden\b/i.test(message)) return 'forbidden';
+  return 'failed';
+}
+
+/**
+ * Lift one rider's cooldown. The function returns the cleared end time, or null when there was
+ * nothing to lift (it ended on its own, or someone else lifted it first) — which is not an
+ * error, but the merchant should be told rather than shown a success for nothing.
+ */
+export async function liftDriverCooldown(
+  supabase: FavornomsClient,
+  driverId: string,
+  branchId: string,
+  note?: string | null,
+): Promise<LiftCooldownOutcome> {
+  const trimmed = note?.trim() ?? '';
+  const { data, error } = await supabase.rpc('lift_driver_cooldown', {
+    p_driver_id: driverId,
+    p_branch_id: branchId,
+    p_note: trimmed === '' ? null : trimmed,
+  } as never);
+  if (error) return { ok: false, reason: liftCooldownFailure(error.message), message: error.message };
+  if (data == null) return { ok: false, reason: 'alreadyOver' };
+  return { ok: true, wasUntil: String(data) };
 }

@@ -10,6 +10,7 @@ import {
 import { Badge, Button, Card, vehicleTypeIcon } from '@favornoms/ui';
 import { getBrowserClient } from '@favornoms/database/client';
 import { useDriverSession } from '@/components/driver-session';
+import { AlertSettingRows } from '@/components/alert-settings';
 import { DriverInstallRow } from '@/components/install-app-button';
 import { LocaleSwitcher } from '@/components/locale-switcher';
 import { listDriverDocuments } from './document-storage';
@@ -185,6 +186,8 @@ export function ProfileView() {
             <ChevronRight className="h-5 w-5 text-muted-foreground" />
           </button>
         </li>
+        {/* Offer sound and keeping the screen on: per phone, not per account. */}
+        <AlertSettingRows />
         {/* Changing it reloads the app in the chosen language. Restaurant names, branch
             names and anything a merchant typed stay as they were entered. */}
         <li>

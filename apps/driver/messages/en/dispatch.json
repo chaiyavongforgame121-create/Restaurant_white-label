@@ -19,5 +19,12 @@
   "orderStop": "{orderNumber} · stop {stop}",
   "accept": "Accept",
   "reject": "Reject",
-  "unnamedBranch": "Restaurant"
+  "unnamedBranch": "Restaurant",
+  "notice": {
+    "offerGone": "This offer is no longer yours. It expired or went to another rider.",
+    "offerExpired": "This offer has expired.",
+    "noSignal": "No signal, so your answer did not arrive. Try again.",
+    "declineFailed": "Couldn’t decline this offer. Try again.",
+    "acceptFailed": "Couldn’t accept this offer. Try again."
+  }
 }

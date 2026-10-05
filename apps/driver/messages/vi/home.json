@@ -101,5 +101,9 @@
       "saveFailed": "Không thêm được giờ làm — hãy kiểm tra kết nối và thử lại.",
       "removeFailed": "Không xóa được khung giờ — hãy kiểm tra kết nối và thử lại."
     }
+  },
+  "sound": {
+    "turnOn": "Bật âm thanh báo đơn",
+    "turnOff": "Tắt âm thanh báo đơn"
   }
 }

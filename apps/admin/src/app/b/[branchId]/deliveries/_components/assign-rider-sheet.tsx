@@ -5,7 +5,7 @@ import { Loader2, UserRound } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import type { BranchRider } from '@favornoms/database/queries';
 import { Button, Sheet } from '@favornoms/ui';
-import { ageSpan, riderPinState, type RiderPinState } from './live-ops-model';
+import { ageSpan, riderCoolingDown, riderPinState, type RiderPinState } from './live-ops-model';
 import { useLiveOpsText } from './live-ops-text';
 
 // Put a named rider on a delivery by hand. This is the way out of a dispatch that never
@@ -112,13 +112,18 @@ export function AssignRiderSheet({
       ) : (
         <ul className="mt-4 space-y-1">
           {ordered.map(({ rider, state }) => {
+            // A cooldown says until when: the merchant deciding whether to wait for this rider,
+            // or to lift it on Drivers, needs the time, not just "cooling down".
+            const coolingUntil = riderCoolingDown(rider, nowMs) ? text.cooldownEnd(rider.cooldown_until, nowMs) : null;
             const blocked =
               state === 'busy'
                 ? t('assign.blockedBusy')
                 : !rider.kyc_verified
                   ? t('assign.blockedDocs')
-                  : rider.cooling_down
-                    ? t('assign.blockedCooldown')
+                  : riderCoolingDown(rider, nowMs)
+                    ? coolingUntil
+                      ? t('assign.blockedCooldownUntil', { time: coolingUntil })
+                      : t('assign.blockedCooldown')
                     : null;
             return (
               <li key={rider.driver_id}>

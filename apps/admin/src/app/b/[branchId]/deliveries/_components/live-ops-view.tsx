@@ -15,6 +15,7 @@ import { getBrowserClient } from '@favornoms/database/client';
 import { useRealtime } from '@favornoms/database/realtime';
 import {
   LIVE_DELIVERY_STATUSES,
+  invokeDispatchDriver,
   listBranchRiders,
   listLiveDeliveries,
   type BranchRider,
@@ -28,23 +29,23 @@ import {
   boardCounts,
   canAssign,
   canCancelDelivery,
-  canFindRider,
   describeDelivery,
-  describeDispatchFailure,
   detailQuote,
   dropoffPosition,
+  findRiderFor,
   formatCountdown,
   lastEndedWithReason,
+  liveDispatchLine,
   mergeRefetch,
-  offerOpen,
   partitionStale,
+  riderCoolingDown,
   riderMapPosition,
   riderPinState,
   riderPosition,
+  riderReady,
   type DeliveryAssignmentRef,
-  type DispatchFailure,
-  type DispatchFailureText,
 } from './live-ops-model';
+import { readDispatchAnswer, stackPeers, type DispatchAnswer } from './dispatch-model';
 import { useLiveOpsText } from './live-ops-text';
 // Cancelling here is the same cancel as on Orders: a card the diner paid online is refunded first.
 import { cardRefundErrorKey, keepIdempotencyKey } from '../../orders/_components/card-refund';
@@ -74,6 +75,7 @@ const CANCEL_REASON_MAX = 300;
 
 /** No assignments yet is the common case; one shared array keeps the card memo-stable. */
 const NO_ASSIGNMENTS: DeliveryAssignmentRef[] = [];
+const NO_PEERS: LiveDelivery[] = [];
 
 /** Riders idle on the map. A rider on a job is drawn by the job, in the shop's blue. */
 const RIDER_COLOR: Record<'available' | 'stale', string> = {
@@ -108,8 +110,9 @@ function markerEl(
   return wrap;
 }
 
-/** Ticks once a second, and only where a second actually matters. */
-function OfferCountdown({ expiresAt }: { expiresAt: string }) {
+/** Ticks once a second, and only where a second actually matters. "Offered to {rider} · 0:42"
+ *  while the rider still has it on their screen. */
+function OfferCountdown({ expiresAt, riderName }: { expiresAt: string; riderName: string | null }) {
   const t = useTranslations('deliveries');
   const [now, setNow] = React.useState(() => Date.now());
   React.useEffect(() => {
@@ -118,7 +121,14 @@ function OfferCountdown({ expiresAt }: { expiresAt: string }) {
   }, []);
   const left = new Date(expiresAt).getTime() - now;
   if (!Number.isFinite(left) || left <= 0) return <>{t('detail.offerExpired')}</>;
-  return <>{t('detail.expiresIn', { countdown: formatCountdown(left) })}</>;
+  const countdown = formatCountdown(left);
+  return (
+    <>
+      {riderName
+        ? t('detail.offeredTo', { name: riderName, countdown })
+        : t('detail.expiresIn', { countdown })}
+    </>
+  );
 }
 
 /** Ages, overdue flags and staleness only need to move at walking pace. */
@@ -257,6 +267,11 @@ interface CardProps {
   d: LiveDelivery;
   /** This delivery's rider turns, oldest first. Carries the reasons the delivery row lost. */
   assignments: readonly DeliveryAssignmentRef[];
+  /** The other stops of this delivery's stack (one rider, one round), and their turns. */
+  peers: readonly LiveDelivery[];
+  peerAssignments: readonly DeliveryAssignmentRef[];
+  /** This screen's last dispatch-driver answer for the delivery. */
+  answer: DispatchAnswer | null;
   branchId: string;
   nowMs: number;
   selfDelivery: boolean;
@@ -275,6 +290,9 @@ interface CardProps {
 function DeliveryCard({
   d,
   assignments,
+  peers,
+  peerAssignments,
+  answer,
   branchId,
   nowMs,
   selfDelivery,
@@ -291,7 +309,20 @@ function DeliveryCard({
 }: CardProps) {
   const text = useLiveOpsText();
   const { t } = text;
-  const info = describeDelivery(d, nowMs, selfDelivery, assignments);
+  const ctx = { stack: peers, answer, stackAssignments: peerAssignments };
+  const info = describeDelivery(d, nowMs, selfDelivery, assignments, ctx);
+  // The server's word on the search (deliveries.dispatch_state), never a timer on this side.
+  const line = liveDispatchLine(d, nowMs, assignments, ctx);
+  const search = findRiderFor(d, selfDelivery, line);
+  // What dispatch-driver said about the riders it could not use (a cooldown, stale GPS…), shown
+  // only while the card still describes the round that answer was about.
+  const gateNote =
+    answer &&
+    (answer.kind === 'waiting' || answer.kind === 'noRiderFound') &&
+    answer.failure &&
+    (line.kind === 'waiting' || line.kind === 'noRiderFound')
+      ? text.dispatchFailure(answer.failure)
+      : null;
   const walked = lastEndedWithReason(assignments);
   // Suppressed when describeDelivery already put those exact words on the card — the point is
   // that the reason is visible once, not that it is visible twice.
@@ -341,13 +372,22 @@ function DeliveryCard({
       {addressLine && <p className="mt-0.5 text-xs text-muted-foreground">{addressLine}</p>}
       {addr?.notes && <p className="text-xs italic text-muted-foreground">“{addr.notes}”</p>}
 
+      {peers.length > 0 && (
+        <p className="mt-1 text-xs font-medium text-info">
+          {t('card.stackedWith', {
+            number: peers.map((p) => p.order?.order_number ?? '—').join(', '),
+          })}
+        </p>
+      )}
+
       <p className="mt-1.5 text-xs text-muted-foreground">
-        {offerOpen(d, nowMs) && d.offer_expires_at ? (
-          <OfferCountdown expiresAt={d.offer_expires_at} />
+        {line.kind === 'offered' ? (
+          <OfferCountdown expiresAt={line.expiresAt} riderName={rider} />
         ) : (
           text.detail(info.detail)
         )}
       </p>
+      {gateNote && <p className="mt-0.5 text-xs text-muted-foreground">{gateNote}</p>}
 
       <p className="mt-0.5 text-xs text-muted-foreground">
         {rider ? (
@@ -380,15 +420,25 @@ function DeliveryCard({
       )}
 
       <div className="mt-2 flex flex-wrap items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-        {canFindRider(d, selfDelivery) && (
+        {search && (
           <Button
-            variant="soft"
+            variant={search === 'restart' ? 'primary' : 'soft'}
             size="sm"
             loading={busy}
-            onClick={() => onFindRider(false)}
-            leftIcon={<Search className="h-3.5 w-3.5" />}
+            onClick={() => onFindRider(search === 'restart')}
+            leftIcon={
+              search === 'restart' ? (
+                <RotateCcw className="h-3.5 w-3.5" />
+              ) : (
+                <Search className="h-3.5 w-3.5" />
+              )
+            }
           >
-            {t('card.findRider')}
+            {search === 'restart'
+              ? peers.length > 0
+                ? t('card.findAgainStack')
+                : t('card.findAgain')
+              : t('card.findRider')}
           </Button>
         )}
         {canAssign(d, selfDelivery) && (
@@ -496,6 +546,9 @@ export function LiveOpsView({
   const [cancelOther, setCancelOther] = React.useState('');
   const [assignments, setAssignments] = React.useState<DeliveryAssignmentRef[]>([]);
   const [busyId, setBusyId] = React.useState<string | null>(null);
+  // dispatch-driver's last answer per delivery. The row is the truth; an answer only fills what
+  // the row cannot say yet, and is dropped once the row's round moves on (see onChange).
+  const [answers, setAnswers] = React.useState<ReadonlyMap<string, DispatchAnswer>>(() => new Map());
   const [actionError, setActionError] = React.useState<{
     id: string;
     message: string;
@@ -623,6 +676,20 @@ export function LiveOpsView({
         if (stillLive) void refresh();
         return;
       }
+      if (
+        (row.dispatch_state !== undefined && row.dispatch_state !== held.dispatch_state) ||
+        (row.dispatch_round_started_at !== undefined &&
+          row.dispatch_round_started_at !== held.dispatch_round_started_at)
+      ) {
+        // The round moved on: an answer about the old state would now say something stale.
+        const id = row.id;
+        setAnswers((prev) => {
+          if (!prev.has(id)) return prev;
+          const next = new Map(prev);
+          next.delete(id);
+          return next;
+        });
+      }
       if (row.driver_id !== undefined && row.driver_id !== held.driver_id) {
         // The rider changed and the payload carries no name or phone for the new one.
         void refresh();
@@ -646,8 +713,10 @@ export function LiveOpsView({
     [deliveries, nowMs],
   );
   const counts = React.useMemo(() => boardCounts(live), [live]);
+  // A rider on a cooldown is skipped by every search, so they are not "ready" whatever their
+  // GPS says.
   const ridersReady = React.useMemo(
-    () => riders.filter((r) => riderPinState(r, nowMs, maxGpsAgeMin) === 'available').length,
+    () => riders.filter((r) => riderReady(r, nowMs, maxGpsAgeMin)).length,
     [riders, nowMs, maxGpsAgeMin],
   );
 
@@ -833,34 +902,34 @@ export function LiveOpsView({
       setBusyId(d.id);
       setActionError(null);
       const supabase = getBrowserClient();
-      const { error } = await supabase.functions.invoke('dispatch-driver', {
-        body: reset ? { delivery_id: d.id, reset: true } : { delivery_id: d.id },
-      });
+      // `reset` is "Find rider again": a new round in which everyone may be asked again (D2). The
+      // server refuses it once a rider has accepted, and withdraws an open offer without a
+      // strike (D6).
+      const reply = await invokeDispatchDriver(supabase, { deliveryId: d.id }, reset);
+      const answer = readDispatchAnswer(reply.status, reply.body);
       setBusyId(null);
-      if (error) {
-        // supabase-js hides the response body behind error.context. A 503 from
-        // dispatch-driver carries which gate emptied the candidate list, and that reason is
-        // the only useful thing here — "no rider found" alone had merchants chasing riders
-        // who were online the whole time.
-        let failure: DispatchFailureText | null = null;
-        try {
-          const ctx = (error as unknown as { context?: Response }).context;
-          if (ctx && typeof ctx.json === 'function') {
-            failure = describeDispatchFailure((await ctx.json()) as DispatchFailure, ctx.status);
-          }
-        } catch {
-          /* body unreadable — fall through to the generic sentence */
-        }
-        if (!failure || failure.key === 'failed') {
-          console.error('dispatch-driver failed:', failure?.code ?? error.message);
+      if (answer.kind === 'refused') {
+        // The gate that emptied the list, or the refusal, is the only useful thing here — "no
+        // rider found" alone had merchants chasing riders who were online the whole time.
+        if (answer.failure.key === 'failed') {
+          console.error(
+            'dispatch-driver failed:',
+            answer.failure.code ?? `http_${reply.status ?? 'none'}`,
+          );
         }
         setActionError({
           id: d.id,
-          message: failure ? text.dispatchFailure(failure) : t('dispatch.failed'),
-          canReset: !reset && failure?.key === 'maxAttempts',
+          message: text.dispatchFailure(answer.failure),
+          canReset: !reset && answer.failure.key === 'maxAttempts',
         });
         return;
       }
+      if (answer.kind === 'alreadyAccepted') {
+        setActionError({ id: d.id, message: t('dispatch.alreadyAccepted'), canReset: false });
+        await refresh();
+        return;
+      }
+      setAnswers((prev) => new Map(prev).set(d.id, answer));
       await refresh();
     },
     [refresh, t, text],
@@ -929,32 +998,43 @@ export function LiveOpsView({
 
   const hasMap = hasMapboxToken() && branchLat != null && branchLng != null;
 
-  const cardFor = (d: LiveDelivery) => (
-    <DeliveryCard
-      key={d.id}
-      d={d}
-      assignments={assignmentsByDelivery.get(d.id) ?? NO_ASSIGNMENTS}
-      branchId={branchId}
-      nowMs={nowMs}
-      selfDelivery={selfDelivery}
-      canCancel={canCancel}
-      selected={selectedId === d.id}
-      riderName={d.driver_id ? (riderNameById.get(d.driver_id) ?? null) : null}
-      busy={busyId === d.id}
-      error={actionError?.id === d.id ? actionError : null}
-      onSelect={() => selectCard(d)}
-      onAssign={() => setAssignFor(d)}
-      onCancel={() => {
-        cancelKeyRef.current = newIdempotencyKey();
-        setCancelError(null);
-        setCancelReason(null);
-        setCancelOther('');
-        setCancelFor(d);
-      }}
-      onFindRider={(reset) => void findRider(d, reset)}
-      onRefresh={refresh}
-    />
-  );
+  const cardFor = (d: LiveDelivery) => {
+    // A stack is dispatched as one unit (D5): the card reads its round with the other stop's.
+    const peers = d.batch_id ? stackPeers(d, deliveries) : NO_PEERS;
+    return (
+      <DeliveryCard
+        key={d.id}
+        d={d}
+        assignments={assignmentsByDelivery.get(d.id) ?? NO_ASSIGNMENTS}
+        peers={peers}
+        peerAssignments={
+          peers.length > 0
+            ? peers.flatMap((p) => assignmentsByDelivery.get(p.id) ?? NO_ASSIGNMENTS)
+            : NO_ASSIGNMENTS
+        }
+        answer={answers.get(d.id) ?? null}
+        branchId={branchId}
+        nowMs={nowMs}
+        selfDelivery={selfDelivery}
+        canCancel={canCancel}
+        selected={selectedId === d.id}
+        riderName={d.driver_id ? (riderNameById.get(d.driver_id) ?? null) : null}
+        busy={busyId === d.id}
+        error={actionError?.id === d.id ? actionError : null}
+        onSelect={() => selectCard(d)}
+        onAssign={() => setAssignFor(d)}
+        onCancel={() => {
+          cancelKeyRef.current = newIdempotencyKey();
+          setCancelError(null);
+          setCancelReason(null);
+          setCancelOther('');
+          setCancelFor(d);
+        }}
+        onFindRider={(reset) => void findRider(d, reset)}
+        onRefresh={refresh}
+      />
+    );
+  };
 
   const cancelChoices = [...CANCEL_REASONS, { value: CANCEL_OTHER, labelKey: 'other' } as const];
 
@@ -980,6 +1060,11 @@ export function LiveOpsView({
             text={t('stats.findingRider', { count: counts.findingRider })}
             value={counts.findingRider}
             tone="bg-warning/15 text-warning"
+          />
+          <StatPill
+            text={t('stats.noRiderFound', { count: counts.noRiderFound })}
+            value={counts.noRiderFound}
+            tone="bg-danger/15 text-danger"
           />
           <StatPill
             text={t('stats.offered', { count: counts.offered })}
@@ -1143,6 +1228,10 @@ export function LiveOpsView({
               <ul className="mt-1.5 space-y-1">
                 {riders.map((r) => {
                   const state = riderPinState(r, nowMs, maxGpsAgeMin);
+                  // Online and green, but skipped by every search: say why, and until when.
+                  const coolingUntil = riderCoolingDown(r, nowMs)
+                    ? text.cooldownEnd(r.cooldown_until, nowMs)
+                    : null;
                   return (
                     <li key={r.driver_id} className="flex items-center gap-2 text-xs">
                       <span
@@ -1157,14 +1246,20 @@ export function LiveOpsView({
                         }`}
                       />
                       <span className="min-w-0 flex-1 truncate font-medium">{r.full_name}</span>
-                      <span className="shrink-0 text-muted-foreground">
+                      <span
+                        className={`shrink-0 ${
+                          coolingUntil && state !== 'busy' ? 'text-warning' : 'text-muted-foreground'
+                        }`}
+                      >
                         {state === 'busy'
                           ? t('list.riderOnJob')
-                          : state === 'offline'
-                            ? t('list.riderOffline')
-                            : t('list.riderGps', {
-                                age: text.age(ageSpan(r.location_updated_at, nowMs)),
-                              })}
+                          : coolingUntil
+                            ? t('list.riderCooldown', { time: coolingUntil })
+                            : state === 'offline'
+                              ? t('list.riderOffline')
+                              : t('list.riderGps', {
+                                  age: text.age(ageSpan(r.location_updated_at, nowMs)),
+                                })}
                         {r.battery_level != null ? ` · ${r.battery_level}%` : ''}
                       </span>
                     </li>

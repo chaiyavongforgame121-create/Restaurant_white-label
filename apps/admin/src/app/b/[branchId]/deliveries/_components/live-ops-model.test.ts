@@ -6,17 +6,20 @@ import {
   boardCounts,
   canAssign,
   canCancelDelivery,
-  canFindRider,
   describeDelivery,
   describeDispatchFailure,
   detailQuote,
+  findRiderFor,
   lastEndedWithReason,
+  liveDispatchLine,
   isStale,
   mergeRefetch,
   partitionStale,
   rpcErrorKey,
+  riderCoolingDown,
   riderPinState,
   riderPosition,
+  riderReady,
   saneEta,
 } from './live-ops-model';
 
@@ -69,6 +72,7 @@ function rider(over: Partial<BranchRider> = {}): BranchRider {
     online: true,
     kyc_verified: true,
     cooling_down: false,
+    cooldown_until: null,
     lat: 30.1566,
     lng: -95.4889,
     location_updated_at: minsAgo(1),
@@ -122,7 +126,7 @@ describe('describeDelivery', () => {
     expect(d.overdue).toBe(true);
   });
 
-  it('reports how many riders dispatch has already asked', () => {
+  it('falls back to the attempt count on a row read without dispatch_state', () => {
     const d = describeDelivery(
       delivery({ status: 'dispatching', dispatch_attempts: 3 }),
       NOW,
@@ -130,6 +134,72 @@ describe('describeDelivery', () => {
     );
     expect(d.label).toEqual({ key: 'findingRider' });
     expect(d.detail).toEqual({ key: 'askedRiders', count: 3 });
+  });
+
+  it('counts the riders this round asked, across the log and the rider turns', () => {
+    const round = minsAgo(10);
+    const d = describeDelivery(
+      delivery({
+        status: 'dispatching',
+        dispatch_state: 'searching',
+        dispatch_round_started_at: round,
+        dispatch_history: [
+          { type: 'offered', driver_id: 'r1', at: minsAgo(9), round },
+          { type: 'rejected', driver_id: 'r1', at: minsAgo(8), round },
+        ],
+        dispatch_attempts: 7,
+      }),
+      NOW,
+      false,
+      [assignment({ driver_id: 'r2', offered_at: minsAgo(7), end_kind: 'offer_expired' })],
+    );
+    expect(d.detail).toEqual({ key: 'askedRiders', count: 2 });
+  });
+
+  it('says what a waiting round is waiting for', () => {
+    const round = minsAgo(10);
+    const d = describeDelivery(
+      delivery({
+        status: 'dispatching',
+        dispatch_state: 'waiting',
+        dispatch_round_started_at: round,
+        dispatch_history: [
+          { type: 'offered', driver_id: 'r1', at: minsAgo(9), round },
+          { type: 'waiting', reason: 'cooling_down', asked: 1, at: minsAgo(8), round },
+        ],
+      }),
+      NOW,
+      false,
+    );
+    expect(d.label).toEqual({ key: 'findingRider' });
+    expect(d.detail).toEqual({ key: 'waiting', count: 1, reason: 'cooldown' });
+  });
+
+  it('says "no rider found" only on the server\u2019s word, and asks for a person', () => {
+    const d = describeDelivery(
+      delivery({
+        status: 'dispatching',
+        dispatch_state: 'no_rider_found',
+        dispatch_round_started_at: minsAgo(16),
+        dispatch_history: [{ type: 'no_rider_found', reason: 'round_over', at: minsAgo(1) }],
+      }),
+      NOW,
+      false,
+    );
+    expect(d.label).toEqual({ key: 'noRiderFound' });
+    expect(d.variant).toBe('danger');
+    expect(d.detail).toEqual({ key: 'noRiderFound', reason: 'windowOver' });
+    expect(d.overdue).toBe(true);
+  });
+
+  it('says nothing is searching when the server has no round for a waiting row', () => {
+    const d = describeDelivery(
+      delivery({ status: 'dispatching', dispatch_state: null, dispatch_round_started_at: null }),
+      NOW,
+      false,
+    );
+    expect(d.label).toEqual({ key: 'notSearching' });
+    expect(d.detail).toEqual({ key: 'notSearching' });
   });
 
   it('prefers the rider’s own cancellation reason over the attempt count', () => {
@@ -326,6 +396,18 @@ describe('riderPinState', () => {
     expect(riderPinState(rider({ location_updated_at: minsAgo(90) }), NOW, 5)).toBe('stale');
   });
 
+  it('reads a cooldown from its end time, and the flag only when there is none', () => {
+    expect(riderCoolingDown(rider({ cooldown_until: minsAgo(-30) }), NOW)).toBe(true);
+    // Ended a minute ago: the flag from the last poll is stale, the time is not.
+    expect(riderCoolingDown(rider({ cooldown_until: minsAgo(1), cooling_down: true }), NOW)).toBe(false);
+    expect(riderCoolingDown(rider({ cooldown_until: null, cooling_down: true }), NOW)).toBe(true);
+  });
+
+  it('does not count a rider on a cooldown as ready, whatever the GPS says', () => {
+    expect(riderReady(rider(), NOW, 5)).toBe(true);
+    expect(riderReady(rider({ cooldown_until: minsAgo(-30) }), NOW, 5)).toBe(false);
+  });
+
   it('is offline when the branch flag is off', () => {
     expect(riderPinState(rider({ online: false }), NOW, 5)).toBe('offline');
   });
@@ -344,10 +426,23 @@ describe('action gates', () => {
   });
 
   it('only sends a rider once the kitchen says the food is ready', () => {
-    expect(canFindRider(delivery({ status: 'dispatching' }), false)).toBe(false);
-    const ready = delivery({ status: 'dispatching' });
+    const cooking = delivery({ status: 'dispatching', dispatch_state: null });
+    expect(findRiderFor(cooking, false, liveDispatchLine(cooking, NOW))).toBeNull();
+    const ready = delivery({ status: 'dispatching', dispatch_state: null });
     ready.order = { ...ready.order!, status: 'ready' };
-    expect(canFindRider(ready, false)).toBe(true);
+    expect(findRiderFor(ready, false, liveDispatchLine(ready, NOW))).toBe('start');
+    expect(findRiderFor(ready, true, liveDispatchLine(ready, NOW))).toBeNull();
+  });
+
+  it('offers a new round only after the server found nobody, never while it is searching', () => {
+    const base = delivery({ status: 'dispatching', dispatch_round_started_at: minsAgo(5) });
+    base.order = { ...base.order!, status: 'ready' };
+    const searching = { ...base, dispatch_state: 'searching' as const };
+    const waiting = { ...base, dispatch_state: 'waiting' as const };
+    const none = { ...base, dispatch_state: 'no_rider_found' as const };
+    expect(findRiderFor(searching, false, liveDispatchLine(searching, NOW))).toBeNull();
+    expect(findRiderFor(waiting, false, liveDispatchLine(waiting, NOW))).toBeNull();
+    expect(findRiderFor(none, false, liveDispatchLine(none, NOW))).toBe('restart');
   });
 
   it('stops offering cancel once the food is with the rider', () => {
@@ -391,10 +486,12 @@ describe('boardCounts', () => {
       delivery({ id: '5', status: 'assigned', driver_id: null }),
       delivery({ id: '6', status: 'in_transit', driver_id: 'r1' }),
       delivery({ id: '7', status: 'failed' }),
+      delivery({ id: '8', status: 'dispatching', dispatch_state: 'no_rider_found' }),
     ]);
     expect(c).toEqual({
       waitingKitchen: 1,
       findingRider: 2,
+      noRiderFound: 1,
       offered: 1,
       accepted: 1,
       onTheWay: 1,

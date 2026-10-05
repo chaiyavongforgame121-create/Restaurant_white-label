@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 
 import { getBrowserClient } from '@favornoms/database/client';
+import { invokeDispatchDriver } from '@favornoms/database/queries';
 import { useRealtime } from '@favornoms/database/realtime';
 import { LocaleSwitcher } from '@/components/locale-switcher';
 import { SignOutIconButton } from '@/components/sign-out';
@@ -28,6 +29,12 @@ import {
 // part of it, because the database will not let an order with the diner's money be cancelled.
 import { cardRefundErrorKey, keepIdempotencyKey } from '@/app/b/[branchId]/orders/_components/card-refund';
 import { cancelOrderWithCardRefund, newIdempotencyKey } from '@/app/b/[branchId]/orders/_components/card-refund-client';
+// What a ready delivery's card says about finding a rider, read from the server's own state on the
+// delivery row (D7). Shared with Live deliveries so both boards say the same thing.
+import {
+  canRestartDispatch, dispatchLine, findRiderAction, readDispatchAnswer, stackPeers, withKnownDispatchColumns,
+  type DispatchAnswer, type DispatchFailureText, type DispatchRowFields,
+} from '@/app/b/[branchId]/deliveries/_components/dispatch-model';
 
 /* ──────────────────────────────────────────────────────────────────────────
    "Sunset" theme — warm, light, gradient. Kept local to the kitchen surface so
@@ -218,67 +225,13 @@ interface Props {
   initialSoldOut: SoldOutItem[];
 }
 
-interface DispatchFailure {
-  error?: string;
-  diagnostics?: {
-    branch_has_pin?: boolean;
-    max_gps_age_min?: number;
-    radius_km?: number;
-    approved?: number;
-    online?: number;
-    has_location?: number;
-    gps_fresh?: number;
-    in_radius?: number;
-    not_busy?: number;
-  } | null;
-}
-
-/** A sentence to show, as a key under kitchen.dispatch plus its values. */
-interface DispatchMessage {
-  key: string;
-  values?: Record<string, number>;
-}
-
-/** Turn dispatch-driver's gate counts into the one sentence that tells the merchant where
- *  to look. Ordered from "nothing is set up" to "everyone is busy", so the first failing
- *  gate is the one reported. */
-function describeDispatchFailure(body: DispatchFailure | null, status?: number): DispatchMessage {
-  // A body with neither `error` nor `diagnostics` never reached dispatch-driver: the gateway
-  // rejected the JWT itself (401 "Invalid JWT") or failed (5xx). That is not "no rider".
-  if (!body?.error && !body?.diagnostics) {
-    if (status === 401) return { key: 'signInAgain' };
-    if (status === 403) return { key: 'notAllowed' };
-    console.error('dispatch-driver failed with no body, status', status);
-    return { key: 'failed' };
-  }
-  if (body?.error && body.error !== 'no_drivers_available') {
-    if (body.error === 'max_attempts_reached') return { key: 'maxAttempts' };
-    if (body.error === 'feature_not_entitled') return { key: 'notEntitled' };
-    if (body.error === 'delivery_not_dispatchable') return { key: 'notDispatchable' };
-    // dispatch-driver checks the caller: 403 without kitchen.access / delivery.manage at the
-    // delivery's branch, 401 when the session is gone.
-    if (body.error === 'not_authorized') return { key: 'notAllowed' };
-    if (body.error === 'auth_required') return { key: 'signInAgain' };
-    // Any other code is server vocabulary, not a sentence for the merchant.
-    console.error('dispatch-driver failed:', body.error);
-    return { key: 'failed' };
-  }
-  const d = body?.diagnostics;
-  if (!d) return { key: 'noneAvailable' };
-  if (d.branch_has_pin === false) return { key: 'noPin' };
-  if (!d.approved) return { key: 'noneApproved' };
-  if (!d.online) return { key: 'noneOnline', values: { approved: d.approved } };
-  if (!d.has_location) return { key: 'noLocation', values: { online: d.online } };
-  if (!d.gps_fresh) return { key: 'gpsStale', values: { online: d.online, minutes: d.max_gps_age_min ?? 5 } };
-  if (!d.not_busy) return { key: 'allBusy', values: { online: d.online } };
-  if (!d.in_radius) {
-    const mi = d.radius_km != null ? Math.round(d.radius_km / 1.609344) : null;
-    return mi != null
-      ? { key: 'outOfRangeMiles', values: { online: d.online, miles: mi } }
-      : { key: 'outOfRange', values: { online: d.online } };
-  }
-  return { key: 'noneAvailable' };
-}
+/** A delivery row as this board holds it. The select (kitchen-model KITCHEN_ORDER_SELECT) names
+ *  the base columns; the dispatch columns arrive with it once it names them, and with every
+ *  realtime payload regardless, which carries the whole row. Read defensively either way. */
+type BoardDelivery = Delivery & Omit<DispatchRowFields, keyof Delivery> & {
+  /** `driver:drivers(id, full_name)`, where the select embeds it. */
+  driver?: { id?: string | null; full_name?: string | null } | null;
+};
 
 type Translate = ReturnType<typeof useTranslations<'kitchen'>>;
 
@@ -352,6 +305,47 @@ export function KitchenView({
   }, []);
 
   const supa = React.useCallback(() => getBrowserClient(), []);
+
+  /* Rider names for "Offered to {rider}". The roster (`drivers`) is only loaded for staff with
+     delivery.manage, and a realtime payload carries a rider's id but never their name, so names
+     the board does not know yet are read once from drivers (staff may read the riders of their
+     own branches). Best-effort: without a name the card says "Offered to a rider". */
+  const [riderNames, setRiderNames] = React.useState<ReadonlyMap<string, string>>(
+    () => new Map(drivers.map((d) => [d.id, d.full_name])),
+  );
+  const askedNamesRef = React.useRef<Set<string>>(new Set(drivers.map((d) => d.id)));
+  const unknownRiderIds = [
+    ...new Set(
+      orders.flatMap((o) =>
+        asArray(o.deliveries).flatMap((d) =>
+          d.status === 'assigned' && d.driver_id && !askedNamesRef.current.has(d.driver_id) ? [d.driver_id] : [],
+        ),
+      ),
+    ),
+  ].sort();
+  const unknownRidersKey = unknownRiderIds.join(',');
+  React.useEffect(() => {
+    if (!unknownRidersKey) return;
+    const ids = unknownRidersKey.split(',');
+    for (const id of ids) askedNamesRef.current.add(id);
+    let live = true;
+    void supa()
+      .from('drivers')
+      .select('id, full_name')
+      .in('id', ids)
+      .then(({ data, error }) => {
+        if (error) console.error('kitchen: rider names read failed', error.message);
+        if (!live || !data?.length) return;
+        setRiderNames((curr) => {
+          const next = new Map(curr);
+          for (const r of data as { id: string; full_name: string | null }[]) if (r.full_name) next.set(r.id, r.full_name);
+          return next;
+        });
+      });
+    return () => {
+      live = false;
+    };
+  }, [unknownRidersKey, supa]);
 
   /* ── sound preferences ─────────────────────────────────────────────────
      Mute and voice are per device and per branch: the pass tablet can stay silent while the
@@ -564,7 +558,12 @@ export function KitchenView({
         // is enough to come back without the embed — which put a "Find a rider" button back
         // under a ticket whose rider was already riding.
         const known = curr.find((o) => o.id === r.id)?.deliveries;
-        return r.deliveries.length === 0 && (known?.length ?? 0) > 0 ? { ...r, deliveries: known } : r;
+        if (r.deliveries.length === 0 && (known?.length ?? 0) > 0) return { ...r, deliveries: known };
+        // Nor drop the dispatch state realtime brought (dispatch_state & co.) when this read's
+        // select does not name those columns: the card would fall back to "Searching…".
+        const read = r.deliveries[0];
+        const kept = read ? withKnownDispatchColumns(read as BoardDelivery, known?.[0] as BoardDelivery | undefined) : read;
+        return kept && kept !== read ? { ...r, deliveries: [kept, ...r.deliveries.slice(1)] } : r;
       });
       // A ticket tapped, echoed or removed while this read was in flight keeps what the board
       // holds: the read is older than that change.
@@ -995,28 +994,25 @@ export function KitchenView({
     }
   };
 
-  const dispatchDriver = async (orderId: string, reset = false) => {
-    const { error } = await supa().functions.invoke('dispatch-driver', { body: { order_id: orderId, reset } });
-    if (!error) return;
-    // supabase-js hides the response body behind error.context. A 503 from dispatch-driver
-    // carries the reason the candidate list came back empty, and that reason is the only
-    // useful thing on this screen — "No rider found" alone had the merchant chasing riders
-    // who were online the whole time.
-    let reason: DispatchMessage | null = null;
-    try {
-      const ctx = (error as unknown as { context?: Response }).context;
-      if (ctx && typeof ctx.json === 'function') {
-        const body = (await ctx.json().catch(() => null)) as DispatchFailure | null;
-        reason = describeDispatchFailure(body, ctx.status);
-      }
-    } catch {
-      /* body unreadable — fall through to the generic message */
+  /* Ask the server for a rider (dispatch-driver, a thin wrapper over staff_dispatch_delivery).
+     The server runs the round on its own from the moment the order is marked ready (D1); this is
+     only the staff's "Find a rider" where nothing is running, and "Find rider again" (`restart`,
+     a new round — D2). Returns the server's answer for the card to show; the row it changed is
+     read back at once rather than left to realtime. */
+  const dispatchDriver = async (order: Order, restart: boolean): Promise<DispatchAnswer> => {
+    const delivery = asArray(order.deliveries)[0];
+    const reply = await invokeDispatchDriver(
+      supa(),
+      delivery?.id ? { deliveryId: delivery.id } : { orderId: order.id },
+      restart,
+    );
+    const answer = readDispatchAnswer(reply.status, reply.body);
+    // Server vocabulary this board has no sentence for goes to the console, never the card.
+    if (answer.kind === 'refused' && answer.failure.key === 'failed') {
+      console.error('kitchen: dispatch-driver failed', answer.failure.code ?? `http_${reply.status ?? 'none'}`);
     }
-    if (!reason) {
-      console.error('kitchen: dispatch-driver failed', error.message);
-      reason = { key: 'failed' };
-    }
-    throw new Error(t(`dispatch.${reason.key}`, reason.values));
+    requestReloadRef.current();
+    return answer;
   };
 
   // Manually offer a delivery to a SPECIFIC rider (staff override of auto-dispatch).
@@ -1041,6 +1037,17 @@ export function KitchenView({
     const d = drivers.find((x) => x.id === driverId);
     showToast(d?.full_name ? t('toast.offeredTo', { name: d.full_name }) : t('toast.offeredToRider'), null);
   };
+
+  /* Every delivery on the board with its order number, for stacks: a stacked pair is dispatched
+     as one unit (D5), so each stop's card reads the round together with the other stop's row. */
+  const boardDeliveries = React.useMemo(
+    () =>
+      orders.flatMap((o) => {
+        const d = asArray(o.deliveries)[0] as BoardDelivery | undefined;
+        return d ? [{ ...d, order_number: o.order_number }] : [];
+      }),
+    [orders],
+  );
 
   /* derive lanes (client-side station filter + FIFO) */
   // awaiting_payment tickets are not work yet — the money has not arrived, and
@@ -1406,7 +1413,12 @@ export function KitchenView({
                     on86={eightySix}
                     soldOutIds={soldOutIds}
                     onTogglePrep={(item) => void togglePrep(order.id, item)}
-                    onDispatch={(reset) => dispatchDriver(order.id, reset)}
+                    onDispatch={(restart) => dispatchDriver(order, restart)}
+                    stack={(() => {
+                      const own = asArray(order.deliveries)[0] as BoardDelivery | undefined;
+                      return own ? stackPeers({ ...own, order_number: order.order_number }, boardDeliveries) : [];
+                    })()}
+                    riderName={(id) => riderNames.get(id) ?? null}
                     drivers={drivers}
                     canAssign={canAssign}
                     onAssign={assignDriver}
@@ -1463,25 +1475,46 @@ function Column({ lane, count, children }: { lane: (typeof LANES)[number]; count
   );
 }
 
-// Stop the "Searching for a rider…" spinner after this long and surface a retry
-// instead — a fruitless search shouldn't spin forever.
-const SEARCH_TIMEOUT_SEC = 120;
+/* The rider line of a ready delivery card. There is no clock here: "Searching" and "No rider
+   found" are whatever the server wrote on the delivery row (dispatch_state). The board used to
+   spin for 120 seconds after "ready" with nothing running on the server, then offer a retry that
+   wiped the round, so the rider who had just declined was asked again and struck again. */
+
+/** A sentence for a dispatch failure, as a key under kitchen.dispatch. */
+function dispatchText(t: Translate, f: DispatchFailureText): string {
+  return t(`dispatch.${f.key}`, f.values);
+}
+
+/** Something the last press of a dispatch button said, kept until the next press. `info` is the
+ *  server's gate counts for a round that is waiting or found nobody; `error` is a refusal. */
+interface DispatchNote {
+  text: string;
+  tone: 'info' | 'error';
+  /** When the answer came back: a note about a round older than the row's is not shown. */
+  at: number;
+}
 
 function OrderCard({
   order, lane, now, station, readyAt, workStartedAt, onAdvance, onReject, onRecall, on86, soldOutIds, onTogglePrep,
-  onDispatch, drivers, canAssign, onAssign,
+  onDispatch, stack, riderName, drivers, canAssign, onAssign,
 }: {
   order: Order; lane: string; now: number; station: string | null; readyAt: number; workStartedAt: number;
   onAdvance: () => void; onReject: () => void; onRecall: () => void;
   on86: (menuItemId: string, name: string) => void; soldOutIds: Set<string>; onTogglePrep: (item: OrderItem) => void;
-  onDispatch: (reset?: boolean) => void | Promise<void>;
+  onDispatch: (restart: boolean) => Promise<DispatchAnswer>;
+  /** The other stop(s) of this delivery's stack, each with its order number. */
+  stack: (BoardDelivery & { order_number: string })[];
+  riderName: (driverId: string) => string | null;
   drivers: DriverLite[]; canAssign: boolean; onAssign: (deliveryId: string, driverId: string) => void | Promise<void>;
 }) {
   const t = useTranslations('kitchen');
   const [menuOpen, setMenuOpen] = React.useState(false);
-  const [dispatching, setDispatching] = React.useState(false);
-  const [dispatchError, setDispatchError] = React.useState(false);
-  const [dispatchReason, setDispatchReason] = React.useState<string | null>(null);
+  // A press of a dispatch button is in flight.
+  const [asking, setAsking] = React.useState(false);
+  // The server's last answer to a press here. The row stays the truth; this only fills what the
+  // row cannot say yet (dispatchLine).
+  const [answer, setAnswer] = React.useState<DispatchAnswer | null>(null);
+  const [note, setNote] = React.useState<DispatchNote | null>(null);
   const fromMs = lane === 'ready' ? readyAt : workStartedAt;
   const sec = safeElapsedSec(fromMs, now);
   const tg = agingTier(sec, lane);
@@ -1501,9 +1534,8 @@ function OrderCard({
 
   const action = ACTION[order.status];
   const isDelivery = order.channel === 'delivery';
-  const delivery = order.deliveries?.[0];
+  const delivery = order.deliveries?.[0] as BoardDelivery | undefined;
   const deliveryId = delivery?.id;
-  const driverAssigned = delivery && delivery.status !== 'pending' && delivery.status !== 'dispatching';
   // Staff can hand the job to a specific rider until it's actually accepted / in flight.
   const canManualAssign =
     isDelivery && order.status === 'ready' && !!deliveryId &&
@@ -1514,34 +1546,49 @@ function OrderCard({
   const cardClickable = !!action && !(isDelivery && order.status === 'ready');
   const urgent = tg.tier === 'late' || tg.tier === 'crit';
   const skin = urgent ? URGENT_SKIN : (LANE_SKIN[lane] ?? LANE_SKIN.new!);
-  const driverLabel = !delivery || delivery.status === 'pending' || delivery.status === 'dispatching'
-    ? t('rider.finding')
-    : delivery.status === 'assigned'
-      ? (delivery.accepted_at ? t('rider.assigned') : t('rider.offered'))
-      : t('rider.onTheWay');
+  // Where finding a rider stands, from the row (and the stack's other stop), never from a timer.
+  const line = delivery ? dispatchLine(delivery, { nowMs: now, stack, answer }) : null;
+  // No row yet is a delivery order whose delivery the board has not read: the button still asks.
+  const search = line ? findRiderAction(line) : 'start';
+  const stacked = stack.length > 0;
+  // The embedded rider only while it is still the rider the row names: a realtime merge keeps
+  // the old embed when the offer moves on to the next rider.
+  const embedded = delivery?.driver;
+  const offeredName =
+    line?.kind === 'offered'
+      ? (embedded?.id === line.driverId ? embedded?.full_name ?? null : null) ?? riderName(line.driverId)
+      : null;
+  // A note about a round that has since been restarted (here or anywhere) is not about this one.
+  const roundMs = delivery?.dispatch_round_started_at ? Date.parse(delivery.dispatch_round_started_at) : NaN;
+  const noteStale = !!note && Number.isFinite(roundMs) && roundMs > note.at + 2_000;
+  const noteShown =
+    note && !noteStale &&
+    (note.tone === 'error'
+      ? line?.kind !== 'accepted' && line?.kind !== 'withRider' && line?.kind !== 'offered'
+      : line?.kind === 'waiting' || line?.kind === 'noRiderFound')
+      ? note
+      : null;
 
-  // Show a "searching" indicator the instant the button is pressed (optimistic)
-  // and for as long as the delivery sits in pending/dispatching, so the kitchen
-  // sees a rider is actively being found instead of a static, unchanged button.
-  const searching =
-    dispatching || (!!delivery && (delivery.status === 'pending' || delivery.status === 'dispatching'));
-  // A passive/cron search that's gone nowhere for SEARCH_TIMEOUT_SEC stops spinning
-  // and shows a retry. A fresh manual dispatch click (local `dispatching`) keeps
-  // spinning until it resolves, regardless of the order's age.
-  const searchTimedOut = !dispatching && searching && sec >= SEARCH_TIMEOUT_SEC;
-  React.useEffect(() => {
-    if (delivery) setDispatching(false); // the realtime row now drives the searching state
-  }, [delivery]);
-  const handleDispatch = async (reset = false) => {
-    setDispatchError(false);
-    setDispatchReason(null);
-    setDispatching(true);
+  const handleDispatch = async (restart: boolean) => {
+    setNote(null);
+    setAsking(true);
     try {
-      await onDispatch(reset);
-    } catch (e) {
-      setDispatching(false); // dispatch failed — surface it so they can retry
-      setDispatchError(true);
-      setDispatchReason((e as Error)?.message || null);
+      const a = await onDispatch(restart);
+      if (a.kind === 'refused') {
+        setNote({ text: dispatchText(t, a.failure), tone: 'error', at: Date.now() });
+      } else if (a.kind === 'alreadyAccepted') {
+        // D6: a rider took it in the meantime; the row read back shows who.
+        setNote({ text: t('dispatch.alreadyAccepted'), tone: 'error', at: Date.now() });
+      } else {
+        setAnswer(a);
+        if ((a.kind === 'waiting' || a.kind === 'noRiderFound') && a.failure) {
+          setNote({ text: dispatchText(t, a.failure), tone: 'info', at: Date.now() });
+        }
+      }
+    } catch {
+      setNote({ text: t('dispatch.failed'), tone: 'error', at: Date.now() });
+    } finally {
+      setAsking(false);
     }
   };
 
@@ -1595,7 +1642,10 @@ function OrderCard({
                 {order.status === 'ready' && (
                   <MenuRow onClick={() => { setMenuOpen(false); onRecall(); }}><RotateCcw className="h-4 w-4" />{t('card.recall')}</MenuRow>
                 )}
-                {isDelivery && order.status === 'ready' && (
+                {/* A new round, until a rider accepts: after that the server refuses it (409
+                    already_accepted), and this item used to restart a job whose rider was already
+                    on the way to the shop. Restarting an open offer withdraws it without a strike. */}
+                {isDelivery && order.status === 'ready' && delivery && canRestartDispatch(delivery) && (
                   <MenuRow onClick={() => { setMenuOpen(false); void handleDispatch(true); }}><Bike className="h-4 w-4" />{t('card.redispatch')}</MenuRow>
                 )}
                 {targets.length > 0 && (
@@ -1623,7 +1673,9 @@ function OrderCard({
         #{order.order_number.slice(-4)}
         {delivery?.batch_id && (
           <span className="ml-1.5 inline-flex items-center rounded-md px-1.5 py-px font-semibold" style={{ background: '#E7EEFB', color: '#2E5FB0' }}>
-            {t('card.stacked', { stop: delivery.batch_seq ?? '?' })}
+            {stacked
+              ? t('card.stackedWith', { other: stack.map((p) => p.order_number.slice(-4)).join(', #'), stop: delivery.batch_seq ?? '?' })
+              : t('card.stacked', { stop: delivery.batch_seq ?? '?' })}
           </span>
         )}
       </div>
@@ -1691,29 +1743,48 @@ function OrderCard({
 
       {isDelivery && order.status === 'ready' ? (
         <div onClick={(e) => e.stopPropagation()}>
-          {driverAssigned ? (
-            <div className="mt-2.5 flex items-center justify-center gap-2 rounded-[10px] px-3 py-2.5 text-sm font-medium" style={{ background: '#E7EEFB', color: '#2E5FB0' }}>
-              <Bike className="h-4 w-4" /> {driverLabel}
-            </div>
-          ) : dispatchError || searchTimedOut ? (
-            <div className="mt-2.5">
-              <button onClick={() => handleDispatch(true)} className="flex w-full items-center justify-center gap-2 rounded-[10px] py-2.5 text-sm font-medium active:scale-[.985]" style={{ background: '#FBE3E1', color: '#C0382F' }}>
-                <AlertTriangle className="h-4 w-4" /> {t('rider.notFound')}
-              </button>
-              {dispatchReason && (
-                <p className="mt-1.5 px-1 text-[11px] leading-snug" style={{ color: '#C0382F' }}>
-                  {dispatchReason}
+          {asking ? (
+            <RiderBox spin>{t('rider.searching')}</RiderBox>
+          ) : line?.kind === 'accepted' ? (
+            <RiderBox>{t('rider.assigned')}</RiderBox>
+          ) : line?.kind === 'withRider' ? (
+            <RiderBox>{t('rider.onTheWay')}</RiderBox>
+          ) : line?.kind === 'offered' ? (
+            <RiderBox><OfferLine expiresAt={line.expiresAt} name={offeredName} /></RiderBox>
+          ) : line?.kind === 'offerLapsed' ? (
+            <RiderBox spin>{t('rider.offerLapsed')}</RiderBox>
+          ) : line?.kind === 'searching' || line?.kind === 'waiting' || line?.kind === 'unknown' ? (
+            <>
+              <RiderBox spin>{line.asked > 0 ? t('rider.searchingAsked', { count: line.asked }) : t('rider.searching')}</RiderBox>
+              {/* Waiting is not stuck: every rider who could take it has been asked, and the
+                  server offers it to the next one who becomes free. Say what it is waiting for. */}
+              {line.kind === 'waiting' && (
+                <p className="mt-1.5 px-1 text-[11px] leading-snug" style={{ color: '#2E5FB0' }}>
+                  {t('rider.waiting', { reason: line.why ?? 'none' })}
                 </p>
               )}
+            </>
+          ) : line?.kind === 'noRiderFound' ? (
+            <div className="mt-2.5 flex items-center justify-center gap-2 rounded-[10px] px-3 py-2.5 text-sm font-medium" style={{ background: '#FBE3E1', color: '#C0382F' }}>
+              <AlertTriangle className="h-4 w-4 shrink-0" /> {t('rider.noRiderFound', { reason: line.reason })}
             </div>
-          ) : searching ? (
-            <div className="mt-2.5 flex items-center justify-center gap-2 rounded-[10px] px-3 py-2.5 text-sm font-medium" style={{ background: '#E7EEFB', color: '#2E5FB0' }}>
-              <Loader2 className="h-4 w-4 animate-spin" /> {t('rider.searching')}
-            </div>
-          ) : (
-            <button onClick={() => handleDispatch(false)} className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-[10px] py-2.5 text-sm font-medium active:scale-[.985]" style={{ background: '#E3ECFF', color: '#2E5FB0' }}>
+          ) : line?.kind === 'notStarted' ? (
+            <p className="mt-2.5 px-1 text-[11px] leading-snug" style={{ color: SUN.muted }}>{t('rider.notStarted')}</p>
+          ) : null}
+          {!asking && search === 'restart' && (
+            <button onClick={() => void handleDispatch(true)} className="mt-2 flex w-full items-center justify-center gap-2 rounded-[10px] py-2.5 text-sm font-medium active:scale-[.985]" style={{ background: '#C0382F', color: '#fff' }}>
+              <RotateCcw className="h-4 w-4" /> {stacked ? t('rider.findAgainStack') : t('rider.findAgain')}
+            </button>
+          )}
+          {!asking && search === 'start' && line?.kind !== 'unknown' && (
+            <button onClick={() => void handleDispatch(false)} className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-[10px] py-2.5 text-sm font-medium active:scale-[.985]" style={{ background: '#E3ECFF', color: '#2E5FB0' }}>
               <Bike className="h-4 w-4" /> {t('rider.find')}
             </button>
+          )}
+          {noteShown && (
+            <p className="mt-1.5 px-1 text-[11px] leading-snug" style={{ color: noteShown.tone === 'error' ? '#C0382F' : SUN.muted }}>
+              {noteShown.text}
+            </p>
           )}
           {/* Assigning a named rider is delivery.manage (staff_assign_driver checks it); the
               kitchen role only finds one automatically. */}
@@ -1728,6 +1799,28 @@ function OrderCard({
       ) : null}
     </motion.div>
   );
+}
+
+/** The blue rider status box under a ready delivery card. */
+function RiderBox({ children, spin }: { children: React.ReactNode; spin?: boolean }) {
+  return (
+    <div className="mt-2.5 flex items-center justify-center gap-2 rounded-[10px] px-3 py-2.5 text-center text-sm font-medium" style={{ background: '#E7EEFB', color: '#2E5FB0' }}>
+      {spin ? <Loader2 className="h-4 w-4 shrink-0 animate-spin" /> : <Bike className="h-4 w-4 shrink-0" />} {children}
+    </div>
+  );
+}
+
+/** "Offered to {rider} · 0:42". Owns its own one-second tick (like TimerPill) so the countdown
+ *  does not re-render the card around it. Past the deadline it says the offer ran out: the
+ *  expiry sweep moves it to the next rider within half a minute. */
+function OfferLine({ expiresAt, name }: { expiresAt: string; name: string | null }) {
+  const t = useTranslations('kitchen');
+  const now = useTick(CLOCK_TICK_MS);
+  const left = Date.parse(expiresAt) - now;
+  if (!Number.isFinite(left) || left <= 0) return <>{t('rider.offerLapsed')}</>;
+  const sec = Math.ceil(left / 1000);
+  const countdown = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+  return <span suppressHydrationWarning>{name ? t('rider.offeredTo', { name, countdown }) : t('rider.offeredToRider', { countdown })}</span>;
 }
 
 /* The one thing on the board that has to move every second. It owns the 1s tick so the

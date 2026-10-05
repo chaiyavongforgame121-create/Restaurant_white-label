@@ -1407,6 +1407,8 @@ export type Database = {
           delivery_location: unknown
           dispatch_attempts: number
           dispatch_history: Json
+          dispatch_round_started_at: string | null
+          dispatch_state: string | null
           distance_km: number | null
           driver_earnings: number | null
           driver_id: string | null
@@ -1449,6 +1451,8 @@ export type Database = {
           delivery_location?: unknown
           dispatch_attempts?: number
           dispatch_history?: Json
+          dispatch_round_started_at?: string | null
+          dispatch_state?: string | null
           distance_km?: number | null
           driver_earnings?: number | null
           driver_id?: string | null
@@ -1491,6 +1495,8 @@ export type Database = {
           delivery_location?: unknown
           dispatch_attempts?: number
           dispatch_history?: Json
+          dispatch_round_started_at?: string | null
+          dispatch_state?: string | null
           distance_km?: number | null
           driver_earnings?: number | null
           driver_id?: string | null
@@ -1547,6 +1553,7 @@ export type Database = {
           branch_id: string
           created_at: string
           delivery_id: string
+          dispatch_round_started_at: string | null
           driver_id: string
           earnings: number | null
           end_kind: string | null
@@ -1563,6 +1570,7 @@ export type Database = {
           branch_id: string
           created_at?: string
           delivery_id: string
+          dispatch_round_started_at?: string | null
           driver_id: string
           earnings?: number | null
           end_kind?: string | null
@@ -1579,6 +1587,7 @@ export type Database = {
           branch_id?: string
           created_at?: string
           delivery_id?: string
+          dispatch_round_started_at?: string | null
           driver_id?: string
           earnings?: number | null
           end_kind?: string | null
@@ -1887,6 +1896,7 @@ export type Database = {
       }
       driver_penalty_events: {
         Row: {
+          consumed_at: string | null
           created_at: string
           delivery_id: string | null
           driver_id: string
@@ -1894,6 +1904,7 @@ export type Database = {
           type: string
         }
         Insert: {
+          consumed_at?: string | null
           created_at?: string
           delivery_id?: string | null
           driver_id: string
@@ -1901,6 +1912,7 @@ export type Database = {
           type: string
         }
         Update: {
+          consumed_at?: string | null
           created_at?: string
           delivery_id?: string | null
           driver_id?: string
@@ -5748,12 +5760,17 @@ export type Database = {
         Args: { p_code?: string; p_token: string }
         Returns: Json
       }
+      lift_driver_cooldown: {
+        Args: { p_branch_id: string; p_driver_id: string; p_note?: string }
+        Returns: string
+      }
       list_billing_requests: { Args: { p_status?: string }; Returns: Json }
       list_branch_riders: {
         Args: { p_branch_id: string }
         Returns: {
           active_delivery_id: string
           battery_level: number
+          cooldown_until: string
           cooling_down: boolean
           driver_id: string
           full_name: string
@@ -6248,6 +6265,10 @@ export type Database = {
       staff_can_ring_up: {
         Args: { p_branch_id: string; p_user_id: string }
         Returns: boolean
+      }
+      staff_dispatch_delivery: {
+        Args: { p_delivery_id: string; p_restart?: boolean }
+        Returns: Json
       }
       stamp_batch_offer: {
         Args: {

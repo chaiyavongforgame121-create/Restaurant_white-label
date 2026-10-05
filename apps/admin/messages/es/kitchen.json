@@ -59,24 +59,22 @@
     "moreActions": "Más acciones",
     "reject": "Rechazar pedido",
     "recall": "Devolver a cocina",
-    "redispatch": "Buscar repartidor de nuevo",
+    "redispatch": "Buscar repartidor de nuevo (ronda nueva)",
     "eightySixHeading": "Marcar agotado",
     "stacked": "🔗 Agrupado · parada {stop}: empaca ambas bolsas para un solo repartidor",
     "allergyNote": "Alergia / nota: {note}",
     "markLineDone": "Marcar {item} como listo",
     "markLineNotDone": "Marcar {item} como pendiente",
-    "soldOut": "Agotado"
+    "soldOut": "Agotado",
+    "stackedWith": "🔗 Agrupado con #{other} · parada {stop}: empaca ambas bolsas para un solo repartidor"
   },
   "timer": {
     "hoursMinutes": "{hours} h {minutes} min",
     "daysHours": "{days} d {hours} h"
   },
   "rider": {
-    "finding": "Buscando repartidor…",
     "assigned": "Repartidor asignado ✓",
-    "offered": "Ofrecido a repartidor…",
     "onTheWay": "Repartidor en camino",
-    "notFound": "Sin repartidor: toca para reintentar",
     "searching": "Buscando repartidor…",
     "find": "Buscar repartidor",
     "assign": "Asignar a un repartidor",
@@ -86,7 +84,16 @@
     "gpsStale": "GPS antiguo",
     "gpsStaleHint": "Sin señal GPS en los últimos 5 min: la asignación automática omite a este repartidor, pero una oferta directa sí funciona",
     "offline": "Desconectado",
-    "busy": "En una entrega"
+    "busy": "En una entrega",
+    "searchingAsked": "Buscando — {count, plural, one {ofrecido a # repartidor} other {ofrecido a # repartidores}}",
+    "noRiderFound": "{reason, select, everyoneAsked {Sin repartidor: se preguntó a todos} cooldown {Sin repartidor: repartidores en pausa} nobodyOnline {Sin repartidor: nadie conectado} noFreshGps {Sin repartidor: sin GPS reciente} allBusy {Sin repartidor: todos ocupados} notSetUp {Sin repartidor: revisa repartidores o sucursal} other {Sin repartidor: se acabó el tiempo de búsqueda}}",
+    "offeredTo": "Ofrecido a {name} · {countdown}",
+    "offeredToRider": "Ofrecido a un repartidor · {countdown}",
+    "offerLapsed": "La oferta venció: preguntando al siguiente repartidor…",
+    "findAgain": "Buscar repartidor de nuevo",
+    "findAgainStack": "Buscar repartidor de nuevo (ambas paradas)",
+    "notStarted": "Nadie está buscando repartidor para este pedido.",
+    "waiting": "{reason, select, everyoneAsked {Ya se preguntó a todos los repartidores libres: el próximo que se conecte lo recibe.} cooldown {Los repartidores están en pausa: sale en cuanto termine una.} nobodyOnline {No hay nadie conectado: sale cuando se conecte un repartidor.} noFreshGps {Ningún repartidor tiene GPS reciente: sale cuando alguno lo tenga.} allBusy {Todos los repartidores están en una entrega: sale cuando uno quede libre.} notSetUp {Aún no se puede ofrecer a ningún repartidor: revisa los repartidores en Repartidores y la ubicación de la sucursal en el mapa.} other {Esperando un repartidor libre.}}"
   },
   "vehicle": {
     "motorcycle": "Moto",
@@ -153,8 +160,13 @@
     "allBusy": "{online, plural, one {# conectado, ya en una entrega} other {# conectados, todos ya en una entrega}}.",
     "outOfRangeMiles": "{online, plural, one {# conectado} other {# conectados}}, pero ninguno a menos de {miles} mi: sube “Radio de búsqueda de repartidores”.",
     "outOfRange": "{online, plural, one {# conectado} other {# conectados}}, pero ninguno dentro del radio de búsqueda: sube “Radio de búsqueda de repartidores”.",
-    "notAllowed": "Tu cuenta no tiene permiso para asignar repartidores en esta sucursal.",
-    "signInAgain": "Tu sesión ha caducado. Vuelve a iniciar sesión para buscar un repartidor."
+    "notAuthorized": "Tu cuenta no tiene permiso para asignar repartidores en esta sucursal.",
+    "authRequired": "Tu sesión ha caducado. Vuelve a iniciar sesión para buscar un repartidor.",
+    "alreadyAccepted": "Un repartidor ya aceptó esta entrega; no hay nada más que buscar.",
+    "noneVerified": "{online, plural, one {# conectado} other {# conectados}}, pero ninguno tiene los documentos verificados.",
+    "allCoolingDown": "{online, plural, one {# conectado} other {# conectados}}, pero todos en pausa por ofertas perdidas o rechazadas. Un gerente puede levantarla en Repartidores.",
+    "alreadyAsked": "{asked, plural, one {Ya se preguntó a # repartidor} other {Ya se preguntó a # repartidores}} por este pedido. “Buscar repartidor de nuevo” empieza una ronda que pregunta a todos.",
+    "someCoolingDown": "{online, plural, one {# conectado} other {# conectados}}, {cooling} en pausa por ofertas perdidas o rechazadas; el resto está ocupado o ya se le preguntó."
   },
   "ops": {
     "busy": "Ocupado",

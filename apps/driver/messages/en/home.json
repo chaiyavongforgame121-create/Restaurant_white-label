@@ -101,5 +101,9 @@
       "saveFailed": "Couldn’t add your hours — check your connection and try again.",
       "removeFailed": "Couldn’t remove that window — check your connection and try again."
     }
+  },
+  "sound": {
+    "turnOn": "Turn offer sound on",
+    "turnOff": "Turn offer sound off"
   }
 }

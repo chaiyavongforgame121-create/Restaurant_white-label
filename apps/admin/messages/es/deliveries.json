@@ -18,7 +18,8 @@
     "failed": "{count, plural, one {# fallido} other {# fallidos}}",
     "ridersReady": "{ready} de {total} repartidores aprobados listos",
     "live": "En vivo",
-    "reconnecting": "Reconectando…"
+    "reconnecting": "Reconectando…",
+    "noRiderFound": "{count} sin repartidor"
   },
   "map": {
     "fitAll": "Ver todo",
@@ -49,7 +50,8 @@
     "riders": "Repartidores",
     "riderOnJob": "En una entrega",
     "riderOffline": "Desconectado",
-    "riderGps": "GPS {age}"
+    "riderGps": "GPS {age}",
+    "riderCooldown": "En pausa hasta las {time}"
   },
   "card": {
     "waiting": "Esperando {age}",
@@ -67,7 +69,10 @@
     "cancelOrder": "Cancelar pedido",
     "viewOrder": "Ver pedido",
     "withRider": "El repartidor ya tiene la comida: si no se puede entregar, reembólsala desde Pedidos.",
-    "retryFromScratch": "Reintentar desde cero"
+    "retryFromScratch": "Reintentar desde cero",
+    "findAgain": "Buscar repartidor de nuevo",
+    "findAgainStack": "Buscar repartidor de nuevo (ambas paradas)",
+    "stackedWith": "Agrupado con {number}"
   },
   "status": {
     "waitingKitchen": "Esperando a cocina",
@@ -79,7 +84,9 @@
     "arriving": "Llegando",
     "onTheWay": "En camino",
     "failed": "Fallido: requiere atención",
-    "unknown": "{status}"
+    "unknown": "{status}",
+    "noRiderFound": "Sin repartidor",
+    "notSearching": "Sin búsqueda"
   },
   "detail": {
     "kitchenReady": "Cocina lo marcó listo: aún no se ha ofrecido a ningún repartidor",
@@ -96,7 +103,11 @@
     "pickedUpAgo": "Recogido hace {age}",
     "atDoor": "El repartidor está en la puerta",
     "etaUnknown": "Llegada desconocida: esperando el GPS del repartidor",
-    "noReason": "Sin motivo registrado"
+    "noReason": "Sin motivo registrado",
+    "waiting": "{reason, select, everyoneAsked {Ya se preguntó a todos los repartidores libres: el próximo que se conecte lo recibe.} cooldown {Los repartidores están en pausa: sale en cuanto termine una.} nobodyOnline {No hay nadie conectado: sale cuando se conecte un repartidor.} noFreshGps {Ningún repartidor tiene GPS reciente: sale cuando alguno lo tenga.} allBusy {Todos los repartidores están en una entrega: sale cuando uno quede libre.} notSetUp {Aún no se puede ofrecer a ningún repartidor: revisa los repartidores en Repartidores y la ubicación de la sucursal en el mapa.} other {Esperando un repartidor libre.}}",
+    "noRiderFound": "{reason, select, everyoneAsked {Se preguntó a todos los repartidores y nadie lo tomó} cooldown {Los repartidores que podían tomarlo están en pausa} nobodyOnline {No había nadie conectado} noFreshGps {Ningún repartidor conectado tenía GPS reciente} allBusy {Todos los repartidores estaban en otra entrega} notSetUp {No se pudo ofrecer a ningún repartidor: revisa los repartidores en Repartidores y la ubicación de la sucursal en el mapa} other {Se acabó el tiempo de búsqueda}}",
+    "notSearching": "Nadie está buscando repartidor: pulsa Buscar repartidor",
+    "offeredTo": "Ofrecido a {name} · {countdown}"
   },
   "age": {
     "unknown": "—",
@@ -121,7 +132,12 @@
     "gpsStale": "{online, plural, one {# conectado} other {# conectados}}, pero sin ubicaciones de menos de {minutes} min. La app de repartidor solo envía el GPS mientras está abierta en pantalla.",
     "allBusy": "{online, plural, one {# conectado, ya en una entrega} other {# conectados, todos ya en una entrega}}.",
     "outOfRangeMiles": "{online, plural, one {# conectado} other {# conectados}}, pero ninguno a menos de {miles} mi: sube “Radio de búsqueda de repartidores”.",
-    "outOfRange": "{online, plural, one {# conectado} other {# conectados}}, pero ninguno dentro del radio de búsqueda: sube “Radio de búsqueda de repartidores”."
+    "outOfRange": "{online, plural, one {# conectado} other {# conectados}}, pero ninguno dentro del radio de búsqueda: sube “Radio de búsqueda de repartidores”.",
+    "alreadyAccepted": "Un repartidor ya aceptó esta entrega; no hay nada más que buscar.",
+    "noneVerified": "{online, plural, one {# conectado} other {# conectados}}, pero ninguno tiene los documentos verificados.",
+    "allCoolingDown": "{online, plural, one {# conectado} other {# conectados}}, pero todos en pausa por ofertas perdidas o rechazadas. Un gerente puede levantarla en Repartidores.",
+    "alreadyAsked": "{asked, plural, one {Ya se preguntó a # repartidor} other {Ya se preguntó a # repartidores}} por este pedido. “Buscar repartidor de nuevo” empieza una ronda que pregunta a todos.",
+    "someCoolingDown": "{online, plural, one {# conectado} other {# conectados}}, {cooling} en pausa por ofertas perdidas o rechazadas; el resto está ocupado o ya se le preguntó."
   },
   "rpcErrors": {
     "driverBusy": "Ese repartidor ya está en otra entrega.",
@@ -154,9 +170,10 @@
     },
     "blockedBusy": "En otra entrega",
     "blockedDocs": "Documentos sin verificar",
-    "blockedCooldown": "En pausa por rechazos",
+    "blockedCooldown": "En pausa: puedes levantarla en Repartidores",
     "lastSeen": "{vehicle} · visto hace {age}",
-    "close": "Cerrar"
+    "close": "Cerrar",
+    "blockedCooldownUntil": "En pausa hasta las {time}: puedes levantarla en Repartidores"
   },
   "vehicle": {
     "motorcycle": "Moto",

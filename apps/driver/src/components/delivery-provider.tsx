@@ -12,6 +12,15 @@ import {
   getActiveDelivery,
   type DeliveryStatus,
 } from '@favornoms/database/queries';
+import {
+  dispatchNotice,
+  jobIds,
+  offerDeadlineMs,
+  parseTimeMs,
+  parseWorkerMessage,
+  type DispatchNotice,
+} from '@/lib/alerts';
+import { reportLiveOffers } from '@/lib/offer-notifications';
 import { useDriverSession } from './driver-session';
 
 /**
@@ -80,13 +89,30 @@ export interface EndedJobNotice {
   endReason: string | null;
 }
 
+/** How the server took the rider's answer to an offer. */
+export type DispatchAnswer = { ok: true } | { ok: false; notice: DispatchNotice };
+
 interface DeliveryContextValue {
   /** A new offer that has not been accepted yet. */
   offered: ActiveDeliveryUI | null;
+  /**
+   * When this phone treats `offered` as over (lib/alerts offerDeadlineMs): its server deadline,
+   * never sooner than a few seconds after it appeared here. The sheet's countdown and the ring
+   * both end at this one instant. Null without an offer.
+   */
+  offerDeadlineMs: number | null;
+  /** An accept or a decline of `offered` is on its way to the server. */
+  responding: boolean;
   /** The delivery currently in flight (accepted, picked_up, in_transit). */
   active: ActiveDeliveryUI | null;
-  accept: () => Promise<boolean>;
-  reject: (reason?: 'timeout' | 'declined') => Promise<void>;
+  /**
+   * True once the server has answered a read. Before that, "no offer, no job" only means nothing
+   * has been read yet, which must not count as news (a job ringing as new) or as an all-clear
+   * (offer notifications closed).
+   */
+  synced: boolean;
+  accept: () => Promise<DispatchAnswer>;
+  reject: (reason?: 'timeout' | 'declined') => Promise<DispatchAnswer>;
   progress: (next: DeliveryStatus) => Promise<void>;
   /** Persist "arrived at the customer" (sets arriving_at). */
   markArriving: () => Promise<void>;
@@ -240,6 +266,10 @@ export function DeliveryProvider({ children }: { children: React.ReactNode }) {
   const [offered, setOffered] = React.useState<ActiveDeliveryUI | null>(null);
   const [active, setActive] = React.useState<ActiveDeliveryUI | null>(null);
   const [lastEnded, setLastEnded] = React.useState<EndedJobNotice | null>(null);
+  const [synced, setSynced] = React.useState(false);
+  // The offer an accept or a decline is in flight for. Keyed by id so a reply that lands after
+  // a newer offer arrived cannot mark that one as answered.
+  const [respondingTo, setRespondingTo] = React.useState<string | null>(null);
 
   // An assignment row keeps being UPDATEd after it ends (status, earnings), so the notice is
   // announced once per turn rather than once per payload.
@@ -277,7 +307,10 @@ export function DeliveryProvider({ children }: { children: React.ReactNode }) {
 
     const row = result as unknown as Record<string, unknown> | null;
     if (!row) {
-      if (!offeredRef.current && !activeRef.current) return;
+      if (!offeredRef.current && !activeRef.current) {
+        setSynced(true);
+        return;
+      }
       // Still not proof the rider is free: a null also means get_driver_order lost the race
       // against a reassign, and the read can simply be lagging. Clearing a live job on that
       // is how a delivery the rider is carrying vanishes from their screen mid-ride — the
@@ -293,6 +326,7 @@ export function DeliveryProvider({ children }: { children: React.ReactNode }) {
       rawRowsRef.current = new Map();
       setOffered(null);
       setActive(null);
+      setSynced(true);
       return;
     }
 
@@ -315,6 +349,7 @@ export function DeliveryProvider({ children }: { children: React.ReactNode }) {
       setOffered(null);
       setActive((prev) => (sameDelivery(prev, ui) ? prev : ui));
     }
+    setSynced(true);
   }, [driverId]);
 
   // A rider's phone backgrounds constantly and rides through dead spots, so the socket
@@ -389,35 +424,86 @@ export function DeliveryProvider({ children }: { children: React.ReactNode }) {
     enabled: !!driverId,
   });
 
-  const accept = React.useCallback(async (): Promise<boolean> => {
-    if (!offered) return false;
-    const supabase = getBrowserClient();
-    const { error } = await acceptDispatchQuery(supabase, offered.id);
-    if (error) {
-      // Offer expired or was reassigned (no longer 'assigned' to this driver):
-      // accept_dispatch raises 'forbidden'. Clear the stale offer and resync from
-      // the server rather than silently leaving the driver with nothing.
-      setOffered(null);
-      void refreshFromServer();
-      return false;
+  // When the offer on screen first appeared here, for its deadline. Reset with the offer, so the
+  // same delivery offered again later starts a fresh clock.
+  const offerShownRef = React.useRef<{ id: string; at: number } | null>(null);
+  const offerDeadline = React.useMemo(() => {
+    if (!offered) {
+      offerShownRef.current = null;
+      return null;
     }
-    setActive({ ...offered, acceptedAt: new Date().toISOString() });
-    setOffered(null);
-    return true;
-  }, [offered, refreshFromServer]);
+    if (offerShownRef.current?.id !== offered.id) offerShownRef.current = { id: offered.id, at: Date.now() };
+    return offerDeadlineMs(parseTimeMs(offered.offerExpiresAt), offerShownRef.current.at);
+  }, [offered]);
+
+  // Both answers keep the offer on screen when the server does not take them, and ask the server
+  // what the offer is now. The decline used to clear it whatever happened: a decline that never
+  // arrived, or that the server refused, looked done on the phone while the server kept holding
+  // the offer for this rider until it expired, and only then moved on to the next one. Now a
+  // refusal for an offer that has moved on ('forbidden') ends with that read clearing it, and an
+  // answer that got no reply leaves the offer, still the rider's, to be answered again.
+  const accept = React.useCallback(async (): Promise<DispatchAnswer> => {
+    const offer = offeredRef.current;
+    if (!offer) return { ok: false, notice: 'offerGone' };
+    setRespondingTo(offer.id);
+    const { refusal } = await acceptDispatchQuery(getBrowserClient(), offer.id);
+    setRespondingTo((current) => (current === offer.id ? null : current));
+    if (refusal) {
+      void refreshFromServer();
+      return { ok: false, notice: dispatchNotice(refusal.reason, 'accept') };
+    }
+    setActive({ ...offer, acceptedAt: new Date().toISOString() });
+    setOffered((current) => (current?.id === offer.id ? null : current));
+    // A read that started before the accept would land showing the offer again, Accept button
+    // and all. Starting a new one retires it (only the newest read may set state).
+    void refreshFromServer();
+    return { ok: true };
+  }, [refreshFromServer]);
 
   const reject = React.useCallback(
-    async (reason: 'timeout' | 'declined' = 'declined') => {
-      if (!offered) return;
-      const supabase = getBrowserClient();
-      await rejectDispatchQuery(supabase, offered.id, driverId, reason);
-      setOffered(null);
+    async (reason: 'timeout' | 'declined' = 'declined'): Promise<DispatchAnswer> => {
+      const offer = offeredRef.current;
+      if (!offer) return { ok: true };
+      setRespondingTo(offer.id);
+      const { refusal } = await rejectDispatchQuery(getBrowserClient(), offer.id, driverId, reason);
+      setRespondingTo((current) => (current === offer.id ? null : current));
+      if (refusal) {
+        void refreshFromServer();
+        return { ok: false, notice: dispatchNotice(refusal.reason, 'decline') };
+      }
+      // Only the offer that was declined: one that arrived meanwhile is a new offer.
+      setOffered((current) => (current?.id === offer.id ? null : current));
+      // Same as accept: a read already in flight would bring the declined offer back. A fresh
+      // one also picks up a new offer whose own read the old one may have been.
+      void refreshFromServer();
       // A reject/timeout may have just stamped a penalty cooldown — re-read the
       // driver so Home reflects it (countdown + disabled toggles) immediately.
       void refreshDriver();
+      return { ok: true };
     },
-    [offered, driverId, refreshDriver],
+    [driverId, refreshDriver, refreshFromServer],
   );
+
+  // The service worker says a push arrived. With the app open but its socket asleep (a phone
+  // that dimmed, a dead spot) that push is the first this phone hears of a new offer: read now,
+  // and the offer appearing on screen starts the ring.
+  React.useEffect(() => {
+    if (!driverId || typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+    const onMessage = (event: MessageEvent) => {
+      if (parseWorkerMessage(event.data)?.type === 'push') void refreshFromServer();
+    };
+    navigator.serviceWorker.addEventListener('message', onMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage);
+  }, [driverId, refreshFromServer]);
+
+  // Offer notifications stay on the shade until touched. Once the server has answered, tell the
+  // worker which offers are still this rider's so it can close the rest (expired, declined,
+  // accepted, given to someone else).
+  const liveOfferKey = synced ? jobIds(offered).join(',') : null;
+  React.useEffect(() => {
+    if (liveOfferKey == null) return;
+    reportLiveOffers(liveOfferKey ? liveOfferKey.split(',') : []);
+  }, [liveOfferKey]);
 
   const progress = React.useCallback(
     async (next: DeliveryStatus) => {
@@ -460,10 +546,14 @@ export function DeliveryProvider({ children }: { children: React.ReactNode }) {
   // A fresh object literal here re-rendered every useDelivery() consumer — the tab bar, Home
   // and the whole Active view — on any provider render at all, which multiplied the cost of
   // everything above.
+  const responding = !!offered && respondingTo === offered.id;
   const value = React.useMemo(
     () => ({
       offered,
+      offerDeadlineMs: offerDeadline,
+      responding,
       active,
+      synced,
       accept,
       reject,
       progress,
@@ -475,7 +565,10 @@ export function DeliveryProvider({ children }: { children: React.ReactNode }) {
     }),
     [
       offered,
+      offerDeadline,
+      responding,
       active,
+      synced,
       accept,
       reject,
       progress,

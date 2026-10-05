@@ -15,5 +15,9 @@
   "push": {
     "prompt": "Turn on alerts so you hear new delivery offers.",
     "turnOn": "Turn on"
+  },
+  "sound": {
+    "locked": "Tap to turn on sound for new offers",
+    "lockedHint": "Your phone keeps sound off until the screen is touched."
   }
 }

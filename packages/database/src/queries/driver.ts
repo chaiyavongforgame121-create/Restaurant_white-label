@@ -204,30 +204,72 @@ export async function getActiveDelivery(
   };
 }
 
+/**
+ * Why the server did not take a rider's answer to an offer. `reason` is the word the RPC raised
+ * ('forbidden' when the offer is no longer this rider's, 'offer_expired', 'auth_required', …), or
+ * 'no_answer' when the request never got a reply at all (no signal). The two must not look alike
+ * on the phone: after a refusal the offer may already be someone else's, after no answer it is
+ * almost certainly still the rider's.
+ */
+export interface DispatchRefusal {
+  reason: string;
+  message: string;
+}
+
+/** The answer to accept/reject: null when the server took it. */
+export interface DispatchAnswerResult {
+  refusal: DispatchRefusal | null;
+}
+
+/** supabase-js reports a request that never reached the server as status 0 with the fetch
+ *  error's text as the message; anything else is the exception the function raised. */
+function refusalOf(res: { error: { message?: string } | null; status?: number }): DispatchRefusal | null {
+  if (!res.error) return null;
+  const message = res.error.message ?? '';
+  if (res.status === 0) return { reason: 'no_answer', message };
+  return { reason: message.trim() || 'unknown', message };
+}
+
+async function answerOffer(
+  call: () => PromiseLike<{ error: { message?: string } | null; status?: number }>,
+): Promise<DispatchAnswerResult> {
+  try {
+    return { refusal: refusalOf(await call()) };
+  } catch (err) {
+    return { refusal: { reason: 'no_answer', message: err instanceof Error ? err.message : String(err) } };
+  }
+}
+
 /** Driver accepts the dispatch offer. Single round-trip RPC for atomicity. */
 export async function acceptDispatch(
   supabase: FavornomsClient,
   deliveryId: string,
-) {
-  return supabase.rpc('accept_dispatch', { p_delivery_id: deliveryId });
+): Promise<DispatchAnswerResult> {
+  return answerOffer(() => supabase.rpc('accept_dispatch', { p_delivery_id: deliveryId }));
 }
 
 /**
- * Driver rejects the dispatch. Clears driver_id, status reverts to
- * `dispatching`, increments driver.reject_streak. Single round-trip via
- * the `reject_dispatch` RPC for atomicity.
+ * Driver rejects the dispatch. Clears driver_id, status reverts to `dispatching`, and the server
+ * offers the job to the next rider. Single round-trip via the `reject_dispatch` RPC for atomicity.
+ *
+ * The refusal is returned rather than dropped. The app used to clear the offer whatever the
+ * server said, so a decline that never arrived (or that the server refused) looked declined on
+ * the phone while the server still held the offer for this rider until it expired, and only then
+ * moved on to anyone else.
  */
 export async function rejectDispatch(
   supabase: FavornomsClient,
   deliveryId: string,
   _driverId: string,
   reason: 'timeout' | 'declined' = 'declined',
-) {
+): Promise<DispatchAnswerResult> {
   void _driverId;
-  return supabase.rpc('reject_dispatch', {
-    p_delivery_id: deliveryId,
-    p_reason: reason,
-  });
+  return answerOffer(() =>
+    supabase.rpc('reject_dispatch', {
+      p_delivery_id: deliveryId,
+      p_reason: reason,
+    }),
+  );
 }
 
 /**

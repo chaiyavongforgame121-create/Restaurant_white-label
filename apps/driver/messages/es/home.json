@@ -101,5 +101,9 @@
       "saveFailed": "No se pudo agregar tu horario. Revisa tu conexión e inténtalo de nuevo.",
       "removeFailed": "No se pudo eliminar esa franja. Revisa tu conexión e inténtalo de nuevo."
     }
+  },
+  "sound": {
+    "turnOn": "Activar el sonido de solicitudes",
+    "turnOff": "Desactivar el sonido de solicitudes"
   }
 }

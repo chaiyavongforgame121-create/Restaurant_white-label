@@ -19,5 +19,12 @@
   "orderStop": "{orderNumber} · parada {stop}",
   "accept": "Aceptar",
   "reject": "Rechazar",
-  "unnamedBranch": "Restaurante"
+  "unnamedBranch": "Restaurante",
+  "notice": {
+    "offerGone": "Esta solicitud ya no es tuya. Caducó o pasó a otro repartidor.",
+    "offerExpired": "Esta solicitud ha caducado.",
+    "noSignal": "Sin señal: tu respuesta no llegó. Inténtalo de nuevo.",
+    "declineFailed": "No se pudo rechazar esta solicitud. Inténtalo de nuevo.",
+    "acceptFailed": "No se pudo aceptar esta solicitud. Inténtalo de nuevo."
+  }
 }

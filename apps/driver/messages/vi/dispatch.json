@@ -19,5 +19,12 @@
   "orderStop": "{orderNumber} · điểm {stop}",
   "accept": "Nhận đơn",
   "reject": "Từ chối",
-  "unnamedBranch": "Nhà hàng"
+  "unnamedBranch": "Nhà hàng",
+  "notice": {
+    "offerGone": "Đơn này không còn là của bạn. Đơn đã hết hạn hoặc được chuyển cho tài xế khác.",
+    "offerExpired": "Đơn này đã hết hạn.",
+    "noSignal": "Không có sóng nên câu trả lời của bạn chưa được gửi. Hãy thử lại.",
+    "declineFailed": "Không thể từ chối đơn này. Hãy thử lại.",
+    "acceptFailed": "Không thể nhận đơn này. Hãy thử lại."
+  }
 }

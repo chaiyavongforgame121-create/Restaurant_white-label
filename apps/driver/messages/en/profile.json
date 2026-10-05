@@ -150,5 +150,13 @@
         "detail": "They have paused you here, so you will not get their orders."
       }
     }
+  },
+  "alerts": {
+    "sound": "Offer sound",
+    "soundOn": "Rings until you accept or decline",
+    "soundOff": "Off — new offers will not ring on this phone",
+    "keepAwake": "Keep screen on while online",
+    "keepAwakeOn": "Offers keep arriving. Uses more battery.",
+    "keepAwakeOff": "The screen may lock and miss offers until you open it"
   }
 }

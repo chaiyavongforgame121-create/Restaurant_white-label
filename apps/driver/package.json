@@ -8,6 +8,7 @@
     "start": "next start --port 3001",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
+    "test": "vitest run",
     "clean": "rimraf .next .turbo"
   },
   "dependencies": {

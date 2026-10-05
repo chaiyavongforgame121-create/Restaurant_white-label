@@ -18,7 +18,8 @@
     "failed": "{count} failed",
     "ridersReady": "{ready} of {total} approved riders ready",
     "live": "Live",
-    "reconnecting": "Reconnecting…"
+    "reconnecting": "Reconnecting…",
+    "noRiderFound": "{count} no rider found"
   },
   "map": {
     "fitAll": "Fit all",
@@ -49,7 +50,8 @@
     "riders": "Riders",
     "riderOnJob": "On a job",
     "riderOffline": "Offline",
-    "riderGps": "GPS {age}"
+    "riderGps": "GPS {age}",
+    "riderCooldown": "Cooldown until {time}"
   },
   "card": {
     "waiting": "Waiting {age}",
@@ -67,7 +69,10 @@
     "cancelOrder": "Cancel order",
     "viewOrder": "View order",
     "withRider": "Food is with the rider — refund it from Orders if it cannot be delivered.",
-    "retryFromScratch": "Retry from scratch"
+    "retryFromScratch": "Retry from scratch",
+    "findAgain": "Find rider again",
+    "findAgainStack": "Find rider again (both stops)",
+    "stackedWith": "Stacked with {number}"
   },
   "status": {
     "waitingKitchen": "Waiting for the kitchen",
@@ -79,7 +84,9 @@
     "arriving": "Arriving now",
     "onTheWay": "On the way",
     "failed": "Failed — needs you",
-    "unknown": "{status}"
+    "unknown": "{status}",
+    "noRiderFound": "No rider found",
+    "notSearching": "Not searching"
   },
   "detail": {
     "kitchenReady": "Kitchen says ready — no rider has been asked yet",
@@ -96,7 +103,11 @@
     "pickedUpAgo": "Picked up {age} ago",
     "atDoor": "Rider is at the door",
     "etaUnknown": "ETA unknown — waiting for the rider’s GPS",
-    "noReason": "No reason recorded"
+    "noReason": "No reason recorded",
+    "waiting": "{reason, select, everyoneAsked {Every free rider has been asked — the next one to come online gets it.} cooldown {Riders are on a cooldown — it goes out as soon as one ends.} nobodyOnline {Nobody is online — it goes out when a rider comes online.} noFreshGps {No rider has a fresh GPS fix — it goes out when one does.} allBusy {Every rider is on a delivery — it goes out when one is free.} notSetUp {No rider can be offered it yet — check the riders on Drivers and the branch’s map pin.} other {Waiting for a free rider.}}",
+    "noRiderFound": "{reason, select, everyoneAsked {Every rider was asked and none took it} cooldown {The riders who could take it are on a cooldown} nobodyOnline {Nobody was online} noFreshGps {No online rider had a fresh GPS fix} allBusy {Every rider was busy with another delivery} notSetUp {No rider could be offered it — check the riders on Drivers and the branch’s map pin} other {The search time ran out}}",
+    "notSearching": "Nothing is looking for a rider — press Find a rider",
+    "offeredTo": "Offered to {name} · {countdown}"
   },
   "age": {
     "unknown": "—",
@@ -121,7 +132,12 @@
     "gpsStale": "{online} online, but no location newer than {minutes} min. The rider app only sends GPS while it is open in the foreground.",
     "allBusy": "{online} online, all already on a delivery.",
     "outOfRangeMiles": "{online} online, but none within {miles} mi — raise “Driver search radius”.",
-    "outOfRange": "{online} online, but none within the search radius — raise “Driver search radius”."
+    "outOfRange": "{online} online, but none within the search radius — raise “Driver search radius”.",
+    "alreadyAccepted": "A rider has already accepted this one, so there is nothing left to search for.",
+    "noneVerified": "{online} online, but none has verified documents yet.",
+    "allCoolingDown": "{online} online, but all are on a cooldown after missed or declined offers. A manager can lift it on Drivers.",
+    "alreadyAsked": "{asked, plural, one {# rider has} other {# riders have}} already been asked for this order. Find rider again starts a new round that asks everyone.",
+    "someCoolingDown": "{online} online, {cooling} of them on a cooldown after missed or declined offers; the rest are busy or already asked."
   },
   "rpcErrors": {
     "driverBusy": "That rider is already on a delivery.",
@@ -154,9 +170,10 @@
     },
     "blockedBusy": "On another delivery",
     "blockedDocs": "Documents not verified",
-    "blockedCooldown": "In a rejection cool-down",
+    "blockedCooldown": "On a cooldown — lift it on Drivers",
     "lastSeen": "{vehicle} · last seen {age} ago",
-    "close": "Close"
+    "close": "Close",
+    "blockedCooldownUntil": "On a cooldown until {time} — lift it on Drivers"
   },
   "vehicle": {
     "motorcycle": "Motorcycle",

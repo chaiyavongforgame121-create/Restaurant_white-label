@@ -8,7 +8,8 @@
     "applied": "{count, plural, one {# driver has applied to this branch} other {# drivers have applied to this branch}}",
     "awaitingDecision": "{count} awaiting your decision",
     "documentsToReview": "{count} with documents to review",
-    "changedAfterReview": "{count} changed a document after review"
+    "changedAfterReview": "{count} changed a document after review",
+    "coolingDown": "{count} on a cooldown"
   },
   "loadError": {
     "title": "Could not load driver applications",
@@ -48,7 +49,9 @@
     "note": "<label>Note:</label> {note}",
     "approvedNeedsDocuments": "Approved, but their documents still need reviewing — use Review documents.",
     "replacedAfterVerify": "They replaced a document {received}, after it was verified on {verified} — look again.",
-    "replacedAfterDecision": "They replaced a document {received}, after your decision on {reviewed}."
+    "replacedAfterDecision": "They replaced a document {received}, after your decision on {reviewed}.",
+    "coolingDown": "On a cooldown until {time} — too many missed or declined offers",
+    "coolingDownNoTime": "On a cooldown — too many missed or declined offers"
   },
   "kycStatus": {
     "pending": "pending",
@@ -109,5 +112,19 @@
     "rejectHint": "Rejecting tells the rider a document needs changing, but not which one. To say why, reject their application with a reason — that text is shown in their app.",
     "reject": "Reject",
     "verify": "Verify"
+  },
+  "cooldown": {
+    "lift": "Lift cooldown",
+    "confirmTitle": "Let {name} take orders again?",
+    "confirmBody": "The cooldown was set automatically after missed or declined offers. Lifting it lets {name} go online and get offers right away, at every branch they ride for.",
+    "noteLabel": "Note for the log (optional)",
+    "notePlaceholder": "e.g. the app froze, not the rider’s fault",
+    "confirm": "Lift cooldown",
+    "cancel": "Keep cooldown",
+    "lifted": "{name} can go online again. If the rider app still shows a countdown, ask them to reopen it.",
+    "alreadyOver": "The cooldown had already ended — {name} can go online.",
+    "forbidden": "You do not have permission to lift a rider’s cooldown. Only an owner or manager can.",
+    "sharedForbidden": "{name} also rides for a branch you do not manage. The cooldown applies at every branch, so a platform admin or someone who manages all of them has to lift it.",
+    "failed": "Couldn’t lift the cooldown. Try again."
   }
 }

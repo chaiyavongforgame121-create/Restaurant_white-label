@@ -7,7 +7,7 @@ import { sortOrderLines } from '@favornoms/shared';
 /** Everything the board reads per ticket. page.tsx (first paint) and the view's reload() must
  *  select the same shape, or a refetch silently drops a field a card relies on. */
 export const KITCHEN_ORDER_SELECT =
-  'id, order_number, status, status_history, channel, created_at, customer_name, customer_notes, kitchen_notes, held, awaiting_payment, scheduled_for, table_id, tables(table_number, display_name), order_items(id, menu_item_id, combo_id, combo_contents, item_name, quantity, notes, prep_status, station, modifiers, category_position, item_position, created_at), deliveries(id, status, driver_id, accepted_at, batch_id, batch_seq)';
+  'id, order_number, status, status_history, channel, created_at, customer_name, customer_notes, kitchen_notes, held, awaiting_payment, scheduled_for, table_id, tables(table_number, display_name), order_items(id, menu_item_id, combo_id, combo_contents, item_name, quantity, notes, prep_status, station, modifiers, category_position, item_position, created_at), deliveries(id, status, driver_id, accepted_at, batch_id, batch_seq, offer_expires_at, dispatch_state, dispatch_round_started_at, dispatch_history, driver:drivers(id, full_name))';
 
 export const ACTIVE_STATUSES = ['pending', 'confirmed', 'preparing', 'ready'];
 
@@ -35,6 +35,13 @@ export interface Delivery {
   accepted_at: string | null;
   batch_id?: string | null;
   batch_seq?: number | null;
+  /** The open offer's deadline, while a rider is being asked. */
+  offer_expires_at?: string | null;
+  /** The server's dispatch state (docs/DISPATCH-FIXES-2026-10-05.md D7): searching | waiting | no_rider_found. */
+  dispatch_state?: string | null;
+  dispatch_round_started_at?: string | null;
+  dispatch_history?: unknown;
+  driver?: { id: string; full_name: string | null } | null;
 }
 export interface Order {
   id: string;

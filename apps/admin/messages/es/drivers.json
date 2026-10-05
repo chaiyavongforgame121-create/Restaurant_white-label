@@ -8,7 +8,8 @@
     "applied": "{count, plural, one {# repartidor se ha postulado a esta sucursal} other {# repartidores se han postulado a esta sucursal}}",
     "awaitingDecision": "{count, plural, one {# espera tu decisión} other {# esperan tu decisión}}",
     "documentsToReview": "{count} con documentos por revisar",
-    "changedAfterReview": "{count, plural, one {# cambió un documento tras la revisión} other {# cambiaron un documento tras la revisión}}"
+    "changedAfterReview": "{count, plural, one {# cambió un documento tras la revisión} other {# cambiaron un documento tras la revisión}}",
+    "coolingDown": "{count} en pausa"
   },
   "loadError": {
     "title": "No se pudieron cargar las solicitudes de repartidores",
@@ -48,7 +49,9 @@
     "note": "<label>Nota:</label> {note}",
     "approvedNeedsDocuments": "Aprobado, pero sus documentos aún necesitan revisión: usa Revisar documentos.",
     "replacedAfterVerify": "Reemplazó un documento el {received}, después de que se verificara el {verified}: vuelve a revisarlo.",
-    "replacedAfterDecision": "Reemplazó un documento el {received}, después de tu decisión del {reviewed}."
+    "replacedAfterDecision": "Reemplazó un documento el {received}, después de tu decisión del {reviewed}.",
+    "coolingDown": "En pausa hasta las {time}: demasiadas ofertas perdidas o rechazadas",
+    "coolingDownNoTime": "En pausa: demasiadas ofertas perdidas o rechazadas"
   },
   "kycStatus": {
     "pending": "pendiente",
@@ -109,5 +112,19 @@
     "rejectHint": "Rechazar le indica al repartidor que debe cambiar un documento, pero no cuál. Para explicar por qué, rechaza su solicitud con un motivo: ese texto se muestra en su app.",
     "reject": "Rechazar",
     "verify": "Verificar"
+  },
+  "cooldown": {
+    "lift": "Levantar pausa",
+    "confirmTitle": "¿Dejar que {name} vuelva a recibir pedidos?",
+    "confirmBody": "La pausa se puso automáticamente tras ofertas perdidas o rechazadas. Al levantarla, {name} puede conectarse y recibir ofertas enseguida, en todas las sucursales donde reparte.",
+    "noteLabel": "Nota para el registro (opcional)",
+    "notePlaceholder": "p. ej., la app se colgó, no fue culpa del repartidor",
+    "confirm": "Levantar pausa",
+    "cancel": "Mantener pausa",
+    "lifted": "{name} ya puede conectarse. Si la app del repartidor aún muestra una cuenta atrás, pídele que la vuelva a abrir.",
+    "alreadyOver": "La pausa ya había terminado: {name} puede conectarse.",
+    "forbidden": "No tienes permiso para levantar la pausa de un repartidor. Solo un propietario o gerente puede.",
+    "sharedForbidden": "{name} también reparte para una sucursal que no gestionas. La pausa aplica en todas, así que debe levantarla un administrador de la plataforma o alguien que las gestione todas.",
+    "failed": "No se pudo levantar la pausa. Inténtalo de nuevo."
   }
 }

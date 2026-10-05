@@ -15,5 +15,9 @@
   "push": {
     "prompt": "Activa las alertas para enterarte de nuevas ofertas de entrega.",
     "turnOn": "Activar"
+  },
+  "sound": {
+    "locked": "Toca para activar el sonido de las nuevas solicitudes",
+    "lockedHint": "Tu teléfono mantiene el sonido apagado hasta que toques la pantalla."
   }
 }

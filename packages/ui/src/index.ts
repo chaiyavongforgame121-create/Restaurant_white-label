@@ -1,5 +1,6 @@
 export * from './lib/cn';
 export * from './lib/push';
+export * from './lib/sound';
 export * from './lib/clipboard';
 export * from './components/button';
 export * from './components/card';

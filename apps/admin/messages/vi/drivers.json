@@ -8,7 +8,8 @@
     "applied": "{count, plural, other {# tài xế đã đăng ký vào chi nhánh này}}",
     "awaitingDecision": "{count} đang chờ bạn quyết định",
     "documentsToReview": "{count} có giấy tờ cần xem xét",
-    "changedAfterReview": "{count} đã đổi giấy tờ sau khi được xem xét"
+    "changedAfterReview": "{count} đã đổi giấy tờ sau khi được xem xét",
+    "coolingDown": "{count} đang tạm khóa"
   },
   "loadError": {
     "title": "Không tải được danh sách đăng ký tài xế",
@@ -48,7 +49,9 @@
     "note": "<label>Ghi chú:</label> {note}",
     "approvedNeedsDocuments": "Đã duyệt, nhưng giấy tờ vẫn cần được xem xét — hãy dùng Xem giấy tờ.",
     "replacedAfterVerify": "Tài xế đã thay một giấy tờ lúc {received}, sau khi được xác minh ngày {verified} — hãy xem lại.",
-    "replacedAfterDecision": "Tài xế đã thay một giấy tờ lúc {received}, sau quyết định của bạn ngày {reviewed}."
+    "replacedAfterDecision": "Tài xế đã thay một giấy tờ lúc {received}, sau quyết định của bạn ngày {reviewed}.",
+    "coolingDown": "Tạm khóa nhận đơn đến {time} — bỏ lỡ hoặc từ chối quá nhiều lời mời",
+    "coolingDownNoTime": "Đang tạm khóa nhận đơn — bỏ lỡ hoặc từ chối quá nhiều lời mời"
   },
   "kycStatus": {
     "pending": "đang chờ",
@@ -109,5 +112,19 @@
     "rejectHint": "Từ chối sẽ báo cho tài xế rằng cần thay một giấy tờ, nhưng không nói là giấy tờ nào. Để nêu lý do, hãy từ chối đơn đăng ký của họ kèm lý do — nội dung đó sẽ hiện trong ứng dụng của họ.",
     "reject": "Từ chối",
     "verify": "Xác minh"
+  },
+  "cooldown": {
+    "lift": "Gỡ tạm khóa",
+    "confirmTitle": "Cho {name} nhận đơn lại?",
+    "confirmBody": "Hệ thống tự động tạm khóa sau khi bỏ lỡ hoặc từ chối lời mời. Gỡ khóa sẽ cho {name} bật nhận đơn và nhận lời mời ngay, ở mọi chi nhánh mà họ giao.",
+    "noteLabel": "Ghi chú lưu nhật ký (không bắt buộc)",
+    "notePlaceholder": "ví dụ: ứng dụng bị treo, không phải lỗi của tài xế",
+    "confirm": "Gỡ tạm khóa",
+    "cancel": "Giữ tạm khóa",
+    "lifted": "{name} đã có thể bật nhận đơn lại. Nếu ứng dụng tài xế vẫn hiện đếm ngược, hãy nhờ họ mở lại ứng dụng.",
+    "alreadyOver": "Thời gian tạm khóa đã kết thúc — {name} có thể bật nhận đơn.",
+    "forbidden": "Bạn không có quyền gỡ tạm khóa cho tài xế. Chỉ chủ hoặc quản lý mới làm được.",
+    "sharedForbidden": "{name} còn giao cho một chi nhánh bạn không quản lý. Tạm khóa áp dụng ở mọi chi nhánh, nên quản trị viên nền tảng hoặc người quản lý tất cả các chi nhánh đó phải gỡ.",
+    "failed": "Không gỡ được tạm khóa. Hãy thử lại."
   }
 }

@@ -150,5 +150,13 @@
         "detail": "Nhà hàng đã tạm ngưng bạn nên bạn sẽ không nhận được đơn của họ."
       }
     }
+  },
+  "alerts": {
+    "sound": "Âm thanh báo đơn",
+    "soundOn": "Đổ chuông cho đến khi bạn nhận hoặc từ chối",
+    "soundOff": "Đang tắt — đơn mới sẽ không đổ chuông trên điện thoại này",
+    "keepAwake": "Giữ màn hình sáng khi đang nhận đơn",
+    "keepAwakeOn": "Đơn mới vẫn đến liên tục. Tốn pin hơn.",
+    "keepAwakeOff": "Màn hình có thể khóa và bỏ lỡ đơn cho đến khi bạn mở lại"
   }
 }

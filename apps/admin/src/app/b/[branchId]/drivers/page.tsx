@@ -7,6 +7,8 @@ import { AccessDenied } from '@/components/access-denied';
 import { DeliveryLocked } from '@/components/delivery-locked';
 import { ApproveButton } from './_components/approve-button';
 import { KycReviewButton } from './_components/kyc-review-button';
+import { CooldownNotice, LiftCooldownButton } from './_components/lift-cooldown-button';
+import { activeCooldownUntil } from './_lib/cooldown';
 import { DriverAppCard } from './_components/driver-app-card';
 import { configuredDriverAppUrl } from './_lib/driver-app-url';
 import {
@@ -117,7 +119,7 @@ export default async function DriversPage({ params }: Props) {
   const { data: approvals, error } = await supabase
     .from('driver_approvals')
     .select(
-      'id, status, applied_at, reviewed_at, notes, driver:drivers(id, full_name, phone, vehicle_type, vehicle_plate, kyc_status, kyc_verified_at, average_rating)',
+      'id, status, applied_at, reviewed_at, notes, driver:drivers(id, full_name, phone, vehicle_type, vehicle_plate, kyc_status, kyc_verified_at, average_rating, cooldown_until)',
     )
     .eq('branch_id', branchId)
     .order('applied_at', { ascending: false });
@@ -135,6 +137,8 @@ export default async function DriversPage({ params }: Props) {
         kyc_status: string;
         kyc_verified_at?: string | null;
         average_rating?: number;
+        /** The strike cooldown (2 missed or declined offers in 24 h): no offers anywhere until then. */
+        cooldown_until?: string | null;
       } | null,
   );
   const docsByDriver = await loadDocsByDriver(
@@ -143,6 +147,10 @@ export default async function DriversPage({ params }: Props) {
   );
 
   const pendingCount = rows.filter((a) => a.status === 'pending').length;
+  // Read once per render: a cooldown that ends while the page is open is dropped by the client
+  // components (CooldownNotice / LiftCooldownButton) on their own clock.
+  const renderedAt = Date.now();
+  const coolingCount = drivers.filter((d) => activeCooldownUntil(d?.cooldown_until, renderedAt)).length;
   const kycWaiting = drivers.filter((d) => d?.kyc_status === 'pending').length;
   // A replaced document is invisible everywhere else: the upload writes nothing, so a
   // rider can swap a licence and stay verified on a review that was about the old file.
@@ -161,6 +169,7 @@ export default async function DriversPage({ params }: Props) {
     pendingCount > 0 ? t('header.awaitingDecision', { count: pendingCount }) : null,
     kycWaiting > 0 ? t('header.documentsToReview', { count: kycWaiting }) : null,
     changedCount > 0 ? t('header.changedAfterReview', { count: changedCount }) : null,
+    coolingCount > 0 ? t('header.coolingDown', { count: coolingCount }) : null,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -210,6 +219,7 @@ export default async function DriversPage({ params }: Props) {
               docs.lastReceivedAt,
             );
             const changedSinceDecision = decidedBeforeUpload(a.reviewed_at, docs.lastReceivedAt);
+            const coolingUntil = activeCooldownUntil(d?.cooldown_until, renderedAt);
             const vehicle = d?.vehicle_type
               ? VEHICLE_TYPES.includes(d.vehicle_type)
                 ? t(`vehicle.${d.vehicle_type}`)
@@ -277,6 +287,9 @@ export default async function DriversPage({ params }: Props) {
                           {t('card.approvedNeedsDocuments')}
                         </p>
                       )}
+                      {/* Why a rider who says they are online gets no offers: the cooldown, and until
+                          when. It is the rider's, so it holds at every branch they ride for. */}
+                      {coolingUntil && <CooldownNotice until={coolingUntil} />}
                       {changedSinceVerify ? (
                         <p className="mt-1.5 text-xs font-semibold text-warning">
                           {t('card.replacedAfterVerify', {
@@ -313,6 +326,17 @@ export default async function DriversPage({ params }: Props) {
                         currentStatus={a.status as ApprovalStatus}
                         reviewerId={reviewerId}
                       />
+                      {/* Rendered while there is nothing to lift too: it keeps the outcome of a
+                          lift on screen across the refresh that clears the cooldown. A rider this
+                          branch rejected is not this branch's to lift (driver_not_at_branch). */}
+                      {d?.id && a.status !== 'rejected' && (
+                        <LiftCooldownButton
+                          driverId={d.id}
+                          branchId={branchId}
+                          driverName={d.full_name}
+                          until={coolingUntil}
+                        />
+                      )}
                     </div>
                   </div>
                 </Card>

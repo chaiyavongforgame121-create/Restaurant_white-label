@@ -150,5 +150,13 @@
         "detail": "Te pusieron en pausa aquí, así que no recibirás sus pedidos."
       }
     }
+  },
+  "alerts": {
+    "sound": "Sonido de solicitudes",
+    "soundOn": "Suena hasta que aceptes o rechaces",
+    "soundOff": "Apagado: las nuevas solicitudes no sonarán en este teléfono",
+    "keepAwake": "Pantalla encendida mientras estás conectado",
+    "keepAwakeOn": "Las solicitudes siguen llegando. Usa más batería.",
+    "keepAwakeOff": "La pantalla puede bloquearse y perder solicitudes hasta que abras la app"
   }
 }

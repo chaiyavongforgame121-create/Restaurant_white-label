@@ -40,7 +40,20 @@
 // (the cache only as the offline fallback), like the manifest, so the next icon change needs no
 // bump. Only /_next/static/, whose file names carry a build hash, is still cache-first. The
 // notification badge is also a car silhouette of its own now; see the push handler.
-const CACHE_VERSION = 'favornoms-driver-v4';
+//
+// v5 — offers ring in the app, and stale offers leave the shade.
+//  1. A push now also tells every open window of the app ('push' message). The app rings the
+//     offer itself (an urgent chime every few seconds, components/driver-alerts.tsx), but only
+//     once it knows about the offer; with its live connection asleep, the push is how it finds out.
+//  2. An offer notification stays up until it is touched (requireInteraction), and nothing took
+//     one down when the offer expired or went to another rider: tapping it opened an empty home
+//     screen. The app now reports which offers are still the rider's ('offers-live') and the
+//     worker closes the rest; an offer's own deadline (expires_at, when the payload carries one)
+//     closes it at the next push too, and a later push that says an offer is over
+//     (offer_gone) closes that one.
+//  The bump makes installed phones take this worker on their next launch rather than whenever
+//  the browser next checks.
+const CACHE_VERSION = 'favornoms-driver-v5';
 
 // The offline path, and only the offline path: the shell a signed-in rider lands on, the
 // screen an expired session lands on, and the icons their tab and the manifest point at.
@@ -144,6 +157,55 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// notify-worker tags each dispatch offer 'new_dispatch:<delivery id>' (see the push handler).
+const OFFER_TAG_PREFIX = 'new_dispatch:';
+
+function offerIdFromTag(tag) {
+  return typeof tag === 'string' && tag.indexOf(OFFER_TAG_PREFIX) === 0 && tag.length > OFFER_TAG_PREFIX.length
+    ? tag.slice(OFFER_TAG_PREFIX.length)
+    : null;
+}
+
+// When an offer stops being answerable, from whichever the payload carries: an absolute
+// expires_at, or the seconds it had left when it was queued. Null when it carries neither.
+function offerExpiresAt(data, now) {
+  if (typeof data.expires_at === 'string') {
+    const at = Date.parse(data.expires_at);
+    if (isFinite(at)) return at;
+  }
+  const seconds = Number(data.expires_in_seconds);
+  if (isFinite(seconds) && seconds > 0) return now + seconds * 1000;
+  return null;
+}
+
+// The delivery ids a payload says are over: offer_gone may be one id or a list.
+function goneOfferIds(data) {
+  const gone = data.offer_gone;
+  if (typeof gone === 'string' && gone) return [gone];
+  if (Array.isArray(gone)) return gone.filter((id) => typeof id === 'string' && id);
+  return [];
+}
+
+// Close every offer notification on the shade that keep(deliveryId, notification) refuses.
+// getNotifications can be missing or fail; closing is tidying, never worth failing a push over.
+async function closeOfferNotifications(keep) {
+  let shown = [];
+  try {
+    shown = await self.registration.getNotifications();
+  } catch {
+    return;
+  }
+  for (const notification of shown) {
+    const id = offerIdFromTag(notification.tag);
+    if (id && !keep(id, notification)) notification.close();
+  }
+}
+
+function offerExpired(notification, now) {
+  const at = notification.data && notification.data.expiresAt;
+  return typeof at === 'number' && at <= now;
+}
+
 // Web Push: render notifications from notify-worker payloads. For a rider with the phone in
 // their pocket this is the only channel there is, so a notification that does not alert is the
 // same as no notification.
@@ -154,12 +216,22 @@ self.addEventListener('push', (event) => {
   } catch {
     data = { title: 'FavorGO', body: event.data ? event.data.text() : '' };
   }
+  if (!data || typeof data !== 'object') data = {};
+  const now = Date.now();
   // The app's name, as in src/components/brand-mark.tsx (APP_NAME); a worker cannot import it.
   const title = data.title || 'FavorGO';
   const tag = typeof data.tag === 'string' && data.tag ? data.tag : undefined;
   // notify-worker tags dispatch offers 'new_dispatch:<delivery id>' so each offer is its own
   // notification; order-status updates keep collapsing on one tag, which is what you want there.
   const isDispatch = !!tag && tag.indexOf('new_dispatch') === 0;
+  const offerId = offerIdFromTag(tag);
+  const expiresAt = isDispatch ? offerExpiresAt(data, now) : null;
+  // An offer that reached the phone after its deadline (a push held back by a sleeping phone)
+  // is still shown, since a push must show something, but it does not ring for work that is gone.
+  const lapsed = expiresAt != null && expiresAt <= now;
+  const alerting = isDispatch && !lapsed;
+  const deliveryId =
+    offerId || (typeof data.delivery_id === 'string' && data.delivery_id ? data.delivery_id : null);
   const options = {
     body: data.body || '',
     // PNG, not SVG — Android notification icons do not render SVG.
@@ -170,13 +242,38 @@ self.addEventListener('push', (event) => {
     tag,
     // renotify without a tag is a TypeError, which rejects showNotification and produces no
     // notification at all — worse than the silent replacement it is here to prevent.
-    renotify: !!tag,
-    requireInteraction: isDispatch,
-    vibrate: isDispatch ? [200, 100, 200, 100, 200] : [100],
-    silent: false,
-    data: { url: data.url || '/app/home' },
+    renotify: !!tag && !lapsed,
+    requireInteraction: alerting,
+    vibrate: alerting ? [200, 100, 200, 100, 200] : [100],
+    silent: lapsed,
+    data: { url: data.url || '/app/home', deliveryId, offer: isDispatch, expiresAt },
   };
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil(
+    (async () => {
+      // Shown first: whatever else fails, the push has its notification.
+      await self.registration.showNotification(title, options);
+      const gone = goneOfferIds(data);
+      await closeOfferNotifications(
+        (id, notification) => id === offerId || (gone.indexOf(id) === -1 && !offerExpired(notification, now)),
+      );
+      // An open app rings for itself; this is how it hears about the offer while its own live
+      // connection is asleep.
+      const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      for (const client of windows) {
+        client.postMessage({ type: 'push', tag: tag || null, deliveryId, offer: isDispatch });
+      }
+    })(),
+  );
+});
+
+// The app reports the offers that are still this rider's, after every read the server answered
+// (src/lib/offer-notifications.ts). Every other offer notification is over: expired, declined,
+// accepted on screen, or given to someone else.
+self.addEventListener('message', (event) => {
+  const message = event.data;
+  if (!message || message.type !== 'offers-live' || !Array.isArray(message.deliveryIds)) return;
+  const live = message.deliveryIds.filter((id) => typeof id === 'string');
+  event.waitUntil(closeOfferNotifications((id) => live.indexOf(id) !== -1));
 });
 
 self.addEventListener('notificationclick', (event) => {

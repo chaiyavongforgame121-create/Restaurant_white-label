@@ -15,5 +15,9 @@
   "push": {
     "prompt": "Bật thông báo để không bỏ lỡ đơn giao mới.",
     "turnOn": "Bật"
+  },
+  "sound": {
+    "locked": "Chạm để bật âm thanh cho đơn mới",
+    "lockedHint": "Điện thoại tắt âm thanh cho đến khi bạn chạm vào màn hình."
   }
 }

@@ -34,10 +34,6 @@ function metresBetween(a: { lat: number; lng: number }, b: { lat: number; lng: n
   return Math.hypot(dLat, dLng);
 }
 
-interface WakeLockSentinel {
-  release: () => Promise<void>;
-}
-
 /**
  * Watches GPS while driver is online or on a delivery and pushes coords
  * to drivers.current_location via the set_driver_location RPC.
@@ -171,40 +167,8 @@ export function DriverLocationPing() {
     // cadence, and finishing it has to drop back to the slow one.
   }, [enabled, onDelivery, driver.id, setGps, markFixSent]);
 
-  // A web page cannot report GPS from the background: iOS suspends it within seconds and
-  // Android throttles the timers to a crawl. The app's own Navigate button sends the rider
-  // to Google Maps for the drive, so the one thing worth defending is the case where they
-  // leave OUR screen in front — keep it awake for the length of the job rather than letting
-  // the phone lock 30 seconds in and freeze the customer's pin. The browser drops the lock
-  // whenever the page is hidden, so it is re-taken on every return to the foreground.
-  React.useEffect(() => {
-    if (!onDelivery) return;
-    const nav = navigator as Navigator & {
-      wakeLock?: { request: (type: 'screen') => Promise<WakeLockSentinel> };
-    };
-    if (!nav.wakeLock) return;
-    let lock: WakeLockSentinel | null = null;
-    let cancelled = false;
-    const acquire = async () => {
-      if (cancelled || document.visibilityState !== 'visible') return;
-      try {
-        lock = await nav.wakeLock!.request('screen');
-      } catch {
-        // Refused (low battery, no user gesture yet, unsupported) — nothing to do but let
-        // the phone behave normally.
-      }
-    };
-    void acquire();
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') void acquire();
-    };
-    document.addEventListener('visibilitychange', onVisibilityChange);
-    return () => {
-      cancelled = true;
-      document.removeEventListener('visibilitychange', onVisibilityChange);
-      void lock?.release().catch(() => {});
-    };
-  }, [onDelivery]);
+  // The screen wake lock that used to live here (held only during a job) is in DriverAlerts now,
+  // which also holds it while the rider is merely online and waiting for an offer.
 
   return null;
 }

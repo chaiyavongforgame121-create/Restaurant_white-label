@@ -9,6 +9,15 @@
 //
 // Invoke via pg_cron every minute or manually via HTTP w/ x-worker-secret header.
 //
+// STALE ROWS ARE SKIPPED, NOT SENT (docs/DISPATCH-FIXES-2026-10-05.md D10). The worker never ran on
+// the live project, so the queue holds months of pending rows; switched on as it was, it would have
+// pushed June's expired offers and "your rider is arriving" for orders long delivered, oldest
+// first, ahead of the first live offer. Each run now retires what is past its use as `skipped`
+// (an offer once its offer is over; anything else 30 minutes after it fell due), sends fresh
+// offers before everything else and newest first, and gives every push a TTL and an urgency: an
+// offer goes `high` (so Android does not hold it in Doze) and lives only as long as the offer.
+// The rules are in ../_shared/notify-staleness.ts.
+//
 // BILLING: deliberately NOT entitlement-gated (owner decision, 2026-07-25). This
 // drains a queue of messages about orders that were already accepted while the
 // account was live — a customer waiting on "your rider is here" must still get it
@@ -16,8 +25,16 @@
 // order creation (place-order), so nothing new can enter this queue anyway.
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
-import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2';
 import webpush from 'npm:web-push@3.6.7';
+import {
+  OFFER_TEMPLATE,
+  planSend,
+  pushData,
+  pushOptions,
+  staleCutoffIso,
+  type StaleReason,
+} from '../_shared/notify-staleness.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -48,7 +65,22 @@ interface OutboxRow {
   template: string;
   variables: Record<string, unknown>;
   attempts: number;
+  created_at: string;
+  scheduled_for: string;
 }
+
+/**
+ * The service-role client every helper takes. Spelled as the library's own type: `ReturnType<typeof
+ * createClient>` resolves to a client with no schema in current supabase-js, so every row it read
+ * typed as `never` and `deno check` failed on this file.
+ */
+type Db = SupabaseClient;
+
+const OUTBOX_COLUMNS =
+  'id, branch_id, channel, recipient_type, recipient_id, template, variables, attempts, created_at, scheduled_for';
+
+/** 1 mile, in km: distances are stored in km and shown to US riders in miles. */
+const KM_PER_MILE = 1.609344;
 
 /** Where an order lives on the storefront, and which branch it belongs to. */
 interface OrderRoute {
@@ -109,20 +141,51 @@ Deno.serve(async (req) => {
     auth: { persistSession: false },
   });
 
-  const { data: rows, error } = await supabase
-    .from('notifications_outbox')
-    .select('id, branch_id, channel, recipient_type, recipient_id, template, variables, attempts')
-    .in('status', ['pending', 'failed'])
-    .lte('scheduled_for', new Date().toISOString())
-    .lt('attempts', MAX_ATTEMPTS)
-    .order('scheduled_for', { ascending: true })
-    .limit(BATCH_SIZE);
+  const nowMs = Date.now();
+  const nowIso = new Date(nowMs).toISOString();
 
+  // Retire the long tail in one statement: everything due more than 30 minutes ago, whatever its
+  // template (no offer lives that long). A failure here is logged and the run goes on: the rows it
+  // fetches are judged one by one below anyway.
+  const { count: retiredOld, error: retireErr } = await supabase
+    .from('notifications_outbox')
+    .update({ status: 'skipped', last_error: 'stale:too_old' }, { count: 'exact' })
+    .in('status', ['pending', 'failed'])
+    .lt('attempts', MAX_ATTEMPTS)
+    .lt('created_at', staleCutoffIso(nowMs))
+    .lt('scheduled_for', staleCutoffIso(nowMs));
+  if (retireErr) console.error('notify-worker: retiring old rows failed', retireErr.code, retireErr.message);
+
+  // Offers and everything else are read separately, newest first, so a burst of other rows can
+  // never push a live offer out of this run's window.
+  const due = () =>
+    supabase
+      .from('notifications_outbox')
+      .select(OUTBOX_COLUMNS)
+      .in('status', ['pending', 'failed'])
+      .lte('scheduled_for', nowIso)
+      .lt('attempts', MAX_ATTEMPTS);
+  const [offers, others] = await Promise.all([
+    due().eq('template', OFFER_TEMPLATE).order('created_at', { ascending: false }).limit(BATCH_SIZE),
+    due()
+      .neq('template', OFFER_TEMPLATE)
+      .order('scheduled_for', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(BATCH_SIZE),
+  ]);
+  const error = offers.error ?? others.error;
   if (error) return json({ error: error.message }, 500);
+
+  const plan = planSend(
+    [...((offers.data ?? []) as OutboxRow[]), ...((others.data ?? []) as OutboxRow[])],
+    nowMs,
+    BATCH_SIZE,
+  );
+  const skipped = (retiredOld ?? 0) + (await retireStale(supabase, plan.stale));
 
   const lookups: Lookups = { orders: new Map(), branches: new Map() };
   const results = await Promise.all(
-    (rows ?? []).map(async (row: OutboxRow) => {
+    plan.send.map(async (row: OutboxRow) => {
       try {
         await dispatch(supabase, row, lookups);
         await supabase
@@ -149,11 +212,39 @@ Deno.serve(async (req) => {
     processed: results.length,
     success: results.filter((r) => r.ok).length,
     failed: results.filter((r) => !r.ok).length,
+    skipped,
   });
 });
 
+/**
+ * Marks rows past their use as `skipped`, one statement per reason, and says how many it marked.
+ * Guarded on the statuses this run read them in, so a row another run has just sent stays sent.
+ */
+async function retireStale(
+  supabase: Db,
+  stale: Array<{ row: OutboxRow; reason: StaleReason }>,
+): Promise<number> {
+  const byReason = new Map<StaleReason, string[]>();
+  for (const { row, reason } of stale) {
+    const ids = byReason.get(reason) ?? [];
+    ids.push(row.id);
+    byReason.set(reason, ids);
+  }
+  let marked = 0;
+  for (const [reason, ids] of byReason) {
+    const { count, error } = await supabase
+      .from('notifications_outbox')
+      .update({ status: 'skipped', last_error: `stale:${reason}` }, { count: 'exact' })
+      .in('id', ids)
+      .in('status', ['pending', 'failed']);
+    if (error) console.error('notify-worker: skipping stale rows failed', reason, error.code, error.message);
+    else marked += count ?? 0;
+  }
+  return marked;
+}
+
 async function dispatch(
-  supabase: ReturnType<typeof createClient>,
+  supabase: Db,
   row: OutboxRow,
   lookups: Lookups,
 ) {
@@ -186,7 +277,7 @@ async function dispatch(
 }
 
 async function sendEmail(
-  supabase: ReturnType<typeof createClient>,
+  supabase: Db,
   row: OutboxRow,
 ) {
   if (!RESEND_API_KEY) throw new Error('resend_not_configured');
@@ -252,7 +343,7 @@ function sendableEmail(value: unknown): string | null {
  * other template, it is the customers row's own email.
  */
 async function customerEmail(
-  supabase: ReturnType<typeof createClient>,
+  supabase: Db,
   row: OutboxRow,
 ): Promise<string | null> {
   const { data, error } = await supabase
@@ -272,7 +363,7 @@ async function customerEmail(
 
 /** variables.email of an abandoned_cart row, when the cart it names vouches for it. */
 async function abandonedCartEmail(
-  supabase: ReturnType<typeof createClient>,
+  supabase: Db,
   row: OutboxRow,
   customer: { user_id: string | null; branch_id: string | null },
 ): Promise<string | null> {
@@ -316,7 +407,8 @@ function renderEmailHtml(template: string, vars: Record<string, unknown>): strin
   const headerName = escapeHtml(storefront ?? 'Favornoms');
   const eta = String(vars.eta_minutes ?? 30);
   const total = vars.total ? `$${Number(vars.total).toFixed(2)}` : null;
-  const distanceMi = vars.distance_km ? Number(vars.distance_km).toFixed(1) : null;
+  // distance_km is in km; the line says "mi".
+  const distanceMi = vars.distance_km ? (Number(vars.distance_km) / KM_PER_MILE).toFixed(1) : null;
   const earningsUsd = vars.earnings ? `$${Number(vars.earnings).toFixed(2)}` : null;
 
   let hero = '';
@@ -418,7 +510,7 @@ function escapeHtml(s: string): string {
 }
 
 async function sendSms(
-  supabase: ReturnType<typeof createClient>,
+  supabase: Db,
   row: OutboxRow,
 ) {
   if (!TWILIO_SID || !TWILIO_TOKEN || !TWILIO_FROM) throw new Error('twilio_not_configured');
@@ -514,7 +606,7 @@ function hostKey(embedded: BranchHost): string {
  * register with.
  */
 async function pushSubscriptionsFor(
-  supabase: ReturnType<typeof createClient>,
+  supabase: Db,
   row: OutboxRow,
 ): Promise<PushSub[]> {
   const table = RECIPIENT_TABLE[row.recipient_type];
@@ -569,7 +661,7 @@ async function pushSubscriptionsFor(
 }
 
 async function sendPush(
-  supabase: ReturnType<typeof createClient>,
+  supabase: Db,
   row: OutboxRow,
 ) {
   if (!VAPID_PUBLIC || !VAPID_PRIVATE) throw new Error('vapid_not_configured');
@@ -591,6 +683,9 @@ async function sendPush(
   const orderId = typeof row.variables.order_id === 'string' ? row.variables.order_id : null;
 
   const payload = JSON.stringify({
+    // template (+ delivery_id, batch_id, expires_at on an offer): lets the rider app's service
+    // worker tell an open app that an offer arrived, and close the notification once it is over.
+    ...pushData(row),
     title: storefront ?? renderTitle(row.template, row.variables),
     body: storefront
       ? renderStorefrontPushBody(row.template, row.variables)
@@ -614,6 +709,11 @@ async function sendPush(
           : row.template,
   });
 
+  // web-push's defaults are a four-week TTL and normal urgency: a push service would hold an
+  // offer long after it was over, and Android's Doze can sit on a normal one for minutes. Read at
+  // send time, so the TTL is what is left now, not when the run started.
+  const options = pushOptions(row, Date.now());
+
   let okCount = 0;
   let lastErr: string | null = null;
   for (const sub of subs as PushSub[]) {
@@ -621,6 +721,7 @@ async function sendPush(
       await webpush.sendNotification(
         { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
         payload,
+        options,
       );
       okCount++;
     } catch (err) {
@@ -670,7 +771,7 @@ function renderTitle(template: string, vars: Record<string, unknown>) {
  * A failed lookup never stops a notification: it goes out without the missing piece.
  */
 async function enrichVars(
-  supabase: ReturnType<typeof createClient>,
+  supabase: Db,
   row: OutboxRow,
   lookups: Lookups,
 ): Promise<Record<string, unknown>> {
@@ -707,7 +808,7 @@ function cached<T>(map: Map<string, Promise<T>>, key: string, load: () => Promis
 }
 
 async function loadOrderRoute(
-  supabase: ReturnType<typeof createClient>,
+  supabase: Db,
   orderId: string,
 ): Promise<OrderRoute | null> {
   try {
@@ -747,7 +848,7 @@ async function loadOrderRoute(
  * otherwise still lend that restaurant's name and icon to this branch's messages.
  */
 async function loadStorefrontIdentity(
-  supabase: ReturnType<typeof createClient>,
+  supabase: Db,
   branchId: string,
 ): Promise<StorefrontIdentity | null> {
   try {
@@ -885,7 +986,8 @@ function renderTemplate(template: string, vars: Record<string, unknown>) {
     delivery_returned: `Driver cancelled after pickup: ${vars.reason ?? 'unknown reason'}. The order needs attention.`,
     order_released: `Scheduled order ${vars.order_number} is due — start preparing.`,
     dispatch_failed: `No driver found for a delivery — open Orders to re-dispatch.`,
-    new_dispatch: `New delivery offer: ${Number(vars.distance_km ?? 0).toFixed(1)} mi · $${Number(vars.earnings ?? 0).toFixed(2)}. Open the Driver app.`,
+    // distance_km is in km; the line says "mi" (it printed the km figure as miles).
+    new_dispatch: `New delivery offer: ${(Number(vars.distance_km ?? 0) / KM_PER_MILE).toFixed(1)} mi · $${Number(vars.earnings ?? 0).toFixed(2)}. Open the Driver app.`,
     low_stock: `Low stock: ${vars.name} — ${vars.remaining} left (threshold ${vars.threshold}).`,
     promo: (vars.body as string) ?? '',
     abandoned_cart: `Your cart at ${storefrontLabel(vars) ?? 'the restaurant'} is still waiting${

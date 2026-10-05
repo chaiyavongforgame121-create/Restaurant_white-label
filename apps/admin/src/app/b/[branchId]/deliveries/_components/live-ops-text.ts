@@ -1,7 +1,9 @@
 'use client';
 
 import * as React from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import { DEFAULT_UI_LOCALE, intlLocaleFor, isUiLocale } from '@favornoms/shared';
+import { cooldownEndLabel } from '../../drivers/_lib/cooldown';
 import {
   rpcErrorKey,
   type AgeSpan,
@@ -19,6 +21,8 @@ const VEHICLE_TYPES = ['motorcycle', 'car', 'bicycle', 'scooter'] as const;
 
 export function useLiveOpsText() {
   const t = useTranslations('deliveries');
+  const rawLocale = useLocale();
+  const intlLocale = intlLocaleFor(isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE);
 
   return React.useMemo(() => {
     const age = (span: AgeSpan): string => {
@@ -51,6 +55,14 @@ export function useLiveOpsText() {
           return t('detail.riderCancelled', { reason: d.reason });
         case 'askedRiders':
           return t('detail.askedRiders', { count: d.count });
+        case 'waiting': {
+          // The reason a round is waiting is the part the merchant can act on (a cooldown to lift,
+          // a rider to call online); the count says the round did not just stall.
+          const why = t('detail.waiting', { reason: d.reason });
+          return d.count > 0 ? `${t('detail.askedRiders', { count: d.count })} · ${why}` : why;
+        }
+        case 'noRiderFound':
+          return t('detail.noRiderFound', { reason: d.reason });
         case 'acceptedAgo':
           return t('detail.acceptedAgo', { age: age(d.age) });
         case 'pickedUpAgo':
@@ -80,6 +92,10 @@ export function useLiveOpsText() {
     const vehicle = (value: string): string =>
       (VEHICLE_TYPES as readonly string[]).includes(value) ? t(`vehicle.${value}`) : value;
 
-    return { t, age, label, detail, dispatchFailure, rpcError, vehicle };
-  }, [t]);
+    /** When a rider's cooldown ends, on this device's clock; null when it is not running. */
+    const cooldownEnd = (iso: string | null | undefined, nowMs: number): string | null =>
+      cooldownEndLabel(iso, nowMs, intlLocale);
+
+    return { t, age, label, detail, dispatchFailure, rpcError, vehicle, cooldownEnd };
+  }, [t, intlLocale]);
 }
