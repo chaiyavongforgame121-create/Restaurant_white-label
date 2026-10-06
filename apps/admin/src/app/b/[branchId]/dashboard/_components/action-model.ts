@@ -11,6 +11,7 @@ import {
   partitionStale,
   STALE_AFTER_MS,
 } from '../../deliveries/_components/live-ops-model';
+import type { NoRiderReason } from '../../deliveries/_components/dispatch-model';
 
 // Everything the dashboard decides without React or the network. Every threshold here is
 // either imported from the screen that owns it or mirrored with the line it came from:
@@ -114,6 +115,12 @@ export type RowReason =
   | { code: 'deliveryKitchenStatus'; status: string }
   | { code: 'deliveryLookingForRider' }
   | { code: 'deliveryAskedRiders'; count: number }
+  /** Every eligible rider has been asked; the server offers it to the next one who becomes free. */
+  | { code: 'deliveryWaiting'; count: number; reason: NoRiderReason | 'none' }
+  /** The round ended with nobody (dispatch_state no_rider_found): nothing searches until staff start a new one. */
+  | { code: 'deliveryNoRiderFound'; reason: NoRiderReason }
+  /** Ready, waiting for a rider, and no round is running on the server. */
+  | { code: 'deliveryNotSearching' }
   | { code: 'deliveryOwnStaff' }
   | { code: 'deliveryNoRiderHolds' }
   | { code: 'deliveryOfferExpired' }
@@ -133,7 +140,8 @@ export interface ActionRow {
   href: string;
   /**
    * The order the row is about, when it is about one. A delivery row's key is the delivery's
-   * own id, so this is how one order listed by two buckets is recognised as one thing.
+   * own id (with its round, once that round found no rider), so this is how one order listed by
+   * two buckets is recognised as one thing.
    */
   orderId?: string | null;
 }
@@ -305,8 +313,13 @@ export interface DeliveryReading {
  * board prints for the same row (its detail, else its label), as a code. Whether the row is
  * overdue at all stays describeDelivery's call; only the wording is mirrored here. Called
  * without assignments, as readDeliveries always did, so "Rider cancelled" never applies.
+ *
+ * A row still looking for a rider is read through describeDelivery itself, so the server's
+ * round (deliveries.dispatch_state) speaks here exactly as it does on the board: a round that
+ * ended as "no rider found" used to be listed as "Looking for a rider" while nothing was looking,
+ * and a recalled ticket's delivery as a search while the food was back on the stove.
  */
-export function unacceptedReason(d: LiveDelivery, selfDelivery: boolean): RowReason {
+export function unacceptedReason(d: LiveDelivery, selfDelivery: boolean, nowMs: number = Date.now()): RowReason {
   if (d.status === 'pending') {
     const kitchen = d.order?.status;
     if (kitchen === 'ready') return { code: 'deliveryKitchenReady' };
@@ -314,9 +327,21 @@ export function unacceptedReason(d: LiveDelivery, selfDelivery: boolean): RowRea
     return { code: 'deliveryWaitingKitchen' };
   }
   if (d.status === 'dispatching') {
-    return d.dispatch_attempts > 0
-      ? { code: 'deliveryAskedRiders', count: d.dispatch_attempts }
-      : { code: 'deliveryLookingForRider' };
+    const detail = describeDelivery(d, nowMs, selfDelivery).detail;
+    switch (detail.key) {
+      case 'noRiderFound':
+        return { code: 'deliveryNoRiderFound', reason: detail.reason };
+      case 'waiting':
+        return { code: 'deliveryWaiting', count: detail.count, reason: detail.reason };
+      case 'notSearching':
+        return { code: 'deliveryNotSearching' };
+      case 'kitchenStatus':
+        return { code: 'deliveryKitchenStatus', status: detail.status };
+      case 'askedRiders':
+        return { code: 'deliveryAskedRiders', count: detail.count };
+      default:
+        return { code: 'deliveryLookingForRider' };
+    }
   }
   // `assigned` and not accepted. With no rider it is waiting on staff or on the pool; with a
   // rider, an offer still open is never overdue, so only an expired one reaches this list.
@@ -353,11 +378,14 @@ export function readDeliveries(
 ): DeliveryReading {
   const { live, stale } = partitionStale(all, nowMs);
   const counts = boardCounts(live);
-  // "In flight" is every live row that is not an alarm — the same five pills the delivery
-  // board shows, minus `failed`, which is a job for a human rather than food in motion.
+  // "In flight" is every live row the delivery board shows except `failed`, which is a job for a
+  // human rather than food in motion. A round that found no rider is still an order waiting to go
+  // out — it is also listed below as needing someone — and leaving it out made the tile drop by
+  // one, as if the delivery had vanished.
   const inFlight =
     counts.waitingKitchen +
     counts.findingRider +
+    counts.noRiderFound +
     counts.offered +
     counts.accepted +
     counts.onTheWay;
@@ -382,7 +410,16 @@ export function readDeliveries(
     )
     .filter((d) => !(d.order && heldOrders.has(d.order.id)))
     .filter((d) => describeDelivery(d, nowMs, selfDelivery).overdue)
-    .map((d) => row(d, deliveriesHref, unacceptedReason(d, selfDelivery)))
+    .map((d) => {
+      const why = unacceptedReason(d, selfDelivery, nowMs);
+      const listed = row(d, deliveriesHref, why);
+      // A round ending with nobody is the moment someone has to act, even for a row already
+      // listed as overdue while it was still searching. Its own key, once per round, is what
+      // makes Action Required announce it (alert-model: a key not seen before is new).
+      return why.code === 'deliveryNoRiderFound'
+        ? { ...listed, key: `${d.id}:no-rider:${d.dispatch_round_started_at ?? ''}` }
+        : listed;
+    })
     .sort(byAgeDesc);
 
   // Failures are pulled from BOTH partitions: a rider's problem does not stop mattering

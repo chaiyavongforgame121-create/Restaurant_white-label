@@ -106,7 +106,7 @@
     "noReason": "No reason recorded",
     "waiting": "{reason, select, everyoneAsked {Every free rider has been asked — the next one to come online gets it.} cooldown {Riders are on a cooldown — it goes out as soon as one ends.} nobodyOnline {Nobody is online — it goes out when a rider comes online.} noFreshGps {No rider has a fresh GPS fix — it goes out when one does.} allBusy {Every rider is on a delivery — it goes out when one is free.} notSetUp {No rider can be offered it yet — check the riders on Drivers and the branch’s map pin.} other {Waiting for a free rider.}}",
     "noRiderFound": "{reason, select, everyoneAsked {Every rider was asked and none took it} cooldown {The riders who could take it are on a cooldown} nobodyOnline {Nobody was online} noFreshGps {No online rider had a fresh GPS fix} allBusy {Every rider was busy with another delivery} notSetUp {No rider could be offered it — check the riders on Drivers and the branch’s map pin} other {The search time ran out}}",
-    "notSearching": "Nothing is looking for a rider — press Find a rider",
+    "notSearching": "Nothing is looking for a rider for this order yet",
     "offeredTo": "Offered to {name} · {countdown}"
   },
   "age": {
@@ -135,9 +135,12 @@
     "outOfRange": "{online} online, but none within the search radius — raise “Driver search radius”.",
     "alreadyAccepted": "A rider has already accepted this one, so there is nothing left to search for.",
     "noneVerified": "{online} online, but none has verified documents yet.",
-    "allCoolingDown": "{online} online, but all are on a cooldown after missed or declined offers. A manager can lift it on Drivers.",
-    "alreadyAsked": "{asked, plural, one {# rider has} other {# riders have}} already been asked for this order. Find rider again starts a new round that asks everyone.",
-    "someCoolingDown": "{online} online, {cooling} of them on a cooldown after missed or declined offers; the rest are busy or already asked."
+    "allCoolingDown": "{online} online, but all are on a cooldown after missed, declined or cancelled jobs. A manager can lift it on Drivers.",
+    "alreadyAsked": "{asked, plural, one {# rider has} other {# riders have}} already been asked for this order — it goes out to the next rider who becomes free.",
+    "someCoolingDown": "{online} online, {cooling} of them on a cooldown after missed, declined or cancelled jobs; the rest are busy or already asked.",
+    "orderClosed": "This order is closed — cancelled, refunded or completed — so no rider is needed.",
+    "offerOpen": "A rider already has this offer on their screen — wait for their answer.",
+    "kitchenNotReady": "The kitchen has not marked this order ready — the rider search starts when it does."
   },
   "rpcErrors": {
     "driverBusy": "That rider is already on a delivery.",

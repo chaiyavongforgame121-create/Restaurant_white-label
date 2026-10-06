@@ -169,7 +169,10 @@
     "deliveryFailed": "{reason} · reportado en una entrega iniciada hace {age}",
     "noReason": "Sin motivo registrado",
     "bookingNotAccepted": "Nadie ha aceptado este pedido programado todavía",
-    "bookingStillHeld": "Ya debería estar en cocina, pero sigue en espera"
+    "bookingStillHeld": "Ya debería estar en cocina, pero sigue en espera",
+    "deliveryWaiting": "{reason, select, everyoneAsked {Ya se preguntó a todos los repartidores libres: el próximo que se conecte lo recibe} cooldown {Los repartidores están en pausa: sale en cuanto termine una} nobodyOnline {No hay nadie conectado: sale cuando se conecte un repartidor} noFreshGps {Ningún repartidor tiene GPS reciente: sale cuando alguno lo tenga} allBusy {Todos los repartidores están en una entrega: sale cuando uno quede libre} notSetUp {Aún no se puede ofrecer a ningún repartidor: revisa los repartidores en Repartidores y la ubicación de la sucursal en el mapa} other {Esperando un repartidor libre}}",
+    "deliveryNoRiderFound": "{reason, select, everyoneAsked {No se encontró repartidor: se preguntó a todos y nadie lo tomó} cooldown {No se encontró repartidor: los que podían tomarlo están en pausa} nobodyOnline {No se encontró repartidor: no había nadie conectado} noFreshGps {No se encontró repartidor: ningún repartidor conectado tenía GPS reciente} allBusy {No se encontró repartidor: todos estaban en otra entrega} notSetUp {No se encontró repartidor: revisa los repartidores en Repartidores y la ubicación de la sucursal en el mapa} other {No se encontró repartidor: se acabó el tiempo de búsqueda}}",
+    "deliveryNotSearching": "Nadie está buscando repartidor"
   },
   "bookings": {
     "at": {

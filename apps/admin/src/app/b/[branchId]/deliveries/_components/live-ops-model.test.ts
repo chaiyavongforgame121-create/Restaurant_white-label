@@ -63,6 +63,12 @@ function delivery(over: Partial<LiveDelivery> = {}): LiveDelivery {
   };
 }
 
+/** A delivery the kitchen has marked ready: only then is a rider looked for (orders_after_ready_dispatch). */
+function ready(over: Partial<LiveDelivery> = {}): LiveDelivery {
+  const d = delivery(over);
+  return { ...d, order: d.order ? { ...d.order, status: 'ready' } : null };
+}
+
 function rider(over: Partial<BranchRider> = {}): BranchRider {
   return {
     driver_id: 'r1',
@@ -128,7 +134,7 @@ describe('describeDelivery', () => {
 
   it('falls back to the attempt count on a row read without dispatch_state', () => {
     const d = describeDelivery(
-      delivery({ status: 'dispatching', dispatch_attempts: 3 }),
+      ready({ status: 'dispatching', dispatch_attempts: 3 }),
       NOW,
       false,
     );
@@ -139,7 +145,7 @@ describe('describeDelivery', () => {
   it('counts the riders this round asked, across the log and the rider turns', () => {
     const round = minsAgo(10);
     const d = describeDelivery(
-      delivery({
+      ready({
         status: 'dispatching',
         dispatch_state: 'searching',
         dispatch_round_started_at: round,
@@ -159,7 +165,7 @@ describe('describeDelivery', () => {
   it('says what a waiting round is waiting for', () => {
     const round = minsAgo(10);
     const d = describeDelivery(
-      delivery({
+      ready({
         status: 'dispatching',
         dispatch_state: 'waiting',
         dispatch_round_started_at: round,
@@ -177,7 +183,7 @@ describe('describeDelivery', () => {
 
   it('says "no rider found" only on the server\u2019s word, and asks for a person', () => {
     const d = describeDelivery(
-      delivery({
+      ready({
         status: 'dispatching',
         dispatch_state: 'no_rider_found',
         dispatch_round_started_at: minsAgo(16),
@@ -194,7 +200,7 @@ describe('describeDelivery', () => {
 
   it('says nothing is searching when the server has no round for a waiting row', () => {
     const d = describeDelivery(
-      delivery({ status: 'dispatching', dispatch_state: null, dispatch_round_started_at: null }),
+      ready({ status: 'dispatching', dispatch_state: null, dispatch_round_started_at: null }),
       NOW,
       false,
     );
@@ -202,9 +208,44 @@ describe('describeDelivery', () => {
     expect(d.detail).toEqual({ key: 'notSearching' });
   });
 
+  it('leaves a recalled ticket to the kitchen, whatever round its delivery was in', () => {
+    // Ready, offered round started, then "Recall to kitchen": the food is back on the stove, so the
+    // card says what it waits for instead of a search (or a "No rider found") for it.
+    for (const state of ['searching', 'waiting', 'no_rider_found'] as const) {
+      const d = describeDelivery(
+        delivery({ status: 'dispatching', dispatch_state: state, dispatch_round_started_at: minsAgo(3) }),
+        NOW,
+        false,
+      );
+      expect(d.label).toEqual({ key: 'waitingKitchen' });
+      expect(d.detail).toEqual({ key: 'kitchenStatus', status: 'preparing' });
+      expect(d.variant).toBe('muted');
+    }
+  });
+
+  it('does not tell staff to press a button a June row under an unfinished order cannot show', () => {
+    // The live shape: dispatching, no round, the order still 'confirmed'. There is no "Find a rider"
+    // on it (the kitchen never marked it ready), so the card must not say to press one.
+    const june = delivery({
+      status: 'dispatching',
+      dispatch_state: null,
+      dispatch_round_started_at: null,
+      created_at: '2026-06-04T18:00:00Z',
+    });
+    june.order = { ...june.order!, status: 'confirmed' };
+    const d = describeDelivery(june, NOW, false);
+    expect(d.label).toEqual({ key: 'waitingKitchen' });
+    expect(d.detail).toEqual({ key: 'kitchenStatus', status: 'confirmed' });
+    expect(findRiderFor(june, false, liveDispatchLine(june, NOW))).toBeNull();
+    // Once the kitchen is done, nothing running is "Not searching", with its button right there.
+    const done = ready({ status: 'dispatching', dispatch_state: null, dispatch_round_started_at: null });
+    expect(describeDelivery(done, NOW, false).label).toEqual({ key: 'notSearching' });
+    expect(findRiderFor(done, false, liveDispatchLine(done, NOW))).toBe('start');
+  });
+
   it('prefers the rider’s own cancellation reason over the attempt count', () => {
     const d = describeDelivery(
-      delivery({ status: 'dispatching', dispatch_attempts: 3 }),
+      ready({ status: 'dispatching', dispatch_attempts: 3 }),
       NOW,
       false,
       [assignment({ end_kind: 'driver_cancelled', end_reason: 'Bike chain snapped on Silom' })],
@@ -216,7 +257,7 @@ describe('describeDelivery', () => {
 
   it('falls back to the attempt count when the turn ended without words', () => {
     const d = describeDelivery(
-      delivery({ status: 'dispatching', dispatch_attempts: 3 }),
+      ready({ status: 'dispatching', dispatch_attempts: 3 }),
       NOW,
       false,
       [assignment({ end_kind: 'offer_expired', end_reason: null })],
@@ -480,13 +521,13 @@ describe('boardCounts', () => {
   it('separates offered from accepted, and does not call a cooking order in flight', () => {
     const c = boardCounts([
       delivery({ id: '1', status: 'pending' }),
-      delivery({ id: '2', status: 'dispatching' }),
+      ready({ id: '2', status: 'dispatching' }),
       delivery({ id: '3', status: 'assigned', driver_id: 'r1' }),
       delivery({ id: '4', status: 'assigned', driver_id: 'r1', accepted_at: minsAgo(1) }),
       delivery({ id: '5', status: 'assigned', driver_id: null }),
       delivery({ id: '6', status: 'in_transit', driver_id: 'r1' }),
       delivery({ id: '7', status: 'failed' }),
-      delivery({ id: '8', status: 'dispatching', dispatch_state: 'no_rider_found' }),
+      ready({ id: '8', status: 'dispatching', dispatch_state: 'no_rider_found' }),
     ]);
     expect(c).toEqual({
       waitingKitchen: 1,
@@ -497,6 +538,14 @@ describe('boardCounts', () => {
       onTheWay: 1,
       failed: 1,
     });
+  });
+
+  it('counts a recalled ticket’s delivery with the kitchen, as its card is labelled', () => {
+    const c = boardCounts([
+      delivery({ id: '1', status: 'dispatching', dispatch_state: 'waiting' }),
+      delivery({ id: '2', status: 'dispatching', dispatch_state: 'no_rider_found' }),
+    ]);
+    expect(c).toMatchObject({ waitingKitchen: 2, findingRider: 0, noRiderFound: 0 });
   });
 });
 

@@ -137,7 +137,8 @@ export default async function DriversPage({ params }: Props) {
         kyc_status: string;
         kyc_verified_at?: string | null;
         average_rating?: number;
-        /** The strike cooldown (2 missed or declined offers in 24 h): no offers anywhere until then. */
+        /** The cooldown (2 missed or declined offers in 24 h, or an accepted job the rider cancelled):
+         *  no offers anywhere until then. */
         cooldown_until?: string | null;
       } | null,
   );

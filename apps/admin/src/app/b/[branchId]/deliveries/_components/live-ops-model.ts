@@ -238,6 +238,17 @@ function offersOf(assignments: readonly DeliveryAssignmentRef[]): OfferRef[] {
   return assignments.map((a) => ({ driver_id: a.driver_id, offered_at: a.offered_at }));
 }
 
+/**
+ * A delivery still waiting for a rider whose order the kitchen has not marked ready (or has taken
+ * back from the pass). No rider should be on their way to it yet, so it is the kitchen's, whatever
+ * dispatch state an older round left on the row. Unknown when the order was not read.
+ */
+export function kitchenNotReady(d: Pick<LiveDelivery, 'status' | 'order'>): boolean {
+  if (d.status !== 'pending' && d.status !== 'dispatching') return false;
+  const kitchen = d.order?.status;
+  return kitchen === 'pending' || kitchen === 'confirmed' || kitchen === 'preparing';
+}
+
 /** The server's dispatch state for one card, read with its stack, turns and last answer. */
 export function liveDispatchLine(
   d: LiveDelivery,
@@ -274,8 +285,20 @@ export function describeDelivery(
       return { label: { key: 'waitingKitchen' }, variant: 'muted', detail, overdue: age > OVERDUE_AFTER_MS };
     }
     case 'dispatching': {
-      const line = liveDispatchLine(d, nowMs, assignments, ctx);
       const overdue = age > OVERDUE_AFTER_MS;
+      // The kitchen is not done with it: a ticket recalled from the pass, or a row from before the
+      // rounds left 'dispatching' under an order the kitchen never finished. Nothing is offered to a
+      // rider for food that is not cooked, and the search starts when the kitchen marks it ready,
+      // so the card says what it waits for — not a search state, not a button it does not show.
+      if (kitchenNotReady(d)) {
+        return {
+          label: { key: 'waitingKitchen' },
+          variant: 'muted',
+          detail: { key: 'kitchenStatus', status: kitchen! },
+          overdue,
+        };
+      }
+      const line = liveDispatchLine(d, nowMs, assignments, ctx);
       // The verdict is the server's (deliveries.dispatch_state), never a clock on this side.
       if (line.kind === 'noRiderFound') {
         return {
@@ -496,7 +519,9 @@ export function boardCounts(ds: readonly LiveDelivery[]): BoardCounts {
         c.waitingKitchen += 1;
         break;
       case 'dispatching':
-        if (d.dispatch_state === 'no_rider_found') c.noRiderFound += 1;
+        // Counted the way its card is labelled: the kitchen's while the food is not ready.
+        if (kitchenNotReady(d)) c.waitingKitchen += 1;
+        else if (d.dispatch_state === 'no_rider_found') c.noRiderFound += 1;
         else c.findingRider += 1;
         break;
       case 'assigned':

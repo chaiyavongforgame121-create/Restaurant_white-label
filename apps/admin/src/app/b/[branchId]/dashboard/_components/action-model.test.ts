@@ -81,6 +81,12 @@ function delivery(over: Partial<LiveDelivery> = {}): LiveDelivery {
   };
 }
 
+/** A delivery whose order the kitchen has marked ready: only then is a rider looked for. */
+function ready(over: Partial<LiveDelivery> = {}): LiveDelivery {
+  const d = delivery(over);
+  return { ...d, order: d.order ? { ...d.order, status: 'ready' } : null };
+}
+
 function booking(over: Partial<DashboardScheduledOrder> = {}): DashboardScheduledOrder {
   return {
     id: 's1',
@@ -264,13 +270,13 @@ describe('readDeliveries', () => {
   });
 
   it('counts a live row and chases it once it is overdue', () => {
-    const overdue = readDeliveries([delivery({ created_at: minsAgo(45) })], NOW, false, BRANCH);
+    const overdue = readDeliveries([ready({ created_at: minsAgo(45) })], NOW, false, BRANCH);
     expect(overdue).toMatchObject({ inFlight: 1, stalled: 0 });
     expect(overdue.unaccepted).toHaveLength(1);
     expect(overdue.unaccepted[0]?.why).toEqual({ code: 'deliveryLookingForRider' });
     expect(overdue.unaccepted[0]?.title).toBe('#A-2609-991284');
 
-    const fresh = readDeliveries([delivery({ created_at: minsAgo(10) })], NOW, false, BRANCH);
+    const fresh = readDeliveries([ready({ created_at: minsAgo(10) })], NOW, false, BRANCH);
     expect(fresh).toMatchObject({ inFlight: 1, stalled: 0 });
     expect(fresh.unaccepted).toHaveLength(0);
   });
@@ -306,6 +312,40 @@ describe('readDeliveries', () => {
     expect(reading.inFlight).toBe(1);
     // Released (no longer held), the same row is chased again.
     expect(readDeliveries([booked], NOW, false, BRANCH).unaccepted).toHaveLength(1);
+  });
+
+  it('counts a round that found no rider as in flight, and asks for a person at once', () => {
+    // Ready twenty minutes ago, nobody online for the whole search window: the server ended the
+    // round. It is not overdue by age yet, but nothing is looking any more.
+    const ended = ready({
+      created_at: minsAgo(20),
+      dispatch_state: 'no_rider_found',
+      dispatch_round_started_at: minsAgo(16),
+      dispatch_history: [{ type: 'no_rider_found', reason: 'nobody_online', asked: 0, at: minsAgo(1) }],
+    });
+    const reading = readDeliveries([ended], NOW, false, BRANCH);
+    expect(reading.inFlight).toBe(1);
+    expect(reading.unaccepted).toHaveLength(1);
+    expect(reading.unaccepted[0]?.why).toEqual({ code: 'deliveryNoRiderFound', reason: 'nobodyOnline' });
+  });
+
+  it('announces a round ending with nobody even when the row was already listed', () => {
+    // Overdue while still searching (listed under its own id), then the window ran out: a key of
+    // its own, once per round, so Action Required flags it as new instead of silently relabelling.
+    const round = minsAgo(16);
+    const searching = ready({ created_at: minsAgo(40), dispatch_state: 'searching', dispatch_round_started_at: round });
+    const ended = {
+      ...searching,
+      dispatch_state: 'no_rider_found' as const,
+      dispatch_history: [{ type: 'no_rider_found', reason: 'everyone_asked', asked: 2, at: minsAgo(1), round }],
+    };
+    const before = readDeliveries([searching], NOW, false, BRANCH).unaccepted[0];
+    const after = readDeliveries([ended], NOW, false, BRANCH).unaccepted[0];
+    expect(before?.key).toBe('d1');
+    expect(after?.key).not.toBe(before?.key);
+    expect(after?.key).toBe(`d1:no-rider:${round}`);
+    // Still the same order to every other bucket.
+    expect(after?.orderId).toBe('ord1');
   });
 
   it('names the order each row is about', () => {
@@ -352,10 +392,43 @@ describe('unacceptedReason', () => {
   });
 
   it('counts the riders already asked', () => {
-    expect(unacceptedReason(delivery({ dispatch_attempts: 3 }), false)).toEqual({
+    expect(unacceptedReason(ready({ dispatch_attempts: 3 }), false, NOW)).toEqual({
       code: 'deliveryAskedRiders',
       count: 3,
     });
+  });
+
+  it('says what the server’s round says, as the Live deliveries card does', () => {
+    const round = minsAgo(10);
+    expect(
+      unacceptedReason(
+        ready({
+          dispatch_state: 'no_rider_found',
+          dispatch_round_started_at: round,
+          dispatch_history: [{ type: 'no_rider_found', reason: 'everyone_asked', asked: 2, at: minsAgo(1), round }],
+        }),
+        false,
+        NOW,
+      ),
+    ).toEqual({ code: 'deliveryNoRiderFound', reason: 'everyoneAsked' });
+    expect(
+      unacceptedReason(
+        ready({
+          dispatch_state: 'waiting',
+          dispatch_round_started_at: round,
+          dispatch_history: [{ type: 'waiting', reason: 'cooling_down', asked: 1, at: minsAgo(2), round }],
+        }),
+        false,
+        NOW,
+      ),
+    ).toEqual({ code: 'deliveryWaiting', count: 1, reason: 'cooldown' });
+    expect(
+      unacceptedReason(ready({ dispatch_state: null, dispatch_round_started_at: null }), false, NOW),
+    ).toEqual({ code: 'deliveryNotSearching' });
+    // Recalled to the kitchen with a round still on the row: the kitchen's, not a search.
+    expect(
+      unacceptedReason(delivery({ dispatch_state: 'searching', dispatch_round_started_at: round }), false, NOW),
+    ).toEqual({ code: 'deliveryKitchenStatus', status: 'preparing' });
   });
 
   it('separates self-delivery, an empty assignment and an expired offer', () => {

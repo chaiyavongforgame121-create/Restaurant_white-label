@@ -10,10 +10,12 @@ import { getBrowserClient } from '@favornoms/database/client';
 import { liftDriverCooldown } from '@favornoms/database/queries';
 import { activeCooldownUntil, cooldownEndLabel, liftMessage, type LiftMessage } from '../_lib/cooldown';
 
-// A rider on the strike cooldown (two missed or declined offers in 24 hours) gets no offers and
-// cannot go online, at any branch, for an hour. Nothing could end it early: on 2026-10-05 two
-// riders were put on it by the kitchen's own retries (each retry re-offered the order to the
-// rider who had just declined it) and the owner had to ask for it to be cleared by hand. This
+// A rider on a cooldown (two missed or declined offers in 24 hours: an hour; a job they accepted
+// and then cancelled: ten minutes) gets no offers and cannot go online, at any branch.
+// drivers.cooldown_until does not record which, so the copy names neither cause on its own.
+// Nothing could end it early: on 2026-10-05 two riders were put on it by the kitchen's own
+// retries (each retry re-offered the order to the rider who had just declined it) and the owner
+// had to ask for it to be cleared by hand. This
 // is the button for that (D8). The cooldown is the rider's, not the branch's, so the database
 // lets a platform admin lift it, or a manager with drivers.manage at every branch the rider
 // works for; anyone else is told why, the way the KYC review does.
@@ -36,7 +38,7 @@ function useIntlLocale(): string {
   return intlLocaleFor(isUiLocale(raw) ? raw : DEFAULT_UI_LOCALE);
 }
 
-/** "On a cooldown until 4:32 PM — too many missed or declined offers", on this device's clock. */
+/** "On a cooldown until 4:32 PM — no new offers until then", on this device's clock. */
 export function CooldownNotice({ until }: { until: string }) {
   const t = useTranslations('drivers');
   const intlLocale = useIntlLocale();

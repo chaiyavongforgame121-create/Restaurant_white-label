@@ -1,10 +1,11 @@
 -- Rider dispatch in the database (20261005100000_dispatch_in_database, docs/DISPATCH-FIXES-2026-10-05.md
--- D1-D6, D8). A rolled-back script, not a migration.
+-- D1-D6, D8), and the fixes after its review (20261006100000_dispatch_fixes: sections 13-20). A
+-- rolled-back script, not a migration.
 --
--- Run from the repo root once the migration is applied:
+-- Run from the repo root once the migrations are applied:
 --   SUPABASE_TELEMETRY_DISABLED=1 npx --yes supabase db query --linked \
 --     --project-ref ayyfczidnzxetndiijmv -f supabase/tests/dispatch_in_database.sql
--- Before it is applied, put the migration after a "begin;" of your own and this file (without its own
+-- Before one is applied, put it after a "begin;" of your own and this file (without its own
 -- "begin;" line) after it, in one transaction.
 --
 -- Everything happens inside one transaction that ends in ROLLBACK, on a restaurant this script creates
@@ -128,6 +129,12 @@ create or replace function pg_temp.fx(p_key text)
 returns uuid
 language sql
 as $$ select v from t_fx where k = p_key $$;
+
+-- Whether a delivery is out of any stack.
+create or replace function pg_temp.solo(p_delivery uuid)
+returns text
+language sql
+as $$ select (batch_id is null and batch_seq is null)::text from public.deliveries where id = p_delivery $$;
 
 -- The fixture label of a rider id ('-' for none), so expectations read as names.
 create or replace function pg_temp.who(p_driver uuid)
@@ -795,6 +802,563 @@ begin
     has_function_privilege('authenticated', 'private.dispatch_delivery(uuid, text)', 'execute')::text || ' '
     || has_function_privilege('authenticated', 'private.dispatch_sweep(uuid)', 'execute')::text || ' '
     || has_function_privilege('anon', 'public.staff_dispatch_delivery(uuid, boolean)', 'execute')::text);
+end
+$t$;
+
+-- 13. DL-1 / CONC-1: a stop whose order is cancelled stays cancelled; a closed order is never offered -------
+do $t$
+declare
+  d1 uuid;
+  d2 uuid;
+  du uuid;
+  dv uuid;
+begin
+  perform pg_temp.reset();
+  update public.branches set settings = settings || '{"batch_enabled": true}'::jsonb where id = pg_temp.fx('B1');
+  perform pg_temp.online('D1', false);
+  perform pg_temp.online('D2', false);
+  perform pg_temp.online('D3', false);
+  d1 := pg_temp.new_delivery('S', 0.03);
+  d2 := pg_temp.new_delivery('T', 0.031);
+  perform pg_temp.ready(d1);
+  perform pg_temp.ready(d2);
+  perform pg_temp.online('D1', true);
+  perform pg_temp.online('D2', true);
+  perform pg_temp.online('D3', true);
+  perform private.dispatch_sweep(pg_temp.fx('B1'));
+  perform pg_temp.expect('cancel in a stack: the stack is offered to D1', 'false assigned D1 searching | assigned D1 searching',
+    pg_temp.solo(d1) || ' ' || pg_temp.dsum(d1) || ' | ' || pg_temp.dsum(d2));
+
+  -- The second order is cancelled while the stack is on D1's screen, and D1 lets the offer lapse.
+  update public.orders set status = 'cancelled' where id = pg_temp.fx('o:T');
+  perform pg_temp.expect('cancel in a stack: the cancelled stop is cancelled with D1 still on it', 'cancelled D1 searching',
+    pg_temp.dsum(d2));
+  update public.deliveries set offer_expires_at = now() - interval '1 second' where id in (d1, d2) and status = 'assigned';
+  perform private.expire_dispatch_offers(pg_temp.fx('B1'));
+  perform pg_temp.expect('stack expiry: the cancelled stop stays cancelled, untouched by the expiry',
+    'cancelled D1 searching false 1',
+    pg_temp.dsum(d2) || ' '
+    || (select exists (select 1 from jsonb_array_elements(dispatch_history) e where e ->> 'type' = 'offer_expired')::text
+          from public.deliveries where id = d2) || ' '
+    || (select count(*)::text from public.delivery_assignments where delivery_id = d2));
+  perform pg_temp.expect('stack expiry: the live stop goes to the next rider on its own, the stack dissolved',
+    'assigned D2 searching true true',
+    pg_temp.dsum(d1) || ' ' || pg_temp.solo(d1) || ' ' || pg_temp.solo(d2));
+
+  -- An order completed by hand while its delivery waits: never offered, never swept, never stacked.
+  perform pg_temp.online('D1', false);
+  perform pg_temp.online('D3', false);
+  du := pg_temp.new_delivery('U', 0.05);
+  perform pg_temp.ready(du);
+  perform pg_temp.expect('closed order: the delivery waits (nobody free)', 'dispatching - waiting', pg_temp.dsum(du));
+  update public.orders set status = 'completed' where id = pg_temp.fx('o:U');
+  perform pg_temp.online('D1', true);
+  perform pg_temp.online('D3', true);
+  perform pg_temp.expect('closed order: dispatch_delivery refuses it', 'not_dispatchable order_closed completed',
+    (select (x ->> 'result') || ' ' || (x ->> 'reason') || ' ' || (x ->> 'order_status')
+       from private.dispatch_delivery(du, 'staff') x));
+  perform pg_temp.expect('closed order: the sweep does not look at it', '0 dispatching - waiting',
+    private.dispatch_sweep(pg_temp.fx('B1'))::text || ' ' || pg_temp.dsum(du));
+  dv := pg_temp.new_delivery('V', 0.051);
+  perform pg_temp.ready(dv);
+  perform pg_temp.expect('closed order: a new order on the way is not stacked with it', 'true true assigned D1 searching',
+    pg_temp.solo(dv) || ' ' || pg_temp.solo(du) || ' ' || pg_temp.dsum(dv));
+end
+$t$;
+
+-- 14. DL-4: a failed trip whose order was cancelled is not offered again ---------------------------------------
+do $t$
+declare
+  d uuid;
+begin
+  perform pg_temp.reset();
+  d := pg_temp.new_delivery('W');
+  perform pg_temp.ready(d);
+  perform pg_temp.act_as(pg_temp.fx('uD1'));
+  perform public.accept_dispatch(d);
+  perform pg_temp.act_as(null);
+  update public.deliveries set status = 'picked_up' where id = d;
+  -- Staff cancel the order while the food is out (the delivery is not touched by that), then the rider
+  -- gives up after pickup.
+  update public.orders set status = 'cancelled' where id = pg_temp.fx('o:W');
+  perform pg_temp.act_as(pg_temp.fx('uD1'));
+  perform public.driver_cancel_delivery(d, 'Customer not answering');
+  perform pg_temp.act_as(null);
+  perform pg_temp.expect('requeue a closed order: the trip failed', 'failed D1 -', pg_temp.dsum(d));
+  perform pg_temp.expect('requeue a closed order: refused', 'ERR order_closed',
+    pg_temp.try_as(pg_temp.fx('manager'), array[format('select public.requeue_failed_delivery(%L)::text', d)]));
+  perform pg_temp.expect('requeue a closed order: nobody is offered it', 'failed D1 - 1',
+    pg_temp.dsum(d) || ' ' || (select count(*)::text from public.delivery_assignments where delivery_id = d));
+  -- And dispatch itself refuses it, whatever its row says.
+  update public.deliveries
+     set status = 'dispatching', driver_id = null, accepted_at = null,
+         dispatch_round_started_at = clock_timestamp(), dispatch_state = 'searching'
+   where id = d;
+  perform pg_temp.expect('a cancelled order''s delivery is never offered', 'not_dispatchable order_closed dispatching - searching',
+    (select (x ->> 'result') || ' ' || (x ->> 'reason') from private.dispatch_delivery(d, 'auto') x)
+    || ' ' || pg_temp.dsum(d));
+end
+$t$;
+
+-- 15. DL-2: a stack never inherits another round's exclusions --------------------------------------------------
+do $t$
+declare
+  da uuid;
+  db uuid;
+  dc uuid;
+  dd uuid;
+  de uuid;
+  df uuid;
+  v jsonb;
+begin
+  -- A fresh order next to one every rider has declined.
+  perform pg_temp.reset();
+  update public.branches set settings = settings || '{"batch_enabled": true}'::jsonb where id = pg_temp.fx('B1');
+  da := pg_temp.new_delivery('X', 0.03);
+  perform pg_temp.ready(da);
+  perform pg_temp.act_as(pg_temp.fx('uD1')); perform public.reject_dispatch(da, 'declined');
+  perform pg_temp.act_as(pg_temp.fx('uD2')); perform public.reject_dispatch(da, 'declined');
+  perform pg_temp.act_as(pg_temp.fx('uD3')); perform public.reject_dispatch(da, 'declined');
+  perform pg_temp.act_as(null);
+  perform pg_temp.expect('inherit: the first order has asked everyone', 'dispatching - waiting | waiting everyone_asked',
+    pg_temp.dsum(da) || ' | ' || pg_temp.last_entry(da));
+  db := pg_temp.new_delivery('Y', 0.031);
+  perform pg_temp.ready(db);
+  perform pg_temp.expect('inherit: a fresh order is not stacked with it, and is offered at once',
+    'true true assigned D1 searching | dispatching - waiting',
+    pg_temp.solo(db) || ' ' || pg_temp.solo(da) || ' ' || pg_temp.dsum(db) || ' | ' || pg_temp.dsum(da));
+
+  -- Two waiting orders, each declined by a different rider, are not paired by the sweep.
+  perform pg_temp.reset();
+  update public.branches set settings = settings || '{"batch_enabled": true}'::jsonb where id = pg_temp.fx('B1');
+  perform pg_temp.online('D2', false);
+  perform pg_temp.online('D3', false);
+  dc := pg_temp.new_delivery('Z1', 0.03);
+  perform pg_temp.ready(dc);
+  perform pg_temp.act_as(pg_temp.fx('uD1')); perform public.reject_dispatch(dc, 'declined');
+  perform pg_temp.act_as(null);
+  perform pg_temp.online('D1', false);
+  perform pg_temp.online('D2', true);
+  dd := pg_temp.new_delivery('Z2', 0.031);
+  perform pg_temp.ready(dd);
+  perform pg_temp.act_as(pg_temp.fx('uD2')); perform public.reject_dispatch(dd, 'declined');
+  perform pg_temp.act_as(null);
+  perform pg_temp.expect('inherit: two orders, each declined by a different rider, both waiting',
+    'dispatching - waiting | dispatching - waiting', pg_temp.dsum(dc) || ' | ' || pg_temp.dsum(dd));
+  perform pg_temp.online('D1', true);
+  perform pg_temp.expect('inherit: the sweep offers each to the rider who has not declined it, unstacked',
+    '2 assigned D2 searching | assigned D1 searching true true',
+    private.dispatch_sweep(pg_temp.fx('B1'))::text || ' ' || pg_temp.dsum(dc) || ' | ' || pg_temp.dsum(dd)
+    || ' ' || pg_temp.solo(dc) || ' ' || pg_temp.solo(dd));
+
+  -- A stack whose rounds came apart (paired before this fix): broken up when it finds nobody, and the
+  -- stop nobody was asked about goes to the free rider.
+  perform pg_temp.reset();
+  update public.branches set settings = settings || '{"batch_enabled": true}'::jsonb where id = pg_temp.fx('B1');
+  de := pg_temp.new_delivery('Z3', 0.03);
+  perform pg_temp.ready(de);
+  perform pg_temp.act_as(pg_temp.fx('uD1')); perform public.reject_dispatch(de, 'declined');
+  perform pg_temp.act_as(pg_temp.fx('uD2')); perform public.reject_dispatch(de, 'declined');
+  perform pg_temp.act_as(pg_temp.fx('uD3')); perform public.reject_dispatch(de, 'declined');
+  perform pg_temp.act_as(null);
+  perform pg_temp.online('D1', false);
+  perform pg_temp.online('D2', false);
+  perform pg_temp.online('D3', false);
+  df := pg_temp.new_delivery('Z4', 0.031);
+  perform pg_temp.ready(df);
+  perform pg_temp.expect('broken stack: the fresh order waits on its own (nobody online)', 'true waiting nobody_online',
+    pg_temp.solo(df) || ' ' || pg_temp.last_entry(df));
+  update public.deliveries set batch_id = gen_random_uuid() where id = de;
+  update public.deliveries
+     set batch_id = (select batch_id from public.deliveries where id = de),
+         batch_seq = case when id = de then 1 else 2 end
+   where id in (de, df);
+  perform pg_temp.online('D1', true);
+  v := private.dispatch_delivery(de, 'auto');
+  perform pg_temp.expect('broken stack: the stack finds nobody and is broken up; the other stop is offered alone',
+    'waiting offered D1 | dispatching - waiting | assigned D1 searching | true true',
+    (v ->> 'result') || ' ' || (v -> 'unstacked' -> 'others' -> 0 ->> 'result') || ' '
+    || pg_temp.who((v -> 'unstacked' -> 'others' -> 0 ->> 'driver_id')::uuid) || ' | '
+    || pg_temp.dsum(de) || ' | ' || pg_temp.dsum(df) || ' | ' || pg_temp.solo(de) || ' ' || pg_temp.solo(df));
+  perform pg_temp.expect('broken stack: the waiting stop counts its own riders asked', '3 3',
+    (select (dispatch_history -> -1 ->> 'asked') from public.deliveries where id = de) || ' ' || (v ->> 'asked_count'));
+end
+$t$;
+
+-- 16. DL-3 / CONC-8: Find rider again moves on from the withdrawn rider; "free but not this step" is searching ---
+do $t$
+declare
+  dg uuid;
+  dh uuid;
+  v jsonb;
+begin
+  perform pg_temp.reset();
+  dg := pg_temp.new_delivery('Z5');
+  perform pg_temp.ready(dg);
+  perform pg_temp.expect('withdraw and move on: offered to D1', 'assigned D1 searching', pg_temp.dsum(dg));
+  perform pg_temp.act_as(pg_temp.fx('manager'));
+  v := public.staff_dispatch_delivery(dg, true);
+  perform pg_temp.act_as(null);
+  perform pg_temp.expect('withdraw and move on: the next rider is offered, not the one just withdrawn',
+    'offered D2 assigned D2 searching', (v ->> 'result') || ' ' || pg_temp.who((v ->> 'driver_id')::uuid) || ' ' || pg_temp.dsum(dg));
+  perform pg_temp.expect('withdraw and move on: the withdrawn rider is not written into the new round', 'false 0',
+    (pg_temp.fx('D1') = any (private.dispatch_asked_riders(array[dg])))::text || ' ' || pg_temp.strikes(pg_temp.fx('D1'), dg));
+
+  -- Only the withdrawn rider is free: this step does not offer it to him again at once, and does not call
+  -- him busy; the next sweep may come back to him.
+  perform pg_temp.reset();
+  perform pg_temp.online('D2', false);
+  perform pg_temp.online('D3', false);
+  dh := pg_temp.new_delivery('Z6');
+  perform pg_temp.ready(dh);
+  perform pg_temp.act_as(pg_temp.fx('manager'));
+  v := public.staff_dispatch_delivery(dh, true);
+  perform pg_temp.act_as(null);
+  perform pg_temp.expect('only the withdrawn rider is free: still searching, not "busy", not re-offered at once',
+    'waiting retry_shortly 0 | dispatching - searching | withdrawn',
+    (v ->> 'result') || ' ' || (v ->> 'reason') || ' ' || (v ->> 'asked_count') || ' | ' || pg_temp.dsum(dh)
+    || ' | ' || pg_temp.last_entry(dh));
+  perform pg_temp.expect('only the withdrawn rider is free: the next sweep offers it to him', '1 assigned D1 searching',
+    private.dispatch_sweep(pg_temp.fx('B1'))::text || ' ' || pg_temp.dsum(dh));
+end
+$t$;
+
+-- 17. BE-2 / CONC-2: an order taken back from ready ends its round ---------------------------------------------
+do $t$
+declare
+  dk uuid;
+  dl uuid;
+  dm uuid;
+  dn1 uuid;
+  dn2 uuid;
+  v_round timestamptz;
+  v_hi uuid;
+  v_hist integer;
+begin
+  -- Recall while an offer is out.
+  perform pg_temp.reset();
+  dk := pg_temp.new_delivery('K1');
+  perform pg_temp.ready(dk);
+  select dispatch_round_started_at into v_round from public.deliveries where id = dk;
+  perform pg_temp.expect('recall: offered to D1', 'assigned D1 searching', pg_temp.dsum(dk));
+  perform pg_temp.act_as(pg_temp.fx('kitchen'));
+  perform public.recall_order(pg_temp.fx('o:K1'));
+  perform pg_temp.act_as(null);
+  perform pg_temp.expect('recall: the offer is withdrawn without a strike; the delivery waits for the kitchen, outside any round',
+    'pending - - true 0',
+    pg_temp.dsum(dk) || ' ' || (select (dispatch_round_started_at is null)::text from public.deliveries where id = dk)
+    || ' ' || pg_temp.strikes(pg_temp.fx('D1')));
+  perform pg_temp.expect('recall: the rider''s turn is closed as withdrawn by staff', 'reassigned reassigned_by_staff order_recalled',
+    (select a.status || ' ' || a.end_kind || ' ' || a.end_reason from public.delivery_assignments a
+      where a.delivery_id = dk and a.driver_id = pg_temp.fx('D1')));
+  perform pg_temp.expect('recall: logged as withdrawn, then recalled', 'withdrawn order_recalled | recalled',
+    (select (dispatch_history -> -2 ->> 'type') || ' ' || (dispatch_history -> -2 ->> 'reason') || ' | '
+            || (dispatch_history -> -1 ->> 'type')
+       from public.deliveries where id = dk));
+  perform pg_temp.expect('recall: the sweep leaves it alone, and Find rider is refused while it cooks',
+    '0 not_dispatchable kitchen_not_ready pending - -',
+    private.dispatch_sweep(pg_temp.fx('B1'))::text || ' '
+    || (select (x ->> 'result') || ' ' || (x ->> 'reason') from private.dispatch_delivery(dk, 'staff') x)
+    || ' ' || pg_temp.dsum(dk));
+  perform pg_temp.ready(dk);
+  perform pg_temp.expect('ready again: a fresh round, offered at once', 'assigned D1 searching true',
+    pg_temp.dsum(dk) || ' ' || (select (dispatch_round_started_at > v_round)::text from public.deliveries where id = dk));
+
+  -- Undo (the kitchen's bare update) on a waiting delivery.
+  perform pg_temp.reset();
+  perform pg_temp.online('D1', false);
+  perform pg_temp.online('D2', false);
+  perform pg_temp.online('D3', false);
+  dl := pg_temp.new_delivery('K2');
+  perform pg_temp.ready(dl);
+  perform pg_temp.expect('undo: the delivery was waiting', 'dispatching - waiting', pg_temp.dsum(dl));
+  update public.orders set status = 'preparing' where id = pg_temp.fx('o:K2');
+  perform pg_temp.expect('undo: back to pending, outside any round', 'pending - - true',
+    pg_temp.dsum(dl) || ' ' || (select (dispatch_round_started_at is null)::text from public.deliveries where id = dl));
+
+  -- A job a rider accepted stays his; Ready again does not lock it (CONC-4), and his pickup moves the order.
+  perform pg_temp.reset();
+  dm := pg_temp.new_delivery('K3');
+  perform pg_temp.ready(dm);
+  perform pg_temp.act_as(pg_temp.fx('uD1'));
+  perform public.accept_dispatch(dm);
+  perform pg_temp.act_as(null);
+  v_hist := (select jsonb_array_length(dispatch_history) from public.deliveries where id = dm);
+  perform pg_temp.act_as(pg_temp.fx('kitchen'));
+  perform public.recall_order(pg_temp.fx('o:K3'));
+  perform pg_temp.act_as(null);
+  perform pg_temp.expect('recall after accept: the rider keeps the job, the row is not written', 'assigned D1 - true true',
+    pg_temp.dsum(dm) || ' ' || (select (accepted_at is not null)::text || ' '
+                                       || (jsonb_array_length(dispatch_history) = v_hist)::text
+                                  from public.deliveries where id = dm));
+  perform pg_temp.ready(dm);
+  perform pg_temp.expect('ready after accept: the rider keeps the job, the row is not written', 'assigned D1 - true',
+    pg_temp.dsum(dm) || ' ' || (select (jsonb_array_length(dispatch_history) = v_hist)::text
+                                  from public.deliveries where id = dm));
+  -- Row locks cannot be watched from one session (this transaction's own locks never block it), so
+  -- the order is read off the function: the accepted job is answered before any row is locked.
+  perform pg_temp.expect('lock order: dispatch_delivery answers an accepted job before it locks a row', 'true',
+    (select (position('''already_accepted''' in def) between 1 and position('for update' in def))::text
+       from (select pg_get_functiondef('private.dispatch_delivery(uuid, text)'::regprocedure) as def) f));
+  update public.deliveries set pickup_photo_url = 'test://pickup.jpg' where id = dm;
+  perform pg_temp.act_as(pg_temp.fx('uD1'));
+  perform public.progress_delivery(dm, 'picked_up');
+  perform pg_temp.act_as(null);
+  perform pg_temp.expect('pickup: the delivery and the order move on', 'picked_up D1 - out_for_delivery',
+    pg_temp.dsum(dm) || ' ' || (select status::text from public.orders where id = pg_temp.fx('o:K3')));
+
+  -- Recall one stop of a stack whose offer is out.
+  perform pg_temp.reset();
+  update public.branches set settings = settings || '{"batch_enabled": true}'::jsonb where id = pg_temp.fx('B1');
+  perform pg_temp.online('D1', false);
+  perform pg_temp.online('D2', false);
+  perform pg_temp.online('D3', false);
+  dn1 := pg_temp.new_delivery('K4', 0.03);
+  dn2 := pg_temp.new_delivery('K5', 0.031);
+  perform pg_temp.ready(dn1);
+  perform pg_temp.ready(dn2);
+  perform pg_temp.online('D1', true);
+  perform pg_temp.online('D2', true);
+  perform pg_temp.online('D3', true);
+  perform private.dispatch_sweep(pg_temp.fx('B1'));
+  perform pg_temp.expect('recall in a stack: the stack is offered to D1', 'false assigned D1 searching | assigned D1 searching',
+    pg_temp.solo(dn1) || ' ' || pg_temp.dsum(dn1) || ' | ' || pg_temp.dsum(dn2));
+  perform pg_temp.act_as(pg_temp.fx('kitchen'));
+  perform public.recall_order(pg_temp.fx('o:K4'));
+  perform pg_temp.act_as(null);
+  perform pg_temp.expect('recall in a stack: this stop goes back to the kitchen, the other goes to the next rider alone, no strike',
+    'pending - - | assigned D2 searching | true true 0',
+    pg_temp.dsum(dn1) || ' | ' || pg_temp.dsum(dn2) || ' | ' || pg_temp.solo(dn1) || ' ' || pg_temp.solo(dn2)
+    || ' ' || pg_temp.strikes(pg_temp.fx('D1')));
+
+  -- 18. CONC-3 / CONC-5: the rider's own writes, in either order ----------------------------------------------
+  perform pg_temp.reset();
+  dk := pg_temp.new_delivery('L1');
+  perform pg_temp.ready(dk);
+  perform pg_temp.act_as(pg_temp.fx('uD1'));
+  perform public.set_driver_location(pg_temp.fx('D1'), -95.0, 30.0021, 80);
+  perform public.accept_dispatch(dk);
+  perform pg_temp.act_as(null);
+  perform pg_temp.expect('a GPS ping on an open offer, then Accept: both go through', 'assigned D1 - 30.0021 30.0021',
+    pg_temp.dsum(dk) || ' ' || (select driver_lat::text from public.deliveries where id = dk) || ' '
+    || (select round(st_y(current_location::geometry)::numeric, 4)::text from public.drivers where id = pg_temp.fx('D1')));
+  dl := pg_temp.new_delivery('L2');
+  perform pg_temp.ready(dl);
+  perform pg_temp.act_as(pg_temp.fx('uD2'));
+  perform public.accept_dispatch(dl);
+  perform public.set_driver_location(pg_temp.fx('D2'), -95.0, 30.0051, 70);
+  perform pg_temp.act_as(null);
+  perform pg_temp.expect('Accept, then a GPS ping: both go through', 'assigned D2 - 30.0051 70',
+    pg_temp.dsum(dl) || ' ' || (select driver_lat::text from public.deliveries where id = dl) || ' '
+    || (select battery_level::text from public.drivers where id = pg_temp.fx('D2')));
+  perform pg_temp.expect('another rider''s ping cannot write this rider''s row', 'ERR forbidden',
+    pg_temp.try_as(pg_temp.fx('uD2'), array[format('select public.set_driver_location(%L, -95.0, 30.0, null)::text', pg_temp.fx('D1'))]));
+
+  perform pg_temp.reset();
+  update public.branches set settings = settings || '{"batch_enabled": true}'::jsonb where id = pg_temp.fx('B1');
+  perform pg_temp.online('D1', false);
+  perform pg_temp.online('D2', false);
+  perform pg_temp.online('D3', false);
+  dn1 := pg_temp.new_delivery('L3', 0.03);
+  dn2 := pg_temp.new_delivery('L4', 0.031);
+  perform pg_temp.ready(dn1);
+  perform pg_temp.ready(dn2);
+  perform pg_temp.online('D1', true);
+  perform private.dispatch_sweep(pg_temp.fx('B1'));
+  v_hi := greatest(dn1, dn2);
+  perform pg_temp.act_as(pg_temp.fx('uD1'));
+  perform public.accept_dispatch(v_hi);
+  perform pg_temp.act_as(null);
+  perform pg_temp.expect('a stack accepted through its higher-id stop: both stops are the rider''s', 'assigned D1 - | assigned D1 - | 2',
+    pg_temp.dsum(dn1) || ' | ' || pg_temp.dsum(dn2) || ' | '
+    || (select count(*)::text from public.deliveries where id in (dn1, dn2) and accepted_at is not null));
+
+  perform pg_temp.expect('lock order: accept_dispatch takes the branch lock before any row lock', 'true',
+    (select (position('private.dispatch_lock_branch' in def) between 1 and position('for update' in def))::text
+       from (select pg_get_functiondef('public.accept_dispatch(uuid)'::regprocedure) as def) f));
+  perform pg_temp.expect('lock order: set_driver_location writes deliveries (skipping locked ones) before the rider''s row', 'true true',
+    (select (position('update public.deliveries' in def) between 1 and position('update public.drivers' in def))::text
+            || ' ' || (def like '%skip locked%')::text
+       from (select pg_get_functiondef('public.set_driver_location(uuid, double precision, double precision, integer)'::regprocedure) as def) f));
+  perform pg_temp.expect('lock order: progress_delivery locks the order before the delivery', 'true',
+    (select (position('from public.orders' in def) between 1 and position('for update;' in def))::text
+       from (select pg_get_functiondef('public.progress_delivery(uuid, delivery_status)'::regprocedure) as def) f));
+end
+$t$;
+
+-- 19. CONC-6: the expiry scan has its index ----------------------------------------------------------------------
+do $t$
+declare
+  v_line text;
+  v_plan text := '';
+begin
+  perform pg_temp.expect('the expiry index: open offers by expiry', 'true',
+    (select (indexdef like '%(offer_expires_at)%' and indexdef like '%accepted_at IS NULL%'
+             and indexdef like '%''assigned''%')::text
+       from pg_indexes where schemaname = 'public' and indexname = 'deliveries_open_offer_expiry_idx'));
+  perform set_config('enable_seqscan', 'off', true);
+  for v_line in execute
+    'explain select d.id from public.deliveries d
+      where d.status = ''assigned'' and d.accepted_at is null
+        and d.offer_expires_at is not null and d.offer_expires_at < now()'
+  loop
+    v_plan := v_plan || v_line || ' ';
+  end loop;
+  perform set_config('enable_seqscan', 'on', true);
+  perform pg_temp.expect('the expiry index: the expiry''s query can use it', 'true',
+    (v_plan like '%deliveries_open_offer_expiry_idx%')::text);
+
+  perform pg_temp.expect('the new trigger functions are not callable by app users', 'false false',
+    has_function_privilege('authenticated', 'private.orders_unready_withdraws_dispatch()', 'execute')::text || ' '
+    || has_function_privilege('authenticated', 'private.notify_offer_kick()', 'execute')::text);
+  perform pg_temp.expect('the rider''s RPCs keep their grants', 'true true true true false false',
+    has_function_privilege('authenticated', 'public.set_driver_location(uuid, double precision, double precision, integer)', 'execute')::text || ' '
+    || has_function_privilege('authenticated', 'public.progress_delivery(uuid, delivery_status)', 'execute')::text || ' '
+    || has_function_privilege('authenticated', 'public.accept_dispatch(uuid)', 'execute')::text || ' '
+    || has_function_privilege('authenticated', 'public.reject_dispatch(uuid, text)', 'execute')::text || ' '
+    || has_function_privilege('anon', 'public.accept_dispatch(uuid)', 'execute')::text || ' '
+    || has_function_privilege('authenticated', 'public.claim_batch_sibling(uuid)', 'execute')::text);
+  perform pg_temp.expect('recall trigger: on an order leaving ready backwards', 'true',
+    (select (pg_get_triggerdef(t.oid) like '%AFTER UPDATE OF status ON public.orders%'
+             and pg_get_triggerdef(t.oid) like '%''ready''%')::text
+       from pg_trigger t where t.tgname = 'orders_unready_withdraws_dispatch'
+        and t.tgrelid = 'public.orders'::regclass));
+end
+$t$;
+
+-- 20. A decline that lands once the offer has run out is the offer expiring ----------------------------------
+do $t$
+declare
+  d uuid;
+  d1 uuid;
+  d2 uuid;
+begin
+  -- A live decline stays a decline.
+  perform pg_temp.reset();
+  d := pg_temp.new_delivery('T1');
+  perform pg_temp.ready(d);
+  perform pg_temp.act_as(pg_temp.fx('uD1')); perform public.reject_dispatch(d, 'declined');
+  perform pg_temp.act_as(null);
+  perform pg_temp.expect('late decline: a decline in time is a reject', 'rejected declined | rejected rejected | reject | assigned D2 searching',
+    (select h ->> 'type' || ' ' || (h ->> 'reason') from public.deliveries x
+       cross join lateral jsonb_array_elements(x.dispatch_history) h
+      where x.id = d and h ->> 'type' in ('rejected', 'offer_expired')) || ' | '
+    || (select a.status || ' ' || a.end_kind from public.delivery_assignments a
+         where a.delivery_id = d and a.driver_id = pg_temp.fx('D1')) || ' | '
+    || (select string_agg(type, ',') from public.driver_penalty_events where driver_id = pg_temp.fx('D1')) || ' | '
+    || pg_temp.dsum(d));
+
+  -- The phone's countdown decline.
+  perform pg_temp.reset();
+  d := pg_temp.new_delivery('T2');
+  perform pg_temp.ready(d);
+  perform pg_temp.act_as(pg_temp.fx('uD1')); perform public.reject_dispatch(d, 'timeout');
+  perform pg_temp.act_as(null);
+  perform pg_temp.expect('late decline: the countdown decline is an expiry, and the next rider is asked now',
+    'offer_expired timeout | expired offer_expired | timeout | assigned D2 searching',
+    (select h ->> 'type' || ' ' || (h ->> 'reason') from public.deliveries x
+       cross join lateral jsonb_array_elements(x.dispatch_history) h
+      where x.id = d and h ->> 'type' in ('rejected', 'offer_expired')) || ' | '
+    || (select a.status || ' ' || a.end_kind from public.delivery_assignments a
+         where a.delivery_id = d and a.driver_id = pg_temp.fx('D1')) || ' | '
+    || (select string_agg(type, ',') from public.driver_penalty_events where driver_id = pg_temp.fx('D1')) || ' | '
+    || pg_temp.dsum(d));
+
+  -- Decline tapped after the deadline, before the sweep cleared it.
+  perform pg_temp.reset();
+  d := pg_temp.new_delivery('T3');
+  perform pg_temp.ready(d);
+  update public.deliveries set offer_expires_at = now() - interval '1 second' where id = d;
+  perform pg_temp.act_as(pg_temp.fx('uD1')); perform public.reject_dispatch(d, 'declined');
+  perform pg_temp.act_as(null);
+  perform pg_temp.expect('late decline: a decline past the deadline is an expiry too, one strike',
+    'offer_expired declined | expired offer_expired | timeout | assigned D2 searching',
+    (select h ->> 'type' || ' ' || (h ->> 'reason') from public.deliveries x
+       cross join lateral jsonb_array_elements(x.dispatch_history) h
+      where x.id = d and h ->> 'type' in ('rejected', 'offer_expired')) || ' | '
+    || (select a.status || ' ' || a.end_kind from public.delivery_assignments a
+         where a.delivery_id = d and a.driver_id = pg_temp.fx('D1')) || ' | '
+    || (select string_agg(type, ',') from public.driver_penalty_events where driver_id = pg_temp.fx('D1')) || ' | '
+    || pg_temp.dsum(d));
+
+  -- A stack's countdown decline: both stops expire, one strike, the stack moves on as a unit.
+  perform pg_temp.reset();
+  update public.branches set settings = settings || '{"batch_enabled": true}'::jsonb where id = pg_temp.fx('B1');
+  perform pg_temp.online('D1', false);
+  perform pg_temp.online('D2', false);
+  perform pg_temp.online('D3', false);
+  d1 := pg_temp.new_delivery('T4', 0.03);
+  d2 := pg_temp.new_delivery('T5', 0.031);
+  perform pg_temp.ready(d1);
+  perform pg_temp.ready(d2);
+  perform pg_temp.online('D1', true);
+  perform pg_temp.online('D2', true);
+  perform private.dispatch_sweep(pg_temp.fx('B1'));
+  perform pg_temp.expect('late decline: the stack is offered to D1', 'assigned D1 searching | assigned D1 searching',
+    pg_temp.dsum(d1) || ' | ' || pg_temp.dsum(d2));
+  perform pg_temp.act_as(pg_temp.fx('uD1')); perform public.reject_dispatch(d2, 'timeout');
+  perform pg_temp.act_as(null);
+  perform pg_temp.expect('late decline: a stack''s countdown decline expires both stops, one strike, the stack moves on',
+    'offer_expired offer_expired | timeout | assigned D2 searching | assigned D2 searching',
+    (select h ->> 'type' from public.deliveries x cross join lateral jsonb_array_elements(x.dispatch_history) h
+      where x.id = d1 and h ->> 'type' in ('rejected', 'offer_expired')) || ' '
+    || (select h ->> 'type' from public.deliveries x cross join lateral jsonb_array_elements(x.dispatch_history) h
+      where x.id = d2 and h ->> 'type' in ('rejected', 'offer_expired')) || ' | '
+    || (select string_agg(type, ',') from public.driver_penalty_events where driver_id = pg_temp.fx('D1')) || ' | '
+    || pg_temp.dsum(d1) || ' | ' || pg_temp.dsum(d2));
+end
+$t$;
+
+-- 21. CONC-7: a rider offer kicks the notify worker when its transaction commits ------------------------------
+-- Last on purpose: SET CONSTRAINTS ... IMMEDIATE fires every deferred kick this transaction has queued
+-- so far, and keeps the trigger immediate until the rollback.
+-- The calls this transaction queued, found by the txid the kick writes into its body (other sessions
+-- queue and the pg_net worker drains calls all the time, so a count of the whole queue would race).
+create or replace function pg_temp.my_kicks()
+returns setof net.http_request_queue
+language sql
+as $$
+  select q.* from net.http_request_queue q
+   where q.body is not null
+     and convert_from(q.body, 'UTF8') like '%"txid": ' || txid_current()::text || ',%'
+$$;
+
+do $t$
+declare
+  v_url text := nullif(btrim(coalesce(private.get_setting('notify_worker_url'), '')), '');
+  v_secret text := nullif(private.get_setting('notify_worker_secret'), '');
+  v_req record;
+  d uuid;
+begin
+  perform pg_temp.reset();
+  perform pg_temp.expect('kick: a deferred trigger on the outbox, for rider offers only', 'true true true',
+    (select t.tgdeferrable::text || ' ' || t.tginitdeferred::text || ' '
+            || (pg_get_triggerdef(t.oid) like '%new_dispatch%')::text
+       from pg_trigger t where t.tgname = 'notifications_outbox_kick_offer_push'
+        and t.tgrelid = 'public.notifications_outbox'::regclass));
+  d := pg_temp.new_delivery('M1');
+  perform pg_temp.ready(d);
+  perform pg_temp.expect('kick: an offer is queued, and nothing is sent before the commit', 'assigned D1 searching 0',
+    pg_temp.dsum(d) || ' ' || (select count(*)::text from pg_temp.my_kicks()));
+
+  -- As at commit: every offer this transaction queued (sections 1-20) fires its deferred kick now.
+  set constraints public.notifications_outbox_kick_offer_push immediate;
+  perform pg_temp.expect('kick: at commit, one call to the worker for the transaction''s offers (none without a worker URL)',
+    case when v_url is null then '0' else '1' end, (select count(*)::text from pg_temp.my_kicks()));
+  if v_url is not null then
+    select * into v_req from pg_temp.my_kicks() limit 1;
+    perform pg_temp.expect('kick: to notify_worker_url, POST, offers only', 'true POST offers new_dispatch',
+      (v_req.url = v_url)::text || ' ' || v_req.method || ' '
+      || (convert_from(v_req.body, 'UTF8')::jsonb ->> 'scope') || ' '
+      || (convert_from(v_req.body, 'UTF8')::jsonb ->> 'source'));
+    perform pg_temp.expect('kick: the worker secret is sent only when one is set', 'true',
+      ((v_req.headers ? 'x-worker-secret') = (v_secret is not null))::text);
+  end if;
+
+  d := pg_temp.new_delivery('M2');
+  perform pg_temp.ready(d);
+  perform pg_temp.expect('kick: once per transaction', 'assigned D2 searching ' || case when v_url is null then '0' else '1' end,
+    pg_temp.dsum(d) || ' ' || (select count(*)::text from pg_temp.my_kicks()));
 end
 $t$;
 

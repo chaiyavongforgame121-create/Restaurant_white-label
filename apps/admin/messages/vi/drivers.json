@@ -50,8 +50,8 @@
     "approvedNeedsDocuments": "Đã duyệt, nhưng giấy tờ vẫn cần được xem xét — hãy dùng Xem giấy tờ.",
     "replacedAfterVerify": "Tài xế đã thay một giấy tờ lúc {received}, sau khi được xác minh ngày {verified} — hãy xem lại.",
     "replacedAfterDecision": "Tài xế đã thay một giấy tờ lúc {received}, sau quyết định của bạn ngày {reviewed}.",
-    "coolingDown": "Tạm khóa nhận đơn đến {time} — bỏ lỡ hoặc từ chối quá nhiều lời mời",
-    "coolingDownNoTime": "Đang tạm khóa nhận đơn — bỏ lỡ hoặc từ chối quá nhiều lời mời"
+    "coolingDown": "Tạm khóa nhận đơn đến {time} — không nhận lời mời mới cho đến lúc đó",
+    "coolingDownNoTime": "Đang tạm khóa nhận đơn — không nhận lời mời mới cho đến khi hết hạn"
   },
   "kycStatus": {
     "pending": "đang chờ",
@@ -116,7 +116,7 @@
   "cooldown": {
     "lift": "Gỡ tạm khóa",
     "confirmTitle": "Cho {name} nhận đơn lại?",
-    "confirmBody": "Hệ thống tự động tạm khóa sau khi bỏ lỡ hoặc từ chối lời mời. Gỡ khóa sẽ cho {name} bật nhận đơn và nhận lời mời ngay, ở mọi chi nhánh mà họ giao.",
+    "confirmBody": "Hệ thống tự động tạm khóa sau khi bỏ lỡ hoặc từ chối lời mời, hoặc sau khi {name} hủy một đơn đã nhận. Gỡ khóa sẽ cho {name} bật nhận đơn và nhận lời mời ngay, ở mọi chi nhánh mà họ giao.",
     "noteLabel": "Ghi chú lưu nhật ký (không bắt buộc)",
     "notePlaceholder": "ví dụ: ứng dụng bị treo, không phải lỗi của tài xế",
     "confirm": "Gỡ tạm khóa",

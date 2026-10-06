@@ -2,11 +2,11 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, useIsPresent } from 'framer-motion';
 import { Bike, Check, MapPin, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { formatCurrency, kmToMi } from '@favornoms/shared';
-import { secondsLeft, type DispatchNotice } from '@/lib/alerts';
+import { offerKey, secondsLeft, type DispatchNotice } from '@/lib/alerts';
 import { useDelivery, type ActiveDeliveryUI, type DispatchAnswer } from './delivery-provider';
 
 /** How long "this offer is no longer yours" stays up once the sheet has gone. */
@@ -39,12 +39,19 @@ export function DispatchOfferOverlay() {
   const answer = async (offerId: string, run: () => Promise<DispatchAnswer>): Promise<boolean> => {
     const result = await run();
     if (result.ok) {
-      setNotice(null);
+      setNotice((current) => (current?.offerId === offerId ? null : current));
       return true;
     }
     setNotice({ offerId, kind: result.notice });
     return false;
   };
+
+  // A notice belongs to its offer. Once another offer is on screen it is stale, and must not
+  // come back as the "no longer yours" toast when that one leaves.
+  const offeredId = offered?.id ?? null;
+  React.useEffect(() => {
+    if (offeredId) setNotice((current) => (current && current.offerId !== offeredId ? null : current));
+  }, [offeredId]);
 
   // A refused answer keeps the sheet up while the server is asked what the offer is now. When the
   // answer is that it moved on, the sheet goes, and this says why rather than letting the offer
@@ -61,19 +68,24 @@ export function DispatchOfferOverlay() {
     <>
       <AnimatePresence>
         {offered && offerDeadlineMs != null && (
+          // One sheet per offer. Unkeyed, an offer that arrived while the last sheet was still
+          // sliding away took that sheet over, busy from the answer just given: both buttons
+          // disabled and its timeout suppressed, so the rider could not take it and the sweep
+          // struck them for letting it lapse.
           <DispatchSheet
+            key={offerKey(offered)}
             offer={offered}
             deadlineMs={offerDeadlineMs}
             notice={notice?.offerId === offered.id ? notice.kind : null}
             onAccept={async () => {
-              const ok = await answer(offered.id, accept);
+              const ok = await answer(offered.id, () => accept(offered.id));
               // Hand the rider straight to the active run instead of leaving them on
               // whatever screen the offer interrupted.
               if (ok) router.push('/app/active');
               return ok;
             }}
-            onReject={() => answer(offered.id, () => reject('declined'))}
-            onTimeout={() => answer(offered.id, () => reject('timeout'))}
+            onReject={() => answer(offered.id, () => reject(offered.id, 'declined'))}
+            onTimeout={() => answer(offered.id, () => reject(offered.id, 'timeout'))}
           />
         )}
       </AnimatePresence>
@@ -132,11 +144,18 @@ export function DispatchSheet({
       mountedRef.current = false;
     };
   }, []);
+  // False while the sheet slides away after its offer ended (AnimatePresence keeps it mounted
+  // for that). A leaving sheet answers nothing: its countdown stops, and its buttons go dead, so
+  // neither a late tap nor a deadline reached mid-exit can reach whatever offer comes next.
+  const isPresent = useIsPresent();
+  const presentRef = React.useRef(isPresent);
+  presentRef.current = isPresent;
 
   // The countdown reads the clock against the deadline on every tick instead of counting ticks:
   // a phone that dimmed slows or stops its timers, and a count of ticks then shows seconds the
   // offer no longer has.
   React.useEffect(() => {
+    if (!isPresent) return;
     let fired = false;
     const tick = () => {
       const at = Date.now();
@@ -156,11 +175,11 @@ export function DispatchSheet({
       window.clearInterval(id);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [offer.id, deadlineMs]);
+  }, [offer.id, deadlineMs, isPresent]);
 
   // A tap that the server did not take hands the buttons back, so the rider can try again.
   const answer = (run: () => Promise<boolean>) => {
-    if (busyRef.current) return;
+    if (busyRef.current || !presentRef.current) return;
     busyRef.current = true;
     setBusy(true);
     void run().then((ok) => {
@@ -341,7 +360,7 @@ export function DispatchSheet({
         <div className="grid grid-cols-2 gap-3 border-t border-border/60 bg-card px-5 pb-safe pt-4">
           <motion.button
             whileTap={{ scale: 0.96 }}
-            disabled={busy}
+            disabled={busy || !isPresent}
             onClick={() => answer(onReject)}
             className="focus-ring inline-flex h-16 items-center justify-center gap-2 rounded-2xl border-2 border-border bg-card text-base font-semibold text-foreground transition-colors hover:bg-muted disabled:opacity-50"
           >
@@ -350,9 +369,9 @@ export function DispatchSheet({
           </motion.button>
           <motion.button
             whileTap={{ scale: 0.96 }}
-            disabled={busy}
+            disabled={busy || !isPresent}
             onClick={() => {
-              if (busyRef.current) return;
+              if (busyRef.current || !presentRef.current) return;
               if ('vibrate' in navigator) navigator.vibrate([60, 30, 60]);
               answer(onAccept);
             }}

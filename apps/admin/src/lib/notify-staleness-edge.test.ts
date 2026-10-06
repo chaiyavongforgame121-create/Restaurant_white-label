@@ -1,14 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CLAIM_LEASE_SEC,
   OFFER_FALLBACK_LIFE_SEC,
   STALE_AFTER_SEC,
+  claimGroups,
+  claimedInPlanOrder,
+  leaseCutoffIso,
+  offerIsOpen,
+  offerTarget,
   planSend,
   pushData,
   pushOptions,
   secondsLeft,
   staleAtMs,
   staleCutoffIso,
+  runScope,
   staleReason,
+  type OfferDelivery,
   type OutboxTiming,
 } from '../../../../supabase/functions/_shared/notify-staleness';
 
@@ -208,5 +216,266 @@ describe('the order a run sends in', () => {
     const late = other('order_released', 3600, 10);
     const early = other('order_delivered', 20);
     expect(planSend([early, late], NOW, 10).send).toEqual([late, early]);
+  });
+});
+
+// ── Claims (review BE-6) ─────────────────────────────────────────────────────────────────────────
+//
+// What is at stake: the worker read pending rows, sent them, and only then marked them sent, so two
+// runs at once (a long tick, a kick beside the minute tick, anyone calling its open URL) sent every
+// due push and SMS twice. A run now claims rows with one guarded UPDATE per attempts count and sends
+// only what came back. The fake table below applies the worker's statements with Postgres's rule
+// for an UPDATE whose row changed under it: the WHERE is checked again on the newest version.
+
+type Status = 'pending' | 'sending' | 'sent' | 'failed' | 'skipped';
+interface FakeRow {
+  id: string;
+  status: Status;
+  attempts: number;
+  sent_at: string | null;
+  last_error: string | null;
+}
+
+const MAX = 5;
+
+function fakeTable(rows: Array<Partial<FakeRow> & { id: string }>) {
+  const table = new Map<string, FakeRow>(
+    rows.map((r) => [r.id, { status: 'pending', attempts: 0, sent_at: null, last_error: null, ...r }]),
+  );
+  return {
+    table,
+    /** notify-worker's claim(): the guarded UPDATE ... RETURNING, one per group. */
+    claim(read: ReadonlyArray<{ id: string; attempts: number }>, atIso: string): FakeRow[] {
+      const won: FakeRow[] = [];
+      for (const group of claimGroups(read, MAX)) {
+        for (const id of group.ids) {
+          const row = table.get(id);
+          if (!row || row.attempts !== group.attempts || !['pending', 'failed'].includes(row.status)) continue;
+          Object.assign(row, { status: 'sending', attempts: group.attempts + 1, sent_at: atIso });
+          won.push({ ...row });
+        }
+      }
+      return claimedInPlanOrder(read, won);
+    },
+    /** notify-worker's finish(): only while the claim is still the caller's. */
+    finish(claimed: FakeRow, patch: Partial<FakeRow>): boolean {
+      const row = table.get(claimed.id);
+      if (!row || row.status !== 'sending' || row.attempts !== claimed.attempts) return false;
+      Object.assign(row, patch);
+      return true;
+    },
+    /** The full run's release of claims older than the lease. */
+    release(nowMs: number): number {
+      const cutoff = Date.parse(leaseCutoffIso(nowMs));
+      let n = 0;
+      for (const row of table.values()) {
+        if (row.status === 'sending' && row.sent_at !== null && Date.parse(row.sent_at) < cutoff) {
+          Object.assign(row, { status: 'failed', sent_at: null, last_error: 'claim_expired' });
+          n++;
+        }
+      }
+      return n;
+    },
+    /** What a run reads: claimable rows with tries left. */
+    read(): FakeRow[] {
+      return [...table.values()]
+        .filter((r) => ['pending', 'failed'].includes(r.status) && r.attempts < MAX)
+        .map((r) => ({ ...r }));
+    },
+  };
+}
+
+describe('a run sends only the rows it claimed', () => {
+  it('two runs that read the same rows send each row once', () => {
+    const db = fakeTable([{ id: 'a' }, { id: 'b', status: 'failed', attempts: 2 }, { id: 'c' }]);
+    const readByA = db.read();
+    const readByB = db.read();
+    const wonByA = db.claim(readByA, ago(0));
+    const wonByB = db.claim(readByB, ago(0));
+    expect(wonByA.map((r) => r.id)).toEqual(['a', 'b', 'c']);
+    expect(wonByB).toEqual([]);
+    // Twenty callers at once still send nothing more.
+    for (let i = 0; i < 20; i++) expect(db.claim(readByB, ago(0))).toEqual([]);
+  });
+
+  it('counts the try when it claims, by exactly one, whatever count each row was read with', () => {
+    const db = fakeTable([{ id: 'a' }, { id: 'b', status: 'failed', attempts: 3 }]);
+    const won = db.claim(db.read(), ago(0));
+    expect(won.map((r) => [r.id, r.status, r.attempts])).toEqual([
+      ['a', 'sending', 1],
+      ['b', 'sending', 4],
+    ]);
+  });
+
+  it('does not claim a row that changed since it was read (sent, skipped, or retried by another run)', () => {
+    const db = fakeTable([{ id: 'a' }, { id: 'b' }, { id: 'c', status: 'failed', attempts: 1 }]);
+    const stale = db.read();
+    db.table.get('a')!.status = 'sent';
+    db.table.get('b')!.status = 'skipped';
+    db.table.get('c')!.attempts = 2; // another run tried it again since
+    expect(db.claim(stale, ago(0))).toEqual([]);
+  });
+
+  it('finishes a row only while the claim is still its own', () => {
+    const db = fakeTable([{ id: 'a' }]);
+    const [mine] = db.claim(db.read(), ago(0));
+    expect(db.finish(mine!, { status: 'sent', sent_at: ago(0) })).toBe(true);
+    expect(db.table.get('a')!.status).toBe('sent');
+    // A second finish of the same claim (or a late one) changes nothing.
+    expect(db.finish(mine!, { status: 'failed' })).toBe(false);
+    expect(db.table.get('a')!.status).toBe('sent');
+  });
+
+  it('releases a claim whose run died after the lease, and never one inside it', () => {
+    const db = fakeTable([{ id: 'a' }, { id: 'b' }]);
+    db.claim([{ id: 'a', attempts: 0 }], ago(CLAIM_LEASE_SEC + 1));
+    db.claim([{ id: 'b', attempts: 0 }], ago(CLAIM_LEASE_SEC - 1));
+    expect(db.release(NOW)).toBe(1);
+    expect(db.table.get('a')).toMatchObject({ status: 'failed', attempts: 1, sent_at: null, last_error: 'claim_expired' });
+    expect(db.table.get('b')).toMatchObject({ status: 'sending', attempts: 1 });
+  });
+
+  it('lets the dead run neither finish nor overwrite the claim that replaced it', () => {
+    const db = fakeTable([{ id: 'a' }]);
+    const [dead] = db.claim(db.read(), ago(CLAIM_LEASE_SEC + 60));
+    db.release(NOW);
+    const [next] = db.claim(db.read(), ago(0));
+    expect(next).toMatchObject({ id: 'a', attempts: 2 });
+    expect(db.finish(dead!, { status: 'failed', last_error: 'late' })).toBe(false);
+    expect(db.finish(next!, { status: 'sent' })).toBe(true);
+    expect(db.table.get('a')).toMatchObject({ status: 'sent', attempts: 2 });
+  });
+
+  it('stops retrying a row that kills the worker every time, after the last try', () => {
+    const db = fakeTable([{ id: 'a' }]);
+    for (let i = 0; i < MAX; i++) {
+      expect(db.claim(db.read(), ago(CLAIM_LEASE_SEC + 60))).toHaveLength(1);
+      db.release(NOW);
+    }
+    expect(db.table.get('a')).toMatchObject({ status: 'failed', attempts: MAX });
+    expect(db.read()).toEqual([]);
+  });
+});
+
+describe('claim groups', () => {
+  it('groups rows by the attempts they were read with, fewest first', () => {
+    const rows = [
+      { id: 'a', attempts: 2 },
+      { id: 'b', attempts: 0 },
+      { id: 'c', attempts: 2 },
+      { id: 'd', attempts: 4 },
+    ];
+    expect(claimGroups(rows, MAX)).toEqual([
+      { attempts: 0, ids: ['b'] },
+      { attempts: 2, ids: ['a', 'c'] },
+      { attempts: 4, ids: ['d'] },
+    ]);
+  });
+
+  it('claims a row read twice once, and leaves out rows with no tries left or no usable count', () => {
+    const rows = [
+      { id: 'a', attempts: 0 },
+      { id: 'a', attempts: 0 },
+      { id: 'b', attempts: MAX },
+      { id: 'c', attempts: -1 },
+      { id: 'd', attempts: 1.5 },
+      { id: 'e', attempts: Number.NaN },
+    ];
+    expect(claimGroups(rows, MAX)).toEqual([{ attempts: 0, ids: ['a'] }]);
+    expect(claimGroups([], MAX)).toEqual([]);
+  });
+
+  it('sends what it won in the order it planned, as the claim returned it', () => {
+    const planned = [
+      { id: 'x', attempts: 0 },
+      { id: 'y', attempts: 1 },
+      { id: 'z', attempts: 0 },
+    ];
+    const claimed = [
+      { id: 'z', attempts: 1 },
+      { id: 'x', attempts: 1 },
+      { id: 'stranger', attempts: 1 },
+    ];
+    expect(claimedInPlanOrder(planned, claimed)).toEqual([
+      { id: 'x', attempts: 1 },
+      { id: 'z', attempts: 1 },
+    ]);
+  });
+
+  it('holds a claim longer than any run can live, and counts the lease back from now', () => {
+    // The edge runtime's wall-clock limit is 400 s on a paid plan (150 s free).
+    expect(CLAIM_LEASE_SEC).toBeGreaterThan(400);
+    expect(Date.parse(leaseCutoffIso(NOW))).toBe(NOW - CLAIM_LEASE_SEC * 1000);
+  });
+});
+
+// ── An offer that is already over is not pushed (review DS-2, server half) ──────────────────────
+
+describe('an offer push goes out only while the offer is open to that rider', () => {
+  const RIDER = '11111111-1111-4111-8111-111111111111';
+  const OTHER = '22222222-2222-4222-8222-222222222222';
+  const D1 = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const D2 = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const BATCH = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  const ahead = new Date(NOW + 40_000).toISOString();
+
+  const pushRow = (vars: Record<string, unknown>) => ({ ...offer(5, { expires_in_seconds: 75, ...vars }), recipient_id: RIDER });
+  const delivery = (over: Partial<OfferDelivery> = {}): OfferDelivery => ({
+    id: D1,
+    batch_id: null,
+    status: 'assigned',
+    driver_id: RIDER,
+    accepted_at: null,
+    offer_expires_at: ahead,
+    ...over,
+  });
+
+  it('is open while the delivery is offered to this rider, unanswered, before it expires', () => {
+    expect(offerIsOpen(pushRow({ delivery_id: D1 }), [delivery()], NOW)).toBe(true);
+  });
+
+  it('is over once the rider accepted, it went to someone else, it expired or it left the offer', () => {
+    const row = pushRow({ delivery_id: D1 });
+    expect(offerIsOpen(row, [delivery({ accepted_at: ago(1), offer_expires_at: null })], NOW)).toBe(false);
+    expect(offerIsOpen(row, [delivery({ driver_id: OTHER })], NOW)).toBe(false);
+    expect(offerIsOpen(row, [delivery({ offer_expires_at: ago(1) })], NOW)).toBe(false);
+    expect(offerIsOpen(row, [delivery({ offer_expires_at: null })], NOW)).toBe(false);
+    for (const status of ['pending', 'dispatching', 'cancelled', 'picked_up']) {
+      expect(offerIsOpen(row, [delivery({ status, driver_id: status === 'pending' ? null : RIDER })], NOW)).toBe(false);
+    }
+    expect(offerIsOpen(row, [], NOW)).toBe(false);
+  });
+
+  it('keeps a stack open while any of its stops is still offered to the rider', () => {
+    const row = pushRow({ delivery_id: D1, batch_id: BATCH });
+    const firstGone = delivery({ batch_id: BATCH, status: 'cancelled' });
+    const second = delivery({ id: D2, batch_id: BATCH });
+    expect(offerIsOpen(row, [firstGone, second], NOW)).toBe(true);
+    expect(offerIsOpen(row, [firstGone, { ...second, driver_id: OTHER }], NOW)).toBe(false);
+    // Another stack's open stop says nothing about this one.
+    expect(offerIsOpen(row, [firstGone, { ...second, batch_id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd' }], NOW)).toBe(false);
+  });
+
+  it('cannot tell, and so does not skip, a row that names no delivery', () => {
+    expect(offerIsOpen(pushRow({ delivery_id: undefined }), [delivery()], NOW)).toBeNull();
+    expect(offerIsOpen(pushRow({ delivery_id: 'd-1' }), [delivery()], NOW)).toBeNull();
+    expect(offerIsOpen({ ...other('order_delivered', 5), recipient_id: RIDER }, [delivery()], NOW)).toBeNull();
+  });
+
+  it('reads only UUIDs from the row, so the ids are safe in the delivery query', () => {
+    expect(offerTarget(pushRow({ delivery_id: D1, batch_id: BATCH }))).toEqual({ deliveryId: D1, batchId: BATCH });
+    expect(offerTarget(pushRow({ delivery_id: D1, batch_id: 'x),id.not.is.null' }))).toEqual({ deliveryId: D1, batchId: null });
+    expect(offerTarget(pushRow({ delivery_id: `${D1},x` }))).toBeNull();
+  });
+});
+
+// ── Offers first (review CONC-7) ─────────────────────────────────────────────────────────────────
+
+describe('what a call asks the worker to do', () => {
+  it('sends offers only when asked for exactly that, and runs in full otherwise', () => {
+    expect(runScope({ scope: 'offers' })).toBe('offers');
+    for (const body of [null, undefined, {}, { source: 'pg_cron' }, { scope: 'all' }, { scope: 'OFFERS' }, 'offers', ['offers']]) {
+      expect(runScope(body)).toBe('all');
+    }
   });
 });

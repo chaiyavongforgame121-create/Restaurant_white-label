@@ -169,7 +169,10 @@
     "deliveryFailed": "{reason} · báo trên đơn giao bắt đầu {age} trước",
     "noReason": "Không ghi lý do",
     "bookingNotAccepted": "Chưa có ai nhận đơn hẹn giờ này",
-    "bookingStillHeld": "Lẽ ra đã phải vào bếp — vẫn đang giữ"
+    "bookingStillHeld": "Lẽ ra đã phải vào bếp — vẫn đang giữ",
+    "deliveryWaiting": "{reason, select, everyoneAsked {Đã mời hết tài xế đang rảnh — người đầu tiên bật nhận đơn sẽ nhận đơn này} cooldown {Các tài xế đang bị tạm khóa nhận đơn — đơn sẽ được gửi ngay khi có người hết hạn} nobodyOnline {Không có tài xế nào bật nhận đơn — đơn sẽ được gửi khi có người bật} noFreshGps {Không tài xế nào có GPS mới — đơn sẽ được gửi khi có người cập nhật vị trí} allBusy {Mọi tài xế đều đang giao đơn — đơn sẽ được gửi khi có người rảnh} notSetUp {Chưa thể mời tài xế nào — hãy kiểm tra tài xế trong mục Tài xế và vị trí chi nhánh trên bản đồ} other {Đang chờ tài xế rảnh}}",
+    "deliveryNoRiderFound": "{reason, select, everyoneAsked {Không tìm được tài xế — đã mời hết nhưng không ai nhận} cooldown {Không tìm được tài xế — các tài xế có thể nhận đang bị tạm khóa} nobodyOnline {Không tìm được tài xế — không có ai bật nhận đơn} noFreshGps {Không tìm được tài xế — không tài xế nào có GPS mới} allBusy {Không tìm được tài xế — mọi tài xế đều đang giao đơn khác} notSetUp {Không tìm được tài xế — hãy kiểm tra tài xế trong mục Tài xế và vị trí chi nhánh trên bản đồ} other {Không tìm được tài xế — đã hết thời gian tìm}}",
+    "deliveryNotSearching": "Chưa có ai tìm tài xế"
   },
   "bookings": {
     "at": {

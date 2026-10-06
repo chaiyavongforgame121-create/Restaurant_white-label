@@ -53,7 +53,22 @@
 //     (offer_gone) closes that one.
 //  The bump makes installed phones take this worker on their next launch rather than whenever
 //  the browser next checks.
-const CACHE_VERSION = 'favornoms-driver-v5';
+//
+// v6 — every offer push shows something, and an offer answered in the app stays answered.
+//  1. An offer push that reached the phone with its deadline gone was built with silent:true AND
+//     a vibration pattern, which browsers refuse ("Silent notifications must not specify
+//     vibration patterns"): showNotification threw, nothing was shown (Chrome put up its generic
+//     "this site has been updated in the background" instead), and the open app was never told.
+//     A quiet notification carries no vibrate now, a refused one is retried with plain options,
+//     and the open app hears about every push whatever happened to the notification.
+//  2. notify-worker sends on a one-minute tick, so an offer the rider accepted or declined in the
+//     app within seconds still had its push on the way, which buzzed them again and stayed on the
+//     shade. The app now names the offers it saw end ('offers-live' .over); the worker keeps them
+//     in Cache Storage (an idle worker is stopped within about 30 s and its memory goes with it),
+//     and a push for one of them is shown silently and closed at once.
+//  3. An offer with under OFFER_MIN_LEFT_MS left by this phone's clock is shown quietly: nobody
+//     can unlock a phone and answer in that time.
+const CACHE_VERSION = 'favornoms-driver-v6';
 
 // The offline path, and only the offline path: the shell a signed-in rider lands on, the
 // screen an expired session lands on, and the icons their tab and the manifest point at.
@@ -151,7 +166,10 @@ self.addEventListener('activate', (event) => {
       .then((keys) =>
         // Everything from an older CACHE_VERSION goes, which is how a device on v2 sheds the
         // precached redirect at '/' and any 502 it swallowed.
-        Promise.all(keys.filter((k) => k !== CACHE_VERSION).map((k) => caches.delete(k))),
+        // The list of offers that are over is state, not a cached copy of anything: it stays.
+        Promise.all(
+          keys.filter((k) => k !== CACHE_VERSION && k !== OFFERS_OVER_CACHE).map((k) => caches.delete(k)),
+        ),
       )
       .then(() => self.clients.claim()),
   );
@@ -159,6 +177,22 @@ self.addEventListener('activate', (event) => {
 
 // notify-worker tags each dispatch offer 'new_dispatch:<delivery id>' (see the push handler).
 const OFFER_TAG_PREFIX = 'new_dispatch:';
+// An offer with less than this left by the phone's clock is shown without alerting: nobody can
+// unlock a phone and answer in that time.
+const OFFER_MIN_LEFT_MS = 2000;
+
+// The offers the app has seen end, kept where they outlive this worker being stopped. The URL is
+// only a key inside this cache; nothing is ever fetched from it.
+const OFFERS_OVER_CACHE = 'favornoms-driver-offers-over';
+const OFFERS_OVER_KEY = '/__favorgo/offers-over.json';
+// Long past the moment any push for one of them could still arrive: an offer lives about a
+// minute, and the push service drops a push once its offer would have expired (TTL).
+const OFFER_OVER_KEEP_MS = 15 * 60 * 1000;
+// For an entry or a push without a deadline, the delivery alone has to match, so only briefly:
+// a later round may offer the same delivery to this rider again.
+const OFFER_UNDATED_OVER_MS = 2 * 60 * 1000;
+// Two readings of one deadline (the database's microseconds, the push's milliseconds).
+const SAME_DEADLINE_MS = 1000;
 
 function offerIdFromTag(tag) {
   return typeof tag === 'string' && tag.indexOf(OFFER_TAG_PREFIX) === 0 && tag.length > OFFER_TAG_PREFIX.length
@@ -196,14 +230,150 @@ async function closeOfferNotifications(keep) {
     return;
   }
   for (const notification of shown) {
-    const id = offerIdFromTag(notification.tag);
-    if (id && !keep(id, notification)) notification.close();
+    try {
+      const id = offerIdFromTag(notification.tag);
+      if (id && !keep(id, notification)) notification.close();
+    } catch {
+      // One notification that will not close does not keep the others up.
+    }
   }
 }
 
-function offerExpired(notification, now) {
+// The deadline a notification was shown with (its data.expiresAt), or null.
+function deadlineOf(notification) {
   const at = notification.data && notification.data.expiresAt;
-  return typeof at === 'number' && at <= now;
+  return typeof at === 'number' ? at : null;
+}
+
+function offerExpired(notification, now) {
+  const at = deadlineOf(notification);
+  return at != null && at <= now;
+}
+
+// ── Offers that are over ─────────────────────────────────────────────────────────────────────
+// Entries are { id, expiresAt, at }: the delivery, the offer's deadline (null when it had none)
+// and when the app reported it.
+
+let offersOverMemo = null;
+// Writes go one after another, so two reports in quick succession cannot drop each other's entries.
+let offersOverWrite = Promise.resolve();
+
+function validOverEntry(e) {
+  return (
+    !!e &&
+    typeof e.id === 'string' &&
+    !!e.id &&
+    (e.expiresAt === null || (typeof e.expiresAt === 'number' && isFinite(e.expiresAt))) &&
+    typeof e.at === 'number' &&
+    isFinite(e.at)
+  );
+}
+
+async function readOffersOver(now) {
+  if (!offersOverMemo) {
+    let list = [];
+    try {
+      const cache = await caches.open(OFFERS_OVER_CACHE);
+      const res = await cache.match(OFFERS_OVER_KEY);
+      const stored = res ? await res.json() : [];
+      if (Array.isArray(stored)) list = stored.filter(validOverEntry);
+    } catch {
+      list = [];
+    }
+    if (!offersOverMemo) offersOverMemo = list;
+  }
+  offersOverMemo = offersOverMemo.filter((e) => now - e.at < OFFER_OVER_KEEP_MS);
+  return offersOverMemo;
+}
+
+function rememberOffersOver(entries, now) {
+  offersOverWrite = offersOverWrite
+    .catch(() => undefined)
+    .then(async () => {
+      const list = (await readOffersOver(now)).slice();
+      for (const entry of entries) {
+        const known = list.findIndex((e) => e.id === entry.id && e.expiresAt === entry.expiresAt);
+        if (known !== -1) list.splice(known, 1);
+        list.push({ id: entry.id, expiresAt: entry.expiresAt, at: now });
+      }
+      offersOverMemo = list;
+      try {
+        const cache = await caches.open(OFFERS_OVER_CACHE);
+        await cache.put(
+          OFFERS_OVER_KEY,
+          new Response(JSON.stringify(list), { headers: { 'Content-Type': 'application/json' } }),
+        );
+      } catch {
+        // Storage refused: the list still holds for as long as this worker runs.
+      }
+    });
+  return offersOverWrite;
+}
+
+// The list as it stands once every report already received has been written.
+async function offersOverNow(now) {
+  await offersOverWrite.catch(() => undefined);
+  return readOffersOver(now);
+}
+
+// Whether the offer of delivery `id` with deadline `expiresAt` is one the app saw end. Matched on
+// the deadline too, because a later round can offer the same delivery to this rider again.
+function isOfferOver(list, id, expiresAt, now) {
+  return list.some((e) => {
+    if (e.id !== id) return false;
+    if (e.expiresAt != null && expiresAt != null) return Math.abs(e.expiresAt - expiresAt) < SAME_DEADLINE_MS;
+    return now - e.at < OFFER_UNDATED_OVER_MS;
+  });
+}
+
+// The app's report, [{ deliveryId, expiresAt }], with anything malformed dropped.
+function parseOverReport(over) {
+  if (!Array.isArray(over)) return [];
+  const out = [];
+  for (const o of over) {
+    if (!o || typeof o.deliveryId !== 'string' || !o.deliveryId) continue;
+    const at = typeof o.expiresAt === 'number' && isFinite(o.expiresAt) ? o.expiresAt : null;
+    out.push({ id: o.deliveryId, expiresAt: at });
+  }
+  return out;
+}
+
+// showNotification rejects options a browser will not take (silent with a vibration pattern,
+// renotify without a tag), and a push that shows nothing gets the browser's generic notice, or
+// none at all. A refusal is retried with the plainest options that still carry the tag and data.
+async function showNotification(title, options) {
+  try {
+    await self.registration.showNotification(title, options);
+    return;
+  } catch {
+    // Fall through to the plain retry.
+  }
+  try {
+    await self.registration.showNotification(title, {
+      body: options.body,
+      tag: options.tag,
+      silent: !!options.silent,
+      data: options.data,
+    });
+  } catch {
+    // Nothing more a worker can do; the open app is still told.
+  }
+}
+
+async function tellOpenWindows(message) {
+  let windows = [];
+  try {
+    windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+  } catch {
+    return;
+  }
+  for (const client of windows) {
+    try {
+      client.postMessage(message);
+    } catch {
+      // A window closing as we speak.
+    }
+  }
 }
 
 // Web Push: render notifications from notify-worker payloads. For a rider with the phone in
@@ -226,54 +396,69 @@ self.addEventListener('push', (event) => {
   const isDispatch = !!tag && tag.indexOf('new_dispatch') === 0;
   const offerId = offerIdFromTag(tag);
   const expiresAt = isDispatch ? offerExpiresAt(data, now) : null;
-  // An offer that reached the phone after its deadline (a push held back by a sleeping phone)
-  // is still shown, since a push must show something, but it does not ring for work that is gone.
-  const lapsed = expiresAt != null && expiresAt <= now;
-  const alerting = isDispatch && !lapsed;
+  // An offer that reached the phone after (or a moment before) its deadline, a push held back by
+  // a sleeping phone, is still shown, since a push must show something, but it does not ring for
+  // work that is gone.
+  const lapsed = expiresAt != null && expiresAt - now < OFFER_MIN_LEFT_MS;
   const deliveryId =
     offerId || (typeof data.delivery_id === 'string' && data.delivery_id ? data.delivery_id : null);
-  const options = {
-    body: data.body || '',
-    // PNG, not SVG — Android notification icons do not render SVG.
-    icon: '/icon-192.png',
-    // Android paints the badge in the status bar from its alpha channel alone. icon-192 is a
-    // solid rounded square, so it came out as a blank white tile; this is the car cut out.
-    badge: '/badge-96.png',
-    tag,
-    // renotify without a tag is a TypeError, which rejects showNotification and produces no
-    // notification at all — worse than the silent replacement it is here to prevent.
-    renotify: !!tag && !lapsed,
-    requireInteraction: alerting,
-    vibrate: alerting ? [200, 100, 200, 100, 200] : [100],
-    silent: lapsed,
-    data: { url: data.url || '/app/home', deliveryId, offer: isDispatch, expiresAt },
-  };
   event.waitUntil(
     (async () => {
-      // Shown first: whatever else fails, the push has its notification.
-      await self.registration.showNotification(title, options);
+      const overList = offerId ? await offersOverNow(now) : [];
+      // Answered in the app (or seen there to expire, or to go to someone else) before its push came.
+      const over = !!offerId && isOfferOver(overList, offerId, expiresAt, now);
+      const quiet = lapsed || over;
+      const alerting = isDispatch && !quiet;
+      const options = {
+        body: data.body || '',
+        // PNG, not SVG — Android notification icons do not render SVG.
+        icon: '/icon-192.png',
+        // Android paints the badge in the status bar from its alpha channel alone. icon-192 is a
+        // solid rounded square, so it came out as a blank white tile; this is the car cut out.
+        badge: '/badge-96.png',
+        tag,
+        // renotify without a tag is a TypeError, which rejects showNotification and produces no
+        // notification at all — worse than the silent replacement it is here to prevent.
+        renotify: !!tag && !quiet,
+        requireInteraction: alerting,
+        silent: quiet,
+        data: { url: data.url || '/app/home', deliveryId, offer: isDispatch, expiresAt },
+      };
+      // Never together with silent: browsers refuse that pair outright (v6, above).
+      if (!quiet) options.vibrate = alerting ? [200, 100, 200, 100, 200] : [100];
+
+      // Shown first: a push must show something, whatever else fails. An offer that is over is
+      // shown too (a push that shows nothing counts against the site), silently, and closed below.
+      await showNotification(title, options);
       const gone = goneOfferIds(data);
-      await closeOfferNotifications(
-        (id, notification) => id === offerId || (gone.indexOf(id) === -1 && !offerExpired(notification, now)),
-      );
+      await closeOfferNotifications((id, notification) => {
+        if (id === offerId) return !over;
+        if (gone.indexOf(id) !== -1 || offerExpired(notification, now)) return false;
+        return !isOfferOver(overList, id, deadlineOf(notification), now);
+      });
       // An open app rings for itself; this is how it hears about the offer while its own live
-      // connection is asleep.
-      const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-      for (const client of windows) {
-        client.postMessage({ type: 'push', tag: tag || null, deliveryId, offer: isDispatch });
-      }
+      // connection is asleep. Every push, including one whose notification could not be shown.
+      await tellOpenWindows({ type: 'push', tag: tag || null, deliveryId, offer: isDispatch });
     })(),
   );
 });
 
-// The app reports the offers that are still this rider's, after every read the server answered
+// The app reports the offers that are still this rider's, after a read the server answered
 // (src/lib/offer-notifications.ts). Every other offer notification is over: expired, declined,
-// accepted on screen, or given to someone else.
+// accepted on screen, or given to someone else. `over` names the offers the app saw end; they
+// are remembered so that a push for one of them still on its way is closed when it lands.
 self.addEventListener('message', (event) => {
   const message = event.data;
   if (!message || message.type !== 'offers-live' || !Array.isArray(message.deliveryIds)) return;
   const live = message.deliveryIds.filter((id) => typeof id === 'string');
-  event.waitUntil(closeOfferNotifications((id) => live.indexOf(id) !== -1));
+  const over = parseOverReport(message.over);
+  const now = Date.now();
+  event.waitUntil(
+    Promise.all([
+      over.length ? rememberOffersOver(over, now) : Promise.resolve(),
+      closeOfferNotifications((id) => live.indexOf(id) !== -1),
+    ]),
+  );
 });
 
 self.addEventListener('notificationclick', (event) => {

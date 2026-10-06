@@ -1,14 +1,25 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  DISPATCH_FAILURE_KEYS,
+  answerAgrees,
   askedInRound,
   canRestartDispatch,
   describeDispatchFailure,
   dispatchLine,
+  dispatchMark,
   findRiderAction,
   noRiderReasonOf,
+  pressAnswer,
+  pressCurrent,
   readDispatchAnswer,
+  restartWithdrawsOffer,
+  settlePress,
   stackPeers,
   withKnownDispatchColumns,
+  type DispatchAnswer,
+  type DispatchPress,
   type DispatchRowFields,
 } from './dispatch-model';
 
@@ -309,6 +320,22 @@ describe('readDispatchAnswer', () => {
     expect(readDispatchAnswer(null, null)).toEqual({ kind: 'refused', failure: { key: 'failed' } });
   });
 
+  it('says why a delivery is not dispatchable when the server names the reason', () => {
+    const refusal = (reason: string) =>
+      readDispatchAnswer(409, { error: 'delivery_not_dispatchable', result: 'not_dispatchable', reason });
+    // An order cancelled, refunded or completed under the delivery: no rider is needed at all.
+    expect(refusal('order_closed')).toEqual({ kind: 'refused', failure: { key: 'orderClosed' } });
+    // The ticket went back to the kitchen before the press landed.
+    expect(refusal('kitchen_not_ready')).toEqual({ kind: 'refused', failure: { key: 'kitchenNotReady' } });
+    // A "Find a rider" that crossed an offer the board had not drawn yet.
+    expect(refusal('offer_open')).toEqual({ kind: 'refused', failure: { key: 'offerOpen' } });
+    // The delivery's own status (delivered, cancelled, failed): past dispatching.
+    expect(refusal('delivered')).toEqual({ kind: 'refused', failure: { key: 'notDispatchable' } });
+    expect(describeDispatchFailure({ error: 'delivery_not_dispatchable', reason: 'order_closed' }, 409)).toEqual({
+      key: 'orderClosed',
+    });
+  });
+
   it('still reads a server from before the rounds', () => {
     expect(readDispatchAnswer(200, { status: 'offered', driver_id: 'peter', offer_expires_at: at(-60) })).toMatchObject(
       { kind: 'offered', driverId: 'peter' },
@@ -461,5 +488,174 @@ describe('buttons', () => {
     expect(canRestartDispatch({ status: 'assigned', driver_id: 'peter', accepted_at: null })).toBe(true);
     expect(canRestartDispatch({ status: 'dispatching', driver_id: null, accepted_at: null })).toBe(true);
     expect(canRestartDispatch({ status: 'failed', driver_id: null, accepted_at: null })).toBe(false);
+  });
+});
+
+// The note under a kitchen card used to outlive what it described: the gate counts of a press
+// ("all are on a cooldown") stayed under a newer server reason ("Every free rider has been
+// asked"), and a tablet a couple of seconds behind the server hid the note of its own press.
+describe('whether an answer is still about the row', () => {
+  const waitingEntry = (reason: string, asked: number, secAgo: number) => ({
+    type: 'waiting',
+    reason,
+    asked,
+    at: at(secAgo),
+    round: ROUND,
+  });
+  const cooldownAnswer: DispatchAnswer = {
+    kind: 'waiting',
+    asked: 1,
+    why: 'cooldown',
+    failure: { key: 'allCoolingDown', values: { online: 2 } },
+  };
+  const waitingRow = (history: unknown[]) => row({ dispatch_state: 'waiting', dispatch_history: history });
+
+  it('agrees while the row is waiting for the same reason, with nothing newer in its log', () => {
+    expect(answerAgrees(cooldownAnswer, waitingRow([offered('peter', 300), waitingEntry('cooling_down', 1, 200)]))).toBe(true);
+  });
+
+  it('stops agreeing once anything newer happened, even back in the same state', () => {
+    // The cooldown ended, the sweep offered it to Alex, Alex declined: waiting again, and the
+    // reason is now that everyone was asked.
+    const later = waitingRow([
+      offered('peter', 300),
+      waitingEntry('cooling_down', 1, 200),
+      offered('alex', 120),
+      { type: 'rejected', driver_id: 'alex', at: at(100), round: ROUND },
+      waitingEntry('everyone_asked', 2, 100),
+    ]);
+    expect(answerAgrees(cooldownAnswer, later)).toBe(false);
+    // The same reason again, but more riders asked since: not the moment the answer described.
+    const again = waitingRow([waitingEntry('cooling_down', 1, 200), offered('alex', 120), waitingEntry('cooling_down', 2, 60)]);
+    expect(answerAgrees(cooldownAnswer, again)).toBe(false);
+    // Offered meanwhile: not waiting at all.
+    expect(
+      answerAgrees(cooldownAnswer, row({ status: 'assigned', driver_id: 'alex', dispatch_history: [offered('alex', 10)] })),
+    ).toBe(false);
+  });
+
+  it('stops agreeing when the reason changes without any offer in between', () => {
+    // A cooldown ran out for a rider already asked: still waiting, now because everyone was asked.
+    const changed = waitingRow([waitingEntry('cooling_down', 1, 200), waitingEntry('everyone_asked', 1, 50)]);
+    expect(answerAgrees(cooldownAnswer, changed)).toBe(false);
+  });
+
+  it('reads a no-rider answer against the round that ended', () => {
+    const ended: DispatchAnswer = { kind: 'noRiderFound', asked: 2, reason: 'everyoneAsked', failure: null };
+    const d = row({
+      dispatch_state: 'no_rider_found',
+      dispatch_history: [{ type: 'no_rider_found', reason: 'everyone_asked', asked: 2, at: at(5), round: ROUND }],
+    });
+    expect(answerAgrees(ended, d)).toBe(true);
+    // A new round since (another tablet pressed "Find rider again"): no longer about it.
+    expect(answerAgrees(ended, { ...d, dispatch_state: 'searching', dispatch_round_started_at: at(2) })).toBe(false);
+  });
+
+  it('treats a refusal as about the press, and a row read without the columns as unable to disagree', () => {
+    expect(answerAgrees({ kind: 'refused', failure: { key: 'failed' } }, row())).toBe(true);
+    expect(answerAgrees({ kind: 'alreadyAccepted' }, row())).toBe(true);
+    expect(answerAgrees(cooldownAnswer, row({ dispatch_state: undefined }))).toBe(true);
+  });
+
+  it('agrees with an offer while that rider holds it', () => {
+    const offer: DispatchAnswer = { kind: 'offered', driverId: 'peter', expiresAt: at(-60), asked: 1 };
+    expect(answerAgrees(offer, row({ status: 'assigned', driver_id: 'peter', offer_expires_at: at(-60) }))).toBe(true);
+    expect(answerAgrees(offer, row({ status: 'assigned', driver_id: 'alex' }))).toBe(false);
+    expect(answerAgrees(offer, row({ status: 'assigned', driver_id: 'peter', accepted_at: at(1) }))).toBe(false);
+  });
+
+  it('marks the row by what changed, never by the clock or the text a time came as', () => {
+    const d = waitingRow([waitingEntry('cooling_down', 1, 200)]);
+    // A realtime payload and a refetch may write the same instant differently.
+    const pgText = { ...d, dispatch_round_started_at: '2026-10-05 15:30:00.000123+00' };
+    const iso = { ...d, dispatch_round_started_at: '2026-10-05T15:30:00.000Z' };
+    expect(dispatchMark(pgText)).toBe(dispatchMark(iso));
+    expect(dispatchMark(d)).not.toBe(dispatchMark(waitingRow([waitingEntry('cooling_down', 1, 200), offered('alex', 10)])));
+    expect(dispatchMark(d)).not.toBe(dispatchMark({ ...d, dispatch_state: 'searching' }));
+  });
+});
+
+describe('a press and the row it is about', () => {
+  type Note = { text: string };
+  const answer: DispatchAnswer = {
+    kind: 'waiting',
+    asked: 0,
+    why: 'nobodyOnline',
+    failure: { key: 'noneOnline', values: { approved: 3 } },
+  };
+  const press: DispatchPress<Note> = { seq: 1, answer, note: { text: 'No rider is online' }, bound: null };
+  const step = (p: DispatchPress<Note> | null, d: DispatchRowFields) =>
+    settlePress(p, dispatchMark(d), !p?.answer || answerAgrees(p.answer, d));
+
+  // "Find a rider" on a ready order nothing was looking for: the server opens a round (one
+  // UPDATE), finds nobody online and writes "waiting" (a second UPDATE). Realtime brings them as
+  // two events, and the answer can land before either of them.
+  const before = row({ dispatch_state: null, dispatch_round_started_at: null, dispatch_history: [] });
+  const opened = row({ dispatch_state: 'searching', dispatch_history: [] });
+  const waiting = row({
+    dispatch_state: 'waiting',
+    dispatch_history: [{ type: 'waiting', reason: 'nobody_online', asked: 0, at: at(1), round: ROUND }],
+  });
+
+  it('waits for the row to catch up, then binds to it, whichever arrives first', () => {
+    let p: DispatchPress<Note> | null = press;
+    p = step(p, before);
+    expect(p?.bound).toBeNull();
+    // Until the row shows anything, the answer is what the card can say; its note is not shown yet.
+    expect(pressAnswer(p, dispatchMark(before))).toBe(answer);
+    expect(pressCurrent(p, dispatchMark(before), answerAgrees(answer, before))).toBe(false);
+    p = step(p, opened);
+    expect(p?.bound).toBeNull();
+    p = step(p, waiting);
+    expect(p?.bound).toBe(dispatchMark(waiting));
+    expect(pressCurrent(p, dispatchMark(waiting), true)).toBe(true);
+    // The answer landing after the row: bound at once.
+    expect(step(press, waiting)?.bound).toBe(dispatchMark(waiting));
+  });
+
+  it('is dropped as soon as the row moves on, and never comes back', () => {
+    const bound = step(press, waiting);
+    const offeredRow = row({ status: 'assigned', driver_id: 'alex', dispatch_history: [offered('alex', 0)] });
+    expect(pressAnswer(bound, dispatchMark(offeredRow))).toBeNull();
+    expect(pressCurrent(bound, dispatchMark(offeredRow), false)).toBe(false);
+    expect(step(bound, offeredRow)).toBeNull();
+    // Unchanged row: the very same press.
+    expect(step(bound, waiting)).toBe(bound);
+  });
+
+  it('binds a refusal to the row as it was, and drops it when the row changes', () => {
+    const refused: DispatchPress<Note> = {
+      seq: 2,
+      answer: { kind: 'refused', failure: { key: 'offerOpen' } },
+      note: { text: 'A rider already has this offer' },
+      bound: null,
+    };
+    const bound = step(refused, before);
+    expect(bound?.bound).toBe(dispatchMark(before));
+    expect(step(bound, opened)).toBeNull();
+  });
+});
+
+describe('restart over an open offer', () => {
+  it('moves the order on from a rider who has not answered, and only then', () => {
+    expect(restartWithdrawsOffer({ status: 'assigned', driver_id: 'peter', accepted_at: null })).toBe(true);
+    expect(restartWithdrawsOffer({ status: 'assigned', driver_id: 'peter', accepted_at: at(5) })).toBe(false);
+    expect(restartWithdrawsOffer({ status: 'dispatching', driver_id: null, accepted_at: null })).toBe(false);
+    expect(restartWithdrawsOffer({ status: 'assigned', driver_id: null, accepted_at: null })).toBe(false);
+  });
+});
+
+describe('dispatch sentences', () => {
+  // Both boards word a failure as t(`dispatch.${key}`): a key with no sentence prints the raw key.
+  it('has every failure sentence on both boards, in every language', () => {
+    for (const locale of ['en', 'es', 'th', 'vi']) {
+      for (const ns of ['kitchen', 'deliveries']) {
+        const file = path.resolve(__dirname, `../../../../../../messages/${locale}/${ns}.json`);
+        const dispatch = (JSON.parse(readFileSync(file, 'utf8')) as { dispatch: Record<string, unknown> }).dispatch;
+        for (const key of DISPATCH_FAILURE_KEYS) {
+          expect(typeof dispatch[key], `${locale} ${ns}.dispatch.${key}`).toBe('string');
+        }
+      }
+    }
   });
 });

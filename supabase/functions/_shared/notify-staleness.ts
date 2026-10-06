@@ -19,6 +19,13 @@
 //     sits in front of a live offer.
 //   • An offer is sent with urgency high and a TTL of the seconds it has left; anything else with
 //     urgency normal and a TTL of the time left before it would be stale.
+//   • An offer whose delivery is no longer offered to that rider (accepted, declined, withdrawn,
+//     expired, cancelled) is not sent either: it would ring a locked phone for nothing.
+//
+// And how a run takes rows (CLAIMS, below): a run sends only rows it has claimed, by moving them
+// from pending/failed to `sending` in one guarded UPDATE, so two runs (an overlapping tick, a kick
+// after an offer, or anyone calling the URL) never send the same row twice. A claim that is never
+// finished, because the run died, is released after CLAIM_LEASE_SEC.
 //
 // PURE ON PURPOSE. Nothing here imports, reads Deno.env or touches a database, so the admin app's
 // vitest pins every rule (apps/admin/src/lib/notify-staleness-edge.test.ts).
@@ -44,7 +51,8 @@ export interface OutboxTiming {
   scheduled_for: string | null | undefined;
 }
 
-export type StaleReason = 'offer_expired' | 'too_old' | 'undated';
+/** Written to last_error as `stale:<reason>` when a row is skipped. */
+export type StaleReason = 'offer_expired' | 'offer_gone' | 'too_old' | 'undated';
 
 export interface PushOptions {
   /** Seconds a push service may hold the message for a device that is offline. */
@@ -168,4 +176,158 @@ export function planSend<T extends OutboxTiming>(rows: readonly T[], nowMs: numb
     return offerFirst !== 0 ? offerFirst : dueMs(b) - dueMs(a);
   });
   return { send: fresh.slice(0, Math.max(0, limit)), stale };
+}
+
+// ── Claims ───────────────────────────────────────────────────────────────────────────────────────
+//
+// The worker used to read pending rows, send them, and only then mark them sent. Two runs that
+// overlapped (a tick that ran long, a kick after an offer landing beside the minute tick, or anyone
+// calling the worker's URL, which is open until NOTIFY_WORKER_SECRET is set) read the same rows
+// and sent every one of them twice: the rider's offer rang again, the diner's SMS was billed again.
+//
+// Now a run claims before it sends:
+//   UPDATE notifications_outbox SET status = 'sending', attempts = n + 1, sent_at = <claim time>
+//    WHERE id IN (...) AND attempts = n AND status IN ('pending', 'failed')  RETURNING ...
+// one statement per `n` the rows were read with (claimGroups), so the counter goes up by exactly
+// one per try without an increment PostgREST cannot express. Postgres re-checks the WHERE on the
+// newest row version when two such UPDATEs meet, so the second one finds the row `sending` and
+// skips it: each row is claimed by one run only, and a run sends only what came back.
+//   • attempts is also the claim's token: the run finishes a row (sent or failed) only
+//     while it is still `sending` with the attempts it claimed, so a run that outlived its lease
+//     cannot overwrite the claim that replaced it.
+//   • The table has no claimed_at column, so while a row is `sending`, sent_at holds the claim
+//     time (the lease clock). Sent rows get the real send time; failed rows have it cleared.
+//   • A row left `sending` for CLAIM_LEASE_SEC (its run died) goes back to `failed` and is retried
+//     like any failure. The try it was claimed for still counts, so a row that kills the worker
+//     every time stops after MAX_ATTEMPTS instead of looping.
+
+/**
+ * How long a claim holds a row before it may be retried. Longer than any run can live: the edge
+ * runtime kills a function at its wall-clock limit (150 s free, 400 s paid), so a claim older than
+ * this belongs to a run that is gone, not to a slow one still sending.
+ */
+export const CLAIM_LEASE_SEC = 10 * 60;
+
+/** Claims taken before this moment are abandoned (see CLAIM_LEASE_SEC). */
+export function leaseCutoffIso(nowMs: number): string {
+  return new Date(nowMs - CLAIM_LEASE_SEC * 1000).toISOString();
+}
+
+/** One guarded UPDATE: the rows read with `attempts` tries behind them, claimed as try attempts + 1. */
+export interface ClaimGroup {
+  attempts: number;
+  ids: string[];
+}
+
+/**
+ * The rows to claim, grouped by the attempts each was read with, fewest first. A row read twice is
+ * claimed once; a row with no usable count, or out of tries, is not claimed at all.
+ */
+export function claimGroups(
+  rows: ReadonlyArray<{ id: string; attempts: number }>,
+  maxAttempts: number,
+): ClaimGroup[] {
+  const byAttempts = new Map<number, string[]>();
+  const seen = new Set<string>();
+  for (const row of rows) {
+    if (seen.has(row.id)) continue;
+    if (!Number.isInteger(row.attempts) || row.attempts < 0 || row.attempts >= maxAttempts) continue;
+    seen.add(row.id);
+    const ids = byAttempts.get(row.attempts) ?? [];
+    ids.push(row.id);
+    byAttempts.set(row.attempts, ids);
+  }
+  return [...byAttempts.entries()].sort(([a], [b]) => a - b).map(([attempts, ids]) => ({ attempts, ids }));
+}
+
+/**
+ * The rows this run won, in the order it planned to send them, as the claim returned them (so
+ * `attempts` is the claimed try, the token that finishes the row). Rows another run claimed first
+ * are left out: that run sends them.
+ */
+export function claimedInPlanOrder<T extends { id: string }>(
+  planned: ReadonlyArray<{ id: string }>,
+  claimed: readonly T[],
+): T[] {
+  const won = new Map(claimed.map((row) => [row.id, row]));
+  const out: T[] = [];
+  for (const row of planned) {
+    const mine = won.get(row.id);
+    if (mine) {
+      out.push(mine);
+      won.delete(row.id);
+    }
+  }
+  return out;
+}
+
+// ── Is the offer still open? ─────────────────────────────────────────────────────────────────────
+//
+// An offer row is queued in the transaction that makes the offer, but it is sent later (the next
+// run, or a retry). If the rider has answered in the app by then, or the offer was withdrawn,
+// moved on or expired early, the push is a ghost: it rings a locked phone for an offer that is not
+// there. The worker reads the offer's deliveries and skips the row (`stale:offer_gone`) unless one
+// of them is still offered to this rider: status 'assigned', driver_id = the recipient, not
+// accepted, and offer_expires_at still ahead. A stack's push names its first stop and its batch,
+// so any stop of the batch still offered to the rider keeps it open.
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** The deliveries columns offerIsOpen reads. */
+export interface OfferDelivery {
+  id: string;
+  batch_id: string | null;
+  status: string | null;
+  driver_id: string | null;
+  accepted_at: string | null;
+  offer_expires_at: string | null;
+}
+
+/** The delivery (and stack) an offer row is about, or null when it names no delivery. */
+export function offerTarget(row: OutboxTiming): { deliveryId: string; batchId: string | null } | null {
+  if (!isOffer(row)) return null;
+  const vars = row.variables ?? {};
+  const deliveryId = typeof vars.delivery_id === 'string' && UUID_RE.test(vars.delivery_id) ? vars.delivery_id : null;
+  if (!deliveryId) return null;
+  const batchId = typeof vars.batch_id === 'string' && UUID_RE.test(vars.batch_id) ? vars.batch_id : null;
+  return { deliveryId, batchId };
+}
+
+/**
+ * Whether the offer this row announces is still open to its rider at `nowMs`. Null when the row
+ * names no delivery, so nothing can be said: the staleness rules alone decide then.
+ */
+export function offerIsOpen(
+  row: OutboxTiming & { recipient_id: string },
+  deliveries: readonly OfferDelivery[],
+  nowMs: number,
+): boolean | null {
+  const target = offerTarget(row);
+  if (!target) return null;
+  return deliveries.some((d) => {
+    if (d.id !== target.deliveryId && !(target.batchId && d.batch_id === target.batchId)) return false;
+    const expires = timeMs(d.offer_expires_at);
+    return (
+      d.status === 'assigned' &&
+      d.driver_id === row.recipient_id &&
+      d.accepted_at == null &&
+      expires !== null &&
+      expires > nowMs
+    );
+  });
+}
+
+// ── What a call asks for ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * 'offers': only the rider offers (a kick right after an offer is queued, so the push goes out in
+ * seconds rather than at the next minute tick). 'all': offers first, then everything else (the
+ * minute tick, a manual call, any body this does not read). Only `{"scope":"offers"}` narrows it.
+ */
+export type RunScope = 'offers' | 'all';
+
+export function runScope(body: unknown): RunScope {
+  return typeof body === 'object' && body !== null && (body as { scope?: unknown }).scope === 'offers'
+    ? 'offers'
+    : 'all';
 }

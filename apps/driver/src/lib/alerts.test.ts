@@ -6,8 +6,11 @@ import {
   dispatchNotice,
   jobIds,
   offerDeadlineMs,
+  offerKey,
   offerRingDue,
   offerShouldRing,
+  offerSightings,
+  offersOver,
   parseTimeMs,
   parseWorkerMessage,
   readOnOff,
@@ -212,5 +215,53 @@ describe('service worker messages', () => {
     expect(parseWorkerMessage(null)).toBeNull();
     expect(parseWorkerMessage('push')).toBeNull();
     expect(parseWorkerMessage({ type: 'something' })).toBeNull();
+  });
+});
+
+describe('telling one offer from another', () => {
+  const at = (ms: number) => new Date(ms).toISOString();
+  const offer = (id: string, expiresMs: number | null, mate: string | null = null) => ({
+    id,
+    offerExpiresAt: expiresMs == null ? null : at(expiresMs),
+    batchMate: mate ? { id: mate, offerExpiresAt: expiresMs == null ? null : at(expiresMs) } : null,
+  });
+
+  it('keys an offer by its delivery and its deadline, so a re-offer is a new sheet', () => {
+    expect(offerKey(offer('d1', T0))).toBe(`d1@${T0}`);
+    expect(offerKey(offer('d1', T0 + 300_000))).not.toBe(offerKey(offer('d1', T0)));
+    expect(offerKey(offer('d1', null))).toBe('d1@');
+    expect(offerKey(null)).toBe('');
+  });
+
+  it('reads the same deadline the same way at any precision the server writes it', () => {
+    expect(offerKey({ id: 'd1', offerExpiresAt: '2026-10-05T15:30:00+00:00' })).toBe(`d1@${T0}`);
+    expect(offerKey({ id: 'd1', offerExpiresAt: '2026-10-05T15:30:00.000Z' })).toBe(`d1@${T0}`);
+  });
+
+  it('lists each stop of a stack under the offer’s deadline', () => {
+    expect(offerSightings(offer('d1', T0, 'd2'))).toEqual([
+      { deliveryId: 'd1', expiresAtMs: T0 },
+      { deliveryId: 'd2', expiresAtMs: T0 },
+    ]);
+    expect(offerSightings({ id: 'd1', offerExpiresAt: at(T0), batchMate: { id: 'd2', offerExpiresAt: null } })).toEqual([
+      { deliveryId: 'd1', expiresAtMs: T0 },
+      { deliveryId: 'd2', expiresAtMs: T0 },
+    ]);
+    expect(offerSightings(null)).toEqual([]);
+  });
+
+  it('names the offers that left the screen, and only those', () => {
+    const a = offerSightings(offer('d1', T0, 'd2'));
+    const b = offerSightings(offer('d3', T0 + 60_000));
+    expect(offersOver([], a)).toEqual([]);
+    expect(offersOver(a, a)).toEqual([]);
+    expect(offersOver(a, [])).toEqual(a);
+    expect(offersOver(a, b)).toEqual(a);
+  });
+
+  it('counts the same delivery offered again under a new deadline as the old offer ending', () => {
+    const first = offerSightings(offer('d1', T0));
+    const again = offerSightings(offer('d1', T0 + 300_000));
+    expect(offersOver(first, again)).toEqual(first);
   });
 });

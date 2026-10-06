@@ -50,8 +50,8 @@
     "approvedNeedsDocuments": "Aprobado, pero sus documentos aún necesitan revisión: usa Revisar documentos.",
     "replacedAfterVerify": "Reemplazó un documento el {received}, después de que se verificara el {verified}: vuelve a revisarlo.",
     "replacedAfterDecision": "Reemplazó un documento el {received}, después de tu decisión del {reviewed}.",
-    "coolingDown": "En pausa hasta las {time}: demasiadas ofertas perdidas o rechazadas",
-    "coolingDownNoTime": "En pausa: demasiadas ofertas perdidas o rechazadas"
+    "coolingDown": "En pausa hasta las {time}: no recibe ofertas hasta entonces",
+    "coolingDownNoTime": "En pausa: no recibe ofertas hasta que termine"
   },
   "kycStatus": {
     "pending": "pendiente",
@@ -116,7 +116,7 @@
   "cooldown": {
     "lift": "Levantar pausa",
     "confirmTitle": "¿Dejar que {name} vuelva a recibir pedidos?",
-    "confirmBody": "La pausa se puso automáticamente tras ofertas perdidas o rechazadas. Al levantarla, {name} puede conectarse y recibir ofertas enseguida, en todas las sucursales donde reparte.",
+    "confirmBody": "La pausa se puso automáticamente, tras ofertas perdidas o rechazadas o un trabajo que {name} canceló después de aceptarlo. Al levantarla, {name} puede conectarse y recibir ofertas enseguida, en todas las sucursales donde reparte.",
     "noteLabel": "Nota para el registro (opcional)",
     "notePlaceholder": "p. ej., la app se colgó, no fue culpa del repartidor",
     "confirm": "Levantar pausa",

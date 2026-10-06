@@ -129,9 +129,71 @@ async function getLiveAssignment(
   return (data ?? null) as unknown as DriverAssignment | null;
 }
 
+/** The statuses a delivery holds a rider in: offered or accepted, picked up, on the road. */
+const RIDER_HELD_STATUSES = ['assigned', 'picked_up', 'in_transit'] as const;
+
+/**
+ * How many of this rider's rows (or the one row, with `deliveryId`) are offers that are over by
+ * the database's clock: still 'assigned', never accepted, offer_expires_at passed. The expiry
+ * sweep releases such a row only on its next 30-second tick, and until then every read returned
+ * it, so a phone that came back from the background, or opened a notification, showed an offer
+ * the server would only refuse: ringing, with a few seconds on an Accept that answered "this
+ * offer has expired".
+ *
+ * The value 'now' is deliberate. PostgREST sends a filter value as an untyped parameter, and
+ * Postgres reads the input 'now' as the time of the statement's own transaction, the same now()
+ * accept_dispatch and the sweep compare against. The decision is the server's clock, not the
+ * phone's, which may run fast or slow (lib/alerts in the driver app keeps a floor for that).
+ *
+ * Null when the read failed. Callers then carry on as if the offer were live, which is what
+ * happened before this check existed.
+ */
+async function lapsedOfferCount(
+  supabase: FavornomsClient,
+  driverId: string,
+  deliveryId?: string,
+): Promise<number | null> {
+  let query = supabase
+    .from('deliveries')
+    .select('id', { head: true, count: 'exact' })
+    .eq('driver_id', driverId)
+    .eq('status', 'assigned')
+    .is('accepted_at', null)
+    .lte('offer_expires_at', 'now');
+  if (deliveryId) query = query.eq('id', deliveryId);
+  const { count, error } = await query;
+  if (error) return null;
+  return count ?? 0;
+}
+
+/**
+ * Whether the server still counts anything as this rider's: a job, or an offer whose deadline
+ * has not passed by the database's clock. Null when the read failed.
+ *
+ * For the moment `getActiveDelivery` comes back empty while the phone still shows something.
+ * An empty read is not proof on its own: get_driver_order can lose a race against a reassign,
+ * and a read can lag. An offer the server's clock has ended is not something the rider holds,
+ * though, even before the sweep has released it.
+ */
+export async function holdsOpenDelivery(
+  supabase: FavornomsClient,
+  driverId: string,
+): Promise<boolean | null> {
+  const { count, error } = await supabase
+    .from('deliveries')
+    .select('id', { head: true, count: 'exact' })
+    .eq('driver_id', driverId)
+    .in('status', [...RIDER_HELD_STATUSES]);
+  if (error) return null;
+  const held = count ?? 0;
+  if (held === 0) return false;
+  return held - ((await lapsedOfferCount(supabase, driverId)) ?? 0) > 0;
+}
+
 /**
  * Fetch driver's active delivery (any status that means "in flight").
- * Returns null when driver has nothing on their plate.
+ * Returns null when driver has nothing on their plate, and for an offer whose deadline has
+ * passed by the server's clock (see lapsedOfferCount): the rider can no longer take it.
  *
  * Throws when the read itself failed. "No job" and "could not ask" used to be the same
  * `null`, so a dead spot or an expired JWT wiped the rider's live job off the screen as
@@ -153,14 +215,30 @@ export async function getActiveDelivery(
     .from('deliveries')
     .select(`*, branch:branches(id, name, address, geo_location, geo_lat, geo_lng)`)
     .eq('driver_id', driverId)
-    .in('status', ['assigned', 'picked_up', 'in_transit'])
+    .in('status', [...RIDER_HELD_STATUSES])
     .order('batch_seq', { ascending: true, nullsFirst: false })
     .order('assigned_at', { ascending: false })
     .limit(1)
     .maybeSingle();
   if (error) throw error;
   if (!data) return null;
-  const row = data as { id: string; batch_id: string | null };
+  const row = data as {
+    id: string;
+    batch_id: string | null;
+    status: string;
+    accepted_at: string | null;
+    offer_expires_at: string | null;
+  };
+  // An offer: one more question, asked of the server's clock. Both stops of a stacked offer
+  // share one deadline, so the first stop answers for the pair.
+  if (
+    row.status === 'assigned' &&
+    !row.accepted_at &&
+    row.offer_expires_at &&
+    ((await lapsedOfferCount(supabase, driverId, row.id)) ?? 0) > 0
+  ) {
+    return null;
+  }
   const { data: order, error: orderError } = await supabase.rpc('get_driver_order', {
     p_delivery_id: row.id,
   });
@@ -181,7 +259,7 @@ export async function getActiveDelivery(
       .eq('batch_id', row.batch_id)
       .eq('driver_id', driverId)
       .neq('id', row.id)
-      .in('status', ['assigned', 'picked_up', 'in_transit'])
+      .in('status', [...RIDER_HELD_STATUSES])
       .maybeSingle();
     if (mate) {
       const { data: mateOrder } = await supabase.rpc('get_driver_order', {

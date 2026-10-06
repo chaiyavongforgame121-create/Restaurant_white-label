@@ -70,30 +70,39 @@ export interface DispatchDiagnostics {
 
 export interface DispatchFailure {
   error?: string;
+  /** Why a refusal refused: private.dispatch_delivery's not_dispatchable reason. */
+  reason?: string;
   diagnostics?: DispatchDiagnostics | null;
 }
 
-export type DispatchFailureKey =
-  | 'maxAttempts'
-  | 'notEntitled'
-  | 'notDispatchable'
-  | 'alreadyAccepted'
-  | 'authRequired'
-  | 'notAuthorized'
-  | 'failed'
-  | 'noneAvailable'
-  | 'noPin'
-  | 'noneApproved'
-  | 'noneOnline'
-  | 'noneVerified'
-  | 'allCoolingDown'
-  | 'noLocation'
-  | 'gpsStale'
-  | 'allBusy'
-  | 'outOfRangeMiles'
-  | 'outOfRange'
-  | 'alreadyAsked'
-  | 'someCoolingDown';
+/** Every sentence a dispatch failure can be, as keys under both boards' `dispatch` messages. */
+export const DISPATCH_FAILURE_KEYS = [
+  'maxAttempts',
+  'notEntitled',
+  'notDispatchable',
+  'orderClosed',
+  'kitchenNotReady',
+  'offerOpen',
+  'alreadyAccepted',
+  'authRequired',
+  'notAuthorized',
+  'failed',
+  'noneAvailable',
+  'noPin',
+  'noneApproved',
+  'noneOnline',
+  'noneVerified',
+  'allCoolingDown',
+  'noLocation',
+  'gpsStale',
+  'allBusy',
+  'outOfRangeMiles',
+  'outOfRange',
+  'alreadyAsked',
+  'someCoolingDown',
+] as const;
+
+export type DispatchFailureKey = (typeof DISPATCH_FAILURE_KEYS)[number];
 
 /** A sentence to show, as a key under `<namespace>.dispatch` plus its values. */
 export interface DispatchFailureText {
@@ -104,6 +113,21 @@ export interface DispatchFailureText {
 }
 
 const isZero = (n: number | undefined): boolean => n != null && n <= 0;
+
+/**
+ * The sentence for private.dispatch_delivery's not_dispatchable, by its reason. 'order_closed' is
+ * an order cancelled, refunded or completed under the delivery (nothing to find a rider for, and
+ * no point pressing again); 'kitchen_not_ready' an order taken back from the pass before the press
+ * landed (the search starts again when it is ready); 'offer_open' a press that crossed an offer the
+ * board had not shown yet. Every other reason (the delivery's own status: delivered, cancelled,
+ * failed) is past dispatching.
+ */
+function notDispatchableFailure(reason: unknown): DispatchFailureText {
+  if (reason === 'order_closed') return { key: 'orderClosed' };
+  if (reason === 'kitchen_not_ready') return { key: 'kitchenNotReady' };
+  if (reason === 'offer_open') return { key: 'offerOpen' };
+  return { key: 'notDispatchable' };
+}
 
 /** Turn dispatch-driver's gate counts into the one sentence that tells the merchant where to
  *  look. Ordered from "nothing is set up" to "everyone free was already asked", so the first
@@ -126,13 +150,10 @@ export function describeDispatchFailure(body: DispatchFailure | null, status?: n
     // Only a dispatch-driver older than v2.5 sends this; kept so a stale deployment reads right.
     if (body.error === 'feature_not_entitled') return { key: 'notEntitled' };
     // Past dispatching (picked up, cancelled), or gone altogether: either way nothing to search for.
-    if (
-      body.error === 'delivery_not_dispatchable' ||
-      body.error === 'not_dispatchable' ||
-      body.error === 'delivery_not_found'
-    ) {
-      return { key: 'notDispatchable' };
+    if (body.error === 'delivery_not_dispatchable' || body.error === 'not_dispatchable') {
+      return notDispatchableFailure(body.reason);
     }
+    if (body.error === 'delivery_not_found') return { key: 'notDispatchable' };
     // D6: a new round is refused once a rider has accepted — the job is no longer looking.
     if (body.error === 'already_accepted') return { key: 'alreadyAccepted' };
     // The two refusals, both before anything is written: the session has expired, or the
@@ -444,7 +465,7 @@ export function readDispatchAnswer(status: number | null, body: unknown): Dispat
     case 'already_accepted':
       return { kind: 'alreadyAccepted' };
     case 'not_dispatchable':
-      return { kind: 'refused', failure: { key: 'notDispatchable' } };
+      return { kind: 'refused', failure: notDispatchableFailure(b?.reason) };
     default:
       break;
   }
@@ -624,4 +645,134 @@ export function canRestartDispatch(row: Pick<DispatchRowFields, 'status' | 'acce
   // A self-delivery order parked for the shop's own staff is not looking for a rider at all.
   if (row.status === 'assigned' && !row.driver_id) return false;
   return row.status === 'pending' || row.status === 'dispatching' || row.status === 'assigned';
+}
+
+/**
+ * Whether a restart right now takes an offer back from a rider who has not answered it (on their
+ * screen, or just run out and not yet moved on). That press is a cook moving the order on from a
+ * rider who is not answering, so the button says it asks another rider: the server withdraws the
+ * offer without a strike and does not hand the order straight back to the same rider.
+ */
+export function restartWithdrawsOffer(row: Pick<DispatchRowFields, 'status' | 'accepted_at' | 'driver_id'>): boolean {
+  return row.status === 'assigned' && !!row.driver_id && !row.accepted_at;
+}
+
+// ---------------------------------------------------------------------------------------
+// Whether a press's answer is still about the row
+
+/**
+ * Where a delivery row's round stands, as one comparable value: its status and rider, the round
+ * and its state, and the newest log entry. Any change means the server has moved on, so what this
+ * screen was told before that change is no longer about the same thing. Never a clock: the
+ * board's clock and the server's do not agree, and a tablet a few seconds behind used to hide the
+ * answer to its own press.
+ */
+export function dispatchMark(row: DispatchRowFields): string {
+  const raw: unknown[] = Array.isArray(row.dispatch_history) ? row.dispatch_history : [];
+  const last = asObject(raw[raw.length - 1]);
+  return JSON.stringify([
+    row.status,
+    row.driver_id ?? null,
+    stampKey(row.accepted_at),
+    row.dispatch_state === undefined ? '?' : row.dispatch_state,
+    stampKey(row.dispatch_round_started_at),
+    raw.length,
+    last ? [last.type ?? last.result ?? null, stampKey(last.at ?? last.attempted_at)] : null,
+  ]);
+}
+
+/**
+ * A timestamp as the instant it names, so the same stamp read twice (a realtime payload, then a
+ * refetch) is the same value whatever text it came as: Postgres's own form ('2026-10-05
+ * 15:40:00.123456+00') and ISO are both read, to the millisecond. Text that is no time is kept.
+ */
+function stampKey(v: unknown): number | string | null {
+  if (typeof v !== 'string' || v.trim() === '') return null;
+  const iso = v
+    .trim()
+    .replace(' ', 'T')
+    .replace(/(T\d{2}:\d{2}:\d{2}\.\d{3})\d+/, '$1')
+    .replace(/(T\d{2}:\d{2}:\d{2}(?:\.\d+)?)([+-]\d{2})$/, '$1$2:00');
+  const t = Date.parse(iso);
+  return Number.isFinite(t) ? t : v;
+}
+
+/**
+ * Whether the row now says what `answer` said. The row is the truth (D7): a waiting or no-rider
+ * answer agrees only while the row is in that state and its newest log entry is the one the server
+ * wrote for that answer — the same reason and, where both carry it, the same asked count. Any newer
+ * entry (an offer, a decline, waiting for another reason) and it no longer does, so the gate counts
+ * of an old press are never printed under a newer, different reason. An offer agrees while the row
+ * holds it. A refusal is about the press, not a state of the row. A row read without the dispatch
+ * columns cannot contradict anything.
+ */
+export function answerAgrees(answer: DispatchAnswer, row: DispatchRowFields): boolean {
+  if (row.dispatch_state === undefined) return true;
+  switch (answer.kind) {
+    case 'waiting':
+    case 'noRiderFound': {
+      const state = answer.kind === 'waiting' ? 'waiting' : 'no_rider_found';
+      if (row.status !== 'pending' && row.status !== 'dispatching') return false;
+      if (row.dispatch_state !== state) return false;
+      const log = readLog(row.dispatch_history);
+      const last = log[log.length - 1];
+      if (!last || last.type !== state) return false;
+      if (!inRound(last, parseMs(row.dispatch_round_started_at ?? null))) return false;
+      const said = answer.kind === 'waiting' ? answer.why : answer.reason;
+      const rowSays = noRiderReasonOf(last.reason, last.diagnostics);
+      if (said != null && rowSays != null && said !== rowSays) return false;
+      return answer.asked == null || last.asked == null || answer.asked === last.asked;
+    }
+    case 'offered':
+      return (
+        row.status === 'assigned' &&
+        !!row.driver_id &&
+        !row.accepted_at &&
+        (answer.driverId == null || answer.driverId === row.driver_id)
+      );
+    case 'searching':
+      return row.dispatch_state === 'searching';
+    default:
+      return true;
+  }
+}
+
+/**
+ * One press of a find-rider button and what came of it, as the screen that pressed keeps it: the
+ * server's answer (which fills only what the row cannot say yet) and the note shown under the
+ * card. It is about the row as it stood when the answer was given, and that is the row it is
+ * bound to once the row shows it (the answer may land before or after realtime brings the press's
+ * own writes). From then on it lives exactly as long as the row stays where it was.
+ */
+export interface DispatchPress<N> {
+  /** Which press this is, so a newer press is never settled as an older one. */
+  seq: number;
+  answer: DispatchAnswer | null;
+  note: N | null;
+  /** The row's dispatchMark once the row agreed with the answer; null until it has caught up. */
+  bound: string | null;
+}
+
+/**
+ * What becomes of a press as its row changes: bound to the row once the row agrees with it, kept
+ * while the row stays as it was bound, dropped the moment the row moves on (a new round, another
+ * state, a newer log entry). Returns the same object when nothing changes.
+ */
+export function settlePress<P extends DispatchPress<unknown>>(press: P | null, mark: string, agrees: boolean): P | null {
+  if (!press) return press;
+  if (press.bound != null) return press.bound === mark ? press : null;
+  return agrees ? { ...press, bound: mark } : press;
+}
+
+/** Whether a press still speaks for the row now: bound to it, or not bound yet and agreeing. */
+export function pressCurrent(press: DispatchPress<unknown> | null, mark: string, agrees: boolean): boolean {
+  if (!press) return false;
+  return press.bound != null ? press.bound === mark : agrees;
+}
+
+/** The answer a card's dispatch line may read: a press the row has not caught up with yet, or one
+ *  bound to the row as it still is. Never one whose row has since moved on. */
+export function pressAnswer(press: DispatchPress<unknown> | null, mark: string): DispatchAnswer | null {
+  if (!press) return null;
+  return press.bound == null || press.bound === mark ? press.answer : null;
 }

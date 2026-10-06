@@ -169,7 +169,10 @@
     "deliveryFailed": "{reason} · raised on a delivery started {age} ago",
     "noReason": "No reason recorded",
     "bookingNotAccepted": "Nobody has accepted this booking yet",
-    "bookingStillHeld": "Should already be in the kitchen — still held"
+    "bookingStillHeld": "Should already be in the kitchen — still held",
+    "deliveryWaiting": "{reason, select, everyoneAsked {Every free rider has been asked — the next one to come online gets it} cooldown {Riders are on a cooldown — it goes out as soon as one ends} nobodyOnline {Nobody is online — it goes out when a rider comes online} noFreshGps {No rider has a fresh GPS fix — it goes out when one does} allBusy {Every rider is on a delivery — it goes out when one is free} notSetUp {No rider can be offered it yet — check the riders on Drivers and the branch’s map pin} other {Waiting for a free rider}}",
+    "deliveryNoRiderFound": "{reason, select, everyoneAsked {No rider found — every rider was asked and none took it} cooldown {No rider found — the riders who could take it are on a cooldown} nobodyOnline {No rider found — nobody was online} noFreshGps {No rider found — no online rider had a fresh GPS fix} allBusy {No rider found — every rider was busy with another delivery} notSetUp {No rider found — check the riders on Drivers and the branch’s map pin} other {No rider found — the search time ran out}}",
+    "deliveryNotSearching": "Nothing is looking for a rider"
   },
   "bookings": {
     "at": {

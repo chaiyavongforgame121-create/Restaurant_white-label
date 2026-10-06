@@ -42,6 +42,8 @@ describe('changeMatters', () => {
   it('refreshes when a delivery changes in a way a bucket can see', () => {
     const memory = new Map<string, string>();
     changeMatters('deliveries', 'UPDATE', delivery(), memory);
+    // The server ending a round as "no rider found" writes only its state and log: still news.
+    expect(changeMatters('deliveries', 'UPDATE', delivery({ dispatch_state: 'no_rider_found' }), memory)).toBe(true);
     expect(changeMatters('deliveries', 'UPDATE', delivery({ status: 'failed' }), memory)).toBe(true);
     expect(
       changeMatters('deliveries', 'UPDATE', delivery({ status: 'failed', failed_reason: 'Closed' }), memory),

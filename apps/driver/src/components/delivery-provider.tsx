@@ -10,15 +10,19 @@ import {
   progressDelivery as progressDeliveryQuery,
   markDeliveryArriving as markArrivingQuery,
   getActiveDelivery,
+  holdsOpenDelivery,
   type DeliveryStatus,
 } from '@favornoms/database/queries';
 import {
   dispatchNotice,
-  jobIds,
   offerDeadlineMs,
+  offerKey,
+  offerSightings,
+  offersOver,
   parseTimeMs,
   parseWorkerMessage,
   type DispatchNotice,
+  type OfferSighting,
 } from '@/lib/alerts';
 import { reportLiveOffers } from '@/lib/offer-notifications';
 import { useDriverSession } from './driver-session';
@@ -111,8 +115,13 @@ interface DeliveryContextValue {
    * (offer notifications closed).
    */
   synced: boolean;
-  accept: () => Promise<DispatchAnswer>;
-  reject: (reason?: 'timeout' | 'declined') => Promise<DispatchAnswer>;
+  /**
+   * Answer the offer with this delivery id. Named rather than "the offer on screen": a sheet
+   * still fading out after its own offer ended must not answer the next one, which may already
+   * be on screen. An id that is not the offer on screen is a no-op.
+   */
+  accept: (offerId: string) => Promise<DispatchAnswer>;
+  reject: (offerId: string, reason?: 'timeout' | 'declined') => Promise<DispatchAnswer>;
   progress: (next: DeliveryStatus) => Promise<void>;
   /** Persist "arrived at the customer" (sets arriving_at). */
   markArriving: () => Promise<void>;
@@ -291,12 +300,35 @@ export function DeliveryProvider({ children }: { children: React.ReactNode }) {
   // otherwise the one that started first lands last and drags the stage card backwards.
   const seqRef = React.useRef(0);
 
+  // The first read that starts after the service worker said a push arrived. Once a read from
+  // then on settles, the offers still live are reported to the worker even when nothing on
+  // screen changed: that push may be for an offer this phone never showed, already gone, and its
+  // notification should not stay up. Not after every read: one that started before the push
+  // can land after its notification went up, and would close a live offer.
+  const pushSeqRef = React.useRef<number | null>(null);
+  const [pushReads, setPushReads] = React.useState(0);
+
+  // The offer the server refused an accept for as expired (offerKey). Kept off the screen even if
+  // a read still returns it before the expiry sweep has released it: it can only be refused again.
+  // A re-offer of the same delivery has a new deadline, so a new key, and shows.
+  const droppedOfferRef = React.useRef('');
+
   const refreshFromServer = React.useCallback(async () => {
     const supabase = getBrowserClient();
     const seq = ++seqRef.current;
+    // The server has answered for what is now on screen.
+    const settle = () => {
+      setSynced(true);
+      if (pushSeqRef.current != null && seq >= pushSeqRef.current) {
+        pushSeqRef.current = null;
+        setPushReads((n) => n + 1);
+      }
+    };
 
     let result: Awaited<ReturnType<typeof getActiveDelivery>>;
     try {
+      // An offer whose deadline has passed by the server's clock comes back as null here, so it
+      // never rings or shows an Accept that can only be refused (queries/driver.ts).
       result = await getActiveDelivery(supabase, driverId);
     } catch {
       // It now throws rather than passing a failed read off as "no job". Keep what is on
@@ -305,28 +337,42 @@ export function DeliveryProvider({ children }: { children: React.ReactNode }) {
     }
     if (seq !== seqRef.current) return;
 
-    const row = result as unknown as Record<string, unknown> | null;
+    const read = result as unknown as Record<string, unknown> | null;
+    // The offer an accept was refused for as expired, read again before the sweep released it.
+    const dropped =
+      !!read &&
+      read.status === 'assigned' &&
+      !read.accepted_at &&
+      droppedOfferRef.current !== '' &&
+      offerKey({ id: read.id as string, offerExpiresAt: (read.offer_expires_at as string | null) ?? null }) ===
+        droppedOfferRef.current;
+    const row = dropped ? null : read;
     if (!row) {
       if (!offeredRef.current && !activeRef.current) {
-        setSynced(true);
+        settle();
+        return;
+      }
+      if (dropped) {
+        // The rider holds nothing else while that offer is still theirs on the server.
+        rawRowsRef.current = new Map();
+        setOffered(null);
+        setActive(null);
+        settle();
         return;
       }
       // Still not proof the rider is free: a null also means get_driver_order lost the race
       // against a reassign, and the read can simply be lagging. Clearing a live job on that
       // is how a delivery the rider is carrying vanishes from their screen mid-ride — the
       // same defect 1dc661d fixed on the customer's tracking page. Ask once more, cheaply,
-      // and keep what we hold unless the server plainly says there is nothing.
-      const { count, error } = await supabase
-        .from('deliveries')
-        .select('id', { head: true, count: 'exact' })
-        .eq('driver_id', driverId)
-        .in('status', ['assigned', 'picked_up', 'in_transit']);
+      // and keep what we hold unless the server plainly says there is nothing (an offer its
+      // clock has ended counts as nothing).
+      const holds = await holdsOpenDelivery(supabase, driverId);
       if (seq !== seqRef.current) return;
-      if (error || (count ?? 0) > 0) return;
+      if (holds !== false) return;
       rawRowsRef.current = new Map();
       setOffered(null);
       setActive(null);
-      setSynced(true);
+      settle();
       return;
     }
 
@@ -349,7 +395,7 @@ export function DeliveryProvider({ children }: { children: React.ReactNode }) {
       setOffered(null);
       setActive((prev) => (sameDelivery(prev, ui) ? prev : ui));
     }
-    setSynced(true);
+    settle();
   }, [driverId]);
 
   // A rider's phone backgrounds constantly and rides through dead spots, so the socket
@@ -424,17 +470,26 @@ export function DeliveryProvider({ children }: { children: React.ReactNode }) {
     enabled: !!driverId,
   });
 
-  // When the offer on screen first appeared here, for its deadline. Reset with the offer, so the
-  // same delivery offered again later starts a fresh clock.
-  const offerShownRef = React.useRef<{ id: string; at: number } | null>(null);
+  // When the offer on screen first appeared here, for its deadline. Reset with the offer (its
+  // offerKey, the delivery and its deadline), so the same delivery offered again later starts a
+  // fresh clock, as its sheet does.
+  const offerShownRef = React.useRef<{ key: string; at: number } | null>(null);
   const offerDeadline = React.useMemo(() => {
     if (!offered) {
       offerShownRef.current = null;
       return null;
     }
-    if (offerShownRef.current?.id !== offered.id) offerShownRef.current = { id: offered.id, at: Date.now() };
+    const key = offerKey(offered);
+    if (offerShownRef.current?.key !== key) offerShownRef.current = { key, at: Date.now() };
     return offerDeadlineMs(parseTimeMs(offered.offerExpiresAt), offerShownRef.current.at);
   }, [offered]);
+
+  // An answer the server refused because the offer expired: that offer is over whatever a read
+  // still says, so it leaves the screen now, stops ringing, and never sends a timeout decline.
+  const dropExpiredOffer = React.useCallback((offer: ActiveDeliveryUI) => {
+    droppedOfferRef.current = offerKey(offer);
+    setOffered((current) => (current?.id === offer.id ? null : current));
+  }, []);
 
   // Both answers keep the offer on screen when the server does not take them, and ask the server
   // what the offer is now. The decline used to clear it whatever happened: a decline that never
@@ -442,15 +497,17 @@ export function DeliveryProvider({ children }: { children: React.ReactNode }) {
   // the offer for this rider until it expired, and only then moved on to the next one. Now a
   // refusal for an offer that has moved on ('forbidden') ends with that read clearing it, and an
   // answer that got no reply leaves the offer, still the rider's, to be answered again.
-  const accept = React.useCallback(async (): Promise<DispatchAnswer> => {
+  const accept = React.useCallback(async (offerId: string): Promise<DispatchAnswer> => {
     const offer = offeredRef.current;
-    if (!offer) return { ok: false, notice: 'offerGone' };
+    if (!offer || offer.id !== offerId) return { ok: false, notice: 'offerGone' };
     setRespondingTo(offer.id);
     const { refusal } = await acceptDispatchQuery(getBrowserClient(), offer.id);
     setRespondingTo((current) => (current === offer.id ? null : current));
     if (refusal) {
+      const notice = dispatchNotice(refusal.reason, 'accept');
+      if (notice === 'offerExpired') dropExpiredOffer(offer);
       void refreshFromServer();
-      return { ok: false, notice: dispatchNotice(refusal.reason, 'accept') };
+      return { ok: false, notice };
     }
     setActive({ ...offer, acceptedAt: new Date().toISOString() });
     setOffered((current) => (current?.id === offer.id ? null : current));
@@ -458,18 +515,21 @@ export function DeliveryProvider({ children }: { children: React.ReactNode }) {
     // and all. Starting a new one retires it (only the newest read may set state).
     void refreshFromServer();
     return { ok: true };
-  }, [refreshFromServer]);
+  }, [dropExpiredOffer, refreshFromServer]);
 
   const reject = React.useCallback(
-    async (reason: 'timeout' | 'declined' = 'declined'): Promise<DispatchAnswer> => {
+    async (offerId: string, reason: 'timeout' | 'declined' = 'declined'): Promise<DispatchAnswer> => {
       const offer = offeredRef.current;
-      if (!offer) return { ok: true };
+      // Nothing to decline: the offer this was about has already left the screen.
+      if (!offer || offer.id !== offerId) return { ok: true };
       setRespondingTo(offer.id);
       const { refusal } = await rejectDispatchQuery(getBrowserClient(), offer.id, driverId, reason);
       setRespondingTo((current) => (current === offer.id ? null : current));
       if (refusal) {
+        const notice = dispatchNotice(refusal.reason, 'decline');
+        if (notice === 'offerExpired') dropExpiredOffer(offer);
         void refreshFromServer();
-        return { ok: false, notice: dispatchNotice(refusal.reason, 'decline') };
+        return { ok: false, notice };
       }
       // Only the offer that was declined: one that arrived meanwhile is a new offer.
       setOffered((current) => (current?.id === offer.id ? null : current));
@@ -481,7 +541,7 @@ export function DeliveryProvider({ children }: { children: React.ReactNode }) {
       void refreshDriver();
       return { ok: true };
     },
-    [driverId, refreshDriver, refreshFromServer],
+    [dropExpiredOffer, driverId, refreshDriver, refreshFromServer],
   );
 
   // The service worker says a push arrived. With the app open but its socket asleep (a phone
@@ -490,7 +550,10 @@ export function DeliveryProvider({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     if (!driverId || typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
     const onMessage = (event: MessageEvent) => {
-      if (parseWorkerMessage(event.data)?.type === 'push') void refreshFromServer();
+      if (parseWorkerMessage(event.data)?.type !== 'push') return;
+      // refreshFromServer takes the next sequence number synchronously, so this is its read.
+      pushSeqRef.current = seqRef.current + 1;
+      void refreshFromServer();
     };
     navigator.serviceWorker.addEventListener('message', onMessage);
     return () => navigator.serviceWorker.removeEventListener('message', onMessage);
@@ -498,12 +561,24 @@ export function DeliveryProvider({ children }: { children: React.ReactNode }) {
 
   // Offer notifications stay on the shade until touched. Once the server has answered, tell the
   // worker which offers are still this rider's so it can close the rest (expired, declined,
-  // accepted, given to someone else).
-  const liveOfferKey = synced ? jobIds(offered).join(',') : null;
+  // accepted, given to someone else), and which ones this phone saw end, so a push for one of
+  // those that is still on its way is closed when it lands rather than buzzing the rider again.
+  const liveOfferKey = synced
+    ? offerSightings(offered)
+        .map((s) => `${s.deliveryId}@${s.expiresAtMs ?? ''}`)
+        .join(',')
+    : null;
+  const reportedOffersRef = React.useRef<OfferSighting[]>([]);
   React.useEffect(() => {
     if (liveOfferKey == null) return;
-    reportLiveOffers(liveOfferKey ? liveOfferKey.split(',') : []);
-  }, [liveOfferKey]);
+    const live = offerSightings(offeredRef.current);
+    const over = offersOver(reportedOffersRef.current, live);
+    reportedOffersRef.current = live;
+    reportLiveOffers(
+      live.map((s) => s.deliveryId),
+      over,
+    );
+  }, [liveOfferKey, pushReads]);
 
   const progress = React.useCallback(
     async (next: DeliveryStatus) => {

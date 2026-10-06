@@ -20,6 +20,10 @@ const RELEVANT_COLUMNS: Record<WatchedTable, readonly string[]> = {
     'offered_at',
     'offer_expires_at',
     'dispatch_attempts',
+    // The server's round (docs/DISPATCH-FIXES-2026-10-05.md D7). A round ending as "no rider
+    // found" changes only these and the log, and is exactly what Action Required must show.
+    'dispatch_state',
+    'dispatch_round_started_at',
     'failed_reason',
     'picked_up_at',
   ],

@@ -34,6 +34,7 @@ import {
   dropoffPosition,
   findRiderFor,
   formatCountdown,
+  kitchenNotReady,
   lastEndedWithReason,
   liveDispatchLine,
   mergeRefetch,
@@ -45,7 +46,7 @@ import {
   riderReady,
   type DeliveryAssignmentRef,
 } from './live-ops-model';
-import { readDispatchAnswer, stackPeers, type DispatchAnswer } from './dispatch-model';
+import { answerAgrees, readDispatchAnswer, stackPeers, type DispatchAnswer } from './dispatch-model';
 import { useLiveOpsText } from './live-ops-text';
 // Cancelling here is the same cancel as on Orders: a card the diner paid online is refunded first.
 import { cardRefundErrorKey, keepIdempotencyKey } from '../../orders/_components/card-refund';
@@ -315,12 +316,16 @@ function DeliveryCard({
   const line = liveDispatchLine(d, nowMs, assignments, ctx);
   const search = findRiderFor(d, selfDelivery, line);
   // What dispatch-driver said about the riders it could not use (a cooldown, stale GPS…), shown
-  // only while the card still describes the round that answer was about.
+  // only while the row still says what that answer said: the same state, the same reason, nothing
+  // newer in its log. A cooldown note under "Every free rider has been asked" was an old press
+  // talking over the server.
   const gateNote =
     answer &&
     (answer.kind === 'waiting' || answer.kind === 'noRiderFound') &&
     answer.failure &&
-    (line.kind === 'waiting' || line.kind === 'noRiderFound')
+    (line.kind === 'waiting' || line.kind === 'noRiderFound') &&
+    !kitchenNotReady(d) &&
+    answerAgrees(answer, d)
       ? text.dispatchFailure(answer.failure)
       : null;
   const walked = lastEndedWithReason(assignments);

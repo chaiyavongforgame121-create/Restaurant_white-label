@@ -7,7 +7,28 @@
 //  - push: Web Push via VAPID (RFC 8291) — fans out to all push_subscriptions rows for recipient
 //  - email: Resend (RESEND_API_KEY); throws resend_not_configured without it
 //
-// Invoke via pg_cron every minute or manually via HTTP w/ x-worker-secret header.
+// Invoke via pg_cron every minute (private.run_notify_worker_tick) or manually via HTTP with the
+// x-worker-secret header. A POST body of {"scope":"offers"} sends rider offers only: that is the
+// call to make right after an offer is queued, so its push goes out in seconds instead of at the
+// next minute tick (review CONC-7). Any other body, or none, is a full run: offers first, then
+// everything else.
+//
+// THE SECRET. Until the owner sets NOTIFY_WORKER_SECRET, this URL answers anyone: the function runs
+// without JWT verification, and the tick sends whatever private.app_settings.notify_worker_secret
+// holds (nothing yet). Since rows are claimed (below), an outside call can no longer send a message
+// twice; it can still make the worker run early and retry failed rows sooner, spending their tries.
+// To close it, set private.app_settings.notify_worker_secret FIRST, then the function secret
+// NOTIFY_WORKER_SECRET to the same value (the other way round, every tick in between is refused).
+//
+// ROWS ARE CLAIMED BEFORE THEY ARE SENT (review BE-6). A run moves the rows it will send from
+// pending/failed to `sending` in one guarded UPDATE and sends only the rows that came back, so two
+// runs at once (a tick that ran long, a kick beside the minute tick, an outside caller) never send
+// the same row twice. The claim counts the try; a claim whose run died is released after
+// CLAIM_LEASE_SEC and retried like a failure. The rules are in ../_shared/notify-staleness.ts.
+//
+// OFFERS FIRST. A run reads, claims and sends rider offers before it does anything else, including
+// its housekeeping, and an offer is skipped (`stale:offer_gone`) when its delivery is no longer
+// offered to that rider, so a locked phone does not ring for an offer that is already over.
 //
 // STALE ROWS ARE SKIPPED, NOT SENT (docs/DISPATCH-FIXES-2026-10-05.md D10). The worker never ran on
 // the live project, so the queue holds months of pending rows; switched on as it was, it would have
@@ -29,10 +50,17 @@ import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2';
 import webpush from 'npm:web-push@3.6.7';
 import {
   OFFER_TEMPLATE,
+  claimGroups,
+  claimedInPlanOrder,
+  leaseCutoffIso,
+  offerIsOpen,
+  offerTarget,
   planSend,
   pushData,
   pushOptions,
+  runScope,
   staleCutoffIso,
+  type OfferDelivery,
   type StaleReason,
 } from '../_shared/notify-staleness.ts';
 
@@ -54,6 +82,13 @@ if (VAPID_PUBLIC && VAPID_PRIVATE) {
 
 const BATCH_SIZE = 25;
 const MAX_ATTEMPTS = 5;
+/** The statuses a row can be claimed from. */
+const CLAIMABLE = ['pending', 'failed'];
+/**
+ * A send that hangs (a push service, Twilio, Resend) fails after this, so a run stays far inside
+ * its claims' lease and a stuck provider costs one retry rather than the whole run.
+ */
+const SEND_TIMEOUT_MS = 15_000;
 
 interface OutboxRow {
   id: string;
@@ -132,17 +167,49 @@ interface PushSub {
   auth: string;
 }
 
+/** What one run did, as its JSON answer says. */
+interface RunTally {
+  /** Rows this run claimed and tried to send. */
+  processed: number;
+  success: number;
+  failed: number;
+  /** Rows marked skipped: past their use, or an offer already over. */
+  skipped: number;
+  /** Rows another run claimed first (that run sends them). */
+  contended: number;
+  /** Claims whose run died, put back to be retried. */
+  released: number;
+}
+
 Deno.serve(async (req) => {
   if (WORKER_SECRET && req.headers.get('x-worker-secret') !== WORKER_SECRET) {
     return new Response('forbidden', { status: 403 });
   }
+  const scope = runScope(await readBody(req));
 
   const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
   });
+  const tally: RunTally = { processed: 0, success: 0, failed: 0, skipped: 0, contended: 0, released: 0 };
+  const lookups: Lookups = { orders: new Map(), branches: new Map() };
+
+  // Offers before anything else, housekeeping included: an offer lives 75 seconds, and this run may
+  // be the kick that was made for it.
+  const offersError = await runBatch(supabase, 'offers', tally, lookups);
+  if (scope === 'offers') {
+    return offersError ? json({ error: offersError, scope, ...tally }, 500) : json({ scope, ...tally });
+  }
 
   const nowMs = Date.now();
-  const nowIso = new Date(nowMs).toISOString();
+
+  // Claims whose run died go back to be retried (the try they were claimed for still counts).
+  const { count: released, error: releaseErr } = await supabase
+    .from('notifications_outbox')
+    .update({ status: 'failed', sent_at: null, last_error: 'claim_expired' }, { count: 'exact' })
+    .eq('status', 'sending')
+    .lt('sent_at', leaseCutoffIso(nowMs));
+  if (releaseErr) console.error('notify-worker: releasing expired claims failed', releaseErr.code, releaseErr.message);
+  tally.released = released ?? 0;
 
   // Retire the long tail in one statement: everything due more than 30 minutes ago, whatever its
   // template (no offer lives that long). A failure here is logged and the run goes on: the rows it
@@ -150,75 +217,177 @@ Deno.serve(async (req) => {
   const { count: retiredOld, error: retireErr } = await supabase
     .from('notifications_outbox')
     .update({ status: 'skipped', last_error: 'stale:too_old' }, { count: 'exact' })
-    .in('status', ['pending', 'failed'])
+    .in('status', CLAIMABLE)
     .lt('attempts', MAX_ATTEMPTS)
     .lt('created_at', staleCutoffIso(nowMs))
     .lt('scheduled_for', staleCutoffIso(nowMs));
   if (retireErr) console.error('notify-worker: retiring old rows failed', retireErr.code, retireErr.message);
+  tally.skipped += retiredOld ?? 0;
 
-  // Offers and everything else are read separately, newest first, so a burst of other rows can
-  // never push a live offer out of this run's window.
-  const due = () =>
-    supabase
-      .from('notifications_outbox')
-      .select(OUTBOX_COLUMNS)
-      .in('status', ['pending', 'failed'])
-      .lte('scheduled_for', nowIso)
-      .lt('attempts', MAX_ATTEMPTS);
-  const [offers, others] = await Promise.all([
-    due().eq('template', OFFER_TEMPLATE).order('created_at', { ascending: false }).limit(BATCH_SIZE),
-    due()
-      .neq('template', OFFER_TEMPLATE)
-      .order('scheduled_for', { ascending: false })
-      .order('created_at', { ascending: false })
-      .limit(BATCH_SIZE),
-  ]);
-  const error = offers.error ?? others.error;
-  if (error) return json({ error: error.message }, 500);
+  const othersError = await runBatch(supabase, 'others', tally, lookups);
+  const error = offersError ?? othersError;
+  return error ? json({ error, scope, ...tally }, 500) : json({ scope, ...tally });
+});
 
-  const plan = planSend(
-    [...((offers.data ?? []) as OutboxRow[]), ...((others.data ?? []) as OutboxRow[])],
-    nowMs,
-    BATCH_SIZE,
-  );
-  const skipped = (retiredOld ?? 0) + (await retireStale(supabase, plan.stale));
+/** The request's JSON body, or null when there is none or it is not JSON. */
+async function readBody(req: Request): Promise<unknown> {
+  try {
+    const text = await req.text();
+    return text.trim() ? JSON.parse(text) : null;
+  } catch {
+    return null;
+  }
+}
 
-  const lookups: Lookups = { orders: new Map(), branches: new Map() };
-  const results = await Promise.all(
-    plan.send.map(async (row: OutboxRow) => {
-      try {
-        await dispatch(supabase, row, lookups);
-        await supabase
-          .from('notifications_outbox')
-          .update({ status: 'sent', sent_at: new Date().toISOString() })
-          .eq('id', row.id);
-        return { id: row.id, ok: true };
-      } catch (err) {
-        const msg = (err as Error).message;
-        await supabase
-          .from('notifications_outbox')
-          .update({
-            status: 'failed',
-            attempts: row.attempts + 1,
-            last_error: msg.slice(0, 500),
-          })
-          .eq('id', row.id);
-        return { id: row.id, ok: false, error: msg };
+/**
+ * Reads one kind of row (rider offers, or everything else), retires what is past its use, claims
+ * the rest and sends what it won. The kinds are read separately, newest first, so a burst of other
+ * rows can never push a live offer out of a run's window. Returns the read's error message, or null.
+ */
+async function runBatch(
+  supabase: Db,
+  kind: 'offers' | 'others',
+  tally: RunTally,
+  lookups: Lookups,
+): Promise<string | null> {
+  const nowMs = Date.now();
+  const due = supabase
+    .from('notifications_outbox')
+    .select(OUTBOX_COLUMNS)
+    .in('status', CLAIMABLE)
+    .lte('scheduled_for', new Date(nowMs).toISOString())
+    .lt('attempts', MAX_ATTEMPTS);
+  const { data, error } = await (kind === 'offers'
+    ? due.eq('template', OFFER_TEMPLATE).order('created_at', { ascending: false }).limit(BATCH_SIZE)
+    : due
+        .neq('template', OFFER_TEMPLATE)
+        .order('scheduled_for', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(BATCH_SIZE));
+  if (error) {
+    console.error(`notify-worker: reading ${kind} failed`, error.code, error.message);
+    return error.message;
+  }
+
+  const plan = planSend((data ?? []) as OutboxRow[], nowMs, BATCH_SIZE);
+  let toSend = plan.send;
+  const stale = [...plan.stale];
+  if (kind === 'offers') {
+    const gone = await goneOffers(supabase, toSend);
+    if (gone.size > 0) {
+      for (const row of toSend) if (gone.has(row.id)) stale.push({ row, reason: 'offer_gone' });
+      toSend = toSend.filter((row) => !gone.has(row.id));
+    }
+  }
+  tally.skipped += await retireStale(supabase, stale);
+
+  const mine = await claim(supabase, toSend);
+  tally.contended += toSend.length - mine.length;
+
+  const results = await Promise.all(mine.map((row) => sendClaimed(supabase, row, lookups)));
+  tally.processed += results.length;
+  tally.success += results.filter((ok) => ok).length;
+  tally.failed += results.filter((ok) => !ok).length;
+  return null;
+}
+
+/**
+ * Claims `rows` for this run (see Claims in ../_shared/notify-staleness.ts): one guarded UPDATE
+ * per attempts count, each moving its rows to `sending` only while they are still pending/failed
+ * with the count they were read with. Returns the rows won, in `rows` order, as claimed. A claim
+ * that errors wins nothing: those rows wait for the next run rather than risk a double send.
+ */
+async function claim(supabase: Db, rows: OutboxRow[]): Promise<OutboxRow[]> {
+  if (rows.length === 0) return [];
+  const claimedAt = new Date().toISOString();
+  const won = await Promise.all(
+    claimGroups(rows, MAX_ATTEMPTS).map(async ({ attempts, ids }) => {
+      const { data, error } = await supabase
+        .from('notifications_outbox')
+        .update({ status: 'sending', attempts: attempts + 1, sent_at: claimedAt })
+        .in('id', ids)
+        .eq('attempts', attempts)
+        .in('status', CLAIMABLE)
+        .select(OUTBOX_COLUMNS);
+      if (error) {
+        console.error('notify-worker: claiming rows failed', error.code, error.message);
+        return [];
       }
+      return (data ?? []) as OutboxRow[];
     }),
   );
+  return claimedInPlanOrder(rows, won.flat());
+}
 
-  return json({
-    processed: results.length,
-    success: results.filter((r) => r.ok).length,
-    failed: results.filter((r) => !r.ok).length,
-    skipped,
-  });
-});
+/** Sends one claimed row and finishes it as sent or failed. True when it went out. */
+async function sendClaimed(supabase: Db, row: OutboxRow, lookups: Lookups): Promise<boolean> {
+  try {
+    await dispatch(supabase, row, lookups);
+    await finish(supabase, row, { status: 'sent', sent_at: new Date().toISOString() });
+    return true;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // The claim already counted this try: attempts is not raised again here.
+    await finish(supabase, row, { status: 'failed', sent_at: null, last_error: msg.slice(0, 500) });
+    return false;
+  }
+}
+
+/**
+ * Writes a claimed row's outcome, only while the claim is still this run's: `sending`, with the
+ * attempts it was claimed at. A run that outlived its lease cannot overwrite the claim after it.
+ */
+async function finish(supabase: Db, row: OutboxRow, patch: Record<string, unknown>) {
+  const { error } = await supabase
+    .from('notifications_outbox')
+    .update(patch)
+    .eq('id', row.id)
+    .eq('status', 'sending')
+    .eq('attempts', row.attempts);
+  if (error) console.error('notify-worker: finishing a row failed', row.id, error.code, error.message);
+}
+
+/**
+ * The offer rows whose offer is already over: the rider answered in the app, or the offer was
+ * withdrawn, passed on or cancelled before this run got to it. Read at send time, one query for
+ * the whole batch. When the read fails nothing is called over (an offer that is still open must
+ * not be lost); the staleness rules still bound how late a push can go.
+ */
+async function goneOffers(supabase: Db, rows: OutboxRow[]): Promise<Set<string>> {
+  const gone = new Set<string>();
+  const deliveryIds = new Set<string>();
+  const batchIds = new Set<string>();
+  for (const row of rows) {
+    const target = offerTarget(row);
+    if (!target) continue;
+    deliveryIds.add(target.deliveryId);
+    if (target.batchId) batchIds.add(target.batchId);
+  }
+  if (deliveryIds.size === 0) return gone;
+
+  // The ids are UUIDs (offerTarget checks), so they are safe inside the filter string.
+  const read = supabase
+    .from('deliveries')
+    .select('id, batch_id, status, driver_id, accepted_at, offer_expires_at');
+  const { data, error } = await (batchIds.size > 0
+    ? read.or(`id.in.(${[...deliveryIds].join(',')}),batch_id.in.(${[...batchIds].join(',')})`)
+    : read.in('id', [...deliveryIds]));
+  if (error) {
+    console.error('notify-worker: reading offered deliveries failed', error.code, error.message);
+    return gone;
+  }
+  const deliveries = (data ?? []) as OfferDelivery[];
+  const nowMs = Date.now();
+  for (const row of rows) {
+    if (offerIsOpen(row, deliveries, nowMs) === false) gone.add(row.id);
+  }
+  return gone;
+}
 
 /**
  * Marks rows past their use as `skipped`, one statement per reason, and says how many it marked.
- * Guarded on the statuses this run read them in, so a row another run has just sent stays sent.
+ * Guarded on the statuses this run read them in, so a row another run has claimed or sent is left
+ * alone.
  */
 async function retireStale(
   supabase: Db,
@@ -236,7 +405,7 @@ async function retireStale(
       .from('notifications_outbox')
       .update({ status: 'skipped', last_error: `stale:${reason}` }, { count: 'exact' })
       .in('id', ids)
-      .in('status', ['pending', 'failed']);
+      .in('status', CLAIMABLE);
     if (error) console.error('notify-worker: skipping stale rows failed', reason, error.code, error.message);
     else marked += count ?? 0;
   }
@@ -313,6 +482,7 @@ async function sendEmail(
       subject,
       html,
     }),
+    signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
   });
   if (!res.ok) {
     throw new Error(`resend_${res.status}:${(await res.text()).slice(0, 200)}`);
@@ -536,6 +706,7 @@ async function sendSms(
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: form.toString(),
+      signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
     },
   );
   if (!res.ok) {
@@ -712,7 +883,7 @@ async function sendPush(
   // web-push's defaults are a four-week TTL and normal urgency: a push service would hold an
   // offer long after it was over, and Android's Doze can sit on a normal one for minutes. Read at
   // send time, so the TTL is what is left now, not when the run started.
-  const options = pushOptions(row, Date.now());
+  const options = { ...pushOptions(row, Date.now()), timeout: SEND_TIMEOUT_MS };
 
   let okCount = 0;
   let lastErr: string | null = null;

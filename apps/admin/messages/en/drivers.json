@@ -50,8 +50,8 @@
     "approvedNeedsDocuments": "Approved, but their documents still need reviewing — use Review documents.",
     "replacedAfterVerify": "They replaced a document {received}, after it was verified on {verified} — look again.",
     "replacedAfterDecision": "They replaced a document {received}, after your decision on {reviewed}.",
-    "coolingDown": "On a cooldown until {time} — too many missed or declined offers",
-    "coolingDownNoTime": "On a cooldown — too many missed or declined offers"
+    "coolingDown": "On a cooldown until {time} — no new offers until then",
+    "coolingDownNoTime": "On a cooldown — no new offers until it ends"
   },
   "kycStatus": {
     "pending": "pending",
@@ -116,7 +116,7 @@
   "cooldown": {
     "lift": "Lift cooldown",
     "confirmTitle": "Let {name} take orders again?",
-    "confirmBody": "The cooldown was set automatically after missed or declined offers. Lifting it lets {name} go online and get offers right away, at every branch they ride for.",
+    "confirmBody": "The cooldown was set automatically, after missed or declined offers or a job {name} cancelled after accepting it. Lifting it lets {name} go online and get offers right away, at every branch they ride for.",
     "noteLabel": "Note for the log (optional)",
     "notePlaceholder": "e.g. the app froze, not the rider’s fault",
     "confirm": "Lift cooldown",

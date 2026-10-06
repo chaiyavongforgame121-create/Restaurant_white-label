@@ -66,7 +66,8 @@
     "markLineDone": "Marcar {item} como listo",
     "markLineNotDone": "Marcar {item} como pendiente",
     "soldOut": "Agotado",
-    "stackedWith": "🔗 Agrupado con #{other} · parada {stop}: empaca ambas bolsas para un solo repartidor"
+    "stackedWith": "🔗 Agrupado con #{other} · parada {stop}: empaca ambas bolsas para un solo repartidor",
+    "redispatchOffered": "Saltar a este repartidor y ofrecerlo a otro"
   },
   "timer": {
     "hoursMinutes": "{hours} h {minutes} min",
@@ -93,7 +94,9 @@
     "findAgain": "Buscar repartidor de nuevo",
     "findAgainStack": "Buscar repartidor de nuevo (ambas paradas)",
     "notStarted": "Nadie está buscando repartidor para este pedido.",
-    "waiting": "{reason, select, everyoneAsked {Ya se preguntó a todos los repartidores libres: el próximo que se conecte lo recibe.} cooldown {Los repartidores están en pausa: sale en cuanto termine una.} nobodyOnline {No hay nadie conectado: sale cuando se conecte un repartidor.} noFreshGps {Ningún repartidor tiene GPS reciente: sale cuando alguno lo tenga.} allBusy {Todos los repartidores están en una entrega: sale cuando uno quede libre.} notSetUp {Aún no se puede ofrecer a ningún repartidor: revisa los repartidores en Repartidores y la ubicación de la sucursal en el mapa.} other {Esperando un repartidor libre.}}"
+    "waiting": "{reason, select, everyoneAsked {Ya se preguntó a todos los repartidores libres: el próximo que se conecte lo recibe.} cooldown {Los repartidores están en pausa: sale en cuanto termine una.} nobodyOnline {No hay nadie conectado: sale cuando se conecte un repartidor.} noFreshGps {Ningún repartidor tiene GPS reciente: sale cuando alguno lo tenga.} allBusy {Todos los repartidores están en una entrega: sale cuando uno quede libre.} notSetUp {Aún no se puede ofrecer a ningún repartidor: revisa los repartidores en Repartidores y la ubicación de la sucursal en el mapa.} other {Esperando un repartidor libre.}}",
+    "acceptedComing": "{name} aceptó: va en camino por este pedido",
+    "acceptedComingNoName": "Un repartidor aceptó: va en camino por este pedido"
   },
   "vehicle": {
     "motorcycle": "Moto",
@@ -164,9 +167,12 @@
     "authRequired": "Tu sesión ha caducado. Vuelve a iniciar sesión para buscar un repartidor.",
     "alreadyAccepted": "Un repartidor ya aceptó esta entrega; no hay nada más que buscar.",
     "noneVerified": "{online, plural, one {# conectado} other {# conectados}}, pero ninguno tiene los documentos verificados.",
-    "allCoolingDown": "{online, plural, one {# conectado} other {# conectados}}, pero todos en pausa por ofertas perdidas o rechazadas. Un gerente puede levantarla en Repartidores.",
-    "alreadyAsked": "{asked, plural, one {Ya se preguntó a # repartidor} other {Ya se preguntó a # repartidores}} por este pedido. “Buscar repartidor de nuevo” empieza una ronda que pregunta a todos.",
-    "someCoolingDown": "{online, plural, one {# conectado} other {# conectados}}, {cooling} en pausa por ofertas perdidas o rechazadas; el resto está ocupado o ya se le preguntó."
+    "allCoolingDown": "{online, plural, one {# conectado} other {# conectados}}, pero todos en pausa por ofertas perdidas o rechazadas o por trabajos cancelados. Un gerente puede levantarla en Repartidores.",
+    "alreadyAsked": "{asked, plural, one {Ya se preguntó a # repartidor} other {Ya se preguntó a # repartidores}} por este pedido: sale con el próximo repartidor que quede libre.",
+    "someCoolingDown": "{online, plural, one {# conectado} other {# conectados}}, {cooling} en pausa por ofertas perdidas o rechazadas o por trabajos cancelados; el resto está ocupado o ya se le preguntó.",
+    "orderClosed": "Este pedido está cerrado (cancelado, reembolsado o completado), así que no hace falta repartidor.",
+    "offerOpen": "Un repartidor ya tiene esta oferta en pantalla: espera su respuesta.",
+    "kitchenNotReady": "La cocina aún no marcó este pedido como listo: la búsqueda de repartidor empieza cuando lo haga."
   },
   "ops": {
     "busy": "Ocupado",

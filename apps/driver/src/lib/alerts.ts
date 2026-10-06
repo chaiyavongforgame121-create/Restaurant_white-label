@@ -17,7 +17,10 @@ const RING_DUE_SLACK_MS = 250;
 export const OFFER_FALLBACK_MS = 45_000;
 /** The sheet never counts down less than this, however late the offer reached the phone (or
  *  however far the phone's clock runs ahead of the server's): an offer that shows up at 0 s is
- *  an offer the rider can only lose. */
+ *  an offer the rider can only lose. Only live offers get here: one whose deadline has passed by
+ *  the server's clock never reaches the screen (getActiveDelivery in packages/database drops it),
+ *  and an accept refused as expired takes it off at once. The phone's clock does not decide that,
+ *  since on a phone running fast it would hide offers that are still live. */
 export const OFFER_MIN_SHOWN_MS = 5_000;
 
 /** Per ring: long-short-long, so it reads as "answer me" in a pocket. Android only. */
@@ -84,6 +87,59 @@ export function offerRingDue(lastRingAt: number | null, now: number, every = OFF
 export function jobIds(job: { id: string; batchMate: { id: string } | null } | null | undefined): string[] {
   if (!job) return [];
   return job.batchMate ? [job.id, job.batchMate.id] : [job.id];
+}
+
+/** What an offer is made of, as far as telling one offer from another goes. */
+interface OfferLike {
+  id: string;
+  offerExpiresAt: string | null;
+}
+
+/**
+ * Which offer this is. The delivery alone does not say: a later round can offer the same
+ * delivery to the same rider again, with a later deadline, and that is a new offer with nothing
+ * answered on it yet. Empty without an offer.
+ */
+export function offerKey(offer: OfferLike | null | undefined): string {
+  if (!offer) return '';
+  return `${offer.id}@${parseTimeMs(offer.offerExpiresAt) ?? ''}`;
+}
+
+/** One stop of an offer as this phone saw it: the delivery, under that offer's deadline. */
+export interface OfferSighting {
+  deliveryId: string;
+  /** offer_expires_at in epoch ms; null for an offer without one. */
+  expiresAtMs: number | null;
+}
+
+/**
+ * The stops an offer on screen stands for, each under the offer's deadline: the service worker
+ * matches a push by the delivery in its tag, and a stack's push names its first stop.
+ */
+export function offerSightings(
+  offer: (OfferLike & { batchMate: OfferLike | null }) | null | undefined,
+): OfferSighting[] {
+  if (!offer) return [];
+  const stops = offer.batchMate ? [offer, offer.batchMate] : [offer];
+  return stops.map((stop) => ({
+    deliveryId: stop.id,
+    expiresAtMs: parseTimeMs(stop.offerExpiresAt) ?? parseTimeMs(offer.offerExpiresAt),
+  }));
+}
+
+function sameSighting(a: OfferSighting, b: OfferSighting): boolean {
+  return a.deliveryId === b.deliveryId && a.expiresAtMs === b.expiresAtMs;
+}
+
+/**
+ * The offers that were on screen at the last confirmed read and are not now: accepted, declined,
+ * expired or given to someone else. The service worker keeps these, because the push for an
+ * offer can arrive after the rider has answered it in the app (the worker sends on a one-minute
+ * tick), and that push must not buzz and stay on the shade. An offer that stays, or one that
+ * only changed deadline (a re-offer of the same delivery), is not over under its new deadline.
+ */
+export function offersOver(previous: readonly OfferSighting[], live: readonly OfferSighting[]): OfferSighting[] {
+  return previous.filter((seen) => !live.some((now) => sameSighting(seen, now)));
 }
 
 /**

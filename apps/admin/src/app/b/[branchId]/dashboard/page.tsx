@@ -458,6 +458,10 @@ export default async function DashboardPage({ params }: Props) {
         });
       case 'deliveryAskedRiders':
         return t('rows.deliveryAskedRiders', { count: why.count });
+      case 'deliveryWaiting':
+        return t('rows.deliveryWaiting', { reason: why.reason });
+      case 'deliveryNoRiderFound':
+        return t('rows.deliveryNoRiderFound', { reason: why.reason });
       case 'deliveryFailed':
         // The rider's own words are shown as typed.
         return t('rows.deliveryFailed', {

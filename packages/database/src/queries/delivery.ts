@@ -209,8 +209,9 @@ export interface BranchRider {
   kyc_verified: boolean;
   cooling_down: boolean;
   /**
-   * drivers.cooldown_until: set by the strike rule (2 missed or declined offers in 24 h) and
-   * lifted early only by lift_driver_cooldown. The cooldown is the rider's, not the branch's, so
+   * drivers.cooldown_until: set by the strike rule (2 missed or declined offers in 24 h), or for
+   * 10 minutes when a rider cancels a job they had accepted, and lifted early only by
+   * lift_driver_cooldown. The cooldown is the rider's, not the branch's, so
    * it stops offers at every branch they ride for. Null when not cooling down, and on a database
    * whose list_branch_riders predates the column.
    */
@@ -294,8 +295,9 @@ export async function invokeDispatchDriver(
 }
 
 // ---------------------------------------------------------------------------------------
-// Rider cooldown. Two missed or declined offers in 24 hours put a rider on a cooldown
-// (drivers.cooldown_until) that stops every offer at every branch they ride for. Staff can
+// Rider cooldown. Two missed or declined offers in 24 hours, or cancelling a job already accepted,
+// put a rider on a cooldown (drivers.cooldown_until) that stops every offer at every branch they
+// ride for. The column does not say which, so no screen may name the cause. Staff can
 // lift it early through public.lift_driver_cooldown (D8): a platform admin, or a manager with
 // drivers.manage at EVERY branch where the rider is not rejected — the same rule as KYC,
 // because the cooldown is one value for all of them.

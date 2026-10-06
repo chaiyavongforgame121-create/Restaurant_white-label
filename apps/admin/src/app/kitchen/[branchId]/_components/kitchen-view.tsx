@@ -32,8 +32,9 @@ import { cancelOrderWithCardRefund, newIdempotencyKey } from '@/app/b/[branchId]
 // What a ready delivery's card says about finding a rider, read from the server's own state on the
 // delivery row (D7). Shared with Live deliveries so both boards say the same thing.
 import {
-  canRestartDispatch, dispatchLine, findRiderAction, readDispatchAnswer, stackPeers, withKnownDispatchColumns,
-  type DispatchAnswer, type DispatchFailureText, type DispatchRowFields,
+  answerAgrees, canRestartDispatch, dispatchLine, dispatchMark, findRiderAction, pressAnswer, pressCurrent,
+  readDispatchAnswer, restartWithdrawsOffer, settlePress, stackPeers, withKnownDispatchColumns,
+  type DispatchAnswer, type DispatchFailureText, type DispatchPress, type DispatchRowFields,
 } from '@/app/b/[branchId]/deliveries/_components/dispatch-model';
 
 /* ──────────────────────────────────────────────────────────────────────────
@@ -1485,14 +1486,20 @@ function dispatchText(t: Translate, f: DispatchFailureText): string {
   return t(`dispatch.${f.key}`, f.values);
 }
 
-/** Something the last press of a dispatch button said, kept until the next press. `info` is the
- *  server's gate counts for a round that is waiting or found nobody; `error` is a refusal. */
+/** Something the last press of a dispatch button said. `info` is the server's gate counts for a
+ *  round that is waiting or found nobody; `error` is a refusal. It lives as long as the press does
+ *  (DispatchPress): until the delivery row moves on, or the next press. */
 interface DispatchNote {
   text: string;
   tone: 'info' | 'error';
-  /** When the answer came back: a note about a round older than the row's is not shown. */
-  at: number;
 }
+
+/** A press whose answer the row never came to show (realtime missed, or the server had already
+ *  moved on before this board heard of it) stops speaking for the row after this long. A local
+ *  duration on this tablet's clock, never compared with a server time. */
+const PRESS_UNSEEN_MS = 15_000;
+
+let pressSeq = 0;
 
 function OrderCard({
   order, lane, now, station, readyAt, workStartedAt, onAdvance, onReject, onRecall, on86, soldOutIds, onTogglePrep,
@@ -1511,10 +1518,11 @@ function OrderCard({
   const [menuOpen, setMenuOpen] = React.useState(false);
   // A press of a dispatch button is in flight.
   const [asking, setAsking] = React.useState(false);
-  // The server's last answer to a press here. The row stays the truth; this only fills what the
-  // row cannot say yet (dispatchLine).
-  const [answer, setAnswer] = React.useState<DispatchAnswer | null>(null);
-  const [note, setNote] = React.useState<DispatchNote | null>(null);
+  // The last press here: the server's answer (the row stays the truth; the answer only fills what
+  // the row cannot say yet, in dispatchLine) and the note under the card. Bound to the row once the
+  // row shows it, and dropped as soon as the row moves on: an old press's cooldown counts used to
+  // sit under a newer "Every free rider has been asked".
+  const [press, setPress] = React.useState<DispatchPress<DispatchNote> | null>(null);
   const fromMs = lane === 'ready' ? readyAt : workStartedAt;
   const sec = safeElapsedSec(fromMs, now);
   const tg = agingTier(sec, lane);
@@ -1546,6 +1554,24 @@ function OrderCard({
   const cardClickable = !!action && !(isDelivery && order.status === 'ready');
   const urgent = tg.tier === 'late' || tg.tier === 'crit';
   const skin = urgent ? URGENT_SKIN : (LANE_SKIN[lane] ?? LANE_SKIN.new!);
+  // Whether the last press still speaks for the row (see press above). The mark is the row's own:
+  // a stack's other stop moves on in step with it, and its writes land as separate events.
+  const mark = delivery ? dispatchMark(delivery) : '';
+  const agrees = !!press && (!press.answer || !delivery || answerAgrees(press.answer, delivery));
+  const pressSeqNow = press?.seq ?? null;
+  React.useEffect(() => {
+    setPress((p) => settlePress(p, mark, agrees));
+  }, [mark, agrees, pressSeqNow]);
+  const pressBound = press?.bound != null;
+  React.useEffect(() => {
+    if (pressSeqNow == null || pressBound) return;
+    const id = window.setTimeout(
+      () => setPress((p) => (p && p.seq === pressSeqNow && p.bound == null ? null : p)),
+      PRESS_UNSEEN_MS,
+    );
+    return () => window.clearTimeout(id);
+  }, [pressSeqNow, pressBound]);
+  const answer = pressAnswer(press, mark);
   // Where finding a rider stands, from the row (and the stack's other stop), never from a timer.
   const line = delivery ? dispatchLine(delivery, { nowMs: now, stack, answer }) : null;
   // No row yet is a delivery order whose delivery the board has not read: the button still asks.
@@ -1558,35 +1584,45 @@ function OrderCard({
     line?.kind === 'offered'
       ? (embedded?.id === line.driverId ? embedded?.full_name ?? null : null) ?? riderName(line.driverId)
       : null;
-  // A note about a round that has since been restarted (here or anywhere) is not about this one.
-  const roundMs = delivery?.dispatch_round_started_at ? Date.parse(delivery.dispatch_round_started_at) : NaN;
-  const noteStale = !!note && Number.isFinite(roundMs) && roundMs > note.at + 2_000;
+  const acceptedName =
+    line?.kind === 'accepted' && delivery?.driver_id
+      ? (embedded?.id === delivery.driver_id ? embedded?.full_name ?? null : null) ?? riderName(delivery.driver_id)
+      : null;
+  // The note only while its press still speaks for the row, and only where it means something: a
+  // refusal until a rider has the job, the gate counts while the round is waiting or found nobody.
+  const note = pressCurrent(press, mark, agrees) ? press?.note ?? null : null;
   const noteShown =
-    note && !noteStale &&
+    note &&
     (note.tone === 'error'
       ? line?.kind !== 'accepted' && line?.kind !== 'withRider' && line?.kind !== 'offered'
       : line?.kind === 'waiting' || line?.kind === 'noRiderFound')
       ? note
       : null;
+  // A restart while a rider holds an unanswered offer moves the order on from that rider.
+  const restartMovesOn = !!delivery && restartWithdrawsOffer(delivery);
 
   const handleDispatch = async (restart: boolean) => {
-    setNote(null);
+    setPress(null);
     setAsking(true);
+    const keep = (said: DispatchAnswer | null, n: DispatchNote | null) =>
+      setPress({ seq: ++pressSeq, answer: said, note: n, bound: null });
     try {
       const a = await onDispatch(restart);
       if (a.kind === 'refused') {
-        setNote({ text: dispatchText(t, a.failure), tone: 'error', at: Date.now() });
+        keep(a, { text: dispatchText(t, a.failure), tone: 'error' });
       } else if (a.kind === 'alreadyAccepted') {
         // D6: a rider took it in the meantime; the row read back shows who.
-        setNote({ text: t('dispatch.alreadyAccepted'), tone: 'error', at: Date.now() });
+        keep(a, { text: t('dispatch.alreadyAccepted'), tone: 'error' });
       } else {
-        setAnswer(a);
-        if ((a.kind === 'waiting' || a.kind === 'noRiderFound') && a.failure) {
-          setNote({ text: dispatchText(t, a.failure), tone: 'info', at: Date.now() });
-        }
+        keep(
+          a,
+          (a.kind === 'waiting' || a.kind === 'noRiderFound') && a.failure
+            ? { text: dispatchText(t, a.failure), tone: 'info' }
+            : null,
+        );
       }
     } catch {
-      setNote({ text: t('dispatch.failed'), tone: 'error', at: Date.now() });
+      keep(null, { text: t('dispatch.failed'), tone: 'error' });
     } finally {
       setAsking(false);
     }
@@ -1644,9 +1680,11 @@ function OrderCard({
                 )}
                 {/* A new round, until a rider accepts: after that the server refuses it (409
                     already_accepted), and this item used to restart a job whose rider was already
-                    on the way to the shop. Restarting an open offer withdraws it without a strike. */}
+                    on the way to the shop. Over an unanswered offer it is the cook moving the order
+                    on from a rider who is not answering: the offer is withdrawn without a strike and
+                    the next rider is asked, so that is what it says. */}
                 {isDelivery && order.status === 'ready' && delivery && canRestartDispatch(delivery) && (
-                  <MenuRow onClick={() => { setMenuOpen(false); void handleDispatch(true); }}><Bike className="h-4 w-4" />{t('card.redispatch')}</MenuRow>
+                  <MenuRow onClick={() => { setMenuOpen(false); void handleDispatch(true); }}><Bike className="h-4 w-4" />{restartMovesOn ? t('card.redispatchOffered') : t('card.redispatch')}</MenuRow>
                 )}
                 {targets.length > 0 && (
                   <>
@@ -1739,6 +1777,13 @@ function OrderCard({
           {isAllergy ? <AlertTriangle className="h-4 w-4 shrink-0" /> : <Clock className="h-4 w-4 shrink-0" />}
           {isAllergy ? t('card.allergyNote', { note: noteRaw }) : noteRaw}
         </div>
+      )}
+
+      {/* A rider who accepted before the ticket went back to the kitchen (a recall, or a rider
+          staff assigned early) is still coming for it, so the cook is told who. Nothing else about
+          finding a rider shows until the kitchen marks it ready: the search belongs to food that is. */}
+      {isDelivery && order.status !== 'ready' && line?.kind === 'accepted' && (
+        <RiderBox>{acceptedName ? t('rider.acceptedComing', { name: acceptedName }) : t('rider.acceptedComingNoName')}</RiderBox>
       )}
 
       {isDelivery && order.status === 'ready' ? (

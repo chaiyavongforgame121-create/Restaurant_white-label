@@ -1,9 +1,10 @@
 import type { LiftCooldownOutcome } from '@favornoms/database/queries';
 
-// A rider's strike cooldown (drivers.cooldown_until), as the screens that show it need it. The
-// cooldown is set by the database (two missed or declined offers in 24 hours) and only ever
-// ends on its own or through lift_driver_cooldown, so all a screen decides is whether it is
-// still running, how to write when it ends, and what to say after a lift.
+// A rider's cooldown (drivers.cooldown_until), as the screens that show it need it. The database
+// sets it (two missed or declined offers in 24 hours, or 10 minutes after a rider cancels a job
+// they had accepted; the row does not say which) and it only ever ends on its own or through
+// lift_driver_cooldown, so all a screen decides is whether it is still running, how to write when
+// it ends, and what to say after a lift.
 
 /** The end of a cooldown that is still running, or null when there is none (or it is over). */
 export function activeCooldownUntil(iso: string | null | undefined, nowMs: number): string | null {
