@@ -46,3 +46,6 @@ supabase/.temp/
 
 # Tooling / agent working dirs
 _sp_skills/
+
+# Public VAPID key written by scripts/setup-vapid.cjs
+.vapid-public-key
