@@ -22,7 +22,7 @@ const playfair = Playfair_Display({
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations('landing');
   return {
-    metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://favornoms.com'),
+    metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://app.favornoms.com'),
     title: { default: t('meta.title'), template: '%s · Favornoms' },
     description: t('site.description'),
     manifest: '/manifest.webmanifest',

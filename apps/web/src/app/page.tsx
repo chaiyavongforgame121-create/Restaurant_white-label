@@ -20,9 +20,10 @@ export async function generateMetadata() {
 
 // The merchant back office is a separate deployment, so signup and onboarding
 // live on another origin. Defaults to the local dev port so `pnpm dev` links
-// work without any .env.local at all.
+// work without any .env.local at all, and to the production back office in a build.
 const MERCHANT_URL = (
-  process.env.NEXT_PUBLIC_MERCHANT_URL ?? 'http://localhost:3004'
+  process.env.NEXT_PUBLIC_MERCHANT_URL ??
+  (process.env.NODE_ENV === 'production' ? 'https://admin.favornoms.com' : 'http://localhost:3004')
 ).replace(/\/$/, '');
 const SIGNUP_URL = `${MERCHANT_URL}/signup`;
 

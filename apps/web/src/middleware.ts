@@ -20,7 +20,10 @@ import { NextResponse, type NextRequest } from 'next/server';
  * they call the same RPC and both treat "no live branch" as "not a merchant domain".
  */
 const APEX_HOSTS = new Set(
-  (process.env.NEXT_PUBLIC_APEX_HOSTS ?? 'localhost,127.0.0.1,favornoms.com,app.favornoms.com')
+  (
+    process.env.NEXT_PUBLIC_APEX_HOSTS ??
+    'localhost,127.0.0.1,favornoms.com,www.favornoms.com,app.favornoms.com,restaurant-white-label-web.vercel.app'
+  )
     .split(',')
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean),

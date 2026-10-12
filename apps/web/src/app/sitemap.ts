@@ -4,7 +4,7 @@ import { getServerClient } from '@favornoms/database/server';
 export const revalidate = 3600;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const base = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://favornoms.com';
+  const base = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://app.favornoms.com';
   const supabase = await getServerClient();
   const { data: branches } = await supabase
     .from('branches')

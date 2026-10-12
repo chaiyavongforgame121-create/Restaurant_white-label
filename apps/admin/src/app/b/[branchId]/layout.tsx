@@ -122,9 +122,12 @@ async function openableBranches(
 
 export default async function BranchLayout({ params, children }: Props) {
   const { branchId } = await params;
+  // Signed out, the login page sends the user back to the page they asked for, not always the
+  // dashboard. Only a path inside this branch is passed on.
+  const pathname = (await headers()).get(PATHNAME_HEADER) ?? '';
   const { supabase, user, branch, capabilities, can, role } = await getBranchAccess(
     branchId,
-    `/b/${branchId}/dashboard`,
+    pathname.startsWith(`/b/${branchId}/`) ? pathname : `/b/${branchId}/dashboard`,
   );
 
   // A platform superadmin opens branches from /platform to support merchants. They are
@@ -200,7 +203,6 @@ export default async function BranchLayout({ params, children }: Props) {
   // is where the merchant fixes it. Redirecting to a page that redirects would
   // be an infinite loop, so the exemption is load-bearing, not a nicety.
   const planPath = `/b/${branchId}/settings/plan`;
-  const pathname = (await headers()).get(PATHNAME_HEADER) ?? '';
   if (!platformAdmin && !entitlements.entitled && !pathname.startsWith(planPath)) {
     redirect(`${planPath}?suspended=1`);
   }
