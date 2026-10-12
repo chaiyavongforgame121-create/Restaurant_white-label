@@ -6,15 +6,13 @@
  * When that is unset the fallback has to be an origin that actually serves the
  * storefront: `https://favornoms.com` is a parked marketing site and returns 404
  * for `/r/<restaurant>/<branch>`, which is what made printed QR codes dead on
- * arrival. Verified over HTTP 2026-08-14:
- *   favornoms.com/r/coastal-grill/brooklyn                      → 404
- *   restaurant-white-label-web.vercel.app/r/coastal-grill/brooklyn → 200
- *   app.favornoms.com                                            → does not resolve
+ * arrival. Since 2026-10-12 the storefront is served at app.favornoms.com (a CNAME
+ * to the web project on Vercel), and the old restaurant-white-label-web.vercel.app
+ * address keeps working for codes printed before then.
  *
- * This is a fallback, not a policy: set NEXT_PUBLIC_SITE_URL on the admin project
- * and the branded domain takes over with no code change.
+ * This is a fallback, not a policy: NEXT_PUBLIC_SITE_URL on the admin project wins.
  */
-const PUBLIC_FALLBACK = 'https://restaurant-white-label-web.vercel.app';
+const PUBLIC_FALLBACK = 'https://app.favornoms.com';
 
 export function storefrontBase(): string {
   const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim();

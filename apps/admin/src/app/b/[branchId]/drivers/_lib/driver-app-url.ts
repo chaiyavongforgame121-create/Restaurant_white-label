@@ -17,7 +17,7 @@
  *    `?branch=` here would be a promise the rider app does not keep.
  *  - A path, query or `user:pass@` pasted into the variable never reaches a printed code.
  */
-export const DRIVER_APP_FALLBACK_URL = 'https://restaurant-white-label-driver.vercel.app';
+export const DRIVER_APP_FALLBACK_URL = 'https://go.favornoms.com';
 
 /**
  * Plain http is accepted only for a developer pointing admin at their own machine. The
