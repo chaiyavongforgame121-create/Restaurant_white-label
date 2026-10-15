@@ -12,13 +12,14 @@ export const dynamic = 'force-dynamic';
 export async function POST(request: NextRequest) {
   const origin = request.nextUrl.origin;
 
-  // A form on another site must not be able to sign this browser into someone else's account.
-  // Browsers send Origin on every form POST; 'null' (some in-app browsers) is let through, since
-  // the token itself is the secret.
+  // A form on another site must not sign this browser into an account the attacker controls
+  // (login CSRF: the token in that case is the attacker's own). Sec-Fetch-Site is what modern
+  // browsers send and cannot be forged by a page; without it, Origin must match, and 'null' (a
+  // no-referrer page or a sandboxed iframe) does not.
+  const site = request.headers.get('sec-fetch-site');
   const sentFrom = request.headers.get('origin');
-  if (sentFrom && sentFrom !== 'null' && sentFrom !== origin) {
-    return new NextResponse('Forbidden', { status: 403 });
-  }
+  const crossSite = site ? site !== 'same-origin' : !!sentFrom && sentFrom !== origin;
+  if (crossSite) return new NextResponse('Forbidden', { status: 403 });
 
   const form = await request.formData();
   const tokenHash = String(form.get('token_hash') ?? '').trim();

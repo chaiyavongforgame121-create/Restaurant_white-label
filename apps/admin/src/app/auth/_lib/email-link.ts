@@ -54,17 +54,12 @@ function decodeOnce(raw: string): string {
   }
 }
 
-/** Where each kind of link goes when its redirect says nothing usable. */
+/** Where each kind of link goes when its redirect says nothing usable. Everything but a reset goes
+ *  to the root, which sends a signed-in person on to their dashboard, a pending invitation, or
+ *  onboarding: `email` covers both signup confirmation and a magic sign-in, so a fixed
+ *  /onboarding would have sent returning staff to the new-restaurant wizard. */
 export function defaultDestination(type: EmailLinkType | null): string {
-  switch (type) {
-    case 'recovery':
-      return '/auth/update-password';
-    case 'signup':
-    case 'email':
-      return '/onboarding';
-    default:
-      return '/';
-  }
+  return type === 'recovery' ? '/auth/update-password' : '/';
 }
 
 /**

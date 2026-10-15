@@ -340,19 +340,16 @@ Deno.serve(async (req) => {
   // anyone who already had an account reported success and delivered no email at all, and
   // the owner was left waiting for something that was never going to arrive.
   //
-  // These people do not need an email: they already have a way in. generateLink doubles as
-  // the lookup (it errors for an unknown address, and returns the user when it succeeds),
-  // so link the staff row here and they can sign in with the credentials they already have.
-  // Same three columns acceptStaffInvite writes, so both paths land in the same state.
-  const existingAuthUser = await admin.auth.admin.generateLink({
-    type: 'magiclink',
-    email,
-    options: { redirectTo },
-  });
-  const existingUser = existingAuthUser.data?.user;
-  const existingUserId = existingUser?.id;
-  if (!existingUserId) {
-    return json({ error: 'email_failed', detail: invite.error.message }, 500);
+  // The account is looked up without minting anything. This used generateLink('magiclink') as
+  // the lookup, which stores a recovery token and stamps recovery_sent_at, so the
+  // resetPasswordForEmail below then hit GoTrue's per-user email interval and the set-password
+  // email was never sent (2026-10-15).
+  const { data: found, error: lookupError } = await admin.rpc('invite_lookup_auth_user', { p_email: email });
+  const existingUser = (Array.isArray(found) ? found[0] : null) as
+    | { id: string; invited_at: string | null; password_set: boolean; has_other_sign_in: boolean }
+    | null;
+  if (lookupError || !existingUser?.id) {
+    return json({ error: 'email_failed', detail: lookupError?.message ?? invite.error.message }, 500);
   }
 
   // Someone who can already sign in needs no email: an account they created themselves (no
@@ -360,10 +357,7 @@ Deno.serve(async (req) => {
   // identity. Someone who cannot (an earlier invitation opened once, by the person or a mail
   // scanner, confirms the address and inviteUserByEmail then refuses it) is sent a link to set a
   // password. Either way the row stays pending until they press Join.
-  const canSignIn =
-    !existingUser?.invited_at ||
-    existingUser?.user_metadata?.password_set === true ||
-    (existingUser?.identities ?? []).some((identity) => identity.provider !== 'email');
+  const canSignIn = !existingUser.invited_at || existingUser.password_set || existingUser.has_other_sign_in;
   if (!canSignIn) {
     const recovery = await admin.auth.resetPasswordForEmail(email, { redirectTo });
     if (recovery.error) {

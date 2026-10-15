@@ -77,10 +77,13 @@ export async function GET(request: NextRequest) {
   const tokenHash = params.get('token_hash');
   const rawType = params.get('type');
   const type = OTP_TYPES.includes(rawType as EmailOtpType) ? (rawType as EmailOtpType) : null;
+  // Never spent on a GET: a mail scanner fetching the link would use it up, and any page could
+  // navigate a visitor here to sign them into the attacker's account. It goes to the
+  // click-to-continue page instead, `next` last and absolute as /auth/confirm reads it.
   if (tokenHash && type) {
-    const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
-    if (error) return fail('otp_expired');
-    return NextResponse.redirect(new URL(next, origin));
+    return NextResponse.redirect(
+      `${origin}/auth/confirm?token_hash=${encodeURIComponent(tokenHash)}&type=${type}&next=${encodeURIComponent(origin + next)}`,
+    );
   }
 
   // A staff invitation is sent with the Auth admin API, which has no PKCE verifier, so it comes

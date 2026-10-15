@@ -53,13 +53,23 @@ describe('destinationFor', () => {
     expect(destinationFor('https://app.favornoms.com/', 'invite', ORIGIN)).toBe('/');
   });
 
+  it('sends a magic sign-in from the plain login page to the root, not the onboarding wizard', () => {
+    expect(destinationFor('https://admin.favornoms.com/auth/callback?next=%2F', 'email', ORIGIN)).toBe('/');
+    expect(destinationFor('https://admin.favornoms.com/auth/callback?next=%2Fonboarding', 'email', ORIGIN)).toBe('/onboarding');
+  });
+
+  it('follows the absolute next the old /auth/callback forwards with', () => {
+    const { redirectTo } = readEmailLink(`token_hash=x&type=magiclink&next=${encodeURIComponent('https://admin.favornoms.com/b/1/menu?tab=items')}`);
+    expect(destinationFor(redirectTo, 'magiclink', ORIGIN)).toBe('/b/1/menu?tab=items');
+  });
+
   it('never leaves the app', () => {
     expect(destinationFor('https://admin.favornoms.com/auth/callback?next=https://evil.example', 'magiclink', ORIGIN)).toBe('/');
     expect(destinationFor('https://admin.favornoms.com/auth/callback?next=//evil.example', 'recovery', ORIGIN)).toBe(
       '/auth/update-password',
     );
     expect(destinationFor('https://admin.favornoms.com/auth/callback?next=/%5Cevil.example', 'magiclink', ORIGIN)).toBe('/');
-    expect(destinationFor('not a url at all', 'signup', ORIGIN)).toBe('/onboarding');
+    expect(destinationFor('not a url at all', 'signup', ORIGIN)).toBe('/');
     expect(destinationFor(null, 'invite', ORIGIN)).toBe('/');
   });
 });
@@ -67,8 +77,8 @@ describe('destinationFor', () => {
 describe('defaultDestination / failureDestination', () => {
   it('sends each type somewhere useful by default', () => {
     expect(defaultDestination('recovery')).toBe('/auth/update-password');
-    expect(defaultDestination('signup')).toBe('/onboarding');
-    expect(defaultDestination('email')).toBe('/onboarding');
+    expect(defaultDestination('signup')).toBe('/');
+    expect(defaultDestination('email')).toBe('/');
     expect(defaultDestination('magiclink')).toBe('/');
     expect(defaultDestination(null)).toBe('/');
   });

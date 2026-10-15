@@ -1,11 +1,12 @@
 import * as Sentry from '@sentry/nextjs';
 
-// Invitation and recovery links arrive with #access_token=…&refresh_token=… in the URL. Sentry
-// records navigation breadcrumbs and the page URL with the fragment, so without this a later error
-// in the same tab would send a live session to the error tracker.
-const TOKEN_IN_URL = /[#&](access|refresh|provider)_token=/;
+// Older invitation links arrive with #access_token=…&refresh_token=… in the URL, and emailed links
+// now land on /auth/confirm?token_hash=… (a credential until Continue is pressed). Sentry records
+// navigation breadcrumbs and the page URL, so without this a later error in the same tab would
+// send a live session or token to the error tracker. Query and fragment are both dropped.
+const TOKEN_IN_URL = /[?#&](access_token|refresh_token|provider_token|token_hash)=/;
 function scrubUrl(url: unknown): unknown {
-  return typeof url === 'string' && TOKEN_IN_URL.test(url) ? url.split('#')[0] : url;
+  return typeof url === 'string' && TOKEN_IN_URL.test(url) ? url.split(/[?#]/)[0] : url;
 }
 
 const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
