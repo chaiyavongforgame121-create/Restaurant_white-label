@@ -1123,18 +1123,21 @@ function PosInner({
 
   return (
     <div className="flex h-dynamic-screen flex-col bg-background">
-      <header className="flex items-center justify-between border-b border-border/60 bg-card px-6 py-3">
-        <div className="flex items-center gap-3">
+      {/* Never overflows: on a tablet the controls used to run past the right edge and take the
+          sign-out button with them, so a cashier could not find the way out to switch to a manager
+          account. Tablet (md–lg): the title and sign-out share the first row and the till controls
+          wrap onto a second. Wide screens (xl): one row, as before. */}
+      <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border/60 bg-card px-4 py-3 md:px-6">
+        <div className="order-1 flex items-center gap-3">
           <div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-warm text-white shadow-warm">
             <Store className="h-5 w-5" />
           </div>
           <div>
             <p className="text-xs text-muted-foreground">{t('header.eyebrow', { branch: branchName })}</p>
-            <h1 className="font-display text-lg font-bold">{t('header.title')}</h1>
+            <h1 className="whitespace-nowrap font-display text-lg font-bold">{t('header.title')}</h1>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="hidden items-center gap-3 md:flex">
+        <div className="order-3 hidden w-full flex-wrap items-center gap-2 md:flex xl:order-2 xl:w-auto xl:flex-1 xl:justify-end">
             <ClockButton branchId={branchId} />
             <button
               type="button"
@@ -1183,10 +1186,11 @@ function PosInner({
                   : []),
               ]}
             />
-          </div>
+        </div>
+        <div className="order-2 ml-auto flex shrink-0 items-center gap-2 xl:order-3 xl:ml-0">
           <LocaleSwitcher compact />
           {/* A cashier has no back office, so the till is the only place to sign out. */}
-          <SignOutIconButton className="border border-border bg-card text-danger hover:bg-danger/10" />
+          <SignOutIconButton label className="border border-border bg-card text-danger hover:bg-danger/10" />
         </div>
       </header>
 

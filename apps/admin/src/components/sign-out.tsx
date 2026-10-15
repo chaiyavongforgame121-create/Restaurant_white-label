@@ -70,9 +70,13 @@ export function SignOutButton({ className }: { className?: string }) {
 export function SignOutIconButton({
   className,
   style,
+  label = false,
 }: {
   className?: string;
   style?: React.CSSProperties;
+  /** Show "Sign out" next to the icon. The till uses it: staff swapping between the cashier and a
+   *  manager account could not find a bare icon at the edge of a crowded header. */
+  label?: boolean;
 }) {
   const t = useTranslations('common');
   const { signOut, pending } = useSignOut();
@@ -93,13 +97,13 @@ export function SignOutIconButton({
       title={armed ? t('signOutConfirm') : t('signOut')}
       className={cn(
         'inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg text-xs font-semibold disabled:opacity-60',
-        armed ? 'px-2.5' : 'w-9',
+        armed || label ? 'px-2.5' : 'w-9',
         className,
       )}
       style={style}
     >
       {pending ? <Loader2 className="h-[18px] w-[18px] animate-spin" /> : <LogOut className="h-[18px] w-[18px]" />}
-      {armed && !pending && <span>{t('signOutConfirm')}</span>}
+      {armed && !pending ? <span>{t('signOutConfirm')}</span> : label && <span>{t('signOut')}</span>}
     </button>
   );
 }

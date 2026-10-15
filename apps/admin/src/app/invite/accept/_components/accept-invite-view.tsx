@@ -278,7 +278,9 @@ export function AcceptInviteView({ staffId }: { staffId?: string }) {
         setState({ kind: 'wrong_account', invite, signedInAs: user.email ?? '' });
         return;
       }
-      setState({ kind: 'needs_link', invite, expired: !!fragment.error || fragment.present });
+      // /auth/confirm/verify sends an invitation link it could not verify back here with ?link=expired.
+      const linkExpired = new URLSearchParams(window.location.search).get('link') === 'expired';
+      setState({ kind: 'needs_link', invite, expired: linkExpired || !!fragment.error || fragment.present });
     };
 
     // A shared link is usually tapped inside LINE, whose own browser cannot finish a Google
