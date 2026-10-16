@@ -17,6 +17,8 @@ import {
 interface Props {
   sort: CustomerSortKey;
   dir: SortDir;
+  /** Leave Spend out: the viewer has no reports.view, so the list shows no spend to sort by. */
+  hideSpend?: boolean;
 }
 
 /**
@@ -28,7 +30,7 @@ interface Props {
  * switching to "Name" wants A→Z, not Z→A inherited from a spend sort — and drops
  * `page`, because page 4 of the old order means nothing in the new one.
  */
-export function CustomerSortControls({ sort, dir }: Props) {
+export function CustomerSortControls({ sort, dir, hideSpend = false }: Props) {
   const t = useTranslations('customers.sort');
   const rawLocale = useLocale();
   const locale = isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE;
@@ -59,7 +61,9 @@ export function CustomerSortControls({ sort, dir }: Props) {
         <Segmented<CustomerSortKey>
           value={sort}
           onChange={(next) => push({ sort: next })}
-          options={customerSortOptions(locale).map((o) => ({ value: o.value, label: o.label }))}
+          options={customerSortOptions(locale)
+            .filter((o) => !hideSpend || o.value !== 'spent')
+            .map((o) => ({ value: o.value, label: o.label }))}
         />
       </div>
       <button

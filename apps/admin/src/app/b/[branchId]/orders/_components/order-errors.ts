@@ -29,6 +29,7 @@ export type OrderErrorKey =
   | 'deliveryForbidden'
   | 'paymentNotFound'
   | 'paymentForbidden'
+  | 'paymentAlreadyDecided'
   | 'onlineCardUnpaid'
   | 'cardRefundRequired'
   | 'cardRefundNotRecorded'
@@ -60,6 +61,9 @@ export function orderErrorKey(action: OrderAction, message: string | null | unde
       // Only seen when the refund that must come first has not reached our books yet; the
       // cancel itself goes through cancelOrderWithCardRefund, which refunds before cancelling.
       if (is(raw, 'card_refund_required')) return 'cardRefundRequired';
+      // The order has been paid, so cancelling it is a refund (20261016100000_roles_core.sql):
+      // orders.refund, which the cashier does not hold. The refund sentence says who can.
+      if (is(raw, 'paid_order_needs_refund')) return 'refundNotAuthorized';
       break;
     case 'issueInvoice':
       if (is(raw, 'order_not_found')) return 'orderNotFound';
@@ -84,6 +88,9 @@ export function orderErrorKey(action: OrderAction, message: string | null | unde
       // Matched loosely on purpose, as before: the word is what the approval rule raises.
       if (/forbidden/i.test(raw)) return 'paymentForbidden';
       if (is(raw, 'payment_not_found')) return 'paymentNotFound';
+      // A cashier (payments.verify) may only settle a slip that is still waiting; someone else
+      // got there first, or it was never a slip (20261016100000_roles_core.sql).
+      if (is(raw, 'payment_not_pending')) return 'paymentAlreadyDecided';
       break;
   }
   return 'generic';

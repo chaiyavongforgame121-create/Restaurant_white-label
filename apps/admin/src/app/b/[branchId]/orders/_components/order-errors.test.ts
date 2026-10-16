@@ -20,6 +20,8 @@ describe('orderErrorKey', () => {
     expect(orderErrorKey('requeue', 'forbidden')).toBe('deliveryForbidden');
     expect(orderErrorKey('decidePayment', 'payment_not_found')).toBe('paymentNotFound');
     expect(orderErrorKey('decidePayment', 'forbidden')).toBe('paymentForbidden');
+    expect(orderErrorKey('decidePayment', 'payment_not_pending')).toBe('paymentAlreadyDecided');
+    expect(orderErrorKey('cancel', 'paid_order_needs_refund')).toBe('refundNotAuthorized');
   });
 
   it('names the card payment rules of 20260925100000 and 20260925120000', () => {

@@ -21,10 +21,12 @@
 //
 // What it does, in order:
 //   1. The caller must hold orders.refund at the order's branch (my_capabilities, the rule RLS
-//      and refund_order use): owner, admin or manager. With cancel: true, the right to cancel
-//      instead (orders.cancel or kitchen.access, exactly as cancel_order): the kitchen's Reject
-//      and a cancel from Orders or Live deliveries must be able to give the diner's money back as
-//      part of the cancel, and that refund is always the whole remainder, never a chosen amount.
+//      and refund_order use): owner, admin or manager. With cancel: true, exactly what
+//      cancel_order asks to cancel a PAID order (20261016100000_roles_core.sql): the right to
+//      cancel (orders.cancel or kitchen.access) together with orders.refund, or for the kitchen's
+//      Reject an order nobody has accepted yet (KITCHEN_PAID_CANCEL_STATUSES). A cashier holds
+//      orders.cancel without orders.refund, so it is refused before any money moves. That refund
+//      is always the whole remainder, never a chosen amount.
 //   2. The order's paid Stripe card payment, and the account the charge lives on, are read with
 //      the service role. The account is never taken from the request.
 //   3. The PaymentIntent is read back from Stripe: it must have succeeded and must be this
@@ -190,11 +192,12 @@ Deno.serve(async (req) => {
     }
     if (!order) return cors(json({ error: 'order_not_found' }, 404));
 
-    // The same right refund_order asks for, or with cancel the same right cancel_order asks for,
-    // through the same rule (owner rows cover every branch, restaurant owner_user_id and platform
-    // admins hold everything, active rows only).
+    // The same right refund_order asks for, or with cancel the same right cancel_order asks for to
+    // cancel a paid order, through the same rule (owner rows cover every branch, restaurant
+    // owner_user_id and platform admins hold everything, active rows only). The kitchen's window
+    // depends on the status read here; cancel_order checks it again under the order lock.
     const capabilities = await capabilitiesAt(userClient, order.branch_id as string);
-    if (!mayRequest(capabilities, cancel)) return cors(json({ error: 'not_authorized' }, 403));
+    if (!mayRequest(capabilities, cancel, order.status)) return cors(json({ error: 'not_authorized' }, 403));
 
     // A closed order cannot be cancelled, so the refund that would go with the cancel is not made
     // either. (A plain refund of a cancelled order is still allowed: that is how the back office

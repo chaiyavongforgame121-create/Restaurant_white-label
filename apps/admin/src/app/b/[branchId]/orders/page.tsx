@@ -3,6 +3,7 @@ import { branchDayKey, shiftDayKey, startOfBranchDayUtc } from '@favornoms/datab
 import { sortOrderLines } from '@favornoms/shared';
 import { Card } from '@favornoms/ui';
 import { getBranchAccess } from '@/lib/capabilities';
+import { PageAccessDenied } from '@/components/page-access-denied';
 import { OrderFilters } from './_components/order-filters';
 import { PaymentApprovals, type PendingTransfer } from './_components/payment-approvals';
 import { DeliveryIssues, type DeliveryIssue } from './_components/delivery-issues';
@@ -38,16 +39,33 @@ export default async function OrdersPage({ params, searchParams }: Props) {
   const { branchId } = await params;
   const { q, status, channel, when, range, from, to } = await searchParams;
   const { supabase, branch, can } = await getBranchAccess(branchId, `/b/${branchId}/orders`);
+  // The sidebar has always asked orders.view; the page now asks too, so a role past the
+  // back-office gate without it gets a card instead of an empty list.
+  if (!can('orders.view')) return <PageAccessDenied area="orders" branchName={branch.name} />;
   const t = await getTranslations('orders');
 
   // Two capabilities decide the receipt drawer. orders.view is who may read the order at
   // all; receipt.reprint is the counter's named right to put one on paper. The matrix
-  // seeds receipt.reprint for `cashier` alone and a cashier cannot open the back office,
-  // so asking for it on its own would hide printing from every role that can reach this
-  // page — hence "either". Granting receipt.reprint to owner/admin/manager is a
-  // role_capabilities change, and this reads correctly the day someone makes it.
+  // seeds receipt.reprint for `cashier` alone, so asking for it on its own would hide
+  // printing from the owner, admin and manager — hence "either". Granting receipt.reprint
+  // to them is a role_capabilities change, and this reads correctly the day someone makes it.
   const canViewReceipt = can('orders.view');
   const canPrintReceipt = can('receipt.reprint') || can('orders.view');
+
+  // What each row may offer. A cashier opens this page now (owner decision D1, 2026-10-16), and
+  // the row menu used to decide on the order's status alone, so it offered a refund, a cancel
+  // with a full card refund and a tax invoice that the database then refused — or, for a cancel,
+  // let through. The database is the boundary; these keep the menu to what will work.
+  // - Refund, and the tax invoice (issue_tax_invoice checks the same right): orders.refund.
+  // - Cancel: orders.cancel, and only before the order is paid unless the viewer may also
+  //   refund (D4). A paid order's cancel gives the money back, which is a refund.
+  const canRefundOrders = can('orders.refund');
+  const canCancelOrders = can('orders.cancel');
+  // Slip approvals: decide_payment_proof takes payments.verify (the cashier's "check the money
+  // arrived", D12) or payments.decide.
+  const canDecideSlips = can('payments.verify') || can('payments.decide');
+  // Failed deliveries are re-dispatched through requeue_failed_delivery, which is delivery.manage.
+  const canHandleDeliveries = can('delivery.manage');
 
   // getBranchAccess reads only id/name/restaurant_id. A receipt header needs the address a
   // diner would recognise and the currency the branch actually charges in; the date range
@@ -168,6 +186,30 @@ export default async function OrdersPage({ params, searchParams }: Props) {
     }
   }
 
+  // Which rows are paid, asked only of someone who may cancel but not refund (the cashier): for
+  // them Cancel is offered on unpaid orders alone (D4). Paid means money taken by any method — a
+  // payment completed or refunded, for more than zero — the rule cancel_order applies. A failed read leaves every row "maybe paid", so Cancel
+  // is hidden rather than offered on an order that may already hold the diner's money.
+  let paidOrderIds: Set<string> | null = null;
+  let paidReadFailed = false;
+  if (canCancelOrders && !canRefundOrders && orderIds.length > 0) {
+    const { data: paidRows, error: paidErr } = await supabase
+      .from('payments')
+      .select('order_id')
+      .eq('branch_id', branchId)
+      .in('status', ['completed', 'refunded'])
+      .gt('amount', 0)
+      .in('order_id', orderIds);
+    if (paidErr) {
+      console.error('[orders] paid read failed', paidErr.message);
+      paidReadFailed = true;
+    } else {
+      paidOrderIds = new Set((paidRows ?? []).map((p) => p.order_id as string));
+    }
+  }
+  const paidState = (orderId: string): boolean | null =>
+    paidReadFailed ? true : paidOrderIds ? paidOrderIds.has(orderId) : null;
+
   const rows: OrderRowData[] = (orders ?? []).map((o) => {
     // tables is a many-to-one embed, so PostgREST hands back one object (or null), but the
     // loosened client type cannot promise that — normalise the same way the kitchen does.
@@ -200,6 +242,7 @@ export default async function OrdersPage({ params, searchParams }: Props) {
       // summary's first two lines come from this order too.
       lines: sortOrderLines((o.order_items ?? []) as OrderLine[]),
       card: cardByOrder[o.id] ?? null,
+      paid: paidState(o.id),
     };
   });
 
@@ -209,15 +252,20 @@ export default async function OrdersPage({ params, searchParams }: Props) {
     currency,
     canViewReceipt,
     canPrintReceipt,
+    canRefundOrders,
+    canCancelOrders,
   };
 
-  // Failed deliveries that need staff attention (re-dispatch or refund).
-  const { data: failedRows } = await supabase
-    .from('deliveries')
-    .select('id, order_id, failed_reason, failed_photo_url, orders!inner(order_number, customer_name, customer_phone)')
-    .eq('branch_id', branchId)
-    .eq('status', 'failed')
-    .limit(20);
+  // Failed deliveries that need staff attention (re-dispatch or refund). Only read for someone who
+  // can re-dispatch them; anyone else would get a panel whose one button is refused.
+  const { data: failedRows } = canHandleDeliveries
+    ? await supabase
+        .from('deliveries')
+        .select('id, order_id, failed_reason, failed_photo_url, orders!inner(order_number, customer_name, customer_phone)')
+        .eq('branch_id', branchId)
+        .eq('status', 'failed')
+        .limit(20)
+    : { data: null };
   const issues: DeliveryIssue[] = (failedRows ?? []).map((d) => {
     const o = (Array.isArray(d.orders) ? d.orders[0] : d.orders) as {
       order_number: string;
@@ -244,16 +292,21 @@ export default async function OrdersPage({ params, searchParams }: Props) {
   // of half-finished uploads is noise the merchant has to re-check every time it changes.
   // customer_confirmed_at is stamped by confirm_payment_proof, i.e. by the diner pressing
   // "I've paid".
-  const { data: transferRows } = await supabase
-    .from('payments')
-    .select('id, order_id, amount, proof_image_url, gateway_metadata, orders!inner(order_number, customer_name, customer_phone)')
-    .eq('branch_id', branchId)
-    .eq('method', 'transfer')
-    .eq('status', 'pending')
-    .not('proof_image_url', 'is', null)
-    .not('gateway_metadata->customer_confirmed_at', 'is', null)
-    .order('created_at', { ascending: true })
-    .limit(50);
+  //
+  // Read only for someone who may decide a slip (payments.verify or payments.decide). Reading
+  // payments alone (payments.view) used to be enough to see the queue and its Approve buttons.
+  const { data: transferRows } = canDecideSlips
+    ? await supabase
+        .from('payments')
+        .select('id, order_id, amount, proof_image_url, gateway_metadata, orders!inner(order_number, customer_name, customer_phone)')
+        .eq('branch_id', branchId)
+        .eq('method', 'transfer')
+        .eq('status', 'pending')
+        .not('proof_image_url', 'is', null)
+        .not('gateway_metadata->customer_confirmed_at', 'is', null)
+        .order('created_at', { ascending: true })
+        .limit(50)
+    : { data: null };
 
   const pendingTransfers: PendingTransfer[] = (transferRows ?? []).map((p) => {
     const o = (Array.isArray(p.orders) ? p.orders[0] : p.orders) as {

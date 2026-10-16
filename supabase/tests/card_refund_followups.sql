@@ -168,7 +168,9 @@ begin
   -- 2. staff cannot close a paid order without its refund -------------------------------------
   perform pg_temp.expect('the owner cannot cancel it without a refund', 'ERR card_refund_required',
     pg_temp.try_as(v_owner, array[format('select public.cancel_order(%L, ''Admin canceled'')::text', v_order)]));
-  perform pg_temp.expect('nor can the kitchen''s Reject', 'ERR card_refund_required',
+  -- Since 20261016100000_roles_core the kitchen may cancel a paid order only while it is pending;
+  -- this one is confirmed, so its Reject is refused before the refund is even looked at.
+  perform pg_temp.expect('nor can the kitchen''s Reject', 'ERR paid_order_needs_refund',
     pg_temp.try_as(v_kitchen, array[format('select public.cancel_order(%L, ''Rejected by kitchen'')::text', v_order)]));
   perform pg_temp.expect('nor a direct status write', 'ERR card_refund_required',
     pg_temp.try_as(v_owner, array[format('update public.orders set status = ''cancelled'' where id = %L returning 1', v_order)]));
@@ -188,7 +190,7 @@ begin
   perform pg_temp.stripe_refund('re_TESTRF2B', 'pi_TESTRF2', 700, 'pending');
   perform pg_temp.expect('a pending refund of the rest counts as sent', '0.00',
     (select private.order_card_refund_due(v_order)::text));
-  perform pg_temp.expect('then the kitchen can reject it', 'ok%',
+  perform pg_temp.expect('the kitchen still cannot reject it once it is cooking', 'ERR paid_order_needs_refund',
     pg_temp.try_as(v_kitchen, array[format('select public.cancel_order(%L, ''Rejected by kitchen'')::text', v_order)]));
   perform pg_temp.expect('and the owner can cancel it', 'ok%',
     pg_temp.try_as(v_owner, array[format('select public.cancel_order(%L, ''Admin canceled'')::text', v_order)]));
@@ -301,7 +303,7 @@ begin
     (select r.status || ' ' || p.status || ' ' || private.order_card_refund_due(v_order)
        from public.payment_refunds r join public.payments p on p.id = r.payment_id
       where r.stripe_refund_id = 're_TESTRF10'));
-  perform pg_temp.expect('so the kitchen still cannot Reject it with nothing sent back', 'ERR card_refund_required',
+  perform pg_temp.expect('so the kitchen still cannot Reject it', 'ERR paid_order_needs_refund',
     pg_temp.try_as(v_kitchen, array[format('select public.cancel_order(%L, ''Rejected by kitchen'')::text', v_order)]));
 
   -- The charge read while its refund was on the way said refunded in full; the refund then failed.

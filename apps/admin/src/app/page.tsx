@@ -7,6 +7,9 @@ function landingPath(role: string, branchId: string): string {
   switch (role) {
     case 'kitchen':
       return `/kitchen/${branchId}`;
+    // A cashier has a back office too (its dashboard and the screens its capabilities open,
+    // owner decision D1, 2026-10-16), but the day starts at the till; its header has a
+    // Dashboard button for the way across.
     case 'cashier':
     case 'server':
     case 'staff':

@@ -34,6 +34,9 @@ export type Capability =
   | 'loyalty.manage'
   | 'payments.view'
   | 'payments.decide'
+  /** Approve or reject a storefront transfer slip (decide_payment_proof): the cashier's "check
+   *  the money arrived". Voiding and closing unpaid tables stay with payments.decide. */
+  | 'payments.verify'
   | 'receipt.reprint'
   | 'delivery.manage'
   | 'drivers.manage'

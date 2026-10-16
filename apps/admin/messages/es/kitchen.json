@@ -21,7 +21,8 @@
     "soundSettings": "Ajustes de sonido",
     "testSound": "Probar sonido",
     "voice": "Leer en voz alta los pedidos nuevos",
-    "soundHelp": "Suena un aviso con cada pedido nuevo. Se repite cada 30 segundos mientras haya una comanda en Nuevos sin aceptar. Una comanda ya aceptada avisa durante 2 minutos como máximo, o hasta que alguien toque la pantalla. Un tono grave suena una vez cuando una comanda se retrasa."
+    "soundHelp": "Suena un aviso con cada pedido nuevo. Se repite cada 30 segundos mientras haya una comanda en Nuevos sin aceptar. Una comanda ya aceptada avisa durante 2 minutos como máximo, o hasta que alguien toque la pantalla. Un tono grave suena una vez cuando una comanda se retrasa.",
+    "dashboard": "Panel"
   },
   "stations": {
     "all": "Todas",
@@ -147,7 +148,9 @@
     "rejectedRefunded": "#{ticket} rechazado. Se está reembolsando la tarjeta del cliente.",
     "rejectRefundFailed": "No se pudo rechazar #{ticket}: no se pudo reembolsar la tarjeta del cliente, así que el pedido sigue abierto y no se movió dinero. Pide a un gerente que lo revise en Pedidos.",
     "rejectRefundUnknown": "No se pudo confirmar el reembolso a la tarjeta de #{ticket}. Toca Rechazar otra vez; al cliente no se le puede reembolsar dos veces.",
-    "rejectRefundedStillOpen": "Se reembolsó la tarjeta del cliente de #{ticket}, pero el pedido sigue abierto. Toca Rechazar otra vez para terminar."
+    "rejectRefundedStillOpen": "Se reembolsó la tarjeta del cliente de #{ticket}, pero el pedido sigue abierto. Toca Rechazar otra vez para terminar.",
+    "rejectRefundedNeedsManager": "Se reembolsó la tarjeta de #{ticket}, pero el ticket se aceptó mientras tanto. Pide a un gerente que lo cierre en Pedidos.",
+    "rejectPaid": "#{ticket} ya está pagado, así que no se puede rechazar aquí. Pide a un gerente que lo cancele y lo reembolse en Pedidos."
   },
   "dispatch": {
     "maxAttempts": "Se probó con todos los repartidores: sube “Máximo de intentos de asignación” o asigna uno manualmente.",
@@ -197,5 +200,31 @@
     "title": "Agotado",
     "until": "hasta {time}",
     "backOnSale": "Volver a vender"
+  },
+  "availability": {
+    "toggle": "Disponibilidad",
+    "lowCount": "Poco stock: {count}",
+    "title": "Disponibilidad del menú",
+    "close": "Cerrar",
+    "search": "Buscar platos",
+    "filterLabel": "Mostrar",
+    "filter": {
+      "all": "Todos",
+      "soldOut": "Agotados",
+      "low": "Poco stock"
+    },
+    "loading": "Cargando el menú…",
+    "loadFailed": "No se pudo cargar el menú.",
+    "retry": "Reintentar",
+    "emptyMenu": "Todavía no hay platos en el menú.",
+    "noMatch": "Ningún plato coincide.",
+    "noCategory": "Otros",
+    "soldOutUntil": "Agotado hasta {time}",
+    "noneLeft": "Sin stock",
+    "lowStock": "Poco stock · quedan {count}",
+    "stockHint": "El stock se lleva en Inventario. Un gerente lo repone allí.",
+    "markSoldOut": "Marcar agotado",
+    "markSoldOutItem": "Marcar {item} como agotado",
+    "help": "Un plato agotado vuelve a la venta cuando la sucursal abre mañana, o cuando alguien lo vuelve a poner a la venta. El stock se cambia en Inventario, no aquí."
   }
 }

@@ -151,8 +151,9 @@ export default async function BranchLayout({ params, children }: Props) {
       : STAFF_ROLES.includes(role)
         ? t('roleCannotOpen', { role: t(`roles.${role}`), branch: branch.name })
         : t('accountCannotOpen', { branch: branch.name });
-    // The watcher stays on the denied screen too: a manager made cashier lands here, and one
-    // made manager again is let back in without having to think of reloading.
+    // The watcher stays on the denied screen too: a manager made server lands here, and one
+    // made manager again is let back in without having to think of reloading. (A cashier has
+    // the back office since owner decision D1; each page then asks for its own capability.)
     return (
       <>
         <AccessDenied title={t('title')} reason={reason} />

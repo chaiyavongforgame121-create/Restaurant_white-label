@@ -37,8 +37,10 @@ import {
 } from '@favornoms/database/queries';
 import {
   assignableRoles,
+  invitableRoles,
   roleChangeErrorKey,
   roleChangeViewer,
+  type OfferedRole,
   type RoleChangeViewer,
 } from './role-rules';
 
@@ -78,28 +80,12 @@ interface Props {
   staffBranchIds: string[];
 }
 
-/** Assignable roles, in descending order of access. `owner` is absent on purpose —
- *  it is created by restaurant onboarding and cannot be handed out here. The
- *  description (staff.roles.<role>.description) is what a non-technical merchant needs to
- *  pick correctly, so it names the boundary rather than listing screens. */
-export type AssignableRole =
-  | 'admin'
-  | 'manager'
-  | 'cashier'
-  | 'server'
-  | 'kitchen'
-  | 'driver'
-  | 'staff';
-
-const roleOptions: AssignableRole[] = [
-  'admin',
-  'manager',
-  'cashier',
-  'server',
-  'kitchen',
-  'driver',
-  'staff',
-];
+// The invitation's role list is invitableRoles (role-rules.ts): the roles this viewer can really
+// give, in descending order of access. `owner` is never handed out here (restaurant onboarding
+// creates it), Admin only by the owner (invite-staff refuses anyone else), and neither `driver`
+// (riders join through the driver app) nor the legacy `staff` role is offered any more. The
+// description under the list (staff.roles.<role>.description) is what a non-technical merchant
+// needs to pick correctly, so it names the boundary rather than listing screens.
 
 /** Roles with a label in staff.roleNames; anything else is shown as stored. */
 const KNOWN_ROLES = new Set<string>([
@@ -379,6 +365,7 @@ export function StaffView({
             branchId={branchId}
             branchName={branchName}
             canInviteEverywhere={viewerRestaurantWide}
+            viewerIsOwner={viewerIsOwner}
             onClose={() => setModalOpen(false)}
             // Refresh only — the modal stays up to report which outcome happened and to hold
             // the link, because "share this link", "we emailed them" and "they already have an
@@ -543,7 +530,8 @@ function RoleChange({
   const [applied, setApplied] = React.useState(false);
   if (!choices) return null;
   const email = member.invited_email ?? t('unnamed');
-  // A driver stays listed as a driver until someone changes it; driver is never offered otherwise.
+  // A driver, or someone on the legacy staff role, stays listed as such until someone changes it;
+  // neither is offered otherwise.
   const options: StaffRole[] = (choices as StaffRole[]).includes(member.role)
     ? choices
     : [member.role, ...choices];
@@ -971,6 +959,7 @@ function InviteModal({
   branchId,
   branchName,
   canInviteEverywhere,
+  viewerIsOwner,
   onClose,
   onInvited,
 }: {
@@ -979,13 +968,16 @@ function InviteModal({
   branchName: string;
   /** invite-staff refuses an all-branches invitation from an admin of one branch. */
   canInviteEverywhere: boolean;
+  /** invite-staff lets only the owner invite an admin; an admin was offered Admin and then got a 403. */
+  viewerIsOwner: boolean;
   onClose: () => void;
   onInvited: () => void;
 }) {
   const t = useTranslations('staff');
   const titleId = React.useId();
+  const roleChoices = invitableRoles(viewerIsOwner);
   const [email, setEmail] = React.useState('');
-  const [role, setRole] = React.useState<AssignableRole>('cashier');
+  const [role, setRole] = React.useState<OfferedRole>('cashier');
   const [scope, setScope] = React.useState<'branch' | 'restaurant'>('branch');
   // Links are the default: Supabase's built-in mailer sends about two emails an hour and only
   // to the project's own team, so an emailed invitation fails for real staff until the
@@ -1177,7 +1169,7 @@ function InviteModal({
                   onChange={(e) => setRole(e.target.value as typeof role)}
                   className="focus-ring w-full rounded-xl border border-border bg-background px-4 py-3 text-base"
                 >
-                  {roleOptions.map((value) => (
+                  {roleChoices.map((value) => (
                     <option key={value} value={value}>
                       {t(`roles.${value}.label`)}
                     </option>

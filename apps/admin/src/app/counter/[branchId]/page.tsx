@@ -23,7 +23,7 @@ const coord = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v :
 export default async function CounterPage({ params }: Props) {
   const { branchId } = await params;
   // The layout has already refused anyone without counter.access here; this is for the hint
-  // that only someone who can fix the branch's settings should see.
+  // that only someone who can fix the branch's settings should see, and for the Dashboard button.
   const { supabase, can } = await getBranchAccess(branchId, `/counter/${branchId}`);
   const tr = await getTranslations('counter');
   // sales_tax_rate and settings ride along because the till has to price the cart the way
@@ -122,6 +122,10 @@ export default async function CounterPage({ params }: Props) {
       deliveryFeeFlat={Number(settings.delivery_fee ?? 3.99)}
       qrTransfer={qrTransfer}
       canEditBranchSettings={can('branch.settings')}
+      // The back office's dashboard, for whoever may open it from here: the owner, admin and
+      // manager, and the cashier since owner decision D1 (2026-10-16). The till is still where a
+      // cashier lands after sign-in; this is their way across.
+      canOpenDashboard={can('backoffice.access') && can('dashboard.view')}
       effectivePrices={effectivePriceMap((effective.data ?? []) as EffectivePriceRow[])}
       soldOutUntil={soldOutUntil}
       branchCenter={lat != null && lng != null ? { lat, lng } : null}

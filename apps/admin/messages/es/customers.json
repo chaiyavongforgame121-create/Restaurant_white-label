@@ -65,6 +65,7 @@
   "nameFromOrder": "Nombre de su último pedido",
   "phoneFromOrder": "De su último pedido",
   "legend": "Todas las cifras son solo de esta sucursal. Pedidos y gasto cuentan los pedidos completados; la última visita es su pedido más reciente aquí que no se canceló; los puntos son los de fidelidad de esta sucursal.",
+  "legendNoSpend": "Todas las cifras son solo de esta sucursal. Pedidos cuenta los pedidos completados; la última visita es su pedido más reciente aquí que no se canceló; los puntos son los de fidelidad de esta sucursal.",
   "detail": {
     "title": "Cliente",
     "unnamed": "Cliente sin nombre",

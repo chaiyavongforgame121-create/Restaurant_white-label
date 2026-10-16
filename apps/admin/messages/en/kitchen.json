@@ -21,7 +21,8 @@
     "soundSettings": "Sound settings",
     "testSound": "Test sound",
     "voice": "Read new orders aloud",
-    "soundHelp": "A chime plays for every new order. It repeats every 30 seconds while a ticket in New has not been accepted. An accepted ticket reminds for up to 2 minutes, or until someone touches the screen. A low tone plays once when a ticket runs late."
+    "soundHelp": "A chime plays for every new order. It repeats every 30 seconds while a ticket in New has not been accepted. An accepted ticket reminds for up to 2 minutes, or until someone touches the screen. A low tone plays once when a ticket runs late.",
+    "dashboard": "Dashboard"
   },
   "stations": {
     "all": "All",
@@ -147,7 +148,9 @@
     "rejectedRefunded": "#{ticket} rejected. The customer’s card is being refunded.",
     "rejectRefundFailed": "Couldn’t reject #{ticket}: the customer’s card couldn’t be refunded, so the order is still open and no money moved. Ask a manager to check it in Orders.",
     "rejectRefundUnknown": "Couldn’t confirm the card refund for #{ticket}. Tap Reject again; the customer can’t be refunded twice.",
-    "rejectRefundedStillOpen": "The customer’s card for #{ticket} was refunded, but the order is still open. Tap Reject again to finish."
+    "rejectRefundedStillOpen": "The customer’s card for #{ticket} was refunded, but the order is still open. Tap Reject again to finish.",
+    "rejectRefundedNeedsManager": "The card for #{ticket} was refunded, but the ticket was accepted meanwhile. Ask a manager to close it in Orders.",
+    "rejectPaid": "#{ticket} is already paid, so it can’t be rejected here. Ask a manager to cancel and refund it in Orders."
   },
   "dispatch": {
     "maxAttempts": "Tried every rider — raise “Max dispatch attempts” or assign one by hand.",
@@ -197,5 +200,31 @@
     "title": "Sold out",
     "until": "until {time}",
     "backOnSale": "Back on sale"
+  },
+  "availability": {
+    "toggle": "Availability",
+    "lowCount": "{count} low",
+    "title": "Menu availability",
+    "close": "Close",
+    "search": "Search dishes",
+    "filterLabel": "Show",
+    "filter": {
+      "all": "All",
+      "soldOut": "Sold out",
+      "low": "Low stock"
+    },
+    "loading": "Loading the menu…",
+    "loadFailed": "Couldn’t load the menu.",
+    "retry": "Try again",
+    "emptyMenu": "There are no dishes on the menu yet.",
+    "noMatch": "No dishes match.",
+    "noCategory": "Other",
+    "soldOutUntil": "Sold out until {time}",
+    "noneLeft": "None left",
+    "lowStock": "Low · {count} left",
+    "stockHint": "Stock counts are kept in Inventory. A manager restocks a dish there.",
+    "markSoldOut": "Mark sold out",
+    "markSoldOutItem": "Mark {item} sold out",
+    "help": "Sold out lasts until the branch opens tomorrow, or until someone puts the dish back on sale. Stock counts are changed in Inventory, not here."
   }
 }

@@ -1,6 +1,6 @@
-import { notFound } from 'next/navigation';
-import { getServerClient } from '@favornoms/database/server';
 import { getRestaurantReportsResult } from '@favornoms/database/queries';
+import { getBranchAccess } from '@/lib/capabilities';
+import { PageAccessDenied } from '@/components/page-access-denied';
 import { HqView } from './_components/hq-view';
 
 interface Props {
@@ -15,15 +15,12 @@ export default async function HqPage({ params, searchParams }: Props) {
   // the heading from advertising a range the data doesn't actually cover.
   const monthsBack = Math.max(1, Math.min(24, Number(months) || 6));
 
-  const supabase = await getServerClient();
-  // Sequential for the same reason as /reports: two calls racing one token
-  // refresh means the loser comes back as `anon`, which has no EXECUTE here.
-  const { data: branch } = await supabase
-    .from('branches')
-    .select('restaurant_id')
-    .eq('id', branchId)
-    .maybeSingle();
-  if (!branch) notFound();
+  // Only the sidebar and get_restaurant_reports' own 42501 kept this owner screen closed, so
+  // anyone else got the head-office chrome around an error card. hq.view is what both ask.
+  // Sequential for the same reason as /reports: two calls racing one token refresh means the
+  // loser comes back as `anon`, which has no EXECUTE here.
+  const { supabase, branch, can } = await getBranchAccess(branchId, `/b/${branchId}/hq`);
+  if (!can('hq.view')) return <PageAccessDenied area="hq" branchName={branch.name} />;
 
   let { data: reports, error } = await getRestaurantReportsResult(
     supabase,

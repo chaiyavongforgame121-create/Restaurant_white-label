@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { Constants } from '@favornoms/database';
 import {
   CHANGEABLE_ROLES,
+  OFFERED_ROLES,
   assignableRoles,
+  invitableRoles,
   roleChangeErrorKey,
   roleChangeViewer,
   type RoleChangeTarget,
@@ -24,15 +26,22 @@ const row = (over: Partial<RoleChangeTarget> = {}): RoleChangeTarget => ({
 });
 
 describe('assignableRoles', () => {
-  it('lets the owner give every changeable role, admin included', () => {
+  it('lets the owner give every offered role, admin included', () => {
     expect(assignableRoles(row(), owner)).toEqual([
       'admin',
       'manager',
       'cashier',
       'server',
       'kitchen',
-      'staff',
     ]);
+  });
+
+  it('no longer offers the legacy staff role, but keeps it changeable for someone who holds it', () => {
+    for (const viewer of [owner, branchAdmin, everyBranchAdmin]) {
+      expect(assignableRoles(row(), viewer) ?? []).not.toContain('staff');
+    }
+    // The member on it can still be moved onto a spec role.
+    expect(assignableRoles(row({ role: 'staff', user_id: 'legacy' }), branchAdmin)).toContain('server');
   });
 
   it('never offers owner or driver', () => {
@@ -45,7 +54,7 @@ describe('assignableRoles', () => {
 
   it('lets a branch admin change a cashier at their branch, but never to admin', () => {
     const roles = assignableRoles(row(), branchAdmin);
-    expect(roles).toEqual(['manager', 'cashier', 'server', 'kitchen', 'staff']);
+    expect(roles).toEqual(['manager', 'cashier', 'server', 'kitchen']);
   });
 
   it('keeps admin rows owner-only', () => {
@@ -76,7 +85,6 @@ describe('assignableRoles', () => {
       'cashier',
       'server',
       'kitchen',
-      'staff',
     ]);
     expect(assignableRoles(everywhere, owner)).toContain('admin');
   });
@@ -98,6 +106,26 @@ describe('assignableRoles', () => {
   it('only names roles the database has', () => {
     const enumRoles = new Set<string>(Constants.public.Enums.staff_role);
     for (const r of CHANGEABLE_ROLES) expect(enumRoles.has(r)).toBe(true);
+    for (const r of OFFERED_ROLES) expect(enumRoles.has(r)).toBe(true);
+  });
+});
+
+describe('invitableRoles', () => {
+  it('offers the owner Admin and the four roles under it', () => {
+    expect(invitableRoles(true)).toEqual(['admin', 'manager', 'cashier', 'server', 'kitchen']);
+  });
+
+  it('never offers an admin Admin, which invite-staff would refuse', () => {
+    expect(invitableRoles(false)).toEqual(['manager', 'cashier', 'server', 'kitchen']);
+  });
+
+  it('never offers owner, driver or the legacy staff role', () => {
+    for (const isOwner of [true, false]) {
+      const roles: string[] = invitableRoles(isOwner);
+      expect(roles).not.toContain('owner');
+      expect(roles).not.toContain('driver');
+      expect(roles).not.toContain('staff');
+    }
   });
 });
 

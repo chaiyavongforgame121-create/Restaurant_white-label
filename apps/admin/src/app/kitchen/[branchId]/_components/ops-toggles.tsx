@@ -4,6 +4,7 @@ import * as React from 'react';
 import { useTranslations } from 'next-intl';
 import { Flame, Pause, Play } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
+import { OPS_SETTINGS_SELECT, pickOpsSettings } from './kitchen-model';
 
 // Always-on-screen kitchen controls: pause new orders / busy mode (+prep time).
 // They write branches.settings keys — the same keys the delivery settings card and
@@ -13,6 +14,11 @@ import { getBrowserClient } from '@favornoms/database/client';
 // had made in Branch settings since. Styled for the warm "Sunset" header (translucent-white pills
 // on the gradient). Surfaces the settings upward so the board can paint a persistent paused
 // banner and time scheduled tickets.
+// Only the keys the board uses are read and held (OPS_SETTING_KEYS), never the whole settings
+// object: it carries the payment QR set-up and fees, which are no business of the kitchen screen.
+// patch_branch_settings answers the kitchen role with these keys only (20261016110000), so a
+// Pause or Busy tap does not bring the rest back. RLS still lets a branch member read the column
+// itself; this keeps it off the tablet, not out of reach.
 
 const BUSY_OPTIONS = [0, 10, 20, 30];
 
@@ -42,9 +48,13 @@ export function OpsToggles({
 
   const load = React.useCallback(async () => {
     const seq = writeSeq.current;
-    const { data, error } = await getBrowserClient().from('branches').select('settings').eq('id', branchId).single();
+    const { data, error } = await getBrowserClient()
+      .from('branches')
+      .select(OPS_SETTINGS_SELECT)
+      .eq('id', branchId)
+      .single();
     if (error || seq !== writeSeq.current) return;
-    setSettings((data?.settings ?? {}) as Settings);
+    setSettings(pickOpsSettings(data));
   }, [branchId]);
 
   React.useEffect(() => {
@@ -81,7 +91,8 @@ export function OpsToggles({
       void load(); // roll back to server truth
       return;
     }
-    if (data && typeof data === 'object' && !Array.isArray(data)) setSettings(data as Settings);
+    // The RPC answers with the whole merged settings object; only the board's keys are kept.
+    if (data && typeof data === 'object' && !Array.isArray(data)) setSettings(pickOpsSettings(data));
   };
 
   if (!settings) return null;

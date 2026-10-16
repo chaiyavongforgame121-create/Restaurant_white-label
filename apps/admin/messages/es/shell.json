@@ -19,6 +19,7 @@
     "digitalSignage": "Señalización digital",
     "aiVoice": "Voz con IA",
     "staff": "Personal",
+    "timeLog": "Registro de horas",
     "drivers": "Repartidores",
     "driverPayouts": "Pagos a repartidores",
     "customers": "Clientes",
@@ -54,12 +55,13 @@
     "darkMode": "Modo oscuro"
   },
   "accessDenied": {
-    "title": "Acceso denegado"
+    "title": "Acceso denegado",
+    "backToMyScreen": "Volver a mi pantalla"
   },
   "branchAccess": {
     "title": "Sin acceso al panel de administración",
-    "roleCannotOpen": "Tu cuenta de {role} no puede abrir el panel de administración de {branch}. Tu trabajo está en el mostrador o en la pantalla de cocina.",
-    "accountCannotOpen": "Tu cuenta no puede abrir el panel de administración de {branch}. Tu trabajo está en el mostrador o en la pantalla de cocina.",
+    "roleCannotOpen": "Tu cuenta de {role} no incluye el panel de administración de {branch}. Vuelve a tu pantalla o pide más acceso al propietario o a un administrador.",
+    "accountCannotOpen": "Tu cuenta no incluye el panel de administración de {branch}. Vuelve a tu pantalla o pide más acceso al propietario o a un administrador.",
     "notStaff": "Tu cuenta no forma parte del personal de {branch}.",
     "roles": {
       "owner": "propietario",
@@ -185,5 +187,24 @@
       "tooLarge": "Esa imagen pesa más de {megabytes} MB.",
       "tooSmall": "Esa imagen mide {width}×{height}. Los íconos de la app necesitan al menos {min}×{min}; con uno más pequeño desaparece el botón de instalar."
     }
+  },
+  "pageAccess": {
+    "title": "No disponible para tu rol",
+    "reasons": {
+      "menu": "Tu rol en {branch} no permite editar el menú. Si lo necesitas, pídeselo al propietario o a un administrador.",
+      "qr": "Tu rol en {branch} no permite gestionar el código QR del menú. Si lo necesitas, pídeselo al propietario o a un administrador.",
+      "promos": "Tu rol en {branch} no permite gestionar promociones. Si lo necesitas, pídeselo al propietario o a un administrador.",
+      "orders": "Tu rol en {branch} no permite ver la lista de pedidos. Si lo necesitas, pídeselo al propietario o a un administrador.",
+      "receipts": "Tu rol en {branch} no permite ver los recibos fiscales. Si lo necesitas, pídeselo al propietario o a un administrador.",
+      "activity": "Tu rol en {branch} no permite ver el registro de actividad. Si lo necesitas, pídeselo al propietario o a un administrador.",
+      "ratings": "Tu rol en {branch} no permite ver las reseñas de los clientes. Si lo necesitas, pídeselo al propietario o a un administrador.",
+      "payouts": "Tu rol en {branch} no permite ver los pagos a repartidores. Si lo necesitas, pídeselo al propietario o a un administrador.",
+      "hq": "Solo el propietario puede abrir la oficina central de {branch}.",
+      "franchise": "Solo el propietario puede gestionar la franquicia de {branch}.",
+      "branch": "Tu rol en {branch} no permite cambiar la configuración de la sucursal. Si lo necesitas, pídeselo al propietario o a un administrador.",
+      "settings": "Tu rol en {branch} no permite abrir las preferencias de la sucursal. Puedes seguir cambiando el idioma desde el menú."
+    },
+    "branchHoursOnly": "Aquí puedes fijar el horario de atención y los cierres de esta sucursal. El nombre, la dirección, los impuestos, los pagos y la tienda en línea los cambia el propietario o un administrador.",
+    "addBranchOwnerOnly": "Solo el propietario puede agregar una sucursal, porque cada sucursal nueva suma un cupo de sucursal de pago al plan."
   }
 }

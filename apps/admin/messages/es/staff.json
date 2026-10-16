@@ -35,11 +35,11 @@
     },
     "manager": {
       "label": "Gerente",
-      "description": "Lleva el día a día: pedidos, reembolsos, menú, inventario, promociones, repartidores, informes y horas del personal. Sin facturación, imagen de marca ni invitaciones de personal."
+      "description": "Lleva el día a día: pedidos, reembolsos, menú, inventario, promociones, entregas y asignación de repartidores, informes y horas del personal. Sin facturación, configuración de la sucursal, cuentas de repartidores ni invitaciones al personal."
     },
     "cashier": {
       "label": "Cajero",
-      "description": "Mostrador y cobros. Toma pedidos y cobra, aplica descuentos, reimprime recibos y cancela antes del pago. Los reembolsos requieren un gerente."
+      "description": "Mostrador y pagos. Toma pedidos y cobra, verifica comprobantes de transferencia, aplica descuentos, reimprime recibos, cancela antes del pago y ve el panel sin totales de ventas. Los reembolsos requieren un gerente."
     },
     "server": {
       "label": "Mesero",
@@ -189,8 +189,8 @@
     "unchanged": "{email} ya tiene el rol {role}.",
     "hints": {
       "admin": "Todo excepto la facturación y la propiedad. Puede gestionar el equipo, pero no a otros administradores.",
-      "manager": "Lleva el día a día en el panel de administración. Sin cambios de personal, marca ni facturación.",
-      "cashier": "El mostrador: pedidos, cobros y recibos.",
+      "manager": "Lleva la administración del día a día. Sin cambios de personal, configuración de la sucursal, cuentas de repartidores ni facturación.",
+      "cashier": "El mostrador, los pedidos y el panel (sin totales de ventas); verifica comprobantes de transferencia.",
       "server": "Pedidos de mesa desde el mostrador, solo los suyos.",
       "kitchen": "Solo la pantalla de cocina.",
       "staff": "Solo el mostrador.",

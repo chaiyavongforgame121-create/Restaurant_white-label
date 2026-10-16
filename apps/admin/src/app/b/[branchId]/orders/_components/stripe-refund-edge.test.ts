@@ -207,16 +207,56 @@ describe('stripe-refund: the right account and the right charge', () => {
 });
 
 describe('stripe-refund: cancel with refund', () => {
-  it('lets whoever may cancel ask for the cancel, and only refunders ask for a plain refund', () => {
-    // The kitchen's Reject: kitchen.access, no orders.refund.
-    expect(plan.mayRequest(['kitchen.access'], true)).toBe(true);
-    expect(plan.mayRequest(['kitchen.access'], false)).toBe(false);
-    expect(plan.mayRequest(['orders.cancel'], true)).toBe(true);
-    expect(plan.mayRequest(['orders.refund'], false)).toBe(true);
+  // The capability lists the roles hold (role_capabilities after 20261016100000).
+  const MANAGER = ['backoffice.access', 'counter.access', 'kitchen.access', 'orders.cancel', 'orders.refund', 'payments.decide'];
+  const CASHIER = ['backoffice.access', 'counter.access', 'orders.cancel', 'payments.verify', 'payments.view'];
+  const KITCHEN = ['kitchen.access', 'menu.availability'];
+
+  it('lets only refunders ask for a plain refund', () => {
+    expect(plan.mayRequest(MANAGER, false, 'confirmed')).toBe(true);
+    expect(plan.mayRequest(['orders.refund'], false, null)).toBe(true);
+    expect(plan.mayRequest(CASHIER, false, 'pending')).toBe(false);
+    expect(plan.mayRequest(KITCHEN, false, 'pending')).toBe(false);
+  });
+
+  it('asks a cancel with its refund for the right to cancel a paid order, as cancel_order does', () => {
+    // A manager (or owner, admin) cancels and refunds whatever the order has reached.
+    for (const status of ['pending', 'confirmed', 'preparing', 'ready']) {
+      expect(plan.mayRequest(MANAGER, true, status)).toBe(true);
+    }
+    // The cashier may cancel only before payment, and this mode exists to refund a payment.
+    for (const status of ['pending', 'confirmed', 'preparing']) {
+      expect(plan.mayRequest(CASHIER, true, status)).toBe(false);
+    }
+    // The kitchen's Reject refunds and cancels only an order nobody has accepted yet.
+    expect(plan.mayRequest(KITCHEN, true, 'pending')).toBe(true);
+    for (const status of ['confirmed', 'preparing', 'ready', null, undefined, 42]) {
+      expect(plan.mayRequest(KITCHEN, true, status)).toBe(false);
+    }
     // Refunding is not cancelling: cancel_order would refuse this caller, so no refund is made.
-    expect(plan.mayRequest(['orders.refund'], true)).toBe(false);
-    expect(plan.mayRequest([], true)).toBe(false);
-    expect(plan.mayRequest([null, 42, { capability: 'orders.cancel' }], true)).toBe(false);
+    expect(plan.mayRequest(['orders.refund'], true, 'pending')).toBe(false);
+    expect(plan.mayRequest([], true, 'pending')).toBe(false);
+    expect(plan.mayRequest([null, 42, { capability: 'orders.refund' }, 'kitchen'], true, 'pending')).toBe(false);
+  });
+
+  it("names the same kitchen window as cancel_order's paid-order rule", async () => {
+    // cancel_order must let the kitchen cancel whatever this function lets it refund for a cancel:
+    // otherwise the card would be refunded and the order then refused, or the other way round.
+    const { readFileSync } = await import('node:fs');
+    const { fileURLToPath } = await import('node:url');
+    const sql = readFileSync(
+      fileURLToPath(new URL('../../../../../../../../supabase/migrations/20261016100000_roles_core.sql', import.meta.url)),
+      'utf8',
+    );
+    const match = /v_kitchen_window := v_order\.status in \(([^)]*)\);/.exec(sql);
+    expect(match).not.toBeNull();
+    const inSql = (match?.[1] ?? '').split(',').map((s) => s.trim().replace(/'/g, '')).sort();
+    expect(inSql).toEqual([...plan.KITCHEN_PAID_CANCEL_STATUSES].sort());
+    // And the rule that uses it is the paid-order one, answered before card_refund_required.
+    expect(sql.indexOf("raise exception 'paid_order_needs_refund'")).toBeGreaterThan(-1);
+    expect(sql.indexOf("raise exception 'paid_order_needs_refund'")).toBeLessThan(
+      sql.indexOf("raise exception 'card_refund_required'", sql.indexOf('function public.cancel_order')),
+    );
   });
 
   it('switches to the cancel mode on a literal true only', () => {

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
-import { getServerClient } from '@favornoms/database/server';
+import { getBranchAccess } from '@/lib/capabilities';
+import { PageAccessDenied } from '@/components/page-access-denied';
 import { ModifiersManager } from './_components/modifiers-manager';
 
 interface Props {
@@ -14,7 +15,9 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function ModifiersPage({ params }: Props) {
   const { branchId } = await params;
-  const supabase = await getServerClient();
+  // The same gate as the menu itself: option groups are menu editing.
+  const { supabase, branch, can } = await getBranchAccess(branchId, `/b/${branchId}/menu/modifiers`);
+  if (!can('menu.manage')) return <PageAccessDenied area="menu" branchName={branch.name} />;
   const [{ data: groups }, { data: menuItems }] = await Promise.all([
     supabase
       .from('modifier_groups')

@@ -9,8 +9,8 @@ export default async function RecentOrdersPage({ params }: Props) {
   const { branchId } = await params;
   // The receipt drawer needs the branch's address and currency, and the capability set
   // decides whether it may put paper in a printer. receipt.reprint is the right named for
-  // this job and the matrix seeds it for `cashier` alone — a role with no back office at
-  // all, which is why the only surface for it until now was one the cashier cannot reach.
+  // this job and the matrix seeds it for `cashier` alone; this list is where a cashier
+  // reprints without leaving the till.
   const { supabase, branch, can } = await getBranchAccess(branchId, `/counter/${branchId}/recent`);
   const { data: branchDetail } = await supabase
     .from('branches')
@@ -56,6 +56,8 @@ export default async function RecentOrdersPage({ params }: Props) {
       // refund_order checks orders.refund at this branch; a cashier does not hold it, and a
       // button that can only answer "not allowed" is noise at a busy till.
       canRefund={can('orders.refund')}
+      // The same way across to the back office as the till's header (owner decision D1).
+      canOpenDashboard={can('backoffice.access') && can('dashboard.view')}
     />
   );
 }

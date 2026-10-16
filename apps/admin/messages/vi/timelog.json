@@ -1,0 +1,60 @@
+{
+  "metaTitle": "Nhật ký giờ làm",
+  "title": "Nhật ký giờ làm",
+  "subtitle": "Giờ vào ca và ra ca của nhân viên tại {branch}. Thời gian theo múi giờ của chi nhánh ({timezone}).",
+  "accessDenied": {
+    "title": "Không có quyền xem nhật ký giờ làm",
+    "reason": "Chỉ chủ sở hữu, quản trị viên hoặc quản lý mới xem được giờ làm của nhân viên tại {branch}."
+  },
+  "filters": {
+    "presets": "Khoảng ngày",
+    "preset": {
+      "today": "Hôm nay",
+      "week": "7 ngày qua",
+      "month": "30 ngày qua"
+    },
+    "from": "Từ",
+    "to": "Đến",
+    "staff": "Nhân viên",
+    "everyone": "Tất cả",
+    "apply": "Xem",
+    "clamped": "Mỗi lần chỉ xem được tối đa {days} ngày, nên khoảng này bắt đầu muộn hơn ngày bạn chọn."
+  },
+  "loadError": {
+    "title": "Không tải được nhật ký giờ làm",
+    "body": "Không đọc được các ca làm. Hãy tải lại trang để thử lại."
+  },
+  "summary": {
+    "label": "Tổng của khoảng này",
+    "hours": "Giờ làm",
+    "shifts": "Số ca",
+    "people": "Số người"
+  },
+  "truncated": "Chỉ hiển thị {count} ca đầu tiên nên tổng chưa đầy đủ. Hãy chọn khoảng ngày ngắn hơn.",
+  "onShift": {
+    "title": "Đang trong ca",
+    "since": "Từ {time}",
+    "sinceDay": "Từ {day}, {time}",
+    "long": "Hơn {hours} giờ — quên chấm công ra?"
+  },
+  "empty": {
+    "title": "Không có ca làm trong khoảng này",
+    "description": "Ca làm sẽ hiện ở đây khi nhân viên chấm công vào và ra tại quầy."
+  },
+  "dayTotal": "{count} ca · {duration}",
+  "columns": {
+    "person": "Nhân viên",
+    "clockIn": "Vào ca",
+    "clockOut": "Ra ca",
+    "duration": "Thời lượng"
+  },
+  "note": "Ghi chú: {note}",
+  "stillOn": "Đang trong ca",
+  "outOnDay": "{time} ({day})",
+  "people": {
+    "title": "Giờ làm theo người",
+    "shifts": "Số ca",
+    "hours": "Số giờ"
+  },
+  "duration": "{hours} giờ {minutes} phút"
+}

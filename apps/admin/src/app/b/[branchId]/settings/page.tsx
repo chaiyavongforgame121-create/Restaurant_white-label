@@ -2,7 +2,9 @@ import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { CreditCard, Cog, Languages } from 'lucide-react';
 import { Card } from '@favornoms/ui';
+import { getBranchAccess } from '@/lib/capabilities';
 import { LocaleSwitcher } from '@/components/locale-switcher';
+import { PageAccessDenied } from '@/components/page-access-denied';
 
 interface Props {
   params: Promise<{ branchId: string }>;
@@ -10,6 +12,11 @@ interface Props {
 
 export default async function SettingsPage({ params }: Props) {
   const { branchId } = await params;
+  // The sidebar has always shown Preferences with branch.settings only; the page now asks the
+  // same. Nothing here is lost to anyone else: the language switcher is in the sidebar for
+  // every role, and Plan & billing has its own entry and its own answer.
+  const { branch, can } = await getBranchAccess(branchId, `/b/${branchId}/settings`);
+  if (!can('branch.settings')) return <PageAccessDenied area="settings" branchName={branch.name} />;
   const t = await getTranslations('settings.index');
   return (
     <div className="container max-w-3xl py-8">

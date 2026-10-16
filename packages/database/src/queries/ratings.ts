@@ -106,14 +106,17 @@ export async function getBranchRatings(
     .in('id', rows.map((r) => r.order_id));
   const numbers = new Map((orders ?? []).map((o) => [o.id, o.order_number]));
 
-  // Same reasoning as the order numbers: a plain id→name map rather than an embed.
-  // A missing name is not an error — a rider the branch can no longer read still has
-  // deliveries worth scoring, so the card falls back to the id.
+  // Same reasoning as the order numbers: a plain id→name map rather than an embed. Read through
+  // branch_rider_names: the rider row itself (phone, bank details) is drivers.manage only, and a
+  // manager reads ratings without it. A missing name is not an error — a rider the branch can no
+  // longer read still has deliveries worth scoring, so the card falls back to the id.
   const driverIds = [...new Set(rows.map((r) => r.driver_id).filter((id): id is string => !!id))];
-  const { data: driverRows } = driverIds.length
-    ? await supabase.from('drivers').select('id, full_name').in('id', driverIds)
-    : { data: [] as Array<{ id: string; full_name: string | null }> };
-  const driverNames = new Map((driverRows ?? []).map((d) => [d.id, d.full_name]));
+  let driverRows: Array<{ driver_id: string; full_name: string | null }> = [];
+  if (driverIds.length) {
+    const { data } = await supabase.rpc('branch_rider_names', { p_branch_id: branchId, p_driver_ids: driverIds });
+    driverRows = data ?? [];
+  }
+  const driverNames = new Map(driverRows.map((d) => [d.driver_id, d.full_name]));
 
   const ratings: BranchRating[] = rows.map((r) => ({
     id: r.id,

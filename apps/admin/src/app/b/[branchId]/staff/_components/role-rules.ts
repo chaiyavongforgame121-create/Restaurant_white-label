@@ -16,6 +16,32 @@ export const CHANGEABLE_ROLES = [
 ] as const;
 export type ChangeableRole = (typeof CHANGEABLE_ROLES)[number];
 
+/**
+ * What the Staff page offers, in descending order of access: the owner's seven-role spec minus
+ * the owner (never handed out) and the rider (riders live in the driver app, never as staff).
+ * `staff` is a legacy role outside that spec (owner decision D11, 2026-10-16), so it is no longer
+ * offered for an invitation or a change; set_staff_role still accepts it, and a member who holds
+ * it keeps showing it until someone picks a role from this list.
+ */
+export const OFFERED_ROLES = [
+  'admin',
+  'manager',
+  'cashier',
+  'server',
+  'kitchen',
+] as const satisfies readonly ChangeableRole[];
+export type OfferedRole = (typeof OFFERED_ROLES)[number];
+
+/**
+ * The roles this viewer may put on an invitation. invite-staff lets only the owner invite an admin
+ * (anyone else gets a 403), so an admin is never offered Admin. A platform admin working as support
+ * is not the owner to invite-staff, so `isOwner` here is the page's viewerIsOwner, not
+ * roleChangeViewer's.
+ */
+export function invitableRoles(isOwner: boolean): OfferedRole[] {
+  return isOwner ? [...OFFERED_ROLES] : OFFERED_ROLES.filter((r) => r !== 'admin');
+}
+
 export interface RoleChangeViewer {
   /** The restaurant's owner of record, an owner row, or a platform admin (user_owns_restaurant). */
   isOwner: boolean;
@@ -56,7 +82,7 @@ export interface RoleChangeTarget {
 export function assignableRoles(
   member: RoleChangeTarget,
   viewer: RoleChangeViewer,
-): ChangeableRole[] | null {
+): OfferedRole[] | null {
   // Removed is history; bringing someone back is a new invitation.
   if (member.status === 'removed') return null;
   // An owner stays an owner, whoever is looking.
@@ -67,8 +93,9 @@ export function assignableRoles(
   if (member.branch_id === null && !viewer.restaurantWide) return null;
   // Only the owner adds an admin, so only the owner changes one...
   if (member.role === 'admin' && !viewer.isOwner) return null;
-  // ...or makes one: an admin never raises anyone to their own level.
-  return viewer.isOwner ? [...CHANGEABLE_ROLES] : CHANGEABLE_ROLES.filter((r) => r !== 'admin');
+  // ...or makes one: an admin never raises anyone to their own level. The page keeps showing a
+  // role that is no longer offered (staff, driver) as the member's current one.
+  return viewer.isOwner ? [...OFFERED_ROLES] : OFFERED_ROLES.filter((r) => r !== 'admin');
 }
 
 export type RoleChangeError =

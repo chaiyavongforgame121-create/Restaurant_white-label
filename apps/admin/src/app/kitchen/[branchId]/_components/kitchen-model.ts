@@ -3,6 +3,9 @@
 
 import type { BranchRider } from '@favornoms/database/queries';
 import { sortOrderLines } from '@favornoms/shared';
+// What "low" and "none left" mean is the back office's rule (v_low_stock_items, the inventory
+// table, the menu grid); the board reads the same one so the kitchen and the manager agree.
+import { stockState } from '@/app/b/[branchId]/inventory/_components/stock-model';
 
 /** Everything the board reads per ticket. page.tsx (first paint) and the view's reload() must
  *  select the same shape, or a refetch silently drops a field a card relies on. */
@@ -96,6 +99,198 @@ export interface SoldOutItem {
   id: string;
   name: string;
   sold_out_until: string;
+}
+
+/* ── branch settings the board reads ───────────────────────────────────── */
+
+/** The branches.settings keys the board uses: pause and busy (OpsToggles writes them through
+ *  patch_branch_settings), and the two a scheduled ticket's clock starts from. The board used to
+ *  read the whole settings object, the payment QR set-up included, to paint two buttons. */
+export const OPS_SETTING_KEYS = ['orders_paused', 'busy_extra_prep_min', 'prep_time_min', 'schedule_lead_time_min'] as const;
+
+/** A PostgREST select of just those keys, each under its own name. `->` keeps the JSON type, so
+ *  a boolean stays a boolean and a number a number. */
+export const OPS_SETTINGS_SELECT = OPS_SETTING_KEYS.map((key) => `${key}:settings->${key}`).join(', ');
+
+/** Those keys out of a row read with OPS_SETTINGS_SELECT, or out of the whole settings object that
+ *  patch_branch_settings answers with; nothing else is kept. A key the branch never set comes back
+ *  null and is left out, so the board falls back to its default for it. */
+export function pickOpsSettings(raw: unknown): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+  const row = raw as Record<string, unknown>;
+  for (const key of OPS_SETTING_KEYS) if (row[key] != null) out[key] = row[key];
+  return out;
+}
+
+/* ── menu availability ─────────────────────────────────────────────────── */
+
+/** Everything the availability panel reads per dish. page.tsx (first paint) and the panel's re-read
+ *  select the same shape, always with is_active = true: a dish taken off the menu is not the
+ *  kitchen's to sell out or bring back (the sold-out strip follows the same rule). */
+export const AVAILABILITY_SELECT =
+  'id, name, display_order, track_stock, stock_quantity, low_stock_threshold, menu_categories(name, display_order)';
+
+/** A dish on the menu at this branch, as the availability panel lists it. */
+export interface AvailabilityItem {
+  id: string;
+  name: string;
+  /** The menu category's name; null when the dish has none (or it could not be read). */
+  category: string | null;
+  categoryOrder: number;
+  displayOrder: number;
+  track_stock: boolean | null;
+  stock_quantity: number | null;
+  low_stock_threshold: number | null;
+}
+
+/** A dish with no category sorts after every category. */
+const NO_CATEGORY_ORDER = Number.MAX_SAFE_INTEGER;
+
+function numberOr(value: unknown, fallback: number): number {
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function nullableNumber(value: unknown): number | null {
+  if (value == null || value === '') return null;
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** A row read with AVAILABILITY_SELECT, or null when it is not a dish. The category embed is read as
+ *  an object or a one-element array, whichever PostgREST answers with. */
+export function toAvailabilityItem(raw: unknown): AvailabilityItem | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const row = raw as Record<string, unknown>;
+  if (typeof row.id !== 'string' || typeof row.name !== 'string') return null;
+  const embed = Array.isArray(row.menu_categories) ? row.menu_categories[0] : row.menu_categories;
+  const cat = embed && typeof embed === 'object' ? (embed as Record<string, unknown>) : null;
+  const category = cat && typeof cat.name === 'string' && cat.name.trim() !== '' ? cat.name : null;
+  return {
+    id: row.id,
+    name: row.name,
+    category,
+    categoryOrder: category ? numberOr(cat?.display_order, 0) : NO_CATEGORY_ORDER,
+    displayOrder: numberOr(row.display_order, 0),
+    track_stock: typeof row.track_stock === 'boolean' ? row.track_stock : null,
+    stock_quantity: nullableNumber(row.stock_quantity),
+    low_stock_threshold: nullableNumber(row.low_stock_threshold),
+  };
+}
+
+/** What the panel says about a dish's stock count. Read-only on the board: counting stock is
+ *  inventory.manage (Inventory), which the kitchen role does not hold.
+ *  - 'out': counted, and none left: nobody can order it until it is restocked;
+ *  - 'low': counted, at or under its alert threshold;
+ *  - null: not counted, or plenty left. */
+export type StockBadge = { kind: 'out' } | { kind: 'low'; count: number } | null;
+
+export function stockBadge(item: Pick<AvailabilityItem, 'track_stock' | 'stock_quantity' | 'low_stock_threshold'>): StockBadge {
+  const state = stockState({ ...item, sold_out_until: null });
+  if (state.count === null) return null;
+  if (state.count <= 0) return { kind: 'out' };
+  return state.isLow ? { kind: 'low', count: state.count } : null;
+}
+
+export type AvailabilityFilter = 'all' | 'soldOut' | 'low';
+export const AVAILABILITY_FILTERS: readonly AvailabilityFilter[] = ['all', 'soldOut', 'low'];
+
+/** Does a dish belong under a filter? 'soldOut' is what diners cannot order right now (86'd, or
+ *  counted with none left); 'low' is every counted dish at or under its threshold, none left
+ *  included (the back office's "low" too). */
+export function matchesAvailabilityFilter(
+  item: AvailabilityItem,
+  filter: AvailabilityFilter,
+  soldOutIds: ReadonlySet<string>,
+): boolean {
+  if (filter === 'all') return true;
+  const badge = stockBadge(item);
+  if (filter === 'low') return badge !== null;
+  return soldOutIds.has(item.id) || badge?.kind === 'out';
+}
+
+export function availabilityCounts(
+  items: readonly AvailabilityItem[],
+  soldOutIds: ReadonlySet<string>,
+): Record<AvailabilityFilter, number> {
+  const counts: Record<AvailabilityFilter, number> = { all: 0, soldOut: 0, low: 0 };
+  for (const item of items) {
+    for (const f of AVAILABILITY_FILTERS) if (matchesAvailabilityFilter(item, f, soldOutIds)) counts[f] += 1;
+  }
+  return counts;
+}
+
+export interface AvailabilityGroup {
+  category: string | null;
+  items: AvailabilityItem[];
+}
+
+/** The panel's list: dishes whose name holds `query` (any case) under `filter`, grouped by menu
+ *  category in menu order, and in menu order within a category. Dishes with no category last. */
+export function availabilityGroups(
+  items: readonly AvailabilityItem[],
+  opts: { query: string; filter: AvailabilityFilter; soldOutIds: ReadonlySet<string> },
+): AvailabilityGroup[] {
+  const q = opts.query.trim().toLocaleLowerCase();
+  const shown = items
+    .filter((it) => (!q || it.name.toLocaleLowerCase().includes(q)) && matchesAvailabilityFilter(it, opts.filter, opts.soldOutIds))
+    .sort(
+      (a, b) =>
+        a.categoryOrder - b.categoryOrder ||
+        (a.category ?? '').localeCompare(b.category ?? '') ||
+        a.displayOrder - b.displayOrder ||
+        a.name.localeCompare(b.name),
+    );
+  const groups: AvailabilityGroup[] = [];
+  for (const it of shown) {
+    const last = groups[groups.length - 1];
+    if (last && last.category === it.category) last.items.push(it);
+    else groups.push({ category: it.category, items: [it] });
+  }
+  return groups;
+}
+
+/** Fold a menu_items row (a realtime UPDATE: every sale changes the stock count) into the panel's
+ *  list. Returns the SAME array when nothing the panel shows changed. A dish taken off the menu
+ *  leaves the list; a dish the list does not hold is left for the next read (its category name
+ *  is not in the payload). */
+export function mergeAvailability(
+  list: AvailabilityItem[],
+  row: {
+    id?: string | null;
+    name?: string | null;
+    is_active?: boolean | null;
+    display_order?: number | null;
+    track_stock?: boolean | null;
+    stock_quantity?: number | null;
+    low_stock_threshold?: number | null;
+  },
+): AvailabilityItem[] {
+  if (!row.id) return list;
+  const idx = list.findIndex((it) => it.id === row.id);
+  if (idx < 0) return list;
+  if (row.is_active === false) return list.filter((it) => it.id !== row.id);
+  const curr = list[idx]!;
+  const next: AvailabilityItem = {
+    ...curr,
+    name: typeof row.name === 'string' && row.name !== '' ? row.name : curr.name,
+    displayOrder: row.display_order != null ? numberOr(row.display_order, curr.displayOrder) : curr.displayOrder,
+    track_stock: row.track_stock !== undefined ? row.track_stock : curr.track_stock,
+    stock_quantity: row.stock_quantity !== undefined ? nullableNumber(row.stock_quantity) : curr.stock_quantity,
+    low_stock_threshold:
+      row.low_stock_threshold !== undefined ? nullableNumber(row.low_stock_threshold) : curr.low_stock_threshold,
+  };
+  const same =
+    next.name === curr.name &&
+    next.displayOrder === curr.displayOrder &&
+    next.track_stock === curr.track_stock &&
+    next.stock_quantity === curr.stock_quantity &&
+    next.low_stock_threshold === curr.low_stock_threshold;
+  if (same) return list;
+  const out = list.slice();
+  out[idx] = next;
+  return out;
 }
 
 /** One dish inside a combo line. */

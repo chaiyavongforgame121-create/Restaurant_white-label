@@ -1,15 +1,19 @@
 import { getLocale, getTranslations } from 'next-intl/server';
-import { getServerClient } from '@favornoms/database/server';
 import { getBranchRatings } from '@favornoms/database/queries';
 import { DEFAULT_UI_LOCALE, intlLocaleFor, isUiLocale } from '@favornoms/shared';
 import { Card, EmptyState, RiderIcon } from '@favornoms/ui';
 import { AlertTriangle, MessageSquare, Star, UtensilsCrossed } from 'lucide-react';
+import { getBranchAccess } from '@/lib/capabilities';
+import { PageAccessDenied } from '@/components/page-access-denied';
 
 interface Props { params: Promise<{ branchId: string }> }
 
 export default async function RatingsPage({ params }: Props) {
   const { branchId } = await params;
-  const supabase = await getServerClient();
+  // How the branch and its riders are rated is a reports question, so it is reports.view, the
+  // capability the sidebar entry now carries as well. Neither had one before.
+  const { supabase, branch, can } = await getBranchAccess(branchId, `/b/${branchId}/ratings`);
+  if (!can('reports.view')) return <PageAccessDenied area="ratings" branchName={branch.name} />;
   const [t, rawLocale] = await Promise.all([getTranslations('ratings'), getLocale()]);
   const locale = isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE;
   const { ratings, foodAvg, foodCount, deliveryAvg, deliveryCount, total, drivers, error } =

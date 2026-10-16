@@ -144,8 +144,8 @@ export function LocationCard({ branch }: { branch: BranchLocation }) {
     if (updateError) {
       console.error('Saving the branch time zone failed', updateError);
       setError(
-        updateError.message.includes('branch_manager_required')
-          ? t('errors.managerRequired')
+        updateError.message.includes('branch_settings_required')
+          ? t('errors.settingsRequired')
           : updateError.message.includes('invalid_timezone')
             ? t('location.errors.invalidTimezone')
             : updateError.code === '42501'

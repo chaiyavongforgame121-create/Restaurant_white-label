@@ -147,6 +147,7 @@
       "bodyCardUnpaid": "The customer’s card payment hasn’t gone through, so there is nothing to refund. This cancels the order and restores stock. It can’t be undone.",
       "bodyCardNothingLeft": "The card payment has already been refunded or is being refunded, so nothing more goes back. This cancels the order and restores stock. It can’t be undone.",
       "bodyCardDisputed": "The customer disputed this card payment with their bank, which has already taken the money back, so nothing is refunded here. This cancels the order and restores stock. It can’t be undone.",
+      "bodyPaidNeedsRefund": "The customer has paid for this order, so cancelling it means refunding them. Ask a manager, admin or the owner to cancel it.",
       "confirmRefund": "Refund and cancel"
     },
     "noteDialog": {
@@ -223,7 +224,8 @@
     "deliveryNotFailed": "This delivery is no longer marked as failed. Refresh to see where it is.",
     "deliveryForbidden": "Your account can’t re-dispatch deliveries at this branch.",
     "paymentNotFound": "That payment no longer exists.",
-    "paymentForbidden": "Only an owner or manager can approve payments.",
+    "paymentForbidden": "Your role at this branch can’t approve or reject payment slips.",
+    "paymentAlreadyDecided": "This slip was already approved or rejected. Refresh to see where it stands.",
     "onlineCardUnpaid": "This order was placed online to be paid by card, and the customer hasn’t paid yet, so it can’t be settled or moved on here. Cancel it, then ring the sale up again at the counter and take the payment there.",
     "cardRefundRequired": "The customer paid this order online by card, and the card has to be refunded before the order can be cancelled. The refund isn’t recorded yet: wait a minute and try again.",
     "cardRefundNotRecorded": "Stripe has made the card refund, but it isn’t in this branch’s records yet, so the order can’t show it. Wait a minute and press the button again; the card won’t be refunded twice.",

@@ -1,10 +1,11 @@
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { getServerClient } from '@favornoms/database/server';
 import { DEFAULT_UI_LOCALE, formatCurrency, intlLocaleFor, isUiLocale } from '@favornoms/shared';
 import { Badge, Card } from '@favornoms/ui';
+import { getBranchAccess } from '@/lib/capabilities';
 import { PAYOUT_SUMMARY_WEEKS, resolveDeliveryGate } from '@/lib/delivery-gate';
 import { DeliveryLocked, DeliveryStoppedNotice } from '@/components/delivery-locked';
+import { PageAccessDenied } from '@/components/page-access-denied';
 import { PayoutAttachments } from './_components/payout-attachments';
 import { fetchPayoutMedia } from './_components/payout-media';
 import { WithdrawalActions } from './_components/withdrawal-actions';
@@ -29,21 +30,21 @@ interface SummaryRow {
 
 export default async function PayoutsPage({ params }: Props) {
   const { branchId } = await params;
-  const supabase = await getServerClient();
+  // Riders' bank details and what they are owed: drivers.manage, the capability the sidebar
+  // entry has always asked for. The page itself never checked one, so anyone past the
+  // back-office gate could read it by URL.
+  const { supabase, branch, can } = await getBranchAccess(branchId, `/b/${branchId}/payouts`);
+  if (!can('drivers.manage')) return <PageAccessDenied area="payouts" branchName={branch.name} />;
   const [t, locale] = await Promise.all([getTranslations('payouts'), getLocale()]);
   const intlLocale = intlLocaleFor(isUiLocale(locale) ? locale : DEFAULT_UI_LOCALE);
 
   const WITHDRAWAL_COLS =
     'id, amount, status, bank_name, account_number, account_name, created_at, paid_at, receipt_number, rejection_reason, drivers(full_name)';
-  // This screen never asked whether the branch sells delivery — it had no capability check
-  // either — so it worked for any branch by URL. Delivery is per branch now, and the
-  // question is asked for THIS branch. The name is read alongside it: the locked screen
-  // says which branch does not deliver, not "your add-on is gone".
-  const [gate, { data: branchRow }] = await Promise.all([
-    resolveDeliveryGate(supabase, branchId),
-    supabase.from('branches').select('name').eq('id', branchId).maybeSingle(),
-  ]);
-  const branchName = branchRow?.name ?? '';
+  // This screen never asked whether the branch sells delivery, so it worked for any branch by
+  // URL. Delivery is per branch now, and the question is asked for THIS branch. The locked
+  // screen names the branch: it says which branch does not deliver, not "your add-on is gone".
+  const gate = await resolveDeliveryGate(supabase, branchId);
+  const branchName = branch.name;
 
   // Pending rows get their own unbounded query — they linger while newer requests
   // get settled, so a shared recency window would eventually hide them from the

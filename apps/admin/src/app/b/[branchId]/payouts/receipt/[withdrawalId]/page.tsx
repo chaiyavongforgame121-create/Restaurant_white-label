@@ -1,9 +1,10 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getLocale, getTranslations } from 'next-intl/server';
-import { getServerClient } from '@favornoms/database/server';
 import { DEFAULT_UI_LOCALE, formatCurrency, intlLocaleFor, isUiLocale } from '@favornoms/shared';
 import { Card } from '@favornoms/ui';
+import { getBranchAccess } from '@/lib/capabilities';
+import { PageAccessDenied } from '@/components/page-access-denied';
 import { PayoutAttachments } from '../../_components/payout-attachments';
 import { fetchPayoutMedia } from '../../_components/payout-media';
 import { PrintButton } from '../../_components/print-button';
@@ -14,7 +15,12 @@ interface Props {
 
 export default async function WithdrawalReceiptPage({ params }: Props) {
   const { branchId, withdrawalId } = await params;
-  const supabase = await getServerClient();
+  // A paid rider's receipt carries their bank account: the payouts page's own gate.
+  const access = await getBranchAccess(branchId, `/b/${branchId}/payouts/receipt/${withdrawalId}`);
+  if (!access.can('drivers.manage')) {
+    return <PageAccessDenied area="payouts" branchName={access.branch.name} />;
+  }
+  const { supabase } = access;
   const [t, locale] = await Promise.all([getTranslations('payouts'), getLocale()]);
   const intlLocale = intlLocaleFor(isUiLocale(locale) ? locale : DEFAULT_UI_LOCALE);
 

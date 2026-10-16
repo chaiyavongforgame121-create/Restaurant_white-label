@@ -5355,6 +5355,10 @@ export type Database = {
         }
         Returns: Json
       }
+      branch_rider_names: {
+        Args: { p_branch_id: string; p_driver_ids?: string[] }
+        Returns: { driver_id: string; full_name: string }[]
+      }
       branch_schedule_policy: { Args: { p_branch_id: string }; Returns: Json }
       broadcast_franchise_menu: {
         Args: { p_source_branch_id: string; p_target_branch_ids: string[] }

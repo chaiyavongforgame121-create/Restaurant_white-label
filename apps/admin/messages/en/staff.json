@@ -35,11 +35,11 @@
     },
     "manager": {
       "label": "Manager",
-      "description": "Runs the day to day: orders, refunds, menu, stock, promos, drivers, reports and staff hours. No billing, branding or staff invites."
+      "description": "Runs the day to day: orders, refunds, menu, stock, promos, deliveries and assigning riders, reports and staff hours. No billing, branch settings, rider accounts or staff invites."
     },
     "cashier": {
       "label": "Cashier",
-      "description": "Counter and payments. Takes orders and money, applies discounts, reprints receipts, cancels before payment. Refunds need a manager."
+      "description": "Counter and payments. Takes orders and money, checks transfer slips, applies discounts, reprints receipts, cancels before payment, and sees the dashboard without sales totals. Refunds need a manager."
     },
     "server": {
       "label": "Server",
@@ -189,8 +189,8 @@
     "unchanged": "{email} already has the role {role}.",
     "hints": {
       "admin": "Everything except billing and ownership. Can manage the team, but not other admins.",
-      "manager": "Runs the back office day to day. No staff changes, branding or billing.",
-      "cashier": "The counter: orders, payments and receipts.",
+      "manager": "Runs the back office day to day. No staff changes, branch settings, rider accounts or billing.",
+      "cashier": "The counter, orders and the dashboard (no sales totals); checks transfer slips.",
       "server": "Table orders from the counter, their own only.",
       "kitchen": "The kitchen board only.",
       "staff": "The counter only.",

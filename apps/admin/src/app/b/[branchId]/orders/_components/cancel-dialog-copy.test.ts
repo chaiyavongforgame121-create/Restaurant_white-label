@@ -26,6 +26,7 @@ const KEYS = [
   'bodyCardUnpaid',
   'bodyCardNothingLeft',
   'bodyCardDisputed',
+  'bodyPaidNeedsRefund',
 ];
 
 describe('the Cancel dialog copy', () => {
@@ -56,6 +57,19 @@ describe('the Cancel dialog copy', () => {
     expect(String(en.bodyCardDisputed)).toMatch(/dispute/i);
     expect(String(en.bodyCardDisputed)).not.toMatch(/\{amount\}/);
     expect(en.bodyCardDisputed).not.toBe(en.bodyCardNothingLeft);
+  });
+
+  it('tells someone who may not refund that a paid order is a manager’s cancel, before any refund wording', () => {
+    // A cashier (orders.cancel without orders.refund) must never be shown "refunds {amount}" with
+    // a live Confirm: cancel_order refuses them with paid_order_needs_refund (owner decision D4).
+    const src = fs.readFileSync(path.join(__dirname, 'order-row-actions.tsx'), 'utf8');
+    const needsRefund = src.indexOf("t('actions.cancelDialog.bodyPaidNeedsRefund')");
+    expect(needsRefund).toBeGreaterThan(-1);
+    expect(needsRefund).toBeLessThan(src.indexOf("t('actions.cancelDialog.bodyCard', {"));
+    expect(needsRefund).toBeLessThan(src.indexOf("t('actions.cancelDialog.bodyCardDisputed')"));
+    for (const locale of LOCALES) {
+      expect(String(cancelDialog(locale).bodyPaidNeedsRefund)).not.toMatch(/\{amount\}/);
+    }
   });
 
   it('is picked for a disputed payment before the refund wording', () => {

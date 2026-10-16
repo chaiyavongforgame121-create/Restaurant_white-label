@@ -49,6 +49,9 @@ export interface OrderRowData {
   /** The order's Stripe card payment and what has gone back on it, or null for cash, transfer
    *  and cards taken on the restaurant's own terminal (and for readers without payments.view). */
   card: CardPaymentSummary | null;
+  /** A completed payment exists for the order. Only read for a viewer who may cancel but not
+   *  refund, for whom Cancel is limited to unpaid orders; null when it was not asked. */
+  paid?: boolean | null;
 }
 
 export interface OrderRowContext {
@@ -57,6 +60,10 @@ export interface OrderRowContext {
   currency: string;
   canViewReceipt: boolean;
   canPrintReceipt: boolean;
+  /** orders.refund: refunds, cancelling a paid order, and issuing a tax invoice. */
+  canRefundOrders: boolean;
+  /** orders.cancel: cancelling an order that has not been paid. */
+  canCancelOrders: boolean;
 }
 
 /** `intlLocale` is the reader's language as an Intl tag (see useIntlLocale). */
@@ -410,6 +417,9 @@ export function OrderTableRow({ order: o, ctx }: { order: OrderRowData; ctx: Ord
               customerNotes={o.customer_notes}
               card={o.card}
               currency={ctx.currency}
+              canRefundOrders={ctx.canRefundOrders}
+              canCancelOrders={ctx.canCancelOrders}
+              paid={o.paid ?? null}
             />
           </div>
         </td>

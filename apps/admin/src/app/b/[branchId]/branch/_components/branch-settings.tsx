@@ -174,6 +174,9 @@ export function BranchSettings({
         setError(t('errors.stripeDeliveryActive'));
       } else if (updateError.message.includes('branch_privileged_column_forbidden')) {
         setError(t('errors.ownerOnlyDomain'));
+      } else if (updateError.message.includes('branch_settings_required')) {
+        // Name, address, tax, time zone, open/closed: owner and admin (20261016110000).
+        setError(t('errors.settingsRequired'));
       } else if (updateError.message.includes('branch_manager_required')) {
         setError(t('errors.managerRequired'));
       } else if (updateError.code === '23505' && /custom_domain/.test(updateError.message)) {

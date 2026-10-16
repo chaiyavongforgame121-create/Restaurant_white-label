@@ -2,7 +2,8 @@
   "defaultRestaurantName": "Nhà hàng của tôi",
   "errors": {
     "generic": "Đã xảy ra lỗi và chưa có gì được lưu. Hãy thử lại.",
-    "managerRequired": "Chỉ chủ sở hữu hoặc quản lý mới có thể thay đổi các cài đặt chi nhánh này.",
+    "managerRequired": "Chỉ chủ sở hữu, quản trị viên hoặc quản lý của chi nhánh này mới có thể đổi giờ mở cửa.",
+    "settingsRequired": "Chỉ chủ sở hữu hoặc quản trị viên mới có thể thay đổi các cài đặt chi nhánh này.",
     "ownerOnlyDomain": "Chỉ chủ nhà hàng mới có thể đổi tên miền riêng.",
     "domainTaken": "Tên miền này đã được một chi nhánh khác sử dụng.",
     "noPermission": "Vai trò của bạn không được phép thực hiện thay đổi này.",
@@ -90,7 +91,7 @@
       "outOfRange": "Tọa độ nằm ngoài phạm vi hợp lệ.",
       "dropPin": "Hãy đặt ghim lên cửa hàng.",
       "pinRequired": "Hãy chọn địa chỉ mới trên bản đồ để tài xế biết nơi lấy hàng.",
-      "notAuthorized": "Chỉ chủ sở hữu hoặc quản lý mới có thể di chuyển chi nhánh.",
+      "notAuthorized": "Chỉ chủ sở hữu hoặc quản trị viên mới có thể di chuyển chi nhánh.",
       "signedOut": "Bạn đã bị đăng xuất. Hãy đăng nhập lại rồi thử lại.",
       "branchNotFound": "Không tìm thấy chi nhánh này.",
       "invalidTimezone": "Hãy chọn một múi giờ trong danh sách."

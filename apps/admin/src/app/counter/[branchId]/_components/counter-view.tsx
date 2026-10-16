@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocale, useTranslations } from 'next-intl';
 import {
-  Banknote, CreditCard, Minus, Plus, QrCode, Search, ShoppingBag, Store,
+  Banknote, CreditCard, LayoutDashboard, Minus, Plus, QrCode, Search, ShoppingBag, Store,
   Trash2, Utensils, X,
 } from 'lucide-react';
 import {
@@ -139,6 +139,9 @@ interface Props {
   qrTransfer?: CounterQrTransfer | null;
   /** branch.settings: only someone who can upload a QR is told where to do it. */
   canEditBranchSettings?: boolean;
+  /** backoffice.access and dashboard.view: the header links to the back office's dashboard.
+   *  Defaults to false, so a missing prop cannot offer a door that answers "access denied". */
+  canOpenDashboard?: boolean;
   /** Happy-hour prices in force when the page rendered, by menu item id. */
   effectivePrices?: Record<string, EffectivePrice>;
   /** Menu item id -> when its 86 lifts. Future times only. */
@@ -218,6 +221,7 @@ function PosInner({
   deliveryFeeFlat = 0,
   qrTransfer = null,
   canEditBranchSettings = false,
+  canOpenDashboard = false,
   effectivePrices = NO_PRICES,
   soldOutUntil = NO_SOLD_OUT,
   branchCenter = null,
@@ -1189,7 +1193,24 @@ function PosInner({
         </div>
         <div className="order-2 ml-auto flex shrink-0 items-center gap-2 xl:order-3 xl:ml-0">
           <LocaleSwitcher compact />
-          {/* A cashier has no back office, so the till is the only place to sign out. */}
+          {/* The way across to the back office, in the cluster that never wraps away: the till
+              controls above are hidden below md, and this is the cashier's only route to the
+              dashboard the owner asked them to have (D1). A full page load, like Tables and
+              Recent: the back office is a different shell, not a panel of this one. */}
+          {canOpenDashboard && (
+            <a
+              href={`/b/${branchId}/dashboard`}
+              // The word goes on a phone, where the header already wraps; the icon stays named.
+              aria-label={t('header.dashboard')}
+              title={t('header.dashboard')}
+              className="focus-ring inline-flex h-9 min-w-9 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-2 text-xs font-semibold hover:bg-muted sm:px-2.5"
+            >
+              <LayoutDashboard className="h-[18px] w-[18px]" />
+              <span className="hidden sm:inline">{t('header.dashboard')}</span>
+            </a>
+          )}
+          {/* Every account that works the till signs out here, whether or not it also has a back
+              office: swapping between a cashier and a manager account happens at this screen. */}
           <SignOutIconButton label className="border border-border bg-card text-danger hover:bg-danger/10" />
         </div>
       </header>

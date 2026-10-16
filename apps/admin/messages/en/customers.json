@@ -65,6 +65,7 @@
   "nameFromOrder": "Name from their latest order",
   "phoneFromOrder": "From their latest order",
   "legend": "Every figure is this branch only. Orders and spend count completed orders; last seen is their latest order here that was not cancelled; points are this branch’s loyalty points.",
+  "legendNoSpend": "Every figure is this branch only. Orders count completed orders; last seen is their latest order here that was not cancelled; points are this branch’s loyalty points.",
   "detail": {
     "title": "Customer",
     "unnamed": "Unnamed customer",

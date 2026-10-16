@@ -11,6 +11,7 @@
     "endsToday": "Thời gian dùng thử miễn phí kết thúc hôm nay",
     "daysLeft": "{days, plural, other {Còn # ngày dùng thử miễn phí}}",
     "body": "Mọi tính năng đều đã mở. Chọn một gói để tiếp tục sử dụng — chưa cần thẻ cho đến lúc đó.",
+    "bodyStaff": "Mọi tính năng đều đã mở. Chủ nhà hàng sẽ chọn gói để tiếp tục dùng sau thời gian dùng thử.",
     "cta": "Chọn gói"
   },
   "expiry": {

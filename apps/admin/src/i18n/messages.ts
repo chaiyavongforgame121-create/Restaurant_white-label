@@ -34,6 +34,7 @@ import en_ratings from '../../messages/en/ratings.json';
 import en_drivers from '../../messages/en/drivers.json';
 import en_misc from '../../messages/en/misc.json';
 import en_platformBilling from '../../messages/en/platformBilling.json';
+import en_timelog from '../../messages/en/timelog.json';
 import es_common from '../../messages/es/common.json';
 import es_shell from '../../messages/es/shell.json';
 import es_auth from '../../messages/es/auth.json';
@@ -66,6 +67,7 @@ import es_ratings from '../../messages/es/ratings.json';
 import es_drivers from '../../messages/es/drivers.json';
 import es_misc from '../../messages/es/misc.json';
 import es_platformBilling from '../../messages/es/platformBilling.json';
+import es_timelog from '../../messages/es/timelog.json';
 import vi_common from '../../messages/vi/common.json';
 import vi_shell from '../../messages/vi/shell.json';
 import vi_auth from '../../messages/vi/auth.json';
@@ -98,6 +100,7 @@ import vi_ratings from '../../messages/vi/ratings.json';
 import vi_drivers from '../../messages/vi/drivers.json';
 import vi_misc from '../../messages/vi/misc.json';
 import vi_platformBilling from '../../messages/vi/platformBilling.json';
+import vi_timelog from '../../messages/vi/timelog.json';
 import th_common from '../../messages/th/common.json';
 import th_shell from '../../messages/th/shell.json';
 import th_auth from '../../messages/th/auth.json';
@@ -130,6 +133,7 @@ import th_ratings from '../../messages/th/ratings.json';
 import th_drivers from '../../messages/th/drivers.json';
 import th_misc from '../../messages/th/misc.json';
 import th_platformBilling from '../../messages/th/platformBilling.json';
+import th_timelog from '../../messages/th/timelog.json';
 
 type MessageTree = { [key: string]: string | MessageTree };
 
@@ -167,6 +171,7 @@ const CATALOG: Record<UiLocale, MessageTree> = {
     drivers: en_drivers,
     misc: en_misc,
     platformBilling: en_platformBilling,
+    timelog: en_timelog,
   },
   es: {
     common: es_common,
@@ -201,6 +206,7 @@ const CATALOG: Record<UiLocale, MessageTree> = {
     drivers: es_drivers,
     misc: es_misc,
     platformBilling: es_platformBilling,
+    timelog: es_timelog,
   },
   vi: {
     common: vi_common,
@@ -235,6 +241,7 @@ const CATALOG: Record<UiLocale, MessageTree> = {
     drivers: vi_drivers,
     misc: vi_misc,
     platformBilling: vi_platformBilling,
+    timelog: vi_timelog,
   },
   th: {
     common: th_common,
@@ -269,10 +276,11 @@ const CATALOG: Record<UiLocale, MessageTree> = {
     drivers: th_drivers,
     misc: th_misc,
     platformBilling: th_platformBilling,
+    timelog: th_timelog,
   },
 } as unknown as Record<UiLocale, MessageTree>;
 
-export const NAMESPACES = ["common","shell","auth","onboarding","invite","kitchen","counter","dashboard","orders","deliveries","menu","branch","settings","loyalty","reports","staff","payouts","customers","hq","platform","errors","menuExtras","inventory","branchOps","brands","qr","tables","promos","ratings","drivers","misc","platformBilling"] as const;
+export const NAMESPACES = ["common","shell","auth","onboarding","invite","kitchen","counter","dashboard","orders","deliveries","menu","branch","settings","loyalty","reports","staff","payouts","customers","hq","platform","errors","menuExtras","inventory","branchOps","brands","qr","tables","promos","ratings","drivers","misc","platformBilling","timelog"] as const;
 
 /** The messages for a language, with English underneath: a key not yet translated shows English,
  *  never a raw key path. */

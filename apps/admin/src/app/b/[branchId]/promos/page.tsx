@@ -1,12 +1,16 @@
-import { getServerClient } from '@favornoms/database/server';
+import { getBranchAccess } from '@/lib/capabilities';
+import { PageAccessDenied } from '@/components/page-access-denied';
 import { PromosManager } from './_components/promos-manager';
 
 interface Props { params: Promise<{ branchId: string }> }
 
 export default async function PromosPage({ params }: Props) {
   const { branchId } = await params;
-  const supabase = await getServerClient();
-  const [{ data }, { data: branch }] = await Promise.all([
+  // Creating codes is promos.manage. A cashier applies them at the till (promos.apply) and
+  // never edits them here.
+  const { supabase, branch, can } = await getBranchAccess(branchId, `/b/${branchId}/promos`);
+  if (!can('promos.manage')) return <PageAccessDenied area="promos" branchName={branch.name} />;
+  const [{ data }, { data: detail }] = await Promise.all([
     supabase
       .from('promos')
       .select('*')
@@ -18,7 +22,7 @@ export default async function PromosPage({ params }: Props) {
     <PromosManager
       branchId={branchId}
       // The same fallback is_branch_open() uses for a branch with no zone recorded.
-      timezone={branch?.timezone || 'America/New_York'}
+      timezone={detail?.timezone || 'America/New_York'}
       initialPromos={(data ?? []) as never}
     />
   );

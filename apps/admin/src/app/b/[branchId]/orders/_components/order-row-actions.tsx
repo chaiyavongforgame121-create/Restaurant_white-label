@@ -26,6 +26,7 @@ import {
   type CardRefundSuccess,
 } from './card-refund-client';
 import { useIntlLocale } from './order-labels';
+import { orderActionRights } from './order-actions-model';
 
 interface Props {
   orderId: string;
@@ -37,6 +38,15 @@ interface Props {
    *  taken on the restaurant's own terminal. The dialogs re-read it when they open. */
   card?: CardPaymentSummary | null;
   currency?: string;
+  /** orders.refund: Refund, Cancel on a paid order (its cancel gives the money back) and Issue
+   *  receipt, which issue_tax_invoice gates on the same right. Defaults to false, so a missing
+   *  prop hides the action rather than offering one the database refuses. */
+  canRefundOrders?: boolean;
+  /** orders.cancel: Cancel on an order that has not been paid (owner decision D4). */
+  canCancelOrders?: boolean;
+  /** Whether the order has a completed payment, as the list read it; null when it was not asked
+   *  (the viewer may refund, so it does not matter). The dialog re-checks a card payment. */
+  paid?: boolean | null;
 }
 
 /**
@@ -80,6 +90,9 @@ export function OrderRowActions({
   customerNotes,
   card = null,
   currency = 'USD',
+  canRefundOrders = false,
+  canCancelOrders = false,
+  paid = null,
 }: Props) {
   const t = useTranslations('orders');
   const errorText = useOrderError();
@@ -102,23 +115,20 @@ export function OrderRowActions({
   const cancelKeyRef = React.useRef('');
   const cancelRefundedRef = React.useRef<number | null>(null);
 
-  // Use canonical order_status values ('cancelled' two L's, 'completed' — there is no
-  // 'canceled'/'delivered' for orders) so terminal-state orders don't offer dead actions.
-  //
-  // A closed order is still offered a refund while its card payment sits with the restaurant.
-  // The database no longer lets anyone close a paid card order without its refund
-  // (20260925120000), so this is for orders closed before that, and for one whose refund Stripe
-  // later failed.
-  const cardStillHeld = !!card && card.paid && card.refundable > 0;
-  const canRefund = !['cancelled', 'refunded'].includes(orderStatus) || cardStillHeld;
-  const canCancel = !['cancelled', 'refunded', 'completed'].includes(orderStatus);
-  // admin_edit_order_notes accepts pending, confirmed and preparing; the menu offered two
-  // of the three, so a ticket already on the pass could not be corrected.
-  const canEdit = ['pending', 'confirmed', 'preparing'].includes(orderStatus);
-  // issue_tax_invoice raises 'order_not_completed' outside these three, so offering it on a
-  // pending or cancelled row was an error waiting to be clicked. Viewing the receipt is a
-  // separate button and stays available on every order.
-  const canIssueReceipt = ['confirmed', 'ready', 'completed'].includes(orderStatus);
+  // The order's state AND the viewer's right decide each action (order-actions-model.ts). With
+  // nothing to offer there is no menu: an empty card on a click reads as broken.
+  const rights = orderActionRights({
+    status: orderStatus,
+    card,
+    paid,
+    canRefundOrders,
+    canCancelOrders,
+  });
+  const canRefund = rights.refund;
+  const canCancel = rights.cancel;
+  const canEdit = rights.editNote;
+  const canIssueReceipt = rights.issueReceipt;
+  const hasActions = rights.any;
 
   // admin_edit_order_notes writes orders.customer_notes — the note the diner typed at
   // checkout and the one the kitchen ticket prints. The dialog used to open empty under
@@ -216,6 +226,10 @@ export function OrderRowActions({
   if (cancelCard.loading) cancelBody = t('cardRefund.checking');
   else if (!cancelCard.state) cancelBody = t('actions.cancelDialog.body');
   else if (!cancelCard.state.paid) cancelBody = t('actions.cancelDialog.bodyCardUnpaid');
+  // Paid since the list was read, and this viewer may not refund: cancel_order counts any card
+  // payment that went through (refunded or disputed too) as money taken, so the cancel is a
+  // manager's (D4). Said before Confirm rather than refused after it.
+  else if (!canRefundOrders) cancelBody = t('actions.cancelDialog.bodyPaidNeedsRefund');
   // A formal dispute took the money back through the diner's bank, so the cancel refunds nothing
   // (the database and stripe-refund skip it); saying "already refunded" would be wrong too.
   else if (cancelCard.state.disputed) cancelBody = t('actions.cancelDialog.bodyCardDisputed');
@@ -224,18 +238,20 @@ export function OrderRowActions({
 
   return (
     <>
-      <IconButton
-        label={t('actions.menu')}
-        size="sm"
-        onClick={() => {
-          // The menu now shows its own errors, so a failed "Issue receipt" must not
-          // greet the next order the operator opens the menu on.
-          setError(null);
-          setOpen((o) => !o);
-        }}
-      >
-        <MoreHorizontal className="h-4 w-4" />
-      </IconButton>
+      {hasActions && (
+        <IconButton
+          label={t('actions.menu')}
+          size="sm"
+          onClick={() => {
+            // The menu now shows its own errors, so a failed "Issue receipt" must not
+            // greet the next order the operator opens the menu on.
+            setError(null);
+            setOpen((o) => !o);
+          }}
+        >
+          <MoreHorizontal className="h-4 w-4" />
+        </IconButton>
+      )}
 
       {/* Everything below opens from the sticky actions cell, and sticky with a z-index is
           a stacking context: inline, the menu and these dialogs could rise no higher than
@@ -346,8 +362,13 @@ export function OrderRowActions({
                   variant="danger"
                   onClick={doCancel}
                   loading={busy}
-                  // Unknown whether the card was paid means unknown whether a refund is owed.
-                  disabled={cancelCard.loading || cancelCard.failed}
+                  // Unknown whether the card was paid means unknown whether a refund is owed. A
+                  // refund owed by someone who may not refund is a manager's cancel.
+                  disabled={
+                    cancelCard.loading ||
+                    cancelCard.failed ||
+                    (!canRefundOrders && !!cancelCard.state?.paid)
+                  }
                 >
                   {cancelRefundDue > 0 && cancelRefundedRef.current === null
                     ? t('actions.cancelDialog.confirmRefund')

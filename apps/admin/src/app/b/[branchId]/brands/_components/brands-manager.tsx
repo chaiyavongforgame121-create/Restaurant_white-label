@@ -70,9 +70,15 @@ interface Props {
   /**
    * The owner, a restaurant-wide admin or a platform admin: the only people the restaurants and
    * brands policies let change the shared storefront defaults and the brand. A branch-scoped admin
-   * still opens this page (brand.edit) to add a branch, but those editors are read-only for them.
+   * still opens this page (brand.edit), but those editors are read-only for them.
    */
   canEditShared: boolean;
+  /**
+   * The owner (owner_user_id or an owner row) or a platform admin: create_branch accepts no one
+   * else, because a new branch adds a paid seat to the plan (owner decision D9, 2026-10-16). Anyone
+   * else is told so in place of the Add branch button.
+   */
+  canCreateBranch: boolean;
   /** Per active branch, what the viewer may copy from it into a new branch. */
   copyCaps: Record<string, CopyCaps>;
   brands: Brand[];
@@ -131,6 +137,7 @@ export function BrandsManager({
   newBrand,
   currentBranchId,
   canEditShared,
+  canCreateBranch,
   copyCaps,
   brands: initialBrands,
   branches,
@@ -138,6 +145,7 @@ export function BrandsManager({
   entitlements,
 }: Props) {
   const t = useTranslations('brands');
+  const tAccess = useTranslations('shell.pageAccess');
   const rawLocale = useLocale();
   const locale = isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE;
   const router = useRouter();
@@ -377,8 +385,9 @@ export function BrandsManager({
           {/* Pay first, then create (owner decision 2026-07-25). The branches
               trigger enforces this regardless; sending the merchant to the plan
               page is friendlier than letting them fill a form that will be
-              refused on submit. */}
-          {canAddBranch(entitlements) ? (
+              refused on submit. Only the owner gets either button: a branch is a
+              paid seat, and create_branch accepts the owner alone (D9). */}
+          {!canCreateBranch ? null : canAddBranch(entitlements) ? (
             <Button variant="gradient" leftIcon={<Plus className="h-4 w-4" />} onClick={() => setAddingBranch(true)}>
               {t('branches.add')}
             </Button>
@@ -390,13 +399,20 @@ export function BrandsManager({
             </Link>
           )}
         </div>
-        {!canAddBranch(entitlements) && (
-          <p className="mt-3 rounded-xl bg-muted px-3 py-2 text-xs text-muted-foreground">
-            {t('branches.seatsUsed', {
-              used: entitlements.branchesUsed,
-              seats: entitlements.branchSeats,
-            })}
+        {!canCreateBranch ? (
+          <p className="mt-3 flex items-start gap-2 rounded-xl bg-muted px-3 py-2 text-xs text-muted-foreground">
+            <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>{tAccess('addBranchOwnerOnly')}</span>
           </p>
+        ) : (
+          !canAddBranch(entitlements) && (
+            <p className="mt-3 rounded-xl bg-muted px-3 py-2 text-xs text-muted-foreground">
+              {t('branches.seatsUsed', {
+                used: entitlements.branchesUsed,
+                seats: entitlements.branchSeats,
+              })}
+            </p>
+          )
         )}
         <div className="mt-3 space-y-2">
           {branches.map((b) => (

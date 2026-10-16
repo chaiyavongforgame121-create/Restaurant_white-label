@@ -1,14 +1,18 @@
 import { getLocale, getTranslations } from 'next-intl/server';
-import { getServerClient } from '@favornoms/database/server';
 import { DEFAULT_UI_LOCALE, intlLocaleFor, isUiLocale } from '@favornoms/shared';
 import { Card, EmptyState } from '@favornoms/ui';
 import { ClipboardList } from 'lucide-react';
+import { getBranchAccess } from '@/lib/capabilities';
+import { PageAccessDenied } from '@/components/page-access-denied';
 
 interface Props { params: Promise<{ branchId: string }> }
 
 export default async function ActivityPage({ params }: Props) {
   const { branchId } = await params;
-  const supabase = await getServerClient();
+  // The audit trail carries refunds, payments and who did what: a reports.view read, the gate
+  // the sidebar entry has always used. The page itself had none.
+  const { supabase, branch, can } = await getBranchAccess(branchId, `/b/${branchId}/activity`);
+  if (!can('reports.view')) return <PageAccessDenied area="activity" branchName={branch.name} />;
   const { data: logs } = await supabase
     .from('audit_logs')
     .select('id, action, entity_type, actor_type, created_at, metadata')

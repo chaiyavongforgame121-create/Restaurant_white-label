@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useTranslations } from 'next-intl';
 import {
-  BarChart3, Building2, ChefHat, ChevronDown, ClipboardList, Cog,
+  BarChart3, Building2, ChefHat, ChevronDown, ClipboardList, Clock, Cog,
   CreditCard, Gift, Landmark, LayoutDashboard, Menu as MenuIcon, Monitor,
   Network, Package, Palette, QrCode, Receipt, ShieldCheck, Star, Store, Tag, UserRound,
   Users, Wallet, X,
@@ -62,9 +62,12 @@ type NavItem = {
    * the board for runs still out, payouts for riders still owed, Drivers for neither.
    */
   windDown?: keyof DeliveryWindDown;
-  /** Hidden unless the user holds this capability. Absent = visible to anyone who
-   *  already passed the backoffice.access gate in the layout. */
-  capability?: string;
+  /** Hidden unless the user holds this capability — the same one the page itself checks, so
+   *  an entry is shown exactly when its screen opens. Every back-office entry carries one: a
+   *  cashier passes the layout's backoffice.access gate too (owner decision D1, 2026-10-16),
+   *  and "anyone past the gate" is no longer a manager. A list means any one of them, for a
+   *  page that opens a narrower version of itself to a second capability. */
+  capability?: string | readonly string[];
   /** Hover text for an entry whose label alone does not say what the screen is for. */
   description?: string;
 };
@@ -121,7 +124,9 @@ export function Sidebar({
   // Capability gating sits alongside the entitlement gate: entitlements answer "did the
   // restaurant pay for this", capabilities answer "may this person use it". Both must pass.
   const capSet = React.useMemo(() => new Set(capabilities), [capabilities]);
-  const permitted = (capability?: string) => !capability || capSet.has(capability);
+  const permitted = (capability?: string | readonly string[]) =>
+    !capability ||
+    (typeof capability === 'string' ? capSet.has(capability) : capability.some((c) => capSet.has(c)));
 
   const core: NavItem[] = [
     { href: `${base}/dashboard`, label: t('nav.dashboard'), icon: LayoutDashboard, capability: 'dashboard.view' },
@@ -132,15 +137,17 @@ export function Sidebar({
     { href: `${base}/menu`, label: t('nav.menu'), icon: ChefHat, capability: 'menu.manage' },
     { href: `/kitchen/${branchId}`, label: t('nav.kitchenDisplay'), icon: Monitor, capability: 'kitchen.access' },
     { href: `/counter/${branchId}`, label: t('nav.counter'), icon: Store, capability: 'counter.access' },
-    { href: `${base}/qr`, label: t('nav.qrCode'), icon: QrCode },
+    // The storefront's menu code: printed and placed by whoever runs the menu.
+    { href: `${base}/qr`, label: t('nav.qrCode'), icon: QrCode, capability: 'menu.manage' },
     { href: `${base}/reports`, label: t('nav.reports'), icon: BarChart3, capability: 'reports.view' },
     // Shown for single-branch restaurants too: it is the only screen that puts
     // driver payouts and the subscription next to revenue, which the per-branch
     // Reports page never does.
     { href: `${base}/hq`, label: t('nav.headOffice'), icon: Landmark, capability: 'hq.view' },
     // Kept in core, not under Advanced: merchants were reporting "I can't see my
-    // ratings anywhere", and Advanced is collapsed by default.
-    { href: `${base}/ratings`, label: t('nav.ratings'), icon: Star },
+    // ratings anywhere", and Advanced is collapsed by default. How the branch is doing is
+    // the reports question, so it follows reports.view like the rest of them.
+    { href: `${base}/ratings`, label: t('nav.ratings'), icon: Star, capability: 'reports.view' },
   ];
 
   const advanced: NavGroup[] = [
@@ -158,6 +165,9 @@ export function Sidebar({
       title: t('sections.peopleGrowth'),
       items: [
         { href: `${base}/staff`, label: t('nav.staff'), icon: Users, capability: 'staff.manage' },
+        // Clock-ins and outs from the till. Its own capability, not staff.manage: a manager reads
+        // the team's hours (staff_shifts RLS) but does not hand out access.
+        { href: `${base}/timelog`, label: t('nav.timeLog'), icon: Clock, capability: 'staff.timelog' },
         { href: `${base}/drivers`, label: t('nav.drivers'), icon: RiderIcon, feature: 'delivery', capability: 'drivers.manage' },
         { href: `${base}/payouts`, label: t('nav.driverPayouts'), icon: Wallet, feature: 'delivery', windDown: 'ridersOwed', capability: 'drivers.manage' },
         { href: `${base}/customers`, label: t('nav.customers'), icon: UserRound, capability: 'customers.view' },
@@ -180,7 +190,9 @@ export function Sidebar({
       id: 'setup',
       title: t('sections.setup'),
       items: [
-        { href: `${base}/branch`, label: t('nav.branchSettings'), icon: Building2, capability: 'branch.settings' },
+        // The whole page with branch.settings; opening hours and closures alone with menu.manage
+        // (the manager's day-to-day, owner decision D8), which is what the page itself opens.
+        { href: `${base}/branch`, label: t('nav.branchSettings'), icon: Building2, capability: ['branch.settings', 'menu.manage'] },
         { href: `${base}/brands`, label: t('nav.brandAndBranches'), icon: Palette, capability: 'brand.edit' },
         { href: `${base}/franchise`, label: t('nav.franchise'), icon: Network, capability: 'hq.view' },
         { href: `${base}/settings/plan`, label: t('nav.planBilling'), icon: CreditCard, capability: 'billing.manage' },

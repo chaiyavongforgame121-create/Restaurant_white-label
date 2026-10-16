@@ -47,7 +47,8 @@ function listHref(
 export default async function CustomersPage({ params, searchParams }: Props) {
   const { branchId } = await params;
   const raw = await searchParams;
-  const { sort, dir, page, q } = parseCustomerSort(raw);
+  const parsed = parseCustomerSort(raw);
+  const { page, q } = parsed;
   const openId = raw.customer && UUID_RE.test(raw.customer) ? raw.customer : null;
   const [t, locale] = await Promise.all([getTranslations('customers'), getLocale()]);
   const intlLocale = intlLocaleFor(isUiLocale(locale) ? locale : DEFAULT_UI_LOCALE);
@@ -66,6 +67,16 @@ export default async function CustomersPage({ params, searchParams }: Props) {
       />
     );
   }
+
+  // What each customer has spent here adds up to the branch's takings, which is the reports
+  // question (owner decision D2, 2026-10-16). A cashier holds customers.view for the basics —
+  // who they are, how to reach them, their points — so without reports.view the spend column,
+  // the drawer's total and the spend sort are left out. Spend is the default sort, so such a
+  // viewer starts on "last seen" instead; a URL asking for spend is read the same way.
+  const showSpend = can('reports.view');
+  const spendRefused = !showSpend && parsed.sort === 'spent';
+  const sort: CustomerSortKey = spendRefused ? 'last_seen' : parsed.sort;
+  const dir = spendRefused ? defaultDirFor('last_seen') : parsed.dir;
 
   const [list, program, detail] = await Promise.all([
     listBranchCustomers(supabase, branchId, { sort, dir, page, q }),
@@ -95,7 +106,9 @@ export default async function CustomersPage({ params, searchParams }: Props) {
     : detail.error
       ? { kind: 'error' }
       : detail.customer
-        ? { kind: 'ok', customer: detail.customer }
+        ? // The drawer is a client component, so whatever it is handed reaches the browser: the
+          // lifetime spend stays on the server for a viewer the page does not show it to.
+          { kind: 'ok', customer: showSpend ? detail.customer : { ...detail.customer, total_spent: 0 } }
         : { kind: 'notFound' };
 
   return (
@@ -147,7 +160,7 @@ export default async function CustomersPage({ params, searchParams }: Props) {
             </Link>
           ) : null}
         </form>
-        <CustomerSortControls sort={sort} dir={dir} />
+        <CustomerSortControls sort={sort} dir={dir} hideSpend={!showSpend} />
       </div>
 
       {error ? (
@@ -208,7 +221,9 @@ export default async function CustomersPage({ params, searchParams }: Props) {
                   <th scope="col" className="px-5 py-3">{t('columns.address')}</th>
                   <th scope="col" className="px-5 py-3 text-right">{t('columns.points')}</th>
                   <SortHeader label={t('columns.orders')} column="orders" state={state} q={q} basePath={basePath} align="right" />
-                  <SortHeader label={t('columns.spent')} column="spent" state={state} q={q} basePath={basePath} align="right" />
+                  {showSpend && (
+                    <SortHeader label={t('columns.spent')} column="spent" state={state} q={q} basePath={basePath} align="right" />
+                  )}
                   <SortHeader label={t('columns.lastSeen')} column="last_seen" state={state} q={q} basePath={basePath} />
                   <SortHeader label={t('columns.joined')} column="joined" state={state} q={q} basePath={basePath} />
                 </tr>
@@ -285,9 +300,11 @@ export default async function CustomersPage({ params, searchParams }: Props) {
                       )}
                     </td>
                     <td className="px-5 py-3 text-right tabular-nums">{c.total_orders}</td>
-                    <td className="px-5 py-3 text-right font-semibold text-primary">
-                      {formatCurrency(c.total_spent)}
-                    </td>
+                    {showSpend && (
+                      <td className="px-5 py-3 text-right font-semibold text-primary">
+                        {formatCurrency(c.total_spent)}
+                      </td>
+                    )}
                     <td className="px-5 py-3 text-muted-foreground">
                       {c.last_order_at ? fmtDate(c.last_order_at) : t('never')}
                     </td>
@@ -297,7 +314,9 @@ export default async function CustomersPage({ params, searchParams }: Props) {
               </tbody>
             </table></div>
           </Card>
-          <p className="mt-2 px-2 text-xs text-muted-foreground lg:px-0">{t('legend')}</p>
+          <p className="mt-2 px-2 text-xs text-muted-foreground lg:px-0">
+            {showSpend ? t('legend') : t('legendNoSpend')}
+          </p>
         </>
       )}
 
@@ -317,6 +336,7 @@ export default async function CustomersPage({ params, searchParams }: Props) {
           tierLabels={tierLabels}
           branchId={branchId}
           canAdjustPoints={can('loyalty.manage')}
+          showSpend={showSpend}
         />
       ) : null}
     </div>

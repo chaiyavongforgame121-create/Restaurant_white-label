@@ -1,0 +1,60 @@
+{
+  "metaTitle": "Registro de horas",
+  "title": "Registro de horas",
+  "subtitle": "Cuándo registró el equipo de {branch} su entrada y su salida. Las horas están en la zona horaria de la sucursal ({timezone}).",
+  "accessDenied": {
+    "title": "Sin acceso al registro de horas",
+    "reason": "Solo el propietario, un administrador o un gerente pueden ver las horas del personal en {branch}."
+  },
+  "filters": {
+    "presets": "Rango de fechas",
+    "preset": {
+      "today": "Hoy",
+      "week": "Últimos 7 días",
+      "month": "Últimos 30 días"
+    },
+    "from": "Desde",
+    "to": "Hasta",
+    "staff": "Empleado",
+    "everyone": "Todos",
+    "apply": "Mostrar",
+    "clamped": "Un rango muestra como máximo {days} días, así que este empieza más tarde que la fecha elegida."
+  },
+  "loadError": {
+    "title": "No se pudo cargar el registro de horas",
+    "body": "No se pudieron leer los turnos. Actualiza la página para intentarlo de nuevo."
+  },
+  "summary": {
+    "label": "Totales de este rango",
+    "hours": "Horas trabajadas",
+    "shifts": "Turnos",
+    "people": "Personas"
+  },
+  "truncated": "Solo se muestran los primeros {count} turnos, así que los totales están incompletos. Elige un rango más corto.",
+  "onShift": {
+    "title": "En turno ahora",
+    "since": "Desde las {time}",
+    "sinceDay": "Desde el {day}, {time}",
+    "long": "Más de {hours} h: ¿olvidó registrar la salida?"
+  },
+  "empty": {
+    "title": "No hay turnos en este rango",
+    "description": "Los turnos aparecen aquí cuando el personal registra su entrada y su salida en el mostrador."
+  },
+  "dayTotal": "{count, plural, one {# turno} other {# turnos}} · {duration}",
+  "columns": {
+    "person": "Empleado",
+    "clockIn": "Entrada",
+    "clockOut": "Salida",
+    "duration": "Duración"
+  },
+  "note": "Nota: {note}",
+  "stillOn": "En turno",
+  "outOnDay": "{time} ({day})",
+  "people": {
+    "title": "Horas por persona",
+    "shifts": "Turnos",
+    "hours": "Horas"
+  },
+  "duration": "{hours} h {minutes} min"
+}

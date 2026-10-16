@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
-import { getServerClient } from '@favornoms/database/server';
+import { getBranchAccess } from '@/lib/capabilities';
+import { PageAccessDenied } from '@/components/page-access-denied';
 import { HappyHoursManager } from './_components/happy-hours-manager';
 
 interface Props {
@@ -14,7 +15,10 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function HappyHoursPage({ params }: Props) {
   const { branchId } = await params;
-  const supabase = await getServerClient();
+  // happy_hours is written under user_manages_branch (owner, admin, manager); menu.manage is
+  // held by exactly those roles, and a happy hour is a menu price. A cashier stays out.
+  const { supabase, branch, can } = await getBranchAccess(branchId, `/b/${branchId}/menu/happy-hours`);
+  if (!can('menu.manage')) return <PageAccessDenied area="menu" branchName={branch.name} />;
   const [{ data: hours }, { data: items }, { data: categories }] = await Promise.all([
     supabase
       .from('happy_hours')

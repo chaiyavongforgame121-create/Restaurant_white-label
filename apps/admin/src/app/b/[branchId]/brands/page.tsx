@@ -12,7 +12,8 @@ export default async function BrandsPage({ params }: Props) {
   const t = await getTranslations('brands');
   // Only the sidebar used to hide this page. A manager who typed the URL still got the brand
   // editor and the Add branch button, which opens a paid branch seat. Ask for the same
-  // capability the sidebar and the brands RLS policies use.
+  // capability the sidebar and the brands RLS policies use. The Add branch button itself is the
+  // owner's alone (canCreateBranch below).
   const { supabase, user, branch, can } = await getBranchAccess(branchId, `/b/${branchId}/brands`);
   if (!can('brand.edit')) {
     return (
@@ -130,6 +131,9 @@ export default async function BrandsPage({ params }: Props) {
       restaurantName={restaurantRes.data?.name ?? t('restaurantFallback')}
       currentBranchId={branchId}
       canEditShared={canEditShared}
+      // create_branch's own rule (private.user_owns_restaurant): owner_user_id, an owner row or a
+      // platform admin — the same people who copy from any branch above (D9).
+      canCreateBranch={copiesFromAnywhere}
       copyCaps={copyCaps}
       brands={(brandsRes.data ?? []) as never}
       branches={branches}

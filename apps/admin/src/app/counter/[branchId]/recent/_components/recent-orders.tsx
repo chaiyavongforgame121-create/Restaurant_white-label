@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
-import { ArrowLeft, QrCode, RefreshCcw, Undo2 } from 'lucide-react';
+import { ArrowLeft, LayoutDashboard, QrCode, RefreshCcw, Undo2 } from 'lucide-react';
 import { DEFAULT_UI_LOCALE, formatCurrency, intlLocaleFor, isUiLocale } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Badge, Button, Card, useAlert, useConfirm, usePrompt } from '@favornoms/ui';
@@ -11,8 +11,7 @@ import { describeSettleError } from '../../_components/counter-errors';
 import { forgetUnsettled } from '../../_components/unsettled-transfers';
 // The one receipt drawer in the product. It loads the order itself and prints the same
 // 80mm document the till prints after a sale, so the counter reuses it rather than growing
-// a second, drifting copy — /b/[branchId]/orders sits behind backoffice.access, which the
-// cashier who holds receipt.reprint does not have.
+// a second, drifting copy — a reprint at the till should not mean a trip to the back office.
 import { OrderReceiptButton } from '@/app/b/[branchId]/orders/_components/order-receipt-sheet';
 
 interface OrderRow {
@@ -40,6 +39,9 @@ interface Props {
   canPrintReceipt: boolean;
   /** orders.refund at this branch. Absent means the old behaviour: show the button. */
   canRefund?: boolean;
+  /** backoffice.access and dashboard.view: a link to the back office's dashboard, as on the
+   *  till's header. Defaults to false. */
+  canOpenDashboard?: boolean;
 }
 
 /** A QR sale rung up at the till whose payment was never recorded: it is off the kitchen board
@@ -88,6 +90,7 @@ export function RecentOrders({
   currency,
   canPrintReceipt,
   canRefund = true,
+  canOpenDashboard = false,
 }: Props) {
   const t = useTranslations('counter');
   const rawLocale = useLocale();
@@ -194,14 +197,27 @@ export function RecentOrders({
 
   return (
     <div className="container max-w-4xl py-6">
-      <header className="mb-5 flex items-center justify-between">
+      <header className="mb-5 flex flex-wrap items-center justify-between gap-2">
         <Link
           href={`/counter/${branchId}`}
           className="focus-ring inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium hover:bg-muted"
         >
           <ArrowLeft className="h-4 w-4" /> {t('recent.back')}
         </Link>
-        <h1 className="font-display text-2xl font-bold">{t('recent.title')}</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="font-display text-2xl font-bold">{t('recent.title')}</h1>
+          {/* The back office's dashboard, as on the till's header (D1). A full page load: the
+              back office is a different shell. */}
+          {canOpenDashboard && (
+            <a
+              href={`/b/${branchId}/dashboard`}
+              className="focus-ring inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-xs font-semibold hover:bg-muted"
+            >
+              <LayoutDashboard className="h-[18px] w-[18px]" />
+              {t('header.dashboard')}
+            </a>
+          )}
+        </div>
       </header>
 
       {orders.length === 0 ? (

@@ -11,6 +11,7 @@
     "endsToday": "Your free trial ends today",
     "daysLeft": "{days, plural, one {# day left in your free trial} other {# days left in your free trial}}",
     "body": "Everything is unlocked. Choose a package to keep it — no card needed until then.",
+    "bodyStaff": "Everything is unlocked. The restaurant owner chooses a package to keep it after the trial.",
     "cta": "Choose a package"
   },
   "expiry": {

@@ -1,11 +1,12 @@
 'use client';
 
 import * as React from 'react';
+import Link from 'next/link';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useLocale, useTranslations } from 'next-intl';
 import {
   AlertTriangle, ArrowRight, Armchair, BellRing, Bike, CalendarClock, Check, ChefHat, Clock,
-  Flame, Layers, Loader2, Maximize2, Minimize2, MoreVertical, RotateCcw, ShoppingBag, Undo2,
+  Flame, LayoutDashboard, Layers, ListChecks, Loader2, Maximize2, Minimize2, MoreVertical, RotateCcw, ShoppingBag, Undo2,
   UserRound, Volume2, VolumeX, X,
 } from 'lucide-react';
 
@@ -14,13 +15,16 @@ import { invokeDispatchDriver } from '@favornoms/database/queries';
 import { useRealtime } from '@favornoms/database/realtime';
 import { LocaleSwitcher } from '@/components/locale-switcher';
 import { SignOutIconButton } from '@/components/sign-out';
+import { AvailabilityPanel } from './availability-panel';
+import { SUN } from './kitchen-theme';
 import { OpsToggles } from './ops-toggles';
 import {
-  ACTIVE_STATUSES, KITCHEN_ORDER_SELECT, NO_STATION, REMINDER_INTERVAL_MS, agingTierKey, batchGroups, boardHealth,
-  comboParts, eightySixTargets, fmtTimer, heardOnTap, isLineDone, isOnBoard, laneOf, lateTicketIds,
-  lineMatchesStation, linesInMenuOrder, mergeSoldOut, overlaySnapshot, parseTimestamp, partMatchesStation, readyStartedMs,
-  reminderDue, safeElapsedSec, speakableTicket, stationPills, stationStats, workStartedMs,
-  type Delivery, type DriverLite, type Order, type OrderItem, type SoldOutItem, type TierKey,
+  ACTIVE_STATUSES, AVAILABILITY_SELECT, KITCHEN_ORDER_SELECT, NO_STATION, REMINDER_INTERVAL_MS, agingTierKey, batchGroups,
+  boardHealth, comboParts, eightySixTargets, fmtTimer, heardOnTap, isLineDone, isOnBoard, laneOf, lateTicketIds,
+  lineMatchesStation, linesInMenuOrder, mergeAvailability, mergeSoldOut, overlaySnapshot, parseTimestamp, partMatchesStation,
+  readyStartedMs, reminderDue, safeElapsedSec, speakableTicket, stationPills, stationStats, stockBadge, toAvailabilityItem,
+  workStartedMs,
+  type AvailabilityItem, type Delivery, type DriverLite, type Order, type OrderItem, type SoldOutItem, type TierKey,
 } from './kitchen-model';
 import {
   UNLOCK_EVENTS, audioContext, playChime, speak, speechAvailable, speechLang, unlockAudio,
@@ -36,26 +40,6 @@ import {
   readDispatchAnswer, restartWithdrawsOffer, settlePress, stackPeers, withKnownDispatchColumns,
   type DispatchAnswer, type DispatchFailureText, type DispatchPress, type DispatchRowFields,
 } from '@/app/b/[branchId]/deliveries/_components/dispatch-model';
-
-/* ──────────────────────────────────────────────────────────────────────────
-   "Sunset" theme — warm, light, gradient. Kept local to the kitchen surface so
-   it never fights the global app theme. (Validated with the user 2026-06-17.)
-   ──────────────────────────────────────────────────────────────────────── */
-const SUN = {
-  page: '#FCF3EA',
-  header: 'linear-gradient(120deg,#FF8A1E,#FF5C5C)',
-  panel: 'rgba(255,255,255,.55)',
-  card: '#FFFFFF',
-  cardBorder: 'rgba(170,100,55,.13)',
-  line: 'rgba(170,100,55,.10)',
-  text: '#3E2A1E',
-  muted: '#9C8470',
-  faint: '#B8A593',
-  qty: '#FF5E2C',
-  accent: '#FF6B2C',
-  accentBg: 'rgba(255,107,44,.14)',
-  accentTx: '#BE4A12',
-};
 
 // Lane titles are translated at render: kitchen.lanes.<key>.
 const LANES = [
@@ -224,6 +208,13 @@ interface Props {
   /** delivery.manage at this branch: only then is the "assign a rider" picker offered. */
   canAssign: boolean;
   initialSoldOut: SoldOutItem[];
+  /** Every dish on the menu, for the availability panel; null when the server's read failed (the
+   *  panel reads it again when opened). */
+  initialMenu: AvailabilityItem[] | null;
+  /** Where the header's Dashboard link goes; null hides it. Only for someone with backoffice.access
+   *  and dashboard.view here (a manager who opened the board from the sidebar), never the kitchen
+   *  role, who has no back office. */
+  dashboardHref: string | null;
 }
 
 /** A delivery row as this board holds it. The select (kitchen-model KITCHEN_ORDER_SELECT) names
@@ -248,7 +239,7 @@ type AudioState = 'unknown' | 'unsupported' | 'locked' | 'running';
 
 export function KitchenView({
   branchId, branchName, branchTimezone, initialOrders, initialReadFailed, stations, activeStation, drivers, canAssign,
-  initialSoldOut,
+  initialSoldOut, initialMenu, dashboardHref,
 }: Props) {
   const t = useTranslations('kitchen');
   const locale = useLocale();
@@ -267,6 +258,12 @@ export function KitchenView({
   const [batchOpen, setBatchOpen] = React.useState(false);
   const [toast, setToast] = React.useState<{ text: string; onUndo: (() => void) | null } | null>(null);
   const [soldOut, setSoldOut] = React.useState<SoldOutItem[]>(initialSoldOut);
+  // The availability panel: every dish on the menu with its stock count. Kept here, not in the
+  // panel, so the menu_items events this board already receives keep the counts (and the low-stock
+  // figure on its button) current while the panel is closed.
+  const [availabilityOpen, setAvailabilityOpen] = React.useState(false);
+  const [menuItems, setMenuItems] = React.useState<AvailabilityItem[] | null>(initialMenu);
+  const [menuLoadFailed, setMenuLoadFailed] = React.useState(false);
   // The last read of the tickets failed. An empty board then means "could not look", not "all
   // clear", and says so (see the header).
   const [readFailed, setReadFailed] = React.useState(initialReadFailed);
@@ -307,10 +304,39 @@ export function KitchenView({
 
   const supa = React.useCallback(() => getBrowserClient(), []);
 
+  /* The availability panel's menu, read again every time the panel opens: a dish added, renamed,
+     moved or put back on the menu since the board loaded arrives that way (the realtime payload has
+     no category name, and an INSERT is not subscribed). The list already held stays up meanwhile,
+     and a failed re-read keeps it; only a panel with nothing to show says the read failed. */
+  const menuReadSeq = React.useRef(0);
+  const loadMenu = React.useCallback(async () => {
+    const seq = ++menuReadSeq.current;
+    setMenuLoadFailed(false);
+    const { data, error } = await supa()
+      .from('menu_items')
+      .select(AVAILABILITY_SELECT)
+      .eq('branch_id', branchId)
+      .eq('is_active', true)
+      .order('display_order')
+      .order('name');
+    if (seq !== menuReadSeq.current) return;
+    if (error || !data) {
+      console.error('kitchen: menu read failed', error?.message ?? 'no rows');
+      setMenuLoadFailed(true);
+      return;
+    }
+    setMenuItems((data as unknown[]).map(toAvailabilityItem).filter((it): it is AvailabilityItem => it !== null));
+  }, [branchId, supa]);
+  const openAvailability = () => {
+    setAvailabilityOpen(true);
+    void loadMenu();
+  };
+
   /* Rider names for "Offered to {rider}". The roster (`drivers`) is only loaded for staff with
      delivery.manage, and a realtime payload carries a rider's id but never their name, so names
-     the board does not know yet are read once from drivers (staff may read the riders of their
-     own branches). Best-effort: without a name the card says "Offered to a rider". */
+     the board does not know yet are read once through branch_rider_names (the rider row itself is
+     drivers.manage only since 20261016110000_roles_sensitive_reads; this returns the name alone).
+     Best-effort: without a name the card says "Offered to a rider". */
   const [riderNames, setRiderNames] = React.useState<ReadonlyMap<string, string>>(
     () => new Map(drivers.map((d) => [d.id, d.full_name])),
   );
@@ -328,25 +354,22 @@ export function KitchenView({
   React.useEffect(() => {
     if (!unknownRidersKey) return;
     const ids = unknownRidersKey.split(',');
+    // Marked as asked, so the next render's key no longer carries them. That is also why the
+    // answer is not tied to this effect's cleanup: the board re-renders every second, and the
+    // very next render changes the key, which used to throw the answer away.
     for (const id of ids) askedNamesRef.current.add(id);
-    let live = true;
     void supa()
-      .from('drivers')
-      .select('id, full_name')
-      .in('id', ids)
+      .rpc('branch_rider_names', { p_branch_id: branchId, p_driver_ids: ids })
       .then(({ data, error }) => {
         if (error) console.error('kitchen: rider names read failed', error.message);
-        if (!live || !data?.length) return;
+        if (!data?.length) return;
         setRiderNames((curr) => {
           const next = new Map(curr);
-          for (const r of data as { id: string; full_name: string | null }[]) if (r.full_name) next.set(r.id, r.full_name);
+          for (const r of data) if (r.full_name) next.set(r.driver_id, r.full_name);
           return next;
         });
       });
-    return () => {
-      live = false;
-    };
-  }, [unknownRidersKey, supa]);
+  }, [unknownRidersKey, supa, branchId]);
 
   /* ── sound preferences ─────────────────────────────────────────────────
      Mute and voice are per device and per branch: the pass tablet can stay silent while the
@@ -635,7 +658,11 @@ export function KitchenView({
     refetch: reload,
     onChange: (payload, table) => {
       if (table === 'menu_items') {
-        const m = payload.new as { id?: string; name?: string; sold_out_until?: string | null; is_active?: boolean } | null;
+        const m = payload.new as {
+          id?: string; name?: string; sold_out_until?: string | null; is_active?: boolean;
+          display_order?: number | null; track_stock?: boolean | null; stock_quantity?: number | null;
+          low_stock_threshold?: number | null;
+        } | null;
         if (m?.id) {
           const id = m.id;
           setSoldOut((curr) => {
@@ -644,6 +671,8 @@ export function KitchenView({
             if (next !== curr) markSoldOutChanged(id);
             return next;
           });
+          // The stock count moves with every sale; the panel's Low badges follow it.
+          setMenuItems((curr) => (curr ? mergeAvailability(curr, m) : curr));
         }
         return;
       }
@@ -769,7 +798,7 @@ export function KitchenView({
       if (el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))) return;
       if (e.key === 'm' || e.key === 'M') keyActions.current.toggleSound();
       else if (e.key === 'f' || e.key === 'F') void keyActions.current.toggleFs();
-      else if (e.key === 'Escape') { setScheduledOpen(false); setBatchOpen(false); setSoundMenuOpen(false); }
+      else if (e.key === 'Escape') { setScheduledOpen(false); setBatchOpen(false); setSoundMenuOpen(false); setAvailabilityOpen(false); }
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
@@ -891,15 +920,20 @@ export function KitchenView({
       return;
     }
     if (outcome.stage === 'cancelAfterRefund') {
-      // The diner has their money back; only the cancel is left, and the next tap does just that.
+      // The diner has their money back; only the cancel is left, and the next tap does just that —
+      // unless the ticket was accepted on another tablet in the meantime: a refunded payment still
+      // counts as paid, and past 'pending' only orders.refund may close it, so a tap here cannot.
       console.error('kitchen: cancel after card refund failed', outcome.code);
-      showToast(t('toast.rejectRefundedStillOpen', { ticket }), null);
+      showToast(t(outcome.code.includes('paid_order_needs_refund') ? 'toast.rejectRefundedNeedsManager' : 'toast.rejectRefundedStillOpen', { ticket }), null);
       return;
     }
     rejectKeysRef.current.delete(order.id);
     console.error('kitchen: cancel_order failed', outcome.code);
     const key = errorKey(outcome.code, {
       cannot_cancel_status: 'toast.rejectClosed',
+      // cancel_order: the order is paid and this account cannot refund it (once the kitchen has
+      // accepted it, only orders.refund may cancel a paid order). "Try again" would not help.
+      paid_order_needs_refund: 'toast.rejectPaid',
       not_authorized: 'toast.rejectForbidden',
     }, 'toast.rejectFailed');
     showToast(t(key, { ticket }), null);
@@ -1187,6 +1221,8 @@ export function KitchenView({
   /* the sold-out strip: dishes 86'd at this branch whose time has not run out */
   const liveSoldOut = soldOut.filter((s) => parseTimestamp(s.sold_out_until) > now);
   const soldOutIds = new Set(liveSoldOut.map((s) => s.id));
+  /* counted dishes at or under their alert threshold (none left included), for the panel's button */
+  const lowStockCount = (menuItems ?? []).filter((it) => stockBadge(it) !== null).length;
   const fmtUntil = (iso: string) => {
     const at = parseTimestamp(iso);
     if (!Number.isFinite(at)) return '';
@@ -1246,6 +1282,18 @@ export function KitchenView({
           </p>
         </div>
         <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
+          {/* The way back to the back office for a manager, admin or owner who opened the board
+              from the sidebar: it had none but the browser's Back. The kitchen role has no back
+              office and never sees it (dashboardHref is null). */}
+          {dashboardHref && (
+            <Link
+              href={dashboardHref}
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium"
+              style={{ background: 'rgba(255,255,255,.24)', color: '#fff' }}
+            >
+              <LayoutDashboard className="h-4 w-4" />{t('header.dashboard')}
+            </Link>
+          )}
           {scheduled.length > 0 && (
             <button onClick={() => setScheduledOpen(true)} className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium" style={{ background: 'rgba(255,255,255,.24)' }}>
               <CalendarClock className="h-4 w-4" />{t('header.scheduled', { count: scheduled.length })}
@@ -1313,7 +1361,7 @@ export function KitchenView({
             )}
           </div>
           <HBtn onClick={toggleFs} label={t('header.fullscreen')}>{isFs ? <Minimize2 className="h-[18px] w-[18px]" /> : <Maximize2 className="h-[18px] w-[18px]" />}</HBtn>
-          {/* Kitchen staff have no back office, so the board is the only place to sign out. */}
+          {/* The kitchen role has no back office, so the board is its only place to sign out. */}
           <SignOutIconButton style={{ background: 'rgba(255,255,255,.22)', color: '#fff' }} />
         </div>
       </header>
@@ -1338,7 +1386,22 @@ export function KitchenView({
             onClick={() => setStationFilter(s)}
           />
         ))}
-        <button onClick={() => setBatchOpen((b) => !b)} className="ml-auto flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium" style={batchOpen ? { background: SUN.accentBg, color: SUN.accentTx, border: `1px solid ${SUN.accent}` } : { color: SUN.muted, border: `1px solid ${SUN.cardBorder}` }}>
+        {/* Every dish on the menu, to mark sold out or back on sale, with its stock count. The
+            figure is the dishes running low (or out), so the cook sees it without opening it. */}
+        <button
+          type="button"
+          onClick={openAvailability}
+          className="ml-auto flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium"
+          style={{ color: SUN.muted, border: `1px solid ${SUN.cardBorder}` }}
+        >
+          <ListChecks className="h-4 w-4" /> {t('availability.toggle')}
+          {lowStockCount > 0 && (
+            <span className="rounded-full px-1.5 text-[11px] font-semibold tabular-nums" style={{ background: '#FCEBC6', color: '#9A6206' }}>
+              {t('availability.lowCount', { count: lowStockCount })}
+            </span>
+          )}
+        </button>
+        <button onClick={() => setBatchOpen((b) => !b)} className="flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium" style={batchOpen ? { background: SUN.accentBg, color: SUN.accentTx, border: `1px solid ${SUN.accent}` } : { color: SUN.muted, border: `1px solid ${SUN.cardBorder}` }}>
           <Layers className="h-4 w-4" /> {t('batch.toggle')}
         </button>
       </div>
@@ -1431,8 +1494,23 @@ export function KitchenView({
         ))}
       </main>
 
-      <AnimatePresence>{toast && <UndoToast text={toast.text} onUndo={toast.onUndo} onClose={() => setToast(null)} />}</AnimatePresence>
       <AnimatePresence>{scheduledOpen && <ScheduledDrawer orders={scheduled} onClose={() => setScheduledOpen(false)} />}</AnimatePresence>
+      <AnimatePresence>
+        {availabilityOpen && (
+          <AvailabilityPanel
+            items={menuItems}
+            loadFailed={menuLoadFailed}
+            onRetry={() => void loadMenu()}
+            soldOut={liveSoldOut}
+            fmtUntil={fmtUntil}
+            onSoldOut={(item) => eightySix(item.id, item.name)}
+            onBackOnSale={(item) => backOnSale(item)}
+            onClose={() => setAvailabilityOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+      {/* Last, and above the drawers: an 86 made from the availability panel offers its Undo here. */}
+      <AnimatePresence>{toast && <UndoToast text={toast.text} onUndo={toast.onUndo} onClose={() => setToast(null)} />}</AnimatePresence>
     </div>
   );
 }
@@ -1664,14 +1742,14 @@ function OrderCard({
             <>
               <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
               <div className="absolute right-0 top-8 z-20 w-56 overflow-hidden rounded-xl py-1 text-left text-sm" style={{ background: SUN.card, border: `1px solid ${SUN.cardBorder}`, boxShadow: '0 8px 24px rgba(0,0,0,.14)' }}>
-                {/* Any ticket the pass has not started cooking can still be refused. Gating
-                    this on 'pending' alone made Reject unreachable for exactly the orders a
-                    cook most often has to refuse: payments_confirm_cash_order promotes every
-                    cash payment straight to 'confirmed', place-order inserts that row in the
-                    same request, and dine-in always pays cash — so a diner at table 4 whose
-                    dish has just run out arrived already confirmed, and the cook had to leave
-                    the board and find someone with back-office access. cancel_order permits
-                    the kitchen role and accepts a confirmed order. */}
+                {/* Any ticket the pass has not started cooking can still be refused, and the
+                    server decides whether this one may be. Cash sales arrive already 'confirmed'
+                    (payments_confirm_cash_order) with the money still owed, and cancel_order lets
+                    the kitchen cancel any unpaid order, so a cook whose dish just ran out refuses
+                    it here. A PAID order is a refund (20261016100000_roles_core): past 'pending'
+                    the kitchen role gets paid_order_needs_refund, shown as toast.rejectPaid, and
+                    a manager cancels it. The board cannot tell paid from unpaid itself: the
+                    kitchen role does not read payments. */}
                 {(order.status === 'pending' || order.status === 'confirmed') && (
                   <MenuRow onClick={() => { setMenuOpen(false); onReject(); }} danger><X className="h-4 w-4" />{t('card.reject')}</MenuRow>
                 )}
@@ -1980,7 +2058,7 @@ function UndoToast({ text, onUndo, onClose }: { text: string; onUndo: (() => voi
   return (
     <motion.div
       initial={{ opacity: 0, y: 20, x: '-50%' }} animate={{ opacity: 1, y: 0, x: '-50%' }} exit={{ opacity: 0, y: 20, x: '-50%' }}
-      className="fixed bottom-5 left-1/2 z-40 flex items-center gap-3.5 rounded-xl px-3.5 py-2.5 text-sm"
+      className="fixed bottom-5 left-1/2 z-50 flex items-center gap-3.5 rounded-xl px-3.5 py-2.5 text-sm"
       style={{ background: SUN.card, border: `1px solid ${SUN.cardBorder}`, color: SUN.text, boxShadow: '0 8px 24px rgba(0,0,0,.16)' }}
     >
       <span>{text}</span>

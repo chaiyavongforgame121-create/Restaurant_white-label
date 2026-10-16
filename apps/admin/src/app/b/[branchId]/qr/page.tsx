@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
-import { getServerClient } from '@favornoms/database/server';
+import { getBranchAccess } from '@/lib/capabilities';
+import { PageAccessDenied } from '@/components/page-access-denied';
 import { branchMenuLink } from './_lib/menu-url';
 import { BranchQr } from './_components/branch-qr';
 
@@ -9,7 +10,13 @@ interface Props {
 
 export default async function BranchQrPage({ params }: Props) {
   const { branchId } = await params;
-  const supabase = await getServerClient();
+  // The storefront menu's code is printed and put out by whoever runs the menu. It had no
+  // capability at all, in the sidebar or here, so a cashier would have been shown it.
+  const access = await getBranchAccess(branchId, `/b/${branchId}/qr`);
+  if (!access.can('menu.manage')) {
+    return <PageAccessDenied area="qr" branchName={access.branch.name} />;
+  }
+  const { supabase } = access;
 
   const { data: branch } = await supabase
     .from('branches')

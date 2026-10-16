@@ -14,6 +14,7 @@
     "park": "Lưu tạm đơn",
     "tables": "Bàn",
     "recent": "Đơn gần đây",
+    "dashboard": "Tổng quan",
     "clockNotStaff": "Bạn không thuộc nhân viên của chi nhánh này nên không thể chấm công vào tại đây. Hãy nhờ chủ quán thêm bạn.",
     "clockElsewhere": "Bạn vẫn đang trong ca ở chi nhánh khác. Hãy chấm công ra ở đó trước.",
     "clockSignIn": "Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại để chấm công.",

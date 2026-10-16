@@ -14,6 +14,7 @@
     "park": "Park order",
     "tables": "Tables",
     "recent": "Recent orders",
+    "dashboard": "Dashboard",
     "clockNotStaff": "You are not on this branch's staff, so you cannot clock in here. Ask the owner to add you.",
     "clockElsewhere": "You are still clocked in at another branch. Clock out there first.",
     "clockSignIn": "Your session has expired. Sign in again to clock in.",

@@ -14,6 +14,7 @@
     "park": "Poner en espera",
     "tables": "Mesas",
     "recent": "Pedidos recientes",
+    "dashboard": "Panel",
     "clockNotStaff": "No formas parte del personal de esta sucursal, así que no puedes registrar tu entrada aquí. Pide al dueño que te agregue.",
     "clockElsewhere": "Todavía tienes un turno abierto en otra sucursal. Registra tu salida allí primero.",
     "clockSignIn": "Tu sesión expiró. Vuelve a iniciar sesión para registrar tu turno.",

@@ -35,11 +35,11 @@
     },
     "manager": {
       "label": "Quản lý",
-      "description": "Điều hành hằng ngày: đơn hàng, hoàn tiền, thực đơn, tồn kho, khuyến mãi, tài xế, báo cáo và giờ làm của nhân viên. Không có quyền thanh toán gói, nhận diện thương hiệu hay mời nhân viên."
+      "description": "Điều hành hằng ngày: đơn hàng, hoàn tiền, thực đơn, tồn kho, khuyến mãi, giao hàng và phân công tài xế, báo cáo và giờ làm của nhân viên. Không có quyền thanh toán dịch vụ, cài đặt chi nhánh, tài khoản tài xế hay mời nhân viên."
     },
     "cashier": {
       "label": "Thu ngân",
-      "description": "Quầy và thanh toán. Nhận đơn, thu tiền, áp dụng giảm giá, in lại hóa đơn, hủy đơn trước khi thanh toán. Hoàn tiền cần quản lý."
+      "description": "Quầy và thanh toán. Nhận đơn và thu tiền, kiểm tra biên lai chuyển khoản, áp dụng giảm giá, in lại hóa đơn, hủy trước khi thanh toán và xem Tổng quan không kèm doanh thu. Hoàn tiền cần quản lý."
     },
     "server": {
       "label": "Phục vụ",
@@ -189,8 +189,8 @@
     "unchanged": "{email} đã có vai trò {role}.",
     "hints": {
       "admin": "Mọi thứ trừ thanh toán và quyền sở hữu. Quản lý được đội ngũ, nhưng không đổi được quản trị viên khác.",
-      "manager": "Điều hành công việc hằng ngày trong trang quản trị. Không đổi nhân sự, thương hiệu hay thanh toán.",
-      "cashier": "Quầy thu ngân: đơn hàng, thanh toán và hóa đơn.",
+      "manager": "Điều hành hậu trường hằng ngày. Không thay đổi nhân viên, cài đặt chi nhánh, tài khoản tài xế hay thanh toán dịch vụ.",
+      "cashier": "Quầy, đơn hàng và Tổng quan (không kèm doanh thu); kiểm tra biên lai chuyển khoản.",
       "server": "Gọi món cho bàn từ quầy, chỉ đơn của chính mình.",
       "kitchen": "Chỉ màn hình bếp.",
       "staff": "Chỉ quầy thu ngân.",

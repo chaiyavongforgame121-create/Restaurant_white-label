@@ -2,7 +2,8 @@
   "defaultRestaurantName": "Mi restaurante",
   "errors": {
     "generic": "Algo salió mal y no se guardó nada. Inténtalo de nuevo.",
-    "managerRequired": "Solo el propietario o un gerente puede cambiar esta configuración de la sucursal.",
+    "managerRequired": "Solo el propietario, un administrador o el gerente de esta sucursal puede cambiar el horario de atención.",
+    "settingsRequired": "Solo el propietario o un administrador puede cambiar esta configuración de la sucursal.",
     "ownerOnlyDomain": "Solo el propietario del restaurante puede cambiar el dominio propio.",
     "domainTaken": "Otra sucursal ya usa ese dominio.",
     "noPermission": "Tu rol no tiene permiso para hacer este cambio.",
@@ -90,7 +91,7 @@
       "outOfRange": "Las coordenadas están fuera de rango.",
       "dropPin": "Coloca el pin sobre el local.",
       "pinRequired": "Elige la nueva dirección en el mapa para que el repartidor sepa dónde recoger.",
-      "notAuthorized": "Solo el propietario o un gerente puede mover una sucursal.",
+      "notAuthorized": "Solo el propietario o un administrador puede mover una sucursal.",
       "signedOut": "Se cerró tu sesión. Inicia sesión de nuevo y vuelve a intentarlo.",
       "branchNotFound": "No se encontró esta sucursal.",
       "invalidTimezone": "Elige una zona horaria de la lista."

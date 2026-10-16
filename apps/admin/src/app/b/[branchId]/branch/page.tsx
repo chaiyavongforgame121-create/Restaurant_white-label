@@ -1,20 +1,42 @@
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
-import { getServerClient } from '@favornoms/database/server';
+import { Info } from 'lucide-react';
 import {
   getBranchPaymentAccount,
   getEntitlementsForBranch,
   listRestaurantPaymentAccounts,
 } from '@favornoms/database/queries';
 import { hasFeature } from '@favornoms/shared';
+import { getBranchAccess } from '@/lib/capabilities';
 import { resolveDeliveryGate } from '@/lib/delivery-gate';
+import { PageAccessDenied } from '@/components/page-access-denied';
 import { BranchSettings } from './_components/branch-settings';
+import { ClosuresManager } from './_components/closures-manager';
+import { HoursEditor } from './_components/hours-editor';
 
 interface Props { params: Promise<{ branchId: string }> }
 
 export default async function BranchPage({ params }: Props) {
   const { branchId } = await params;
-  const supabase = await getServerClient();
+  const { supabase, branch: access, can } = await getBranchAccess(branchId, `/b/${branchId}/branch`);
+
+  // Two doors (owner decision D8, 2026-10-16). The branch's identity, tax, active switch,
+  // timezone, theme, payments and storefront are branch.settings: the owner's and the admin's.
+  // Opening hours and closures stay the manager's day-to-day work — they are written under
+  // user_manages_branch (owner, admin, manager), and menu.manage is held by exactly those roles,
+  // the same stand-in the dashboard's setup checklist uses. So a manager gets those two cards and
+  // nothing else; this page used to show a manager every card, read-only, and let them save the
+  // identity ones. Anyone else (a cashier) gets the card that says whose screen this is.
+  if (!can('branch.settings')) {
+    if (!can('menu.manage')) return <PageAccessDenied area="branch" branchName={access.name} />;
+    const { data: clock } = await supabase
+      .from('branches')
+      .select('timezone')
+      .eq('id', branchId)
+      .maybeSingle();
+    return <BranchHoursOnly branchId={branchId} timezone={clock?.timezone ?? 'America/New_York'} />;
+  }
+
   const { data: branch } = await supabase
     .from('branches')
     .select(
@@ -51,7 +73,6 @@ export default async function BranchPage({ params }: Props) {
     deliveryGate,
     { data: brand },
     t,
-    { data: caps },
     paymentAccount,
     restaurantPaymentAccounts,
   ] = await Promise.all([
@@ -60,16 +81,11 @@ export default async function BranchPage({ params }: Props) {
     resolveDeliveryGate(supabase, branchId),
     brandQuery,
     getTranslations('branch'),
-    // The settings cards save through patch_branch_settings, which needs branch.settings (owner
-    // and admin). A manager opens this page too, so the cards are shown read-only to them
-    // rather than refusing only after Save.
-    supabase.rpc('my_capabilities', { p_branch_id: branchId }),
-    // The Stripe account rows are readable with branch.settings only (RLS); anyone else gets none,
-    // and the card says the setup is for the owner and admins to see.
+    // The Stripe account rows are readable with branch.settings only (RLS), which every viewer
+    // who gets this far holds.
     getBranchPaymentAccount(supabase, branchId),
     listRestaurantPaymentAccounts(supabase, branch.restaurant_id),
   ]);
-  const capabilities = (caps ?? []) as string[];
   // resolveDeliveryGate asks getEntitlementsForBranch the same question hasFeature would,
   // and carries the catalog prices with it, so the upsell's answer and its numbers cannot
   // disagree.
@@ -102,15 +118,45 @@ export default async function BranchPage({ params }: Props) {
         planHref: deliveryGate.planHref,
       }}
       canUseCard={hasFeature(entitlements, 'card_payment')}
-      canEditSettings={capabilities.includes('branch.settings')}
+      // Always true past the gate above; kept as a prop so the cards still lock themselves if this
+      // page is ever opened wider again.
+      canEditSettings={can('branch.settings')}
       cardPayments={{
         account: paymentAccount,
         restaurantAccounts: restaurantPaymentAccounts,
         // Connecting, sharing and disconnecting choose where the branch's card money is paid:
         // billing.manage, the owner's. stripe-connect-onboard checks the same thing itself.
-        canConnect: capabilities.includes('billing.manage'),
-        canView: capabilities.includes('branch.settings'),
+        canConnect: can('billing.manage'),
+        canView: can('branch.settings'),
       }}
     />
+  );
+}
+
+/**
+ * The manager's branch page: opening hours and closures, the two cards whose writes
+ * (branch_hours, branch_closures) stay with user_manages_branch. Same cards, same order and
+ * same container as the full page, so the dashboard's "Set your opening hours" link lands on
+ * the same thing for everyone.
+ */
+async function BranchHoursOnly({ branchId, timezone }: { branchId: string; timezone: string }) {
+  const [t, tAccess] = await Promise.all([
+    getTranslations('branch'),
+    getTranslations('shell.pageAccess'),
+  ]);
+  return (
+    <div className="container max-w-3xl py-8">
+      <header className="mb-6 px-2 pl-16 lg:px-0">
+        <h1 className="font-display text-3xl font-bold">{t('settings.title')}</h1>
+      </header>
+      <div className="space-y-5 px-2 lg:px-0">
+        <p className="flex items-start gap-2 rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">
+          <Info className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{tAccess('branchHoursOnly')}</span>
+        </p>
+        <HoursEditor branchId={branchId} timezone={timezone} />
+        <ClosuresManager branchId={branchId} timezone={timezone} />
+      </div>
+    </div>
   );
 }

@@ -1,0 +1,60 @@
+{
+  "metaTitle": "Time log",
+  "title": "Time log",
+  "subtitle": "When the team at {branch} clocked in and out. Times are in the branch’s time zone ({timezone}).",
+  "accessDenied": {
+    "title": "No time log access",
+    "reason": "Only the owner, an admin or a manager can see staff hours at {branch}."
+  },
+  "filters": {
+    "presets": "Date range",
+    "preset": {
+      "today": "Today",
+      "week": "Last 7 days",
+      "month": "Last 30 days"
+    },
+    "from": "From",
+    "to": "To",
+    "staff": "Staff member",
+    "everyone": "Everyone",
+    "apply": "Show",
+    "clamped": "A range shows at most {days} days, so this one starts later than the date you picked."
+  },
+  "loadError": {
+    "title": "Couldn’t load the time log",
+    "body": "The shifts couldn’t be read. Refresh the page to try again."
+  },
+  "summary": {
+    "label": "Totals for this range",
+    "hours": "Hours worked",
+    "shifts": "Shifts",
+    "people": "People"
+  },
+  "truncated": "Showing the first {count} shifts only, so the totals are incomplete. Pick a shorter range.",
+  "onShift": {
+    "title": "On shift now",
+    "since": "Since {time}",
+    "sinceDay": "Since {day}, {time}",
+    "long": "Over {hours} h — forgot to clock out?"
+  },
+  "empty": {
+    "title": "No shifts in this range",
+    "description": "Shifts appear here when staff clock in and out on the counter."
+  },
+  "dayTotal": "{count, plural, one {# shift} other {# shifts}} · {duration}",
+  "columns": {
+    "person": "Staff member",
+    "clockIn": "Clock in",
+    "clockOut": "Clock out",
+    "duration": "Duration"
+  },
+  "note": "Note: {note}",
+  "stillOn": "On shift",
+  "outOnDay": "{time} ({day})",
+  "people": {
+    "title": "Hours by person",
+    "shifts": "Shifts",
+    "hours": "Hours"
+  },
+  "duration": "{hours}h {minutes}m"
+}

@@ -2,7 +2,8 @@
   "defaultRestaurantName": "My restaurant",
   "errors": {
     "generic": "Something went wrong and nothing was saved. Try again.",
-    "managerRequired": "Only an owner or manager can change these branch settings.",
+    "managerRequired": "Only the owner, an admin or this branch's manager can change opening hours.",
+    "settingsRequired": "Only the owner or an admin can change these branch settings.",
     "ownerOnlyDomain": "Only the restaurant owner can change the custom domain.",
     "domainTaken": "Another branch already uses that domain.",
     "noPermission": "Your role isn’t allowed to make this change.",
@@ -90,7 +91,7 @@
       "outOfRange": "Coordinates are out of range.",
       "dropPin": "Drop the pin on the store.",
       "pinRequired": "Pick the new address on the map so delivery knows where to collect.",
-      "notAuthorized": "Only an owner or manager can move a branch.",
+      "notAuthorized": "Only the owner or an admin can move a branch.",
       "signedOut": "You’ve been signed out. Sign in again and retry.",
       "branchNotFound": "This branch could not be found.",
       "invalidTimezone": "Pick a time zone from the list."

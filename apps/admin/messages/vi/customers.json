@@ -65,6 +65,7 @@
   "nameFromOrder": "Tên từ đơn gần nhất",
   "phoneFromOrder": "Từ đơn gần nhất",
   "legend": "Mọi con số chỉ tính riêng chi nhánh này. Đơn hàng và chi tiêu tính các đơn đã hoàn tất; ghé gần nhất là đơn gần nhất tại đây không bị hủy; điểm là điểm thành viên của chi nhánh này.",
+  "legendNoSpend": "Mọi con số chỉ tính riêng chi nhánh này. Đơn hàng tính các đơn đã hoàn tất; ghé gần nhất là đơn gần nhất tại đây không bị hủy; điểm là điểm thành viên của chi nhánh này.",
   "detail": {
     "title": "Khách hàng",
     "unnamed": "Khách hàng chưa có tên",

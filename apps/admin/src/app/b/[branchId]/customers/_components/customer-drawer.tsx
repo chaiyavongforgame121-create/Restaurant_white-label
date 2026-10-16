@@ -29,6 +29,9 @@ interface Props {
   branchId: string;
   /** loyalty.manage at this branch: shows the "Adjust points" action. */
   canAdjustPoints?: boolean;
+  /** reports.view at this branch: shows what the customer has spent here in total. Defaults to
+   *  hidden, so a missing prop cannot show a cashier the takings it adds up to. */
+  showSpend?: boolean;
 }
 
 const ORDER_STATUSES = [
@@ -55,7 +58,14 @@ const has = <T extends string>(list: readonly T[], value: string): value is T =>
  * the server does the reading under the merchant's own RLS, a reload keeps it open, and closing
  * it is just going back to the list URL.
  */
-export function CustomerDrawer({ state, closeHref, tierLabels, branchId, canAdjustPoints = false }: Props) {
+export function CustomerDrawer({
+  state,
+  closeHref,
+  tierLabels,
+  branchId,
+  canAdjustPoints = false,
+  showSpend = false,
+}: Props) {
   const t = useTranslations('customers.detail');
   const tOrders = useTranslations('orders');
   const router = useRouter();
@@ -91,7 +101,9 @@ export function CustomerDrawer({ state, closeHref, tierLabels, branchId, canAdju
 
           <dl className="grid grid-cols-2 gap-3">
             <Stat label={t('stats.orders')} value={fmtNumber(customer.total_orders)} />
-            <Stat label={t('stats.spent')} value={formatCurrency(customer.total_spent)} />
+            {showSpend && (
+              <Stat label={t('stats.spent')} value={formatCurrency(customer.total_spent)} />
+            )}
             <Stat
               label={t('stats.lastSeen')}
               value={customer.last_order_at ? fmtDate(customer.last_order_at) : t('never')}

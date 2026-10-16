@@ -147,6 +147,7 @@
       "bodyCardUnpaid": "Khách chưa thanh toán thẻ thành công nên không có gì để hoàn. Đơn sẽ bị hủy và tồn kho được cộng lại. Không thể hoàn tác.",
       "bodyCardNothingLeft": "Khoản thanh toán thẻ đã được hoàn hoặc đang được hoàn nên không hoàn thêm. Đơn sẽ bị hủy và tồn kho được cộng lại. Không thể hoàn tác.",
       "bodyCardDisputed": "Khách đã khiếu nại khoản thanh toán thẻ này với ngân hàng và ngân hàng đã lấy lại tiền, nên không hoàn tiền tại đây. Đơn sẽ bị hủy và tồn kho được cộng lại. Không thể hoàn tác.",
+      "bodyPaidNeedsRefund": "Khách đã thanh toán đơn này, nên hủy đơn đồng nghĩa với hoàn tiền cho khách. Hãy nhờ quản lý, quản trị viên hoặc chủ sở hữu hủy đơn.",
       "confirmRefund": "Hoàn tiền và hủy"
     },
     "noteDialog": {
@@ -223,7 +224,8 @@
     "deliveryNotFailed": "Chuyến giao này không còn ở trạng thái thất bại. Hãy tải lại trang để xem tình trạng hiện tại.",
     "deliveryForbidden": "Tài khoản của bạn không thể điều phối lại chuyến giao tại chi nhánh này.",
     "paymentNotFound": "Khoản thanh toán này không còn tồn tại.",
-    "paymentForbidden": "Chỉ chủ sở hữu hoặc quản lý mới có thể duyệt thanh toán.",
+    "paymentForbidden": "Vai trò của bạn tại chi nhánh này không được duyệt hoặc từ chối biên lai chuyển khoản.",
+    "paymentAlreadyDecided": "Biên lai này đã được duyệt hoặc từ chối. Tải lại để xem trạng thái mới nhất.",
     "onlineCardUnpaid": "Đơn này được đặt trực tuyến để thanh toán bằng thẻ và khách chưa thanh toán, nên không thể ghi nhận thanh toán hay chuyển bước tại đây. Hãy hủy đơn, rồi nhập lại giao dịch tại quầy và thu tiền ở đó.",
     "cardRefundRequired": "Khách đã thanh toán đơn này trực tuyến bằng thẻ, và phải hoàn tiền về thẻ trước khi hủy được đơn. Khoản hoàn tiền chưa được ghi nhận: hãy chờ một phút rồi thử lại.",
     "cardRefundNotRecorded": "Stripe đã hoàn tiền về thẻ nhưng khoản này chưa có trong hồ sơ của chi nhánh, nên đơn chưa hiển thị được. Hãy chờ một phút rồi nhấn nút lần nữa; thẻ sẽ không bị hoàn tiền hai lần.",

@@ -56,8 +56,9 @@ export default async function OnboardingPage() {
       ])
     : [null, null];
 
-  // create_branch accepts owner and admin only, so only they are pointed at Add branch.
-  const canAddBranch = chosen.role === 'owner' || chosen.role === 'admin';
+  // create_branch accepts the owner only (20261016100000_roles_core.sql: a new branch is billed
+  // to the owner's subscription), so only they are pointed at Add branch.
+  const canAddBranch = chosen.role === 'owner';
   const branchId = chosen.branch_id ?? firstBranchRes?.data?.id ?? null;
 
   const existing: ExistingMembership = {

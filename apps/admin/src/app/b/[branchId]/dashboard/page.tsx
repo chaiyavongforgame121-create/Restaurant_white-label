@@ -164,10 +164,20 @@ export default async function DashboardPage({ params }: Props) {
   // menu.manage is held by exactly owner, admin and manager: the people who can act on the
   // setup checklist. A cashier or kitchen account has nothing to do with a map pin.
   const showSetup = can('menu.manage');
+  // Store-wide takings — the Sales tile, its change against yesterday and the revenue chart —
+  // are the reports question (owner decision D2, 2026-10-16). A cashier opens this dashboard too
+  // now, for the orders count, the kitchen queue and the work waiting on them, but not for how
+  // much the shop took. The trend read stays: the orders count is drawn from the same rows.
+  const canSeeMoney = can('reports.view');
+  // Slips are approved or rejected by payments.verify (the cashier, D12) or payments.decide
+  // (owner, admin, manager): the bucket is shown to exactly the people the Orders page lets
+  // decide, not to everyone who may read payments and could only look at the queue.
+  const canDecideSlips = can('payments.verify') || can('payments.decide');
 
   const [snapshot, setup] = await Promise.all([
     loadBranchDashboard(supabase, branchId, {
-      canViewPayments: can('payments.view'),
+      // Named for what it once meant; all it decides is whether the slip queue is read.
+      canViewPayments: canDecideSlips,
       canRefund: can('orders.refund'),
       canManageInventory: can('inventory.manage'),
       canManageDrivers: can('drivers.manage'),
@@ -203,8 +213,8 @@ export default async function DashboardPage({ params }: Props) {
             : Promise.resolve(null),
           // Riders approved for THIS branch: dispatch only offers an order to those
           // (find_dispatch_candidates), and a new branch starts with none. Read only for the
-          // no-riders warning, which follows deliverySold.
-          deliverySold
+          // no-riders warning, which follows deliverySold and goes to whoever approves riders.
+          deliverySold && can('drivers.manage')
             ? supabase
                 .from('driver_approvals')
                 .select('id', { count: 'exact', head: true })
@@ -276,6 +286,10 @@ export default async function DashboardPage({ params }: Props) {
   const expiryDaysLeft = billingCard.kind === 'expiry' ? billingCard.daysLeft : null;
 
   const branchSettingsHref = `/b/${branchId}/branch`;
+  // The map pin, the payment methods and the tax rate are set on the full Branch settings page,
+  // which is branch.settings (owner and admin, D8); a manager's branch page has the opening hours
+  // and closures only. Each step is asked of someone who can tick it off.
+  const canSetUpBranch = can('branch.settings');
   const [menuRes, hoursRes, geoRes, staffRes, ridersRes] = setup ?? [null, null, null, null, null];
   const hasPin = geoRes?.data?.geo_lat != null && geoRes.data.geo_lng != null;
   const setupSteps: SetupStep[] =
@@ -290,15 +304,19 @@ export default async function DashboardPage({ params }: Props) {
             hrefLabel: t('setup.menu.link'),
             error: setupError('menu', menuRes.error),
           },
-          {
-            id: 'pin',
-            label: t('setup.pin.label'),
-            why: t('setup.pin.why'),
-            done: hasPin,
-            href: branchSettingsHref,
-            hrefLabel: t('setup.pin.link'),
-            error: setupError('pin', geoRes.error),
-          },
+          ...(canSetUpBranch
+            ? [
+                {
+                  id: 'pin',
+                  label: t('setup.pin.label'),
+                  why: t('setup.pin.why'),
+                  done: hasPin,
+                  href: branchSettingsHref,
+                  hrefLabel: t('setup.pin.link'),
+                  error: setupError('pin', geoRes.error),
+                },
+              ]
+            : []),
           {
             id: 'hours',
             label: t('setup.hours.label'),
@@ -308,26 +326,30 @@ export default async function DashboardPage({ params }: Props) {
             hrefLabel: t('setup.hours.link'),
             error: setupError('hours', hoursRes.error),
           },
-          {
-            id: 'payment',
-            label: t('setup.payment.label'),
-            why: t('setup.payment.why'),
-            done: paymentMethodOn(
-              settings,
-              hasFeature(entitlements, 'card_payment'),
-              // deliverySold, not deliveryEnabled: this asks which payment methods the
-              // branch needs for the delivery it SELLS. A branch winding down is not being
-              // set up for anything.
-              deliverySold && settings.scheduling_enabled !== false,
-            ),
-            href: branchSettingsHref,
-            hrefLabel: t('setup.payment.link'),
-          },
+          ...(canSetUpBranch
+            ? [
+                {
+                  id: 'payment',
+                  label: t('setup.payment.label'),
+                  why: t('setup.payment.why'),
+                  done: paymentMethodOn(
+                    settings,
+                    hasFeature(entitlements, 'card_payment'),
+                    // deliverySold, not deliveryEnabled: this asks which payment methods the
+                    // branch needs for the delivery it SELLS. A branch winding down is not being
+                    // set up for anything.
+                    deliverySold && settings.scheduling_enabled !== false,
+                  ),
+                  href: branchSettingsHref,
+                  hrefLabel: t('setup.payment.link'),
+                },
+              ]
+            : []),
           // A new branch used to start at 0% and its first orders went out untaxed. 0% can be
           // right (prices that already include VAT), so this only asks: it is done once a rate
           // is saved, or once "0% is correct" is ticked under Sales tax. Only asked of someone
           // who can change the rate (branch.settings); a manager could never tick it off.
-          ...(can('branch.settings')
+          ...(canSetUpBranch
             ? [
                 {
                   id: 'tax',
@@ -362,7 +384,9 @@ export default async function DashboardPage({ params }: Props) {
   const setupWarnings: SetupWarning[] = [];
   // Setup nags follow deliverySold too: telling a branch that just switched delivery off to
   // drop a map pin or recruit riders is advice for a business it no longer runs.
-  if (deliverySold && geoRes && !geoRes.error && !hasPin) {
+  // The pin and the payment QR are fixed on the full Branch settings page, so both warnings go to
+  // whoever can open it; the riders one to whoever approves riders (drivers.manage).
+  if (canSetUpBranch && deliverySold && geoRes && !geoRes.error && !hasPin) {
     setupWarnings.push({
       id: 'delivery-no-pin',
       label: t('setup.noPin.label'),
@@ -371,7 +395,7 @@ export default async function DashboardPage({ params }: Props) {
       hrefLabel: t('setup.noPin.link'),
     });
   }
-  if (setup && transferOnWithoutQr(settings)) {
+  if (canSetUpBranch && setup && transferOnWithoutQr(settings)) {
     setupWarnings.push({
       id: 'transfer-no-qr',
       label: t('setup.transferNoQr.label'),
@@ -413,17 +437,30 @@ export default async function DashboardPage({ params }: Props) {
     heldOrderIds(snapshot.kitchen.rows, snapshot.scheduledDeliveries.rows),
   );
   const scheduled = readScheduled(snapshot.scheduled.rows, now, leadMs, branchId);
+  // Riders who failed or were never found are worked on the Live deliveries board and the Orders
+  // page's delivery-issues panel, both delivery.manage. A cashier opens this page too now, and a
+  // bucket of work they cannot pick up is noise, so the two delivery buckets follow the board.
+  const showDeliveryWork = can('delivery.manage');
   const bookings = readScheduledDeliveries(
     snapshot.scheduledDeliveries.rows,
     now,
     leadMs,
     branchId,
     ordersListedIn(
-      [kitchen.kitchenLate, kitchen.customersWaiting, deliveries.unaccepted, deliveries.failed],
+      [
+        kitchen.kitchenLate,
+        kitchen.customersWaiting,
+        ...(showDeliveryWork ? [deliveries.unaccepted, deliveries.failed] : []),
+      ],
       snapshot.proofs.rows.map((p) => p.order_id),
     ),
     bookingMethods,
   );
+  // The kitchen board is kitchen.access, which a cashier does not hold. The same orders are on the
+  // Orders page, so a row or a tile that would have opened the board opens that instead.
+  const kitchenHref = can('kitchen.access') ? `/kitchen/${branchId}` : `/b/${branchId}/orders`;
+  const reach = (href: string) => (href.startsWith('/kitchen/') ? kitchenHref : href);
+  const kitchenDestination = can('kitchen.access') ? ('kitchen' as const) : ('orders' as const);
 
   // --- Words for the model's codes -------------------------------------------------------
   const spanText = (span: Span): string => {
@@ -477,7 +514,7 @@ export default async function DashboardPage({ params }: Props) {
     title: row.title ?? t('rows.deliveryTitle'),
     why: reasonText(row.why),
     age: ageText(row.age),
-    href: row.href,
+    href: reach(row.href),
   });
   const lines = (rows: ActionRow[]) => rows.slice(0, ROWS_PER_BUCKET).map(toLine);
 
@@ -527,19 +564,33 @@ export default async function DashboardPage({ params }: Props) {
   const delta = (a: number, prev: number) => (prev > 0 ? ((a - prev) / prev) * 100 : undefined);
 
   const salesFailed = !!snapshot.trend.error;
+  // The Deliveries tile opens the board (delivery.manage) or, where the branch does not deliver,
+  // its Delivery switch on the plan page (billing.manage). Without the right to either it is a
+  // plain number.
+  const deliveriesTileHref = deliveryBoardOpen
+    ? showDeliveryWork
+      ? `/b/${branchId}/deliveries`
+      : undefined
+    : canRenew
+      ? deliveryPlanHref(branchId)
+      : undefined;
   const tiles: OverviewTile[] = [
-    {
-      label: t('overview.sales.label'),
-      // Reports offers 7/30/90 days only, so ?days=1 would land on a range with no pill
-      // selected. The plain screen is the one that answers "show me the money".
-      href: `/b/${branchId}/reports`,
-      value: salesFailed ? '—' : formatCurrency(totalRevenue, currency),
-      sub: salesFailed ? t('overview.sales.failed') : null,
-      delta: salesFailed ? undefined : delta(totalRevenue, yRevenue),
-      deltaLabel: t('overview.vsYesterday'),
-      icon: DollarSign,
-      tone: 'primary',
-    },
+    ...(canSeeMoney
+      ? [
+          {
+            label: t('overview.sales.label'),
+            // Reports offers 7/30/90 days only, so ?days=1 would land on a range with no pill
+            // selected. The plain screen is the one that answers "show me the money".
+            href: `/b/${branchId}/reports`,
+            value: salesFailed ? '—' : formatCurrency(totalRevenue, currency),
+            sub: salesFailed ? t('overview.sales.failed') : null,
+            delta: salesFailed ? undefined : delta(totalRevenue, yRevenue),
+            deltaLabel: t('overview.vsYesterday'),
+            icon: DollarSign,
+            tone: 'primary' as const,
+          },
+        ]
+      : []),
     {
       label: t('overview.orders.label'),
       href: `/b/${branchId}/orders?range=today`,
@@ -552,7 +603,7 @@ export default async function DashboardPage({ params }: Props) {
     },
     {
       label: t('overview.kitchen.label'),
-      href: `/kitchen/${branchId}`,
+      href: kitchenHref,
       value: snapshot.kitchen.error ? '—' : (kitchen.waiting + kitchen.cooking).toString(),
       // The old "In kitchen" tile counted confirmed+preparing and ignored held and
       // awaiting_payment, so it never matched the board it was describing.
@@ -573,7 +624,7 @@ export default async function DashboardPage({ params }: Props) {
       // Straight to this branch's Delivery switch, not the bare plan page: the merchant
       // may already deliver from another branch, so "add delivery" is a question about
       // which branch.
-      href: deliveryBoardOpen ? `/b/${branchId}/deliveries` : deliveryPlanHref(branchId),
+      href: deliveriesTileHref,
       value: !deliveryBoardOpen || snapshot.deliveries.error ? '—' : deliveries.inFlight.toString(),
       // Without the stalled line a truthful 0 reads as a broken tile: one branch carries
       // thirteen June test runs that the board itself parks as forgotten.
@@ -776,7 +827,7 @@ export default async function DashboardPage({ params }: Props) {
       href: `/b/${branchId}/orders`,
       destination: 'orders',
       failed: Boolean(snapshot.deliveries.error),
-      hidden: deliveriesUnavailable,
+      hidden: deliveriesUnavailable || !showDeliveryWork,
     },
     {
       id: 'delivery-unaccepted',
@@ -789,7 +840,7 @@ export default async function DashboardPage({ params }: Props) {
       href: `/b/${branchId}/deliveries`,
       destination: 'deliveries',
       failed: Boolean(snapshot.deliveries.error),
-      hidden: deliveriesUnavailable,
+      hidden: deliveriesUnavailable || !showDeliveryWork,
     },
     {
       id: 'customers-waiting',
@@ -799,8 +850,8 @@ export default async function DashboardPage({ params }: Props) {
       count: kitchen.customersWaiting.length,
       rows: lines(kitchen.customersWaiting),
       keys: keysOf(kitchen.customersWaiting),
-      href: `/kitchen/${branchId}`,
-      destination: 'kitchen',
+      href: kitchenHref,
+      destination: kitchenDestination,
       failed: Boolean(snapshot.kitchen.error),
     },
     {
@@ -811,8 +862,8 @@ export default async function DashboardPage({ params }: Props) {
       count: kitchen.kitchenLate.length,
       rows: lines(kitchen.kitchenLate),
       keys: keysOf(kitchen.kitchenLate),
-      href: `/kitchen/${branchId}`,
-      destination: 'kitchen',
+      href: kitchenHref,
+      destination: kitchenDestination,
       failed: Boolean(snapshot.kitchen.error),
     },
     {
@@ -902,8 +953,8 @@ export default async function DashboardPage({ params }: Props) {
       count: kitchen.abandoned,
       rows: [],
       keys: [],
-      href: `/kitchen/${branchId}`,
-      destination: 'kitchen',
+      href: kitchenHref,
+      destination: kitchenDestination,
       failed: Boolean(snapshot.kitchen.error),
     },
   ];
@@ -935,15 +986,18 @@ export default async function DashboardPage({ params }: Props) {
                   ? t('trial.endsToday')
                   : t('trial.daysLeft', { days: trialDays })}
               </p>
-              <p className="text-xs text-muted-foreground">{t('trial.body')}</p>
+              <p className="text-xs text-muted-foreground">{t(canRenew ? 'trial.body' : 'trial.bodyStaff')}</p>
             </div>
           </div>
-          <Link
-            href={`/b/${branchId}/settings/plan`}
-            className="focus-ring inline-flex items-center rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white shadow-soft hover:bg-amber-600"
-          >
-            {t('trial.cta')}
-          </Link>
+          {/* The plan page is the owner's (billing.manage); anyone else would land on PlanNotYours. */}
+          {canRenew && (
+            <Link
+              href={`/b/${branchId}/settings/plan`}
+              className="focus-ring inline-flex items-center rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white shadow-soft hover:bg-amber-600"
+            >
+              {t('trial.cta')}
+            </Link>
+          )}
         </Card>
       )}
 
@@ -1060,47 +1114,50 @@ export default async function DashboardPage({ params }: Props) {
 
       <ActionRequired branchId={branchId} buckets={buckets} checkedAt={checkedAt} />
 
-      <div className="mt-8 px-2 lg:px-0">
-        <Card className="p-6">
-          <h2 className="font-display text-lg font-semibold">{t('trend.title')}</h2>
-          <p className="text-sm text-muted-foreground">{t('trend.subtitle')}</p>
-          {/* Real revenue per day. This was a fixed array of made-up figures
-              (6200, 7800, 9100 …) that every branch saw as its own trade, with
-              weekday labels that never matched the actual days either. */}
-          <div className="mt-4 flex h-40 items-end gap-2">
-            {trend.map((d) => {
-              const h = Math.round((d.revenue / trendMax) * 100);
-              return (
-                <div key={d.key} className="flex flex-1 flex-col items-center gap-2">
-                  <div
-                    className="relative w-full overflow-hidden rounded-lg bg-muted"
-                    style={{ height: '128px' }}
-                    title={t('trend.bar', {
-                      day: d.label,
-                      amount: formatCurrency(d.revenue, currency),
-                    })}
-                  >
+      {/* Takings by day: reports.view only, with the Sales tile (D2). */}
+      {canSeeMoney && (
+        <div className="mt-8 px-2 lg:px-0">
+          <Card className="p-6">
+            <h2 className="font-display text-lg font-semibold">{t('trend.title')}</h2>
+            <p className="text-sm text-muted-foreground">{t('trend.subtitle')}</p>
+            {/* Real revenue per day. This was a fixed array of made-up figures
+                (6200, 7800, 9100 …) that every branch saw as its own trade, with
+                weekday labels that never matched the actual days either. */}
+            <div className="mt-4 flex h-40 items-end gap-2">
+              {trend.map((d) => {
+                const h = Math.round((d.revenue / trendMax) * 100);
+                return (
+                  <div key={d.key} className="flex flex-1 flex-col items-center gap-2">
                     <div
-                      className="absolute inset-x-0 bottom-0 rounded-lg bg-gradient-warm"
-                      style={{ height: `${h}%` }}
-                    />
+                      className="relative w-full overflow-hidden rounded-lg bg-muted"
+                      style={{ height: '128px' }}
+                      title={t('trend.bar', {
+                        day: d.label,
+                        amount: formatCurrency(d.revenue, currency),
+                      })}
+                    >
+                      <div
+                        className="absolute inset-x-0 bottom-0 rounded-lg bg-gradient-warm"
+                        style={{ height: `${h}%` }}
+                      />
+                    </div>
+                    <span className="text-[10px] text-muted-foreground">{d.label}</span>
                   </div>
-                  <span className="text-[10px] text-muted-foreground">{d.label}</span>
-                </div>
-              );
-            })}
-          </div>
-          {salesFailed ? (
-            <p role="alert" className="mt-2 text-xs text-warning">
-              {t('trend.failed')}
-            </p>
-          ) : (
-            trendMax === 1 && (
-              <p className="mt-2 text-xs text-muted-foreground">{t('trend.empty')}</p>
-            )
-          )}
-        </Card>
-      </div>
+                );
+              })}
+            </div>
+            {salesFailed ? (
+              <p role="alert" className="mt-2 text-xs text-warning">
+                {t('trend.failed')}
+              </p>
+            ) : (
+              trendMax === 1 && (
+                <p className="mt-2 text-xs text-muted-foreground">{t('trend.empty')}</p>
+              )
+            )}
+          </Card>
+        </div>
+      )}
 
       <AutoRefresh branchId={branchId} />
     </div>

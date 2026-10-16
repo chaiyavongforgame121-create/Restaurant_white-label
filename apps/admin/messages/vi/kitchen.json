@@ -21,7 +21,8 @@
     "soundSettings": "Cài đặt âm thanh",
     "testSound": "Thử âm thanh",
     "voice": "Đọc to đơn hàng mới",
-    "soundHelp": "Chuông kêu khi có đơn mới và lặp lại mỗi 30 giây khi còn phiếu ở cột Mới chưa được nhận. Phiếu đã nhận chỉ nhắc tối đa 2 phút, hoặc đến khi có người chạm vào màn hình. Một tiếng trầm vang một lần khi phiếu bị trễ."
+    "soundHelp": "Chuông kêu khi có đơn mới và lặp lại mỗi 30 giây khi còn phiếu ở cột Mới chưa được nhận. Phiếu đã nhận chỉ nhắc tối đa 2 phút, hoặc đến khi có người chạm vào màn hình. Một tiếng trầm vang một lần khi phiếu bị trễ.",
+    "dashboard": "Tổng quan"
   },
   "stations": {
     "all": "Tất cả",
@@ -147,7 +148,9 @@
     "rejectedRefunded": "Đã từ chối #{ticket}. Đang hoàn tiền về thẻ của khách.",
     "rejectRefundFailed": "Không từ chối được #{ticket}: không hoàn được tiền về thẻ của khách, nên đơn vẫn mở và không có tiền nào được chuyển. Hãy nhờ quản lý kiểm tra trong mục Đơn hàng.",
     "rejectRefundUnknown": "Không xác nhận được việc hoàn tiền thẻ cho #{ticket}. Hãy nhấn Từ chối lần nữa; khách sẽ không bị hoàn tiền hai lần.",
-    "rejectRefundedStillOpen": "Đã hoàn tiền về thẻ của khách cho #{ticket}, nhưng đơn vẫn mở. Hãy nhấn Từ chối lần nữa để hoàn tất."
+    "rejectRefundedStillOpen": "Đã hoàn tiền về thẻ của khách cho #{ticket}, nhưng đơn vẫn mở. Hãy nhấn Từ chối lần nữa để hoàn tất.",
+    "rejectRefundedNeedsManager": "Đã hoàn tiền vào thẻ cho #{ticket}, nhưng phiếu đã được nhận trong lúc đó. Hãy nhờ quản lý đóng đơn trong mục Đơn hàng.",
+    "rejectPaid": "#{ticket} đã thanh toán nên không thể từ chối ở đây. Hãy nhờ quản lý hủy và hoàn tiền trong mục Đơn hàng."
   },
   "dispatch": {
     "maxAttempts": "Đã thử mọi tài xế — hãy tăng “Số lần điều phối tối đa” hoặc tự chọn tài xế.",
@@ -197,5 +200,31 @@
     "title": "Hết món",
     "until": "đến {time}",
     "backOnSale": "Bán lại"
+  },
+  "availability": {
+    "toggle": "Tình trạng món",
+    "lowCount": "{count} sắp hết",
+    "title": "Tình trạng thực đơn",
+    "close": "Đóng",
+    "search": "Tìm món",
+    "filterLabel": "Hiển thị",
+    "filter": {
+      "all": "Tất cả",
+      "soldOut": "Hết món",
+      "low": "Sắp hết"
+    },
+    "loading": "Đang tải thực đơn…",
+    "loadFailed": "Không tải được thực đơn.",
+    "retry": "Thử lại",
+    "emptyMenu": "Thực đơn chưa có món nào.",
+    "noMatch": "Không có món nào khớp.",
+    "noCategory": "Khác",
+    "soldOutUntil": "Hết món đến {time}",
+    "noneLeft": "Hết hàng",
+    "lowStock": "Sắp hết · còn {count}",
+    "stockHint": "Số lượng tồn kho được quản lý ở mục Tồn kho. Quản lý nhập thêm hàng ở đó.",
+    "markSoldOut": "Báo hết",
+    "markSoldOutItem": "Báo hết {item}",
+    "help": "Món báo hết sẽ được bán lại khi chi nhánh mở cửa ngày mai, hoặc khi có người bấm bán lại. Số lượng tồn kho chỉ thay đổi ở mục Tồn kho."
   }
 }

@@ -66,9 +66,15 @@ const PUBLIC_ADMIN_URL =
   Deno.env.get('PUBLIC_ADMIN_URL')?.replace(/\/$/, '') ??
   (IS_LOCAL_STACK ? 'http://localhost:3004' : '');
 
-/** Every role except `owner`, which is only ever created by restaurant onboarding.
- *  Kept as a runtime list so a forged payload cannot mint an owner. */
-const ASSIGNABLE_ROLES = ['admin', 'manager', 'cashier', 'server', 'kitchen', 'driver', 'staff'] as const;
+/** The roles of the owner's role spec, except `owner`, which is only ever created by restaurant
+ *  onboarding. Kept as a runtime list so a forged payload cannot mint an owner.
+ *  Not offered (2026-10-16 roles audit, D11 / DR-1):
+ *    - `driver`: a rider is a `drivers` row reached through driver_approvals, never a branch
+ *      member. A staff row with this role got full branch membership (every order with the
+ *      customer's phone and address, other riders' details); set_staff_role already refused it.
+ *    - `staff`: the legacy catch-all, not in the spec, which got the cashier's whole till.
+ *  Rows that already hold either role are left as they are. */
+const ASSIGNABLE_ROLES = ['admin', 'manager', 'cashier', 'server', 'kitchen'] as const;
 type AssignableRole = (typeof ASSIGNABLE_ROLES)[number];
 
 /** Who may invite. Owner and admin only: handing out access is the one thing a

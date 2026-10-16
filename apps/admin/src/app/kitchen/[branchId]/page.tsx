@@ -1,7 +1,10 @@
 import { listBranchRiders } from '@favornoms/database/queries';
 import { getBranchAccess } from '@/lib/capabilities';
 import { KitchenView } from './_components/kitchen-view';
-import { KITCHEN_ORDER_SELECT, toDriverLite, type DriverLite, type SoldOutItem } from './_components/kitchen-model';
+import {
+  AVAILABILITY_SELECT, KITCHEN_ORDER_SELECT, toAvailabilityItem, toDriverLite,
+  type AvailabilityItem, type DriverLite, type SoldOutItem,
+} from './_components/kitchen-model';
 
 interface Props {
   params: Promise<{ branchId: string }>;
@@ -17,8 +20,12 @@ export default async function KitchenPage({ params, searchParams }: Props) {
   // staff_assign_driver and list_branch_riders both require delivery.manage, which the kitchen
   // role does not hold: offering the picker to a cook only ever ended in "can't assign riders".
   const canAssign = can('delivery.manage');
+  // The header's way back to the back office: the same two capabilities the Dashboard itself asks
+  // for (the /b layout and the dashboard page), so the link never leads to an access-denied card.
+  // A manager, admin or owner has both; the kitchen role has neither.
+  const dashboardHref = can('backoffice.access') && can('dashboard.view') ? `/b/${branchId}/dashboard` : null;
 
-  const [{ data: branchRow }, { data: orders, error: ordersError }, { data: menu }, { data: soldOut }, riders] = await Promise.all([
+  const [{ data: branchRow }, { data: orders, error: ordersError }, { data: menu }, { data: soldOut }, riders, menuRead] = await Promise.all([
     supabase.from('branches').select('timezone').eq('id', branchId).maybeSingle(),
     supabase
       .from('orders')
@@ -45,7 +52,20 @@ export default async function KitchenPage({ params, searchParams }: Props) {
     // same source dispatch reads; drivers.is_online is global and said "online" for a rider who
     // was working another branch.
     canAssign ? listBranchRiders(supabase, branchId).catch(() => []) : Promise.resolve([]),
+    // Every dish on the menu for the availability panel (mark sold out / back on sale, low stock).
+    // set_item_86 takes kitchen.access for any dish of the branch, not only one on a ticket.
+    supabase
+      .from('menu_items')
+      .select(AVAILABILITY_SELECT)
+      .eq('branch_id', branchId)
+      .eq('is_active', true)
+      .order('display_order')
+      .order('name'),
   ]);
+  if (menuRead.error) console.error('kitchen: menu read failed', menuRead.error.message);
+  const initialMenu: AvailabilityItem[] | null = menuRead.error
+    ? null
+    : ((menuRead.data ?? []) as unknown[]).map(toAvailabilityItem).filter((it): it is AvailabilityItem => it !== null);
   // A refused read (the select names a column this database does not have yet, a policy error)
   // used to paint an empty, healthy-looking board. The view is told, says so, and keeps asking.
   if (ordersError) console.error('kitchen: orders read failed', ordersError.message);
@@ -74,6 +94,8 @@ export default async function KitchenPage({ params, searchParams }: Props) {
       drivers={drivers}
       canAssign={canAssign}
       initialSoldOut={(soldOut ?? []) as SoldOutItem[]}
+      initialMenu={initialMenu}
+      dashboardHref={dashboardHref}
     />
   );
 }

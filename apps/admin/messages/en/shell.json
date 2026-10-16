@@ -19,6 +19,7 @@
     "digitalSignage": "Digital Signage",
     "aiVoice": "AI Voice",
     "staff": "Staff",
+    "timeLog": "Time log",
     "drivers": "Drivers",
     "driverPayouts": "Driver payouts",
     "customers": "Customers",
@@ -54,12 +55,13 @@
     "darkMode": "Dark mode"
   },
   "accessDenied": {
-    "title": "Access denied"
+    "title": "Access denied",
+    "backToMyScreen": "Back to my screen"
   },
   "branchAccess": {
     "title": "No admin access",
-    "roleCannotOpen": "Your {role} account can’t open the back office for {branch}. Your work is on the counter or kitchen screen.",
-    "accountCannotOpen": "Your account can’t open the back office for {branch}. Your work is on the counter or kitchen screen.",
+    "roleCannotOpen": "Your {role} account doesn’t include the back office for {branch}. Go back to your own screen, or ask the owner or an admin if you need more access.",
+    "accountCannotOpen": "Your account doesn’t include the back office for {branch}. Go back to your own screen, or ask the owner or an admin if you need more access.",
     "notStaff": "Your account isn’t a member of staff at {branch}.",
     "roles": {
       "owner": "owner",
@@ -185,5 +187,24 @@
       "tooLarge": "That image is larger than {megabytes} MB.",
       "tooSmall": "That image is {width}×{height}. App icons need at least {min}×{min} — a smaller one makes the install button disappear."
     }
+  },
+  "pageAccess": {
+    "title": "Not available to your role",
+    "reasons": {
+      "menu": "Your role at {branch} can’t edit the menu. Ask the owner or an admin if you need to.",
+      "qr": "Your role at {branch} can’t manage the menu QR code. Ask the owner or an admin if you need to.",
+      "promos": "Your role at {branch} can’t manage promotions. Ask the owner or an admin if you need to.",
+      "orders": "Your role at {branch} can’t see the order list. Ask the owner or an admin if you need to.",
+      "receipts": "Your role at {branch} can’t see tax receipts. Ask the owner or an admin if you need to.",
+      "activity": "Your role at {branch} can’t see the activity log. Ask the owner or an admin if you need to.",
+      "ratings": "Your role at {branch} can’t see customer ratings. Ask the owner or an admin if you need to.",
+      "payouts": "Your role at {branch} can’t see rider payouts. Ask the owner or an admin if you need to.",
+      "hq": "Only the owner can open head office for {branch}.",
+      "franchise": "Only the owner can manage the franchise for {branch}.",
+      "branch": "Your role at {branch} can’t change the branch settings. Ask the owner or an admin if you need to.",
+      "settings": "Your role at {branch} can’t open the branch preferences. You can still change the language from the menu."
+    },
+    "branchHoursOnly": "You can set this branch’s opening hours and closures here. Its name, address, tax, payments and storefront are changed by the owner or an admin.",
+    "addBranchOwnerOnly": "Only the owner can add a branch, because each new branch adds a paid branch seat to the plan."
   }
 }

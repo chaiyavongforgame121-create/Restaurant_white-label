@@ -278,7 +278,12 @@ interface CardProps {
   selfDelivery: boolean;
   canCancel: boolean;
   selected: boolean;
-  riderName: string | null;
+  /** The polled rider list's row for d.driver_id: the name, phone and vehicle when the embed
+   *  has none (a realtime row, or a viewer without drivers.manage, who reads no rider row). */
+  polledRider: BranchRider | null;
+  /** branch_rider_names' answer for a rider the polled list does not carry (no longer approved here,
+   *  e.g. suspended mid-job): a name only, no phone or vehicle. */
+  lookedUpName: string | null;
   busy: boolean;
   error: { message: string; canReset: boolean } | null;
   onSelect: () => void;
@@ -299,7 +304,8 @@ function DeliveryCard({
   selfDelivery,
   canCancel,
   selected,
-  riderName,
+  polledRider,
+  lookedUpName,
   busy,
   error,
   onSelect,
@@ -340,8 +346,12 @@ function DeliveryCard({
   const addr = order?.delivery_address ?? null;
   const addressLine = [addr?.line1, addr?.city].filter(Boolean).join(', ');
   // The realtime payload carries no embeds, so a freshly offered row knows its driver_id
-  // before it knows the name; the polled rider list fills that second-long gap.
-  const rider = d.driver?.full_name ?? riderName;
+  // before it knows the name; the polled rider list fills that second-long gap. It is also the
+  // only source for a manager: the drivers row (and so the embed) is drivers.manage only since
+  // 20261016110000_roles_sensitive_reads, while list_branch_riders answers delivery.manage.
+  const rider = d.driver?.full_name ?? polledRider?.full_name ?? lookedUpName ?? null;
+  const riderVehicle = d.driver?.vehicle_type ?? polledRider?.vehicle_type ?? null;
+  const riderPhone = d.driver?.phone ?? polledRider?.phone ?? null;
   const withRider = d.status === 'picked_up' || d.status === 'in_transit';
   const placedAge = text.age(ageSpan(d.created_at, nowMs));
 
@@ -399,12 +409,12 @@ function DeliveryCard({
           <>
             <UserRound className="mr-1 inline h-3 w-3" />
             {rider}
-            {d.driver?.vehicle_type ? ` · ${text.vehicle(d.driver.vehicle_type)}` : ''}
-            {d.driver?.phone && (
+            {riderVehicle ? ` · ${text.vehicle(riderVehicle)}` : ''}
+            {riderPhone && (
               <>
                 {' · '}
                 <a
-                  href={`tel:${d.driver.phone}`}
+                  href={`tel:${riderPhone}`}
                   onClick={(e) => e.stopPropagation()}
                   className="focus-ring text-primary hover:underline"
                 >
@@ -534,6 +544,10 @@ export function LiveOpsView({
   const { t } = text;
   const [deliveries, setDeliveries] = React.useState<LiveDelivery[]>([]);
   const [riders, setRiders] = React.useState<BranchRider[]>([]);
+  // Names of riders on a job here whom neither the embed (drivers.manage only) nor the polled list
+  // (approved riders only) knows, read once each through branch_rider_names.
+  const [lookedUpNames, setLookedUpNames] = React.useState<ReadonlyMap<string, string>>(() => new Map());
+  const askedNamesRef = React.useRef<Set<string>>(new Set());
   const [loadError, setLoadError] = React.useState<string | null>(null);
   const [ridersError, setRidersError] = React.useState<string | null>(null);
   const [loaded, setLoaded] = React.useState(false);
@@ -786,7 +800,11 @@ export function LiveOpsView({
         else markersRef.current.set(key, build());
       };
 
+      // The embed is empty for a viewer without drivers.manage; the polled list has the name.
+      const polledNames = new Map(riders.map((r) => [r.driver_id, r.full_name]));
+      for (const [id, name] of lookedUpNames) if (!polledNames.has(id)) polledNames.set(id, name);
       for (const d of liveRef.current) {
+        const riderFullName = d.driver?.full_name ?? (d.driver_id ? polledNames.get(d.driver_id) : undefined);
         const drop = dropoffPosition(d);
         if (drop) {
           place(
@@ -811,14 +829,16 @@ export function LiveOpsView({
         const pos = riderPosition(d);
         if (pos) {
           place(
-            `job:${d.id}:${d.driver_id}`,
+            // The name is in the key: for a manager it arrives with the polled list, which can
+            // come after the marker was first drawn as "Rider".
+            `job:${d.id}:${d.driver_id}:${riderFullName ?? ''}`,
             pos.lng,
             pos.lat,
             () =>
               new mapboxgl.Marker({
                 element: markerEl('🛵', '#1F6FEB', 30, {
-                  label: d.driver?.full_name.split(' ')[0] ?? t('map.rider'),
-                  title: `${d.driver?.full_name ?? t('map.rider')} · ${d.order?.order_number ?? ''}`,
+                  label: riderFullName?.split(' ')[0] ?? t('map.rider'),
+                  title: `${riderFullName ?? t('map.rider')} · ${d.order?.order_number ?? ''}`,
                   onClick: () => setSelectedId(d.id),
                 }),
               })
@@ -866,7 +886,7 @@ export function LiveOpsView({
         void fitAll();
       }
     })();
-  }, [live, riders, mapReady, nowMs, maxGpsAgeMin, fitAll, t, text]);
+  }, [live, riders, lookedUpNames, mapReady, nowMs, maxGpsAgeMin, fitAll, t, text]);
 
   const handleMapReady = React.useCallback(
     (map: MapboxMap) => {
@@ -995,11 +1015,44 @@ export function LiveOpsView({
     return m;
   }, [assignments]);
 
-  const riderNameById = React.useMemo(() => {
-    const m = new Map<string, string>();
-    for (const r of riders) m.set(r.driver_id, r.full_name);
+  const riderById = React.useMemo(() => {
+    const m = new Map<string, BranchRider>();
+    for (const r of riders) m.set(r.driver_id, r);
     return m;
   }, [riders]);
+
+  // A job held by a rider the polled list does not carry (approved riders only): a manager has no
+  // embed to fall back on, so the card would say "no rider" while the food is with someone.
+  const unknownRiderKey = [
+    ...new Set(
+      deliveries.flatMap((d) =>
+        d.driver_id && !d.driver && !riderById.has(d.driver_id) && !askedNamesRef.current.has(d.driver_id)
+          ? [d.driver_id]
+          : [],
+      ),
+    ),
+  ]
+    .sort()
+    .join(',');
+  React.useEffect(() => {
+    if (!unknownRiderKey) return;
+    const ids = unknownRiderKey.split(',');
+    // Marked as asked, so the next render's key no longer carries them. That is also why the
+    // answer is not tied to this effect's cleanup: the very next render changes the key and would
+    // throw it away.
+    for (const id of ids) askedNamesRef.current.add(id);
+    void getBrowserClient()
+      .rpc('branch_rider_names', { p_branch_id: branchId, p_driver_ids: ids })
+      .then(({ data, error }) => {
+        if (error) console.error('Live deliveries: rider names read failed', error.message);
+        if (!data?.length) return;
+        setLookedUpNames((curr) => {
+          const next = new Map(curr);
+          for (const r of data) if (r.full_name) next.set(r.driver_id, r.full_name);
+          return next;
+        });
+      });
+  }, [unknownRiderKey, branchId]);
 
   const hasMap = hasMapboxToken() && branchLat != null && branchLng != null;
 
@@ -1023,7 +1076,8 @@ export function LiveOpsView({
         selfDelivery={selfDelivery}
         canCancel={canCancel}
         selected={selectedId === d.id}
-        riderName={d.driver_id ? (riderNameById.get(d.driver_id) ?? null) : null}
+        polledRider={d.driver_id ? (riderById.get(d.driver_id) ?? null) : null}
+        lookedUpName={d.driver_id ? (lookedUpNames.get(d.driver_id) ?? null) : null}
         busy={busyId === d.id}
         error={actionError?.id === d.id ? actionError : null}
         onSelect={() => selectCard(d)}

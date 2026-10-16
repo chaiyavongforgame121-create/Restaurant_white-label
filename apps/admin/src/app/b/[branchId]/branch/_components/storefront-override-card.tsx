@@ -64,8 +64,8 @@ export function StorefrontOverrideCard({ branchId, restaurantId, settings, resta
     if (upErr) {
       console.error('Saving the menu layout override failed', upErr);
       setError(
-        upErr.message.includes('branch_manager_required')
-          ? t('errors.managerRequired')
+        upErr.message.includes('branch_settings_required')
+          ? t('errors.settingsRequired')
           : upErr.code === '42501'
             ? t('errors.noPermission')
             : t('errors.generic'),

@@ -187,21 +187,49 @@ export function planRefund(input: RefundPlanInput): RefundPlan {
   return { ok: true, amountCents: amount, ...base };
 }
 
-/**
- * Who may ask for a cancel with its refund (cancel: true): exactly who cancel_order lets cancel,
- * so the kitchen's Reject works for a cook who holds kitchen.access and not orders.refund. The
- * refund in that mode is never an amount the caller picks: it is the whole of what is left, and
- * it is followed by the cancel, so it cannot be used to hand out partial refunds.
- */
+/** The right to cancel at all, as cancel_order asks for it: orders.cancel, or kitchen.access for
+ *  the kitchen's Reject. */
 export const CANCEL_CAPABILITIES = ['orders.cancel', 'kitchen.access'] as const;
 
-/** The capabilities a plain refund needs: the right refund_order asks for. */
+/** The capabilities a plain refund needs: the right refund_order asks for. Cancelling a paid order
+ *  needs it too, outside the kitchen's window below. */
 export const REFUND_CAPABILITIES = ['orders.refund'] as const;
 
-/** Whether the caller's capability list at the branch allows this request. */
-export function mayRequest(capabilities: readonly unknown[], cancel: boolean): boolean {
-  const needed: readonly string[] = cancel ? CANCEL_CAPABILITIES : REFUND_CAPABILITIES;
-  return capabilities.some((c) => typeof c === 'string' && needed.includes(c));
+/**
+ * Order statuses in which the kitchen's Reject may still cancel a PAID order, and so have its card
+ * refunded in full here: an order nobody has accepted yet. cancel_order names the same list
+ * (v_kitchen_window in 20261016100000_roles_core.sql); a test keeps the two equal.
+ */
+export const KITCHEN_PAID_CANCEL_STATUSES = ['pending'] as const;
+
+/**
+ * Whether the caller's capability list at the branch allows this request.
+ *
+ * A plain refund needs orders.refund. A cancel with its refund (cancel: true) needs exactly what
+ * cancel_order asks of a paid order since 20261016100000 ("cancel before payment"): the right to
+ * cancel AND the right to give the money back, which is orders.refund, or for the kitchen
+ * (kitchen.access) an order still in KITCHEN_PAID_CANCEL_STATUSES. This mode exists to refund a
+ * paid card before cancelling, so a cashier (orders.cancel without orders.refund), or the kitchen
+ * once the order has moved on, is refused here before any money moves, as cancel_order refuses
+ * them ('paid_order_needs_refund'). The refund in this mode is never an amount the caller picks:
+ * it is the whole of what is left, and it is followed by the cancel, so it cannot be used to hand
+ * out partial refunds.
+ *
+ * `orderStatus` is the order's status as read before the refund. cancel_order checks it again
+ * under the order lock, so an order the kitchen accepts in between is refunded and left open
+ * ('cancel_failed'), never cancelled by someone who no longer may.
+ */
+export function mayRequest(capabilities: readonly unknown[], cancel: boolean, orderStatus: unknown): boolean {
+  const held = new Set(capabilities.filter((c): c is string => typeof c === 'string'));
+  const holdsAny = (needed: readonly string[]) => needed.some((c) => held.has(c));
+  if (!cancel) return holdsAny(REFUND_CAPABILITIES);
+  if (!holdsAny(CANCEL_CAPABILITIES)) return false;
+  if (holdsAny(REFUND_CAPABILITIES)) return true;
+  return (
+    held.has('kitchen.access') &&
+    typeof orderStatus === 'string' &&
+    (KITCHEN_PAID_CANCEL_STATUSES as readonly string[]).includes(orderStatus)
+  );
 }
 
 /**

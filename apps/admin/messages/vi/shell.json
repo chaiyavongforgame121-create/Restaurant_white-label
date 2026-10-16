@@ -19,6 +19,7 @@
     "digitalSignage": "Bảng hiệu kỹ thuật số",
     "aiVoice": "Giọng nói AI",
     "staff": "Nhân viên",
+    "timeLog": "Nhật ký giờ làm",
     "drivers": "Tài xế",
     "driverPayouts": "Chi trả tài xế",
     "customers": "Khách hàng",
@@ -54,12 +55,13 @@
     "darkMode": "Chế độ tối"
   },
   "accessDenied": {
-    "title": "Không có quyền truy cập"
+    "title": "Không có quyền truy cập",
+    "backToMyScreen": "Về màn hình của tôi"
   },
   "branchAccess": {
     "title": "Không có quyền quản trị",
-    "roleCannotOpen": "Tài khoản {role} của bạn không thể mở trang quản trị của {branch}. Công việc của bạn nằm ở màn hình quầy hoặc màn hình bếp.",
-    "accountCannotOpen": "Tài khoản của bạn không thể mở trang quản trị của {branch}. Công việc của bạn nằm ở màn hình quầy hoặc màn hình bếp.",
+    "roleCannotOpen": "Tài khoản {role} của bạn không có quyền vào trang quản trị của {branch}. Hãy quay về màn hình của bạn, hoặc nhờ chủ sở hữu hay quản trị viên cấp thêm quyền.",
+    "accountCannotOpen": "Tài khoản của bạn không có quyền vào trang quản trị của {branch}. Hãy quay về màn hình của bạn, hoặc nhờ chủ sở hữu hay quản trị viên cấp thêm quyền.",
     "notStaff": "Tài khoản của bạn không phải nhân viên của {branch}.",
     "roles": {
       "owner": "chủ sở hữu",
@@ -185,5 +187,24 @@
       "tooLarge": "Ảnh này lớn hơn {megabytes} MB.",
       "tooSmall": "Ảnh này có kích thước {width}×{height}. Biểu tượng ứng dụng cần tối thiểu {min}×{min} — nhỏ hơn thì nút cài đặt sẽ biến mất."
     }
+  },
+  "pageAccess": {
+    "title": "Vai trò của bạn không dùng được trang này",
+    "reasons": {
+      "menu": "Vai trò của bạn tại {branch} không được chỉnh thực đơn. Nếu cần, hãy nhờ chủ sở hữu hoặc quản trị viên.",
+      "qr": "Vai trò của bạn tại {branch} không được quản lý mã QR thực đơn. Nếu cần, hãy nhờ chủ sở hữu hoặc quản trị viên.",
+      "promos": "Vai trò của bạn tại {branch} không được quản lý khuyến mãi. Nếu cần, hãy nhờ chủ sở hữu hoặc quản trị viên.",
+      "orders": "Vai trò của bạn tại {branch} không được xem danh sách đơn hàng. Nếu cần, hãy nhờ chủ sở hữu hoặc quản trị viên.",
+      "receipts": "Vai trò của bạn tại {branch} không được xem hóa đơn thuế. Nếu cần, hãy nhờ chủ sở hữu hoặc quản trị viên.",
+      "activity": "Vai trò của bạn tại {branch} không được xem nhật ký hoạt động. Nếu cần, hãy nhờ chủ sở hữu hoặc quản trị viên.",
+      "ratings": "Vai trò của bạn tại {branch} không được xem đánh giá của khách. Nếu cần, hãy nhờ chủ sở hữu hoặc quản trị viên.",
+      "payouts": "Vai trò của bạn tại {branch} không được xem khoản chi trả tài xế. Nếu cần, hãy nhờ chủ sở hữu hoặc quản trị viên.",
+      "hq": "Chỉ chủ sở hữu mới mở được trang trụ sở của {branch}.",
+      "franchise": "Chỉ chủ sở hữu mới quản lý được nhượng quyền của {branch}.",
+      "branch": "Vai trò của bạn tại {branch} không được thay đổi cài đặt chi nhánh. Nếu cần, hãy nhờ chủ sở hữu hoặc quản trị viên.",
+      "settings": "Vai trò của bạn tại {branch} không mở được cài đặt chung của chi nhánh. Bạn vẫn đổi được ngôn ngữ từ menu."
+    },
+    "branchHoursOnly": "Bạn có thể đặt giờ mở cửa và ngày nghỉ của chi nhánh này tại đây. Tên, địa chỉ, thuế, thanh toán và cửa hàng trực tuyến do chủ sở hữu hoặc quản trị viên thay đổi.",
+    "addBranchOwnerOnly": "Chỉ chủ sở hữu mới thêm được chi nhánh, vì mỗi chi nhánh mới thêm một suất chi nhánh trả phí vào gói."
   }
 }

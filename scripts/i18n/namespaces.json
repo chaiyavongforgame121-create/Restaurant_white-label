@@ -50,7 +50,8 @@
     "ratings",
     "drivers",
     "misc",
-    "platformBilling"
+    "platformBilling",
+    "timelog"
   ],
   "driver": [
     "nav",

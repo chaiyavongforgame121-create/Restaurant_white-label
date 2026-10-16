@@ -11,6 +11,7 @@
     "endsToday": "Tu prueba gratuita termina hoy",
     "daysLeft": "{days, plural, one {Te queda # día de prueba gratuita} other {Te quedan # días de prueba gratuita}}",
     "body": "Todo está desbloqueado. Elige un paquete para conservarlo; no necesitas tarjeta hasta entonces.",
+    "bodyStaff": "Todo está desbloqueado. El propietario del restaurante elige un paquete para conservarlo después de la prueba.",
     "cta": "Elegir un paquete"
   },
   "expiry": {
