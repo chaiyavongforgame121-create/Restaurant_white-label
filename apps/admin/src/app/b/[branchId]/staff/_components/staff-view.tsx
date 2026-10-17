@@ -952,7 +952,11 @@ async function copyText(text: string, field?: HTMLInputElement | null): Promise<
 /** 'existingAccount': an email invitation to an address that already has an account. No email
  *  goes out and the member stays pending until they open the link and join, so the owner needs
  *  the link just as much as after 'link'. */
-type InviteResult = { kind: 'link' | 'sent' | 'existingAccount'; email: string; url: string };
+type InviteResult = {
+  kind: 'link' | 'sent' | 'sentExisting' | 'recentlyEmailed' | 'existingAccount';
+  email: string;
+  url: string;
+};
 
 function InviteModal({
   restaurantId,
@@ -979,11 +983,11 @@ function InviteModal({
   const [email, setEmail] = React.useState('');
   const [role, setRole] = React.useState<OfferedRole>('cashier');
   const [scope, setScope] = React.useState<'branch' | 'restaurant'>('branch');
-  // Links are the default: Supabase's built-in mailer sends about two emails an hour and only
-  // to the project's own team, so an emailed invitation fails for real staff until the
-  // platform connects its own mail service. There is no per-restaurant email setting, which is
-  // why the hint under the checkbox points at the link rather than at a setup step.
-  const [sendEmail, setSendEmail] = React.useState(false);
+  // Email is the default since auth mail goes through Brevo (2026-10-14): it was off while
+  // Supabase's built-in mailer sent about two emails an hour, so an owner who did not tick the box
+  // got a link and no email, also when inviting an address again after cancelling. The link is
+  // shown either way for LINE.
+  const [sendEmail, setSendEmail] = React.useState(true);
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [result, setResult] = React.useState<InviteResult | null>(null);
@@ -1018,7 +1022,16 @@ function InviteModal({
       const url = staffInviteUrl(window.location.origin, res.staff_id);
       setSubmitting(false);
       setResult({
-        kind: res.delivery === 'link' ? 'link' : res.emailed ? 'sent' : 'existingAccount',
+        kind:
+          res.delivery === 'link'
+            ? 'link'
+            : res.emailed
+              ? res.already_registered
+                ? 'sentExisting'
+                : 'sent'
+              : res.recently_emailed
+                ? 'recentlyEmailed'
+                : 'existingAccount',
         email: invitedEmail,
         url,
       });
@@ -1110,11 +1123,23 @@ function InviteModal({
                   })}
                 </p>
               </>
-            ) : result.kind === 'sent' ? (
+            ) : result.kind === 'sent' || result.kind === 'sentExisting' ? (
               <>
                 <p className="mt-3 font-display text-lg font-semibold">{t('invite.sentTitle')}</p>
+                {/* An address that already has an account gets a sign-in link rather than the
+                    invitation email (invite-staff), so the owner is told what will arrive. */}
                 <p className="mt-1 text-sm text-muted-foreground">
-                  {t.rich('invite.sentBody', {
+                  {t.rich(result.kind === 'sentExisting' ? 'invite.sentExistingBody' : 'invite.sentBody', {
+                    email: result.email,
+                    strong: (chunks) => <strong>{chunks}</strong>,
+                  })}
+                </p>
+              </>
+            ) : result.kind === 'recentlyEmailed' ? (
+              <>
+                <p className="mt-3 font-display text-lg font-semibold">{t('invite.recentlyEmailedTitle')}</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {t.rich('invite.recentlyEmailedBody', {
                     email: result.email,
                     strong: (chunks) => <strong>{chunks}</strong>,
                   })}
@@ -1140,7 +1165,7 @@ function InviteModal({
             <InviteLinkPanel
               url={result.url}
               email={result.email}
-              hint={result.kind === 'sent' ? t('invite.link.emailFallback') : undefined}
+              hint={result.kind === 'sent' || result.kind === 'sentExisting' ? t('invite.link.emailFallback') : undefined}
             />
             <Button type="button" variant="ghost" className="mt-5" fullWidth onClick={onClose}>
               {t('invite.done')}

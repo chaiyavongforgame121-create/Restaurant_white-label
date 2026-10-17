@@ -86,7 +86,7 @@ export function toReceiptInput(order: ReceiptOrder, ctx: ReceiptContext): Receip
   // ReceiptInput carries subtotal/delivery/service and nothing else, so a taxed or tipped
   // order would print a TOTAL its own lines never reach. Until the printer package grows
   // rows of its own, these ride on the one free-text line the format has, which keeps the
-  // paper adding up. Kept short: the 80mm page is 42 columns and does not wrap.
+  // paper adding up. Kept short: it is one line on a 42-column page (both printers wrap it now).
   //
   // Card refunds ride there too, one total for those Stripe has confirmed and one for those it
   // is still processing, however many there were: a reprint for an order whose card was given
@@ -108,7 +108,8 @@ export function toReceiptInput(order: ReceiptOrder, ctx: ReceiptContext): Receip
     branchAddress: ctx.branchAddress ?? undefined,
     branchPhone: ctx.branchPhone ?? undefined,
     orderNumber: order.order_number,
-    channel: order.channel.replace('_', ' '),
+    // The stored code: both printers word it (receiptChannelLabel, "Dine-in").
+    channel: order.channel,
     createdAt: order.created_at,
     // unit_price is the price of the plain dish; subtotal is what the line actually cost,
     // options included (place-order: lineTotal(price, modDelta, qty), rounded once). The

@@ -6,8 +6,9 @@
 //                        address (Google, or an existing email/password account), and
 //                        accept_staff_invite checks the confirmed email matches before joining.
 //                        The link is not a credential: the staff id alone lets nobody in. This is
-//                        the default in the back office, because Supabase's built-in mailer sends
-//                        about two emails an hour and only to the project's own team.
+//                        what the back office sends when the owner unticks "also email"; it was
+//                        the default while Supabase's built-in mailer sent about two emails an
+//                        hour (auth mail goes through Brevo since 2026-10-14).
 //
 //   delivery 'email'  -> the original flow below, which takes one of two paths depending on
 //                        whether that address already has an auth account. Also the default when
@@ -16,12 +17,13 @@
 //   new address       -> inviteUserByEmail. The mail lands on /auth/callback, which
 //                        exchanges the code and hands off to /invite/accept, which links
 //                        the row and asks them to choose a password.
-//   existing account  -> no mail, and the row stays PENDING: the response carries accept_url
-//                        (already_registered: true) for the owner to send, and the person joins
-//                        by pressing Join on it, or is taken there by my_pending_staff_invite the
-//                        next time they sign in. This used to make the row active on the spot,
-//                        which let any restaurant owner (a free trial is one Google click away)
-//                        put an existing user on their team, as admin even, without asking them.
+//   existing account  -> a sign-in link by email (already_registered: true), and the row stays
+//                        PENDING: the link signs them in onto /invite/accept, where they press
+//                        Join (choosing a password first if the account has none); they are also
+//                        taken there by my_pending_staff_invite the next time they sign in. This
+//                        used to make the row active on the spot, which let any restaurant owner
+//                        (a free trial is one Google click away) put an existing user on their
+//                        team, as admin even, without asking them.
 //
 // The response says which happened (`emailed`), because the admin UI has to word those two
 // outcomes differently — see staff-view.tsx.
@@ -340,45 +342,51 @@ Deno.serve(async (req) => {
     return json({ error: 'email_failed', detail: invite.error.message }, 500);
   }
 
-  // inviteUserByEmail refuses an address that already has an auth account. The old fallback
-  // called generateLink() here and then returned ok:true — but generateLink only MINTS a
-  // link, it never sends one, and nothing in this function sends it either. So inviting
-  // anyone who already had an account reported success and delivered no email at all, and
-  // the owner was left waiting for something that was never going to arrive.
+  // inviteUserByEmail refuses an address that already has an auth account: someone who signed up
+  // themselves, signed in with Google, or opened an earlier invitation once (the person or a mail
+  // scanner), which confirms the address. That last one is the usual case: an owner cancels an
+  // invitation and invites the same address again.
   //
-  // The account is looked up without minting anything. This used generateLink('magiclink') as
-  // the lookup, which stores a recovery token and stamps recovery_sent_at, so the
-  // resetPasswordForEmail below then hit GoTrue's per-user email interval and the set-password
-  // email was never sent (2026-10-15).
-  const { data: found, error: lookupError } = await admin.rpc('invite_lookup_auth_user', { p_email: email });
-  const existingUser = (Array.isArray(found) ? found[0] : null) as
-    | { id: string; invited_at: string | null; password_set: boolean; has_other_sign_in: boolean }
-    | null;
-  if (lookupError || !existingUser?.id) {
-    return json({ error: 'email_failed', detail: lookupError?.message ?? invite.error.message }, 500);
-  }
-
-  // Someone who can already sign in needs no email: an account they created themselves (no
-  // invited_at), an invited one that has chosen a password, or one with a Google (any non-email)
-  // identity. Someone who cannot (an earlier invitation opened once, by the person or a mail
-  // scanner, confirms the address and inviteUserByEmail then refuses it) is sent a link to set a
-  // password. Either way the row stays pending until they press Join.
-  const canSignIn = !existingUser.invited_at || existingUser.password_set || existingUser.has_other_sign_in;
-  if (!canSignIn) {
-    const recovery = await admin.auth.resetPasswordForEmail(email, { redirectTo });
-    if (recovery.error) {
-      if (recovery.error.status === 429) {
-        return json({ error: 'rate_limited', detail: recovery.error.message }, 429);
-      }
-      return json({ error: 'email_failed', detail: recovery.error.message }, 500);
+  // Such a person is emailed a sign-in link (signInWithOtp, the magic-link template, through the
+  // project's SMTP). It signs them in and lands on /invite/accept, which asks them to choose a
+  // password when the account has none (needsPassword) and otherwise offers Join. The row stays
+  // pending until they press Join, so nobody is put on a team without saying yes.
+  //
+  // Until 2026-10-17 an account that could already sign in was sent nothing (the owner had to
+  // pass the link on), and one that could not got a reset-password email worded as such. Both
+  // dated from Supabase's built-in mailer, which sent a couple of emails an hour; Brevo now
+  // carries auth mail, so re-inviting an address reaches its inbox like a first invitation.
+  const otp = await admin.auth.signInWithOtp({
+    email,
+    options: { shouldCreateUser: false, emailRedirectTo: redirectTo },
+  });
+  if (otp.error) {
+    // GoTrue spaces emails to one address ("you can only request this after N seconds"). That is
+    // an owner inviting the same person twice within the minute, usually to correct the role: an
+    // email has just gone out, so this is not a failure. The owner is told so and gets the link.
+    if (/after \d+ seconds?/i.test(otp.error.message)) {
+      return json({
+        ok: true,
+        staff_id: staffId,
+        emailed: false,
+        delivery: 'email',
+        already_registered: true,
+        recently_emailed: true,
+        redirect_to: redirectTo,
+        accept_url: acceptUrl,
+      });
     }
-    return json({ ok: true, staff_id: staffId, emailed: true, delivery: 'email', redirect_to: redirectTo, accept_url: acceptUrl });
+    // The project's hourly cap on auth emails.
+    if (otp.error.status === 429 || otp.error.code === 'over_email_send_rate_limit') {
+      return json({ error: 'rate_limited', detail: otp.error.message }, 429);
+    }
+    return json({ error: 'email_failed', detail: otp.error.message }, 500);
   }
 
   return json({
     ok: true,
     staff_id: staffId,
-    emailed: false,
+    emailed: true,
     delivery: 'email',
     already_registered: true,
     redirect_to: redirectTo,

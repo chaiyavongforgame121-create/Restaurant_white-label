@@ -308,9 +308,15 @@ describe('printed phone numbers', () => {
 
   it('prints them the same way through the browser fallback', () => {
     const html = browserReceipt(toReceiptInput(us, ctx));
-    expect(html).toContain('Phone    +1 (555) 234-5678');
+    expect(html).toContain('<span class="l">Phone</span><span class="r">+1 (555) 234-5678</span>');
     expect(html).toContain('Tel: +66 98 035 8264');
     expect(html).not.toContain('+15552345678');
+  });
+
+  it('words the channel on a reprint the way the counter does', () => {
+    const dineIn = toReceiptInput({ ...order, channel: 'dine_in' }, ctx);
+    expect(new TextDecoder().decode(buildReceipt(dineIn))).toMatch(/Channel +Dine-in/);
+    expect(browserReceipt(dineIn)).toContain('<span class="r">Dine-in</span>');
   });
 
   it('prints no Phone row for the till’s walk-in stand-in', () => {

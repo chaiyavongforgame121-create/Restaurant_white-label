@@ -57,7 +57,7 @@ export function ConfirmLinkView() {
         ) : (
           <>
             <h1 className="mt-5 text-center font-display text-3xl font-bold">
-              {link ? t(`confirmLink.titles.${link.type}`) : t('confirmLink.working')}
+              {link ? t(`confirmLink.titles.${titleFor(link)}`) : t('confirmLink.working')}
             </h1>
             <p className="mt-1 text-center text-sm text-muted-foreground">{t('confirmLink.body')}</p>
             <Card className="mt-6 p-5">
@@ -82,4 +82,13 @@ export function ConfirmLinkView() {
       </motion.div>
     </div>
   );
+}
+
+/**
+ * The heading names where the link goes, not only its type: an invitation sent to an address that
+ * already has an account is a sign-in link (type=email, invite-staff), and it said "Confirm your
+ * email" to someone who had only been invited to a team.
+ */
+function titleFor(link: Ready): EmailLinkType {
+  return link.next.startsWith('/invite/accept') ? 'invite' : link.type;
 }

@@ -60,6 +60,8 @@ export async function inviteStaff(
     redirect_to?: string;
     emailed: boolean;
     already_registered?: boolean;
+    /** An email went to this address less than a minute ago, so none was sent now. */
+    recently_emailed?: boolean;
     delivery?: 'link' | 'email';
     /** The invitation page to share. Missing only from an invite-staff deployed before links. */
     accept_url?: string;
