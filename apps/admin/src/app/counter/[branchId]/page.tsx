@@ -19,6 +19,11 @@ interface Props {
 
 const text = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
 const coord = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+const kitchenLeadMin = (settings: Record<string, unknown>) => {
+  const prep = Number(settings.prep_time_min ?? 15);
+  const lead = Number(settings.schedule_lead_time_min ?? prep);
+  return Number.isFinite(lead) && lead >= 0 ? lead : 15;
+};
 
 export default async function CounterPage({ params }: Props) {
   const { branchId } = await params;
@@ -126,6 +131,12 @@ export default async function CounterPage({ params }: Props) {
       // manager, and the cashier since owner decision D1 (2026-10-16). The till is still where a
       // cashier lands after sign-in; this is their way across.
       canOpenDashboard={can('backoffice.access') && can('dashboard.view')}
+      // A read-only look at the kitchen board from the till (kitchen.status: the cashier and the
+      // server; kitchen.access: anyone who works the board itself). It changes nothing.
+      canViewKitchen={can('kitchen.status') || can('kitchen.access')}
+      // When a scheduled order reaches the kitchen, so its clock starts where the board's does:
+      // the same keys and defaults as the kitchen board (schedule lead, else prep time, else 15).
+      kitchenLeadMin={kitchenLeadMin(settings)}
       effectivePrices={effectivePriceMap((effective.data ?? []) as EffectivePriceRow[])}
       soldOutUntil={soldOutUntil}
       branchCenter={lat != null && lng != null ? { lat, lng } : null}

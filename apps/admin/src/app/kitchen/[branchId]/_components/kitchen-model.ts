@@ -293,6 +293,33 @@ export function mergeAvailability(
   return out;
 }
 
+/* ── how a line and a ticket read ──────────────────────────────────────── */
+
+/** A line's options as the cards list them: the board's, and the till's read-only kitchen view.
+ *  The stored shape varies by writer, so it is read defensively. */
+export function parseMods(m: unknown): { label: string; remove: boolean }[] {
+  let arr: unknown[] = [];
+  if (Array.isArray(m)) arr = m;
+  else if (m && typeof m === 'object') arr = Object.values(m as Record<string, unknown>);
+  const out: { label: string; remove: boolean }[] = [];
+  for (const it of arr) {
+    if (it == null) continue;
+    if (typeof it === 'string') { out.push({ label: it, remove: /^(no|without|no-)\b/i.test(it) }); continue; }
+    if (typeof it === 'object') {
+      const o = it as Record<string, unknown>;
+      const name = (o.name ?? o.label ?? o.option_name ?? o.title ?? o.value) as string | undefined;
+      if (!name) continue;
+      const price = Number(o.price ?? o.price_delta ?? o.extra_price ?? 0);
+      const label = price > 0 ? `${name} (+$${price.toFixed(2)})` : String(name);
+      out.push({ label, remove: /^(no|without|no-)\b/i.test(String(name)) });
+    }
+  }
+  return out;
+}
+
+/** A note that is an allergy or diet warning, shown in red rather than as an ordinary note. */
+export const ALLERGY_RE = /allerg|peanut|\bnut\b|gluten|shellfish|dairy|lactose|sesame|\bsoy\b|vegan|coeliac|celiac/i;
+
 /** One dish inside a combo line. */
 export interface ComboPart {
   menu_item_id: string | null;

@@ -283,5 +283,24 @@
     "orderNotSettleable": "Đơn đã bị hủy hoặc hoàn tiền trong lúc đó nên không thể ghi nhận thanh toán. Hãy hoàn lại khoản chuyển khoản cho khách.",
     "failed": "Chưa thể ghi nhận thanh toán lúc này. Hãy thử lại sau giây lát.",
     "onlineCardUnpaid": "Đơn này được đặt trực tuyến để thanh toán bằng thẻ và khách chưa thanh toán. Không thể ghi nhận thanh toán tại quầy: hãy hủy đơn, rồi nhập lại giao dịch và thu tiền tại đây."
+  },
+  "kitchenView": {
+    "button": "Bếp",
+    "title": "Trạng thái bếp",
+    "viewOnly": "Chỉ xem",
+    "subtitle": "Theo dõi đơn hàng khi bếp đang làm. Không thể thay đổi gì ở đây.",
+    "live": "Trực tiếp",
+    "reconnecting": "Đang kết nối lại…",
+    "loading": "Đang tải đơn hàng…",
+    "readFailed": "Không tải được đơn hàng. Đang thử lại…",
+    "emptyLane": "Không có gì",
+    "emptyAll": "Hiện không có đơn nào trong bếp.",
+    "notAccepted": "Đang chờ bếp nhận",
+    "accepted": "Bếp đã nhận",
+    "readyFor": "Đã xong · {time}",
+    "progress": "Xong {done}/{total}",
+    "scheduledFor": "Hẹn lúc {time}",
+    "lineDone": "Xong",
+    "close": "Đóng"
   }
 }

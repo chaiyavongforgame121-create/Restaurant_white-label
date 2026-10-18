@@ -283,5 +283,24 @@
     "orderNotSettleable": "The order was cancelled or refunded in the meantime, so the payment cannot be recorded. Refund the customer’s transfer.",
     "failed": "The payment could not be recorded just now. Try again in a moment.",
     "onlineCardUnpaid": "This order was placed online to be paid by card, and the customer hasn’t paid yet. It can’t be settled at the till: cancel it, then ring the sale up again and take the payment here."
+  },
+  "kitchenView": {
+    "button": "Kitchen",
+    "title": "Kitchen status",
+    "viewOnly": "View only",
+    "subtitle": "Follow orders as the kitchen works on them. Nothing can be changed from here.",
+    "live": "Live",
+    "reconnecting": "Reconnecting…",
+    "loading": "Loading orders…",
+    "readFailed": "Orders could not be loaded. Retrying…",
+    "emptyLane": "Nothing here",
+    "emptyAll": "No orders in the kitchen right now.",
+    "notAccepted": "Waiting for the kitchen",
+    "accepted": "Accepted",
+    "readyFor": "Ready · {time}",
+    "progress": "{done} of {total} done",
+    "scheduledFor": "Scheduled {time}",
+    "lineDone": "Done",
+    "close": "Close"
   }
 }

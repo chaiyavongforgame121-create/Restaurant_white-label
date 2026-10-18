@@ -44,6 +44,7 @@ import {
 import { CounterItemSheet } from './counter-item-sheet';
 import { CounterComboSheet } from './counter-combo-sheet';
 import { ClockButton } from './clock-button';
+import { KitchenStatusButton } from './kitchen-status-modal';
 import { ComboArt, comboDishImages } from './combo-art';
 import {
   CounterDeliveryFields,
@@ -142,6 +143,10 @@ interface Props {
   /** backoffice.access and dashboard.view: the header links to the back office's dashboard.
    *  Defaults to false, so a missing prop cannot offer a door that answers "access denied". */
   canOpenDashboard?: boolean;
+  /** kitchen.status or kitchen.access: the header offers the read-only kitchen view. */
+  canViewKitchen?: boolean;
+  /** Minutes before its slot a scheduled order reaches the kitchen (the board's lead time). */
+  kitchenLeadMin?: number;
   /** Happy-hour prices in force when the page rendered, by menu item id. */
   effectivePrices?: Record<string, EffectivePrice>;
   /** Menu item id -> when its 86 lifts. Future times only. */
@@ -222,6 +227,8 @@ function PosInner({
   qrTransfer = null,
   canEditBranchSettings = false,
   canOpenDashboard = false,
+  canViewKitchen = false,
+  kitchenLeadMin = 15,
   effectivePrices = NO_PRICES,
   soldOutUntil = NO_SOLD_OUT,
   branchCenter = null,
@@ -1193,6 +1200,12 @@ function PosInner({
         </div>
         <div className="order-2 ml-auto flex shrink-0 items-center gap-2 xl:order-3 xl:ml-0">
           <LocaleSwitcher compact />
+          {/* A read-only look at the kitchen board, so the cashier can see where an order is
+              without leaving the till. Nothing in it changes an order; the board itself, opened
+              from the back office, keeps every action. */}
+          {canViewKitchen && (
+            <KitchenStatusButton branchId={branchId} leadMin={kitchenLeadMin} branchTimezone={branchTimezone} />
+          )}
           {/* The way across to the back office, in the cluster that never wraps away: the till
               controls above are hidden below md, and this is the cashier's only route to the
               dashboard the owner asked them to have (D1). A full page load, like Tables and

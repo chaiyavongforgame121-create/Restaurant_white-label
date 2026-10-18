@@ -23,7 +23,7 @@ import {
   boardHealth, comboParts, eightySixTargets, fmtTimer, heardOnTap, isLineDone, isOnBoard, laneOf, lateTicketIds,
   lineMatchesStation, linesInMenuOrder, mergeAvailability, mergeSoldOut, overlaySnapshot, parseTimestamp, partMatchesStation,
   readyStartedMs, reminderDue, safeElapsedSec, speakableTicket, stationPills, stationStats, stockBadge, toAvailabilityItem,
-  workStartedMs,
+  workStartedMs, ALLERGY_RE, parseMods,
   type AvailabilityItem, type Delivery, type DriverLite, type Order, type OrderItem, type SoldOutItem, type TierKey,
 } from './kitchen-model';
 import {
@@ -132,26 +132,6 @@ function asArray<T>(v: T[] | T | null | undefined): T[] {
   return Array.isArray(v) ? v : v ? [v] : [];
 }
 
-function parseMods(m: unknown): { label: string; remove: boolean }[] {
-  let arr: unknown[] = [];
-  if (Array.isArray(m)) arr = m;
-  else if (m && typeof m === 'object') arr = Object.values(m as Record<string, unknown>);
-  const out: { label: string; remove: boolean }[] = [];
-  for (const it of arr) {
-    if (it == null) continue;
-    if (typeof it === 'string') { out.push({ label: it, remove: /^(no|without|no-)\b/i.test(it) }); continue; }
-    if (typeof it === 'object') {
-      const o = it as Record<string, unknown>;
-      const name = (o.name ?? o.label ?? o.option_name ?? o.title ?? o.value) as string | undefined;
-      if (!name) continue;
-      const price = Number(o.price ?? o.price_delta ?? o.extra_price ?? 0);
-      const label = price > 0 ? `${name} (+$${price.toFixed(2)})` : String(name);
-      out.push({ label, remove: /^(no|without|no-)\b/i.test(String(name)) });
-    }
-  }
-  return out;
-}
-
 /** What makes two lines the same dish in the batch strip: their modifiers, in any order. */
 function modsKey(m: unknown): string {
   return parseMods(m).map((x) => x.label).sort().join(',');
@@ -163,8 +143,6 @@ const STATION_CODES = ['hot', 'cold', 'bar', 'dessert', 'expo'] as const;
 function isStationCode(value: string): value is (typeof STATION_CODES)[number] {
   return (STATION_CODES as readonly string[]).includes(value);
 }
-
-const ALLERGY_RE = /allerg|peanut|\bnut\b|gluten|shellfish|dairy|lactose|sesame|\bsoy\b|vegan|coeliac|celiac/i;
 
 /** Pick the translation key for a failed RPC. The raw PostgREST / Postgres text is server
  *  vocabulary, never a sentence for the cook: a known code gets its own message, anything
