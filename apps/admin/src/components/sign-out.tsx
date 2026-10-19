@@ -14,6 +14,17 @@ function useSignOut() {
   const [pending, setPending] = React.useState(false);
   const signOut = React.useCallback(async () => {
     setPending(true);
+    // The till's sale in progress (counter-view SaleDraft, pos-current-sale:<branch>) belongs to
+    // whoever rang it up: the next account on this tab starts with an empty cart, not with the
+    // last person's dishes, customer and discount. Parked carts are meant to wait and stay.
+    try {
+      for (let i = window.sessionStorage.length - 1; i >= 0; i -= 1) {
+        const key = window.sessionStorage.key(i);
+        if (key?.startsWith('pos-current-sale:')) window.sessionStorage.removeItem(key);
+      }
+    } catch {
+      // A blocked store holds nothing to clear.
+    }
     try {
       await getBrowserClient().auth.signOut({ scope: 'local' });
     } finally {

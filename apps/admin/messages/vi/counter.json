@@ -19,13 +19,15 @@
     "clockElsewhere": "Bạn vẫn đang trong ca ở chi nhánh khác. Hãy chấm công ra ở đó trước.",
     "clockSignIn": "Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại để chấm công.",
     "clockDismiss": "Đóng",
-    "clockShiftGone": "Ca đó đã đóng hoặc không phải ca của bạn. Nút giờ hiển thị ca của chính bạn."
+    "clockShiftGone": "Ca đó đã đóng hoặc không phải ca của bạn. Nút giờ hiển thị ca của chính bạn.",
+    "menu": "Menu"
   },
   "channel": {
     "dine_in": "Ăn tại quán",
     "pickup": "Tự đến lấy",
     "delivery": "Giao hàng",
-    "qr_ordering": "Đơn QR"
+    "qr_ordering": "Đơn QR",
+    "label": "Loại đơn"
   },
   "status": {
     "pending": "Đang chờ",
@@ -91,7 +93,12 @@
     "phoneDelivery": "Số điện thoại khách",
     "phoneInvalid": "Số điện thoại này có vẻ không đúng. Hãy kiểm tra lại hoặc xóa trống.",
     "lineGone": "Không còn trong thực đơn",
-    "unsellableHint": "{count, plural, other {Có # món trong đơn không còn bán được. Hãy bỏ ra để thu tiền.}}"
+    "unsellableHint": "{count, plural, other {Có # món trong đơn không còn bán được. Hãy bỏ ra để thu tiền.}}",
+    "viewOrder": "Xem đơn · {count} món",
+    "backToMenu": "Quay lại thực đơn",
+    "needsAttention": "Có {count} mục cần kiểm tra",
+    "maybePlaced": "Đơn này có thể đã được gửi trước khi trang tải lại. Hãy kiểm tra <recent>Đơn gần đây</recent> trước khi thu tiền lại.",
+    "dismiss": "Đóng"
   },
   "delivery": {
     "address": "Địa chỉ giao hàng",

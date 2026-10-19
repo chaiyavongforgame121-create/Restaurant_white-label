@@ -19,13 +19,15 @@
     "clockElsewhere": "Todavía tienes un turno abierto en otra sucursal. Registra tu salida allí primero.",
     "clockSignIn": "Tu sesión expiró. Vuelve a iniciar sesión para registrar tu turno.",
     "clockDismiss": "Cerrar",
-    "clockShiftGone": "Ese turno ya estaba cerrado o no es tuyo. El botón ahora muestra tu propio turno."
+    "clockShiftGone": "Ese turno ya estaba cerrado o no es tuyo. El botón ahora muestra tu propio turno.",
+    "menu": "Menú"
   },
   "channel": {
     "dine_in": "En el local",
     "pickup": "Recoger",
     "delivery": "A domicilio",
-    "qr_ordering": "Pedido QR"
+    "qr_ordering": "Pedido QR",
+    "label": "Tipo de pedido"
   },
   "status": {
     "pending": "Pendiente",
@@ -91,7 +93,12 @@
     "phoneDelivery": "Teléfono del cliente",
     "phoneInvalid": "Ese número de teléfono no parece correcto. Revísalo o borra el campo.",
     "lineGone": "Ya no está en el menú",
-    "unsellableHint": "{count, plural, one {Un artículo del pedido ya no se puede vender. Quítalo para cobrar.} other {# artículos del pedido ya no se pueden vender. Quítalos para cobrar.}}"
+    "unsellableHint": "{count, plural, one {Un artículo del pedido ya no se puede vender. Quítalo para cobrar.} other {# artículos del pedido ya no se pueden vender. Quítalos para cobrar.}}",
+    "viewOrder": "Ver pedido · {count, plural, one {# artículo} other {# artículos}}",
+    "backToMenu": "Volver al menú",
+    "needsAttention": "Tienes {count, plural, one {# aviso} other {# avisos}} por revisar",
+    "maybePlaced": "Esta venta pudo haberse enviado antes de que la página se recargara. Revisa <recent>Pedidos recientes</recent> antes de cobrarla de nuevo.",
+    "dismiss": "Descartar"
   },
   "delivery": {
     "address": "Dirección de entrega",

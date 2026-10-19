@@ -19,13 +19,15 @@
     "clockElsewhere": "You are still clocked in at another branch. Clock out there first.",
     "clockSignIn": "Your session has expired. Sign in again to clock in.",
     "clockDismiss": "Dismiss",
-    "clockShiftGone": "That shift was already closed, or it is not yours. The button now shows your own shift."
+    "clockShiftGone": "That shift was already closed, or it is not yours. The button now shows your own shift.",
+    "menu": "Menu"
   },
   "channel": {
     "dine_in": "Dine-in",
     "pickup": "Pickup",
     "delivery": "Delivery",
-    "qr_ordering": "QR order"
+    "qr_ordering": "QR order",
+    "label": "Order type"
   },
   "status": {
     "pending": "Pending",
@@ -91,7 +93,12 @@
     "phoneDelivery": "Customer phone",
     "phoneInvalid": "That phone number does not look right. Check it, or clear the field.",
     "lineGone": "No longer on the menu",
-    "unsellableHint": "{count, plural, one {One item in the order can no longer be sold. Take it off to charge.} other {# items in the order can no longer be sold. Take them off to charge.}}"
+    "unsellableHint": "{count, plural, one {One item in the order can no longer be sold. Take it off to charge.} other {# items in the order can no longer be sold. Take them off to charge.}}",
+    "viewOrder": "View order · {count, plural, one {# item} other {# items}}",
+    "backToMenu": "Back to the menu",
+    "needsAttention": "You have {count, plural, one {# thing} other {# things}} to check",
+    "maybePlaced": "This sale may already have been sent before the page reloaded. Check <recent>Recent orders</recent> before charging it again.",
+    "dismiss": "Dismiss"
   },
   "delivery": {
     "address": "Delivery address",

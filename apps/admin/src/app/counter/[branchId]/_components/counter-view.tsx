@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocale, useTranslations } from 'next-intl';
 import {
-  Banknote, CreditCard, LayoutDashboard, Minus, Plus, QrCode, Search, ShoppingBag, Store,
+  Banknote, ChevronLeft, CreditCard, LayoutDashboard, Menu, Minus, Plus, QrCode, Search, ShoppingBag, Store,
   Trash2, Utensils, X,
 } from 'lucide-react';
 import {
@@ -31,7 +31,7 @@ import {
   type PlaceOrderInput,
   type PlaceOrderResult,
 } from '@favornoms/database/queries';
-import { Badge, Button, RiderIcon, Segmented, Sheet, useConfirm } from '@favornoms/ui';
+import { Badge, Button, RiderIcon, Sheet, useConfirm } from '@favornoms/ui';
 import { LocaleSwitcher } from '@/components/locale-switcher';
 import { SignOutIconButton } from '@/components/sign-out';
 import {
@@ -212,6 +212,30 @@ interface ParkedOrder {
 
 const PARK_STORAGE_KEY = (branchId: string) => `pos-parked-orders:${branchId}`;
 
+/**
+ * The sale being rung up, kept for this browser tab. Tables and Recent orders are pages of their
+ * own, so going there and back (or a reload) used to start the till over with an empty cart and
+ * the dishes already picked gone. sessionStorage, not localStorage: it belongs to this tab and
+ * this shift, while a cart meant to wait is what Park is for.
+ */
+interface SaleDraft {
+  lines: Line[];
+  channel: Channel;
+  tableNumber: string;
+  customerName: string;
+  phone: string;
+  delivery: CounterDelivery;
+  discountInput: string;
+  splitInput: string;
+  savedAt: number;
+  /** Set while place-order is out for this cart: a draft that still carries it on the next load
+   *  may belong to an order that exists, and must not quietly come back to be charged again. */
+  placingSince?: number;
+}
+const DRAFT_STORAGE_KEY = (branchId: string) => `pos-current-sale:${branchId}`;
+/** Older than this, a draft is a cart someone walked away from, not one being rung up. */
+const DRAFT_MAX_AGE_MS = 12 * 3600_000;
+
 function PosInner({
   branchId,
   branchName,
@@ -262,6 +286,43 @@ function PosInner({
   const splitN = readNumericField(splitInput, { min: 1, max: 20, empty: 1 });
   const [parked, setParked] = React.useState<ParkedOrder[]>([]);
   const [showParked, setShowParked] = React.useState(false);
+  /** The till's controls behind the header's Menu button (below xl). */
+  const [tillMenuOpen, setTillMenuOpen] = React.useState(false);
+  const tillMenuId = React.useId();
+  React.useEffect(() => {
+    if (!tillMenuOpen) return undefined;
+    // Into the menu, as a keyboard user expects; it sits before its button in the page.
+    document.getElementById(tillMenuId)?.querySelector<HTMLElement>('button:not([disabled]), a')?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setTillMenuOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [tillMenuOpen, tillMenuId]);
+  /** On a phone the order panel is a sheet over the menu, opened from the bar at the bottom. */
+  const [cartOpen, setCartOpen] = React.useState(false);
+  const cartBarRef = React.useRef<HTMLButtonElement>(null);
+  const cartBackRef = React.useRef<HTMLButtonElement>(null);
+  const cartTitleId = React.useId();
+  // Below sm (the breakpoint the panel turns into a sheet at). False on the server and the
+  // first client render, so the markup matches; the panel is a plain column until then.
+  const isPhone = React.useSyncExternalStore(
+    (onChange) => {
+      const mq = window.matchMedia('(max-width: 639.98px)');
+      mq.addEventListener('change', onChange);
+      return () => mq.removeEventListener('change', onChange);
+    },
+    () => window.matchMedia('(max-width: 639.98px)').matches,
+    () => false,
+  );
+  const cartSheet = isPhone && cartOpen;
+  // The sheet takes focus when it opens and gives it back to the bar when it closes.
+  const wasSheet = React.useRef(false);
+  React.useEffect(() => {
+    if (cartSheet) cartBackRef.current?.focus();
+    else if (wasSheet.current) cartBarRef.current?.focus();
+    wasSheet.current = cartSheet;
+  }, [cartSheet]);
   const [payError, setPayError] = React.useState<PayErrorState | null>(null);
   /** The item whose options are being picked, or null. Tapping a tile no longer adds. */
   const [configuring, setConfiguring] = React.useState<MenuItem | null>(null);
@@ -513,6 +574,99 @@ function PosInner({
     persistParked(parked.filter((p) => p.id !== parkedId));
     setShowParked(false);
   };
+
+  // The sale in progress survives a trip to Tables or Recent orders and a reload (SaleDraft).
+  // Read once after mount, then written on every change; until it has been read nothing is
+  // written, so the first render's empty cart cannot overwrite it.
+  const [draftLoaded, setDraftLoaded] = React.useState(false);
+  /** The restored cart was being sent when the page went away: its order may exist. */
+  const [draftMaybePlaced, setDraftMaybePlaced] = React.useState(false);
+  const setDraftPlacing = (placing: boolean) => {
+    try {
+      const key = DRAFT_STORAGE_KEY(branchId);
+      const raw = window.sessionStorage.getItem(key);
+      if (!raw) return;
+      const draft = JSON.parse(raw) as SaleDraft;
+      if (placing) draft.placingSince = Date.now();
+      else delete draft.placingSince;
+      window.sessionStorage.setItem(key, JSON.stringify(draft));
+    } catch {
+      // A blocked store has no draft to mark.
+    }
+  };
+  const dropDraft = () => {
+    try {
+      window.sessionStorage.removeItem(DRAFT_STORAGE_KEY(branchId));
+    } catch {
+      // Nothing stored.
+    }
+  };
+  React.useEffect(() => {
+    try {
+      const raw = window.sessionStorage.getItem(DRAFT_STORAGE_KEY(branchId));
+      const draft = raw ? (JSON.parse(raw) as Partial<SaleDraft>) : null;
+      if (draft && Date.now() - (draft.savedAt ?? 0) < DRAFT_MAX_AGE_MS) {
+        // The same care as resuming a parked cart: folded lines, a channel this branch still
+        // sells, and the table re-found on today's floor.
+        if (Array.isArray(draft.lines)) setLines(mergeIdenticalLines(draft.lines, counterLineKey));
+        if (draft.channel) setChannel(draft.channel === 'delivery' && !canDeliver ? 'pickup' : draft.channel);
+        const number = draft.tableNumber ?? '';
+        setTableNumber(number);
+        setTableId(number ? (tables.find((tb) => tb.number === number)?.id ?? null) : null);
+        setCustomerName(draft.customerName ?? '');
+        setPhoneInput(draft.phone ?? '');
+        setDelivery(draft.delivery ?? EMPTY_DELIVERY);
+        setDiscountInput(draft.discountInput ?? '');
+        setSplitInput(draft.splitInput ?? '');
+        if (draft.placingSince) setDraftMaybePlaced(true);
+      }
+    } catch {
+      // A broken or blocked store starts an empty sale, as before.
+    }
+    setDraftLoaded(true);
+    // Read once per branch; the floor and delivery flag are only consulted while restoring.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchId]);
+  React.useEffect(() => {
+    if (!draftLoaded) return;
+    const empty =
+      lines.length === 0 && !customerName && !phoneInput && !tableNumber && !discountInput && !splitInput;
+    try {
+      if (empty) {
+        window.sessionStorage.removeItem(DRAFT_STORAGE_KEY(branchId));
+      } else {
+        const draft: SaleDraft = {
+          lines,
+          channel,
+          tableNumber,
+          customerName,
+          phone: phoneInput,
+          delivery,
+          discountInput,
+          splitInput,
+          savedAt: Date.now(),
+        };
+        window.sessionStorage.setItem(DRAFT_STORAGE_KEY(branchId), JSON.stringify(draft));
+      }
+    } catch {
+      // Quota or a blocked store: the sale still works, it just will not survive a reload.
+    }
+  }, [draftLoaded, branchId, lines, channel, tableNumber, customerName, phoneInput, delivery, discountInput, splitInput]);
+
+  // What the till has to tell the cashier after a sale lives in the order panel: a QR transfer
+  // not recorded (with its Record payment), a payment error, an order that may already exist.
+  // On a phone that panel is a sheet, so it opens for these and does not close while one is up;
+  // an emptied order with nothing to say sends the phone back to the menu.
+  const hasNotice = unsettled.length > 0 || (payError != null && !payOpen) || draftMaybePlaced;
+  React.useEffect(() => {
+    if (lines.length === 0 && !hasNotice) setCartOpen(false);
+  }, [lines.length, hasNotice]);
+  const noticeCount = unsettled.length + (payError != null && !payOpen ? 1 : 0) + (draftMaybePlaced ? 1 : 0);
+  const prevNoticeCount = React.useRef(0);
+  React.useEffect(() => {
+    if (noticeCount > prevNoticeCount.current) setCartOpen(true);
+    prevNoticeCount.current = noticeCount;
+  }, [noticeCount]);
 
   const discardParked = async (parkedId: string) => {
     if (
@@ -959,9 +1113,15 @@ function PosInner({
     };
 
     let result: PlaceOrderResult;
+    // Marked while the order is out, and dropped the moment it exists: a reload in between must
+    // not hand the cashier the same cart to charge a second time (SaleDraft.placingSince).
+    setDraftPlacing(true);
     try {
       result = await placeOrder(supabase, payload);
     } catch (err) {
+      // A refusal place-order spelled out proves there is no order: the cart is safe to keep.
+      // Anything else (a dropped answer) keeps the mark, so a reload warns instead.
+      if (!orderMayExist(parsePlaceOrderFailure((err as Error)?.message ?? String(err)))) setDraftPlacing(false);
       // A cashier mid-sale needs the reason, not a raw wire string in a browser alert().
       // Suspension makes place-order refuse every new order here, and the fix for that one
       // is on the Plan page, not at the till.
@@ -978,6 +1138,9 @@ function PosInner({
       setSubmitting(false);
       return;
     }
+
+    dropDraft();
+    setDraftMaybePlaced(false);
 
     // Said as soon as the order exists, whatever settling it does next: the number typed "for
     // points" only helps if the cashier can tell it found somebody.
@@ -1134,11 +1297,13 @@ function PosInner({
 
   return (
     <div className="flex h-dynamic-screen flex-col bg-background">
-      {/* Never overflows: on a tablet the controls used to run past the right edge and take the
-          sign-out button with them, so a cashier could not find the way out to switch to a manager
-          account. Tablet (md–lg): the title and sign-out share the first row and the till controls
-          wrap onto a second. Wide screens (xl): one row, as before. */}
-      <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border/60 bg-card px-4 py-3 md:px-6">
+      {/* One header on every device. The till's own controls (clock, parked, park, tables, recent,
+          printer) sit in one row on a wide screen (xl) and behind the Menu button below it, so a
+          phone and a tablet show the same tidy header. They used to be hidden outright below md,
+          which left a tablet in portrait with no way to clock in or reach Tables, and shown on a
+          wide phone, where they crowded the screen. Dine-in / Pickup / Delivery lives with the
+          order, in the order panel, so it is there on every device. */}
+      <header className="relative flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border/60 bg-card px-4 py-3 md:px-6">
         <div className="order-1 flex items-center gap-3">
           <div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-warm text-white shadow-warm">
             <Store className="h-5 w-5" />
@@ -1148,8 +1313,26 @@ function PosInner({
             <h1 className="whitespace-nowrap font-display text-lg font-bold">{t('header.title')}</h1>
           </div>
         </div>
-        <div className="order-3 hidden w-full flex-wrap items-center gap-2 md:flex xl:order-2 xl:w-auto xl:flex-1 xl:justify-end">
-            <ClockButton branchId={branchId} />
+        {tillMenuOpen && (
+          <div className="fixed inset-0 z-40 xl:hidden" aria-hidden onClick={() => setTillMenuOpen(false)} />
+        )}
+        {/* Mounted once: a dropdown below xl, an inline row from xl. Choosing something closes the
+            dropdown, except the clock, whose answer (or error) is shown right there. */}
+        <div
+          id={tillMenuId}
+          onClick={(e) => {
+            const hit = (e.target as HTMLElement).closest('a, button');
+            if (hit && !hit.closest('[data-keep-menu]')) setTillMenuOpen(false);
+          }}
+          className={`${tillMenuOpen ? 'flex' : 'hidden'} absolute right-3 top-full z-50 mt-2 w-64 flex-col items-stretch gap-1.5 rounded-2xl border border-border bg-card p-2 shadow-warm [&>a]:min-h-10 [&>a]:w-full [&>button]:min-h-10 [&>button]:w-full xl:static xl:order-2 xl:mt-0 xl:flex xl:w-auto xl:flex-1 xl:flex-row xl:flex-wrap xl:items-center xl:justify-end xl:gap-2 xl:rounded-none xl:border-0 xl:bg-transparent xl:p-0 xl:shadow-none xl:[&>a]:min-h-0 xl:[&>a]:w-auto xl:[&>button]:min-h-0 xl:[&>button]:w-auto`}
+        >
+            {/* In the dropdown the clock's error note opens leftwards, inside the screen. */}
+            <div
+              data-keep-menu
+              className="[&>div>button]:min-h-10 [&>div>button]:w-full [&_[role=alert]]:left-auto [&_[role=alert]]:right-0 [&_[role=alert]]:max-w-[calc(100vw-2rem)] xl:[&>div>button]:min-h-0 xl:[&>div>button]:w-auto xl:[&_[role=alert]]:left-0 xl:[&_[role=alert]]:right-auto"
+            >
+              <ClockButton branchId={branchId} />
+            </div>
             <button
               type="button"
               onClick={() => setShowParked((s) => !s)}
@@ -1178,27 +1361,8 @@ function PosInner({
               {t('header.recent')} →
             </a>
             <PrinterStatusButton />
-            <Segmented
-              value={channel}
-              onChange={(c) => {
-                setChannel(c as Channel);
-                // The table picker is hidden off dine-in but its state survives.
-                // Leaving it set would stamp a pickup order with a real table.
-                if (c !== 'dine_in') {
-                  setTableNumber('');
-                  setTableId(null);
-                }
-              }}
-              options={[
-                { value: 'dine_in', label: t('channel.dine_in'), icon: <Store className="h-4 w-4" /> },
-                { value: 'pickup', label: t('channel.pickup'), icon: <ShoppingBag className="h-4 w-4" /> },
-                ...(canDeliver
-                  ? [{ value: 'delivery', label: t('channel.delivery'), icon: <RiderIcon className="h-4 w-4" /> }]
-                  : []),
-              ]}
-            />
         </div>
-        <div className="order-2 ml-auto flex shrink-0 items-center gap-2 xl:order-3 xl:ml-0">
+        <div className="order-2 ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2 xl:order-3 xl:ml-0">
           <LocaleSwitcher compact />
           {/* A read-only look at the kitchen board, so the cashier can see where an order is
               without leaving the till. Nothing in it changes an order; the board itself, opened
@@ -1206,10 +1370,9 @@ function PosInner({
           {canViewKitchen && (
             <KitchenStatusButton branchId={branchId} leadMin={kitchenLeadMin} branchTimezone={branchTimezone} />
           )}
-          {/* The way across to the back office, in the cluster that never wraps away: the till
-              controls above are hidden below md, and this is the cashier's only route to the
-              dashboard the owner asked them to have (D1). A full page load, like Tables and
-              Recent: the back office is a different shell, not a panel of this one. */}
+          {/* The way across to the back office, in the cluster that never wraps away: the
+              cashier's route to the dashboard the owner asked them to have (D1). A full page load,
+              like Tables and Recent: the back office is a different shell, not a panel of this one. */}
           {canOpenDashboard && (
             <a
               href={`/b/${branchId}/dashboard`}
@@ -1222,6 +1385,25 @@ function PosInner({
               <span className="hidden sm:inline">{t('header.dashboard')}</span>
             </a>
           )}
+          {/* The till's controls on a phone or tablet (they are in the header row from xl). The
+              count is the parked carts, which would otherwise be out of sight. */}
+          <button
+            type="button"
+            onClick={() => setTillMenuOpen((o) => !o)}
+            aria-expanded={tillMenuOpen}
+            aria-controls={tillMenuId}
+            aria-label={t('header.menu')}
+            title={t('header.menu')}
+            className="focus-ring relative inline-flex h-9 min-w-9 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-2 text-xs font-semibold hover:bg-muted sm:px-2.5 xl:hidden"
+          >
+            <Menu className="h-[18px] w-[18px]" />
+            <span className="hidden sm:inline">{t('header.menu')}</span>
+            {parked.length > 0 && (
+              <span className="absolute -right-1.5 -top-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+                {parked.length}
+              </span>
+            )}
+          </button>
           {/* Every account that works the till signs out here, whether or not it also has a back
               office: swapping between a cashier and a manager account happens at this screen. */}
           <SignOutIconButton label className="border border-border bg-card text-danger hover:bg-danger/10" />
@@ -1281,9 +1463,13 @@ function PosInner({
 
       <div className="flex flex-1 overflow-hidden">
         {/* Left — menu grid */}
-        <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          {/* On a phone or tablet: the search on its own row and the categories in one row that
+              scrolls sideways, so the dishes get the screen instead of four rows of chips and the
+              search is wide enough to type in. From lg the wrapper dissolves (display: contents)
+              and everything wraps as before. */}
           <div className="flex flex-wrap items-center gap-2 border-b border-border/60 bg-card/50 px-4 py-3">
-            <div className="relative flex-1">
+            <div className="relative w-full lg:w-auto lg:flex-1">
               <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
                 value={search}
@@ -1292,9 +1478,10 @@ function PosInner({
                 className="focus-ring h-11 w-full rounded-full border border-border bg-card pl-10 pr-4 text-base"
               />
             </div>
+            <div className="-mx-4 flex w-[calc(100%+2rem)] gap-2 overflow-x-auto overscroll-x-contain px-4 [mask-image:linear-gradient(to_right,black_calc(100%-2.5rem),transparent)] [scrollbar-width:none] lg:contents">
             <button
               onClick={() => setActiveCategory('all')}
-              className={`focus-ring inline-flex h-10 items-center gap-2 rounded-full border px-3 text-sm font-semibold ${
+              className={`focus-ring inline-flex h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-full border px-3 text-sm font-semibold ${
                 activeCategory === 'all' ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card'
               }`}
             >
@@ -1303,7 +1490,7 @@ function PosInner({
             {combos.length > 0 && (
               <button
                 onClick={() => setActiveCategory('combos')}
-                className={`focus-ring inline-flex h-10 items-center gap-2 rounded-full border px-3 text-sm font-semibold ${
+                className={`focus-ring inline-flex h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-full border px-3 text-sm font-semibold ${
                   activeCategory === 'combos'
                     ? 'border-primary bg-primary text-primary-foreground'
                     : 'border-border bg-card'
@@ -1316,7 +1503,7 @@ function PosInner({
               <button
                 key={c.id}
                 onClick={() => setActiveCategory(c.id)}
-                className={`focus-ring inline-flex h-10 items-center gap-2 rounded-full border px-3 text-sm font-semibold ${
+                className={`focus-ring inline-flex h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-full border px-3 text-sm font-semibold ${
                   activeCategory === c.id
                     ? 'border-primary bg-primary text-primary-foreground'
                     : 'border-border bg-card'
@@ -1325,6 +1512,7 @@ function PosInner({
                 <span aria-hidden>{c.iconEmoji ?? '🍴'}</span> {c.name}
               </button>
             ))}
+            </div>
           </div>
           <div className="flex-1 overflow-y-auto p-4">
             {/* Above the dishes, not mixed into them: a combo is a different kind of thing
@@ -1444,12 +1632,63 @@ function PosInner({
               </div>
             )}
           </div>
+          {/* A phone has no room for the order beside the menu: the order is a sheet, and this
+              bar says what is in it and opens it. */}
+          {(lines.length > 0 || hasNotice) && (
+            <div className="border-t border-border/60 bg-card p-3 sm:hidden">
+              <button
+                ref={cartBarRef}
+                type="button"
+                onClick={() => setCartOpen(true)}
+                className={`focus-ring flex w-full items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left shadow-warm ${
+                  lines.length > 0 ? 'bg-gradient-warm text-white' : 'bg-warning text-white'
+                }`}
+              >
+                <span className="flex items-center gap-2 font-semibold">
+                  <ShoppingBag className="h-5 w-5" />
+                  {lines.length > 0
+                    ? t('cart.viewOrder', { count: lines.reduce((n, l) => n + l.quantity, 0) })
+                    : t('cart.needsAttention', { count: noticeCount })}
+                </span>
+                {lines.length > 0 && (
+                  <span className="font-display text-lg font-bold tabular-nums">{formatCurrency(total)}</span>
+                )}
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Right — cart pane */}
-        <aside className="flex w-[360px] flex-col border-l border-border/60 bg-card">
-          <div className="flex items-center justify-between border-b border-border/60 px-5 py-3">
-            <h2 className="font-display text-lg font-semibold">{t('cart.title')}</h2>
+        {/* Right — the order. A column beside the menu from sm (tablets and up); on a phone a
+            full-screen sheet opened from the bar above, with a way back to the menu. */}
+        <aside
+          role={cartSheet ? 'dialog' : undefined}
+          aria-modal={cartSheet ? true : undefined}
+          aria-labelledby={cartSheet ? cartTitleId : undefined}
+          onKeyDown={(e) => {
+            if (cartSheet && e.key === 'Escape' && !payOpen) {
+              e.stopPropagation();
+              setCartOpen(false);
+            }
+          }}
+          // Scrolls as a whole when it is taller than the screen (a landscape phone, a short
+          // tablet, a delivery order on a small phone), so Charge can always be reached.
+          className={`${cartOpen ? 'flex' : 'hidden'} fixed inset-0 z-40 flex-col overflow-y-auto bg-card sm:static sm:z-auto sm:flex sm:w-[340px] sm:shrink-0 sm:border-l sm:border-border/60 lg:w-[360px]`}
+        >
+          <div className="flex items-center justify-between gap-2 border-b border-border/60 px-5 py-3">
+            <div className="flex items-center gap-1">
+              <button
+                ref={cartBackRef}
+                type="button"
+                onClick={() => setCartOpen(false)}
+                aria-label={t('cart.backToMenu')}
+                className="focus-ring -ml-2 grid h-9 w-9 place-items-center rounded-full hover:bg-muted sm:hidden"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <h2 id={cartTitleId} className="font-display text-lg font-semibold">
+                {t('cart.title')}
+              </h2>
+            </div>
             {lines.length > 0 && (
               <button
                 onClick={clear}
@@ -1459,7 +1698,47 @@ function PosInner({
               </button>
             )}
           </div>
-          <div className="flex-1 overflow-y-auto p-3">
+          {/* What kind of order this is belongs with the order, so it is here on every device.
+              Tabs that share the panel's width by their labels' length, so a long label (Thai
+              "รับเองที่ร้าน") gets the room it needs; the shared Segmented ran past a tablet's panel. */}
+          <div className="border-b border-border/60 px-3 py-2.5">
+            <div role="radiogroup" aria-label={t('channel.label')} className="flex gap-1 rounded-full bg-muted p-1">
+              {(
+                [
+                  { value: 'dine_in', label: t('channel.dine_in'), icon: <Store className="h-4 w-4 shrink-0" /> },
+                  { value: 'pickup', label: t('channel.pickup'), icon: <ShoppingBag className="h-4 w-4 shrink-0" /> },
+                  ...(canDeliver
+                    ? [{ value: 'delivery', label: t('channel.delivery'), icon: <RiderIcon className="h-4 w-4 shrink-0" /> }]
+                    : []),
+                ] as { value: Channel; label: string; icon: React.ReactNode }[]
+              ).map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={channel === opt.value}
+                  onClick={() => {
+                    setChannel(opt.value);
+                    // The table picker is hidden off dine-in but its state survives.
+                    // Leaving it set would stamp a pickup order with a real table.
+                    if (opt.value !== 'dine_in') {
+                      setTableNumber('');
+                      setTableId(null);
+                    }
+                  }}
+                  className={`focus-ring flex min-h-touch min-w-0 flex-auto items-center justify-center gap-1 whitespace-nowrap rounded-full px-1.5 py-2 text-[13px] font-semibold transition-colors lg:gap-1.5 lg:text-sm ${
+                    channel === opt.value
+                      ? 'bg-primary text-primary-foreground shadow-warm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {opt.icon}
+                  <span className="truncate">{opt.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="min-h-[7.5rem] flex-1 overflow-y-auto p-3">
             {lines.length === 0 ? (
               <div className="grid h-full place-items-center text-center">
                 <div>
@@ -1535,7 +1814,7 @@ function PosInner({
           <div className="border-t border-border/60 p-4 space-y-3">
             {/* The customer's details scroll on their own, so a delivery's extra fields can
                 never push Charge off a short screen. */}
-            <div className="-mx-1 max-h-[42vh] space-y-3 overflow-y-auto px-1">
+            <div className="-mx-1 max-h-[42dvh] space-y-3 overflow-y-auto px-1">
               <div className={channel !== 'dine_in' ? 'grid grid-cols-2 gap-2' : ''}>
                 {/* Pickup and delivery are called out by name; dine-in is called out by
                     table, which the picker below already sets. Optional everywhere -- a queue
@@ -1775,6 +2054,27 @@ function PosInner({
               </div>
             )}
             {payError && !payOpen && <ErrorNote error={payError} />}
+            {draftMaybePlaced && (
+              <div role="alert" className="flex items-start justify-between gap-2 rounded-xl bg-warning/10 px-3 py-2 text-xs text-warning">
+                <p>
+                  {t.rich('cart.maybePlaced', {
+                    recent: (chunks) => (
+                      <a href={`/counter/${branchId}/recent`} className="font-semibold underline">
+                        {chunks}
+                      </a>
+                    ),
+                  })}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setDraftMaybePlaced(false)}
+                  aria-label={t('cart.dismiss')}
+                  className="focus-ring -m-1 rounded-full p-1 hover:bg-warning/10"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
             {customerFiled && (
               <div
                 role="status"
