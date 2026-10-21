@@ -9,7 +9,11 @@ const badgeVariants = cva(
       variant: {
         default: 'bg-primary/15 text-primary',
         solid: 'bg-primary text-primary-foreground shadow-soft',
-        accent: 'bg-accent/20 text-accent-foreground',
+        // accent-foreground is the colour for text ON the accent. Over a 20% tint that holds in
+        // light mode only: on a dark page the tint is dark too and the text vanished (Chef's Pick
+        // on the storefront). Dark mode uses the solid accent, which any tenant's accent and its
+        // foreground are chosen to read on.
+        accent: 'bg-accent/20 text-accent-foreground dark:bg-accent dark:text-accent-foreground',
         outline: 'border border-border bg-transparent text-foreground',
         success: 'bg-success/15 text-success',
         warning: 'bg-warning/15 text-warning',

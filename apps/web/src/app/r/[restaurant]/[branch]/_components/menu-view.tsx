@@ -587,7 +587,7 @@ function Hero({
               sizes="(max-width: 1024px) 100vw, 50vw"
               className="object-cover"
             />
-            <div className="absolute inset-x-4 bottom-4 rounded-2xl border border-white/30 bg-white/85 px-4 py-3 backdrop-blur-md">
+            <div className="absolute inset-x-4 bottom-4 rounded-2xl border border-white/30 bg-white/85 px-4 py-3 text-foreground shadow-soft backdrop-blur-md dark:border-white/10 dark:bg-card/80">
               <p className="text-xs font-medium text-muted-foreground">{t('hero.nowServing')}</p>
               <p className="font-display text-lg font-semibold">{title}</p>
             </div>

@@ -13,33 +13,5 @@
     "deliveryUnlockedAtThisBranch": "{branch} tiene la entrega a domicilio desactivada. Ya se desbloqueó en esta sucursal, así que volver a activarla no tiene cargo único: solo suma el precio mensual de esta sucursal.",
     "deliveryUnlockedHere": "Esta sucursal tiene la entrega a domicilio desactivada. Ya se desbloqueó aquí, así que volver a activarla no tiene cargo único: solo suma el precio mensual de esta sucursal.",
     "deliveryStoppedHere": "Esta sucursal ya no hace entregas."
-  },
-  "receipts": {
-    "title": "Recibos",
-    "subtitle": "Todos los recibos de venta emitidos para la sucursal {branch}…",
-    "empty": "Aún no se han emitido recibos. Los recibos se crean desde la página de Pedidos, en los pedidos completados.",
-    "columns": {
-      "receipt": "N.º de recibo",
-      "order": "N.º de pedido",
-      "customer": "Cliente",
-      "total": "Total",
-      "status": "Estado",
-      "issued": "Emitido"
-    },
-    "walkIn": "Cliente de paso",
-    "viewPrint": "Ver / imprimir",
-    "status": {
-      "issued": "Emitido",
-      "draft": "Borrador",
-      "pending": "Pendiente",
-      "canceled": "Cancelado",
-      "cancelled": "Cancelado",
-      "void": "Anulado",
-      "voided": "Anulado"
-    },
-    "openFailedTitle": "No se pudo abrir este recibo",
-    "openFailedBody": "El servicio de recibos devolvió el error {status}. Inténtalo de nuevo en un momento.",
-    "popupTitle": "Ventana emergente bloqueada",
-    "popupBody": "Permite las ventanas emergentes para este sitio y vuelve a abrir el recibo."
   }
 }

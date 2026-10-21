@@ -13,33 +13,5 @@
     "deliveryUnlockedAtThisBranch": "{branch} has delivery switched off. Delivery was unlocked here before, so switching it back on has no one-time fee — it only adds this branch's monthly price.",
     "deliveryUnlockedHere": "Delivery is switched off at this branch. It was unlocked here before, so switching it back on has no one-time fee — it only adds this branch's monthly price.",
     "deliveryStoppedHere": "This branch no longer delivers."
-  },
-  "receipts": {
-    "title": "Receipts",
-    "subtitle": "All sales receipts issued for branch {branch}…",
-    "empty": "No receipts issued yet. Receipts are created from the Orders page on completed orders.",
-    "columns": {
-      "receipt": "Receipt #",
-      "order": "Order #",
-      "customer": "Customer",
-      "total": "Total",
-      "status": "Status",
-      "issued": "Issued"
-    },
-    "walkIn": "Walk-in",
-    "viewPrint": "View / print",
-    "status": {
-      "issued": "Issued",
-      "draft": "Draft",
-      "pending": "Pending",
-      "canceled": "Cancelled",
-      "cancelled": "Cancelled",
-      "void": "Void",
-      "voided": "Void"
-    },
-    "openFailedTitle": "Could not open this receipt",
-    "openFailedBody": "The receipt service returned error {status}. Try again in a moment.",
-    "popupTitle": "Pop-up blocked",
-    "popupBody": "Allow pop-ups for this site, then open the receipt again."
   }
 }

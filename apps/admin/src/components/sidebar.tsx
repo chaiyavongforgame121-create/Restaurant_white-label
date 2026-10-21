@@ -182,7 +182,6 @@ export function Sidebar({
       id: 'records',
       title: t('sections.records'),
       items: [
-        { href: `${base}/receipts`, label: t('nav.receipts'), icon: Receipt, capability: 'orders.view' },
         { href: `${base}/activity`, label: t('nav.activityLog'), icon: ClipboardList, capability: 'reports.view' },
       ],
     },

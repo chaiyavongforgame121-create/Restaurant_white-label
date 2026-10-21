@@ -45,7 +45,7 @@ export function QuantityStepper({
         disabled={value <= min}
         onClick={() => onChange(Math.max(min, value - 1))}
         className={cn(
-          'focus-ring inline-flex items-center justify-center rounded-full bg-white shadow-soft transition disabled:opacity-40',
+          'focus-ring inline-flex items-center justify-center rounded-full bg-white shadow-soft transition disabled:opacity-40 dark:bg-card',
           s.btn,
         )}
       >

@@ -17,7 +17,6 @@ export type PageAccessArea =
   | 'qr'
   | 'promos'
   | 'orders'
-  | 'receipts'
   | 'activity'
   | 'ratings'
   | 'payouts'

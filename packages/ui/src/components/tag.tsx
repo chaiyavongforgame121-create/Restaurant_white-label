@@ -7,6 +7,9 @@ import { useUiStrings, type UiStrings } from './ui-strings';
 
 type DietaryTag = 'vegan' | 'halal' | 'spicy' | 'gluten-free' | 'new' | 'chef-pick';
 
+// The two theme-coloured tags are tints in light mode. On a dark page (and over a dish photo)
+// a 15-20% tint is dark as well, and accent-foreground, which is meant for text on the solid
+// accent, vanished into it; dark mode uses the solid colour with its own foreground instead.
 const tagMap: Record<
   DietaryTag,
   {
@@ -20,8 +23,8 @@ const tagMap: Record<
   halal: { label: 'dietaryHalal', icon: Sparkles, className: 'bg-teal-100 text-teal-700' },
   spicy: { label: 'dietarySpicy', icon: Flame, className: 'bg-rose-100 text-rose-700' },
   'gluten-free': { label: 'dietaryGlutenFree', icon: WheatOff, className: 'bg-amber-100 text-amber-800' },
-  new: { label: 'dietaryNew', icon: Sparkles, className: 'bg-primary/15 text-primary' },
-  'chef-pick': { label: 'dietaryChefPick', icon: Star, className: 'bg-accent/20 text-accent-foreground' },
+  new: { label: 'dietaryNew', icon: Sparkles, className: 'bg-primary/15 text-primary dark:bg-primary dark:text-primary-foreground' },
+  'chef-pick': { label: 'dietaryChefPick', icon: Star, className: 'bg-accent/20 text-accent-foreground dark:bg-accent dark:text-accent-foreground' },
 };
 
 export function DietaryBadge({ tag, className }: { tag: DietaryTag; className?: string }) {

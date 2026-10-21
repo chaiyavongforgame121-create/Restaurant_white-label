@@ -31,7 +31,7 @@ const buttonVariants = cva(
         danger:
           'bg-danger text-white hover:brightness-110 shadow-soft',
         glass:
-          'glass text-foreground hover:bg-white/80',
+          'glass text-foreground hover:bg-white/80 dark:hover:bg-card/80',
       },
       size: {
         sm: 'h-9 px-3.5 text-sm',
