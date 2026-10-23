@@ -9,7 +9,7 @@
  * worked, so the caller can point at the link to copy by hand instead of flashing "Copied".
  *
  * The same routine the staff invite panel grew (apps/admin …/staff-view.tsx), lifted here so
- * the admin and rider apps' "copy the FavorGO link" buttons behave alike.
+ * the admin and rider apps' "copy the FavorGo link" buttons behave alike.
  */
 export async function copyText(
   text: string,

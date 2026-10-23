@@ -26,7 +26,7 @@ interface Props {
 }
 
 /**
- * "Get the FavorGO app": the rider app's QR code, its address, and how to install it.
+ * "Get the FavorGo app": the rider app's QR code, its address, and how to install it.
  *
  * Riders used to learn the app's address by word of mouth — nothing in the back office
  * named it, so a manager recruiting riders had no link to hand over.

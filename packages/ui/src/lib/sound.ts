@@ -1,5 +1,5 @@
 /* Sounds generated in code (no audio files): the kitchen board's order chimes, the back office
- * dashboard's "something new needs you" alert, and FavorGO's offer ring. They share this module
+ * dashboard's "something new needs you" alert, and FavorGo's offer ring. They share this module
  * (and so one AudioContext per tab) rather than each carrying a copy, because every lesson below
  * was learned the hard way on the kitchen tablet and a second copy would have to learn them again.
  * It lived in apps/admin/src/lib/sound.ts until the rider app needed the same thing; the admin

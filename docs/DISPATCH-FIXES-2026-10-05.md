@@ -4,7 +4,7 @@ The owner reported, at Food Thai Thai:
 1. Two riders (Bobby Chu, Peter Box) "banned" — lift it (done by hand the same day), and add a **Lift cooldown** button.
 2. "Searching for a rider" takes very long and often ends in "No rider found — tap to retry".
 3. When the offered rider rejects, the job must go straight to the next rider, then the next, until there is nobody left.
-4. FavorGO must make a **sound** when an offer / job arrives.
+4. FavorGo must make a **sound** when an offer / job arrives.
 5. Dispatching **two or more orders at the same time** misbehaves (stacked orders both stuck on "No rider found").
 
 ## 1. What is actually wrong (live forensics, 2026-10-05)
@@ -45,7 +45,7 @@ The owner reported, at Food Thai Thai:
 | D6 | **Safe restart.** A staff restart is refused (`409 already_accepted`) once a rider has accepted. Restarting while an offer is open withdraws it without a strike. |
 | D7 | **The boards show the server's truth.** Kitchen and Live deliveries show: *Offered to {rider} · {countdown}*, *Searching — asked {n} riders*, or *No rider found — {reason}* (every rider asked / riders on cooldown / nobody online / no fresh GPS / search window over) only when the server says so — no client timer. The button is **Find rider again** (a new round). |
 | D8 | **Lift cooldown.** `public.lift_driver_cooldown(p_driver_id, p_branch_id, p_note)`: a platform admin, or staff with `drivers.manage` at **every** branch where the rider is not rejected (the same rule as KYC, because the cooldown is global). Clears the cooldown, the streak and the strike window; writes `audit_logs`. Button on the rider roster `/b/[branchId]/drivers` with a confirm. The rider app re-reads its row when it becomes visible. |
-| D9 | **FavorGO sound.** A shared `packages/ui/src/lib/sound.ts` (the kitchen's Web Audio chime, moved; admin re-exports it). An offer rings an urgent repeating chime (about every 3 s) and vibrates until it is accepted, declined or expires; a new active job rings once. Audio is unlocked by any tap (Go online, tabs) and a "Tap to enable sound" strip shows while it is locked. While the rider is online the screen is kept awake (wake lock), so offers keep arriving; the rider can turn it off. A failed reject is shown, not hidden. |
+| D9 | **FavorGo sound.** A shared `packages/ui/src/lib/sound.ts` (the kitchen's Web Audio chime, moved; admin re-exports it). An offer rings an urgent repeating chime (about every 3 s) and vibrates until it is accepted, declined or expires; a new active job rings once. Audio is unlocked by any tap (Go online, tabs) and a "Tap to enable sound" strip shows while it is locked. While the rider is online the screen is kept awake (wake lock), so offers keep arriving; the rider can turn it off. A failed reject is shown, not hidden. |
 | D10 | **Push, when the phone is locked** (needs the owner's VAPID setup, §4): the worker skips stale rows (an offer older than its expiry; anything else older than 30 minutes) instead of sending them, sends offers with `urgency: high` and a TTL equal to the offer's life, and the service worker tells an open app about a push and closes an offer's notification once it is gone. `notify_worker_url` (not a secret) is set in `private.app_settings` so the cron tick runs. |
 
 ## 3. Interfaces (the contract the builders share)

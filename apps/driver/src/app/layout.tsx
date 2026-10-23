@@ -31,7 +31,7 @@ export async function generateMetadata(): Promise<Metadata> {
     icons: {
       // Tab icons come from favicon-*.png, a cut of the car with no speed lines and solid wheels,
       // drawn larger in the circle — at 16-32px the full icon's speed lines and ringed wheels
-      // smear into a blob. No SVG is offered: the FavorGO art is a raster (public/icon.svg only
+      // smear into a blob. No SVG is offered: the FavorGo art is a raster (public/icon.svg only
       // wraps the PNG for old links), and an SVG candidate would win the tab over these
       // hand-sized PNGs in every browser that reads one.
       // public/favicon.ico (16/32/48, the same cut) is deliberately not listed: it exists for the

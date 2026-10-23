@@ -25,16 +25,16 @@
   "supportCenter": "Support center",
   "signOut": "Sign out",
   "share": {
-    "rowTitle": "Share FavorGO",
+    "rowTitle": "Share FavorGo",
     "rowSubtitle": "Show a code another rider scans to get the app",
-    "sheetTitle": "Share FavorGO",
-    "intro": "Let another rider scan this with their phone’s camera. It opens FavorGO, where they sign up and install it.",
-    "qrLabel": "QR code that opens FavorGO",
+    "sheetTitle": "Share FavorGo",
+    "intro": "Let another rider scan this with their phone’s camera. It opens FavorGo, where they sign up and install it.",
+    "qrLabel": "QR code that opens FavorGo",
     "copyLink": "Copy link",
     "copied": "Copied",
     "copyFailed": "Couldn’t copy — select the link above and copy it yourself.",
     "shareLink": "Share",
-    "shareText": "Deliver with FavorGO — get the rider app here:"
+    "shareText": "Deliver with FavorGo — get the rider app here:"
   },
   "summary": {
     "unreadable": "Could not check your documents just now",

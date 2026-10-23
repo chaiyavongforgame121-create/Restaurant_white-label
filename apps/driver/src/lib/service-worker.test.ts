@@ -197,8 +197,8 @@ describe('driver service worker: offers', () => {
     });
     await w.push(null);
     expect(w.open().map((n) => [n.title, n.options.body])).toEqual([
-      ['FavorGO', 'plain text'],
-      ['FavorGO', ''],
+      ['FavorGo', 'plain text'],
+      ['FavorGo', ''],
     ]);
   });
 });

@@ -147,7 +147,7 @@ export function DriverSessionProvider({ children }: { children: React.ReactNode 
     router.replace('/login');
   };
 
-  // The FavorGO splash (the owner's car and wordmark) while the rider is signed in and their
+  // The FavorGo splash (the owner's car and wordmark) while the rider is signed in and their
   // profile read: this is what a cold start of the installed app shows. Instant, because it is
   // also what the server renders, so it is the first thing on screen.
   if (loading && !driver) {

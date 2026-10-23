@@ -1,7 +1,7 @@
 import { useTranslations } from 'next-intl';
 
 /**
- * The FavorGO splash: the owner's car-and-wordmark art (public/brand/favorgo-splash.*) centred on
+ * The FavorGo splash: the owner's car-and-wordmark art (public/brand/favorgo-splash.*) centred on
  * white, with three orange dots under it.
  *
  * It is the app's boot screen: components/driver-session.tsx shows it while it signs the rider in
@@ -32,7 +32,7 @@ export function FavorGoSplash({ instant = false }: { instant?: boolean }) {
           src="/brand/favorgo-splash.png"
           width={451}
           height={485}
-          alt="FavorGO"
+          alt="FavorGo"
           fetchPriority="high"
           className="fg-splash__art"
         />

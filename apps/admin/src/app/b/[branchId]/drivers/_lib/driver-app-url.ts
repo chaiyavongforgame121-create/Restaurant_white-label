@@ -1,5 +1,5 @@
 /**
- * The address every "Get the FavorGO app" code in the back office points at.
+ * The address every "Get the FavorGo app" code in the back office points at.
  *
  * The rider app is a separate Vercel project, so admin only knows where it lives through
  * NEXT_PUBLIC_DRIVER_APP_URL. Unset or unusable, it falls back to the production

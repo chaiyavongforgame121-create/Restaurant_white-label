@@ -4,7 +4,7 @@ import * as React from 'react';
  * The app's name as riders see it. public/manifest.webmanifest and public/sw.js are static files
  * that cannot import this, so they spell it out themselves; keep all three in step.
  */
-export const APP_NAME = 'FavorGO';
+export const APP_NAME = 'FavorGo';
 
 // The car from public/icon.svg, in the same 512 box and facing right, so the mark inside the app
 // is the one on the rider's home screen. The wheel arches are arcs in the outline and the side
@@ -32,7 +32,7 @@ export interface FavorGoCarProps
 }
 
 /**
- * The FavorGO car glyph. It is wider than it is tall, so give it a box of roughly that shape
+ * The FavorGo car glyph. It is wider than it is tall, so give it a box of roughly that shape
  * (for example `h-10 w-16` for `full`, `h-5 w-6` for `compact`) or it letterboxes inside a square.
  * Decorative by default; pass `role="img"` and an `aria-label` where it stands alone.
  */

@@ -1,5 +1,5 @@
 /**
- * When FavorGO makes a noise, and when it stops. Pure, so the rules can be tested without a
+ * When FavorGo makes a noise, and when it stops. Pure, so the rules can be tested without a
  * phone: the component that plays the sound (components/driver-alerts.tsx) only asks these.
  *
  * Why the app rings at all: an offer lives for about a minute (branch offer_ttl_seconds, 75 s at
@@ -169,7 +169,7 @@ export function wantsWakeLock(input: { online: boolean; onDelivery: boolean; kee
   return input.onDelivery || (input.online && input.keepAwake);
 }
 
-/** A stored on/off switch: anything but the two words FavorGO writes falls back to the default. */
+/** A stored on/off switch: anything but the two words FavorGo writes falls back to the default. */
 export function readOnOff(raw: string | null | undefined, fallback: boolean): boolean {
   if (raw === 'on') return true;
   if (raw === 'off') return false;

@@ -1,4 +1,4 @@
-// One command to turn on push notifications to locked phones (FavorGO offers, diner order updates).
+// One command to turn on push notifications to locked phones (FavorGo offers, diner order updates).
 // Run from the repo root: node scripts/setup-vapid.cjs
 //
 // Generates a VAPID keypair and stores both keys straight into the Supabase Edge Function secrets

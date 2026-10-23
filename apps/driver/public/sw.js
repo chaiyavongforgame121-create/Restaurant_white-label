@@ -33,7 +33,7 @@
 //     the stale row on the next 410 and nothing re-subscribed, so the installed app went
 //     permanently silent. Re-subscribe here and hand the result to the page, which owns the RPC.
 //
-// v4 — the app is FavorGO now, with a car where the bicycle was. The icons kept their URLs, and
+// v4 — the app is FavorGo now, with a car where the bicycle was. The icons kept their URLs, and
 // v3 served every /icon*, /apple-touch-icon* and *.png|svg cache-first — which, for a file whose
 // name carries no hash, means for good: an installed rider would have kept the bicycle until
 // some later version bump. This bump purges v3's cache, and public/ files are now network-first
@@ -73,7 +73,7 @@ const CACHE_VERSION = 'favornoms-driver-v6';
 // The offline path, and only the offline path: the shell a signed-in rider lands on, the
 // screen an expired session lands on, and the icons their tab and the manifest point at.
 // favicon.svg went with the old vector car and icon.svg is only a wrapper of the PNG now: the
-// FavorGO art is a raster and the PNGs cover every size. No version bump for that — public/ files
+// FavorGo art is a raster and the PNGs cover every size. No version bump for that — public/ files
 // are network-first.
 const CACHE_FILES = [
   '/app/home',
@@ -387,12 +387,12 @@ self.addEventListener('push', (event) => {
   try {
     data = event.data ? event.data.json() : {};
   } catch {
-    data = { title: 'FavorGO', body: event.data ? event.data.text() : '' };
+    data = { title: 'FavorGo', body: event.data ? event.data.text() : '' };
   }
   if (!data || typeof data !== 'object') data = {};
   const now = Date.now();
   // The app's name, as in src/components/brand-mark.tsx (APP_NAME); a worker cannot import it.
-  const title = data.title || 'FavorGO';
+  const title = data.title || 'FavorGo';
   const tag = typeof data.tag === 'string' && data.tag ? data.tag : undefined;
   // notify-worker tags dispatch offers 'new_dispatch:<delivery id>' so each offer is its own
   // notification; order-status updates keep collapsing on one tag, which is what you want there.

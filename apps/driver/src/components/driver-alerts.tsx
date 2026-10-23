@@ -55,7 +55,7 @@ function vibrate(pattern: number | readonly number[]): boolean {
 }
 
 /**
- * Sound, vibration and the screen wake lock for FavorGO, in one place above every tab.
+ * Sound, vibration and the screen wake lock for FavorGo, in one place above every tab.
  *
  * - An offer rings an urgent chime about every three seconds, and vibrates, until the rider
  *   accepts or declines it or it expires. One buzz on arrival was the only alert before, and it

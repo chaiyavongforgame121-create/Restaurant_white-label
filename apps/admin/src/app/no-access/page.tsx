@@ -12,7 +12,7 @@ import { configuredDriverAppUrl } from '@/app/b/[branchId]/drivers/_lib/driver-a
  * scoped by drivers.user_id and driver_approvals. Bouncing them to a login loop or an
  * "access denied" they cannot resolve reads as a broken account.
  *
- * Telling a rider to "open the FavorGO app" is only half an answer when nothing says where
+ * Telling a rider to "open the FavorGo app" is only half an answer when nothing says where
  * it is, so the page carries the app's code and link too: a rider at a desktop scans it with
  * their phone, and one already on their phone taps straight through.
  */

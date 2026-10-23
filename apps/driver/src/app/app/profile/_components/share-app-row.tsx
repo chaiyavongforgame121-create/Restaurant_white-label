@@ -7,7 +7,7 @@ import { Check, ChevronRight, Copy, QrCode, Share2 } from 'lucide-react';
 import { Button, Sheet, copyText } from '@favornoms/ui';
 
 /**
- * "Share FavorGO": a code another rider scans off this phone to get the app.
+ * "Share FavorGo": a code another rider scans off this phone to get the app.
  *
  * Riders recruit riders — the one standing next to you at the pickup counter is the likeliest
  * next sign-up — and until now the only way to pass the app on was to spell out a
@@ -47,7 +47,7 @@ export function ShareAppRow() {
   const share = async () => {
     if (!url) return;
     try {
-      await navigator.share({ title: 'FavorGO', text: t('shareText'), url });
+      await navigator.share({ title: 'FavorGo', text: t('shareText'), url });
     } catch {
       /* closing the share sheet rejects with AbortError; nothing to report */
     }
