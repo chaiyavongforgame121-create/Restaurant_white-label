@@ -269,7 +269,7 @@ interface MenuViewProps {
   /** Schedule Delivery can be booked here (resolveScheduleDelivery). Defaults false so a missing prop
    *  cannot sell delivery. */
   canDeliver?: boolean;
-  /** This branch sells delivery at all (per branch since docs/PACKAGING-2026-09-23.md §2).
+  /** This branch delivers at all (per branch: its delivery switch, docs/PACKAGING-2026-10-24.md §3).
    *  Words only — canDeliver alone decides whether delivery is offered. Defaults true so a
    *  missing prop says "not right now" rather than declaring the branch delivery-free. */
   deliveryOffered?: boolean;

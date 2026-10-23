@@ -3,10 +3,11 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { Entitlements } from '@favornoms/shared';
 import {
-  deliveryOneTimePrice,
+  deliveryGateFrom,
+  deliveryOffReason,
+  deliverySettingsHref,
   navEntryAllowed,
   NO_WIND_DOWN,
-  oneTimePriceToShow,
   payoutWindowStart,
   PAYOUT_SUMMARY_WEEKS,
   type DeliveryWindDown,
@@ -74,26 +75,67 @@ describe('navEntryAllowed — a delivery entry is shown exactly while its screen
   });
 });
 
-describe('deliveryOneTimePrice — PKG-04: a paid unlock is never quoted again', () => {
-  it('quotes the catalog price at a branch that never unlocked delivery', () => {
-    expect(deliveryOneTimePrice(59, false)).toBe(59);
+describe('deliveryOffReason — why a branch does not deliver, in the two words a screen can use', () => {
+  it('has no reason at a branch that delivers, whatever else is read', () => {
+    expect(deliveryOffReason(true, true, true)).toBeNull();
+    expect(deliveryOffReason(true, true, null)).toBeNull();
+    // The branch payload is the server's combined answer; the switch read never overrides it.
+    expect(deliveryOffReason(true, true, false)).toBeNull();
   });
 
-  it('quotes nothing once at a branch whose unlock was already paid', () => {
-    // Coastal Grill's Hamburger switched delivery off with its $59 paid: back on is $0 once.
-    expect(deliveryOneTimePrice(59, true)).toBe(0);
+  it("blames the branch's own switch only when it was read as off", () => {
+    expect(deliveryOffReason(false, true, false)).toBe('switchedOff');
   });
 
-  it('guesses neither $59 nor $0 when the unlock or the catalog could not be read', () => {
-    expect(deliveryOneTimePrice(59, null)).toBeNull();
-    expect(deliveryOneTimePrice(null, false)).toBeNull();
-    expect(deliveryOneTimePrice(null, true)).toBeNull();
+  it('blames the restaurant when the switch is on and the branch still does not deliver', () => {
+    // The platform switched delivery off (feature_overrides): nothing in branch settings helps.
+    expect(deliveryOffReason(false, true, true)).toBe('notAvailable');
   });
 
-  it('prints a positive price, and leaves 0 or unknown out rather than showing "$0 once"', () => {
-    expect(oneTimePriceToShow(59)).toBe(59);
-    expect(oneTimePriceToShow(0)).toBeUndefined();
-    expect(oneTimePriceToShow(null)).toBeUndefined();
+  it('blames the restaurant once it has lapsed, even with the switch off', () => {
+    // Turning the switch on would not bring delivery back; the plan page, not this screen,
+    // is where a lapse is fixed.
+    expect(deliveryOffReason(false, false, false)).toBe('notAvailable');
+    expect(deliveryOffReason(false, false, true)).toBe('notAvailable');
+  });
+
+  it('claims nothing about the switch when it could not be read', () => {
+    expect(deliveryOffReason(false, true, null)).toBe('notAvailable');
+  });
+});
+
+describe('deliveryGateFrom — the gate every delivery screen reads', () => {
+  it('links to the switch only when the switch is the reason', () => {
+    expect(deliveryGateFrom('b1', false, true, false)).toEqual({
+      delivers: false,
+      reason: 'switchedOff',
+      settingsHref: '/b/b1/branch#delivery-switch',
+    });
+    expect(deliveryGateFrom('b1', false, true, true)).toEqual({
+      delivers: false,
+      reason: 'notAvailable',
+      settingsHref: null,
+    });
+    expect(deliveryGateFrom('b1', true, true, true)).toEqual({
+      delivers: true,
+      reason: null,
+      settingsHref: null,
+    });
+  });
+
+  it('never points at the plan page or carries a price', () => {
+    for (const gate of [
+      deliveryGateFrom('b1', false, true, false),
+      deliveryGateFrom('b1', false, false, true),
+      deliveryGateFrom('b1', true, true, true),
+    ]) {
+      expect(Object.keys(gate).sort()).toEqual(['delivers', 'reason', 'settingsHref']);
+      expect(gate.settingsHref ?? '').not.toContain('/settings/plan');
+    }
+  });
+
+  it('goes to branch settings, at the switch card', () => {
+    expect(deliverySettingsHref('3f2a')).toBe('/b/3f2a/branch#delivery-switch');
   });
 });
 
@@ -122,24 +164,76 @@ describe('payoutWindowStart — the same first week get_branch_payout_summary li
 });
 
 describe('the words the locked delivery screens use, in every language', () => {
+  type Tree = { [k: string]: string | Tree };
+  // A price, a price placeholder, or one of the old package numbers.
+  const PRICE = /\$|\{(price|once|monthly)\}|\b(29|30|49|59)\b/;
+
   for (const locale of LOCALES) {
-    it(`${locale}: says an unlocked branch pays nothing once, naming the branch`, () => {
+    it(`${locale}: says which reason, names the branch where it can, and never sells anything`, () => {
       const locked = (messages(locale, 'misc') as { lockedFeature: Record<string, string> }).lockedFeature;
-      expect(locked.deliveryUnlockedAtThisBranch).toContain('{branch}');
-      expect(locked.deliveryUnlockedHere).toBeTruthy();
-      expect(locked.deliveryUnlockedHere).not.toContain('{branch}');
-      const branch = (messages(locale, 'branch') as { settings: { delivery: Record<string, string> } })
-        .settings.delivery;
-      expect(branch.descriptionUnlocked).toContain('{branch}');
+      expect(locked.deliverySwitchedOffAtBranch).toContain('{branch}');
+      expect(locked.deliveryNotAvailableAtBranch).toContain('{branch}');
+      for (const key of [
+        'deliverySwitchedOffHere',
+        'deliveryNotAvailableHere',
+        'deliveryAskToSwitchOn',
+        'deliveryOpenSettings',
+        'deliveryStoppedNotAvailable',
+        'deliveryTurnBackOn',
+      ]) {
+        expect(locked[key], `${locale}: misc.lockedFeature.${key}`).toBeTruthy();
+        expect(locked[key]).not.toContain('{branch}');
+      }
+      // "Contact FavorNoms" is the only way forward when the restaurant has no delivery.
+      expect(locked.deliveryNotAvailableAtBranch).toContain('FavorNoms');
+      for (const value of Object.values(locked)) expect(value).not.toMatch(PRICE);
+    });
+
+    it(`${locale}: has none of the add-on copy left`, () => {
+      const locked = (messages(locale, 'misc') as { lockedFeature: Record<string, string> }).lockedFeature;
+      for (const key of [
+        'deliveryNotAtThisBranch',
+        'deliveryNotHere',
+        'deliveryUnlockedAtThisBranch',
+        'deliveryUnlockedHere',
+      ]) {
+        expect(locked[key], `${locale}: misc.lockedFeature.${key}`).toBeUndefined();
+      }
+      // The upsell card's prices and the "part of the {addon} add-on" lock went with the paywall.
+      const shell = messages(locale, 'shell') as Tree;
+      expect(shell.addon).toBeUndefined();
+      expect(shell.lockedFeature).toBeUndefined();
+      const branch = messages(locale, 'branch') as {
+        errors: Record<string, string>;
+        settings: { delivery: Record<string, string> };
+      };
+      expect(branch.errors.stripeDeliveryActive).toBeUndefined();
+      expect(branch.settings.delivery.descriptionUnlocked).toBeUndefined();
+    });
+
+    it(`${locale}: the branch switch says what on and off do, without a price`, () => {
+      const d = (messages(locale, 'branch') as { settings: { delivery: Record<string, string> } }).settings
+        .delivery;
+      for (const key of ['title', 'on', 'off', 'saving', 'included', 'unreadable']) expect(d[key], key).toBeTruthy();
+      expect(d.onBody).toContain('{branch}');
+      expect(d.offBody).toContain('{branch}');
+      expect(d.notAvailable).toContain('{branch}');
+      for (const value of Object.values(d)) expect(value).not.toMatch(PRICE);
     });
   }
 
   it('translates them rather than copying the English', () => {
     const en = (messages('en', 'misc') as { lockedFeature: Record<string, string> }).lockedFeature;
+    const enSwitch = (messages('en', 'branch') as { settings: { delivery: Record<string, string> } }).settings
+      .delivery;
     for (const locale of ['es', 'th', 'vi']) {
       const locked = (messages(locale, 'misc') as { lockedFeature: Record<string, string> }).lockedFeature;
-      expect(locked.deliveryUnlockedAtThisBranch).not.toBe(en.deliveryUnlockedAtThisBranch);
-      expect(locked.deliveryUnlockedHere).not.toBe(en.deliveryUnlockedHere);
+      for (const key of Object.keys(en)) expect(locked[key], `${locale}: ${key}`).not.toBe(en[key]);
+      const sw = (messages(locale, 'branch') as { settings: { delivery: Record<string, string> } }).settings
+        .delivery;
+      for (const key of ['title', 'onBody', 'offBody', 'included', 'notAvailable']) {
+        expect(sw[key], `${locale}: settings.delivery.${key}`).not.toBe(enSwitch[key]);
+      }
     }
   });
 });

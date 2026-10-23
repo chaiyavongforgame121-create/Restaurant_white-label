@@ -44,9 +44,10 @@ export default async function PlatformPage() {
     // Only for cancel_at_period_end — entitlements_json does not expose it.
     supabase.from('subscriptions').select('restaurant_id, cancel_at_period_end').in('restaurant_id', ids),
     listBillingProducts(supabase),
-    // The one-time ledger. Under the 2026-09-23 packaging the monthly totals no
-    // longer contain the $228 / $99 / $59 fees, so without this the console's
-    // only revenue figures are the restaurants' own takings.
+    // The one-time ledger. The monthly totals never contain the one-time fees (the
+    // $199 first-time setup, $89 per additional branch, and whatever older setup fees
+    // were paid), so without this the console's only revenue figures are the
+    // restaurants' own takings.
     supabase.from('billing_charges').select('net_amount').eq('status', 'paid'),
   ]);
 

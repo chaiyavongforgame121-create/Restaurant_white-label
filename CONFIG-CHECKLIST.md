@@ -149,10 +149,18 @@ JSON.parse(atob(session.access_token.split('.')[1]));
 **Needs deploy from local source:**
 
 ```bash
+# One plan (docs/PACKAGING-2026-10-24.md): apply migration 20261024100000_single_plan.sql
+# FIRST, then push to main (Vercel rebuilds web and admin), then deploy place-order, import-menu,
+# stripe-billing and stripe-webhook. They carry the new delivery rule and Stripe catalog
+# (_shared/entitlements.ts, _shared/stripe-billing.ts). Migration before push: the landing page
+# caches the catalog for an hour under 'landing-billing-products-v2' from its first visit, and the
+# platform drawer's delivery note assumes the plan already grants delivery.
+
 # These need an UPGRADE (source is newer than active version)
 supabase functions deploy place-order            # v4 → v8 (modifiers + combos + happy hour + scheduling + gift cards)
 supabase functions deploy notify-worker          # adds gift_card_issued, birthday_reward, abandoned_cart, waitlist_ready templates
 supabase functions deploy issue-tax-invoice      # Thai E-Tax XML → US HTML receipt
+supabase functions deploy import-menu            # AI menu import: now needs ai_menu_import, which no plan grants
 
 # Stripe. They ship DORMANT: with no STRIPE_SECRET_KEY set they return 503
 # stripe_not_configured, and the plan page falls back to the manual
@@ -202,8 +210,8 @@ supabase link --project-ref ayyfczidnzxetndiijmv
 | `STRIPE_PUBLISHABLE_KEY` | API keys. The storefront gets it from `stripe-create-payment-intent`, so no app env is needed |
 
 > **Two different money flows share these keys — don't confuse them.**
-> - *Packages* ($170 once for the base with its first branch, $70 once per extra branch, $29 a month
->   per branch, +$30 a month per branch with delivery; prices live in `billing_products`) are paid by
+> - *Packages* (one plan: $199 once for the first branch, $89 once per additional branch, $49 a month
+>   per branch, delivery included; prices live in `billing_products`) are paid by
 >   the restaurant to **the platform**, on **our** Stripe account, when card billing is switched on.
 > - *Order payments* are **direct charges on each branch's own connected Stripe
 >   account** (Stripe Connect, owner decision 2026-09-24,

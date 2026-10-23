@@ -28,7 +28,7 @@ import {
 } from '@favornoms/shared';
 import { Card } from '@favornoms/ui';
 import { getBranchAccess } from '@/lib/capabilities';
-import { deliveryPlanHref, resolveDeliveryWindDown } from '@/lib/delivery-gate';
+import { resolveDeliveryGate, resolveDeliveryWindDown } from '@/lib/delivery-gate';
 import { AccessDenied } from '@/components/access-denied';
 // The plan page's card-rail rules, so the two screens cannot disagree about one bill.
 import {
@@ -123,10 +123,12 @@ export default async function DashboardPage({ params }: Props) {
   const entitlements = await getEntitlementsForBranch(supabase, branchId);
   const trialDays = trialDaysLeft(entitlements);
   // Resolved FOR this branch, so `delivery` is this branch's answer and not the
-  // restaurant's: delivery is bought per branch (docs/PACKAGING-2026-09-23.md §2). Every
-  // delivery thing on this page — the rider and withdrawal reads, the no-pin and no-riders
-  // warnings, the Deliveries tile, the bookings bucket — hangs off this one value, so they
-  // all follow the branch switcher together.
+  // restaurant's: delivery is in the plan at every branch, behind a free switch in branch
+  // settings (docs/PACKAGING-2026-10-24.md §3), so this is true unless that switch is off or
+  // the restaurant does not have delivery right now. Every delivery thing on this page — the
+  // rider and withdrawal reads, the no-pin and no-riders warnings, the Deliveries tile, the
+  // bookings bucket — hangs off this one value, so they all follow the branch switcher
+  // together.
   const deliverySold = hasFeature(entitlements, 'delivery');
   // Switched off here, but riders still out or still owed. The Live deliveries board and
   // Driver payouts stay open for that (their own pages decide it again), and the Schedule
@@ -135,8 +137,15 @@ export default async function DashboardPage({ params }: Props) {
   // delivery-unaccepted buckets vanished, because loadBranchDashboard was told delivery was
   // off and never issued the read. A rider failing on an in-flight run was then surfaced
   // nowhere at all. A few head counts, and only while delivery is off.
-  const windDown = await resolveDeliveryWindDown(supabase, branchId, deliverySold);
-  // The Live deliveries board is open: the add-on, or runs it still shows (the page's own
+  //
+  // When it does not deliver, the gate also says why — the branch's switch, or the whole
+  // restaurant — so the Deliveries tile can say which and link to the switch only when it is
+  // the switch. Both reads happen only while delivery is off here.
+  const [windDown, deliveryGate] = await Promise.all([
+    resolveDeliveryWindDown(supabase, branchId, deliverySold),
+    resolveDeliveryGate(supabase, branchId, entitlements),
+  ]);
+  // The Live deliveries board is open: delivery is on, or runs it still shows (the page's own
   // rule, hasRunsOut). The Deliveries tile and the delivery-failed / delivery-unaccepted
   // alerts follow it and link to it, so none of them ever leads to a locked screen.
   const deliveryBoardOpen = deliverySold || windDown.runsOut;
@@ -564,15 +573,16 @@ export default async function DashboardPage({ params }: Props) {
   const delta = (a: number, prev: number) => (prev > 0 ? ((a - prev) / prev) * 100 : undefined);
 
   const salesFailed = !!snapshot.trend.error;
-  // The Deliveries tile opens the board (delivery.manage) or, where the branch does not deliver,
-  // its Delivery switch on the plan page (billing.manage). Without the right to either it is a
-  // plain number.
+  // The Deliveries tile opens the board (delivery.manage) or, where the branch switched
+  // delivery off, that switch in branch settings (branch.settings). Delivery off for the whole
+  // restaurant has nothing to open, and the plan page sells nothing for it. Without the right
+  // to either it is a plain number.
   const deliveriesTileHref = deliveryBoardOpen
     ? showDeliveryWork
       ? `/b/${branchId}/deliveries`
       : undefined
-    : canRenew
-      ? deliveryPlanHref(branchId)
+    : canSetUpBranch
+      ? (deliveryGate.settingsHref ?? undefined)
       : undefined;
   const tiles: OverviewTile[] = [
     ...(canSeeMoney
@@ -621,15 +631,14 @@ export default async function DashboardPage({ params }: Props) {
     },
     {
       label: t('overview.deliveries.label'),
-      // Straight to this branch's Delivery switch, not the bare plan page: the merchant
-      // may already deliver from another branch, so "add delivery" is a question about
-      // which branch.
       href: deliveriesTileHref,
       value: !deliveryBoardOpen || snapshot.deliveries.error ? '—' : deliveries.inFlight.toString(),
       // Without the stalled line a truthful 0 reads as a broken tile: one branch carries
       // thirteen June test runs that the board itself parks as forgotten.
       sub: !deliveryBoardOpen
-        ? t('overview.deliveries.notOffered')
+        ? deliveryGate.reason === 'switchedOff'
+          ? t('overview.deliveries.switchedOff')
+          : t('overview.deliveries.notAvailable')
         : snapshot.deliveries.error
           ? t('overview.deliveries.failed')
           : !deliverySold

@@ -294,7 +294,7 @@ export async function getReportSections(
   supabase: ReportClient,
   branchId: string,
   range: ReportRange,
-  // Delivery is sold per branch (docs/PACKAGING-2026-09-23.md §2) and
+  // Delivery is answered per branch (docs/PACKAGING-2026-10-24.md §3) and
   // get_branch_delivery_report has no entitlement check of its own, so a branch that does
   // not deliver is not asked at all. `{ data: null, error: null }` is the shape a quiet
   // section already has, so nothing downstream reads it as a failure.

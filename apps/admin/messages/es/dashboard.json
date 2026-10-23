@@ -48,7 +48,7 @@
     },
     "noPin": {
       "label": "La entrega a domicilio está activada, pero esta sucursal no tiene pin en el mapa",
-      "why": "No se pueden asignar repartidores a los pedidos a domicilio de esta sucursal hasta que se coloque el pin.",
+      "why": "No se pueden asignar repartidores a los pedidos a domicilio de esta sucursal hasta que se coloque el pin. Si esta sucursal no hace entregas, desactiva la entrega en Configuración de sucursal.",
       "link": "Colocar el pin"
     },
     "tax": {
@@ -68,7 +68,7 @@
     },
     "noRiders": {
       "label": "La entrega está activada, pero no hay repartidores aprobados para esta sucursal",
-      "why": "Los pedidos a domicilio de esta sucursal no se pueden ofrecer a nadie hasta que apruebes repartidores para ella.",
+      "why": "Los pedidos a domicilio de esta sucursal no se pueden ofrecer a nadie hasta que apruebes repartidores para ella. Si esta sucursal no hace entregas, desactiva la entrega en Configuración de sucursal.",
       "link": "Repartidores"
     }
   },
@@ -93,7 +93,8 @@
       "label": "Entregas activas",
       "failed": "No se pudieron leer las entregas",
       "stalled": "{count, plural, one {# estancada} other {# estancadas}}",
-      "notOffered": "Esta sucursal no hace entregas",
+      "switchedOff": "La entrega está desactivada aquí",
+      "notAvailable": "La entrega no está disponible ahora",
       "windingDown": "Las entregas están desactivadas aquí; los últimos repartos siguen en curso"
     }
   },

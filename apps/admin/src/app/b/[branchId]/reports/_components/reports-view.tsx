@@ -18,6 +18,7 @@ import { SectionPayments } from './section-payments';
 import { ErrorDetail } from './section-frame';
 import { reportRangeLabel, type ReportRange } from './report-range';
 import type { ReportSections, SectionError } from './report-queries';
+import type { DeliveryGate } from '@/lib/delivery-gate-model';
 
 interface Props {
   branchId: string;
@@ -28,12 +29,12 @@ interface Props {
    *  with the report about which day "today" is. */
   today: string;
   sections: ReportSections;
-  /** Delivery is sold per branch: this is THIS branch's answer, not the restaurant's. */
-  canUseDelivery: boolean;
+  /** Does THIS branch deliver, and if not, why (resolveDeliveryGate). */
+  deliveryGate: DeliveryGate;
+  /** branch.settings: may follow the Delivery section's link to the switch. */
+  canSwitchDelivery: boolean;
   /** Named in the Delivery section so "does not deliver" says which branch. */
   branchName: string;
-  /** The plan page with this branch's Delivery switch pre-selected. */
-  deliveryPlanHref: string;
 }
 
 const ANCHORS = ['sales', 'orders', 'menu', 'delivery', 'customers', 'payments'] as const;
@@ -45,9 +46,9 @@ export function ReportsView({
   range,
   today,
   sections,
-  canUseDelivery,
+  deliveryGate,
+  canSwitchDelivery,
   branchName,
-  deliveryPlanHref,
 }: Props) {
   const t = useTranslations('reports');
   // The tier names are the restaurant’s to set, so the customers table has to ask for them
@@ -175,9 +176,9 @@ export function ReportsView({
         result={sections.delivery}
         currency={currency}
         branchId={branchId}
-        delivers={canUseDelivery}
+        gate={deliveryGate}
+        canSwitch={canSwitchDelivery}
         branchName={branchName}
-        planHref={deliveryPlanHref}
       />
       <SectionCustomers result={sections.customers} currency={currency} tierLabels={tierLabels} />
       <SectionPayments result={sections.payments} currency={currency} branchId={branchId} />

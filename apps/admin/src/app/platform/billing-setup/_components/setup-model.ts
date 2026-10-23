@@ -363,8 +363,9 @@ export function statusLoadErrorKey(message: string): string {
  */
 export function setEnabledErrorKey(message: string): string {
   if (/stripe_billing_failed:not_ready\b/.test(message)) return 'stripe.setup.switch.errors.notReady';
-  // A Catalog monthly product (Base, a seat, Delivery) is missing or unpriced, so there is
-  // nothing to make the Stripe prices from.
+  // A Catalog monthly product (the plan, or the additional branch) is missing or unpriced, so
+  // there is nothing to make the Stripe prices from. The withdrawn Delivery product is not
+  // needed (docs/PACKAGING-2026-10-24.md §4.3).
   if (/stripe_billing_failed:catalog_incomplete\b/.test(message)) {
     return 'stripe.setup.switch.errors.catalogIncomplete';
   }

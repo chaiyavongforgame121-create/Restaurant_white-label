@@ -47,6 +47,7 @@
 - [x] เห็น "Start free trial" button + "See a live menu" button
 - [x] เห็น 6 feature cards (Customer storefront, KDS, Stripe, Driver dispatch, Marketing, Reports)
 - [ ] เห็น pricing tiles — **repriced 2026-07-25**, re-verify:
+      (prices here are historical; current ones: `docs/PACKAGING-2026-10-24.md`)
       Base $199 (Card Payment + AI menu import, 1 branch) ·
       +$99 extra branch · +$49 Delivery · +$59 AI Suite ·
       Pro Start-up $0 / 14-day trial, no card
@@ -568,6 +569,8 @@ Smoke-test ยิงสดที่ `POST /functions/v1/place-order` branch `444
 - [ ] Inline save flow not exercised in this pass
 
 ## 5.6 Plan & billing — **rewritten + re-verified 2026-07-25**
+
+> Prices in this section are historical (2026-07-25); current ones: `docs/PACKAGING-2026-10-24.md`.
 
 Verified against the live dev DB over the running dev servers (the Chrome
 extension was unreachable, so pages were fetched server-rendered with a real

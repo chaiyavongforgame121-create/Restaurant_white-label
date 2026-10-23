@@ -45,8 +45,8 @@ export default async function ReportsPage({ params, searchParams }: Props) {
   const range = parseReportRange(sp, timezone, now);
   // The Delivery section was rendered for every branch, delivery or not, and its RPC has no
   // entitlement check — so a branch that does not deliver got a full delivery report. It is
-  // the branch's own answer now, and the section says so rather than disappearing without a
-  // word (a merchant who pays for delivery at their other branch would read that as a bug).
+  // the branch's own answer now, and the section says so, and why, rather than disappearing
+  // without a word (a merchant whose other branches deliver would read that as a bug).
   const gate = await resolveDeliveryGate(supabase, branchId);
   const sections = await getReportSections(supabase, branchId, range, gate.delivers);
 
@@ -58,9 +58,10 @@ export default async function ReportsPage({ params, searchParams }: Props) {
       range={range}
       today={localDay(now, timezone)}
       sections={sections}
-      canUseDelivery={gate.delivers}
+      deliveryGate={gate}
+      // The switch is in branch settings; only a viewer who may open them gets the link.
+      canSwitchDelivery={can('branch.settings')}
       branchName={branch.name}
-      deliveryPlanHref={gate.planHref}
     />
   );
 }

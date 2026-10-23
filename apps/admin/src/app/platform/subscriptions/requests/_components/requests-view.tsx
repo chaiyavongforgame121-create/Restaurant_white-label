@@ -10,12 +10,13 @@
 // so a code switched off or expired since the merchant was quoted never blocks Approve.
 //
 // Approving also REPLACES the whole package: billing_apply_selection deletes every
-// line item the request does not name, switches delivery off at every branch the
-// request does not list, and restarts the month from now(). The card used to show
-// only the request, so an old "Base, 3 seats" request read like an upgrade while it
-// would have stripped Delivery from a store paying for it. Each pending card shows
-// what the store has today and what approving takes away, and a removal has to be
-// confirmed by name.
+// line item the request does not name and restarts the month from now(). The card used
+// to show only the request, so an old request read like an upgrade while it would have
+// taken seats away or thrown out days already paid for. Each pending card shows what
+// the store has today and what approving takes away, and a loss has to be confirmed.
+// Since 2026-10-24 (docs/PACKAGING-2026-10-24.md) there is one plan with every feature,
+// delivery at every branch included, so a request is a plan and a branch count and
+// nothing else; an old request's delivery branch list is history and is not read.
 //
 // The two money figures are shown apart and never summed (the owner's rule): what
 // is payable ONCE if this is approved — already net of any code — and what the
@@ -38,7 +39,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { useFormatter, useLocale, useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Check, ExternalLink, X } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import {
@@ -47,14 +48,12 @@ import {
   type RestaurantSubscriptionRow,
 } from '@favornoms/database/queries';
 import {
-  ADDON_DELIVERY,
   DEFAULT_UI_LOCALE,
   FEATURE_KEYS,
   billingErrorMessage,
   featureLabel,
   intlLocaleFor,
   isUiLocale,
-  packageMonthlyTotal,
   selectionFeatures,
   type BillingProduct,
   type PackageSelection,
@@ -66,9 +65,10 @@ import {
   billingErrorOf,
   decisionErrorKey,
   formatMoney,
-  requestAsk,
   requestOneTime,
-  type PlatformBranchLite,
+  requestSeats,
+  sellableCatalog,
+  sellableMonthlyTotal,
 } from '../../../_components/platform-billing';
 import {
   isPaymentInProgressError,
@@ -117,7 +117,6 @@ export function RequestsView({
   requests,
   status,
   packages,
-  branches,
   catalog,
   nowMs,
   cardPayments = false,
@@ -128,10 +127,8 @@ export function RequestsView({
   /** Each requesting restaurant's package today, keyed by restaurant id. A missing
    *  key means the read failed, not that the store has no package. */
   packages: Record<string, RestaurantSubscriptionRow>;
-  /** Every branch of each requesting restaurant, so delivery is named rather than
-   *  counted: "delivery at Food Thai Thai", not "delivery × 1". */
-  branches: Record<string, PlatformBranchLite[]>;
-  /** The full catalog, inactive products included, priced the way the RPC prices. */
+  /** The full catalog, inactive products included so every name resolves. Only its
+   *  active products are ever priced (sellableCatalog). */
   catalog: BillingProduct[];
   /** The server clock, so dates render identically on both sides. */
   nowMs: number;
@@ -194,7 +191,6 @@ export function RequestsView({
               key={r.id}
               request={r}
               current={packages[r.restaurant_id] ?? null}
-              branches={branches[r.restaurant_id] ?? []}
               catalog={catalog}
               nowMs={nowMs}
               cardSwitchOn={cardSwitchOn}
@@ -210,7 +206,6 @@ export function RequestsView({
 function RequestCard({
   request,
   current,
-  branches,
   catalog,
   nowMs,
   cardSwitchOn,
@@ -218,7 +213,6 @@ function RequestCard({
 }: {
   request: BillingRequest;
   current: RestaurantSubscriptionRow | null;
-  branches: PlatformBranchLite[];
   catalog: BillingProduct[];
   nowMs: number;
   cardSwitchOn: boolean | null;
@@ -226,7 +220,6 @@ function RequestCard({
 }) {
   const router = useRouter();
   const t = useTranslations('platformBilling');
-  const format = useFormatter();
   const locale = useUiLocale();
   const confirm = useConfirm();
   const [busy, setBusy] = React.useState<'approve' | 'reject' | null>(null);
@@ -244,29 +237,12 @@ function RequestCard({
   const name = request.restaurant_name ?? t('requests.thisRestaurant');
   const noPackage = t('requests.noPackage');
   const diff = React.useMemo(
-    () =>
-      pending && current
-        ? packageDiff(request, current, branches, catalog, nowMs, locale, noPackage)
-        : null,
-    [pending, request, current, branches, catalog, nowMs, locale, noPackage],
+    () => (pending && current ? packageDiff(request, current, catalog, nowMs, locale, noPackage) : null),
+    [pending, request, current, catalog, nowMs, locale, noPackage],
   );
 
-  const ask = requestAsk(request.branch_seats, request.delivery_branch_ids, branches);
+  const seats = requestSeats(request.branch_seats);
   const oneTime = requestOneTime(request);
-
-  // Branch names are the merchant's own words; only the list punctuation is localized.
-  const nameList = (names: string[], unnamed = 0) =>
-    format.list(
-      unnamed > 0 ? [...names, t('requests.unnamedBranches', { count: unnamed })] : names,
-      { type: 'conjunction' },
-    );
-
-  const deliveryText =
-    ask.deliveryBranchNames.length === 0 && ask.unnamedDeliveryBranches === 0
-      ? t('requests.deliveryNone')
-      : t('requests.deliveryAt', {
-          branches: nameList(ask.deliveryBranchNames, ask.unnamedDeliveryBranches),
-        });
 
   const perMonth = (amount: string) =>
     t.rich('perMonth', {
@@ -358,11 +334,11 @@ function RequestCard({
           {t('requests.requested')}
         </p>
       )}
-      {/* What is being asked for, in a sentence: "2 branches, delivery at Food
-          Thai Thai". The old row of add-on pills could not say WHICH branch. */}
+      {/* What is being asked for: the plan and how many branches. Every feature comes
+          with the plan, so there is nothing else to ask for. */}
       <div className={`${pending ? 'mt-1.5' : 'mt-3'} flex flex-wrap items-center gap-2 text-sm`}>
         <Badge variant="outline">{planName(catalog, request.plan_code, noPackage)}</Badge>
-        <span>{t('requests.asking', { seats: ask.seats, delivery: deliveryText })}</span>
+        <span>{t('requests.asking', { seats })}</span>
       </div>
 
       {/* Two totals, never one. Paid once today, then every month. */}
@@ -448,7 +424,7 @@ function RequestCard({
           it is only shown where Approve is. */}
       {rail.showDiff &&
         (diff ? (
-          <PackageComparison diff={diff} nameList={nameList} />
+          <PackageComparison diff={diff} />
         ) : (
           <p className="mt-4 rounded-xl bg-warning/10 px-3 py-2 text-sm text-warning">
             {t('requests.loadFailed', { name })}
@@ -494,13 +470,7 @@ function RequestCard({
   );
 }
 
-function PackageComparison({
-  diff,
-  nameList,
-}: {
-  diff: PackageDiff;
-  nameList: (names: string[], unnamed?: number) => string;
-}) {
+function PackageComparison({ diff }: { diff: PackageDiff }) {
   const t = useTranslations('platformBilling');
   const locale = useUiLocale();
   const seatClass =
@@ -516,15 +486,7 @@ function PackageComparison({
         </p>
         <div className="mt-1.5 flex flex-wrap items-center gap-2">
           <Badge variant="outline">{diff.planFrom}</Badge>
-          <span>
-            {t('requests.asking', {
-              seats: diff.seatsFrom,
-              delivery:
-                diff.deliveryFrom.length === 0
-                  ? t('requests.deliveryNone')
-                  : t('requests.deliveryAt', { branches: nameList(diff.deliveryFrom) }),
-            })}
-          </span>
+          <span>{t('requests.asking', { seats: diff.seatsFrom })}</span>
           <span className="ml-auto font-display text-lg font-bold">
             {t.rich('perMonth', {
               amount: money(diff.totalFrom),
@@ -546,16 +508,6 @@ function PackageComparison({
           {t('requests.approving')}
         </p>
         <ul className="mt-1.5 space-y-1">
-          {diff.deliveryRemoves.length > 0 && (
-            <li className="font-semibold text-danger">
-              {t('requests.deliveryOff', { branches: nameList(diff.deliveryRemoves) })}
-            </li>
-          )}
-          {diff.deliveryAdds.length > 0 && (
-            <li className="font-semibold text-success">
-              {t('requests.deliveryOn', { branches: nameList(diff.deliveryAdds) })}
-            </li>
-          )}
           {diff.removes.length > 0 && (
             <li className="font-semibold text-danger">
               {t('requests.removes', { items: diff.removes.join(', ') })}
@@ -613,12 +565,7 @@ function PackageComparison({
 interface PackageDiff {
   planFrom: string;
   planTo: string;
-  /** Branch names delivering today. */
-  deliveryFrom: string[];
-  /** Branch names approving switches ON / OFF. */
-  deliveryAdds: string[];
-  deliveryRemoves: string[];
-  /** Feature labels (delivery excluded — it is per branch above) lost and gained. */
+  /** Feature labels approving takes away and adds (the plan's own map, overrides applied). */
   removes: string[];
   adds: string[];
   seatsFrom: number;
@@ -644,7 +591,6 @@ function planName(catalog: BillingProduct[], code: string, noPackage: string): s
 function packageDiff(
   request: BillingRequest,
   current: RestaurantSubscriptionRow,
-  branches: PlatformBranchLite[],
   catalog: BillingProduct[],
   nowMs: number,
   locale: UiLocale,
@@ -652,43 +598,33 @@ function packageDiff(
   noPackage: string,
 ): PackageDiff {
   const ent = current.entitlements;
+  // The request's plan and seats, nothing else: its delivery_branch_ids (an old request's) is
+  // ignored by the server, so it is ignored here too.
   const next: PackageSelection = {
     planCode: request.plan_code,
-    branchSeats: Math.max(1, Math.trunc(request.branch_seats || 1)),
-    deliveryBranchIds: [...request.delivery_branch_ids],
+    branchSeats: requestSeats(request.branch_seats),
   };
+  // Money and grants come from the active products only. The full catalog is read so every
+  // name resolves, and a withdrawn row with a price left on it must not add to "New total".
+  const sellable = sellableCatalog(catalog);
 
-  // Delivery is compared branch by branch, because that is what it is now. An id
-  // with no branch on hand is left out of the NAMES (there is nothing to print)
-  // but the card still counts it in the request's own summary above.
-  const nameOf = (id: string) => branches.find((b) => b.id === id)?.name ?? null;
-  const namesOf = (ids: string[]) =>
-    ids.map(nameOf).filter((n): n is string => typeof n === 'string' && n.length > 0);
-  const wanted = new Set(next.deliveryBranchIds);
-  const held = new Set(ent.deliveryBranchIds);
-
-  // Feature-level loss catches what the branch list cannot: a trialing store has
-  // every feature through the trial PLAN, so a Base request switches Digital
-  // Signage off without any branch changing. Skipped when the catalog did not
-  // load — every feature would then read as removed.
+  // Feature-level loss: the plan's own map, compared with what the store has today. Both
+  // plans grant the same two features, so this is quiet unless the catalog changes or a store
+  // still carries a grant a withdrawn product gave it. Delivery is in the restaurant-wide map
+  // like any other key (whether each branch delivers is its own switch, which approving never
+  // touches). Skipped when no active product loaded — every feature would read as removed.
   let lostFeatures: string[] = [];
   let gainedFeatures: string[] = [];
-  if (catalog.length > 0) {
-    const after = selectionFeatures(next, catalog);
+  if (sellable.length > 0) {
+    const after = selectionFeatures(next, sellable);
     // billing_compute applies the platform switch last, so an On/Off override
     // survives approval and must not be reported as a change.
     for (const [key, on] of Object.entries(current.feature_overrides)) {
       if (on) after.add(key);
       else after.delete(key);
     }
-    lostFeatures = FEATURE_KEYS.filter(
-      // delivery is per branch and already reported by name; reporting it here
-      // as well would say "this removes Delivery" while a branch keeps it.
-      (k) => k !== ADDON_DELIVERY && ent.features[k] === true && !after.has(k),
-    );
-    gainedFeatures = FEATURE_KEYS.filter(
-      (k) => k !== ADDON_DELIVERY && ent.features[k] !== true && after.has(k),
-    );
+    lostFeatures = FEATURE_KEYS.filter((k) => ent.features[k] === true && !after.has(k));
+    gainedFeatures = FEATURE_KEYS.filter((k) => ent.features[k] !== true && after.has(k));
   }
 
   // What billing_apply_selection writes on approval: start = now(), end = the
@@ -702,16 +638,13 @@ function packageDiff(
   return {
     planFrom: planName(catalog, ent.planCode, noPackage),
     planTo: planName(catalog, next.planCode, noPackage),
-    deliveryFrom: namesOf(ent.deliveryBranchIds),
-    deliveryAdds: namesOf(next.deliveryBranchIds.filter((id) => !held.has(id))),
-    deliveryRemoves: namesOf(ent.deliveryBranchIds.filter((id) => !wanted.has(id))),
     removes: lostFeatures.map((k) => featureLabel(k, locale)),
     adds: gainedFeatures.map((k) => featureLabel(k, locale)),
     seatsFrom: ent.branchSeats,
     seatsTo: next.branchSeats,
     totalFrom: ent.monthlyTotal,
-    totalTo:
-      catalog.length > 0 ? packageMonthlyTotal(next, catalog) : Number(request.monthly_total ?? 0),
+    // With no active product to price from, the request's own figure stands in rather than $0.
+    totalTo: sellableMonthlyTotal(next, catalog) ?? Number(request.monthly_total ?? 0),
     requestedTotal: Number(request.monthly_total ?? 0),
     oneTimeNet: requestOneTime(request).net,
     discountCode: requestOneTime(request).code,
@@ -767,12 +700,9 @@ function approvalQuestion(
     };
   }
 
-  // A branch losing delivery is a removal like any other, and the one most likely
-  // to be missed: nothing else on the card changes when it happens.
-  const lost = [
-    ...diff.deliveryRemoves.map((branch) => t('requests.deliveryLossItem', { branch })),
-    ...diff.removes,
-  ];
+  // Approving never touches a branch's delivery switch, so a lost feature is the only removal
+  // to name here.
+  const lost = diff.removes;
   const removes = lost.length > 0;
   const cutsSeats = diff.seatsTo < diff.seatsFrom;
   const shortens = diff.daysLost > 0 && diff.paidFrom !== null;

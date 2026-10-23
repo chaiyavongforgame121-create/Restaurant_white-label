@@ -6,12 +6,15 @@
     "emptyBody": "Las acciones importantes (reembolsos, anulaciones, cambios de configuración) aparecerán aquí."
   },
   "lockedFeature": {
-    "deliveryNotAtThisBranch": "{branch} no ofrece entrega a domicilio. La entrega se activa sucursal por sucursal: al activarla aquí, esta sucursal obtiene repartidores, tarifas de envío y seguimiento en vivo.",
+    "deliverySwitchedOffAtBranch": "{branch} tiene la entrega a domicilio desactivada, así que los clientes no pueden pedir entrega allí y no se asignan repartidores.",
+    "deliverySwitchedOffHere": "Esta sucursal tiene la entrega a domicilio desactivada, así que los clientes no pueden pedir entrega aquí y no se asignan repartidores.",
+    "deliveryAskToSwitchOn": "El propietario o un administrador puede volver a activarla en Configuración de sucursal.",
+    "deliveryOpenSettings": "Abrir Configuración de sucursal",
+    "deliveryNotAvailableAtBranch": "La entrega a domicilio no está disponible para tu restaurante en este momento, así que {branch} no puede aceptar pedidos a domicilio. Contacta con FavorNoms para que la vuelvan a activar.",
+    "deliveryNotAvailableHere": "La entrega a domicilio no está disponible para tu restaurante en este momento, así que esta sucursal no puede aceptar pedidos a domicilio. Contacta con FavorNoms para que la vuelvan a activar.",
     "deliveryStoppedTitle": "{branch} ya no hace entregas.",
-    "deliveryTurnBackOn": "Volver a activar la entrega",
-    "deliveryNotHere": "Esta sucursal no ofrece entrega a domicilio. La entrega se activa sucursal por sucursal: al activarla aquí, esta sucursal obtiene repartidores, tarifas de envío y seguimiento en vivo.",
-    "deliveryUnlockedAtThisBranch": "{branch} tiene la entrega a domicilio desactivada. Ya se desbloqueó en esta sucursal, así que volver a activarla no tiene cargo único: solo suma el precio mensual de esta sucursal.",
-    "deliveryUnlockedHere": "Esta sucursal tiene la entrega a domicilio desactivada. Ya se desbloqueó aquí, así que volver a activarla no tiene cargo único: solo suma el precio mensual de esta sucursal.",
-    "deliveryStoppedHere": "Esta sucursal ya no hace entregas."
+    "deliveryStoppedHere": "Esta sucursal ya no hace entregas.",
+    "deliveryStoppedNotAvailable": "La entrega a domicilio está desactivada para todo tu restaurante; contacta con FavorNoms para que la vuelvan a activar.",
+    "deliveryTurnBackOn": "Volver a activar la entrega en Configuración de sucursal"
   }
 }

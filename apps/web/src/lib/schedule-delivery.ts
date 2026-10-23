@@ -13,7 +13,7 @@ import { buildScheduleDays, type ClosurePeriod, type OpeningWindow } from './sch
  *
  * What it does require, because each one otherwise sends the diner through the whole checkout
  * to a refusal:
- * - the delivery add-on and a branch taking advance orders;
+ * - a branch that delivers at all and takes advance orders;
  * - orders not paused — is_branch_open() refuses every time while paused, booked times included,
  *   so "you can still schedule a delivery" would be a promise every slot breaks;
  * - at least one bookable slot, from the same builder and the same inputs the checkout picker
@@ -26,11 +26,11 @@ export interface ScheduleDeliveryState {
   /** The kitchen paused orders (branches.settings.orders_paused). Nothing can be ordered. */
   paused: boolean;
   /**
-   * This branch sells delivery at all (storefront_status.delivery_entitled).
+   * This branch delivers at all (storefront_status.delivery_entitled).
    *
-   * Delivery is bought per branch (docs/PACKAGING-2026-09-23.md §2), so `false` here is
-   * "this branch does not deliver" — a permanent fact about the branch, not "delivery is
-   * closed right now". The two must never share a sentence: a diner told the wrong one
+   * Delivery is in the plan but switched per branch (docs/PACKAGING-2026-10-24.md §3), so
+   * `false` here is "this branch does not deliver" — a standing fact about the branch, not
+   * "delivery is closed right now". The two must never share a sentence: a diner told the wrong one
    * comes back tomorrow for a delivery that will never be offered, or gives up on a branch
    * that would have delivered in an hour.
    *

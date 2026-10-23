@@ -104,7 +104,7 @@ export default async function DriversPage({ params }: Props) {
     // riders before switching delivery on, and riders apply to any active branch.
     return (
       <>
-        <DeliveryLocked branchId={branchId} branchName={branch.name} gate={gate} />
+        <DeliveryLocked branchName={branch.name} gate={gate} canSwitch={can('branch.settings')} />
         <div className="container -mt-10 max-w-2xl pb-16">
           <DriverAppCard url={driverAppUrl} audience="team" branchName={branch.name} />
         </div>

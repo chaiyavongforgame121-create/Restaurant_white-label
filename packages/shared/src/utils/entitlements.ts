@@ -9,13 +9,14 @@
 // Every function in this file fails CLOSED. A missing row, a missing key, a
 // parse error or a lapsed deadline all read as "no".
 //
-// Pricing model locked 2026-09-23 — see docs/PACKAGING-2026-09-23.md. Money is
-// paid once AND every month. Prices live in billing_products; as of 2026-09-24 they are
-// $170 for the base (first branch), $70 for each branch after it, no one-time fee for
-// delivery; then $29 a month per branch and $30 more for every branch that
-// delivers ($59 for a delivery branch). Delivery is PER BRANCH, so an
-// Entitlements payload loaded for a branch answers features.delivery for THAT
-// branch, and carries deliveryBranchIds for the whole restaurant.
+// Pricing model of 2026-10-24 — see docs/PACKAGING-2026-10-24.md. One plan, every
+// feature included, paid once AND every month. As of that date billing_products says
+// $199 once for the FavorNoms Plan (it includes the first branch) and $89 once for each
+// branch after it; then $49 a month for every branch, the first one included. Delivery
+// is part of the plan and not sold any more, but it is still answered PER BRANCH: a
+// merchant can switch it off at one branch (docs §3). So an Entitlements payload loaded
+// for a branch answers features.delivery for THAT branch, and carries deliveryBranchIds
+// for the whole restaurant.
 //
 // Prices live in billing_products and nowhere else. Nothing here hardcodes a
 // number; every function takes the catalog. The server re-prices everything
@@ -39,7 +40,10 @@ export type FeatureKey = (typeof FEATURE_KEYS)[number];
 export const PLAN_BASE = 'base';
 export const PLAN_TRIAL = 'trial';
 export const PRODUCT_EXTRA_BRANCH = 'extra_branch';
-export const ADDON_DELIVERY = 'delivery';
+/** The delivery feature key: answered per branch, included in the plan. */
+export const FEATURE_DELIVERY = 'delivery';
+/** @deprecated delivery is not sold any more; kept so old rows and callers still parse. */
+export const ADDON_DELIVERY = FEATURE_DELIVERY;
 // The AI Suite was withdrawn on 2026-09-23 and its product code went with it: nothing sells
 // it, so nothing should be able to name it as something to sell. FEATURE_KEYS above keeps
 // 'ai_suite' so old rows and platform overrides still parse.
@@ -70,19 +74,16 @@ export interface Entitlements {
    *
    * When this payload was loaded for a BRANCH (get_branch_entitlements), `delivery`
    * is that branch's own answer. Loaded for a restaurant it keeps the account-wide
-   * meaning: "delivery is sold to this account", not "every branch delivers".
+   * meaning: "the plan includes delivery", not "every branch delivers" — a merchant
+   * can switch it off at one branch.
    */
   features: Record<string, boolean>;
   addons: string[];
-  /** Every branch of the restaurant that delivers. Present on both payloads. */
-  deliveryBranchIds: string[];
   /**
-   * Every branch whose $59 delivery unlock is already bought (private.branch_delivery_unlocked:
-   * a branch_addons row, on or off, or a PAID charge). Switching delivery back on at one of
-   * these costs nothing once. Present on both payloads, so a locked delivery screen can quote
-   * the real price without reading the billing ledger, which is the owner's.
+   * Every branch of the restaurant that delivers now: paid up, delivery in the plan, and its
+   * delivery switch not turned off. Present on both payloads.
    */
-  deliveryUnlockedBranchIds: string[];
+  deliveryBranchIds: string[];
   /**
    * How the restaurant pays the platform (docs/PLATFORM-BILLING-STRIPE-2026-09-26.md §9.9).
    * 'stripe' while a live card subscription renews the package by itself, 'manual' otherwise.
@@ -124,7 +125,6 @@ export const DENIED_ENTITLEMENTS: Entitlements = Object.freeze({
   features: NO_FEATURES,
   addons: [] as string[],
   deliveryBranchIds: [] as string[],
-  deliveryUnlockedBranchIds: [] as string[],
   billingRail: 'manual',
   billingEndsAt: null,
 }) as Entitlements;
@@ -184,10 +184,9 @@ export function parseEntitlements(raw: unknown): Entitlements {
     monthlyTotal: asNumber(r.monthly_total),
     features,
     addons: asIdList(r.addons),
+    // delivery_unlocked_branch_ids is still in the payload for old readers and deliberately
+    // not read: since 2026-10-24 there is no delivery unlock to buy.
     deliveryBranchIds: asIdList(r.delivery_branch_ids),
-    // Absent from a payload older than the 2026-09-23 fixes, which reads as "nothing unlocked":
-    // the worst that does is quote a $59 the plan page then does not charge.
-    deliveryUnlockedBranchIds: asIdList(r.delivery_unlocked_branch_ids),
     billingRail: r.billing_rail === 'stripe' ? 'stripe' : 'manual',
     // A date nobody can read is no date: the dashboard would count down to nothing.
     billingEndsAt: asReadableIsoOrNull(r.billing_ends_at),
@@ -265,8 +264,9 @@ export interface BillingProduct {
   code: string;
   name: string;
   kind: 'plan' | 'addon' | 'seat' | string;
+  /** $49 for the plan and for an additional branch, so every branch costs the same. */
   monthly_price: number;
-  /** Paid once, ever. 228 for the base, 99 for a branch, 59 to unlock a branch's delivery. */
+  /** Paid once, ever. 199 for the plan (first branch included), 89 for each branch after it. */
   one_time_price: number;
   included_seats: number;
   seats_per_unit: number;
@@ -284,8 +284,6 @@ export interface PackageSelection {
   planCode: string;
   /** Branches paid for, >= 1. */
   branchSeats: number;
-  /** The branches that deliver. Its length is the delivery line's quantity. */
-  deliveryBranchIds: string[];
 }
 
 /**
@@ -300,15 +298,12 @@ export interface BillingPaidState {
   basePaid: boolean;
   /** Branch seats already paid for, the base's included branch included. */
   seatsPaid: number;
-  /** Branches whose $59 was paid at some point — switching one back on is free. */
-  deliveryUnlockedBranchIds: string[];
 }
 
 /** Nothing is bought yet. What a brand-new account prices against. */
 export const NOTHING_PAID: BillingPaidState = Object.freeze({
   basePaid: false,
   seatsPaid: 0,
-  deliveryUnlockedBranchIds: [] as string[],
 }) as BillingPaidState;
 
 export interface PriceLine {
@@ -317,7 +312,10 @@ export interface PriceLine {
   qty: number;
   unit: number;
   total: number;
-  /** Set on a line that belongs to one branch (a delivery unlock). */
+  /**
+   * Set on a line that belongs to one branch. Nothing here raises one any more — the
+   * per-branch delivery unlock was the only such line — but readers still key on it.
+   */
   branchId?: string;
 }
 
@@ -328,23 +326,28 @@ function findProduct(catalog: BillingProduct[], code: string): BillingProduct | 
   return catalog.find((p) => p.code === code);
 }
 
+/**
+ * The plan a selection names, and only if it IS a plan. Mirrors private.billing_apply_selection,
+ * which looks the code up with kind = 'plan': a selection naming the extra-branch product, or the
+ * withdrawn delivery add-on, prices nothing rather than billing an add-on as if it were the plan.
+ */
+function findPlan(catalog: BillingProduct[], code: string): BillingProduct | undefined {
+  const plan = findProduct(catalog, code);
+  return plan && plan.kind === 'plan' ? plan : undefined;
+}
+
 /** Whole branches, never fewer than one. */
 function seatsOf(sel: PackageSelection): number {
   return Math.max(1, Math.trunc(sel.branchSeats || 1));
 }
 
-/** The chosen branches, each one once, so a repeated id cannot be billed twice. */
-function deliveryIdsOf(sel: PackageSelection): string[] {
-  return [...new Set((sel.deliveryBranchIds ?? []).filter((id) => typeof id === 'string' && id))];
-}
-
 /**
- * What one branch costs a month before delivery.
+ * What one branch costs a month.
  *
  * Every paid branch is billed at the extra-branch price — which is also what the
- * base's own $29 covers for the first one — so the per-branch figures add up to
- * the package total. A trial branch is free, and the plan's own price is the
- * fallback for a catalog with no seat product at all.
+ * plan's own $49 covers for the first one (the catalog keeps the two equal, docs
+ * §4.1) — so the per-branch figures add up to the package total. A trial branch is
+ * free, and the plan's own price is the fallback for a catalog with no seat product.
  */
 function seatPrice(plan: BillingProduct | undefined, catalog: BillingProduct[]): number {
   if ((plan?.trial_days ?? 0) > 0) return plan?.monthly_price ?? 0;
@@ -355,13 +358,15 @@ function seatPrice(plan: BillingProduct | undefined, catalog: BillingProduct[]):
 /**
  * The monthly bill, expanded into the lines the database actually stores.
  *
- * Mirrors private.billing_apply_selection exactly: one plan line, one extra-branch
- * line of (seats − plan.included_seats), and one delivery line whose QUANTITY is
- * the number of delivering branches. Use branchMonthly() for the per-branch view.
+ * Mirrors private.billing_apply_selection exactly: one plan line and one extra-branch
+ * line of (seats − plan.included_seats). Nothing else — delivery is in the plan, and a
+ * product that is neither the plan nor extra_branch (the withdrawn delivery row, say)
+ * never becomes a line, whatever the catalog holds. Use branchMonthly() for the
+ * per-branch view.
  */
 export function monthlyLines(sel: PackageSelection, catalog: BillingProduct[]): PriceLine[] {
   const lines: PriceLine[] = [];
-  const plan = findProduct(catalog, sel.planCode);
+  const plan = findPlan(catalog, sel.planCode);
   if (!plan) return lines;
 
   lines.push({
@@ -373,11 +378,11 @@ export function monthlyLines(sel: PackageSelection, catalog: BillingProduct[]): 
   });
 
   // seatPrice(), not seat.monthly_price: a trial is $0 with everything on, extra branches
-  // included (docs/PACKAGING-2026-09-23.md §1). Charging the catalog's $29 here made a
-  // two-branch trial read "$29 every month" while branchMonthly() — which does go through
-  // seatPrice() — priced each of its branches at 0, so the page's per-branch lines and its
-  // total disagreed. private.billing_apply_selection now writes the same 0 into the seat
-  // line's unit_price, and the two must stay in step.
+  // included. Charging the catalog's seat price here made a two-branch trial read "$49 every
+  // month" while branchMonthly() — which does go through seatPrice() — priced each of its
+  // branches at 0, so the page's per-branch lines and its total disagreed.
+  // private.billing_apply_selection writes the same 0 into the seat line's unit_price, and the
+  // two must stay in step.
   const seat = findProduct(catalog, PRODUCT_EXTRA_BRANCH);
   const extra = Math.max(seatsOf(sel) - (plan.included_seats ?? 0), 0);
   if (seat && extra > 0) {
@@ -391,57 +396,36 @@ export function monthlyLines(sel: PackageSelection, catalog: BillingProduct[]): 
     });
   }
 
-  // The trial delivers from every branch by rule and bills nothing for it.
-  const delivery = findProduct(catalog, ADDON_DELIVERY);
-  const delivers = (plan.trial_days ?? 0) > 0 ? 0 : deliveryIdsOf(sel).length;
-  if (delivery && delivers > 0) {
-    lines.push({
-      code: delivery.code,
-      label: delivery.name,
-      qty: delivers,
-      unit: delivery.monthly_price,
-      total: delivery.monthly_price * delivers,
-    });
-  }
-
   return lines;
 }
 
 /** @deprecated Use monthlyLines. Kept so the current plan page compiles. */
 export const packageLines = monthlyLines;
 
-/** $29 × branches + $29 × delivery branches. */
+/** $49 × branches. */
 export function packageMonthlyTotal(sel: PackageSelection, catalog: BillingProduct[]): number {
   return monthlyLines(sel, catalog).reduce((sum, l) => sum + l.total, 0);
 }
 
-/** What one branch adds to the monthly bill: $29, or $58 with delivery. */
-export function branchMonthly(
-  sel: PackageSelection,
-  catalog: BillingProduct[],
-  branchId: string,
-): number {
-  const plan = findProduct(catalog, sel.planCode);
+/** What one branch adds to the monthly bill: $49, the same for every branch; 0 on the trial. */
+export function branchMonthly(sel: PackageSelection, catalog: BillingProduct[]): number {
+  const plan = findPlan(catalog, sel.planCode);
   if (!plan) return 0;
-  const delivery = findProduct(catalog, ADDON_DELIVERY);
-  const delivers = (plan.trial_days ?? 0) > 0 ? false : deliveryIdsOf(sel).includes(branchId);
-  return seatPrice(plan, catalog) + (delivers && delivery ? delivery.monthly_price : 0);
+  return seatPrice(plan, catalog);
 }
 
 /**
  * What this change adds to the "pay once today" total — only what is NOT bought yet.
  *
- * Mirrors private.billing_price_one_time. The base INCLUDES the first branch, so a
- * first-time buyer of one branch pays 228 and not 228 + 99; once the base is paid,
- * what is covered is what the ledger says. A branch whose $59 was ever paid is
- * absent, which is why switching its delivery off and on again costs nothing.
+ * Mirrors private.billing_price_one_time. The plan INCLUDES the first branch, so a
+ * first-time buyer of one branch pays 199 and not 199 + 89; once the plan is paid,
+ * what is covered is what the ledger says. Nothing else is ever charged once.
  *
  * The server writes one billing_charges row per seat; this returns one line of
  * quantity N, because that is what the merchant reads.
  *
- * A product with no one-time price raises no line. Delivery has none since the
- * 2026-09-24 prices (it is a monthly add-on only), and a "Delivery — Hamburger $0"
- * line would read as something to pay, or keep "Nothing to pay once" from showing.
+ * A product with no one-time price raises no line: a "$0" line would read as something
+ * to pay, or keep "Nothing to pay once" from showing.
  */
 export function oneTimeLines(
   sel: PackageSelection,
@@ -449,7 +433,7 @@ export function oneTimeLines(
   paid: BillingPaidState,
 ): PriceLine[] {
   const lines: PriceLine[] = [];
-  const plan = findProduct(catalog, sel.planCode);
+  const plan = findPlan(catalog, sel.planCode);
   // The trial is granted once at signup and never sold, so it raises nothing.
   if (!plan || (plan.trial_days ?? 0) > 0) return lines;
 
@@ -476,22 +460,6 @@ export function oneTimeLines(
     });
   }
 
-  const delivery = findProduct(catalog, ADDON_DELIVERY);
-  if (delivery && delivery.one_time_price > 0) {
-    const unlocked = new Set(paid.deliveryUnlockedBranchIds ?? []);
-    for (const branchId of deliveryIdsOf(sel)) {
-      if (unlocked.has(branchId)) continue;
-      lines.push({
-        code: delivery.code,
-        label: delivery.name,
-        qty: 1,
-        unit: delivery.one_time_price,
-        total: delivery.one_time_price,
-        branchId,
-      });
-    }
-  }
-
   return lines;
 }
 
@@ -507,13 +475,17 @@ export function packageOneTimeTotal(
 /**
  * Does THIS branch deliver? Give it a payload loaded for a branch
  * (get_branch_entitlements / getEntitlementsForBranch) — a restaurant payload
- * answers "delivery is sold to this account", which is a different question.
+ * answers "the plan includes delivery", which is a different question: the branch's
+ * own delivery switch may be off.
  */
 export function deliversHere(e: Entitlements | null | undefined): boolean {
-  return hasFeature(e, ADDON_DELIVERY);
+  return hasFeature(e, FEATURE_DELIVERY);
 }
 
-/** Feature keys a selection would grant, before it is paid for. */
+/**
+ * Feature keys a selection would grant, before it is paid for: the plan's own map, so
+ * {card_payment, delivery} for the FavorNoms Plan however many branches it has.
+ */
 export function selectionFeatures(sel: PackageSelection, catalog: BillingProduct[]): Set<string> {
   const out = new Set<string>();
   for (const line of monthlyLines(sel, catalog)) {
@@ -531,10 +503,8 @@ export function selectionFeatures(sel: PackageSelection, catalog: BillingProduct
  *
  * The trial is not a purchasable plan — it is granted once at signup and never
  * sold. Seeding the builder with `trial` would let a trialing merchant "buy"
- * $0/mo with every feature on, so a trial always pre-fills as Base instead. The
- * branches that deliver carry over, because that is what they are used to — and
- * for a trialing merchant that is every branch, which is exactly what the $59
- * unlocks are quoted against.
+ * $0/mo with every feature on, so a trial always pre-fills as the FavorNoms Plan
+ * instead, with the branches it already has.
  */
 export function currentSelection(e: Entitlements | null | undefined): PackageSelection {
   const plan = e?.planCode;
@@ -542,7 +512,6 @@ export function currentSelection(e: Entitlements | null | undefined): PackageSel
   return {
     planCode: purchasable ? plan : PLAN_BASE,
     branchSeats: Math.max(1, e?.branchSeats ?? 1),
-    deliveryBranchIds: e?.deliveryBranchIds ? [...e.deliveryBranchIds] : [],
   };
 }
 
@@ -680,6 +649,12 @@ export function featureLabel(key: string, locale?: unknown): string {
 interface BillingErrorCopy {
   inactive: string;
   feature: (feature: string) => string;
+  /**
+   * feature_not_entitled:delivery. Delivery is in the plan, so a branch refused it has its
+   * delivery switch off (or the platform switched it off): point at branch settings, never
+   * at the package as if delivery were something to buy.
+   */
+  deliveryOff: string;
   seats: (current: number, limit: number) => string;
   dormant: string;
   discount: Record<DiscountReason | 'unknown', string>;
@@ -689,6 +664,7 @@ const BILLING_ERROR_COPY: Record<UiLocale, BillingErrorCopy> = {
   en: {
     inactive: 'Your subscription is not active. Choose a package to continue.',
     feature: (feature) => `${feature} is not included in your current package.`,
+    deliveryOff: 'Delivery is switched off at this branch. Turn it on in branch settings.',
     seats: (current, limit) =>
       `You are using ${current} of ${limit} branch seats. Add a seat to create another branch.`,
     dormant: 'Online payment is not configured yet. Your request has been sent for manual activation.',
@@ -706,6 +682,8 @@ const BILLING_ERROR_COPY: Record<UiLocale, BillingErrorCopy> = {
   es: {
     inactive: 'Tu suscripción no está activa. Elige un paquete para continuar.',
     feature: (feature) => `${feature} no está incluido en tu paquete actual.`,
+    deliveryOff:
+      'La entrega a domicilio está desactivada en esta sucursal. Actívala en la configuración de la sucursal.',
     seats: (current, limit) =>
       `Cupos de sucursal en uso: ${current} de ${limit}. Agrega un cupo para crear otra sucursal.`,
     dormant: 'El pago en línea aún no está configurado. Enviamos tu solicitud para activarlo manualmente.',
@@ -723,6 +701,7 @@ const BILLING_ERROR_COPY: Record<UiLocale, BillingErrorCopy> = {
   vi: {
     inactive: 'Gói đăng ký của bạn chưa hoạt động. Hãy chọn một gói để tiếp tục.',
     feature: (feature) => `${feature} không có trong gói hiện tại của bạn.`,
+    deliveryOff: 'Giao hàng đang tắt ở chi nhánh này. Hãy bật lại trong phần cài đặt chi nhánh.',
     seats: (current, limit) =>
       `Bạn đang dùng ${current}/${limit} suất chi nhánh. Hãy thêm suất để tạo chi nhánh mới.`,
     dormant: 'Thanh toán trực tuyến chưa được thiết lập. Yêu cầu của bạn đã được gửi để kích hoạt thủ công.',
@@ -740,6 +719,7 @@ const BILLING_ERROR_COPY: Record<UiLocale, BillingErrorCopy> = {
   th: {
     inactive: 'การสมัครสมาชิกของคุณไม่ได้เปิดใช้งานอยู่ โปรดเลือกแพ็กเกจเพื่อดำเนินการต่อ',
     feature: (feature) => `${feature} ไม่รวมอยู่ในแพ็กเกจปัจจุบันของคุณ`,
+    deliveryOff: 'สาขานี้ปิดการจัดส่งอยู่ เปิดได้ที่การตั้งค่าสาขา',
     seats: (current, limit) =>
       `คุณใช้สิทธิ์สาขาไปแล้ว ${current} จาก ${limit} สิทธิ์ เพิ่มสิทธิ์สาขาเพื่อสร้างสาขาใหม่`,
     dormant: 'ยังไม่ได้ตั้งค่าการชำระเงินออนไลน์ เราได้ส่งคำขอของคุณเพื่อเปิดใช้งานให้แล้ว',
@@ -781,7 +761,9 @@ export function billingErrorMessage(e: BillingError, locale: UiLocale = DEFAULT_
     case 'inactive':
       return copy.inactive;
     case 'feature':
-      return copy.feature(featureLabel(e.feature, loc));
+      return e.feature === FEATURE_DELIVERY
+        ? copy.deliveryOff
+        : copy.feature(featureLabel(e.feature, loc));
     case 'seats':
       return copy.seats(e.current, e.limit);
     case 'discount':

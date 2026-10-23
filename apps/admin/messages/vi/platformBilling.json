@@ -57,7 +57,9 @@
     "priceSummary": "<b>{once}</b> một lần, sau đó <b>{monthly}</b> mỗi tháng",
     "withdrawn": "Đã ngừng bán",
     "withdrawnHint": "Không còn bán nữa. Nhà hàng đang dùng vẫn giữ được và lịch sử vẫn nguyên vẹn, nhưng không ai mua mới được. Đánh dấu hoạt động để bán lại.",
-    "featureWithdrawn": "{feature} (đã ngừng bán)"
+    "featureWithdrawn": "{feature} (đã ngừng bán)",
+    "featureWithdrawnHint": "Không thể thêm tính năng đã ngừng bán vào sản phẩm: không còn gì bán chúng nữa. Nếu muốn ngoại lệ có chủ đích, hãy bật cho riêng một nhà hàng trong mục Bật/tắt tính năng của nhà hàng đó ở thẻ Gói đăng ký.",
+    "withdrawnFeatureOn": "Sản phẩm này vẫn cấp một tính năng đã ngừng bán cho mọi nhà hàng đang dùng. Hãy tắt tính năng đó rồi lưu: không còn gì bán nó nữa."
   },
   "reports": {
     "title": "Báo cáo tài chính",
@@ -143,7 +145,7 @@
   "subscriptions": {
     "metaTitle": "Gói đăng ký · FavorNoms",
     "title": "Gói đăng ký",
-    "subtitle": "Đặt gói của nhà hàng trực tiếp, theo từng chi nhánh. Thay đổi có hiệu lực ngay lập tức.",
+    "subtitle": "Đặt trực tiếp gói và số chi nhánh của nhà hàng. Thay đổi có hiệu lực ngay lập tức.",
     "searchPlaceholder": "Tìm nhà hàng",
     "noMatches": "Không có nhà hàng phù hợp.",
     "live": "Đang hoạt động",
@@ -182,18 +184,6 @@
     "minSeats": "tối thiểu {count} (chi nhánh đang mở)",
     "applyPackage": "Áp dụng gói",
     "saved": "Đã lưu",
-    "deliveringCount": "Giao hàng tại {count} trong {total}",
-    "deliveringNone": "Không giao hàng",
-    "delivery": {
-      "title": "Chi nhánh nào giao hàng",
-      "hint": "Mỗi chi nhánh giao hàng sẽ cộng thêm phí giao hàng vào hoá đơn hằng tháng. Thao tác ở đây không thu phí mở khoá một lần: những gì bạn cấp bằng tay thì nhà hàng không nợ.",
-      "trialHint": "Trong thời gian dùng thử, mọi chi nhánh đều giao hàng nên không có gì để chọn. Hãy chuyển nhà hàng sang gói trả phí để chọn.",
-      "noBranches": "Nhà hàng này chưa có chi nhánh nào.",
-      "hiddenBranch": "đang ẩn",
-      "branchMonthly": "{amount} mỗi tháng",
-      "on": "Có giao hàng",
-      "off": "Không giao hàng"
-    },
     "noOneTimeCharge": "Áp dụng gói ở đây không tạo ra khoản thu một lần nào.",
     "oneTime": {
       "show": "Lịch sử trả một lần",
@@ -216,7 +206,12 @@
     "hiddenOverridden": "Ẩn với người bán · đã ghi đè",
     "hiddenNotInPackage": "Ẩn với người bán · không có trong gói",
     "groupLabel": "Hiển thị {feature}",
-    "deliveryNote": "Giao hàng là ngoại lệ: công tắc này chỉ nói tài khoản có được phép giao hàng hay không, còn danh sách chi nhánh ở trên nói giao ở đâu. Bật cưỡng bức cũng chưa cấp gì cho tới khi bật ở một chi nhánh."
+    "withdrawnHint": "Đã ngừng bán: không gói nào gồm tính năng này. Bật sẽ cấp riêng cho nhà hàng này, như một ngoại lệ có chủ đích.",
+    "grantWithdrawn": {
+      "title": "Cấp {feature} cho {restaurant}?",
+      "body": "Không gói nào còn gồm {feature}. Bật sẽ cấp tính năng này riêng cho nhà hàng này, cho tới khi bạn đặt lại về Theo gói.",
+      "confirm": "Cấp cho họ"
+    }
   },
   "requests": {
     "metaTitle": "Yêu cầu đổi gói · FavorNoms",
@@ -259,25 +254,19 @@
     "noPackage": "Chưa có gói",
     "confirm": {
       "blindTitle": "Duyệt mà không xem gói hiện tại của {name}?",
-      "blindBody": "Không tải được gói hiện tại của họ. Duyệt sẽ thay toàn bộ gói bằng yêu cầu này và gỡ mọi tiện ích bổ sung hoặc suất không có trong yêu cầu.",
+      "blindBody": "Không tải được gói hiện tại của họ. Duyệt sẽ thay toàn bộ gói bằng yêu cầu này, gỡ mọi suất chi nhánh không có trong yêu cầu và tính lại tháng đã trả từ hôm nay.",
       "approveAnyway": "Vẫn duyệt",
       "removeTitle": "Duyệt và gỡ bỏ {items}?",
       "smallerTitle": "Duyệt gói nhỏ hơn?",
       "body": "Duyệt sẽ thay toàn bộ gói của {name} bằng yêu cầu này.{removes, select, yes { Gỡ bỏ {items}.} other {}}{seats, select, yes { Giảm suất chi nhánh từ {seatsFrom} xuống {seatsTo}.} other {}}{shortens, select, yes { Lùi ngày đã trả đến từ {paidFrom} về {paidTo} (ít hơn {days} ngày).} other {}} Họ mất những thứ này ngay khi bạn duyệt, và muốn lấy lại phải thiết lập lại gói ở trang Gói đăng ký.",
       "approveRemove": "Duyệt và gỡ bỏ"
     },
-    "asking": "{seats, plural, other {# chi nhánh}}, {delivery}",
-    "deliveryNone": "không giao hàng",
-    "deliveryAt": "giao hàng tại {branches}",
-    "unnamedBranches": "{count, plural, other {# chi nhánh không còn tồn tại}}",
+    "asking": "{seats, plural, other {# chi nhánh}}",
     "payOnce": "Trả một lần",
     "thenMonthly": "Sau đó mỗi tháng",
     "discountApplied": "Mã {code} đã giảm {amount} từ {list}",
     "discountNothingOff": "Mã {code} không giảm được đồng nào.",
     "nothingOnce": "Không có khoản nào phải trả một lần — tất cả đã mua rồi.",
-    "deliveryOn": "Việc này BẬT giao hàng tại: {branches}",
-    "deliveryOff": "Việc này TẮT giao hàng tại: {branches}",
-    "deliveryLossItem": "Giao hàng tại {branch}",
     "marksPaid": "Đánh dấu {amount} khoản thu một lần là đã trả",
     "keepsCode": "Mã {code} được tính là đã dùng — lượt dùng đã được giữ từ lúc nhà hàng gửi yêu cầu này"
   },
@@ -290,7 +279,7 @@
     "metaTitle": "Mã giảm giá · FavorNoms",
     "title": "Mã giảm giá",
     "subtitle": "Những mã bạn phát ra. Máy chủ tính toán mức giảm cho từng mã.",
-    "oneTimeOnly": "<strong>Mã chỉ giảm các khoản trả một lần</strong> — gói nền, chi nhánh thêm, phí mở khoá giao hàng của một chi nhánh. Mã không bao giờ đổi hoá đơn hằng tháng.",
+    "oneTimeOnly": "<strong>Mã chỉ giảm các khoản trả một lần</strong> — phí thiết lập lần đầu và phí thiết lập cho mỗi chi nhánh thêm. Mã không bao giờ đổi hoá đơn hằng tháng.",
     "newCode": "Mã mới",
     "emptyTitle": "Chưa có mã nào",
     "emptyBody": "Hãy tạo một mã khi bạn muốn bớt đi khoản nhà hàng phải trả lúc bắt đầu.",
@@ -376,8 +365,7 @@
   "stripe": {
     "errors": {
       "managed": "Nhà hàng này thanh toán bằng thẻ qua Stripe nên gói chỉ thay đổi được qua Stripe. Chưa có gì thay đổi.",
-      "paymentInProgress": "Thay đổi này đang chờ người bán thanh toán bằng thẻ trên Stripe (xác thực 3-D Secure hoặc thẻ bị từ chối), và khoản thanh toán đó vẫn có thể thành công, nên chưa thể từ chối. Gói sẽ tự kích hoạt khi được thanh toán. Khi hạn thanh toán kết thúc, khoảng một ngày sau khi bắt đầu, yêu cầu mới có thể bị từ chối. Chưa có gì thay đổi.",
-      "deliveryActive": "Một chi nhánh đang giao hàng được tính phí trong gói đăng ký trả bằng thẻ của nhà hàng này, nên Stripe sẽ tiếp tục thu phí giao hàng cho chi nhánh đó. Người bán cần tắt giao hàng cho chi nhánh đó trên trang gói của mình trước (việc này cập nhật Stripe). Chưa có gì thay đổi."
+      "paymentInProgress": "Thay đổi này đang chờ người bán thanh toán bằng thẻ trên Stripe (xác thực 3-D Secure hoặc thẻ bị từ chối), và khoản thanh toán đó vẫn có thể thành công, nên chưa thể từ chối. Gói sẽ tự kích hoạt khi được thanh toán. Khi hạn thanh toán kết thúc, khoảng một ngày sau khi bắt đầu, yêu cầu mới có thể bị từ chối. Chưa có gì thay đổi."
     },
     "links": {
       "customer": "Khách hàng trên Stripe",
@@ -472,7 +460,7 @@
         "confirmOff": "Tắt",
         "errors": {
           "notReady": "Stripe chưa sẵn sàng: hãy đặt khoá bí mật và secret của webhook trước. Chưa có gì thay đổi.",
-          "catalogIncomplete": "Danh mục đang thiếu giá hằng tháng đang hoạt động cho Base, chi nhánh thêm hoặc Giao hàng, nên không có gì để tạo giá trên Stripe. Hãy sửa ở thẻ Danh mục trước. Thu phí bằng thẻ chưa được bật.",
+          "catalogIncomplete": "Danh mục đang thiếu giá hằng tháng đang hoạt động cho gói hoặc cho chi nhánh thêm, nên không có gì để tạo giá trên Stripe. Hãy sửa ở thẻ Danh mục trước. Thu phí bằng thẻ chưa được bật.",
           "forbidden": "Chỉ quản trị viên nền tảng mới làm được việc này. Chưa có gì thay đổi.",
           "notSignedIn": "Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại rồi thử lại công tắc. Chưa có gì thay đổi.",
           "network": "Không kết nối được máy chủ. Chưa có gì thay đổi — hãy kiểm tra kết nối và thử lại.",

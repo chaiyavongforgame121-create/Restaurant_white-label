@@ -6,12 +6,15 @@
     "emptyBody": "Các thao tác quan trọng (hoàn tiền, hủy giao dịch, thay đổi cài đặt) sẽ hiển thị tại đây."
   },
   "lockedFeature": {
-    "deliveryNotAtThisBranch": "{branch} không giao hàng. Giao hàng được bật theo từng chi nhánh — bật tại đây sẽ có tài xế, phí giao hàng và theo dõi trực tiếp cho riêng chi nhánh này.",
+    "deliverySwitchedOffAtBranch": "{branch} đang tắt giao hàng, nên khách không thể đặt giao hàng ở đó và không có tài xế nào được điều phối.",
+    "deliverySwitchedOffHere": "Chi nhánh này đang tắt giao hàng, nên khách không thể đặt giao hàng ở đây và không có tài xế nào được điều phối.",
+    "deliveryAskToSwitchOn": "Chủ sở hữu hoặc quản trị viên có thể bật lại trong Cài đặt chi nhánh.",
+    "deliveryOpenSettings": "Mở Cài đặt chi nhánh",
+    "deliveryNotAvailableAtBranch": "Hiện nhà hàng của bạn chưa dùng được giao hàng, nên {branch} không thể nhận đơn giao hàng. Hãy liên hệ FavorNoms để được bật lại.",
+    "deliveryNotAvailableHere": "Hiện nhà hàng của bạn chưa dùng được giao hàng, nên chi nhánh này không thể nhận đơn giao hàng. Hãy liên hệ FavorNoms để được bật lại.",
     "deliveryStoppedTitle": "{branch} không còn giao hàng.",
-    "deliveryTurnBackOn": "Bật lại giao hàng",
-    "deliveryNotHere": "Chi nhánh này không giao hàng. Giao hàng được bật theo từng chi nhánh — bật tại đây sẽ có tài xế, phí giao hàng và theo dõi trực tiếp cho riêng chi nhánh này.",
-    "deliveryUnlockedAtThisBranch": "{branch} đang tắt giao hàng. Giao hàng đã được mở khóa tại chi nhánh này trước đây, nên bật lại không mất phí một lần — chỉ cộng thêm phí hằng tháng của chi nhánh này.",
-    "deliveryUnlockedHere": "Chi nhánh này đang tắt giao hàng. Giao hàng đã được mở khóa tại đây trước đây, nên bật lại không mất phí một lần — chỉ cộng thêm phí hằng tháng của chi nhánh này.",
-    "deliveryStoppedHere": "Chi nhánh này không còn giao hàng."
+    "deliveryStoppedHere": "Chi nhánh này không còn giao hàng.",
+    "deliveryStoppedNotAvailable": "Giao hàng đang tắt cho toàn bộ nhà hàng — hãy liên hệ FavorNoms để được bật lại.",
+    "deliveryTurnBackOn": "Bật lại giao hàng trong Cài đặt chi nhánh"
   }
 }

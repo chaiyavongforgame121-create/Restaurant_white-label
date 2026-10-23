@@ -4,14 +4,16 @@
 // while suspended — it is the escape hatch, so the layout deliberately does not
 // redirect away from it.
 //
-// Rebuilt for the 2026-09-23 packaging (docs/PACKAGING-2026-09-23.md §4.1). Two things
-// changed and both are visible here:
+// Sells the one plan of 2026-10-24 (docs/PACKAGING-2026-10-24.md §1, §5). Two things shape
+// the page:
 //
 //   1. Money is paid once AND every month. The two totals are shown in two boxes and are
 //      never added together — the owner's instruction for this page was to make it easy or
 //      users will be confused ("ทำให้มันเข้าใจง่ายหน่อยเดี๋ยวผู้ใช้จะงง").
-//   2. Delivery is per branch, so the page lists the restaurant's branches and each one
-//      carries its own switch instead of one restaurant-wide add-on card.
+//   2. Every feature is in the plan, so the only choice left is how many branches. The
+//      branches are listed at their monthly price and nothing else: delivery used to be a
+//      switch on each row, and is now part of the plan at every branch, switched off (when a
+//      merchant wants that) in branch settings — never here, and never for money.
 //
 // Submit always files the request first (request_package_change: the server prices it, the
 // code is reserved, the one-time charges are written), exactly as on the manual rail. When the
@@ -60,9 +62,9 @@ import {
   DEFAULT_UI_LOCALE,
   discountReasonMessage,
   formatInZone,
-  intlLocaleFor,
   isTrialing,
   isUiLocale,
+  PLAN_BASE,
   trialDaysLeft,
   type BillingPaidState,
   type BillingProduct,
@@ -128,7 +130,6 @@ import {
   branchRows,
   canQuote,
   isDirty,
-  joinNames,
   minimumSeats,
   netOneTime,
   openingSelection,
@@ -137,7 +138,6 @@ import {
   selectionKey,
   submittableCode,
   summaryFacts,
-  toggleDelivery,
   withSeats,
   type AppliedDiscount,
   type PlanBranch,
@@ -149,7 +149,6 @@ export interface DecidedRequest {
   status: 'approved' | 'rejected';
   planCode: string;
   branchSeats: number;
-  deliveryBranchIds: string[];
   monthlyTotal: number;
   oneTimeTotal: number;
   decisionNote: string | null;
@@ -163,7 +162,7 @@ interface Props {
   restaurantId: string;
   entitlements: Entitlements;
   catalog: BillingProduct[];
-  /** Every active branch of the restaurant, with its delivery state. */
+  /** Every active branch of the restaurant, each billed at the same monthly price. */
   branches: PlanBranch[];
   /** What is already bought, so nothing one-time is quoted twice. */
   paid: BillingPaidState;
@@ -172,10 +171,6 @@ interface Props {
   /** The branch's zone, so a request "sent 9/12" means the merchant's 9/12. */
   timezone: string;
   suspended: boolean;
-  /** `?add=delivery`: the merchant pressed an upsell for delivery. */
-  addDelivery: boolean;
-  /** `?branch=<uuid>`: the branch whose switch that upsell was about. */
-  preselectBranchId: string | null;
   /** `?no_trial=1`: a second restaurant on an account that already used its trial. */
   noTrial: boolean;
   /** `?renew=1`: sent from the dashboard's expiry banner. */
@@ -217,8 +212,6 @@ export function PlanView({
   latestDecision,
   timezone,
   suspended,
-  addDelivery,
-  preselectBranchId,
   noTrial,
   renew,
   billing,
@@ -233,18 +226,11 @@ export function PlanView({
   const day = (iso: string) => formatInZone(iso, timezone, { dateOnly: true }, locale);
 
   const minSeats = minimumSeats(entitlements, branches);
-  // The deep link decides the opening state ONCE. Recomputing it would switch a branch the
-  // merchant has just switched off straight back on, which is how ?add= used to fight them.
-  const [opening] = React.useState(() =>
-    openingSelection({
-      entitlements,
-      branches,
-      minSeats,
-      addDelivery,
-      branchParam: preselectBranchId,
-    }),
+  // Decided once, on the first render: a refresh after filing must not reset the stepper the
+  // merchant is looking at.
+  const [sel, setSel] = React.useState<PackageSelection>(() =>
+    openingSelection({ entitlements, minSeats }),
   );
-  const [sel, setSel] = React.useState<PackageSelection>(opening.selection);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [code, setCode] = React.useState('');
@@ -395,13 +381,13 @@ export function PlanView({
   const onTrial = isTrialing(entitlements);
   const trialDays = trialDaysLeft(entitlements);
 
-  const rows = branchRows(sel, catalog, branches, paid);
+  const rows = branchRows(sel, catalog, branches);
   const totals = planTotals(sel, catalog, branches, paid);
-  const facts = summaryFacts(sel, catalog, branches, paid);
+  const facts = summaryFacts(sel, catalog, paid);
   const dueNow = netOneTime(sel, totals.oneTimeTotal, applied);
-  // A quote priced against another selection is not applied: the merchant flipped a switch
-  // after asking, and showing a discount the server did not give for THIS package is how a
-  // page ends up promising money it cannot take off.
+  // A quote priced against another selection is not applied: the merchant changed the branch
+  // count after asking, and showing a discount the server did not give for THIS package is how
+  // a page ends up promising money it cannot take off.
   const activeDiscount = applied && applied.key === selectionKey(sel) ? applied : null;
   const staleDiscount = applied !== null && activeDiscount === null;
 
@@ -629,10 +615,6 @@ export function PlanView({
     }
   };
 
-  const setDelivery = (id: string, on: boolean) => {
-    setSel((s) => toggleDelivery(s, id, on));
-  };
-
   const setSeats = (n: number) => {
     setSel((s) => withSeats(s, n, minSeats));
   };
@@ -708,7 +690,7 @@ export function PlanView({
         : null;
     // "Nothing was charged for the earlier one" is not said about a request whose card step just
     // ended without a known result: if that payment went through, it is refunded (§9.3).
-    const filedSummary = filed ? summaryLine(t, locale, filedFacts(filed, branches)) : '';
+    const filedSummary = filed ? summaryLine(t, filedFacts(filed)) : '';
     const replacing = filed
       ? [
           pendingKind === 'unconfirmed'
@@ -930,18 +912,13 @@ export function PlanView({
       )}
 
       {latestDecision && (
-        <DecisionBanner
-          decision={latestDecision}
-          branches={branches}
-          timezone={timezone}
-          locale={locale}
-        />
+        <DecisionBanner decision={latestDecision} timezone={timezone} locale={locale} />
       )}
 
       {filed && pendingKind !== 'none' && pendingKind !== 'settling' && (
         <PendingBanner
           kind={pendingKind}
-          summary={summaryLine(t, locale, filedFacts(filed, branches))}
+          summary={summaryLine(t, filedFacts(filed))}
           oneTimeTotal={filed.oneTimeTotal}
           sentOn={filed.createdAt ? day(filed.createdAt) : null}
           // The cancelled-checkout banner above already carries the button.
@@ -973,25 +950,15 @@ export function PlanView({
                   ? t('now.trialPlan')
                   : entitlements.planCode === 'none'
                     ? t('now.noPlan')
-                    : (base?.name ?? t('base.name'))}
+                    : entitlements.planCode === PLAN_BASE
+                      ? t('base.name')
+                      : (base?.name ?? t('base.name'))}
               </Fact>
               <Fact label={t('now.branches')}>
                 {t('now.branchesValue', {
                   used: entitlements.branchesUsed,
                   seats: Math.max(1, entitlements.branchSeats),
                 })}
-              </Fact>
-              <Fact label={t('now.delivery')}>
-                {onTrial
-                  ? t('now.deliveryTrial')
-                  : entitlements.deliveryBranchIds.length === 0
-                    ? t('now.deliveryNone')
-                    : joinNames(
-                        branches
-                          .filter((b) => entitlements.deliveryBranchIds.includes(b.id))
-                          .map((b) => b.name),
-                        intlLocaleFor(locale),
-                      )}
               </Fact>
               {nextFact ? (
                 // The card rail: the date (and amount) Stripe charges next, or when it ends.
@@ -1019,15 +986,15 @@ export function PlanView({
                 {trialDays === 0 ? t('trial.endsToday') : t('trial.daysLeft', { days: trialDays })}
               </p>
             )}
+            {/* The owner's own list (docs/PACKAGING-2026-10-24.md §1), the same six lines the
+                landing page sells. Nothing on it is optional, so nothing on it has a price. */}
             <p className="mt-5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               {t('now.includedTitle')}
             </p>
             <ul className="mt-2 grid gap-2 text-sm sm:grid-cols-2">
-              <Included>{t('base.included.cardPayment')}</Included>
-              <Included>{t('base.included.onlineOrdering')}</Included>
-              <Included>{t('base.included.reportsLoyalty')}</Included>
-              <Included>{t('base.included.kitchenCounter')}</Included>
-              <Included>{t('base.included.oneBranch')}</Included>
+              {INCLUDED.map((key) => (
+                <Included key={key}>{t(`base.included.${key}`)}</Included>
+              ))}
             </ul>
           </Card>
 
@@ -1041,7 +1008,7 @@ export function PlanView({
             />
           )}
 
-          {/* 2. Your branches — delivery is bought per branch. */}
+          {/* 2. Your branches — every one at the same monthly price, every feature included. */}
           <Card className="p-5">
             <h2 className="font-display text-lg font-bold">{t('branches.title')}</h2>
             <p className="text-sm text-muted-foreground">
@@ -1058,56 +1025,15 @@ export function PlanView({
                 {rows.map((row) => (
                   <li
                     key={row.id}
-                    className={`rounded-xl border p-3 transition-colors ${
-                      row.id === opening.focusBranchId ? 'border-primary bg-primary/[0.04]' : 'border-border'
-                    }`}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-border p-3"
                   >
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="flex items-center gap-2 font-semibold">
-                          <Store className="h-4 w-4 shrink-0 text-muted-foreground" />
-                          <span className="truncate">{row.name}</span>
-                        </p>
-                        {quotable && (
-                          <p className="mt-0.5 text-sm tabular-nums text-muted-foreground">
-                            {t('branches.eachMonth', { price: money(row.monthly) })}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="text-right">
-                          <p className="text-sm font-medium">{t('branches.delivery')}</p>
-                          {quotable && (
-                            <p className="text-xs text-muted-foreground">
-                              {row.deliveryOnce > 0
-                                ? t('branches.costOnceAndMonthly', {
-                                    once: money(row.deliveryOnce),
-                                    monthly: money(row.deliveryMonthly),
-                                  })
-                                : t('branches.costMonthly', {
-                                    monthly: money(row.deliveryMonthly),
-                                  })}
-                            </p>
-                          )}
-                        </div>
-                        <Switch
-                          checked={row.delivers}
-                          onChange={(on) => setDelivery(row.id, on)}
-                          label={t('branches.switchLabel', { branch: row.name })}
-                        />
-                      </div>
-                    </div>
-                    {row.delivers && row.unlocked && !row.deliversToday && (
-                      <p className="mt-2 text-xs text-success">{t('branches.alreadyUnlocked')}</p>
-                    )}
-                    {row.losingDelivery && (
-                      <p className="mt-2 flex items-start gap-2 rounded-lg bg-warning/15 px-3 py-2 text-xs">
-                        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
-                        <span>
-                          {t('branches.offWarning', { branch: row.name })}
-                          {quotable &&
-                            ` ${t('branches.dropsTo', { price: money(row.monthlyWithoutDelivery) })}`}
-                        </span>
+                    <p className="flex min-w-0 items-center gap-2 font-semibold">
+                      <Store className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <span className="truncate">{row.name}</span>
+                    </p>
+                    {quotable && (
+                      <p className="shrink-0 text-sm tabular-nums text-muted-foreground">
+                        {t('branches.eachMonth', { price: money(row.monthly) })}
                       </p>
                     )}
                   </li>
@@ -1221,9 +1147,9 @@ export function PlanView({
                   <p className="mt-2 text-sm text-muted-foreground">{t('pay.onceNothing')}</p>
                 ) : (
                   <ul className="mt-2 space-y-1.5 text-sm">
-                    {totals.oneTimeLines.map((line, i) => (
-                      <li key={`${line.code}-${line.branchId ?? i}`} className="flex items-baseline justify-between gap-3">
-                        <span className="text-muted-foreground">{oneTimeLabel(t, line, branches)}</span>
+                    {totals.oneTimeLines.map((line) => (
+                      <li key={line.code} className="flex items-baseline justify-between gap-3">
+                        <span className="text-muted-foreground">{oneTimeLabel(t, line, sel.planCode)}</span>
                         <span className="tabular-nums">{money(line.total)}</span>
                       </li>
                     ))}
@@ -1305,11 +1231,7 @@ export function PlanView({
                 <ul className="mt-2 space-y-1.5 text-sm">
                   {totals.perBranch.map((line) => (
                     <li key={line.branchId} className="flex items-baseline justify-between gap-3">
-                      <span className="min-w-0 truncate text-muted-foreground">
-                        {line.delivers
-                          ? t('pay.withDelivery', { branch: line.name ?? '' })
-                          : (line.name ?? '')}
-                      </span>
+                      <span className="min-w-0 truncate text-muted-foreground">{line.name ?? ''}</span>
                       <span className="tabular-nums">{money(line.monthly)}</span>
                     </li>
                   ))}
@@ -1335,7 +1257,7 @@ export function PlanView({
                 </p>
               </section>
 
-              <p className="mt-3 text-sm">{summaryLine(t, locale, facts)}</p>
+              <p className="mt-3 text-sm">{summaryLine(t, facts)}</p>
             </>
           )}
 
@@ -1379,28 +1301,33 @@ export function PlanView({
   );
 }
 
-/** "2 branches, delivery at Food Thai Thai — $87 every month", assembled per language. */
-function summaryLine(
-  t: PlanT,
-  locale: UiLocale,
-  facts: { branches: number; deliveryNames: string[]; monthlyTotal: number },
-): string {
+/**
+ * "2 branches — $98 every month", assembled per language. One sentence for the quote, the
+ * replace dialog and the pending and decision banners, so the same package always reads the
+ * same way.
+ */
+function summaryLine(t: PlanT, facts: { branches: number; monthlyTotal: number }): string {
   return t('pay.summary.line', {
     branches: t('pay.summary.branches', { count: facts.branches }),
-    delivery:
-      facts.deliveryNames.length === 0
-        ? t('pay.summary.noDelivery')
-        : t('pay.summary.delivery', {
-            names: joinNames(facts.deliveryNames, intlLocaleFor(locale)),
-          }),
     price: money(facts.monthlyTotal),
   });
 }
 
-/** A one-time line as the merchant reads it: the product, and the branch when it has one. */
-function oneTimeLabel(t: PlanT, line: PriceLine, branches: PlanBranch[]): string {
-  const branch = line.branchId ? branches.find((b) => b.id === line.branchId) : undefined;
-  const label = branch ? t('pay.forBranch', { product: line.label, branch: branch.name }) : line.label;
+/** The owner's six included items (docs/PACKAGING-2026-10-24.md §1), as settings.plan keys. */
+const INCLUDED = ['allFeatures', 'website', 'operations', 'drivers', 'growth', 'noCommissions'] as const;
+
+/**
+ * A one-time line as the merchant reads it. The two fees are named the way the owner sells
+ * them — first-time setup, additional branch setup — in the reader's language; the catalog's
+ * own product name (English only) is the fallback for anything else.
+ */
+function oneTimeLabel(t: PlanT, line: PriceLine, planCode: string): string {
+  const label =
+    line.code === SEAT_CODE
+      ? t('pay.setup.extraBranch')
+      : line.code === planCode
+        ? t('pay.setup.first')
+        : line.label;
   return line.qty > 1 ? `${label} × ${line.qty}` : label;
 }
 
@@ -1410,40 +1337,6 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
       <dt className="text-xs uppercase tracking-wider text-muted-foreground">{label}</dt>
       <dd className="mt-0.5 font-medium">{children}</dd>
     </div>
-  );
-}
-
-/**
- * The Delivery switch. A plain checkbox reads as "tick to agree" beside a price; this is a
- * switch because it turns a branch's delivery on and off, and it carries the branch name in
- * its accessible label so a screen reader does not meet five switches all called "Delivery".
- */
-function Switch({
-  checked,
-  onChange,
-  label,
-}: {
-  checked: boolean;
-  onChange: (on: boolean) => void;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      onClick={() => onChange(!checked)}
-      className={`focus-ring relative h-7 w-12 shrink-0 rounded-full transition-colors ${
-        checked ? 'bg-primary' : 'bg-muted-foreground/30'
-      }`}
-    >
-      <span
-        className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${
-          checked ? 'left-6' : 'left-1'
-        }`}
-      />
-    </button>
   );
 }
 
@@ -1551,12 +1444,10 @@ function RenewBanner({ paidThrough, byCard }: { paidThrough: string | null; byCa
 
 function DecisionBanner({
   decision,
-  branches,
   timezone,
   locale,
 }: {
   decision: DecidedRequest;
-  branches: PlanBranch[];
   timezone: string;
   locale: UiLocale;
 }) {
@@ -1566,12 +1457,8 @@ function DecisionBanner({
   // because the team never saw it — the note on the row is the settlement's bookkeeping.
   const paid = approved && decision.paidByCard;
   const on = formatInZone(decision.decidedAt, timezone, { dateOnly: true }, locale);
-  const names = branches
-    .filter((b) => decision.deliveryBranchIds.includes(b.id))
-    .map((b) => b.name);
-  const summary = summaryLine(t, locale, {
+  const summary = summaryLine(t, {
     branches: decision.branchSeats,
-    deliveryNames: names,
     monthlyTotal: decision.monthlyTotal,
   });
   return (

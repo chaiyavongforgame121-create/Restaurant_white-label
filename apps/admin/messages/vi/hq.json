@@ -56,7 +56,11 @@
     "title": "Chi phí ghi nhận được",
     "driverPayouts": "Chi trả tài xế",
     "subscription": "Gói đăng ký FavorNoms",
-    "noInvoicesWithPlan": "Chưa có hóa đơn nào được ghi nhận. Mức phí hiện tại của bạn là <strong>{rate}/tháng</strong> với gói <planName>{plan}</planName>.",
+    "noInvoicesWithPlan": "Chưa có hóa đơn nào được ghi nhận. Mức phí hiện tại của bạn là <strong>{rate}/tháng</strong> với {plan}.",
+    "planNames": {
+      "base": "gói FavorNoms",
+      "trial": "gói dùng thử miễn phí"
+    },
     "noInvoices": "Chưa có hóa đơn nào được ghi nhận. Mức phí hiện tại của bạn là <strong>{rate}/tháng</strong>.",
     "totalKnown": "Tổng chi phí đã biết",
     "afterCosts": "Doanh thu sau chi phí",

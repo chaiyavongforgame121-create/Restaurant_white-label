@@ -363,7 +363,7 @@ const tag = (chunks: string) => chunks;
 const VALUES = {
   count: 2,
   date: 'Oct 7, 2026',
-  amount: '$59',
+  amount: '$49',
   name: 'Pho Corner',
   id: 'acct_1Plat',
   mode: 'test',

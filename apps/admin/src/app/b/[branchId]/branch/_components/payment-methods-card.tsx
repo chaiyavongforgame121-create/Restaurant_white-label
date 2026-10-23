@@ -2,7 +2,6 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { AlertTriangle, Lock, Save, Store, Wallet } from 'lucide-react';
 import { Button, Card } from '@favornoms/ui';
@@ -209,16 +208,13 @@ export function PaymentMethodsCard({ branchId, restaurantId, settings, canUseCar
         </div>
       </div>
 
+      {/* Card payment is in the plan (docs/PACKAGING-2026-10-24.md §2), so this only shows
+          when it is off for the whole restaurant: lapsed, or switched off by the platform.
+          The plan page sells nothing that changes that, so there is no link to it. */}
       {!canUseCard && (
-        <p className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-muted px-4 py-3 text-sm">
-          <Lock className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <p className="mt-3 flex items-start gap-2 rounded-xl bg-muted px-4 py-3 text-sm">
+          <Lock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
           <span>{t('payments.cardLocked')}</span>
-          <Link
-            href={`/b/${branchId}/settings/plan`}
-            className="font-medium text-primary underline-offset-2 hover:underline"
-          >
-            {t('payments.viewPackages')}
-          </Link>
         </p>
       )}
 

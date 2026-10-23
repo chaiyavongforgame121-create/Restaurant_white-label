@@ -1,103 +1,37 @@
 import 'server-only';
 import {
+  getBranchDeliveryEnabled,
   getEntitlementsForBranch,
-  listBillingProducts,
   LIVE_DELIVERY_STATUSES,
   LIVE_ORDER_STATUSES,
 } from '@favornoms/database/queries';
-import { ADDON_DELIVERY, hasFeature, type BillingProduct } from '@favornoms/shared';
+import { hasFeature, type Entitlements } from '@favornoms/shared';
 import type { getServerClient } from '@favornoms/database/server';
 import {
-  deliveryOneTimePrice,
+  deliveryGateFrom,
   NO_WIND_DOWN,
   payoutWindowStart,
+  type DeliveryGate,
   type DeliveryWindDown,
 } from './delivery-gate-model';
 
-export { NO_WIND_DOWN, PAYOUT_SUMMARY_WEEKS, oneTimePriceToShow } from './delivery-gate-model';
-export type { DeliveryWindDown } from './delivery-gate-model';
+export { NO_WIND_DOWN, PAYOUT_SUMMARY_WEEKS, deliverySettingsHref } from './delivery-gate-model';
+export type { DeliveryGate, DeliveryOffReason, DeliveryWindDown } from './delivery-gate-model';
 
 type ServerClient = Awaited<ReturnType<typeof getServerClient>>;
 
 /**
- * Does THIS branch deliver, and what would it cost to turn it on?
- *
- * Delivery stopped being one restaurant-wide switch on 2026-09-23: the owner picks
- * which branches deliver, each one costs $59 once and $29/month, and a branch without
- * it must read as "this branch does not deliver" rather than "your add-on is gone"
- * (docs/PACKAGING-2026-09-23.md §2). Every delivery screen in the back office asks
- * this one question so they cannot answer it differently.
- *
- * `getEntitlementsForBranch` resolves the payload FOR the branch, so
- * `features.delivery` is this branch's answer and not the restaurant's union.
- *
- * Prices come from `billing_products` and are null when the catalog cannot be read:
- * a locked screen with no price is honest, an invented one is not.
+ * The branch's "Delivery at this branch" switch, or null when it could not be read.
+ * getBranchDeliveryEnabled throws on a failed read rather than guess; here an unknown switch
+ * only decides which sentence a locked screen shows (deliveryOffReason), so it is not worth
+ * failing the page over.
  */
-export interface DeliveryGate {
-  /** Delivery is live at this branch right now. */
-  delivers: boolean;
-  /**
-   * This branch paid its one-time delivery unlock before, so turning delivery back on costs
-   * nothing once (docs §1: "A branch's $59 is paid once ever"). null when it could not be read.
-   */
-  alreadyUnlocked: boolean | null;
-  /**
-   * What turning delivery on HERE costs once: the catalog's unlock price, 0 when the branch
-   * already paid it, null when either could not be read. Print it with oneTimePriceToShow.
-   */
-  oneTimePrice: number | null;
-  /** billing_products.delivery.monthly_price — what this branch adds to the bill. */
-  monthlyPrice: number | null;
-  /** The plan page with this branch's delivery already picked. */
-  planHref: string;
-}
-
-/**
- * billing_products.one_time_price, added by the 2026-09-23 packaging migration
- * (docs §3.1). Read through a cast so this compiles before `BillingProduct` grows the
- * field; until the migration lands it is simply absent, and the caller shows the
- * monthly price on its own instead of a made-up number.
- */
-function oneTimePriceOf(product: BillingProduct | undefined): number | null {
-  const raw = (product as unknown as Record<string, unknown> | undefined)?.one_time_price;
-  const n = Number(raw);
-  return Number.isFinite(n) && n > 0 ? n : null;
-}
-
-function positive(n: number | null | undefined): number | null {
-  return typeof n === 'number' && Number.isFinite(n) && n > 0 ? n : null;
-}
-
-/** The plan page, with this branch's Delivery switch pre-selected. */
-export function deliveryPlanHref(branchId: string): string {
-  return `/b/${branchId}/settings/plan?add=${ADDON_DELIVERY}&branch=${encodeURIComponent(branchId)}`;
-}
-
-/**
- * Has this branch paid its one-time delivery unlock before?
- *
- * The same test as private.branch_delivery_unlocked (what billing_paid_state and the plan
- * page read), taken the one way a merchant's session can: a branch_addons row for the branch,
- * switched on or off. The row is never deleted while the branch exists — switching delivery
- * off only flips `active` — so "a row exists" is "the $59 was paid", or the branch was
- * granted or grandfathered without a charge, which the plan page counts the same way. The
- * other half of the SQL test, a PAID billing_charges row, is not readable from here (that
- * table is platform-admin only), and adds nothing: decide_billing_request applies the
- * selection, which writes the row, in the same transaction that marks the charge paid.
- *
- * RLS lets any staff member of the branch read its row, so a manager on a locked screen gets
- * the same answer as the owner. A failed read is null, never a guess.
- */
-async function deliveryUnlockedHere(supabase: ServerClient, branchId: string): Promise<boolean | null> {
-  const { data, error } = await supabase
-    .from('branch_addons')
-    .select('branch_id')
-    .eq('branch_id', branchId)
-    .eq('code', ADDON_DELIVERY)
-    .maybeSingle();
-  if (error) return null;
-  return data !== null;
+async function readDeliverySwitch(supabase: ServerClient, branchId: string): Promise<boolean | null> {
+  try {
+    return await getBranchDeliveryEnabled(supabase, branchId);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -176,22 +110,29 @@ export async function resolveDeliveryWindDown(
   return { runsOut, ridersOwed };
 }
 
-export async function resolveDeliveryGate(supabase: ServerClient, branchId: string): Promise<DeliveryGate> {
-  // The catalog is a public read, the entitlements RPC is per branch and the unlock is one
-  // row; none depends on another, and this sits in front of pages that load plenty already.
-  const [entitlements, catalog, alreadyUnlocked] = await Promise.all([
-    getEntitlementsForBranch(supabase, branchId),
-    listBillingProducts(supabase),
-    deliveryUnlockedHere(supabase, branchId),
-  ]);
-  const delivery = catalog.find((p) => p.code === ADDON_DELIVERY);
-  return {
-    // hasFeature on a branch-resolved payload IS the branch question (packaging §7.1
-    // calls it deliversHere). It fails closed, so a failed read locks the screen.
-    delivers: hasFeature(entitlements, 'delivery'),
-    alreadyUnlocked,
-    oneTimePrice: deliveryOneTimePrice(oneTimePriceOf(delivery), alreadyUnlocked),
-    monthlyPrice: positive(delivery?.monthly_price),
-    planHref: deliveryPlanHref(branchId),
-  };
+/**
+ * Does THIS branch deliver, and if not, why (see DeliveryOffReason)?
+ *
+ * Delivery is part of the plan at every branch, behind a free per-branch switch in branch
+ * settings (docs/PACKAGING-2026-10-24.md §3). Every delivery screen in the back office asks
+ * this one question so they cannot answer it differently, and none of them quotes a price or
+ * points at the plan page for it any more.
+ *
+ * `getEntitlementsForBranch` resolves the payload FOR the branch, so `features.delivery` is
+ * this branch's answer (private.branch_feature_granted) and not the restaurant's. A page that
+ * already read that payload passes it as `entitlements`, so it is not read twice. The switch
+ * itself is read only when the answer is no — to tell the two reasons apart — so a branch that
+ * delivers, which is nearly every branch, pays for one read at most.
+ */
+export async function resolveDeliveryGate(
+  supabase: ServerClient,
+  branchId: string,
+  entitlements?: Entitlements,
+): Promise<DeliveryGate> {
+  const ent = entitlements ?? (await getEntitlementsForBranch(supabase, branchId));
+  // hasFeature on a branch-resolved payload IS the branch question. It fails closed, so a
+  // failed read locks the screen (with the 'notAvailable' words: entitled is false then).
+  const delivers = hasFeature(ent, 'delivery');
+  const switchOn = delivers ? true : await readDeliverySwitch(supabase, branchId);
+  return deliveryGateFrom(branchId, delivers, ent.entitled, switchOn);
 }

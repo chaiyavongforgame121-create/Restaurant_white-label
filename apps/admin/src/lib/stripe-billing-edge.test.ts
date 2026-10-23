@@ -37,14 +37,15 @@ function rawContext(over: Record<string, unknown> = {}) {
       stripe_customer_id: null,
       owner_email: 'owner@thaigarden.com',
     },
+    // docs/PACKAGING-2026-10-24.md: $199 first-time setup, $89 per additional branch, $49 a
+    // month per branch. No delivery line: delivery is part of the plan.
     charges: [
-      { id: CH_BASE, code: 'base', branch_id: null, net_amount: '153.00' },
-      { id: CH_B2, code: 'extra_branch', branch_id: BRANCH_2, net_amount: 70 },
+      { id: CH_BASE, code: 'base', branch_id: null, net_amount: '199.00' },
+      { id: CH_B2, code: 'extra_branch', branch_id: BRANCH_2, net_amount: 89 },
     ],
     monthly_lines: [
-      { code: 'base', quantity: 1, unit_amount_cents: 2900 },
-      { code: 'extra_branch', quantity: 1, unit_amount_cents: 2900 },
-      { code: 'delivery', quantity: 1, unit_amount_cents: 3000 },
+      { code: 'base', quantity: 1, unit_amount_cents: 4900 },
+      { code: 'extra_branch', quantity: 1, unit_amount_cents: 4900 },
     ],
     subscription: {
       status: 'trialing',
@@ -66,7 +67,7 @@ function ctxOf(over: Record<string, unknown> = {}) {
   return parsed.ctx;
 }
 
-const PRICES = { base: 'price_base', extra_branch: 'price_branch', delivery: 'price_delivery' };
+const PRICES = { base: 'price_base', extra_branch: 'price_branch' };
 const URLS = billing.checkoutUrls(
   'https://admin.favornoms.com',
   'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
@@ -81,19 +82,30 @@ describe('versions', () => {
 });
 
 describe('catalog identity', () => {
+  it('sells base and extra_branch, and only recognises the withdrawn delivery product', () => {
+    expect(billing.MONTHLY_CODES).toEqual(['base', 'extra_branch']);
+    expect(billing.LEGACY_MONTHLY_CODES).toEqual(['delivery']);
+    expect(billing.isMonthlyCode('delivery')).toBe(false);
+  });
+
   it('names every product with a stable explicit id and maps it back to its code', () => {
     expect(billing.MONTHLY_PRODUCT_IDS).toEqual({
       base: 'favornoms_base',
       extra_branch: 'favornoms_extra_branch',
+      // Legacy: kept so an item bought before delivery joined the plan is read for what it is.
       delivery: 'favornoms_delivery',
     });
     expect(billing.SETUP_PRODUCT_IDS).toEqual({
       base: 'favornoms_base_setup',
       extra_branch: 'favornoms_extra_branch_setup',
-      delivery: 'favornoms_delivery_setup',
     });
     expect(billing.productCodeOf('favornoms_extra_branch')).toBe('extra_branch');
-    expect(billing.productCodeOf('favornoms_delivery_setup')).toBe('delivery');
+    expect(billing.productCodeOf('favornoms_extra_branch_setup')).toBe('extra_branch');
+    expect(billing.productCodeOf('favornoms_delivery')).toBe('delivery');
+    expect(billing.productKindOf('favornoms_delivery')).toBe('monthly');
+    // No delivery setup fee is ever charged again.
+    expect(billing.productCodeOf('favornoms_delivery_setup')).toBeNull();
+    expect(billing.productKindOf('favornoms_delivery_setup')).toBeNull();
     expect(billing.productCodeOf({ id: 'favornoms_base', object: 'product' })).toBe('base');
     expect(billing.productKindOf('favornoms_base')).toBe('monthly');
     expect(billing.productKindOf('favornoms_base_setup')).toBe('setup');
@@ -103,33 +115,55 @@ describe('catalog identity', () => {
   });
 
   it('puts the amount in the lookup key, so a new catalog price is a new Stripe price', () => {
-    expect(billing.priceLookupKey('base', 2900)).toBe('favornoms_base_monthly_2900');
-    expect(billing.priceLookupKey('delivery', 3000)).toBe('favornoms_delivery_monthly_3000');
-    expect(billing.parseLookupKey('favornoms_extra_branch_monthly_2900')).toEqual({
+    expect(billing.priceLookupKey('base', 4900)).toBe('favornoms_base_monthly_4900');
+    expect(billing.priceLookupKey('extra_branch', 4900)).toBe(
+      'favornoms_extra_branch_monthly_4900',
+    );
+    expect(billing.parseLookupKey('favornoms_extra_branch_monthly_4900')).toEqual({
       code: 'extra_branch',
-      cents: 2900,
+      cents: 4900,
     });
+    expect(billing.parseLookupKey('favornoms_delivery_monthly_3000')).toBeNull();
     expect(billing.parseLookupKey('favornoms_ai_suite_monthly_8900')).toBeNull();
-    expect(billing.parseLookupKey('favornoms_base_monthly_29.00')).toBeNull();
+    expect(billing.parseLookupKey('favornoms_base_monthly_49.00')).toBeNull();
+  });
+
+  it('names the products as the plan page sells them', () => {
+    expect(billing.PRODUCT_NAMES).toEqual({
+      favornoms_base: 'FavorNoms Plan (first branch), monthly',
+      favornoms_extra_branch: 'Additional branch, monthly',
+      favornoms_base_setup: 'FavorNoms Plan, first-time setup',
+      favornoms_extra_branch_setup: 'Additional branch setup',
+    });
   });
 
   it('creates products and prices with exactly these bodies', () => {
     expect(billing.productParams('favornoms_extra_branch_setup')).toEqual({
       id: 'favornoms_extra_branch_setup',
-      name: 'Additional branch, one-time setup',
+      name: 'Additional branch setup',
       'metadata[product_code]': 'extra_branch',
       'metadata[kind]': 'setup',
       'metadata[purpose]': 'platform_billing',
     });
+    expect(billing.productParams('favornoms_base')).toEqual({
+      id: 'favornoms_base',
+      name: 'FavorNoms Plan (first branch), monthly',
+      'metadata[product_code]': 'base',
+      'metadata[kind]': 'monthly',
+      'metadata[purpose]': 'platform_billing',
+    });
     expect(() => billing.productParams('prod_Other')).toThrow('unknown_product');
-    expect(billing.priceParams('delivery', 3000)).toEqual({
-      product: 'favornoms_delivery',
+    // A withdrawn product is never made again.
+    expect(() => billing.productParams('favornoms_delivery')).toThrow('unknown_product');
+    expect(() => billing.productParams('favornoms_delivery_setup')).toThrow('unknown_product');
+    expect(billing.priceParams('extra_branch', 4900)).toEqual({
+      product: 'favornoms_extra_branch',
       currency: 'usd',
-      unit_amount: '3000',
+      unit_amount: '4900',
       'recurring[interval]': 'month',
-      lookup_key: 'favornoms_delivery_monthly_3000',
+      lookup_key: 'favornoms_extra_branch_monthly_4900',
       transfer_lookup_key: 'true',
-      'metadata[product_code]': 'delivery',
+      'metadata[product_code]': 'extra_branch',
     });
     expect(() => billing.priceParams('base', 0)).toThrow('bad_amount');
   });
@@ -139,56 +173,59 @@ describe('catalog identity', () => {
       id: 'price_1',
       active: true,
       currency: 'usd',
-      unit_amount: 2900,
-      lookup_key: 'favornoms_base_monthly_2900',
+      unit_amount: 4900,
+      lookup_key: 'favornoms_base_monthly_4900',
       product: 'favornoms_base',
       recurring: { interval: 'month', interval_count: 1 },
     };
-    expect(billing.priceMatches(good, 'base', 2900)).toBe(true);
-    expect(billing.priceMatches({ ...good, product: { id: 'favornoms_base' } }, 'base', 2900)).toBe(
+    expect(billing.priceMatches(good, 'base', 4900)).toBe(true);
+    expect(billing.priceMatches({ ...good, product: { id: 'favornoms_base' } }, 'base', 4900)).toBe(
       true,
     );
-    expect(billing.priceMatches({ ...good, active: false }, 'base', 2900)).toBe(false);
-    expect(billing.priceMatches({ ...good, unit_amount: 2800 }, 'base', 2900)).toBe(false);
-    expect(billing.priceMatches({ ...good, product: 'favornoms_delivery' }, 'base', 2900)).toBe(
+    expect(billing.priceMatches({ ...good, active: false }, 'base', 4900)).toBe(false);
+    expect(billing.priceMatches({ ...good, unit_amount: 2900 }, 'base', 4900)).toBe(false);
+    expect(billing.priceMatches({ ...good, product: 'favornoms_extra_branch' }, 'base', 4900)).toBe(
       false,
     );
-    expect(billing.priceMatches({ ...good, recurring: { interval: 'year' } }, 'base', 2900)).toBe(
+    expect(billing.priceMatches({ ...good, recurring: { interval: 'year' } }, 'base', 4900)).toBe(
       false,
     );
     expect(
       billing.priceMatches(
         { ...good, recurring: { interval: 'month', interval_count: 3 } },
         'base',
-        2900,
+        4900,
       ),
     ).toBe(false);
-    expect(billing.priceMatches({ ...good, recurring: null }, 'base', 2900)).toBe(false);
+    expect(billing.priceMatches({ ...good, recurring: null }, 'base', 4900)).toBe(false);
   });
 
-  it('prepares prices only from a whole, active catalog', () => {
+  it('prepares prices only from a whole, active catalog, which delivery is not part of', () => {
     const rows = [
-      { code: 'base', monthly_price: '29.00', is_active: true },
-      { code: 'extra_branch', monthly_price: 29, is_active: true },
-      { code: 'delivery', monthly_price: '30', is_active: true },
+      { code: 'base', monthly_price: '49.00', is_active: true },
+      { code: 'extra_branch', monthly_price: 49, is_active: true },
+      // The withdrawn product as the catalog keeps it (docs/PACKAGING-2026-10-24.md §4.1).
+      { code: 'delivery', monthly_price: 0, is_active: false },
       { code: 'trial', monthly_price: 0, is_active: true },
     ];
-    expect(billing.catalogMonthlyCents(rows)).toEqual([
-      { code: 'base', cents: 2900 },
-      { code: 'extra_branch', cents: 2900 },
-      { code: 'delivery', cents: 3000 },
-    ]);
+    const both = [
+      { code: 'base', cents: 4900 },
+      { code: 'extra_branch', cents: 4900 },
+    ];
+    expect(billing.catalogMonthlyCents(rows)).toEqual(both);
+    // Complete without a delivery row at all.
+    expect(billing.catalogMonthlyCents(rows.slice(0, 2))).toEqual(both);
     expect(billing.catalogMonthlyCents(rows.slice(1))).toBeNull();
     expect(
       billing.catalogMonthlyCents([
-        ...rows.slice(0, 2),
-        { code: 'delivery', monthly_price: 30, is_active: false },
+        rows[0],
+        { code: 'extra_branch', monthly_price: 49, is_active: false },
       ]),
     ).toBeNull();
     expect(
       billing.catalogMonthlyCents([
-        ...rows.slice(0, 2),
-        { code: 'delivery', monthly_price: 0, is_active: true },
+        rows[0],
+        { code: 'extra_branch', monthly_price: 0, is_active: true },
       ]),
     ).toBeNull();
     expect(billing.catalogMonthlyCents(null)).toBeNull();
@@ -197,7 +234,7 @@ describe('catalog identity', () => {
 
 describe('money', () => {
   it('turns numeric dollars into exact cents', () => {
-    expect(billing.cents('70.00')).toBe(7000);
+    expect(billing.cents('89.00')).toBe(8900);
     expect(billing.cents(148.5)).toBe(14850);
     expect(billing.cents(0.29)).toBe(29);
     expect(billing.cents(19.99)).toBe(1999);
@@ -210,7 +247,7 @@ describe('money', () => {
       expect(Number.isNaN(billing.cents(bad))).toBe(true);
     }
     expect(billing.dollars(14850)).toBe(148.5);
-    expect(billing.dollars(2900)).toBe(29);
+    expect(billing.dollars(4900)).toBe(49);
   });
 });
 
@@ -219,11 +256,15 @@ describe('the request context', () => {
     const ctx = ctxOf();
     expect(ctx.request.id).toBe(REQ);
     expect(ctx.charges).toEqual([
-      { id: CH_BASE, code: 'base', branch_id: null, net_cents: 15300 },
-      { id: CH_B2, code: 'extra_branch', branch_id: BRANCH_2, net_cents: 7000 },
+      { id: CH_BASE, code: 'base', branch_id: null, net_cents: 19900 },
+      { id: CH_B2, code: 'extra_branch', branch_id: BRANCH_2, net_cents: 8900 },
+    ]);
+    expect(ctx.monthly_lines).toEqual([
+      { code: 'base', quantity: 1, unit_amount_cents: 4900 },
+      { code: 'extra_branch', quantity: 1, unit_amount_cents: 4900 },
     ]);
     expect(ctx.subscription?.trial_ends_at).toBe('2026-10-03T12:00:00Z');
-    expect(billing.oneTimeTotalCents(ctx)).toBe(22300);
+    expect(billing.oneTimeTotalCents(ctx)).toBe(28800);
   });
 
   it('passes the refusal through and fails closed on anything it cannot bill exactly', () => {
@@ -238,30 +279,46 @@ describe('the request context', () => {
     expect(bad({ charges: [{ id: CH_BASE, code: 'ai_suite', net_amount: 10 }] })).toBe(false);
     expect(bad({ charges: [{ id: CH_BASE, code: 'base', net_amount: 'free' }] })).toBe(false);
     expect(
-      bad({ monthly_lines: [{ code: 'extra_branch', quantity: 1, unit_amount_cents: 2900 }] }),
+      bad({ monthly_lines: [{ code: 'extra_branch', quantity: 1, unit_amount_cents: 4900 }] }),
     ).toBe(false);
-    expect(bad({ monthly_lines: [{ code: 'base', quantity: 2, unit_amount_cents: 2900 }] })).toBe(
+    expect(bad({ monthly_lines: [{ code: 'base', quantity: 2, unit_amount_cents: 4900 }] })).toBe(
       false,
     );
-    expect(bad({ monthly_lines: [{ code: 'base', quantity: 1, unit_amount_cents: 29.5 }] })).toBe(
+    expect(bad({ monthly_lines: [{ code: 'base', quantity: 1, unit_amount_cents: 49.5 }] })).toBe(
       false,
     );
     expect(
       bad({
         monthly_lines: [
-          { code: 'base', quantity: 1, unit_amount_cents: 2900 },
-          { code: 'delivery', quantity: 1.5, unit_amount_cents: 3000 },
+          { code: 'base', quantity: 1, unit_amount_cents: 4900 },
+          { code: 'extra_branch', quantity: 1.5, unit_amount_cents: 4900 },
         ],
       }),
     ).toBe(false);
     expect(
       bad({
         monthly_lines: [
-          { code: 'base', quantity: 1, unit_amount_cents: 2900 },
-          { code: 'base', quantity: 1, unit_amount_cents: 2900 },
+          { code: 'base', quantity: 1, unit_amount_cents: 4900 },
+          { code: 'base', quantity: 1, unit_amount_cents: 4900 },
         ],
       }),
     ).toBe(false);
+  });
+
+  it('refuses to sell the withdrawn delivery add-on again, as a monthly line or a fee', () => {
+    const parsed = (over: Record<string, unknown>) =>
+      billing.parseCheckoutContext(rawContext(over));
+    expect(
+      parsed({
+        monthly_lines: [
+          { code: 'base', quantity: 1, unit_amount_cents: 4900 },
+          { code: 'delivery', quantity: 1, unit_amount_cents: 3000 },
+        ],
+      }),
+    ).toEqual({ ok: false, error: 'bad_monthly_line' });
+    expect(
+      parsed({ charges: [{ id: CH_B2, code: 'delivery', branch_id: BRANCH_2, net_amount: 59 }] }),
+    ).toEqual({ ok: false, error: 'bad_charge' });
   });
 });
 
@@ -287,16 +344,14 @@ describe('first purchase: the Checkout session', () => {
       'line_items[0][quantity]': '1',
       'line_items[1][price]': 'price_branch',
       'line_items[1][quantity]': '1',
-      'line_items[2][price]': 'price_delivery',
+      'line_items[2][price_data][currency]': 'usd',
+      'line_items[2][price_data][product]': 'favornoms_base_setup',
+      'line_items[2][price_data][unit_amount]': '19900',
       'line_items[2][quantity]': '1',
       'line_items[3][price_data][currency]': 'usd',
-      'line_items[3][price_data][product]': 'favornoms_base_setup',
-      'line_items[3][price_data][unit_amount]': '15300',
+      'line_items[3][price_data][product]': 'favornoms_extra_branch_setup',
+      'line_items[3][price_data][unit_amount]': '8900',
       'line_items[3][quantity]': '1',
-      'line_items[4][price_data][currency]': 'usd',
-      'line_items[4][price_data][product]': 'favornoms_extra_branch_setup',
-      'line_items[4][price_data][unit_amount]': '7000',
-      'line_items[4][quantity]': '1',
     });
     // Stripe promotion codes could discount the monthly price; the platform's codes are one-time only.
     expect(Object.keys(params).some((k) => k.includes('promotion') || k.includes('discount'))).toBe(
@@ -307,13 +362,13 @@ describe('first purchase: the Checkout session', () => {
   it('starts billing now without a trial date, and leaves out quantity-0 lines and $0 fees', () => {
     const ctx = ctxOf({
       monthly_lines: [
-        { code: 'base', quantity: 1, unit_amount_cents: 2900 },
-        { code: 'extra_branch', quantity: 0, unit_amount_cents: 2900 },
-        { code: 'delivery', quantity: 0, unit_amount_cents: 3000 },
+        { code: 'base', quantity: 1, unit_amount_cents: 4900 },
+        { code: 'extra_branch', quantity: 0, unit_amount_cents: 4900 },
       ],
       charges: [
-        { id: CH_BASE, code: 'base', branch_id: null, net_amount: '170.00' },
-        { id: CH_B2, code: 'delivery', branch_id: BRANCH_2, net_amount: '0.00' },
+        { id: CH_BASE, code: 'base', branch_id: null, net_amount: '199.00' },
+        // A 100 % code: a fee of $0 is not a line.
+        { id: CH_B2, code: 'extra_branch', branch_id: BRANCH_2, net_amount: '0.00' },
       ],
     });
     const params = billing.checkoutSessionParams(
@@ -332,7 +387,7 @@ describe('first purchase: the Checkout session', () => {
       'line_items[0][quantity]': '1',
       'line_items[1][price_data][currency]': 'usd',
       'line_items[1][price_data][product]': 'favornoms_base_setup',
-      'line_items[1][price_data][unit_amount]': '17000',
+      'line_items[1][price_data][unit_amount]': '19900',
       'line_items[1][quantity]': '1',
     });
   });
@@ -342,20 +397,20 @@ describe('first purchase: the Checkout session', () => {
       id: `55555555-5555-4555-8555-${String(i).padStart(12, '0')}`,
       code: 'extra_branch',
       branch_id: null,
-      net_amount: i === 0 ? '63.00' : '70.00',
+      net_amount: i === 0 ? '80.10' : '89.00',
     }));
     const ctx = ctxOf({
       charges: many,
       monthly_lines: [
-        { code: 'base', quantity: 1, unit_amount_cents: 2900 },
-        { code: 'extra_branch', quantity: 30, unit_amount_cents: 2900 },
+        { code: 'base', quantity: 1, unit_amount_cents: 4900 },
+        { code: 'extra_branch', quantity: 30, unit_amount_cents: 4900 },
       ],
     });
     const params = billing.checkoutSessionParams(ctx, 'cus_1', PRICES, URLS, null);
     expect(params['line_items[1][quantity]']).toBe('30');
-    expect(params['line_items[2][price_data][unit_amount]']).toBe('7000');
+    expect(params['line_items[2][price_data][unit_amount]']).toBe('8900');
     expect(params['line_items[2][quantity]']).toBe('29');
-    expect(params['line_items[3][price_data][unit_amount]']).toBe('6300');
+    expect(params['line_items[3][price_data][unit_amount]']).toBe('8010');
     expect(params['line_items[3][quantity]']).toBe('1');
     expect(params['line_items[4][price]']).toBeUndefined();
     expect(params['line_items[4][price_data][currency]']).toBeUndefined();
@@ -457,17 +512,15 @@ describe("changing a paying restaurant's package: the subscription update", () =
   const current = {
     base: { id: 'si_base', quantity: 1 },
     extra_branch: { id: 'si_branch', quantity: 1 },
-    delivery: { id: 'si_delivery', quantity: 2 },
   };
 
-  it('adds a branch: the FULL target (unchanged items too) and the $70 at net', () => {
+  it('adds a branch: the FULL target (unchanged items too) and the $89 at net', () => {
     const ctx = ctxOf({
       stripe_managed: true,
-      charges: [{ id: CH_B3, code: 'extra_branch', branch_id: BRANCH_3, net_amount: '70.00' }],
+      charges: [{ id: CH_B3, code: 'extra_branch', branch_id: BRANCH_3, net_amount: '89.00' }],
       monthly_lines: [
-        { code: 'base', quantity: 1, unit_amount_cents: 2900 },
-        { code: 'extra_branch', quantity: 2, unit_amount_cents: 2900 },
-        { code: 'delivery', quantity: 2, unit_amount_cents: 3000 },
+        { code: 'base', quantity: 1, unit_amount_cents: 4900 },
+        { code: 'extra_branch', quantity: 2, unit_amount_cents: 4900 },
       ],
     });
     expect(billing.subscriptionUpdateParams(ctx, current, {})).toEqual({
@@ -475,11 +528,9 @@ describe("changing a paying restaurant's package: the subscription update", () =
       'items[0][quantity]': '1',
       'items[1][id]': 'si_branch',
       'items[1][quantity]': '2',
-      'items[2][id]': 'si_delivery',
-      'items[2][quantity]': '2',
       'add_invoice_items[0][price_data][currency]': 'usd',
       'add_invoice_items[0][price_data][product]': 'favornoms_extra_branch_setup',
-      'add_invoice_items[0][price_data][unit_amount]': '7000',
+      'add_invoice_items[0][price_data][unit_amount]': '8900',
       'add_invoice_items[0][quantity]': '1',
       'add_invoice_items[0][metadata][billing_request_id]': REQ,
       'add_invoice_items[0][metadata][product_code]': 'extra_branch',
@@ -493,49 +544,98 @@ describe("changing a paying restaurant's package: the subscription update", () =
   it('SP-2: a retry after the first update applied sends the SAME body, so the key replays it', () => {
     const ctx = ctxOf({
       stripe_managed: true,
-      charges: [{ id: CH_B3, code: 'extra_branch', branch_id: BRANCH_3, net_amount: '70.00' }],
+      charges: [{ id: CH_B3, code: 'extra_branch', branch_id: BRANCH_3, net_amount: '89.00' }],
       monthly_lines: [
-        { code: 'base', quantity: 1, unit_amount_cents: 2900 },
-        { code: 'extra_branch', quantity: 2, unit_amount_cents: 2900 },
-        { code: 'delivery', quantity: 2, unit_amount_cents: 3000 },
+        { code: 'base', quantity: 1, unit_amount_cents: 4900 },
+        { code: 'extra_branch', quantity: 2, unit_amount_cents: 4900 },
       ],
     });
     const before = billing.subscriptionUpdateParams(ctx, current, {});
     const applied = { ...current, extra_branch: { id: 'si_branch', quantity: 2 } };
     const after = billing.subscriptionUpdateParams(ctx, applied, {});
-    // The old diff builder sent only the fees here, a new body and a second $70.
+    // The old diff builder sent only the fees here, a new body and a second $89.
     expect(after).toEqual(before);
     expect(billing.changeIdempotencyKey(REQ)).toBe(`billing_change:${REQ}`);
   });
 
   it('deletes an item going to 0 and adds a product it lacks at the catalog price', () => {
-    const ctx = ctxOf({
+    const removing = ctxOf({
       stripe_managed: true,
       charges: [],
       monthly_lines: [
-        { code: 'base', quantity: 1, unit_amount_cents: 2900 },
-        { code: 'extra_branch', quantity: 0, unit_amount_cents: 2900 },
-        { code: 'delivery', quantity: 1, unit_amount_cents: 3000 },
+        { code: 'base', quantity: 1, unit_amount_cents: 4900 },
+        { code: 'extra_branch', quantity: 0, unit_amount_cents: 4900 },
       ],
     });
-    const have = {
-      base: { id: 'si_base', quantity: 1 },
-      extra_branch: { id: 'si_branch', quantity: 1 },
-    };
-    const params = billing.subscriptionUpdateParams(ctx, have, { delivery: 'price_delivery' });
+    const params = billing.subscriptionUpdateParams(removing, current, {});
     expect(params).toEqual({
       'items[0][id]': 'si_base',
       'items[0][quantity]': '1',
       'items[1][id]': 'si_branch',
       'items[1][deleted]': 'true',
-      'items[2][price]': 'price_delivery',
-      'items[2][quantity]': '1',
       proration_behavior: 'always_invoice',
       payment_behavior: 'pending_if_incomplete',
       'expand[0]': 'latest_invoice',
     });
-    expect(billing.itemsMatch(billing.targetQuantities(ctx), have)).toBe(false);
+    expect(billing.itemsMatch(billing.targetQuantities(removing), current)).toBe(false);
     expect(billing.updateAddsOneTimeFees(params)).toBe(false);
+
+    const adding = ctxOf({
+      stripe_managed: true,
+      charges: [],
+      monthly_lines: [
+        { code: 'base', quantity: 1, unit_amount_cents: 4900 },
+        { code: 'extra_branch', quantity: 2, unit_amount_cents: 4900 },
+      ],
+    });
+    const baseOnly = { base: { id: 'si_base', quantity: 1 } };
+    expect(
+      billing.subscriptionUpdateParams(adding, baseOnly, { extra_branch: 'price_branch' }),
+    ).toEqual({
+      'items[0][id]': 'si_base',
+      'items[0][quantity]': '1',
+      'items[1][price]': 'price_branch',
+      'items[1][quantity]': '2',
+      proration_behavior: 'always_invoice',
+      payment_behavior: 'pending_if_incomplete',
+      'expand[0]': 'latest_invoice',
+    });
+  });
+
+  it('removes a legacy delivery item on the next change, needing no price for it', () => {
+    // A subscription bought while delivery was a $30 add-on (docs/PACKAGING-2026-10-24.md §4.3).
+    const legacy = { ...current, delivery: { id: 'si_delivery', quantity: 2 } };
+    const sameBranches = ctxOf({ stripe_managed: true, charges: [] });
+    expect(billing.targetQuantities(sameBranches)).toEqual({ base: 1, extra_branch: 1 });
+    // Not "nothing to change": the delivery item's target is 0.
+    expect(billing.itemsMatch(billing.targetQuantities(sameBranches), legacy)).toBe(false);
+    expect(billing.subscriptionUpdateParams(sameBranches, legacy, {})).toEqual({
+      'items[0][id]': 'si_base',
+      'items[0][quantity]': '1',
+      'items[1][id]': 'si_branch',
+      'items[1][quantity]': '1',
+      'items[2][id]': 'si_delivery',
+      'items[2][deleted]': 'true',
+      // always_invoice: Stripe credits the delivery item's unused days.
+      proration_behavior: 'always_invoice',
+      payment_behavior: 'pending_if_incomplete',
+      'expand[0]': 'latest_invoice',
+    });
+    // Adding a branch at the same time removes it too, after the sold items.
+    const addBranch = ctxOf({
+      stripe_managed: true,
+      charges: [{ id: CH_B3, code: 'extra_branch', branch_id: BRANCH_3, net_amount: '89.00' }],
+      monthly_lines: [
+        { code: 'base', quantity: 1, unit_amount_cents: 4900 },
+        { code: 'extra_branch', quantity: 2, unit_amount_cents: 4900 },
+      ],
+    });
+    const params = billing.subscriptionUpdateParams(addBranch, legacy, {});
+    expect(params['items[1][quantity]']).toBe('2');
+    expect(params['items[2][id]']).toBe('si_delivery');
+    expect(params['items[2][deleted]']).toBe('true');
+    expect(params['items[2][quantity]']).toBeUndefined();
+    expect(Object.values(params)).not.toContain('price_delivery');
   });
 
   it('never sends subscription metadata: basil refuses it with pending_if_incomplete', () => {
@@ -552,36 +652,36 @@ describe("changing a paying restaurant's package: the subscription update", () =
       stripe_managed: true,
       charges: [],
       monthly_lines: [
-        { code: 'base', quantity: 1, unit_amount_cents: 2900 },
-        { code: 'extra_branch', quantity: 1, unit_amount_cents: 2900 },
-        { code: 'delivery', quantity: 2, unit_amount_cents: 3000 },
+        { code: 'base', quantity: 1, unit_amount_cents: 4900 },
+        { code: 'extra_branch', quantity: 1, unit_amount_cents: 4900 },
       ],
     });
-    expect(billing.targetQuantities(ctx)).toEqual({ base: 1, extra_branch: 1, delivery: 2 });
+    expect(billing.targetQuantities(ctx)).toEqual({ base: 1, extra_branch: 1 });
     expect(billing.itemsMatch(billing.targetQuantities(ctx), current)).toBe(true);
     // A missing item counts as 0.
     expect(
-      billing.itemsMatch(
-        { base: 1, extra_branch: 0, delivery: 0 },
-        { base: { id: 'si_base', quantity: 1 } },
-      ),
+      billing.itemsMatch({ base: 1, extra_branch: 0 }, { base: { id: 'si_base', quantity: 1 } }),
     ).toBe(true);
     expect(
+      billing.itemsMatch({ base: 1, extra_branch: 1 }, { base: { id: 'si_base', quantity: 1 } }),
+    ).toBe(false);
+    // A legacy delivery item never matches: it is always targeted at 0.
+    expect(
       billing.itemsMatch(
-        { base: 1, extra_branch: 1, delivery: 0 },
-        { base: { id: 'si_base', quantity: 1 } },
+        { base: 1, extra_branch: 0 },
+        { base: { id: 'si_base', quantity: 1 }, delivery: { id: 'si_delivery', quantity: 1 } },
       ),
     ).toBe(false);
   });
 
   it('a one-time fee with no quantity change is recognised (Stripe makes no invoice for it)', () => {
+    // A branch's $89 setup still owed for a seat the subscription already bills.
     const ctx = ctxOf({
       stripe_managed: true,
-      charges: [{ id: CH_B3, code: 'delivery', branch_id: BRANCH_3, net_amount: '15.00' }],
+      charges: [{ id: CH_B3, code: 'extra_branch', branch_id: BRANCH_3, net_amount: '89.00' }],
       monthly_lines: [
-        { code: 'base', quantity: 1, unit_amount_cents: 2900 },
-        { code: 'extra_branch', quantity: 1, unit_amount_cents: 2900 },
-        { code: 'delivery', quantity: 2, unit_amount_cents: 3000 },
+        { code: 'base', quantity: 1, unit_amount_cents: 4900 },
+        { code: 'extra_branch', quantity: 1, unit_amount_cents: 4900 },
       ],
     });
     const params = billing.subscriptionUpdateParams(ctx, current, {});
@@ -594,9 +694,9 @@ describe("changing a paying restaurant's package: the subscription update", () =
     expect(() =>
       billing.subscriptionUpdateParams(ctx, { base: { id: 'si_base', quantity: 1 } }, {}),
     ).toThrow('missing_price:extra_branch');
-    expect(() =>
-      billing.targetItemParams({ base: 0, extra_branch: 1, delivery: 0 }, current, {}),
-    ).toThrow('base_removed');
+    expect(() => billing.targetItemParams({ base: 0, extra_branch: 1 }, current, {})).toThrow(
+      'base_removed',
+    );
   });
 
   it("reads the subscription's items by product, refusing one it does not understand", () => {
@@ -623,6 +723,29 @@ describe("changing a paying restaurant's package: the subscription update", () =
       { product_code: 'base', stripe_subscription_item_id: 'si_base' },
       { product_code: 'extra_branch', stripe_subscription_item_id: 'si_branch' },
     ]);
+    // A legacy delivery item is understood (the subscription can still change, and the change
+    // removes it), but it has no subscription_items line to settle onto.
+    const withLegacy = {
+      items: {
+        data: [
+          ...sub.items.data,
+          {
+            id: 'si_delivery',
+            quantity: 2,
+            price: { id: 'price_d', product: 'favornoms_delivery' },
+          },
+        ],
+      },
+    };
+    expect(billing.subscriptionItemsByCode(withLegacy)).toEqual({
+      ok: true,
+      items: {
+        base: { id: 'si_base', quantity: 1 },
+        extra_branch: { id: 'si_branch', quantity: 3 },
+        delivery: { id: 'si_delivery', quantity: 2 },
+      },
+    });
+    expect(billing.settleItems(withLegacy)).toEqual(billing.settleItems(sub));
     const withForeign = {
       items: {
         data: [...sub.items.data, { id: 'si_x', quantity: 1, price: { product: 'prod_Other' } }],
@@ -967,9 +1090,9 @@ describe('settling a completed Checkout', () => {
       data: [
         { id: 'si_base', current_period_end: 1_791_000_000, price: { product: 'favornoms_base' } },
         {
-          id: 'si_delivery',
+          id: 'si_branch',
           current_period_end: 1_791_000_000,
-          price: { product: 'favornoms_delivery' },
+          price: { product: 'favornoms_extra_branch' },
         },
       ],
     },
@@ -986,7 +1109,7 @@ describe('settling a completed Checkout', () => {
       p_paid_through: new Date(1_791_000_000 * 1000).toISOString(),
       p_items: [
         { product_code: 'base', stripe_subscription_item_id: 'si_base' },
-        { product_code: 'delivery', stripe_subscription_item_id: 'si_delivery' },
+        { product_code: 'extra_branch', stripe_subscription_item_id: 'si_branch' },
       ],
       p_card: { brand: 'visa', last4: '4242', exp_month: 1, exp_year: 2031 },
       p_monthly_amount: null,
@@ -1192,22 +1315,20 @@ describe('review fixes (spec §9): the request already being paid', () => {
 
 describe('review fixes: putting a paid-but-unapplied change back (ME-6, WH-2)', () => {
   const rows = [
-    { product_code: 'base', quantity: 1, unit_price: '29.00' },
-    { product_code: 'extra_branch', quantity: 2, unit_price: 29 },
-    // billing_compute keeps the delivery line at 1 x $0 when no branch delivers.
-    { product_code: 'delivery', quantity: 1, unit_price: '0.00' },
+    { product_code: 'base', quantity: 1, unit_price: '49.00' },
+    { product_code: 'extra_branch', quantity: 2, unit_price: 49 },
   ];
 
   it('reads the granted package from subscription_items, a $0 line as none', () => {
     expect(billing.grantedLines(rows)).toEqual({
-      quantities: { base: 1, extra_branch: 2, delivery: 0 },
-      cents: { base: 2900, extra_branch: 2900 },
+      quantities: { base: 1, extra_branch: 2 },
+      cents: { base: 4900, extra_branch: 4900 },
     });
     expect(
-      billing.grantedLines([rows[0], { product_code: 'delivery', quantity: 3, unit_price: 30 }]),
+      billing.grantedLines([rows[0], { product_code: 'extra_branch', quantity: 3, unit_price: 0 }]),
     ).toEqual({
-      quantities: { base: 1, extra_branch: 0, delivery: 3 },
-      cents: { base: 2900, delivery: 3000 },
+      quantities: { base: 1, extra_branch: 0 },
+      cents: { base: 4900 },
     });
   });
 
@@ -1217,7 +1338,7 @@ describe('review fixes: putting a paid-but-unapplied change back (ME-6, WH-2)', 
     expect(
       billing.grantedLines([
         rows[0],
-        { product_code: 'extra_branch', quantity: 1.5, unit_price: 29 },
+        { product_code: 'extra_branch', quantity: 1.5, unit_price: 49 },
       ]),
     ).toBeNull();
     expect(
@@ -1226,42 +1347,51 @@ describe('review fixes: putting a paid-but-unapplied change back (ME-6, WH-2)', 
         { product_code: 'extra_branch', quantity: 1, unit_price: 'x' },
       ]),
     ).toBeNull();
-    // A product Stripe does not bill (a withdrawn add-on) is not the revert's business.
+    // A product that is not sold (a withdrawn add-on, delivery included) is not the revert's
+    // business: its line is skipped, so it is never put back.
     expect(
-      billing.grantedLines([rows[0], { product_code: 'ai_suite', quantity: 1, unit_price: 89 }])
-        ?.quantities,
-    ).toEqual({ base: 1, extra_branch: 0, delivery: 0 });
+      billing.grantedLines([
+        rows[0],
+        { product_code: 'ai_suite', quantity: 1, unit_price: 89 },
+        { product_code: 'delivery', quantity: 3, unit_price: 30 },
+      ]),
+    ).toEqual({ quantities: { base: 1, extra_branch: 0 }, cents: { base: 4900 } });
   });
 
   it('sends the full granted package with no proration, re-adding a removed product', () => {
-    const now = {
-      base: { id: 'si_base', quantity: 1 },
-      extra_branch: { id: 'si_branch', quantity: 3 },
-    };
+    const now = { base: { id: 'si_base', quantity: 1 } };
     expect(
-      billing.revertParams({ base: 1, extra_branch: 2, delivery: 1 }, now, {
-        delivery: 'price_delivery',
-      }),
+      billing.revertParams({ base: 1, extra_branch: 2 }, now, { extra_branch: 'price_branch' }),
     ).toEqual({
       'items[0][id]': 'si_base',
       'items[0][quantity]': '1',
-      'items[1][id]': 'si_branch',
+      'items[1][price]': 'price_branch',
       'items[1][quantity]': '2',
-      'items[2][price]': 'price_delivery',
-      'items[2][quantity]': '1',
       proration_behavior: 'none',
     });
+    // The database grants no delivery, so a legacy delivery item is not put back either.
     const reverted = billing.revertParams(
-      { base: 1, extra_branch: 0, delivery: 0 },
-      { ...now, delivery: { id: 'si_delivery', quantity: 1 } },
+      { base: 1, extra_branch: 0 },
+      {
+        ...now,
+        extra_branch: { id: 'si_branch', quantity: 3 },
+        delivery: { id: 'si_delivery', quantity: 1 },
+      },
       {},
     );
-    expect(reverted['items[1][deleted]']).toBe('true');
-    expect(reverted['items[2][deleted]']).toBe('true');
+    expect(reverted).toEqual({
+      'items[0][id]': 'si_base',
+      'items[0][quantity]': '1',
+      'items[1][id]': 'si_branch',
+      'items[1][deleted]': 'true',
+      'items[2][id]': 'si_delivery',
+      'items[2][deleted]': 'true',
+      proration_behavior: 'none',
+    });
     expect(Object.keys(reverted).some((k) => k.startsWith('add_invoice_items'))).toBe(false);
     expect(reverted.payment_behavior).toBeUndefined();
-    expect(() => billing.revertParams({ base: 1, extra_branch: 0, delivery: 1 }, now, {})).toThrow(
-      'missing_price:delivery',
+    expect(() => billing.revertParams({ base: 1, extra_branch: 1 }, now, {})).toThrow(
+      'missing_price:extra_branch',
     );
     expect(billing.revertIdempotencyKey(REQ, 'in_1')).toBe(`billing_revert:${REQ}:in_1`);
   });
@@ -1276,27 +1406,31 @@ describe("review fixes: Stripe's monthly total (§9.6)", () => {
 
   it('sums unit_amount x quantity over the recurring items, in dollars', () => {
     expect(
+      billing.subscriptionMonthlyAmount({ items: { data: [item(4900, 1), item(4900, 2)] } }),
+    ).toBe(147);
+    // A legacy delivery item bills until a change removes it, so Stripe's total counts it.
+    expect(
       billing.subscriptionMonthlyAmount({
-        items: { data: [item(2900, 1), item(2900, 2), item(3000, 3)] },
+        items: { data: [item(4900, 1), item(4900, 2), item(3000, 3)] },
       }),
-    ).toBe(177);
+    ).toBe(237);
     expect(billing.subscriptionMonthlyAmount({ items: { data: [item(1999, 1)] } })).toBe(19.99);
     expect(
       billing.subscriptionMonthlyAmount({
-        items: { data: [{ id: 'si', price: { unit_amount: 2900, type: 'recurring' } }] },
+        items: { data: [{ id: 'si', price: { unit_amount: 4900, type: 'recurring' } }] },
       }),
-    ).toBe(29);
+    ).toBe(49);
   });
 
   it('claims no total it cannot read exactly', () => {
     expect(billing.subscriptionMonthlyAmount({ items: { data: [] } })).toBeNull();
     expect(billing.subscriptionMonthlyAmount(null)).toBeNull();
     expect(
-      billing.subscriptionMonthlyAmount({ items: { data: [item(2900, 1), item(null, 1)] } }),
+      billing.subscriptionMonthlyAmount({ items: { data: [item(4900, 1), item(null, 1)] } }),
     ).toBeNull();
-    expect(billing.subscriptionMonthlyAmount({ items: { data: [item(29.5, 1)] } })).toBeNull();
+    expect(billing.subscriptionMonthlyAmount({ items: { data: [item(49.5, 1)] } })).toBeNull();
     expect(
-      billing.subscriptionMonthlyAmount({ items: { data: [item(2900, 1, null)] } }),
+      billing.subscriptionMonthlyAmount({ items: { data: [item(4900, 1, null)] } }),
     ).toBeNull();
     expect(billing.subscriptionMonthlyAmount({ items: { data: [{ id: 'si' }] } })).toBeNull();
   });
@@ -1314,7 +1448,7 @@ describe("review fixes: Stripe's monthly total (§9.6)", () => {
             current_period_end: 1_790_000_000,
             price: {
               product: 'favornoms_base',
-              unit_amount: 2900,
+              unit_amount: 4900,
               recurring: { interval: 'month' },
             },
           },
@@ -1324,7 +1458,7 @@ describe("review fixes: Stripe's monthly total (§9.6)", () => {
             current_period_end: 1_790_000_000,
             price: {
               product: 'favornoms_extra_branch',
-              unit_amount: 2900,
+              unit_amount: 4900,
               recurring: { interval: 'month' },
             },
           },
@@ -1342,12 +1476,12 @@ describe("review fixes: Stripe's monthly total (§9.6)", () => {
         { product_code: 'extra_branch', stripe_subscription_item_id: 'si_branch' },
       ],
       p_card: null,
-      p_monthly_amount: 87,
+      p_monthly_amount: 147,
     });
     expect(billing.changeSettleArgs(REQ, '', sub, null)).toBeNull();
     expect(billing.changeSettleArgs('nope', 'cus_1', sub, null)).toBeNull();
     expect(billing.changeSettleArgs(REQ, 'cus_1', { ...sub, id: undefined }, null)).toBeNull();
-    expect(billing.syncStatusArgs(sub, null)?.p_monthly_amount).toBe(87);
+    expect(billing.syncStatusArgs(sub, null)?.p_monthly_amount).toBe(147);
   });
 
   it('stores a changed card without touching status, flags or dates (WH-8)', () => {
@@ -1636,13 +1770,13 @@ describe('second review fixes (spec §10)', () => {
     const ctx = ctxOf({
       stripe_managed: true,
       charges: [
-        { id: CH_B2, code: 'extra_branch', branch_id: BRANCH_2, net_amount: 70 },
-        { id: CH_B3, code: 'extra_branch', branch_id: BRANCH_3, net_amount: '70.00' },
-        { id: CH_BASE, code: 'delivery', branch_id: BRANCH_2, net_amount: '59.00' },
-        // A free unlock is not an item at all.
+        { id: CH_BASE, code: 'base', branch_id: null, net_amount: '199.00' },
+        { id: CH_B2, code: 'extra_branch', branch_id: BRANCH_2, net_amount: 89 },
+        { id: CH_B3, code: 'extra_branch', branch_id: BRANCH_3, net_amount: '89.00' },
+        // A fee a 100 % code took to $0 is not an item at all.
         {
           id: '33333333-3333-4333-8333-333333333334',
-          code: 'delivery',
+          code: 'extra_branch',
           branch_id: BRANCH_3,
           net_amount: 0,
         },
@@ -1653,22 +1787,22 @@ describe('second review fixes (spec §10)', () => {
         customer: 'cus_1',
         invoice: 'in_fee',
         'price_data[currency]': 'usd',
-        'price_data[product]': 'favornoms_extra_branch_setup',
-        'price_data[unit_amount]': '7000',
-        quantity: '2',
+        'price_data[product]': 'favornoms_base_setup',
+        'price_data[unit_amount]': '19900',
+        quantity: '1',
         'metadata[billing_request_id]': REQ,
-        'metadata[product_code]': 'extra_branch',
+        'metadata[product_code]': 'base',
+        'metadata[billing_charge_id]': CH_BASE,
       },
       {
         customer: 'cus_1',
         invoice: 'in_fee',
         'price_data[currency]': 'usd',
-        'price_data[product]': 'favornoms_delivery_setup',
-        'price_data[unit_amount]': '5900',
-        quantity: '1',
+        'price_data[product]': 'favornoms_extra_branch_setup',
+        'price_data[unit_amount]': '8900',
+        quantity: '2',
         'metadata[billing_request_id]': REQ,
-        'metadata[product_code]': 'delivery',
-        'metadata[billing_charge_id]': CH_BASE,
+        'metadata[product_code]': 'extra_branch',
       },
     ]);
     expect(billing.feeInvoiceItemParams(ctxOf({ charges: [] }), 'cus_1', 'in_fee')).toEqual([]);

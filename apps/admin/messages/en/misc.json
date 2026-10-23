@@ -6,12 +6,15 @@
     "emptyBody": "Important actions (refunds, voids, settings changes) will appear here."
   },
   "lockedFeature": {
-    "deliveryNotAtThisBranch": "{branch} does not deliver. Delivery is chosen branch by branch, so switching it on here adds riders, delivery fees and live tracking for this branch only.",
+    "deliverySwitchedOffAtBranch": "{branch} has delivery switched off, so customers can't order delivery there and no riders are dispatched.",
+    "deliverySwitchedOffHere": "Delivery is switched off at this branch, so customers can't order delivery here and no riders are dispatched.",
+    "deliveryAskToSwitchOn": "The owner or an admin can switch it back on in Branch settings.",
+    "deliveryOpenSettings": "Open Branch settings",
+    "deliveryNotAvailableAtBranch": "Delivery isn't available for your restaurant right now, so {branch} can't take delivery orders. Contact FavorNoms to have it turned back on.",
+    "deliveryNotAvailableHere": "Delivery isn't available for your restaurant right now, so this branch can't take delivery orders. Contact FavorNoms to have it turned back on.",
     "deliveryStoppedTitle": "{branch} no longer delivers.",
-    "deliveryTurnBackOn": "Turn delivery back on",
-    "deliveryNotHere": "This branch does not deliver. Delivery is chosen branch by branch, so switching it on here adds riders, delivery fees and live tracking for this branch only.",
-    "deliveryUnlockedAtThisBranch": "{branch} has delivery switched off. Delivery was unlocked here before, so switching it back on has no one-time fee — it only adds this branch's monthly price.",
-    "deliveryUnlockedHere": "Delivery is switched off at this branch. It was unlocked here before, so switching it back on has no one-time fee — it only adds this branch's monthly price.",
-    "deliveryStoppedHere": "This branch no longer delivers."
+    "deliveryStoppedHere": "This branch no longer delivers.",
+    "deliveryStoppedNotAvailable": "Delivery is off for your whole restaurant — contact FavorNoms to have it turned back on.",
+    "deliveryTurnBackOn": "Turn delivery back on in Branch settings"
   }
 }

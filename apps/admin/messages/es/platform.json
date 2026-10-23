@@ -65,7 +65,7 @@
     "reactivateFailed": "No se pudo reactivar la suscripción."
   },
   "plans": {
-    "base": "Base",
+    "base": "Plan FavorNoms",
     "trial": "Prueba gratuita",
     "none": "Sin plan"
   },
@@ -138,8 +138,8 @@
     "action": {
       "restore": "Restablecer",
       "extend": "Extender 1 mes",
-      "convert": "Pasar a Base",
-      "convertPriced": "Pasar a Base · {price}/mes"
+      "convert": "Pasar a {plan}",
+      "convertPriced": "Pasar a {plan} · {price}/mes"
     },
     "verdict": {
       "label": {
@@ -216,7 +216,7 @@
       "lapsed": "Venció",
       "seats": "Cupos",
       "overQuota": "excede los cupos: no se bloquea y se cobra de menos",
-      "noDelivery": "Base no incluye entrega a domicilio: el filtro de tipo de pedido la oculta y se rechazan los pedidos a domicilio.",
+      "deliveryOff": "La entrega a domicilio está desactivada en todo el restaurante: su interruptor de función (Suscripciones → Interruptores de funciones) o su paquete la excluye, así que ninguna sucursal acepta pedidos a domicilio, diga lo que diga el interruptor de entrega de cada sucursal.",
       "dormant": "Otorgadas, inactivas mientras no se pague"
     }
   },
@@ -261,8 +261,7 @@
       "lapsed": "Paga con tarjeta a través de Stripe, así que aquí no se ofrece Extender: ábrelo en Stripe para ver por qué no llegó el pago."
     },
     "errors": {
-      "managed": "Este restaurante paga con tarjeta a través de Stripe, así que su paquete solo cambia a través de Stripe. No se cambió nada.",
-      "deliveryActive": "Una sucursal que hace entregas se paga en la suscripción con tarjeta de este restaurante, así que Stripe seguiría cobrando la entrega por ella. Primero el comercio desactiva la entrega de esa sucursal en su página de plan (eso actualiza Stripe). No se cambió nada."
+      "managed": "Este restaurante paga con tarjeta a través de Stripe, así que su paquete solo cambia a través de Stripe. No se cambió nada."
     },
     "links": {
       "customer": "Cliente en Stripe",

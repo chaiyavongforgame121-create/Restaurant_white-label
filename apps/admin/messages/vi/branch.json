@@ -7,8 +7,7 @@
     "ownerOnlyDomain": "Chỉ chủ nhà hàng mới có thể đổi tên miền riêng.",
     "domainTaken": "Tên miền này đã được một chi nhánh khác sử dụng.",
     "noPermission": "Vai trò của bạn không được phép thực hiện thay đổi này.",
-    "busyMinutesRange": "Chế độ bận chỉ có thể cộng thêm từ 0 đến {max} phút chuẩn bị.",
-    "stripeDeliveryActive": "Chi nhánh này có giao hàng và phí giao hàng đang được trừ vào thẻ của bạn. Hãy tắt giao hàng cho chi nhánh này ở trang Gói và thanh toán trước, rồi mới ẩn chi nhánh."
+    "busyMinutesRange": "Chế độ bận chỉ có thể cộng thêm từ 0 đến {max} phút chuẩn bị."
   },
   "settings": {
     "title": "Cài đặt chi nhánh",
@@ -44,12 +43,15 @@
       "invalid": "“{input}” không phải là hostname. Hãy nhập địa chỉ khách sẽ gõ, như order.myrestaurant.com — không phải tên nhà hàng."
     },
     "delivery": {
-      "title": "Giao hàng",
-      "description": "Tài xế của riêng bạn, theo dõi trực tiếp và điều phối tự động. {branch} không giao hàng — giao hàng được bật theo từng chi nhánh.",
-      "descriptionUnlocked": "Tài xế của riêng bạn, theo dõi trực tiếp và điều phối tự động. {branch} đang tắt giao hàng và đã được mở khóa trước đây — bật lại không mất phí một lần, chỉ có phí hằng tháng.",
-      "bulletFees": "Phí giao hàng, bán kính và thời gian chuẩn bị",
-      "bulletDispatch": "Tự động điều phối tài xế, có thời hạn nhận đơn",
-      "bulletTracking": "Bản đồ theo dõi trực tiếp cho khách"
+      "title": "Giao hàng tại chi nhánh này",
+      "on": "Bật",
+      "off": "Tắt",
+      "saving": "Đang lưu…",
+      "onBody": "Bật: khách có thể đặt giao hàng từ {branch} và tài xế được điều phối đến.",
+      "offBody": "Tắt: trang đặt hàng, quầy và việc điều phối tài xế ngừng nhận giao hàng tại {branch}. Các đơn đang trên đường vẫn được giao xong.",
+      "included": "Giao hàng đã có trong gói của bạn ở mọi chi nhánh, nên bật hay tắt ở đây không bao giờ thay đổi số tiền bạn trả.",
+      "notAvailable": "Hiện nhà hàng của bạn chưa dùng được giao hàng, nên {branch} không thể giao hàng dù đã bật. Hãy liên hệ FavorNoms để được bật lại.",
+      "unreadable": "Không đọc được công tắc giao hàng của chi nhánh này. Hãy tải lại trang để thử lại."
     },
     "advanced": {
       "title": "Nâng cao: JSON cài đặt gốc",

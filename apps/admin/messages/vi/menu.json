@@ -75,7 +75,7 @@
     "isNew": "Mới",
     "save": "Lưu",
     "stockReadFailed": "Không đọc được cài đặt tồn kho của món này. {reason}",
-    "planLimit": "Bạn đã đạt giới hạn của gói ({current}/{limit} món). Nâng cấp gói đăng ký trong Cài đặt chung → Gói và thanh toán để thêm món.",
+    "planLimit": "Chưa lưu: thực đơn đã chạm giới hạn ({current} trên {limit} món). Gói của bạn không giới hạn số món, vì vậy hãy liên hệ FavorNoms để được kiểm tra.",
     "nothingSaved": "Chưa lưu được gì. Món này có thể đã bị xóa, hoặc vai trò của bạn không được sửa thực đơn ở chi nhánh này.",
     "optionsWarning": "Đã lưu “{name}”, nhưng một nhóm tùy chọn của món không lưu được. {reason} Các nhóm đã lưu vẫn được giữ — hãy mở lại món để hoàn tất tùy chọn.",
     "stockRequired": "Nhập số lượng hiện có trong kho, hoặc bỏ chọn Theo dõi tồn kho.",

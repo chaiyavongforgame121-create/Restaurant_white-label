@@ -1,4 +1,6 @@
 
+> Prices and add-ons in this inventory are historical (2026-07-25 packaging); current pricing: [PACKAGING-2026-10-24.md](PACKAGING-2026-10-24.md).
+
 # SURFACE: CUSTOMER WEB (apps/web/src) — Next.js App Router storefront serving all tenants via /r/[restaurant]/[branch] plus custom-domain middleware rewrite (resolve_custom_domain RPC). Data via Supabase browser/server clients, place-order edge fn, Mapbox for geo, Stripe dormant. Demo tenant linked from landing: /r/coastal-grill/brooklyn.
 
 - **Marketing landing** [/]

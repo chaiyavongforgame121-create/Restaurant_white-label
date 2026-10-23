@@ -12,15 +12,21 @@
 //     treats null as "leave alone", and the feature grid always sends the full
 //     map, so a price edit cannot silently drop a feature key.
 //
-// Since 2026-09-23 a product carries TWO prices (docs/PACKAGING-2026-09-23.md):
-// one_time_price is paid once ever, monthly_price every month. They are edited
-// side by side and never added together — the base is $228 once AND $29 a month,
-// and a single figure would be a lie whichever way it was computed.
+// A product carries TWO prices (docs/PACKAGING-2026-10-24.md §4.1): one_time_price
+// is paid once ever, monthly_price every month. They are edited side by side and
+// never added together — the plan is $199 once AND $49 a month, and a single figure
+// would be a lie whichever way it was computed.
 //
 // A withdrawn product (is_active = false) is kept, never deleted:
 // subscription_items.product_code has an FK to it and the history must still
 // resolve. It has to READ as withdrawn, though, or the AI Suite goes on looking
 // like something a merchant can still buy.
+//
+// A withdrawn FEATURE (docs/PACKAGING-2026-10-24.md §2: AI Suite, AI Voice, Digital
+// Signage, AI menu import) cannot be switched on for a product at all: a product grants
+// its features to every restaurant on it, and nothing sells these any more. One left on
+// from before can still be switched off. A deliberate exception for one restaurant is a
+// platform feature switch on its Subscriptions card, not a catalog edit.
 
 import * as React from 'react';
 import Link from 'next/link';
@@ -38,12 +44,12 @@ import {
 } from '@favornoms/shared';
 import { Badge, Button, Card } from '@favornoms/ui';
 import { PlatformNav } from '../../_components/platform-nav';
+import { isWithdrawnFeature } from '../../_components/platform-billing';
 
 const INPUT_CLS =
   'h-11 w-full rounded-xl border border-border bg-background px-3 text-base outline-none transition-colors focus-visible:border-primary';
 
-/** Catalog prices are whole dollars; the cents would be noise on every row. */
-// Whole dollars as "$99", cents kept when there are any: a discounted one-time fee can be
+// Whole dollars as "$89", cents kept when there are any: a discounted one-time fee can be
 // $49.50, and a rounded figure here would disagree with the ledger it summarises.
 const money = (n: number) => {
   const v = Number(n ?? 0);
@@ -98,13 +104,6 @@ export function PlansManager({ products }: { products: BillingProduct[] }) {
     (a, b) => Number(b.is_active) - Number(a.is_active) || a.sort_order - b.sort_order,
   );
 
-  // A feature key nothing ACTIVE grants is not for sale any more, whatever the
-  // withdrawn rows still carry. Derived from the catalog rather than naming
-  // ai_suite here, so the next product the owner retires needs no code change.
-  const soldFeatures = new Set(
-    products.filter((p) => p.is_active).flatMap((p) => Object.keys(p.features ?? {})),
-  );
-
   return (
     <div className="container max-w-5xl py-8">
       <header className="mb-2 flex flex-wrap items-center justify-between gap-3">
@@ -145,7 +144,6 @@ export function PlansManager({ products }: { products: BillingProduct[] }) {
             key="__new__"
             initial={EMPTY}
             isNew
-            soldFeatures={soldFeatures}
             onCancel={() => setCreating(false)}
             onError={setError}
             onSaved={() => {
@@ -158,7 +156,6 @@ export function PlansManager({ products }: { products: BillingProduct[] }) {
           <ProductEditor
             key={p.code}
             initial={p}
-            soldFeatures={soldFeatures}
             onError={setError}
             onSaved={() => router.refresh()}
           />
@@ -171,15 +168,12 @@ export function PlansManager({ products }: { products: BillingProduct[] }) {
 function ProductEditor({
   initial,
   isNew,
-  soldFeatures,
   onSaved,
   onError,
   onCancel,
 }: {
   initial: BillingProduct;
   isNew?: boolean;
-  /** Feature keys at least one active product still grants. Anything else is withdrawn. */
-  soldFeatures: Set<string>;
   onSaved: () => void;
   onError: (msg: string | null) => void;
   onCancel?: () => void;
@@ -195,9 +189,14 @@ function ProductEditor({
     setD((v) => {
       const next = { ...v.features };
       if (next[key]) delete next[key];
-      else next[key] = true;
+      // The button is disabled for these; refusing here as well keeps a keyboard or a
+      // future caller from granting one anyway.
+      else if (!isWithdrawnFeature(key)) next[key] = true;
       return { ...v, features: next };
     });
+
+  // A withdrawn key still on from before: said in words under the grid, not only in red.
+  const carriesWithdrawn = FEATURE_KEYS.some((k) => isWithdrawnFeature(k) && d.features[k] === true);
 
   const save = async () => {
     onError(null);
@@ -271,8 +270,8 @@ function ProductEditor({
         </button>
       </div>
 
-      {/* The two prices side by side and never summed: the base is $228 once AND
-          $29 a month, and one blended number would be wrong whichever way it was
+      {/* The two prices side by side and never summed: the plan is $199 once AND
+          $49 a month, and one blended number would be wrong whichever way it was
           computed. */}
       <p className="mb-3 text-sm">
         {t.rich('plans.priceSummary', {
@@ -347,21 +346,25 @@ function ProductEditor({
         <div className="flex flex-wrap gap-2">
           {FEATURE_KEYS.map((k) => {
             const on = d.features[k] === true;
-            // A key no active product grants any more is withdrawn: the dashed
-            // outline and the suffix stop it reading like something on sale,
-            // while leaving it switchable for the day the owner relaunches it.
-            const withdrawn = !soldFeatures.has(k) && !on;
+            // A withdrawn key reads as withdrawn and cannot be switched on: the dashed
+            // outline and the suffix stop it reading like something on sale. One still
+            // on from before is painted as a problem and can only be switched off.
+            const withdrawn = isWithdrawnFeature(k);
             return (
               <button
                 key={k}
                 type="button"
                 onClick={() => toggleFeature(k)}
                 aria-pressed={on}
-                className={`focus-ring rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                  on
-                    ? 'border-primary bg-primary/10 text-primary'
-                    : withdrawn
-                      ? 'border-dashed border-border text-muted-foreground/70 hover:bg-muted'
+                disabled={withdrawn && !on}
+                title={withdrawn ? t('plans.featureWithdrawnHint') : undefined}
+                className={`focus-ring rounded-full border px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed ${
+                  withdrawn
+                    ? on
+                      ? 'border-danger bg-danger/10 text-danger'
+                      : 'border-dashed border-border text-muted-foreground/70'
+                    : on
+                      ? 'border-primary bg-primary/10 text-primary'
                       : 'border-border text-muted-foreground hover:bg-muted'
                 }`}
               >
@@ -372,6 +375,9 @@ function ProductEditor({
             );
           })}
         </div>
+        <p className={`mt-2 text-[11px] ${carriesWithdrawn ? 'text-danger' : 'text-muted-foreground'}`}>
+          {carriesWithdrawn ? t('plans.withdrawnFeatureOn') : t('plans.featureWithdrawnHint')}
+        </p>
       </fieldset>
 
       <div className="mt-4 flex items-center gap-3">

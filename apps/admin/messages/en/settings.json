@@ -3,7 +3,7 @@
     "title": "Preferences",
     "subtitle": "Account and billing settings",
     "planTitle": "Plan & billing",
-    "planDescription": "View your plan, usage, and upgrade options.",
+    "planDescription": "See your plan, what you pay, and add branches.",
     "languageTitle": "Language",
     "languageDescription": "The language of this back office on this device. Menu items and names stay as you typed them.",
     "themeTitle": "Theme",
@@ -18,7 +18,7 @@
       "inactiveTitle": "Your restaurant’s package is inactive — ask the owner",
       "lockedTitle": "Only the restaurant owner can change the package",
       "inactiveBody": "The storefront and back office for {branch} are paused until the restaurant owner chooses a package. Nothing has been deleted, and your work comes back as soon as it is active again.",
-      "lockedBody": "{branch}’s package is managed by the restaurant owner. Ask them if you need a feature that is not switched on."
+      "lockedBody": "{branch}’s package is managed by the restaurant owner. Every feature is already included — ask them if you need another branch."
     },
     "replaceDialog": {
       "title": "Replace your pending request?",
@@ -50,38 +50,29 @@
       "noPlan": "No package yet",
       "branches": "Branches",
       "branchesValue": "{used} open · {seats} paid for",
-      "delivery": "Delivery",
-      "deliveryNone": "No branch delivers yet",
-      "deliveryTrial": "Every branch, free until the trial ends",
       "nextPayment": "Next payment",
       "trialEnds": "Trial ends",
       "noNextPayment": "Nothing scheduled",
-      "includedTitle": "In every package"
+      "includedTitle": "Included at every branch"
     },
     "base": {
-      "name": "Base",
+      "name": "FavorNoms Plan",
       "included": {
-        "cardPayment": "Card payment at checkout",
-        "onlineOrdering": "Online ordering & QR",
-        "reportsLoyalty": "Reports & loyalty",
-        "kitchenCounter": "Kitchen display & counter",
-        "oneBranch": "1 branch included"
+        "allFeatures": "All customer, admin and driver features",
+        "website": "Branded ordering website + web app",
+        "operations": "POS, kitchen display and branch management",
+        "drivers": "FavorGo driver tools (delivery)",
+        "growth": "Marketing, loyalty and reports",
+        "noCommissions": "No marketplace commissions"
       }
     },
     "branches": {
       "title": "Your branches",
-      "subtitle": "Every branch is {price} a month. Switch on Delivery for the branches that deliver.",
-      "subtitleNoPrice": "Switch on Delivery for the branches that deliver.",
+      "subtitle": "Every branch is {price} a month, with every feature included.",
+      "subtitleNoPrice": "Every branch has every feature included.",
       "empty": "This restaurant has no active branch yet.",
-      "delivery": "Delivery",
-      "switchLabel": "Delivery at {branch}",
       "eachMonth": "{price}/mo",
-      "costOnceAndMonthly": "+{once} once, then +{monthly}/mo",
-      "costMonthly": "+{monthly}/mo",
-      "alreadyUnlocked": "Already unlocked — nothing more to pay once for this branch.",
-      "offWarning": "{branch} will stop offering delivery on its storefront.",
-      "dropsTo": "This branch drops to {price}/mo.",
-      "trialNote": "Every branch delivers free until your trial ends. What you leave switched on here is what you pay for afterwards."
+      "trialNote": "Every branch is free until your trial ends. These are the monthly prices after that."
     },
     "seats": {
       "title": "Add a branch",
@@ -101,15 +92,15 @@
       "onceCode": "Code {code}",
       "onceAwaiting": "Nothing has been charged yet. You pay this when the FavorNoms team activates your request.",
       "monthlyTitle": "Then every month",
-      "withDelivery": "{branch} + delivery",
       "unusedSeats": "{count, plural, one {# branch not created yet} other {# branches not created yet}}",
-      "forBranch": "{product} — {branch}",
+      "setup": {
+        "first": "First-time setup",
+        "extraBranch": "Additional branch setup"
+      },
       "total": "Total",
       "summary": {
         "branches": "{count, plural, one {# branch} other {# branches}}",
-        "delivery": "delivery at {names}",
-        "noDelivery": "no delivery",
-        "line": "{branches}, {delivery} — {price} every month.",
+        "line": "{branches} — {price} every month.",
         "plusOnce": "Plus {price} once."
       },
       "trialNote": "Nothing is charged while your free trial runs. This is your first bill when you confirm.",
@@ -130,7 +121,7 @@
       "active": "Free trial active",
       "endsToday": "Your free trial ends today",
       "daysLeft": "{days, plural, one {# day left in your free trial} other {# days left in your free trial}}",
-      "body": "Everything is unlocked, delivery included at every branch. Choose what you keep below — no card needed until the trial ends."
+      "body": "Everything is unlocked, delivery included at every branch. No card needed until the trial ends — confirm your package below whenever you are ready."
     },
     "suspended": {
       "title": "Your account is not active",

@@ -5,11 +5,20 @@
 // worded — it returns numbers, names and message keys, and the screens turn those
 // into the reader's language.
 //
-// The 2026-09-23 packaging (docs/PACKAGING-2026-09-23.md) has TWO totals that must
-// never be blended: what is paid once, and what is paid every month. Everything
-// here keeps them apart.
+// The packaging of 2026-10-24 (docs/PACKAGING-2026-10-24.md) is one plan with TWO
+// totals that must never be blended: what is paid once (the first-time setup, then a
+// setup fee per additional branch) and what is paid every month (the same price per
+// branch). Everything here keeps them apart.
 
-import { describeBillingError, type BillingError } from '@favornoms/shared';
+import {
+  FEATURE_KEYS,
+  describeBillingError,
+  packageMonthlyTotal,
+  type BillingError,
+  type BillingProduct,
+  type FeatureKey,
+  type PackageSelection,
+} from '@favornoms/shared';
 
 /**
  * Money as this console shows it: whole dollars, with cents ONLY when something
@@ -27,43 +36,64 @@ export function formatMoney(amount: number): string {
 export interface PlatformBranchLite {
   id: string;
   name: string;
-  /** Hidden branches take no orders, but they still hold their delivery row. */
+  /**
+   * Hidden branches take no orders, but they are still listed: a one-time charge raised for
+   * one before it was hidden (the old per-branch delivery unlock) must still be named.
+   */
   isActive: boolean;
 }
 
-/** What a package request asks for, in the pieces a plain sentence needs. */
-export interface RequestAsk {
-  /** Branches paid for, never fewer than one. */
-  seats: number;
-  /** The branches that would deliver, named, in the order the console lists them. */
-  deliveryBranchNames: string[];
-  /**
-   * Delivery asked for on a branch this console cannot name — deleted since the
-   * request was raised, or simply not in the page's read. Counted rather than
-   * dropped: silently showing "no delivery" would hide what approving switches on.
-   */
-  unnamedDeliveryBranches: number;
+/**
+ * The branches a package request pays for, never fewer than one. That is the whole ask now:
+ * the plan includes every feature, delivery at every branch included, so a request no longer
+ * names branches that deliver. An old request's delivery_branch_ids is history and is ignored.
+ */
+export function requestSeats(branchSeats: number): number {
+  return Math.max(1, Math.trunc(branchSeats || 1));
 }
 
 /**
- * Resolve a request's branch ids against the branches on hand.
- *
- * Duplicate ids collapse (the server stores a distinct array, but a request
- * written by an older client may not) and the order follows the branch list, so
- * two cards for the same restaurant read the branches in the same order.
+ * Feature keys nothing sells any more (docs/PACKAGING-2026-10-24.md §2: "nothing extra"). No
+ * product grants them, so a catalog editor that offered them as a plain checkbox was one stray
+ * click from handing an AI edge function to every restaurant on a plan. FEATURE_KEYS keeps them
+ * so old rows and per-restaurant overrides still parse; this list is what the console refuses
+ * to grant by accident.
  */
-export function requestAsk(
-  branchSeats: number,
-  deliveryBranchIds: string[],
-  branches: PlatformBranchLite[],
-): RequestAsk {
-  const wanted = new Set((deliveryBranchIds ?? []).filter((id) => typeof id === 'string' && id));
-  const named = branches.filter((b) => wanted.has(b.id));
-  return {
-    seats: Math.max(1, Math.trunc(branchSeats || 1)),
-    deliveryBranchNames: named.map((b) => b.name),
-    unnamedDeliveryBranches: Math.max(0, wanted.size - named.length),
-  };
+export const WITHDRAWN_FEATURES: readonly FeatureKey[] = Object.freeze([
+  'ai_suite',
+  'ai_voice',
+  'digital_signage',
+  'ai_menu_import',
+]);
+
+/** True for a key on WITHDRAWN_FEATURES. Unknown keys are not withdrawn: they were never sold. */
+export function isWithdrawnFeature(key: string): boolean {
+  return (WITHDRAWN_FEATURES as readonly string[]).includes(key);
+}
+
+/** The keys a product may still grant: FEATURE_KEYS without the withdrawn ones. */
+export const SOLD_FEATURES: readonly FeatureKey[] = Object.freeze(
+  FEATURE_KEYS.filter((k) => !isWithdrawnFeature(k)),
+);
+
+/**
+ * The products that may put money on a quote: the active ones.
+ *
+ * A screen that reads the full catalog (to name a product an old request or charge still
+ * refers to) must never price from it, or a withdrawn row with a price left on it — Delivery at
+ * $30 a month, say — adds money to a total nobody is charged.
+ */
+export function sellableCatalog(catalog: BillingProduct[]): BillingProduct[] {
+  return catalog.filter((p) => p.is_active);
+}
+
+/**
+ * What a selection costs every month, priced from the ACTIVE products only, or null when no
+ * active product is on hand to price it from (a failed catalog read must not quote $0).
+ */
+export function sellableMonthlyTotal(sel: PackageSelection, catalog: BillingProduct[]): number | null {
+  const sellable = sellableCatalog(catalog);
+  return sellable.length > 0 ? packageMonthlyTotal(sel, sellable) : null;
 }
 
 /** The one-time money on a request, split the way the merchant was quoted it. */

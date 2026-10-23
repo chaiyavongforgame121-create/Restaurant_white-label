@@ -2,13 +2,14 @@ import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { Info } from 'lucide-react';
 import {
+  getBranchDeliveryEnabled,
   getBranchPaymentAccount,
   getEntitlementsForBranch,
   listRestaurantPaymentAccounts,
 } from '@favornoms/database/queries';
 import { hasFeature } from '@favornoms/shared';
 import { getBranchAccess } from '@/lib/capabilities';
-import { resolveDeliveryGate } from '@/lib/delivery-gate';
+import { deliveryOffReason } from '@/lib/delivery-gate-model';
 import { PageAccessDenied } from '@/components/page-access-denied';
 import { BranchSettings } from './_components/branch-settings';
 import { ClosuresManager } from './_components/closures-manager';
@@ -64,13 +65,10 @@ export default async function BranchPage({ params }: Props) {
         .limit(1)
         .maybeSingle();
 
-  // The delivery gate carries the catalog's prices as well as the answer: the upsell shown
-  // in place of the delivery cards used to hardcode $49 while the catalog said $59, and
-  // delivery is now $59 once plus $29/month FOR THIS BRANCH (docs/PACKAGING-2026-09-23.md).
   const [
     { data: restaurant },
     entitlements,
-    deliveryGate,
+    deliverySwitch,
     { data: brand },
     t,
     paymentAccount,
@@ -78,7 +76,13 @@ export default async function BranchPage({ params }: Props) {
   ] = await Promise.all([
     supabase.from('restaurants').select('name, storefront').eq('id', branch.restaurant_id).maybeSingle(),
     getEntitlementsForBranch(supabase, branchId),
-    resolveDeliveryGate(supabase, branchId),
+    // The "Delivery at this branch" switch. A failed read is null, not a guess: the card then
+    // says it could not be read and stays put, rather than offering to switch on a branch
+    // that may already deliver.
+    getBranchDeliveryEnabled(supabase, branchId).catch((e: unknown) => {
+      console.error('Branch settings: could not read the delivery switch:', e);
+      return null;
+    }),
     brandQuery,
     getTranslations('branch'),
     // The Stripe account rows are readable with branch.settings only (RLS), which every viewer
@@ -86,9 +90,14 @@ export default async function BranchPage({ params }: Props) {
     getBranchPaymentAccount(supabase, branchId),
     listRestaurantPaymentAccounts(supabase, branch.restaurant_id),
   ]);
-  // resolveDeliveryGate asks getEntitlementsForBranch the same question hasFeature would,
-  // and carries the catalog prices with it, so the upsell's answer and its numbers cannot
-  // disagree.
+  // The branch payload's delivery answer already includes this switch; what it cannot say
+  // alone is whether the restaurant has delivery at all. deliveryOffReason is the rule every
+  // locked delivery screen uses, so this card's note and those screens agree.
+  const deliveryReason = deliveryOffReason(
+    hasFeature(entitlements, 'delivery'),
+    entitlements.entitled,
+    deliverySwitch,
+  );
   return (
     <BranchSettings
       branch={branch as never}
@@ -108,14 +117,13 @@ export default async function BranchPage({ params }: Props) {
           iconUrl: brand?.icon_192_url || brand?.favicon_url || null,
         },
       }}
-      canUseDelivery={deliveryGate.delivers}
-      deliveryPrices={{
-        // This branch's one-time price: 0 when its unlock was paid before, so switching
-        // delivery back on is quoted as the monthly price alone, as the plan page prices it.
-        once: deliveryGate.oneTimePrice,
-        monthly: deliveryGate.monthlyPrice,
-        alreadyUnlocked: deliveryGate.alreadyUnlocked === true,
-        planHref: deliveryGate.planHref,
+      delivery={{
+        switchOn: deliverySwitch,
+        // 'notAvailable' blames the restaurant. That holds when it has lapsed (the switch
+        // cannot matter then) or when the switch was read as on; an unread switch claims
+        // nothing, and the card already says it could not be read.
+        restaurantOff:
+          deliveryReason === 'notAvailable' && (!entitlements.entitled || deliverySwitch === true),
       }}
       canUseCard={hasFeature(entitlements, 'card_payment')}
       // Always true past the gate above; kept as a prop so the cards still lock themselves if this

@@ -237,8 +237,10 @@
     "minutesShort": "{minutes} min",
     "notOffered": {
       "title": "{branch} no hace entregas",
-      "body": "La entrega se elige sucursal por sucursal, así que aquí no hay nada que informar. Tus otras sucursales conservan sus propios informes de entrega.",
-      "link": "Activar la entrega en esta sucursal"
+      "switchedOff": "La entrega a domicilio está desactivada en la configuración de esta sucursal. Tus otras sucursales conservan sus propios informes de entrega.",
+      "switchedOffAsk": "La entrega a domicilio está desactivada en la configuración de esta sucursal; el propietario o un administrador puede volver a activarla. Tus otras sucursales conservan sus propios informes de entrega.",
+      "notAvailable": "La entrega a domicilio no está disponible para tu restaurante en este momento. Contacta con FavorNoms para que la vuelvan a activar.",
+      "link": "Volver a activar la entrega en Configuración de sucursal"
     }
   },
   "customers": {

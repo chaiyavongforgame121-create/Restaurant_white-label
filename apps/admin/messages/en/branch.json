@@ -7,8 +7,7 @@
     "ownerOnlyDomain": "Only the restaurant owner can change the custom domain.",
     "domainTaken": "Another branch already uses that domain.",
     "noPermission": "Your role isn’t allowed to make this change.",
-    "busyMinutesRange": "Busy mode can add 0 to {max} minutes of prep time.",
-    "stripeDeliveryActive": "This branch delivers and its delivery is billed to your card. Turn delivery off for it on the Plan & billing page first, then hide it."
+    "busyMinutesRange": "Busy mode can add 0 to {max} minutes of prep time."
   },
   "settings": {
     "title": "Branch settings",
@@ -44,12 +43,15 @@
       "invalid": "“{input}” is not a hostname. Enter the address customers will type, like order.myrestaurant.com — not your restaurant’s name."
     },
     "delivery": {
-      "title": "Delivery",
-      "description": "Your own riders, live tracking and automatic dispatch. {branch} does not deliver — delivery is switched on one branch at a time.",
-      "descriptionUnlocked": "Your own riders, live tracking and automatic dispatch. {branch} has delivery switched off, and it was unlocked here before — switching it back on has no one-time fee, only the monthly price.",
-      "bulletFees": "Delivery fees, radius and prep time",
-      "bulletDispatch": "Automatic driver dispatch with offer timeouts",
-      "bulletTracking": "Live customer tracking map"
+      "title": "Delivery at this branch",
+      "on": "On",
+      "off": "Off",
+      "saving": "Saving…",
+      "onBody": "On: customers can order delivery from {branch}, and riders are dispatched to it.",
+      "offBody": "Off: the storefront, the counter and rider dispatch stop offering delivery at {branch}. Deliveries already on the way still finish.",
+      "included": "Delivery is part of your plan at every branch, so switching it on or off here never changes what you pay.",
+      "notAvailable": "Delivery isn't available for your restaurant right now, so {branch} can't deliver even with this switched on. Contact FavorNoms to have it turned back on.",
+      "unreadable": "This branch's delivery switch could not be read. Refresh the page to try again."
     },
     "advanced": {
       "title": "Advanced: raw settings JSON",

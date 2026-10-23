@@ -2,6 +2,10 @@
 -- 20260927100000_platform_billing_stripe_fixes and 20260927200000_platform_billing_stripe_fixes_2,
 -- docs/PLATFORM-BILLING-STRIPE-2026-09-26.md §8, §9, §10).
 -- A rolled-back script, not a migration. Checks whose rule the fixes changed say so (§9.x, §10.x).
+-- Prices and delivery follow 20261024100000_single_plan (docs/PACKAGING-2026-10-24.md): $49 a month
+-- per branch, $199 / $89 once, delivery included at every branch, so no request names delivering
+-- branches and no card restaurant's branch is guarded for its delivery. single_plan.sql covers the
+-- plan itself; the checks here that changed with it say "single plan".
 --
 -- Run from the repo root once the migration is applied:
 --   SUPABASE_TELEMETRY_DISABLED=1 npx --yes supabase db query --linked \
@@ -276,10 +280,10 @@ begin
   perform pg_temp.act_as(null);
   perform pg_temp.expect('context: keys', 'charges,monthly_lines,ok,request,restaurant,stripe_managed,subscription',
     (select string_agg(k, ',' order by k) from jsonb_object_keys(r) k));
-  perform pg_temp.expect('context: monthly lines in cents', 'base:1:2900,extra_branch:1:2900,delivery:1:3000',
+  perform pg_temp.expect('context: monthly lines in cents, no delivery line (single plan)', 'base:1:4900,extra_branch:1:4900',
     (select string_agg((e ->> 'code') || ':' || (e ->> 'quantity') || ':' || (e ->> 'unit_amount_cents'), ',' order by ord)
        from jsonb_array_elements(r -> 'monthly_lines') with ordinality as t(e, ord)));
-  perform pg_temp.expect('context: the one-time charges add up to the request, net of the code, $0 lines left out',
+  perform pg_temp.expect('context: the one-time charges add up to the request, net of the code',
     'true 2',
     ((select sum((e ->> 'net_amount')::numeric) from jsonb_array_elements(r -> 'charges') e)
        = (r #>> '{request,one_time_total}')::numeric)::text || ' ' || jsonb_array_length(r -> 'charges'));
@@ -353,6 +357,8 @@ begin
     pg_temp.try_as(v_admin, array[format('select public.decide_billing_request(%L, false, ''abandoned'')::text', v_q1)], true));
 
   -- 4. A first purchase settles: trial -> active, paid through the anchor ---------------------------
+  -- The delivery item is what Stripe would still report for a subscription bought before the
+  -- single plan; it writes no line (single plan).
   v_items := jsonb_build_array(
     jsonb_build_object('product_code', 'base', 'stripe_subscription_item_id', 'si_TESTBASE'),
     jsonb_build_object('product_code', 'extra_branch', 'stripe_subscription_item_id', 'si_TESTSEAT'),
@@ -373,10 +379,10 @@ begin
             || c.card_exp_month || '/' || c.card_exp_year || ' ' || coalesce(s.grace_until::text, '<null>') || ' ' || s.cancel_at_period_end
        from public.subscriptions s join public.billing_stripe_customers c on c.restaurant_id = s.restaurant_id
       where s.restaurant_id = v_rid));
-  perform pg_temp.expect('settle: entitled through the anchor plus the renewal slack (§9.1), at $29 + $29 + $30', 'active true 88.00 2',
+  perform pg_temp.expect('settle: entitled through the anchor plus the renewal slack (§9.1), at $49 x 2 (single plan)', 'active true 98.00 2',
     (select be.status || ' ' || (be.entitled_through = v_x + interval '7 days') || ' ' || be.monthly_total || ' ' || be.branch_seats
        from public.billing_entitlements be where be.restaurant_id = v_rid));
-  perform pg_temp.expect('settle: every charge of the request paid by that invoice', 'paid:in_TESTFIRST:3',
+  perform pg_temp.expect('settle: every charge of the request paid by that invoice', 'paid:in_TESTFIRST:2',
     (select string_agg(distinct status || ':' || coalesce(stripe_invoice_id, '-'), ',') || ':' || count(*)
        from public.billing_charges where request_id = v_q1));
   perform pg_temp.expect('settle: the code is redeemed', 'redeemed',
@@ -384,11 +390,11 @@ begin
   perform pg_temp.expect('settle: the request is approved, paid by card', 'approved stripe Paid by card (Stripe) true in_TESTFIRST',
     (select status || ' ' || rail || ' ' || decision_note || ' ' || (paid_at is not null) || ' ' || stripe_invoice_id
        from public.billing_requests where id = v_q1));
-  perform pg_temp.expect('settle: Stripe''s item ids are on the lines', 'base:si_TESTBASE,delivery:si_TESTDEL,extra_branch:si_TESTSEAT',
+  perform pg_temp.expect('settle: Stripe''s item ids are on the lines; the legacy delivery item makes none (single plan)', 'base:si_TESTBASE,extra_branch:si_TESTSEAT',
     (select string_agg(si.product_code || ':' || si.stripe_subscription_item_id, ',' order by si.product_code)
        from public.subscription_items si join public.subscriptions s on s.id = si.subscription_id
       where s.restaurant_id = v_rid));
-  perform pg_temp.expect('settle: the chosen branch delivers, the other does not', 'true false',
+  perform pg_temp.expect('settle: every branch delivers, whatever the request named (single plan)', 'true true',
     private.branch_feature_granted(v_b1, 'delivery')::text || ' ' || private.branch_feature_granted(v_b2, 'delivery')::text);
   perform pg_temp.expect('settle: logged', '1',
     (select count(*)::text from public.billing_events where restaurant_id = v_rid and type = 'stripe.request_settled'));
@@ -398,7 +404,7 @@ begin
   r := public.get_billing_overview(v_rid);
   perform pg_temp.act_as(null);
   perform pg_temp.expect('overview on the Stripe rail: rail, status, customer, next charge, amount, card',
-    'stripe active true true 88.00 visa 4242 12 2030 <null>',
+    'stripe active true true 98.00 visa 4242 12 2030 <null>',
     (r #>> '{billing,rail}') || ' ' || (r #>> '{billing,status}') || ' ' || (r #>> '{billing,stripe_customer}') || ' '
       || ((r #>> '{billing,next_charge_at}')::timestamptz = v_x)::text || ' ' || (r #>> '{billing,next_charge_amount}') || ' '
       || (r #>> '{billing,card,brand}') || ' ' || (r #>> '{billing,card,last4}') || ' ' || (r #>> '{billing,card,exp_month}') || ' '
@@ -446,7 +452,7 @@ begin
   perform pg_temp.act_as(v_owner);
   r := public.billing_checkout_context(v_q3);
   perform pg_temp.act_as(null);
-  perform pg_temp.expect('change context: Stripe-managed, the subscription and its items', 'true sub_TESTPBS1 3 base:1:2900,extra_branch:1:2900,delivery:2:3000',
+  perform pg_temp.expect('change context: Stripe-managed, the subscription and its items (single plan: no delivery)', 'true sub_TESTPBS1 2 base:1:4900,extra_branch:1:4900',
     (r ->> 'stripe_managed') || ' ' || (r #>> '{subscription,stripe_subscription_id}') || ' '
       || jsonb_array_length(r #> '{subscription,items}') || ' '
       || (select string_agg((e ->> 'code') || ':' || (e ->> 'quantity') || ':' || (e ->> 'unit_amount_cents'), ',' order by ord)
@@ -461,14 +467,13 @@ begin
   perform pg_temp.expect('change settle: the period is kept', 'true true active',
     (select (current_period_end = v_x)::text || ' ' || (current_period_start = v_start)::text || ' ' || status
        from public.subscriptions where restaurant_id = v_rid));
-  perform pg_temp.expect('change settle: both branches deliver, $29 x 2 + $30 x 2', 'true true 118.00',
+  perform pg_temp.expect('change settle: both branches deliver, $49 x 2 (single plan)', 'true true 98.00',
     private.branch_feature_granted(v_b1, 'delivery')::text || ' ' || private.branch_feature_granted(v_b2, 'delivery')::text
       || ' ' || (select monthly_total::text from public.billing_entitlements where restaurant_id = v_rid));
-  perform pg_temp.expect('change settle: the delivery line has its new item id, the card is unchanged', 'si_TESTDEL2 4242',
-    (select si.stripe_subscription_item_id || ' ' || c.card_last4 from public.subscription_items si
-       join public.subscriptions s on s.id = si.subscription_id
-       join public.billing_stripe_customers c on c.restaurant_id = s.restaurant_id
-      where s.restaurant_id = v_rid and si.product_code = 'delivery'));
+  perform pg_temp.expect('change settle: a legacy delivery item writes no line (single plan), the card is unchanged', '0 4242',
+    (select count(*) from public.subscription_items si join public.subscriptions s on s.id = si.subscription_id
+      where s.restaurant_id = v_rid and si.product_code = 'delivery') || ' '
+      || (select c.card_last4 from public.billing_stripe_customers c where c.restaurant_id = v_rid));
   perform pg_temp.expect('change settle: approved, and still found from its invoice whatever its status (§9.3)', 'approved true',
     (select status from public.billing_requests where id = v_q3) || ' '
       || (public.billing_request_for_invoice('in_TESTCHG') = v_q3)::text);
@@ -655,18 +660,18 @@ begin
 
   -- 12. A paid invoice moves the date forward, only forward ------------------------------------------
   r := public.billing_record_stripe_invoice(
-         pg_temp.invoice('in_TESTRENEW1', 'sub_TESTPBS1', 'subscription_cycle', 'paid', 11800, 1, v_x + interval '1 month'),
+         pg_temp.invoice('in_TESTRENEW1', 'sub_TESTPBS1', 'subscription_cycle', 'paid', 9800, 1, v_x + interval '1 month'),
          v_x + interval '1 month');
   perform pg_temp.expect('invoice paid: applied', 'true true', (r ->> 'ok') || ' ' || (r ->> 'applied'));
   perform pg_temp.expect('invoice paid: paid through the new period, next charge then', 'true true active',
     (select (current_period_end = v_x + interval '1 month') || ' ' || (next_billing_at = v_x + interval '1 month') || ' ' || status
        from public.subscriptions where restaurant_id = v_rid));
-  perform pg_temp.expect('invoice paid: recorded in dollars with its period and link', 'paid 118.00 118.00 subscription_cycle true true 1',
+  perform pg_temp.expect('invoice paid: recorded in dollars with its period and link', 'paid 98.00 98.00 subscription_cycle true true 1',
     (select status || ' ' || amount_due || ' ' || amount_paid || ' ' || billing_reason || ' '
             || (abs(extract(epoch from period_end - (v_x + interval '1 month'))) < 1) || ' ' || (paid_at is not null) || ' ' || attempt_count
        from public.billing_invoices where stripe_invoice_id = 'in_TESTRENEW1'));
   r := public.billing_record_stripe_invoice(
-         pg_temp.invoice('in_TESTRENEW1', 'sub_TESTPBS1', 'subscription_cycle', 'paid', 11800, 1, v_x), v_x);
+         pg_temp.invoice('in_TESTRENEW1', 'sub_TESTPBS1', 'subscription_cycle', 'paid', 9800, 1, v_x), v_x);
   perform pg_temp.expect('invoice paid with an older date: the date stays', 'true',
     (select (current_period_end = v_x + interval '1 month')::text from public.subscriptions where restaurant_id = v_rid));
   r := public.billing_record_stripe_invoice(
@@ -684,19 +689,19 @@ begin
   v_x := v_x + interval '1 month';
   v_grace := v_x + interval '7 days';
   r := public.billing_record_stripe_invoice_failed(
-         (pg_temp.invoice('in_TESTFAIL1', null, 'subscription_cycle', 'open', 11800, 1, v_x + interval '1 month') - 'subscription')
+         (pg_temp.invoice('in_TESTFAIL1', null, 'subscription_cycle', 'open', 9800, 1, v_x + interval '1 month') - 'subscription')
          || jsonb_build_object('parent', jsonb_build_object('subscription_details', jsonb_build_object('subscription', 'sub_TESTPBS1'))));
   perform pg_temp.expect('invoice failed (basil shape): past_due with the grace', 'true true past_due true',
     (r ->> 'ok') || ' ' || (r ->> 'past_due') || ' '
       || (select status || ' ' || (grace_until = v_grace) from public.subscriptions where restaurant_id = v_rid));
   r := public.billing_record_stripe_invoice_failed(
-         pg_temp.invoice('in_TESTFAIL1', 'sub_TESTPBS1', 'subscription_cycle', 'open', 11800, 2, v_x + interval '1 month'));
+         pg_temp.invoice('in_TESTFAIL1', 'sub_TESTPBS1', 'subscription_cycle', 'open', 9800, 2, v_x + interval '1 month'));
   perform pg_temp.expect('invoice failed again: the grace is not extended, the attempts counted', 'past_due true open 2 true',
     (select s.status || ' ' || (s.grace_until = v_grace) from public.subscriptions s where s.restaurant_id = v_rid) || ' '
       || (select bi.status || ' ' || bi.attempt_count || ' ' || (s.current_period_end = v_x)
             from public.billing_invoices bi, public.subscriptions s
            where bi.stripe_invoice_id = 'in_TESTFAIL1' and s.restaurant_id = v_rid));
-  perform pg_temp.expect('the platform sees what Stripe is still trying to collect', 'ok 118.00 2 open subscription_cycle true',
+  perform pg_temp.expect('the platform sees what Stripe is still trying to collect', 'ok 98.00 2 open subscription_cycle true',
     pg_temp.try_as(v_admin, array[format(
       'select (e#>>''{open_invoice,amount_due}'') || '' '' || (e#>>''{open_invoice,attempt_count}'') || '' '' || (e#>>''{open_invoice,status}'') || '' '' || (e#>>''{open_invoice,billing_reason}'') || '' '' || (e#>>''{open_invoice,hosted_invoice_url}'' like ''https://invoice.stripe.com/%%'')::text from jsonb_array_elements(public.list_restaurant_subscriptions()) e where e->>''restaurant_id'' = %L', v_rid)], true));
   -- Every invoice here was written at the same now(); the older ones are made older, as they are.
@@ -714,19 +719,19 @@ begin
     (select string_agg(k, ',' order by k) from jsonb_object_keys(r #> '{billing,last_invoice}') k));
 
   r := public.billing_record_stripe_invoice(
-         pg_temp.invoice('in_TESTFAIL1', 'sub_TESTPBS1', 'subscription_cycle', 'paid', 11800, 3, v_x + interval '1 month'),
+         pg_temp.invoice('in_TESTFAIL1', 'sub_TESTPBS1', 'subscription_cycle', 'paid', 9800, 3, v_x + interval '1 month'),
          v_x + interval '1 month');
   perform pg_temp.expect('a retry succeeds: active, the grace over, paid through the next month', 'active <null> true paid',
     (select status || ' ' || coalesce(grace_until::text, '<null>') || ' ' || (current_period_end = v_x + interval '1 month')
        from public.subscriptions where restaurant_id = v_rid) || ' '
       || (select status from public.billing_invoices where stripe_invoice_id = 'in_TESTFAIL1'));
   r := public.billing_record_stripe_invoice_failed(
-         pg_temp.invoice('in_TESTFAIL1', 'sub_TESTPBS1', 'subscription_cycle', 'open', 11800, 3, v_x + interval '1 month'));
+         pg_temp.invoice('in_TESTFAIL1', 'sub_TESTPBS1', 'subscription_cycle', 'open', 9800, 3, v_x + interval '1 month'));
   perform pg_temp.expect('a late failure event after the payment changes nothing', 'false paid active',
     (r ->> 'past_due') || ' ' || (select status from public.billing_invoices where stripe_invoice_id = 'in_TESTFAIL1') || ' '
       || (select status::text from public.subscriptions where restaurant_id = v_rid));
   r := public.billing_record_stripe_invoice_failed(
-         pg_temp.invoice('in_TESTUPDFAIL', 'sub_TESTPBS1', 'subscription_update', 'open', 7000, 1, v_x + interval '1 month'));
+         pg_temp.invoice('in_TESTUPDFAIL', 'sub_TESTPBS1', 'subscription_update', 'open', 8900, 1, v_x + interval '1 month'));
   perform pg_temp.expect('a failed CHANGE does not make the restaurant past due', 'false active',
     (r ->> 'past_due') || ' ' || (select status::text from public.subscriptions where restaurant_id = v_rid));
   perform pg_temp.expect('no open invoice shown once it is paid up', 'ok null',
@@ -930,8 +935,8 @@ begin
   perform pg_temp.act_as(v_owner);
   r := public.get_billing_overview(v_rid);
   perform pg_temp.act_as(null);
-  perform pg_temp.expect('rail: Stripe''s total is the next charge (ours says 88), the new card, no invoice of the old subscription',
-    'stripe 87.00 88.00 mastercard true <null>',
+  perform pg_temp.expect('rail: Stripe''s total is the next charge (ours says 98), the new card, no invoice of the old subscription',
+    'stripe 87.00 98.00 mastercard true <null>',
     (r #>> '{billing,rail}') || ' ' || (r #>> '{billing,next_charge_amount}') || ' ' || (r #>> '{entitlements,monthly_total}') || ' '
       || (r #>> '{billing,card,brand}') || ' ' || (r #>> '{billing,stripe_customer}') || ' '
       || coalesce(r #>> '{billing,last_invoice}', '<null>'));
@@ -1017,22 +1022,24 @@ begin
       || coalesce(private.billing_rail_json(v_rid) ->> 'pending_invoice_url', '<null>') || ' '
       || coalesce(private.billing_rail_json(v_rid) ->> 'pending_request_rail', '<null>'));
 
-  -- 16h. A delivering branch of a card restaurant stays until its delivery is off (§9.6, money-sql-6).
-  perform pg_temp.expect('branch guard: the owner cannot hide a delivering branch of a card restaurant', 'ERR stripe_delivery_active',
-    pg_temp.try_as(v_owner, array[format('update public.branches set is_active = false where id = %L returning 1', v_b2)]));
-  perform pg_temp.expect('branch guard: nor can it be deleted', 'ERR stripe_delivery_active',
-    pg_temp.try_service(array[format('delete from public.branches where id = %L returning 1', v_b2)]));
-  perform pg_temp.expect('branch guard: nor moved to another restaurant', 'ERR stripe_delivery_active',
-    pg_temp.try_service(array[format('update public.branches set restaurant_id = %L where id = %L returning 1', v_rid2, v_b2)]));
-  perform pg_temp.expect('branch guard: the branch''s other settings still change', 'ok 1',
+  -- 16h. A card restaurant's branches come and go like any other's (single plan). Delivery is not
+  -- billed per branch any more, so the guards that kept a delivering branch from being hidden,
+  -- deleted or moved (§9.6, money-sql-6) are gone.
+  perform pg_temp.expect('no delivery guard: the owner hides a delivering branch of a card restaurant, its delivery untouched', 'ok 0',
+    pg_temp.try_as(v_owner, array[format('update public.branches set is_active = false where id = %L returning 1', v_b2),
+      format('select count(*)::text from public.branch_addons where branch_id = %L', v_b2)]));
+  perform pg_temp.expect('no delivery guard: the service role deletes it', 'ok 0',
+    pg_temp.try_service(array[format('delete from public.branches where id = %L returning 1', v_b2),
+      format('select count(*)::text from public.branches where id = %L', v_b2)]));
+  perform pg_temp.expect('card restaurant: the branch''s other settings still change', 'ok 1',
     pg_temp.try_as(v_owner, array[format('update public.branches set name = ''ZZ Two Renamed'' where id = %L returning 1', v_b2)]));
-  perform pg_temp.expect('branch guard: a card restaurant''s branch without delivery can still be hidden', 'ok 1',
+  perform pg_temp.expect('card restaurant: a second card restaurant hides a branch too', 'ok 1',
     pg_temp.try_as(v_owner, array[format(
       'update public.branches set is_active = false where restaurant_id = %L and slug = ''two'' returning 1', v_rid2)]));
-  perform pg_temp.expect('branch guard: the platform can still suspend a card restaurant (D11)', 'ok 2',
+  perform pg_temp.expect('card restaurant: the platform can still suspend it (D11)', 'ok 2',
     pg_temp.try_as(v_admin, array[format('select public.set_restaurant_suspended(%L, true)::text', v_rid),
       format('select count(*)::text from public.branches where restaurant_id = %L and not is_active', v_rid)], true));
-  perform pg_temp.expect('branch guard: deleting the whole restaurant still cascades', 'ok 0',
+  perform pg_temp.expect('card restaurant: deleting the whole restaurant still cascades', 'ok 0',
     pg_temp.try_service(array[format('delete from public.restaurants where id = %L returning 1', v_rid),
       format('select count(*)::text from public.branches where restaurant_id = %L', v_rid)]));
 
@@ -1117,12 +1124,12 @@ begin
             || coalesce(s.next_billing_at::text, '<null>') || ' ' || s.cancel_at_period_end || ' '
             || coalesce(s.stripe_monthly_amount::text, '<null>')
        from public.subscriptions s where s.restaurant_id = v_rid3) || ' ' || (private.billing_rail_json(v_rid3) ->> 'rail'));
-  perform pg_temp.expect('branch guard: a manual restaurant hides a delivering branch as before', 'true ok 1',
+  perform pg_temp.expect('a manual restaurant hides a delivering branch as before', 'true ok 1',
     private.branch_feature_granted(v_d1, 'delivery')::text || ' '
       || pg_temp.try_as(v_owner, array[format('update public.branches set is_active = false where id = %L returning 1', v_d1)]));
-  perform pg_temp.expect('hiding a delivering branch of a manual restaurant keeps its add-on (§10.3 is the card rail''s)', 'ok true',
+  perform pg_temp.expect('hiding a branch writes no delivery switch (single plan)', 'ok 0',
     pg_temp.try_as(v_owner, array[format('update public.branches set is_active = false where id = %L returning 1', v_d1),
-      format('select active::text from public.branch_addons where branch_id = %L and code = ''delivery''', v_d1)]));
+      format('select count(*)::text from public.branch_addons where branch_id = %L', v_d1)]));
 
   -- 16k. Webhook events are claimed with a lease (WH-5); the claim says claimed / in_flight /
   -- handled (§10.7, SEC-R2-2), so a delivery that meets a live lease is retried, not dropped.
@@ -1174,7 +1181,7 @@ begin
   perform pg_temp.expect('settings merge: the owner cannot call it', 'ERR permission denied for function%',
     pg_temp.try_as(v_owner, array['select public.billing_settings_merge(''{"stripe_enabled": true}''::jsonb)::text']));
   -- 17. The second review fixes (20260927200000, §10) --------------------------------------------------
-  -- A fourth restaurant goes on the card rail with three branches, the first one delivering.
+  -- A fourth restaurant goes on the card rail with three branches, every one delivering (single plan).
   insert into public.restaurants (owner_user_id, slug, name)
   values (v_owner, 'zz-pbs4-' || v_sfx, 'ZZ Platform Billing Test Four')
   returning id into v_rid4;
@@ -1193,57 +1200,54 @@ begin
   r := public.billing_settle_stripe_request(v_q11, 'cus_TESTPBS4', 'sub_TESTPBS4', 'in_TESTPBS4', now() + interval '1 month',
          '[]'::jsonb, null, 117.00);
   select current_period_end into v_x4 from public.subscriptions where restaurant_id = v_rid4;
-  perform pg_temp.expect('§10 fixture: a card restaurant with three branches, the first delivering', 'true first_purchase true true false false',
+  perform pg_temp.expect('§10 fixture: a card restaurant with three branches, every one delivering (single plan)', 'true first_purchase true true true true',
     (r ->> 'ok') || ' ' || (r ->> 'kind') || ' ' || private.billing_is_stripe_managed(v_rid4)::text || ' '
       || private.branch_feature_granted(v_e1, 'delivery')::text || ' ' || private.branch_feature_granted(v_e2, 'delivery')::text || ' '
       || private.branch_feature_granted(v_e3, 'delivery')::text);
 
-  -- 17a. Delivery follows active branches (§10.3, money-rr-3).
+  -- 17a. Delivery is not billed per branch any more (single plan; this was §10.3, money-rr-3): a
+  -- request names no branches, no billing writer touches the merchant's switch, and a branch shown
+  -- again after a hide or a suspension delivers.
   perform pg_temp.act_as(v_owner);
   r := public.request_package_change(v_rid4, 'base', 3, array[v_e1, v_e2, v_e3], null, null);
   perform pg_temp.act_as(null);
   v_q12 := (r ->> 'id')::uuid;
-  -- The third branch is hidden before the change is paid; it does not deliver yet, so the guard lets it go.
+  -- The third branch is hidden before the change is paid.
   update public.branches set is_active = false where id = v_e3;
   perform public.billing_mark_request_stripe(v_q12, null, 'in_TESTCHG12', 'https://invoice.stripe.com/i/in_TESTCHG12');
   r := public.billing_settle_stripe_request(v_q12, 'cus_TESTPBS4', 'sub_TESTPBS4', 'in_TESTCHG12', null, '[]'::jsonb, null, 147.00);
-  perform pg_temp.expect('delivery: a branch hidden before the change settled is not switched on (money-rr-3)', 'true change true true false 3',
+  perform pg_temp.expect('delivery: the request named no branch, the settle wrote no switch', 'true change 0 0',
     (r ->> 'ok') || ' ' || (r ->> 'kind') || ' '
-      || coalesce((select active::text from public.branch_addons where branch_id = v_e1 and code = 'delivery'), 'false') || ' '
-      || coalesce((select active::text from public.branch_addons where branch_id = v_e2 and code = 'delivery'), 'false') || ' '
-      || coalesce((select active::text from public.branch_addons where branch_id = v_e3 and code = 'delivery'), 'false') || ' '
-      || (select cardinality(delivery_branch_ids)::text from public.billing_requests where id = v_q12));
+      || (select cardinality(delivery_branch_ids)::text from public.billing_requests where id = v_q12) || ' '
+      || (select count(*)::text from public.branch_addons where branch_id in (v_e1, v_e2, v_e3)));
   update public.branches set is_active = true where id = v_e3;
-  perform pg_temp.expect('delivery: shown again, it does not deliver', 'false 2',
+  perform pg_temp.expect('delivery: shown again, it delivers', 'true 3',
     private.branch_feature_granted(v_e3, 'delivery')::text || ' '
       || jsonb_array_length(private.entitlements_json(v_rid4) -> 'delivery_branch_ids')::text);
 
-  -- A platform admin hides a delivering branch (the guard lets the platform through).
+  -- A platform admin hides a branch: nothing about delivery moves, nothing is logged for it.
   perform pg_temp.act_as(v_admin, true);
   update public.branches set is_active = false where id = v_e2;
   perform pg_temp.act_as(null);
-  perform pg_temp.expect('hide: a delivering branch of a card restaurant hidden by the platform loses its add-on, keeps its unlock (money-rr-3)',
-    'false true 1 1',
-    (select active::text || ' ' || (unlocked_at is not null)::text from public.branch_addons where branch_id = v_e2 and code = 'delivery') || ' '
+  perform pg_temp.expect('hide: no switch written, no delivery event, no delivery line', '0 0 0',
+    (select count(*)::text from public.branch_addons where branch_id = v_e2) || ' '
       || (select count(*)::text from public.billing_events where restaurant_id = v_rid4 and type = 'stripe.delivery_branch_hidden') || ' '
-      || (select si.quantity::text from public.subscription_items si join public.subscriptions s on s.id = si.subscription_id
+      || (select count(*)::text from public.subscription_items si join public.subscriptions s on s.id = si.subscription_id
            where s.restaurant_id = v_rid4 and si.product_code = 'delivery'));
   update public.branches set is_active = true where id = v_e2;
-  perform pg_temp.expect('hide: shown again, it does not deliver and is not billed', 'false 1 1',
+  perform pg_temp.expect('hide: shown again, it delivers', 'true 3',
     private.branch_feature_granted(v_e2, 'delivery')::text || ' '
-      || jsonb_array_length(private.entitlements_json(v_rid4) -> 'delivery_branch_ids')::text || ' '
-      || (select si.quantity::text from public.subscription_items si join public.subscriptions s on s.id = si.subscription_id
-           where s.restaurant_id = v_rid4 and si.product_code = 'delivery'));
+      || jsonb_array_length(private.entitlements_json(v_rid4) -> 'delivery_branch_ids')::text);
 
-  -- A suspension is not a hide: Stripe goes on billing, and Restore shows the same branches.
+  -- A suspension hides every branch, and Restore shows the same branches again, delivering.
   perform pg_temp.act_as(v_admin, true);
   perform public.set_restaurant_suspended(v_rid4, true);
-  perform pg_temp.expect('suspend: a suspended card restaurant keeps its delivery add-on', '0 true',
+  perform pg_temp.expect('suspend: every branch hidden, no switch written', '0 0',
     (select count(*)::text from public.branches where restaurant_id = v_rid4 and is_active) || ' '
-      || (select active::text from public.branch_addons where branch_id = v_e1 and code = 'delivery'));
+      || (select count(*)::text from public.branch_addons where branch_id in (v_e1, v_e2, v_e3)));
   perform public.set_restaurant_suspended(v_rid4, false);
   perform pg_temp.act_as(null);
-  perform pg_temp.expect('restore: the delivering branch delivers again', '3 true',
+  perform pg_temp.expect('restore: the branches deliver again', '3 true',
     (select count(*)::text from public.branches where restaurant_id = v_rid4 and is_active) || ' '
       || private.branch_feature_granted(v_e1, 'delivery')::text);
 
@@ -1356,12 +1360,12 @@ begin
   perform pg_temp.expect('expired row: a change of its own subscription is refused, not settled as a first purchase (money-rr-7)',
     'false not_managed change expired',
     (r ->> 'ok') || ' ' || (r ->> 'reason') || ' ' || (r ->> 'kind') || ' ' || (r ->> 'subscription_status'));
-  perform pg_temp.expect('expired row: nothing is written', 'expired true 147.00 pending pending false 1',
+  perform pg_temp.expect('expired row: nothing is written', 'expired true 147.00 pending pending 0 1',
     (select s.status || ' ' || (s.current_period_end = v_x4)::text || ' ' || s.stripe_monthly_amount
        from public.subscriptions s where s.restaurant_id = v_rid4) || ' '
       || (select status from public.billing_requests where id = v_q16) || ' '
       || (select string_agg(distinct c.status, ',') from public.billing_charges c where c.request_id = v_q16) || ' '
-      || coalesce((select active::text from public.branch_addons where branch_id = v_e3 and code = 'delivery'), 'false') || ' '
+      || (select count(*) from public.branch_addons where branch_id = v_e3) || ' '
       || (select count(*) from public.billing_events where restaurant_id = v_rid4 and type = 'stripe.settle_refused'
             and note = 'not_managed:expired'));
   -- Stripe says it is active again: the same payment is a change.
@@ -1434,10 +1438,10 @@ begin
                                and not has_function_privilege('authenticated', f, 'execute')
                                and not has_function_privilege('anon', f, 'execute')) || ' of ' || count(*)
        from unnest(array['public.billing_mark_change_started(uuid)', 'public.billing_subscription_is_current(text)']) f));
-  perform pg_temp.expect('the lock helpers and the trigger are nobody''s to call', 'false false false',
+  -- tg_branches_stripe_delivery_off was the third; the single plan dropped it (single_plan.sql checks).
+  perform pg_temp.expect('the lock helpers are nobody''s to call', 'false false',
     has_function_privilege('authenticated', 'private.billing_card_lock(public.billing_requests)', 'execute')::text || ' '
-      || has_function_privilege('authenticated', 'private.billing_release_expired_card_locks(uuid)', 'execute')::text || ' '
-      || has_function_privilege('authenticated', 'private.tg_branches_stripe_delivery_off()', 'execute')::text);
+      || has_function_privilege('authenticated', 'private.billing_release_expired_card_locks(uuid)', 'execute')::text);
 
 end
 $test$;

@@ -29,18 +29,19 @@ export default async function PlatformSubscriptionsPage({
   if (!user) redirect('/login?next=/platform/subscriptions');
   if (!(await isPlatformAdmin(supabase))) return <PlatformAccessDenied />;
 
+  // The whole catalog, withdrawn products included, so a one-time charge for a product
+  // nobody sells any more (the old delivery unlock) still reads by its name. The card
+  // offers and prices only the active ones.
   const [{ q }, rows, catalog] = await Promise.all([
     searchParams,
     listRestaurantSubscriptions(supabase),
-    listBillingProducts(supabase),
+    listBillingProducts(supabase, true),
   ]);
 
   const ids = rows.map((r) => r.restaurant_id);
 
-  // Setting a package now names the branches that deliver, so the picker needs
-  // every branch — hidden ones included. A hidden branch still holds its
-  // branch_addons row, and leaving it out of the list would quietly switch its
-  // delivery off the next time anything on that card was saved.
+  // Every branch, hidden ones included, so the one-time history can name the branch a
+  // charge was raised for even after it was hidden.
   //
   // billing_charges is read straight off the table: the platform-admin policy is
   // the only select policy it has, and merchants reach it solely through

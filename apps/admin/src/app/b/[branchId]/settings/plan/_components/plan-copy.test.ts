@@ -37,35 +37,35 @@ const messages = (locale: string, file: string): Record<string, unknown> =>
 const BRANCH = 'a43b1f08-0000-4000-8000-000000000001';
 const OTHER = 'bbbbbbbb-0000-4000-8000-000000000002';
 
-// The row request_package_change writes for a trialing tenant converting to Base with delivery
-// on its only branch: $228 + $59 once, priced against what was PAID — nothing, on a trial.
+// The row request_package_change writes for a trialing tenant converting to the FavorNoms Plan
+// with its one branch: the $199 first-time setup, priced against what was PAID — nothing, on a
+// trial — and $49 a month (docs/PACKAGING-2026-10-24.md §1).
 const ROW = {
   id: 'req-1',
   plan_code: 'base',
   branch_seats: 1,
-  delivery_branch_ids: [BRANCH],
-  one_time_total: 287,
+  one_time_total: 199,
   discount_code: null,
   discount_amount: 0,
-  monthly_total: 58,
-  created_at: '2026-09-23T08:00:00Z',
+  monthly_total: 49,
+  created_at: '2026-10-24T08:00:00Z',
 };
 
-const selection = { planCode: 'base', branchSeats: 1, deliveryBranchIds: [BRANCH] };
+const selection = { planCode: 'base', branchSeats: 1 };
 
 // --- the Pay-once box after a request is filed -------------------------------
 
 describe('the Pay-once box never says "already paid" for money nobody has taken', () => {
   it('shows the filed request’s own total while it waits, whatever the page would quote', () => {
     // Bought means paid: the request's charges are pending, so the ledger still owes the
-    // $287 and the page's own quote has lines. The box repeats the request, not the quote.
+    // $199 and the page's own quote has lines. The box repeats the request, not the quote.
     const filed = filedRequest(ROW);
     const view = payOnceView({
       filed,
       showingFiled: showsFiledRequest(selection, filed, null),
-      quoteLines: 2,
+      quoteLines: 1,
     });
-    expect(view).toEqual({ kind: 'filed', list: 287, discount: 0, code: null, total: 287 });
+    expect(view).toEqual({ kind: 'filed', list: 199, discount: 0, code: null, total: 199 });
   });
 
   it('shows it even when the ledger has hidden every line', () => {
@@ -78,16 +78,16 @@ describe('the Pay-once box never says "already paid" for money nobody has taken'
   it('shows the list price, the code and what is left when the request carried a discount', () => {
     const filed = filedRequest({
       ...ROW,
-      one_time_total: 237,
+      one_time_total: 149,
       discount_code: 'welcome50',
       discount_amount: 50,
     });
-    expect(payOnceView({ filed, showingFiled: true, quoteLines: 2 })).toEqual({
+    expect(payOnceView({ filed, showingFiled: true, quoteLines: 1 })).toEqual({
       kind: 'filed',
-      list: 287,
+      list: 199,
       discount: 50,
       code: 'WELCOME50',
-      total: 237,
+      total: 149,
     });
   });
 
@@ -95,8 +95,8 @@ describe('the Pay-once box never says "already paid" for money nobody has taken'
     expect(payOnceView({ filed: null, showingFiled: false, quoteLines: 0 })).toEqual({
       kind: 'nothing',
     });
-    // A request that only turns delivery off at a branch: $0 once, priced against what was paid.
-    const filed = filedRequest({ ...ROW, one_time_total: 0, delivery_branch_ids: [] });
+    // A renewal of branches already paid for: $0 once, priced against what was paid.
+    const filed = filedRequest({ ...ROW, one_time_total: 0 });
     expect(payOnceView({ filed, showingFiled: true, quoteLines: 0 })).toEqual({ kind: 'nothing' });
   });
 
@@ -113,7 +113,7 @@ describe('the Pay-once box never says "already paid" for money nobody has taken'
     // request_package_change answers a refused code with {ok:false, error:…} rather than
     // raising; read as a request row that is a row with no id and no plan. Showing it as
     // "waiting for the FavorNoms team" would tell the merchant a request exists that does not.
-    const refusal = { id: '', plan_code: '', branch_seats: 1, delivery_branch_ids: [] };
+    const refusal = { id: '', plan_code: '', branch_seats: 1 };
     expect(filedRequest(refusal)).toBeNull();
   });
 
@@ -152,34 +152,33 @@ describe('the request on screen is the request that was sent', () => {
     expect(showsFiledRequest(selection, noCode, 'WELCOME50')).toBe(false);
   });
 
-  it('matches whatever order the delivery ids come back in', () => {
-    const two = filedRequest({ ...ROW, branch_seats: 2, delivery_branch_ids: [OTHER, BRANCH] });
-    expect(
-      showsFiledRequest({ planCode: 'base', branchSeats: 2, deliveryBranchIds: [BRANCH, OTHER] }, two, null),
-    ).toBe(true);
+  it('is the same request whatever delivery list a stored row still carries', () => {
+    // billing_requests keeps delivery_branch_ids (a row from before 2026-10-24 names branches,
+    // a new one is []). The page sends none, so reading it back would make the request it just
+    // filed look like a different one and offer to replace it.
+    const stored = { ...ROW, branch_seats: 2, delivery_branch_ids: [OTHER, BRANCH] };
+    const fromStore = filedRequest(stored);
+    expect(fromStore?.selection).toEqual({ planCode: 'base', branchSeats: 2 });
+    expect(showsFiledRequest({ planCode: 'base', branchSeats: 2 }, fromStore, null)).toBe(true);
   });
 });
 
 describe('the waiting request is summarised in its own figures', () => {
-  it('repeats the stored monthly total, not the catalog’s', () => {
-    const filed = filedRequest({ ...ROW, monthly_total: 58 }) as FiledRequest;
-    const facts = filedFacts(filed, [
-      { id: BRANCH, name: 'Main', deliveryActive: true, deliveryUnlocked: false },
-      { id: OTHER, name: 'Riverside', deliveryActive: false, deliveryUnlocked: false },
-    ]);
-    expect(facts).toEqual({ branches: 1, deliveryNames: ['Main'], monthlyTotal: 58 });
+  it('repeats the stored branches and monthly total — "2 branches — $98 every month"', () => {
+    const filed = filedRequest({ ...ROW, branch_seats: 2, monthly_total: 98 }) as FiledRequest;
+    expect(filedFacts(filed)).toEqual({ branches: 2, monthlyTotal: 98 });
   });
 });
 
 // --- the discount code -------------------------------------------------------
 
-const two = { planCode: 'base', branchSeats: 2, deliveryBranchIds: ['b1'] };
-const three = { planCode: 'base', branchSeats: 3, deliveryBranchIds: ['b1'] };
+const two = { planCode: 'base', branchSeats: 2 };
+const three = { planCode: 'base', branchSeats: 3 };
 const quote = (code: string, key: string): AppliedDiscount => ({
   code,
   label: 'Launch offer',
   amountOff: 50,
-  netTotal: 237,
+  netTotal: 238,
   key,
 });
 

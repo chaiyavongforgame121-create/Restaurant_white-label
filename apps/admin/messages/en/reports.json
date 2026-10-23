@@ -237,8 +237,10 @@
     "minutesShort": "{minutes}m",
     "notOffered": {
       "title": "{branch} does not deliver",
-      "body": "Delivery is chosen branch by branch, so there is nothing to report here. Your other branches keep their own delivery reports.",
-      "link": "Turn delivery on for this branch"
+      "switchedOff": "Delivery is switched off in this branch's settings. Your other branches keep their own delivery reports.",
+      "switchedOffAsk": "Delivery is switched off in this branch's settings; the owner or an admin can switch it back on. Your other branches keep their own delivery reports.",
+      "notAvailable": "Delivery isn't available for your restaurant right now. Contact FavorNoms to have it turned back on.",
+      "link": "Turn delivery back on in Branch settings"
     }
   },
   "customers": {

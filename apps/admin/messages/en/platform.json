@@ -65,7 +65,7 @@
     "reactivateFailed": "Could not reactivate the subscription."
   },
   "plans": {
-    "base": "Base",
+    "base": "FavorNoms Plan",
     "trial": "Trial",
     "none": "No plan"
   },
@@ -138,8 +138,8 @@
     "action": {
       "restore": "Restore",
       "extend": "Extend 1 month",
-      "convert": "Convert to Base",
-      "convertPriced": "Convert to Base · {price}/mo"
+      "convert": "Convert to {plan}",
+      "convertPriced": "Convert to {plan} · {price}/mo"
     },
     "verdict": {
       "label": {
@@ -216,7 +216,7 @@
       "lapsed": "Lapsed",
       "seats": "Seats",
       "overQuota": "over quota — unenforced, billed short",
-      "noDelivery": "Base does not include delivery — the order-type gate hides it and delivery orders are rejected.",
+      "deliveryOff": "Delivery is off for this whole restaurant: its feature switch (Subscriptions → Feature switches) or its package leaves it out, so no branch takes delivery orders, whatever each branch’s own delivery switch says.",
       "dormant": "Granted, inactive while unpaid"
     }
   },
@@ -261,8 +261,7 @@
       "lapsed": "It pays by card through Stripe, so Extend is not offered here — open it in Stripe to see why the payment did not arrive."
     },
     "errors": {
-      "managed": "This restaurant pays by card through Stripe, so its package only changes through Stripe. Nothing was changed.",
-      "deliveryActive": "A branch that delivers is paid for on this restaurant’s card subscription, so Stripe would keep charging delivery for it. The merchant turns delivery off for that branch on their plan page first (that updates Stripe). Nothing was changed."
+      "managed": "This restaurant pays by card through Stripe, so its package only changes through Stripe. Nothing was changed."
     },
     "links": {
       "customer": "Customer in Stripe",

@@ -57,7 +57,9 @@
     "priceSummary": "<b>{once}</b> una vez y luego <b>{monthly}</b> cada mes",
     "withdrawn": "Retirado",
     "withdrawnHint": "Ya no está a la venta. Los restaurantes que lo tienen lo conservan y su historial sigue siendo válido, pero nadie nuevo puede comprarlo. Márcalo activo para volver a venderlo.",
-    "featureWithdrawn": "{feature} (retirada)"
+    "featureWithdrawn": "{feature} (retirada)",
+    "featureWithdrawnHint": "Las funciones retiradas no se pueden añadir a un producto: ya nada las vende. Para una excepción deliberada, actívala para un solo restaurante en sus Interruptores de funciones, en la pestaña Suscripciones.",
+    "withdrawnFeatureOn": "Este producto todavía concede una función retirada a todos los restaurantes que lo tienen. Desactívala y guarda: ya nada la vende."
   },
   "reports": {
     "title": "Informes financieros",
@@ -143,7 +145,7 @@
   "subscriptions": {
     "metaTitle": "Suscripciones · FavorNoms",
     "title": "Suscripciones",
-    "subtitle": "Define el paquete de un restaurante directamente, sucursal por sucursal. Los cambios se aplican de inmediato.",
+    "subtitle": "Define directamente el plan y el número de sucursales de un restaurante. Los cambios se aplican de inmediato.",
     "searchPlaceholder": "Buscar restaurantes",
     "noMatches": "Ningún restaurante coincide.",
     "live": "Activo",
@@ -182,18 +184,6 @@
     "minSeats": "mín. {count} (sucursales abiertas)",
     "applyPackage": "Aplicar paquete",
     "saved": "Guardado",
-    "deliveringCount": "Entrega en {count} de {total}",
-    "deliveringNone": "Sin entrega",
-    "delivery": {
-      "title": "Qué sucursales hacen entregas",
-      "hint": "Cada sucursal que entrega suma el precio de entrega a la cuenta mensual. Nada de esto cobra el desbloqueo único: lo que concedes a mano no se debe.",
-      "trialHint": "Durante la prueba todas las sucursales entregan, así que no hay nada que elegir. Pasa el restaurante a un plan de pago para decidirlo.",
-      "noBranches": "Este restaurante aún no tiene sucursales.",
-      "hiddenBranch": "oculta",
-      "branchMonthly": "{amount} al mes",
-      "on": "Entrega",
-      "off": "Sin entrega"
-    },
     "noOneTimeCharge": "Aplicar un paquete aquí no genera ningún cargo único.",
     "oneTime": {
       "show": "Historial de pagos únicos",
@@ -216,7 +206,12 @@
     "hiddenOverridden": "Oculta para el comercio · forzado",
     "hiddenNotInPackage": "Oculta para el comercio · no está en su paquete",
     "groupLabel": "Disponibilidad de {feature}",
-    "deliveryNote": "La entrega es la excepción: este interruptor dice si la cuenta puede tener entrega, y la lista de sucursales de arriba dice dónde. Forzarlo en Sí no concede nada hasta que se active una sucursal."
+    "withdrawnHint": "Retirada: ningún plan la incluye. Activado se la concede solo a este restaurante, como excepción deliberada.",
+    "grantWithdrawn": {
+      "title": "¿Dar {feature} a {restaurant}?",
+      "body": "Ningún plan incluye ya {feature}. Activarla se la da solo a este restaurante, hasta que vuelvas a ponerla en Según plan.",
+      "confirm": "Dársela"
+    }
   },
   "requests": {
     "metaTitle": "Solicitudes de paquete · FavorNoms",
@@ -259,25 +254,19 @@
     "noPackage": "Sin paquete",
     "confirm": {
       "blindTitle": "¿Aprobar sin ver el paquete actual de {name}?",
-      "blindBody": "No se pudo cargar su paquete actual. Aprobar lo reemplaza por completo con esta solicitud y quita cualquier complemento o cupo que la solicitud no incluya.",
+      "blindBody": "No se pudo cargar su paquete actual. Aprobar lo reemplaza por completo con esta solicitud: quita cualquier cupo de sucursal que la solicitud no incluya y el mes pagado vuelve a empezar hoy.",
       "approveAnyway": "Aprobar de todos modos",
       "removeTitle": "¿Aprobar y quitar {items}?",
       "smallerTitle": "¿Aprobar un paquete más pequeño?",
       "body": "Aprobar reemplaza todo el paquete de {name} por esta solicitud.{removes, select, yes { Quita {items}.} other {}}{seats, select, yes { Reduce los cupos de sucursal de {seatsFrom} a {seatsTo}.} other {}}{shortens, select, yes { Cambia la fecha de pagado hasta del {paidFrom} al {paidTo} ({days, plural, one {# día menos} other {# días menos}}).} other {}} Lo pierden en cuanto apruebas y, para recuperarlo, hay que volver a configurar el paquete en Suscripciones.",
       "approveRemove": "Aprobar y quitar"
     },
-    "asking": "{seats, plural, one {# sucursal} other {# sucursales}}, {delivery}",
-    "deliveryNone": "sin entrega",
-    "deliveryAt": "entrega en {branches}",
-    "unnamedBranches": "{count, plural, one {# sucursal que ya no existe} other {# sucursales que ya no existen}}",
+    "asking": "{seats, plural, one {# sucursal} other {# sucursales}}",
     "payOnce": "Pago único",
     "thenMonthly": "Y luego cada mes",
     "discountApplied": "El código {code} descontó {amount} de {list}",
     "discountNothingOff": "El código {code} no descontó nada.",
     "nothingOnce": "No hay nada que pagar una vez: ya está todo comprado.",
-    "deliveryOn": "Esto ACTIVA la entrega en: {branches}",
-    "deliveryOff": "Esto DESACTIVA la entrega en: {branches}",
-    "deliveryLossItem": "Entrega en {branch}",
     "marksPaid": "Marca {amount} de cargos únicos como pagados",
     "keepsCode": "El código {code} queda usado: su uso se reservó cuando el comercio envió esta solicitud"
   },
@@ -290,7 +279,7 @@
     "metaTitle": "Códigos de descuento · FavorNoms",
     "title": "Códigos de descuento",
     "subtitle": "Los códigos que repartes. El servidor calcula el importe de cada uno.",
-    "oneTimeOnly": "<strong>Los códigos solo descuentan los cargos únicos</strong>: la base, una sucursal extra, el desbloqueo de entrega de una sucursal. Nunca cambian la cuenta mensual.",
+    "oneTimeOnly": "<strong>Los códigos solo descuentan los cargos únicos</strong>: la configuración inicial y la configuración de cada sucursal adicional. Nunca cambian la cuenta mensual.",
     "newCode": "Nuevo código",
     "emptyTitle": "Aún no hay códigos",
     "emptyBody": "Crea uno cuando quieras rebajar lo que un restaurante paga para empezar.",
@@ -376,8 +365,7 @@
   "stripe": {
     "errors": {
       "managed": "Este restaurante paga con tarjeta a través de Stripe, así que su paquete solo cambia a través de Stripe. No se cambió nada.",
-      "paymentInProgress": "Este cambio está esperando el pago con tarjeta del comercio en Stripe (3-D Secure o una tarjeta rechazada) y ese pago todavía puede completarse, así que aún no se puede rechazar. Se activa solo cuando se paga. Cuando se cierre su plazo de pago, aproximadamente un día después de empezar, se podrá rechazar. No se cambió nada.",
-      "deliveryActive": "Una sucursal que hace entregas se paga en la suscripción con tarjeta de este restaurante, así que Stripe seguiría cobrando la entrega por ella. Primero el comercio desactiva la entrega de esa sucursal en su página de plan (eso actualiza Stripe). No se cambió nada."
+      "paymentInProgress": "Este cambio está esperando el pago con tarjeta del comercio en Stripe (3-D Secure o una tarjeta rechazada) y ese pago todavía puede completarse, así que aún no se puede rechazar. Se activa solo cuando se paga. Cuando se cierre su plazo de pago, aproximadamente un día después de empezar, se podrá rechazar. No se cambió nada."
     },
     "links": {
       "customer": "Cliente en Stripe",
@@ -472,7 +460,7 @@
         "confirmOff": "Desactivar",
         "errors": {
           "notReady": "Stripe no está listo: configura primero la clave secreta y el secreto del webhook. No se cambió nada.",
-          "catalogIncomplete": "Al Catálogo le falta un precio mensual activo para Base, sucursal adicional o Entrega, así que no hay de dónde crear los precios de Stripe. Corrígelo primero en la pestaña Catálogo. El cobro con tarjeta no se activó.",
+          "catalogIncomplete": "Al Catálogo le falta un precio mensual activo para el plan o para una sucursal adicional, así que no hay de dónde crear los precios de Stripe. Corrígelo primero en la pestaña Catálogo. El cobro con tarjeta no se activó.",
           "forbidden": "Solo un administrador de la plataforma puede hacer esto. No se cambió nada.",
           "notSignedIn": "Tu sesión expiró. Vuelve a iniciar sesión y prueba el interruptor de nuevo. No se cambió nada.",
           "network": "No se pudo conectar con el servidor. No se cambió nada: revisa tu conexión e inténtalo de nuevo.",

@@ -200,8 +200,8 @@ export default async function MenuPage({ params, searchParams }: Props) {
         combos={combos}
         happyHours={happyHours}
         canDeliver={scheduleDelivery.canDeliver}
-        // Delivery is sold per branch: a branch that does not deliver says so, rather than
-        // reading as "delivery is closed right now" (docs/PACKAGING-2026-09-23.md §2).
+        // Delivery is switched per branch: a branch that does not deliver says so, rather than
+        // reading as "delivery is closed right now" (docs/PACKAGING-2026-10-24.md §3).
         deliveryOffered={scheduleDelivery.offered}
         // The scan is being seated by <TableScanPin> above, which may be bouncing the diner
         // through sign-in. Until that lands there is no pin, and without this the gate would

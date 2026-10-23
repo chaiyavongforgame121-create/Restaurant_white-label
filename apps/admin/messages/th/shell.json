@@ -98,17 +98,6 @@
     "kitchenStillWorks": "ออร์เดอร์ที่สั่งไว้แล้วยังทำอาหารและปิดออร์เดอร์ได้จากจอครัว",
     "goToBilling": "ไปที่การชำระเงิน"
   },
-  "addon": {
-    "pricePerMonth": "+${price}<unit>/เดือน</unit>",
-    "addToPackage": "เพิ่มในแพ็กเกจของฉัน",
-    "priceOnceThenMonthly": "${once} จ่ายครั้งเดียว จากนั้น +${monthly}/เดือน สำหรับสาขานี้",
-    "priceOnce": "${once} จ่ายครั้งเดียว"
-  },
-  "lockedFeature": {
-    "comingSoon": "เร็วๆ นี้",
-    "notInPackage": "{feature} เป็นส่วนหนึ่งของส่วนเสริม {addon} และไม่รวมอยู่ในแพ็กเกจปัจจุบันของคุณ",
-    "viewPackages": "ดูแพ็กเกจ"
-  },
   "upload": {
     "noCanvas": "เบราว์เซอร์ของคุณประมวลผลรูปภาพไม่ได้ (ไม่รองรับ canvas)"
   },

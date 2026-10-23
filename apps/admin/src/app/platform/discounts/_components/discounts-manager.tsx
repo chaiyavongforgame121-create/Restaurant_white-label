@@ -3,8 +3,8 @@
 // Discount codes, the platform's own.
 //
 // One thing about them decides the whole screen: a code comes off the ONE-TIME
-// charges — the base, an extra branch, a branch's delivery unlock — and never off
-// the monthly bill (docs/PACKAGING-2026-09-23.md §3.4). That keeps the recurring
+// charges — the first-time setup, an additional branch's setup — and never off
+// the monthly bill (docs/PACKAGING-2026-10-24.md §1). That keeps the recurring
 // figure one number everyone can check, and it is said on the page rather than
 // left for an operator to discover by watching a total not move.
 //

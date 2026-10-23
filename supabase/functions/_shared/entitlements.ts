@@ -48,8 +48,9 @@ export interface EdgeEntitlements {
   restaurantId: string;
   /**
    * The branch this payload was resolved for, or null for a restaurant-wide load.
-   * `delivery` is sold per branch (docs/PACKAGING-2026-09-23.md §2), so the answer
-   * only means "this branch delivers" when a branch id was given.
+   * `delivery` has a per-branch off switch (docs/PACKAGING-2026-10-24.md §3), so the
+   * answer only means "this branch delivers" when a branch id was given and the
+   * caller asked for it (loadEntitlements' `delivery` option).
    */
   branchId: string | null;
   planCode: string;
@@ -59,7 +60,8 @@ export interface EdgeEntitlements {
   branchSeats: number;
   /**
    * What is live for this scope right now. For a branch-loaded payload `delivery` is "this
-   * branch delivers today"; every other key is the restaurant's.
+   * branch delivers today" (absent unless the caller asked for it); every other key is the
+   * restaurant's.
    */
   features: Record<string, boolean>;
 }
@@ -105,39 +107,33 @@ function parse(raw: unknown): EdgeEntitlements {
   };
 }
 
-/** The plan every branch delivers under, whatever it has bought (packaging §2). */
-const TRIAL_PLAN = 'trial';
-
 /**
  * Does THIS branch deliver today? The one question an edge function asks before it creates
  * delivery work (place-order). Nothing that finishes existing work asks it — see the rule at
  * the top of this file.
  *
- * It mirrors private.branch_has_feature(branch, 'delivery'), the function the BEFORE INSERT
- * triggers read, so the up-front 403 and the trigger cannot disagree: the restaurant's
- * package must grant delivery at all, and then either the restaurant is on the trial (every
- * branch delivers) or this branch's branch_addons row is switched on
- * (docs/PACKAGING-2026-09-23.md §3.2). Whether billing is paid up is edgeHasFeature's
- * `entitled` test, not this one. A read that fails is a "no": an edge function may not sell
- * a delivery it cannot prove this branch offers.
+ * It mirrors private.branch_feature_granted(branch, 'delivery') behind the BEFORE INSERT
+ * triggers, so the up-front 403 and the trigger cannot disagree (docs/PACKAGING-2026-10-24.md
+ * §3):
+ *
+ *   branch delivers = restaurant entitled (deadline in the future)
+ *                     AND billing_entitlements.features.delivery = true
+ *                     AND NOT EXISTS (branch_addons row for this branch, code 'delivery',
+ *                                     active = false)
+ *
+ * Delivery is part of the plan, so there is no plan-code or trial exception: a branch delivers
+ * unless its merchant switched it off. A read that fails is a "no": an edge function may not
+ * sell a delivery it cannot prove this branch offers.
  */
 async function branchDeliversToday(
   admin: any,
   branchId: string,
   restaurant: EdgeEntitlements,
 ): Promise<boolean> {
-  // billing_compute rebuilds billing_entitlements.features as the union of the subscription
-  // items' feature maps, so the key is present exactly while some branch of the restaurant is
-  // sold delivery (or restaurants.feature_overrides forces it on). Without it no branch may
-  // sell a new delivery, whatever its own row says.
-  if (restaurant.features.delivery !== true) return false;
-  // The 14-day trial has everything on at every branch and buys no add-on rows, so it would
-  // otherwise read as "this branch does not deliver". The SQL expresses the same rule as
-  // `billing_products.trial_days > 0` for the restaurant's plan; `trial` is the only plan that
-  // has trial days, and matching on the code keeps this to the one query. If a second
-  // trial-bearing plan is ever added, this has to read trial_days too or the edge will refuse
-  // deliveries the triggers would have allowed.
-  if (restaurant.planCode === TRIAL_PLAN) return true;
+  // Both are already in hand, so a lapsed restaurant, or one a platform admin switched delivery
+  // off for (feature_overrides delivery:false, which billing_compute folds into features),
+  // costs no read. Neither delivers anywhere, whatever the branch's switch says.
+  if (!restaurant.entitled || restaurant.features.delivery !== true) return false;
   const { data, error } = await admin
     .from('branch_addons')
     .select('active')
@@ -145,13 +141,14 @@ async function branchDeliversToday(
     .eq('code', 'delivery')
     .maybeSingle();
   if (error) {
-    // Logged, not swallowed: the one way this happens in practice is a function deployed
-    // ahead of the migration that creates branch_addons, and the symptom — delivery
-    // refused everywhere at once — is otherwise indistinguishable from a billing problem.
+    // Logged, not swallowed: the symptom (delivery refused at every branch at once) is
+    // otherwise indistinguishable from a billing problem.
     console.error('branch_addons_unreadable', { branch_id: branchId, message: error.message });
     return false;
   }
-  return data?.active === true;
+  // The row is the merchant's off switch (public.set_branch_delivery): only active = false
+  // means "switched off here". No row, a new branch included, delivers.
+  return data?.active !== false;
 }
 
 /**
@@ -161,14 +158,18 @@ async function branchDeliversToday(
  * get_entitlements(), because that RPC requires auth.uid() — which a
  * service-role edge function does not have.
  *
- * Pass `branchId` whenever the answer is about one branch: `delivery` is then
- * that branch's answer instead of the restaurant's. Passing BOTH ids is the
- * cheapest call — a caller that already read `branches.restaurant_id` saves the
- * lookup and still gets the per-branch answer.
+ * Pass `branchId` whenever the answer is about one branch, and `{ delivery: true }`
+ * when the caller is about to create delivery work: `delivery` is then that branch's
+ * answer. Without the option a branch load carries no `delivery` key at all, so the
+ * branch_addons read is spent only where it is needed (place-order), and a check
+ * that forgot to ask reads "does not deliver" (fail closed), never the restaurant's
+ * "yes" for a branch that is switched off. Passing BOTH ids is the cheapest call —
+ * a caller that already read `branches.restaurant_id` saves the lookup.
  */
 export async function loadEntitlements(
   admin: any,
   key: { restaurantId?: string | null; branchId?: string | null },
+  opts: { delivery?: boolean } = {},
 ): Promise<EdgeEntitlements> {
   try {
     let restaurantId = key.restaurantId ?? null;
@@ -196,11 +197,10 @@ export async function loadEntitlements(
     const ent = parse(data);
     if (!key.branchId) return ent;
 
-    return {
-      ...ent,
-      branchId: key.branchId,
-      features: { ...ent.features, delivery: await branchDeliversToday(admin, key.branchId, ent) },
-    };
+    const features = { ...ent.features };
+    delete features.delivery;
+    if (opts.delivery) features.delivery = await branchDeliversToday(admin, key.branchId, ent);
+    return { ...ent, branchId: key.branchId, features };
   } catch (_e) {
     return DENIED;
   }

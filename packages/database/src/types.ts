@@ -6145,6 +6145,10 @@ export type Database = {
         }
         Returns: string
       }
+      set_branch_delivery: {
+        Args: { p_branch_id: string; p_enabled: boolean }
+        Returns: boolean
+      }
       set_branch_delivery_hours: {
         Args: { p_branch_id: string; p_windows: Json }
         Returns: undefined

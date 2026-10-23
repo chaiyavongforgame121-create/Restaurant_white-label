@@ -18,10 +18,11 @@ export type DeliveryQuote =
     }
   | {
       deliverable: false;
-      // 'delivery_not_entitled' is returned when the branch has no delivery add-on. It was
-      // missing here, so checkout treated it like "no coordinates yet", quoted the legacy
-      // flat fee, and place-order then 403'd at submit — the diner saw a price for something
-      // that was never for sale.
+      // 'delivery_not_entitled' is returned when the branch does not deliver (the restaurant is
+      // not paid up, or the merchant switched delivery off there). It was missing here, so
+      // checkout treated it like "no coordinates yet", quoted the legacy flat fee, and
+      // place-order then 403'd at submit — the diner saw a price for something that was never
+      // for sale.
       reason:
         | 'invalid_coordinates'
         | 'branch_unavailable'

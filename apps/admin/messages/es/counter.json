@@ -114,7 +114,7 @@
     "quotedNoDistance": "Envío {fee}",
     "outOfRange": "Ese punto está fuera de la zona de entrega.",
     "outOfRangeMax": "Ese punto está fuera de la zona de entrega (hasta {max} mi).",
-    "notSold": "El plan de esta sucursal no incluye entregas a domicilio.",
+    "notSold": "Esta sucursal no acepta entregas a domicilio en este momento: la entrega está desactivada en su configuración o no está disponible para el restaurante.",
     "flatFee": "Costo de envío fijo: {fee}",
     "clearPin": "Quitar marcador",
     "needsDetails": "Un pedido a domicilio necesita el teléfono y la dirección del cliente."
@@ -194,7 +194,7 @@
     "deliveryMustBeScheduled": "En este momento esta sucursal solo acepta entregas programadas.",
     "insufficientPoints": "El cliente no tiene suficientes puntos para eso.",
     "giftCardChanged": "El saldo de la tarjeta de regalo cambió. Vuelve a cobrar.",
-    "featureNotEntitled": "El plan de esta sucursal no incluye eso. Revisa la página del plan en el panel de administración.",
+    "featureNotEntitled": "Esta sucursal no puede aceptar eso en este momento. Revisa la Configuración de sucursal en el panel de administración o contacta con FavorNoms.",
     "invalidDiscount": "El descuento debe estar entre 0 y 100 %.",
     "invalidPhone": "No se aceptó el teléfono del cliente. Revísalo y vuelve a cobrar.",
     "notStaffHere": "Esta cuenta no puede cobrar en esta sucursal o tu sesión expiró. Vuelve a iniciar sesión o pide al dueño acceso al mostrador de esta sucursal.",

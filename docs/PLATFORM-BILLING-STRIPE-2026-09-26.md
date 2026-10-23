@@ -3,9 +3,15 @@
 The owner asked for the platform side of Stripe: restaurants that sign up pay the platform's own Stripe account for
 their package — the one-time fees and the monthly fee — and the monthly fee is charged again every month by itself.
 
-This is the platform's income (docs/PACKAGING-2026-09-23.md). It is **not** diners paying restaurants, which is
-Stripe Connect (docs/PAYMENTS-STRIPE-CONNECT-2026-09-24.md). Both use the same platform Stripe account and keys; they
-never share a code path, a webhook endpoint or a table row.
+This is the platform's income (docs/PACKAGING-2026-09-23.md, replaced on 2026-10-24 by docs/PACKAGING-2026-10-24.md).
+It is **not** diners paying restaurants, which is Stripe Connect (docs/PAYMENTS-STRIPE-CONNECT-2026-09-24.md). Both use
+the same platform Stripe account and keys; they never share a code path, a webhook endpoint or a table row.
+
+> **One plan since 2026-10-24** (migration `20261024100000_single_plan.sql`): $49 a month per branch, $199 / $89
+> one-time, delivery included. Stripe bills only `base` and `extra_branch`; delivery is never a line, a charge or a
+> product requirement, and the delivery guards of §9.6 and §10.3 are dropped. The rails, the request-first flow and
+> every rule not about delivery are unchanged. Where a decision or rule below still speaks of delivery, it is marked
+> (§1 describes the old dormant rail and is left as it was).
 
 The maps this design was built from (live definitions, 2026-09-26) are in the session scratchpad; the facts that shape
 the design are repeated here so this file stands alone.
@@ -32,8 +38,8 @@ the design are repeated here so this file stands alone.
 | D3 | **Request first, then pay.** The plan page files `request_package_change` exactly as today, then asks the edge function to take payment **for that request**. The server prices everything; Stripe is told net amounts. | One pricing path, codes and the one-time ledger keep working. |
 | D4 | **First purchase = Stripe Checkout (subscription mode)** with the monthly lines as recurring prices and each one-time charge as a one-time line **priced at its net amount** (`price_data`). No Stripe promotion codes. Card only. | Exact to the cent against `billing_charges.net_amount`; codes stay one-time only. |
 | D5 | **Time already covered is not charged twice.** If the restaurant is in its free trial, or already paid through a date on the manual rail, and more than 48 h remain, the monthly charge starts at that date (`subscription_data.trial_end`); the one-time fees are charged now. Otherwise monthly billing starts now. | A trial merchant who buys early keeps the rest of the trial; a manual merchant switching to card keeps what they paid for. |
-| D6 | **After purchase the restaurant is `active` on the paid plan**, paid through the first charge date. The trial ends at purchase in our records (its all-branch delivery stops; the branches they chose deliver). | They bought a package; the trial banner would be wrong. |
-| D7 | **A paying Stripe restaurant that changes its package is not sent to Checkout again.** Its subscription is updated in place: quantities change, the new one-time fees (net) are added, and the difference is charged to the card on file **now** (`proration_behavior=always_invoice`, `payment_behavior=pending_if_incomplete`). Removing a branch's delivery or a seat credits the unused part automatically. If the card needs 3-D Secure or fails, the change waits and the merchant gets Stripe's invoice page to pay. | One subscription per restaurant; "pay $70 now" is immediate and clear. |
+| D6 | **After purchase the restaurant is `active` on the paid plan**, paid through the first charge date. The trial ends at purchase in our records. Delivery does not change: since 2026-10-24 both plans deliver at every branch whose switch is on (before, the trial's all-branch delivery stopped and only the branches they chose delivered). | They bought a package; the trial banner would be wrong. |
+| D7 | **A paying Stripe restaurant that changes its package is not sent to Checkout again.** Its subscription is updated in place: quantities change, the new one-time fees (net) are added, and the difference is charged to the card on file **now** (`proration_behavior=always_invoice`, `payment_behavior=pending_if_incomplete`). Removing a seat credits the unused part automatically. If the card needs 3-D Secure or fails, the change waits and the merchant gets Stripe's invoice page to pay. | One subscription per restaurant; "pay $89 now" is immediate and clear. |
 | D8 | **Paid-through only moves when money arrives.** `current_period_end` is set at purchase (the first charge date or the first paid period) and moved forward only by `invoice.paid`. Subscription update events change the status and the cancel flags, never the date. | Fixes the free-month bug for good. |
 | D9 | **7 days of grace after a failed renewal.** On the first failed renewal the restaurant is `past_due` and keeps working until `grace_until = paid-through + 7 days`. Stripe keeps retrying (Smart Retries); a later success restores it. If Stripe gives up and cancels, access ends at the later of paid-through and grace. | A declined card does not take a restaurant offline in the middle of service. |
 | D10 | **Cancel = at the end of the paid period**, from the Stripe customer portal. The portal is configured by code: update card, invoice history, billing details, cancel at period end; **no plan switching** (plans change on our page). | The merchant never loses days they paid for. |
@@ -119,8 +125,8 @@ public.billing_checkout_context(p_request_id uuid) returns jsonb
   --           subscription{status,plan_code,stripe_subscription_id,stripe_customer_id,current_period_end,
   --                        trial_ends_at,items[{product_code,quantity,stripe_subscription_item_id}]} | null,
   --           stripe_managed boolean }
-  -- monthly_lines: base qty 1, extra_branch qty seats-included (omitted at 0), delivery qty = number of
-  -- delivery_branch_ids (omitted at 0), unit prices from billing_products.
+  -- monthly_lines: base qty 1, extra_branch qty seats-included (omitted at 0), unit prices from
+  -- billing_products. No delivery line since 2026-10-24 (it was qty = number of delivery_branch_ids).
 
 -- EXECUTE authenticated, caller's JWT: the restaurant a branch belongs to and whether the caller may bill it.
 public.billing_branch_context(p_branch_id uuid) returns jsonb
@@ -148,6 +154,7 @@ public.billing_settle_stripe_request(
   -- If not 'pending' -> {ok:false, reason:'request_not_pending', status} (the caller refunds, D12).
   -- First purchase (restaurant not yet Stripe-managed):
   --   billing_apply_selection(rid, plan, req.delivery_branch_ids, seats, 'active', now(), p_paid_through, null)
+  --   (the delivery ids are ignored since 2026-10-24)
   -- Change on an existing Stripe subscription: keep the current period:
   --   billing_apply_selection(rid, plan, ids, seats, current status, current_period_start, current_period_end, null)
   -- then: subscriptions.stripe_customer_id / stripe_subscription_id / next_billing_at = p_paid_through (first purchase)
@@ -218,8 +225,12 @@ public.billing_request_for_invoice(p_invoice_id text) returns uuid
 - `STRIPE_API_VERSION = '2025-08-27.basil'` (re-exported from the Connect module's value, or duplicated with a test
   that they match), `EVENT_API_VERSION = '2026-08-26.dahlia'`.
 - Catalog identity, stable forever:
-  - products: `favornoms_base`, `favornoms_extra_branch`, `favornoms_delivery` (monthly),
-    `favornoms_base_setup`, `favornoms_extra_branch_setup`, `favornoms_delivery_setup` (one-time; `price_data` only).
+  - products: `favornoms_base`, `favornoms_extra_branch` (monthly), `favornoms_base_setup`,
+    `favornoms_extra_branch_setup` (one-time; `price_data` only), named "FavorNoms Plan (first branch), monthly",
+    "Additional branch, monthly", "FavorNoms Plan, first-time setup" and "Additional branch setup".
+    `favornoms_delivery` (monthly) is legacy since 2026-10-24: recognised on an existing subscription, always targeted
+    at quantity 0 so the next change deletes it, never needed for the catalog to be complete.
+    `favornoms_delivery_setup` is gone.
   - recurring price lookup key: `favornoms_<code>_monthly_<cents>` — the amount is in the key, so a price change in
     `billing_products` makes a new Stripe price and never edits an old one; existing subscribers keep their price until
     their items are changed (a later decision for the owner).
@@ -340,7 +351,7 @@ Platform admin = `user.app_metadata.is_platform_admin === true` from `auth.getUs
   from items, invoice subscription id, card mapping, lookup keys).
 - UI models: plan page state → banners/buttons, platform rail chip and guards.
 - Sandbox end to end (§7 done): a trial restaurant buys with 4242 (one-time now, monthly at trial end), adds a branch
-  ($70 + prorated $29 now), opens the portal, and a failed renewal via a test clock.
+  ($89 + prorated $49 now), opens the portal, and a failed renewal via a test clock.
 
 ## 9. Review fixes (2026-09-27)
 
@@ -400,6 +411,7 @@ scratchpad as `review-verified.json`) confirmed 43 defects. They are fixed by mi
 ### 9.6 Stripe and our bill agree (money-sql-6, ui-platform-4)
 - Hiding, moving or deleting a branch that has active delivery on a Stripe-managed restaurant is refused
   (`stripe_delivery_active`): turn delivery off for that branch on the plan page first (which updates Stripe).
+  *Dropped 2026-10-24: delivery is not billed, so the guard and its triggers are gone.*
 - `subscriptions.stripe_monthly_amount` is Stripe's recurring total (sum of the subscription's recurring items), set
   at settlement and on every sync; the next charge shown on the Stripe rail is that amount.
 
@@ -442,7 +454,8 @@ scratchpad). Fixed by migration `20260927200000_platform_billing_stripe_fixes_2.
    (`subscription_create`) are left to `checkout.session.completed`.
 3. **Delivery follows active branches (money-rr-3).** `billing_apply_selection` only switches delivery on for active
    branches; hiding a branch on a Stripe-managed restaurant (a platform admin can) switches its delivery add-on off, so
-   showing it again never grants unbilled delivery.
+   showing it again never grants unbilled delivery. *Dropped 2026-10-24: billing no longer touches delivery, and hiding
+   a branch leaves its delivery switch as it was.*
 4. **A change is found even if its invoice id was never stored (money-rr-4)**: the in-flight marker locks the request,
    the mark after a paid change is retried (hard failure), and `invoice.paid` falls back to the request id on the
    invoice's fee lines.

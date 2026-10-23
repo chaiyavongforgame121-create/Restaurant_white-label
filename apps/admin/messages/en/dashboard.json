@@ -48,7 +48,7 @@
     },
     "noPin": {
       "label": "Delivery is on, but this branch has no map pin",
-      "why": "Riders cannot be dispatched to delivery orders from this branch until the pin is set.",
+      "why": "Riders cannot be dispatched to delivery orders from this branch until the pin is set. If this branch does not deliver, switch delivery off in Branch settings instead.",
       "link": "Set the pin"
     },
     "tax": {
@@ -68,7 +68,7 @@
     },
     "noRiders": {
       "label": "Delivery is on, but no rider is approved for this branch",
-      "why": "Delivery orders from this branch cannot be offered to anyone until you approve riders for it.",
+      "why": "Delivery orders from this branch cannot be offered to anyone until you approve riders for it. If this branch does not deliver, switch delivery off in Branch settings instead.",
       "link": "Riders"
     }
   },
@@ -93,7 +93,8 @@
       "label": "Active Deliveries",
       "failed": "Could not read deliveries",
       "stalled": "{count} stalled",
-      "notOffered": "This branch does not deliver",
+      "switchedOff": "Delivery is switched off here",
+      "notAvailable": "Delivery isn't available right now",
       "windingDown": "Delivery is off here — the last runs are still out"
     }
   },

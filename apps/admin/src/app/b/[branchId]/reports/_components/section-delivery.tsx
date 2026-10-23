@@ -9,23 +9,24 @@ import { formatCurrency } from '@favornoms/shared';
 import { Kpi } from './kpi';
 import { Caption, EmptyNote, SectionFrame } from './section-frame';
 import type { DeliveryReport, SectionResult } from './report-queries';
+import type { DeliveryGate } from '@/lib/delivery-gate-model';
 
 export function SectionDelivery({
   result,
   currency,
   branchId,
-  delivers,
+  gate,
+  canSwitch,
   branchName,
-  planHref,
 }: {
   result: SectionResult<DeliveryReport>;
   currency: string;
   branchId: string;
-  /** Delivery is sold per branch — THIS branch's answer. */
-  delivers: boolean;
+  /** THIS branch's answer: does it deliver, and if not, why. */
+  gate: DeliveryGate;
+  /** branch.settings: may open the switch the link goes to. */
+  canSwitch: boolean;
   branchName: string;
-  /** The plan page with this branch's Delivery switch pre-selected. */
-  planHref: string;
 }) {
   const t = useTranslations('reports.delivery');
   const data = result.data;
@@ -36,8 +37,12 @@ export function SectionDelivery({
   // A branch that does not deliver keeps its heading and its place in the tab strip — the
   // five other sections would otherwise renumber under the merchant — and says which branch
   // it is. Dropping the section instead would read as "the report is broken", and showing
-  // an empty one as "no deliveries this week", which is a different statement.
-  if (!delivers) {
+  // an empty one as "no deliveries this week", which is a different statement. It says why,
+  // too: the branch's own switch (with the way to it, for whoever may use it), or delivery
+  // being off for the whole restaurant. Never a price or the plan page.
+  if (!gate.delivers) {
+    const switchedOff = gate.reason === 'switchedOff';
+    const href = switchedOff && canSwitch ? gate.settingsHref : null;
     return (
       <SectionFrame
         id="delivery"
@@ -47,13 +52,21 @@ export function SectionDelivery({
       >
         <Card className="p-5">
           <p className="text-sm font-semibold">{t('notOffered.title', { branch: branchName })}</p>
-          <p className="mt-1 text-sm text-muted-foreground">{t('notOffered.body')}</p>
-          <Link
-            href={planHref}
-            className="focus-ring mt-3 inline-block text-sm font-medium text-primary underline-offset-2 hover:underline"
-          >
-            {t('notOffered.link')}
-          </Link>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {switchedOff
+              ? href
+                ? t('notOffered.switchedOff')
+                : t('notOffered.switchedOffAsk')
+              : t('notOffered.notAvailable')}
+          </p>
+          {href && (
+            <Link
+              href={href}
+              className="focus-ring mt-3 inline-block text-sm font-medium text-primary underline-offset-2 hover:underline"
+            >
+              {t('notOffered.link')}
+            </Link>
+          )}
         </Card>
       </SectionFrame>
     );

@@ -6,8 +6,10 @@ import { DENIED_ENTITLEMENTS, type Entitlements } from '@favornoms/shared';
 import { MANUAL_RAIL, type BillingRailInfo } from '@favornoms/database/queries';
 import {
   branchVerdict,
+  conversionSelection,
   deadlineFact,
   fmtDate,
+  renewalSelection,
   resolvePrimaryAction,
   tenantHealth,
   type BranchLite,
@@ -40,7 +42,9 @@ function render(tree: Tree, locale: string, m: Msg): string {
   });
   const values: Record<string, string | number> = {};
   for (const [k, v] of Object.entries(m.values ?? {})) {
-    values[k] = typeof v === 'object' ? fmtDate(v.date) : v;
+    // A plan code reads by its name, the way platform-text.ts resolves it.
+    values[k] =
+      typeof v !== 'object' ? v : 'plan' in v ? String((tree.plans as Tree)[v.plan] ?? v.plan) : fmtDate(v.date);
   }
   return (t as unknown as (key: string, values?: Record<string, string | number>) => string)(m.key, values);
 }
@@ -55,7 +59,7 @@ function ent(over: Partial<Entitlements> = {}): Entitlements {
     entitledThrough: inDays(20),
     branchSeats: 1,
     branchesUsed: 1,
-    monthlyTotal: 199,
+    monthlyTotal: 49,
     features: {},
     addons: [],
     ...over,
@@ -89,7 +93,7 @@ function card(over: Partial<BillingRailInfo> = {}): BillingRailInfo {
     status: 'active',
     hasStripeCustomer: true,
     nextChargeAt: inDays(3),
-    nextChargeAmount: 59,
+    nextChargeAmount: 49,
     card: { brand: 'visa', last4: '4242', expMonth: 12, expYear: 2030 },
     ...over,
   };
@@ -153,14 +157,17 @@ describe('tenantHealth', () => {
     expect(resolvePrimaryAction(r, h, null)?.label.key).toBe('health.action.extend');
   });
 
-  it('prices the conversion of a lapsed trial', () => {
+  it('prices the conversion of a lapsed trial, named after the plan it buys', () => {
     const r = row({ ent: ent({ planCode: 'trial', status: 'expired', entitledThrough: inDays(-1) }) });
     const h = tenantHealth(r, [branch({ entitled_through: inDays(-1) })], NOW);
-    expect(resolvePrimaryAction(r, h, 249)?.label).toEqual({
+    expect(resolvePrimaryAction(r, h, 98)?.label).toEqual({
       key: 'health.action.convertPriced',
-      values: { price: '$249' },
+      values: { plan: { plan: 'base' }, price: '$98' },
     });
-    expect(resolvePrimaryAction(r, h, null)?.label.key).toBe('health.action.convert');
+    expect(resolvePrimaryAction(r, h, null)?.label).toEqual({
+      key: 'health.action.convert',
+      values: { plan: { plan: 'base' } },
+    });
   });
 
   it('says no storefront for a tenant with no branches', () => {
@@ -181,7 +188,7 @@ describe('tenantHealth on the Stripe rail', () => {
     expect(h.clause).toEqual({ key: 'stripe.clause.renewsOn', values: { date: { date: inDays(3) } } });
     expect(h.severity).toBe(0);
     expect(h.reason).toBeNull();
-    expect(resolvePrimaryAction(r, h, 59)).toBeNull();
+    expect(resolvePrimaryAction(r, h, 49)).toBeNull();
   });
 
   it('does not promise a renewal when Stripe has no next charge scheduled', () => {
@@ -204,7 +211,7 @@ describe('tenantHealth on the Stripe rail', () => {
     expect(h.clause).toEqual({ key: 'health.clause.ends', values: { date: { date: inDays(3) } } });
     expect(h.expiringSoon).toBe(true);
     expect(h.reason).toBeNull();
-    expect(resolvePrimaryAction(r, h, 59)).toBeNull();
+    expect(resolvePrimaryAction(r, h, 49)).toBeNull();
     expect(deadlineFact(r, true)).toEqual({ label: { key: 'stripe.drawer.endsOn' }, date: inDays(3) });
   });
 
@@ -226,7 +233,7 @@ describe('tenantHealth on the Stripe rail', () => {
     expect(h.reason).toEqual([{ key: 'stripe.reason.pastDue', values: { date: { date: inDays(5) } } }]);
     // It DOES go dark on that date unless the card is paid, so it is in the expiring cohort.
     expect(h.expiringSoon).toBe(true);
-    expect(resolvePrimaryAction(r, h, 59)).toBeNull();
+    expect(resolvePrimaryAction(r, h, 49)).toBeNull();
   });
 
   it('a manual past-due store keeps the countdown', () => {
@@ -242,7 +249,7 @@ describe('tenantHealth on the Stripe rail', () => {
     expect(h.billing.label.key).toBe('health.chip.cancelling');
     expect(h.clause.key).toBe('health.clause.ends');
     expect(h.expiringSoon).toBe(true);
-    expect(resolvePrimaryAction(r, h, 59)).toBeNull();
+    expect(resolvePrimaryAction(r, h, 49)).toBeNull();
   });
 
   it('a lapsed card store says where the repair is instead of offering Extend', () => {
@@ -254,10 +261,10 @@ describe('tenantHealth on the Stripe rail', () => {
       'stripe.reason.lapsed',
       'health.reason.accessFine',
     ]);
-    expect(resolvePrimaryAction(r, h, 59)).toBeNull();
+    expect(resolvePrimaryAction(r, h, 49)).toBeNull();
     // The same store on the manual rail is offered Extend.
     const manual = row({ ent: r.ent });
-    expect(resolvePrimaryAction(manual, tenantHealth(manual, [branch({ entitled_through: inDays(-1) })], NOW), 59)?.kind).toBe(
+    expect(resolvePrimaryAction(manual, tenantHealth(manual, [branch({ entitled_through: inDays(-1) })], NOW), 49)?.kind).toBe(
       'extend',
     );
   });
@@ -265,7 +272,28 @@ describe('tenantHealth on the Stripe rail', () => {
   it('still offers Restore: platform access is ours, whatever the rail', () => {
     const r = stripeRow();
     const h = tenantHealth(r, [branch({ is_active: false })], NOW);
-    expect(resolvePrimaryAction(r, h, 59)?.kind).toBe('restore');
+    expect(resolvePrimaryAction(r, h, 49)?.kind).toBe('restore');
+  });
+});
+
+describe('the packages the dashboard buttons send', () => {
+  // docs/PACKAGING-2026-10-24.md §4.4: a selection is a plan and a seat count, nothing else.
+  // A delivery list carried into it would mean the button still decides where delivery is on.
+
+  it('converts a trial to the plan with a seat for every branch', () => {
+    const r = row({
+      ent: ent({ planCode: 'trial', status: 'expired', branchSeats: 1, branchesUsed: 2, deliveryBranchIds: ['b1', 'b2'] }),
+    });
+    expect(conversionSelection(r, 3)).toEqual({ planCode: 'base', branchSeats: 3 });
+  });
+
+  it('re-bills the plan the tenant has, never fewer seats than it holds', () => {
+    const r = row({ ent: ent({ branchSeats: 4, branchesUsed: 2, deliveryBranchIds: ['b1'] }) });
+    expect(renewalSelection(r, 1)).toEqual({ planCode: 'base', branchSeats: 4 });
+    expect(renewalSelection(row({ ent: ent({ branchSeats: 0, branchesUsed: 0 }) }), 0)).toEqual({
+      planCode: 'base',
+      branchSeats: 1,
+    });
   });
 });
 
@@ -320,7 +348,7 @@ describe('platform messages', () => {
     const h = tenantHealth(r, bs, NOW);
     produced.push(...h.lamps.map((l) => l.label), h.billing.label, h.clause, h.branchCount, h.branchQualifier);
     produced.push(...(h.reason ?? []));
-    const a = resolvePrimaryAction(r, h, 199);
+    const a = resolvePrimaryAction(r, h, 98);
     if (a) produced.push(a.label);
     const c = resolvePrimaryAction(r, h, null);
     if (c) produced.push(c.label);
@@ -392,6 +420,19 @@ describe('platform messages', () => {
     expect(
       render(en, 'en', { key: 'health.clause.paidThrough', values: { date: { date: '2026-10-07T00:00:00Z' } } }),
     ).toBe('paid through Oct 7, 2026');
+  });
+
+  it('names the plan a conversion buys by its 2026-10-24 name', () => {
+    const en = catalogue('en');
+    const r = row({ ent: ent({ planCode: 'trial', status: 'expired', entitledThrough: inDays(-1) }) });
+    const h = tenantHealth(r, [branch({ entitled_through: inDays(-1) })], NOW);
+    expect(render(en, 'en', resolvePrimaryAction(r, h, 98)!.label)).toBe('Convert to FavorNoms Plan · $98/mo');
+    expect(render(en, 'en', resolvePrimaryAction(r, h, null)!.label)).toBe('Convert to FavorNoms Plan');
+    // No message the console shows names the old plan.
+    for (const locale of ['en', 'es', 'vi', 'th']) {
+      const plans = catalogue(locale).plans as Tree;
+      expect(plans.base, locale).toContain('FavorNoms');
+    }
   });
 });
 

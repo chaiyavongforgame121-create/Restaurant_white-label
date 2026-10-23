@@ -119,7 +119,7 @@
   },
   "dispatch": {
     "maxAttempts": "Đã thử mọi tài xế — hãy tăng “Số lần điều phối tối đa” hoặc tự chọn tài xế.",
-    "notEntitled": "Gói của nhà hàng chưa bao gồm giao hàng.",
+    "notEntitled": "Chi nhánh này đang tắt giao hàng, hoặc hiện nhà hàng chưa dùng được giao hàng.",
     "notDispatchable": "Đơn giao này không còn chờ tài xế nữa.",
     "authRequired": "Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại rồi tìm tài xế.",
     "notAuthorized": "Bạn không có quyền điều tài xế cho chi nhánh này.",

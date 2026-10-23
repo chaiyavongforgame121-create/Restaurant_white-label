@@ -23,19 +23,20 @@ export function usePlatformText() {
 
   const date = (iso: string | null | undefined) => fmtDate(iso, locale);
 
+  /** A plan code as the operator reads it; an unknown code is shown as it is. */
+  const plan = (code: string): string => (PLAN_CODES.has(code) ? t(`plans.${code}`) : code);
+
   const text = (m: Msg): string => {
     if (!m.values) return t(m.key);
     const values: Record<string, string | number> = {};
     for (const [name, value] of Object.entries(m.values)) {
-      values[name] = typeof value === 'object' ? fmtDate(value.date, locale) : value;
+      values[name] =
+        typeof value !== 'object' ? value : 'plan' in value ? plan(value.plan) : fmtDate(value.date, locale);
     }
     return t(m.key, values);
   };
 
   const list = (items: string[]): string => format.list(items, { type: 'conjunction' });
-
-  /** A plan code as the operator reads it; an unknown code is shown as it is. */
-  const plan = (code: string): string => (PLAN_CODES.has(code) ? t(`plans.${code}`) : code);
 
   /** A subscription status code as the operator reads it; an unknown code is shown as it is. */
   const status = (code: string): string =>
@@ -61,9 +62,6 @@ export function platformErrorKey(
   // (D11), and "something went wrong" would send the operator to retry a write the
   // database will refuse every time.
   if (text.includes('stripe_managed')) return 'stripe.errors.managed';
-  // Hiding a branch that delivers on a card subscription would leave Stripe charging
-  // delivery for it every month (§9.6): delivery is switched off on the plan page first.
-  if (text.includes('stripe_delivery_active')) return 'stripe.errors.deliveryActive';
   if (
     code === '42501' ||
     text.includes('not_platform_admin') ||

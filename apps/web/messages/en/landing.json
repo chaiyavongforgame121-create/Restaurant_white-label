@@ -49,33 +49,29 @@
     }
   },
   "pricing": {
-    "title": "One base plan. Add what you need.",
-    "subtitle": "Pay once to start, then a flat fee per branch every month. No menu-item limits, no cap on orders.",
-    "baseName": "Base",
-    "once": "{price} once",
-    "thenMonthly": "then {price} a month",
-    "monthlyOnly": "{price} a month",
-    "baseSummary": "Everything you need to run one branch, card payment included. Your first branch is part of it.",
+    "title": "Simple pricing. One plan.",
+    "subtitle": "Every feature included.",
+    "bestValue": "Best value",
+    "perMonth": "<amount>{price}</amount> / month",
+    "perBranch": "per branch",
+    "monthlyFallback": "One flat monthly fee per branch",
     "includes": {
-      "storefront": "Branded storefront on your own domain",
-      "payments": "Card and cash payments at checkout",
-      "kitchen": "Kitchen Display, POS and counter ordering",
-      "growth": "Loyalty, promos, gift cards and reports",
-      "oneBranch": "1 branch included — add more whenever you need them"
+      "allFeatures": "All customer, admin and driver features",
+      "website": "Branded ordering website + web app",
+      "operations": "POS, kitchen display and branch management",
+      "drivers": "FavorGo driver tools",
+      "growth": "Marketing, loyalty and reports",
+      "noCommissions": "No marketplace commissions"
     },
-    "trialNote": "Free for 14 days, delivery included at every branch. No card until you decide.",
-    "addOnsTitle": "Add on when you need it",
-    "addOnPrice": "+{once} once, then +{monthly}/mo",
-    "addOnOnce": "+{price} once",
-    "addOnMonthly": "+{price}/mo",
-    "addOns": {
-      "extraBranch": {
-        "name": "Extra branch",
-        "description": "Each branch after the first, with the full feature set of your main branch."
+    "trialNote": "Free for 14 days with every feature. No card until you decide.",
+    "setup": {
+      "first": {
+        "name": "First-time setup",
+        "description": "One-time setup and onboarding."
       },
-      "delivery": {
-        "name": "Delivery",
-        "description": "Per branch, on the branches you choose: your own riders, automatic dispatch and live tracking."
+      "extraBranch": {
+        "name": "Additional branch setup",
+        "description": "Per additional branch."
       }
     }
   },

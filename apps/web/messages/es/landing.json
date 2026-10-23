@@ -49,33 +49,29 @@
     }
   },
   "pricing": {
-    "title": "Un plan base. Agrega lo que necesites.",
-    "subtitle": "Pagas una vez al empezar y luego una cuota fija por sucursal cada mes. Sin límite de platos en el menú y sin tope de pedidos.",
-    "baseName": "Base",
-    "once": "{price} una vez",
-    "thenMonthly": "y luego {price} al mes",
-    "monthlyOnly": "{price} al mes",
-    "baseSummary": "Todo lo que necesitas para operar una sucursal, con el pago con tarjeta incluido. Tu primera sucursal ya viene dentro.",
+    "title": "Precios simples. Un solo plan.",
+    "subtitle": "Todas las funciones incluidas.",
+    "bestValue": "Mejor valor",
+    "perMonth": "<amount>{price}</amount> / mes",
+    "perBranch": "por sucursal",
+    "monthlyFallback": "Una cuota mensual fija por sucursal",
     "includes": {
-      "storefront": "Tienda con tu marca en tu propio dominio",
-      "payments": "Pagos con tarjeta y en efectivo al pagar",
-      "kitchen": "Pantalla de cocina, POS y pedidos en mostrador",
-      "growth": "Puntos, promociones, tarjetas de regalo e informes",
-      "oneBranch": "1 sucursal incluida: agrega más cuando las necesites"
+      "allFeatures": "Todas las funciones para clientes, administración y repartidores",
+      "website": "Sitio web de pedidos con tu marca + app web",
+      "operations": "POS, pantalla de cocina y gestión de sucursales",
+      "drivers": "Herramientas para repartidores de FavorGo",
+      "growth": "Marketing, programa de puntos e informes",
+      "noCommissions": "Sin comisiones de marketplace"
     },
-    "trialNote": "Gratis por 14 días, con entrega a domicilio en todas las sucursales. Sin tarjeta hasta que lo decidas.",
-    "addOnsTitle": "Agrega complementos cuando los necesites",
-    "addOnPrice": "+{once} una vez y luego +{monthly}/mes",
-    "addOnOnce": "+{price} una vez",
-    "addOnMonthly": "+{price}/mes",
-    "addOns": {
-      "extraBranch": {
-        "name": "Sucursal adicional",
-        "description": "Cada sucursal después de la primera, con todas las funciones de tu sucursal principal."
+    "trialNote": "Gratis por 14 días con todas las funciones. Sin tarjeta hasta que lo decidas.",
+    "setup": {
+      "first": {
+        "name": "Configuración inicial",
+        "description": "Configuración y puesta en marcha, en un solo pago."
       },
-      "delivery": {
-        "name": "Entrega a domicilio",
-        "description": "Por sucursal, en las que tú elijas: tus propios repartidores, asignación automática y seguimiento en vivo."
+      "extraBranch": {
+        "name": "Configuración de sucursal adicional",
+        "description": "Por cada sucursal adicional."
       }
     }
   },

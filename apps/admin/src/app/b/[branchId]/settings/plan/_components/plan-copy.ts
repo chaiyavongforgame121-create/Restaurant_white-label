@@ -11,7 +11,7 @@ import {
   type PackageSelection,
   type UiLocale,
 } from '@favornoms/shared';
-import { sameSelection, selectionFromRequest, type PlanBranch } from './plan-model';
+import { sameSelection, selectionFromRequest } from './plan-model';
 
 // --- the request the merchant already sent -----------------------------------
 
@@ -44,12 +44,14 @@ export interface FiledRequest {
   rail: 'manual' | 'stripe';
 }
 
-/** The fields of a billing_requests row this page reads. */
+/**
+ * The fields of a billing_requests row this page reads. A row still carries
+ * delivery_branch_ids (always [] since 2026-10-24); the page has no use for it.
+ */
 export interface RequestRow {
   id?: string | null;
   plan_code: string;
   branch_seats: number;
-  delivery_branch_ids: string[];
   one_time_total?: number | null;
   discount_code?: string | null;
   discount_amount?: number | null;
@@ -104,16 +106,13 @@ export function showsFiledRequest(
   return activeCode === null || activeCode.toUpperCase() === filed.discountCode;
 }
 
-/** The facts for the one-sentence summary of a filed request, in the server's figures. */
-export function filedFacts(
-  filed: FiledRequest,
-  branches: PlanBranch[],
-): { branches: number; deliveryNames: string[]; monthlyTotal: number } {
-  const wanted = new Set(filed.selection.deliveryBranchIds);
+/**
+ * The facts for the one-sentence summary of a filed request — "2 branches — $98 every
+ * month" — in the server's figures.
+ */
+export function filedFacts(filed: FiledRequest): { branches: number; monthlyTotal: number } {
   return {
     branches: filed.selection.branchSeats,
-    // In the order the page lists the branches, so the sentence reads the way the page does.
-    deliveryNames: branches.filter((b) => wanted.has(b.id)).map((b) => b.name),
     monthlyTotal: filed.monthlyTotal,
   };
 }

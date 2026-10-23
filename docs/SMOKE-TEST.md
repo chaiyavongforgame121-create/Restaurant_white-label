@@ -176,6 +176,7 @@
       used/bought, monthly total, renewal date.
       **No item or orders/month bars** — those caps were removed 2026-07-25.
 - [x] Build a package: Base $199 → +Delivery $248 → +AI Suite $307 → +1 seat $406
+      (prices here are historical; current ones: `docs/PACKAGING-2026-10-24.md`)
 - [ ] Stripe dormant (no `STRIPE_SECRET_KEY`) → submitting falls back to the
       manual request queue, not an error
 - [ ] Platform admin → Subscriptions → Requests → approve → merchant is entitled

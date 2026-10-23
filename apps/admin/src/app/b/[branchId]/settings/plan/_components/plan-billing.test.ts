@@ -71,7 +71,7 @@ const MANUAL: BillingRailInfo = {
   pendingInvoiceUrl: null,
 };
 
-/** A restaurant paying by card, renewing on Oct 26 for $58. */
+/** A restaurant paying by card for two branches, renewing on Oct 26 for $98. */
 const STRIPE: BillingRailInfo = {
   ...MANUAL,
   stripeEnabled: true,
@@ -79,11 +79,11 @@ const STRIPE: BillingRailInfo = {
   status: 'active',
   hasStripeCustomer: true,
   nextChargeAt: '2026-10-26T12:00:00Z',
-  nextChargeAmount: 58,
+  nextChargeAmount: 98,
   card: { brand: 'visa', last4: '4242', expMonth: 12, expYear: 2030 },
   lastInvoice: {
-    amountPaid: 228,
-    amountDue: 228,
+    amountPaid: 288,
+    amountDue: 288,
     status: 'paid',
     paidAt: '2026-09-26T12:00:00Z',
     hostedInvoiceUrl: 'https://invoice.stripe.com/i/acct_1/test_abc',
@@ -565,20 +565,20 @@ const PAID_MANUAL = {
   status: 'active',
   trialEndsAt: null,
   entitledThrough: iso(NOW + 20 * DAY),
-  monthlyTotal: 29,
+  monthlyTotal: 49,
 };
-const LAPSED = { status: 'expired', trialEndsAt: null, entitledThrough: null, monthlyTotal: 29 };
+const LAPSED = { status: 'expired', trialEndsAt: null, entitledThrough: null, monthlyTotal: 49 };
 
 describe('time already covered is not charged twice (D5)', () => {
   it('starts a trial’s monthly fee when the trial ends, and charges only the one-time fees now', () => {
-    const c = cardCharge({ rail: 'manual', entitlements: TRIAL, oneTimeNow: 170, monthlyTotal: 29, nowMs: NOW });
-    expect(c).toEqual({ kind: 'first', now: 170, monthlyFrom: TRIAL.trialEndsAt });
-    expect(cardAction(c)).toEqual({ key: 'payNow', amount: 170 });
+    const c = cardCharge({ rail: 'manual', entitlements: TRIAL, oneTimeNow: 199, monthlyTotal: 49, nowMs: NOW });
+    expect(c).toEqual({ kind: 'first', now: 199, monthlyFrom: TRIAL.trialEndsAt });
+    expect(cardAction(c)).toEqual({ key: 'payNow', amount: 199 });
     expect(cardFootnote(c)).toEqual({ key: 'firstLater', date: TRIAL.trialEndsAt });
   });
 
   it('keeps what a manual merchant already paid for', () => {
-    const c = cardCharge({ rail: 'manual', entitlements: PAID_MANUAL, oneTimeNow: 0, monthlyTotal: 29, nowMs: NOW });
+    const c = cardCharge({ rail: 'manual', entitlements: PAID_MANUAL, oneTimeNow: 0, monthlyTotal: 49, nowMs: NOW });
     expect(c).toEqual({ kind: 'first', now: 0, monthlyFrom: PAID_MANUAL.entitledThrough });
     // Nothing today: Checkout only saves the card, and the button says when the first charge is.
     expect(cardAction(c)).toEqual({ key: 'addCard', date: PAID_MANUAL.entitledThrough });
@@ -588,8 +588,8 @@ describe('time already covered is not charged twice (D5)', () => {
     const at = (ms: number) => ({ ...TRIAL, trialEndsAt: iso(NOW + ms), entitledThrough: iso(NOW + ms) });
     const ending = at(MONTHLY_DEFER_MIN_MS);
     expect(monthlyStartsOn(ending, NOW)).toBeNull();
-    const c = cardCharge({ rail: 'manual', entitlements: ending, oneTimeNow: 170, monthlyTotal: 59, nowMs: NOW });
-    expect(c).toEqual({ kind: 'first', now: 229, monthlyFrom: null });
+    const c = cardCharge({ rail: 'manual', entitlements: ending, oneTimeNow: 199, monthlyTotal: 49, nowMs: NOW });
+    expect(c).toEqual({ kind: 'first', now: 248, monthlyFrom: null });
     expect(cardFootnote(c)).toEqual({ key: 'firstNow' });
 
     // 48 h 5 min: past Stripe's 48 hours but inside the edge's margin, so Checkout charges the
@@ -620,9 +620,9 @@ describe('time already covered is not charged twice (D5)', () => {
 
   it('charges a lapsed restaurant its first month now', () => {
     expect(coveredUntil(LAPSED)).toBeNull();
-    const c = cardCharge({ rail: 'manual', entitlements: LAPSED, oneTimeNow: 0, monthlyTotal: 29, nowMs: NOW });
-    expect(c).toEqual({ kind: 'first', now: 29, monthlyFrom: null });
-    expect(cardAction(c)).toEqual({ key: 'payNow', amount: 29 });
+    const c = cardCharge({ rail: 'manual', entitlements: LAPSED, oneTimeNow: 0, monthlyTotal: 49, nowMs: NOW });
+    expect(c).toEqual({ kind: 'first', now: 49, monthlyFrom: null });
+    expect(cardAction(c)).toEqual({ key: 'payNow', amount: 49 });
   });
 
   it('reads a trial by its end date, and falls back to the deadline when it has none', () => {
@@ -632,8 +632,8 @@ describe('time already covered is not charged twice (D5)', () => {
   });
 
   it('adds cents without floating-point drift', () => {
-    const c = cardCharge({ rail: 'manual', entitlements: LAPSED, oneTimeNow: 49.5, monthlyTotal: 29.1, nowMs: NOW });
-    expect(c.now).toBe(78.6);
+    const c = cardCharge({ rail: 'manual', entitlements: LAPSED, oneTimeNow: 49.5, monthlyTotal: 49.1, nowMs: NOW });
+    expect(c.now).toBe(98.6);
   });
 });
 
@@ -682,25 +682,25 @@ describe('the page and the edge agree on when the first monthly charge is (UIM-7
 });
 
 describe('a restaurant already paying by card is charged on the card on file (D7)', () => {
-  const onCard = { ...PAID_MANUAL, monthlyTotal: 58 };
+  const onCard = { ...PAID_MANUAL, monthlyTotal: 98 };
 
   it('charges the one-time fees now and says a monthly difference is prorated', () => {
-    const c = cardCharge({ rail: 'stripe', entitlements: onCard, oneTimeNow: 70, monthlyTotal: 87, nowMs: NOW });
-    expect(c).toEqual({ kind: 'change', now: 70, monthlyChanges: true });
-    expect(cardAction(c)).toEqual({ key: 'payNow', amount: 70 });
+    const c = cardCharge({ rail: 'stripe', entitlements: onCard, oneTimeNow: 89, monthlyTotal: 147, nowMs: NOW });
+    expect(c).toEqual({ kind: 'change', now: 89, monthlyChanges: true });
+    expect(cardAction(c)).toEqual({ key: 'payNow', amount: 89 });
     expect(cardFootnote(c)).toEqual({ key: 'change' });
   });
 
   it('never adds a month the subscription already bills', () => {
     // The trial/paid-through rule is for the first purchase only: a card-rail change keeps its
     // period, and the month is on the subscription already.
-    const c = cardCharge({ rail: 'stripe', entitlements: { ...onCard, entitledThrough: iso(NOW + DAY) }, oneTimeNow: 0, monthlyTotal: 29, nowMs: NOW });
+    const c = cardCharge({ rail: 'stripe', entitlements: { ...onCard, entitledThrough: iso(NOW + DAY) }, oneTimeNow: 0, monthlyTotal: 49, nowMs: NOW });
     expect(c).toEqual({ kind: 'change', now: 0, monthlyChanges: true });
     expect(cardAction(c)).toEqual({ key: 'confirmChange' });
   });
 
   it('knows when the monthly fee does not move', () => {
-    const c = cardCharge({ rail: 'stripe', entitlements: onCard, oneTimeNow: 0, monthlyTotal: 58, nowMs: NOW });
+    const c = cardCharge({ rail: 'stripe', entitlements: onCard, oneTimeNow: 0, monthlyTotal: 98, nowMs: NOW });
     expect(c).toEqual({ kind: 'change', now: 0, monthlyChanges: false });
   });
 });
@@ -748,7 +748,7 @@ describe('the card rail’s banners', () => {
 
 describe('the Billing card', () => {
   it('shows the next charge, or the end date once cancelled', () => {
-    expect(nextCharge(STRIPE)).toEqual({ kind: 'charge', at: STRIPE.nextChargeAt, amount: 58 });
+    expect(nextCharge(STRIPE)).toEqual({ kind: 'charge', at: STRIPE.nextChargeAt, amount: 98 });
     expect(nextCharge({ ...STRIPE, cancelAtPeriodEnd: true, nextChargeAt: null, cancelAt: '2026-10-26T12:00:00Z' })).toEqual({
       kind: 'cancels',
       on: '2026-10-26T12:00:00Z',
@@ -786,8 +786,8 @@ describe('the Billing card', () => {
 
   it('shows what an invoice took, or what is still owed on it', () => {
     const paid = STRIPE.lastInvoice!;
-    expect(invoiceAmount(paid)).toBe(228);
-    expect(invoiceAmount({ ...paid, status: 'open', amountPaid: 0, amountDue: 58 })).toBe(58);
+    expect(invoiceAmount(paid)).toBe(288);
+    expect(invoiceAmount({ ...paid, status: 'open', amountPaid: 0, amountDue: 98 })).toBe(98);
   });
 });
 

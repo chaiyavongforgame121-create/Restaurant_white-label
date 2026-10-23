@@ -8,10 +8,17 @@
 //  4. Admin reviews + edits → bulk insert via supabase client.
 //
 // We DO NOT auto-insert. The admin must confirm.
+//
+// No screen calls this today: the admin's menu import page is the spreadsheet importer
+// alone, which never touches this function. It stays deployed behind ai_menu_import.
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2';
-import { billingInactiveBody, loadEntitlements } from '../_shared/entitlements.ts';
+import {
+  edgeHasFeature,
+  featureNotEntitledBody,
+  loadEntitlements,
+} from '../_shared/entitlements.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -67,11 +74,15 @@ Deno.serve(async (req) => {
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
-  // Billing gate only — AI menu import ships with Base, so there is no
-  // ai_menu_import feature check here (owner decision 2, 2026-07-25). What a
-  // suspended account cannot do is spend our Anthropic budget.
+  // AI menu import is a withdrawn feature (docs/PACKAGING-2026-10-24.md §2): no
+  // product grants ai_menu_import, so this answers 403 for every restaurant unless a
+  // platform admin switches it on. It used to check only that the restaurant was
+  // paid up, which let any paid-up restaurant spend our Anthropic budget by calling
+  // it directly after its screen was gone. Paid up AND granted, as the AI functions.
   const ent = await loadEntitlements(admin, { branchId: body.branch_id });
-  if (!ent.entitled) return cors(json(billingInactiveBody('ai_menu_import'), 402));
+  if (!edgeHasFeature(ent, 'ai_menu_import')) {
+    return cors(json(featureNotEntitledBody('ai_menu_import'), 403));
+  }
 
   // Rate limit: 20 imports/hour per branch
   const { data: rl } = await admin.rpc('check_rate_limit', {

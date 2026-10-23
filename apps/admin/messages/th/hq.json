@@ -56,7 +56,11 @@
     "title": "ต้นทุนที่เราเห็น",
     "driverPayouts": "การจ่ายเงินคนขับ",
     "subscription": "ค่าสมาชิก FavorNoms",
-    "noInvoicesWithPlan": "ยังไม่มีใบแจ้งหนี้ อัตราปัจจุบันของคุณคือ <strong>{rate}/เดือน</strong> ในแพ็กเกจ <planName>{plan}</planName>",
+    "noInvoicesWithPlan": "ยังไม่มีใบแจ้งหนี้ อัตราปัจจุบันของคุณคือ <strong>{rate}/เดือน</strong> ({plan})",
+    "planNames": {
+      "base": "แพ็กเกจ FavorNoms",
+      "trial": "ช่วงทดลองใช้ฟรี"
+    },
     "noInvoices": "ยังไม่มีใบแจ้งหนี้ อัตราปัจจุบันของคุณคือ <strong>{rate}/เดือน</strong>",
     "totalKnown": "รวมต้นทุนที่ทราบ",
     "afterCosts": "ยอดขายหลังหักต้นทุน",

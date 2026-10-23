@@ -3,7 +3,7 @@
     "title": "Preferencias",
     "subtitle": "Configuración de la cuenta y facturación",
     "planTitle": "Plan y facturación",
-    "planDescription": "Consulta tu plan, el uso y las opciones para ampliarlo.",
+    "planDescription": "Consulta tu plan, lo que pagas y agrega sucursales.",
     "languageTitle": "Idioma",
     "languageDescription": "El idioma del panel de gestión en este dispositivo. Los platos y los nombres se muestran tal como los escribiste.",
     "themeTitle": "Tema",
@@ -18,7 +18,7 @@
       "inactiveTitle": "El paquete de tu restaurante está inactivo: habla con el propietario",
       "lockedTitle": "Solo el propietario del restaurante puede cambiar el paquete",
       "inactiveBody": "La tienda en línea y el panel de gestión de {branch} están en pausa hasta que el propietario del restaurante elija un paquete. No se borró nada y tu trabajo vuelve en cuanto se active de nuevo.",
-      "lockedBody": "El paquete de {branch} lo gestiona el propietario del restaurante. Pídeselo si necesitas una función que no está activada."
+      "lockedBody": "El paquete de {branch} lo gestiona el propietario del restaurante. Todas las funciones ya están incluidas; pídeselo si necesitas otra sucursal."
     },
     "replaceDialog": {
       "title": "¿Reemplazar tu solicitud pendiente?",
@@ -50,38 +50,29 @@
       "noPlan": "Todavía sin paquete",
       "branches": "Sucursales",
       "branchesValue": "{used} abiertas · {seats} pagadas",
-      "delivery": "Entrega a domicilio",
-      "deliveryNone": "Ninguna sucursal entrega todavía",
-      "deliveryTrial": "Todas las sucursales, gratis hasta que termine la prueba",
       "nextPayment": "Próximo pago",
       "trialEnds": "La prueba termina",
       "noNextPayment": "Sin fecha prevista",
-      "includedTitle": "En todos los paquetes"
+      "includedTitle": "Incluido en todas las sucursales"
     },
     "base": {
-      "name": "Base",
+      "name": "Plan FavorNoms",
       "included": {
-        "cardPayment": "Pago con tarjeta al pagar",
-        "onlineOrdering": "Pedidos en línea y QR",
-        "reportsLoyalty": "Informes y fidelidad",
-        "kitchenCounter": "Pantalla de cocina y mostrador",
-        "oneBranch": "1 sucursal incluida"
+        "allFeatures": "Todas las funciones para clientes, administración y repartidores",
+        "website": "Sitio web de pedidos con tu marca + app web",
+        "operations": "POS, pantalla de cocina y gestión de sucursales",
+        "drivers": "Herramientas para repartidores de FavorGo (entrega a domicilio)",
+        "growth": "Marketing, programa de puntos e informes",
+        "noCommissions": "Sin comisiones de marketplace"
       }
     },
     "branches": {
       "title": "Tus sucursales",
-      "subtitle": "Cada sucursal cuesta {price} al mes. Activa Entrega a domicilio en las sucursales que entregan.",
-      "subtitleNoPrice": "Activa Entrega a domicilio en las sucursales que entregan.",
+      "subtitle": "Cada sucursal cuesta {price} al mes, con todas las funciones incluidas.",
+      "subtitleNoPrice": "Cada sucursal tiene todas las funciones incluidas.",
       "empty": "Este restaurante todavía no tiene ninguna sucursal activa.",
-      "delivery": "Entrega a domicilio",
-      "switchLabel": "Entrega a domicilio en {branch}",
       "eachMonth": "{price}/mes",
-      "costOnceAndMonthly": "+{once} una vez y luego +{monthly}/mes",
-      "costMonthly": "+{monthly}/mes",
-      "alreadyUnlocked": "Ya desbloqueada: no hay nada más que pagar una vez por esta sucursal.",
-      "offWarning": "{branch} dejará de ofrecer entrega a domicilio en su tienda en línea.",
-      "dropsTo": "Esta sucursal baja a {price}/mes.",
-      "trialNote": "Todas las sucursales entregan gratis hasta que termine tu prueba. Lo que dejes activado aquí es lo que pagarás después."
+      "trialNote": "Todas las sucursales son gratis hasta que termine tu prueba. Estos son los precios mensuales a partir de entonces."
     },
     "seats": {
       "title": "Agregar una sucursal",
@@ -101,15 +92,15 @@
       "onceCode": "Código {code}",
       "onceAwaiting": "Todavía no se ha cobrado nada. Lo pagarás cuando el equipo de FavorNoms active tu solicitud.",
       "monthlyTitle": "Y luego cada mes",
-      "withDelivery": "{branch} + entrega a domicilio",
       "unusedSeats": "{count, plural, one {# sucursal sin crear} other {# sucursales sin crear}}",
-      "forBranch": "{product} — {branch}",
+      "setup": {
+        "first": "Configuración inicial",
+        "extraBranch": "Configuración de sucursal adicional"
+      },
       "total": "Total",
       "summary": {
         "branches": "{count, plural, one {# sucursal} other {# sucursales}}",
-        "delivery": "entrega a domicilio en {names}",
-        "noDelivery": "sin entrega a domicilio",
-        "line": "{branches}, {delivery}: {price} al mes.",
+        "line": "{branches}: {price} al mes.",
         "plusOnce": "Más {price} una sola vez."
       },
       "trialNote": "No se cobra nada mientras dura tu prueba gratuita. Esta es tu primera factura cuando confirmes.",
@@ -130,7 +121,7 @@
       "active": "Prueba gratuita activa",
       "endsToday": "Tu prueba gratuita termina hoy",
       "daysLeft": "{days, plural, one {Te queda # día de prueba gratuita} other {Te quedan # días de prueba gratuita}}",
-      "body": "Todo está desbloqueado, con entrega a domicilio en todas las sucursales. Elige abajo lo que quieres conservar; no necesitas tarjeta hasta que termine la prueba."
+      "body": "Todo está desbloqueado, con entrega a domicilio en todas las sucursales. No necesitas tarjeta hasta que termine la prueba; confirma tu paquete abajo cuando quieras."
     },
     "suspended": {
       "title": "Tu cuenta no está activa",

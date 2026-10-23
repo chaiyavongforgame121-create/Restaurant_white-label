@@ -43,9 +43,10 @@
 
 ## Billing operations
 
-Packaging (2026-07-25): **Base $199** (card payment + AI menu import, 1 branch)
-· **+$99** per extra branch · **+$49** Delivery · **+$59** AI Suite
-· **$0 / 14-day trial** with everything and 1 branch.
+Packaging (2026-10-24, `docs/PACKAGING-2026-10-24.md`): **one plan, every feature
+included** · **$49 a month per branch** · **$199** once for the first branch,
+**$89** once per additional branch · **$0 / 14-day trial** with everything and 1 branch.
+Delivery is not sold: each branch has a free switch in Branch settings, on by default.
 
 ### How entitlement actually works
 
@@ -68,7 +69,7 @@ Error codes surfaced to the UI:
 | Raised | Meaning |
 |--------|---------|
 | `billing_inactive:<scope>` | nothing is paid for → 402 |
-| `feature_not_entitled:<key>` | paid, but not in the package → 403 |
+| `feature_not_entitled:<key>` | paid, but the feature is off → 403. `delivery`: switched off at that branch (Branch settings), or by a platform override; the AI keys are withdrawn |
 | `plan_limit_exceeded:branches:<used>/<limit>` | out of branch seats → buy a seat first |
 
 ### "A merchant paid but is still suspended"
@@ -82,10 +83,12 @@ Error codes surfaced to the UI:
 4. Manual override (the live path while Stripe is dormant):
    ```sql
    select public.billing_set_package(
-     p_restaurant_id => '<id>', p_plan_code => 'base',
-     p_addons => array['delivery','ai_suite'], p_branch_seats => 1,
+     p_restaurant_id => '<id>', p_plan_code => 'base', p_branch_seats => 1,
      p_status => 'active', p_period_end => now() + interval '1 month');
    ```
+   `p_branch_seats` is the number of paid branches. There is no delivery or add-on
+   argument to set (`p_delivery_branch_ids` is ignored); a branch that does not
+   deliver has its switch off in Branch settings (`set_branch_delivery`).
 
 ### "Merchant can't create a branch"
 Expected when branch seats are exhausted — extra branches are **pay-first**.

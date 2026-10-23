@@ -12,10 +12,13 @@ import {
 import { Badge, Card } from '@favornoms/ui';
 import { PlatformAccessDenied, PlatformNav } from '../_components/platform-nav';
 
+// Plan codes with a name in platform.plans.*.
+const PLAN_LABELS = new Set(['base', 'trial', 'none']);
+
 interface Summary {
   mrr: number;
   arr: number;
-  /** What today's trials would add per month if every one converted at Base. */
+  /** What today's trials would add per month if every one converted to the FavorNoms Plan. */
   trial_pipeline_mrr: number;
   active_subs: number;
   trialing_subs: number;
@@ -71,7 +74,11 @@ export default async function PlatformReportsPage() {
 
   const { data, error } = await supabase.rpc('platform_financial_summary');
   if (error) return <PlatformAccessDenied />;
-  const [t, rawLocale] = await Promise.all([getTranslations('platformBilling'), getLocale()]);
+  const [t, tp, rawLocale] = await Promise.all([
+    getTranslations('platformBilling'),
+    getTranslations('platform'),
+    getLocale(),
+  ]);
   const locale = isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE;
   const s = (data ?? {}) as unknown as Summary;
   const mrr = Number(s.mrr ?? 0);
@@ -154,7 +161,9 @@ export default async function PlatformReportsPage() {
             {(s.by_plan ?? []).map((p) => (
               <MrrBar
                 key={p.plan_code}
-                label={p.plan_code === 'base' ? 'Base' : p.plan_code}
+                // The plan's name in the reader's language (platform.plans.*), the same label the
+                // rest of the console uses; a code it does not know is shown as it is.
+                label={PLAN_LABELS.has(p.plan_code) ? tp(`plans.${p.plan_code}`) : p.plan_code}
                 detail={barDetail(p.count, Number(p.mrr))}
                 value={Number(p.mrr)}
                 total={mrr}
@@ -163,8 +172,8 @@ export default async function PlatformReportsPage() {
           </div>
         </Card>
 
-        {/* MRR by add-on — how much of the take is Delivery / AI Suite / seats,
-            which is what decides where the next build effort goes. */}
+        {/* MRR by add-on — since 2026-10-24 the only add-on sold is the additional
+            branch, so this is how much of the take comes from multi-branch tenants. */}
         <Card className="p-5">
           <h2 className="font-display text-lg font-semibold">{t('reports.mrrByAddon')}</h2>
           <div className="mt-3 space-y-2">

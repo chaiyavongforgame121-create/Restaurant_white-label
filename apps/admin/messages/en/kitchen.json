@@ -154,7 +154,7 @@
   },
   "dispatch": {
     "maxAttempts": "Tried every rider — raise “Max dispatch attempts” or assign one by hand.",
-    "notEntitled": "Delivery isn’t included in this restaurant’s plan.",
+    "notEntitled": "Delivery is switched off at this branch, or isn't available for the restaurant right now.",
     "notDispatchable": "This delivery can’t be dispatched any more.",
     "failed": "Couldn’t search for a rider. Try again.",
     "noneAvailable": "No rider available right now.",

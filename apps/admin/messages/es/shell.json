@@ -98,17 +98,6 @@
     "kitchenStillWorks": "Los pedidos ya realizados se pueden seguir preparando y completando desde la pantalla de cocina.",
     "goToBilling": "Ir a facturación"
   },
-  "addon": {
-    "pricePerMonth": "+${price}<unit>/mes</unit>",
-    "addToPackage": "Agregar a mi paquete",
-    "priceOnceThenMonthly": "${once} una sola vez y luego +${monthly}/mes por esta sucursal",
-    "priceOnce": "${once} una sola vez"
-  },
-  "lockedFeature": {
-    "comingSoon": "Próximamente",
-    "notInPackage": "{feature} forma parte del complemento {addon} y no está incluido en tu paquete actual.",
-    "viewPackages": "Ver paquetes"
-  },
   "upload": {
     "noCanvas": "Tu navegador no pudo procesar la imagen (no admite canvas)."
   },

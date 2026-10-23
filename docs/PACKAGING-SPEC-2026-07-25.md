@@ -1,5 +1,10 @@
 # Packaging build spec — 2026-07-25
 
+> **Superseded** by [PACKAGING-2026-09-23.md](PACKAGING-2026-09-23.md), then by
+> [PACKAGING-2026-10-24.md](PACKAGING-2026-10-24.md) (current: one plan, $49 a month per branch). History only; every
+> price in this file is dead. The architecture in §1 (catalog → subscription → resolved entitlements, deadline,
+> BEFORE INSERT gates) still holds.
+
 Companion to [PACKAGING-2026-07-25.md](PACKAGING-2026-07-25.md) (owner decisions + recon). This file is the build document.
 
 ---

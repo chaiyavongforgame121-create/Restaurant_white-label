@@ -163,8 +163,8 @@ interface Props {
   /** `delivery` entitlement — default false so a missing prop cannot sell it. */
   canDeliver?: boolean;
   /**
-   * This branch sells delivery at all (storefront_status.delivery_entitled, per branch
-   * since docs/PACKAGING-2026-09-23.md §2).
+   * This branch delivers at all (storefront_status.delivery_entitled, per branch: its
+   * delivery switch, docs/PACKAGING-2026-10-24.md §3).
    *
    * Words only — canDeliver alone decides whether delivery can be chosen. Defaults true so
    * a missing prop says "not right now" instead of declaring the branch delivery-free.
@@ -504,7 +504,7 @@ export function CheckoutView({
   const outOfRange =
     channel === 'delivery' && quote != null && !quote.deliverable && quote.reason === 'out_of_range';
   // THIS branch does not deliver — quote_delivery asks branch_has_feature, which is per
-  // branch (docs/PACKAGING-2026-09-23.md §2). place-order answers 403 for it, so quoting
+  // branch (docs/PACKAGING-2026-10-24.md §3). place-order answers 403 for it, so quoting
   // ANY fee would be selling something that cannot be bought; the flat-fee fallback below
   // is for a missing map pin, not for a branch that does not deliver.
   const deliveryNotSold =
@@ -547,7 +547,7 @@ export function CheckoutView({
     paymentMatrix.asap.cash || paymentMatrix.asap.card || paymentMatrix.asap.transfer;
   const scheduledPayable =
     paymentMatrix.scheduled.cash || paymentMatrix.scheduled.card || paymentMatrix.scheduled.transfer;
-  // What each way to order needs. Schedule Delivery: the add-on and advance orders (canDeliver,
+  // What each way to order needs. Schedule Delivery: a delivering branch and advance orders (canDeliver,
   // from canScheduleDelivery) plus a payment method for booked orders; whether any slot is left
   // is known once the booking policy has loaded. Pickup: a payment method for orders placed now,
   // and the branch open at this moment.

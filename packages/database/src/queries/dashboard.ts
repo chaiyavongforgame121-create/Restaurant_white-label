@@ -197,7 +197,8 @@ export interface DashboardScope {
   canRefund: boolean;
   canManageInventory: boolean;
   canManageDrivers: boolean;
-  /** The `delivery` add-on. Without it there is no delivery board to link to. */
+  /** This branch delivers (paid up, and its delivery switch is on). Without it there is no
+   *  delivery board to link to. */
   deliveryEnabled: boolean;
   /** now, injected so a render and its numbers agree on one instant. */
   now: number;

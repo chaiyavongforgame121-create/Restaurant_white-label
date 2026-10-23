@@ -174,8 +174,8 @@ export interface CartState {
   channel: OrderChannel | null;
   setChannel: (channel: OrderChannel) => void;
   /**
-   * Drop a persisted choice that no longer applies — a branch that has since lost the
-   * delivery add-on, or dine-in on a device that is not sitting at a table. Clearing re-opens
+   * Drop a persisted choice that no longer applies — a branch that has since stopped
+   * delivering, or dine-in on a device that is not sitting at a table. Clearing re-opens
    * the gate rather than silently substituting a channel the diner did not pick.
    *
    * `hasTablePin` must be the SETTLED answer: call this only once the table-pin
@@ -446,8 +446,8 @@ export function createCartStore(branchId: string) {
             set({ channel: null });
             return;
           }
-          // Delivery is a paid add-on and can lapse between visits. Re-ask rather
-          // than downgrading to pickup behind the diner's back.
+          // Delivery can stop at a branch between visits (its delivery switch turned off, or
+          // the restaurant lapsed). Re-ask rather than downgrading to pickup behind the diner's back.
           if (!canDeliver && channel === 'delivery') set({ channel: null });
         },
         setNotes: (notes) => set({ notes }),

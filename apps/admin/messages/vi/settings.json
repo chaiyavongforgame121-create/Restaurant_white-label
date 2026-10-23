@@ -3,7 +3,7 @@
     "title": "Cài đặt chung",
     "subtitle": "Cài đặt tài khoản và thanh toán",
     "planTitle": "Gói và thanh toán",
-    "planDescription": "Xem gói hiện tại, mức sử dụng và các lựa chọn nâng cấp.",
+    "planDescription": "Xem gói của bạn, số tiền phải trả và thêm chi nhánh.",
     "languageTitle": "Ngôn ngữ",
     "languageDescription": "Ngôn ngữ của trang quản lý trên thiết bị này. Tên món và các tên khác vẫn giữ nguyên như bạn đã nhập.",
     "themeTitle": "Giao diện",
@@ -18,7 +18,7 @@
       "inactiveTitle": "Gói của nhà hàng đang ngừng hoạt động — hãy liên hệ chủ sở hữu",
       "lockedTitle": "Chỉ chủ nhà hàng mới có thể đổi gói",
       "inactiveBody": "Trang đặt hàng và trang quản lý của {branch} đang tạm dừng cho đến khi chủ nhà hàng chọn một gói. Không có dữ liệu nào bị xóa, mọi thứ sẽ trở lại ngay khi gói hoạt động trở lại.",
-      "lockedBody": "Gói của {branch} do chủ nhà hàng quản lý. Hãy liên hệ họ nếu bạn cần một tính năng chưa được bật."
+      "lockedBody": "Gói của {branch} do chủ nhà hàng quản lý. Mọi tính năng đều đã được bao gồm — hãy liên hệ họ nếu bạn cần thêm chi nhánh."
     },
     "replaceDialog": {
       "title": "Thay thế yêu cầu đang chờ?",
@@ -50,38 +50,29 @@
       "noPlan": "Chưa có gói",
       "branches": "Chi nhánh",
       "branchesValue": "{used} đang mở · {seats} đã trả phí",
-      "delivery": "Giao hàng",
-      "deliveryNone": "Chưa chi nhánh nào giao hàng",
-      "deliveryTrial": "Mọi chi nhánh, miễn phí đến hết thời gian dùng thử",
       "nextPayment": "Lần thanh toán tới",
       "trialEnds": "Dùng thử kết thúc",
       "noNextPayment": "Chưa có lịch",
-      "includedTitle": "Có trong mọi gói"
+      "includedTitle": "Có ở mọi chi nhánh"
     },
     "base": {
-      "name": "Cơ bản",
+      "name": "Gói FavorNoms",
       "included": {
-        "cardPayment": "Thanh toán bằng thẻ khi đặt hàng",
-        "onlineOrdering": "Đặt hàng trực tuyến và QR",
-        "reportsLoyalty": "Báo cáo và tích điểm",
-        "kitchenCounter": "Màn hình bếp và quầy",
-        "oneBranch": "Bao gồm 1 chi nhánh"
+        "allFeatures": "Mọi tính năng cho khách hàng, quản trị và tài xế",
+        "website": "Trang web đặt món mang thương hiệu + ứng dụng web",
+        "operations": "POS, màn hình bếp và quản lý chi nhánh",
+        "drivers": "Công cụ cho tài xế FavorGo (giao hàng)",
+        "growth": "Tiếp thị, tích điểm và báo cáo",
+        "noCommissions": "Không thu hoa hồng như các sàn đặt món"
       }
     },
     "branches": {
       "title": "Chi nhánh của bạn",
-      "subtitle": "Mỗi chi nhánh là {price} một tháng. Hãy bật Giao hàng cho những chi nhánh có giao hàng.",
-      "subtitleNoPrice": "Hãy bật Giao hàng cho những chi nhánh có giao hàng.",
+      "subtitle": "Mỗi chi nhánh là {price} một tháng, bao gồm mọi tính năng.",
+      "subtitleNoPrice": "Mỗi chi nhánh đều có đủ mọi tính năng.",
       "empty": "Nhà hàng này chưa có chi nhánh nào đang hoạt động.",
-      "delivery": "Giao hàng",
-      "switchLabel": "Giao hàng tại {branch}",
       "eachMonth": "{price}/tháng",
-      "costOnceAndMonthly": "+{once} một lần, rồi +{monthly}/tháng",
-      "costMonthly": "+{monthly}/tháng",
-      "alreadyUnlocked": "Đã mở khóa trước đây — chi nhánh này không phải trả thêm khoản một lần nào.",
-      "offWarning": "{branch} sẽ ngừng nhận giao hàng trên trang đặt hàng.",
-      "dropsTo": "Chi nhánh này giảm còn {price}/tháng.",
-      "trialNote": "Mọi chi nhánh đều giao hàng miễn phí đến hết thời gian dùng thử. Những chi nhánh bạn để bật ở đây là những chi nhánh bạn sẽ trả phí sau đó."
+      "trialNote": "Mọi chi nhánh đều miễn phí đến hết thời gian dùng thử. Đây là giá hằng tháng sau đó."
     },
     "seats": {
       "title": "Thêm chi nhánh",
@@ -101,15 +92,15 @@
       "onceCode": "Mã {code}",
       "onceAwaiting": "Chưa có khoản nào bị tính phí. Bạn sẽ trả khoản này khi đội ngũ FavorNoms kích hoạt yêu cầu của bạn.",
       "monthlyTitle": "Rồi mỗi tháng",
-      "withDelivery": "{branch} + giao hàng",
       "unusedSeats": "{count, plural, other {# chi nhánh chưa tạo}}",
-      "forBranch": "{product} — {branch}",
+      "setup": {
+        "first": "Phí thiết lập ban đầu",
+        "extraBranch": "Phí thiết lập chi nhánh thêm"
+      },
       "total": "Tổng cộng",
       "summary": {
         "branches": "{count, plural, other {# chi nhánh}}",
-        "delivery": "giao hàng tại {names}",
-        "noDelivery": "không giao hàng",
-        "line": "{branches}, {delivery} — {price} mỗi tháng.",
+        "line": "{branches} — {price} mỗi tháng.",
         "plusOnce": "Cộng thêm {price} trả một lần."
       },
       "trialNote": "Không bị tính phí trong thời gian dùng thử miễn phí. Đây là hóa đơn đầu tiên khi bạn xác nhận.",
@@ -130,7 +121,7 @@
       "active": "Đang dùng thử miễn phí",
       "endsToday": "Thời gian dùng thử miễn phí kết thúc hôm nay",
       "daysLeft": "{days, plural, other {Còn # ngày dùng thử miễn phí}}",
-      "body": "Mọi tính năng đều đã mở, gồm cả giao hàng ở mọi chi nhánh. Hãy chọn bên dưới những gì bạn muốn giữ — chưa cần thẻ cho đến khi hết dùng thử."
+      "body": "Mọi tính năng đều đã mở, gồm cả giao hàng ở mọi chi nhánh. Chưa cần thẻ cho đến khi hết dùng thử — hãy xác nhận gói bên dưới khi bạn sẵn sàng."
     },
     "suspended": {
       "title": "Tài khoản của bạn chưa hoạt động",

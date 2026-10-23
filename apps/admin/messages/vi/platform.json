@@ -65,7 +65,7 @@
     "reactivateFailed": "Không thể kích hoạt lại gói đăng ký."
   },
   "plans": {
-    "base": "Cơ bản",
+    "base": "FavorNoms",
     "trial": "Dùng thử",
     "none": "Chưa có gói"
   },
@@ -138,8 +138,8 @@
     "action": {
       "restore": "Khôi phục",
       "extend": "Gia hạn 1 tháng",
-      "convert": "Chuyển sang gói Cơ bản",
-      "convertPriced": "Chuyển sang gói Cơ bản · {price}/tháng"
+      "convert": "Chuyển sang gói {plan}",
+      "convertPriced": "Chuyển sang gói {plan} · {price}/tháng"
     },
     "verdict": {
       "label": {
@@ -216,7 +216,7 @@
       "lapsed": "Đã hết hạn",
       "seats": "Suất chi nhánh",
       "overQuota": "vượt hạn mức — chưa bị chặn, đang tính phí thiếu",
-      "noDelivery": "Gói Cơ bản không gồm giao hàng — bộ lọc loại đơn sẽ ẩn giao hàng và đơn giao hàng bị từ chối.",
+      "deliveryOff": "Giao hàng đang tắt cho toàn bộ nhà hàng: công tắc tính năng của nhà hàng (Gói đăng ký → Bật/tắt tính năng) hoặc gói của nhà hàng không gồm giao hàng, nên không chi nhánh nào nhận đơn giao hàng, bất kể công tắc giao hàng riêng của từng chi nhánh.",
       "dormant": "Đã cấp, không hoạt động khi chưa thanh toán"
     }
   },
@@ -261,8 +261,7 @@
       "lapsed": "Cửa hàng này thanh toán bằng thẻ qua Stripe nên ở đây không có nút Gia hạn — hãy mở trên Stripe để xem vì sao chưa nhận được tiền."
     },
     "errors": {
-      "managed": "Nhà hàng này thanh toán bằng thẻ qua Stripe nên gói chỉ thay đổi được qua Stripe. Chưa có gì thay đổi.",
-      "deliveryActive": "Một chi nhánh đang giao hàng được tính phí trong gói đăng ký trả bằng thẻ của nhà hàng này, nên Stripe sẽ tiếp tục thu phí giao hàng cho chi nhánh đó. Người bán cần tắt giao hàng cho chi nhánh đó trên trang gói của mình trước (việc này cập nhật Stripe). Chưa có gì thay đổi."
+      "managed": "Nhà hàng này thanh toán bằng thẻ qua Stripe nên gói chỉ thay đổi được qua Stripe. Chưa có gì thay đổi."
     },
     "links": {
       "customer": "Khách hàng trên Stripe",

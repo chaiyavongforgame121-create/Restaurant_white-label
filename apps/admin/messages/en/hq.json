@@ -56,7 +56,11 @@
     "title": "Costs we can see",
     "driverPayouts": "Driver payouts",
     "subscription": "FavorNoms subscription",
-    "noInvoicesWithPlan": "No invoices recorded yet. Your current rate is <strong>{rate}/month</strong> on the <planName>{plan}</planName> plan.",
+    "noInvoicesWithPlan": "No invoices recorded yet. Your current rate is <strong>{rate}/month</strong> on the {plan}.",
+    "planNames": {
+      "base": "FavorNoms Plan",
+      "trial": "free trial"
+    },
     "noInvoices": "No invoices recorded yet. Your current rate is <strong>{rate}/month</strong>.",
     "totalKnown": "Total known costs",
     "afterCosts": "Revenue after them",

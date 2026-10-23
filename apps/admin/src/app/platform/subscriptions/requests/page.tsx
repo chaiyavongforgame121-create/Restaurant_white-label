@@ -10,7 +10,6 @@ import {
   type RestaurantSubscriptionRow,
 } from '@favornoms/database/queries';
 import { PlatformAccessDenied } from '../../_components/platform-nav';
-import type { PlatformBranchLite } from '../../_components/platform-billing';
 import { RequestsView } from './_components/requests-view';
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -34,13 +33,14 @@ export default async function BillingRequestsPage({ searchParams }: Props) {
   // An explicit empty string means "all"; absent means the default queue.
   const filter = status === undefined ? 'pending' : status === '' ? null : status;
   // The current package is loaded next to each request because approving REPLACES
-  // it: decide_billing_request deletes every line item the request does not name,
-  // and a card that showed only the request let an old Base-only request strip
-  // Delivery and AI Suite from a store that was paying for both.
+  // it: decide_billing_request rewrites the line items to the request's plan and seat
+  // count and restarts the month, so a card that showed only the request could not
+  // say that approving takes branch seats away or shortens what is already paid for.
   //
-  // Inactive products are included: billing_apply_selection does not check
-  // is_active, so an add-on retired from the catalog is still applied and charged
-  // on approval, and the diff has to price it the same way.
+  // Inactive products are read too, but only so a request naming a withdrawn product
+  // still shows its name. Nothing withdrawn is ever priced: the card prices from the
+  // active products alone (sellableCatalog), so the withdrawn Delivery row can never
+  // add money to a total.
   const [requests, subscriptions, catalog] = await Promise.all([
     listBillingRequests(supabase, filter),
     listRestaurantSubscriptions(supabase),
@@ -53,26 +53,11 @@ export default async function BillingRequestsPage({ searchParams }: Props) {
     if (wanted.has(row.restaurant_id)) packages[row.restaurant_id] = row;
   }
 
-  // Delivery is per branch, so a request asks for delivery at particular branches.
-  // Without their names the card can only say "delivery × 2", which is exactly the
-  // sentence an operator cannot act on. Hidden branches are included: a request may
-  // legitimately name one, and leaving it unnamed would read as a deleted branch.
-  const branches: Record<string, PlatformBranchLite[]> = {};
-  const { data: branchRows } = await supabase
-    .from('branches')
-    .select('id, restaurant_id, name, is_active')
-    .in('restaurant_id', [...wanted])
-    .order('created_at', { ascending: true });
-  for (const b of branchRows ?? []) {
-    (branches[b.restaurant_id] ??= []).push({ id: b.id, name: b.name, isActive: b.is_active });
-  }
-
   return (
     <RequestsView
       requests={requests}
       status={status ?? 'pending'}
       packages={packages}
-      branches={branches}
       catalog={catalog}
       nowMs={Date.now()}
       // The platform switch rides on every row's `billing` (it is one setting), so any

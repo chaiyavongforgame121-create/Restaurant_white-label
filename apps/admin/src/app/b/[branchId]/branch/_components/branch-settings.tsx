@@ -8,10 +8,9 @@ import { Lock, Save } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import { DEFAULT_UI_LOCALE, billingErrorMessage, describeBillingError, isUiLocale } from '@favornoms/shared';
 import { Badge, Button, Card } from '@favornoms/ui';
-import { AddonUpsellCard } from '@/components/addon-upsell-card';
-import { oneTimePriceToShow } from '@/lib/delivery-gate-model';
 import { ClosuresManager } from './closures-manager';
 import { DeliverySettingsCard } from './delivery-settings-card';
+import { DeliverySwitchCard } from './delivery-switch-card';
 import { HoursEditor } from './hours-editor';
 import { PaymentMethodsCard } from './payment-methods-card';
 import { CardPaymentsCard, type CardPaymentsAccountRow } from './card-payments-card';
@@ -44,8 +43,7 @@ export function BranchSettings({
   branch,
   restaurantStorefront,
   branding,
-  canUseDelivery,
-  deliveryPrices,
+  delivery,
   canUseCard,
   canEditSettings,
   cardPayments,
@@ -54,18 +52,12 @@ export function BranchSettings({
   restaurantStorefront: Record<string, unknown> | null;
   /** This branch's own logo and icons, and the brand name and defaults the card previews with. */
   branding: BrandingCardData;
-  /** Delivery is sold per branch — THIS branch's answer, not the restaurant's. */
-  canUseDelivery: boolean;
-  /** What turning delivery on for THIS branch costs, straight from billing_products. Either
-   *  number is null when it could not be read; the card then leaves it out. `once` is 0 when
-   *  `alreadyUnlocked`: the branch paid its one-time unlock before and switched delivery off,
-   *  so switching it back on costs only the monthly price. */
-  deliveryPrices: {
-    once: number | null;
-    monthly: number | null;
-    alreadyUnlocked: boolean;
-    planHref: string;
-  };
+  /**
+   * The "Delivery at this branch" switch: `switchOn` as read (null when it could not be), and
+   * `restaurantOff` when delivery is off for the whole restaurant, so the branch does not
+   * deliver whatever the switch says (docs/PACKAGING-2026-10-24.md §3).
+   */
+  delivery: { switchOn: boolean | null; restaurantOff: boolean };
   canUseCard: boolean;
   /** branch.settings (owner and admin): what patch_branch_settings requires for the cards below. */
   canEditSettings: boolean;
@@ -167,11 +159,6 @@ export function BranchSettings({
       console.error('Saving branch settings failed', updateError);
       if (billing) {
         setError(billingErrorMessage(billing, locale));
-      } else if (updateError.message.includes('stripe_delivery_active')) {
-        // A card-paying restaurant is billed by Stripe for this branch's delivery; hiding the branch
-        // here would stop the service but not the charge, so delivery is switched off on the plan
-        // page first, which updates Stripe.
-        setError(t('errors.stripeDeliveryActive'));
       } else if (updateError.message.includes('branch_privileged_column_forbidden')) {
         setError(t('errors.ownerOnlyDomain'));
       } else if (updateError.message.includes('branch_settings_required')) {
@@ -347,38 +334,21 @@ export function BranchSettings({
               ARE those hours, so the two are read together. */}
           <ScheduledOrdersCard branchId={branch.id} settings={branch.settings} />
 
-          {canUseDelivery ? (
-            <>
-              <DeliverySettingsCard branchId={branch.id} settings={branch.settings} />
-              {/* Grouped with the other delivery settings and behind the same entitlement:
-                  delivery hours and self-delivery are meaningless without the add-on. */}
-              <DeliveryHoursCard branchId={branch.id} settings={branch.settings} />
-            </>
-          ) : (
-            <AddonUpsellCard
-              branchId={branch.id}
-              title={t('settings.delivery.title')}
-              addon="delivery"
-              // Read from billing_products, never written here: this card said $49 while the
-              // catalog said $59 for months. Delivery is bought per branch, so the link
-              // carries the branch and the description names it.
-              price={deliveryPrices.monthly ?? undefined}
-              // A 0 (the unlock was paid before) is left out rather than printed as "$0
-              // once", and the description says why.
-              oneTimePrice={oneTimePriceToShow(deliveryPrices.once)}
-              href={deliveryPrices.planHref}
-              description={
-                deliveryPrices.alreadyUnlocked
-                  ? t('settings.delivery.descriptionUnlocked', { branch: branch.name })
-                  : t('settings.delivery.description', { branch: branch.name })
-              }
-              bullets={[
-                t('settings.delivery.bulletFees'),
-                t('settings.delivery.bulletDispatch'),
-                t('settings.delivery.bulletTracking'),
-              ]}
-            />
-          )}
+          {/* Delivery is in the plan at every branch, so its settings are always here: a
+              merchant can set fees, radius and hours before switching delivery on, and they
+              are kept while it is off. The switch sits above them because it decides whether
+              any of them reach a customer. Inside the fieldset like the cards around it, so
+              a viewer without branch.settings sees it locked. */}
+          <DeliverySwitchCard
+            branchId={branch.id}
+            branchName={branch.name}
+            initialOn={delivery.switchOn}
+            restaurantOff={delivery.restaurantOff}
+            canEdit={canEditSettings}
+          />
+          <DeliverySettingsCard branchId={branch.id} settings={branch.settings} />
+          {/* Grouped with the other delivery settings: hours and who delivers. */}
+          <DeliveryHoursCard branchId={branch.id} settings={branch.settings} />
 
           {/* Where the branch's card money is paid, directly above the methods it enables: the
               card method reaches diners only once this account can take charges. */}

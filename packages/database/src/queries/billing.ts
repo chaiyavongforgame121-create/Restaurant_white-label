@@ -4,6 +4,10 @@
 // Write path → request_package_change (merchant, queues a request) and
 //              billing_set_package (platform admin, applies it immediately).
 //
+// One plan since 2026-10-24 (docs/PACKAGING-2026-10-24.md): a price per branch, every feature
+// included. Delivery is not sold; whether a branch delivers is its own free switch
+// (getBranchDeliveryEnabled / setBranchDelivery), never part of a package.
+//
 // Every read here fails CLOSED: a network error, an RLS `forbidden`, an
 // `auth_required` or a garbage payload all resolve to DENIED_ENTITLEMENTS.
 // Returning null (as plan.ts does) would make callers fail OPEN, since
@@ -28,10 +32,12 @@ function seatsOf(selection: PackageSelection): number {
   return Math.max(1, Math.trunc(selection.branchSeats || 1));
 }
 
-/** The chosen branches, each one once. The server re-checks they are this tenant's. */
-function deliveryIdsOf(selection: PackageSelection): string[] {
-  return [...new Set((selection.deliveryBranchIds ?? []).filter((id) => typeof id === 'string' && id))];
-}
+/**
+ * What every pricing RPC is sent for its p_delivery_branch_ids parameter. The SQL keeps the
+ * parameter in its signature and ignores it (docs/PACKAGING-2026-10-24.md §4.2), so a client
+ * deployed before or after the migration calls the same function; nothing reads it any more.
+ */
+const NO_DELIVERY_BRANCHES: string[] = [];
 
 function num(v: unknown, fallback = 0): number {
   const n = typeof v === 'number' ? v : Number(v);
@@ -95,14 +101,14 @@ export interface StorefrontStatus {
    */
   known: boolean;
   entitled: boolean;
-  /** Delivery is sellable RIGHT NOW: the add-on is paid for AND the branch is inside
-   *  its delivery window. The storefront's order-type picker no longer gates on this — every
-   *  customer delivery is booked ahead, so it uses canScheduleDelivery (delivery_entitled and
-   *  scheduling_enabled) instead. */
+  /** Delivery is sellable RIGHT NOW: the branch delivers (paid up, and its merchant has not
+   *  switched delivery off there) AND it is inside its delivery window. The storefront's
+   *  order-type picker no longer gates on this — every customer delivery is booked ahead, so it
+   *  uses canScheduleDelivery (delivery_entitled and scheduling_enabled) instead. */
   delivery: boolean;
-  /** The add-on is paid for, regardless of the clock. Kept separate so the storefront
-   *  can say "delivery opens at 5pm" instead of hiding delivery as if it were never
-   *  bought — two very different messages for a paying merchant. */
+  /** The branch delivers, regardless of the clock. Kept separate so the storefront can say
+   *  "delivery opens at 5pm" instead of hiding delivery as if the branch never offered it —
+   *  two very different messages for a merchant whose branch does deliver. */
   delivery_entitled: boolean;
   /** Inside a delivery window (true whenever the hours feature is switched off). */
   delivery_available: boolean;
@@ -306,10 +312,12 @@ function normalizeProduct(row: unknown): BillingProduct {
 export interface BillingOverviewBranch {
   id: string;
   name: string;
-  /** This branch delivers. Ignores the deadline, so a lapsed merchant still sees their switches. */
-  deliveryActive: boolean;
-  /** Its $59 was paid at some point, so switching it back on costs nothing one-time. */
-  deliveryUnlocked: boolean;
+  /**
+   * This branch delivers now: the restaurant is paid up and the branch's delivery switch is on
+   * (get_billing_overview's delivery_active). Delivery is in the plan, so this only reports it;
+   * the switch itself is in branch settings (setBranchDelivery).
+   */
+  deliveryOn: boolean;
 }
 
 export interface BillingCharge {
@@ -464,7 +472,7 @@ export interface BillingOverview {
   billing: BillingRailInfo;
 }
 
-/** Denied, and denied in a way that sells nothing: no branch delivers, nothing is paid. */
+/** Denied, and denied in a way that sells nothing: no branch listed, nothing is paid. */
 const DENIED_OVERVIEW: BillingOverview = Object.freeze({
   entitlements: DENIED_ENTITLEMENTS,
   branches: [] as BillingOverviewBranch[],
@@ -476,18 +484,17 @@ const DENIED_OVERVIEW: BillingOverview = Object.freeze({
 
 function parsePaidState(raw: unknown): BillingPaidState {
   const r = (raw ?? {}) as Record<string, unknown>;
+  // The payload still carries delivery_unlocked_branch_ids (always []) for old readers; nothing
+  // is bought per branch any more, so it is not read.
   return {
     basePaid: r.base_paid === true,
     seatsPaid: Math.max(0, Math.trunc(num(r.seats_paid))),
-    deliveryUnlockedBranchIds: Array.isArray(r.delivery_unlocked_branch_ids)
-      ? r.delivery_unlocked_branch_ids.filter((b): b is string => typeof b === 'string')
-      : [],
   };
 }
 
 /**
- * Everything the plan page needs: the entitlements, each branch with its delivery
- * state, what is already PAID, the open request with its one-time total, and the
+ * Everything the plan page needs: the entitlements, each active branch and whether it
+ * delivers now, what is already PAID, the open request with its one-time total, and the
  * one-time ledger with each charge's status.
  *
  * billing_charges has no merchant read policy at all — this RPC is the only way in.
@@ -514,8 +521,7 @@ export async function getBillingOverview(
             return {
               id: String(b.id ?? ''),
               name: String(b.name ?? ''),
-              deliveryActive: b.delivery_active === true,
-              deliveryUnlocked: b.delivery_unlocked === true,
+              deliveryOn: b.delivery_active === true,
             };
           })
         : [],
@@ -591,7 +597,7 @@ export async function validateBillingDiscount(
       p_code: args.code.trim(),
       p_plan_code: args.selection.planCode,
       p_branch_seats: seatsOf(args.selection),
-      p_delivery_branch_ids: deliveryIdsOf(args.selection),
+      p_delivery_branch_ids: NO_DELIVERY_BRANCHES,
     });
     if (error || !data || typeof data !== 'object') return denied;
     const d = data as Record<string, unknown>;
@@ -736,12 +742,15 @@ export interface BillingRequest {
   restaurant_id: string;
   requested_by: string | null;
   plan_code: string;
-  /** Legacy. 'delivery' appears when any branch delivers; which ones is delivery_branch_ids. */
+  /** Legacy: ['delivery'] on a request filed before 2026-10-24. Every new request carries []. */
   addons: string[];
   branch_seats: number;
-  /** $29 × branches + $29 × delivery branches. */
+  /** The plan's price per branch × branch_seats, priced by the server from the catalog. */
   monthly_total: number;
-  /** The branches this request asks to deliver from. */
+  /**
+   * Legacy: the branches a request filed before 2026-10-24 asked to deliver from. Every new
+   * request carries [], and nothing acts on it: delivery is in the plan at every branch.
+   */
   delivery_branch_ids: string[];
   /** Payable once if approved, already net of discount_amount. */
   one_time_total: number;
@@ -842,7 +851,7 @@ export async function requestPackageChange(
     p_restaurant_id: args.restaurantId,
     p_plan_code: args.selection.planCode,
     p_branch_seats: seatsOf(args.selection),
-    p_delivery_branch_ids: deliveryIdsOf(args.selection),
+    p_delivery_branch_ids: NO_DELIVERY_BRANCHES,
     p_discount_code: args.discountCode?.trim() ? args.discountCode.trim() : null,
     p_note: args.note ?? null,
   });
@@ -925,8 +934,8 @@ export async function decideBillingRequest(
  * rail: it is what actually turns a paying customer on while Stripe is dormant.
  *
  * It raises no one-time charge. What an operator grants by hand is not owed, and
- * the server counts the granted seats and the branch_addons rows it writes as
- * already bought, so the merchant is never asked to buy it a second time.
+ * the server counts the granted seats as already bought, so the merchant is never
+ * asked to buy them a second time. It never touches a branch's delivery switch.
  */
 export async function setRestaurantPackage(
   supabase: FavornomsClient,
@@ -939,7 +948,7 @@ export async function setRestaurantPackage(
     p_restaurant_id: restaurantId,
     p_plan_code: selection.planCode,
     p_branch_seats: seatsOf(selection),
-    p_delivery_branch_ids: deliveryIdsOf(selection),
+    p_delivery_branch_ids: NO_DELIVERY_BRANCHES,
     p_status: status,
     p_period_end: periodEnd ?? null,
   });
@@ -986,11 +995,13 @@ export async function listRestaurantSubscriptions(
 }
 
 /**
- * Flip one feature for one restaurant, independently of its package.
+ * Flip one feature for one restaurant, independently of its package. Platform admin only:
+ * restaurants.feature_overrides is the platform's (docs/PACKAGING-2026-10-24.md §2), and the
+ * database refuses anyone else who tries to write it.
  *
- * 'off' hides a feature the plan sold (the reason this exists: the trial grants
- * Digital Signage + AI Voice to everyone and both pages are still placeholders).
- * 'on' grants one the plan never sold. 'plan' clears the switch.
+ * 'off' hides a feature the plan includes ('delivery' off stops delivery at every branch,
+ * whatever each branch's own switch says). 'on' grants one the plan does not include.
+ * 'plan' clears the switch.
  *
  * The SQL recomputes billing_entitlements inside the same statement, so the
  * merchant sees the change on their next request — no cron, no cache purge.
@@ -1046,6 +1057,60 @@ export async function upsertBillingProduct(
   });
   if (error) return { ok: false, error: error.message };
   return { ok: true, product: normalizeProduct(data) };
+}
+
+// --- delivery at a branch -----------------------------------------------------
+//
+// docs/PACKAGING-2026-10-24.md §3. Delivery is in the plan at every branch, and each branch has a
+// free "Delivery at this branch" switch, on by default. The switch is a branch_addons row
+// (code 'delivery'): active = false means switched off; no row, or active = true, means on. It is
+// the merchant's alone: no package change, approval or card payment ever writes it.
+
+/**
+ * Is delivery switched on at this branch? This is the switch, not whether the branch can take a
+ * delivery right now — a lapsed restaurant's switch still reads on (the storefront's
+ * delivery_entitled and the entitlements' deliveryBranchIds answer that).
+ *
+ * Read through branch_addons_staff_read, so it needs a member of the branch (or a platform
+ * admin); for anyone else the row is invisible and this answers true, the default. A read that
+ * FAILS throws instead of guessing: a settings page that drew a guessed switch would invite the
+ * merchant to "correct" a state nobody read.
+ */
+export async function getBranchDeliveryEnabled(
+  supabase: FavornomsClient,
+  branchId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('branch_addons')
+    .select('active')
+    .eq('branch_id', branchId)
+    .eq('code', 'delivery')
+    .maybeSingle();
+  if (error) throw new Error(`branch_delivery_unreadable:${error.message}`);
+  return (data as { active?: unknown } | null)?.active !== false;
+}
+
+/**
+ * Switch delivery on or off at a branch (public.set_branch_delivery). Allowed for staff with
+ * branch.settings at that branch, the restaurant's owner and platform admins; anyone else gets
+ * 'forbidden'. Free: it bills nothing. Deliveries already created are not touched — only new
+ * delivery orders are refused at a branch that is switched off. Saying the same thing twice
+ * writes nothing.
+ *
+ * Returns the switch as it now stands (true = on). Throws the server's refusal as the message:
+ * 'forbidden', 'branch_not_found', 'sign_in_required' or 'invalid_argument'.
+ */
+export async function setBranchDelivery(
+  supabase: FavornomsClient,
+  branchId: string,
+  enabled: boolean,
+): Promise<boolean> {
+  const { data, error } = await supabase.rpc('set_branch_delivery', {
+    p_branch_id: branchId,
+    p_enabled: enabled,
+  });
+  if (error) throw new Error(error.message);
+  return data === true;
 }
 
 // --- Stripe: restaurants paying the platform by card ------------------------

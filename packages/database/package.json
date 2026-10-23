@@ -16,7 +16,8 @@
   },
   "scripts": {
     "lint": "tsc --noEmit",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@favornoms/shared": "workspace:*",

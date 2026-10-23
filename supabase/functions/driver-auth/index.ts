@@ -25,7 +25,9 @@
 // BILLING: deliberately NOT entitlement-gated (owner decision, 2026-07-25). A driver
 // is platform-scoped, not tenant-scoped — they have no restaurant_id at login time and
 // may work for several branches. Locking a driver out because one of those branches
-// lapsed would strand them mid-shift. The delivery gate lives in dispatch-driver.
+// lapsed would strand them mid-shift. Delivery is gated where delivery work is
+// created, never where it is finished: place-order asks whether the branch delivers,
+// and the deliveries BEFORE INSERT trigger enforces it (../_shared/entitlements.ts).
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';

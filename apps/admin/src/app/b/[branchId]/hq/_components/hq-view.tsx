@@ -361,12 +361,13 @@ export function HqView({ branchId, initialMonths, reports, error }: Props) {
             // Multiplying the current rate by the number of months would invent a
             // billing history that does not exist. State the rate instead.
             <p className="mt-2 rounded-xl bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-              {reports.subscription_plan
+              {/* The report gives the plan code ('base', 'trial', 'none'); name it the way the plan page
+                  does, and say nothing about a code with no name of its own. */}
+              {reports.subscription_plan === 'base' || reports.subscription_plan === 'trial'
                 ? t.rich('costs.noInvoicesWithPlan', {
                     rate: formatCurrency(reports.subscription_monthly),
-                    plan: reports.subscription_plan,
+                    plan: t(`costs.planNames.${reports.subscription_plan}`),
                     strong: (chunks) => <strong className="text-foreground">{chunks}</strong>,
-                    planName: (chunks) => <span className="capitalize">{chunks}</span>,
                   })
                 : t.rich('costs.noInvoices', {
                     rate: formatCurrency(reports.subscription_monthly),

@@ -1,5 +1,9 @@
 # Packaging — 2026-09-23 (owner decision)
 
+> **Superseded 2026-10-24** by [PACKAGING-2026-10-24.md](PACKAGING-2026-10-24.md): one plan at $49 a month per branch,
+> $199 / $89 one-time, delivery included at every branch. This file stays as history; every price in it, and the
+> per-branch delivery add-on, are dead.
+
 Replaces the all-monthly model of [PACKAGING-2026-07-25.md](PACKAGING-2026-07-25.md). That file stays as history; every
 price in it is dead.
 

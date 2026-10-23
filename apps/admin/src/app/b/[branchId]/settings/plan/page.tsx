@@ -6,12 +6,7 @@ import {
   getPendingBillingRequest,
   listBillingProducts,
 } from '@favornoms/database/queries';
-import {
-  ADDON_DELIVERY,
-  isValidTimeZone,
-  type BillingPaidState,
-  type BillingProduct,
-} from '@favornoms/shared';
+import { isValidTimeZone, type BillingPaidState } from '@favornoms/shared';
 import { Card } from '@favornoms/ui';
 import { getBranchAccess } from '@/lib/capabilities';
 import { readCheckoutReturn, readPortalReturn } from './_components/plan-billing';
@@ -28,8 +23,6 @@ interface Props {
     session_id?: string;
     /** 'return': Stripe's customer portal sending the merchant back. */
     portal?: string;
-    add?: string;
-    branch?: string;
     no_trial?: string;
     renew?: string;
   }>;
@@ -41,33 +34,19 @@ export async function generateMetadata() {
 }
 
 /**
- * `?add=` arrives from an upsell card, which may only know its own title ("Delivery"), so
- * it is matched against the catalog code and the product name alike. Delivery is the only
- * thing left to add — the AI Suite was withdrawn on 2026-09-23 — so this answers yes or no
- * rather than returning a code: anything else in the query string adds nothing.
+ * When the catalog was last repriced: the one plan of docs/PACKAGING-2026-10-24.md replaced
+ * the per-branch delivery add-on and every earlier price. A request filed before it was priced
+ * in dollars that no longer exist, and its total on today's page reads as today's price for
+ * the same branches. Such a decision is history, not news, so the banner leaves it out. (It
+ * was 2026-09-23, the retirement of the all-monthly catalog, until this repricing.)
  */
-function wantsDelivery(raw: string | undefined, catalog: BillingProduct[]): boolean {
-  if (!raw) return false;
-  const slug = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_');
-  const wanted = slug(raw);
-  const delivery = catalog.find((p) => p.code === ADDON_DELIVERY && p.kind === 'addon');
-  if (!delivery) return false;
-  return wanted === delivery.code || slug(delivery.name) === wanted;
-}
+const REPRICED_AT_MS = Date.parse('2026-10-24T00:00:00Z');
 
 /**
  * get_latest_billing_decision returns to_jsonb of a billing_requests row, or null. It is read
  * as unknown because the RPC is not in the generated types, so every field is checked here
  * rather than trusted.
  */
-/**
- * When the all-monthly catalog was retired (docs/PACKAGING-2026-09-23.md). A request filed
- * before it was priced in dollars that no longer exist: Coastal Grill's last one reads
- * "3 branches, no delivery — $397 every month", which on today's page looks like today's
- * price. Such a decision is history, not news, so the banner leaves it out.
- */
-const REPRICED_AT_MS = Date.parse('2026-09-23T00:00:00Z');
-
 function readDecision(raw: unknown): DecidedRequest | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const r = raw as Record<string, unknown>;
@@ -82,15 +61,11 @@ function readDecision(raw: unknown): DecidedRequest | null {
     typeof decided === 'string' ? decided : typeof created === 'string' ? created : null;
   if (!status || typeof id !== 'string' || typeof planCode !== 'string' || !decidedAt) return null;
   const note = r.decision_note;
-  const delivery = r.delivery_branch_ids;
   return {
     id,
     status,
     planCode,
     branchSeats: Math.max(1, Math.trunc(Number(r.branch_seats) || 1)),
-    deliveryBranchIds: Array.isArray(delivery)
-      ? delivery.filter((b): b is string => typeof b === 'string')
-      : [],
     monthlyTotal: Number(r.monthly_total ?? 0),
     // A row written before the packaging migration has no one-time total, and 0 is the
     // truth for it: nothing one-time was ever charged under the old all-monthly model.
@@ -145,7 +120,7 @@ export default async function PlanPage({ params, searchParams }: Props) {
     // Read on its own as well as inside the overview: this RPC predates get_billing_overview
     // and answers even when that one cannot, and whether the store is suspended is what
     // decides the whole page. Everything this page reads from it (seats, branches used, the
-    // delivering branches, the deadline) is restaurant-wide in both payloads.
+    // deadline) is restaurant-wide in both payloads.
     getEntitlementsForBranch(supabase, branchId),
     getBillingOverview(supabase, branch.restaurant_id),
     listBillingProducts(supabase),
@@ -176,7 +151,6 @@ export default async function PlanPage({ params, searchParams }: Props) {
   }
 
   const latestDecision = decidedRes.error ? null : readDecision(decidedRes.data);
-  const preselect = typeof query.branch === 'string' ? query.branch : null;
 
   return (
     <PlanView
@@ -190,9 +164,6 @@ export default async function PlanPage({ params, searchParams }: Props) {
       latestDecision={latestDecision}
       timezone={timezone}
       suspended={!entitlements.entitled}
-      addDelivery={wantsDelivery(query.add, catalog)}
-      // Only a branch of this restaurant may be pre-selected; the view drops anything else.
-      preselectBranchId={branches.some((b) => b.id === preselect) ? preselect : null}
       noTrial={query.no_trial === '1'}
       renew={query.renew === '1'}
       // How the restaurant pays. The denied overview carries MANUAL_RAIL (card billing off), so

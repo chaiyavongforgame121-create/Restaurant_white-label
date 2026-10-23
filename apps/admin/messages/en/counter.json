@@ -114,7 +114,7 @@
     "quotedNoDistance": "Delivery {fee}",
     "outOfRange": "That pin is outside the delivery area.",
     "outOfRangeMax": "That pin is outside the delivery area (up to {max} mi).",
-    "notSold": "Delivery is not included in this branch's plan.",
+    "notSold": "This branch isn't taking deliveries right now: delivery is switched off in its settings, or isn't available for the restaurant.",
     "flatFee": "Flat delivery fee: {fee}",
     "clearPin": "Remove pin",
     "needsDetails": "A delivery needs the customer's phone number and address."
@@ -194,7 +194,7 @@
     "deliveryMustBeScheduled": "This branch only takes deliveries scheduled for later right now.",
     "insufficientPoints": "The customer does not have enough points for that.",
     "giftCardChanged": "The gift card balance changed. Charge again.",
-    "featureNotEntitled": "This branch's plan does not include that. Check the Plan page in the back office.",
+    "featureNotEntitled": "This branch can't take that right now. Check Branch settings in the back office, or contact FavorNoms.",
     "invalidDiscount": "The discount must be between 0 and 100%.",
     "invalidPhone": "The customer's phone number was not accepted. Check it and charge again.",
     "notStaffHere": "This account cannot ring up sales at this branch, or your session has expired. Sign in again, or ask the owner for counter access here.",

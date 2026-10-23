@@ -237,8 +237,10 @@
     "minutesShort": "{minutes} ph",
     "notOffered": {
       "title": "{branch} không giao hàng",
-      "body": "Giao hàng được bật theo từng chi nhánh nên ở đây không có gì để báo cáo. Các chi nhánh khác vẫn có báo cáo giao hàng riêng.",
-      "link": "Bật giao hàng cho chi nhánh này"
+      "switchedOff": "Giao hàng đang tắt trong cài đặt của chi nhánh này. Các chi nhánh khác vẫn có báo cáo giao hàng riêng.",
+      "switchedOffAsk": "Giao hàng đang tắt trong cài đặt của chi nhánh này; chủ sở hữu hoặc quản trị viên có thể bật lại. Các chi nhánh khác vẫn có báo cáo giao hàng riêng.",
+      "notAvailable": "Hiện nhà hàng của bạn chưa dùng được giao hàng. Hãy liên hệ FavorNoms để được bật lại.",
+      "link": "Bật lại giao hàng trong Cài đặt chi nhánh"
     }
   },
   "customers": {

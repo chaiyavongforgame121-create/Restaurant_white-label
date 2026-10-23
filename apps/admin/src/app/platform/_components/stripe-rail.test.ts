@@ -7,7 +7,6 @@ import {
   cardExpiry,
   dashboardBaseOf,
   isPaymentInProgressError,
-  isStripeDeliveryActiveError,
   isStripeManagedError,
   CARD_CHANGE_WINDOW_MS,
   monthlyFigure,
@@ -39,7 +38,7 @@ const stripe = (over: Partial<BillingRailInfo> = {}): BillingRailInfo => ({
   rail: 'stripe',
   status: 'active',
   nextChargeAt: NEXT,
-  nextChargeAmount: 87,
+  nextChargeAmount: 98,
   ...over,
 });
 
@@ -129,7 +128,7 @@ describe('the rail', () => {
     const later = stripe({ cancelAt: '2026-12-26T00:00:00Z' });
     expect(stripeCancelling(later)).toBe(false);
     expect(renewsByItself(later, 'active', false)).toBe(true);
-    expect(nextChargeView(later, 'active')).toEqual({ kind: 'charge', at: NEXT, amount: 87 });
+    expect(nextChargeView(later, 'active')).toEqual({ kind: 'charge', at: NEXT, amount: 98 });
     // ... and the day it stops is still shown beside that charge.
     expect(stripeCancelsLater(later)).toBe('2026-12-26T00:00:00Z');
   });
@@ -159,7 +158,7 @@ describe('the rail', () => {
 
 describe('the next charge', () => {
   it('takes the amount from Stripe, never from the catalog', () => {
-    expect(nextChargeView(stripe(), 'active')).toEqual({ kind: 'charge', at: NEXT, amount: 87 });
+    expect(nextChargeView(stripe(), 'active')).toEqual({ kind: 'charge', at: NEXT, amount: 98 });
     // Before the first sync stored Stripe's amount: the date alone.
     expect(nextChargeView(stripe({ nextChargeAmount: null }), 'active')).toEqual({
       kind: 'charge',
@@ -184,9 +183,9 @@ describe('the next charge', () => {
   });
 
   it("shows Stripe's monthly amount for a card store and the package total otherwise", () => {
-    expect(monthlyFigure(stripe(), 58)).toBe(87);
-    expect(monthlyFigure(stripe({ nextChargeAmount: null }), 58)).toBe(58);
-    expect(monthlyFigure({ ...MANUAL_RAIL, nextChargeAmount: 87 }, 58)).toBe(58);
+    expect(monthlyFigure(stripe(), 49)).toBe(98);
+    expect(monthlyFigure(stripe({ nextChargeAmount: null }), 49)).toBe(49);
+    expect(monthlyFigure({ ...MANUAL_RAIL, nextChargeAmount: 98 }, 49)).toBe(49);
   });
 });
 
@@ -447,10 +446,9 @@ describe('isStripeManagedError', () => {
     expect(isStripeManagedError(undefined)).toBe(false);
   });
 
-  it('spots the payment_in_progress and stripe_delivery_active refusals too', () => {
+  it('spots the payment_in_progress refusal too', () => {
     expect(isPaymentInProgressError('ERROR: payment_in_progress (P0001)')).toBe(true);
     expect(isPaymentInProgressError('stripe_managed')).toBe(false);
-    expect(isStripeDeliveryActiveError('stripe_delivery_active')).toBe(true);
-    expect(isStripeDeliveryActiveError(null)).toBe(false);
+    expect(isPaymentInProgressError(null)).toBe(false);
   });
 });

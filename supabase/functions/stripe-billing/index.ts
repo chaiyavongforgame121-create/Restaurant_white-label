@@ -83,6 +83,7 @@ import {
   MONTHLY_CODES,
   SETUP_PRODUCT_IDS,
   MONTHLY_PRODUCT_IDS,
+  PRODUCT_NAMES,
   accountSummary,
   balanceUndoIdempotencyKey,
   balanceUndoParams,
@@ -428,8 +429,8 @@ async function changeSubscription(env: Env, ctx: CheckoutContext): Promise<Respo
     const applied = await appliedChangeInvoice(env.admin, ctx, current);
     if (applied) return await resolveChangeInvoice(env, ctx, subId, applied);
     if (!hasFees) return await settleChange(env, ctx, subId, null);
-    // Only a one-time fee (delivery moved from one branch to another): no subscription update is
-    // sent at all; the fee is charged on an invoice of its own (money-rr-5).
+    // Only a one-time fee (a setup fee still owed for seats Stripe already bills): no
+    // subscription update is sent at all; the fee is charged on an invoice of its own (money-rr-5).
     await ensureSetupProducts(setupCodesOf(ctx));
     return await chargeFeesNow(env, ctx, subId, customerId, pendingFees);
   }
@@ -1762,13 +1763,15 @@ async function ensureSetupProducts(codes: MonthlyCode[]) {
 async function ensureProduct(productId: string) {
   const res = await stripeRequest<Json>(STRIPE_SECRET_KEY, 'GET', `/v1/products/${productId}`);
   if (res.ok) {
-    if (res.data?.active !== true) {
-      await stripe(
-        'POST',
-        `/v1/products/${productId}`,
-        { params: { active: 'true' } },
-        'product_activate',
-      );
+    // Re-activated when archived, and renamed when it still carries an older name: a product is
+    // created once under its explicit id, so this is the only way a new PRODUCT_NAMES entry (the
+    // 2026-10-24 "FavorNoms Plan" names) reaches a product Stripe already has.
+    const update: Record<string, string> = {};
+    if (res.data?.active !== true) update.active = 'true';
+    const name = PRODUCT_NAMES[productId];
+    if (name && res.data?.name !== name) update.name = name;
+    if (Object.keys(update).length > 0) {
+      await stripe('POST', `/v1/products/${productId}`, { params: update }, 'product_update');
     }
     return;
   }

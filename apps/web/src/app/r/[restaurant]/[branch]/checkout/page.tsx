@@ -35,7 +35,7 @@ export default async function CheckoutPage({ params }: Props) {
         branchId={tenant.branch.id}
         branchName={tenant.branch.name}
         canDeliver={scheduleDelivery.canDeliver}
-        // Delivery is sold per branch, so "not offered here" and "not bookable right now"
+        // Delivery is switched per branch, so "not offered here" and "not bookable right now"
         // are different sentences on the gate.
         deliveryOffered={scheduleDelivery.offered}
       />

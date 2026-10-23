@@ -74,8 +74,11 @@ export interface TenantRow {
   openInvoice: BillingInvoiceSummary | null;
 }
 
-/** A value inside a message. `{ date }` is an ISO timestamp, formatted in the reader's language. */
-export type MsgValue = string | number | { date: string | null };
+/**
+ * A value inside a message. `{ date }` is an ISO timestamp, formatted in the reader's language;
+ * `{ plan }` is a plan code, shown by its name in the reader's language (platform.plans.*).
+ */
+export type MsgValue = string | number | { date: string | null } | { plan: string };
 
 /** A message in the `platform` namespace: the key plus the values it needs. */
 export interface Msg {
@@ -175,7 +178,7 @@ function dateFormat(locale: UiLocale): Intl.DateTimeFormat {
 export const fmtDate = (v?: string | null, locale: UiLocale = DEFAULT_UI_LOCALE) =>
   v ? dateFormat(locale).format(new Date(v)) : '—';
 
-// Whole dollars as "$116", cents kept when there are any (a discounted one-time fee can be
+// Whole dollars as "$147", cents kept when there are any (a discounted one-time fee can be
 // $49.50): a rounded figure would disagree with the ledger it summarises.
 export const money = (n: number) => {
   const v = Number(n ?? 0);
@@ -511,9 +514,8 @@ export function resolvePrimaryAction(
   health: TenantHealth,
   /**
    * What `conversionSelection` actually costs for THIS tenant, priced from the
-   * catalog — not the bare Base price. Conversion keeps the add-ons the tenant
-   * already owns and buys a seat per branch, so a flat "$199/mo" on the button
-   * under-quoted every multi-branch or add-on tenant it was shown to.
+   * catalog — not the bare plan price. Conversion buys a seat per branch, so a flat
+   * "$49/mo" on the button under-quoted every multi-branch tenant it was shown to.
    */
   convertPrice: number | null,
 ): PrimaryAction | null {
@@ -538,12 +540,14 @@ export function resolvePrimaryAction(
   if (isPaidPlan(row.ent.planCode)) {
     return { kind: 'extend', label: msg('health.action.extend') };
   }
+  // Named after the plan it buys (conversionSelection), by its current name.
+  const plan = { plan: PLAN_BASE };
   return {
     kind: 'convert',
     label:
       convertPrice === null
-        ? msg('health.action.convert')
-        : msg('health.action.convertPriced', { price: money(convertPrice) }),
+        ? msg('health.action.convert', { plan })
+        : msg('health.action.convertPriced', { plan, price: money(convertPrice) }),
   };
 }
 
@@ -573,24 +577,14 @@ export function deadlineFact(row: TenantRow, entitled: boolean): { label: Msg; d
 }
 
 /**
- * Which branches keep delivering when a package is re-sent from this page.
- *
- * A trial delivers from EVERY branch by rule, without any of them having paid the
- * one-time unlock, so carrying that list into a paid package would both hand the
- * delivery add-on away for free and bill $29 a month per branch that nobody chose.
- * A paid store's list is what it actually owns, so that one carries over untouched.
- * Picking delivery branch by branch is Subscriptions' job, not a dashboard button's.
+ * The package a conversion would buy: the FavorNoms Plan, with a seat for every branch the
+ * tenant has. Nothing else to carry: the plan includes every feature, delivery at every branch,
+ * and each branch's own delivery switch is the merchant's, untouched by a package write.
  */
-function deliveringBranchIds(row: TenantRow): string[] {
-  return isPaidPlan(row.ent.planCode) ? [...row.ent.deliveryBranchIds] : [];
-}
-
-/** The package a conversion would buy: Base, keeping the delivery already paid for. */
 export function conversionSelection(row: TenantRow, branchesUsed: number): PackageSelection {
   return {
     planCode: PLAN_BASE,
     branchSeats: Math.max(1, row.ent.branchSeats, row.ent.branchesUsed, branchesUsed),
-    deliveryBranchIds: deliveringBranchIds(row),
   };
 }
 
@@ -614,7 +608,6 @@ export function renewalSelection(row: TenantRow, branchesUsed: number): PackageS
   return {
     planCode: row.ent.planCode,
     branchSeats: Math.max(1, row.ent.branchSeats, row.ent.branchesUsed, branchesUsed),
-    deliveryBranchIds: deliveringBranchIds(row),
   };
 }
 

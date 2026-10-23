@@ -8,10 +8,14 @@ describe('platformErrorKey', () => {
   const log = vi.spyOn(console, 'error').mockImplementation(() => {});
   afterEach(() => log.mockClear());
 
-  it('names the card-billing refusals first', () => {
+  it('names the card-billing refusal first', () => {
     expect(platformErrorKey('ERROR: stripe_managed (P0001)')).toBe('stripe.errors.managed');
-    // Suspending a branch that delivers on a card subscription (§9.6).
-    expect(platformErrorKey('ERROR: stripe_delivery_active (P0001)')).toBe('stripe.errors.deliveryActive');
+  });
+
+  it('has no delivery refusal any more', () => {
+    // The card-rail guard that refused to hide a delivering branch was dropped with the
+    // delivery add-on (docs/PACKAGING-2026-10-24.md §4.2); the stray code reads as any failure.
+    expect(platformErrorKey('ERROR: stripe_delivery_active (P0001)')).toBe('errors.generic');
   });
 
   it('keeps the older causes and the fallback', () => {
@@ -22,7 +26,7 @@ describe('platformErrorKey', () => {
   });
 
   it('logs the raw text instead of showing it', () => {
-    platformErrorKey('ERROR: stripe_delivery_active (P0001)');
+    platformErrorKey('ERROR: stripe_managed (P0001)');
     expect(log).toHaveBeenCalled();
   });
 });

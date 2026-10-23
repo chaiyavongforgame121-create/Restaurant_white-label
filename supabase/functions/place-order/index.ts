@@ -501,14 +501,16 @@ Deno.serve(async (req: Request) => {
   // real authority — this check exists so a suspended tenant gets one clean 402
   // instead of a half-written order rolled back by a P0001 three steps later.
   //
-  // Loaded for THIS branch, not the restaurant: delivery is sold per branch
-  // (docs/PACKAGING-2026-09-23.md §2), so a branch that does not deliver has to be
-  // refused here rather than by orders_billing_gate mid-handler. The restaurant id
-  // is passed as well because it is already in hand — it saves the branch lookup.
-  const ent = await loadEntitlements(admin, {
-    restaurantId: branch.restaurant_id,
-    branchId: payload.branch_id,
-  });
+  // Loaded for THIS branch, not the restaurant, with its delivery answer: a merchant
+  // can switch delivery off at one branch (docs/PACKAGING-2026-10-24.md §3), so a
+  // branch that does not deliver has to be refused here rather than by
+  // orders_billing_gate mid-handler. The restaurant id is passed as well because it
+  // is already in hand — it saves the branch lookup.
+  const ent = await loadEntitlements(
+    admin,
+    { restaurantId: branch.restaurant_id, branchId: payload.branch_id },
+    { delivery: true },
+  );
   if (!ent.entitled) return json(402, billingInactiveBody('orders'));
   if (payload.channel === 'delivery' && !edgeHasFeature(ent, 'delivery')) {
     return json(403, featureNotEntitledBody('delivery'));
@@ -970,7 +972,7 @@ Deno.serve(async (req: Request) => {
         return json(409, { error: 'delivery_out_of_range', distance_km: quote.distance_km, radius_km: quote.radius_km });
       } else if (quote?.reason === 'delivery_not_entitled') {
         // Must NOT fall through to the legacy flat fee below — that would quietly
-        // sell a delivery this branch has not paid for. Unreachable for a branch
+        // sell a delivery this branch does not offer. Unreachable for a branch
         // that does not deliver (the gate above answers that first); it still
         // stands for the race where delivery is switched off mid-checkout.
         return json(403, featureNotEntitledBody('delivery'));

@@ -57,8 +57,8 @@ describe('billingErrorMessage', () => {
     expect(billingErrorMessage({ kind: 'inactive', scope: 'account' })).toBe(
       'Your subscription is not active. Choose a package to continue.',
     );
-    expect(billingErrorMessage({ kind: 'feature', feature: 'delivery' })).toBe(
-      'Delivery is not included in your current package.',
+    expect(billingErrorMessage({ kind: 'feature', feature: 'card_payment' })).toBe(
+      'Card payment is not included in your current package.',
     );
     expect(billingErrorMessage({ kind: 'seats', current: 2, limit: 2 })).toBe(
       'You are using 2 of 2 branch seats. Add a seat to create another branch.',
@@ -69,11 +69,27 @@ describe('billingErrorMessage', () => {
   });
 
   it('translates the message and the feature name inside it together', () => {
-    expect(billingErrorMessage({ kind: 'feature', feature: 'delivery' }, 'es')).toBe(
-      'Entrega a domicilio no está incluido en tu paquete actual.',
+    expect(billingErrorMessage({ kind: 'feature', feature: 'card_payment' }, 'es')).toBe(
+      'Pago con tarjeta no está incluido en tu paquete actual.',
     );
     const th = billingErrorMessage({ kind: 'seats', current: 3, limit: 3 }, 'th');
     expect(th).toContain('3 จาก 3');
+  });
+
+  // Delivery is in the plan since 2026-10-24 (docs/PACKAGING-2026-10-24.md §3): a branch refused
+  // it has its delivery switch off, so the words point at branch settings, never at the package.
+  it('sends a branch refused delivery to its branch settings, not to the package', () => {
+    expect(billingErrorMessage({ kind: 'feature', feature: 'delivery' })).toBe(
+      'Delivery is switched off at this branch. Turn it on in branch settings.',
+    );
+    const generic = new Set(
+      UI_LOCALES.map((locale) => billingErrorMessage({ kind: 'feature', feature: 'card_payment' }, locale)),
+    );
+    for (const locale of UI_LOCALES) {
+      const text = billingErrorMessage({ kind: 'feature', feature: 'delivery' }, locale);
+      expect(text.length, locale).toBeGreaterThan(0);
+      expect(generic.has(text), locale).toBe(false);
+    }
   });
 });
 

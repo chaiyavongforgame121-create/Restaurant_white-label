@@ -7,8 +7,7 @@
     "ownerOnlyDomain": "Solo el propietario del restaurante puede cambiar el dominio propio.",
     "domainTaken": "Otra sucursal ya usa ese dominio.",
     "noPermission": "Tu rol no tiene permiso para hacer este cambio.",
-    "busyMinutesRange": "El modo ocupado puede sumar de 0 a {max} minutos de preparación.",
-    "stripeDeliveryActive": "Esta sucursal tiene entregas y se cobran a tu tarjeta. Primero desactiva las entregas de esta sucursal en la página Plan y facturación, y luego ocúltala."
+    "busyMinutesRange": "El modo ocupado puede sumar de 0 a {max} minutos de preparación."
   },
   "settings": {
     "title": "Configuración de sucursal",
@@ -44,12 +43,15 @@
       "invalid": "“{input}” no es un nombre de host. Ingresa la dirección que escribirán los clientes, como order.myrestaurant.com, no el nombre de tu restaurante."
     },
     "delivery": {
-      "title": "Entrega a domicilio",
-      "description": "Tus propios repartidores, seguimiento en vivo y envío automático. {branch} no hace entregas: la entrega se activa sucursal por sucursal.",
-      "descriptionUnlocked": "Tus propios repartidores, seguimiento en vivo y envío automático. {branch} tiene la entrega desactivada y ya se desbloqueó aquí: volver a activarla no tiene cargo único, solo el precio mensual.",
-      "bulletFees": "Costo de envío, radio y tiempo de preparación",
-      "bulletDispatch": "Asignación automática de repartidores con límite de tiempo para aceptar",
-      "bulletTracking": "Mapa de seguimiento en vivo para clientes"
+      "title": "Entrega a domicilio en esta sucursal",
+      "on": "Activada",
+      "off": "Desactivada",
+      "saving": "Guardando…",
+      "onBody": "Activada: los clientes pueden pedir entrega a domicilio en {branch} y se asignan repartidores.",
+      "offBody": "Desactivada: la tienda en línea, el mostrador y la asignación de repartidores dejan de ofrecer entrega a domicilio en {branch}. Las entregas que ya están en camino se completan.",
+      "included": "La entrega a domicilio está incluida en tu plan en todas las sucursales, así que activarla o desactivarla aquí nunca cambia lo que pagas.",
+      "notAvailable": "La entrega a domicilio no está disponible para tu restaurante en este momento, así que {branch} no puede hacer entregas aunque esté activada. Contacta con FavorNoms para que la vuelvan a activar.",
+      "unreadable": "No se pudo leer el interruptor de entrega de esta sucursal. Actualiza la página para intentarlo de nuevo."
     },
     "advanced": {
       "title": "Avanzado: JSON de configuración sin procesar",

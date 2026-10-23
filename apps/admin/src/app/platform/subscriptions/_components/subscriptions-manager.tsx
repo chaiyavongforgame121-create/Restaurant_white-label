@@ -7,11 +7,10 @@
 // recomputes entitlements synchronously, so a save here is live for the merchant
 // on their next request — no cron, no cache purge.
 //
-// Since 2026-09-23 (docs/PACKAGING-2026-09-23.md) delivery is PER BRANCH, so the
-// package is no longer an add-on list: the operator picks which branches deliver
-// and billing_set_package takes those ids. Hidden branches are in the picker too
-// — they still carry a branch_addons row, and leaving them out of the selection
-// would switch their delivery off the moment anything else was saved.
+// Since 2026-10-24 (docs/PACKAGING-2026-10-24.md) there is one plan with every feature
+// included, so a package is a plan and a branch count and nothing else. Delivery is in
+// the plan at every branch; whether one branch delivers is the merchant's own switch in
+// branch settings, which nothing on this page reads or writes.
 //
 // Two money figures live on this card and they are NEVER added together: what the
 // restaurant pays every month, and what it has already paid once. Applying a
@@ -38,7 +37,6 @@ import {
   DEFAULT_UI_LOCALE,
   FEATURE_KEYS,
   PLAN_BASE,
-  branchMonthly,
   currentSelection,
   featureLabel,
   featureOverrideState,
@@ -52,15 +50,18 @@ import {
   type PackageSelection,
   type UiLocale,
 } from '@favornoms/shared';
-import { Badge, Button, Card } from '@favornoms/ui';
+import { Badge, Button, Card, useConfirm } from '@favornoms/ui';
 import { PlatformNav } from '../../_components/platform-nav';
-import type { PlatformBranchLite } from '../../_components/platform-billing';
+import {
+  isWithdrawnFeature,
+  sellableCatalog,
+  type PlatformBranchLite,
+} from '../../_components/platform-billing';
 import { RailChip } from '../../_components/rail-chip';
 import {
   cardBrandName,
   cardExpired,
   cardExpiry,
-  isStripeDeliveryActiveError,
   isStripeManagedError,
   monthlyFigure,
   nextChargeView,
@@ -89,7 +90,7 @@ const CHARGE_STATUSES = ['pending', 'paid', 'void'] as const;
 const isChargeStatus = (s: string): s is (typeof CHARGE_STATUSES)[number] =>
   (CHARGE_STATUSES as readonly string[]).includes(s);
 
-// Whole dollars as "$99", cents kept when there are any: a discounted one-time fee can be
+// Whole dollars as "$89", cents kept when there are any: a discounted one-time fee can be
 // $49.50, and a rounded figure here would disagree with the ledger it summarises.
 const money = (n: number) => {
   const v = Number(n ?? 0);
@@ -121,9 +122,6 @@ function saveErrorKey(raw: string | undefined): string {
   // The card hides the editor for a card-paying store, but a tab opened before the
   // merchant paid still has it: say why the database refused, not "could not save".
   if (isStripeManagedError(raw)) return 'stripe.errors.managed';
-  // A branch that delivers on a card subscription keeps delivery until the merchant turns it
-  // off on the plan page, which updates Stripe (§9.6).
-  if (isStripeDeliveryActiveError(raw)) return 'stripe.errors.deliveryActive';
   if (/forbidden|not[ _]authori[sz]ed|permission denied|platform[ _]admin/i.test(raw)) {
     return 'errors.permission';
   }
@@ -152,8 +150,11 @@ export function SubscriptionsManager({
   nowMs,
 }: {
   rows: RestaurantSubscriptionRow[];
+  /** The full catalog, withdrawn products included so an old charge still reads by its
+   *  product's name. Only the active products are offered or priced (sellableCatalog). */
   catalog: BillingProduct[];
-  /** Every branch of each restaurant, keyed by restaurant id, oldest first. */
+  /** Every branch of each restaurant, keyed by restaurant id, oldest first, so a one-time
+   *  charge raised for one branch (the old delivery unlock) still names it. */
   branches: Record<string, PlatformBranchLite[]>;
   /** The one-time ledger, keyed by restaurant id. `null` means the read FAILED —
    *  which must not render as "this restaurant has never paid anything". */
@@ -247,14 +248,17 @@ function SubscriptionCard({
   const stripe = row.billing.rail === 'stripe';
   const stripeLinks = stripeObjectLinks(row.stripe_customer_id, row.stripe_subscription_id);
 
-  const plans = catalog.filter((p) => p.kind === 'plan');
-  const total = packageMonthlyTotal(sel, catalog);
-  const lines = monthlyLines(sel, catalog);
+  // Offered and priced from the active products only: a withdrawn row is history, and one with
+  // a price left on it (Delivery, say) must never add to the figure the operator applies.
+  const sellable = sellableCatalog(catalog);
+  const plans = sellable.filter((p) => p.kind === 'plan');
+  const total = packageMonthlyTotal(sel, sellable);
+  const lines = monthlyLines(sel, sellable);
   const minSeats = Math.max(1, ent.branchesUsed);
 
   // What a blank "Paid through" actually writes (billing_apply_selection): the
   // period restarts at now() and ends after the plan's trial days or one month.
-  // "Blank = +1 month" read as "one more month on top", so adding delivery to a
+  // "Blank = +1 month" read as "one more month on top", so adding a branch to a
   // store paid well ahead quietly handed back less time than it already had.
   const trialDays = catalog.find((p) => p.code === sel.planCode)?.trial_days ?? 0;
   const blankEnd = trialDays > 0 ? new Date(nowMs + trialDays * 86_400_000) : addOneMonthUtc(nowMs);
@@ -262,9 +266,6 @@ function SubscriptionCard({
   const blankShortens = !periodEnd && Number.isFinite(currentEnd) && currentEnd > blankEnd.getTime();
   const statusHint = HINTED_STATUSES.includes(status) ? t(`subscriptions.statusHint.${status}`) : null;
 
-  // The restaurant's delivering branches as they stand today, which is what the
-  // header badge reports — not the unsaved picker below it.
-  const deliveringNow = ent.deliveryBranchIds.length;
   const paidOnce = charges
     ? charges.filter((c) => c.status === 'paid').reduce((sum, c) => sum + c.netAmount, 0)
     : null;
@@ -275,27 +276,8 @@ function SubscriptionCard({
       unit: (chunks) => <span className="ml-1 text-sm font-normal text-muted-foreground">{chunks}</span>,
     });
 
-  const toggleDelivery = (branchId: string) =>
-    setSel((s) => ({
-      ...s,
-      deliveryBranchIds: s.deliveryBranchIds.includes(branchId)
-        ? s.deliveryBranchIds.filter((id) => id !== branchId)
-        : [...s.deliveryBranchIds, branchId],
-    }));
-
-  const changePlan = (planCode: string) =>
-    setSel((s) => {
-      const toTrial = (catalog.find((p) => p.code === planCode)?.trial_days ?? 0) > 0;
-      return {
-        ...s,
-        planCode,
-        // A trial delivers from every branch by rule, and no branch paid its $59
-        // unlock for that. Carrying the trial's list onto a paid plan would give
-        // delivery away and bill $29 a month per branch nobody chose, so moving
-        // off a trial starts the picker empty.
-        deliveryBranchIds: trialDays > 0 && !toTrial ? [] : s.deliveryBranchIds,
-      };
-    });
+  // Both plans grant every feature at every branch, so a plan change carries nothing but the code.
+  const changePlan = (planCode: string) => setSel((s) => ({ ...s, planCode }));
 
   const save = async () => {
     setSaving(true);
@@ -332,16 +314,6 @@ function SubscriptionCard({
           <Badge variant="muted">{ent.planCode}</Badge>
           <Badge variant="outline">
             {isStatus(ent.status) ? t(`subscriptionStatus.${ent.status}`) : ent.status}
-          </Badge>
-          {/* Which branches deliver is the package now, so it belongs in the
-              header where the add-on pills used to be. */}
-          <Badge variant={deliveringNow > 0 ? 'default' : 'muted'}>
-            {deliveringNow > 0
-              ? t('subscriptions.deliveringCount', {
-                  count: deliveringNow,
-                  total: Math.max(branches.length, deliveringNow),
-                })
-              : t('subscriptions.deliveringNone')}
           </Badge>
         </div>
       </div>
@@ -489,60 +461,6 @@ function SubscriptionCard({
             </label>
           </div>
 
-          <div>
-            <span className="mb-1 block text-xs font-medium text-muted-foreground">
-              {t('subscriptions.delivery.title')}
-            </span>
-            <p className="mb-2 text-[11px] text-muted-foreground">
-              {trialDays > 0
-                ? t('subscriptions.delivery.trialHint')
-                : t('subscriptions.delivery.hint')}
-            </p>
-            {branches.length === 0 ? (
-              <p className="text-sm text-muted-foreground">{t('subscriptions.delivery.noBranches')}</p>
-            ) : (
-              <ul className="divide-y divide-border rounded-xl border border-border">
-                {branches.map((b) => {
-                  const on = trialDays > 0 || sel.deliveryBranchIds.includes(b.id);
-                  return (
-                    <li key={b.id} className="flex flex-wrap items-center justify-between gap-3 px-3 py-2.5">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">
-                          {b.name}
-                          {!b.isActive && (
-                            <span className="ml-2 text-[11px] font-normal text-muted-foreground">
-                              {t('subscriptions.delivery.hiddenBranch')}
-                            </span>
-                          )}
-                        </p>
-                        <p className="text-[11px] text-muted-foreground">
-                          {t('subscriptions.delivery.branchMonthly', {
-                            amount: money(branchMonthly(sel, catalog, b.id)),
-                          })}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        aria-pressed={on}
-                        disabled={trialDays > 0}
-                        onClick={() => toggleDelivery(b.id)}
-                        className={`focus-ring rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-60 ${
-                          on
-                            ? 'border-primary bg-primary/10 text-primary'
-                            : 'border-border text-muted-foreground hover:bg-muted'
-                        }`}
-                      >
-                        {on
-                          ? t('subscriptions.delivery.on')
-                          : t('subscriptions.delivery.off')}
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <span className="text-xs font-medium text-muted-foreground">
@@ -579,8 +497,8 @@ function SubscriptionCard({
           </div>
 
           {/* The monthly bill, itemised exactly as billing_apply_selection stores
-              it: one plan line, one extra-branch line, one delivery line whose
-              quantity is the number of delivering branches. */}
+              it: one plan line (the first branch) and one additional-branch line
+              whose quantity is every branch after it. */}
           <ul className="space-y-1 text-sm">
             {lines.map((l) => (
               <li key={l.code} className="flex items-center justify-between gap-3">
@@ -819,10 +737,15 @@ function OneTimeHistory({
 
 // Per-restaurant feature switches.
 //
-// Separate from the package on purpose: the trial plan grants AI Voice and
-// Digital Signage to every restaurant, and both pages are still placeholders, so
-// the operator needs to hide them for one customer without repricing the plan
-// everyone else is on. "Plan" is the default and means: follow the package.
+// Separate from the package on purpose: the operator can switch one feature off (or on) for
+// one customer without repricing the plan everyone else is on. "Plan" is the default and
+// means: follow the package. Only a platform admin may write these (docs/PACKAGING-2026-10-24.md
+// §2), so this is the one place a restaurant can be given more than the plan includes.
+//
+// The withdrawn features (AI Suite, AI Voice, Digital Signage, AI menu import) stay switchable
+// here — a deliberate exception for one restaurant is a real decision — but they read as
+// withdrawn, and forcing one On asks first, because nothing else sells them and one stray click
+// would otherwise open an AI function to a restaurant nobody meant to give it to.
 // Labels are switches.states.<value>.
 const STATES: FeatureOverrideState[] = ['plan', 'on', 'off'];
 
@@ -830,6 +753,7 @@ function FeatureSwitches({ row }: { row: RestaurantSubscriptionRow }) {
   const router = useRouter();
   const t = useTranslations('platformBilling');
   const locale = useUiLocale();
+  const confirm = useConfirm();
   // Seeded from the server row, then advanced from each RPC reply — the reply
   // carries the recomputed entitlements, so the "Merchant sees" column stays
   // truthful without waiting for router.refresh() to land.
@@ -839,6 +763,15 @@ function FeatureSwitches({ row }: { row: RestaurantSubscriptionRow }) {
   const [error, setError] = React.useState<string | null>(null);
 
   const apply = async (feature: FeatureKey, state: FeatureOverrideState) => {
+    if (state === 'on' && isWithdrawnFeature(feature) && featureOverrideState(overrides, feature) !== 'on') {
+      const name = featureLabel(feature, locale);
+      const ok = await confirm({
+        title: t('switches.grantWithdrawn.title', { feature: name, restaurant: row.restaurant_name }),
+        body: t('switches.grantWithdrawn.body', { feature: name }),
+        confirmLabel: t('switches.grantWithdrawn.confirm'),
+      });
+      if (!ok) return;
+    }
     setBusy(feature);
     setError(null);
     const res = await setFeatureOverride(getBrowserClient(), row.restaurant_id, feature, state);
@@ -857,9 +790,6 @@ function FeatureSwitches({ row }: { row: RestaurantSubscriptionRow }) {
       <p className="text-xs text-muted-foreground">
         {t.rich('switches.intro', { strong: (chunks) => <strong>{chunks}</strong> })}
       </p>
-      {/* Delivery is the one key the switch cannot place: it says the account may
-          have delivery at all, while branch_addons still says which branches. */}
-      <p className="text-xs text-muted-foreground">{t('switches.deliveryNote')}</p>
 
       {error && (
         <p className="rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</p>
@@ -873,6 +803,7 @@ function FeatureSwitches({ row }: { row: RestaurantSubscriptionRow }) {
           const effective = granted[key] === true;
           const fromPlan = state === 'plan' ? effective : null;
           const label = featureLabel(key, locale);
+          const withdrawn = isWithdrawnFeature(key);
           const visibility =
             state !== 'plan'
               ? effective
@@ -884,8 +815,13 @@ function FeatureSwitches({ row }: { row: RestaurantSubscriptionRow }) {
           return (
             <li key={key} className="flex flex-wrap items-center justify-between gap-3 py-2.5">
               <div>
-                <p className="text-sm font-medium">{label}</p>
+                <p className={`text-sm font-medium ${withdrawn ? 'text-muted-foreground' : ''}`}>
+                  {withdrawn ? t('plans.featureWithdrawn', { feature: label }) : label}
+                </p>
                 <p className="text-xs text-muted-foreground">{t(visibility)}</p>
+                {withdrawn && (
+                  <p className="text-xs text-muted-foreground">{t('switches.withdrawnHint')}</p>
+                )}
               </div>
               <div
                 role="group"

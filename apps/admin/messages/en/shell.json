@@ -98,17 +98,6 @@
     "kitchenStillWorks": "Orders already placed can still be cooked and completed from the kitchen display.",
     "goToBilling": "Go to billing"
   },
-  "addon": {
-    "pricePerMonth": "+${price}<unit>/month</unit>",
-    "addToPackage": "Add to my package",
-    "priceOnceThenMonthly": "${once} once, then +${monthly}/month for this branch",
-    "priceOnce": "${once} once"
-  },
-  "lockedFeature": {
-    "comingSoon": "Coming soon",
-    "notInPackage": "{feature} is part of the {addon} add-on and is not included in your current package.",
-    "viewPackages": "View packages"
-  },
   "upload": {
     "noCanvas": "Your browser could not process the image (no canvas support)."
   },

@@ -1912,6 +1912,9 @@ Implementation: Upstash Rate Limit / Cloudflare
 > original Thai-market plan (THB, Omise, multi-language). It was **replaced
 > outright** — no grandfathering — by the packaging the owner priced for the
 > US-only market. Catalog lives in `public.billing_products`.
+>
+> **Prices here are historical.** Repriced on 2026-09-23 and again on 2026-10-24: today it is one
+> plan, $49 a month per branch, delivery included (`docs/PACKAGING-2026-10-24.md`).
 
 ### 16.1 Packages
 

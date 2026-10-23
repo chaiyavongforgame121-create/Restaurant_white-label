@@ -16,7 +16,6 @@ import {
   canQuote,
   fallbackOverview,
   isDirty,
-  joinNames,
   minimumSeats,
   netOneTime,
   normalizeSelection,
@@ -28,20 +27,18 @@ import {
   selectionKey,
   submittableCode,
   summaryFacts,
-  toggleDelivery,
   withSeats,
   type PlanBranch,
 } from './plan-model';
 
-// The owner's own examples, from docs/PACKAGING-2026-09-23.md §1:
+// The owner's own examples, from docs/PACKAGING-2026-10-24.md §1:
 //
-//   1 branch, no delivery                     $29 / month
-//   2 branches, delivery on one      29 + 58 = $87 / month
-//   2 branches, delivery on both     58 + 58 = $116 / month
-//   first purchase (1 branch)                 $228 once
-//   one more branch                            $99 once
-//   delivery on a branch                       $59 once, and never again
+//   1 branch      $199 once, then  $49 / month
+//   2 branches    $288 once, then  $98 / month
+//   3 branches    $377 once, then $147 / month
+//   one more branch for a restaurant that already paid: $89 once
 //
+// Every feature is in the plan, delivery included, so nothing here is priced per feature.
 // Every number below comes from this catalog, never from the code under test — a price
 // hardcoded in a component is exactly what rule 1 of the packaging doc forbids.
 
@@ -62,31 +59,24 @@ const product = (over: Partial<BillingProduct> & { code: string }): BillingProdu
   ...over,
 });
 
+/** What listBillingProducts returns since 2026-10-24: the active products only (§4.1). */
 const CATALOG: BillingProduct[] = [
   product({
     code: 'base',
-    name: 'Base',
+    name: 'FavorNoms Plan',
     kind: 'plan',
-    monthly_price: 29,
-    one_time_price: 228,
+    monthly_price: 49,
+    one_time_price: 199,
     included_seats: 1,
-    features: { card_payment: true },
+    features: { card_payment: true, delivery: true },
   }),
   product({
     code: 'extra_branch',
-    name: 'Extra branch',
-    monthly_price: 29,
-    one_time_price: 99,
+    name: 'Additional branch',
+    monthly_price: 49,
+    one_time_price: 89,
     seats_per_unit: 1,
     is_quantity: true,
-  }),
-  product({
-    code: 'delivery',
-    name: 'Delivery',
-    monthly_price: 29,
-    one_time_price: 59,
-    is_quantity: true,
-    features: { delivery: true },
   }),
   product({
     code: 'trial',
@@ -98,23 +88,35 @@ const CATALOG: BillingProduct[] = [
   }),
 ];
 
+/**
+ * The same catalog with the withdrawn delivery row still in it at its old prices, as a read of
+ * every product (the platform console's) or a stale cache would return it. It must change
+ * nothing on the bill.
+ */
+const WITH_OLD_DELIVERY: BillingProduct[] = [
+  ...CATALOG,
+  product({
+    code: 'delivery',
+    name: 'Delivery',
+    monthly_price: 30,
+    one_time_price: 59,
+    is_quantity: true,
+    features: { delivery: true },
+  }),
+];
+
 const BRANCH_A = 'aaaaaaaa-0000-4000-8000-000000000001';
 const BRANCH_B = 'bbbbbbbb-0000-4000-8000-000000000002';
+const BRANCH_C = 'cccccccc-0000-4000-8000-000000000003';
 
-const branch = (id: string, name: string, over: Partial<PlanBranch> = {}): PlanBranch => ({
-  id,
-  name,
-  deliveryActive: false,
-  deliveryUnlocked: false,
-  ...over,
-});
+const branch = (id: string, name: string): PlanBranch => ({ id, name });
 
 const TWO_BRANCHES = [branch(BRANCH_A, 'Food Thai Thai'), branch(BRANCH_B, 'Riverside')];
+const THREE_BRANCHES = [...TWO_BRANCHES, branch(BRANCH_C, 'Old Town')];
 
 const sel = (over: Partial<PackageSelection> = {}): PackageSelection => ({
   planCode: 'base',
   branchSeats: 1,
-  deliveryBranchIds: [],
   ...over,
 });
 
@@ -135,191 +137,149 @@ const ent = (over: Partial<Entitlements> = {}): Entitlements => ({
 });
 
 describe('the monthly bill', () => {
-  it('is $29 for one branch with no delivery', () => {
-    expect(planTotals(sel(), CATALOG, [TWO_BRANCHES[0]!], NOTHING_PAID).monthlyTotal).toBe(29);
+  it('is $49 for one branch', () => {
+    expect(planTotals(sel(), CATALOG, [TWO_BRANCHES[0]!], NOTHING_PAID).monthlyTotal).toBe(49);
   });
 
-  it('is $87 for two branches with delivery at one of them', () => {
-    const totals = planTotals(
-      sel({ branchSeats: 2, deliveryBranchIds: [BRANCH_A] }),
-      CATALOG,
-      TWO_BRANCHES,
-      NOTHING_PAID,
-    );
-    expect(totals.monthlyTotal).toBe(87);
-    expect(totals.perBranch.map((l) => l.monthly)).toEqual([58, 29]);
+  it('is $98 for two branches, $49 each', () => {
+    const totals = planTotals(sel({ branchSeats: 2 }), CATALOG, TWO_BRANCHES, NOTHING_PAID);
+    expect(totals.monthlyTotal).toBe(98);
+    expect(totals.perBranch).toEqual([
+      { branchId: BRANCH_A, name: 'Food Thai Thai', monthly: 49 },
+      { branchId: BRANCH_B, name: 'Riverside', monthly: 49 },
+    ]);
   });
 
-  it('is $116 for two branches that both deliver', () => {
+  it('is $147 for three branches', () => {
     expect(
-      planTotals(
-        sel({ branchSeats: 2, deliveryBranchIds: [BRANCH_A, BRANCH_B] }),
-        CATALOG,
-        TWO_BRANCHES,
-        NOTHING_PAID,
-      ).monthlyTotal,
-    ).toBe(116);
+      planTotals(sel({ branchSeats: 3 }), CATALOG, THREE_BRANCHES, NOTHING_PAID).monthlyTotal,
+    ).toBe(147);
   });
 
   // The seat floor keeps the seats at or above the branches on screen, so the itemised
   // lines are the whole bill. A page whose arithmetic does not add up is exactly the
   // confusion the owner asked us to remove.
   it('adds up: the per-branch lines plus the unused seats ARE the total', () => {
-    for (const [seats, delivers, branches] of [
-      [1, [], [TWO_BRANCHES[0]!]],
-      [2, [BRANCH_A], TWO_BRANCHES],
-      [2, [BRANCH_A, BRANCH_B], TWO_BRANCHES],
-      [4, [BRANCH_B], TWO_BRANCHES],
-    ] as Array<[number, string[], PlanBranch[]]>) {
-      const totals = planTotals(
-        sel({ branchSeats: seats, deliveryBranchIds: delivers }),
-        CATALOG,
-        branches,
-        NOTHING_PAID,
-      );
+    for (const [seats, branches] of [
+      [1, [TWO_BRANCHES[0]!]],
+      [2, TWO_BRANCHES],
+      [3, THREE_BRANCHES],
+      [5, TWO_BRANCHES],
+    ] as Array<[number, PlanBranch[]]>) {
+      const totals = planTotals(sel({ branchSeats: seats }), CATALOG, branches, NOTHING_PAID);
       const shown =
         totals.perBranch.reduce((sum, l) => sum + l.monthly, 0) +
         totals.unusedSeats * totals.seatMonthly;
       expect(shown).toBe(totals.monthlyTotal);
+      expect(totals.monthlyTotal).toBe(49 * seats);
     }
   });
 
   it('counts a seat bought ahead of its branch', () => {
     const totals = planTotals(sel({ branchSeats: 3 }), CATALOG, TWO_BRANCHES, NOTHING_PAID);
     expect(totals.unusedSeats).toBe(1);
-    expect(totals.seatMonthly).toBe(29);
-    expect(totals.monthlyTotal).toBe(87);
+    expect(totals.seatMonthly).toBe(49);
+    expect(totals.monthlyTotal).toBe(147);
+  });
+
+  it('stores the plan line and the additional branches, nothing else', () => {
+    const lines = planTotals(sel({ branchSeats: 3 }), CATALOG, THREE_BRANCHES, NOTHING_PAID)
+      .monthlyCatalogLines;
+    expect(lines.map((l) => [l.code, l.qty, l.total])).toEqual([
+      ['base', 1, 49],
+      ['extra_branch', 2, 98],
+    ]);
+  });
+
+  it('adds nothing for the withdrawn delivery product, even where a catalog still carries it', () => {
+    for (const seats of [1, 2, 3]) {
+      const branches = THREE_BRANCHES.slice(0, seats);
+      const now = planTotals(sel({ branchSeats: seats }), CATALOG, branches, NOTHING_PAID);
+      const stale = planTotals(sel({ branchSeats: seats }), WITH_OLD_DELIVERY, branches, NOTHING_PAID);
+      expect(stale).toEqual(now);
+      expect(stale.monthlyCatalogLines.some((l) => l.code === 'delivery')).toBe(false);
+      expect(stale.oneTimeLines.some((l) => l.code === 'delivery')).toBe(false);
+    }
   });
 });
 
 describe('what is paid once', () => {
-  it('is $228 for a first purchase, the first branch included', () => {
+  it('is $199 for a first purchase, the first branch included', () => {
     const totals = planTotals(sel(), CATALOG, [TWO_BRANCHES[0]!], NOTHING_PAID);
-    expect(totals.oneTimeTotal).toBe(228);
+    expect(totals.oneTimeTotal).toBe(199);
     expect(totals.oneTimeLines.map((l) => l.code)).toEqual(['base']);
   });
 
-  it('is $99 to add a branch once the base is paid', () => {
+  it('is $288 for two branches and $377 for three, bought at once', () => {
+    expect(planTotals(sel({ branchSeats: 2 }), CATALOG, TWO_BRANCHES, NOTHING_PAID).oneTimeTotal).toBe(288);
+    const three = planTotals(sel({ branchSeats: 3 }), CATALOG, THREE_BRANCHES, NOTHING_PAID);
+    expect(three.oneTimeTotal).toBe(377);
+    expect(three.oneTimeLines.map((l) => [l.code, l.qty, l.total])).toEqual([
+      ['base', 1, 199],
+      ['extra_branch', 2, 178],
+    ]);
+  });
+
+  it('is $89 to add a branch once the plan is paid', () => {
     const paid = paidState({ basePaid: true, seatsPaid: 1 });
-    expect(planTotals(sel({ branchSeats: 2 }), CATALOG, TWO_BRANCHES, paid).oneTimeTotal).toBe(99);
+    const totals = planTotals(sel({ branchSeats: 2 }), CATALOG, TWO_BRANCHES, paid);
+    expect(totals.oneTimeTotal).toBe(89);
+    expect(totals.monthlyTotal).toBe(98);
   });
 
-  it('is $59 to unlock delivery on a branch', () => {
+  it('charges nothing twice: branches already paid for cost nothing once', () => {
     const paid = paidState({ basePaid: true, seatsPaid: 2 });
-    const totals = planTotals(
-      sel({ branchSeats: 2, deliveryBranchIds: [BRANCH_B] }),
-      CATALOG,
-      TWO_BRANCHES,
-      paid,
-    );
-    expect(totals.oneTimeTotal).toBe(59);
-    expect(totals.oneTimeLines[0]!.branchId).toBe(BRANCH_B);
-  });
-
-  it('charges nothing twice: a branch unlocked before is free to switch back on', () => {
-    const paid = paidState({
-      basePaid: true,
-      seatsPaid: 2,
-      deliveryUnlockedBranchIds: [BRANCH_A],
-    });
-    const totals = planTotals(
-      sel({ branchSeats: 2, deliveryBranchIds: [BRANCH_A] }),
-      CATALOG,
-      TWO_BRANCHES,
-      paid,
-    );
+    const totals = planTotals(sel({ branchSeats: 2 }), CATALOG, TWO_BRANCHES, paid);
     expect(totals.oneTimeTotal).toBe(0);
     expect(totals.oneTimeLines).toEqual([]);
   });
 
-  it('asks for both fees at once when a new branch also delivers', () => {
-    const paid = paidState({ basePaid: true, seatsPaid: 1 });
-    const totals = planTotals(
-      sel({ branchSeats: 2, deliveryBranchIds: [BRANCH_B] }),
-      CATALOG,
-      TWO_BRANCHES,
-      paid,
-    );
-    expect(totals.oneTimeTotal).toBe(99 + 59);
-  });
-
   it('never mixes the two totals', () => {
-    const totals = planTotals(
-      sel({ branchSeats: 2, deliveryBranchIds: [BRANCH_A] }),
-      CATALOG,
-      TWO_BRANCHES,
-      NOTHING_PAID,
-    );
-    expect(totals.oneTimeTotal).toBe(228 + 99 + 59);
-    expect(totals.monthlyTotal).toBe(87);
+    const totals = planTotals(sel({ branchSeats: 2 }), CATALOG, TWO_BRANCHES, NOTHING_PAID);
+    expect(totals.oneTimeTotal).toBe(199 + 89);
+    expect(totals.monthlyTotal).toBe(98);
   });
 });
 
 describe('the branch rows', () => {
-  it('quotes the unlock only for a branch that never had delivery', () => {
-    const rows = branchRows(
-      sel({ branchSeats: 2, deliveryBranchIds: [BRANCH_A] }),
-      CATALOG,
-      [branch(BRANCH_A, 'Food Thai Thai', { deliveryActive: true, deliveryUnlocked: true }), TWO_BRANCHES[1]!],
-      NOTHING_PAID,
-    );
-    expect(rows[0]!.deliveryOnce).toBe(0);
-    expect(rows[0]!.monthly).toBe(58);
-    expect(rows[1]!.deliveryOnce).toBe(59);
-    expect(rows[1]!.monthly).toBe(29);
+  it('lists every branch at the same monthly price, and nothing else', () => {
+    // No switch, no unlock, no "drops to": the row is the branch and what it costs.
+    expect(branchRows(sel({ branchSeats: 2 }), CATALOG, TWO_BRANCHES)).toEqual([
+      { id: BRANCH_A, name: 'Food Thai Thai', monthly: 49 },
+      { id: BRANCH_B, name: 'Riverside', monthly: 49 },
+    ]);
   });
 
-  // A trial delivers everywhere and has bought nothing: get_billing_overview reports
-  // delivery_active true (private.branch_owns_feature short-circuits on trial_days) and
-  // delivery_unlocked false, and billing_paid_state holds no branch at all. The row used to
-  // read "delivers today, so it must have been paid for" and hid the unlock, while the server
-  // — private.billing_price_one_time, mirrored by oneTimeLines — charged it anyway. The two
-  // halves of this test are the two halves of the same screen and must agree.
-  it('still quotes the unlock on a trial, where delivery is granted and nothing was bought', () => {
-    const trialBranches = [
-      branch(BRANCH_A, 'Food Thai Thai', { deliveryActive: true, deliveryUnlocked: false }),
+  it('bills a branch that switched delivery off like any other', () => {
+    // get_billing_overview's branches carry deliveryOn. It is not a billing matter (§3).
+    const fromOverview = [
+      { id: BRANCH_A, name: 'Food Thai Thai', deliveryOn: true },
+      { id: BRANCH_B, name: 'Riverside', deliveryOn: false },
     ];
-    const selection = sel({ branchSeats: 1, deliveryBranchIds: [BRANCH_A] });
-    const rows = branchRows(selection, CATALOG, trialBranches, NOTHING_PAID);
-    expect(rows[0]!.unlocked).toBe(false);
-    expect(rows[0]!.deliveryOnce).toBe(59);
-
-    const totals = planTotals(selection, CATALOG, trialBranches, NOTHING_PAID);
-    expect(totals.oneTimeTotal).toBe(228 + 59);
-    expect(totals.oneTimeLines.some((l) => l.branchId === BRANCH_A && l.total === 59)).toBe(true);
+    const rows = branchRows(sel({ branchSeats: 2 }), CATALOG, fromOverview);
+    expect(rows.map((r) => r.monthly)).toEqual([49, 49]);
+    expect(planTotals(sel({ branchSeats: 2 }), CATALOG, fromOverview, NOTHING_PAID).monthlyTotal).toBe(98);
   });
 
-  // The same trial case on the page's other road in: when get_billing_overview cannot be read
-  // the page rebuilds the branches from the entitlements, and it used to mark every branch that
-  // delivers today as unlocked — i.e. every branch of every trial.
-  it('still quotes the unlock on a trial when the overview could not be read', () => {
-    const trialing = ent({ planCode: 'trial', status: 'trialing', deliveryBranchIds: [BRANCH_A] });
-    const { branches, paid } = fallbackOverview(trialing, [{ id: BRANCH_A, name: 'Food Thai Thai' }]);
-    expect(branches[0]).toMatchObject({ deliveryActive: true, deliveryUnlocked: false });
-    const rows = branchRows(sel({ deliveryBranchIds: [BRANCH_A] }), CATALOG, branches, paid);
-    expect(rows[0]!.deliveryOnce).toBe(59);
-  });
-
-  it('never re-sells the unlock to a paying branch when the overview could not be read', () => {
+  it('never re-sells the setup to a paying restaurant when the overview could not be read', () => {
     const paying = ent({ branchSeats: 2, branchesUsed: 2, deliveryBranchIds: [BRANCH_A] });
     const { branches, paid } = fallbackOverview(paying, [
       { id: BRANCH_A, name: 'Food Thai Thai' },
       { id: BRANCH_B, name: 'Riverside' },
     ]);
-    const selection = sel({ branchSeats: 2, deliveryBranchIds: [BRANCH_A] });
-    expect(branchRows(selection, CATALOG, branches, paid).map((r) => r.deliveryOnce)).toEqual([0, 59]);
-    expect(planTotals(selection, CATALOG, branches, paid).oneTimeTotal).toBe(0);
+    expect(paid).toEqual({ basePaid: true, seatsPaid: 2 });
+    expect(branches).toEqual(TWO_BRANCHES);
+    expect(planTotals(sel({ branchSeats: 2 }), CATALOG, branches, paid).oneTimeTotal).toBe(0);
   });
 
-  it('warns when a branch that delivers today is switched off, and says what it drops to', () => {
-    const branches = [branch(BRANCH_A, 'Food Thai Thai', { deliveryActive: true, deliveryUnlocked: true })];
-    const rows = branchRows(sel(), CATALOG, branches, NOTHING_PAID);
-    expect(rows[0]!.losingDelivery).toBe(true);
-    expect(rows[0]!.monthlyWithoutDelivery).toBe(29);
-  });
-
-  it('does not warn about a branch that never delivered', () => {
-    expect(branchRows(sel(), CATALOG, TWO_BRANCHES, NOTHING_PAID)[0]!.losingDelivery).toBe(false);
+  it('prices a trial against nothing paid when the overview could not be read', () => {
+    // A trial has bought nothing, so converting it costs the first-time setup — the same figure
+    // private.billing_price_one_time will charge.
+    const trialing = ent({ planCode: 'trial', status: 'trialing', deliveryBranchIds: [BRANCH_A] });
+    const { branches, paid } = fallbackOverview(trialing, [{ id: BRANCH_A, name: 'Food Thai Thai' }]);
+    expect(paid).toEqual(NOTHING_PAID);
+    expect(branches).toEqual([TWO_BRANCHES[0]]);
+    expect(planTotals(sel(), CATALOG, branches, paid).oneTimeTotal).toBe(199);
   });
 });
 
@@ -330,6 +290,7 @@ describe('the selection', () => {
     expect(withSeats(sel({ branchSeats: 2 }), 1, minSeats).branchSeats).toBe(2);
     expect(withSeats(sel({ branchSeats: 2 }), 5, minSeats).branchSeats).toBe(5);
     expect(withSeats(sel(), 500, minSeats).branchSeats).toBe(MAX_SEATS);
+    expect(normalizeSelection(sel({ branchSeats: 0 }), minSeats)).toEqual(sel({ branchSeats: 2 }));
   });
 
   it('keeps a restaurant with more branches than the stepper offers at its own branch count', () => {
@@ -338,179 +299,132 @@ describe('the selection', () => {
     expect(withSeats(sel(), MAX_SEATS + 20, MAX_SEATS + 5).branchSeats).toBe(MAX_SEATS + 5);
   });
 
-  it('drops delivery ids that are not this restaurant’s branches', () => {
-    const cleaned = normalizeSelection(
-      sel({ branchSeats: 2, deliveryBranchIds: [BRANCH_A, 'not-ours'] }),
-      TWO_BRANCHES,
-      2,
-    );
-    expect(cleaned.deliveryBranchIds).toEqual([BRANCH_A]);
-  });
-
-  it('opens with the branch the upsell link named', () => {
+  it('opens on the plan and the branches the restaurant pays for, and nothing else', () => {
     const opening = openingSelection({
-      entitlements: ent({ branchSeats: 2, branchesUsed: 2 }),
-      branches: TWO_BRANCHES,
+      entitlements: ent({ branchSeats: 2, branchesUsed: 2, deliveryBranchIds: [BRANCH_A, BRANCH_B] }),
       minSeats: 2,
-      addDelivery: true,
-      branchParam: BRANCH_B,
     });
-    expect(opening.selection.deliveryBranchIds).toEqual([BRANCH_B]);
-    expect(opening.focusBranchId).toBe(BRANCH_B);
+    expect(opening).toEqual({ planCode: 'base', branchSeats: 2 });
   });
 
-  it('switches the only branch on when ?add=delivery arrives without one', () => {
+  it('opens a trial on the plan it would buy', () => {
     const opening = openingSelection({
-      entitlements: ent(),
-      branches: [TWO_BRANCHES[0]!],
+      entitlements: ent({ planCode: 'trial', status: 'trialing', branchSeats: 1 }),
       minSeats: 1,
-      addDelivery: true,
-      branchParam: null,
     });
-    expect(opening.selection.deliveryBranchIds).toEqual([BRANCH_A]);
-  });
-
-  it('guesses nothing when several branches could be meant', () => {
-    const opening = openingSelection({
-      entitlements: ent({ branchSeats: 2, branchesUsed: 2 }),
-      branches: TWO_BRANCHES,
-      minSeats: 2,
-      addDelivery: true,
-      branchParam: null,
-    });
-    expect(opening.selection.deliveryBranchIds).toEqual([]);
-    expect(opening.focusBranchId).toBeNull();
-  });
-
-  it('carries over the branches that deliver today', () => {
-    const opening = openingSelection({
-      entitlements: ent({ branchSeats: 2, branchesUsed: 2, deliveryBranchIds: [BRANCH_A] }),
-      branches: TWO_BRANCHES,
-      minSeats: 2,
-      addDelivery: false,
-      branchParam: null,
-    });
-    expect(opening.selection).toEqual({
-      planCode: 'base',
-      branchSeats: 2,
-      deliveryBranchIds: [BRANCH_A],
-    });
+    expect(opening).toEqual({ planCode: 'base', branchSeats: 1 });
   });
 
   it('treats a trialing restaurant as a change, so it can be confirmed', () => {
     const trialing = ent({ planCode: 'trial', status: 'trialing', deliveryBranchIds: [BRANCH_A] });
-    expect(isDirty(sel({ deliveryBranchIds: [BRANCH_A] }), trialing)).toBe(true);
+    expect(isDirty(sel(), trialing)).toBe(true);
   });
 
-  it('treats an unchanged package as clean whatever the order of the ids', () => {
-    const current = ent({
-      branchSeats: 2,
-      branchesUsed: 2,
-      deliveryBranchIds: [BRANCH_A, BRANCH_B],
-    });
-    expect(isDirty(sel({ branchSeats: 2, deliveryBranchIds: [BRANCH_B, BRANCH_A] }), current)).toBe(
-      false,
-    );
+  // The delivering branches used to be part of the selection, compared against the server's
+  // list: whenever the two disagreed, "Confirm package" stayed lit with nothing to confirm.
+  it('treats an unchanged package as clean, whichever branches deliver', () => {
+    for (const delivering of [[], [BRANCH_A], [BRANCH_A, BRANCH_B]]) {
+      const current = ent({ branchSeats: 2, branchesUsed: 2, deliveryBranchIds: delivering });
+      expect(isDirty(sel({ branchSeats: 2 }), current), delivering.join()).toBe(false);
+    }
   });
 
-  it('compares two selections by what they buy, not by list order', () => {
-    expect(
-      sameSelection(
-        sel({ branchSeats: 2, deliveryBranchIds: [BRANCH_A, BRANCH_B] }),
-        sel({ branchSeats: 2, deliveryBranchIds: [BRANCH_B, BRANCH_A] }),
-      ),
-    ).toBe(true);
-    expect(toggleDelivery(sel(), BRANCH_A, true).deliveryBranchIds).toEqual([BRANCH_A]);
-    expect(toggleDelivery(sel({ deliveryBranchIds: [BRANCH_A] }), BRANCH_A, false).deliveryBranchIds)
-      .toEqual([]);
+  it('sees a change in the branch count', () => {
+    expect(isDirty(sel({ branchSeats: 3 }), ent({ branchSeats: 2, branchesUsed: 2 }))).toBe(true);
   });
 
-  it('reads a queued request back as a selection', () => {
-    expect(
-      selectionFromRequest({
-        plan_code: 'base',
-        branch_seats: 2,
-        delivery_branch_ids: [BRANCH_A],
-      }),
-    ).toEqual({ planCode: 'base', branchSeats: 2, deliveryBranchIds: [BRANCH_A] });
+  it('compares two selections by the plan and the branch count', () => {
+    expect(sameSelection(sel({ branchSeats: 2 }), sel({ branchSeats: 2 }))).toBe(true);
+    expect(sameSelection(sel({ branchSeats: 2 }), sel({ branchSeats: 3 }))).toBe(false);
+    expect(selectionKey(sel({ branchSeats: 2 }))).not.toBe(selectionKey(sel({ branchSeats: 3 })));
+  });
+
+  it('reads a queued request back as a selection, ignoring a legacy delivery list', () => {
+    // A row filed before 2026-10-24 still names the branches it wanted delivery at.
+    const legacy = { plan_code: 'base', branch_seats: 2, delivery_branch_ids: [BRANCH_A] };
+    expect(selectionFromRequest(legacy)).toEqual({ planCode: 'base', branchSeats: 2 });
+    expect(sameSelection(selectionFromRequest(legacy), sel({ branchSeats: 2 }))).toBe(true);
   });
 });
 
 describe('the discount code', () => {
-  const selection = sel({ branchSeats: 2, deliveryBranchIds: [BRANCH_A] });
+  const selection = sel({ branchSeats: 2 });
   const applied = {
     code: 'LAUNCH50',
     label: 'Launch offer',
     amountOff: 50,
-    netTotal: 336,
+    netTotal: 238,
     key: selectionKey(selection),
   };
 
   it('shows the server’s number, not one of its own', () => {
-    expect(netOneTime(selection, 386, applied)).toBe(336);
+    expect(netOneTime(selection, 288, applied)).toBe(238);
     expect(submittableCode(selection, applied)).toBe('LAUNCH50');
   });
 
   it('re-prices at list price when the package changes under it', () => {
-    const changed = toggleDelivery(selection, BRANCH_B, true);
-    expect(netOneTime(changed, 445, applied)).toBe(445);
+    const changed = withSeats(selection, 3, 1);
+    expect(netOneTime(changed, 377, applied)).toBe(377);
     expect(submittableCode(changed, applied)).toBeNull();
   });
 
   it('re-prices at list price when the code is cleared', () => {
-    expect(netOneTime(selection, 386, null)).toBe(386);
+    expect(netOneTime(selection, 288, null)).toBe(288);
     expect(submittableCode(selection, null)).toBeNull();
   });
 });
 
 describe('the plain-language summary', () => {
-  it('names the branches that deliver, in the order the page lists them', () => {
-    const facts = summaryFacts(
-      sel({ branchSeats: 2, deliveryBranchIds: [BRANCH_B, BRANCH_A] }),
-      CATALOG,
-      TWO_BRANCHES,
-      NOTHING_PAID,
-    );
-    expect(facts.branches).toBe(2);
-    expect(facts.deliveryNames).toEqual(['Food Thai Thai', 'Riverside']);
-    expect(facts.monthlyTotal).toBe(116);
+  it('is the branches and the monthly total — "2 branches — $98 every month"', () => {
+    expect(summaryFacts(sel({ branchSeats: 2 }), CATALOG, NOTHING_PAID)).toEqual({
+      branches: 2,
+      monthlyTotal: 98,
+      oneTimeTotal: 288,
+    });
   });
 
-  it('joins names the way the reader’s language does', () => {
-    expect(joinNames(['Food Thai Thai'], 'en-US')).toBe('Food Thai Thai');
-    expect(joinNames(['Food Thai Thai', 'Riverside'], 'en-US')).toContain('and');
-    expect(joinNames([], 'en-US')).toBe('');
+  it('counts the branches paid for, not only the ones open', () => {
+    const facts = summaryFacts(sel({ branchSeats: 3 }), CATALOG, paidState({ basePaid: true, seatsPaid: 2 }));
+    expect(facts).toEqual({ branches: 3, monthlyTotal: 147, oneTimeTotal: 89 });
   });
 });
 
 describe('the catalog is the only price list', () => {
   it('reads both prices of a product', () => {
-    expect(priceOf(CATALOG, 'delivery')).toEqual({ monthly: 29, once: 59 });
+    expect(priceOf(CATALOG, 'base')).toEqual({ monthly: 49, once: 199 });
+    expect(priceOf(CATALOG, 'extra_branch')).toEqual({ monthly: 49, once: 89 });
   });
 
   it('prices nothing at all when the catalog could not be read', () => {
     const totals = planTotals(sel({ branchSeats: 2 }), [], TWO_BRANCHES, NOTHING_PAID);
     expect(totals.monthlyTotal).toBe(0);
     expect(totals.oneTimeTotal).toBe(0);
-    expect(priceOf([], 'delivery')).toEqual({ monthly: 0, once: 0 });
+    expect(priceOf([], 'extra_branch')).toEqual({ monthly: 0, once: 0 });
   });
 
   // Those zeros are what a failed read produces (listBillingProducts answers an error with
   // []), and the page used to print them as a quote — "$0/mo", "$0 every month", "Nothing.
-  // Everything … is already paid for." — with Confirm enabled. Coastal Grill's real package
-  // (two branches, delivery at both) is $116 a month; it must never read as free.
+  // Everything … is already paid for." — with Confirm enabled. Two branches are $98 a month;
+  // they must never read as free.
   it('refuses to quote from a catalog that could not be read', () => {
     expect(canQuote([], 'base')).toBe(false);
     expect(canQuote(CATALOG, 'base')).toBe(true);
   });
 
-  it('refuses to quote when any product the page prices is missing', () => {
+  it('refuses to quote when the plan or the additional branch is missing', () => {
     const without = (code: string) => CATALOG.filter((p) => p.code !== code);
     expect(canQuote(without('base'), 'base')).toBe(false);
     expect(canQuote(without('extra_branch'), 'base')).toBe(false);
-    expect(canQuote(without('delivery'), 'base')).toBe(false);
     // An add-on that happens to share the plan's code is not the plan.
     expect(canQuote([...without('base'), product({ code: 'base' })], 'base')).toBe(false);
+  });
+
+  // The page reads active products only, and the delivery product is inactive since
+  // 2026-10-24. Requiring it put every merchant on "Prices unavailable" — a suspended one too,
+  // for whom this page is the only way back.
+  it('quotes without the withdrawn delivery product', () => {
+    expect(CATALOG.some((p) => p.code === 'delivery')).toBe(false);
+    expect(canQuote(CATALOG, 'base')).toBe(true);
   });
 });
 
@@ -560,34 +474,26 @@ const USED: Array<[string, Record<string, string | number>?]> = [
   ['now.noPlan'],
   ['now.branches'],
   ['now.branchesValue', { used: 1, seats: 2 }],
-  ['now.delivery'],
-  ['now.deliveryNone'],
-  ['now.deliveryTrial'],
   ['now.nextPayment'],
   ['now.trialEnds'],
   ['now.noNextPayment'],
   ['now.includedTitle'],
   ['base.name'],
-  ['base.included.cardPayment'],
-  ['base.included.onlineOrdering'],
-  ['base.included.reportsLoyalty'],
-  ['base.included.kitchenCounter'],
-  ['base.included.oneBranch'],
+  // The owner's six included items (plan-view.tsx INCLUDED).
+  ['base.included.allFeatures'],
+  ['base.included.website'],
+  ['base.included.operations'],
+  ['base.included.drivers'],
+  ['base.included.growth'],
+  ['base.included.noCommissions'],
   ['branches.title'],
-  ['branches.subtitle', { price: '$29' }],
+  ['branches.subtitle', { price: '$49' }],
   ['branches.subtitleNoPrice'],
   ['branches.empty'],
-  ['branches.delivery'],
-  ['branches.switchLabel', { branch: 'Food Thai Thai' }],
-  ['branches.eachMonth', { price: '$58' }],
-  ['branches.costOnceAndMonthly', { once: '$59', monthly: '$29' }],
-  ['branches.costMonthly', { monthly: '$29' }],
-  ['branches.alreadyUnlocked'],
-  ['branches.offWarning', { branch: 'Food Thai Thai' }],
-  ['branches.dropsTo', { price: '$29' }],
+  ['branches.eachMonth', { price: '$49' }],
   ['branches.trialNote'],
   ['seats.title'],
-  ['seats.body', { once: '$99', monthly: '$29' }],
+  ['seats.body', { once: '$89', monthly: '$49' }],
   ['seats.usage', { used: 1, seats: 2 }],
   ['seats.remove'],
   ['seats.add'],
@@ -601,15 +507,13 @@ const USED: Array<[string, Record<string, string | number>?]> = [
   ['pay.onceCode', { code: 'WELCOME50' }],
   ['pay.onceAwaiting'],
   ['pay.monthlyTitle'],
-  ['pay.withDelivery', { branch: 'Food Thai Thai' }],
   ['pay.unusedSeats', { count: 1 }],
-  ['pay.forBranch', { product: 'Delivery', branch: 'Food Thai Thai' }],
+  ['pay.setup.first'],
+  ['pay.setup.extraBranch'],
   ['pay.total'],
   ['pay.summary.branches', { count: 2 }],
-  ['pay.summary.delivery', { names: 'Food Thai Thai' }],
-  ['pay.summary.noDelivery'],
-  ['pay.summary.line', { branches: '2 branches', delivery: 'no delivery', price: '$87' }],
-  ['pay.summary.plusOnce', { price: '$228' }],
+  ['pay.summary.line', { branches: '2 branches', price: '$98' }],
+  ['pay.summary.plusOnce', { price: '$288' }],
   ['pay.trialNote'],
   ['pay.footnote'],
   ['discount.title'],
@@ -651,10 +555,10 @@ const USED: Array<[string, Record<string, string | number>?]> = [
   ['stripe.action.confirmChange'],
   ['stripe.action.continue'],
   ['stripe.action.processing'],
-  ['stripe.footnote.firstLater', { date: '10/26/2026', monthly: '$58' }],
-  ['stripe.footnote.firstNow', { monthly: '$58' }],
-  ['stripe.footnote.change', { monthly: '$58' }],
-  ['stripe.footnote.renews', { monthly: '$58' }],
+  ['stripe.footnote.firstLater', { date: '10/26/2026', monthly: '$98' }],
+  ['stripe.footnote.firstNow', { monthly: '$98' }],
+  ['stripe.footnote.change', { monthly: '$98' }],
+  ['stripe.footnote.renews', { monthly: '$98' }],
   ['stripe.prorationNote'],
   ['stripe.trialNote.later', { date: '10/26/2026' }],
   ['stripe.trialNote.now'],
@@ -665,14 +569,14 @@ const USED: Array<[string, Record<string, string | number>?]> = [
   ['stripe.noTrialBody'],
   ['stripe.replaceBody', { summary: '2 branches' }],
   ['stripe.chargeDialog.title'],
-  ['stripe.chargeDialog.amount', { amount: '$70', card: 'Visa •••• 4242' }],
-  ['stripe.chargeDialog.proration', { monthly: '$87' }],
+  ['stripe.chargeDialog.amount', { amount: '$89', card: 'Visa •••• 4242' }],
+  ['stripe.chargeDialog.proration', { monthly: '$147' }],
   ['stripe.chargeDialog.nothing'],
   ['stripe.chargeDialog.cardOnFile'],
   ['stripe.chargeDialog.confirm'],
   ['stripe.now.nextCharge'],
   ['stripe.now.endsOn'],
-  ['stripe.now.chargeValue', { amount: '$58', date: '10/26/2026' }],
+  ['stripe.now.chargeValue', { amount: '$98', date: '10/26/2026' }],
   ['stripe.pending.title'],
   ['stripe.pending.titleSent', { date: '9/26/2026' }],
   ['stripe.pending.body'],
@@ -707,7 +611,7 @@ const USED: Array<[string, Record<string, string | number>?]> = [
   ['stripe.billing.noCard'],
   ['stripe.billing.cardExpiring'],
   ['stripe.billing.lastInvoice'],
-  ['stripe.billing.invoiceValue', { amount: '$228', status: 'Paid' }],
+  ['stripe.billing.invoiceValue', { amount: '$288', status: 'Paid' }],
   ['stripe.billing.viewInvoice'],
   ['stripe.billing.noInvoice'],
   ['stripe.billing.manage'],
@@ -781,6 +685,29 @@ describe('the plan page speaks every language', () => {
       expect(plan).not.toContain('AI Suite');
       expect(plan).not.toContain('aiSuite');
       expect(plan).not.toContain('aiMenuImport');
+    });
+
+    it(`sells no delivery switch, unlock or add-on in ${locale}`, () => {
+      // Delivery is in the plan at every branch (docs/PACKAGING-2026-10-24.md §5): the keys
+      // that priced it, switched it or warned about losing it are gone, and so is the summary
+      // sentence that named the delivering branches.
+      const plan = (catalogue(locale) as { plan: Tree }).plan as Record<string, Tree>;
+      for (const key of ['delivery', 'deliveryNone', 'deliveryTrial']) {
+        expect(plan.now![key], `${locale}: now.${key}`).toBeUndefined();
+      }
+      for (const key of ['delivery', 'switchLabel', 'costOnceAndMonthly', 'costMonthly', 'alreadyUnlocked', 'offWarning', 'dropsTo']) {
+        expect(plan.branches![key], `${locale}: branches.${key}`).toBeUndefined();
+      }
+      expect(plan.pay!.withDelivery).toBeUndefined();
+      expect(plan.pay!.forBranch).toBeUndefined();
+      expect((plan.pay!.summary as Tree).delivery).toBeUndefined();
+      expect(JSON.stringify(plan)).not.toContain('{delivery}');
+    });
+
+    it(`hardcodes no price in ${locale}`, () => {
+      // Every figure comes from billing_products through a {price}-style placeholder.
+      const settings = JSON.stringify(catalogue(locale));
+      expect(settings).not.toMatch(/\$\s?\d/);
     });
   }
 });

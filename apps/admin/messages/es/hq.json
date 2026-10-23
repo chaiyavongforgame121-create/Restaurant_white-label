@@ -56,7 +56,11 @@
     "title": "Costos que podemos ver",
     "driverPayouts": "Pagos a repartidores",
     "subscription": "Suscripción de FavorNoms",
-    "noInvoicesWithPlan": "Aún no hay facturas registradas. Tu tarifa actual es <strong>{rate}/mes</strong> con el plan <planName>{plan}</planName>.",
+    "noInvoicesWithPlan": "Aún no hay facturas registradas. Tu tarifa actual es <strong>{rate}/mes</strong> con el {plan}.",
+    "planNames": {
+      "base": "Plan FavorNoms",
+      "trial": "periodo de prueba gratuito"
+    },
     "noInvoices": "Aún no hay facturas registradas. Tu tarifa actual es <strong>{rate}/mes</strong>.",
     "totalKnown": "Total de costos conocidos",
     "afterCosts": "Ingresos después de costos",

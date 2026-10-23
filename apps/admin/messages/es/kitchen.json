@@ -154,7 +154,7 @@
   },
   "dispatch": {
     "maxAttempts": "Se probó con todos los repartidores: sube “Máximo de intentos de asignación” o asigna uno manualmente.",
-    "notEntitled": "La entrega a domicilio no está incluida en el plan de este restaurante.",
+    "notEntitled": "La entrega a domicilio está desactivada en esta sucursal o no está disponible para el restaurante en este momento.",
     "notDispatchable": "Ya no se puede buscar repartidor para esta entrega.",
     "failed": "No se pudo buscar repartidor. Inténtalo de nuevo.",
     "noneAvailable": "No hay repartidores disponibles ahora.",

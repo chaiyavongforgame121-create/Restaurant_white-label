@@ -409,9 +409,14 @@ function Package({
         </div>
       )}
 
+      {/* The plan includes delivery at every branch (docs/PACKAGING-2026-10-24.md §1), so a paid-up
+          restaurant without it has had it switched off for the whole restaurant: by a platform
+          feature switch, or by a package that leaves it out. Said here because it outranks every
+          branch's own delivery switch and is the first thing to check when a merchant says
+          delivery stopped. */}
       {health.entitled && !hasFeature(ent, 'delivery') && (
         <p className="rounded-xl bg-warning/10 px-3 py-2 text-xs text-warning">
-          {t('drawer.package.noDelivery')}
+          {t('drawer.package.deliveryOff')}
         </p>
       )}
 

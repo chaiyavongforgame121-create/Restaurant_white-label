@@ -16,7 +16,7 @@ interface Props {
   branchId: string;
   branchName?: string;
   /**
-   * Schedule Delivery can be booked here (see resolveScheduleDelivery): sold, taking advance
+   * Schedule Delivery can be booked here (see resolveScheduleDelivery): delivering, taking advance
    * orders, not paused, and at least one bookable slot. Not "delivery is open this minute" —
    * every storefront delivery is booked for later, so the tile no longer disappears outside
    * delivery hours.
@@ -24,8 +24,8 @@ interface Props {
    */
   canDeliver?: boolean;
   /**
-   * This branch sells delivery at all (storefront_status.delivery_entitled, per branch
-   * since docs/PACKAGING-2026-09-23.md §2).
+   * This branch delivers at all (storefront_status.delivery_entitled, per branch: its
+   * delivery switch, docs/PACKAGING-2026-10-24.md §3).
    *
    * Only ever used for the words under the tiles, never to offer delivery — canDeliver
    * alone decides that. A diner who is told "closed right now" about a branch that never

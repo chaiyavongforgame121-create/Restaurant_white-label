@@ -2,12 +2,12 @@ import Link from 'next/link';
 import { unstable_cache } from 'next/cache';
 import { getTranslations } from 'next-intl/server';
 import {
-  Check, ChefHat, ChevronRight, CreditCard, LineChart,
-  Megaphone, ShoppingBag, Star, Store, Zap,
+  Building2, Check, ChefHat, ChevronRight, CreditCard, LineChart,
+  Megaphone, Settings, ShoppingBag, Star, Zap,
 } from 'lucide-react';
 import { getAnonServerClient } from '@favornoms/database/server';
 import { listBillingProducts } from '@favornoms/database/queries';
-import type { BillingProduct } from '@favornoms/shared';
+import { PLAN_BASE, PRODUCT_EXTRA_BRANCH, type BillingProduct } from '@favornoms/shared';
 import { RiderIcon } from '@favornoms/ui';
 
 export async function generateMetadata() {
@@ -27,26 +27,22 @@ const MERCHANT_URL = (
 ).replace(/\/$/, '');
 const SIGNUP_URL = `${MERCHANT_URL}/signup`;
 
-// What the base plan includes, in display order. The words live in landing.pricing.includes.
-// "AI menu import" left this list on 2026-09-23 with the screen that sold it
-// (docs/PACKAGING-2026-09-23.md §1); the CSV importer it sat beside is still there, but it
-// was never part of what the base is sold on.
-const BASE_INCLUDES = [
-  'storefront',
-  // Still does not say "into your own Stripe account". The code does
-  // now: stripe-create-payment-intent charges each branch's own
-  // connected account (Stripe Connect, direct charges,
-  // docs/PAYMENTS-STRIPE-CONNECT-2026-09-24.md). The wording (in every
-  // language) waits until card payments are live and the owner signs
-  // off on the claim.
-  'payments',
-  'kitchen',
+// What the one plan includes, in display order: the owner's own list of 2026-10-24
+// (docs/PACKAGING-2026-10-24.md §1), at every branch. The words live in
+// landing.pricing.includes. Delivery is one of them now, not an add-on.
+const PLAN_INCLUDES = [
+  'allFeatures',
+  'website',
+  'operations',
+  'drivers',
   'growth',
-  'oneBranch',
+  // True of the code too: no application fee or transfer is taken on a card charge
+  // (stripe-create-payment-intent), and the terms say FavorNoms takes no share of orders.
+  'noCommissions',
 ] as const;
 
 // Money is shown in US format in every interface language, as it is everywhere else.
-// Whole dollars as "$228"; a catalog price with cents keeps them rather than being rounded.
+// Whole dollars as "$49"; a catalog price with cents keeps them rather than being rounded.
 const money = (n: number) =>
   Number.isInteger(n)
     ? `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
@@ -55,11 +51,14 @@ const money = (n: number) =>
 /**
  * The catalog, read once an hour.
  *
- * Prices live in `billing_products` and nowhere else (docs/PACKAGING-2026-09-23.md §5.1),
+ * Prices live in `billing_products` and nowhere else (docs/PACKAGING-2026-10-24.md §4.1),
  * so this page and the merchant's plan page cannot quote different numbers — which is
- * exactly what this section did for months, offering "$199/mo" and an AI Suite the catalog
- * had already moved on from. The anon role may read active products, so the cookie-less
- * client is enough and the page stays static between revalidations.
+ * exactly what this section once did for months, offering a monthly price and an AI Suite
+ * the catalog had already moved on from. The anon role may read active products, so the
+ * cookie-less client is enough and the page stays static between revalidations.
+ *
+ * The key is versioned so a deploy that changes what this page reads never serves the
+ * previous deploy's cached catalog for up to an hour (v2: the single plan, no delivery row).
  */
 const billingCatalog = unstable_cache(
   async (): Promise<BillingProduct[]> => {
@@ -71,7 +70,7 @@ const billingCatalog = unstable_cache(
       return [];
     }
   },
-  ['landing-billing-products-v1'],
+  ['landing-billing-products-v2'],
   { revalidate: 3600, tags: ['billing-products'] },
 );
 
@@ -85,19 +84,10 @@ function prices(catalog: BillingProduct[], code: string): { once: number | null;
 export default async function RootPage() {
   const t = await getTranslations('landing');
   const catalog = await billingCatalog();
-  const base = prices(catalog, 'base');
-  const extraBranch = prices(catalog, 'extra_branch');
-  const delivery = prices(catalog, 'delivery');
-
-  /** "+$59 once, then +$29/mo" — one string, so each language orders it itself. */
-  const addOnPrice = (p: { once: number | null; monthly: number | null }): string | null => {
-    if (p.once !== null && p.monthly !== null) {
-      return t('pricing.addOnPrice', { once: money(p.once), monthly: money(p.monthly) });
-    }
-    if (p.once !== null) return t('pricing.addOnOnce', { price: money(p.once) });
-    if (p.monthly !== null) return t('pricing.addOnMonthly', { price: money(p.monthly) });
-    return null;
-  };
+  // The plan's monthly price is the per-branch price: the catalog keeps the additional
+  // branch's monthly equal to it (docs §4.1), so the plan's own figure is the one to quote.
+  const base = prices(catalog, PLAN_BASE);
+  const extraBranch = prices(catalog, PRODUCT_EXTRA_BRANCH);
 
   return (
     <main className="overflow-hidden">
@@ -212,71 +202,71 @@ export default async function RootPage() {
       {/* Pricing */}
       <section className="bg-muted/40 py-20">
         <div className="container max-w-5xl">
-          <div className="text-center">
-            <h2 className="font-display text-3xl font-bold sm:text-4xl">{t('pricing.title')}</h2>
-            <p className="mt-3 text-muted-foreground">
-              {t('pricing.subtitle')}
-            </p>
-          </div>
+          <h2 className="text-center font-display text-3xl font-bold sm:text-4xl">
+            {t('pricing.title')}
+            <span className="mt-1 block text-primary">{t('pricing.subtitle')}</span>
+          </h2>
 
-          <div className="mx-auto mt-10 max-w-md rounded-3xl border-2 border-primary bg-card p-7 shadow-warm">
-            <p className="text-xs font-semibold uppercase tracking-wider text-primary">{t('pricing.baseName')}</p>
-            {/* Two numbers, never added together: what a restaurant pays to start, and what it
-                pays every month after that. A price the catalog could not give is left out, and
-                a catalog that only has one of the two leads with the one it has. */}
-            {base.once !== null && (
-              <p className="mt-2 font-display text-5xl font-bold">
-                {t('pricing.once', { price: money(base.once) })}
-              </p>
-            )}
-            {base.monthly !== null &&
-              (base.once !== null ? (
-                <p className="mt-1 font-display text-xl font-semibold text-muted-foreground">
-                  {t('pricing.thenMonthly', { price: money(base.monthly) })}
-                </p>
+          {/* The plan beside what is paid once. Never added together: the monthly figure is
+              what every branch costs, the side cards what starting and growing cost once.
+              A price the catalog could not give is left out rather than invented. */}
+          <div className="mt-10 grid grid-cols-1 gap-5 md:grid-cols-5">
+            <div className="flex flex-col rounded-3xl border-2 border-primary bg-card p-6 shadow-warm sm:p-7 md:col-span-3">
+              <span className="self-start rounded-full bg-gradient-warm px-3 py-1 text-xs font-bold uppercase tracking-wider text-white">
+                {t('pricing.bestValue')}
+              </span>
+              {base.monthly !== null ? (
+                <div className="mt-4">
+                  {/* One message, so each language orders the number and its unit itself. */}
+                  <p className="flex flex-wrap items-baseline gap-x-2 text-xl font-semibold text-muted-foreground">
+                    {t.rich('pricing.perMonth', {
+                      price: money(base.monthly),
+                      amount: (chunks) => (
+                        <span className="font-display text-6xl font-bold text-foreground tabular-nums">{chunks}</span>
+                      ),
+                    })}
+                  </p>
+                  <p className="mt-1 text-sm font-medium text-muted-foreground">{t('pricing.perBranch')}</p>
+                </div>
               ) : (
-                <p className="mt-2 font-display text-5xl font-bold">
-                  {t('pricing.monthlyOnly', { price: money(base.monthly) })}
+                <p className="mt-4 font-display text-2xl font-bold">{t('pricing.monthlyFallback')}</p>
+              )}
+              <ul className="mt-6 space-y-2.5 text-left">
+                {PLAN_INCLUDES.map((key) => (
+                  <li key={key} className="flex items-start gap-2 text-sm">
+                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
+                    {t(`pricing.includes.${key}`)}
+                  </li>
+                ))}
+              </ul>
+              {/* mt-auto keeps the button at the foot of the card when the side cards are taller. */}
+              <div className="mt-auto pt-7">
+                <a
+                  href={SIGNUP_URL}
+                  className="focus-ring inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-warm px-6 text-base font-semibold text-white shadow-warm hover:opacity-95"
+                >
+                  {t('hero.startTrial')} <ChevronRight className="h-4 w-4" />
+                </a>
+                <p className="mt-3 text-center text-xs text-muted-foreground">
+                  {t('pricing.trialNote')}
                 </p>
-              ))}
-            <p className="mt-2 text-sm text-muted-foreground">
-              {t('pricing.baseSummary')}
-            </p>
-            <ul className="mt-5 space-y-2 text-left">
-              {BASE_INCLUDES.map((key) => (
-                <li key={key} className="flex items-start gap-2 text-sm">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
-                  {t(`pricing.includes.${key}`)}
-                </li>
-              ))}
-            </ul>
-            <a
-              href={SIGNUP_URL}
-              className="focus-ring mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary px-6 text-base font-semibold text-primary-foreground shadow-warm hover:bg-primary/90"
-            >
-              {t('hero.startTrial')}
-            </a>
-            <p className="mt-3 text-center text-xs text-muted-foreground">
-              {t('pricing.trialNote')}
-            </p>
-          </div>
+              </div>
+            </div>
 
-          <p className="mt-12 text-center text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            {t('pricing.addOnsTitle')}
-          </p>
-          <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <AddonTile
-              icon={<Store className="h-5 w-5" />}
-              name={t('pricing.addOns.extraBranch.name')}
-              price={addOnPrice(extraBranch)}
-              tag={t('pricing.addOns.extraBranch.description')}
-            />
-            <AddonTile
-              icon={<RiderIcon className="h-5 w-5" />}
-              name={t('pricing.addOns.delivery.name')}
-              price={addOnPrice(delivery)}
-              tag={t('pricing.addOns.delivery.description')}
-            />
+            <div className="grid grid-cols-1 gap-5 md:col-span-2 md:grid-rows-2">
+              <SetupCard
+                icon={<Settings className="h-5 w-5" />}
+                name={t('pricing.setup.first.name')}
+                price={base.once !== null ? money(base.once) : null}
+                description={t('pricing.setup.first.description')}
+              />
+              <SetupCard
+                icon={<Building2 className="h-5 w-5" />}
+                name={t('pricing.setup.extraBranch.name')}
+                price={extraBranch.once !== null ? money(extraBranch.once) : null}
+                description={t('pricing.setup.extraBranch.description')}
+              />
+            </div>
           </div>
         </div>
       </section>
@@ -329,17 +319,31 @@ function Feature({ icon, title, description }: { icon: React.ReactNode; title: s
   );
 }
 
-function AddonTile({ icon, name, price, tag }: { icon: React.ReactNode; name: string; price: string | null; tag: string }) {
+function SetupCard({
+  icon,
+  name,
+  price,
+  description,
+}: {
+  icon: React.ReactNode;
+  name: string;
+  price: string | null;
+  description: string;
+}) {
   return (
-    <div className="rounded-2xl border border-border bg-card p-5">
-      <span className="grid h-10 w-10 place-items-center rounded-xl bg-accent/20 text-accent-foreground">
-        {icon}
-      </span>
-      <p className="mt-4 font-display text-lg font-semibold">{name}</p>
-      {/* `price` is the whole "+$59 once, then +$29/mo" line, so each language orders it
-          itself — and it is absent, rather than wrong, when the catalog could not be read. */}
-      {price && <p className="mt-1 font-display text-xl font-bold">{price}</p>}
-      <p className="mt-2 text-sm text-muted-foreground">{tag}</p>
+    <div className="flex flex-col justify-center rounded-2xl border border-border bg-card p-5 sm:p-6">
+      <div className="flex items-center gap-3">
+        {/* The Feature tiles' chip: it reads on the light and the dark card alike. */}
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+          {icon}
+        </span>
+        <p className="font-display text-lg font-semibold">{name}</p>
+      </div>
+      {/* Absent, rather than wrong, when the catalog could not be read. */}
+      {price && <p className="mt-4 font-display text-4xl font-bold tabular-nums">{price}</p>}
+      <p className={price ? 'mt-1 text-sm text-muted-foreground' : 'mt-3 text-sm text-muted-foreground'}>
+        {description}
+      </p>
     </div>
   );
 }

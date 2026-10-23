@@ -57,7 +57,9 @@
     "priceSummary": "<b>{once}</b> once, then <b>{monthly}</b> every month",
     "withdrawn": "Withdrawn",
     "withdrawnHint": "Not on sale. Restaurants already on it keep it and their history still resolves, but nobody new can buy it. Mark it active to sell it again.",
-    "featureWithdrawn": "{feature} (withdrawn)"
+    "featureWithdrawn": "{feature} (withdrawn)",
+    "featureWithdrawnHint": "Withdrawn features cannot be added to a product: nothing sells them any more. For a deliberate exception, switch one on for a single restaurant under its Feature switches on the Subscriptions tab.",
+    "withdrawnFeatureOn": "This product still grants a withdrawn feature to every restaurant on it. Switch it off and save: nothing sells it any more."
   },
   "reports": {
     "title": "Financial reports",
@@ -143,7 +145,7 @@
   "subscriptions": {
     "metaTitle": "Subscriptions · FavorNoms",
     "title": "Subscriptions",
-    "subtitle": "Set a restaurant's package directly, branch by branch. Changes take effect immediately.",
+    "subtitle": "Set a restaurant's plan and branch count directly. Changes take effect immediately.",
     "searchPlaceholder": "Search restaurants",
     "noMatches": "No restaurants match.",
     "live": "Live",
@@ -182,18 +184,6 @@
     "minSeats": "min {count} (branches open)",
     "applyPackage": "Apply package",
     "saved": "Saved",
-    "deliveringCount": "Delivery at {count} of {total}",
-    "deliveringNone": "No delivery",
-    "delivery": {
-      "title": "Which branches deliver",
-      "hint": "Every branch that delivers adds the delivery price to the monthly bill. Nothing here charges the one-time unlock — what you grant by hand is not owed.",
-      "trialHint": "On a trial every branch delivers, so there is nothing to pick. Move the restaurant to a paid plan to choose.",
-      "noBranches": "This restaurant has no branches yet.",
-      "hiddenBranch": "hidden",
-      "branchMonthly": "{amount} a month",
-      "on": "Delivers",
-      "off": "No delivery"
-    },
     "noOneTimeCharge": "Applying a package here raises no one-time charge.",
     "oneTime": {
       "show": "One-time history",
@@ -216,7 +206,12 @@
     "hiddenOverridden": "Hidden from the merchant · overridden",
     "hiddenNotInPackage": "Hidden from the merchant · not in their package",
     "groupLabel": "{feature} availability",
-    "deliveryNote": "Delivery is the exception: this switch says the account may have delivery at all, while the branch list above says where. Forcing it On grants nothing until a branch is switched on."
+    "withdrawnHint": "Withdrawn: no plan includes it. On grants it to this restaurant alone, as a deliberate exception.",
+    "grantWithdrawn": {
+      "title": "Give {feature} to {restaurant}?",
+      "body": "No plan includes {feature} any more. Switching it On gives it to this restaurant alone, until you set it back to Plan.",
+      "confirm": "Give it to them"
+    }
   },
   "requests": {
     "metaTitle": "Package requests · FavorNoms",
@@ -259,25 +254,19 @@
     "noPackage": "No package",
     "confirm": {
       "blindTitle": "Approve without seeing {name}’s current package?",
-      "blindBody": "Their current package could not be loaded. Approving replaces it entirely with this request, removing any add-on or seat the request does not include.",
+      "blindBody": "Their current package could not be loaded. Approving replaces it entirely with this request, removing any branch seat the request does not include and restarting the paid month from today.",
       "approveAnyway": "Approve anyway",
       "removeTitle": "Approve and remove {items}?",
       "smallerTitle": "Approve a smaller package?",
       "body": "Approving replaces {name}’s whole package with this request.{removes, select, yes { It removes {items}.} other {}}{seats, select, yes { It cuts branch seats from {seatsFrom} to {seatsTo}.} other {}}{shortens, select, yes { It moves paid through back from {paidFrom} to {paidTo} ({days, plural, one {# day fewer} other {# days fewer}}).} other {}} They lose that as soon as you approve, and getting it back means setting the package again on Subscriptions.",
       "approveRemove": "Approve & remove"
     },
-    "asking": "{seats, plural, one {# branch} other {# branches}}, {delivery}",
-    "deliveryNone": "no delivery",
-    "deliveryAt": "delivery at {branches}",
-    "unnamedBranches": "{count, plural, one {# branch that no longer exists} other {# branches that no longer exist}}",
+    "asking": "{seats, plural, one {# branch} other {# branches}}",
     "payOnce": "Pay once",
     "thenMonthly": "Then every month",
     "discountApplied": "Code {code} took {amount} off {list}",
     "discountNothingOff": "Code {code} took nothing off.",
     "nothingOnce": "Nothing to pay once — it is all bought already.",
-    "deliveryOn": "This switches delivery ON at: {branches}",
-    "deliveryOff": "This switches delivery OFF at: {branches}",
-    "deliveryLossItem": "Delivery at {branch}",
     "marksPaid": "Marks {amount} of one-time charges paid",
     "keepsCode": "Code {code} stays used — its use was reserved when the merchant sent this request"
   },
@@ -290,7 +279,7 @@
     "metaTitle": "Discount codes · FavorNoms",
     "title": "Discount codes",
     "subtitle": "Codes you hand out. The server prices every one of them.",
-    "oneTimeOnly": "<strong>Codes come off the one-time charges only</strong> — the base, an extra branch, a branch's delivery unlock. They never change the monthly bill.",
+    "oneTimeOnly": "<strong>Codes come off the one-time charges only</strong> — the first-time setup and the setup of each additional branch. They never change the monthly bill.",
     "newCode": "New code",
     "emptyTitle": "No codes yet",
     "emptyBody": "Create one when you want to take something off what a restaurant pays to start.",
@@ -376,8 +365,7 @@
   "stripe": {
     "errors": {
       "managed": "This restaurant pays by card through Stripe, so its package only changes through Stripe. Nothing was changed.",
-      "paymentInProgress": "This change is waiting on the merchant’s card payment at Stripe (3-D Secure or a declined card), and that payment could still go through, so it cannot be rejected yet. It switches on by itself when paid. Once its payment window closes, about a day after it started, it can be rejected. Nothing was changed.",
-      "deliveryActive": "A branch that delivers is paid for on this restaurant’s card subscription, so Stripe would keep charging delivery for it. The merchant turns delivery off for that branch on their plan page first (that updates Stripe). Nothing was changed."
+      "paymentInProgress": "This change is waiting on the merchant’s card payment at Stripe (3-D Secure or a declined card), and that payment could still go through, so it cannot be rejected yet. It switches on by itself when paid. Once its payment window closes, about a day after it started, it can be rejected. Nothing was changed."
     },
     "links": {
       "customer": "Customer in Stripe",
@@ -472,7 +460,7 @@
         "confirmOff": "Switch off",
         "errors": {
           "notReady": "Stripe is not ready: set the secret key and the webhook secret first. Nothing was changed.",
-          "catalogIncomplete": "The Catalog is missing an active monthly price for Base, an extra branch or Delivery, so there is nothing to make the Stripe prices from. Fix it on the Catalog tab first. Card billing was not switched on.",
+          "catalogIncomplete": "The Catalog is missing an active monthly price for the plan or for an additional branch, so there is nothing to make the Stripe prices from. Fix it on the Catalog tab first. Card billing was not switched on.",
           "forbidden": "Only a platform admin can do this. Nothing was changed.",
           "notSignedIn": "Your session has expired. Sign in again, then try the switch. Nothing was changed.",
           "network": "Couldn’t reach the server. Nothing was changed — check your connection and try again.",

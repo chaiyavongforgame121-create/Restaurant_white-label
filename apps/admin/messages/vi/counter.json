@@ -114,7 +114,7 @@
     "quotedNoDistance": "Phí giao {fee}",
     "outOfRange": "Vị trí ghim nằm ngoài khu vực giao hàng.",
     "outOfRangeMax": "Vị trí ghim nằm ngoài khu vực giao hàng (tối đa {max} dặm).",
-    "notSold": "Gói dịch vụ của chi nhánh này không bao gồm giao hàng.",
+    "notSold": "Chi nhánh này hiện không nhận giao hàng: giao hàng đang tắt trong cài đặt chi nhánh, hoặc nhà hàng chưa dùng được giao hàng.",
     "flatFee": "Phí giao hàng cố định: {fee}",
     "clearPin": "Bỏ ghim",
     "needsDetails": "Đơn giao hàng cần số điện thoại và địa chỉ của khách."
@@ -194,7 +194,7 @@
     "deliveryMustBeScheduled": "Hiện chi nhánh này chỉ nhận giao hàng đặt trước.",
     "insufficientPoints": "Khách không đủ điểm cho việc này.",
     "giftCardChanged": "Số dư thẻ quà tặng đã thay đổi. Hãy thu lại.",
-    "featureNotEntitled": "Gói dịch vụ của chi nhánh này không bao gồm tính năng đó. Kiểm tra trang Gói dịch vụ trong trang quản trị.",
+    "featureNotEntitled": "Chi nhánh này hiện không thể nhận yêu cầu đó. Hãy kiểm tra Cài đặt chi nhánh trong trang quản trị, hoặc liên hệ FavorNoms.",
     "invalidDiscount": "Giảm giá phải từ 0 đến 100%.",
     "invalidPhone": "Số điện thoại của khách không được chấp nhận. Kiểm tra lại rồi thu lại.",
     "notStaffHere": "Tài khoản này không thể bán hàng tại chi nhánh này, hoặc phiên đăng nhập đã hết hạn. Hãy đăng nhập lại, hoặc xin chủ quán quyền dùng quầy của chi nhánh này.",

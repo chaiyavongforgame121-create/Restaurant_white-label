@@ -7,8 +7,8 @@
 3. The platform only builds the software. It never holds, receives or forwards a diner's money, takes no cut of an
    order, and does not carry the restaurants' card fees or disputes.
 
-The platform earns only its own subscription ($170 once + $29 a month per branch, docs/PACKAGING-2026-09-23.md), which
-stays a separate flow (billing_requests → billing_charges).
+The platform earns only its own subscription ($199 once for the first branch, $89 once per additional branch, $49 a
+month per branch, docs/PACKAGING-2026-10-24.md), which stays a separate flow (billing_requests → billing_charges).
 
 The platform's Stripe account is a **United States** account (confirmed by the owner, 2026-09-24).
 

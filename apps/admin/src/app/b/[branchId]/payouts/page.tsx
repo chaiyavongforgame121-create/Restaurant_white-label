@@ -40,9 +40,9 @@ export default async function PayoutsPage({ params }: Props) {
 
   const WITHDRAWAL_COLS =
     'id, amount, status, bank_name, account_number, account_name, created_at, paid_at, receipt_number, rejection_reason, drivers(full_name)';
-  // This screen never asked whether the branch sells delivery, so it worked for any branch by
-  // URL. Delivery is per branch now, and the question is asked for THIS branch. The locked
-  // screen names the branch: it says which branch does not deliver, not "your add-on is gone".
+  // This screen never asked whether the branch delivers, so it worked for any branch by URL.
+  // The question is asked for THIS branch, and the locked screen names the branch and says
+  // why: its delivery switch is off, or the restaurant does not have delivery right now.
   const gate = await resolveDeliveryGate(supabase, branchId);
   const branchName = branch.name;
 
@@ -79,7 +79,7 @@ export default async function PayoutsPage({ params }: Props) {
   const pending = normalize(pendingData ?? []);
   const settled = normalize(settledData ?? []);
   const rows = (summaryData ?? []) as SummaryRow[];
-  // Money already earned is not cancelled by a plan change: a rider who finished runs here
+  // Money already earned is not cancelled by delivery stopping: a rider who finished runs here
   // is still owed, and a withdrawal they have already asked for still has to be settled.
   // So the screen locks only once there is nothing outstanding — otherwise it stays open
   // with a line saying why. This is hasRidersOwed's rule (lib/delivery-gate.ts) — a pending
@@ -88,7 +88,7 @@ export default async function PayoutsPage({ params }: Props) {
   // always leads to an open screen.
   const owing = pending.length > 0 || rows.some((r) => Number(r.accrued_total) > 0);
   if (!gate.delivers && !owing) {
-    return <DeliveryLocked branchId={branchId} branchName={branchName} gate={gate} />;
+    return <DeliveryLocked branchName={branchName} gate={gate} canSwitch={can('branch.settings')} />;
   }
 
   // The rider's receiving QR and the transfer slip, fetched once the rows above have settled
@@ -100,7 +100,8 @@ export default async function PayoutsPage({ params }: Props) {
       {!gate.delivers && (
         <DeliveryStoppedNotice
           branchName={branchName}
-          planHref={gate.planHref}
+          gate={gate}
+          canSwitch={can('branch.settings')}
           body={t('notOffered.stillOwed')}
         />
       )}

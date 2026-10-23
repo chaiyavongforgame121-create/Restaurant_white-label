@@ -114,9 +114,9 @@ export function PlatformDashboard({
   }, [branches]);
 
   // Price the exact package each button would buy, per tenant. A single
-  // platform-wide "Base = $199" was wrong for every tenant that owns an add-on
-  // or runs more than one branch, because conversionSelection carries both
-  // forward — the button quoted $199 and the RPC charged more.
+  // platform-wide "$49 a month" was wrong for every tenant that runs more than one
+  // branch, because conversionSelection buys a seat for each of them — the button
+  // quoted one branch and the RPC charged for all of them.
   const priceOf = React.useCallback(
     (selection: ReturnType<typeof renewalSelection>) =>
       catalog.length === 0 ? null : packageMonthlyTotal(selection, catalog),

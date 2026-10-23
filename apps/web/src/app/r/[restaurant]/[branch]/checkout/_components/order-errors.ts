@@ -12,7 +12,7 @@ import type { CartPart } from '@/store/cart';
 export const ORDER_ERRORS: Array<[string, string]> = [
   ['billing_inactive', 'errors.order.billingInactive'],
   // Both of these mean "this BRANCH does not deliver", not "the restaurant stopped offering
-  // delivery": delivery is bought per branch (docs/PACKAGING-2026-09-23.md §2), so a diner at
+  // delivery": delivery is switched per branch (docs/PACKAGING-2026-10-24.md §3), so a diner at
   // Hamburger can be refused while Food Thai Thai is still delivering. The sentence was
   // "This restaurant is not offering delivery right now", which is wrong twice over — wrong
   // scope, and "right now" promises a temporary state that nothing will change. It now opens

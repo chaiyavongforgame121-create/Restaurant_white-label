@@ -1,7 +1,6 @@
 'use client';
 
 import * as React from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { AlertTriangle, CheckCircle2, Clock, CreditCard, ExternalLink, Lock, Unplug } from 'lucide-react';
@@ -242,16 +241,12 @@ export function CardPaymentsCard({
             <p className="mt-3 text-sm text-muted-foreground">{t('sharedWith', { branches: alsoPays.join(', ') })}</p>
           )}
 
+          {/* Only when card payment is off for the whole restaurant (lapsed, or switched off
+              by the platform): it is in the plan otherwise, so there is nothing to buy. */}
           {!canUseCard && (
-            <p className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-muted px-4 py-3 text-sm">
-              <Lock className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <p className="mt-3 flex items-start gap-2 rounded-xl bg-muted px-4 py-3 text-sm">
+              <Lock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
               <span>{t('packageLocked')}</span>
-              <Link
-                href={`/b/${branchId}/settings/plan`}
-                className="font-medium text-primary underline-offset-2 hover:underline"
-              >
-                {t('viewPackages')}
-              </Link>
             </p>
           )}
 

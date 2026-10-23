@@ -1,7 +1,7 @@
 // The rules a discount code has to obey, away from the form that collects it.
 //
-// Codes come off ONE-TIME charges only — the base, an extra branch, a branch's
-// delivery unlock (docs/PACKAGING-2026-09-23.md §3.4). Nothing here touches the
+// Codes come off ONE-TIME charges only — the first-time setup and the additional
+// branch setup (docs/PACKAGING-2026-10-24.md §1). Nothing here touches the
 // monthly bill, and nothing here prices anything: the server quotes every code
 // (private.billing_discount_quote), and this module only decides whether a draft
 // is worth sending and how an existing code reads on the list.

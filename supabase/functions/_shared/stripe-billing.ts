@@ -34,8 +34,13 @@ export const CURRENCY = 'usd';
 // Catalog identity (stable forever)
 // ---------------------------------------------------------------------------------------------
 
-/** The billing_products codes Stripe bills monthly, in the order lines are sent. */
-export const MONTHLY_CODES = ['base', 'extra_branch', 'delivery'] as const;
+/**
+ * The billing_products codes Stripe bills monthly and SELLS, in the order lines are sent: the
+ * FavorNoms Plan (first branch) and each additional branch (docs/PACKAGING-2026-10-24.md §4.3).
+ * A request's lines and charges, the catalog that must be complete, the prices made at Stripe and
+ * the setup products are these and nothing else.
+ */
+export const MONTHLY_CODES = ['base', 'extra_branch'] as const;
 export type MonthlyCode = (typeof MONTHLY_CODES)[number];
 
 export function isMonthlyCode(value: unknown): value is MonthlyCode {
@@ -43,10 +48,28 @@ export function isMonthlyCode(value: unknown): value is MonthlyCode {
 }
 
 /**
+ * Codes that are no longer sold but may still be an item on a subscription made before they were
+ * withdrawn. `delivery` was a per-branch add-on until 2026-10-24; it is part of the plan now.
+ * Such an item is recognised (so the subscription is not refused as hand-edited), always targeted
+ * at quantity 0 (so the restaurant's next change removes it, with Stripe crediting its unused
+ * days) and never priced, added or required.
+ */
+export const LEGACY_MONTHLY_CODES = ['delivery'] as const;
+export type LegacyMonthlyCode = (typeof LEGACY_MONTHLY_CODES)[number];
+
+/** Every code a subscription item may carry: what is sold, then what was. */
+export type ItemCode = MonthlyCode | LegacyMonthlyCode;
+export const ITEM_CODES: readonly ItemCode[] = Object.freeze([
+  ...MONTHLY_CODES,
+  ...LEGACY_MONTHLY_CODES,
+]);
+
+/**
  * Products are created with these explicit ids, so a second create fails harmlessly instead of
  * making a duplicate, and an id on an invoice line maps back to a catalog code without a lookup.
+ * The legacy product is listed only so an existing item of it is read for what it is.
  */
-export const MONTHLY_PRODUCT_IDS: Readonly<Record<MonthlyCode, string>> = Object.freeze({
+export const MONTHLY_PRODUCT_IDS: Readonly<Record<ItemCode, string>> = Object.freeze({
   base: 'favornoms_base',
   extra_branch: 'favornoms_extra_branch',
   delivery: 'favornoms_delivery',
@@ -56,17 +79,18 @@ export const MONTHLY_PRODUCT_IDS: Readonly<Record<MonthlyCode, string>> = Object
 export const SETUP_PRODUCT_IDS: Readonly<Record<MonthlyCode, string>> = Object.freeze({
   base: 'favornoms_base_setup',
   extra_branch: 'favornoms_extra_branch_setup',
-  delivery: 'favornoms_delivery_setup',
 });
 
-/** What Checkout, invoices and the portal show the merchant for each product. */
+/**
+ * What Checkout, invoices and the portal show the merchant for each product. stripe-billing's
+ * ensureProduct writes it when it creates a product and renames one that exists under another
+ * name, so a product made before 2026-10-24 takes these names the next time it is ensured.
+ */
 export const PRODUCT_NAMES: Readonly<Record<string, string>> = Object.freeze({
-  favornoms_base: 'FavorNoms package (first branch), monthly',
+  favornoms_base: 'FavorNoms Plan (first branch), monthly',
   favornoms_extra_branch: 'Additional branch, monthly',
-  favornoms_delivery: 'Delivery for a branch, monthly',
-  favornoms_base_setup: 'FavorNoms package, one-time setup',
-  favornoms_extra_branch_setup: 'Additional branch, one-time setup',
-  favornoms_delivery_setup: 'Delivery for a branch, one-time setup',
+  favornoms_base_setup: 'FavorNoms Plan, first-time setup',
+  favornoms_extra_branch_setup: 'Additional branch setup',
 });
 
 export function monthlyProductId(code: MonthlyCode): string {
@@ -96,12 +120,16 @@ export function productKindOf(product: unknown): 'monthly' | 'setup' | null {
   return null;
 }
 
-/** The billing_products code a product id stands for (monthly or one-time), or null. */
-export function productCodeOf(product: unknown): MonthlyCode | null {
+/**
+ * The billing_products code a product id stands for (monthly or one-time), or null. A legacy
+ * monthly product answers its legacy code; callers that act on the answer check isMonthlyCode.
+ */
+export function productCodeOf(product: unknown): ItemCode | null {
   const id = idOf(product);
   if (!id) return null;
-  for (const code of MONTHLY_CODES) {
-    if (MONTHLY_PRODUCT_IDS[code] === id || SETUP_PRODUCT_IDS[code] === id) return code;
+  for (const code of ITEM_CODES) {
+    if (MONTHLY_PRODUCT_IDS[code] === id) return code;
+    if (isMonthlyCode(code) && SETUP_PRODUCT_IDS[code] === id) return code;
   }
   return null;
 }
@@ -117,18 +145,21 @@ export function priceLookupKey(code: MonthlyCode, unitCents: number): string {
 
 export function parseLookupKey(key: unknown): { code: MonthlyCode; cents: number } | null {
   if (typeof key !== 'string') return null;
-  const m = /^favornoms_(base|extra_branch|delivery)_monthly_(\d{1,9})$/.exec(key);
+  const m = /^favornoms_(base|extra_branch)_monthly_(\d{1,9})$/.exec(key);
   if (!m) return null;
   const code = m[1];
   const cents = Number(m[2]);
   return isMonthlyCode(code) && Number.isSafeInteger(cents) ? { code, cents } : null;
 }
 
-/** POST /v1/products for one catalog product, created with its explicit id. */
+/**
+ * POST /v1/products for one catalog product, created with its explicit id. Only a product that
+ * is sold: a withdrawn one is never made again.
+ */
 export function productParams(productId: string): Record<string, string> {
   const code = productCodeOf(productId);
   const kind = productKindOf(productId);
-  if (!code || !kind) throw new BillingParamsError('unknown_product');
+  if (!isMonthlyCode(code) || !kind) throw new BillingParamsError('unknown_product');
   return {
     id: productId,
     name: PRODUCT_NAMES[productId] ?? productId,
@@ -179,8 +210,9 @@ export function priceMatches(price: unknown, code: MonthlyCode, unitCents: numbe
 }
 
 /**
- * billing_products rows (code, monthly_price, is_active) -> the three monthly amounts in cents.
- * Null unless all three are active and priced: prices are not prepared from half a catalog.
+ * billing_products rows (code, monthly_price, is_active) -> the sold monthly amounts in cents
+ * (base and extra_branch). Null unless both are active and priced: prices are not prepared from
+ * half a catalog. The withdrawn `delivery` row (inactive, $0) is not part of it and is ignored.
  */
 export function catalogMonthlyCents(
   rows: unknown,
@@ -305,9 +337,11 @@ function stripeIdOrNull(v: unknown, prefix: string): string | null {
 }
 
 /**
- * The context as the edge function may act on it, or why not. Fails closed: a code Stripe has no
- * product for, a quantity or amount that is not a whole non-negative number, a duplicated monthly
- * line or a base line that is not exactly 1 is refused rather than sent to Stripe as something else.
+ * The context as the edge function may act on it, or why not. Fails closed: a code that is not
+ * sold (a withdrawn `delivery` line or charge included: billing_checkout_context no longer makes
+ * one, and selling it again by card is exactly what must not happen), a quantity or amount that is
+ * not a whole non-negative number, a duplicated monthly line or a base line that is not exactly 1
+ * is refused rather than sent to Stripe as something else.
  */
 export function parseCheckoutContext(
   raw: unknown,
@@ -401,7 +435,7 @@ interface OneTimeGroup {
 /**
  * Checkout and add_invoice_items each take at most 20 one-time lines, and a restaurant may add many
  * branches at once, so charges of the same product at the same net amount become one line with a
- * quantity. A $0 charge (a 100 % code, a free unlock) is not a line at all.
+ * quantity. A $0 charge (a 100 % code) is not a line at all.
  */
 function oneTimeGroups(charges: ContextCharge[]): OneTimeGroup[] {
   const groups: OneTimeGroup[] = [];
@@ -568,7 +602,8 @@ export function billingAnchor(
 // Changing a paying restaurant's package: one subscription, updated in place (D7)
 // ---------------------------------------------------------------------------------------------
 
-export type CurrentItems = Partial<Record<MonthlyCode, { id: string; quantity: number }>>;
+/** A subscription's items by code, a legacy (withdrawn) item included. */
+export type CurrentItems = Partial<Record<ItemCode, { id: string; quantity: number }>>;
 
 interface StripeItemLike {
   id?: unknown;
@@ -591,7 +626,9 @@ function itemsOf(sub: unknown): StripeItemLike[] {
 /**
  * The subscription's items by catalog code, read from Stripe (not from our rows, which can lag).
  * Refused when an item is not one of the monthly products or a product appears twice: a
- * subscription edited by hand is not changed by code that would misread it.
+ * subscription edited by hand is not changed by code that would misread it. A legacy delivery
+ * item is one of them, so a subscription bought before delivery joined the plan can still change
+ * (and the change removes it).
  */
 export function subscriptionItemsByCode(
   sub: unknown,
@@ -609,7 +646,10 @@ export function subscriptionItemsByCode(
   return { ok: true, items };
 }
 
-/** [{product_code, stripe_subscription_item_id}] for billing_settle_stripe_request. */
+/**
+ * [{product_code, stripe_subscription_item_id}] for billing_settle_stripe_request: the sold items
+ * only. A legacy item has no subscription_items line to carry its id (and is on its way out).
+ */
 export function settleItems(
   sub: unknown,
 ): Array<{ product_code: MonthlyCode; stripe_subscription_item_id: string }> {
@@ -617,34 +657,43 @@ export function settleItems(
   for (const item of itemsOf(sub)) {
     const product = item.price?.product;
     const code = productKindOf(product) === 'monthly' ? productCodeOf(product) : null;
-    if (code && typeof item.id === 'string' && item.id)
+    if (isMonthlyCode(code) && typeof item.id === 'string' && item.id)
       out.push({ product_code: code, stripe_subscription_item_id: item.id });
   }
   return out;
 }
 
-/** How many of each monthly product a package bills: every code, 0 for one it does not have. */
+/**
+ * How many of each SOLD monthly product a package bills: every sold code, 0 for one it does not
+ * have. A legacy item has no entry because its target is always 0 (itemsMatch, targetItemParams).
+ */
 export type TargetQuantities = Record<MonthlyCode, number>;
 
 /** The quantities the request's package bills each month (billing_checkout_context.monthly_lines). */
 export function targetQuantities(ctx: CheckoutContext): TargetQuantities {
-  const out = { base: 0, extra_branch: 0, delivery: 0 } as TargetQuantities;
+  const out: TargetQuantities = { base: 0, extra_branch: 0 };
   for (const line of ctx.monthly_lines) out[line.code] = Math.max(0, line.quantity);
   return out;
 }
 
-/** Whether Stripe's items already bill exactly these quantities (a missing item counts as 0). */
+/**
+ * Whether Stripe's items already bill exactly these quantities (a missing item counts as 0). A
+ * legacy item still on the subscription is a difference: its target is 0.
+ */
 export function itemsMatch(target: TargetQuantities, current: CurrentItems): boolean {
-  return MONTHLY_CODES.every((code) => (current[code]?.quantity ?? 0) === target[code]);
+  return (
+    MONTHLY_CODES.every((code) => (current[code]?.quantity ?? 0) === target[code]) &&
+    LEGACY_MONTHLY_CODES.every((code) => (current[code]?.quantity ?? 0) === 0)
+  );
 }
 
 /**
  * The `items[...]` of an update that makes the subscription bill exactly `target`: EVERY item,
  * unchanged ones included, with its target quantity; an item going to 0 is deleted; a product the
- * subscription lacks is added at `prices[code]`. The whole target (not a diff) is sent so that a
- * retry under the same idempotency key is the same request: had only the difference been sent, a
- * retry after the first call applied would send nothing but the fees, a new body, and charge them
- * again (SP-2).
+ * subscription lacks is added at `prices[code]`; a legacy item is always deleted. The whole target
+ * (not a diff) is sent so that a retry under the same idempotency key is the same request: had
+ * only the difference been sent, a retry after the first call applied would send nothing but the
+ * fees, a new body, and charge them again (SP-2).
  */
 export function targetItemParams(
   target: TargetQuantities,
@@ -670,6 +719,13 @@ export function targetItemParams(
       i++;
     }
   }
+  for (const code of LEGACY_MONTHLY_CODES) {
+    const have = current[code];
+    if (!have) continue;
+    p[`items[${i}][id]`] = have.id;
+    p[`items[${i}][deleted]`] = 'true';
+    i++;
+  }
   return p;
 }
 
@@ -679,8 +735,8 @@ export function targetItemParams(
  *   - the full target (targetItemParams): every item with its target quantity, deleted at 0, a
  *     product the subscription lacks added at the catalog's recurring price;
  *   - the new one-time fees ride along as add_invoice_items at their NET amount;
- *   - proration_behavior=always_invoice charges the difference NOW (and credits a removed branch
- *     or delivery for its unused days);
+ *   - proration_behavior=always_invoice charges the difference NOW (and credits a removed branch,
+ *     or a legacy delivery item, for its unused days);
  *   - payment_behavior=pending_if_incomplete applies the change only if that invoice is paid;
  *     otherwise the subscription carries a pending_update and the merchant pays on Stripe's page;
  *   - latest_invoice is expanded to tell which of the two happened.
@@ -722,7 +778,8 @@ export function updateAddsOneTimeFees(params: Record<string, string>): boolean {
 
 /**
  * POST /v1/invoices for a change's one-time fees when no proration invoice carries them (a fee
- * with no quantity change: delivery moved from one branch to another; or a change during a trial).
+ * with no quantity change: a setup fee still owed for seats Stripe already bills; or a change
+ * during a trial).
  * money-rr-5: the invoice is made FIRST, empty (pending_invoice_items_behavior=exclude), and the
  * fees are then created ON it (feeInvoiceItemParams with invoice=<id>), so a fee never waits as a
  * pending invoice item that the next renewal would sweep up if this flow stopped half way.
@@ -815,15 +872,16 @@ export function revertParams(
 /**
  * The package the database has granted, as Stripe quantities, from the restaurant's
  * subscription_items rows ({product_code, quantity, unit_price}): the lines Stripe should be
- * billing if nothing had drifted. The delivery line is kept at quantity 1 priced 0 when no branch
- * delivers (billing_compute), so a line priced 0 counts as 0. Null when the rows cannot be read as
- * a package (no base line), so a revert is never sent from half a picture.
+ * billing if nothing had drifted. Only sold codes count: a leftover row of a withdrawn product
+ * (`delivery`) is skipped, so a revert removes that item like any change. A line priced 0 bills
+ * nothing at Stripe, so it counts as 0. Null when the rows cannot be read as a package (no base
+ * line), so a revert is never sent from half a picture.
  */
 export function grantedLines(
   rows: unknown,
 ): { quantities: TargetQuantities; cents: Partial<Record<MonthlyCode, number>> } | null {
   if (!Array.isArray(rows)) return null;
-  const quantities = { base: 0, extra_branch: 0, delivery: 0 } as TargetQuantities;
+  const quantities: TargetQuantities = { base: 0, extra_branch: 0 };
   const unit: Partial<Record<MonthlyCode, number>> = {};
   for (const r of rows) {
     const row = (r ?? {}) as { product_code?: unknown; quantity?: unknown; unit_price?: unknown };
@@ -957,8 +1015,8 @@ export function invoiceServicePeriod(inv: unknown): { start: number | null; end:
  * period (D8: only money for a period moves the date).
  *
  *   - Only the first invoice (subscription_create) and renewals (subscription_cycle) pay for a
- *     period. A change's proration invoice or a one-off invoice does not: paying $70 for a new
- *     branch while a renewal is still unpaid must not extend access over that unpaid month.
+ *     period. A change's proration invoice or a one-off invoice does not: paying a new branch's
+ *     setup fee while a renewal is still unpaid must not extend access over that unpaid month.
  *   - The date is the end of the period the invoice's own subscription lines bill, capped at the
  *     subscription's current paid-through (subscriptionPaidThrough). So a renewal retried and paid
  *     late, after the next period has already started, pays through ITS period and no further.

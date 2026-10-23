@@ -198,13 +198,13 @@ describe('draftToInput', () => {
     const original = code({
       max_redemptions: 50,
       ends_at: '2026-12-31T23:59:59.999Z',
-      product_codes: ['base', 'delivery'],
+      product_codes: ['base', 'extra_branch'],
     });
     const input = draftToInput(draftFrom(original));
     expect(input.code).toBe('SUMMER20');
     expect(input.kind).toBe('percent');
     expect(input.value).toBe(20);
-    expect(input.product_codes).toEqual(['base', 'delivery']);
+    expect(input.product_codes).toEqual(['base', 'extra_branch']);
     expect(input.max_redemptions).toBe(50);
     expect(input.ends_at).toBe('2026-12-31T23:59:59.999Z');
   });

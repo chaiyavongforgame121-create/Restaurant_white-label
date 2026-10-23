@@ -481,11 +481,3 @@ export const isStripeManagedError = (raw: string | null | undefined): boolean =>
  */
 export const isPaymentInProgressError = (raw: string | null | undefined): boolean =>
   typeof raw === 'string' && /payment_in_progress/i.test(raw);
-
-/**
- * A branch write was refused because the branch delivers on a card subscription: Stripe
- * would keep charging delivery for it (§9.6). Delivery is switched off on the plan page
- * first, which updates Stripe.
- */
-export const isStripeDeliveryActiveError = (raw: string | null | undefined): boolean =>
-  typeof raw === 'string' && /stripe_delivery_active/i.test(raw);

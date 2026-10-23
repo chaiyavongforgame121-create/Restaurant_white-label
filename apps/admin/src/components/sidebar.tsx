@@ -107,14 +107,15 @@ export function Sidebar({
   }, []);
 
   // Fails CLOSED, unlike the tier ladder this replaced: hasFeature() requires an
-  // explicit `true` on a live subscription, so an unknown plan hides the add-on
-  // surfaces instead of advertising them. Only add-on features are gated here —
-  // everything in Base stays visible for every paying tenant.
+  // explicit `true` on a live subscription, so an unknown plan hides the gated
+  // surfaces instead of showing screens that would refuse. Only delivery is gated here —
+  // everything else in the plan stays visible for every paying tenant.
   //
   // `entitlements` comes from the branch layout's getEntitlementsForBranch, i.e. it is
-  // resolved FOR the branch in the URL. Delivery is sold per branch (docs/
-  // PACKAGING-2026-09-23.md §2), so `delivery` here means "this branch delivers" and the
-  // three delivery entries below follow the branch switcher. Everything else in the map is
+  // resolved FOR the branch in the URL. Delivery is in the plan at every branch behind a free
+  // switch in branch settings (docs/PACKAGING-2026-10-24.md §3), so `delivery` here means
+  // "this branch delivers" — true unless that switch is off or the restaurant does not have
+  // delivery right now — and the three delivery entries below follow the branch switcher. Everything else in the map is
   // restaurant-wide and reads the same at every branch.
   // `delivery` has one exception the other keys do not: the two screens that finish work
   // already started stay reachable while that work is out, each for its own kind of work

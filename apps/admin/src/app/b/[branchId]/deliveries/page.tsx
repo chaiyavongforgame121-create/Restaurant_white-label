@@ -27,9 +27,10 @@ export default async function DeliveriesPage({ params }: Props) {
     );
   }
 
-  // The board itself never asked whether this branch sells delivery — only who may manage
-  // it — so a branch without the add-on showed a working live-ops screen. Delivery is per
-  // branch now, so this is the branch's own answer and the merchant is told which branch.
+  // The board itself never asked whether this branch delivers — only who may manage it — so
+  // a branch that did not deliver showed a working live-ops screen. This is the branch's own
+  // answer (its "Delivery at this branch" switch, and the restaurant having delivery at all),
+  // and the merchant is told which branch, and why.
   //
   // Runs already out are the exception, for the same reason dispatch-driver dispatches them
   // whatever the switch says: a delivery that exists is finished (the rule in
@@ -42,7 +43,7 @@ export default async function DeliveriesPage({ params }: Props) {
     hasRunsOut(supabase, branchId),
   ]);
   if (!gate.delivers && !runsOut) {
-    return <DeliveryLocked branchId={branchId} branchName={branch.name} gate={gate} />;
+    return <DeliveryLocked branchName={branch.name} gate={gate} canSwitch={can('branch.settings')} />;
   }
 
   // getBranchAccess already read the branch for its name and access check; this second read
@@ -60,7 +61,8 @@ export default async function DeliveriesPage({ params }: Props) {
       {!gate.delivers && (
         <DeliveryStoppedNotice
           branchName={branch.name}
-          planHref={gate.planHref}
+          gate={gate}
+          canSwitch={can('branch.settings')}
           body={t('notOffered.stillInFlight')}
         />
       )}
