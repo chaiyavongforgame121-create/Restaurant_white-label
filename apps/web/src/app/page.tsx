@@ -127,14 +127,15 @@ export default async function RootPage() {
             </div>
 
             {/* Stylized phone mock. The branch, restaurant and dish names are a demo merchant's
-                own content, so they stay as that merchant would have typed them. */}
+                own content, so they stay as that merchant would have typed them. It names the
+                showcase store "See a live menu" opens (Demo-FavorNoms, branch Hamburger). */}
             <div className="relative hidden lg:block">
               <div className="absolute inset-0 -m-8 rounded-[2.5rem] bg-white/5 blur-3xl" />
               <div className="relative mx-auto max-w-xs rounded-[2rem] bg-white/10 p-3 shadow-warm backdrop-blur">
                 <div className="aspect-[9/19] overflow-hidden rounded-[1.5rem] bg-card text-card-foreground">
                   <div className="bg-gradient-warm p-6 text-white">
-                    <p className="text-xs font-semibold uppercase tracking-wider">Brooklyn Flagship</p>
-                    <h3 className="mt-1 font-display text-xl font-bold">Coastal Grill</h3>
+                    <p className="text-xs font-semibold uppercase tracking-wider">Hamburger</p>
+                    <h3 className="mt-1 font-display text-xl font-bold">Demo-FavorNoms</h3>
                   </div>
                   <div className="space-y-3 p-4 text-foreground">
                     <MockItem name="Smash Burger" price="$14.95" />
