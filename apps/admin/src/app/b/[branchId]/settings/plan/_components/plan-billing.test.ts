@@ -345,7 +345,7 @@ describe('the waiting request says who it is waiting for', () => {
     result: null,
   };
 
-  it('waits for the Favornoms team while card payments are off for a manual restaurant', () => {
+  it('waits for the FavorNoms team while card payments are off for a manual restaurant', () => {
     expect(pendingPayment({ ...base, byCard: false, pending: { id: 'r', rail: 'manual' } })).toBe('team');
     expect(canContinuePayment('team')).toBe(false);
   });

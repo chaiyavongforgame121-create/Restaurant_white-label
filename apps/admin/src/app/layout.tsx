@@ -11,9 +11,34 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin', 'vietnamese'], variable: '--font-sans', display: 'swap' });
 const notoThai = Noto_Sans_Thai({ subsets: ['thai'], variable: '--font-thai', display: 'swap', preload: false });
 
+/** What the installed back office is called: public/manifest.webmanifest spells the same out. */
+const APP_NAME = 'FavorNoms Merchant';
+/** The label under the home-screen icon (the manifest's short_name). */
+const APP_SHORT_NAME = 'FavorNoms';
+
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations('shell.metadata');
-  return { title: t('title'), description: t('description') };
+  return {
+    title: t('title'),
+    description: t('description'),
+    manifest: '/manifest.webmanifest',
+    applicationName: APP_NAME,
+    // 'default', not 'black-translucent': the latter hands the status-bar strip to the page, and
+    // the back office's headers (and the POS) would sit under the notch.
+    appleWebApp: { capable: true, statusBarStyle: 'default', title: APP_SHORT_NAME },
+    icons: {
+      // The chef-hat F, as in apps/web. PNG only — the art is a raster; the 16/32 cuts are sized
+      // for a tab. public/favicon.ico (16/32/48) is not listed: it answers the bare /favicon.ico
+      // request some browsers still make.
+      icon: [
+        { url: '/favicon-32.png', sizes: '32x32', type: 'image/png' },
+        { url: '/favicon-16.png', sizes: '16x16', type: 'image/png' },
+        { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+      ],
+      // 180x180 with no alpha channel (the orange circle on white): iOS paints transparency black.
+      apple: '/apple-touch-icon.png',
+    },
+  };
 }
 export const viewport: Viewport = {
   width: 'device-width',

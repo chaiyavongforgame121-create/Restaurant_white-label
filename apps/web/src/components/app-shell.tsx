@@ -14,8 +14,9 @@ import { ThemeToggle } from './theme-toggle';
 
 export function AppShell({
   base,
-  brandName = 'Favornoms',
+  brandName = 'FavorNoms',
   logoUrl = null,
+  iconUrl = null,
   children,
 }: {
   base: string;
@@ -23,6 +24,9 @@ export function AppShell({
   /** brands.logo_url. Absent for a merchant who has not uploaded one, which is why the
    *  initial-in-a-circle fallback stays. */
   logoUrl?: string | null;
+  /** The branch's square app icon. Without a logo it stands in for the initial, so an icon set on
+   *  the Branding card shows on the storefront and not only on a home screen. */
+  iconUrl?: string | null;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -90,9 +94,15 @@ export function AppShell({
               </>
             ) : (
               <>
-                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-warm text-white shadow-warm">
-                  <span className="font-display text-lg leading-none">{brandName.charAt(0)}</span>
-                </span>
+                {iconUrl ? (
+                  <span className="relative block h-8 w-8 shrink-0 overflow-hidden rounded-xl shadow-soft">
+                    <Image src={iconUrl} alt="" fill className="object-cover" sizes="32px" priority />
+                  </span>
+                ) : (
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-warm text-white shadow-warm">
+                    <span className="font-display text-lg leading-none">{brandName.charAt(0)}</span>
+                  </span>
+                )}
                 {/* "<brand> - <branch>" can be long ("Coastal Grill - Food Thai Thai"): one line, cut with an
                     ellipsis, rather than wrapping the header onto a second row on a phone. */}
                 <span className="truncate font-display text-lg font-semibold tracking-tight">{brandName}</span>

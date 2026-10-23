@@ -1,4 +1,4 @@
-# Favornoms — Operational Config Checklist (🇺🇸 US)
+# FavorNoms — Operational Config Checklist (🇺🇸 US)
 
 > Things that can't be applied via SQL/migrations. You must click through Supabase Dashboard / Stripe Dashboard / set env vars.
 >
@@ -234,7 +234,7 @@ request for manual approval, exactly as before.
 | `VAPID_PUBLIC_KEY` + `VAPID_PRIVATE_KEY` | `node scripts/generate-vapid-keys.cjs` |
 | `VAPID_SUBJECT` *(optional)* | `mailto:ops@favornoms.com` |
 | `RESEND_API_KEY` | resend.com |
-| `RESEND_FROM` *(optional)* | `Favornoms <orders@favornoms.com>` |
+| `RESEND_FROM` *(optional)* | `FavorNoms <orders@favornoms.com>` |
 | `TWILIO_ACCOUNT_SID` | Same as §2 |
 | `TWILIO_AUTH_TOKEN` | Same as §2 |
 | `TWILIO_PHONE_NUMBER` | Same as §2 |

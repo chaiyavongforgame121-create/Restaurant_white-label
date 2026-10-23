@@ -16,7 +16,7 @@
     "requestNotFound": "Esa solicitud ya no existe. Recarga la cola."
   },
   "plans": {
-    "metaTitle": "Catálogo de productos · Favornoms",
+    "metaTitle": "Catálogo de productos · FavorNoms",
     "title": "Catálogo de productos",
     "subtitle": "Lo que pueden comprar los restaurantes. Cada producto tiene dos precios en USD: uno que se paga una sola vez y otro que se paga cada mes.",
     "newProduct": "Nuevo producto",
@@ -141,7 +141,7 @@
     "reset": "Restablecer valores predeterminados"
   },
   "subscriptions": {
-    "metaTitle": "Suscripciones · Favornoms",
+    "metaTitle": "Suscripciones · FavorNoms",
     "title": "Suscripciones",
     "subtitle": "Define el paquete de un restaurante directamente, sucursal por sucursal. Los cambios se aplican de inmediato.",
     "searchPlaceholder": "Buscar restaurantes",
@@ -219,7 +219,7 @@
     "deliveryNote": "La entrega es la excepción: este interruptor dice si la cuenta puede tener entrega, y la lista de sucursales de arriba dice dónde. Forzarlo en Sí no concede nada hasta que se active una sucursal."
   },
   "requests": {
-    "metaTitle": "Solicitudes de paquete · Favornoms",
+    "metaTitle": "Solicitudes de paquete · FavorNoms",
     "title": "Solicitudes de paquete",
     "subtitle": "Comercios que eligieron un paquete y esperan que se active.",
     "filters": {
@@ -287,7 +287,7 @@
     "void": "anulado"
   },
   "discounts": {
-    "metaTitle": "Códigos de descuento · Favornoms",
+    "metaTitle": "Códigos de descuento · FavorNoms",
     "title": "Códigos de descuento",
     "subtitle": "Los códigos que repartes. El servidor calcula el importe de cada uno.",
     "oneTimeOnly": "<strong>Los códigos solo descuentan los cargos únicos</strong>: la base, una sucursal extra, el desbloqueo de entrega de una sucursal. Nunca cambian la cuenta mensual.",
@@ -412,7 +412,7 @@
       "paymentExpired": "Plazo de pago vencido",
       "paidByCard": "Pagado con tarjeta",
       "awaitingCardNote": "Se envió al comercio a la página de pago de Stripe para pagar esto con tarjeta. Se activa solo cuando Stripe confirma el pago, así que no hay nada que aprobar. Recházala solo para limpiar un pago que abandonaron.",
-      "awaitingCardPausedNote": "Los pagos con tarjeta están desactivados, así que la página de plan de {name} ahora le pide enviar esta solicitud al equipo de Favornoms. Cuando lo haga, volverá aquí como una solicitud normal para que la apruebes. Hasta entonces sigue aquí: un pago que ya abrió todavía se puede completar, y entonces se activa solo. Recházala solo si no debe seguir adelante.",
+      "awaitingCardPausedNote": "Los pagos con tarjeta están desactivados, así que la página de plan de {name} ahora le pide enviar esta solicitud al equipo de FavorNoms. Cuando lo haga, volverá aquí como una solicitud normal para que la apruebes. Hasta entonces sigue aquí: un pago que ya abrió todavía se puede completar, y entonces se activa solo. Recházala solo si no debe seguir adelante.",
       "paymentInProgressNote": "{name} está terminando este pago en la página de Stripe: su tarjeta necesita confirmación (3-D Secure) o fue rechazada, así que el cambio espera hasta que se pague. Se activa solo en cuanto se paga. Durante aproximadamente un día no se puede rechazar, porque el pago todavía puede completarse. Después se cierra el plazo de pago: la solicitud se descarta cuando el comercio vuelva a elegir un paquete, o puedes rechazarla aquí.",
       "paymentExpiredNote": "Plazo de pago vencido: recházala para limpiarla. {name} no terminó de pagar este cambio en Stripe en aproximadamente un día, así que no sigue adelante y no cambia nada. Si de todos modos paga esa factura antigua, el pago se reembolsa automáticamente.",
       "managedRestaurantNote": "{name} ya paga con tarjeta a través de Stripe, así que este cambio se paga en su página de plan y se activa solo, esté activado o no el cobro con tarjeta. No se puede aprobar aquí; recházalo solo si no debe seguir adelante.",
@@ -427,7 +427,7 @@
       "priceIdHint": "Ya no es necesario: el cobro con tarjeta busca o crea sus precios en Stripe a partir de los precios de arriba."
     },
     "setup": {
-      "metaTitle": "Stripe · Favornoms",
+      "metaTitle": "Stripe · FavorNoms",
       "title": "Stripe",
       "subtitle": "Los restaurantes pagan su paquete con tarjeta a la cuenta de Stripe de la propia plataforma. Configúralo una vez para el modo de prueba y otra para el modo real, y luego actívalo.",
       "mode": {
@@ -538,7 +538,7 @@
         },
         "portal": {
           "title": "Portal del cliente",
-          "body": "Donde los comercios actualizan su tarjeta, ven sus facturas y cancelan al final del mes pagado. Los cambios de plan siguen en la página de plan de Favornoms.",
+          "body": "Donde los comercios actualizan su tarjeta, ven sus facturas y cancelan al final del mes pagado. Los cambios de plan siguen en la página de plan de FavorNoms.",
           "auto": "Se configura automáticamente al activar el cobro con tarjeta.",
           "missingWhileOn": "El cobro con tarjeta está activado pero el portal no está configurado. Desactívalo y vuelve a activarlo para configurarlo."
         }

@@ -1,4 +1,4 @@
-# Favornoms — Detailed Test Cases (manual QA)
+# FavorNoms — Detailed Test Cases (manual QA)
 
 > วิธีใช้: ทำเครื่องหมาย `[x]` แต่ละข้อที่ผ่าน. ถ้าข้อไหน fail ให้บันทึก order #, URL, screenshot ไว้
 > ก่อนเริ่ม: ทำตาม `CONFIG-CHECKLIST.md` ทั้งหมด + deploy edge functions แล้ว
@@ -76,7 +76,7 @@
 
 ### 1.1.5 PWA install prompt
 - [x] รอ 8 วินาที (ไม่ dismiss anything)
-- [x] บน Chrome desktop: เห็น `Install Favornoms` floating card
+- [x] บน Chrome desktop: เห็น `Install FavorNoms` floating card
 - [ ] บน iOS Safari: เห็น hint "Tap Share → Add to Home Screen" (skipped — Windows Chrome only)
 - [x] Click X to dismiss → 90-day cookie set, ไม่ขึ้นอีก
 
@@ -833,7 +833,7 @@ All state used in this pass was restored byte-identical afterwards.
 
 หน้ารวมทุกสาขาของร้านเดียว: ยอดขาย + ค่าใช้จ่ายต่อเดือน + report รวม
 (`/b/{branchId}/hq`) ตอบข้อ 7 ของเจ้าของ ค่าใช้จ่ายใช้ **เฉพาะข้อมูลที่มีอยู่แล้ว**
-(driver payouts + ค่าสมาชิก Favornoms) ตามที่เจ้าของเลือก — ไม่สร้างระบบบันทึกรายจ่ายใหม่
+(driver payouts + ค่าสมาชิก FavorNoms) ตามที่เจ้าของเลือก — ไม่สร้างระบบบันทึกรายจ่ายใหม่
 
 **สิทธิ์ (`private.user_owns_restaurant` — เข้มกว่า `user_manages_restaurant` ที่ใช้ทั่วไป)**
 - [x] staff `owner` ของร้านตัวเอง → `owner_own=OK branches=1 revenue=1176.07 orders=35 payouts=17.66 sub=0.00 months=6` ✓

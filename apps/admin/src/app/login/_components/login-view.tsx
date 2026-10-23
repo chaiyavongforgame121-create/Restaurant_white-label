@@ -144,7 +144,7 @@ export function LoginView({ next, error: initialError }: { next: string; error: 
           <Building2 className="h-8 w-8" />
         </div>
         {/* Product name, the same in every language. */}
-        <h1 className="mt-5 text-center font-display text-3xl font-bold">Favornoms Merchant</h1>
+        <h1 className="mt-5 text-center font-display text-3xl font-bold">FavorNoms Merchant</h1>
         <p className="mt-1 text-center text-sm text-muted-foreground">{t('login.subtitle')}</p>
 
         <Card className="mt-6 p-5">

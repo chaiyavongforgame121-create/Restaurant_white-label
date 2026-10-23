@@ -72,12 +72,15 @@ const CACHE_VERSION = 'favornoms-driver-v6';
 
 // The offline path, and only the offline path: the shell a signed-in rider lands on, the
 // screen an expired session lands on, and the icons their tab and the manifest point at.
+// favicon.svg went with the old vector car and icon.svg is only a wrapper of the PNG now: the
+// FavorGO art is a raster and the PNGs cover every size. No version bump for that — public/ files
+// are network-first.
 const CACHE_FILES = [
   '/app/home',
   '/login',
   '/manifest.webmanifest',
-  '/favicon.svg',
-  '/icon.svg',
+  '/favicon-32.png',
+  '/favicon-16.png',
   '/icon-192.png',
 ];
 

@@ -10,7 +10,7 @@ interface Props {
   params: Promise<{ restaurant: string; branch: string; orderNumber: string }>;
 }
 
-// Plain 'Receipt', with `absolute` so the root layout's '%s · Favornoms' template does not
+// Plain 'Receipt', with `absolute` so the root layout's '%s · FavorNoms' template does not
 // put the platform's brand on a white-labelled restaurant's receipt. The restaurant names
 // itself inside the document.
 export async function generateMetadata(): Promise<Metadata> {

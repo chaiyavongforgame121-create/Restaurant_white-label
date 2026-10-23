@@ -1,4 +1,4 @@
-# Favornoms — Release Test Plan (pre-client-handoff) — 2026-08-10
+# FavorNoms — Release Test Plan (pre-client-handoff) — 2026-08-10
 
 > จุดประสงค์: ทดสอบทุกฟังก์ชันก่อนส่งมอบลูกค้า. เจอบัค → แก้ทันที → re-test → mark `[x]`.
 > รายงานแบบสั้น: ✅ ผ่าน / 🐛 เจอบัค+แก้แล้ว ต่อรายการ.

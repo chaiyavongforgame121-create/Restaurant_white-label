@@ -10,7 +10,7 @@
     "themeDescription": "Sắp ra mắt — hiện đang theo chế độ màu của hệ thống."
   },
   "plan": {
-    "metaTitle": "Gói và thanh toán · Favornoms",
+    "metaTitle": "Gói và thanh toán · FavorNoms",
     "title": "Gói và thanh toán",
     "subtitle": "Hai khoản tách bạch: khoản trả một lần và khoản trả hằng tháng.",
     "perMonth": "/tháng",
@@ -22,7 +22,7 @@
     },
     "replaceDialog": {
       "title": "Thay thế yêu cầu đang chờ?",
-      "body": "Yêu cầu trước đó ({summary}) sẽ bị rút lại và yêu cầu này sẽ được gửi đến đội ngũ Favornoms thay thế.",
+      "body": "Yêu cầu trước đó ({summary}) sẽ bị rút lại và yêu cầu này sẽ được gửi đến đội ngũ FavorNoms thay thế.",
       "codeReleased": "Yêu cầu đó có mã {code}. Hãy áp dụng lại mã ở đây để giữ; nếu không, lượt dùng sẽ được trả lại.",
       "confirm": "Thay thế yêu cầu"
     },
@@ -99,7 +99,7 @@
       "onceNothing": "Không có. Mọi thứ trong gói này đều đã được trả.",
       "onceOnRequest": "Nằm trong yêu cầu bạn đã gửi",
       "onceCode": "Mã {code}",
-      "onceAwaiting": "Chưa có khoản nào bị tính phí. Bạn sẽ trả khoản này khi đội ngũ Favornoms kích hoạt yêu cầu của bạn.",
+      "onceAwaiting": "Chưa có khoản nào bị tính phí. Bạn sẽ trả khoản này khi đội ngũ FavorNoms kích hoạt yêu cầu của bạn.",
       "monthlyTitle": "Rồi mỗi tháng",
       "withDelivery": "{branch} + giao hàng",
       "unusedSeats": "{count, plural, other {# chi nhánh chưa tạo}}",
@@ -113,7 +113,7 @@
         "plusOnce": "Cộng thêm {price} trả một lần."
       },
       "trialNote": "Không bị tính phí trong thời gian dùng thử miễn phí. Đây là hóa đơn đầu tiên khi bạn xác nhận.",
-      "footnote": "Yêu cầu của bạn sẽ được gửi đến đội ngũ Favornoms để kích hoạt. Hóa đơn được gửi hằng tháng."
+      "footnote": "Yêu cầu của bạn sẽ được gửi đến đội ngũ FavorNoms để kích hoạt. Hóa đơn được gửi hằng tháng."
     },
     "discount": {
       "title": "Mã giảm giá",
@@ -138,12 +138,12 @@
     },
     "noTrial": {
       "title": "Nhà hàng này bắt đầu mà không có dùng thử miễn phí",
-      "body": "Tài khoản của bạn đã dùng 14 ngày dùng thử miễn phí cho một nhà hàng khác. Nhà hàng này sẽ tạm ngừng cho đến khi có gói: hãy chọn một gói bên dưới và gửi yêu cầu, đội ngũ Favornoms sẽ kích hoạt."
+      "body": "Tài khoản của bạn đã dùng 14 ngày dùng thử miễn phí cho một nhà hàng khác. Nhà hàng này sẽ tạm ngừng cho đến khi có gói: hãy chọn một gói bên dưới và gửi yêu cầu, đội ngũ FavorNoms sẽ kích hoạt."
     },
     "renew": {
       "title": "Gia hạn gói",
       "paidThrough": "Gói của bạn đã được thanh toán đến {date}.",
-      "body": "Gói hiện tại đã được chọn sẵn bên dưới. Nhấn Yêu cầu gia hạn để gửi đến đội ngũ Favornoms — gói chỉ được gia hạn khi họ duyệt. Bạn cũng có thể đổi gói trước khi gửi."
+      "body": "Gói hiện tại đã được chọn sẵn bên dưới. Nhấn Yêu cầu gia hạn để gửi đến đội ngũ FavorNoms — gói chỉ được gia hạn khi họ duyệt. Bạn cũng có thể đổi gói trước khi gửi."
     },
     "pricesUnavailable": {
       "title": "Không tải được bảng giá",
@@ -153,14 +153,14 @@
     "decision": {
       "approvedOn": "Yêu cầu đã được duyệt ngày {date}",
       "declinedOn": "Yêu cầu bị từ chối ngày {date}",
-      "noteLabel": "Ghi chú từ đội ngũ Favornoms:",
+      "noteLabel": "Ghi chú từ đội ngũ FavorNoms:",
       "noReason": "Không có lý do được đưa ra. Bạn có thể chọn một gói bên dưới và gửi yêu cầu mới.",
       "approved": "Đã duyệt",
       "declined": "Bị từ chối"
     },
     "pending": {
-      "title": "Yêu cầu đang chờ đội ngũ Favornoms",
-      "titleSent": "Yêu cầu đang chờ đội ngũ Favornoms · gửi ngày {date}",
+      "title": "Yêu cầu đang chờ đội ngũ FavorNoms",
+      "titleSent": "Yêu cầu đang chờ đội ngũ FavorNoms · gửi ngày {date}",
       "body": "Chưa có gì thay đổi cho đến khi được duyệt. Muốn yêu cầu khác, hãy đổi gói bên dưới và nhấn Thay thế yêu cầu đang chờ.",
       "badge": "Đang chờ"
     },
@@ -174,7 +174,7 @@
         "finishPayment": "Hoàn tất thanh toán",
         "finishFirst": "Hãy hoàn tất khoản thanh toán đang chờ trước",
         "checking": "Đang kiểm tra thanh toán…",
-        "sendToTeam": "Gửi cho đội ngũ Favornoms"
+        "sendToTeam": "Gửi cho đội ngũ FavorNoms"
       },
       "footnote": {
         "firstLater": "Thanh toán bằng thẻ qua Stripe. Từ ngày {date}, {monthly} sẽ được tự động trừ vào thẻ của bạn mỗi tháng; trang thanh toán của Stripe hiển thị số tiền chính xác trước khi trừ bất kỳ khoản nào. Bạn có thể hủy bất cứ lúc nào và vẫn dùng được đến hết tháng đã trả.",
@@ -218,7 +218,7 @@
         "unconfirmedBody": "Thẻ của bạn có thể đã bị trừ tiền cho yêu cầu này, nên không thể thanh toán lại từ trang này. Hãy tải lại trang sau một phút để xem tình trạng hiện tại.",
         "unconfirmedBadge": "Đang kiểm tra",
         "pausedTitle": "Thanh toán bằng thẻ đang tạm dừng",
-        "pausedBody": "Yêu cầu này đang chờ thanh toán bằng thẻ, nhưng hiện chưa thể thu tiền. Hãy gửi yêu cầu cho đội ngũ Favornoms để họ kích hoạt."
+        "pausedBody": "Yêu cầu này đang chờ thanh toán bằng thẻ, nhưng hiện chưa thể thu tiền. Hãy gửi yêu cầu cho đội ngũ FavorNoms để họ kích hoạt."
       },
       "result": {
         "confirmingTitle": "Đã nhận thanh toán — đang kích hoạt gói…",
@@ -235,7 +235,7 @@
         "refundedStaleTitle": "Khoản thanh toán này đang được hoàn tiền",
         "refundedStaleBody": "Khoản này dành cho một yêu cầu không còn mở: yêu cầu đã được đổi hoặc đóng sau khi trang thanh toán được mở. Toàn bộ số tiền sẽ tự động được hoàn lại vào thẻ của bạn, bạn không cần làm gì. Gói của bạn không thay đổi; những gì còn đang chờ được hiển thị bên dưới.",
         "refundedFailedTitle": "Không thể kích hoạt gói của bạn, nên khoản thanh toán đang được hoàn tiền",
-        "refundedFailedBody": "Khoản thanh toán đã thành công, nhưng không thể áp dụng gói, nên toàn bộ số tiền sẽ tự động được hoàn lại vào thẻ của bạn. Gói của bạn không thay đổi. Nếu không thấy tiền hoàn lại trong vài ngày, hãy liên hệ đội ngũ Favornoms.",
+        "refundedFailedBody": "Khoản thanh toán đã thành công, nhưng không thể áp dụng gói, nên toàn bộ số tiền sẽ tự động được hoàn lại vào thẻ của bạn. Gói của bạn không thay đổi. Nếu không thấy tiền hoàn lại trong vài ngày, hãy liên hệ đội ngũ FavorNoms.",
         "notAppliedTitle": "Gói của bạn không thay đổi — không có khoản nào bị trừ",
         "notAppliedBody": "Trang của Stripe đã hoàn tất, nhưng yêu cầu đó không thể được áp dụng: yêu cầu đã bị thay đổi hoặc đóng trong lúc trang đó đang mở, hoặc không còn phù hợp với các chi nhánh của bạn. Không có khoản tiền nào bị trừ. Những gì vẫn đang chờ được hiển thị bên dưới."
       },
@@ -282,18 +282,18 @@
         "requestGone": "Yêu cầu này không còn chờ thanh toán — nó đã được thanh toán, thay thế hoặc bị từ chối. Hãy tải lại trang để xem tình trạng hiện tại.",
         "startFailed": "Không thể bắt đầu thanh toán bằng thẻ. Chưa có khoản nào bị trừ và yêu cầu của bạn vẫn được lưu — hãy thử Tiếp tục thanh toán lại sau giây lát.",
         "portalFailed": "Không thể mở cổng thanh toán. Vui lòng thử lại sau giây lát.",
-        "portalOff": "Hiện đang tắt thanh toán bằng thẻ. Hãy liên hệ đội ngũ Favornoms về việc thanh toán của bạn.",
+        "portalOff": "Hiện đang tắt thanh toán bằng thẻ. Hãy liên hệ đội ngũ FavorNoms về việc thanh toán của bạn.",
         "noCustomer": "Chưa có thẻ nào được lưu. Thẻ sẽ được lưu khi bạn thanh toán bằng thẻ lần đầu.",
-        "chargedNotApplied": "Thẻ của bạn đã bị trừ tiền, nhưng thay đổi chưa được áp dụng và không thể tự động hoàn tiền. Vui lòng không thanh toán lại — đội ngũ Favornoms sẽ xử lý.",
-        "changeNotApplied": "Gói của bạn không thay đổi và chưa có khoản nào bị trừ. Hãy tải lại trang trước khi thử lại; nếu vẫn xảy ra, hãy liên hệ đội ngũ Favornoms.",
-        "needsTeam": "Hiện chưa thể tự động trừ tiền vào thẻ cho thay đổi này. Chưa có khoản nào bị trừ — vui lòng liên hệ đội ngũ Favornoms.",
+        "chargedNotApplied": "Thẻ của bạn đã bị trừ tiền, nhưng thay đổi chưa được áp dụng và không thể tự động hoàn tiền. Vui lòng không thanh toán lại — đội ngũ FavorNoms sẽ xử lý.",
+        "changeNotApplied": "Gói của bạn không thay đổi và chưa có khoản nào bị trừ. Hãy tải lại trang trước khi thử lại; nếu vẫn xảy ra, hãy liên hệ đội ngũ FavorNoms.",
+        "needsTeam": "Hiện chưa thể tự động trừ tiền vào thẻ cho thay đổi này. Chưa có khoản nào bị trừ — vui lòng liên hệ đội ngũ FavorNoms.",
         "chargedRefunded": "Thẻ của bạn đã bị trừ tiền, nhưng thay đổi không thể được áp dụng, nên toàn bộ số tiền đang được hoàn lại vào thẻ. Gói của bạn không thay đổi. Hãy tải lại trang trước khi thử lại.",
         "resultUnknown": "Chúng tôi chưa thể xác nhận thẻ của bạn đã bị trừ tiền hay chưa. Vui lòng chưa thanh toán lại: hãy tải lại trang sau một phút. Nếu thanh toán đã thành công, thay đổi của bạn sẽ tự được áp dụng.",
         "paymentInProgress": "Một khoản thanh toán bằng thẻ cho yêu cầu trước vẫn đang chờ trên trang của Stripe (ngân hàng yêu cầu bạn xác nhận, hoặc thẻ đã bị từ chối). Hãy hoàn tất nó, hoặc đợi nó hết hạn sau khoảng một ngày, trước khi đổi gói.",
         "busy": "Khoản thanh toán này đang được xử lý. Hãy đợi một lát rồi thử lại — bạn sẽ không bị trừ tiền hai lần.",
         "planLimit": "Gói này có ít chi nhánh hơn số chi nhánh nhà hàng đang mở. Hãy thêm chi nhánh vào gói, hoặc đóng bớt một chi nhánh trước. Chưa có khoản nào bị trừ.",
-        "cardPaused": "Thanh toán bằng thẻ hiện đang tạm dừng, nên chưa thể trừ tiền. Chưa có khoản nào bị trừ và yêu cầu của bạn vẫn được lưu. Hãy thử lại sau, hoặc liên hệ đội ngũ Favornoms.",
-        "changeConflict": "Thay đổi này đã được gửi để trừ vào thẻ của bạn một lần và hiện chưa rõ kết quả. Lần này không trừ thêm khoản nào. Vui lòng không thanh toán lại: hãy liên hệ đội ngũ Favornoms để họ xử lý.",
+        "cardPaused": "Thanh toán bằng thẻ hiện đang tạm dừng, nên chưa thể trừ tiền. Chưa có khoản nào bị trừ và yêu cầu của bạn vẫn được lưu. Hãy thử lại sau, hoặc liên hệ đội ngũ FavorNoms.",
+        "changeConflict": "Thay đổi này đã được gửi để trừ vào thẻ của bạn một lần và hiện chưa rõ kết quả. Lần này không trừ thêm khoản nào. Vui lòng không thanh toán lại: hãy liên hệ đội ngũ FavorNoms để họ xử lý.",
         "paymentExpired": "Khoản thanh toán bằng thẻ cho thay đổi này không hoàn tất kịp thời, nên thay đổi đã bị hủy. Chưa có khoản nào bị trừ. Hãy chọn lại gói để thử lần nữa."
       },
       "onceSettling": "Khoản thanh toán của bạn cho mục này đang được ghi nhận.",

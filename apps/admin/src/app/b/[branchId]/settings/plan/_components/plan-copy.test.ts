@@ -112,7 +112,7 @@ describe('the Pay-once box never says "already paid" for money nobody has taken'
   it('does not mistake a refusal for a filed request', () => {
     // request_package_change answers a refused code with {ok:false, error:…} rather than
     // raising; read as a request row that is a row with no id and no plan. Showing it as
-    // "waiting for the Favornoms team" would tell the merchant a request exists that does not.
+    // "waiting for the FavorNoms team" would tell the merchant a request exists that does not.
     const refusal = { id: '', plan_code: '', branch_seats: 1, delivery_branch_ids: [] };
     expect(filedRequest(refusal)).toBeNull();
   });

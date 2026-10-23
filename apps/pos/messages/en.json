@@ -28,7 +28,7 @@
     "browserPrint": "Browser print"
   },
   "login": {
-    "title": "Favornoms POS",
+    "title": "FavorNoms POS",
     "subtitle": "Sign in with your work email to start a shift",
     "email": "Work email",
     "sendLink": "Send sign-in link",

@@ -242,9 +242,9 @@ describe('flags', () => {
 
 describe('titleWithCount', () => {
   it('prefixes the count and replaces rather than stacks it', () => {
-    expect(titleWithCount('Favornoms Merchant', 3)).toBe('(3) Favornoms Merchant');
-    expect(titleWithCount('(3) Favornoms Merchant', 4)).toBe('(4) Favornoms Merchant');
-    expect(titleWithCount('(4) Favornoms Merchant', 0)).toBe('Favornoms Merchant');
-    expect(titleWithCount('Favornoms Merchant', 0)).toBe('Favornoms Merchant');
+    expect(titleWithCount('FavorNoms Merchant', 3)).toBe('(3) FavorNoms Merchant');
+    expect(titleWithCount('(3) FavorNoms Merchant', 4)).toBe('(4) FavorNoms Merchant');
+    expect(titleWithCount('(4) FavorNoms Merchant', 0)).toBe('FavorNoms Merchant');
+    expect(titleWithCount('FavorNoms Merchant', 0)).toBe('FavorNoms Merchant');
   });
 });

@@ -1,4 +1,4 @@
-# Platform billing through Stripe — restaurants pay Favornoms by card (owner request 2026-09-26)
+# Platform billing through Stripe — restaurants pay FavorNoms by card (owner request 2026-09-26)
 
 The owner asked for the platform side of Stripe: restaurants that sign up pay the platform's own Stripe account for
 their package — the one-time fees and the monthly fee — and the monthly fee is charged again every month by itself.

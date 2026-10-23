@@ -43,6 +43,7 @@ export default async function BranchLayout({ params, children }: Props) {
             // logo's alt text. The logo is the branch's own (brand's until the branch uploads one).
             brandName={storefrontNames(tenant).full}
             logoUrl={tenant.logoUrl}
+            iconUrl={tenant.icon192Url ?? tenant.faviconUrl}
           >
             <PushSubscriber />
             <PendingCartReplay branchId={tenant.branch.id} />
@@ -68,7 +69,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const shareImage = tenant.logoUrl ?? tenant.faviconUrl;
 
   return {
-    // `absolute` on purpose. A bare string inherits the root layout's '%s · Favornoms'
+    // `absolute` on purpose. A bare string inherits the root layout's '%s · FavorNoms'
     // template, which put the PLATFORM's brand in the tab of every white-labelled
     // storefront — the one place a tenant's customer should never see it.
     title: { absolute: names.full },

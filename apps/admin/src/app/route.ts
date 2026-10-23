@@ -1,6 +1,13 @@
-import { redirect } from 'next/navigation';
+import { NextResponse } from 'next/server';
 import { getServerClient } from '@favornoms/database/server';
 import { isPlatformAdmin } from '@favornoms/database/queries';
+
+// '/' only decides where someone belongs and sends them there. It is a route handler rather than
+// a page so the answer is a real 307: under app/loading.tsx (the FavorNoms splash) a page's
+// redirect() is streamed as a 200 with a client-side redirect instead, which painted the splash,
+// waited for hydration and painted it again on every launch of the installed app (its start_url)
+// and every sign-in.
+export const dynamic = 'force-dynamic';
 
 // Each staff role lands on its own surface after sign-in.
 function landingPath(role: string, branchId: string): string {
@@ -30,15 +37,23 @@ function landingPath(role: string, branchId: string): string {
 // silently changes which membership decides where a multi-role user lands.
 const ROLE_PRIORITY = ['owner', 'admin', 'manager', 'cashier', 'server', 'kitchen', 'staff', 'driver'];
 
-export default async function RootPage() {
+export async function GET() {
+  // A relative Location, resolved by the browser against the address it asked for. An absolute
+  // one built from request.url named the host the server saw, which is not always the one in the
+  // address bar (127.0.0.1 vs localhost in development, a proxy's host behind one), and the
+  // session cookie belongs to the address bar's host.
+  return new NextResponse(null, { status: 307, headers: { Location: await landing() } });
+}
+
+async function landing(): Promise<string> {
   const supabase = await getServerClient();
   const { data: userData } = await supabase.auth.getUser();
-  if (!userData.user) redirect('/login');
+  if (!userData.user) return '/login';
 
   // The platform owner lands on the platform console, even when the account also holds a staff
   // row somewhere (owner@test.com owns the demo restaurant): the console is their home, and it
   // links to every restaurant. A deep link (/login?next=/b/…) still goes where it points.
-  if (await isPlatformAdmin(supabase)) redirect('/platform');
+  if (await isPlatformAdmin(supabase)) return '/platform';
 
   const { data: memberships } = await supabase
     .from('staff_members')
@@ -51,8 +66,8 @@ export default async function RootPage() {
     // reset their password) has no membership yet. They belong on their invitation, not in the
     // wizard that creates a restaurant of their own.
     const { data: pendingInvite } = await supabase.rpc('my_pending_staff_invite');
-    if (pendingInvite) redirect(`/invite/accept?staff_id=${pendingInvite}`);
-    redirect('/onboarding');
+    if (pendingInvite) return `/invite/accept?staff_id=${pendingInvite}`;
+    return '/onboarding';
   }
 
   const chosen = [...memberships].sort(
@@ -73,6 +88,6 @@ export default async function RootPage() {
     branchId = branch?.id ?? null;
   }
 
-  if (branchId) redirect(landingPath(role, branchId));
-  redirect('/onboarding');
+  if (branchId) return landingPath(role, branchId);
+  return '/onboarding';
 }

@@ -61,10 +61,10 @@ export const SETUP_PRODUCT_IDS: Readonly<Record<MonthlyCode, string>> = Object.f
 
 /** What Checkout, invoices and the portal show the merchant for each product. */
 export const PRODUCT_NAMES: Readonly<Record<string, string>> = Object.freeze({
-  favornoms_base: 'Favornoms package (first branch), monthly',
+  favornoms_base: 'FavorNoms package (first branch), monthly',
   favornoms_extra_branch: 'Additional branch, monthly',
   favornoms_delivery: 'Delivery for a branch, monthly',
-  favornoms_base_setup: 'Favornoms package, one-time setup',
+  favornoms_base_setup: 'FavorNoms package, one-time setup',
   favornoms_extra_branch_setup: 'Additional branch, one-time setup',
   favornoms_delivery_setup: 'Delivery for a branch, one-time setup',
 });
@@ -1540,7 +1540,7 @@ export function customerBelongsTo(customer: unknown, restaurantId: string): bool
  */
 export function portalConfigurationParams(): Record<string, string> {
   return {
-    'business_profile[headline]': 'Favornoms: your package, card and invoices',
+    'business_profile[headline]': 'FavorNoms: your package, card and invoices',
     'features[payment_method_update][enabled]': 'true',
     'features[invoice_history][enabled]': 'true',
     'features[customer_update][enabled]': 'true',

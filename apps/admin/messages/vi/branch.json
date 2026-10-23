@@ -39,7 +39,7 @@
     },
     "domain": {
       "title": "Tên miền riêng",
-      "description": "Trỏ bản ghi DNS A/CNAME tới máy chủ của Favornoms, rồi nhập hostname vào đây.",
+      "description": "Trỏ bản ghi DNS A/CNAME tới máy chủ của FavorNoms, rồi nhập hostname vào đây.",
       "label": "Hostname (ví dụ order.myrestaurant.com)",
       "invalid": "“{input}” không phải là hostname. Hãy nhập địa chỉ khách sẽ gõ, như order.myrestaurant.com — không phải tên nhà hàng."
     },
@@ -143,7 +143,8 @@
     "title": "Nhận diện thương hiệu của chi nhánh này",
     "description": "Logo và biểu tượng ứng dụng của chi nhánh này, đúng như khách của chi nhánh nhìn thấy. Mỗi chi nhánh có bộ riêng, nên lưu ở đây không làm thay đổi các chi nhánh khác. Logo hiển thị ở đầu mọi trang của cửa hàng trực tuyến của chi nhánh này; biểu tượng là những gì khách thấy khi cài thực đơn của chi nhánh này lên điện thoại hoặc máy tính.",
     "appName": "Tên ứng dụng",
-    "appNameSource": "Tên thương hiệu, sau đó là tên chi nhánh này. Đổi phần thương hiệu ở <link>Thương hiệu và chi nhánh</link>, còn phần chi nhánh ở ô Tên chi nhánh phía trên.",
+    "appNameAuto": "Để trống để tự động dùng “{name}”.",
+    "appNameSource": "Tên tự động là tên thương hiệu rồi đến tên chi nhánh này: đổi phần thương hiệu ở <link>Thương hiệu & chi nhánh</link>, và phần chi nhánh ở Tên chi nhánh phía trên.",
     "appNameWhere": "Dùng trong cửa sổ cài đặt, trên lối tắt máy tính và làm tên dưới biểu tượng trên màn hình chính. Chỗ đó khá hẹp nên điện thoại có thể cắt bớt tên dài.",
     "logo": "Logo",
     "uploadLogo": "Tải logo lên",
@@ -154,7 +155,7 @@
     "installPreview": "Khách sẽ thấy gì khi cài chi nhánh này",
     "publishHint": "Lưu để xuất bản. Người đã cài ứng dụng của chi nhánh này sẽ nhận biểu tượng mới vào lần tới Chrome kiểm tra cập nhật, thường trong vòng một ngày — gỡ và cài lại sẽ thấy ngay.",
     "iconFromBrand": "Chi nhánh này chưa có biểu tượng riêng nên khi cài sẽ dùng biểu tượng mặc định của thương hiệu. Tải biểu tượng lên để chi nhánh có biểu tượng riêng.",
-    "noIconHint": "Chưa có biểu tượng — khi cài chi nhánh này sẽ dùng biểu tượng Favornoms cho đến khi bạn tải lên.",
+    "noIconHint": "Chưa có biểu tượng — khi cài chi nhánh này sẽ dùng biểu tượng FavorNoms cho đến khi bạn tải lên.",
     "noPermission": "Chưa lưu được — vai trò của bạn có thể không được phép thay đổi nhận diện thương hiệu của chi nhánh này.",
     "errors": {
       "ownerOrAdminOnly": "Chỉ chủ nhà hàng hoặc quản trị viên mới có thể thay đổi logo hoặc biểu tượng ứng dụng của chi nhánh.",

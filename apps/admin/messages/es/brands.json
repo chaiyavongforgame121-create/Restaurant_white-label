@@ -141,7 +141,7 @@
     "uploadLogo": "Subir logo",
     "logoHint": "Solo lo usan las sucursales sin logo propio. Cada sucursal sube el suyo en Configuración de sucursal → Imagen de marca de esta sucursal.",
     "appIcon": "Ícono de la app predeterminado (opcional)",
-    "appIconHint": "Solo lo usan las sucursales sin ícono propio, en la pestaña del navegador y como ícono que ven las personas al instalar. Cada sucursal sube el suyo en Configuración de sucursal. Déjalo vacío para usar el ícono de Favornoms.",
+    "appIconHint": "Solo lo usan las sucursales sin ícono propio, en la pestaña del navegador y como ícono que ven las personas al instalar. Cada sucursal sube el suyo en Configuración de sucursal. Déjalo vacío para usar el ícono de FavorNoms.",
     "tabFallback": "Tu tienda",
     "preview": "Vista previa",
     "nameFallback": "Nombre de la marca",

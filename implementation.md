@@ -1,4 +1,4 @@
-# Favornoms — Implementation Guide
+# FavorNoms — Implementation Guide
 
 > **เอกสารพัฒนาระบบบริหารจัดการร้านอาหารแบบ White-label SaaS**  
 > เวอร์ชัน: 1.0 · อัปเดตล่าสุด: 2026-05-25  
@@ -36,7 +36,7 @@
 
 ### 1.1 ภาพรวม
 
-**Favornoms** คือระบบ SaaS แบบ white-label สำหรับร้านอาหาร ที่ให้เจ้าของร้านสามารถสร้างและจัดการสาขาของตัวเองได้ พร้อมระบบบริหารครบวงจรตั้งแต่การรับออเดอร์ ครัว การจัดส่ง ไปจนถึง CRM และ analytics
+**FavorNoms** คือระบบ SaaS แบบ white-label สำหรับร้านอาหาร ที่ให้เจ้าของร้านสามารถสร้างและจัดการสาขาของตัวเองได้ พร้อมระบบบริหารครบวงจรตั้งแต่การรับออเดอร์ ครัว การจัดส่ง ไปจนถึง CRM และ analytics
 
 ### 1.2 Value Proposition
 
@@ -189,7 +189,7 @@
 | `apps/web` | Customer-facing ordering | Next.js 15 (App Router) | End customers |
 | `apps/pos` | POS terminal & KDS | Next.js + Tailwind | Cashier, Kitchen |
 | `apps/admin` | Restaurant admin | Next.js | Owner, Manager |
-| `apps/platform` | Internal platform admin | Next.js | Favornoms team |
+| `apps/platform` | Internal platform admin | Next.js | FavorNoms team |
 | `apps/driver` | Driver mobile app | Expo (React Native) | Drivers |
 
 #### Backend Services

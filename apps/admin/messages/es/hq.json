@@ -55,12 +55,12 @@
   "costs": {
     "title": "Costos que podemos ver",
     "driverPayouts": "Pagos a repartidores",
-    "subscription": "Suscripción de Favornoms",
+    "subscription": "Suscripción de FavorNoms",
     "noInvoicesWithPlan": "Aún no hay facturas registradas. Tu tarifa actual es <strong>{rate}/mes</strong> con el plan <planName>{plan}</planName>.",
     "noInvoices": "Aún no hay facturas registradas. Tu tarifa actual es <strong>{rate}/mes</strong>.",
     "totalKnown": "Total de costos conocidos",
     "afterCosts": "Ingresos después de costos",
-    "disclaimer": "Estos son los únicos costos que registra Favornoms. No incluyen comida, sueldos del personal, renta ni comisiones de tarjeta, así que esto no es tu ganancia."
+    "disclaimer": "Estos son los únicos costos que registra FavorNoms. No incluyen comida, sueldos del personal, renta ni comisiones de tarjeta, así que esto no es tu ganancia."
   },
   "monthly": {
     "title": "Mes a mes",

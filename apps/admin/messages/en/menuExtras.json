@@ -10,7 +10,7 @@
     "invalidPrice": "Enter a valid price."
   },
   "modifiers": {
-    "metaTitle": "Modifiers · Favornoms admin",
+    "metaTitle": "Modifiers · FavorNoms admin",
     "title": "Modifier groups",
     "subtitle": "Size, add-ons, prep options — anything customers customize on an item.",
     "newGroup": "New group",
@@ -81,7 +81,7 @@
     }
   },
   "combos": {
-    "metaTitle": "Combos · Favornoms admin",
+    "metaTitle": "Combos · FavorNoms admin",
     "title": "Combo meals",
     "subtitle": "Bundle dishes at a discount. Customers see combos in a featured row above the menu.",
     "newCombo": "New combo",
@@ -154,7 +154,7 @@
     }
   },
   "happyHours": {
-    "metaTitle": "Happy hours · Favornoms admin",
+    "metaTitle": "Happy hours · FavorNoms admin",
     "title": "Happy hours",
     "subtitle": "Time-windowed discounts on items or whole categories.",
     "newHappyHour": "New happy hour",

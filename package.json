@@ -2,7 +2,7 @@
   "name": "favornoms",
   "version": "0.1.0",
   "private": true,
-  "description": "Favornoms — White-label restaurant SaaS (PWA + Driver app)",
+  "description": "FavorNoms — White-label restaurant SaaS (PWA + Driver app)",
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",

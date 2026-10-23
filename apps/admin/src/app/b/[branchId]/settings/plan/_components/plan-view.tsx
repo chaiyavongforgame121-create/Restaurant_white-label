@@ -20,7 +20,7 @@
 // purchase goes to Stripe Checkout, a restaurant already paying by card is charged on the card
 // it has on file, and a card that needs 3-D Secure opens Stripe's invoice page. With card
 // billing off — or the function answering dormant — the request simply waits for the
-// Favornoms team, as before. A card step that fails leaves the request filed and the page
+// FavorNoms team, as before. A card step that fails leaves the request filed and the page
 // offering "Continue to payment", never a request that silently vanished.
 //
 // Every price is read from the catalog and every total is the server's to confirm; the
@@ -154,7 +154,7 @@ export interface DecidedRequest {
   oneTimeTotal: number;
   decisionNote: string | null;
   decidedAt: string;
-  /** Approved because a card payment settled it, not by the Favornoms team. */
+  /** Approved because a card payment settled it, not by the FavorNoms team. */
   paidByCard: boolean;
 }
 
@@ -405,7 +405,7 @@ export function PlanView({
   const activeDiscount = applied && applied.key === selectionKey(sel) ? applied : null;
   const staleDiscount = applied !== null && activeDiscount === null;
 
-  // The request waiting for the Favornoms team, in the server's own figures.
+  // The request waiting for the FavorNoms team, in the server's own figures.
   const filed = queued ?? filedRequest(pendingRequest);
   const showingFiled = showsFiledRequest(sel, filed, activeDiscount?.code ?? null);
   const payOnce = payOnceView({ filed, showingFiled, quoteLines: totals.oneTimeLines.length });
@@ -472,7 +472,7 @@ export function PlanView({
    * Take payment for a filed request. Checkout and Stripe's invoice page open in this tab (the
    * busy state stays on until the browser leaves); a change charged to the card on file is live
    * at once; 'dormant' means card billing went off since the page was drawn, and a first
-   * purchase's request stays exactly what it is — a request for the Favornoms team. A failure is
+   * purchase's request stays exactly what it is — a request for the FavorNoms team. A failure is
    * worded by cardStepError(): what it says about the money depends on whether this call could
    * have charged the card on file.
    */
@@ -764,7 +764,7 @@ export function PlanView({
       // with {ok:false, error:'discount_invalid:<reason>'} instead of raising — raising would
       // roll back the failed attempt it records for the guessing limit — so an answer with no
       // request in it is a refusal, and the page must say so rather than show a request
-      // "waiting for the Favornoms team" that was never filed.
+      // "waiting for the FavorNoms team" that was never filed.
       const sent = filedRequest(row);
       if (!sent?.id) {
         const refusal = (row as unknown as { error?: unknown } | null)?.error;
@@ -1562,7 +1562,7 @@ function DecisionBanner({
 }) {
   const t = useTranslations('settings.plan');
   const approved = decision.status === 'approved';
-  // Settled by the merchant's own card payment: "paid", and no "note from the Favornoms team",
+  // Settled by the merchant's own card payment: "paid", and no "note from the FavorNoms team",
   // because the team never saw it — the note on the row is the settlement's bookkeeping.
   const paid = approved && decision.paidByCard;
   const on = formatInZone(decision.decidedAt, timezone, { dateOnly: true }, locale);
@@ -1617,7 +1617,7 @@ function DecisionBanner({
 
 /**
  * The request that is filed and not settled. Who it waits for decides every sentence: the
- * Favornoms team (card billing off), the merchant's card (Checkout was opened for it, or
+ * FavorNoms team (card billing off), the merchant's card (Checkout was opened for it, or
  * starting the card payment failed), either (a request for the team while card billing is on),
  * Stripe's invoice page (3-D Secure or a declined card), a card step whose result is not known
  * yet, or a card request that can no longer be paid by card — see pendingPayment().

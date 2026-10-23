@@ -141,7 +141,7 @@
     "uploadLogo": "Tải logo lên",
     "logoHint": "Chỉ dùng cho chi nhánh chưa có logo riêng. Mỗi chi nhánh tải logo riêng trong Cài đặt chi nhánh → Nhận diện thương hiệu của chi nhánh này.",
     "appIcon": "Biểu tượng ứng dụng mặc định (không bắt buộc)",
-    "appIconHint": "Chỉ dùng cho chi nhánh chưa có biểu tượng riêng, cho tab trình duyệt và biểu tượng khách thấy sau khi cài. Mỗi chi nhánh tải biểu tượng riêng trong Cài đặt chi nhánh. Để trống để dùng biểu tượng Favornoms.",
+    "appIconHint": "Chỉ dùng cho chi nhánh chưa có biểu tượng riêng, cho tab trình duyệt và biểu tượng khách thấy sau khi cài. Mỗi chi nhánh tải biểu tượng riêng trong Cài đặt chi nhánh. Để trống để dùng biểu tượng FavorNoms.",
     "tabFallback": "Cửa hàng của bạn",
     "preview": "Xem trước",
     "nameFallback": "Tên thương hiệu",

@@ -1,4 +1,4 @@
-# Favornoms — Cross-Role Flow Audit (progress log)
+# FavorNoms — Cross-Role Flow Audit (progress log)
 
 > **Goal:** Walk every step of the work flow for all 4 roles (customer / merchant / driver /
 > platform), verify each step actually works AND connects end-to-end, benchmark against

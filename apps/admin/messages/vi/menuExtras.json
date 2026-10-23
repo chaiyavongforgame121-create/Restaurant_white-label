@@ -10,7 +10,7 @@
     "invalidPrice": "Nhập giá hợp lệ."
   },
   "modifiers": {
-    "metaTitle": "Tùy chọn · Quản trị Favornoms",
+    "metaTitle": "Tùy chọn · Quản trị FavorNoms",
     "title": "Nhóm tùy chọn",
     "subtitle": "Kích cỡ, món thêm, cách chế biến — mọi thứ khách có thể tùy chỉnh cho một món.",
     "newGroup": "Nhóm mới",
@@ -81,7 +81,7 @@
     }
   },
   "combos": {
-    "metaTitle": "Combo · Quản trị Favornoms",
+    "metaTitle": "Combo · Quản trị FavorNoms",
     "title": "Combo",
     "subtitle": "Gộp nhiều món với giá ưu đãi. Khách thấy combo ở hàng nổi bật phía trên thực đơn.",
     "newCombo": "Combo mới",
@@ -154,7 +154,7 @@
     }
   },
   "happyHours": {
-    "metaTitle": "Giờ vàng · Quản trị Favornoms",
+    "metaTitle": "Giờ vàng · Quản trị FavorNoms",
     "title": "Giờ vàng",
     "subtitle": "Giảm giá theo khung giờ cho từng món hoặc cả danh mục.",
     "newHappyHour": "Thêm giờ vàng",

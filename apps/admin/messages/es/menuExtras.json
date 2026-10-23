@@ -10,7 +10,7 @@
     "invalidPrice": "Ingresa un precio válido."
   },
   "modifiers": {
-    "metaTitle": "Opciones · Administración de Favornoms",
+    "metaTitle": "Opciones · Administración de FavorNoms",
     "title": "Grupos de opciones",
     "subtitle": "Tamaño, extras, preparación: todo lo que los clientes personalizan en un artículo.",
     "newGroup": "Nuevo grupo",
@@ -81,7 +81,7 @@
     }
   },
   "combos": {
-    "metaTitle": "Combos · Administración de Favornoms",
+    "metaTitle": "Combos · Administración de FavorNoms",
     "title": "Combos",
     "subtitle": "Agrupa platos con descuento. Los clientes ven los combos en una fila destacada sobre el menú.",
     "newCombo": "Nuevo combo",
@@ -154,7 +154,7 @@
     }
   },
   "happyHours": {
-    "metaTitle": "Happy hours · Administración de Favornoms",
+    "metaTitle": "Happy hours · Administración de FavorNoms",
     "title": "Happy hours",
     "subtitle": "Descuentos por horario en artículos o categorías completas.",
     "newHappyHour": "Nueva happy hour",

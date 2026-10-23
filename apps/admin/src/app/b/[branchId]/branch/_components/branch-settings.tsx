@@ -242,6 +242,7 @@ export function BranchSettings({
           branchId={branch.id}
           restaurantId={branch.restaurant_id}
           branchName={branch.name}
+          appNameOverride={typeof branch.settings?.app_name === 'string' ? branch.settings.app_name : ''}
           {...branding}
         />
 

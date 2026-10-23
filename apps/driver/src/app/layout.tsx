@@ -29,20 +29,22 @@ export async function generateMetadata(): Promise<Metadata> {
     // every load.
     other: { 'mobile-web-app-capable': 'yes' },
     icons: {
-      // Tab icons come from favicon.*, a cut of the car with no speed lines and solid wheels —
-      // at 16-32px icon.svg's details smear into a blob. Browsers choose among these by their
-      // own rules, which is why every candidate is the same car. public/favicon.ico (16/32/48)
-      // is deliberately not listed: it exists for the bare /favicon.ico request some browsers
-      // and crawlers still make, which otherwise 404s. icon-192 is for surfaces that read link
-      // tags but not the manifest.
+      // Tab icons come from favicon-*.png, a cut of the car with no speed lines and solid wheels,
+      // drawn larger in the circle — at 16-32px the full icon's speed lines and ringed wheels
+      // smear into a blob. No SVG is offered: the FavorGO art is a raster (public/icon.svg only
+      // wraps the PNG for old links), and an SVG candidate would win the tab over these
+      // hand-sized PNGs in every browser that reads one.
+      // public/favicon.ico (16/32/48, the same cut) is deliberately not listed: it exists for the
+      // bare /favicon.ico request some browsers and crawlers still make, which otherwise 404s.
+      // icon-192 is for surfaces that read link tags but not the manifest.
       icon: [
-        { url: '/favicon.svg', type: 'image/svg+xml' },
         { url: '/favicon-32.png', sizes: '32x32', type: 'image/png' },
         { url: '/favicon-16.png', sizes: '16x16', type: 'image/png' },
         { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
       ],
-      // 180x180, full-bleed and with no alpha channel: iOS rounds the corners itself and
-      // paints any transparency black, so the RGBA icon-512 cannot stand in for it.
+      // 180x180 with no alpha channel — the orange circle on white, as the owner drew it: iOS
+      // rounds the corners itself and paints any transparency black, so the RGBA icon-512 (a
+      // circle with transparent corners) cannot stand in for it.
       apple: '/apple-touch-icon.png',
     },
   };

@@ -1,13 +1,13 @@
 {
   "id": "/",
-  "name": "Favornoms — Order from your favorite restaurant",
-  "short_name": "Favornoms",
+  "name": "FavorNoms — Order from your favorite restaurant",
+  "short_name": "FavorNoms",
   "description": "Order authentic local cuisine for delivery, pickup, or dine-in.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#FFFAF5",
+  "background_color": "#FFFFFF",
   "theme_color": "#FF6B35",
   "icons": [
     {
@@ -27,11 +27,6 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
-    },
-    {
-      "src": "/icon.svg",
-      "type": "image/svg+xml",
-      "purpose": "any"
     }
   ],
   "categories": ["food", "lifestyle", "shopping"],

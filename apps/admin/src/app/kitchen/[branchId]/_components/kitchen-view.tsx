@@ -1176,7 +1176,7 @@ export function KitchenView({
     };
     apply();
     // Next writes the route's metadata title after hydration, which silently replaced the count
-    // with "Favornoms Merchant" until the next ticket arrived. Put it back whenever the head changes.
+    // with "FavorNoms Merchant" until the next ticket arrived. Put it back whenever the head changes.
     const observer = new MutationObserver(apply);
     observer.observe(document.head, { subtree: true, childList: true, characterData: true });
     return () => observer.disconnect();

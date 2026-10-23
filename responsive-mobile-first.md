@@ -1,6 +1,6 @@
-# Favornoms — Responsive & Mobile-First Design Guidelines
+# FavorNoms — Responsive & Mobile-First Design Guidelines
 
-> **เอกสารกำกับการออกแบบและพัฒนา UI ทุกแอปในระบบ Favornoms**  
+> **เอกสารกำกับการออกแบบและพัฒนา UI ทุกแอปในระบบ FavorNoms**  
 > หลักการ: **Mobile-First, ไม่ใช่ Mobile-Only**  
 > เวอร์ชัน: 1.0 · อัปเดตล่าสุด: 2026-05-25
 
@@ -39,7 +39,7 @@
 
 ไม่ใช่ "ทำเดสก์ท็อปก่อนแล้วบีบให้เข้ามือถือ" — แนวทางนั้นจะทำให้ mobile UX แย่เสมอ
 
-### 1.2 ทำไมต้อง Mobile-First สำหรับ Favornoms
+### 1.2 ทำไมต้อง Mobile-First สำหรับ FavorNoms
 
 | User Type | Device หลัก | % การใช้งาน (ประมาณการ) |
 |-----------|------------|------------------------|
@@ -994,8 +994,8 @@ function ConnectionStatus() {
 ```json
 // manifest.json
 {
-  "name": "Favornoms - [Restaurant Name]",
-  "short_name": "Favornoms",
+  "name": "FavorNoms - [Restaurant Name]",
+  "short_name": "FavorNoms",
   "description": "Order food online",
   "start_url": "/",
   "display": "standalone",

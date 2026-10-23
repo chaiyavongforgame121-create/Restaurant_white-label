@@ -8,7 +8,7 @@ import {
   type ResolvedTenant,
   type StorefrontStatus,
 } from '@favornoms/database/queries';
-import { deriveStorefrontNames, type StorefrontNames } from './app-identity';
+import { branchAppName, deriveStorefrontNames, type StorefrontNames } from './app-identity';
 
 /**
  * How long a tenant entry may live once nothing has told us it changed. With the version key
@@ -269,7 +269,7 @@ export const DEFAULT_DARK_THEME_COLOR = '#1a0e08';
  *
  * They used to be built inline in four places and produced four different answers for the
  * same restaurant: the manifest said one thing, the home-screen label another, the browser tab
- * said "Hamburger · Favornoms" — the platform's brand, in a white-labelled tenant's tab — and
+ * said "Hamburger · FavorNoms" — the platform's brand, in a white-labelled tenant's tab — and
  * iOS said "Hamburger". The rules live in deriveStorefrontNames so they can be tested without a
  * database.
  *
@@ -281,5 +281,6 @@ export function storefrontNames(tenant: ResolvedTenant): StorefrontNames {
     brandName: tenant.brandName,
     restaurantName: tenant.restaurant.name,
     branchName: tenant.branch.name,
+    appName: branchAppName(tenant.branch.settings),
   });
 }

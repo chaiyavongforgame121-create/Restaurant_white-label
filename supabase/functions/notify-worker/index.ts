@@ -74,7 +74,7 @@ const VAPID_PUBLIC = Deno.env.get('VAPID_PUBLIC_KEY');
 const VAPID_PRIVATE = Deno.env.get('VAPID_PRIVATE_KEY');
 const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT') ?? 'mailto:ops@favornoms.com';
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
-const RESEND_FROM = Deno.env.get('RESEND_FROM') ?? 'Favornoms <orders@favornoms.com>';
+const RESEND_FROM = Deno.env.get('RESEND_FROM') ?? 'FavorNoms <orders@favornoms.com>';
 
 if (VAPID_PUBLIC && VAPID_PRIVATE) {
   webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC, VAPID_PRIVATE);
@@ -565,7 +565,7 @@ function renderEmailHtml(template: string, vars: Record<string, unknown>): strin
     template.startsWith('order_') ? 'View order' :
     template === 'new_dispatch' ? 'Open driver app' :
     template === 'promo' ? 'View offer' :
-    template === 'abandoned_cart' ? 'Finish your order' : 'Open Favornoms';
+    template === 'abandoned_cart' ? 'Finish your order' : 'Open FavorNoms';
 
   // Per-template body. Falls back to renderTemplate() if no rich template.
   const orderNum = escapeHtml(String(vars.order_number ?? ''));
@@ -574,7 +574,7 @@ function renderEmailHtml(template: string, vars: Record<string, unknown>): strin
   // platform's name in the header was never the restaurant they ordered from.
   const storefront = storefrontLabel(vars);
   const branchName = escapeHtml(storefront ?? 'your restaurant');
-  const headerName = escapeHtml(storefront ?? 'Favornoms');
+  const headerName = escapeHtml(storefront ?? 'FavorNoms');
   const eta = String(vars.eta_minutes ?? 30);
   const total = vars.total ? `$${Number(vars.total).toFixed(2)}` : null;
   // distance_km is in km; the line says "mi".

@@ -55,12 +55,12 @@
   "costs": {
     "title": "Costs we can see",
     "driverPayouts": "Driver payouts",
-    "subscription": "Favornoms subscription",
+    "subscription": "FavorNoms subscription",
     "noInvoicesWithPlan": "No invoices recorded yet. Your current rate is <strong>{rate}/month</strong> on the <planName>{plan}</planName> plan.",
     "noInvoices": "No invoices recorded yet. Your current rate is <strong>{rate}/month</strong>.",
     "totalKnown": "Total known costs",
     "afterCosts": "Revenue after them",
-    "disclaimer": "These are the only costs Favornoms records. Food, staff wages, rent and card fees are not included, so this is not your profit."
+    "disclaimer": "These are the only costs FavorNoms records. Food, staff wages, rent and card fees are not included, so this is not your profit."
   },
   "monthly": {
     "title": "Month by month",

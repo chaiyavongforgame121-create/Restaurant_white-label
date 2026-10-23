@@ -33,7 +33,7 @@ export default function PrivacyPage() {
           your delivery. We use service providers (Supabase for hosting, Resend for email, web-push
           providers for notifications) under data-processing agreements. Card payments are
           processed by Stripe on the restaurant&apos;s behalf and paid to the restaurant&apos;s own
-          Stripe account; Favornoms does not hold the money you pay. Stripe handles your card
+          Stripe account; FavorNoms does not hold the money you pay. Stripe handles your card
           details under its own privacy policy. We do not sell your personal information.
         </p>
       </Section>

@@ -22,6 +22,7 @@ import type { Json } from '@favornoms/database/types';
 import { Button, Card } from '@favornoms/ui';
 import { getBrowserClient } from '@favornoms/database/client';
 import { storefrontBase } from '@/lib/site-url';
+import { patchBranchSettings } from './patch-settings';
 import { ImageUpload } from '@/components/image-upload';
 import { IconUpload, type IconSet } from '@/components/icon-upload';
 import { parseIconStyle, type IconStyle } from '@/components/icon-geometry';
@@ -96,7 +97,12 @@ interface Props extends BrandingCardData {
   restaurantId: string;
   /** The branch name as saved: the storefront only shows a rename once Save changes has run. */
   branchName: string;
+  /** branches.settings.app_name: this branch's own App name, '' for the automatic one. */
+  appNameOverride: string;
 }
+
+/** The storefront reads at most this many characters of an App name (branchAppName). */
+const APP_NAME_MAX = 60;
 
 function storefrontHost(): string {
   try {
@@ -106,7 +112,7 @@ function storefrontHost(): string {
   }
 }
 
-export function BrandingCard({ branchId, restaurantId, branchName, brandName, identity, brandDefaults }: Props) {
+export function BrandingCard({ branchId, restaurantId, branchName, brandName, identity, brandDefaults, appNameOverride }: Props) {
   const t = useTranslations('branch');
   const router = useRouter();
   const [logoUrl, setLogoUrl] = React.useState<string | null>(identity.logo_url);
@@ -128,13 +134,17 @@ export function BrandingCard({ branchId, restaurantId, branchName, brandName, id
   const [savedAt, setSavedAt] = React.useState<number | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [host, setHost] = React.useState('');
+  // The App name as typed, and as last saved (what the storefront shows now).
+  const [appNameInput, setAppNameInput] = React.useState(appNameOverride);
+  const [savedAppName, setSavedAppName] = React.useState(appNameOverride.trim());
 
   // storefrontBase() may read window, so resolve it after mount rather than during render.
   React.useEffect(() => setHost(storefrontHost()), []);
 
-  const appName = storefrontAppName(brandName, branchName);
+  const autoAppName = storefrontAppName(brandName, branchName);
+  const appName = appNameInput.trim() || autoAppName;
   // A branch with no icon files of its own installs with the brand's (the storefront decides on
-  // the 192 and 512), so the preview has to show that rather than the Favornoms placeholder.
+  // the 192 and 512), so the preview has to show that rather than the FavorNoms placeholder.
   const hasOwnIcon = !!(icons.icon192Url || icons.icon512Url);
   const previewIcon = hasOwnIcon ? (icons.icon192Url ?? icons.faviconUrl) : brandDefaults.iconUrl;
 
@@ -148,7 +158,7 @@ export function BrandingCard({ branchId, restaurantId, branchName, brandName, id
       // needs is the owner or an admin.
       setError(t('branding.errors.ownerOrAdminOnly'));
     } else {
-      setError(err.code === '42501' ? t('branding.noPermission') : t('errors.generic'));
+      setError(err.code === '42501' || err.message.includes('not_authorized') ? t('branding.noPermission') : t('errors.generic'));
     }
   };
 
@@ -176,6 +186,17 @@ export function BrandingCard({ branchId, restaurantId, branchName, brandName, id
     if (!data || data.length === 0) {
       return setError(t('branding.noPermission'));
     }
+    // The App name lives in the branch's settings (patch_branch_settings: owner and admin), and
+    // is sent only when it changed. Blank removes it, which brings back "<brand> - <branch>".
+    const nextAppName = appNameInput.trim().slice(0, APP_NAME_MAX);
+    if (nextAppName !== savedAppName) {
+      setSaving(true);
+      const { error: nameErr } = await patchBranchSettings(branchId, { app_name: nextAppName || null });
+      setSaving(false);
+      if (nameErr) return writeFailed(nameErr);
+      setSavedAppName(nextAppName);
+      setAppNameInput(nextAppName);
+    }
     setSavedAt(Date.now());
     askStorefrontToRefresh(branchId);
     router.refresh();
@@ -188,12 +209,27 @@ export function BrandingCard({ branchId, restaurantId, branchName, brandName, id
       </h2>
       <p className="text-sm text-muted-foreground">{t('branding.description')}</p>
 
-      {/* Read-only on purpose: both halves have a home of their own, and a name typed here
-          used to land on the brand and rename every other branch with it. */}
+      {/* This branch's own name for its storefront: the header, the browser tab and the installed
+          app. It is saved on the branch (settings.app_name), never on the brand, so typing here
+          cannot rename another branch the way the old brand-level field did. Blank keeps the
+          automatic "<brand> - <branch>", shown as the placeholder. */}
       <div className="mt-4">
-        <span className="mb-1.5 block text-sm font-medium">{t('branding.appName')}</span>
-        <p className="truncate rounded-xl border border-border bg-muted/40 px-4 py-3 text-base">{appName}</p>
-        <span className="mt-1.5 block text-xs text-muted-foreground">
+        <label htmlFor={`app-name-${branchId}`} className="mb-1.5 block text-sm font-medium">
+          {t('branding.appName')}
+        </label>
+        <input
+          id={`app-name-${branchId}`}
+          value={appNameInput}
+          maxLength={APP_NAME_MAX}
+          placeholder={autoAppName}
+          onChange={(e) => {
+            setAppNameInput(e.target.value);
+            setSavedAt(null);
+          }}
+          className="focus-ring h-12 w-full rounded-xl border border-border bg-background px-4 text-base"
+        />
+        <span className="mt-1.5 block text-xs text-muted-foreground">{t('branding.appNameAuto', { name: autoAppName })}</span>
+        <span className="mt-1 block text-xs text-muted-foreground">
           {t.rich('branding.appNameSource', {
             link: (chunks) => (
               <Link href={`/b/${branchId}/brands`} className="font-medium underline">

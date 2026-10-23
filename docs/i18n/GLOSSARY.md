@@ -11,7 +11,7 @@ Tone
 - **ไทย**: polite, neutral written Thai. No ครับ/ค่ะ in labels, buttons or statuses; a short
   polite sentence is fine in longer messages. Keep common loanwords the industry already uses
   (ออร์เดอร์, เมนู, แคชเชียร์, แดชบอร์ด).
-- Keep brand and product names in Latin letters: Favornoms, Stripe, Google, Supabase, QR, PIN, PWA.
+- Keep brand and product names in Latin letters: FavorNoms, Stripe, Google, Supabase, QR, PIN, PWA.
 - Never translate merchant content (dish names, descriptions, ingredients, options, restaurant /
   branch / brand names, addresses, notes) or data values stored or compared in code.
 

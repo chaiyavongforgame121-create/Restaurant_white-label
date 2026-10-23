@@ -10,7 +10,7 @@ export default function TermsPage() {
 
       <Section title="1. Agreement">
         <p>
-          By using Favornoms (the &quot;Service&quot;), you agree to these Terms. If you do not
+          By using FavorNoms (the &quot;Service&quot;), you agree to these Terms. If you do not
           agree, do not use the Service.
         </p>
       </Section>
@@ -23,11 +23,11 @@ export default function TermsPage() {
         <p>
           Orders are an offer to purchase that the restaurant may accept or decline. Prices, item
           availability, and delivery zones are set by each restaurant, and you buy from the
-          restaurant, not from Favornoms.
+          restaurant, not from FavorNoms.
         </p>
         <p>
           Card payments are processed by Stripe and paid straight into the restaurant&apos;s own
-          Stripe account. Favornoms does not receive, hold or pass on the money you pay for an
+          Stripe account. FavorNoms does not receive, hold or pass on the money you pay for an
           order, and takes no share of it. Your card statement shows the restaurant as the
           merchant. Cash and QR-transfer payments are settled directly with the restaurant or its
           driver.
@@ -43,7 +43,7 @@ export default function TermsPage() {
           Refund policy is set by each restaurant, and the restaurant decides whether to refund.
           A card refund is made by the restaurant from its own Stripe account back to the card you
           paid with, and usually appears within 5–10 business days. A dispute or chargeback is
-          between you, your card issuer and the restaurant; Favornoms is not a party to the
+          between you, your card issuer and the restaurant; FavorNoms is not a party to the
           payment.
         </p>
       </Section>
@@ -61,7 +61,7 @@ export default function TermsPage() {
       <Section title="6. Intellectual property">
         <p>
           The Service, its design, and content (other than user submissions and restaurant menus)
-          are owned by Favornoms. You may not reproduce or redistribute without our written consent.
+          are owned by FavorNoms. You may not reproduce or redistribute without our written consent.
         </p>
       </Section>
 

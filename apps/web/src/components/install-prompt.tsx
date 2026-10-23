@@ -22,7 +22,7 @@ const CONSENT_POLL_MS = 500;
  */
 const CONSENT_MAX_WAIT_MS = 15_000;
 /** Platform fallback, used only where no tenant has branded the document. */
-const PLATFORM_NAME = 'Favornoms';
+const PLATFORM_NAME = 'FavorNoms';
 /** Mid-purchase is the wrong moment to ask anyone to install anything. */
 const NO_PROMPT_ROUTES = /(?:^|\/)(?:cart|checkout)\/?$/;
 

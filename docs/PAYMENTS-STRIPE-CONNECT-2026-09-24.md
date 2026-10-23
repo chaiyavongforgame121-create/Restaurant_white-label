@@ -119,7 +119,7 @@ In the platform's **US Stripe account** (start in **Test mode**):
 1. **Connect** → get started; platform profile ("software platform", restaurants in the US; the platform does not
    handle funds; connected accounts pay their own fees).
 2. **Settings → Branding**: name, icon, colour (shown on Stripe's onboarding pages). Stripe-hosted onboarding (Account
-   Links) needs all three. Done in the sandbox on 2026-09-26: the Favornoms icon (apps/web/public/icon-512.png) and
+   Links) needs all three. Done in the sandbox on 2026-09-26: the FavorNoms icon (apps/web/public/icon-512.png) and
    #FF6B35. Redo it for live.
 3. **Developers → Webhooks → Add endpoint**, "Events on connected accounts", pointing at
    `https://ayyfczidnzxetndiijmv.supabase.co/functions/v1/stripe-connect-webhook`, with the events listed in the

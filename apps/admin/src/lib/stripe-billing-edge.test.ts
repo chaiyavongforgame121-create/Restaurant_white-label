@@ -1054,7 +1054,7 @@ describe('customers', () => {
 describe('the customer portal (D10)', () => {
   it('offers card, invoices, details and cancel at period end; never plan switching', () => {
     expect(billing.portalConfigurationParams()).toEqual({
-      'business_profile[headline]': 'Favornoms: your package, card and invoices',
+      'business_profile[headline]': 'FavorNoms: your package, card and invoices',
       'features[payment_method_update][enabled]': 'true',
       'features[invoice_history][enabled]': 'true',
       'features[customer_update][enabled]': 'true',

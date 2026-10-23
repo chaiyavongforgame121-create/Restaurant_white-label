@@ -1,12 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  appleTouchIconUrl,
-  deriveStorefrontNames,
-  isTrustedIconSource,
-  manifestIcons,
-  parseAppIconVariant,
-  urlFingerprint,
-} from './app-identity';
+import { branchAppName, appleTouchIconUrl, deriveStorefrontNames, isTrustedIconSource, manifestIcons, parseAppIconVariant, urlFingerprint } from './app-identity';
 
 const SUPABASE = 'https://abc.supabase.co';
 const upload = (name: string) => `${SUPABASE}/storage/v1/object/public/branding/r1/${name}.png`;
@@ -201,5 +194,23 @@ describe('isTrustedIconSource', () => {
     expect(isTrustedIconSource('http://169.254.169.254/latest/meta-data', SUPABASE)).toBe(false);
     expect(isTrustedIconSource('not a url', SUPABASE)).toBe(false);
     expect(isTrustedIconSource(upload('a'), undefined)).toBe(false);
+  });
+});
+
+describe('the branch’s own App name', () => {
+  it('wins over the automatic name on every surface when set', () => {
+    const names = deriveStorefrontNames({ brandName: 'Coastal Grill', branchName: 'Hamburger', appName: '  Burger Joint  ' });
+    expect(names).toMatchObject({ full: 'Burger Joint', app: 'Burger Joint', short: 'Burger Joint', brand: 'Coastal Grill', branch: 'Hamburger' });
+  });
+  it('falls back to "<brand> - <branch>" when blank or missing', () => {
+    expect(deriveStorefrontNames({ brandName: 'Coastal Grill', branchName: 'Hamburger', appName: '   ' }).full).toBe('Coastal Grill - Hamburger');
+    expect(deriveStorefrontNames({ brandName: 'Coastal Grill', branchName: 'Hamburger', appName: null }).full).toBe('Coastal Grill - Hamburger');
+  });
+  it('is read from branches.settings.app_name, trimmed and capped', () => {
+    expect(branchAppName({ app_name: ' Burger Joint ' })).toBe('Burger Joint');
+    expect(branchAppName({ app_name: '' })).toBeNull();
+    expect(branchAppName({ app_name: 42 })).toBeNull();
+    expect(branchAppName(null)).toBeNull();
+    expect(branchAppName({ app_name: 'x'.repeat(80) })?.length).toBe(60);
   });
 });

@@ -19,7 +19,7 @@ interface Props {
  * A manifest does not merely describe an app, it NAMES one: the platform keys an installed
  * app on `id` resolved against the origin, and on Android that pair decides which WebAPK a
  * new install joins. This route used to emit `id`/`start_url`/`scope` of "/" for every
- * restaurant on the production host, so Coastal Grill, Somtam Zab and the Favornoms marketing
+ * restaurant on the production host, so Coastal Grill, Somtam Zab and the FavorNoms marketing
  * site were one application. Whichever manifest Chrome saw first owned the home-screen icon,
  * a second restaurant could not install separately at all, and the icon that did get installed
  * opened the marketing page.

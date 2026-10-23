@@ -1,4 +1,4 @@
-# Favornoms — User Flows (ทุก Role ละเอียด)
+# FavorNoms — User Flows (ทุก Role ละเอียด)
 
 > เอกสารนี้อธิบายทุก loop การทำงานของแต่ละ role พร้อม URL, ปุ่มที่กด, การเปลี่ยนแปลงใน DB, และ edge cases.
 > ใช้คู่กับ `docs/SMOKE-TEST.md` สำหรับ checklist สั้นๆ.
@@ -511,7 +511,7 @@ Effect:
 /b/{branchId}/branch:
   - Identity: name, address, active toggle
   - Brand theme: primary + accent colors (preview)
-  - Custom domain: hostname (DNS A/CNAME → Favornoms target)
+  - Custom domain: hostname (DNS A/CNAME → FavorNoms target)
   - Operating settings: timezone, delivery radius, service fee %
   - Closures (see above)
 ```

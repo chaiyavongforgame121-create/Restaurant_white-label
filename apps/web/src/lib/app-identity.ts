@@ -55,12 +55,22 @@ export function deriveStorefrontNames(input: {
   brandName?: string | null;
   restaurantName?: string | null;
   branchName?: string | null;
+  /** The branch's own App name from its Branding card (branches.settings.app_name). When set it
+   *  is the name on every surface; blank means the automatic "<brand> - <branch>". */
+  appName?: string | null;
 }): StorefrontNames {
   const brand = input.brandName?.trim() || input.restaurantName?.trim() || '';
   const branch = input.branchName?.trim() || '';
   const sameName = brand.toLowerCase() === branch.toLowerCase();
-  const full = brand && branch && !sameName ? `${brand} - ${branch}` : brand || branch;
+  const derived = brand && branch && !sameName ? `${brand} - ${branch}` : brand || branch;
+  const full = input.appName?.trim() || derived;
   return { brand, branch, full, app: full, short: full };
+}
+
+/** branches.settings.app_name, when it is a non-blank string. */
+export function branchAppName(settings: unknown): string | null {
+  const value = settings && typeof settings === 'object' ? (settings as Record<string, unknown>).app_name : null;
+  return typeof value === 'string' && value.trim() ? value.trim().slice(0, 60) : null;
 }
 
 export type AppIconVariant = '192' | '512' | 'maskable-512';

@@ -1,4 +1,4 @@
-# Favornoms — Mermaid Diagrams
+# FavorNoms — Mermaid Diagrams
 
 > Visual companion to `docs/USER-FLOWS.md`. Renders on GitHub, VS Code (with Mermaid extension), Notion, Obsidian, etc.
 

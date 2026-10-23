@@ -16,7 +16,7 @@ import { sameSelection, selectionFromRequest, type PlanBranch } from './plan-mod
 // --- the request the merchant already sent -----------------------------------
 
 /**
- * A package request that has been sent and is waiting for the Favornoms team, with the money
+ * A package request that has been sent and is waiting for the FavorNoms team, with the money
  * exactly as request_package_change priced it.
  *
  * The server's figures are the ones to repeat. `oneTimeTotal` is stored net of the discount
@@ -39,7 +39,7 @@ export interface FiledRequest {
   createdAt: string | null;
   /**
    * 'stripe' once the merchant started paying it by card (billing_mark_request_stripe): it
-   * waits for that payment, never for the Favornoms team, who cannot approve it by hand.
+   * waits for that payment, never for the FavorNoms team, who cannot approve it by hand.
    */
   rail: 'manual' | 'stripe';
 }
@@ -229,7 +229,7 @@ const CHARGED_REFUNDED = /^charged_refunded\b/;
 /**
  * The card on file WAS charged, the change could not be applied, and the refund did not go
  * through (§10.9). Saying "nothing was charged" — or "it is being refunded" — here would be
- * false; the Favornoms team puts it right, and paying again would only charge twice.
+ * false; the FavorNoms team puts it right, and paying again would only charge twice.
  */
 const CHARGED_NOT_APPLIED = /^charged_not_applied\b/;
 

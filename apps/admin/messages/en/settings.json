@@ -10,7 +10,7 @@
     "themeDescription": "Coming soon — currently follows your system color scheme."
   },
   "plan": {
-    "metaTitle": "Plan & billing · Favornoms",
+    "metaTitle": "Plan & billing · FavorNoms",
     "title": "Plan & billing",
     "subtitle": "Two totals, kept apart: what you pay once, and what you pay every month.",
     "perMonth": "/mo",
@@ -22,7 +22,7 @@
     },
     "replaceDialog": {
       "title": "Replace your pending request?",
-      "body": "Your earlier request ({summary}) is withdrawn and this one goes to the Favornoms team instead.",
+      "body": "Your earlier request ({summary}) is withdrawn and this one goes to the FavorNoms team instead.",
       "codeReleased": "Code {code} was on that request. Apply it again here to keep it; otherwise it is given back.",
       "confirm": "Replace request"
     },
@@ -99,7 +99,7 @@
       "onceNothing": "Nothing. Everything in this package is already paid for.",
       "onceOnRequest": "On the request you sent",
       "onceCode": "Code {code}",
-      "onceAwaiting": "Nothing has been charged yet. You pay this when the Favornoms team activates your request.",
+      "onceAwaiting": "Nothing has been charged yet. You pay this when the FavorNoms team activates your request.",
       "monthlyTitle": "Then every month",
       "withDelivery": "{branch} + delivery",
       "unusedSeats": "{count, plural, one {# branch not created yet} other {# branches not created yet}}",
@@ -113,7 +113,7 @@
         "plusOnce": "Plus {price} once."
       },
       "trialNote": "Nothing is charged while your free trial runs. This is your first bill when you confirm.",
-      "footnote": "Your request goes to the Favornoms team for activation. You are invoiced monthly."
+      "footnote": "Your request goes to the FavorNoms team for activation. You are invoiced monthly."
     },
     "discount": {
       "title": "Discount code",
@@ -138,12 +138,12 @@
     },
     "noTrial": {
       "title": "This restaurant starts without a free trial",
-      "body": "Your account already used its 14-day free trial on another restaurant. This one stays offline until it has a package: choose one below and send the request, and the Favornoms team activates it."
+      "body": "Your account already used its 14-day free trial on another restaurant. This one stays offline until it has a package: choose one below and send the request, and the FavorNoms team activates it."
     },
     "renew": {
       "title": "Renew your package",
       "paidThrough": "Your package is paid through {date}.",
-      "body": "Your current package is selected below. Press Request renewal to send it to the Favornoms team — nothing renews until they approve it. You can also change the package before sending."
+      "body": "Your current package is selected below. Press Request renewal to send it to the FavorNoms team — nothing renews until they approve it. You can also change the package before sending."
     },
     "pricesUnavailable": {
       "title": "Prices could not be loaded",
@@ -153,14 +153,14 @@
     "decision": {
       "approvedOn": "Request approved on {date}",
       "declinedOn": "Request declined on {date}",
-      "noteLabel": "Note from the Favornoms team:",
+      "noteLabel": "Note from the FavorNoms team:",
       "noReason": "No reason was given. You can choose a package below and send a new request.",
       "approved": "Approved",
       "declined": "Declined"
     },
     "pending": {
-      "title": "Request waiting for the Favornoms team",
-      "titleSent": "Request waiting for the Favornoms team · sent {date}",
+      "title": "Request waiting for the FavorNoms team",
+      "titleSent": "Request waiting for the FavorNoms team · sent {date}",
       "body": "Nothing changes until it is approved. To ask for something else, change the package below and press Replace pending request.",
       "badge": "Pending"
     },
@@ -174,7 +174,7 @@
         "finishPayment": "Finish payment",
         "finishFirst": "Finish the waiting payment first",
         "checking": "Checking the payment…",
-        "sendToTeam": "Send to the Favornoms team instead"
+        "sendToTeam": "Send to the FavorNoms team instead"
       },
       "footnote": {
         "firstLater": "Paid by card through Stripe. From {date}, {monthly} is charged to your card automatically every month; Stripe’s payment page shows the exact amount before anything is charged. Cancel any time; you keep what you paid for until the end of that month.",
@@ -218,7 +218,7 @@
         "unconfirmedBody": "Your card may already have been charged for this request, so it cannot be paid again from this page. Reload the page in a minute to see where it stands.",
         "unconfirmedBadge": "Checking",
         "pausedTitle": "Card payments are paused",
-        "pausedBody": "This request was waiting for a card payment, which cannot be taken right now. Send it to the Favornoms team instead and they will activate it."
+        "pausedBody": "This request was waiting for a card payment, which cannot be taken right now. Send it to the FavorNoms team instead and they will activate it."
       },
       "result": {
         "confirmingTitle": "Payment received — turning your package on…",
@@ -235,7 +235,7 @@
         "refundedStaleTitle": "This payment is being refunded",
         "refundedStaleBody": "It was for a request that is no longer open: the request was changed or closed after the payment page opened. The full amount is refunded to your card automatically, so there is nothing you need to do. Nothing changed on your package; anything still waiting is shown below.",
         "refundedFailedTitle": "Your package could not be turned on, so the payment is being refunded",
-        "refundedFailedBody": "The payment went through, but the package could not be applied, so the full amount is refunded to your card automatically. Nothing changed on your package. If you do not see the refund within a few days, contact the Favornoms team.",
+        "refundedFailedBody": "The payment went through, but the package could not be applied, so the full amount is refunded to your card automatically. Nothing changed on your package. If you do not see the refund within a few days, contact the FavorNoms team.",
         "notAppliedTitle": "Your package was not changed — nothing was charged",
         "notAppliedBody": "Stripe’s page finished, but the request it was for could not be applied: it was changed or closed while that page was open, or it no longer fits your branches. No money was taken. Anything still waiting is shown below."
       },
@@ -282,18 +282,18 @@
         "requestGone": "This request is no longer waiting for payment — it was paid, replaced or declined. Reload the page to see where it stands.",
         "startFailed": "The card payment could not be started. Nothing was charged and your request is saved — try Continue to payment again in a moment.",
         "portalFailed": "The billing portal could not be opened. Please try again in a moment.",
-        "portalOff": "Card billing is switched off right now. Contact the Favornoms team about your billing.",
+        "portalOff": "Card billing is switched off right now. Contact the FavorNoms team about your billing.",
         "noCustomer": "There is no card on file yet. One is added the first time you pay by card.",
-        "chargedNotApplied": "Your card was charged, but the change was not applied and the money could not be returned automatically. Please do not pay again — the Favornoms team will fix it.",
-        "changeNotApplied": "Your package was not changed and nothing was charged. Reload the page before you try again; if it happens again, contact the Favornoms team.",
-        "needsTeam": "This change cannot be charged to your card automatically right now. Nothing was charged — please contact the Favornoms team.",
+        "chargedNotApplied": "Your card was charged, but the change was not applied and the money could not be returned automatically. Please do not pay again — the FavorNoms team will fix it.",
+        "changeNotApplied": "Your package was not changed and nothing was charged. Reload the page before you try again; if it happens again, contact the FavorNoms team.",
+        "needsTeam": "This change cannot be charged to your card automatically right now. Nothing was charged — please contact the FavorNoms team.",
         "chargedRefunded": "Your card was charged, but the change could not be applied, so the full amount is being refunded to your card. Nothing changed on your package. Reload the page before you try again.",
         "resultUnknown": "We could not confirm whether your card was charged. Please do not pay again yet: reload the page in a minute. If the payment went through, your change turns on by itself.",
         "paymentInProgress": "A card payment for your earlier request is still waiting on Stripe’s page (your bank asked you to confirm it, or the card was declined). Finish it, or wait until it expires in about a day, before you change the package.",
         "busy": "This payment is already being processed. Wait a moment and try again — it will not be charged twice.",
         "planLimit": "This package has fewer branches than the restaurant has open. Add branches to the package, or close a branch first. Nothing was charged.",
-        "cardPaused": "Card payments are paused right now, so this could not be charged. Nothing was charged and your request is saved. Try again later, or contact the Favornoms team.",
-        "changeConflict": "This change was already sent to your card once, and what it did is not clear yet. Nothing more was charged just now. Please do not pay again: contact the Favornoms team and they will sort it out.",
+        "cardPaused": "Card payments are paused right now, so this could not be charged. Nothing was charged and your request is saved. Try again later, or contact the FavorNoms team.",
+        "changeConflict": "This change was already sent to your card once, and what it did is not clear yet. Nothing more was charged just now. Please do not pay again: contact the FavorNoms team and they will sort it out.",
         "paymentExpired": "The card payment for this change was not finished in time, so the change was cancelled. Nothing was charged. Choose the package again to try once more."
       },
       "onceSettling": "Your payment for this is being recorded.",

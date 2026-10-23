@@ -141,7 +141,7 @@
     "uploadLogo": "Upload logo",
     "logoHint": "Used only by branches without a logo of their own. Each branch uploads its own under Branch settings → Branding for this branch.",
     "appIcon": "Default app icon (optional)",
-    "appIconHint": "Used only by branches without an app icon of their own, for the browser tab and the icon people see after installing. Each branch uploads its own under Branch settings. Leave empty to use the Favornoms icon.",
+    "appIconHint": "Used only by branches without an app icon of their own, for the browser tab and the icon people see after installing. Each branch uploads its own under Branch settings. Leave empty to use the FavorNoms icon.",
     "tabFallback": "Your store",
     "preview": "Preview",
     "nameFallback": "Brand name",

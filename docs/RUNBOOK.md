@@ -1,4 +1,4 @@
-# Favornoms — Operational Runbook
+# FavorNoms — Operational Runbook
 
 > Quick reference for on-call. For deeper docs see `HANDOFF.md`, `CONFIG-CHECKLIST.md`, `docs/BACKUPS.md`.
 

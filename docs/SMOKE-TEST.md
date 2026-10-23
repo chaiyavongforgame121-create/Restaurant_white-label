@@ -1,4 +1,4 @@
-# Favornoms — End-to-end smoke test (🇺🇸 US)
+# FavorNoms — End-to-end smoke test (🇺🇸 US)
 
 > Complete pass through every role's loop, including all features added this session. Run after dashboard config (`CONFIG-CHECKLIST.md`).
 

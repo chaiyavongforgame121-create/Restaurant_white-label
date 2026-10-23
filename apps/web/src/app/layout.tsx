@@ -23,28 +23,36 @@ export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations('landing');
   return {
     metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://app.favornoms.com'),
-    title: { default: t('meta.title'), template: '%s · Favornoms' },
+    title: { default: t('meta.title'), template: '%s · FavorNoms' },
     description: t('site.description'),
     manifest: '/manifest.webmanifest',
-    applicationName: 'Favornoms',
-    appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Favornoms' },
+    applicationName: 'FavorNoms',
+    appleWebApp: { capable: true, statusBarStyle: 'default', title: 'FavorNoms' },
+    // The platform's own icon: the chef-hat F. Every storefront without an icon of its own
+    // inherits this key (the branch layout omits `icons` then), and one that uploaded an icon
+    // replaces it outright. PNG only: the art is a raster, so there is no SVG to offer, and the
+    // 16/32 cuts are sized for a tab where the 192 would be scaled down by the browser. There is
+    // deliberately no public/favicon.ico: on a merchant's own domain the bare /favicon.ico request
+    // some browsers make would be answered with the platform's F instead of a 404.
     icons: {
       icon: [
-        { url: '/icon.svg', type: 'image/svg+xml' },
+        { url: '/favicon-32.png', sizes: '32x32', type: 'image/png' },
+        { url: '/favicon-16.png', sizes: '16x16', type: 'image/png' },
         { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
       ],
+      // 180x180, opaque: the orange circle on white. iOS paints transparency black.
       apple: '/apple-touch-icon.png',
     },
     openGraph: {
       type: 'website',
-      siteName: 'Favornoms',
+      siteName: 'FavorNoms',
       title: t('meta.title'),
       description: t('site.ogDescription'),
       images: ['/icon-512.png'],
     },
     twitter: {
       card: 'summary_large_image',
-      title: 'Favornoms',
+      title: 'FavorNoms',
       description: t('site.twitterDescription'),
       images: ['/icon-512.png'],
     },
@@ -70,7 +78,7 @@ const CAPTURE_INSTALL_PROMPT = `!function(){var w=window;w.__bipEvent=null;w.__b
  * Every restaurant now publishes its own PWA identity, and an app installed from a menu opens
  * on that menu. Apps installed BEFORE that shared one identity with each other and with this
  * marketing site — their start_url is the origin root — so they land here instead, under a
- * Favornoms icon, for ever. Nothing can re-key an installed WebAPK; reinstalling is the only
+ * FavorNoms icon, for ever. Nothing can re-key an installed WebAPK; reinstalling is the only
  * route to a branded one, so say so where those people actually arrive.
  *
  * The test is: running standalone, on a page whose manifest link is the platform one. A page

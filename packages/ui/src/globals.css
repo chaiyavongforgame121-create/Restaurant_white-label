@@ -4,7 +4,7 @@
 
 @layer base {
   /* ============================================================
-   * Favornoms Design Tokens
+   * FavorNoms Design Tokens
    * Appetite-stimulating palette: warm orange → red → gold
    * All overridable per-branch (white-label) via JS-injected
    * `style="--primary: ...;"` on the root element.

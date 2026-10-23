@@ -288,7 +288,7 @@ export default async function RootPage() {
             <span className="grid h-8 w-8 place-items-center rounded-full bg-gradient-warm text-white">
               <ChefHat className="h-4 w-4" />
             </span>
-            <span className="font-display font-semibold text-foreground">Favornoms</span>
+            <span className="font-display font-semibold text-foreground">FavorNoms</span>
           </div>
           <nav className="flex flex-wrap gap-4">
             <Link href="/help" className="hover:text-foreground">{t('footer.help')}</Link>
@@ -298,7 +298,7 @@ export default async function RootPage() {
             <Link href="/account" className="hover:text-foreground">{t('footer.account')}</Link>
             <a href="mailto:hello@favornoms.com" className="hover:text-foreground">{t('footer.contact')}</a>
           </nav>
-          <p className="text-xs">&copy; {new Date().getFullYear()} Favornoms</p>
+          <p className="text-xs">&copy; {new Date().getFullYear()} FavorNoms</p>
         </div>
       </footer>
     </main>

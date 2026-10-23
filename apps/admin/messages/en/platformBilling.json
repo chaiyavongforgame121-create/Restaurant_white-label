@@ -16,7 +16,7 @@
     "requestNotFound": "That request no longer exists. Reload the queue."
   },
   "plans": {
-    "metaTitle": "Product catalog · Favornoms",
+    "metaTitle": "Product catalog · FavorNoms",
     "title": "Product catalog",
     "subtitle": "What restaurants can buy. Every product carries two prices in USD: one paid once, and one paid every month.",
     "newProduct": "New product",
@@ -141,7 +141,7 @@
     "reset": "Reset to defaults"
   },
   "subscriptions": {
-    "metaTitle": "Subscriptions · Favornoms",
+    "metaTitle": "Subscriptions · FavorNoms",
     "title": "Subscriptions",
     "subtitle": "Set a restaurant's package directly, branch by branch. Changes take effect immediately.",
     "searchPlaceholder": "Search restaurants",
@@ -219,7 +219,7 @@
     "deliveryNote": "Delivery is the exception: this switch says the account may have delivery at all, while the branch list above says where. Forcing it On grants nothing until a branch is switched on."
   },
   "requests": {
-    "metaTitle": "Package requests · Favornoms",
+    "metaTitle": "Package requests · FavorNoms",
     "title": "Package requests",
     "subtitle": "Merchants who chose a package and are waiting to be switched on.",
     "filters": {
@@ -287,7 +287,7 @@
     "void": "cancelled"
   },
   "discounts": {
-    "metaTitle": "Discount codes · Favornoms",
+    "metaTitle": "Discount codes · FavorNoms",
     "title": "Discount codes",
     "subtitle": "Codes you hand out. The server prices every one of them.",
     "oneTimeOnly": "<strong>Codes come off the one-time charges only</strong> — the base, an extra branch, a branch's delivery unlock. They never change the monthly bill.",
@@ -412,7 +412,7 @@
       "paymentExpired": "Payment window expired",
       "paidByCard": "Paid by card",
       "awaitingCardNote": "The merchant was sent to Stripe’s checkout page to pay this by card. It switches on by itself when Stripe confirms the payment, so there is nothing to approve. Reject it only to clear a checkout they abandoned.",
-      "awaitingCardPausedNote": "Card payments are switched off, so {name}’s plan page now asks them to send this request to the Favornoms team instead. When they do, it comes back here as an ordinary request for you to approve. Until then it stays here: a checkout they already opened can still be paid, and then it switches on by itself. Reject it only if it should not go ahead.",
+      "awaitingCardPausedNote": "Card payments are switched off, so {name}’s plan page now asks them to send this request to the FavorNoms team instead. When they do, it comes back here as an ordinary request for you to approve. Until then it stays here: a checkout they already opened can still be paid, and then it switches on by itself. Reject it only if it should not go ahead.",
       "paymentInProgressNote": "{name} is finishing this payment on Stripe’s page: their card needs confirming (3-D Secure) or was declined, so the change waits until it is paid. It switches on by itself once paid. For about a day it cannot be rejected, because the payment could still go through. After that the payment window closes: the request is cleared when the merchant chooses a package again, or you can reject it here.",
       "paymentExpiredNote": "Payment window expired — Reject to clear it. {name} did not finish paying this change on Stripe within about a day, so it does not go ahead and nothing changes. If they pay that old invoice anyway, the payment is refunded automatically.",
       "managedRestaurantNote": "{name} already pays by card through Stripe, so this change is paid for on their plan page and switches on by itself, whether card billing is switched on or off. It cannot be approved here; reject it only if it should not go ahead.",
@@ -427,7 +427,7 @@
       "priceIdHint": "Not needed any more: card billing finds or creates its Stripe prices from the prices above."
     },
     "setup": {
-      "metaTitle": "Stripe · Favornoms",
+      "metaTitle": "Stripe · FavorNoms",
       "title": "Stripe",
       "subtitle": "Restaurants pay their package by card into the platform’s own Stripe account. Set it up once for test mode and once for live mode, then switch it on.",
       "mode": {
@@ -538,7 +538,7 @@
         },
         "portal": {
           "title": "Customer portal",
-          "body": "Where merchants update their card, see their invoices and cancel at the end of the paid month. Plan changes stay on the Favornoms plan page.",
+          "body": "Where merchants update their card, see their invoices and cancel at the end of the paid month. Plan changes stay on the FavorNoms plan page.",
           "auto": "Set up automatically when you switch card billing on.",
           "missingWhileOn": "Card billing is on but the portal is not set up. Switch it off and on again to set it up."
         }

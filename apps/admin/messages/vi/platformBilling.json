@@ -16,7 +16,7 @@
     "requestNotFound": "Yêu cầu này không còn nữa. Hãy tải lại hàng chờ."
   },
   "plans": {
-    "metaTitle": "Danh mục sản phẩm · Favornoms",
+    "metaTitle": "Danh mục sản phẩm · FavorNoms",
     "title": "Danh mục sản phẩm",
     "subtitle": "Những gì nhà hàng có thể mua. Mỗi sản phẩm có hai mức giá bằng USD: một khoản trả một lần và một khoản trả hằng tháng.",
     "newProduct": "Sản phẩm mới",
@@ -141,7 +141,7 @@
     "reset": "Khôi phục mặc định"
   },
   "subscriptions": {
-    "metaTitle": "Gói đăng ký · Favornoms",
+    "metaTitle": "Gói đăng ký · FavorNoms",
     "title": "Gói đăng ký",
     "subtitle": "Đặt gói của nhà hàng trực tiếp, theo từng chi nhánh. Thay đổi có hiệu lực ngay lập tức.",
     "searchPlaceholder": "Tìm nhà hàng",
@@ -219,7 +219,7 @@
     "deliveryNote": "Giao hàng là ngoại lệ: công tắc này chỉ nói tài khoản có được phép giao hàng hay không, còn danh sách chi nhánh ở trên nói giao ở đâu. Bật cưỡng bức cũng chưa cấp gì cho tới khi bật ở một chi nhánh."
   },
   "requests": {
-    "metaTitle": "Yêu cầu đổi gói · Favornoms",
+    "metaTitle": "Yêu cầu đổi gói · FavorNoms",
     "title": "Yêu cầu đổi gói",
     "subtitle": "Người bán đã chọn gói và đang chờ được kích hoạt.",
     "filters": {
@@ -287,7 +287,7 @@
     "void": "đã huỷ"
   },
   "discounts": {
-    "metaTitle": "Mã giảm giá · Favornoms",
+    "metaTitle": "Mã giảm giá · FavorNoms",
     "title": "Mã giảm giá",
     "subtitle": "Những mã bạn phát ra. Máy chủ tính toán mức giảm cho từng mã.",
     "oneTimeOnly": "<strong>Mã chỉ giảm các khoản trả một lần</strong> — gói nền, chi nhánh thêm, phí mở khoá giao hàng của một chi nhánh. Mã không bao giờ đổi hoá đơn hằng tháng.",
@@ -412,7 +412,7 @@
       "paymentExpired": "Hết hạn thanh toán",
       "paidByCard": "Đã thanh toán bằng thẻ",
       "awaitingCardNote": "Người bán đã được chuyển tới trang thanh toán của Stripe để trả yêu cầu này bằng thẻ. Gói sẽ tự kích hoạt khi Stripe xác nhận thanh toán, nên không cần duyệt. Chỉ từ chối khi họ đã bỏ dở trang thanh toán.",
-      "awaitingCardPausedNote": "Thanh toán bằng thẻ đang tắt, nên trang gói của {name} giờ đề nghị họ gửi yêu cầu này cho đội ngũ Favornoms. Khi họ gửi, yêu cầu sẽ quay lại đây như một yêu cầu thường để bạn duyệt. Trong lúc chờ, yêu cầu vẫn ở đây: trang thanh toán họ đã mở vẫn có thể được thanh toán, và khi đó gói tự kích hoạt. Chỉ từ chối nếu không nên tiếp tục.",
+      "awaitingCardPausedNote": "Thanh toán bằng thẻ đang tắt, nên trang gói của {name} giờ đề nghị họ gửi yêu cầu này cho đội ngũ FavorNoms. Khi họ gửi, yêu cầu sẽ quay lại đây như một yêu cầu thường để bạn duyệt. Trong lúc chờ, yêu cầu vẫn ở đây: trang thanh toán họ đã mở vẫn có thể được thanh toán, và khi đó gói tự kích hoạt. Chỉ từ chối nếu không nên tiếp tục.",
       "paymentInProgressNote": "{name} đang hoàn tất khoản thanh toán này trên trang của Stripe: thẻ của họ cần xác thực (3-D Secure) hoặc đã bị từ chối, nên thay đổi chờ cho đến khi được thanh toán. Gói sẽ tự kích hoạt khi đã thanh toán. Trong khoảng một ngày không thể từ chối, vì khoản thanh toán vẫn có thể thành công. Sau đó hạn thanh toán kết thúc: yêu cầu được xoá khi người bán chọn gói lại, hoặc bạn có thể từ chối ở đây.",
       "paymentExpiredNote": "Hết hạn thanh toán — từ chối để xoá. {name} không hoàn tất thanh toán thay đổi này trên Stripe trong khoảng một ngày, nên thay đổi không được áp dụng và không có gì thay đổi. Nếu sau đó họ vẫn trả hoá đơn cũ, tiền sẽ được hoàn lại tự động.",
       "managedRestaurantNote": "{name} đã thanh toán bằng thẻ qua Stripe, nên thay đổi này được thanh toán trên trang gói của họ và tự kích hoạt, dù thu phí bằng thẻ đang bật hay tắt. Không thể duyệt ở đây; chỉ từ chối nếu không nên tiếp tục.",
@@ -427,7 +427,7 @@
       "priceIdHint": "Không còn cần nữa: thu phí bằng thẻ tự tìm hoặc tạo giá trên Stripe từ các mức giá ở trên."
     },
     "setup": {
-      "metaTitle": "Stripe · Favornoms",
+      "metaTitle": "Stripe · FavorNoms",
       "title": "Stripe",
       "subtitle": "Nhà hàng thanh toán gói bằng thẻ vào chính tài khoản Stripe của nền tảng. Thiết lập một lần cho chế độ thử nghiệm và một lần cho chế độ thật, rồi bật lên.",
       "mode": {
@@ -538,7 +538,7 @@
         },
         "portal": {
           "title": "Cổng khách hàng",
-          "body": "Nơi người bán cập nhật thẻ, xem hoá đơn và huỷ vào cuối tháng đã trả. Việc đổi gói vẫn làm trên trang gói của Favornoms.",
+          "body": "Nơi người bán cập nhật thẻ, xem hoá đơn và huỷ vào cuối tháng đã trả. Việc đổi gói vẫn làm trên trang gói của FavorNoms.",
           "auto": "Tự thiết lập khi bạn bật thu phí bằng thẻ.",
           "missingWhileOn": "Thu phí bằng thẻ đang bật nhưng cổng chưa được thiết lập. Hãy tắt rồi bật lại để thiết lập."
         }

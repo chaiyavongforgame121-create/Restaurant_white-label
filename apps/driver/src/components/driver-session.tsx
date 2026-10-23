@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { getBrowserClient } from '@favornoms/database/client';
 import { getMyDriver, type DriverWithApproval } from '@favornoms/database/queries';
+import { FavorGoSplash } from './favorgo-splash';
 
 interface DriverSessionContextValue {
   driver: DriverWithApproval;
@@ -146,12 +147,11 @@ export function DriverSessionProvider({ children }: { children: React.ReactNode 
     router.replace('/login');
   };
 
+  // The FavorGO splash (the owner's car and wordmark) while the rider is signed in and their
+  // profile read: this is what a cold start of the installed app shows. Instant, because it is
+  // also what the server renders, so it is the first thing on screen.
   if (loading && !driver) {
-    return (
-      <div className="min-h-dynamic-screen bg-background grid place-items-center">
-        <div className="text-muted-foreground text-sm">{tCommon('loading')}</div>
-      </div>
-    );
+    return <FavorGoSplash instant />;
   }
 
   if (!driver) {

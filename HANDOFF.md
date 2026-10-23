@@ -1,4 +1,4 @@
-# Favornoms — Session Handoff
+# FavorNoms — Session Handoff
 
 > **Last updated:** 2026-05-27 (full session) · `pnpm -r type-check` ✅ · `pnpm -r build` ✅ · `pnpm -r test` ✅ (49 tests passing)
 >
@@ -161,7 +161,7 @@ supabase link --project-ref ayyfczidnzxetndiijmv
 - `NOTIFY_WORKER_SECRET` — random string (must match `private.app_settings` row)
 - `VAPID_PUBLIC_KEY` + `VAPID_PRIVATE_KEY` — `node scripts/generate-vapid-keys.cjs`
 - `RESEND_API_KEY` — from resend.com
-- `RESEND_FROM` *(optional)* — `Favornoms <orders@favornoms.com>`
+- `RESEND_FROM` *(optional)* — `FavorNoms <orders@favornoms.com>`
 - `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN` + `TWILIO_PHONE_NUMBER` — for SMS
 
 **Optional:**

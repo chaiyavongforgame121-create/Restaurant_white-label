@@ -2,7 +2,7 @@
 // no React in them so they can be pinned in a test. The dashboard's billing card reads the same
 // rules from here, so the two screens cannot tell a merchant different things about one bill.
 //
-// Two rails pay the platform. On the MANUAL rail a request waits for the Favornoms team, and
+// Two rails pay the platform. On the MANUAL rail a request waits for the FavorNoms team, and
 // nothing renews by itself. On the STRIPE rail the merchant files the same request and pays it
 // by card straight away, and the monthly fee renews on the card by itself. Which rail a
 // restaurant is on is the server's answer (`billing.rail`, from billing_is_stripe_managed); an
@@ -300,13 +300,13 @@ export function paysByCard(billing: Pick<BillingRailInfo, 'stripeEnabled' | 'rai
  * What the waiting request needs from the merchant.
  *
  * - none: nothing is waiting.
- * - team: card billing is off; the Favornoms team activates it (today's banner).
+ * - team: card billing is off; the FavorNoms team activates it (today's banner).
  * - card: it waits for the card payment — Checkout was opened for it, starting the card payment
  *   failed after it was filed, or the restaurant already pays by card. "Continue to payment"
  *   finishes it. The last case is what a reload shows for a change whose card step failed before
  *   Stripe invoiced it: the server only marks a request as a card request once Stripe has an
  *   invoice for it, so the row still reads 'manual' — yet the team can never approve a card
- *   restaurant's request by hand (D11), so "waiting for the Favornoms team" would strand it
+ *   restaurant's request by hand (D11), so "waiting for the FavorNoms team" would strand it
  *   (ui-rr-4).
  * - teamOrCard: a request filed for the team (before card billing was switched on) while card
  *   billing is on. The team can still approve it — the manual rail stays for bank transfers —
@@ -376,7 +376,7 @@ export function canContinuePayment(kind: PendingPayment): boolean {
  * - finish: open Stripe's invoice page it is held on ("Finish payment").
  * - sendToTeam: card payments are paused for it; file it again as a manual request.
  * - checking: its card step ended without a known result; nothing until the page is read again.
- * - waiting: it waits for the Favornoms team (or is being recorded); nothing to press.
+ * - waiting: it waits for the FavorNoms team (or is being recorded); nothing to press.
  */
 export type FiledAction = 'continue' | 'finish' | 'sendToTeam' | 'checking' | 'waiting';
 

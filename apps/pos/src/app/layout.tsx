@@ -7,7 +7,7 @@ import './globals.css';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans', display: 'swap' });
 
-export const metadata: Metadata = { title: 'Favornoms POS', description: 'Point of Sale' };
+export const metadata: Metadata = { title: 'FavorNoms POS', description: 'Point of Sale' };
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,

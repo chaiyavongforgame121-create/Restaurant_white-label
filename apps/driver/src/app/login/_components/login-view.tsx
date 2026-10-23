@@ -14,7 +14,7 @@ import {
   type UiLocale,
 } from '@favornoms/shared';
 import { Button } from '@favornoms/ui';
-import { APP_NAME, FavorGoCar } from '@/components/brand-mark';
+import { APP_NAME } from '@/components/brand-mark';
 import { LocaleSwitcher } from '@/components/locale-switcher';
 
 // Password-based phone auth (no SMS): the `driver-auth` edge function takes an explicit
@@ -164,12 +164,14 @@ export function LoginView() {
         <motion.div
           animate={{ y: [0, -10, 0] }}
           transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-          className="grid h-24 w-24 place-items-center rounded-[28px] bg-white/20 backdrop-blur"
+          className="grid h-24 w-24 place-items-center rounded-full bg-white/20 p-1.5 backdrop-blur"
         >
-          <FavorGoCar className="h-10 w-16" />
+          {/* The app's own icon, the one on the rider's home screen. */}
+          {/* eslint-disable-next-line @next/next/no-img-element -- a fixed public file */}
+          <img src="/icon-192.png" alt="" width={84} height={84} className="h-full w-full rounded-full" />
         </motion.div>
         {/* Installed, the app has no title bar, so nothing else on the first screen names it —
-            and riders who installed it as "Favornoms Driver" need to see this is the same app.
+            and riders who installed it as "FavorNoms Driver" need to see this is the same app.
             translate="no" keeps in-browser translation from turning the brand into words. */}
         <motion.p
           initial={{ opacity: 0, y: 12 }}

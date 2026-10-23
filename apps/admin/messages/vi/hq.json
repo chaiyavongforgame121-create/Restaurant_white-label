@@ -55,12 +55,12 @@
   "costs": {
     "title": "Chi phí ghi nhận được",
     "driverPayouts": "Chi trả tài xế",
-    "subscription": "Gói đăng ký Favornoms",
+    "subscription": "Gói đăng ký FavorNoms",
     "noInvoicesWithPlan": "Chưa có hóa đơn nào được ghi nhận. Mức phí hiện tại của bạn là <strong>{rate}/tháng</strong> với gói <planName>{plan}</planName>.",
     "noInvoices": "Chưa có hóa đơn nào được ghi nhận. Mức phí hiện tại của bạn là <strong>{rate}/tháng</strong>.",
     "totalKnown": "Tổng chi phí đã biết",
     "afterCosts": "Doanh thu sau chi phí",
-    "disclaimer": "Đây là các chi phí duy nhất Favornoms ghi nhận. Chưa bao gồm nguyên liệu, lương nhân viên, tiền thuê mặt bằng và phí thẻ, nên đây không phải lợi nhuận của bạn."
+    "disclaimer": "Đây là các chi phí duy nhất FavorNoms ghi nhận. Chưa bao gồm nguyên liệu, lương nhân viên, tiền thuê mặt bằng và phí thẻ, nên đây không phải lợi nhuận của bạn."
   },
   "monthly": {
     "title": "Theo từng tháng",

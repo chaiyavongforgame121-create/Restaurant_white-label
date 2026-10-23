@@ -247,7 +247,7 @@ export function freshPerBucket(fresh: FreshMap): Record<string, number> {
 const COUNT_PREFIX = /^\(\d+\)\s+/;
 
 /**
- * '(3) Favornoms Merchant' while three rows are unseen, the plain title otherwise. Whatever
+ * '(3) FavorNoms Merchant' while three rows are unseen, the plain title otherwise. Whatever
  * count the title already carries is replaced rather than stacked, because Next rewrites the
  * title after hydration and this is re-applied on top of whatever it wrote.
  */

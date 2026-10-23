@@ -1,6 +1,6 @@
-# Favornoms — White-label Restaurant SaaS (🇺🇸 US)
+# FavorNoms — White-label Restaurant SaaS (🇺🇸 US)
 
-Monorepo for the Favornoms platform — **fully feature-complete** as of 2026-05-27. See [`HANDOFF.md`](./HANDOFF.md) for the full state of the world and [`CONFIG-CHECKLIST.md`](./CONFIG-CHECKLIST.md) for the operational checklist.
+Monorepo for the FavorNoms platform — **fully feature-complete** as of 2026-05-27. See [`HANDOFF.md`](./HANDOFF.md) for the full state of the world and [`CONFIG-CHECKLIST.md`](./CONFIG-CHECKLIST.md) for the operational checklist.
 
 | App | Port | Purpose |
 |-----|------|---------|

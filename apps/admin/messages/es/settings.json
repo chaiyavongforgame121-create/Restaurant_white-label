@@ -10,7 +10,7 @@
     "themeDescription": "Próximamente. Por ahora sigue el modo de color de tu sistema."
   },
   "plan": {
-    "metaTitle": "Plan y facturación · Favornoms",
+    "metaTitle": "Plan y facturación · FavorNoms",
     "title": "Plan y facturación",
     "subtitle": "Dos totales, siempre separados: lo que pagas una vez y lo que pagas cada mes.",
     "perMonth": "/mes",
@@ -22,7 +22,7 @@
     },
     "replaceDialog": {
       "title": "¿Reemplazar tu solicitud pendiente?",
-      "body": "Tu solicitud anterior ({summary}) se retira y esta se envía al equipo de Favornoms en su lugar.",
+      "body": "Tu solicitud anterior ({summary}) se retira y esta se envía al equipo de FavorNoms en su lugar.",
       "codeReleased": "Esa solicitud tenía el código {code}. Vuelve a aplicarlo aquí para conservarlo; si no, se libera.",
       "confirm": "Reemplazar solicitud"
     },
@@ -99,7 +99,7 @@
       "onceNothing": "Nada. Todo lo de este paquete ya está pagado.",
       "onceOnRequest": "En la solicitud que enviaste",
       "onceCode": "Código {code}",
-      "onceAwaiting": "Todavía no se ha cobrado nada. Lo pagarás cuando el equipo de Favornoms active tu solicitud.",
+      "onceAwaiting": "Todavía no se ha cobrado nada. Lo pagarás cuando el equipo de FavorNoms active tu solicitud.",
       "monthlyTitle": "Y luego cada mes",
       "withDelivery": "{branch} + entrega a domicilio",
       "unusedSeats": "{count, plural, one {# sucursal sin crear} other {# sucursales sin crear}}",
@@ -113,7 +113,7 @@
         "plusOnce": "Más {price} una sola vez."
       },
       "trialNote": "No se cobra nada mientras dura tu prueba gratuita. Esta es tu primera factura cuando confirmes.",
-      "footnote": "Tu solicitud llega al equipo de Favornoms para activarla. Recibirás una factura mensual."
+      "footnote": "Tu solicitud llega al equipo de FavorNoms para activarla. Recibirás una factura mensual."
     },
     "discount": {
       "title": "Código de descuento",
@@ -138,12 +138,12 @@
     },
     "noTrial": {
       "title": "Este restaurante empieza sin prueba gratuita",
-      "body": "Tu cuenta ya usó su prueba gratuita de 14 días en otro restaurante. Este seguirá desconectado hasta tener un paquete: elige uno abajo, envía la solicitud y el equipo de Favornoms lo activará."
+      "body": "Tu cuenta ya usó su prueba gratuita de 14 días en otro restaurante. Este seguirá desconectado hasta tener un paquete: elige uno abajo, envía la solicitud y el equipo de FavorNoms lo activará."
     },
     "renew": {
       "title": "Renueva tu paquete",
       "paidThrough": "Tu paquete está pagado hasta el {date}.",
-      "body": "Tu paquete actual está seleccionado abajo. Pulsa Solicitar renovación para enviarlo al equipo de Favornoms; nada se renueva hasta que lo aprueben. También puedes cambiar el paquete antes de enviarlo."
+      "body": "Tu paquete actual está seleccionado abajo. Pulsa Solicitar renovación para enviarlo al equipo de FavorNoms; nada se renueva hasta que lo aprueben. También puedes cambiar el paquete antes de enviarlo."
     },
     "pricesUnavailable": {
       "title": "No se pudieron cargar los precios",
@@ -153,14 +153,14 @@
     "decision": {
       "approvedOn": "Solicitud aprobada el {date}",
       "declinedOn": "Solicitud rechazada el {date}",
-      "noteLabel": "Nota del equipo de Favornoms:",
+      "noteLabel": "Nota del equipo de FavorNoms:",
       "noReason": "No se indicó ningún motivo. Puedes elegir un paquete abajo y enviar una nueva solicitud.",
       "approved": "Aprobada",
       "declined": "Rechazada"
     },
     "pending": {
-      "title": "Solicitud en espera del equipo de Favornoms",
-      "titleSent": "Solicitud en espera del equipo de Favornoms · enviada el {date}",
+      "title": "Solicitud en espera del equipo de FavorNoms",
+      "titleSent": "Solicitud en espera del equipo de FavorNoms · enviada el {date}",
       "body": "Nada cambia hasta que se apruebe. Si quieres pedir otra cosa, cambia el paquete abajo y pulsa Reemplazar solicitud pendiente.",
       "badge": "Pendiente"
     },
@@ -174,7 +174,7 @@
         "finishPayment": "Terminar el pago",
         "finishFirst": "Primero termina el pago pendiente",
         "checking": "Comprobando el pago…",
-        "sendToTeam": "Enviar al equipo de Favornoms"
+        "sendToTeam": "Enviar al equipo de FavorNoms"
       },
       "footnote": {
         "firstLater": "Pago con tarjeta a través de Stripe. A partir del {date}, se cobran {monthly} a tu tarjeta automáticamente cada mes; la página de pago de Stripe muestra el importe exacto antes de cobrar nada. Puedes cancelar cuando quieras; conservas lo que pagaste hasta el final de ese mes.",
@@ -218,7 +218,7 @@
         "unconfirmedBody": "Es posible que ya se haya cobrado a tu tarjeta por esta solicitud, así que no se puede pagar de nuevo desde esta página. Vuelve a cargar la página en un minuto para ver en qué quedó.",
         "unconfirmedBadge": "Comprobando",
         "pausedTitle": "Los pagos con tarjeta están en pausa",
-        "pausedBody": "Esta solicitud estaba esperando un pago con tarjeta, que ahora no se puede cobrar. Envíala al equipo de Favornoms y ellos la activarán."
+        "pausedBody": "Esta solicitud estaba esperando un pago con tarjeta, que ahora no se puede cobrar. Envíala al equipo de FavorNoms y ellos la activarán."
       },
       "result": {
         "confirmingTitle": "Pago recibido: activando tu paquete…",
@@ -235,7 +235,7 @@
         "refundedStaleTitle": "Este pago se está reembolsando",
         "refundedStaleBody": "Era para una solicitud que ya no está abierta: la solicitud se cambió o se cerró después de abrir la página de pago. El importe completo se reembolsa a tu tarjeta automáticamente, así que no tienes que hacer nada. Tu paquete no cambió; lo que siga pendiente aparece abajo.",
         "refundedFailedTitle": "No se pudo activar tu paquete, así que el pago se está reembolsando",
-        "refundedFailedBody": "El pago se realizó, pero el paquete no se pudo aplicar, así que el importe completo se reembolsa a tu tarjeta automáticamente. Tu paquete no cambió. Si no ves el reembolso en unos días, comunícate con el equipo de Favornoms.",
+        "refundedFailedBody": "El pago se realizó, pero el paquete no se pudo aplicar, así que el importe completo se reembolsa a tu tarjeta automáticamente. Tu paquete no cambió. Si no ves el reembolso en unos días, comunícate con el equipo de FavorNoms.",
         "notAppliedTitle": "Tu paquete no cambió: no se cobró nada",
         "notAppliedBody": "La página de Stripe terminó, pero la solicitud para la que era no se pudo aplicar: se cambió o se cerró mientras esa página estaba abierta, o ya no corresponde a tus sucursales. No se cobró dinero. Lo que siga pendiente aparece abajo."
       },
@@ -282,18 +282,18 @@
         "requestGone": "Esta solicitud ya no está esperando un pago: se pagó, se reemplazó o se rechazó. Vuelve a cargar la página para ver en qué quedó.",
         "startFailed": "No se pudo iniciar el pago con tarjeta. No se cobró nada y tu solicitud está guardada; vuelve a intentarlo con Continuar al pago en un momento.",
         "portalFailed": "No se pudo abrir el portal de facturación. Inténtalo de nuevo en un momento.",
-        "portalOff": "El cobro con tarjeta está desactivado en este momento. Comunícate con el equipo de Favornoms sobre tu facturación.",
+        "portalOff": "El cobro con tarjeta está desactivado en este momento. Comunícate con el equipo de FavorNoms sobre tu facturación.",
         "noCustomer": "Todavía no hay una tarjeta guardada. Se agrega la primera vez que pagas con tarjeta.",
-        "chargedNotApplied": "Se cobró a tu tarjeta, pero el cambio no se aplicó y el dinero no se pudo devolver automáticamente. No vuelvas a pagar: el equipo de Favornoms lo solucionará.",
-        "changeNotApplied": "Tu paquete no cambió y no se cobró nada. Vuelve a cargar la página antes de intentarlo de nuevo; si vuelve a pasar, comunícate con el equipo de Favornoms.",
-        "needsTeam": "Este cambio no se puede cobrar a tu tarjeta automáticamente en este momento. No se cobró nada; comunícate con el equipo de Favornoms.",
+        "chargedNotApplied": "Se cobró a tu tarjeta, pero el cambio no se aplicó y el dinero no se pudo devolver automáticamente. No vuelvas a pagar: el equipo de FavorNoms lo solucionará.",
+        "changeNotApplied": "Tu paquete no cambió y no se cobró nada. Vuelve a cargar la página antes de intentarlo de nuevo; si vuelve a pasar, comunícate con el equipo de FavorNoms.",
+        "needsTeam": "Este cambio no se puede cobrar a tu tarjeta automáticamente en este momento. No se cobró nada; comunícate con el equipo de FavorNoms.",
         "chargedRefunded": "Se cobró a tu tarjeta, pero el cambio no se pudo aplicar, así que el importe completo se está reembolsando a tu tarjeta. Tu paquete no cambió. Vuelve a cargar la página antes de intentarlo de nuevo.",
         "resultUnknown": "No pudimos confirmar si se cobró a tu tarjeta. Por favor, no pagues de nuevo todavía: vuelve a cargar la página en un minuto. Si el pago se realizó, tu cambio se activará solo.",
         "paymentInProgress": "Un pago con tarjeta de tu solicitud anterior sigue esperando en la página de Stripe (tu banco pidió que lo confirmes, o la tarjeta fue rechazada). Termínalo, o espera a que caduque en aproximadamente un día, antes de cambiar el paquete.",
         "busy": "Este pago ya se está procesando. Espera un momento y vuelve a intentarlo; no se cobrará dos veces.",
         "planLimit": "Este paquete tiene menos sucursales de las que el restaurante tiene abiertas. Agrega sucursales al paquete o cierra una sucursal primero. No se cobró nada.",
-        "cardPaused": "Los pagos con tarjeta están en pausa en este momento, así que no se pudo cobrar. No se cobró nada y tu solicitud está guardada. Inténtalo más tarde o comunícate con el equipo de Favornoms.",
-        "changeConflict": "Este cambio ya se envió a tu tarjeta una vez y todavía no está claro qué hizo. No se cobró nada más ahora. Por favor, no pagues de nuevo: comunícate con el equipo de Favornoms y ellos lo resolverán.",
+        "cardPaused": "Los pagos con tarjeta están en pausa en este momento, así que no se pudo cobrar. No se cobró nada y tu solicitud está guardada. Inténtalo más tarde o comunícate con el equipo de FavorNoms.",
+        "changeConflict": "Este cambio ya se envió a tu tarjeta una vez y todavía no está claro qué hizo. No se cobró nada más ahora. Por favor, no pagues de nuevo: comunícate con el equipo de FavorNoms y ellos lo resolverán.",
         "paymentExpired": "El pago con tarjeta de este cambio no se terminó a tiempo, así que el cambio se canceló. No se cobró nada. Vuelve a elegir el paquete para intentarlo otra vez."
       },
       "onceSettling": "Tu pago por esto se está registrando.",

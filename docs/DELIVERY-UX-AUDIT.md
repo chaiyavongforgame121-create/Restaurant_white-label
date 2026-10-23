@@ -29,7 +29,7 @@
 
 ## How leading apps work (benchmark)
 
-| Area | Uber Eats / DoorDash / Grab / foodpanda / Deliveroo | Favornoms (before) |
+| Area | Uber Eats / DoorDash / Grab / foodpanda / Deliveroo | FavorNoms (before) |
 |---|---|---|
 | **Payment** | Collect card / Apple-Google Pay **at checkout**, then confirm. Grab "one press = order". | Deferred to tracking page; Stripe confirm path non-functional. |
 | **Dispatch timing** | Predict prep time, send courier to **arrive as food is ready** (not at order time). | Manual "Find driver" ghost button; can be skipped. |

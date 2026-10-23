@@ -16,7 +16,7 @@
 //     version is ready" banner is a tap, not an ambush.
 //  2. '/' and '/manifest.webmanifest' are no longer precached, and '/' is no longer the offline
 //     fallback. Those are the PLATFORM's landing page and manifest. A diner who installed
-//     "Somtam Zab" and opened it on the underground got the Favornoms marketing page — their
+//     "Somtam Zab" and opened it on the underground got the FavorNoms marketing page — their
 //     restaurant, as far as they could tell, had been replaced by an advert. Offline now falls
 //     back to that storefront's own root, and only then to '/'.
 //  3. Personal and transactional pages are never stored. /orders, /account, /checkout and
@@ -37,14 +37,20 @@
 //     a new one; another branch's window is never touched.
 //  2. Every notification wore the platform's icon and, when the payload had none, its name.
 //     notify-worker now sends the branch's own title and icon, and they are used when present.
-const CACHE_VERSION = 'favornoms-web-v5';
+//
+// v6 — the platform icon is the owner's chef-hat "F" now. Icons keep their URLs and are served
+// cache-first, so only a version bump makes a phone that already has the old ones fetch the new
+// ones; this is that bump. /icon.svg is no longer precached: the art is a raster, the PNGs cover
+// every size, and the SVG is now only a wrapper of the PNG for old links that still point at it.
+// The loading splash under /brand/ is cache-first by extension too: change its file name, or bump
+// again, when the art changes.
+const CACHE_VERSION = 'favornoms-web-v6';
 
 // Icons only. Deliberately no HTML: see (2) above.
+// The 512px and maskable icons are fetched on demand (install, the manifest): precaching them
+// downloaded about 200 KB onto every diner's phone, a storefront with its own icon included.
 const CACHE_FILES = [
-  '/icon.svg',
   '/icon-192.png',
-  '/icon-512.png',
-  '/icon-maskable-512.png',
   '/apple-touch-icon.png',
 ];
 
@@ -134,13 +140,13 @@ self.addEventListener('push', (event) => {
   try {
     data = event.data ? event.data.json() : {};
   } catch {
-    data = { title: 'Favornoms', body: event.data ? event.data.text() : '' };
+    data = { title: 'FavorNoms', body: event.data ? event.data.text() : '' };
   }
   if (!data || typeof data !== 'object') data = {};
   // notify-worker sends the storefront's own name ("Coastal Grill - Hamburger") and the branch's
   // icon for a diner's order updates: two branches on one host share this worker, and the
   // platform's name and icon said nothing about which of them was writing.
-  const title = (typeof data.title === 'string' && data.title) || 'Favornoms';
+  const title = (typeof data.title === 'string' && data.title) || 'FavorNoms';
   const options = {
     body: data.body || '',
     icon: payloadIcon(data.icon) || PLATFORM_NOTIFICATION_ICON,

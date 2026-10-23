@@ -18,8 +18,8 @@
     "titleUnderDay": "Your package is paid through {date} — less than a day left",
     "titleDays": "Your package is paid through {date} — {days, plural, one {# day left} other {# days left}}",
     "body": "After that the storefront stops taking orders and the back office locks.",
-    "renewHint": "Renewal is a request the Favornoms team approves, so send it before the date.",
-    "askOwner": "Ask the restaurant owner to renew it; renewal is a request the Favornoms team approves.",
+    "renewHint": "Renewal is a request the FavorNoms team approves, so send it before the date.",
+    "askOwner": "Ask the restaurant owner to renew it; renewal is a request the FavorNoms team approves.",
     "cta": "Renew package"
   },
   "setup": {

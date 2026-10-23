@@ -68,7 +68,7 @@ export function LoginView({ next }: Props) {
         <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-gradient-warm text-white shadow-warm">
           <ChefHat className="h-8 w-8" />
         </div>
-        <h1 className="mt-5 text-center font-display text-3xl font-bold">Favornoms POS</h1>
+        <h1 className="mt-5 text-center font-display text-3xl font-bold">FavorNoms POS</h1>
         <p className="mt-1 text-center text-sm text-muted-foreground">
           Sign in with your work email to start a shift
         </p>
