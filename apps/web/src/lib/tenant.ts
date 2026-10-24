@@ -1,6 +1,8 @@
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
+import { headers } from 'next/headers';
 import { cache } from 'react';
 import { unstable_cache } from 'next/cache';
+import { PATHNAME_HEADER } from '@favornoms/database/middleware';
 import { getAnonServerClient, getServerClient } from '@favornoms/database/server';
 import {
   getStorefrontStatus,
@@ -143,11 +145,34 @@ export const resolveTenantOptional = cache(
   },
 );
 
+/**
+ * Restaurant slugs a store has given up, mapped to the slug it answers to now, so links already
+ * shared (a QR code, an order-tracking text) keep working. Followed only when the old slug no
+ * longer answers, so a restaurant that takes one of these slugs later is never redirected away.
+ * 2026-10-24: the showcase store Coastal Grill became Demo-FavorNoms.
+ */
+const RENAMED_RESTAURANT_SLUGS: Readonly<Record<string, string>> = {
+  'coastal-grill': 'demo-favornoms',
+};
+
+/** The same path under the restaurant's new slug; the branch's menu when the path is unknown. */
+async function renamedRestaurantPath(oldSlug: string, newSlug: string, branchSlug: string): Promise<string> {
+  const path = (await headers()).get(PATHNAME_HEADER) ?? '';
+  const oldPrefix = `/r/${oldSlug}/`;
+  return path.toLowerCase().startsWith(oldPrefix)
+    ? `/r/${newSlug}/${path.slice(oldPrefix.length)}`
+    : `/r/${newSlug}/${branchSlug}`;
+}
+
 /** The same read, for a page or layout that wants the not-found page when there is no tenant. */
 export const resolveTenant = cache(
   async (restaurantSlug: string, branchSlug: string): Promise<ResolvedTenant> => {
     const tenant = await resolveTenantOptional(restaurantSlug, branchSlug);
-    if (!tenant) notFound();
+    if (!tenant) {
+      const renamed = RENAMED_RESTAURANT_SLUGS[restaurantSlug.toLowerCase()];
+      if (renamed) redirect(await renamedRestaurantPath(restaurantSlug.toLowerCase(), renamed, branchSlug));
+      notFound();
+    }
     return tenant;
   },
 );

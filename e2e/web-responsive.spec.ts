@@ -26,7 +26,7 @@ for (const vp of VIEWPORTS) {
     });
 
     test('branch menu page renders without overflow', async ({ page }) => {
-      await page.goto('/r/coastal-grill/brooklyn');
+      await page.goto('/r/demo-favornoms/brooklyn');
       // wait for hero
       await page.waitForLoadState('networkidle');
       const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);

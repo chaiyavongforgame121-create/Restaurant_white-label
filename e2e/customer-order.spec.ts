@@ -2,12 +2,12 @@ import { test, expect } from '@playwright/test';
 
 /**
  * E2E: customer browses a branch and the cart picker works.
- * Uses the seeded restaurant `coastal-grill`. Requires `pnpm dev:web` running
+ * Uses the showcase restaurant `demo-favornoms` (was coastal-grill). Requires `pnpm dev:web` running
  * with a Supabase project that has the seed data.
  */
 test.describe('customer order flow', () => {
   test('browses menu and adds items to cart', async ({ page }) => {
-    await page.goto('/r/coastal-grill/brooklyn');
+    await page.goto('/r/demo-favornoms/brooklyn');
     await expect(page.getByRole('heading').first()).toBeVisible({ timeout: 10_000 });
 
     const addButtons = page.getByRole('button', { name: /add|\+/i });
@@ -20,7 +20,7 @@ test.describe('customer order flow', () => {
   // request. The old test asserted the button WAS visible, so it could only fail.
   // Assert the removal instead — now the button reappearing is what breaks the build.
   test('cart page has no voice-order button', async ({ page }) => {
-    await page.goto('/r/coastal-grill/brooklyn/cart');
+    await page.goto('/r/demo-favornoms/brooklyn/cart');
     await expect(page.getByRole('heading').first()).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText(/voice order/i)).toHaveCount(0);
   });

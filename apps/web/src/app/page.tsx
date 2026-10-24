@@ -115,7 +115,7 @@ export default async function RootPage() {
                   {t('hero.startTrial')} <ChevronRight className="h-4 w-4" />
                 </a>
                 <Link
-                  href="/r/coastal-grill/brooklyn"
+                  href="/r/demo-favornoms/brooklyn"
                   className="focus-ring inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-white/40 px-6 text-base font-semibold text-white hover:bg-white/10"
                 >
                   {t('hero.seeLiveMenu')}

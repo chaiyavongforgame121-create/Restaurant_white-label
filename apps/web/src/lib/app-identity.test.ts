@@ -3,7 +3,7 @@ import { branchAppName, appleTouchIconUrl, deriveStorefrontNames, isTrustedIconS
 
 const SUPABASE = 'https://abc.supabase.co';
 const upload = (name: string) => `${SUPABASE}/storage/v1/object/public/branding/r1/${name}.png`;
-const BASE = '/r/coastal-grill/brooklyn';
+const BASE = '/r/demo-favornoms/brooklyn';
 
 const FULL_SET = {
   icon192Url: upload('icon-192-aaa'),

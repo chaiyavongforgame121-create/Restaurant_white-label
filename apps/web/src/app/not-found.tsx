@@ -28,7 +28,7 @@ export default function NotFound() {
               {t('backHome')}
             </Button>
           </Link>
-          <Link href="/r/coastal-grill/brooklyn">
+          <Link href="/r/demo-favornoms/brooklyn">
             <Button variant="outline" size="lg" leftIcon={<Search className="h-4 w-4" />}>
               {t('seeDemo')}
             </Button>
