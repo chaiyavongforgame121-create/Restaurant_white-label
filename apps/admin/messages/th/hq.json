@@ -102,7 +102,7 @@
     "create": "สร้าง",
     "groupSummary": "ร้านอาหาร {restaurants, plural, other {# ร้าน}} · {branches, plural, other {# สาขา}}",
     "broadcastTitle": "ส่งเมนูของสาขานี้ไปยัง:",
-    "broadcastBody": "หมวดหมู่และเมนูที่สาขาปลายทางยังไม่มีจะถูกเพิ่มเข้าไป",
+    "broadcastBody": "หมวดหมู่และเมนูที่สาขาปลายทางยังไม่มีจะถูกเพิ่มเข้าไป พร้อมสถานีในครัวที่เมนูเหล่านั้นใช้",
     "noOtherBranches": "ยังไม่มีสาขาอื่นในกลุ่มนี้",
     "broadcast": "ส่งเมนู",
     "broadcastDone": "ส่งเมนูเสร็จแล้ว เพิ่ม {inserted} รายการ อัปเดต {updated} รายการ",

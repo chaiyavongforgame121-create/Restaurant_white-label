@@ -11,19 +11,20 @@ import {
 } from 'lucide-react';
 
 import { getBrowserClient } from '@favornoms/database/client';
-import { invokeDispatchDriver } from '@favornoms/database/queries';
+import { invokeDispatchDriver, listKitchenStations } from '@favornoms/database/queries';
 import { useRealtime } from '@favornoms/database/realtime';
 import { LocaleSwitcher } from '@/components/locale-switcher';
 import { SignOutIconButton } from '@/components/sign-out';
+import { stationLabel, type KitchenStation } from '@/lib/kitchen-stations';
 import { AvailabilityPanel } from './availability-panel';
 import { SUN } from './kitchen-theme';
 import { OpsToggles } from './ops-toggles';
 import {
-  ACTIVE_STATUSES, AVAILABILITY_SELECT, KITCHEN_ORDER_SELECT, NO_STATION, REMINDER_INTERVAL_MS, agingTierKey, batchGroups,
-  boardHealth, comboParts, eightySixTargets, fmtTimer, heardOnTap, isLineDone, isOnBoard, laneOf, lateTicketIds,
+  ACTIVE_STATUSES, AVAILABILITY_SELECT, KITCHEN_ORDER_SELECT, REMINDER_INTERVAL_MS, agingTierKey, batchGroups,
+  boardHealth, comboParts, dishStationKeys, eightySixTargets, filterAfterStationsRead, fmtTimer, heardOnTap, isLineDone, isOnBoard, laneOf, lateTicketIds,
   lineMatchesStation, linesInMenuOrder, mergeAvailability, mergeSoldOut, overlaySnapshot, parseTimestamp, partMatchesStation,
   readyStartedMs, reminderDue, safeElapsedSec, speakableTicket, stationPills, stationStats, stockBadge, toAvailabilityItem,
-  workStartedMs, ALLERGY_RE, parseMods,
+  withDishStation, workStartedMs, ALLERGY_RE, parseMods,
   type AvailabilityItem, type Delivery, type DriverLite, type Order, type OrderItem, type SoldOutItem, type TierKey,
 } from './kitchen-model';
 import {
@@ -114,6 +115,8 @@ const READ_RETRY_MS = 10_000;
 /** A tap on the "Tap to enable order sounds" bar plays the test chime once the context starts,
  *  if it starts within this long (a refused tap must not chime at some later, unrelated one). */
 const BAR_CHIME_WINDOW_MS = 3_000;
+/** The station list while none has been read: one array, so it is the same on every render. */
+const NO_STATIONS: KitchenStation[] = [];
 
 function useTick(periodMs: number): number {
   const [now, setNow] = React.useState(() => Date.now());
@@ -135,13 +138,6 @@ function asArray<T>(v: T[] | T | null | undefined): T[] {
 /** What makes two lines the same dish in the batch strip: their modifiers, in any order. */
 function modsKey(m: unknown): string {
   return parseMods(m).map((x) => x.label).sort().join(',');
-}
-
-/** Station codes the platform assigns (menu import, CSV). The code stays the filter and URL value;
- *  only its label is translated, and a code we don't know is shown as it is stored. */
-const STATION_CODES = ['hot', 'cold', 'bar', 'dessert', 'expo'] as const;
-function isStationCode(value: string): value is (typeof STATION_CODES)[number] {
-  return (STATION_CODES as readonly string[]).includes(value);
 }
 
 /** Pick the translation key for a failed RPC. The raw PostgREST / Postgres text is server
@@ -180,7 +176,12 @@ interface Props {
   /** The server's read of the tickets failed, so `initialOrders` is empty for that reason and
    *  not because the kitchen is quiet. */
   initialReadFailed: boolean;
-  stations: string[];
+  /** The branch's stations in the merchant's order; null when the server's read failed (the view
+   *  reads them again with the board, and checks `activeStation` against the first list it gets). */
+  initialStations: KitchenStation[] | null;
+  /** The stations the branch's active dishes are made at (dishStationKeys). */
+  initialDishStations: string[];
+  /** The ?station= filter, already checked against the branch's stations (openingStation). */
   activeStation: string | null;
   drivers: DriverLite[];
   /** delivery.manage at this branch: only then is the "assign a rider" picker offered. */
@@ -216,13 +217,24 @@ function chipText(order: Order, t: Translate): string {
 type AudioState = 'unknown' | 'unsupported' | 'locked' | 'running';
 
 export function KitchenView({
-  branchId, branchName, branchTimezone, initialOrders, initialReadFailed, stations, activeStation, drivers, canAssign,
-  initialSoldOut, initialMenu, dashboardHref,
+  branchId, branchName, branchTimezone, initialOrders, initialReadFailed, initialStations, initialDishStations,
+  activeStation, drivers, canAssign, initialSoldOut, initialMenu, dashboardHref,
 }: Props) {
   const t = useTranslations('kitchen');
   const locale = useLocale();
-  const stationLabel = (s: string) =>
-    s === NO_STATION ? t('stations.none') : isStationCode(s) ? t(`stations.${s}`) : s;
+  // The branch's stations and the ones its dishes use, for the pills and every station label. Read
+  // again with the board (reload) and on any change to the list (realtime), so a station renamed,
+  // reordered, added or deleted on the menu page reaches a board that is already open.
+  // `knownStations` is null until a read of the list has worked (the server's read failed).
+  const [knownStations, setStations] = React.useState<KitchenStation[] | null>(initialStations);
+  const stations = knownStations ?? NO_STATIONS;
+  const [dishStations, setDishStations] = React.useState<string[]>(initialDishStations);
+  // The menu page's rule: the merchant's name as typed, a built-in's translation until renamed. Any
+  // other key the list does not hold is a deleted station's (an old line, a combo), said so rather
+  // than shown as its opaque key; until the list has been read it is shown as stored.
+  const stationName = (s: string) => stationLabel(
+    s, stations, (key) => t(`stations.${key}`), t('stations.none'), knownStations ? t('stations.deleted') : undefined,
+  );
   const [orders, setOrders] = React.useState<Order[]>(() =>
     initialOrders.map((o) => linesInMenuOrder({ ...o, deliveries: asArray(o.deliveries) })),
   );
@@ -510,7 +522,7 @@ export function KitchenView({
     const seq = ++reloadSeq.current;
     // Changes stamped after this point are newer than what the read below will see.
     const mark = changeClock.current;
-    const [{ data, error }, soldOutRead] = await Promise.all([
+    const [{ data, error }, soldOutRead, stationsRead, dishStationsRead] = await Promise.all([
       supa()
         .from('orders')
         .select(KITCHEN_ORDER_SELECT)
@@ -527,6 +539,20 @@ export function KitchenView({
         .eq('is_active', true)
         .gt('sold_out_until', new Date().toISOString())
         .order('name'),
+      // The stations too, for the same reason, and because a change to the list arrives here
+      // (see the kitchen_stations event below). A failed read keeps the list already held.
+      listKitchenStations(supa(), branchId).catch((e: unknown) => {
+        console.error('kitchen: stations read failed', (e as { message?: string } | null)?.message ?? e);
+        return null;
+      }),
+      // The same rows page.tsx reads: the stations the dishes on the menu are made at. A deleted
+      // station's dishes have moved by the time its event arrives.
+      supa()
+        .from('menu_items')
+        .select('station')
+        .eq('branch_id', branchId)
+        .eq('is_active', true)
+        .not('station', 'is', null),
     ]);
     // Only the newest read may land: reads from the reconnect path and from realtime events can
     // overlap, and an older one finishing last would paint a stale board.
@@ -539,6 +565,8 @@ export function KitchenView({
           .sort((a, b) => a.name.localeCompare(b.name)),
       );
     }
+    if (stationsRead) setStations(stationsRead);
+    if (!dishStationsRead.error && dishStationsRead.data) setDishStations(dishStationKeys(dishStationsRead.data));
     // A failed read used to return here without a word: a board whose select the database
     // refused (a column it does not have yet) showed "0 active · live" and an empty "All clear"
     // for as long as it stayed open, and no ticket reached the kitchen. It now says so and asks
@@ -622,7 +650,8 @@ export function KitchenView({
     reloadSeq.current += 1;
   }, []);
 
-  /* realtime: orders, their lines, deliveries, and this branch's sold-out dishes */
+  /* realtime: orders, their lines, deliveries and this branch's sold-out dishes (its stations have
+     a channel of their own, below) */
   const { healthy: liveHealthy } = useRealtime({
     channel: `kitchen-branch:${branchId}`,
     tables: [
@@ -639,7 +668,7 @@ export function KitchenView({
         const m = payload.new as {
           id?: string; name?: string; sold_out_until?: string | null; is_active?: boolean;
           display_order?: number | null; track_stock?: boolean | null; stock_quantity?: number | null;
-          low_stock_threshold?: number | null;
+          low_stock_threshold?: number | null; station?: string | null;
         } | null;
         if (m?.id) {
           const id = m.id;
@@ -651,6 +680,10 @@ export function KitchenView({
           });
           // The stock count moves with every sale; the panel's Low badges follow it.
           setMenuItems((curr) => (curr ? mergeAvailability(curr, m) : curr));
+          // A dish saved into a station no active dish used brings that pill up now, so a tablet
+          // can be pinned to it before its first ticket. Add-only and without a read: every sale
+          // is an UPDATE too (withDishStation).
+          setDishStations((curr) => withDishStation(curr, m));
         }
         return;
       }
@@ -751,12 +784,62 @@ export function KitchenView({
     },
   });
 
+  /* realtime: this branch's stations, on their own channel. Realtime subscribes a channel's tables
+     all or nothing, so a stations subscription that fails (the table not yet migrated or published)
+     must not silence the tickets. No refetch of its own: the board channel's (re)connect and focus
+     reads (reload) read the stations too, over the same socket. And its health is not the board's:
+     a stations-only failure is no reason for the "connection lost" bar. */
+  useRealtime({
+    channel: `kitchen-stations:${branchId}`,
+    // Unfiltered: a DELETE carries only the station's id, so a branch filter would never let a
+    // deletion through. Whose station it was is judged in onChange.
+    tables: [{ table: 'kitchen_stations' }],
+    onChange: (payload) => {
+      // A station renamed, reordered, added or deleted: the list is read again with the board
+      // (a reorder's burst of events collapses into one read). An INSERT or UPDATE names its
+      // branch. A DELETE names only the id, and reaches every board, since row-level security
+      // cannot check a row that is gone: it is this board's if the id is on the list it holds
+      // (one added since was heard, or read on reconnect).
+      const row = (payload.eventType === 'DELETE' ? payload.old : payload.new) as { id?: string; branch_id?: string } | null;
+      const ours = row?.branch_id
+        ? row.branch_id === branchId
+        : !row?.id || stations.some((s) => s.id === row.id);
+      if (ours) requestReload();
+    },
+  });
+
   const setStationFilter = (s: string | null) => {
     setStation(s);
     const url = new URL(window.location.href);
     if (s) url.searchParams.set('station', s); else url.searchParams.delete('station');
     window.history.replaceState(null, '', url.toString());
   };
+
+  // page.tsx opened the board on All for a ?station= that names no station of this branch (deleted
+  // while this tablet was off, or mistyped): the address bar says All too.
+  React.useEffect(() => {
+    const pinned = new URL(window.location.href).searchParams.get('station');
+    if (pinned !== null && pinned !== activeStation) setStationFilter(activeStation);
+    // Once, against the address the board was opened with.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // The filtered station was deleted (it was on the list, the newest read has it no more): back to
+  // All and out of the address bar, or the tablet would sit on a pill nobody can name, counting 0.
+  // When the server could not read the list, page.tsx kept ?station= unchecked: the first list read
+  // here checks it as first paint would have (filterAfterStationsRead).
+  const heldStationsRef = React.useRef(knownStations);
+  React.useEffect(() => {
+    const before = heldStationsRef.current;
+    heldStationsRef.current = knownStations;
+    // Nothing read yet, or the mount run on the list page.tsx read.
+    if (knownStations === null || before === knownStations) return;
+    const next = filterAfterStationsRead(station, before, knownStations, orders.filter(isOnBoard));
+    if (next !== station) setStationFilter(next);
+    // Only a new list can delete the filtered station; the filter and the board are read as they
+    // stand then (reload() sets the tickets and the list in the same update).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [knownStations]);
 
   const toggleFs = async () => {
     try {
@@ -1182,10 +1265,10 @@ export function KitchenView({
     return () => observer.disconnect();
   }, [newCount, baseTitle]);
 
-  /* The station pills (the menu's stations, those of the lines on the board, "No station" while a
-     line has none), each counting TICKETS like "All" does, and "drowning" when one of those
-     tickets is Late/Critical. */
-  const pills = stationPills(stations, onBoard, station);
+  /* The station pills (the branch's stations its dishes or the lines on the board use, in the
+     merchant's order; "No station" while a line has none; an old line's unknown key last), each
+     counting TICKETS like "All" does, and "drowning" when one of those tickets is Late/Critical. */
+  const pills = stationPills(stations, dishStations, onBoard, station);
   const stationStat = stationStats(onBoard, pills, (o) => {
     const lane = laneOf(o.status);
     const from = lane === 'ready' ? readyStartedMs(o, readyAtRef.current[o.id]) : workStartedMs(o, leadMs);
@@ -1256,7 +1339,7 @@ export function KitchenView({
           <h1 className="text-[15px] font-semibold">{baseTitle}</h1>
           <p className="text-[11px] tracking-wide" style={{ opacity: 0.85 }}>
             {t(`header.${health.status}`, { count: visible.length })}
-            {station ? ` · ${stationLabel(station)}` : ''}
+            {station ? ` · ${stationName(station)}` : ''}
           </p>
         </div>
         <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
@@ -1356,8 +1439,7 @@ export function KitchenView({
         {pills.map((s) => (
           <StationPill
             key={s}
-            label={stationLabel(s)}
-            raw={s !== NO_STATION && !isStationCode(s)}
+            label={stationName(s)}
             count={stationStat[s]?.count ?? 0}
             drown={stationStat[s]?.drown}
             active={station === s}
@@ -1503,16 +1585,16 @@ function HBtn({ children, onClick, label }: { children: React.ReactNode; onClick
   );
 }
 
-/** `raw`: the label is a station code as stored (one the board has no translation for), so it is
- *  capitalised for display; a translated label is shown exactly as written ("No station"). */
-function StationPill({ label, raw, count, drown, active, onClick }: { label: string; raw?: boolean; count: number; drown?: boolean; active: boolean; onClick: () => void }) {
+/** `label` is shown exactly as given: a merchant's name as typed, a translated label as written
+ *  ("No station", "Deleted station"). */
+function StationPill({ label, count, drown, active, onClick }: { label: string; count: number; drown?: boolean; active: boolean; onClick: () => void }) {
   const style: React.CSSProperties = active
     ? { background: SUN.accentBg, borderColor: SUN.accent, color: SUN.accentTx }
     : drown
       ? { background: '#FBE3E1', borderColor: '#F0A8A4', color: '#C0382F' }
       : { background: SUN.card, borderColor: SUN.cardBorder, color: SUN.muted };
   return (
-    <button onClick={onClick} className={`flex shrink-0 items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium ${raw ? 'capitalize' : ''}`} style={{ border: '1px solid', ...style }}>
+    <button onClick={onClick} className="flex shrink-0 items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium" style={{ border: '1px solid', ...style }}>
       {label}
       <span className="rounded-full px-1.5 text-[11px] tabular-nums" style={{ background: drown && !active ? 'rgba(229,72,77,.2)' : 'rgba(0,0,0,.08)' }}>{count}</span>
     </button>

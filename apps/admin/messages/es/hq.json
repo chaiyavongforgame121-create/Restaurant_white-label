@@ -102,7 +102,7 @@
     "create": "Crear",
     "groupSummary": "{restaurants, plural, one {# restaurante} other {# restaurantes}} · {branches, plural, one {# sucursal} other {# sucursales}}",
     "broadcastTitle": "Enviar el menú de esta sucursal a:",
-    "broadcastBody": "Se agregarán las categorías y productos que falten en las sucursales de destino.",
+    "broadcastBody": "Se agregarán las categorías y productos que falten en las sucursales de destino, con las estaciones de cocina que usan esos productos.",
     "noOtherBranches": "Aún no hay otras sucursales en este grupo.",
     "broadcast": "Enviar menú",
     "broadcastDone": "Envío completado. Productos agregados: {inserted}, actualizados: {updated}.",

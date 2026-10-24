@@ -2572,6 +2572,44 @@ export type Database = {
           },
         ]
       }
+      kitchen_stations: {
+        Row: {
+          branch_id: string
+          created_at: string
+          display_order: number
+          id: string
+          key: string
+          name: string | null
+          updated_at: string
+        }
+        Insert: {
+          branch_id: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          key?: string
+          name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          key?: string
+          name?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kitchen_stations_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       loyalty_points: {
         Row: {
           branch_id: string
@@ -3003,6 +3041,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "branches"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "menu_items_branch_id_station_fkey"
+            columns: ["branch_id", "station"]
+            isOneToOne: false
+            referencedRelation: "kitchen_stations"
+            referencedColumns: ["branch_id", "key"]
           },
           {
             foreignKeyName: "menu_items_category_id_fkey"
@@ -5449,6 +5494,10 @@ export type Database = {
         Args: { p_approve: boolean; p_note?: string; p_payment_id: string }
         Returns: undefined
       }
+      delete_kitchen_station: {
+        Args: { p_clear?: boolean; p_move_to?: string; p_station_id: string }
+        Returns: number
+      }
       delete_menu_category: {
         Args: { p_category_id: string; p_move_items_to?: string }
         Returns: Json
@@ -6051,6 +6100,10 @@ export type Database = {
       }
       reorder_item_modifier_groups: {
         Args: { p_group_ids: string[]; p_menu_item_id: string }
+        Returns: undefined
+      }
+      reorder_kitchen_stations: {
+        Args: { p_branch_id: string; p_ids: string[] }
         Returns: undefined
       }
       reorder_menu_categories: {

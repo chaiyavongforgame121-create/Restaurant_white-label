@@ -102,7 +102,7 @@
     "create": "Create",
     "groupSummary": "{restaurants, plural, one {# restaurant} other {# restaurants}} · {branches, plural, one {# branch} other {# branches}}",
     "broadcastTitle": "Broadcast this branch’s menu to:",
-    "broadcastBody": "Categories and items missing in target branches will be inserted.",
+    "broadcastBody": "Categories and items missing in target branches will be inserted, with the kitchen stations those items use.",
     "noOtherBranches": "No other branches in this group yet.",
     "broadcast": "Broadcast menu",
     "broadcastDone": "Broadcast complete. Items added: {inserted}, updated: {updated}.",

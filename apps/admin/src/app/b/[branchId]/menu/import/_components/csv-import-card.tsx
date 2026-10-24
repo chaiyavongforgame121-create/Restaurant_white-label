@@ -5,18 +5,23 @@ import { useTranslations } from 'next-intl';
 import { FileSpreadsheet, Upload } from 'lucide-react';
 import type { MenuCategory } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
+import { createKitchenStation, listKitchenStations } from '@favornoms/database/queries';
 import { Badge, Button, Card } from '@favornoms/ui';
+import type { BuiltInStationKey, KitchenStation } from '@/lib/kitchen-stations';
+import { csvStationMatcher, newStationNames, stationNameTooLong, STATION_NAME_MAX } from './csv-stations';
 
 /** A row problem as a code; the sentence is translated where it is shown. */
 type RowError =
   | { code: 'missingCategory' | 'missingName' }
-  | { code: 'invalidPrice'; value: string };
+  | { code: 'invalidPrice'; value: string }
+  | { code: 'stationTooLong'; value: string };
 
 interface ParsedRow {
   category: string;
   name: string;
   description?: string;
   price: number;
+  /** The cell as written, trimmed; matched against the branch's stations on import. */
   station?: string;
   error?: RowError;
 }
@@ -36,8 +41,6 @@ const HEADER_ALIASES: Record<string, string> = {
 
 const CSV_COLUMNS = 'category, name, description, price, station';
 
-const VALID_STATIONS = ['hot', 'cold', 'bar', 'dessert', 'expo'];
-
 type DbErrorKey = 'permissionDenied' | 'network' | 'duplicate' | 'inUse' | 'invalidValue' | 'generic';
 
 /** Raw PostgREST text never reaches the merchant: known codes get a translated sentence. */
@@ -54,13 +57,19 @@ function dbErrorKey(err: { code?: string; message?: string }): DbErrorKey {
 export function CsvImportCard({
   branchId,
   categories,
+  stations,
   onImported,
 }: {
   branchId: string;
   categories: MenuCategory[];
+  /** The branch's kitchen stations as the page read them, for the preview of what an import adds. */
+  stations: KitchenStation[];
   onImported: (count: number) => void;
 }) {
   const t = useTranslations('menuExtras');
+  // The built-in stations' labels live with the menu editor's, where the dish dialog shows them.
+  const tMenu = useTranslations('menu');
+  const builtInLabel = (key: BuiltInStationKey) => tMenu(`stations.${key}`);
   const [text, setText] = React.useState('');
   const [parsed, setParsed] = React.useState<ParsedRow[]>([]);
   const [busy, setBusy] = React.useState(false);
@@ -88,6 +97,35 @@ export function CsvImportCard({
     setError(null);
     try {
       const supabase = getBrowserClient();
+      // Stations first, read afresh rather than from the page: one added or renamed in another tab
+      // since must be matched, not added a second time (names are unique per branch). A station
+      // that cannot be added stops the import before any category or dish is written, rather than
+      // importing those dishes with no station.
+      const current = await listKitchenStations(supabase, branchId);
+      const created: KitchenStation[] = [];
+      for (const stationName of newStationNames(
+        valid.map((r) => r.station),
+        csvStationMatcher(current, builtInLabel),
+      )) {
+        try {
+          created.push(await createKitchenStation(supabase, branchId, stationName));
+        } catch (err) {
+          console.error('[menu-import] create station failed', err);
+          setError(
+            t('import.csv.stationCreateFailed', {
+              name: stationName,
+              reason: t(`errors.${dbErrorKey(err as { code?: string; message?: string })}`),
+            }),
+          );
+          return;
+        }
+      }
+      // Every cell now names a station the branch has, or none.
+      const matchStation = csvStationMatcher([...current, ...created], builtInLabel);
+      const stationKey = (cell: string | undefined) => {
+        const match = matchStation(cell);
+        return match.kind === 'station' ? match.key : null;
+      };
       const catMap = new Map(categories.map((c) => [c.name.toLowerCase(), c.id]));
       // Ensure all referenced categories exist
       const needCats = new Set<string>();
@@ -108,7 +146,8 @@ export function CsvImportCard({
         name: r.name,
         description: r.description ?? null,
         price: r.price,
-        station: r.station ?? 'expo',
+        // A blank cell is no station: null, never '' and no longer expo.
+        station: stationKey(r.station),
         is_active: true,
         display_order: idx,
       }));
@@ -134,6 +173,11 @@ export function CsvImportCard({
   const validCount = parsed.filter((r) => !r.error).length;
   const errorCount = parsed.length - validCount;
   const rowsWithErrors = parsed.filter((r) => r.error);
+  // Said before the import, so a misspelt station is caught here rather than found on the board.
+  const stationsToAdd = newStationNames(
+    parsed.filter((r) => !r.error).map((r) => r.station),
+    csvStationMatcher(stations, builtInLabel),
+  );
 
   return (
     <Card className="space-y-4 p-5">
@@ -188,7 +232,8 @@ export function CsvImportCard({
                 <li key={i}>
                   {t(`import.csv.rowErrors.${r.error!.code}`, {
                     row: parsed.indexOf(r) + 1,
-                    value: r.error!.code === 'invalidPrice' ? r.error!.value : '',
+                    value: 'value' in r.error! ? r.error!.value : '',
+                    max: STATION_NAME_MAX,
                   })}
                 </li>
               ))}
@@ -196,6 +241,11 @@ export function CsvImportCard({
                 <li>{t('import.csv.moreErrors', { count: rowsWithErrors.length - 5 })}</li>
               )}
             </ul>
+          )}
+          {stationsToAdd.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {t('import.csv.newStations', { count: stationsToAdd.length, names: stationsToAdd.join(', ') })}
+            </p>
           )}
         </div>
       )}
@@ -232,11 +282,14 @@ function parseCsv(text: string): ParsedRow[] {
       name: obj.name ?? '',
       description: obj.description || undefined,
       price,
-      station: obj.station && VALID_STATIONS.includes(obj.station) ? obj.station : undefined,
+      // Any name, matched on import against the branch's stations, or added as a new one. It used
+      // to be a fixed, case-sensitive list of codes, and anything else ("Hot") was dropped unsaid.
+      station: obj.station || undefined,
     };
     if (!row.category) row.error = { code: 'missingCategory' };
     else if (!row.name) row.error = { code: 'missingName' };
     else if (!Number.isFinite(price) || price <= 0) row.error = { code: 'invalidPrice', value: obj.price ?? '' };
+    else if (row.station && stationNameTooLong(row.station)) row.error = { code: 'stationTooLong', value: row.station };
     rows.push(row);
   }
   return rows;
@@ -264,8 +317,10 @@ function splitCsv(line: string): string[] {
 }
 
 // Sample data in the CSV format — kept English on purpose (it is a file template, not interface text).
+// Stations by the names the menu page shows; the last row has none.
 const SAMPLE_CSV = `category,name,description,price,station
-Burgers,Cheeseburger,Classic American cheeseburger,11.50,hot
-Burgers,Veggie Burger,Black-bean patty with chipotle mayo,12.95,hot
-Sides,Hand-cut fries,Sea-salted golden fries,4.95,hot
-Drinks,Cold brew,House cold brew with milk,4.50,bar`;
+Burgers,Cheeseburger,Classic American cheeseburger,11.50,Hot
+Burgers,Veggie Burger,Black-bean patty with chipotle mayo,12.95,Hot
+Sides,Hand-cut fries,Sea-salted golden fries,4.95,Hot
+Drinks,Cold brew,House cold brew with milk,4.50,Bar
+Drinks,Sparkling water,Chilled 500 ml bottle,2.50,`;

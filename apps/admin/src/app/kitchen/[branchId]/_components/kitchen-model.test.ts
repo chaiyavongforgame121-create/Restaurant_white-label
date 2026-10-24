@@ -1,11 +1,14 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { BUILT_IN_STATION_KEYS, type KitchenStation } from '@/lib/kitchen-stations';
 import {
   NO_STATION,
   batchGroups,
   boardHealth,
+  dishStationKeys,
   eightySixTargets,
+  filterAfterStationsRead,
   fmtTimer,
   heardOnTap,
   isLineDone,
@@ -15,6 +18,7 @@ import {
   lineStationKeys,
   linesInMenuOrder,
   mergeSoldOut,
+  openingStation,
   overlaySnapshot,
   parseComboContents,
   parseTimestamp,
@@ -23,8 +27,10 @@ import {
   reminderDue,
   safeElapsedSec,
   speakableTicket,
+  stationDeleted,
   stationPills,
   stationStats,
+  withDishStation,
   type Order,
   type OrderItem,
 } from './kitchen-model';
@@ -41,6 +47,11 @@ function order(partial: Partial<Order>): Order {
     order_items: [{ id: 'l1', item_name: 'Pad Thai', quantity: 1, menu_item_id: 'm1' }],
     ...partial,
   };
+}
+
+/** One of the branch's stations: a built-in left unnamed unless `name` is given. */
+function st(key: string, displayOrder: number, name: string | null = null): KitchenStation {
+  return { id: `id-${key}`, branchId: 'b1', key, name, displayOrder };
 }
 
 const fmt = {
@@ -168,14 +179,107 @@ describe('stations and combos', () => {
     expect(lineMatchesStation({ ...combo, combo_contents: null }, 'cold')).toBe(false);
   });
 
-  it('lists the pills: menu stations and board stations, then "No station" only while a line has none', () => {
+  it('lists the pills in use in the branch\'s order, then "No station" only while a line has none', () => {
     const board = [order({ order_items: [hot, combo] })];
-    expect(stationPills(['cold', 'hot'], board, null)).toEqual(['bar', 'cold', 'hot']);
-    expect(stationPills(['cold', 'hot'], [order({ order_items: [hot, none] })], null)).toEqual(['cold', 'hot', NO_STATION]);
+    // Bar moved to the front on the menu page; Grill is the merchant's own, between Hot and Cold.
+    const list = [st('hot', 20), st('cold', 30), st('bar', 10), st('st_0a1b2c3d4e', 25, 'Grill'), st('expo', 50)];
+    // Not alphabetical: the merchant's order. Expo has no dish and no line, so no pill.
+    expect(stationPills(list, ['cold', 'hot'], board, null)).toEqual(['bar', 'hot', 'cold']);
+    expect(stationPills(list, ['st_0a1b2c3d4e'], board, null)).toEqual(['bar', 'hot', 'st_0a1b2c3d4e']);
+    expect(stationPills(list, ['cold', 'hot'], [order({ order_items: [hot, none] })], null)).toEqual(['hot', 'cold', NO_STATION]);
+    // Two at the same position: by key, as the database lists them.
+    expect(stationPills([st('hot', 10), st('bar', 10)], [], board, null)).toEqual(['bar', 'hot']);
     // The active filter keeps its pill even with nothing left under it.
-    expect(stationPills(['hot'], board, NO_STATION)).toEqual(['bar', 'hot', NO_STATION]);
-    expect(stationPills(['hot'], [], 'grill')).toEqual(['grill', 'hot']);
-    expect(stationPills(['', NO_STATION, 'hot'], [], null)).toEqual(['hot']);
+    expect(stationPills(list, ['hot'], board, NO_STATION)).toEqual(['bar', 'hot', NO_STATION]);
+    expect(stationPills(list, [], [], 'expo')).toEqual(['expo']);
+  });
+
+  it('puts a key the branch\'s list does not hold last, after "No station"', () => {
+    const list = [st('hot', 10), st('bar', 20)];
+    const grill: OrderItem = { ...hot, id: 'g', station: 'grill' };
+    const wok: OrderItem = { ...hot, id: 'w', station: 'wok' };
+    expect(stationPills(list, ['hot'], [order({ order_items: [wok, none, grill, combo] })], null)).toEqual([
+      'hot', 'bar', NO_STATION, 'grill', 'wok',
+    ]);
+    // A bookmarked filter on such a key keeps its pill too, still last.
+    expect(stationPills(list, ['hot'], [], 'grill')).toEqual(['hot', 'grill']);
+    // The list could not be read: every key in use is listed, in key order.
+    expect(stationPills([], ['hot', 'cold'], [order({ order_items: [combo] })], null)).toEqual(['bar', 'cold', 'hot']);
+  });
+
+  it('keeps "_none" for the "No station" pill: never a station, nor a dish\'s station', () => {
+    // The database refuses it as a key; a list that held it anyway puts no station in its place.
+    const list = [st(NO_STATION, 5), st('hot', 10)];
+    expect(stationPills(list, ['', NO_STATION, 'hot'], [], null)).toEqual(['hot']);
+    expect(stationPills(list, ['hot'], [order({ order_items: [none] })], null)).toEqual(['hot', NO_STATION]);
+    expect(dishStationKeys([{ station: 'hot' }, { station: null }, { station: '' }, { station: NO_STATION }, { station: 'hot' }, {}]))
+      .toEqual(['hot']);
+    expect(dishStationKeys(null)).toEqual([]);
+  });
+
+  it('opens on the station the tablet was pinned to, and on All for one the branch no longer has', () => {
+    const list = [st('hot', 10), st('st_0a1b2c3d4e', 20, 'Grill')];
+    expect(openingStation('hot', list, [])).toBe('hot');
+    expect(openingStation('st_0a1b2c3d4e', list, [])).toBe('st_0a1b2c3d4e');
+    expect(openingStation(NO_STATION, list, [])).toBe(NO_STATION);
+    // No filter, or one that cannot be a key.
+    for (const param of [undefined, null, '', 'Hot', 'hot dogs', ['hot', 'bar']]) expect(openingStation(param, list, [])).toBeNull();
+    // Deleted while the tablet was off.
+    expect(openingStation('bar', list, [])).toBeNull();
+    // ...unless a ticket on the board is still made there.
+    expect(openingStation('bar', list, [order({ order_items: [combo] })])).toBe('bar');
+    // The list could not be read: kept rather than guessed.
+    expect(openingStation('bar', null, [])).toBe('bar');
+  });
+
+  it('notices the filtered station deleted, not a key the list never held', () => {
+    const before = [st('hot', 10), st('st_0a1b2c3d4e', 20, 'Grill')];
+    const after = [st('hot', 10)];
+    expect(stationDeleted('st_0a1b2c3d4e', before, after)).toBe(true);
+    // Renamed or moved: still on the list.
+    expect(stationDeleted('st_0a1b2c3d4e', before, [st('st_0a1b2c3d4e', 5, 'Charcoal')])).toBe(false);
+    expect(stationDeleted('hot', before, after)).toBe(false);
+    expect(stationDeleted(null, before, after)).toBe(false);
+    expect(stationDeleted(NO_STATION, before, after)).toBe(false);
+    expect(stationDeleted('grill', before, after)).toBe(false);
+  });
+
+  it('checks ?station= on the first read of the list when the server could not read it', () => {
+    const list = [st('hot', 10), st('st_0a1b2c3d4e', 20, 'Grill')];
+    // The server's read failed, so first paint kept ?station=st_dead unchecked (openingStation with
+    // null) and the view started on an empty placeholder: stationDeleted alone never fires.
+    expect(openingStation('st_dead', null, [])).toBe('st_dead');
+    expect(stationDeleted('st_dead', [], list)).toBe(false);
+    // The first real list falls back to All, as first paint would have.
+    expect(filterAfterStationsRead('st_dead', null, list, [])).toBeNull();
+    // ...but keeps a station the branch has, "No station", All, and a key a board line still carries.
+    expect(filterAfterStationsRead('st_0a1b2c3d4e', null, list, [])).toBe('st_0a1b2c3d4e');
+    expect(filterAfterStationsRead(NO_STATION, null, list, [])).toBe(NO_STATION);
+    expect(filterAfterStationsRead(null, null, list, [])).toBeNull();
+    expect(filterAfterStationsRead('bar', null, list, [order({ order_items: [combo] })])).toBe('bar');
+    // A list already held: All only when the filtered station is deleted from it.
+    expect(filterAfterStationsRead('st_0a1b2c3d4e', list, [st('hot', 10)], [])).toBeNull();
+    expect(filterAfterStationsRead('hot', list, [st('hot', 10)], [])).toBe('hot');
+    expect(filterAfterStationsRead('grill', list, list, [])).toBe('grill');
+  });
+
+  it('adds the station a dish on the menu is saved into, and nothing else', () => {
+    const curr = ['hot'];
+    expect(withDishStation(curr, { station: 'st_0a1b2c3d4e', is_active: true })).toEqual(['hot', 'st_0a1b2c3d4e']);
+    // Already listed, no station, "_none", or a hidden dish: the same array, so nothing repaints.
+    for (const dish of [
+      { station: 'hot', is_active: true },
+      { station: null, is_active: true },
+      { station: '', is_active: true },
+      { station: NO_STATION, is_active: true },
+      { station: 'cold', is_active: false },
+      {},
+      null,
+    ]) {
+      expect(withDishStation(curr, dish)).toBe(curr);
+    }
+    // Only an explicit is_active false is a hidden dish.
+    expect(withDishStation(curr, { station: 'cold' })).toEqual(['hot', 'cold']);
   });
 
   it('counts TICKETS per pill, like All, and flags a pill when one of its tickets is late', () => {
@@ -183,7 +287,7 @@ describe('stations and combos', () => {
     const t1 = order({ id: 't1', order_items: [hot, { ...hot, id: 'a2' }, { ...hot, id: 'a3' }] });
     const t2 = order({ id: 't2', order_items: [hot, none, combo] });
     const t3 = order({ id: 't3', order_items: [{ ...hot, id: 'd', station: 'dessert' }] });
-    const pills = stationPills(['dessert', 'hot'], [t1, t2, t3], null);
+    const pills = stationPills([st('hot', 10), st('bar', 30), st('dessert', 40)], ['dessert', 'hot'], [t1, t2, t3], null);
     const stats = stationStats([t1, t2, t3], pills, (o) => o.id === 't3');
     expect(stats).toEqual({
       bar: { count: 1, drown: false },
@@ -223,6 +327,18 @@ describe('stations and combos', () => {
       { id: 'm4', name: 'Iced Tea' },
     ]);
     expect(eightySixTargets([{ ...combo, combo_contents: null }])).toEqual([]);
+  });
+
+  it('has a label for every built-in station, All, "No station" and "Deleted station" in all four languages', () => {
+    // An unnamed built-in is shown by its translation (stationLabel), on a deleted one's old line too.
+    // Any other key the branch's list does not hold is a deleted station's (stationLabel's unknownLabel).
+    for (const locale of ['en', 'th', 'es', 'vi']) {
+      const file = path.resolve(__dirname, `../../../../../messages/${locale}/kitchen.json`);
+      const labels = (JSON.parse(readFileSync(file, 'utf8')) as { stations: Record<string, unknown> }).stations;
+      for (const key of [...BUILT_IN_STATION_KEYS, 'all', 'none', 'deleted']) {
+        expect(typeof labels[key], `${locale} kitchen.stations.${key}`).toBe('string');
+      }
+    }
   });
 });
 

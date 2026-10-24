@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { categoryDeleteErrorKey, menuErrorKey } from './menu-errors';
+import { categoryDeleteErrorKey, menuErrorKey, stationErrorKey } from './menu-errors';
 
 describe('menuErrorKey', () => {
   it('maps permission failures from codes, RPC raises and RLS text', () => {
@@ -49,5 +49,45 @@ describe('categoryDeleteErrorKey', () => {
     expect(categoryDeleteErrorKey({ code: '42501', message: 'not_authorized' })).toBeNull();
     expect(categoryDeleteErrorKey(new TypeError('Failed to fetch'))).toBeNull();
     expect(categoryDeleteErrorKey(null)).toBeNull();
+  });
+});
+
+describe('stationErrorKey', () => {
+  it('maps the refusals of the station functions', () => {
+    expect(stationErrorKey({ code: 'P0002', message: 'station_not_found' })).toBe('notFound');
+    expect(stationErrorKey(Object.assign(new Error('station_not_found'), { code: 'P0002' }))).toBe('notFound');
+    expect(stationErrorKey({ code: 'P0001', message: 'move_target_invalid' })).toBe('invalidTarget');
+    expect(stationErrorKey({ code: 'P0001', message: 'ids_mismatch' })).toBe('listChanged');
+    expect(stationErrorKey({ code: 'P0001', message: 'station_in_use' })).toBe('inUse');
+  });
+
+  it('maps the station constraints by name', () => {
+    expect(
+      stationErrorKey({
+        code: '23505',
+        message: 'duplicate key value violates unique constraint "kitchen_stations_branch_name_key"',
+      }),
+    ).toBe('nameTaken');
+    expect(
+      stationErrorKey({
+        code: '23514',
+        message: 'new row for relation "kitchen_stations" violates check constraint "kitchen_stations_name_check"',
+      }),
+    ).toBe('nameInvalid');
+    expect(
+      stationErrorKey({
+        code: '23503',
+        message:
+          'insert or update on table "menu_items" violates foreign key constraint "menu_items_branch_id_station_fkey"',
+      }),
+    ).toBe('stationGone');
+  });
+
+  it('leaves every other failure to menuErrorKey, the same codes elsewhere included', () => {
+    expect(stationErrorKey({ code: '42501', message: 'forbidden' })).toBeNull();
+    expect(stationErrorKey({ code: '23505', message: 'duplicate key value violates unique constraint "x"' })).toBeNull();
+    expect(stationErrorKey({ code: '23503', message: 'violates foreign key constraint "menu_items_category_id_fkey"' })).toBeNull();
+    expect(stationErrorKey(new TypeError('Failed to fetch'))).toBeNull();
+    expect(stationErrorKey(null)).toBeNull();
   });
 });

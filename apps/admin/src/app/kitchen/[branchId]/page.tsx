@@ -1,9 +1,9 @@
-import { listBranchRiders } from '@favornoms/database/queries';
+import { listBranchRiders, listKitchenStations } from '@favornoms/database/queries';
 import { getBranchAccess } from '@/lib/capabilities';
 import { KitchenView } from './_components/kitchen-view';
 import {
-  AVAILABILITY_SELECT, KITCHEN_ORDER_SELECT, toAvailabilityItem, toDriverLite,
-  type AvailabilityItem, type DriverLite, type SoldOutItem,
+  AVAILABILITY_SELECT, KITCHEN_ORDER_SELECT, dishStationKeys, openingStation, toAvailabilityItem, toDriverLite,
+  type AvailabilityItem, type DriverLite, type Order, type SoldOutItem,
 } from './_components/kitchen-model';
 
 interface Props {
@@ -25,7 +25,7 @@ export default async function KitchenPage({ params, searchParams }: Props) {
   // A manager, admin or owner has both; the kitchen role has neither.
   const dashboardHref = can('backoffice.access') && can('dashboard.view') ? `/b/${branchId}/dashboard` : null;
 
-  const [{ data: branchRow }, { data: orders, error: ordersError }, { data: menu }, { data: soldOut }, riders, menuRead] = await Promise.all([
+  const [{ data: branchRow }, { data: orders, error: ordersError }, { data: menu }, { data: soldOut }, riders, menuRead, stationsRead] = await Promise.all([
     supabase.from('branches').select('timezone').eq('id', branchId).maybeSingle(),
     supabase
       .from('orders')
@@ -33,10 +33,14 @@ export default async function KitchenPage({ params, searchParams }: Props) {
       .eq('branch_id', branchId)
       .in('status', ['pending', 'confirmed', 'preparing', 'ready'])
       .order('created_at', { ascending: false }), // newest first
+    // The stations the menu's dishes are made at, which keep a station's pill up with nothing on
+    // the board: only dishes on the menu, as a hidden one sends no ticket. (The view's reload()
+    // reads the same rows again; keep the two in step.)
     supabase
       .from('menu_items')
       .select('station')
       .eq('branch_id', branchId)
+      .eq('is_active', true)
       .not('station', 'is', null),
     // Dishes 86'd at this branch right now, for the board's "Sold out" strip. Only dishes on the
     // menu: an inactive dish is hidden from diners anyway, and "Back on sale" would not show it.
@@ -61,6 +65,13 @@ export default async function KitchenPage({ params, searchParams }: Props) {
       .eq('is_active', true)
       .order('display_order')
       .order('name'),
+    // The branch's stations in the merchant's order: the pills and every station label. A failed
+    // read (null) leaves the board on the keys its tickets carry (a built-in still translated) until
+    // the view's next read, which also checks ?station= then.
+    listKitchenStations(supabase, branchId).catch((e: unknown) => {
+      console.error('kitchen: stations read failed', (e as { message?: string } | null)?.message ?? e);
+      return null;
+    }),
   ]);
   if (menuRead.error) console.error('kitchen: menu read failed', menuRead.error.message);
   const initialMenu: AvailabilityItem[] | null = menuRead.error
@@ -69,7 +80,6 @@ export default async function KitchenPage({ params, searchParams }: Props) {
   // A refused read (the select names a column this database does not have yet, a policy error)
   // used to paint an empty, healthy-looking board. The view is told, says so, and keeps asking.
   if (ordersError) console.error('kitchen: orders read failed', ordersError.message);
-  const stations = [...new Set((menu ?? []).map((m) => m.station as string).filter(Boolean))].sort();
 
   const drivers: DriverLite[] = riders.map(toDriverLite);
 
@@ -81,6 +91,9 @@ export default async function KitchenPage({ params, searchParams }: Props) {
     const del = (o as { deliveries?: unknown }).deliveries;
     return { ...o, deliveries: del == null ? [] : Array.isArray(del) ? del : [del] };
   });
+  // A ?station= naming a station this branch no longer has opens on All (the view clears it from
+  // the address bar), as an open board does when its station is deleted.
+  const activeStation = openingStation(station, stationsRead, normalizedOrders as unknown as Order[]);
 
   return (
     <KitchenView
@@ -89,8 +102,9 @@ export default async function KitchenPage({ params, searchParams }: Props) {
       branchTimezone={branchRow?.timezone ?? null}
       initialOrders={normalizedOrders as never}
       initialReadFailed={ordersError != null}
-      stations={stations}
-      activeStation={station ?? null}
+      initialStations={stationsRead}
+      initialDishStations={dishStationKeys(menu)}
+      activeStation={activeStation}
       drivers={drivers}
       canAssign={canAssign}
       initialSoldOut={(soldOut ?? []) as SoldOutItem[]}

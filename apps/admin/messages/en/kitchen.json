@@ -31,7 +31,8 @@
     "bar": "Bar",
     "dessert": "Dessert",
     "expo": "Expo",
-    "none": "No station"
+    "none": "No station",
+    "deleted": "Deleted station"
   },
   "batch": {
     "toggle": "Batch view",

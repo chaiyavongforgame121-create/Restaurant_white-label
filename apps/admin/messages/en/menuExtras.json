@@ -205,16 +205,19 @@
     "imported": "{count, plural, one {Imported # item.} other {Imported # items.}}",
     "csv": {
       "title": "CSV bulk import",
-      "columns": "Columns: <code>{columns}</code> (station optional). First row must be headers.",
+      "columns": "Columns: <code>{columns}</code>. First row must be headers. Station is optional: name one of your kitchen stations, or a new name to add that station; leave it blank for no station.",
       "downloadTemplate": "Download template",
       "valid": "{count} valid",
       "errorCount": "{count, plural, one {# error} other {# errors}}",
       "rowErrors": {
         "missingCategory": "Row {row}: missing category",
         "missingName": "Row {row}: missing name",
-        "invalidPrice": "Row {row}: invalid price “{value}”"
+        "invalidPrice": "Row {row}: invalid price “{value}”",
+        "stationTooLong": "Row {row}: the station name is longer than {max} characters"
       },
       "moreErrors": "… and {count} more.",
+      "newStations": "{count, plural, one {Adds a new kitchen station} other {Adds # new kitchen stations}}: {names}",
+      "stationCreateFailed": "Couldn’t add the kitchen station “{name}”, so no dishes or categories were imported. {reason}",
       "import": "{count, plural, one {Import # item} other {Import # items}}",
       "noValidRows": "No valid rows to import."
     }

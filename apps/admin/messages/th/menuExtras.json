@@ -205,16 +205,19 @@
     "imported": "{count, plural, other {นำเข้าแล้ว # รายการ}}",
     "csv": {
       "title": "นำเข้าจำนวนมากด้วย CSV",
-      "columns": "คอลัมน์: <code>{columns}</code> (station ไม่บังคับ) แถวแรกต้องเป็นหัวคอลัมน์",
+      "columns": "คอลัมน์: <code>{columns}</code> แถวแรกต้องเป็นหัวคอลัมน์ ไม่ต้องใส่ station ก็ได้: ใส่ชื่อสถานีในครัวที่มีอยู่ หรือชื่อใหม่เพื่อเพิ่มสถานีนั้น ถ้าเว้นว่างจะไม่ระบุสถานี",
       "downloadTemplate": "ดาวน์โหลดไฟล์ตัวอย่าง",
       "valid": "ถูกต้อง {count}",
       "errorCount": "{count, plural, other {ผิดพลาด #}}",
       "rowErrors": {
         "missingCategory": "แถว {row}: ไม่มีหมวดหมู่",
         "missingName": "แถว {row}: ไม่มีชื่อ",
-        "invalidPrice": "แถว {row}: ราคาไม่ถูกต้อง “{value}”"
+        "invalidPrice": "แถว {row}: ราคาไม่ถูกต้อง “{value}”",
+        "stationTooLong": "แถว {row}: ชื่อสถานียาวเกิน {max} ตัวอักษร"
       },
       "moreErrors": "… และอีก {count} แถว",
+      "newStations": "จะเพิ่มสถานีในครัวใหม่ {count, plural, other {# สถานี}}: {names}",
+      "stationCreateFailed": "เพิ่มสถานีในครัว “{name}” ไม่สำเร็จ จึงยังไม่ได้นำเข้าเมนูหรือหมวดหมู่ใดเลย {reason}",
       "import": "{count, plural, other {นำเข้า # รายการ}}",
       "noValidRows": "ไม่มีแถวที่ถูกต้องให้นำเข้า"
     }

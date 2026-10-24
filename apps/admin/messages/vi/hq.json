@@ -102,7 +102,7 @@
     "create": "Tạo",
     "groupSummary": "{restaurants, plural, other {# nhà hàng}} · {branches, plural, other {# chi nhánh}}",
     "broadcastTitle": "Gửi thực đơn của chi nhánh này tới:",
-    "broadcastBody": "Các danh mục và món còn thiếu ở chi nhánh đích sẽ được thêm vào.",
+    "broadcastBody": "Các danh mục và món còn thiếu ở chi nhánh đích sẽ được thêm vào, cùng các khu bếp mà những món đó dùng.",
     "noOtherBranches": "Nhóm này chưa có chi nhánh nào khác.",
     "broadcast": "Gửi thực đơn",
     "broadcastDone": "Đã gửi xong. Món đã thêm: {inserted}, đã cập nhật: {updated}.",

@@ -83,7 +83,11 @@
     "soldOutUntil": "Marked sold out until {time}. Use “Back on sale” on the card, or save a count above 0, to put it back on sale sooner.",
     "station": "Kitchen station",
     "stationNone": "No station",
-    "stationHint": "Where this dish is made. The kitchen board can show one station’s tickets at a time."
+    "stationHint": "Where this dish is made. The kitchen board can show one station’s tickets at a time.",
+    "newStation": "+ New",
+    "cancelNewStation": "Cancel",
+    "createStation": "Create station",
+    "stationRemoved": "Deleted station"
   },
   "allergenPresets": {
     "peanuts": "Peanuts",
@@ -205,6 +209,55 @@
       "usedByHappyHour": "These happy hours apply only to this category: {names}. Change or delete them first.",
       "notFound": "This category no longer exists. It may already have been deleted.",
       "unchanged": "Nothing was changed. The category may have been deleted, or your role may not be allowed to edit the menu at this branch."
+    }
+  },
+  "stationManager": {
+    "button": "Kitchen stations",
+    "title": "Kitchen stations",
+    "intro": "Where each dish is made. The kitchen board can show one station’s tickets at a time. Renaming a station keeps its dishes and open tickets where they are.",
+    "order": {
+      "hint": "The kitchen board and the dish editor list stations in this order.",
+      "drag": "Drag {name} to reorder",
+      "up": "Move {name} up",
+      "down": "Move {name} down",
+      "saving": "Saving the new order…",
+      "saved": "Order saved.",
+      "failed": "The new order wasn’t saved. {reason}",
+      "retry": "Try again"
+    },
+    "dishCount": "{count, plural, =0 {No dishes} one {# dish} other {# dishes}}",
+    "hiddenCount": "{count, plural, other {# hidden}}",
+    "rename": "Rename {name}",
+    "delete": "Delete {name}",
+    "nameLabel": "Station name",
+    "namePlaceholder": "Station name (e.g. Grill)",
+    "builtInHint": "Leave it blank to use the standard name, “{label}”, which follows each person’s language.",
+    "useDefault": "Use “{label}”",
+    "save": "Save",
+    "cancel": "Cancel",
+    "saved": "Saved “{name}”.",
+    "nameRequired": "Enter a station name.",
+    "deleteUnused": "Delete “{name}”? No dish uses it. This can’t be undone.",
+    "deleteMove": "{count, plural, one {# dish uses} other {# dishes use}} “{name}”. Choose where they move, then delete.",
+    "moveTo": "Move dishes to",
+    "deleteHint": "Its tickets on open orders move too. A kitchen screen showing only this station goes back to all stations.",
+    "confirmDelete": "Delete station",
+    "confirmMoveDelete": "Move dishes and delete",
+    "deleted": "Deleted “{name}”.",
+    "deletedMoved": "Deleted “{name}” and moved {count, plural, one {# dish} other {# dishes}} to “{target}”.",
+    "deletedCleared": "Deleted “{name}”. {count, plural, one {# dish now has} other {# dishes now have}} no station.",
+    "addTitle": "Add a station",
+    "add": "Add station",
+    "added": "Added “{name}”.",
+    "empty": "No kitchen stations yet. Add one below.",
+    "errors": {
+      "notFound": "This station no longer exists. It may already have been deleted.",
+      "invalidTarget": "The dishes can’t be moved to that station. Choose another one.",
+      "listChanged": "The stations were changed on another screen. The list has been reloaded; try again.",
+      "inUse": "Dishes were added to this station meanwhile. The list has been reloaded; choose where they move, then delete.",
+      "nameTaken": "This branch already has a station with that name.",
+      "nameInvalid": "A station name must be 1 to 40 characters long.",
+      "stationGone": "The kitchen station chosen for this dish has been deleted. Choose another one."
     }
   },
   "stations": {

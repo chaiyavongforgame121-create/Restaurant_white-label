@@ -31,7 +31,8 @@
     "bar": "Quầy bar",
     "dessert": "Tráng miệng",
     "expo": "Ra món",
-    "none": "Không có khu bếp"
+    "none": "Không có khu bếp",
+    "deleted": "Khu bếp đã xóa"
   },
   "batch": {
     "toggle": "Gộp món",

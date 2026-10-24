@@ -576,6 +576,8 @@ interface CopyResult {
   items_copied: number;
   modifier_groups_copied: number;
   combos_copied: number;
+  /** The source's kitchen stations, built-ins included: they replace the new branch's list. */
+  stations_copied: number;
   /** Copied dishes whose stock tracking was switched off: the new kitchen has counted nothing. */
   stock_tracking_off: number;
   hours_copied: number;
@@ -601,6 +603,7 @@ function readCopyResult(data: unknown): CopyResult {
     items_copied: count(row.items_copied),
     modifier_groups_copied: count(row.modifier_groups_copied),
     combos_copied: count(row.combos_copied),
+    stations_copied: count(row.stations_copied),
     stock_tracking_off: count(row.stock_tracking_off),
     hours_copied: count(row.hours_copied),
     schedule_windows_copied: count(row.schedule_windows_copied),
@@ -857,6 +860,9 @@ function BranchCreator({
                     )}
                     {copyMenu && copied.combos_copied > 0 && (
                       <li>{t('created.combos', { count: copied.combos_copied })}</li>
+                    )}
+                    {copyMenu && copied.stations_copied > 0 && (
+                      <li>{t('created.stations', { count: copied.stations_copied })}</li>
                     )}
                     {copyHours && <li>{t('created.hours', { count: copied.hours_copied })}</li>}
                     {copySettings && (

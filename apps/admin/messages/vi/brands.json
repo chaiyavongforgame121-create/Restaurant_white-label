@@ -66,7 +66,7 @@
     },
     "copy": {
       "menu": "Sao chép thực đơn",
-      "menuHint": "Danh mục, món, nhóm tùy chọn và combo. Theo dõi tồn kho sẽ tắt cho đến khi bạn kiểm kho ở đó.",
+      "menuHint": "Danh mục, món, nhóm tùy chọn, combo và khu bếp. Theo dõi tồn kho sẽ tắt cho đến khi bạn kiểm kho ở đó.",
       "hours": "Sao chép giờ mở cửa",
       "hoursHint": "Lịch hằng tuần, không gồm các ngày nghỉ đột xuất",
       "settings": "Sao chép cài đặt",
@@ -110,6 +110,7 @@
     "done": "Xong",
     "openSettings": "Mở cài đặt chi nhánh",
     "combos": "{count, plural, other {# combo}}",
+    "stations": "{count, plural, other {# khu bếp}}",
     "scheduleWindows": "{count, plural, other {# khung giờ nhận đơn đặt trước}}",
     "lookCopied": "Màu sắc, bố cục thực đơn và ảnh bìa",
     "empty": "{name} bắt đầu trống: không có thực đơn, không có giờ mở cửa (mở cả ngày) và dùng cài đặt tiêu chuẩn.",

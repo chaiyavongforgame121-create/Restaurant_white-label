@@ -4,6 +4,7 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import type { MenuCategory } from '@favornoms/shared';
+import type { KitchenStation } from '@/lib/kitchen-stations';
 import { CsvImportCard } from './csv-import-card';
 
 /**
@@ -17,9 +18,11 @@ import { CsvImportCard } from './csv-import-card';
 export function MenuImportView({
   branchId,
   categories,
+  stations,
 }: {
   branchId: string;
   categories: MenuCategory[];
+  stations: KitchenStation[];
 }) {
   const t = useTranslations('menuExtras');
   const router = useRouter();
@@ -43,10 +46,11 @@ export function MenuImportView({
       <CsvImportCard
         branchId={branchId}
         categories={categories}
+        stations={stations}
         onImported={(n) => {
           setSavedCount(n);
-          // Re-reads the branch's categories, so a second paste matches the ones just created
-          // instead of adding them again.
+          // Re-reads the branch's categories and stations, so a second paste matches the ones just
+          // created instead of adding them again.
           router.refresh();
         }}
       />

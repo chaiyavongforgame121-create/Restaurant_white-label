@@ -5,12 +5,25 @@ import Image from 'next/image';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
-import { Copy, Edit3, FileSpreadsheet, LayoutGrid, Move, Plus, Save, Tags, Trash2 } from 'lucide-react';
+import { ChefHat, Copy, Edit3, FileSpreadsheet, LayoutGrid, Move, Plus, Save, Tags, Trash2 } from 'lucide-react';
 import type { MenuCategory, MenuItem } from '@favornoms/shared';
 import { DEFAULT_UI_LOCALE, formatCurrency, isUiLocale } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
-import { listCategories, listMenuItems } from '@favornoms/database/queries';
+import {
+  createKitchenStation,
+  listCategories,
+  listKitchenStations,
+  listMenuItems,
+} from '@favornoms/database/queries';
 import { Badge, Button, Card, IconButton, Sheet, useConfirm } from '@favornoms/ui';
+import {
+  findStation,
+  sortStations,
+  stationLabel,
+  stationNameClash,
+  type BuiltInStationKey,
+  type KitchenStation,
+} from '@/lib/kitchen-stations';
 import {
   DEFAULT_LOW_STOCK_THRESHOLD,
   formatSoldOutUntil,
@@ -19,8 +32,9 @@ import {
 import { CATEGORY_EMOJIS, CategoryManager } from './category-manager';
 import { MenuReorder } from './menu-reorder';
 import { ItemModifierEditor, type ItemModifierEditorHandle } from './item-modifier-editor';
-import { menuErrorKey } from './menu-errors';
+import { menuErrorKey, stationErrorKey } from './menu-errors';
 import { MENU_STOCK_COLUMNS, type MenuItemStockRow } from './menu-stock';
+import { StationManager, StationNameInput } from './station-manager';
 
 export type { MenuItemStockRow } from './menu-stock';
 
@@ -31,17 +45,6 @@ interface ItemStock {
   /** menu_items.sold_out_until as stored; stockState() decides whether it still holds. */
   soldOutUntil: string | null;
   station: string | null;
-}
-
-/**
- * Station codes the kitchen board filters on (the same list menu import and the CSV use). The
- * board builds its station pills from the dishes' stations, so a branch whose menu was built by
- * hand — Food Thai Thai — had no way to get any.
- */
-const STATION_CODES = ['hot', 'cold', 'bar', 'dessert', 'expo'] as const;
-
-function isStationCode(value: string): value is (typeof STATION_CODES)[number] {
-  return (STATION_CODES as readonly string[]).includes(value);
 }
 
 function toStockMap(rows: MenuItemStockRow[]): Record<string, ItemStock> {
@@ -77,6 +80,8 @@ interface Props {
   categories: MenuCategory[];
   items: MenuItem[];
   stockRows: MenuItemStockRow[];
+  /** The branch's kitchen stations (docs/KITCHEN-STATIONS-2026-10-24.md), in display order. */
+  stations: KitchenStation[];
   /** branches.timezone, for "Sold out until …". */
   timezone: string;
   /** branches.settings.currency. */
@@ -97,6 +102,7 @@ export function MenuManager({
   categories: initCategories,
   items: initItems,
   stockRows,
+  stations: initStations,
   timezone,
   currency,
 }: Props) {
@@ -107,10 +113,12 @@ export function MenuManager({
   const [items, setItems] = React.useState(initItems);
   const [categories, setCategories] = React.useState(initCategories);
   const [stock, setStock] = React.useState(() => toStockMap(stockRows));
+  const [stations, setStations] = React.useState(initStations);
   const [busyIds, setBusyIds] = React.useState<string[]>([]);
   const [editing, setEditing] = React.useState<MenuItem | null>(null);
   const [creating, setCreating] = React.useState(false);
   const [managingCategories, setManagingCategories] = React.useState(false);
+  const [managingStations, setManagingStations] = React.useState(false);
   const [mode, setMode] = React.useState<'grid' | 'reorder'>('grid');
   const [notice, setNotice] = React.useState<string | null>(null);
   const [problem, setProblem] = React.useState<string | null>(null);
@@ -135,17 +143,24 @@ export function MenuManager({
       // mapped to the camelCase shape (categoryId/imageUrl/…) the grid expects.
       // A raw snake_case select here left categoryId undefined, which filtered
       // every item out of its category and blanked the page after save.
-      const [nextItems, nextCategories, stockRes] = await Promise.all([
+      const [nextItems, nextCategories, stockRes, nextStations] = await Promise.all([
         // Hidden dishes included, as on first load: this is the screen that switches them back on.
         listMenuItems(supabase, branchId, { includeInactive: true }),
         listCategories(supabase, branchId),
         supabase.from('menu_items').select(MENU_STOCK_COLUMNS).eq('branch_id', branchId),
+        // As on the server page, a failed station read keeps the list on screen rather than
+        // failing the whole reload; the next one tries again.
+        listKitchenStations(supabase, branchId).catch((err: unknown) => {
+          console.error('[menu] kitchen stations reload failed', err);
+          return null;
+        }),
       ]);
       if (stockRes.error) throw stockRes.error;
       if (seq !== refreshSeq.current) return;
       setItems(nextItems);
       setCategories(nextCategories);
       setStock(toStockMap((stockRes.data ?? []) as MenuItemStockRow[]));
+      if (nextStations) setStations(nextStations);
     } catch (err) {
       // This used to reject unhandled. A refresh that fails in silence is
       // indistinguishable from a save that did nothing, which is exactly the
@@ -153,6 +168,13 @@ export function MenuManager({
       setProblem(t('notices.reloadFailed', { reason: errorText('menu reload', err) }));
     }
   };
+
+  // Which station each dish is at, for the Kitchen stations sheet's counts. The station travels with
+  // the stock columns, not the shared MenuItem.
+  const stationDishes = React.useMemo(
+    () => items.map((i) => ({ station: stock[i.id]?.station ?? null, hidden: i.isActive === false })),
+    [items, stock],
+  );
 
   const handleSaved = (saved: SavedItemSummary) => {
     setEditing(null);
@@ -317,6 +339,11 @@ export function MenuManager({
             <>
               <Button variant="ghost" leftIcon={<Tags className="h-4 w-4" />} onClick={() => setManagingCategories(true)}>
                 {t('categories.button')}
+              </Button>
+              {/* Here rather than under Settings: stations are where dishes are made, and the
+                  merchant looking for one is already in the dish dialog's station list. */}
+              <Button variant="ghost" leftIcon={<ChefHat className="h-4 w-4" />} onClick={() => setManagingStations(true)}>
+                {t('stationManager.button')}
               </Button>
               <Link href={`/b/${branchId}/menu/modifiers`}>
                 <Button variant="ghost">
@@ -483,6 +510,22 @@ export function MenuManager({
         />
       </Sheet>
 
+      <Sheet
+        open={managingStations}
+        onClose={() => setManagingStations(false)}
+        title={t('stationManager.title')}
+        ariaLabel={t('stationManager.title')}
+        side="right"
+      >
+        <StationManager
+          branchId={branchId}
+          stations={stations}
+          dishes={stationDishes}
+          onChanged={refresh}
+          onNotice={setNotice}
+        />
+      </Sheet>
+
       {/* Editor sheet — usable in grid mode only */}
       <Sheet
         open={!!editing || creating}
@@ -501,11 +544,16 @@ export function MenuManager({
           key={editing?.id ?? 'new'}
           branchId={branchId}
           categories={categories}
+          stations={stations}
           item={editing}
           initialStock={editing ? stock[editing.id] : undefined}
           timezone={timezone}
           locale={locale}
           onCategoryCreated={(cat) => setCategories((cur) => [...cur, cat])}
+          onStationCreated={(created) =>
+            setStations((cur) => sortStations([...cur.filter((s) => s.id !== created.id), created]))
+          }
+          onStationsStale={refresh}
           onSaved={handleSaved}
         />
       </Sheet>
@@ -586,10 +634,13 @@ const COMMON_ALLERGENS = [
 ] as const;
 
 function ItemEditor({
-  branchId, categories, item, initialStock, timezone, locale, onSaved, onCategoryCreated,
+  branchId, categories, stations, item, initialStock, timezone, locale, onSaved, onCategoryCreated,
+  onStationCreated, onStationsStale,
 }: {
   branchId: string;
   categories: MenuCategory[];
+  /** The branch's kitchen stations, in display order. */
+  stations: KitchenStation[];
   item: MenuItem | null;
   /** Stock as the page last read it, so the checkbox opens in the right position. */
   initialStock: ItemStock | undefined;
@@ -597,6 +648,12 @@ function ItemEditor({
   locale: string;
   onSaved: (saved: SavedItemSummary) => void;
   onCategoryCreated: (cat: MenuCategory) => void;
+  onStationCreated: (station: KitchenStation) => void;
+  /**
+   * The station list proved out of date (a save named a station deleted meanwhile, or the dish
+   * holds one added elsewhere): re-read it. Settles once the list is back.
+   */
+  onStationsStale: () => Promise<void>;
 }) {
   const t = useTranslations('menu');
   const errorText = useMenuErrorText();
@@ -646,6 +703,19 @@ function ItemEditor({
   const [newCatName, setNewCatName] = React.useState('');
   const [newCatEmoji, setNewCatEmoji] = React.useState('🍽️');
   const [creatingCat, setCreatingCat] = React.useState(false);
+  const [showNewStation, setShowNewStation] = React.useState(false);
+  const [newStationName, setNewStationName] = React.useState('');
+  const [creatingStation, setCreatingStation] = React.useState(false);
+  /** Shown inside the new-station panel, next to the name it is about, not at the foot of the form. */
+  const [stationError, setStationError] = React.useState<string | null>(null);
+  /** A station list re-read is running: until it lands, a key the list lacks may be a station added
+   *  elsewhere, so the picker does not call it deleted yet. */
+  const [stationsRefreshing, setStationsRefreshing] = React.useState(false);
+  const builtInStationLabel = (key: BuiltInStationKey) => t(`stations.${key}`);
+  const refreshStations = () => {
+    setStationsRefreshing(true);
+    void onStationsStale().finally(() => setStationsRefreshing(false));
+  };
   const modifierRef = React.useRef<ItemModifierEditorHandle>(null);
 
   const addAllergen = (raw: string) => {
@@ -686,6 +756,36 @@ function ItemEditor({
     setNewCatEmoji('🍽️');
   };
 
+  const createStation = async () => {
+    const nm = newStationName.trim();
+    if (!nm || creatingStation) return;
+    setStationError(null);
+    // The database's unique index never sees a built-in with no name, so a "Bar" next to the
+    // built-in bar is caught here.
+    if (stationNameClash(nm, stations, builtInStationLabel)) {
+      setStationError(t('stationManager.errors.nameTaken'));
+      return;
+    }
+    setCreatingStation(true);
+    try {
+      // After the branch's last station; the database gives it its key.
+      const created = await createKitchenStation(getBrowserClient(), branchId, nm);
+      onStationCreated(created);
+      // The merchant's choice, as a pick from the list is: an existing dish writes its station only
+      // once touched, and a station made from this dish's sheet is meant for this dish.
+      stationTouched.current = true;
+      setStation(created.key);
+      setShowNewStation(false);
+      setNewStationName('');
+    } catch (err) {
+      const key = stationErrorKey(err);
+      if (key) console.error('[menu] create station failed', err);
+      setStationError(key ? t(`stationManager.errors.${key}`) : errorText('create station', err));
+    } finally {
+      setCreatingStation(false);
+    }
+  };
+
   // Re-read the stock columns on open. stock_quantity moves without the merchant:
   // every order decrements it, so the copy the page was rendered with can be minutes
   // out of date and saving it back would undo those sales.
@@ -721,6 +821,10 @@ function ItemEditor({
         };
         setSoldOutUntil(data.sold_out_until ?? null);
         if (!stationTouched.current) setStation(data.station ?? '');
+        // A dish's key is always one of the branch's (menu_items_branch_id_station_fkey), so one
+        // this page's list lacks was added elsewhere (another tab, a CSV import, a copy): re-read
+        // the list so the picker shows its name.
+        if (data.station && !findStation(stations, data.station)) refreshStations();
         if (stockTouched.current || countTouched.current) return;
         setTrackStock(data.track_stock === true);
         setStockQuantity(String(data.stock_quantity ?? 0));
@@ -823,10 +927,20 @@ function ItemEditor({
       if (res.error) {
         const { describePlanError } = await import('@favornoms/database/queries');
         const planErr = describePlanError(res.error);
+        // The station picked here was deleted since the list was read (the Kitchen stations sheet,
+        // another tab): the foreign key refuses it. Say that rather than "still linked to other
+        // records", and re-read the list so the picker shows what the branch has now.
+        const stationGone = !planErr && stationErrorKey(res.error) === 'stationGone';
+        if (stationGone) {
+          console.error('[menu] save item failed', res.error);
+          refreshStations();
+        }
         setError(
           planErr
             ? t('editor.planLimit', { current: planErr.current, limit: planErr.limit })
-            : errorText('save item', res.error),
+            : stationGone
+              ? t('stationManager.errors.stationGone')
+              : errorText('save item', res.error),
         );
         return;
       }
@@ -970,23 +1084,75 @@ function ItemEditor({
         />
       </Field>
       <Field label={t('editor.station')}>
-        <select
-          value={station}
-          onChange={(e) => {
-            stationTouched.current = true;
-            setStation(e.target.value);
-          }}
-          className="input"
-        >
-          <option value="">{t('editor.stationNone')}</option>
-          {STATION_CODES.map((code) => (
-            <option key={code} value={code}>
-              {t(`stations.${code}`)}
-            </option>
-          ))}
-          {/* A station the list does not know (an older import) is kept as it was, not cleared. */}
-          {station && !isStationCode(station) && <option value={station}>{station}</option>}
-        </select>
+        <div className="flex items-center gap-2">
+          <select
+            value={station}
+            onChange={(e) => {
+              stationTouched.current = true;
+              setStation(e.target.value);
+            }}
+            className="input flex-1"
+          >
+            {/* '' is "No station" here only: the save writes null, never ''. */}
+            <option value="">{t('editor.stationNone')}</option>
+            {stations.map((s) => (
+              <option key={s.id} value={s.key}>
+                {stationLabel(s, stations, builtInStationLabel)}
+              </option>
+            ))}
+            {/* A station this list does not hold (deleted, or added in another tab since the page
+                loaded) is kept as the dish has it, not cleared by opening the dish. One added
+                elsewhere gets its name once the list is re-read; one deleted is labelled as such,
+                never by its opaque key. */}
+            {station && !findStation(stations, station) && (
+              <option value={station}>
+                {stationLabel(
+                  station,
+                  stations,
+                  builtInStationLabel,
+                  '',
+                  stationsRefreshing ? '…' : t('editor.stationRemoved'),
+                )}
+              </option>
+            )}
+          </select>
+          <Button
+            type="button"
+            variant="ghost"
+            size="md"
+            onClick={() => {
+              setShowNewStation((s) => !s);
+              setStationError(null);
+            }}
+          >
+            {showNewStation ? t('editor.cancelNewStation') : t('editor.newStation')}
+          </Button>
+        </div>
+        {showNewStation && (
+          <div className="mt-2 space-y-2 rounded-xl border border-border bg-muted/20 p-3">
+            <StationNameInput
+              value={newStationName}
+              onChange={setNewStationName}
+              onSubmit={() => void createStation()}
+              placeholder={t('stationManager.namePlaceholder')}
+            />
+            {stationError && (
+              <p role="alert" className="rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">
+                {stationError}
+              </p>
+            )}
+            <Button
+              type="button"
+              variant="soft"
+              size="md"
+              onClick={createStation}
+              loading={creatingStation}
+              disabled={!newStationName.trim()}
+            >
+              {t('editor.createStation')}
+            </Button>
+          </div>
+        )}
         <p className="mt-1 text-xs text-muted-foreground">{t('editor.stationHint')}</p>
       </Field>
       <Field label={t('editor.description')}>

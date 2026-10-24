@@ -31,7 +31,8 @@
     "bar": "Bar",
     "dessert": "Postres",
     "expo": "Pase",
-    "none": "Sin estación"
+    "none": "Sin estación",
+    "deleted": "Estación eliminada"
   },
   "batch": {
     "toggle": "Agrupar",

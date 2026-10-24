@@ -205,16 +205,19 @@
     "imported": "{count, plural, other {Đã nhập # món.}}",
     "csv": {
       "title": "Nhập hàng loạt từ CSV",
-      "columns": "Các cột: <code>{columns}</code> (cột station không bắt buộc). Dòng đầu tiên phải là tiêu đề cột.",
+      "columns": "Các cột: <code>{columns}</code>. Dòng đầu tiên phải là tiêu đề cột. Cột station không bắt buộc: ghi tên một khu bếp của bạn, hoặc một tên mới để thêm khu bếp đó; để trống nếu không có khu bếp.",
       "downloadTemplate": "Tải tệp mẫu",
       "valid": "{count} hợp lệ",
       "errorCount": "{count, plural, other {# lỗi}}",
       "rowErrors": {
         "missingCategory": "Dòng {row}: thiếu danh mục",
         "missingName": "Dòng {row}: thiếu tên",
-        "invalidPrice": "Dòng {row}: giá không hợp lệ “{value}”"
+        "invalidPrice": "Dòng {row}: giá không hợp lệ “{value}”",
+        "stationTooLong": "Dòng {row}: tên khu bếp dài hơn {max} ký tự"
       },
       "moreErrors": "… và {count} lỗi khác.",
+      "newStations": "Sẽ thêm {count, plural, other {# khu bếp mới}}: {names}",
+      "stationCreateFailed": "Không thêm được khu bếp “{name}”, nên chưa nhập món hay danh mục nào. {reason}",
       "import": "{count, plural, other {Nhập # món}}",
       "noValidRows": "Không có dòng hợp lệ để nhập."
     }

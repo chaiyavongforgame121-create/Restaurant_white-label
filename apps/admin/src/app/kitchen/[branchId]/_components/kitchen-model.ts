@@ -3,6 +3,9 @@
 
 import type { BranchRider } from '@favornoms/database/queries';
 import { sortOrderLines } from '@favornoms/shared';
+import {
+  NO_STATION, findStation, isNoStation, isValidStationKey, sortStations, type KitchenStation,
+} from '@/lib/kitchen-stations';
 // What "low" and "none left" mean is the back office's rule (v_low_stock_items, the inventory
 // table, the menu grid); the board reads the same one so the kitchen and the manager agree.
 import { stockState } from '@/app/b/[branchId]/inventory/_components/stock-model';
@@ -512,9 +515,9 @@ export function overlaySnapshot<T extends { id: string }>(
 /* ── combos and stations ───────────────────────────────────────────────── */
 
 /** The station key, filter value and ?station= value of the "No station" pill: lines whose dish has
- *  no station. The underscore keeps it apart from the station codes the menu editor, menu import and
- *  the CSV write (hot, cold, bar, dessert, expo). */
-export const NO_STATION = '_none';
+ *  no station. It lives with the branch's stations (@/lib/kitchen-stations): the database refuses it
+ *  as a station's key, so no station the merchant adds can take the pill's place. */
+export { NO_STATION };
 
 export function parseComboContents(raw: unknown): ComboPart[] {
   if (!Array.isArray(raw)) return [];
@@ -574,26 +577,108 @@ export function partMatchesStation(p: ComboPart, station: string | null): boolea
   return !station || partStation(p) === station;
 }
 
-/** The station pills after "All", in order: every station the menu uses and every station a line on
- *  the board is made at (a dish moved to a new station mid-service brings its pill along), sorted;
- *  then "No station", only while a line on the board has none. The active filter always keeps its
- *  pill, so the board is never filtered by something the bar does not show (the last ticket without
- *  a station bumped, a bookmarked ?station= the menu no longer uses). */
-export function stationPills(menuStations: string[], board: Order[], active: string | null): string[] {
-  const named = new Set(menuStations.filter((s) => s !== '' && s !== NO_STATION));
-  let unassigned = active === NO_STATION;
+/** The station pills after "All", in order:
+ *  - the branch's stations in use, in the merchant's order (display_order, as the menu page lists
+ *    them): one an active dish is made at (`dishStations`), or a line on the board (a dish moved to a
+ *    new station mid-service brings its pill along). A station nothing uses gets no pill;
+ *  - "No station", only while a line on the board has none;
+ *  - last, in key order, any key the branch's list does not hold: an old line's station.
+ *  The active filter always keeps its pill, so the board is never filtered by something the bar does
+ *  not show (the last ticket without a station bumped, the last dish moved off the station). */
+export function stationPills(
+  stations: readonly KitchenStation[],
+  dishStations: readonly string[],
+  board: Order[],
+  active: string | null,
+): string[] {
+  const used = new Set(dishStations.filter((s) => s !== '' && !isNoStation(s)));
+  let unassigned = isNoStation(active);
   for (const o of board) {
     for (const it of o.order_items) {
       for (const key of lineStationKeys(it)) {
-        if (key === NO_STATION) unassigned = true;
-        else named.add(key);
+        if (isNoStation(key)) unassigned = true;
+        else used.add(key);
       }
     }
   }
-  if (active && active !== NO_STATION) named.add(active);
-  const pills = [...named].sort();
+  if (active && !isNoStation(active)) used.add(active);
+  // The database refuses NO_STATION as a key; a list that held it anyway must not put a station
+  // where the "No station" pill goes.
+  const listed = sortStations(stations).map((s) => s.key).filter((key) => !isNoStation(key));
+  const pills = listed.filter((key) => used.has(key));
   if (unassigned) pills.push(NO_STATION);
+  const known = new Set(listed);
+  pills.push(...[...used].filter((key) => !known.has(key)).sort());
   return pills;
+}
+
+/** The stations the branch's active dishes are made at, each once: what keeps a station's pill up
+ *  with nothing on the board. page.tsx (first paint) and the view's reload() read the same rows:
+ *  menu_items.station of the branch's dishes on the menu (a hidden dish sends no ticket). */
+export function dishStationKeys(rows: readonly { station?: string | null }[] | null | undefined): string[] {
+  const keys = (rows ?? []).map((r) => r.station ?? '').filter((key) => key !== '' && !isNoStation(key));
+  return [...new Set(keys)];
+}
+
+/** The dish stations after a dish's realtime UPDATE: a dish on the menu saved into a station no
+ *  active dish used adds it, so that station's pill comes up at once, not at the board's next read.
+ *  Add-only: the payload does not say which station the dish left, and another dish may still use
+ *  it (a pill left counting 0 goes with the next read). Returns `curr` itself when nothing changes,
+ *  so a sale (every sale is a stock UPDATE) repaints nothing. */
+export function withDishStation(
+  curr: string[],
+  dish: { station?: string | null; is_active?: boolean | null } | null | undefined,
+): string[] {
+  const key = dish?.station ?? '';
+  if (!dish || dish.is_active === false || key === '' || isNoStation(key) || curr.includes(key)) return curr;
+  return [...curr, key];
+}
+
+/** The filter a board opens with, from its ?station=:
+ *  - none, or a value that cannot be a station's key (`?station=Hot`): All;
+ *  - "No station", or a station the branch has: that one;
+ *  - a key the branch no longer has (the station was deleted while this tablet was off): All, as an
+ *    open board does when its station is deleted (stationDeleted). Unless a ticket on the board is
+ *    still made there (an old line), so the pill has something to show;
+ *  - the branch's list could not be read (`stations` null): kept, not guessed at, until the view's
+ *    first read of the list checks it (filterAfterStationsRead). */
+export function openingStation(
+  param: unknown,
+  stations: readonly KitchenStation[] | null,
+  board: Order[],
+): string | null {
+  if (typeof param !== 'string' || param === '') return null;
+  if (isNoStation(param)) return NO_STATION;
+  if (!isValidStationKey(param)) return null;
+  if (!stations || findStation(stations, param)) return param;
+  return board.some((o) => o.order_items.some((it) => lineStationKeys(it).includes(param))) ? param : null;
+}
+
+/** Was the filtered station deleted? It was on the list the board held, and the newest read of the
+ *  list no longer has it. A key the list never held (NO_STATION, an old line's station) was not
+ *  deleted: its pill stays. */
+export function stationDeleted(
+  active: string | null,
+  before: readonly KitchenStation[],
+  after: readonly KitchenStation[],
+): boolean {
+  return !!active && !!findStation(before, active) && !findStation(after, active);
+}
+
+/** The filter after a new read of the branch's stations (`after`):
+ *  - `before` is the list the board held: All if the filtered station was deleted (stationDeleted),
+ *    else the filter as it stands;
+ *  - `before` is null (the server's read failed, so ?station= was kept unchecked at first paint):
+ *    checked now, as first paint would have (openingStation). stationDeleted cannot tell from an
+ *    empty list, and a tablet pinned to a station deleted while it was off kept it for good. */
+export function filterAfterStationsRead(
+  active: string | null,
+  before: readonly KitchenStation[] | null,
+  after: readonly KitchenStation[],
+  board: Order[],
+): string | null {
+  if (before === null) return openingStation(active, after, board);
+  return stationDeleted(active, before, after) ? null : active;
 }
 
 export interface StationStat {

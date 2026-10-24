@@ -83,7 +83,11 @@
     "soldOutUntil": "Đang bị đánh dấu hết hàng đến {time}. Bấm “Bán lại” trên thẻ món, hoặc lưu số lượng lớn hơn 0, để mở bán sớm hơn.",
     "station": "Khu bếp",
     "stationNone": "Không có khu bếp",
-    "stationHint": "Nơi làm món này. Màn hình bếp có thể hiện phiếu của từng khu một."
+    "stationHint": "Nơi làm món này. Màn hình bếp có thể hiện phiếu của từng khu một.",
+    "newStation": "+ Mới",
+    "cancelNewStation": "Hủy",
+    "createStation": "Tạo khu bếp",
+    "stationRemoved": "Khu bếp đã bị xóa"
   },
   "allergenPresets": {
     "peanuts": "Đậu phộng",
@@ -205,6 +209,55 @@
       "usedByHappyHour": "Các giờ vàng này chỉ áp dụng cho danh mục này: {names}. Hãy sửa hoặc xóa chúng trước.",
       "notFound": "Danh mục này không còn tồn tại. Có thể nó đã bị xóa.",
       "unchanged": "Không có gì thay đổi. Danh mục có thể đã bị xóa, hoặc vai trò của bạn không được phép sửa thực đơn tại chi nhánh này."
+    }
+  },
+  "stationManager": {
+    "button": "Khu bếp",
+    "title": "Khu bếp",
+    "intro": "Nơi làm từng món. Màn hình bếp có thể hiện phiếu của từng khu một. Đổi tên khu bếp không làm thay đổi các món và phiếu đang mở của khu đó.",
+    "order": {
+      "hint": "Màn hình bếp và trình sửa món liệt kê các khu bếp theo thứ tự này.",
+      "drag": "Kéo {name} để sắp xếp lại",
+      "up": "Chuyển {name} lên",
+      "down": "Chuyển {name} xuống",
+      "saving": "Đang lưu thứ tự mới…",
+      "saved": "Đã lưu thứ tự.",
+      "failed": "Chưa lưu được thứ tự mới. {reason}",
+      "retry": "Thử lại"
+    },
+    "dishCount": "{count, plural, =0 {Chưa có món} other {# món}}",
+    "hiddenCount": "{count, plural, other {# món đã ẩn}}",
+    "rename": "Đổi tên {name}",
+    "delete": "Xóa {name}",
+    "nameLabel": "Tên khu bếp",
+    "namePlaceholder": "Tên khu bếp (vd: Bếp nướng)",
+    "builtInHint": "Để trống để dùng tên chuẩn “{label}”, hiển thị theo ngôn ngữ của từng người.",
+    "useDefault": "Dùng “{label}”",
+    "save": "Lưu",
+    "cancel": "Hủy",
+    "saved": "Đã lưu “{name}”.",
+    "nameRequired": "Vui lòng nhập tên khu bếp.",
+    "deleteUnused": "Xóa “{name}”? Không có món nào dùng khu này. Không thể hoàn tác.",
+    "deleteMove": "{count, plural, other {# món}} đang dùng “{name}”. Chọn nơi chuyển các món đến, rồi xóa.",
+    "moveTo": "Chuyển món đến",
+    "deleteHint": "Các phiếu của khu này trên đơn đang mở cũng được chuyển theo. Màn hình bếp chỉ hiện khu này sẽ quay lại hiện tất cả các khu.",
+    "confirmDelete": "Xóa khu bếp",
+    "confirmMoveDelete": "Chuyển món và xóa",
+    "deleted": "Đã xóa “{name}”.",
+    "deletedMoved": "Đã xóa “{name}” và chuyển {count, plural, other {# món}} sang “{target}”.",
+    "deletedCleared": "Đã xóa “{name}”. {count, plural, other {# món}} hiện không có khu bếp.",
+    "addTitle": "Thêm khu bếp",
+    "add": "Thêm khu bếp",
+    "added": "Đã thêm “{name}”.",
+    "empty": "Chưa có khu bếp nào. Hãy thêm ở bên dưới.",
+    "errors": {
+      "notFound": "Khu bếp này không còn tồn tại. Có thể nó đã bị xóa.",
+      "invalidTarget": "Không thể chuyển món sang khu bếp đó. Hãy chọn khu khác.",
+      "listChanged": "Các khu bếp vừa được thay đổi ở màn hình khác. Danh sách đã được tải lại; hãy thử lại.",
+      "inUse": "Trong lúc đó đã có món được gán vào khu bếp này. Danh sách đã được tải lại; hãy chọn nơi chuyển các món đến, rồi xóa.",
+      "nameTaken": "Chi nhánh này đã có khu bếp trùng tên.",
+      "nameInvalid": "Tên khu bếp phải dài từ 1 đến 40 ký tự.",
+      "stationGone": "Khu bếp đã chọn cho món này vừa bị xóa. Hãy chọn khu khác."
     }
   },
   "stations": {

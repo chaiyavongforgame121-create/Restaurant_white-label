@@ -205,16 +205,19 @@
     "imported": "{count, plural, one {Se importó # artículo.} other {Se importaron # artículos.}}",
     "csv": {
       "title": "Importación masiva por CSV",
-      "columns": "Columnas: <code>{columns}</code> (station es opcional). La primera fila debe tener los encabezados.",
+      "columns": "Columnas: <code>{columns}</code>. La primera fila debe tener los encabezados. La estación es opcional: escribe el nombre de una de tus estaciones de cocina, o un nombre nuevo para agregar esa estación; déjala en blanco para no asignar estación.",
       "downloadTemplate": "Descargar plantilla",
       "valid": "{count, plural, one {# válida} other {# válidas}}",
       "errorCount": "{count, plural, one {# error} other {# errores}}",
       "rowErrors": {
         "missingCategory": "Fila {row}: falta la categoría",
         "missingName": "Fila {row}: falta el nombre",
-        "invalidPrice": "Fila {row}: precio no válido “{value}”"
+        "invalidPrice": "Fila {row}: precio no válido “{value}”",
+        "stationTooLong": "Fila {row}: el nombre de la estación tiene más de {max} caracteres"
       },
       "moreErrors": "… y {count} más.",
+      "newStations": "{count, plural, one {Agrega una estación de cocina nueva} other {Agrega # estaciones de cocina nuevas}}: {names}",
+      "stationCreateFailed": "No se pudo agregar la estación de cocina “{name}”, así que no se importaron platos ni categorías. {reason}",
       "import": "{count, plural, one {Importar # artículo} other {Importar # artículos}}",
       "noValidRows": "No hay filas válidas para importar."
     }

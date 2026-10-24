@@ -66,7 +66,7 @@
     },
     "copy": {
       "menu": "Copiar menú",
-      "menuHint": "Categorías, productos, grupos de opciones y combos. El control de stock empieza desactivado hasta que cuentes el stock allí.",
+      "menuHint": "Categorías, productos, grupos de opciones, combos y estaciones de cocina. El control de stock empieza desactivado hasta que cuentes el stock allí.",
       "hours": "Copiar horario de atención",
       "hoursHint": "El horario semanal, no los cierres puntuales",
       "settings": "Copiar la configuración",
@@ -110,6 +110,7 @@
     "done": "Listo",
     "openSettings": "Abrir su configuración",
     "combos": "{count, plural, one {# combo} other {# combos}}",
+    "stations": "{count, plural, one {# estación de cocina} other {# estaciones de cocina}}",
     "scheduleWindows": "{count, plural, one {# franja para pedidos programados} other {# franjas para pedidos programados}}",
     "lookCopied": "Colores, diseño del menú y portada",
     "empty": "{name} empieza vacía: sin menú, sin horario de atención (abierta todo el día) y con la configuración estándar.",

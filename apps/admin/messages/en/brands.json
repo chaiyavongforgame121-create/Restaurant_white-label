@@ -66,7 +66,7 @@
     },
     "copy": {
       "menu": "Copy menu",
-      "menuHint": "Categories, items, option groups and combos. Stock tracking starts off until you count stock there.",
+      "menuHint": "Categories, items, option groups, combos and kitchen stations. Stock tracking starts off until you count stock there.",
       "hours": "Copy opening hours",
       "hoursHint": "The weekly hours, not one-off closures",
       "settings": "Copy settings",
@@ -110,6 +110,7 @@
     "done": "Done",
     "openSettings": "Open its settings",
     "combos": "{count, plural, one {# combo} other {# combos}}",
+    "stations": "{count, plural, one {# kitchen station} other {# kitchen stations}}",
     "scheduleWindows": "{count, plural, one {# booking window for scheduled orders} other {# booking windows for scheduled orders}}",
     "lookCopied": "Colours, menu layout and hero",
     "empty": "{name} starts empty: no menu, no opening hours (open around the clock) and the standard settings.",
