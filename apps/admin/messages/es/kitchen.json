@@ -69,7 +69,8 @@
     "markLineNotDone": "Marcar {item} como pendiente",
     "soldOut": "Agotado",
     "stackedWith": "🔗 Agrupado con #{other} · parada {stop}: empaca ambas bolsas para un solo repartidor",
-    "redispatchOffered": "Saltar a este repartidor y ofrecerlo a otro"
+    "redispatchOffered": "Saltar a este repartidor y ofrecerlo a otro",
+    "due": "Listo para {time}"
   },
   "timer": {
     "hoursMinutes": "{hours} h {minutes} min",
@@ -191,7 +192,8 @@
   "scheduled": {
     "title": "Programados · {count}",
     "close": "Cerrar",
-    "releasesIn": "Pasa a cocina en {minutes} min"
+    "releasesIn": "Pasa a cocina en {minutes} min",
+    "releasingNow": "Pasa a cocina ahora"
   },
   "voice": {
     "newOrder": "Pedido nuevo, {channel}, número {ticket}",

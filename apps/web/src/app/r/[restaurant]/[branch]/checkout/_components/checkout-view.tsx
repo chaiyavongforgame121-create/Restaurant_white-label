@@ -18,6 +18,7 @@ import {
   parseTipConfig,
   tipPresetsForChannel,
   TIP_CONFIG_DEFAULTS,
+  TIP_DEFAULT_PERCENT,
   type TipConfig,
   type UiLocale,
 } from '@favornoms/shared';
@@ -160,8 +161,18 @@ const DROPOFF_OPTIONS: DropoffPref[] = ['leave_at_door', 'hand_to_me', 'at_desk'
 interface Props {
   branchId: string;
   base: string;
-  /** `delivery` entitlement — default false so a missing prop cannot sell it. */
+  /**
+   * Delivery can be offered here, ASAP or booked (resolveScheduleDelivery's canDeliver) — default
+   * false so a missing prop cannot sell it. Each half is re-judged below with the branch's payment
+   * methods, which the server page does not read.
+   */
   canDeliver?: boolean;
+  /**
+   * storefront_status.delivery: the branch delivers and is inside its delivery hours this minute.
+   * With the branch open now and a payment method for "now" orders it makes an ASAP delivery
+   * possible. Default false, so a missing prop never offers ASAP; a booking does not need it.
+   */
+  deliveryOpenNow?: boolean;
   /**
    * This branch delivers at all (storefront_status.delivery_entitled, per branch: its
    * delivery switch, docs/PACKAGING-2026-10-24.md §3).
@@ -201,18 +212,18 @@ interface Props {
     minLeadMinutes: number;
     maxDays: number;
     slotMinutes: number;
-    /** Delivery hours when the merchant restricted them, null when not. Every storefront
-     *  delivery is booked now, so its slots must also sit inside these or the
+    /** Delivery hours when the merchant restricted them, null when not. A booked delivery is
+     *  judged against them at its time, so its slots must also sit inside these or the
      *  orders_enforce_delivery_hours trigger refuses the order at submit. */
     deliveryWindows?: OpeningWindow[] | null;
   };
   /**
-   * is_branch_open() when the page was rendered. Pickup is always prepared now, so a closed
-   * branch cannot take one: checkout says so up front instead of letting the diner fill in the
-   * whole form for a 409. Defaults true — place-order still refuses, and a missing prop must
-   * never block ordering.
+   * is_branch_open() when the page was rendered. Pickup and an ASAP delivery are prepared now, so
+   * a closed branch cannot take either: checkout says so up front instead of letting the diner
+   * fill in the whole form for a 409. Defaults true — place-order still refuses, and a missing
+   * prop must never block ordering.
    */
-  pickupOpenNow?: boolean;
+  branchOpenNow?: boolean;
   /** The kitchen paused orders. Nothing can be ordered, now or booked (resolveScheduleDelivery). */
   ordersPaused?: boolean;
 }
@@ -221,13 +232,14 @@ export function CheckoutView({
   branchId,
   base,
   canDeliver = false,
+  deliveryOpenNow = false,
   deliveryOffered = true,
   canUseCard = false,
   cardReady = false,
   salesTaxRate = 0,
   serviceFeePercent = 0,
   scheduling,
-  pickupOpenNow = true,
+  branchOpenNow = true,
   ordersPaused = false,
 }: Props) {
   const t = useTranslations();
@@ -249,10 +261,11 @@ export function CheckoutView({
   // covers checkout until they do, so the null window is never interactive.
   const channel = useCart((s) => s.channel);
   const setChannel = useCart((s) => s.setChannel);
-  // Open right now, for Pickup. The page reads it once on the server, so a branch that opens while
-  // the diner is on this page would keep Pickup disabled until a reload; while closed it is asked
-  // again every minute. Not while paused — no amount of waiting on the clock changes that.
-  const [openNow, setOpenNow] = React.useState(pickupOpenNow);
+  // Open right now, for Pickup and ASAP delivery. The page reads it once on the server, so a branch
+  // that opens while the diner is on this page would keep both unavailable until a reload; while
+  // closed it is asked again every minute. Not while paused — no amount of waiting on the clock
+  // changes that.
+  const [openNow, setOpenNow] = React.useState(branchOpenNow);
   React.useEffect(() => {
     if (openNow || ordersPaused) return;
     const supabase = getBrowserClient();
@@ -379,25 +392,35 @@ export function CheckoutView({
   // only pre-empts the 403, so it FAILS OPEN: we start at true and only flip it
   // when the identity call actually says otherwise.
   const [identityVerified, setIdentityVerified] = React.useState(true);
-  const [tipPercent, setTipPercent] = React.useState<number>(0);
+  // Opens on the 18% chip on every channel (TIP_DEFAULT_PERCENT, owner request 2026-10-25). The
+  // diner can still tap it again, pick another chip, Custom or "No tip", each of which replaces it.
+  const [tipPercent, setTipPercent] = React.useState<number>(TIP_DEFAULT_PERCENT);
   const [customTip, setCustomTip] = React.useState('');
   // Custom is a chip like the percentages, not an always-on field — the USD input
   // only exists once it is chosen.
   const [tipCustom, setTipCustom] = React.useState(false);
   const [tipConfig, setTipConfig] = React.useState<TipConfig>(TIP_CONFIG_DEFAULTS);
   const [promoCode, setPromoCode] = React.useState('');
-  // Derived, never stored. Customers order one of two ways — Pickup (prepared now) or Schedule
-  // Delivery (a booked time) — so the timing IS the order type. As separate state it started at
-  // 'asap' on every mount while the channel persisted in the cart, so a diner who picked
-  // Schedule Delivery on the menu arrived here holding an ASAP delivery.
-  const scheduleMode: 'asap' | 'later' = channel === 'delivery' ? 'later' : 'asap';
-  // Holds a UTC ISO instant now, not a datetime-local string: the slots are generated in
-  // the BRANCH's zone, so the diner's own clock never enters the calculation.
+  // A delivery is ASAP or booked for a chosen time (docs/ASAP-AND-SCHEDULING-2026-10-25.md §1):
+  // an "As soon as possible" checkbox and the Day / Time pickers, which exclude each other.
+  // Ticking ASAP clears the time and disables the pickers; choosing a time disables the checkbox
+  // until the Time is set back to "Choose a time". Pickup and dine-in are always now.
+  //
+  // This is only the diner's own say on the checkbox — whether it is ticked is derived below
+  // (asapTicked), from it and from what is available. null until they touch it, so ASAP starts
+  // ticked whenever it is available, including when it only becomes available after the page
+  // opened (the payment settings land a tick later, the branch opens while they wait); `false` is
+  // an untick, which stays unticked however availability moves underneath. Nothing about timing
+  // is persisted: a diner who comes back starts from ASAP again rather than from a stale booking.
+  const [asapChoice, setAsapChoice] = React.useState<boolean | null>(null);
+  // The chosen time, '' for "Choose a time". Holds a UTC ISO instant, not a datetime-local
+  // string: the slots are generated in the BRANCH's zone, so the diner's own clock never enters
+  // the calculation. Read it through bookedFor below, never directly, for anything sent.
   const [scheduledFor, setScheduledFor] = React.useState<string>('');
   const [scheduleDate, setScheduleDate] = React.useState<string>('');
   // The clock the slot list is measured from. Captured when the page opens, again when the diner
-  // chooses Schedule Delivery, and again if the chosen slot has gone stale by submit — never on
-  // a timer, so the list cannot shift under the diner while they fill in the form.
+  // chooses Delivery or unticks ASAP, and again if the chosen slot has gone stale by submit —
+  // never on a timer, so the list cannot shift under the diner while they fill in the form.
   const [slotClock, setSlotClock] = React.useState(() => new Date());
   // Opening hours are only half of what decides a bookable time. The merchant can also
   // narrow bookings per weekday (branch_schedule_hours) and close the shop for a holiday
@@ -467,11 +490,15 @@ export function CheckoutView({
 
   const selectedDay = scheduleDays.find((d) => d.date === scheduleDate) ?? scheduleDays[0];
 
-  // Preselect the first open slot so "Schedule for later" is never a dead end the diner has
-  // to fight, and re-point it if the policy changes underneath.
+  // A chosen time the list no longer holds (the slot clock moved past it, or the policy changed
+  // underneath) is re-pointed at the first open slot — the next one after it — and submit asks the
+  // diner to confirm it (scheduleStale). An empty Time is left alone, and nothing is preselected:
+  // "Choose a time" is how the diner says "not booked", it is what lets them tick ASAP again, and
+  // filling it in here would override ASAP. When ASAP is unavailable the diner picks the time.
   React.useEffect(() => {
+    if (!scheduledFor) return;
     if (scheduleDays.length === 0) {
-      if (scheduledFor) setScheduledFor('');
+      setScheduledFor('');
       return;
     }
     const stillValid = scheduleDays.some((d) => d.slots.some((sl) => sl.iso === scheduledFor));
@@ -521,16 +548,51 @@ export function CheckoutView({
   const enteringNewAddress = savedAddresses.length === 0 || selectedAddressId === 'new';
   // Dine-in is ASAP only and has no payment step — the diner settles at the
   // restaurant. Both cards are hidden below, so every consumer reads through
-  // these forced values instead of the raw state: a leftover `scheduleMode ===
-  // 'later'` would send a real scheduled_for (the time input is always
-  // pre-populated), re-gate the order against the *scheduled* payment matrix and
-  // could set held=true — which hides the order from the kitchen.
+  // the derived values (bookedFor, paymentModeKey, effectivePaymentMethod) instead
+  // of the raw state: a leftover time would send a real scheduled_for, re-gate the
+  // order against the *scheduled* payment matrix and could set held=true — which
+  // hides the order from the kitchen.
   const isDineIn = channel === 'dine_in';
   // A scanned table is an id the storefront was handed by the server, not a number the
   // diner typed — so it needs no field, no validation and no guessing at the other end.
   const atTable = isDineIn && pinnedTable !== null;
-  const effectiveScheduleMode: 'asap' | 'later' = isDineIn ? 'asap' : scheduleMode;
-  const paymentModeKey: PaymentMode = effectiveScheduleMode === 'later' ? 'scheduled' : 'asap';
+  const asapPayable =
+    paymentMatrix.asap.cash || paymentMatrix.asap.card || paymentMatrix.asap.transfer;
+  const scheduledPayable =
+    paymentMatrix.scheduled.cash || paymentMatrix.scheduled.card || paymentMatrix.scheduled.transfer;
+  // What each way to order needs. canDeliver (from the server) is "ASAP or booked"; each half is
+  // judged again here with the payment methods, which the server page does not read.
+  // - ASAP delivery: the branch open this minute, delivery sellable this minute (deliveryOpenNow:
+  //   delivering, inside delivery hours) and a payment method for orders placed now.
+  // - A booked delivery: advance orders taken here plus a payment method for booked orders;
+  //   whether any slot is left is known once the booking policy has loaded.
+  // - Pickup: a payment method for orders placed now, and the branch open at this moment.
+  const deliveryAsapAvailable =
+    canDeliver && deliveryOpenNow && openNow && !ordersPaused && asapPayable;
+  const deliveryBookable = canDeliver && !!scheduling?.enabled && scheduledPayable;
+  const deliverySlotsKnown = !scheduling?.enabled || bookingPolicy !== null;
+  const deliveryHasSlots = scheduleDays.length > 0;
+  const pickupAvailable = asapPayable && openNow;
+  // "You can still schedule a delivery" is only said when a slot is actually there to book.
+  const deliveryOfferable = deliveryBookable && (!deliverySlotsKnown || deliveryHasSlots);
+  // A time can be picked right now: the pickers are on screen with at least one slot in them.
+  const timeChoosable = deliveryBookable && deliveryHasSlots;
+  // ASAP is ticked when it is available and the diner has neither unticked it nor chosen a time.
+  // With no time to choose (scheduling off, no slot left, no payment method for bookings) it is
+  // the only delivery there is, so it stays ticked and the box is disabled.
+  const asapTicked =
+    channel === 'delivery' &&
+    deliveryAsapAvailable &&
+    (!timeChoosable || (asapChoice !== false && !scheduledFor));
+  // The time this order is booked for, '' when it is not booked. Everything that sends or checks
+  // a time reads this: a time left in state after ASAP was ticked, or after booking stopped being
+  // possible, never reaches place-order.
+  const bookedFor = channel === 'delivery' && !asapTicked && timeChoosable ? scheduledFor : '';
+  // Payment follows the timing, as place-order does (it derives the mode from scheduled_for): a
+  // delivery that is not ASAP is a booking — chosen, or about to be, since ASAP is unticked or
+  // unavailable — and is paid under the merchant's "scheduled" column; pickup, an ASAP delivery
+  // and dine-in under "asap".
+  const paymentModeKey: PaymentMode = channel === 'delivery' && !asapTicked ? 'scheduled' : 'asap';
   // What place-order will actually be told. Dine-in has no payment step, so it is sent
   // as 'cash' — and everything priced off the method has to read this, not `method`.
   const effectivePaymentMethod: PaymentMethod = isDineIn ? 'cash' : method;
@@ -543,20 +605,6 @@ export function CheckoutView({
   // afterwards where the only card button could never have worked.
   const cardWithheld =
     !isDineIn && merchantPaymentMatrix[paymentModeKey].card && !paymentMatrix[paymentModeKey].card;
-  const asapPayable =
-    paymentMatrix.asap.cash || paymentMatrix.asap.card || paymentMatrix.asap.transfer;
-  const scheduledPayable =
-    paymentMatrix.scheduled.cash || paymentMatrix.scheduled.card || paymentMatrix.scheduled.transfer;
-  // What each way to order needs. Schedule Delivery: a delivering branch and advance orders (canDeliver,
-  // from canScheduleDelivery) plus a payment method for booked orders; whether any slot is left
-  // is known once the booking policy has loaded. Pickup: a payment method for orders placed now,
-  // and the branch open at this moment.
-  const deliveryBookable = canDeliver && !!scheduling?.enabled && scheduledPayable;
-  const deliverySlotsKnown = !scheduling?.enabled || bookingPolicy !== null;
-  const deliveryHasSlots = scheduleDays.length > 0;
-  const pickupAvailable = asapPayable && openNow;
-  // "You can still schedule a delivery" is only said when a slot is actually there to book.
-  const deliveryOfferable = deliveryBookable && (!deliverySlotsKnown || deliveryHasSlots);
   const chooseOrderType = (next: 'pickup' | 'delivery') => {
     if (next === channel) return;
     setChannel(next);
@@ -616,7 +664,8 @@ export function CheckoutView({
   const deliveryFee =
     promoFreeDelivery || appliedReward?.kind === 'free_delivery' ? 0 : deliveryFeeBase;
   const tipAmount = computeTipAmount(subtotal, tipPercent, customTip);
-  // Product-fixed 18 / 20 / 25 — parseTipConfig ignores any presets on the row.
+  // Product-fixed 18 / 20 / 25 — parseTipConfig ignores any presets on the row. The card opens on
+  // TIP_DEFAULT_PERCENT, which is one of them, so the tip in the total always has a chip lit.
   const tipPresets = tipPresetsForChannel(tipConfig, channel ?? 'pickup');
   const noTipSelected = !tipCustom && !customTip && tipPercent === 0;
   const tipWorkerPct = (tipConfig[channel ?? 'pickup'] ?? tipConfig.dine_in).workerPct;
@@ -780,19 +829,19 @@ export function CheckoutView({
       });
   }, [branchId, canUseCard]);
 
-  // Keep the selected payment method valid for the current order type. It never changes the
-  // order type itself: when one has no payment methods at all, the order-type card says so and
-  // submit stays disabled. It used to flip ASAP <-> scheduled here, which now would silently turn
-  // a Pickup into a delivery or back — a different order from the one the diner chose.
+  // Keep the selected payment method valid for the current order type and timing. It never
+  // changes either: when one has no payment methods at all, the order-type card says so and
+  // submit stays disabled. It used to flip ASAP <-> scheduled here, which would silently turn a
+  // Pickup into a delivery or an ASAP delivery into a booking — a different order from the one
+  // the diner chose.
   //
   // Dine-in opts out entirely: it has no payment step on screen.
   React.useEffect(() => {
     if (isDineIn) return;
-    const modeKey: PaymentMode = scheduleMode === 'later' ? 'scheduled' : 'asap';
-    const enabled = (['card', 'cash', 'transfer'] as const).filter((m) => paymentMatrix[modeKey][m]);
+    const enabled = (['card', 'cash', 'transfer'] as const).filter((m) => paymentMatrix[paymentModeKey][m]);
     const fallback = enabled[0];
     if (fallback && !enabled.includes(method)) setMethod(fallback);
-  }, [scheduleMode, paymentMatrix, method, isDineIn]);
+  }, [paymentModeKey, paymentMatrix, method, isDineIn]);
 
   // The restaurant's own coordinates make a sensible default centre for the map
   // picker when the customer hasn't entered an address yet.
@@ -1176,23 +1225,56 @@ export function CheckoutView({
 
     // Validate every field up front, then focus the first problem.
     const errs: Record<string, string> = {};
-    // 'later' with a cleared time would silently become ASAP server-side
-    // (place-order derives the mode from scheduled_for) — and be gated
-    // against the wrong payment matrix. Block it here. Dine-in never reaches
-    // this: effectiveScheduleMode pins it to 'asap' and the card is hidden.
-    if (effectiveScheduleMode === 'later' && !scheduledFor)
-      errs.schedule = t('checkout.errors.scheduleRequired');
+    // A delivery with neither ASAP ticked nor a time chosen would silently become ASAP
+    // server-side (place-order derives the timing from scheduled_for) — at a branch where ASAP
+    // may not be on offer, and gated against the wrong payment matrix. Block it here. When
+    // neither is possible at all the button is disabled, and the guard further down says so.
+    // Pickup and dine-in are always now and never reach this.
+    if (
+      channel === 'delivery' &&
+      (deliveryAsapAvailable || deliveryBookable) &&
+      !asapTicked &&
+      !bookedFor
+    )
+      errs.schedule = deliveryAsapAvailable
+        ? t('checkout.errors.timingRequired')
+        : t('checkout.errors.scheduleRequired');
     // The list was measured when delivery was chosen, and filling in an address can take long
     // enough for the picked slot to fall inside the minimum lead time. Refresh the list (the
-    // preselect effect re-points to the next valid slot) and ask the diner to confirm it, rather
-    // than letting place-order answer scheduled_too_soon.
+    // re-point effect moves a stale time to the next valid slot) and ask the diner to confirm
+    // it, rather than letting place-order answer scheduled_too_soon.
     else if (
-      effectiveScheduleMode === 'later' &&
+      bookedFor &&
       scheduling &&
-      Date.parse(scheduledFor) < Date.now() + Math.max(0, scheduling.minLeadMinutes) * 60_000
+      Date.parse(bookedFor) < Date.now() + Math.max(0, scheduling.minLeadMinutes) * 60_000
     ) {
-      setSlotClock(new Date());
-      errs.schedule = t('checkout.errors.scheduleStale');
+      // Measure the refreshed list now, with the same clock the re-render will use: when no time
+      // is left the order falls back to ASAP (or cannot be delivered), and "check the new time"
+      // would point at a time that does not exist.
+      const nowClock = new Date();
+      const fresh =
+        scheduling.enabled && bookingPolicy
+          ? buildScheduleDays({
+              timezone: scheduling.timezone,
+              openingHours: scheduling.openingHours,
+              scheduleWindows: bookingPolicy.windows,
+              closures: bookingPolicy.closures,
+              deliveryWindows: scheduling.deliveryWindows ?? null,
+              minLeadMinutes: scheduling.minLeadMinutes,
+              maxDays: scheduling.maxDays,
+              slotMinutes: scheduling.slotMinutes,
+              now: nowClock,
+              locale,
+              dayLabels: { today: todayLabel, tomorrow: tomorrowLabel },
+            })
+          : [];
+      setSlotClock(nowClock);
+      errs.schedule =
+        fresh.length > 0
+          ? t('checkout.errors.scheduleStale')
+          : deliveryAsapAvailable
+            ? t('checkout.errors.scheduleNoneLeftAsap')
+            : t('checkout.errors.scheduleNoneLeft');
     }
     if (!name.trim()) errs.name = t('checkout.errors.nameRequired');
     const phoneDigits = phone.replace(/\D/g, '');
@@ -1237,8 +1319,10 @@ export function CheckoutView({
       setError(t('checkout.errors.deliveryNotSold'));
       return;
     }
-    if (channel === 'delivery' && !deliveryBookable) {
-      setError(t('errors.order.schedulingDisabled'));
+    // Neither ASAP nor a booking is possible (the button is disabled for it; a checkout left
+    // open while the branch closed or changed its settings can still get here).
+    if (channel === 'delivery' && !asapTicked && !bookedFor) {
+      setError(t('checkout.orderType.deliveryUnavailable'));
       return;
     }
     if (channel === 'pickup' && !openNow) {
@@ -1256,6 +1340,17 @@ export function CheckoutView({
     // (Apple Pay, Google Pay) can only open its sheet inside the diner's tap.
     const card = payingByCard ? cardForm.current : null;
     if (payingByCard) {
+      // Stripe will not take less than its minimum, and place-order refuses it as
+      // card_amount_too_small. With the food covered (gift card, reward, promo) the 18% tip that
+      // checkout opens with can be the whole total: say how to get past it instead of "pay
+      // another way", which a card-only branch does not have. Synchronous, so card.submit() below
+      // is still the first thing awaited in the tap.
+      if (toCents(total) < CARD_MIN_CHARGE_CENTS) {
+        setError(
+          tipAmount > 0 ? t('checkout.card.belowMinimumTip') : t('errors.order.cardAmountTooSmall'),
+        );
+        return;
+      }
       if (!card || cardFormPending) {
         setError(t('checkout.card.notReady'));
         return;
@@ -1351,12 +1446,10 @@ export function CheckoutView({
         reward_id: appliedReward?.id,
         tip_amount: tipAmount || undefined,
         promo_code: promoState.status === 'applied' ? promoCode.trim() : undefined,
-        // Belt and braces on top of effectiveScheduleMode — no state, however
-        // stale, can smuggle a scheduled_for onto a dine-in order.
-        scheduled_for:
-          !isDineIn && effectiveScheduleMode === 'later' && scheduledFor
-            ? scheduledFor
-            : undefined,
+        // Only a time the diner chose for a delivery that is not ASAP (bookedFor): an ASAP
+        // delivery, a pickup and a dine-in round send none, so no state, however stale, can
+        // smuggle a scheduled_for onto them — and with none, place-order takes the "now" path.
+        scheduled_for: bookedFor || undefined,
         gift_card_code: giftCardState.status === 'valid' ? giftCardCode.trim() : undefined,
         items: orderLines.items,
         combos: orderLines.combos,
@@ -1461,7 +1554,8 @@ export function CheckoutView({
           return;
         }
       }
-      const key = orderErrorKey(raw);
+      // An ASAP delivery is judged at "now", so a refusal about "that time" is worded for now.
+      const key = orderErrorKey(raw, { asap: asapTicked, bookable: timeChoosable });
       // A failure with no code we know is logged as it came and shown as the generic line —
       // a raw status and JSON body is no use to a diner.
       if (!key) console.error('place_order_failed', raw);
@@ -1480,9 +1574,8 @@ export function CheckoutView({
       </header>
 
       <form className="space-y-5" onSubmit={handleSubmit}>
-        {/* The two ways to order: Pickup (prepared now) and Schedule Delivery (a booked day and
-            time). This card used to be "When? ASAP | Schedule for later", a timing choice on top
-            of an order type picked elsewhere; the timing now follows from the type. Dine-in never
+        {/* The two ways to order: Pickup (prepared now) and Delivery, which is ASAP or booked for
+            a day and time — the ASAP checkbox and the Day / Time pickers under it. Dine-in never
             sees it — the order type is the table's, and it is always now. */}
         {!isDineIn && (
           <Card className="p-5">
@@ -1511,7 +1604,7 @@ export function CheckoutView({
                   type="button"
                   role="radio"
                   aria-checked={channel === 'delivery'}
-                  disabled={!deliveryBookable}
+                  disabled={!deliveryAsapAvailable && !deliveryBookable}
                   onClick={() => chooseOrderType('delivery')}
                   className={`focus-ring flex-1 rounded-full py-2 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
                     channel === 'delivery' ? 'bg-card text-foreground shadow-soft' : 'text-muted-foreground'
@@ -1543,7 +1636,7 @@ export function CheckoutView({
               </p>
             )}
             {/* Two different statements, never the same sentence: a branch that does not
-                deliver at all, and one that simply cannot take a booking right now. */}
+                deliver at all, and one that simply cannot take a delivery right now. */}
             {channel === 'delivery' && !canDeliver && (
               <p className="mt-2 text-xs text-muted-foreground">
                 {!deliveryOffered
@@ -1555,11 +1648,18 @@ export function CheckoutView({
                     : t('checkout.orderType.deliveryUnavailable')}
               </p>
             )}
-            {channel === 'delivery' && canDeliver && !scheduledPayable && (
+            {/* The server offered delivery, but neither half survives the branch's payment
+                methods, which only this page reads: say so, rather than leave a dead button. */}
+            {channel === 'delivery' && canDeliver && !deliveryAsapAvailable && !deliveryBookable && (
               <p className="mt-2 text-xs text-muted-foreground">
-                {pickupAvailable
-                  ? t('checkout.orderType.deliveryNoPaymentPickupOpen')
-                  : t('checkout.orderType.deliveryNoPayment')}
+                {(deliveryOpenNow && openNow && !ordersPaused && !asapPayable) ||
+                (!!scheduling?.enabled && !scheduledPayable)
+                  ? pickupAvailable
+                    ? t('checkout.orderType.deliveryNoPaymentPickupOpen')
+                    : t('checkout.orderType.deliveryNoPayment')
+                  : pickupAvailable
+                    ? t('checkout.orderType.deliveryUnavailablePickupOpen')
+                    : t('checkout.orderType.deliveryUnavailable')}
               </p>
             )}
             {/* A greyed-out Pickup with no reason reads as a broken button. */}
@@ -1572,35 +1672,80 @@ export function CheckoutView({
                     : t('checkout.orderType.pickupClosedNow')}
               </p>
             )}
-            {/* Day and time, drawn from the branch's opening hours, booking windows, closures and
-                delivery hours. The old free-form datetime-local let a diner pick a moment the
-                branch is shut and only told them after they had filled in the entire form. */}
-            {channel === 'delivery' && deliveryBookable && (
+            {/* When: the ASAP checkbox, then the Day / Time pickers. The two exclude each other —
+                ticking ASAP clears the time and disables the pickers, choosing a time disables the
+                checkbox until the Time is back on "Choose a time" — and one of them has to be set
+                (validated at submit). The pickers are left out entirely when nothing can be
+                booked but ASAP can be placed ("Accept scheduled orders" off, no slot left, no
+                payment method for bookings): ASAP is then the delivery, ticked and fixed. */}
+            {channel === 'delivery' && (deliveryAsapAvailable || deliveryBookable) && (
               <div ref={scheduleSectionRef} className="mt-3">
-                {!bookingPolicy ? (
-                  <p role="status" className="rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">
+                <label
+                  className={`flex items-start gap-3 rounded-xl border px-4 py-3 ${
+                    asapTicked ? 'border-primary bg-primary/5' : 'border-border'
+                  } ${deliveryAsapAvailable && timeChoosable && !scheduledFor ? 'cursor-pointer' : ''}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={asapTicked}
+                    disabled={!deliveryAsapAvailable || !timeChoosable || !!scheduledFor}
+                    onChange={(e) => {
+                      setAsapChoice(e.target.checked);
+                      // Ticking ASAP clears the time: the two never both stand.
+                      if (e.target.checked) setScheduledFor('');
+                      // Unticking turns the diner to the time list: measure it from now.
+                      else setSlotClock(new Date());
+                      clearFieldError('schedule');
+                    }}
+                    className="mt-0.5 h-5 w-5 shrink-0 accent-primary disabled:cursor-not-allowed"
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold">{t('checkout.schedule.asap')}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {t('checkout.schedule.asapHint')}
+                    </span>
+                  </span>
+                </label>
+                {/* A disabled, unticked ASAP with no reason reads as a broken box. Only reached
+                    while a booking is possible, so the pickers below are the way on. */}
+                {!deliveryAsapAvailable && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {!openNow
+                      ? t('checkout.schedule.asapClosed')
+                      : !deliveryOpenNow
+                        ? t('checkout.schedule.asapNotDeliveringNow')
+                        : t('checkout.schedule.asapNoPayment')}
+                  </p>
+                )}
+                {/* Day and time, drawn from the branch's opening hours, booking windows, closures
+                    and delivery hours. The old free-form datetime-local let a diner pick a moment
+                    the branch is shut and only told them after they had filled in the entire form. */}
+                {deliveryBookable && !bookingPolicy ? (
+                  <p role="status" className="mt-3 rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">
                     {t('checkout.schedule.loading')}
                   </p>
-                ) : scheduleDays.length === 0 ? (
-                  <p className="rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">
+                ) : deliveryBookable && scheduleDays.length === 0 && !deliveryAsapAvailable ? (
+                  <p className="mt-3 rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">
                     {t('checkout.schedule.none')}
                   </p>
-                ) : (
+                ) : timeChoosable ? (
                   <>
-                    <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
                       <label className="block">
                         <span className="mb-1 block text-sm font-medium">{t('checkout.schedule.day')}</span>
                         <select
                           value={selectedDay?.date ?? ''}
+                          disabled={asapTicked}
                           onChange={(e) => {
                             const next = scheduleDays.find((d) => d.date === e.target.value);
                             setScheduleDate(e.target.value);
-                            // Re-point at that day's first slot: keeping the old time would
-                            // silently carry a moment the new day may not even be open.
-                            setScheduledFor(next?.slots[0]?.iso ?? '');
+                            // A time already chosen moves to that day's first slot: keeping it
+                            // would silently carry a moment the new day may not even be open.
+                            // "Choose a time" stays as it is.
+                            if (scheduledFor) setScheduledFor(next?.slots[0]?.iso ?? '');
                             clearFieldError('schedule');
                           }}
-                          className="input"
+                          className="input disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {scheduleDays.map((d) => (
                             <option key={d.date} value={d.date}>{d.label}</option>
@@ -1610,25 +1755,29 @@ export function CheckoutView({
                       <label className="block">
                         <span className="mb-1 block text-sm font-medium">{t('checkout.schedule.time')}</span>
                         <select
-                          value={scheduledFor}
+                          value={asapTicked ? '' : scheduledFor}
+                          disabled={asapTicked}
                           onChange={(e) => { setScheduledFor(e.target.value); clearFieldError('schedule'); }}
                           aria-invalid={!!fieldErrors.schedule}
-                          className="input"
+                          className="input disabled:cursor-not-allowed disabled:opacity-50"
                           style={fieldErrors.schedule ? { borderColor: 'hsl(var(--danger))' } : undefined}
                         >
+                          {/* Empty on purpose: no time is chosen until the diner chooses one, and
+                              coming back here is how they free the ASAP box again. */}
+                          <option value="">{t('checkout.schedule.chooseTime')}</option>
                           {(selectedDay?.slots ?? []).map((sl) => (
                             <option key={sl.iso} value={sl.iso}>{sl.label}</option>
                           ))}
                         </select>
                       </label>
                     </div>
-                    {fieldErrors.schedule && (
-                      <p className="mt-1 text-xs text-danger">{fieldErrors.schedule}</p>
-                    )}
                     <p className="mt-2 text-xs text-muted-foreground">
                       {t('checkout.schedule.hint')}
                     </p>
                   </>
+                ) : null}
+                {fieldErrors.schedule && (
+                  <p className="mt-1 text-xs text-danger">{fieldErrors.schedule}</p>
                 )}
               </div>
             )}
@@ -1818,12 +1967,20 @@ export function CheckoutView({
             )}
             {!quoting && quote?.deliverable && (
               <p className="mt-2 text-xs text-muted-foreground">
-                {/* No "ready in N min": every storefront delivery is booked for a chosen time,
-                    and the quote's ETA is measured from now. */}
-                {t('checkout.quote.distanceFee', {
-                  distance: kmToMi(quote.distance_km).toFixed(1),
-                  fee: formatCurrency(quote.fee),
-                })}
+                {/* The quote's ETA (prep time, the kitchen's busy extra and the ride) is measured
+                    from now, which is exactly when an ASAP delivery starts — so it is that
+                    order's arrival time. A booked delivery has its own time, which the ETA would
+                    contradict, so it shows distance and fee only. */}
+                {asapTicked && Number.isFinite(quote.eta_min) && quote.eta_min > 0
+                  ? t('checkout.quote.distanceFeeEta', {
+                      distance: kmToMi(quote.distance_km).toFixed(1),
+                      fee: formatCurrency(quote.fee),
+                      minutes: Math.round(quote.eta_min),
+                    })
+                  : t('checkout.quote.distanceFee', {
+                      distance: kmToMi(quote.distance_km).toFixed(1),
+                      fee: formatCurrency(quote.fee),
+                    })}
               </p>
             )}
             {outOfRange && (
@@ -2141,10 +2298,11 @@ export function CheckoutView({
           {/* Exactly five choices, one grid. On a phone the three percentages
               share the first row; Custom and "No tip" split the second, with No
               tip tucked in the corner at the same footprint as a percent chip.
-              From sm up all five sit on one row. "No tip" is deliberately the
-              quiet one: smaller muted text, no card fill, and even when it is the
-              current choice it takes a neutral grey rather than the brand
-              highlight, so the eye lands on the percentages first. */}
+              From sm up all five sit on one row. The card opens with 18% selected
+              (TIP_DEFAULT_PERCENT). "No tip" is deliberately the quiet one: smaller
+              muted text, no card fill, and even when the diner chooses it it takes
+              a neutral grey rather than the brand highlight, so the eye lands on
+              the percentages first. */}
           <div className="mt-3 grid grid-cols-6 gap-2 sm:grid-cols-5">
             {tipPresets.map((p) => {
               const active = !tipCustom && !customTip && tipPercent === p;
@@ -2350,7 +2508,11 @@ export function CheckoutView({
               // and a dead button with no reason is worse than no button.
               (!isDineIn && enabledMethods.length === 0) ||
               (channel === 'pickup' && !openNow) ||
-              (channel === 'delivery' && (!deliveryBookable || (deliverySlotsKnown && !deliveryHasSlots))) ||
+              // Delivery with neither ASAP nor a slot to book. A missing choice between the two is
+              // not a dead button: submit says "Tick ASAP or choose a time" at the field.
+              (channel === 'delivery' &&
+                !deliveryAsapAvailable &&
+                (!deliveryBookable || (deliverySlotsKnown && !deliveryHasSlots))) ||
               (channel === 'delivery' && quoting) ||
               (channel === 'delivery' && enteringNewAddress && !addressCoords) ||
               // Paying by card needs Stripe's form on screen and ready to be checked.

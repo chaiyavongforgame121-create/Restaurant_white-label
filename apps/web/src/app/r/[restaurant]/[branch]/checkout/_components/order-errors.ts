@@ -67,10 +67,12 @@ export const ORDER_ERRORS: Array<[string, string]> = [
   // There is no table field to send them back to any more — the order reached the server
   // without a table because the pin was gone by the time they pressed the button.
   ['table_required', 'errors.order.tableRequired'],
-  // The two ways to order, enforced by place-order for customer orders. Reached only from a tab
-  // opened before the change, since this page no longer offers either combination. They must
-  // come before invalid_channel: place-order puts that code in the same body as a `hint`, so a
-  // tab older than these entries still finds a sentence instead of printing raw JSON.
+  // place-order refuses a booked pickup from a customer (pickup is always now). It used to refuse
+  // an ASAP delivery too (delivery_must_be_scheduled); that rule is dropped with ASAP delivery's
+  // return (docs/ASAP-AND-SCHEDULING-2026-10-25.md §1), and its sentence stays only for a
+  // place-order still running the old rule while this storefront is already live. Both must come
+  // before invalid_channel: place-order puts that code in the same body as a `hint`, so the
+  // specific sentence wins instead of the generic one.
   ['delivery_must_be_scheduled', 'errors.order.deliveryMustBeScheduled'],
   ['pickup_is_asap_only', 'errors.order.pickupIsAsapOnly'],
   ['invalid_channel', 'errors.order.invalidChannel'],
@@ -123,8 +125,40 @@ export const ORDER_ERRORS: Array<[string, string]> = [
   ['branch_not_found_or_inactive', 'errors.order.billingInactive'],
 ];
 
-/** The message key for a place-order failure, or null when it carries no code we know. */
-export function orderErrorKey(msg: string): string | null {
+/**
+ * Sentences reworded for an ASAP delivery. Its timing is "now", so a refusal phrased about "the
+ * time you picked" would send the diner looking for a time they never chose. The code is the
+ * same either way: orders_enforce_delivery_hours judges coalesce(scheduled_for, now()).
+ */
+export const ASAP_ORDER_ERRORS: Record<string, string> = {
+  'errors.order.deliveryNotAvailableAtThatTime': 'errors.order.deliveryNotAvailableNow',
+};
+
+/**
+ * The same, for an ASAP delivery when no time can be booked instead (scheduling off, or no slot
+ * left): "choose a delivery time" would point at a picker that is not there.
+ */
+export const ASAP_NO_BOOKING_ORDER_ERRORS: Record<string, string> = {
+  'errors.order.deliveryNotAvailableAtThatTime': 'errors.order.deliveryNotAvailableNowNoBooking',
+};
+
+/**
+ * The message key for a place-order failure, or null when it carries no code we know.
+ * `asap`: the order was an ASAP delivery (no scheduled_for), which picks the "right now" wording
+ * where the two differ (ASAP_ORDER_ERRORS). `bookable`: a delivery time could be chosen instead;
+ * false picks the wording that does not offer one (ASAP_NO_BOOKING_ORDER_ERRORS).
+ */
+export function orderErrorKey(
+  msg: string,
+  context: { asap?: boolean; bookable?: boolean } = {},
+): string | null {
+  const key = orderErrorKeyFor(msg);
+  if (!key || !context.asap) return key;
+  const table = context.bookable === false ? ASAP_NO_BOOKING_ORDER_ERRORS : ASAP_ORDER_ERRORS;
+  return table[key] ?? key;
+}
+
+function orderErrorKeyFor(msg: string): string | null {
   // placeOrder throws `place_order_failed:<status>:<body>`. An entitlement refusal names its
   // feature in a separate field ({"error":"feature_not_entitled","feature":"delivery"}), so it is
   // matched as `feature_not_entitled:delivery`; everything else is matched on the text as sent.

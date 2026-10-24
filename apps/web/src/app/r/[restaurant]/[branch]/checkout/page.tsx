@@ -21,10 +21,10 @@ export default async function CheckoutPage({ params }: Props) {
   // carry it. Read it here: the summary must show the tax place-order will charge
   // from the first paint, not discover it a round-trip later.
   const supabase = await getServerClient();
-  // Open right now: Pickup is always prepared immediately, so a closed branch cannot take one.
-  const [{ data: taxRow }, { data: openNow }, scheduleDelivery] = await Promise.all([
+  // resolveScheduleDelivery also reads is_branch_open (scheduleDelivery.openNow): Pickup and an
+  // ASAP delivery are prepared immediately, so a closed branch cannot take either.
+  const [{ data: taxRow }, scheduleDelivery] = await Promise.all([
     supabase.from('branches').select('sales_tax_rate').eq('id', tenant.branch.id).maybeSingle(),
-    supabase.rpc('is_branch_open', { p_branch_id: tenant.branch.id }),
     resolveScheduleDelivery(supabase, tenant.branch.id, status),
   ]);
   const base = `/r/${restaurant}/${branch}`;
@@ -34,8 +34,9 @@ export default async function CheckoutPage({ params }: Props) {
       <OrderTypeGate
         branchId={tenant.branch.id}
         branchName={tenant.branch.name}
-        canDeliver={scheduleDelivery.canDeliver}
-        // Delivery is switched per branch, so "not offered here" and "not bookable right now"
+        canDeliverNow={scheduleDelivery.canDeliverNow}
+        canScheduleDelivery={scheduleDelivery.canScheduleDelivery}
+        // Delivery is switched per branch, so "not offered here" and "not available right now"
         // are different sentences on the gate.
         deliveryOffered={scheduleDelivery.offered}
       />
@@ -45,8 +46,12 @@ export default async function CheckoutPage({ params }: Props) {
         canDeliver={scheduleDelivery.canDeliver}
         deliveryOffered={scheduleDelivery.offered}
         // Only an explicit false: a failed read must not block ordering, and place-order still
-        // refuses a pickup at a closed branch.
-        pickupOpenNow={openNow !== false}
+        // refuses a pickup or an ASAP delivery at a closed branch.
+        branchOpenNow={scheduleDelivery.openNow}
+        // Delivery is sellable this minute: the branch delivers and is inside its delivery hours.
+        // With the branch open now and a payment method for "now" orders, that is ASAP delivery;
+        // the orders_enforce_delivery_hours trigger refuses one outside delivery hours anyway.
+        deliveryOpenNow={status.delivery}
         ordersPaused={scheduleDelivery.paused}
         canUseCard={status.card_payment}
         // The branch's own Stripe account can take charges, so a card paid here lands there. Read
@@ -70,7 +75,8 @@ export default async function CheckoutPage({ params }: Props) {
           minLeadMinutes: status.schedule_min_lead_min,
           maxDays: status.schedule_max_days,
           slotMinutes: status.schedule_slot_minutes,
-          // Every storefront delivery is booked, so its slots must sit inside delivery hours too.
+          // A booked delivery is checked against delivery hours at its time, so its slots must sit
+          // inside them too.
           deliveryWindows: status.delivery_hours_on ? status.delivery_windows : null,
         }}
       />

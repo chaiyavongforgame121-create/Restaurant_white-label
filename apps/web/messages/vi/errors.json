@@ -9,12 +9,13 @@
     "branchClosed": "Nhà hàng hiện đã đóng cửa. Vui lòng thử lại trong giờ mở cửa.",
     "scheduledTooSoon": "Thời gian đó quá sớm đối với nhà hàng này. Vui lòng chọn khung giờ muộn hơn.",
     "scheduledTooFar": "Nhà hàng không nhận đặt trước xa đến thời điểm đó.",
-    "schedulingDisabled": "Nhà hàng hiện không nhận đơn hẹn giờ giao hàng. Bạn có thể vẫn chọn được Tự đến lấy.",
+    "schedulingDisabled": "Nhà hàng hiện không nhận đơn hẹn giờ giao hàng. Bạn có thể vẫn đặt được giao càng sớm càng tốt hoặc Tự đến lấy.",
     "invalidScheduledFor": "Không đọc được thời gian đã hẹn. Vui lòng chọn lại.",
     "deliveryOutOfRange": "Rất tiếc, địa chỉ này nằm ngoài khu vực giao hàng.",
     "paymentMethodNotAccepted": "Phương thức thanh toán này không áp dụng cho loại đơn hàng này. Vui lòng chọn phương thức khác.",
     "transferNotConfigured": "Nhà hàng chưa thiết lập xong chuyển khoản QR. Vui lòng chọn phương thức thanh toán khác.",
     "deliveryNotAvailableAtThatTime": "Nhà hàng không giao hàng vào giờ đó. Vui lòng chọn giờ giao khác hoặc chọn Tự đến lấy.",
+    "deliveryNotAvailableNow": "Nhà hàng hiện chưa giao hàng. Vui lòng chọn giờ giao hàng hoặc chọn Tự đến lấy.",
     "dropoffOtherRequired": "Vui lòng mô tả nơi chúng tôi nên để đơn hàng của bạn.",
     "dropoffRequired": "Vui lòng chọn nơi chúng tôi nên để đơn hàng của bạn.",
     "tableSessionClosed": "Hóa đơn của bàn này đã được thanh toán. Hãy quét mã trên bàn để bắt đầu hóa đơn mới.",
@@ -24,9 +25,9 @@
     "tableNotInBranch": "Bàn đó không thuộc nhà hàng này. Hãy quét mã trên bàn của bạn.",
     "signInRequired": "Vui lòng đăng nhập lại để gọi món tại bàn.",
     "tableRequired": "Hãy quét mã trên bàn để bắt đầu gọi món.",
-    "deliveryMustBeScheduled": "Đơn giao hàng cần hẹn ngày và giờ. Vui lòng chọn trong mục Hẹn giờ giao hàng.",
-    "pickupIsAsapOnly": "Đơn Tự đến lấy được chuẩn bị ngay và không thể hẹn giờ. Hãy chọn Hẹn giờ giao hàng để đặt giờ.",
-    "invalidChannel": "Vui lòng chọn Tự đến lấy hoặc Hẹn giờ giao hàng rồi thử lại.",
+    "deliveryMustBeScheduled": "Nhà hàng chưa nhận giao hàng càng sớm càng tốt. Vui lòng chọn giờ giao hàng.",
+    "pickupIsAsapOnly": "Đơn Tự đến lấy được chuẩn bị ngay và không thể hẹn giờ. Hãy chọn Giao hàng để đặt giờ.",
+    "invalidChannel": "Vui lòng chọn Tự đến lấy hoặc Giao hàng rồi thử lại.",
     "staleClientRefreshRequired": "Phần thưởng đã thay đổi trong lúc bạn đặt hàng. Vui lòng tải lại trang và thử lại.",
     "rewardMinSubtotal": "Đơn hàng chưa đạt mức tối thiểu cho phần thưởng đó. Hãy thêm món hoặc chọn phần thưởng khác.",
     "rewardItemNotInCart": "Món miễn phí của phần thưởng đó không còn trong giỏ hàng. Hãy thêm lại hoặc chọn phần thưởng khác.",
@@ -50,6 +51,7 @@
     "addressRequired": "Vui lòng thêm địa chỉ giao hàng.",
     "cardNotConfigured": "Nhà hàng này hiện chưa thể nhận thanh toán thẻ trực tuyến. Vui lòng chọn cách thanh toán khác.",
     "cardAmountTooSmall": "Thanh toán bằng thẻ phải từ $0.50 trở lên. Vui lòng chọn cách thanh toán khác cho đơn này.",
-    "cardSetupFailed": "Chúng tôi không thể thiết lập thanh toán thẻ, nên đơn hàng chưa được đặt và bạn không bị trừ tiền. Vui lòng thử lại."
+    "cardSetupFailed": "Chúng tôi không thể thiết lập thanh toán thẻ, nên đơn hàng chưa được đặt và bạn không bị trừ tiền. Vui lòng thử lại.",
+    "deliveryNotAvailableNowNoBooking": "Nhà hàng tạm ngừng giao hàng. Vui lòng chọn Tự đến lấy hoặc thử lại sau."
   }
 }

@@ -45,6 +45,9 @@ type Mode = 'asap' | 'scheduled';
 type Method = 'cash' | 'card' | 'transfer';
 
 // Labels live in the branchOps catalogue under payments.modes.<key> / payments.methods.<key>.
+// The keys are the stored ones and never change; the labels say what each governs on the
+// storefront: 'asap' is every order for now (pickup and ASAP delivery), 'scheduled' a delivery
+// booked for a day and time (place-order picks the column from whether scheduled_for is set).
 const MODES: Array<{ key: Mode }> = [{ key: 'asap' }, { key: 'scheduled' }];
 
 const METHODS: Array<{ key: Method }> = [{ key: 'cash' }, { key: 'card' }, { key: 'transfer' }];
@@ -159,10 +162,12 @@ export function PaymentMethodsCard({ branchId, restaurantId, settings, canUseCar
       <div className="mt-4 rounded-xl border border-border p-3">
         <div className="grid grid-cols-[1fr_auto_auto] items-center gap-x-6 gap-y-3">
           <span />
+          {/* Capped and wrapping: "Order now (pickup and ASAP delivery)" names everything the asap
+              column governs, and on one line it pushed the method hints into a sliver on a phone. */}
           {MODES.map((m) => (
             <span
               key={m.key}
-              className="text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+              className="max-w-[9rem] text-center text-xs font-semibold uppercase leading-tight tracking-wider text-muted-foreground"
             >
               {t(`payments.modes.${m.key}`)}
             </span>

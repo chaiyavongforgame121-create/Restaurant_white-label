@@ -14,11 +14,11 @@
   },
   "payments": {
     "title": "Payment methods",
-    "description": "Choose which payment methods customers can pick for Pickup (prepared now) and Schedule Delivery (booked ahead). Card is paid online at checkout, straight into this branch’s own Stripe account, and customers only see it once Stripe is connected under Card payments above. Card sales your staff take at the counter or POS on your own terminal are recorded as before and are not affected.",
+    "description": "Choose which payment methods customers can pick when they order now (pickup, or delivery as soon as possible) and when they book a delivery for a day and time. Card is paid online at checkout, straight into this branch’s own Stripe account, and customers only see it once Stripe is connected under Card payments above. Card sales your staff take at the counter or POS on your own terminal are recorded as before and are not affected.",
     "dineInNote": "This covers delivery and pickup only. Dine-in customers skip the payment step entirely and settle with you at the restaurant.",
     "modes": {
-      "asap": "Pickup (now)",
-      "scheduled": "Schedule Delivery"
+      "asap": "Order now (pickup and ASAP delivery)",
+      "scheduled": "Scheduled delivery"
     },
     "methods": {
       "cash": {
@@ -36,9 +36,9 @@
     },
     "lockedTransfer": "Upload your QR code below to enable",
     "lockedPackage": "Not available for your restaurant right now",
-    "toggleAria": "{method} for {mode} orders",
+    "toggleAria": "{mode}: {method}",
     "cardLocked": "Card payment is switched off for your restaurant right now. Contact FavorNoms to have it turned back on.",
-    "noMethod": "{which, select, asap {Pickup (now) orders have no payment method enabled — customers won’t be able to place delivery or pickup orders that way.} scheduled {Schedule Delivery orders have no payment method enabled — customers won’t be able to place delivery or pickup orders that way.} other {Pickup (now) and Schedule Delivery orders have no payment method enabled — customers won’t be able to place delivery or pickup orders either way.}} Dine-in is not affected.",
+    "noMethod": "{which, select, asap {Orders for now have no payment method enabled — customers won’t be able to order pickup or ASAP delivery.} scheduled {Scheduled deliveries have no payment method enabled — customers won’t be able to book a delivery for a day and time.} other {Neither orders for now nor scheduled deliveries have a payment method enabled — customers won’t be able to order pickup or delivery at all.}} Dine-in is not affected.",
     "qr": {
       "title": "Your QR code",
       "description": "Customers see this at checkout, transfer the total, then upload a photo of the slip. Nothing is charged automatically — the order waits in <b>Orders</b> until you approve the slip.",
@@ -48,7 +48,7 @@
       "instructions": "Instructions (optional)",
       "instructionsPlaceholder": "e.g. Include your order number in the transfer note",
       "onWithoutImage": "QR transfer is switched on but no QR image is saved. Customers will be refused at checkout until you upload one.",
-      "savedButOff": "Your QR code is saved but <strong>QR transfer is still switched off</strong>, so customers cannot choose it. Tick it under Pickup (now) and/or Schedule Delivery above, then save.",
+      "savedButOff": "Your QR code is saved but <strong>QR transfer is still switched off</strong>, so customers cannot choose it. Tick it under Order now and/or Scheduled delivery above, then save.",
       "perBranch": "This QR belongs to this branch only. Diners see it at checkout, and the cashier shows it at this branch’s counter when a customer pays by transfer. Every branch uploads its own: it is never copied to another branch."
     },
     "save": "Save payment methods"
@@ -152,16 +152,16 @@
     },
     "selfNote": "Customers still see live status updates, but not a map — nothing is reporting a position while your own staff are driving.",
     "limit": "Limit delivery to set hours",
-    "limitHint": "Off: deliveries can be booked for any time the branch is open. On: customers can only book delivery times inside the windows below. Every delivery is booked ahead, so delivery also needs <strong>Scheduled orders</strong> switched on.",
+    "limitHint": "Off: customers can order delivery any time the branch is open, as soon as possible or booked for a time. On: only inside the windows below, both ways. Booking a time also needs <strong>Scheduled orders</strong> switched on.",
     "noDelivery": "No delivery this day",
     "armedButEmpty": "Delivery hours are switched on but no windows are set — customers cannot place a delivery order at all. Add a window, or switch this off.",
     "save": "Save delivery settings"
   },
   "scheduling": {
     "title": "Scheduled orders",
-    "description": "How customers book deliveries: on your storefront every delivery is booked for a day and time, and pickup is always ordered for now. Bookable times start from this branch’s <strong>Opening hours</strong> above, narrowed by the booking windows below when you switch those on, and by <strong>Delivery hours</strong> when those are limited. A branch that does not sell delivery takes no bookings from customers.",
+    "description": "How customers book delivery ahead. On your storefront a customer orders delivery as soon as possible or books it for a day and time: the time the driver picks the food up here, so it has to be ready by then. Pickup is always ordered for now. Bookable times start from this branch’s <strong>Opening hours</strong> above, narrowed by the booking windows below when you switch those on, and by <strong>Delivery hours</strong> when those are limited. A branch that does not sell delivery takes no bookings from customers.",
     "accept": "Accept scheduled orders",
-    "acceptHint": "Customers book every delivery for a day and time. Off: “Schedule Delivery” disappears from your storefront and customers can only order Pickup.",
+    "acceptHint": "Customers can book a delivery for a day and time. Off: only the day and time pickers disappear from your storefront. Delivery stays, as soon as possible, while the branch is open and delivering.",
     "minLead": "Earliest booking (minutes ahead)",
     "minLeadHint": "How far in advance a customer must book. Slots sooner than this are not offered.",
     "maxDays": "Furthest booking (days ahead)",
@@ -170,8 +170,10 @@
     "slotOption": "{minutes, plural, one {Every minute} other {Every # minutes}}",
     "slotHint": "Rounds the offered times. Bigger slots mean fewer, tidier choices.",
     "kitchenLead": "Send to kitchen (minutes before)",
-    "kitchenLeadHint": "A booking stays out of the kitchen display until this long before its time. This is <strong>not</strong> the prep time shown in customer ETAs — that stays on the Delivery card.",
+    "kitchenLeadHint": "How many minutes before its booked time a booking reaches the kitchen display, with a chime. A booking for 11:30 with 5 here reaches the kitchen at 11:25. Orders for now go to the kitchen straight away. This is <strong>not</strong> the prep time shown in customer ETAs — that stays on the Delivery card.",
     "leadGap": "Customers can book {bookMinutes, plural, one {# minute} other {# minutes}} ahead, but you asked for {kitchenMinutes, plural, one {# minute} other {# minutes}} of kitchen notice. Anything booked inside that gap reaches the kitchen straight away, with less notice than you wanted. Raise <strong>Earliest booking</strong> to match if that matters.",
+    "leadBelowPrep": "Bookings reach the kitchen {kitchenMinutes, plural, one {# minute} other {# minutes}} before their time, but your prep time is {prepMinutes, plural, one {# minute} other {# minutes}}: food may not be ready when the driver arrives. Set <strong>Send to kitchen</strong> to at least your prep time.",
+    "leadZero": "With 0, a booking reaches the kitchen only at its booked time, when the driver comes for it, so cooking starts when the food should already be ready. Enter the minutes your kitchen needs.",
     "limit": "Limit the times customers can book",
     "limitHint": "Off: customers can book any time the branch is open. On: only inside the windows below — set a different one per day, so you can take bookings from 5pm all week and only 10am–2pm on Sunday.",
     "sameAsOpening": "Same as opening hours",

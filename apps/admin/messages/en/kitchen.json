@@ -69,7 +69,8 @@
     "markLineNotDone": "Mark {item} not done",
     "soldOut": "Sold out",
     "stackedWith": "🔗 Stacked with #{other} · stop {stop} — pack both bags for one rider",
-    "redispatchOffered": "Skip this rider — offer it to another"
+    "redispatchOffered": "Skip this rider — offer it to another",
+    "due": "Due {time}"
   },
   "timer": {
     "hoursMinutes": "{hours}h {minutes}m",
@@ -191,7 +192,8 @@
   "scheduled": {
     "title": "Scheduled · {count}",
     "close": "Close",
-    "releasesIn": "Releases in {minutes}m"
+    "releasesIn": "Releases in {minutes}m",
+    "releasingNow": "Going to the kitchen now"
   },
   "voice": {
     "newOrder": "New order, {channel}, number {ticket}",

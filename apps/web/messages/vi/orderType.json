@@ -2,9 +2,11 @@
   "title": "Bạn muốn đặt hàng theo cách nào?",
   "subtitle": "Chọn một hình thức để bắt đầu đặt hàng.",
   "subtitleNamed": "Chọn một hình thức để bắt đầu đặt hàng tại {branch}.",
-  "deliveryHint": "Chọn ngày giờ, chúng tôi sẽ giao đến địa chỉ của bạn",
+  "deliveryHint": "Càng sớm càng tốt hoặc vào ngày giờ bạn chọn — giao đến địa chỉ của bạn",
+  "deliveryHintAsap": "Giao đến địa chỉ của bạn càng sớm càng tốt",
+  "deliveryHintScheduled": "Chọn ngày giờ, chúng tôi sẽ giao đến địa chỉ của bạn",
   "pickupHint": "Đến nhà hàng lấy trong giờ mở cửa",
   "changeLater": "Bạn có thể đổi lại bất cứ lúc nào từ thực đơn.",
   "deliveryNotOffered": "Chi nhánh này không giao hàng.",
-  "deliveryClosedNow": "Hiện chưa thể đặt lịch giao hàng."
+  "deliveryClosedNow": "Hiện chưa thể giao hàng."
 }

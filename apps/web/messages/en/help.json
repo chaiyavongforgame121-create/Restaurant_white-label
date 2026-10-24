@@ -26,7 +26,7 @@
         },
         "scheduleLater": {
           "q": "Can I schedule an order for later?",
-          "a": "Delivery is always booked ahead — choose “Schedule Delivery” and pick a day and time. The restaurant prepares your order to be ready at that time and sends it out straight after. Pickup orders are prepared as soon as you place them."
+          "a": "Yes, for delivery. Choose “Delivery”, untick “As soon as possible” and pick a day and time: that is when the driver collects your food from the restaurant to bring it to you, and the kitchen has it ready by then. Leave “As soon as possible” ticked and your order goes to the kitchen as soon as you place it. Pickup orders are always prepared as soon as you place them."
         },
         "customizeItem": {
           "q": "Can I customize an item (add toppings, no onions, etc)?",

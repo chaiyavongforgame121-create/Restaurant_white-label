@@ -48,12 +48,15 @@
     "addressRequired": "Please enter your delivery address.",
     "addressUnconfirmed": "Pick your address from the suggestions or the map so we can locate you.",
     "scheduleRequired": "Please pick a day and time for your delivery.",
+    "timingRequired": "Tick “As soon as possible” or choose a time.",
     "scheduleStale": "That delivery time is no longer available. Please check the new time and place your order again.",
     "dropoffRequired": "Please choose where the driver should leave your order.",
     "dropoffOtherRequired": "Please describe the drop-off spot.",
     "outOfRange": "This address is outside the delivery area.",
     "deliveryNotSold": "This branch does not deliver. Try pickup instead.",
-    "pickupClosedScheduleInstead": "This restaurant is closed right now, so pickup is not available. You can schedule a delivery instead."
+    "pickupClosedScheduleInstead": "This restaurant is closed right now, so pickup is not available. You can schedule a delivery instead.",
+    "scheduleNoneLeftAsap": "No more delivery times are left today, so your order is now set to As soon as possible. Check it and place your order again.",
+    "scheduleNoneLeft": "No more delivery times are left. Please choose Pickup, or try again later."
   },
   "promoCode": "Have a promo code?",
   "placeOrder": "Place order — {amount}",
@@ -91,10 +94,10 @@
     "pickupNoPaymentCanSchedule": "Pickup is not available with this restaurant’s current payment options — you can still schedule a delivery.",
     "pickupNoPayment": "Pickup is not available with this restaurant’s current payment options.",
     "pickupReady": "Prepared right away once your order is confirmed.",
-    "deliveryUnavailablePickupOpen": "This restaurant is not taking delivery bookings right now — pickup is still available.",
-    "deliveryUnavailable": "This restaurant is not taking delivery bookings right now.",
-    "deliveryNoPaymentPickupOpen": "Scheduled delivery is not available with this restaurant’s current payment options — pickup is still available.",
-    "deliveryNoPayment": "Scheduled delivery is not available with this restaurant’s current payment options.",
+    "deliveryUnavailablePickupOpen": "This restaurant is not taking delivery orders right now — pickup is still available.",
+    "deliveryUnavailable": "This restaurant is not taking delivery orders right now.",
+    "deliveryNoPaymentPickupOpen": "Delivery is not available with this restaurant’s current payment options — pickup is still available.",
+    "deliveryNoPayment": "Delivery is not available with this restaurant’s current payment options.",
     "pickupPaused": "Pickup is not available right now — the restaurant has paused orders.",
     "pickupClosedNow": "Pickup is not available right now — the restaurant is closed.",
     "deliveryNotOfferedPickupOpen": "This branch does not deliver — pickup is available.",
@@ -103,11 +106,17 @@
   "schedule": {
     "loading": "Loading the times this restaurant takes bookings…",
     "none": "No delivery times are available to book right now. Choose Pickup, or check back later.",
+    "asap": "As soon as possible",
+    "asapHint": "Your order goes to the kitchen as soon as it is placed.",
+    "asapClosed": "Not available right now — the restaurant is closed.",
+    "asapNotDeliveringNow": "Not available right now — the restaurant is not delivering at the moment.",
+    "asapNoPayment": "Not available with this restaurant’s current payment options.",
     "day": "Day",
     "time": "Time",
+    "chooseTime": "Choose a time",
     "today": "Today",
     "tomorrow": "Tomorrow",
-    "hint": "Only times this restaurant delivers are shown, in the restaurant’s local time. Your order is prepared to be ready at that time and sent out to you straight after."
+    "hint": "The time the driver picks up your food at the restaurant to bring it to you — the kitchen has it ready by then. Times are in the restaurant’s local time."
   },
   "addresses": {
     "default": "Default",
@@ -117,6 +126,7 @@
   "quote": {
     "calculating": "Calculating delivery…",
     "distanceFee": "{distance} mi away · delivery {fee}",
+    "distanceFeeEta": "{distance} mi away · delivery {fee} · arrives in about {minutes} min",
     "outOfRangeMax": "Sorry, this address is outside the delivery area (max {max} mi).",
     "notSold": "Delivery is not offered at this branch. Please choose pickup instead.",
     "pickSuggestion": "Select your address from the suggestions to confirm delivery and see the exact fee."
@@ -203,6 +213,7 @@
     "loadFailedChooseOther": "The card form could not load — a blocked script or a weak connection can do this. Choose one of the options above, or reload the page to try the card again.",
     "loadFailedOnly": "The card form could not load — a blocked script or a weak connection can do this. Reload the page to try again.",
     "declinedTryAnother": "Your card was not charged and no order was placed: {reason} Try another card, or choose another way to pay.",
-    "startFailedTryAnother": "The card payment could not be started, so nothing was charged and no order was placed. Try again, or choose another way to pay."
+    "startFailedTryAnother": "The card payment could not be started, so nothing was charged and no order was placed. Try again, or choose another way to pay.",
+    "belowMinimumTip": "Card payments must be at least $0.50. Choose “No tip”, or a tip that brings the total to $0.50 or more."
   }
 }

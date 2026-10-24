@@ -11,6 +11,8 @@ import {
   effectiveBookableRanges,
   intlLocaleFor,
   isUiLocale,
+  kitchenLeadMin,
+  parseDeliverySettings,
   type WeekdayWindow,
 } from '@favornoms/shared';
 import { Button, Card } from '@favornoms/ui';
@@ -157,11 +159,10 @@ export function ScheduledOrdersCard({ branchId, settings }: Props) {
   const [slot, setSlot] = React.useState(() =>
     String(intOr(settings?.schedule_slot_minutes, DEFAULTS.schedule_slot_minutes)),
   );
-  // Falls back to prep_time_min, which is what the release job used before this key
-  // existed — so opening this card shows the value already in force, not a guess.
-  const [kitchenLead, setKitchenLead] = React.useState(() =>
-    String(intOr(settings?.schedule_lead_time_min, intOr(settings?.prep_time_min, 15))),
-  );
+  // The value in force, read by the one rule the release job, place-order and the kitchen board
+  // all use (kitchenLeadMin): a key the branch never set, or one no reader accepts, shows what
+  // the kitchen actually gets instead of a guess.
+  const [kitchenLead, setKitchenLead] = React.useState(() => String(kitchenLeadMin(settings)));
   const [windowsEnabled, setWindowsEnabled] = React.useState(
     settings?.schedule_hours_enabled === true,
   );
@@ -225,6 +226,10 @@ export function ScheduledOrdersCard({ branchId, settings }: Props) {
 
   const draftWindows = flatten(week);
   const armedButEmpty = windowsEnabled && loaded && draftWindows.length === 0;
+  // The lead as it would be saved (a blank field is 0), against the prep time the Delivery card
+  // sets and every customer ETA is quoted from.
+  const leadMinutes = intOr(kitchenLead, 15);
+  const prepMinutes = parseDeliverySettings(settings).prepTimeMin;
 
   const save = async () => {
     setSaving(true);
@@ -367,6 +372,25 @@ export function ScheduledOrdersCard({ branchId, settings }: Props) {
           {t.rich('scheduling.leadGap', {
             bookMinutes: intOr(minLead, DEFAULTS.schedule_min_lead_min),
             kitchenMinutes: intOr(kitchenLead, 15),
+            strong,
+          })}
+        </p>
+      )}
+
+      {/* The booked time is when the driver comes for the food (docs/ASAP-AND-SCHEDULING-2026-10-25.md
+          §2), so the kitchen needs at least its prep time before it. Both mistakes used to save
+          without a word: 0 lets the board see a booking only as the driver walks in, and a lead
+          under the prep time sends the food out unfinished. */}
+      {enabled && leadMinutes === 0 && (
+        <p role="status" className="mt-3 rounded-xl bg-warning/10 px-4 py-3 text-sm">
+          {t('scheduling.leadZero')}
+        </p>
+      )}
+      {enabled && leadMinutes > 0 && leadMinutes < prepMinutes && (
+        <p role="status" className="mt-3 rounded-xl bg-warning/10 px-4 py-3 text-sm">
+          {t.rich('scheduling.leadBelowPrep', {
+            kitchenMinutes: leadMinutes,
+            prepMinutes,
             strong,
           })}
         </p>

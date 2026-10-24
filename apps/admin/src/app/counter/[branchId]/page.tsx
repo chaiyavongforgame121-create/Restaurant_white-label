@@ -7,7 +7,7 @@ import {
   listMenuItems,
   listTableStates,
 } from '@favornoms/database/queries';
-import { hasFeature, parseServiceFeePercent, sortItemsInMenuOrder } from '@favornoms/shared';
+import { hasFeature, kitchenLeadMin, parseServiceFeePercent, sortItemsInMenuOrder } from '@favornoms/shared';
 import { getBranchAccess } from '@/lib/capabilities';
 import { SuspensionScreen } from '@/components/suspension-screen';
 import { CounterView, type CounterQrTransfer } from './_components/counter-view';
@@ -19,11 +19,6 @@ interface Props {
 
 const text = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
 const coord = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
-const kitchenLeadMin = (settings: Record<string, unknown>) => {
-  const prep = Number(settings.prep_time_min ?? 15);
-  const lead = Number(settings.schedule_lead_time_min ?? prep);
-  return Number.isFinite(lead) && lead >= 0 ? lead : 15;
-};
 
 export default async function CounterPage({ params }: Props) {
   const { branchId } = await params;
@@ -136,7 +131,8 @@ export default async function CounterPage({ params }: Props) {
       // server; kitchen.access: anyone who works the board itself). It changes nothing.
       canViewKitchen={can('kitchen.status') || can('kitchen.access')}
       // When a scheduled order reaches the kitchen, so its clock starts where the board's does:
-      // the same keys and defaults as the kitchen board (schedule lead, else prep time, else 15).
+      // the one shared rule (kitchenLeadMin) the board, the release job and place-order all read
+      // the lead by. This page used to keep its own copy, which took 7.5 or a stray string as given.
       kitchenLeadMin={kitchenLeadMin(settings)}
       effectivePrices={effectivePriceMap((effective.data ?? []) as EffectivePriceRow[])}
       soldOutUntil={soldOutUntil}

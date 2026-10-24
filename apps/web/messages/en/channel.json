@@ -1,5 +1,5 @@
 {
-  "delivery": "Schedule Delivery",
+  "delivery": "Delivery",
   "pickup": "Pickup",
   "dineIn": "Dine-in",
   "dineInAt": "Dine-in · {table}"

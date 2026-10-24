@@ -4,6 +4,7 @@ import type {
   DashboardScheduledOrder,
   LiveDelivery,
 } from '@favornoms/database/queries';
+import { kitchenLeadMin } from '@favornoms/shared';
 import {
   boardCounts,
   describeDelivery,
@@ -50,22 +51,17 @@ export const BOOKING_DUE_SOON_MS = 60 * 60_000;
 export const BOOKING_LATE_WINDOW_MS = 2 * 60 * 60_000;
 /** How many of the upcoming bookings the dashboard lists before "See all". */
 export const BOOKING_ROWS_SHOWN = 10;
-/** kitchen-view's DEFAULT_LEAD_MIN and release_scheduled_orders' last fallback. */
-export const DEFAULT_LEAD_MIN = 15;
 
 /**
- * How long before its booked time a scheduled order is let into the kitchen, read exactly as the
- * other three readers of these keys read them — release_scheduled_orders' coalesce, place-order's
- * `??` and kitchen-view's onSettings: the explicit lead time, else the prep time, else fifteen
- * minutes. A saved 0 ("let it in at the booked time") is an answer, not a gap. This used `||`,
- * which read 0 as missing and fell through to the prep time: every booking then said it would go
- * to the kitchen fifteen minutes before the database actually let it out, and was called stuck
- * for those fifteen minutes.
+ * How long before its booked time a scheduled order is let into the kitchen, by the one shared
+ * rule (kitchenLeadMin) that release_scheduled_orders (private.branch_kitchen_lead_min),
+ * place-order and the kitchen board all follow: the explicit lead time, else the prep time, else
+ * fifteen minutes. A saved 0 ("let it in at the booked time") is an answer, not a gap. This once
+ * used `||`, which read 0 as missing: every booking then said it would go to the kitchen fifteen
+ * minutes before the database actually let it out, and was called stuck for those fifteen minutes.
  */
 export function leadTimeMs(settings: Readonly<Record<string, unknown>>): number {
-  const prep = Number(settings.prep_time_min ?? DEFAULT_LEAD_MIN);
-  const lead = Number(settings.schedule_lead_time_min ?? prep);
-  return (Number.isFinite(lead) && lead >= 0 ? lead : DEFAULT_LEAD_MIN) * 60_000;
+  return kitchenLeadMin(settings) * 60_000;
 }
 
 /**

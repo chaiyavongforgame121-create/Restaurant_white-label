@@ -1,7 +1,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { ORDER_ERRORS, orderErrorKey, placeOrderBody, refusedCartPart } from './order-errors';
+import {
+  ASAP_NO_BOOKING_ORDER_ERRORS,
+  ASAP_ORDER_ERRORS,
+  ORDER_ERRORS,
+  orderErrorKey,
+  placeOrderBody,
+  refusedCartPart,
+} from './order-errors';
 
 /** What placeOrder throws for a refusal: `place_order_failed:<status>:<body>`. */
 const refusal = (status: number, body: Record<string, unknown>) =>
@@ -81,10 +88,33 @@ describe('orderErrorKey', () => {
     );
   });
 
+  // docs/ASAP-AND-SCHEDULING-2026-10-25.md §1: the delivery-hours trigger judges an ASAP delivery
+  // at "now", with the same code as a booked one — the sentence must not ask for another time.
+  it('words the delivery-hours refusal for "now" on an ASAP delivery, for "that time" on a booking', () => {
+    const body = refusal(409, { error: 'delivery_not_available_at_that_time' });
+    expect(orderErrorKey(body)).toBe('errors.order.deliveryNotAvailableAtThatTime');
+    expect(orderErrorKey(body, { asap: false })).toBe('errors.order.deliveryNotAvailableAtThatTime');
+    expect(orderErrorKey(body, { asap: true })).toBe('errors.order.deliveryNotAvailableNow');
+    expect(orderErrorKey(body, { asap: true, bookable: true })).toBe('errors.order.deliveryNotAvailableNow');
+    // No time can be booked instead (scheduling off, no slot left): the sentence must not offer one.
+    expect(orderErrorKey(body, { asap: true, bookable: false })).toBe(
+      'errors.order.deliveryNotAvailableNowNoBooking',
+    );
+    expect(orderErrorKey(body, { asap: false, bookable: false })).toBe('errors.order.deliveryNotAvailableAtThatTime');
+    // Everything else reads the same either way.
+    expect(orderErrorKey(refusal(409, { error: 'branch_closed' }), { asap: true })).toBe('errors.order.branchClosed');
+    expect(orderErrorKey('TypeError: Failed to fetch', { asap: true })).toBeNull();
+  });
+
   it('has every sentence it can pick in all four languages', () => {
+    const keys: Array<[string, string]> = [
+      ...ORDER_ERRORS,
+      ...Object.entries(ASAP_ORDER_ERRORS).map(([from, to]): [string, string] => [`asap:${from}`, to]),
+      ...Object.entries(ASAP_NO_BOOKING_ORDER_ERRORS).map(([from, to]): [string, string] => [`asap-no-booking:${from}`, to]),
+    ];
     for (const locale of ['en', 'es', 'th', 'vi']) {
       const dir = path.resolve(__dirname, '../../../../../../../messages', locale);
-      for (const [code, key] of ORDER_ERRORS) {
+      for (const [code, key] of keys) {
         const [ns, ...rest] = key.split('.');
         const messages = JSON.parse(fs.readFileSync(path.join(dir, `${ns}.json`), 'utf8')) as Record<string, unknown>;
         const value = rest.reduce<unknown>(

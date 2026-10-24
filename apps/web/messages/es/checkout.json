@@ -48,12 +48,15 @@
     "addressRequired": "Ingresa tu dirección de entrega.",
     "addressUnconfirmed": "Elige tu dirección de las sugerencias o en el mapa para que podamos ubicarte.",
     "scheduleRequired": "Elige un día y una hora para tu entrega.",
+    "timingRequired": "Marca “Lo antes posible” o elige una hora.",
     "scheduleStale": "Esa hora de entrega ya no está disponible. Revisa la nueva hora y vuelve a hacer tu pedido.",
     "dropoffRequired": "Elige dónde debe dejar tu pedido el repartidor.",
     "dropoffOtherRequired": "Describe el lugar de entrega.",
     "outOfRange": "Esta dirección está fuera del área de entrega.",
     "deliveryNotSold": "Esta sucursal no hace entregas a domicilio. Prueba con recoger en tienda.",
-    "pickupClosedScheduleInstead": "Este restaurante está cerrado en este momento, así que no puedes recoger en tienda. Puedes programar una entrega."
+    "pickupClosedScheduleInstead": "Este restaurante está cerrado en este momento, así que no puedes recoger en tienda. Puedes programar una entrega.",
+    "scheduleNoneLeftAsap": "Ya no quedan horarios de entrega, así que tu pedido ahora es Lo antes posible. Revísalo y vuelve a hacer el pedido.",
+    "scheduleNoneLeft": "Ya no quedan horarios de entrega. Elige Recoger o inténtalo más tarde."
   },
   "promoCode": "¿Tienes un código promocional?",
   "placeOrder": "Hacer pedido — {amount}",
@@ -91,10 +94,10 @@
     "pickupNoPaymentCanSchedule": "Con los métodos de pago actuales de este restaurante no puedes recoger en tienda, pero aún puedes programar una entrega.",
     "pickupNoPayment": "Con los métodos de pago actuales de este restaurante no puedes recoger en tienda.",
     "pickupReady": "Se prepara en cuanto se confirma tu pedido.",
-    "deliveryUnavailablePickupOpen": "Este restaurante no está aceptando entregas programadas en este momento, pero aún puedes recoger en tienda.",
-    "deliveryUnavailable": "Este restaurante no está aceptando entregas programadas en este momento.",
-    "deliveryNoPaymentPickupOpen": "Con los métodos de pago actuales de este restaurante no puedes programar una entrega, pero aún puedes recoger en tienda.",
-    "deliveryNoPayment": "Con los métodos de pago actuales de este restaurante no puedes programar una entrega.",
+    "deliveryUnavailablePickupOpen": "Este restaurante no está aceptando pedidos a domicilio en este momento, pero aún puedes recoger en tienda.",
+    "deliveryUnavailable": "Este restaurante no está aceptando pedidos a domicilio en este momento.",
+    "deliveryNoPaymentPickupOpen": "Con los métodos de pago actuales de este restaurante no puedes pedir a domicilio, pero aún puedes recoger en tienda.",
+    "deliveryNoPayment": "Con los métodos de pago actuales de este restaurante no puedes pedir a domicilio.",
     "pickupPaused": "Recoger en tienda no está disponible por ahora: el restaurante pausó los pedidos.",
     "pickupClosedNow": "Recoger en tienda no está disponible por ahora: el restaurante está cerrado.",
     "deliveryNotOfferedPickupOpen": "Esta sucursal no hace entregas a domicilio; puedes recoger tu pedido.",
@@ -103,11 +106,17 @@
   "schedule": {
     "loading": "Cargando los horarios en que este restaurante acepta pedidos…",
     "none": "No hay horarios de entrega disponibles por ahora. Elige Recoger en tienda o vuelve más tarde.",
+    "asap": "Lo antes posible",
+    "asapHint": "Tu pedido pasa a la cocina en cuanto lo haces.",
+    "asapClosed": "No disponible por ahora: el restaurante está cerrado.",
+    "asapNotDeliveringNow": "No disponible por ahora: el restaurante no está haciendo entregas en este momento.",
+    "asapNoPayment": "No disponible con los métodos de pago actuales de este restaurante.",
     "day": "Día",
     "time": "Hora",
+    "chooseTime": "Elige una hora",
     "today": "Hoy",
     "tomorrow": "Mañana",
-    "hint": "Solo se muestran los horarios en que este restaurante hace entregas, en la hora local del restaurante. Tu pedido estará listo a esa hora y saldrá hacia ti justo después."
+    "hint": "La hora en que el repartidor recoge tu comida en el restaurante para llevártela; la cocina la tendrá lista para entonces. Los horarios están en la hora local del restaurante."
   },
   "addresses": {
     "default": "Predeterminada",
@@ -117,6 +126,7 @@
   "quote": {
     "calculating": "Calculando el envío…",
     "distanceFee": "A {distance} mi · envío {fee}",
+    "distanceFeeEta": "A {distance} mi · envío {fee} · llega en unos {minutes} min",
     "outOfRangeMax": "Lo sentimos, esta dirección está fuera del área de entrega (máx. {max} mi).",
     "notSold": "Esta sucursal no ofrece entrega a domicilio. Elige recoger en tienda.",
     "pickSuggestion": "Elige tu dirección de las sugerencias para confirmar la entrega y ver el costo exacto."
@@ -203,6 +213,7 @@
     "loadFailedChooseOther": "No se pudo cargar el formulario de tarjeta; puede pasar si un script está bloqueado o la conexión es débil. Elige una de las opciones de arriba o recarga la página para volver a intentar con tarjeta.",
     "loadFailedOnly": "No se pudo cargar el formulario de tarjeta; puede pasar si un script está bloqueado o la conexión es débil. Recarga la página para volver a intentarlo.",
     "declinedTryAnother": "No se cobró tu tarjeta y no se hizo ningún pedido: {reason} Prueba con otra tarjeta o elige otra forma de pago.",
-    "startFailedTryAnother": "No se pudo iniciar el pago con tarjeta, así que no se cobró nada ni se hizo ningún pedido. Inténtalo de nuevo o elige otra forma de pago."
+    "startFailedTryAnother": "No se pudo iniciar el pago con tarjeta, así que no se cobró nada ni se hizo ningún pedido. Inténtalo de nuevo o elige otra forma de pago.",
+    "belowMinimumTip": "Los pagos con tarjeta deben ser de al menos $0.50. Elige “Sin propina” o una propina que lleve el total a $0.50 o más."
   }
 }

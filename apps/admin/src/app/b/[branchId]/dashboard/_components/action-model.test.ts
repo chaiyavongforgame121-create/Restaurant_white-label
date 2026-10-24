@@ -356,12 +356,11 @@ describe('readDeliveries', () => {
 
 describe('leadTimeMs', () => {
   const min = 60_000;
-  it('reads the keys the way release_scheduled_orders and place-order do', () => {
+  it('reads the keys the way release_scheduled_orders and place-order do (kitchenLeadMin)', () => {
     expect(leadTimeMs({ schedule_lead_time_min: 30, prep_time_min: 15 })).toBe(30 * min);
     expect(leadTimeMs({ prep_time_min: 20 })).toBe(20 * min);
     // JSON null is coalesce's null: missing, not zero.
     expect(leadTimeMs({ schedule_lead_time_min: null, prep_time_min: 25 })).toBe(25 * min);
-    expect(leadTimeMs({ schedule_lead_time_min: '40' })).toBe(40 * min);
     expect(leadTimeMs({})).toBe(15 * min);
   });
 
@@ -369,9 +368,13 @@ describe('leadTimeMs', () => {
     expect(leadTimeMs({ schedule_lead_time_min: 0, prep_time_min: 15 })).toBe(0);
   });
 
-  it('falls back to fifteen minutes for anything that is not a lead time', () => {
+  // Only a whole number of minutes counts, the rule the release job and place-order follow too: a
+  // string or a fraction is skipped everywhere instead of each reader coercing it its own way.
+  it('skips anything that is not a whole number of minutes, to the prep time, then fifteen', () => {
+    expect(leadTimeMs({ schedule_lead_time_min: '40' })).toBe(15 * min);
     expect(leadTimeMs({ schedule_lead_time_min: 'soon' })).toBe(15 * min);
     expect(leadTimeMs({ schedule_lead_time_min: -5 })).toBe(15 * min);
+    expect(leadTimeMs({ schedule_lead_time_min: 7.5, prep_time_min: 20 })).toBe(20 * min);
   });
 });
 

@@ -1,8 +1,9 @@
 import { listBranchRiders, listKitchenStations } from '@favornoms/database/queries';
+import { kitchenLeadMin } from '@favornoms/shared';
 import { getBranchAccess } from '@/lib/capabilities';
 import { KitchenView } from './_components/kitchen-view';
 import {
-  AVAILABILITY_SELECT, KITCHEN_ORDER_SELECT, dishStationKeys, openingStation, toAvailabilityItem, toDriverLite,
+  AVAILABILITY_SELECT, KITCHEN_ORDER_SELECT, dishStationKeys, openingStation, pickOpsSettings, toAvailabilityItem, toDriverLite,
   type AvailabilityItem, type DriverLite, type Order, type SoldOutItem,
 } from './_components/kitchen-model';
 
@@ -26,7 +27,14 @@ export default async function KitchenPage({ params, searchParams }: Props) {
   const dashboardHref = can('backoffice.access') && can('dashboard.view') ? `/b/${branchId}/dashboard` : null;
 
   const [{ data: branchRow }, { data: orders, error: ordersError }, { data: menu }, { data: soldOut }, riders, menuRead, stationsRead] = await Promise.all([
-    supabase.from('branches').select('timezone').eq('id', branchId).maybeSingle(),
+    // The two lead keys ride along so the board times its scheduled tickets by this branch's
+    // lead from the first paint, not a default until OpsToggles' first read. Only those keys,
+    // as OpsToggles reads them: the rest of settings is no business of the kitchen screen.
+    supabase
+      .from('branches')
+      .select('timezone, prep_time_min:settings->prep_time_min, schedule_lead_time_min:settings->schedule_lead_time_min')
+      .eq('id', branchId)
+      .maybeSingle(),
     supabase
       .from('orders')
       .select(KITCHEN_ORDER_SELECT)
@@ -100,6 +108,7 @@ export default async function KitchenPage({ params, searchParams }: Props) {
       branchId={branchId}
       branchName={branch.name}
       branchTimezone={branchRow?.timezone ?? null}
+      initialLeadMin={kitchenLeadMin(pickOpsSettings(branchRow))}
       initialOrders={normalizedOrders as never}
       initialReadFailed={ordersError != null}
       initialStations={stationsRead}

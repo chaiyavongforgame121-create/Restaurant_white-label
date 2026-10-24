@@ -2,7 +2,10 @@
 // Server-side recalculation never trusts client totals.
 //
 // Version history: see ./CHANGELOG.md (moved out of this file 2026-08-28).
-// Current: v11.7 — a storefront card order is paid into the branch's own Stripe account: it needs a
+// Current: v11.8 — the storefront may place an ASAP delivery again (delivery_must_be_scheduled is
+// gone; a booked pickup is still refused), and a booking is held by the one kitchen-lead rule the
+// release job also uses (./kitchen-lead.ts): a bad lead or prep time reads as the default, never NaN.
+// v11.7 — a storefront card order is paid into the branch's own Stripe account: it needs a
 // card-ready connected account, waits off the kitchen board until Stripe says it is paid, and its
 // card fee is capped at 3%.
 // v11.6 — every branch is its own shop. Delivery is asked of the BRANCH. The caller counts as staff only at a branch
@@ -31,6 +34,9 @@ import {
   readyStripeAccount,
   serviceFeePercentOf,
 } from './card.ts';
+// "Send to kitchen (minutes before)": the same rule as private.branch_kitchen_lead_min() in SQL and
+// the shared kitchenLeadMin(), pinned from packages/shared/src/utils/kitchen-lead.test.ts.
+import { kitchenLeadMin } from './kitchen-lead.ts';
 
 interface PlaceOrderRequest {
   branch_id: string;
@@ -776,23 +782,19 @@ Deno.serve(async (req: Request) => {
   let deliveryFee = payload.channel === 'delivery' ? defaultDeliveryFee : 0;
   const tipAmount = Math.max(0, r2(payload.tip_amount ?? 0));
 
-  // Customers order one of two ways: Pickup, prepared now, or Schedule Delivery, booked for a
-  // chosen time. The storefront only offers those two, but a tab opened before that change (or a
-  // hand-made request) can still send an ASAP delivery or a booked pickup, so the rule lives
-  // here as well. Staff are exempt, like the payment matrix and the booking window: the counter
-  // rings up walk-in deliveries for right now, and that is its job. Dine-in and QR table orders
-  // are untouched — the order type is the table's, not a choice.
+  // Pickup is always for now: the storefront never books one, but a hand-made request (or a tab
+  // from before 2026-09-16) can still send a booked pickup, so the rule lives here as well.
+  // Delivery is either ASAP or booked (docs/ASAP-AND-SCHEDULING-2026-10-25.md §1): the
+  // delivery_must_be_scheduled refusal is gone. An ASAP delivery is already judged for "now" by
+  // is_branch_open above, the 'asap' column of the payment matrix below and the delivery-hours
+  // trigger at insert, exactly as a pickup is. Staff are exempt, like the payment matrix and the
+  // booking window. Dine-in and QR table orders are untouched — the order type is the table's.
   //
   // `hint` carries a code the checkout has matched for a long time. The checkout finds its copy by
-  // substring over the whole response body, so a tab opened before these two codes existed still
-  // reads "choose delivery or pickup and try again" instead of this body printed as raw JSON.
-  if (!staffPlaced) {
-    if (payload.channel === 'delivery' && !scheduledFor) {
-      return json(409, { error: 'delivery_must_be_scheduled', hint: 'invalid_channel' });
-    }
-    if (payload.channel === 'pickup' && scheduledFor) {
-      return json(409, { error: 'pickup_is_asap_only', hint: 'invalid_channel' });
-    }
+  // substring over the whole response body, so a tab opened before this code existed still reads
+  // "choose delivery or pickup and try again" instead of this body printed as raw JSON.
+  if (!staffPlaced && payload.channel === 'pickup' && scheduledFor) {
+    return json(409, { error: 'pickup_is_asap_only', hint: 'invalid_channel' });
   }
 
   // Payment gating: settings.payment_methods = { asap: { cash, card }, scheduled: { cash, card } }.
@@ -1145,8 +1147,11 @@ Deno.serve(async (req: Request) => {
   // order could be held with nothing scheduled to let it out until the next cron tick.
   // schedule_lead_time_min also separates "when the kitchen sees it" from prep_time_min,
   // which is the figure quoted to the diner as an ETA — they were the same key.
-  const prepTimeMin = Number(settings.prep_time_min ?? 15);
-  const leadTimeMin = Math.max(0, Number(settings.schedule_lead_time_min ?? prepTimeMin));
+  // kitchenLeadMin() is the job's own rule (private.branch_kitchen_lead_min): a lead that is not
+  // a whole number 0-10080 falls back to the prep time, then 15. Number() took 7.5 as it came and
+  // read "abc" as NaN, and NaN made every booking "not held", straight to the kitchen however far
+  // ahead.
+  const leadTimeMin = kitchenLeadMin(settings);
   const held = scheduledFor != null &&
     new Date(scheduledFor).getTime() - Date.now() > leadTimeMin * 60_000;
 

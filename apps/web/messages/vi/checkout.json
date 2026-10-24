@@ -48,12 +48,15 @@
     "addressRequired": "Vui lòng nhập địa chỉ giao hàng.",
     "addressUnconfirmed": "Hãy chọn địa chỉ từ gợi ý hoặc trên bản đồ để chúng tôi xác định vị trí của bạn.",
     "scheduleRequired": "Vui lòng chọn ngày và giờ giao hàng.",
+    "timingRequired": "Hãy đánh dấu “Càng sớm càng tốt” hoặc chọn một giờ.",
     "scheduleStale": "Giờ giao hàng đó không còn nữa. Vui lòng kiểm tra giờ mới và đặt hàng lại.",
     "dropoffRequired": "Vui lòng chọn nơi tài xế để đơn hàng của bạn.",
     "dropoffOtherRequired": "Vui lòng mô tả nơi giao.",
     "outOfRange": "Địa chỉ này nằm ngoài khu vực giao hàng.",
     "deliveryNotSold": "Chi nhánh này không giao hàng. Hãy chọn đến lấy.",
-    "pickupClosedScheduleInstead": "Nhà hàng hiện đã đóng cửa nên không thể Tự đến lấy. Bạn có thể hẹn giờ giao hàng."
+    "pickupClosedScheduleInstead": "Nhà hàng hiện đã đóng cửa nên không thể Tự đến lấy. Bạn có thể hẹn giờ giao hàng.",
+    "scheduleNoneLeftAsap": "Không còn giờ giao hàng nào, nên đơn của bạn đã chuyển sang Càng sớm càng tốt. Hãy kiểm tra lại và đặt hàng lần nữa.",
+    "scheduleNoneLeft": "Không còn giờ giao hàng nào. Vui lòng chọn Tự đến lấy hoặc thử lại sau."
   },
   "promoCode": "Bạn có mã khuyến mãi?",
   "placeOrder": "Đặt hàng — {amount}",
@@ -91,10 +94,10 @@
     "pickupNoPaymentCanSchedule": "Không thể Tự đến lấy với các phương thức thanh toán hiện tại của nhà hàng — bạn vẫn có thể hẹn giờ giao hàng.",
     "pickupNoPayment": "Không thể Tự đến lấy với các phương thức thanh toán hiện tại của nhà hàng.",
     "pickupReady": "Được chuẩn bị ngay khi đơn hàng được xác nhận.",
-    "deliveryUnavailablePickupOpen": "Nhà hàng hiện không nhận hẹn giờ giao hàng — bạn vẫn có thể Tự đến lấy.",
-    "deliveryUnavailable": "Nhà hàng hiện không nhận hẹn giờ giao hàng.",
-    "deliveryNoPaymentPickupOpen": "Không thể hẹn giờ giao hàng với các phương thức thanh toán hiện tại của nhà hàng — bạn vẫn có thể Tự đến lấy.",
-    "deliveryNoPayment": "Không thể hẹn giờ giao hàng với các phương thức thanh toán hiện tại của nhà hàng.",
+    "deliveryUnavailablePickupOpen": "Nhà hàng hiện không nhận đơn giao hàng — bạn vẫn có thể Tự đến lấy.",
+    "deliveryUnavailable": "Nhà hàng hiện không nhận đơn giao hàng.",
+    "deliveryNoPaymentPickupOpen": "Không thể giao hàng với các phương thức thanh toán hiện tại của nhà hàng — bạn vẫn có thể Tự đến lấy.",
+    "deliveryNoPayment": "Không thể giao hàng với các phương thức thanh toán hiện tại của nhà hàng.",
     "pickupPaused": "Hiện không thể Tự đến lấy — nhà hàng đang tạm dừng nhận đơn.",
     "pickupClosedNow": "Hiện không thể Tự đến lấy — nhà hàng đã đóng cửa.",
     "deliveryNotOfferedPickupOpen": "Chi nhánh này không giao hàng — bạn vẫn có thể đến lấy.",
@@ -103,11 +106,17 @@
   "schedule": {
     "loading": "Đang tải các khung giờ nhà hàng nhận đặt trước…",
     "none": "Hiện không còn giờ giao hàng nào để đặt. Hãy chọn Tự đến lấy hoặc quay lại sau.",
+    "asap": "Càng sớm càng tốt",
+    "asapHint": "Đơn hàng được chuyển vào bếp ngay khi bạn đặt.",
+    "asapClosed": "Hiện chưa thể chọn — nhà hàng đã đóng cửa.",
+    "asapNotDeliveringNow": "Hiện chưa thể chọn — nhà hàng chưa giao hàng vào lúc này.",
+    "asapNoPayment": "Không khả dụng với các phương thức thanh toán hiện tại của nhà hàng.",
     "day": "Ngày",
     "time": "Giờ",
+    "chooseTime": "Chọn giờ",
     "today": "Hôm nay",
     "tomorrow": "Ngày mai",
-    "hint": "Chỉ hiển thị các giờ nhà hàng có giao hàng, theo giờ địa phương của nhà hàng. Đơn hàng sẽ được chuẩn bị xong vào giờ đó và giao đến bạn ngay sau đó."
+    "hint": "Giờ tài xế đến nhà hàng lấy món để giao cho bạn — bếp sẽ chuẩn bị xong trước giờ đó. Giờ hiển thị theo giờ địa phương của nhà hàng."
   },
   "addresses": {
     "default": "Mặc định",
@@ -117,6 +126,7 @@
   "quote": {
     "calculating": "Đang tính phí giao hàng…",
     "distanceFee": "Cách {distance} mi · phí giao {fee}",
+    "distanceFeeEta": "Cách {distance} mi · phí giao {fee} · đến trong khoảng {minutes} phút",
     "outOfRangeMax": "Rất tiếc, địa chỉ này nằm ngoài khu vực giao hàng (tối đa {max} mi).",
     "notSold": "Chi nhánh này không giao hàng. Vui lòng chọn đến lấy.",
     "pickSuggestion": "Hãy chọn địa chỉ từ gợi ý để xác nhận giao hàng và xem phí chính xác."
@@ -203,6 +213,7 @@
     "loadFailedChooseOther": "Không tải được biểu mẫu thẻ — có thể do tập lệnh bị chặn hoặc kết nối yếu. Hãy chọn một phương thức ở trên, hoặc tải lại trang để thử thẻ lần nữa.",
     "loadFailedOnly": "Không tải được biểu mẫu thẻ — có thể do tập lệnh bị chặn hoặc kết nối yếu. Vui lòng tải lại trang để thử lại.",
     "declinedTryAnother": "Thẻ của bạn chưa bị trừ tiền và chưa có đơn hàng nào được tạo: {reason} Hãy thử thẻ khác hoặc chọn cách thanh toán khác.",
-    "startFailedTryAnother": "Không thể bắt đầu thanh toán bằng thẻ, nên chưa bị trừ tiền và chưa có đơn hàng nào được tạo. Hãy thử lại hoặc chọn cách thanh toán khác."
+    "startFailedTryAnother": "Không thể bắt đầu thanh toán bằng thẻ, nên chưa bị trừ tiền và chưa có đơn hàng nào được tạo. Hãy thử lại hoặc chọn cách thanh toán khác.",
+    "belowMinimumTip": "Thanh toán bằng thẻ phải từ $0.50 trở lên. Chọn “Không tip” hoặc mức tip đưa tổng tiền lên $0.50 trở lên."
   }
 }

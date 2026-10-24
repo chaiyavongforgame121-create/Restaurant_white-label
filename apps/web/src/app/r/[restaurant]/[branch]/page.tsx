@@ -57,7 +57,6 @@ export default async function MenuPage({ params, searchParams }: Props) {
   const [
     categories,
     unsortedItems,
-    openCheck,
     reviewsCheck,
     combosCheck,
     effectivePriceCheck,
@@ -66,7 +65,6 @@ export default async function MenuPage({ params, searchParams }: Props) {
   ] = await Promise.all([
     listCategories(supabase, tenant.branch.id),
     listMenuItems(supabase, tenant.branch.id),
-    supabase.rpc('is_branch_open', { p_branch_id: tenant.branch.id }),
     supabase.rpc('get_branch_reviews', { p_branch_id: tenant.branch.id, p_limit: 3 }),
     // In the merchant's order. Sold-out deals stay in the row, greyed (is_available).
     supabase
@@ -162,7 +160,9 @@ export default async function MenuPage({ params, searchParams }: Props) {
     .filter((hh) => hh.appliesToAll || hh.items.length > 0);
 
   const scheduleDelivery = await resolveScheduleDelivery(supabase, tenant.branch.id, status);
-  const isOpen = openCheck.data !== false;
+  // is_branch_open, read once by resolveScheduleDelivery (ASAP delivery needs it too). A failed
+  // read counts as open there, as it did when this page asked itself.
+  const isOpen = scheduleDelivery.openNow;
   const reviews = (reviewsCheck.data ?? null) as {
     summary: { rating: number | null; count: number };
     recent: Array<{ food_stars: number; delivery_stars: number | null; comment: string; created_at: string }>;
@@ -199,7 +199,8 @@ export default async function MenuPage({ params, searchParams }: Props) {
         reviews={reviews}
         combos={combos}
         happyHours={happyHours}
-        canDeliver={scheduleDelivery.canDeliver}
+        canDeliverNow={scheduleDelivery.canDeliverNow}
+        canScheduleDelivery={scheduleDelivery.canScheduleDelivery}
         // Delivery is switched per branch: a branch that does not deliver says so, rather than
         // reading as "delivery is closed right now" (docs/PACKAGING-2026-10-24.md §3).
         deliveryOffered={scheduleDelivery.offered}

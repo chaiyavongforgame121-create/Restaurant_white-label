@@ -2,9 +2,11 @@
   "title": "How would you like to order?",
   "subtitle": "Pick one to start your order.",
   "subtitleNamed": "Pick one to start your order from {branch}.",
-  "deliveryHint": "Pick a day and time, and we bring it to your address",
+  "deliveryHint": "As soon as possible, or at a day and time you choose — brought to your address",
+  "deliveryHintAsap": "Brought to your address as soon as possible",
+  "deliveryHintScheduled": "Pick a day and time, and we bring it to your address",
   "pickupHint": "Collect it at the restaurant while it's open",
   "changeLater": "You can change this any time from the menu.",
   "deliveryNotOffered": "Delivery is not offered at this branch.",
-  "deliveryClosedNow": "Delivery cannot be booked right now."
+  "deliveryClosedNow": "Delivery is not available right now."
 }

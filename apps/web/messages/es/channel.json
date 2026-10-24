@@ -1,5 +1,5 @@
 {
-  "delivery": "Programar entrega",
+  "delivery": "Entrega a domicilio",
   "pickup": "Recoger en tienda",
   "dineIn": "Comer en el local",
   "dineInAt": "Comer en el local · {table}"

@@ -118,3 +118,4 @@ export * from './modifiers';
 export * from './phone';
 export * from './zoned-time';
 export * from './install-platform';
+export * from './kitchen-lead';

@@ -16,19 +16,20 @@ interface Props {
   branchId: string;
   branchName?: string;
   /**
-   * Schedule Delivery can be booked here (see resolveScheduleDelivery): delivering, taking advance
-   * orders, not paused, and at least one bookable slot. Not "delivery is open this minute" —
-   * every storefront delivery is booked for later, so the tile no longer disappears outside
-   * delivery hours.
-   * Defaults false so a missing prop cannot sell delivery.
+   * An ASAP delivery can be placed right now, and a delivery can be booked for later (both from
+   * resolveScheduleDelivery). The Delivery tile is offered when either is true — it no longer
+   * disappears outside delivery hours while a booking is possible, nor when advance orders are
+   * off while ASAP is possible — and its hint says which of the two the diner will find.
+   * Both default false so a missing prop cannot sell delivery.
    */
-  canDeliver?: boolean;
+  canDeliverNow?: boolean;
+  canScheduleDelivery?: boolean;
   /**
    * This branch delivers at all (storefront_status.delivery_entitled, per branch: its
    * delivery switch, docs/PACKAGING-2026-10-24.md §3).
    *
-   * Only ever used for the words under the tiles, never to offer delivery — canDeliver
-   * alone decides that. A diner who is told "closed right now" about a branch that never
+   * Only ever used for the words under the tiles, never to offer delivery — the two flags
+   * above alone decide that. A diner who is told "closed right now" about a branch that never
    * delivers comes back tomorrow for nothing; one told "does not deliver" about a branch
    * that is merely shut gives up on it for good. Defaults true, so a missing prop falls
    * back to the softer, temporary sentence rather than declaring the branch delivery-free.
@@ -65,11 +66,13 @@ interface Props {
  */
 export function OrderTypeGate({
   branchName,
-  canDeliver = false,
+  canDeliverNow = false,
+  canScheduleDelivery = false,
   deliveryOffered = true,
   seatingFromScan = false,
 }: Props) {
   const t = useTranslations();
+  const canDeliver = canDeliverNow || canScheduleDelivery;
 
   // False on the server and the first client paint, true once this branch's cart is read.
   const hydrated = useCartHydrated();
@@ -155,7 +158,14 @@ export function OrderTypeGate({
     };
   }, [open]);
 
-  // Pickup first, then Schedule Delivery — the order checkout offers them in.
+  // Pickup first, then Delivery — the order checkout offers them in. The hint promises only what
+  // checkout will offer: ASAP, a booked time, or both.
+  const deliveryHint =
+    canDeliverNow && canScheduleDelivery
+      ? t('orderType.deliveryHint')
+      : canDeliverNow
+        ? t('orderType.deliveryHintAsap')
+        : t('orderType.deliveryHintScheduled');
   const options: Array<{ value: OrderChannel; label: string; hint: string; icon: React.ReactNode }> = [
     {
       value: 'pickup',
@@ -168,7 +178,7 @@ export function OrderTypeGate({
           {
             value: 'delivery' as const,
             label: t('channel.delivery'),
-            hint: t('orderType.deliveryHint'),
+            hint: deliveryHint,
             icon: <RiderIcon className="h-6 w-6" />,
           },
         ]

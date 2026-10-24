@@ -13,6 +13,7 @@ import {
 import { getBrowserClient } from '@favornoms/database/client';
 import { invokeDispatchDriver, listKitchenStations } from '@favornoms/database/queries';
 import { useRealtime } from '@favornoms/database/realtime';
+import { DEFAULT_UI_LOCALE, intlLocaleFor, isUiLocale, kitchenLeadMin } from '@favornoms/shared';
 import { LocaleSwitcher } from '@/components/locale-switcher';
 import { SignOutIconButton } from '@/components/sign-out';
 import { stationLabel, type KitchenStation } from '@/lib/kitchen-stations';
@@ -21,8 +22,8 @@ import { SUN } from './kitchen-theme';
 import { OpsToggles } from './ops-toggles';
 import {
   ACTIVE_STATUSES, AVAILABILITY_SELECT, KITCHEN_ORDER_SELECT, REMINDER_INTERVAL_MS, agingTierKey, batchGroups,
-  boardHealth, comboParts, dishStationKeys, eightySixTargets, filterAfterStationsRead, fmtTimer, heardOnTap, isLineDone, isOnBoard, laneOf, lateTicketIds,
-  lineMatchesStation, linesInMenuOrder, mergeAvailability, mergeSoldOut, overlaySnapshot, parseTimestamp, partMatchesStation,
+  boardHealth, comboParts, dishStationKeys, dueTimeLabel, eightySixTargets, filterAfterStationsRead, fmtTimer, heardOnTap, isLineDone, isOnBoard, laneOf, lateTicketIds,
+  lineMatchesStation, linesInMenuOrder, mergeAvailability, mergeSoldOut, minutesToRelease, overlaySnapshot, parseTimestamp, partMatchesStation,
   readyStartedMs, reminderDue, safeElapsedSec, speakableTicket, stationPills, stationStats, stockBadge, toAvailabilityItem,
   withDishStation, workStartedMs, ALLERGY_RE, parseMods,
   type AvailabilityItem, type Delivery, type DriverLite, type Order, type OrderItem, type SoldOutItem, type TierKey,
@@ -92,9 +93,6 @@ function agingTier(sec: number, lane: string): Tier {
   const tier = agingTierKey(sec, lane);
   return { tier, ...TIERS[tier] };
 }
-
-// place-order's fallback when branches.settings carries neither key.
-const DEFAULT_LEAD_MIN = 15;
 
 // Only the mm:ss text has to move every second. A board-wide 1s tick re-rendered every
 // card — and while the cards carried framer-motion's `layout`, re-measured and re-committed
@@ -170,8 +168,11 @@ function writePref(key: string, value: string): void {
 interface Props {
   branchId: string;
   branchName: string;
-  /** The branch's IANA zone, for "sold out until" times. */
+  /** The branch's IANA zone, for "sold out until" and booked ("Due") times. */
   branchTimezone: string | null;
+  /** The branch's kitchen lead (kitchenLeadMin) as the server read it: how long before its booked
+   *  time a booking is released to this board. OpsToggles' reads keep it current after that. */
+  initialLeadMin: number;
   initialOrders: Order[];
   /** The server's read of the tickets failed, so `initialOrders` is empty for that reason and
    *  not because the kitchen is quiet. */
@@ -217,11 +218,13 @@ function chipText(order: Order, t: Translate): string {
 type AudioState = 'unknown' | 'unsupported' | 'locked' | 'running';
 
 export function KitchenView({
-  branchId, branchName, branchTimezone, initialOrders, initialReadFailed, initialStations, initialDishStations,
+  branchId, branchName, branchTimezone, initialLeadMin, initialOrders, initialReadFailed, initialStations, initialDishStations,
   activeStation, drivers, canAssign, initialSoldOut, initialMenu, dashboardHref,
 }: Props) {
   const t = useTranslations('kitchen');
   const locale = useLocale();
+  // Gregorian in Thai too (intlLocaleFor), so a booked time reads as it does on the receipt.
+  const intlLocale = intlLocaleFor(isUiLocale(locale) ? locale : DEFAULT_UI_LOCALE);
   // The branch's stations and the ones its dishes use, for the pills and every station label. Read
   // again with the board (reload) and on any change to the list (realtime), so a station renamed,
   // reordered, added or deleted on the menu page reaches a board that is already open.
@@ -460,13 +463,14 @@ export function KitchenView({
   /* How far ahead of its slot a scheduled order is released to the board, and whether the
      branch is paused. Both come from the settings OpsToggles already reads (and re-reads every
      minute and on focus), because the same keys decide when release_scheduled_orders() fires —
-     and a ticket's clock has to start when the cook was meant to start it. */
-  const [leadMin, setLeadMin] = React.useState(DEFAULT_LEAD_MIN);
+     and a ticket's clock has to start when the cook was meant to start it. Read by the one shared
+     rule (kitchenLeadMin) the release job and place-order follow. It starts from the server's read
+     of the branch: it used to start at 15 until OpsToggles' first read landed, so a board opened
+     at a branch with another lead counted its first seconds against the wrong release time. */
+  const [leadMin, setLeadMin] = React.useState(initialLeadMin);
   const onSettings = React.useCallback((s: Record<string, unknown>) => {
     setPaused(Boolean(s.orders_paused));
-    const prep = Number(s.prep_time_min ?? DEFAULT_LEAD_MIN);
-    const lead = Number(s.schedule_lead_time_min ?? prep);
-    if (Number.isFinite(lead) && lead >= 0) setLeadMin(lead);
+    setLeadMin(kitchenLeadMin(s));
   }, []);
   const leadMs = leadMin * 60_000;
 
@@ -1296,6 +1300,9 @@ export function KitchenView({
       return new Intl.DateTimeFormat(locale, opts).format(at);
     }
   };
+  /* A booking's booked time ("Due 11:30"), the time the driver comes for the food: on its ticket
+     once released, and in the Scheduled drawer before that. '' for an order with none. */
+  const fmtDue = (iso: string | null | undefined) => dueTimeLabel(iso, now, intlLocale, branchTimezone);
 
   const soundLocked = soundOn && audioState === 'locked';
   const health = boardHealth(liveHealthy, readFailed);
@@ -1531,6 +1538,7 @@ export function KitchenView({
                     station={station}
                     readyAt={readyStartedMs(order, readyAtRef.current[order.id])}
                     workStartedAt={workStartedMs(order, leadMs)}
+                    due={fmtDue(order.scheduled_for)}
                     onAdvance={() => advance(order)}
                     onReject={() => reject(order)}
                     onRecall={() => recall(order)}
@@ -1554,7 +1562,7 @@ export function KitchenView({
         ))}
       </main>
 
-      <AnimatePresence>{scheduledOpen && <ScheduledDrawer orders={scheduled} onClose={() => setScheduledOpen(false)} />}</AnimatePresence>
+      <AnimatePresence>{scheduledOpen && <ScheduledDrawer orders={scheduled} leadMs={leadMs} fmtDue={fmtDue} onClose={() => setScheduledOpen(false)} />}</AnimatePresence>
       <AnimatePresence>
         {availabilityOpen && (
           <AvailabilityPanel
@@ -1640,10 +1648,12 @@ const PRESS_UNSEEN_MS = 15_000;
 let pressSeq = 0;
 
 function OrderCard({
-  order, lane, now, station, readyAt, workStartedAt, onAdvance, onReject, onRecall, on86, soldOutIds, onTogglePrep,
+  order, lane, now, station, readyAt, workStartedAt, due, onAdvance, onReject, onRecall, on86, soldOutIds, onTogglePrep,
   onDispatch, stack, riderName, drivers, canAssign, onAssign,
 }: {
   order: Order; lane: string; now: number; station: string | null; readyAt: number; workStartedAt: number;
+  /** The booked time, already formatted; '' for an order placed for now. */
+  due: string;
   onAdvance: () => void; onReject: () => void; onRecall: () => void;
   on86: (menuItemId: string, name: string) => void; soldOutIds: Set<string>; onTogglePrep: (item: OrderItem) => void;
   onDispatch: (restart: boolean) => Promise<DispatchAnswer>;
@@ -1847,6 +1857,13 @@ function OrderCard({
 
       <div className="mt-0.5 text-[11px]" style={{ color: SUN.faint }}>
         #{order.order_number.slice(-4)}
+        {/* A released booking says when it is due: its clock starts at the release, so nothing
+            else on the card told the cook the driver is coming at 11:30. */}
+        {due && (
+          <span className="ml-1.5 inline-flex items-center gap-1 rounded-md px-1.5 py-px font-semibold" style={{ background: '#FCEFCF', color: '#9A6A0A' }}>
+            <CalendarClock className="h-3 w-3" />{t('card.due', { time: due })}
+          </span>
+        )}
         {delivery?.batch_id && (
           <span className="ml-1.5 inline-flex items-center rounded-md px-1.5 py-px font-semibold" style={{ background: '#E7EEFB', color: '#2E5FB0' }}>
             {stacked
@@ -2131,7 +2148,13 @@ function UndoToast({ text, onUndo, onClose }: { text: string; onUndo: (() => voi
   );
 }
 
-function ScheduledDrawer({ orders, onClose }: { orders: Order[]; onClose: () => void }) {
+function ScheduledDrawer({ orders, leadMs, fmtDue, onClose }: {
+  orders: Order[];
+  /** The branch's kitchen lead: a booking is released at its booked time minus this. */
+  leadMs: number;
+  fmtDue: (iso: string | null | undefined) => string;
+  onClose: () => void;
+}) {
   const t = useTranslations('kitchen');
   // "Releases in 12m" only ever moves a minute at a time, and the drawer is open for a
   // moment, so it keeps its own slow clock instead of riding the board's.
@@ -2148,15 +2171,21 @@ function ScheduledDrawer({ orders, onClose }: { orders: Order[]; onClose: () => 
         </div>
         <div className="flex-1 space-y-2.5 overflow-y-auto p-3">
           {orders.map((o) => {
-            const due = o.scheduled_for ? new Date(o.scheduled_for).getTime() : 0;
-            const mins = due ? Math.round((due - now) / 60000) : null;
+            // To the release (booked time − lead), when it reaches the board and chimes. This used
+            // to count to the booked time itself: at 11:00 a 11:30 booking with a 5-minute lead
+            // said "Releases in 30m" and then landed on the board at 11:25.
+            const mins = minutesToRelease(o, leadMs, now);
+            const due = fmtDue(o.scheduled_for);
             return (
               <div key={o.id} className="rounded-2xl p-3" style={{ background: SUN.card, border: `1px solid ${SUN.cardBorder}` }}>
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px]" style={{ color: SUN.faint }}>#{o.order_number.slice(-4)}</span>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px]" style={{ color: SUN.faint }}>
+                    #{o.order_number.slice(-4)}
+                    {due && <span className="ml-1.5 font-semibold" style={{ color: SUN.muted }}>{t('card.due', { time: due })}</span>}
+                  </span>
                   {mins != null && (
-                    <span className="rounded-lg px-2 py-0.5 text-xs font-medium" style={mins <= 10 ? { background: '#FBE1BC', color: '#A85F00' } : { background: '#F1ECE6', color: SUN.muted }}>
-                      {t('scheduled.releasesIn', { minutes: mins })}
+                    <span className="shrink-0 rounded-lg px-2 py-0.5 text-xs font-medium" style={mins <= 10 ? { background: '#FBE1BC', color: '#A85F00' } : { background: '#F1ECE6', color: SUN.muted }}>
+                      {mins === 0 ? t('scheduled.releasingNow') : t('scheduled.releasesIn', { minutes: mins })}
                     </span>
                   )}
                 </div>

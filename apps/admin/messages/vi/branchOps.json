@@ -14,10 +14,10 @@
   },
   "payments": {
     "title": "Phương thức thanh toán",
-    "description": "Chọn phương thức thanh toán khách có thể dùng cho Tự đến lấy (làm ngay) và Hẹn giờ giao hàng (đặt trước). Thẻ được thanh toán trực tuyến khi đặt hàng, tiền vào thẳng tài khoản Stripe riêng của chi nhánh này, và khách chỉ thấy lựa chọn này sau khi Stripe được kết nối ở mục Thanh toán thẻ phía trên. Các giao dịch thẻ nhân viên thu tại quầy hoặc POS bằng máy của bạn vẫn được ghi nhận như trước và không bị ảnh hưởng.",
+    "description": "Chọn phương thức thanh toán khách có thể dùng khi đặt ngay (tự đến lấy, hoặc giao hàng càng sớm càng tốt) và khi hẹn ngày giờ giao hàng. Thẻ được thanh toán trực tuyến khi đặt hàng, tiền vào thẳng tài khoản Stripe riêng của chi nhánh này, và khách chỉ thấy lựa chọn này sau khi Stripe được kết nối ở mục Thanh toán thẻ phía trên. Các giao dịch thẻ nhân viên thu tại quầy hoặc POS bằng máy của bạn vẫn được ghi nhận như trước và không bị ảnh hưởng.",
     "dineInNote": "Phần này chỉ áp dụng cho giao hàng và tự đến lấy. Khách ăn tại quán bỏ qua bước thanh toán và trả tiền trực tiếp tại nhà hàng.",
     "modes": {
-      "asap": "Tự đến lấy (ngay)",
+      "asap": "Đặt ngay (tự đến lấy và giao hàng càng sớm càng tốt)",
       "scheduled": "Hẹn giờ giao hàng"
     },
     "methods": {
@@ -36,9 +36,9 @@
     },
     "lockedTransfer": "Tải mã QR lên ở bên dưới để bật",
     "lockedPackage": "Hiện nhà hàng của bạn chưa dùng được",
-    "toggleAria": "{method} cho đơn {mode}",
+    "toggleAria": "{mode}: {method}",
     "cardLocked": "Thanh toán thẻ hiện đang tắt cho nhà hàng của bạn. Hãy liên hệ FavorNoms để được bật lại.",
-    "noMethod": "{which, select, asap {Đơn Tự đến lấy (ngay) chưa bật phương thức thanh toán nào — khách sẽ không thể đặt đơn giao hàng hoặc tự đến lấy theo cách này.} scheduled {Đơn Hẹn giờ giao hàng chưa bật phương thức thanh toán nào — khách sẽ không thể đặt đơn giao hàng hoặc tự đến lấy theo cách này.} other {Cả Tự đến lấy (ngay) và Hẹn giờ giao hàng đều chưa bật phương thức thanh toán nào — khách sẽ không thể đặt đơn giao hàng hoặc tự đến lấy theo cả hai cách.}} Đơn ăn tại quán không bị ảnh hưởng.",
+    "noMethod": "{which, select, asap {Đơn đặt ngay chưa bật phương thức thanh toán nào — khách sẽ không thể đặt tự đến lấy hoặc giao hàng càng sớm càng tốt.} scheduled {Đơn hẹn giờ giao hàng chưa bật phương thức thanh toán nào — khách sẽ không thể hẹn ngày giờ giao hàng.} other {Cả đơn đặt ngay và đơn hẹn giờ giao hàng đều chưa bật phương thức thanh toán nào — khách sẽ hoàn toàn không thể đặt tự đến lấy hoặc giao hàng.}} Đơn ăn tại quán không bị ảnh hưởng.",
     "qr": {
       "title": "Mã QR của bạn",
       "description": "Khách thấy mã này khi thanh toán, chuyển khoản tổng tiền rồi tải ảnh biên lai lên. Không có khoản nào bị thu tự động — đơn sẽ chờ trong <b>Đơn hàng</b> cho đến khi bạn duyệt biên lai.",
@@ -48,7 +48,7 @@
       "instructions": "Hướng dẫn (không bắt buộc)",
       "instructionsPlaceholder": "VD: Ghi mã đơn hàng vào nội dung chuyển khoản",
       "onWithoutImage": "Chuyển khoản QR đang bật nhưng chưa lưu ảnh QR. Khách sẽ bị từ chối khi thanh toán cho đến khi bạn tải ảnh lên.",
-      "savedButOff": "Mã QR của bạn đã được lưu nhưng <strong>Chuyển khoản QR vẫn đang tắt</strong>, nên khách không thể chọn. Hãy đánh dấu ở Tự đến lấy (ngay) và/hoặc Hẹn giờ giao hàng phía trên, rồi lưu.",
+      "savedButOff": "Mã QR của bạn đã được lưu nhưng <strong>Chuyển khoản QR vẫn đang tắt</strong>, nên khách không thể chọn. Hãy đánh dấu ở Đặt ngay và/hoặc Hẹn giờ giao hàng phía trên, rồi lưu.",
       "perBranch": "Mã QR này chỉ thuộc về chi nhánh này. Khách thấy nó khi thanh toán trực tuyến, và thu ngân hiển thị nó tại quầy của chi nhánh này khi khách chuyển khoản. Mỗi chi nhánh tự tải lên mã của mình: mã không bao giờ được sao chép sang chi nhánh khác."
     },
     "save": "Lưu phương thức thanh toán"
@@ -152,16 +152,16 @@
     },
     "selfNote": "Khách vẫn thấy trạng thái cập nhật trực tiếp nhưng không có bản đồ — không có gì gửi vị trí khi nhân viên của bạn đang giao.",
     "limit": "Giới hạn giờ giao hàng",
-    "limitHint": "Tắt: có thể đặt giao vào bất kỳ lúc nào chi nhánh mở cửa. Bật: khách chỉ đặt được giờ giao trong các khung giờ bên dưới. Mọi đơn giao hàng đều được đặt trước, nên cũng cần bật <strong>Đơn hẹn giờ</strong>.",
+    "limitHint": "Tắt: khách có thể đặt giao hàng vào bất kỳ lúc nào chi nhánh mở cửa, giao càng sớm càng tốt hoặc hẹn giờ. Bật: chỉ trong các khung giờ bên dưới, cho cả hai cách. Muốn khách hẹn giờ thì cũng cần bật <strong>Đơn hẹn giờ</strong>.",
     "noDelivery": "Không giao hàng ngày này",
     "armedButEmpty": "Giờ giao hàng đang bật nhưng chưa có khung giờ nào — khách hoàn toàn không thể đặt đơn giao hàng. Hãy thêm khung giờ hoặc tắt tùy chọn này.",
     "save": "Lưu cài đặt giao hàng"
   },
   "scheduling": {
     "title": "Đơn hẹn giờ",
-    "description": "Cách khách đặt giao hàng: trên trang đặt hàng của bạn, mọi đơn giao đều được hẹn theo ngày và giờ, còn đơn tự đến lấy luôn là lấy ngay. Giờ có thể đặt dựa trên <strong>Giờ mở cửa</strong> của chi nhánh ở trên, được thu hẹp bởi các khung giờ đặt trước bên dưới khi bạn bật, và bởi <strong>Giờ giao hàng</strong> khi có giới hạn. Chi nhánh không bán giao hàng sẽ không nhận đơn đặt trước của khách.",
+    "description": "Cách khách hẹn giờ giao hàng. Trên trang đặt hàng của bạn, khách chọn giao càng sớm càng tốt hoặc hẹn theo ngày và giờ: giờ tài xế đến lấy đồ ăn tại quán, nên món phải xong trước giờ đó. Đơn tự đến lấy luôn là lấy ngay. Giờ có thể đặt dựa trên <strong>Giờ mở cửa</strong> của chi nhánh ở trên, được thu hẹp bởi các khung giờ đặt trước bên dưới khi bạn bật, và bởi <strong>Giờ giao hàng</strong> khi có giới hạn. Chi nhánh không bán giao hàng sẽ không nhận đơn đặt trước của khách.",
     "accept": "Nhận đơn hẹn giờ",
-    "acceptHint": "Khách hẹn ngày và giờ cho mọi đơn giao. Tắt: “Hẹn giờ giao hàng” biến mất khỏi trang đặt hàng và khách chỉ có thể đặt Tự đến lấy.",
+    "acceptHint": "Khách có thể hẹn ngày và giờ giao hàng. Tắt: chỉ phần chọn ngày và giờ biến mất khỏi trang đặt hàng. Khách vẫn đặt giao hàng càng sớm càng tốt khi chi nhánh đang mở cửa và có giao hàng.",
     "minLead": "Đặt sớm nhất (trước bao nhiêu phút)",
     "minLeadHint": "Khách phải đặt trước tối thiểu bao lâu. Khung giờ gần hơn sẽ không được hiển thị.",
     "maxDays": "Đặt xa nhất (trước bao nhiêu ngày)",
@@ -170,8 +170,10 @@
     "slotOption": "{minutes, plural, other {Mỗi # phút}}",
     "slotHint": "Làm tròn các giờ đưa ra. Khung càng lớn thì lựa chọn càng ít và gọn.",
     "kitchenLead": "Gửi xuống bếp (trước bao nhiêu phút)",
-    "kitchenLeadHint": "Đơn đặt trước chưa hiện trên màn hình bếp cho đến khi chỉ còn chừng này thời gian. Đây <strong>không phải</strong> thời gian chuẩn bị hiển thị cho khách — mục đó nằm ở thẻ Giao hàng.",
+    "kitchenLeadHint": "Đơn hẹn giờ hiện trên màn hình bếp, kèm âm báo, trước giờ hẹn bao nhiêu phút. Ví dụ: đơn hẹn 11:30 và đặt 5 ở đây sẽ vào bếp lúc 11:25. Đơn đặt ngay vào bếp lập tức. Đây <strong>không phải</strong> thời gian chuẩn bị hiển thị cho khách — mục đó nằm ở thẻ Giao hàng.",
     "leadGap": "Khách có thể đặt trước {bookMinutes, plural, other {# phút}}, nhưng bạn muốn bếp được báo trước {kitchenMinutes, plural, other {# phút}}. Đơn đặt trong khoảng chênh lệch đó sẽ vào bếp ngay, với thời gian báo trước ít hơn mong muốn. Nếu điều này quan trọng, hãy tăng <strong>Đặt sớm nhất</strong> cho khớp.",
+    "leadBelowPrep": "Đơn hẹn giờ vào bếp trước giờ hẹn {kitchenMinutes, plural, other {# phút}}, nhưng thời gian chuẩn bị của bạn là {prepMinutes, plural, other {# phút}}: món có thể chưa xong khi tài xế đến. Hãy đặt <strong>Gửi xuống bếp</strong> ít nhất bằng thời gian chuẩn bị.",
+    "leadZero": "Với 0, đơn hẹn giờ chỉ vào bếp đúng giờ hẹn, lúc tài xế đến lấy, nên bếp bắt đầu nấu khi món lẽ ra đã phải xong. Hãy nhập số phút bếp của bạn cần.",
     "limit": "Giới hạn giờ khách có thể đặt",
     "limitHint": "Tắt: khách có thể đặt vào bất kỳ lúc nào chi nhánh mở cửa. Bật: chỉ trong các khung giờ bên dưới — mỗi ngày có thể đặt khung riêng, ví dụ nhận đặt từ 17:00 cả tuần và chỉ 10:00–14:00 vào Chủ nhật.",
     "sameAsOpening": "Giống giờ mở cửa",

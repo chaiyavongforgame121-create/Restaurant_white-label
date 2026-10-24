@@ -5,7 +5,24 @@ the bulk of the file; every deploy had to carry it. The history is the valuable 
 so it lives here rather than being deleted.
 
 ```
-// place-order v11.7 — a card is paid into the branch's own Stripe account
+// place-order v11.8 — ASAP delivery is back; one kitchen-lead rule
+//   v11.8 (2026-10-25): docs/ASAP-AND-SCHEDULING-2026-10-25.md. SQL half:
+//        20261025100000_scheduling_release (private.branch_kitchen_lead_min, the release job on it,
+//        patch_branch_settings refusing a bad lead or prep time, the release cron job).
+//        - The 409 { error: 'delivery_must_be_scheduled' } refusal (added 2026-09-16, 9b45236) is
+//          gone: a storefront delivery with no scheduled_for is an ASAP delivery again
+//          (scheduled_for null, held false, on the kitchen board at once, or once paid for a card),
+//          judged for "now" by is_branch_open, the payment matrix's 'asap' column and the
+//          delivery-hours trigger, as a pickup is. 409 { error: 'pickup_is_asap_only' } stays.
+//        - The hold reads the lead with kitchenLeadMin() from a new ./kitchen-lead.ts (pure, no
+//          imports): schedule_lead_time_min if it is a whole number 0-10080, else prep_time_min if
+//          that is, else 15 — the rule of private.branch_kitchen_lead_min, which the release job
+//          uses. It was Math.max(0, Number(lead ?? prep ?? 15)), so 7.5 was taken as 7.5 and
+//          "abc" as NaN, which held nothing: a booking for next week went to the kitchen at once.
+//          packages/shared/src/utils/kitchen-lead.test.ts imports ./kitchen-lead.ts and fails if
+//          it ever answers differently from the shared kitchenLeadMin(). A Management API / MCP
+//          deploy must pass kitchen-lead.ts along with index.ts, card.ts and
+//          _shared/entitlements.ts; the CLI uploads the tree.
 //   v11.7 (2026-09-24): Stripe Connect, direct charges (docs/PAYMENTS-STRIPE-CONNECT-2026-09-24.md).
 //        SQL half: 20260925100000_stripe_connect_payments (branch_payment_accounts,
 //        branch_card_ready, storefront_status.card_ready, the card-aware awaiting-payment sync and

@@ -5,15 +5,16 @@ import {
   parseTipConfig,
   serializeTipConfig,
   TIP_CONFIG_DEFAULTS,
+  TIP_DEFAULT_PERCENT,
   TIP_PRESET_DEFAULTS,
   tipPresetsForChannel,
 } from './tip-settings';
 
 /**
  * The checkout's tip card is a product decision, not a per-branch setting: three
- * percentages, Custom, No tip — five choices, the same everywhere. These tests
- * pin that list, the rule that a branch row cannot override it, and the
- * chip-to-dollars rounding the diner agrees to on screen.
+ * percentages, Custom, No tip — five choices, the same everywhere, opening on 18%.
+ * These tests pin that list, the default chip, the rule that a branch row cannot
+ * override either, and the chip-to-dollars rounding the diner agrees to on screen.
  */
 
 const CHANNELS = ['pickup', 'dine_in', 'delivery', 'qr_ordering'] as const;
@@ -67,6 +68,26 @@ describe('tip presets are product-fixed', () => {
   });
 });
 
+describe('the tip the checkout opens with', () => {
+  // Owner request 2026-10-25: 18% is selected when the checkout opens, on every channel.
+  it('is 18%, and it is one of the chips, so it shows as selected', () => {
+    expect(TIP_DEFAULT_PERCENT).toBe(18);
+    expect(TIP_PRESET_DEFAULTS).toContain(TIP_DEFAULT_PERCENT);
+    for (const ch of CHANNELS) {
+      expect(tipPresetsForChannel(parseTipConfig(null), ch)).toContain(TIP_DEFAULT_PERCENT);
+    }
+  });
+
+  it('is not a branch setting — nothing about a default is read from or written to tip_config', () => {
+    const out = serializeTipConfig(
+      parseTipConfig({ tip_config: { delivery: { default_percent: 25, distribution: { driver: 80 } } } }),
+    ) as Record<string, Record<string, unknown>>;
+    for (const ch of CHANNELS) {
+      expect(Object.keys(out[ch] ?? {})).toEqual(['distribution']);
+    }
+  });
+});
+
 describe('computeTipAmount (what the checkout sends)', () => {
   it('applies a preset percentage to the subtotal, rounded to the cent', () => {
     expect(computeTipAmount(34.85, 18, '')).toBe(6.27);
@@ -75,7 +96,11 @@ describe('computeTipAmount (what the checkout sends)', () => {
     expect(computeTipAmount(10, 18, '')).toBe(1.8);
   });
 
-  it('is 0 in the default state — nothing chosen, No tip', () => {
+  it('opens at 18% of the subtotal', () => {
+    expect(computeTipAmount(34.85, TIP_DEFAULT_PERCENT, '')).toBe(6.27);
+  });
+
+  it('is 0 once the diner taps No tip (or the selected chip again), and on an empty subtotal', () => {
     expect(computeTipAmount(34.85, 0, '')).toBe(0);
     expect(computeTipAmount(0, 20, '')).toBe(0);
   });

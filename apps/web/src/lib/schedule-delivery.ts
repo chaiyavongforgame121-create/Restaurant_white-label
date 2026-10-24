@@ -2,17 +2,24 @@ import type { StorefrontStatus } from '@favornoms/database/queries';
 import { buildScheduleDays, type ClosurePeriod, type OpeningWindow } from './schedule-slots';
 
 /**
- * Customers order one of two ways: Pickup, prepared now, or Schedule Delivery, booked for a day
- * and time. This decides whether the second can be offered at all, on the server, before the
- * order-type gate or the menu picker shows it.
+ * Customers order Pickup (prepared now) or Delivery, and a delivery is either ASAP or booked for
+ * a day and time (docs/ASAP-AND-SCHEDULING-2026-10-25.md §1). This decides, on the server and
+ * before the order-type gate or the menu picker shows anything, which of the two deliveries can
+ * be offered. Delivery is offered when EITHER is possible, and disappears only when neither is.
  *
- * It is deliberately NOT `status.delivery`, which also requires delivery to be open THIS minute:
- * gating on that hid delivery outside delivery hours from exactly the diners booking ahead
- * (Brooklyn, with one Sunday window, showed no delivery six days a week) and made the cart store
- * wipe a delivery choice the diner had already made.
+ * The two are judged separately because they fail separately. Gating all of delivery on
+ * `status.delivery` (open THIS minute) once hid it outside delivery hours from exactly the diners
+ * booking ahead (Brooklyn, with one Sunday window, showed no delivery six days a week); gating it
+ * all on advance orders made "Accept scheduled orders" switch delivery off entirely.
  *
- * What it does require, because each one otherwise sends the diner through the whole checkout
- * to a refusal:
+ * ASAP (canDeliverNow) needs, as place-order and the orders triggers judge "now":
+ * - a branch that delivers and is inside its delivery hours (status.delivery);
+ * - the branch open this minute (is_branch_open: active, not paused, no closure, opening hours).
+ * Whether a payment method is switched on for "now" orders is the checkout's to add — it is in
+ * the branch's settings, which only the checkout reads.
+ *
+ * A booking (canScheduleDelivery) needs, because each one otherwise sends the diner through the
+ * whole checkout to a refusal:
  * - a branch that delivers at all and takes advance orders;
  * - orders not paused — is_branch_open() refuses every time while paused, booked times included,
  *   so "you can still schedule a delivery" would be a promise every slot breaks;
@@ -22,7 +29,17 @@ import { buildScheduleDays, type ClosurePeriod, type OpeningWindow } from './sch
  *   nothing to book.
  */
 export interface ScheduleDeliveryState {
+  /** Delivery can be offered at all: ASAP or booked (canDeliverNow || canScheduleDelivery). */
   canDeliver: boolean;
+  /** An ASAP delivery can be placed right now (before the checkout's payment-method check). */
+  canDeliverNow: boolean;
+  /** A delivery can be booked for a later slot. */
+  canScheduleDelivery: boolean;
+  /**
+   * is_branch_open() right now. A failed read counts as open, like every other caller of it on the
+   * storefront: it must not block ordering, and place-order still refuses at a closed branch.
+   */
+  openNow: boolean;
   /** The kitchen paused orders (branches.settings.orders_paused). Nothing can be ordered. */
   paused: boolean;
   /**
@@ -67,11 +84,13 @@ export async function resolveScheduleDelivery(
   now: Date = new Date(),
 ): Promise<ScheduleDeliveryState> {
   const client = supabase as StorefrontReads;
-  const [{ data: branchRow }, { data: policy }] = await Promise.all([
+  const [{ data: branchRow }, { data: policy }, { data: open }] = await Promise.all([
     client.from('branches').select('settings').eq('id', branchId).maybeSingle(),
     client.rpc('branch_schedule_policy', { p_branch_id: branchId }),
+    client.rpc('is_branch_open', { p_branch_id: branchId }),
   ]);
   const paused = ordersPaused((branchRow?.settings ?? null) as Record<string, unknown> | null);
+  const openNow = open !== false;
   // storefront_status is keyed by branch, so delivery_entitled is this branch's answer —
   // when there IS an answer. getStorefrontStatus returns STOREFRONT_UNKNOWN after two failed
   // RPC attempts, and that constant sets delivery_entitled:false on purpose (it must not
@@ -83,11 +102,21 @@ export async function resolveScheduleDelivery(
   // `deliveryOffered = true` defaults were already written to do.
   //
   // This only changes the WORDS: canDeliver is false either way, because STOREFRONT_UNKNOWN
-  // also carries scheduling_enabled:false and the early return below still fires.
+  // also carries delivery:false and scheduling_enabled:false.
   const offered = status.known === false || status.delivery_entitled === true;
-  if (paused || !offered || !status.scheduling_enabled) {
-    return { canDeliver: false, paused, offered };
-  }
+  // status.delivery already means "this branch delivers and is inside its delivery hours"; the
+  // explicit checks keep a paused or unsold branch out even if that field were ever widened.
+  const canDeliverNow = !paused && offered && status.delivery === true && openNow;
+  const result = (canScheduleDelivery: boolean): ScheduleDeliveryState => ({
+    canDeliver: canDeliverNow || canScheduleDelivery,
+    canDeliverNow,
+    canScheduleDelivery,
+    openNow,
+    paused,
+    offered,
+  });
+  // Scheduling off ("Accept scheduled orders" unticked) takes away bookings only — ASAP stays.
+  if (paused || !offered || !status.scheduling_enabled) return result(false);
   // Same parsing as the checkout picker: a failed policy read means opening hours alone decide,
   // and `windows: null` (never armed) is not the same statement as an empty list.
   const d = (policy ?? {}) as Record<string, unknown>;
@@ -105,5 +134,5 @@ export async function resolveScheduleDelivery(
     slotMinutes: status.schedule_slot_minutes,
     now,
   });
-  return { canDeliver: days.length > 0, paused, offered };
+  return result(days.length > 0);
 }

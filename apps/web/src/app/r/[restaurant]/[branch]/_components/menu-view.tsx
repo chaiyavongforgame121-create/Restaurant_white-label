@@ -266,11 +266,13 @@ interface MenuViewProps {
   heroUrl?: string | null;
   heroTitle?: string;
   heroSubtitle?: string;
-  /** Schedule Delivery can be booked here (resolveScheduleDelivery). Defaults false so a missing prop
-   *  cannot sell delivery. */
-  canDeliver?: boolean;
+  /** An ASAP delivery can be placed now / a delivery can be booked (resolveScheduleDelivery).
+   *  Delivery is offered when either is true. Both default false so a missing prop cannot sell
+   *  delivery. */
+  canDeliverNow?: boolean;
+  canScheduleDelivery?: boolean;
   /** This branch delivers at all (per branch: its delivery switch, docs/PACKAGING-2026-10-24.md §3).
-   *  Words only — canDeliver alone decides whether delivery is offered. Defaults true so a
+   *  Words only — the two flags above alone decide whether delivery is offered. Defaults true so a
    *  missing prop says "not right now" rather than declaring the branch delivery-free. */
   deliveryOffered?: boolean;
   /** A `?t=` token resolved to a table here, so the order type is already settled. */
@@ -281,8 +283,9 @@ interface MenuViewProps {
   timeZone?: string;
 }
 
-export function MenuView({ branch, categories, items, isOpen = true, reviews, combos = [], happyHours = [], menuLayout = 'grid4', menuCardStyle = 'standard', heroUrl, heroTitle, heroSubtitle, canDeliver = false, deliveryOffered = true, seatingFromScan = false, timeZone }: MenuViewProps) {
+export function MenuView({ branch, categories, items, isOpen = true, reviews, combos = [], happyHours = [], menuLayout = 'grid4', menuCardStyle = 'standard', heroUrl, heroTitle, heroSubtitle, canDeliverNow = false, canScheduleDelivery = false, deliveryOffered = true, seatingFromScan = false, timeZone }: MenuViewProps) {
   const t = useTranslations();
+  const canDeliver = canDeliverNow || canScheduleDelivery;
   const params = useParams<{ restaurant: string; branch: string }>();
   const [search, setSearch] = React.useState('');
   const [chosenCategory, setActiveCategory] = React.useState<string>('all');
@@ -414,7 +417,8 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
         <OrderTypeGate
           branchId={branch.id}
           branchName={branch.name}
-          canDeliver={canDeliver}
+          canDeliverNow={canDeliverNow}
+          canScheduleDelivery={canScheduleDelivery}
           deliveryOffered={deliveryOffered}
           seatingFromScan={seatingFromScan}
         />
@@ -438,11 +442,11 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
           <div className="container mt-4">
             <div className="rounded-2xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning">
               <strong>{t('storefront.closed.title')}</strong>{' '}
-              {/* Pickup is always prepared now, so it waits for opening hours — but a delivery is
-                  booked for a later time, which a closed restaurant can still take. canDeliver is
-                  only true with a bookable slot and orders not paused, so this never promises a
-                  booking every slot would refuse. */}
-              {canDeliver
+              {/* Pickup and ASAP delivery are prepared now, so they wait for opening hours — but a
+                  delivery booked for a later time is something a closed restaurant can still take.
+                  canScheduleDelivery is only true with a bookable slot and orders not paused, so
+                  this never promises a booking every slot would refuse. */}
+              {canScheduleDelivery
                 ? t('storefront.closed.canSchedule')
                 : t('storefront.closed.notTaking')}
             </div>
@@ -601,7 +605,7 @@ function Hero({
 /* -------------------- Order type -------------------- */
 
 /**
- * Pickup / Schedule Delivery, straight under the hero.
+ * Pickup / Delivery, straight under the hero.
  *
  * It used to share a toolbar with the search box, below the rating strip, the combos and the
  * happy-hour sections — far enough down that a diner scrolling for food could pick a dish
@@ -630,7 +634,7 @@ function ChannelPicker({
   // Dine-in is not a tab at all: tapping it was a claim to be sitting at a table
   // that nothing had proved, and the round then had no session to land on. It is
   // the table QR that decides it, and the locked chip below is what it looks like.
-  // Pickup first, then Schedule Delivery — the order checkout offers them in.
+  // Pickup first, then Delivery (ASAP or booked) — the order checkout offers them in.
   const options = [
     { value: 'pickup' as const, label: t('channel.pickup'), icon: <ShoppingBag className="h-4 w-4" /> },
     ...(canDeliver

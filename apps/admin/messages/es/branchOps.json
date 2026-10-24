@@ -14,11 +14,11 @@
   },
   "payments": {
     "title": "Métodos de pago",
-    "description": "Elige qué métodos de pago pueden usar los clientes en Recoger en tienda (se prepara ahora) y Programar entrega (se reserva con anticipación). La tarjeta se paga en línea al finalizar el pedido, directamente en la cuenta de Stripe de esta sucursal, y los clientes solo la ven cuando Stripe está conectado en Pagos con tarjeta, más arriba. Las ventas con tarjeta que tu personal cobra en el mostrador o en el POS con tu propia terminal se registran como antes y no se ven afectadas.",
+    "description": "Elige qué métodos de pago pueden usar los clientes cuando piden para ahora (para recoger en tienda, o con entrega lo antes posible) y cuando programan una entrega para un día y una hora. La tarjeta se paga en línea al finalizar el pedido, directamente en la cuenta de Stripe de esta sucursal, y los clientes solo la ven cuando Stripe está conectado en Pagos con tarjeta, más arriba. Las ventas con tarjeta que tu personal cobra en el mostrador o en el POS con tu propia terminal se registran como antes y no se ven afectadas.",
     "dineInNote": "Esto aplica solo a entregas a domicilio y pedidos para recoger. Los clientes que comen en el local se saltan el paso de pago y te pagan directamente en el restaurante.",
     "modes": {
-      "asap": "Recoger en tienda (ahora)",
-      "scheduled": "Programar entrega"
+      "asap": "Pedir ahora (recoger en tienda y entrega lo antes posible)",
+      "scheduled": "Entrega programada"
     },
     "methods": {
       "cash": {
@@ -36,9 +36,9 @@
     },
     "lockedTransfer": "Sube tu código QR abajo para activarla",
     "lockedPackage": "No disponible para tu restaurante en este momento",
-    "toggleAria": "{method} para pedidos de {mode}",
+    "toggleAria": "{mode}: {method}",
     "cardLocked": "El pago con tarjeta está desactivado para tu restaurante en este momento. Contacta con FavorNoms para que lo vuelvan a activar.",
-    "noMethod": "{which, select, asap {Los pedidos de Recoger en tienda (ahora) no tienen ningún método de pago activado: los clientes no podrán hacer pedidos a domicilio ni para recoger de esa forma.} scheduled {Los pedidos de Programar entrega no tienen ningún método de pago activado: los clientes no podrán hacer pedidos a domicilio ni para recoger de esa forma.} other {Ni Recoger en tienda (ahora) ni Programar entrega tienen un método de pago activado: los clientes no podrán hacer pedidos a domicilio ni para recoger de ninguna de las dos formas.}} Los pedidos para comer en el local no se ven afectados.",
+    "noMethod": "{which, select, asap {Los pedidos para ahora no tienen ningún método de pago activado: los clientes no podrán pedir para recoger en tienda ni con entrega lo antes posible.} scheduled {Las entregas programadas no tienen ningún método de pago activado: los clientes no podrán programar una entrega para un día y una hora.} other {Ni los pedidos para ahora ni las entregas programadas tienen un método de pago activado: los clientes no podrán hacer pedidos para recoger ni a domicilio.}} Los pedidos para comer en el local no se ven afectados.",
     "qr": {
       "title": "Tu código QR",
       "description": "Los clientes lo ven al pagar, transfieren el total y luego suben una foto del comprobante. No se cobra nada automáticamente: el pedido espera en <b>Pedidos</b> hasta que apruebes el comprobante.",
@@ -48,7 +48,7 @@
       "instructions": "Instrucciones (opcional)",
       "instructionsPlaceholder": "p. ej., Incluye tu número de pedido en el concepto de la transferencia",
       "onWithoutImage": "La transferencia QR está activada, pero no hay ninguna imagen QR guardada. Se rechazará a los clientes al pagar hasta que subas una.",
-      "savedButOff": "Tu código QR está guardado, pero <strong>la transferencia QR sigue desactivada</strong>, así que los clientes no pueden elegirla. Márcala arriba en Recoger en tienda (ahora) o Programar entrega (o en ambos) y luego guarda.",
+      "savedButOff": "Tu código QR está guardado, pero <strong>la transferencia QR sigue desactivada</strong>, así que los clientes no pueden elegirla. Márcala arriba en Pedir ahora o Entrega programada (o en ambos) y luego guarda.",
       "perBranch": "Este QR es solo de esta sucursal. Los clientes lo ven al pagar en línea y el cajero lo muestra en la caja de esta sucursal cuando alguien paga por transferencia. Cada sucursal sube el suyo: nunca se copia a otra sucursal."
     },
     "save": "Guardar métodos de pago"
@@ -152,16 +152,16 @@
     },
     "selfNote": "Los clientes siguen viendo el estado en vivo, pero no un mapa: nada reporta la ubicación mientras tu personal maneja.",
     "limit": "Limitar las entregas a un horario",
-    "limitHint": "Desactivado: las entregas se pueden reservar para cualquier hora en que la sucursal esté abierta. Activado: los clientes solo pueden reservar entregas dentro de las franjas de abajo. Toda entrega se reserva con anticipación, así que también necesitas <strong>Pedidos programados</strong> activado.",
+    "limitHint": "Desactivado: los clientes pueden pedir entregas a domicilio a cualquier hora en que la sucursal esté abierta, lo antes posible o programadas para una hora. Activado: solo dentro de las franjas de abajo, en ambos casos. Para programar una hora también necesitas <strong>Pedidos programados</strong> activado.",
     "noDelivery": "Sin entregas este día",
     "armedButEmpty": "El horario de entrega está activado, pero no hay franjas: los clientes no pueden hacer ningún pedido a domicilio. Agrega una franja o desactiva esta opción.",
     "save": "Guardar configuración de entrega"
   },
   "scheduling": {
     "title": "Pedidos programados",
-    "description": "Cómo reservan entregas los clientes: en tu tienda en línea cada entrega se reserva para un día y una hora, y los pedidos para recoger siempre son para ahora. Las horas disponibles parten del <strong>Horario de atención</strong> de esta sucursal (arriba), se acotan con las franjas de reserva de abajo cuando las activas, y con el <strong>Horario de entrega</strong> cuando está limitado. Una sucursal que no ofrece entregas a domicilio no recibe reservas de clientes.",
+    "description": "Cómo programan entregas los clientes. En tu tienda en línea, un cliente pide la entrega lo antes posible o la programa para un día y una hora: la hora en que el repartidor recoge la comida aquí, así que debe estar lista para entonces. Los pedidos para recoger siempre son para ahora. Las horas disponibles parten del <strong>Horario de atención</strong> de esta sucursal (arriba), se acotan con las franjas de reserva de abajo cuando las activas, y con el <strong>Horario de entrega</strong> cuando está limitado. Una sucursal que no ofrece entregas a domicilio no recibe reservas de clientes.",
     "accept": "Aceptar pedidos programados",
-    "acceptHint": "Los clientes reservan cada entrega para un día y una hora. Desactivado: “Programar entrega” desaparece de tu tienda en línea y los clientes solo pueden pedir para recoger en tienda.",
+    "acceptHint": "Los clientes pueden programar una entrega para un día y una hora. Desactivado: solo desaparecen de tu tienda en línea los selectores de día y hora. La entrega a domicilio sigue disponible, lo antes posible, mientras la sucursal esté abierta y haciendo entregas.",
     "minLead": "Reserva más próxima (minutos de anticipación)",
     "minLeadHint": "Con cuánta anticipación debe reservar un cliente. No se ofrecen horarios más cercanos.",
     "maxDays": "Reserva más lejana (días de anticipación)",
@@ -170,8 +170,10 @@
     "slotOption": "{minutes, plural, one {Cada minuto} other {Cada # minutos}}",
     "slotHint": "Redondea las horas ofrecidas. Intervalos más grandes dan menos opciones y más ordenadas.",
     "kitchenLead": "Enviar a cocina (minutos antes)",
-    "kitchenLeadHint": "Una reserva no aparece en la pantalla de cocina hasta este tiempo antes de su hora. <strong>No</strong> es el tiempo de preparación de los tiempos estimados para el cliente; ese se configura en la tarjeta Entrega a domicilio.",
+    "kitchenLeadHint": "Cuántos minutos antes de su hora llega una reserva a la pantalla de cocina, con un aviso sonoro. Una reserva para las 11:30 con 5 aquí llega a la cocina a las 11:25. Los pedidos para ahora pasan a cocina de inmediato. <strong>No</strong> es el tiempo de preparación de los tiempos estimados para el cliente; ese se configura en la tarjeta Entrega a domicilio.",
     "leadGap": "Los clientes pueden reservar con {bookMinutes, plural, one {# minuto} other {# minutos}} de anticipación, pero pediste {kitchenMinutes, plural, one {# minuto} other {# minutos}} de aviso para la cocina. Lo que se reserve dentro de esa diferencia llega a la cocina de inmediato, con menos aviso del que querías. Si te importa, sube <strong>Reserva más próxima</strong> para igualarlo.",
+    "leadBelowPrep": "Las reservas llegan a la cocina {kitchenMinutes, plural, one {# minuto} other {# minutos}} antes de su hora, pero tu tiempo de preparación es de {prepMinutes, plural, one {# minuto} other {# minutos}}: puede que la comida no esté lista cuando llegue el repartidor. Pon <strong>Enviar a cocina</strong> en al menos tu tiempo de preparación.",
+    "leadZero": "Con 0, una reserva llega a la cocina justo a su hora, cuando el repartidor viene a recogerla, así que se empieza a cocinar cuando la comida ya debería estar lista. Indica los minutos que necesita tu cocina.",
     "limit": "Limitar las horas en que los clientes pueden reservar",
     "limitHint": "Desactivado: los clientes pueden reservar a cualquier hora en que la sucursal esté abierta. Activado: solo dentro de las franjas de abajo. Puedes definir una distinta por día, por ejemplo, reservas desde las 5 p. m. toda la semana y solo de 10 a. m. a 2 p. m. el domingo.",
     "sameAsOpening": "Igual que el horario de atención",

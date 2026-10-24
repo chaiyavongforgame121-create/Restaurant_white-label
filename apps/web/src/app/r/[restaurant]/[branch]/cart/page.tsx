@@ -27,8 +27,9 @@ export default async function CartPage({ params }: Props) {
       <OrderTypeGate
         branchId={tenant.branch.id}
         branchName={tenant.branch.name}
-        canDeliver={scheduleDelivery.canDeliver}
-        // Delivery is switched per branch, so "not offered here" and "not bookable right now"
+        canDeliverNow={scheduleDelivery.canDeliverNow}
+        canScheduleDelivery={scheduleDelivery.canScheduleDelivery}
+        // Delivery is switched per branch, so "not offered here" and "not available right now"
         // are different sentences on the gate.
         deliveryOffered={scheduleDelivery.offered}
       />

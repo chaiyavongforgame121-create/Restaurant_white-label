@@ -387,6 +387,34 @@ export function workStartedMs(order: Pick<Order, 'created_at' | 'scheduled_for'>
   return Math.max(created, due - leadMs);
 }
 
+/** Whole minutes until a held booking reaches the board: private.release_scheduled_orders() lets
+ *  it out at scheduled_for − lead (the branch's kitchenLeadMin), not at its booked time, so the
+ *  Scheduled drawer counts down to that. Rounded up, so it never says 0 while there is time left;
+ *  0 once the release is due (the minute cron has not run yet). Null without a readable time. */
+export function minutesToRelease(order: Pick<Order, 'scheduled_for'>, leadMs: number, now: number): number | null {
+  const due = parseTimestamp(order.scheduled_for);
+  if (!Number.isFinite(due)) return null;
+  return Math.max(0, Math.ceil((due - leadMs - now) / 60_000));
+}
+
+/** A booking's time as the board writes it ("Due 11:30"): on the branch's clock, not the tablet's,
+ *  and with the weekday when it is not today there (a lead can be up to a week). An unknown zone
+ *  falls back to the device's rather than throwing; '' without a readable time. */
+export function dueTimeLabel(iso: string | null | undefined, now: number, intlLocale: string, timeZone: string | null): string {
+  const at = parseTimestamp(iso);
+  if (!Number.isFinite(at)) return '';
+  const zoned = (opts: Intl.DateTimeFormatOptions): Intl.DateTimeFormat => {
+    try {
+      return new Intl.DateTimeFormat(intlLocale, { ...opts, timeZone: timeZone ?? undefined });
+    } catch {
+      return new Intl.DateTimeFormat(intlLocale, opts);
+    }
+  };
+  const day = zoned({ year: 'numeric', month: '2-digit', day: '2-digit' });
+  const sameDay = day.format(at) === day.format(now);
+  return zoned(sameDay ? { hour: 'numeric', minute: '2-digit' } : { weekday: 'short', hour: 'numeric', minute: '2-digit' }).format(at);
+}
+
 /** Seconds since `fromMs`. Only clock skew (a stamp slightly in the future) is clamped; an old
  *  ticket shows its real age — the 12-hour clamp used to paint a forgotten ticket as a calm 0:00. */
 export function safeElapsedSec(fromMs: number, now: number): number {

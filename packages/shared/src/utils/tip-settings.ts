@@ -38,6 +38,14 @@ export interface TipSplit {
 // and a quiet "No tip" control. 0 is never one of the chips.
 export const TIP_PRESET_DEFAULTS: number[] = [18, 20, 25];
 
+// The chip the storefront checkout opens with, on every channel (owner request 2026-10-25,
+// docs/ASAP-AND-SCHEDULING-2026-10-25.md §4). It must be one of TIP_PRESET_DEFAULTS: the
+// checkout shows a tip as selected only when it matches a chip, so any other number would
+// add a tip to the total with nothing on screen highlighted. Fixed in code like the chips —
+// no branch row stores a default. "No tip", Custom and tapping 18% again still take it to 0.
+// The POS counter has no tip step and never reads this.
+export const TIP_DEFAULT_PERCENT = 18;
+
 // Default = 100% of the tip to the worker (driver for delivery, staff pool
 // otherwise), 0% house — preserves the pre-config "100% goes to your team"
 // behaviour. The SQL trigger uses the same 100/0 fallback.

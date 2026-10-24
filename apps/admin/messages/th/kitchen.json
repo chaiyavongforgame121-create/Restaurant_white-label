@@ -69,7 +69,8 @@
     "markLineNotDone": "ยกเลิกติ๊ก {item}",
     "soldOut": "หมดแล้ว",
     "stackedWith": "🔗 ส่งรวมกับ #{other} · จุดที่ {stop} — แพ็กทั้งสองถุงให้คนขับคนเดียว",
-    "redispatchOffered": "ข้ามคนขับคนนี้ — ส่งให้คนขับคนอื่น"
+    "redispatchOffered": "ข้ามคนขับคนนี้ — ส่งให้คนขับคนอื่น",
+    "due": "ต้องพร้อม {time}"
   },
   "timer": {
     "hoursMinutes": "{hours} ชม. {minutes} นาที",
@@ -191,7 +192,8 @@
   "scheduled": {
     "title": "ออร์เดอร์ล่วงหน้า · {count}",
     "close": "ปิด",
-    "releasesIn": "เข้าครัวใน {minutes} นาที"
+    "releasesIn": "เข้าครัวใน {minutes} นาที",
+    "releasingNow": "กำลังเข้าครัว"
   },
   "voice": {
     "newOrder": "ออเดอร์ใหม่ {channel} หมายเลข {ticket}",

@@ -174,9 +174,10 @@ export interface CartState {
   channel: OrderChannel | null;
   setChannel: (channel: OrderChannel) => void;
   /**
-   * Drop a persisted choice that no longer applies — a branch that has since stopped
-   * delivering, or dine-in on a device that is not sitting at a table. Clearing re-opens
-   * the gate rather than silently substituting a channel the diner did not pick.
+   * Drop a persisted choice that no longer applies — a branch that can no longer deliver
+   * (`canDeliver`: neither an ASAP delivery nor a booking is possible), or dine-in on a device
+   * that is not sitting at a table. Clearing re-opens the gate rather than silently
+   * substituting a channel the diner did not pick.
    *
    * `hasTablePin` must be the SETTLED answer: call this only once the table-pin
    * provider is ready, never while it is still validating a stored sitting, or

@@ -69,7 +69,8 @@
     "markLineNotDone": "Bỏ đánh dấu {item}",
     "soldOut": "Hết món",
     "stackedWith": "🔗 Giao ghép với #{other} · điểm {stop} — gói cả hai túi cho một tài xế",
-    "redispatchOffered": "Bỏ qua tài xế này — mời tài xế khác"
+    "redispatchOffered": "Bỏ qua tài xế này — mời tài xế khác",
+    "due": "Xong trước {time}"
   },
   "timer": {
     "hoursMinutes": "{hours} giờ {minutes} ph",
@@ -191,7 +192,8 @@
   "scheduled": {
     "title": "Đơn hẹn giờ · {count}",
     "close": "Đóng",
-    "releasesIn": "Vào bếp sau {minutes} ph"
+    "releasesIn": "Vào bếp sau {minutes} ph",
+    "releasingNow": "Đang vào bếp"
   },
   "voice": {
     "newOrder": "Đơn mới, {channel}, số {ticket}",

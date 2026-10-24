@@ -7,6 +7,7 @@ import {
   batchGroups,
   boardHealth,
   dishStationKeys,
+  dueTimeLabel,
   eightySixTargets,
   filterAfterStationsRead,
   fmtTimer,
@@ -18,6 +19,7 @@ import {
   lineStationKeys,
   linesInMenuOrder,
   mergeSoldOut,
+  minutesToRelease,
   openingStation,
   overlaySnapshot,
   parseComboContents,
@@ -31,6 +33,7 @@ import {
   stationPills,
   stationStats,
   withDishStation,
+  workStartedMs,
   type Order,
   type OrderItem,
 } from './kitchen-model';
@@ -110,6 +113,49 @@ describe('what is on the board', () => {
     expect(isLineDone({ prep_status: 'served' })).toBe(true);
     expect(isLineDone({ prep_status: 'pending' })).toBe(false);
     expect(isLineDone({})).toBe(false);
+  });
+});
+
+describe('scheduled bookings: release and due time', () => {
+  // The owner's example: booked for 11:30 with "Send to kitchen" at 5 reaches the kitchen at 11:25.
+  const booked = '2026-10-25T11:30:00.000Z';
+  const at = (hhmmss: string) => Date.parse(`2026-10-25T${hhmmss}Z`);
+  const lead5 = 5 * 60_000;
+
+  it('counts the drawer down to the release (booked − lead), not to the booked time', () => {
+    const o = order({ held: true, scheduled_for: booked });
+    expect(minutesToRelease(o, lead5, at('11:00:00'))).toBe(25);
+    expect(minutesToRelease(o, 0, at('11:00:00'))).toBe(30);
+    // Rounded up: never "0" while time is left; 0 once the minute cron is due to release it.
+    expect(minutesToRelease(o, lead5, at('11:24:30'))).toBe(1);
+    expect(minutesToRelease(o, lead5, at('11:25:00'))).toBe(0);
+    expect(minutesToRelease(o, lead5, at('11:26:00'))).toBe(0);
+    // The Postgres text form a reload can carry reads the same.
+    expect(minutesToRelease(order({ scheduled_for: '2026-10-25 11:30:00+00' }), lead5, at('11:00:00'))).toBe(25);
+    expect(minutesToRelease(order({ scheduled_for: null }), lead5, at('11:00:00'))).toBeNull();
+  });
+
+  it('starts a released booking’s clock at its release, never before it was placed', () => {
+    expect(workStartedMs(order({ created_at: '2026-10-25T09:00:00.000Z', scheduled_for: booked }), lead5)).toBe(at('11:25:00'));
+    expect(workStartedMs(order({ created_at: '2026-10-25T11:28:00.000Z', scheduled_for: booked }), lead5)).toBe(at('11:28:00'));
+  });
+
+  it('writes the due time on the branch’s clock, with the weekday only when it is not today there', () => {
+    // 04:30Z is 11:30 in Bangkok (UTC+7).
+    const bkk = '2026-10-25T04:30:00.000Z';
+    expect(dueTimeLabel(bkk, Date.parse('2026-10-25T01:00:00Z'), 'en-GB', 'Asia/Bangkok')).toBe('11:30');
+    // 18:00Z on the 24th is already the 25th in Bangkok: still today there, but not in UTC.
+    expect(dueTimeLabel(bkk, Date.parse('2026-10-24T18:00:00Z'), 'en-GB', 'Asia/Bangkok')).toBe('11:30');
+    const utc = dueTimeLabel(bkk, Date.parse('2026-10-24T18:00:00Z'), 'en-GB', 'UTC');
+    expect(utc).toContain('Sun');
+    expect(utc).toContain('04:30');
+    expect(dueTimeLabel(bkk, Date.parse('2026-10-24T10:00:00Z'), 'en-GB', 'Asia/Bangkok')).toContain('Sun');
+  });
+
+  it('says nothing for an order placed for now, and survives an unknown zone', () => {
+    expect(dueTimeLabel(null, T0, 'en-GB', 'Asia/Bangkok')).toBe('');
+    expect(dueTimeLabel('soon', T0, 'en-GB', 'Asia/Bangkok')).toBe('');
+    expect(dueTimeLabel(booked, at('11:00:00'), 'en-GB', 'Not/AZone')).not.toBe('');
   });
 });
 
