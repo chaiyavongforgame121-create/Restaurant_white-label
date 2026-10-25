@@ -1,5 +1,6 @@
 import { getServerClient } from '@favornoms/database/server';
 import { parseServiceFeePercent } from '@favornoms/shared';
+import { storefrontBase } from '@favornoms/database/storefront-path';
 import { resolveStorefrontStatus, resolveTenant, storefrontNames } from '@/lib/tenant';
 import { CheckoutView } from './_components/checkout-view';
 import { OrderTypeGate } from '../_components/order-type-gate';
@@ -27,7 +28,7 @@ export default async function CheckoutPage({ params }: Props) {
     supabase.from('branches').select('sales_tax_rate').eq('id', tenant.branch.id).maybeSingle(),
     resolveScheduleDelivery(supabase, tenant.branch.id, status),
   ]);
-  const base = `/r/${restaurant}/${branch}`;
+  const base = storefrontBase(tenant);
   // Deep links reach checkout without passing the menu — same gate, same rules.
   return (
     <>

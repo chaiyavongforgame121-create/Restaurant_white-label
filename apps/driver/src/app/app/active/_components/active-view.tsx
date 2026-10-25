@@ -70,7 +70,7 @@ async function readCompletedRun(
   snap: ActiveDeliveryUI,
   earlier: readonly ActiveDeliveryUI[],
   driverId: string,
-): Promise<CompletedRun> {
+): Promise<CompletedCard> {
   const supabase = getBrowserClient();
   const snapshots = [...earlier, snap];
   const known = [...new Set(snapshots.map((l) => l.id))];
@@ -110,7 +110,36 @@ async function readCompletedRun(
     ? [...(knownLedger ?? []), ...((await readLedger(missed)) ?? [])]
     : knownLedger;
 
-  return completedRun({ legIds: [...known, ...missed], ledger, deliveries, snapshots });
+  return {
+    ...completedRun({ legIds: [...known, ...missed], ledger, deliveries, snapshots }),
+    // A leg this phone never held has no order number to show (deliveries has only order_id),
+    // and naming the others alone would contradict "Earnings added (2 orders)" above it.
+    orderNumber: missed.length ? '' : runOrderNumbers(snapshots),
+  };
+}
+
+/** What the "Delivery complete!" card shows: the run's figures and the order numbers under the title. */
+type CompletedCard = CompletedRun & {
+  /** Every leg's order number, or '' when the card cannot name them all. */
+  orderNumber: string;
+};
+
+function runOrderNumbers(legs: readonly ActiveDeliveryUI[]): string {
+  return legs.map((l) => l.orderNumber).join(' · ');
+}
+
+/**
+ * The card from the phone's own figures, shown the moment the run leaves the screen while
+ * readCompletedRun asks what was credited. A batch whose earlier legs this screen did not see
+ * (it was remounted, or they were never this rider's) may have a leg the read is about to find,
+ * so it names no order until the read has said.
+ */
+function provisionalCard(snap: ActiveDeliveryUI, earlier: readonly ActiveDeliveryUI[]): CompletedCard {
+  const legs = [...earlier, snap];
+  return {
+    ...completedRun({ legIds: legs.map((l) => l.id), snapshots: legs }),
+    orderNumber: snap.batchId && earlier.length === 0 ? '' : runOrderNumbers(legs),
+  };
 }
 
 type StageKey = 'heading_to_pickup' | 'at_pickup' | 'picked_up' | 'in_transit' | 'at_customer';
@@ -198,10 +227,32 @@ export function ActiveDeliveryView() {
   const geoDenied = geoWatchDenied || gps === 'denied' || gps === 'insecure';
   const [route, setRoute] = React.useState<[number, number][] | null>(null);
   const { driver } = useDriverSession();
-  const [completed, setCompleted] = React.useState<(CompletedRun & { orderNumber: string }) | null>(null);
+  const [completed, setCompleted] = React.useState<CompletedCard | null>(null);
   // The legs of a batch already dropped off on this run, so the last one can say what the whole
   // run paid. Kept per batch: a leftover from another run must never be added to this one.
   const deliveredLegsRef = React.useRef<{ batchId: string; legs: ActiveDeliveryUI[] } | null>(null);
+
+  // A batch that ended without its last leg delivered (failed at the door, cancelled or
+  // reassigned): the legs already dropped off were credited all the same, so the card still owes
+  // the rider what they paid. A delivered last leg shows the card from handleAdvance instead, which
+  // clears these legs before the screen settles; `advancing` keeps this out of its way meanwhile.
+  React.useEffect(() => {
+    const held = deliveredLegsRef.current;
+    if (active || advancing || !held) return;
+    deliveredLegsRef.current = null;
+    const last = held.legs[held.legs.length - 1];
+    if (!last) return;
+    const earlier = held.legs.slice(0, -1);
+    setCompleted(provisionalCard(last, earlier));
+    let cancelled = false;
+    void readCompletedRun(last, earlier, driver.id).then((card) => {
+      if (!cancelled) setCompleted(card);
+    });
+    return () => {
+      // A new job took the screen first: its own card must not be overwritten by this one.
+      cancelled = true;
+    };
+  }, [active, advancing, driver.id]);
   const [advanceError, setAdvanceError] = React.useState<string | null>(null);
   // Which arrival step the rider has explicitly overridden the distance check for. Stored as
   // the stage rather than a boolean so it expires by itself: once the job moves on, the value
@@ -306,11 +357,20 @@ export function ActiveDeliveryView() {
             transition={{ type: 'spring', stiffness: 260, damping: 18 }}
             className="w-full max-w-sm text-center"
           >
+            {/* A batch whose last order staff took away still ends on this card (for the orders
+                that were delivered), so the notice that says so has to be on it too. */}
+            {lastEnded && (
+              <div className="text-left">
+                <TakenAwayNotice notice={lastEnded} onDismiss={dismissLastEnded} />
+              </div>
+            )}
             <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-success text-white shadow-warm">
               <CheckCircle2 className="h-10 w-10" />
             </div>
             <h1 className="mt-5 font-display text-2xl font-bold">{t('complete.title')}</h1>
-            <p className="mt-1 text-sm text-muted-foreground">{completed.orderNumber}</p>
+            {completed.orderNumber && (
+              <p className="mt-1 text-sm text-muted-foreground">{completed.orderNumber}</p>
+            )}
             <div className="mt-5 rounded-2xl bg-muted/50 px-5 py-4">
               <p className="text-xs uppercase tracking-wider text-muted-foreground">
                 {completed.orders > 1
@@ -476,15 +536,12 @@ export function ActiveDeliveryView() {
           return;
         }
         deliveredLegsRef.current = null;
-        const legs = [...earlier, snap];
-        const orderNumber = legs.map((l) => l.orderNumber).join(' · ');
         // The phone's own figures first, so the card is there the moment the job leaves the
         // screen: without it the read below shows the last run's card, or "No active delivery".
-        setCompleted({ ...completedRun({ legIds: legs.map((l) => l.id), snapshots: legs }), orderNumber });
+        setCompleted(provisionalCard(snap, earlier));
         // What was actually credited (pay incl. any peak bonus, plus the tip), read back from
         // the ledger the delivered transition just wrote; see readCompletedRun.
-        const run = await readCompletedRun(snap, earlier, driver.id);
-        setCompleted({ ...run, orderNumber });
+        setCompleted(await readCompletedRun(snap, earlier, driver.id));
       } else if (meta.transition === 'picked_up') {
         // Collecting the bag and setting off are one act now — the separate "start delivery"
         // tap was a screen with nothing on it to decide. Batched jobs still mark the sibling

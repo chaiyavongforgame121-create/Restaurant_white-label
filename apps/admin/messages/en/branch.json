@@ -140,6 +140,26 @@
     "appNameAuto": "Leave it blank to use “{name}” automatically.",
     "appNameSource": "The automatic name is your brand name, then this branch’s name: change the brand part on <link>Brand & branches</link>, and the branch part with Branch name above.",
     "appNameWhere": "Used in the install window, on the desktop shortcut and as the label under the home-screen icon. Phones have little room under the icon, so a long name may be cut off there.",
+    "webAddress": {
+      "label": "Web address",
+      "placeholder": "pho-ha-noi",
+      "hint": "Made from the App name, and yours to change: lowercase letters (a–z), digits and hyphens. Links and QR codes with an old address keep working and open the new one.",
+      "loading": "Reading this branch’s web address…",
+      "loadFailed": "This branch’s web address couldn’t be read, so it can’t be changed right now. Reload the page to try again — the rest of this card still saves.",
+      "none": "No web address — customers use the long address above. Type one to give this branch a short address.",
+      "noLatin": "Your App name has no Latin letters to make an address from. Type one using a–z, 0–9 and hyphens, or leave it blank to keep the long address above.",
+      "clearing": "Saving with this blank moves the storefront back to the long address above. {old} keeps working and forwards there.",
+      "current": "This is the branch’s web address now.",
+      "checking": "Checking whether this address is free…",
+      "available": "Available — it goes live when you save.",
+      "checkFailed": "Couldn’t check this address right now. It is checked again when you save.",
+      "suggestionUnavailable": "“{slug}” isn’t available, so saving keeps {address}. Type a different web address to change it.",
+      "errors": {
+        "invalid": "A web address uses 2 to 64 lowercase letters (a–z), digits and single hyphens, like pho-ha-noi — no spaces, accents or other symbols.",
+        "reserved": "“{slug}” is kept for FavorNoms itself. Pick another web address.",
+        "taken": "“{slug}” is already in use on FavorNoms, by another storefront or as a restaurant’s own address. Try adding your area, like {slug}-downtown."
+      }
+    },
     "logo": "Logo",
     "uploadLogo": "Upload logo",
     "logoHint": "A wide image works best — it replaces the restaurant name in this branch’s header.",

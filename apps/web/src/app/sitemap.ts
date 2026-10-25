@@ -1,5 +1,6 @@
 import type { MetadataRoute } from 'next';
 import { getServerClient } from '@favornoms/database/server';
+import { publicBase } from '@favornoms/database/storefront-path';
 
 export const revalidate = 3600;
 
@@ -8,7 +9,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const supabase = await getServerClient();
   const { data: branches } = await supabase
     .from('branches')
-    .select('slug, restaurants(slug)')
+    .select('slug, public_slug, restaurants(slug)')
     .eq('is_active', true);
 
   const staticUrls: MetadataRoute.Sitemap = [
@@ -19,11 +20,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
 
   const branchUrls: MetadataRoute.Sitemap = (branches ?? [])
-    .map((b: { slug: string | null; restaurants: { slug: string | null } | { slug: string | null }[] | null }) => {
+    .map((b: { slug: string | null; public_slug: string | null; restaurants: { slug: string | null } | { slug: string | null }[] | null }) => {
       const restSlug = Array.isArray(b.restaurants) ? b.restaurants[0]?.slug : b.restaurants?.slug;
       if (!restSlug || !b.slug) return null;
+      // The address the storefront lives at: its web address when it has one (the long form 308s
+      // there), so a crawler is not handed a redirect for every such branch.
       return {
-        url: `${base}/r/${restSlug}/${b.slug}`,
+        url: `${base}${publicBase(restSlug, b.slug, b.public_slug)}`,
         changeFrequency: 'daily' as const,
         priority: 0.8,
       };

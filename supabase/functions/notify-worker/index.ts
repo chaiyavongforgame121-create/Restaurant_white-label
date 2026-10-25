@@ -127,7 +127,7 @@ interface OrderRoute {
 interface StorefrontIdentity {
   /** "<brand> - <branch>", or one of the two when they are the same. */
   name: string;
-  /** /r/<restaurant>/<branch> */
+  /** The storefront's public base: /r/<web-address> when the branch has one, else /r/<restaurant>/<branch>. */
   path: string | null;
   /**
    * The branch's app icon (192px, else 512px), else its brand's, else the restaurant's default
@@ -933,21 +933,24 @@ async function loadOrderRoute(
   try {
     const { data } = await supabase
       .from('orders')
-      .select('order_number, branch_id, branches(slug, restaurants(slug))')
+      .select('order_number, branch_id, branches(slug, public_slug, restaurants(slug))')
       .eq('id', orderId)
       .maybeSingle();
     const row = data as {
       order_number?: string;
       branch_id?: string | null;
-      branches?: { slug?: string; restaurants?: { slug?: string } | { slug?: string }[] } | null;
+      branches?: {
+        slug?: string;
+        public_slug?: string | null;
+        restaurants?: { slug?: string } | { slug?: string }[];
+      } | null;
     } | null;
     if (!row) return null;
     const branch = row.branches ?? null;
     const restaurant = Array.isArray(branch?.restaurants) ? branch?.restaurants[0] : branch?.restaurants;
+    const base = storefrontBase(restaurant?.slug, branch?.slug, branch?.public_slug);
     return {
-      path: row.order_number && branch?.slug && restaurant?.slug
-        ? `/r/${restaurant.slug}/${branch.slug}/orders/${row.order_number}`
-        : null,
+      path: row.order_number && base ? `${base}/orders/${row.order_number}` : null,
       branchId: row.branch_id ?? null,
     };
   } catch {
@@ -976,12 +979,13 @@ async function loadStorefrontIdentity(
   try {
     const { data } = await supabase
       .from('branches')
-      .select('name, slug, settings, brand_id, icon_192_url, icon_512_url, restaurant_id, restaurants(name, slug)')
+      .select('name, slug, public_slug, settings, brand_id, icon_192_url, icon_512_url, restaurant_id, restaurants(name, slug)')
       .eq('id', branchId)
       .maybeSingle();
     const b = data as {
       name?: string | null;
       slug?: string | null;
+      public_slug?: string | null;
       settings?: unknown;
       brand_id?: string | null;
       icon_192_url?: string | null;
@@ -1023,12 +1027,27 @@ async function loadStorefrontIdentity(
     if (!name) return null;
     return {
       name,
-      path: restaurant?.slug && b.slug ? `/r/${restaurant.slug}/${b.slug}` : null,
+      path: storefrontBase(restaurant?.slug, b.slug, b.public_slug),
       icon,
     };
   } catch {
     return null;
   }
+}
+
+/**
+ * Where a branch's storefront pages live for the diner: /r/<web-address> when the branch has one
+ * (branches.public_slug, docs/SHORT-STOREFRONT-URLS-2026-10-26.md), else /r/<restaurant>/<branch>.
+ * The storefront's own rule (publicBase in packages/database/src/storefront-path.ts): the long form
+ * of a branch with a web address only 308s to it. Null without the slugs to build either.
+ */
+function storefrontBase(
+  restaurantSlug: string | null | undefined,
+  branchSlug: string | null | undefined,
+  publicSlug: string | null | undefined,
+): string | null {
+  if (publicSlug) return `/r/${publicSlug}`;
+  return restaurantSlug && branchSlug ? `/r/${restaurantSlug}/${branchSlug}` : null;
 }
 
 /** A branch's or brand's installed-app icon: the 192px one, else the 512px one, https only. */

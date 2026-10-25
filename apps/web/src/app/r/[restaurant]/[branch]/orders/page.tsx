@@ -3,6 +3,7 @@ import { getTranslations } from 'next-intl/server';
 import { sortOrderLines } from '@favornoms/shared';
 import { EmptyState } from '@favornoms/ui';
 import { getServerClient } from '@favornoms/database/server';
+import { storefrontBase } from '@favornoms/database/storefront-path';
 import { isCheckoutCardFailure } from '@/lib/card-payment';
 import { resolveTenant } from '@/lib/tenant';
 import { OrdersList } from './_components/orders-list';
@@ -17,7 +18,7 @@ export default async function OrdersPage({ params }: Props) {
   const { restaurant, branch } = await params;
   const t = await getTranslations('orders');
   const tenant = await resolveTenant(restaurant, branch);
-  const base = `/r/${restaurant}/${branch}`;
+  const base = storefrontBase(tenant);
 
   const supabase = await getServerClient();
   const { data: { user } } = await supabase.auth.getUser();

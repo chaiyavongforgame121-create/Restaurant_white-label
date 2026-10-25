@@ -1,3 +1,4 @@
+import { storefrontBase } from '@favornoms/database/storefront-path';
 import { resolveTenant, storefrontNames } from '@/lib/tenant';
 import { AccountView } from './_components/account-view';
 
@@ -8,7 +9,7 @@ interface Props {
 export default async function AccountPage({ params }: Props) {
   const { restaurant, branch } = await params;
   const tenant = await resolveTenant(restaurant, branch);
-  const base = `/r/${restaurant}/${branch}`;
+  const base = storefrontBase(tenant);
   return (
     <AccountView
       base={base}

@@ -5,9 +5,8 @@ import { useTranslations } from 'next-intl';
  * centred on white, with three orange dots under it.
  *
  * Platform pages only. Every storefront lives under /r/, and app/r/loading.tsx is the nearer
- * boundary there, so a restaurant's customers — on our host or on the merchant's own domain, which
- * the middleware rewrites into /r/ — never see FavorNoms while their restaurant loads. Do not
- * delete that file without moving this branding somewhere the storefront cannot reach.
+ * boundary there, so a restaurant's customers never see FavorNoms while their restaurant loads.
+ * Do not delete that file without moving this branding somewhere the storefront cannot reach.
  *
  * White in dark mode too, on purpose. The art is an opaque raster drawn on white, not a
  * transparent logo, and "Favor" in the wordmark is near-black: on a dark page it would be a white

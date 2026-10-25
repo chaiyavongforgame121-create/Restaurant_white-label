@@ -6,10 +6,10 @@ import { useTranslations } from 'next-intl';
  *
  * A loading file wraps the segments BELOW its own folder, so [branch]/loading.tsx cannot cover the
  * [branch] layout itself — and that layout awaits the tenant. Without this file the nearest
- * boundary while it waited would be the root one: a diner opening a restaurant's link, or the
- * merchant's own domain (the middleware rewrites it into /r/), would watch the platform's logo
- * before the restaurant's menu. This sits above [restaurant]/[branch], so it is what they see
- * instead.
+ * boundary while it waited would be the root one: a diner opening a restaurant's link would
+ * watch the platform's logo before the restaurant's menu. This sits above [restaurant]/[branch],
+ * so it is what they see instead, at either form of the address (a short one is rewritten onto
+ * the same route).
  *
  * Neutral on purpose: it renders outside the branch's ThemeProvider, so `primary` here would be the
  * platform's orange, not the restaurant's colour. The same two rules as [branch]/loading.tsx —

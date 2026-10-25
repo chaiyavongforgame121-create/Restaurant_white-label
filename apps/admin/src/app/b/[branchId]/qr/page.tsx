@@ -20,7 +20,7 @@ export default async function BranchQrPage({ params }: Props) {
 
   const { data: branch } = await supabase
     .from('branches')
-    .select('id, name, slug, restaurant_id')
+    .select('id, name, slug, public_slug, restaurant_id')
     .eq('id', branchId)
     .maybeSingle();
   if (!branch) notFound();
@@ -31,7 +31,8 @@ export default async function BranchQrPage({ params }: Props) {
     .eq('id', branch.restaurant_id)
     .maybeSingle();
 
-  const { url, missingSlugs } = branchMenuLink(branch.slug, restaurant?.slug);
+  // The branch's web address when it has one (/r/<public_slug>), else the long form.
+  const { url, missingSlugs } = branchMenuLink(branch.slug, restaurant?.slug, branch.public_slug);
 
   // Whether this branch has any table codes decides how the page describes itself: with
   // tables set up, this code is the counter/takeaway one and the table tents are elsewhere.

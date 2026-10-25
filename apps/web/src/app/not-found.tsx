@@ -1,16 +1,17 @@
 import Link from 'next/link';
-import { useTranslations } from 'next-intl';
 import { getTranslations } from 'next-intl/server';
 import { ChefHat, Home, Search } from 'lucide-react';
 import { Button } from '@favornoms/ui';
+import { demoStorefrontPath } from '@/lib/demo-storefront';
 
 export async function generateMetadata() {
   const t = await getTranslations('landing');
   return { title: t('notFound.metaTitle') };
 }
 
-export default function NotFound() {
-  const t = useTranslations('landing.notFound');
+export default async function NotFound() {
+  const t = await getTranslations('landing.notFound');
+  const demoHref = await demoStorefrontPath();
   return (
     <main className="grid min-h-dynamic-screen place-items-center bg-gradient-sunset px-6">
       <div className="text-center">
@@ -28,7 +29,7 @@ export default function NotFound() {
               {t('backHome')}
             </Button>
           </Link>
-          <Link href="/r/demo-favornoms/brooklyn">
+          <Link href={demoHref}>
             <Button variant="outline" size="lg" leftIcon={<Search className="h-4 w-4" />}>
               {t('seeDemo')}
             </Button>

@@ -13,6 +13,8 @@ import {
   storefrontNames,
 } from '@/lib/tenant';
 import { appleTouchIconUrl } from '@/lib/app-identity';
+import { StorefrontAddressProvider } from '@/components/storefront-base';
+import { storefrontBase } from '@favornoms/database/storefront-path';
 import { TablePinProvider } from './_components/table-pin';
 
 interface Props {
@@ -23,35 +25,45 @@ interface Props {
 export default async function BranchLayout({ params, children }: Props) {
   const { restaurant, branch } = await params;
   const tenant = await resolveTenant(restaurant, branch);
-  const base = `/r/${restaurant}/${branch}`;
+  // Where this storefront's pages live for the browser: /r/<web-address> when the branch has one,
+  // else the long form. Never the route params, which stay the long form on the short address the
+  // middleware rewrote (docs/SHORT-STOREFRONT-URLS-2026-10-26.md §3).
+  const base = storefrontBase(tenant);
 
   // Per implementation.md §10.2 — merge restaurant.brand + branch.override
   // ThemeProvider applies as CSS variables on a wrapping div.
   return (
     <ThemeProvider theme={tenant.theme}>
-      {/* One cart per branch. Two branches of a restaurant live on the same host, and a single
-          origin-wide cart showed one branch's items in the other's storefront. Above the table
-          pin, which reads the cart, and above every page. */}
-      <CartProvider branchId={tenant.branch.id}>
-        {/* Above AppShell so the scanned table survives every navigation inside this
-            storefront — the menu, the cart and the checkout all read the same pin. */}
-        <TablePinProvider branchId={tenant.branch.id}>
-          <AppShell
-            base={base}
-            // The branch's App name when it has one, else "<brand> - <branch>": the same name as
-            // the tab and the installed app, so a diner who has both branches open can tell which
-            // kitchen this header belongs to. Also the logo's alt text. The logo is the branch's
-            // own (brand's until the branch uploads one).
-            brandName={storefrontNames(tenant).full}
-            logoUrl={tenant.logoUrl}
-            iconUrl={tenant.icon192Url ?? tenant.faviconUrl}
-          >
-            <PushSubscriber />
-            <PendingCartReplay branchId={tenant.branch.id} />
-            {children}
-          </AppShell>
-        </TablePinProvider>
-      </CartProvider>
+      {/* Every client component's links start from this base, not from useParams(). */}
+      <StorefrontAddressProvider
+        base={base}
+        restaurantSlug={tenant.restaurant.slug}
+        branchSlug={tenant.branch.slug}
+      >
+        {/* One cart per branch. Two branches of a restaurant live on the same host, and a single
+            origin-wide cart showed one branch's items in the other's storefront. Above the table
+            pin, which reads the cart, and above every page. */}
+        <CartProvider branchId={tenant.branch.id}>
+          {/* Above AppShell so the scanned table survives every navigation inside this
+              storefront — the menu, the cart and the checkout all read the same pin. */}
+          <TablePinProvider branchId={tenant.branch.id}>
+            <AppShell
+              base={base}
+              // The branch's App name when it has one, else "<brand> - <branch>": the same name as
+              // the tab and the installed app, so a diner who has both branches open can tell which
+              // kitchen this header belongs to. Also the logo's alt text. The logo is the branch's
+              // own (brand's until the branch uploads one).
+              brandName={storefrontNames(tenant).full}
+              logoUrl={tenant.logoUrl}
+              iconUrl={tenant.icon192Url ?? tenant.faviconUrl}
+            >
+              <PushSubscriber />
+              <PendingCartReplay branchId={tenant.branch.id} />
+              {children}
+            </AppShell>
+          </TablePinProvider>
+        </CartProvider>
+      </StorefrontAddressProvider>
     </ThemeProvider>
   );
 }
@@ -76,8 +88,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     title: { absolute: names.full },
     description,
     // Branch-scoped manifest so an install from here opens this restaurant,
-    // not the platform landing page the root manifest points at.
-    manifest: `/r/${restaurant}/${branch}/manifest.webmanifest`,
+    // not the platform landing page the root manifest points at. At the public base, where its
+    // start_url and scope are too.
+    manifest: `${storefrontBase(tenant)}/manifest.webmanifest`,
     // Our own install card reads this, so it offers the app under the name Chrome's dialog
     // shows — the manifest's `name`, from the same derivation.
     applicationName: names.app,

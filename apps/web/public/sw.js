@@ -44,7 +44,13 @@
 // every size, and the SVG is now only a wrapper of the PNG for old links that still point at it.
 // The loading splash under /brand/ is cache-first by extension too: change its file name, or bump
 // again, when the art changes.
-const CACHE_VERSION = 'favornoms-web-v6';
+//
+// v7 — a storefront has two forms (docs/SHORT-STOREFRONT-URLS-2026-10-26.md): the long form
+// /r/<restaurant>/<branch>/… and the short form /r/<web-address>/… of a branch that has a web
+// address, the one it is linked by. NO_STORE_NAV and tenantRoot() read both, so a short address's
+// /orders and /account pages are never written down, its offline fallback is its own menu, and a
+// notification tap finds its windows. The bump drops pages cached under the old rules.
+const CACHE_VERSION = 'favornoms-web-v7';
 
 // Icons only. Deliberately no HTML: see (2) above.
 // The 512px and maskable icons are fetched on demand (install, the manifest): precaching them
@@ -60,10 +66,12 @@ const STATIC_PREFIXES = ['/_next/static/', '/icon', '/apple-touch-icon'];
 const STATIC_EXTENSIONS = /\.(?:css|js|woff2?|ttf|otf|eot|png|jpe?g|gif|webp|avif|svg|ico)$/i;
 
 // Pages that belong to one person and one moment. Served from the network like everything
-// else; simply never written down. Anchored to the site root or to a /r/<restaurant>/<branch>
-// prefix so a restaurant whose slug happens to be "orders" is not caught by it.
+// else; simply never written down. Anchored to the site root, to a /r/<web-address> prefix or to
+// a /r/<restaurant>/<branch> one, so a restaurant or web address that happens to be "orders" is
+// not caught by it. (A long-form branch slugged like one of these pages is: its pages are then
+// not kept for offline, which is the safe way to be wrong.)
 const NO_STORE_NAV =
-  /^(?:\/r\/[^/]+\/[^/]+)?\/(?:orders|account|checkout|sign-in|sign-up|auth)(?:\/|$)/;
+  /^(?:\/r\/[^/]+(?:\/[^/]+)?)?\/(?:orders|account|checkout|sign-in|sign-up|auth)(?:\/|$)/;
 
 // Roughly one build's worth of chunks plus a handful of pages. Cache.keys() returns insertion
 // order, so trimming from the front drops the oldest entries — in practice the previous
@@ -77,10 +85,19 @@ function isStaticAsset(url) {
   );
 }
 
-/** The storefront a path belongs to: /r/<restaurant>/<branch>. Null off a storefront. */
+// What follows a web address: the storefront's own pages. Under a short address the second
+// segment is always one of these (or nothing); under the long form it is the branch slug.
+const STOREFRONT_PAGES = /^(?:cart|checkout|orders|account|sign-in|sign-up|manifest\.webmanifest|app-icon)$/;
+
+/**
+ * The storefront a path belongs to: /r/<web-address> or /r/<restaurant>/<branch>. Null off a
+ * storefront. Which form a path is in only the database knows; a second segment that names a
+ * storefront page means the first one is a web address.
+ */
 function tenantRoot(url) {
-  const m = url.pathname.match(/^\/r\/[^/]+\/[^/]+/);
-  return m ? m[0] : null;
+  const m = url.pathname.match(/^\/r\/([^/]+)(?:\/([^/]+))?/);
+  if (!m) return null;
+  return !m[2] || STOREFRONT_PAGES.test(m[2]) ? `/r/${m[1]}` : `/r/${m[1]}/${m[2]}`;
 }
 
 async function putTrimmed(request, response) {
@@ -167,12 +184,11 @@ function withoutHash(href) {
  * Take the diner to `rawUrl` in a window of the SAME storefront, or a new one.
  *
  * Two branches of one restaurant share this origin and this worker, so "the first open window"
- * could be the other branch's menu with a cart in it. A window only counts when its
- * /r/<restaurant>/<branch> root matches the target's (for a platform URL, when it is not on a
- * storefront either); every other window is left exactly as it is. On a merchant's own domain
- * the storefront is served without the /r/ prefix, so its windows have no root and a /r/ target
- * opens a new window instead: this worker cannot tell which branch such a window is showing, and
- * guessing wrong is exactly the hijack this exists to prevent.
+ * could be the other branch's menu with a cart in it. A window only counts when its storefront
+ * root (tenantRoot: /r/<web-address> or /r/<restaurant>/<branch>) matches the target's (for a
+ * platform URL, when it is not on a storefront either); every other window is left exactly as it
+ * is. A window still on a storefront's other form (opened before it got its web address) counts
+ * as another storefront, so the tap opens a new window rather than guess which one it shows.
  *
  * Browsers grant ONE window interaction per click — focus() and openWindow() each consume it —
  * so the choice between focusing and opening is made before either is called. A window this

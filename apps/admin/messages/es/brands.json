@@ -61,7 +61,7 @@
       "brandNone": "— Ninguna —",
       "startFrom": "Partir de",
       "startFromNothing": "Nada (una sucursal vacía)",
-      "slugHint": "Forma parte de la dirección web de la tienda. Letras minúsculas, números y guiones.",
+      "slugHint": "Forma parte de la dirección larga de la tienda en línea de la sucursal. Letras minúsculas, números y guiones. Después puedes añadir una dirección web corta en Configuración de sucursal, en Imagen de marca.",
       "timezoneHint": "El horario, los pedidos programados y los informes diarios usan esta zona. Empieza con la zona de este dispositivo."
     },
     "copy": {

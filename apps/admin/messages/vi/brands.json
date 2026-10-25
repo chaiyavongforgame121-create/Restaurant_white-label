@@ -61,7 +61,7 @@
       "brandNone": "— Không có —",
       "startFrom": "Bắt đầu từ",
       "startFromNothing": "Không có gì (chi nhánh trống)",
-      "slugHint": "Một phần của địa chỉ web cửa hàng. Chỉ dùng chữ thường, số và dấu gạch ngang.",
+      "slugHint": "Là một phần của địa chỉ dài của cửa hàng trực tuyến chi nhánh. Chữ thường, chữ số và dấu gạch ngang. Sau này có thể thêm địa chỉ web ngắn trong Cài đặt chi nhánh, mục Nhận diện thương hiệu.",
       "timezoneHint": "Giờ mở cửa, đơn đặt trước và báo cáo hằng ngày dùng múi giờ này. Mặc định là múi giờ của thiết bị này."
     },
     "copy": {

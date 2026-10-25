@@ -14,6 +14,10 @@ import { parseStorefrontPathResolution, type StorefrontPathResolution } from '..
 export {
   movedStorefrontPath,
   parseStorefrontPathResolution,
+  publicBase,
+  shortStorefrontRewrite,
+  storefrontBase,
+  storefrontPathHead,
   storefrontPathSlugs,
   type StorefrontPathResolution,
   type StorefrontPathStatus,
@@ -52,6 +56,13 @@ export interface ResolvedTenant {
    * (branchAppName) and, when it is not blank, it is the storefront's name on every surface.
    */
   appName: string | null;
+  /**
+   * The branch's web address (branches.public_slug, 20261026120000), or null. With one, the
+   * storefront lives at /r/<publicSlug>/… and is linked only by it: build every customer link
+   * from storefrontBase(tenant), never from the route params, which stay the long form even when
+   * the browser is on the short one (the middleware rewrites it).
+   */
+  publicSlug: string | null;
   /** Storefront logo: the branch's own (branches.logo_url), else its brand's. */
   logoUrl: string | null;
   /**
@@ -134,7 +145,7 @@ export async function resolveTenantBySlug(
   const { data: branchRow, error: bErr } = await supabase
     .from('branches')
     .select(
-      'id, restaurant_id, slug, name, address, timezone, theme_override, settings, is_active, brand_id, geo_lat, geo_lng, created_at, updated_at, logo_url, favicon_url, icon_192_url, icon_512_url, icon_maskable_512_url, app_icon',
+      'id, restaurant_id, slug, name, address, timezone, theme_override, settings, is_active, brand_id, geo_lat, geo_lng, created_at, updated_at, logo_url, favicon_url, icon_192_url, icon_512_url, icon_maskable_512_url, app_icon, public_slug',
     )
     .eq('restaurant_id', restaurantRow.id)
     .eq('slug', branchSlug)
@@ -245,25 +256,29 @@ export async function resolveTenantBySlug(
     storefront,
     brandName,
     appName,
+    publicSlug: b.public_slug || null,
     logoUrl: b.logo_url || brandRow?.logo_url || null,
     ...icons,
   };
 }
 
 /**
- * Where a storefront address lives now: public.resolve_storefront_path (20261026110000), which
- * anon may call. `live` when the pair is a storefront today, `redirect` with the current slugs
- * when it is an address the storefront answered to before a rename (a live slug always wins over
- * an old one), `none` otherwise. Null when the database could not answer — callers then behave
- * as before (a 404), never redirect.
+ * Where a storefront address lives now: public.resolve_storefront_path (20261026110000, answers
+ * grown in 20261026120000), which anon may call, for the first one or two segments after /r/
+ * (storefrontPathHead). `live` for a long-form pair of a branch with no web address, `short` for
+ * a live web address (`second` is then only the page), `redirect` to the public base when it is
+ * the long form of a branch with a web address or an address the storefront answered to before a
+ * rename (a live address always wins over an old one), `none` otherwise. Null when the database
+ * could not answer — callers then behave as before (a 404), never redirect.
  */
 export async function resolveStorefrontPath(
   supabase: FavornomsClient,
   first: string,
-  second: string,
+  second: string | null,
 ): Promise<StorefrontPathResolution | null> {
-  // Newer than the last types.ts regeneration — the same thin typed escape the storefront uses
-  // for storefront_version.
+  // The same thin typed escape the storefront uses for storefront_version. p_second goes as null
+  // for a one-segment address: the function's default, and the version before 20261026120000
+  // (no default) reads it as blank and answers none.
   const rpcAny = supabase.rpc.bind(supabase) as unknown as (
     fn: string,
     args: Record<string, unknown>,

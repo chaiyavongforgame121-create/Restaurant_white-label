@@ -9,6 +9,7 @@ import { getAnonServerClient } from '@favornoms/database/server';
 import { listBillingProducts } from '@favornoms/database/queries';
 import { PLAN_BASE, PRODUCT_EXTRA_BRANCH, type BillingProduct } from '@favornoms/shared';
 import { RiderIcon } from '@favornoms/ui';
+import { demoStorefrontPath } from '@/lib/demo-storefront';
 
 export async function generateMetadata() {
   const t = await getTranslations('landing');
@@ -83,7 +84,7 @@ function prices(catalog: BillingProduct[], code: string): { once: number | null;
 
 export default async function RootPage() {
   const t = await getTranslations('landing');
-  const catalog = await billingCatalog();
+  const [catalog, demoHref] = await Promise.all([billingCatalog(), demoStorefrontPath()]);
   // The plan's monthly price is the per-branch price: the catalog keeps the additional
   // branch's monthly equal to it (docs §4.1), so the plan's own figure is the one to quote.
   const base = prices(catalog, PLAN_BASE);
@@ -115,7 +116,7 @@ export default async function RootPage() {
                   {t('hero.startTrial')} <ChevronRight className="h-4 w-4" />
                 </a>
                 <Link
-                  href="/r/demo-favornoms/brooklyn"
+                  href={demoHref}
                   className="focus-ring inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-white/40 px-6 text-base font-semibold text-white hover:bg-white/10"
                 >
                   {t('hero.seeLiveMenu')}

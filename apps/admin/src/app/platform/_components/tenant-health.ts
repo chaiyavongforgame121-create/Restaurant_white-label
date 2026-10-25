@@ -24,6 +24,7 @@
 // billing_set_package refuses a Stripe-managed restaurant with `stripe_managed`.
 
 import type { BillingInvoiceSummary, BillingRailInfo } from '@favornoms/database/queries';
+import { publicBase } from '@favornoms/database/storefront-path';
 import {
   DEFAULT_UI_LOCALE,
   PLAN_BASE,
@@ -46,6 +47,8 @@ export interface BranchLite {
   restaurant_id: string;
   name: string;
   slug: string;
+  /** The branch's web address (branches.public_slug); null keeps the long address. */
+  public_slug: string | null;
   is_active: boolean;
   orders_paused: boolean;
   /** Per-branch billing truth — the column the anon storefront actually reads. */
@@ -189,11 +192,12 @@ export const branchEntitled = (b: BranchLite, nowMs: number) =>
   b.entitled_through !== null && Date.parse(b.entitled_through) > nowMs;
 
 /**
- * Where a diner actually lands: /r/<restaurant>/<branch> on the storefront host. It used to be
- * the branch's custom domain when it had one; custom domains were removed on 2026-10-26.
+ * Where a diner actually lands on the storefront host: the branch's web address /r/<public_slug>
+ * when it has one, else /r/<restaurant>/<branch> (docs/SHORT-STOREFRONT-URLS-2026-10-26.md). It
+ * used to be the branch's custom domain when it had one; custom domains were removed on 2026-10-26.
  */
 export const storefrontUrl = (siteBase: string, restaurantSlug: string, b: BranchLite) =>
-  `${siteBase}/r/${restaurantSlug}/${b.slug}`;
+  `${siteBase}${publicBase(restaurantSlug, b.slug, b.public_slug)}`;
 
 // Lamps are read left-to-right and the first one is what the row's aria-label
 // leads with, so the worst news has to come first. Without this a tenant whose

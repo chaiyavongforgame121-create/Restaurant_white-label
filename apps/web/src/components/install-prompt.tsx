@@ -252,8 +252,9 @@ export function InstallPrompt() {
     expireLegacyCookie();
   }, []);
 
-  // Custom domains serve the same pages from a rewritten root, so the checkout
-  // funnel is "/cart" there and "/r/{restaurant}/{branch}/cart" on an apex host.
+  // The checkout funnel: …/cart and …/checkout under either form of a storefront's address,
+  // /r/{web-address} or /r/{restaurant}/{branch}. The pathname is the browser's own, the short
+  // form included.
   const inCheckoutFunnel = NO_PROMPT_ROUTES.test(pathname ?? '');
   const offerable = !isStandalone && !dismissed && !inCheckoutFunnel && (canInstall || isIosSafari);
 

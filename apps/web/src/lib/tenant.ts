@@ -2,17 +2,21 @@ import { notFound, redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import { cache } from 'react';
 import { unstable_cache } from 'next/cache';
-import { PATHNAME_HEADER, SEARCH_HEADER } from '@favornoms/database/middleware';
+import { PATHNAME_HEADER, PUBLIC_BASE_HEADER, SEARCH_HEADER } from '@favornoms/database/middleware';
 import { getAnonServerClient, getServerClient } from '@favornoms/database/server';
 import {
   getStorefrontStatus,
   movedStorefrontPath,
   resolveStorefrontPath,
   resolveTenantBySlug,
+  storefrontBase,
+  storefrontPathHead,
   type ResolvedTenant,
+  type StorefrontPathResolution,
   type StorefrontStatus,
 } from '@favornoms/database/queries';
 import { branchAppName, deriveStorefrontNames, type StorefrontNames } from './app-identity';
+import { parsePublicBase } from './storefront-address';
 
 /**
  * How long a tenant entry may live once nothing has told us it changed. With the version key
@@ -71,7 +75,9 @@ function tenantCache(restaurantSlug: string, branchSlug: string) {
     // field, would name every branch after the brand, and may carry that foreign brand.
     // v3: ResolvedTenant gained appName (branches.settings.app_name). A v2 entry has none and would
     // keep showing "<brand> - <branch>" over a saved App name until the TTL ran out.
-    ['tenant-by-slug-v3', restaurantSlug, branchSlug],
+    // v4: ResolvedTenant gained publicSlug (branches.public_slug). A v3 entry has none, so every
+    // link and the manifest would stay on the long form until the TTL ran out.
+    ['tenant-by-slug-v4', restaurantSlug, branchSlug],
     {
       revalidate: TENANT_TTL_SECONDS,
       tags: ['tenant', tenantCacheTag(restaurantSlug, branchSlug)],
@@ -150,33 +156,82 @@ export const resolveTenantOptional = cache(
 );
 
 /**
- * Where this request belongs when its slugs moved (public.resolve_storefront_path), or null.
+ * What public.resolve_storefront_path answers, fresh, for the address the BROWSER asked for, and
+ * where that sends it (`moved`, or null when it stays put).
  *
- * The middleware already sends a real 308 for an old address, before anything streams. This is
- * the fallback for the minutes after a rename, while its per-instance cache still calls the old
- * pair live: redirect() here runs after app/r/loading.tsx has started streaming, so it arrives as
- * a meta refresh rather than a 3xx, but it still lands. The whole query string is kept (a table
- * code's ?t=, a Stripe return's ?payment_intent=…); the hard-coded rename map this replaces
- * (coastal-grill, now a row in storefront_path_aliases) kept the pathname only.
+ * The middleware already sends a real 308 for an old address and rewrites a web address, before
+ * anything streams. This is the fallback for the minutes after a rename, while its per-instance
+ * cache still holds an answer the database has moved on from: redirect() here runs after
+ * app/r/loading.tsx has started streaming, so it arrives as a meta refresh rather than a 3xx, but
+ * it still lands. It asks about the browser's own path (PATHNAME_HEADER), never the route params:
+ * those are the long form even on a short address, and the answer says how many of the browser's
+ * segments to replace. The whole query string is kept (a table code's ?t=, a Stripe return's
+ * ?payment_intent=…); the hard-coded rename map this replaces (coastal-grill, now a row in
+ * storefront_path_aliases) kept the pathname only. Both sides read the database fresh for a
+ * redirect, so no two of them can send a diner back and forth.
  */
-async function movedTenantPath(restaurantSlug: string, branchSlug: string): Promise<string | null> {
-  const resolution = await resolveStorefrontPath(getAnonServerClient(), restaurantSlug, branchSlug);
-  if (resolution?.status !== 'redirect') return null;
+async function freshStorefrontPath(
+  restaurantSlug: string,
+  branchSlug: string,
+): Promise<{ resolution: StorefrontPathResolution | null; moved: string | null }> {
   const h = await headers();
   const path = h.get(PATHNAME_HEADER) || `/r/${restaurantSlug}/${branchSlug}`;
-  return movedStorefrontPath(`${path}${h.get(SEARCH_HEADER) ?? ''}`, resolution);
+  const head = storefrontPathHead(path) ?? { first: restaurantSlug, second: branchSlug };
+  const resolution = await resolveStorefrontPath(getAnonServerClient(), head.first, head.second);
+  return { resolution, moved: movedStorefrontPath(`${path}${h.get(SEARCH_HEADER) ?? ''}`, resolution) };
 }
 
-/** The same read, for a page or layout that wants the not-found page when there is no tenant. */
+/**
+ * Whether this request reached the storefront at its public base. The middleware says which base
+ * it served (PUBLIC_BASE_HEADER), and only that is compared. Without it the middleware had no
+ * answer (the database could not say, or this is not a request it saw), so the long form the
+ * browser is on is served in place: sending the diner on to the web address would land on an
+ * instance that cannot rewrite it either, and a web address nothing rewrites is a 404.
+ */
+async function servedAtPublicBase(tenant: ResolvedTenant): Promise<boolean> {
+  const h = await headers();
+  const served = parsePublicBase(h.get(PUBLIC_BASE_HEADER));
+  return !served || served === storefrontBase(tenant);
+}
+
+/**
+ * The same read, for a page or layout that wants the not-found page when there is no tenant.
+ *
+ * Also where an address the middleware's cache still served the old way gets corrected: a long
+ * form of a branch that has since been given a web address, or a short address that has since
+ * changed or been cleared, is redirected to the storefront's address today. A web address the
+ * middleware rewrote onto a long form that no longer answers for it is served from the branch it
+ * names now: the restaurant or branch was renamed under a cached rewrite, or another branch took
+ * the address over while a cached rewrite still pointed at the branch that gave it up.
+ *
+ * Only for a request the middleware really rewrote (PUBLIC_BASE_HEADER): without one the route
+ * params are the browser's own path, and /r/<web-address>/cart arrives as restaurant
+ * <web-address>, branch "cart", which must stay a 404 rather than become the menu at /cart.
+ */
 export const resolveTenant = cache(
   async (restaurantSlug: string, branchSlug: string): Promise<ResolvedTenant> => {
     const tenant = await resolveTenantOptional(restaurantSlug, branchSlug);
-    if (!tenant) {
-      const moved = await movedTenantPath(restaurantSlug, branchSlug);
-      if (moved) redirect(moved);
+    if (tenant && (await servedAtPublicBase(tenant))) return tenant;
+
+    const { resolution, moved } = await freshStorefrontPath(restaurantSlug, branchSlug);
+    if (moved) redirect(moved);
+    const rewritten = parsePublicBase((await headers()).get(PUBLIC_BASE_HEADER)) !== null;
+    if (
+      rewritten &&
+      (resolution?.status === 'short' || resolution?.status === 'live') &&
+      resolution.restaurantSlug &&
+      resolution.branchSlug &&
+      (resolution.restaurantSlug !== restaurantSlug || resolution.branchSlug !== branchSlug)
+    ) {
+      // The browser's address belongs to another branch now (a cached rewrite still pointed at the
+      // branch that gave it up, or at a long form that was renamed): serve the branch it names today.
+      const current = await resolveTenantOptional(resolution.restaurantSlug, resolution.branchSlug);
+      if (current) return current;
       notFound();
     }
-    return tenant;
+    // The fresh answer names this same branch, or the database could not answer.
+    if (tenant) return tenant;
+    notFound();
   },
 );
 

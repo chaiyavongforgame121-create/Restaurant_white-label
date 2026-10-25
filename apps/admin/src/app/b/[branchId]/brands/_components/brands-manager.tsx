@@ -49,8 +49,9 @@ interface BranchRow {
   brand_id: string | null;
   is_active: boolean;
   timezone: string;
-  /** The public menu address: the branch's custom domain when set, else
-   *  /r/<restaurant>/<branch>. Null when a slug is missing. */
+  /** The public menu address: the branch's web address /r/<public_slug> when it has one, else
+   *  /r/<restaurant>/<branch> (the same builder the QR page prints from). Null when neither can
+   *  be built. */
   storefront_url: string | null;
 }
 

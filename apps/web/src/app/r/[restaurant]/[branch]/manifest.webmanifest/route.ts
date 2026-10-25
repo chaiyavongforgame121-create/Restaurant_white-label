@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { storefrontBase } from '@favornoms/database/storefront-path';
 import { manifestIcons, urlFingerprint } from '@/lib/app-identity';
 import { DEFAULT_THEME_COLOR, hexOr, resolveTenantOptional, storefrontNames } from '@/lib/tenant';
 
@@ -30,15 +31,18 @@ export async function GET(request: Request, { params }: Props) {
   const tenant = await resolveTenantOptional(restaurant, branch);
   if (!tenant) return new NextResponse(null, { status: 404 });
 
-  // Every storefront lives under /r/{restaurant}/{branch} on the platform's hosts: merchant custom
-  // domains are gone (2026-10-26), and with them the one case whose app was scoped to the origin
-  // root. Never "/" — that is the marketing page, the bug described above.
-  const base = `/r/${restaurant}/${branch}`;
+  // Every storefront lives under /r/ on the platform's hosts: merchant custom domains are gone
+  // (2026-10-26), and with them the one case whose app was scoped to the origin root. Never "/" —
+  // that is the marketing page, the bug described above. The public base: /r/{web-address} for a
+  // branch that has one (its long form 308s there), else /r/{restaurant}/{branch} — never the
+  // route params, which are the long form even when this was asked for at the short address.
+  const base = storefrontBase(tenant);
   // Deliberately no trailing slash: Next 308-redirects /r/a/b/ to /r/a/b, which would cost a
   // redirect on every cold launch, and start_url has to sit inside scope by plain path-prefix
-  // comparison, so the two must agree. The cost is that a sibling branch whose slug extends
-  // this one (brooklyn / brooklyn-north) falls inside this scope — a containment quirk in the
-  // window, not an identity one, because `id` below still keeps the two apps apart.
+  // comparison, so the two must agree. The cost is that a storefront whose address extends
+  // this one (brooklyn / brooklyn-north, hamburger / hamburger-house) falls inside this scope — a
+  // containment quirk in the window, not an identity one, because `id` below still keeps the two
+  // apps apart.
   const scope = base;
   // Same source as the tab, the apple title, the install card and the admin Branding preview.
   const names = storefrontNames(tenant);

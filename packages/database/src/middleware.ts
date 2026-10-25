@@ -14,6 +14,25 @@ export const PATHNAME_HEADER = 'x-favornoms-pathname';
 export const SEARCH_HEADER = 'x-favornoms-search';
 
 /**
+ * Request header carrying a storefront's public base (/r/<web-address>, or the long form) into
+ * server components, set by the web middleware when it serves a short address from its long form
+ * (docs/SHORT-STOREFRONT-URLS-2026-10-26.md §3). Whatever a client sends under this name is
+ * dropped: only the middleware's value reaches the app. PATHNAME_HEADER stays the address the
+ * browser asked for.
+ */
+export const PUBLIC_BASE_HEADER = 'x-favornoms-public-base';
+
+export interface UpdateSessionOptions {
+  /**
+   * Serve this same-origin path (or URL) instead of the one asked for: NextResponse.rewrite, so
+   * the browser keeps its URL. The refreshed session rides on the rewrite exactly as on next().
+   */
+  rewrite?: string | URL;
+  /** Request headers to add for the server components rendering this request. */
+  headers?: Record<string, string>;
+}
+
+/**
  * Per @supabase/ssr Next.js middleware pattern.
  * Call this from each app's middleware.ts to refresh the session cookie on
  * every request.
@@ -28,18 +47,27 @@ export const SEARCH_HEADER = 'x-favornoms-search';
  * cannot see. The admin branch layout needs the pathname to exempt
  * /settings/plan from the suspension redirect — without the exemption that
  * redirect loops forever.
+ *
+ * `options` lets the storefront serve a short address from its long form
+ * (`rewrite`) and hand the app its public base (`headers`, PUBLIC_BASE_HEADER).
  */
-export async function updateSession(request: NextRequest) {
+export async function updateSession(request: NextRequest, options: UpdateSessionOptions = {}) {
   const { url, publishableKey } = getSupabaseEnv();
 
   const buildHeaders = () => {
     const h = new Headers(request.headers);
     h.set(PATHNAME_HEADER, request.nextUrl.pathname);
     h.set(SEARCH_HEADER, request.nextUrl.search);
+    h.delete(PUBLIC_BASE_HEADER);
+    for (const [name, value] of Object.entries(options.headers ?? {})) h.set(name, value);
     return h;
   };
+  const respond = () =>
+    options.rewrite
+      ? NextResponse.rewrite(new URL(options.rewrite, request.url), { request: { headers: buildHeaders() } })
+      : NextResponse.next({ request: { headers: buildHeaders() } });
 
-  let response = NextResponse.next({ request: { headers: buildHeaders() } });
+  let response = respond();
 
   // Skip the /auth/v1/user round-trip for anonymous visitors. getUser() exists here only to
   // refresh an access token, and an anonymous visitor has no token to refresh — yet this call
@@ -60,9 +88,9 @@ export async function updateSession(request: NextRequest) {
         for (const { name, value } of cookiesToSet) {
           request.cookies.set(name, value);
         }
-        response = NextResponse.next({ request: { headers: buildHeaders() } });
-        for (const { name, value, options } of cookiesToSet) {
-          response.cookies.set(name, value, options as never);
+        response = respond();
+        for (const { name, value, options: cookieOptions } of cookiesToSet) {
+          response.cookies.set(name, value, cookieOptions as never);
         }
       },
     },

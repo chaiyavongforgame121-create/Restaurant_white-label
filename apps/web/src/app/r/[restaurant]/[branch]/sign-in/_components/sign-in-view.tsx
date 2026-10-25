@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { motion } from 'framer-motion';
 import { ChefHat, Lock, Phone, ShieldCheck } from 'lucide-react';
@@ -18,6 +18,7 @@ import {
   toE164,
 } from '@favornoms/shared';
 import { useAuth } from '@/components/auth/use-auth';
+import { useStorefrontBase } from '@/components/storefront-base';
 
 interface Props {
   branchId: string;
@@ -71,14 +72,12 @@ export function SignInView({
   // is no hydration mismatch.
   const rawNext = searchParams.get('next');
   const next = React.useMemo(() => safeNext(rawNext, currentOrigin()), [rawNext]);
-  const pathname = usePathname();
   // Where to send the diner when there is no explicit `next`: the branch home, NEVER this
   // sign-in page itself. Opening /sign-in directly and using Google (whose `next` defaults
   // to the current path) would otherwise bounce straight back here after a successful login.
-  const branchBase = React.useMemo(() => {
-    const m = pathname?.match(/^(\/r\/[^/]+\/[^/]+)/);
-    return m?.[1] ?? '/';
-  }, [pathname]);
+  // The public base from the branch layout (/r/{web-address} or the long form): the pathname
+  // cannot say where a short address ends.
+  const branchBase = useStorefrontBase() || '/';
   const { user } = useAuth();
   const callbackError = searchParams.get('error');
   // Login vs Register is explicit on the phone tab so the edge function knows which path to

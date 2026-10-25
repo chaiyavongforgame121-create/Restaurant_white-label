@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   ChefHat,
@@ -44,6 +44,7 @@ import {
 import { useRealtime } from '@favornoms/database/realtime';
 import { dishQuantityInCart, useCart, type OrderChannel } from '@/store/cart';
 import { useRequireAuth } from '@/components/auth/require-auth';
+import { useStorefrontAddress, useStorefrontBase } from '@/components/storefront-base';
 import { cssUrl } from '@/lib/css-url';
 import { ComboArt, ComboSheet, type ComboRow as ComboRowType } from './combo-sheet';
 import { MenuItemSheet } from './menu-item-sheet';
@@ -290,7 +291,8 @@ interface MenuViewProps {
 export function MenuView({ branch, categories, items, isOpen = true, reviews, combos = [], happyHours = [], menuLayout = 'grid4', menuCardStyle = 'standard', heroUrl, heroTitle, heroSubtitle, canDeliverNow = false, canScheduleDelivery = false, deliveryOffered = true, asapOffered = false, seatingFromScan = false, timeZone }: MenuViewProps) {
   const t = useTranslations();
   const canDeliver = canDeliverNow || canScheduleDelivery;
-  const params = useParams<{ restaurant: string; branch: string }>();
+  // The long form's slugs, which storefront_version takes, from the branch layout.
+  const address = useStorefrontAddress();
   const [search, setSearch] = React.useState('');
   const [chosenCategory, setActiveCategory] = React.useState<string>('all');
   // The live storefront refresh keeps the chosen tab, but the merchant can delete that category
@@ -303,7 +305,7 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
   const [dietaryFilters, setDietaryFilters] = React.useState<Set<string>>(new Set());
   const [usuals, setUsuals] = React.useState<MenuItem[]>([]);
 
-  const refreshMenu = useLiveStorefront(branch.id, params.restaurant, params.branch);
+  const refreshMenu = useLiveStorefront(branch.id, address?.restaurantSlug ?? '', address?.branchSlug ?? '');
   useRefreshWhenSoldOutLifts(items, refreshMenu);
   const branchTimeZone = useBranchTimeZone(branch.id, items, timeZone);
 
@@ -1054,8 +1056,9 @@ function MenuCard({
 /* -------------------- Floating cart bar -------------------- */
 
 function FloatingCartBar() {
-  const params = useParams<{ restaurant: string; branch: string }>();
-  const cartHref = `/r/${params.restaurant}/${params.branch}/cart`;
+  // The public base: on a short address the route params are still the long form.
+  const base = useStorefrontBase();
+  const cartHref = `${base}/cart`;
   const lines = useCart((s) => s.lines);
   const subtotal = useCart((s) => s.subtotal());
   const itemCount = useCart((s) => s.itemCount());

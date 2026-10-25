@@ -140,6 +140,26 @@
     "appNameAuto": "Để trống để tự động dùng “{name}”.",
     "appNameSource": "Tên tự động là tên thương hiệu rồi đến tên chi nhánh này: đổi phần thương hiệu ở <link>Thương hiệu & chi nhánh</link>, và phần chi nhánh ở Tên chi nhánh phía trên.",
     "appNameWhere": "Dùng trong cửa sổ cài đặt, trên lối tắt máy tính và làm tên dưới biểu tượng trên màn hình chính. Chỗ đó khá hẹp nên điện thoại có thể cắt bớt tên dài.",
+    "webAddress": {
+      "label": "Địa chỉ web",
+      "placeholder": "pho-ha-noi",
+      "hint": "Được tạo từ tên ứng dụng và bạn có thể sửa: chữ thường không dấu (a–z), chữ số và dấu gạch ngang. Liên kết và mã QR dùng địa chỉ cũ vẫn hoạt động và mở địa chỉ mới.",
+      "loading": "Đang đọc địa chỉ web của chi nhánh này…",
+      "loadFailed": "Không đọc được địa chỉ web của chi nhánh này nên chưa thể thay đổi lúc này. Hãy tải lại trang để thử lại — phần còn lại của thẻ này vẫn lưu được.",
+      "none": "Chưa có địa chỉ web — khách dùng địa chỉ dài ở trên. Nhập một địa chỉ để chi nhánh này có địa chỉ ngắn.",
+      "noLatin": "Tên ứng dụng không có chữ cái Latinh để tạo địa chỉ. Hãy tự nhập bằng a–z, 0–9 và dấu gạch ngang, hoặc để trống để giữ địa chỉ dài ở trên.",
+      "clearing": "Nếu lưu khi ô này trống, cửa hàng trực tuyến sẽ quay lại địa chỉ dài ở trên. {old} vẫn hoạt động và chuyển khách tới đó.",
+      "current": "Đây là địa chỉ web hiện tại của chi nhánh.",
+      "checking": "Đang kiểm tra địa chỉ này còn trống không…",
+      "available": "Có thể dùng — địa chỉ có hiệu lực khi bạn lưu.",
+      "checkFailed": "Hiện không kiểm tra được địa chỉ này. Địa chỉ sẽ được kiểm tra lại khi bạn lưu.",
+      "suggestionUnavailable": "“{slug}” không dùng được nên khi lưu vẫn giữ {address}. Nhập địa chỉ web khác nếu muốn đổi.",
+      "errors": {
+        "invalid": "Địa chỉ web gồm 2 đến 64 ký tự: chữ thường không dấu (a–z), chữ số và dấu gạch ngang đơn, ví dụ pho-ha-noi — không có khoảng trắng, dấu hay ký hiệu khác.",
+        "reserved": "“{slug}” được giữ riêng cho FavorNoms. Hãy chọn địa chỉ web khác.",
+        "taken": "“{slug}” đã được dùng trên FavorNoms, bởi một cửa hàng khác hoặc là địa chỉ của một nhà hàng. Thử thêm khu vực của bạn, ví dụ {slug}-quan-1."
+      }
+    },
     "logo": "Logo",
     "uploadLogo": "Tải logo lên",
     "logoHint": "Ảnh ngang là đẹp nhất — logo sẽ thay tên nhà hàng ở phần đầu trang của chi nhánh này.",

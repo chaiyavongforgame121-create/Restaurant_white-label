@@ -1,5 +1,6 @@
 export * from './auth';
 export * from './tenant';
+export * from './public-slug';
 export * from './menu';
 export * from './kitchen-stations';
 export * from './orders';

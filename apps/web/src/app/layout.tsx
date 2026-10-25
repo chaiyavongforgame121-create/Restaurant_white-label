@@ -32,8 +32,7 @@ export async function generateMetadata(): Promise<Metadata> {
     // inherits this key (the branch layout omits `icons` then), and one that uploaded an icon
     // replaces it outright. PNG only: the art is a raster, so there is no SVG to offer, and the
     // 16/32 cuts are sized for a tab where the 192 would be scaled down by the browser. There is
-    // deliberately no public/favicon.ico: on a merchant's own domain the bare /favicon.ico request
-    // some browsers make would be answered with the platform's F instead of a 404.
+    // deliberately no public/favicon.ico.
     icons: {
       icon: [
         { url: '/favicon-32.png', sizes: '32x32', type: 'image/png' },
@@ -82,11 +81,10 @@ const CAPTURE_INSTALL_PROMPT = `!function(){var w=window;w.__bipEvent=null;w.__b
  * route to a branded one, so say so where those people actually arrive.
  *
  * The test is: running standalone, on a page whose manifest link is the platform one. A page
- * under /r/ links its own tenant manifest, so a current install never matches — including on a
- * merchant's own domain, where the middleware rewrites "/" to the branch and the tenant
- * manifest is what ends up in the document. It runs from <body> rather than useEffect so it
- * does not wait for hydration, and unhides markup the server already sent rather than building
- * any of its own; it repeats on `load` so that hydration cannot put the attribute back.
+ * under /r/ links its own tenant manifest, so a current install never matches. It runs from
+ * <body> rather than useEffect so it does not wait for hydration, and unhides markup the server
+ * already sent rather than building any of its own; it repeats on `load` so that hydration
+ * cannot put the attribute back.
  */
 const REVEAL_LEGACY_INSTALL_NOTICE = `!function(){function r(){try{var s=(window.matchMedia&&window.matchMedia("(display-mode: standalone)").matches)||window.navigator.standalone===true;if(!s)return;var l=document.querySelector('link[rel="manifest"]');var h=(l&&l.getAttribute("href"))||"";var i=h.indexOf("://");if(i>-1){var rest=h.slice(i+3);var q=rest.indexOf("/");h=q>-1?rest.slice(q):"/"}if(h.indexOf("/r/")===0)return;var e=document.getElementById("legacy-install-notice");if(e)e.hidden=false}catch(x){}}if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",r);else r();window.addEventListener("load",r)}();`;
 

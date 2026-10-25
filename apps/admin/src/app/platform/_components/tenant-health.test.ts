@@ -115,6 +115,7 @@ function branch(over: Partial<BranchLite> = {}): BranchLite {
     restaurant_id: 'r1',
     name: 'Downtown',
     slug: 'downtown',
+    public_slug: null,
     is_active: true,
     orders_paused: false,
     entitled_through: inDays(20),
@@ -437,11 +438,17 @@ describe('platform messages', () => {
 });
 
 describe('storefrontUrl', () => {
-  it('is always the /r/<restaurant>/<branch> address on the storefront host', () => {
+  it('is the /r/<restaurant>/<branch> address on the storefront host for a branch with no web address', () => {
     // Custom domains were removed on 2026-10-26; the console links where every diner lands.
     expect(storefrontUrl('https://app.favornoms.com', 'demo-favornoms', branch({ slug: 'brooklyn' }))).toBe(
       'https://app.favornoms.com/r/demo-favornoms/brooklyn',
     );
+  });
+
+  it('is the web address when the branch has one (the long form only redirects there)', () => {
+    expect(
+      storefrontUrl('https://app.favornoms.com', 'demo-favornoms', branch({ slug: 'brooklyn', public_slug: 'hamburger' })),
+    ).toBe('https://app.favornoms.com/r/hamburger');
   });
 });
 

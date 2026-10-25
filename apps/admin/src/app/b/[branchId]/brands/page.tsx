@@ -35,7 +35,7 @@ export default async function BrandsPage({ params }: Props) {
       .order('created_at', { ascending: true }),
     supabase
       .from('branches')
-      .select('id, name, slug, brand_id, is_active, timezone')
+      .select('id, name, slug, public_slug, brand_id, is_active, timezone')
       .eq('restaurant_id', branch.restaurant_id)
       .order('created_at', { ascending: true }),
     supabase
@@ -105,8 +105,8 @@ export default async function BrandsPage({ params }: Props) {
     is_active: b.is_active,
     timezone: b.timezone,
     // The same builder the QR page prints from, so the link shown here and the printed code
-    // can never point at different places.
-    storefront_url: branchMenuLink(b.slug, restaurantSlug).url,
+    // can never point at different places: the web address when the branch has one.
+    storefront_url: branchMenuLink(b.slug, restaurantSlug, b.public_slug).url,
   }));
 
   // What the Create brand button starts a restaurant's first brand with. The name is the one its

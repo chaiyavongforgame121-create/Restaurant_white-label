@@ -967,6 +967,7 @@ export type Database = {
           logo_url: string | null
           name: string
           open_hours: Json
+          public_slug: string | null
           restaurant_id: string
           sales_tax_rate: number
           settings: Json
@@ -994,6 +995,7 @@ export type Database = {
           logo_url?: string | null
           name: string
           open_hours?: Json
+          public_slug?: string | null
           restaurant_id: string
           sales_tax_rate?: number
           settings?: Json
@@ -1021,6 +1023,7 @@ export type Database = {
           logo_url?: string | null
           name?: string
           open_hours?: Json
+          public_slug?: string | null
           restaurant_id?: string
           sales_tax_rate?: number
           settings?: Json
@@ -5423,6 +5426,10 @@ export type Database = {
         Args: { p_limit_key: string; p_restaurant_id: string }
         Returns: Json
       }
+      check_public_slug: {
+        Args: { p_branch_id: string; p_slug: string }
+        Returns: Json
+      }
       check_rate_limit: {
         Args: {
           p_bucket_key: string
@@ -6167,6 +6174,17 @@ export type Database = {
           restaurant_slug: string
         }[]
       }
+      resolve_storefront_path: {
+        Args: { p_first: string; p_second?: string }
+        Returns: {
+          branch_slug: string
+          public_base: string
+          public_slug: string
+          restaurant_slug: string
+          segments: number
+          status: string
+        }[]
+      }
       resolve_table_qr: {
         Args: { p_token: string }
         Returns: {
@@ -6217,6 +6235,10 @@ export type Database = {
           p_lat?: number
           p_lng?: number
         }
+        Returns: Json
+      }
+      set_branch_public_slug: {
+        Args: { p_branch_id: string; p_slug: string }
         Returns: Json
       }
       set_branch_schedule_hours: {

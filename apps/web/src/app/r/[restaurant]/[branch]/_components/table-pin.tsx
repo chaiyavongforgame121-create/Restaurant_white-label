@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { Loader2, Receipt, Utensils } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { formatCurrency } from '@favornoms/shared';
@@ -15,6 +15,7 @@ import {
 import { useRealtime } from '@favornoms/database/realtime';
 import { Badge, Button, Sheet, cn } from '@favornoms/ui';
 import { useAuth } from '@/components/auth/use-auth';
+import { useStorefrontBase } from '@/components/storefront-base';
 import { useCartHydrated, useCartStoreApi } from '@/store/cart';
 import { billLineOptions } from './table-bill-lines';
 
@@ -381,7 +382,6 @@ export function TableScanPin({
   const { ready, pin } = useTablePin();
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
-  const pathname = usePathname();
   const [blocked, setBlocked] = React.useState<ScanBlock | null>(null);
   const [code, setCode] = React.useState('');
   const [joining, setJoining] = React.useState(false);
@@ -389,10 +389,9 @@ export function TableScanPin({
   // is all a scan is.
   const attemptedRef = React.useRef<string | null>(null);
 
-  const base = React.useMemo(() => {
-    const m = pathname?.match(/^(\/r\/[^/]+\/[^/]+)/);
-    return m ? m[1] : '';
-  }, [pathname]);
+  // The storefront's public base, from the branch layout: the pathname cannot say where a short
+  // address ends.
+  const base = useStorefrontBase();
 
   /** Drop `?t=` so the token stops riding along in shares, history and Referer headers. */
   const stripToken = React.useCallback(() => {

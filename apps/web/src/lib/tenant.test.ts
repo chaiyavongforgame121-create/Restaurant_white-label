@@ -19,6 +19,7 @@ vi.mock('next/cache', () => ({ unstable_cache: (fn: unknown) => fn }));
 vi.mock('@favornoms/database/middleware', () => ({
   PATHNAME_HEADER: 'x-favornoms-pathname',
   SEARCH_HEADER: 'x-favornoms-search',
+  PUBLIC_BASE_HEADER: 'x-favornoms-public-base',
 }));
 vi.mock('@favornoms/database/server', () => ({
   getAnonServerClient: () => db.client,
@@ -35,7 +36,12 @@ type Client = Parameters<typeof resolveTenantBySlug>[0];
  * Just enough of a Supabase client for resolveTenantBySlug and the RPCs: `.eq()` filters really
  * filter, so the branch is found by restaurant, slug and is_active as it is in the database.
  */
-function fakeClient(tables: Record<string, Row[]>, rpcs: Record<string, { data: unknown; error: unknown }> = {}) {
+type RpcAnswer = { data: unknown; error: unknown };
+
+function fakeClient(
+  tables: Record<string, Row[]>,
+  rpcs: Record<string, RpcAnswer | ((args: Record<string, unknown>) => RpcAnswer)> = {},
+) {
   return {
     from(table: string) {
       const filters: Array<[string, unknown]> = [];
@@ -54,7 +60,11 @@ function fakeClient(tables: Record<string, Row[]>, rpcs: Record<string, { data: 
       };
       return builder;
     },
-    rpc: async (fn: string) => rpcs[fn] ?? { data: null, error: { code: 'PGRST202', message: `no ${fn}` } },
+    rpc: async (fn: string, args: Record<string, unknown> = {}) => {
+      const answer = rpcs[fn];
+      if (typeof answer === 'function') return answer(args);
+      return answer ?? { data: null, error: { code: 'PGRST202', message: `no ${fn}` } };
+    },
   };
 }
 
@@ -81,7 +91,7 @@ const BRAND = {
   is_default: true,
 };
 
-function branch(settings: unknown): Row {
+function branch(settings: unknown, extra: Row = {}): Row {
   return {
     id: '44444444-4444-4444-4444-444444444444',
     restaurant_id: RESTAURANT.id,
@@ -103,6 +113,7 @@ function branch(settings: unknown): Row {
     icon_512_url: null,
     icon_maskable_512_url: null,
     app_icon: null,
+    ...extra,
   };
 }
 
@@ -192,5 +203,193 @@ describe('resolveTenant at an address the storefront moved from', () => {
     const tenant = await resolveTenant('demo-favornoms', 'brooklyn');
     expect(storefrontNames(tenant).full).toBe('Hamburger');
     expect(rpc).not.toHaveBeenCalledWith('resolve_storefront_path');
+  });
+});
+
+describe('resolveTenant and the short address (docs/SHORT-STOREFRONT-URLS-2026-10-26.md)', () => {
+  const asked: Array<Record<string, unknown>> = [];
+  /** resolve_storefront_path as 20261026120000 answers it, recording what it was asked. */
+  const answering = (row: Record<string, unknown>) => (args: Record<string, unknown>) => {
+    asked.push(args);
+    return { data: [row], error: null };
+  };
+  const withWebAddress = (publicSlug: string | null) =>
+    ({ restaurants: [RESTAURANT], branches: [branch({}, { public_slug: publicSlug })], brands: [BRAND] });
+
+  beforeEach(() => {
+    nav.redirect.mockClear();
+    nav.notFound.mockClear();
+    asked.length = 0;
+    request.headers = new Headers();
+  });
+
+  it('carries the web address on ResolvedTenant.publicSlug', async () => {
+    const client = fakeClient(withWebAddress('hamburger'));
+    const tenant = await resolveTenantBySlug(client as unknown as Client, 'demo-favornoms', 'brooklyn');
+    expect(tenant?.publicSlug).toBe('hamburger');
+  });
+
+  it('serves a short address the middleware rewrote without asking again', async () => {
+    db.client = fakeClient(withWebAddress('hamburger'), {
+      resolve_storefront_path: answering({ status: 'none' }),
+    });
+    request.headers = new Headers({
+      'x-favornoms-pathname': '/r/hamburger/cart',
+      'x-favornoms-public-base': '/r/hamburger',
+    });
+    const tenant = await resolveTenant('demo-favornoms', 'brooklyn');
+    expect(tenant.publicSlug).toBe('hamburger');
+    expect(asked).toEqual([]);
+  });
+
+  it('sends a long form the middleware still had as live to the web address, path and query kept', async () => {
+    db.client = fakeClient(withWebAddress('hamburger'), {
+      resolve_storefront_path: answering({
+        status: 'redirect',
+        restaurant_slug: 'demo-favornoms',
+        branch_slug: 'brooklyn',
+        public_slug: 'hamburger',
+        segments: 2,
+      }),
+    });
+    request.headers = new Headers({
+      'x-favornoms-pathname': '/r/demo-favornoms/brooklyn/cart',
+      'x-favornoms-search': '?t=abc',
+      'x-favornoms-public-base': '/r/demo-favornoms/brooklyn',
+    });
+    await expect(resolveTenant('demo-favornoms', 'brooklyn')).rejects.toThrow('NEXT_REDIRECT');
+    expect(nav.redirect).toHaveBeenCalledWith('/r/hamburger/cart?t=abc');
+    expect(asked).toEqual([{ p_first: 'demo-favornoms', p_second: 'brooklyn' }]);
+  });
+
+  it('sends a web address that was cleared to the long form, asking about the browser path, not the params', async () => {
+    db.client = fakeClient(withWebAddress(null), {
+      resolve_storefront_path: answering({
+        status: 'redirect',
+        restaurant_slug: 'demo-favornoms',
+        branch_slug: 'brooklyn',
+        public_slug: null,
+        segments: 1,
+      }),
+    });
+    request.headers = new Headers({
+      'x-favornoms-pathname': '/r/hamburger/orders/A-12',
+      'x-favornoms-public-base': '/r/hamburger',
+    });
+    await expect(resolveTenant('demo-favornoms', 'brooklyn')).rejects.toThrow('NEXT_REDIRECT');
+    expect(nav.redirect).toHaveBeenCalledWith('/r/demo-favornoms/brooklyn/orders/A-12');
+    expect(asked).toEqual([{ p_first: 'hamburger', p_second: 'orders' }]);
+  });
+
+  it('serves the page when the fresh answer agrees with the address the browser is on', async () => {
+    // The tenant read is behind (its version could not be read): the middleware served the short
+    // address, the database says it is live, so nothing redirects and nothing can loop.
+    db.client = fakeClient(withWebAddress(null), {
+      resolve_storefront_path: answering({
+        status: 'short',
+        restaurant_slug: 'demo-favornoms',
+        branch_slug: 'brooklyn',
+        public_slug: 'hamburger',
+        segments: 1,
+      }),
+    });
+    request.headers = new Headers({
+      'x-favornoms-pathname': '/r/hamburger',
+      'x-favornoms-public-base': '/r/hamburger',
+    });
+    const tenant = await resolveTenant('demo-favornoms', 'brooklyn');
+    expect(tenant.branch.slug).toBe('brooklyn');
+    expect(nav.redirect).not.toHaveBeenCalled();
+  });
+
+  it('serves the branch a web address names now when a cached rewrite still pointed at its old long form', async () => {
+    db.client = fakeClient(withWebAddress('hamburger'), {
+      resolve_storefront_path: answering({
+        status: 'short',
+        restaurant_slug: 'demo-favornoms',
+        branch_slug: 'brooklyn',
+        public_slug: 'hamburger',
+        segments: 1,
+      }),
+    });
+    request.headers = new Headers({
+      'x-favornoms-pathname': '/r/hamburger/cart',
+      'x-favornoms-public-base': '/r/hamburger',
+    });
+    const tenant = await resolveTenant('coastal-grill', 'brooklyn');
+    expect(tenant.restaurant.slug).toBe('demo-favornoms');
+    expect(nav.notFound).not.toHaveBeenCalled();
+  });
+
+  it('serves the branch that took a web address over when a cached rewrite still pointed at the one that gave it up', async () => {
+    const pho = { ...RESTAURANT, id: '55555555-5555-5555-5555-555555555555', slug: 'pho-place', name: 'Pho Place' };
+    const phoBranch = branch({}, {
+      id: '66666666-6666-6666-6666-666666666666',
+      restaurant_id: pho.id,
+      slug: 'main',
+      name: 'Pho Place',
+      public_slug: 'hamburger',
+    });
+    db.client = fakeClient(
+      {
+        restaurants: [RESTAURANT, pho],
+        branches: [branch({}, { public_slug: 'burger2' }), phoBranch],
+        brands: [BRAND, { ...BRAND, id: 'brand-2', restaurant_id: pho.id, name: 'Pho Place' }],
+      },
+      {
+        resolve_storefront_path: answering({
+          status: 'short',
+          restaurant_slug: 'pho-place',
+          branch_slug: 'main',
+          public_slug: 'hamburger',
+          segments: 1,
+        }),
+      },
+    );
+    request.headers = new Headers({
+      'x-favornoms-pathname': '/r/hamburger/cart',
+      'x-favornoms-public-base': '/r/hamburger',
+    });
+    const tenant = await resolveTenant('demo-favornoms', 'brooklyn');
+    expect(tenant.restaurant.slug).toBe('pho-place');
+    expect(tenant.branch.id).toBe(phoBranch.id);
+    expect(asked).toEqual([{ p_first: 'hamburger', p_second: 'cart' }]);
+    expect(nav.redirect).not.toHaveBeenCalled();
+    expect(nav.notFound).not.toHaveBeenCalled();
+  });
+
+  it('serves a long form in place when the middleware had no answer, rather than sending it to the web address', async () => {
+    // No PUBLIC_BASE_HEADER: the middleware could not ask the database, so it could not rewrite
+    // /r/hamburger either. Sending the diner there would be a 404.
+    db.client = fakeClient(withWebAddress('hamburger'), {
+      resolve_storefront_path: answering({
+        status: 'redirect',
+        restaurant_slug: 'demo-favornoms',
+        branch_slug: 'brooklyn',
+        public_slug: 'hamburger',
+        segments: 2,
+      }),
+    });
+    request.headers = new Headers({ 'x-favornoms-pathname': '/r/demo-favornoms/brooklyn/cart', 'x-favornoms-search': '?t=abc' });
+    const tenant = await resolveTenant('demo-favornoms', 'brooklyn');
+    expect(tenant.publicSlug).toBe('hamburger');
+    expect(asked).toEqual([]);
+    expect(nav.redirect).not.toHaveBeenCalled();
+  });
+
+  it('never renders the menu at a web address page the middleware did not rewrite', async () => {
+    // /r/hamburger/cart with no rewrite routes as restaurant "hamburger", branch "cart".
+    db.client = fakeClient(withWebAddress('hamburger'), {
+      resolve_storefront_path: answering({
+        status: 'short',
+        restaurant_slug: 'demo-favornoms',
+        branch_slug: 'brooklyn',
+        public_slug: 'hamburger',
+        segments: 1,
+      }),
+    });
+    request.headers = new Headers({ 'x-favornoms-pathname': '/r/hamburger/cart' });
+    await expect(resolveTenant('hamburger', 'cart')).rejects.toThrow('NEXT_NOT_FOUND');
+    expect(nav.redirect).not.toHaveBeenCalled();
   });
 });

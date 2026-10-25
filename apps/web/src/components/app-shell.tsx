@@ -19,6 +19,9 @@ export function AppShell({
   iconUrl = null,
   children,
 }: {
+  /** The storefront's public base (/r/<web-address> or /r/<restaurant>/<branch>): the tabs link
+   *  under it, and the active one is matched against the browser's own path, which is under it
+   *  too. Never the route params, which stay the long form on a short address. */
   base: string;
   brandName?: string;
   /** brands.logo_url. Absent for a merchant who has not uploaded one, which is why the

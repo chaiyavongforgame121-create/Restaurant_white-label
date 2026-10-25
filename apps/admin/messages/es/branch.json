@@ -140,6 +140,26 @@
     "appNameAuto": "Déjalo en blanco para usar “{name}” automáticamente.",
     "appNameSource": "El nombre automático es tu marca y luego el nombre de esta sucursal: cambia la marca en <link>Marca y sucursales</link> y la sucursal con Nombre de la sucursal arriba.",
     "appNameWhere": "Se usa en la ventana de instalación, en el acceso directo del escritorio y como nombre bajo el ícono de la pantalla de inicio. Ahí hay poco espacio, así que el teléfono puede recortar un nombre largo.",
+    "webAddress": {
+      "label": "Dirección web",
+      "placeholder": "pho-ha-noi",
+      "hint": "Se crea a partir del nombre de la app y puedes cambiarla: letras minúsculas (a–z), números y guiones. Los enlaces y códigos QR con una dirección anterior siguen funcionando y abren la nueva.",
+      "loading": "Leyendo la dirección web de esta sucursal…",
+      "loadFailed": "No se pudo leer la dirección web de esta sucursal, así que ahora no se puede cambiar. Recarga la página para intentarlo de nuevo; el resto de esta tarjeta se guarda igual.",
+      "none": "Sin dirección web: los clientes usan la dirección larga de arriba. Escribe una para darle a esta sucursal una dirección corta.",
+      "noLatin": "El nombre de la app no tiene letras latinas para crear una dirección. Escribe una con a–z, 0–9 y guiones, o déjala en blanco para mantener la dirección larga de arriba.",
+      "clearing": "Si guardas con esto en blanco, la tienda en línea vuelve a la dirección larga de arriba. {old} sigue funcionando y redirige allí.",
+      "current": "Esta es la dirección web actual de la sucursal.",
+      "checking": "Comprobando si esta dirección está libre…",
+      "available": "Disponible: se activa al guardar.",
+      "checkFailed": "No se pudo comprobar esta dirección ahora. Se vuelve a comprobar al guardar.",
+      "suggestionUnavailable": "“{slug}” no está disponible, así que al guardar se mantiene {address}. Escribe otra dirección web para cambiarla.",
+      "errors": {
+        "invalid": "Una dirección web usa de 2 a 64 letras minúsculas (a–z), números y guiones sueltos, como pho-ha-noi: sin espacios, tildes ni otros símbolos.",
+        "reserved": "“{slug}” está reservada para FavorNoms. Elige otra dirección web.",
+        "taken": "“{slug}” ya está en uso en FavorNoms, por otra tienda en línea o como dirección de un restaurante. Prueba a añadir tu zona, como {slug}-centro."
+      }
+    },
     "logo": "Logo",
     "uploadLogo": "Subir logo",
     "logoHint": "Una imagen ancha funciona mejor: reemplaza el nombre del restaurante en el encabezado de esta sucursal.",

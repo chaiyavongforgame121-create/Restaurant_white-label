@@ -61,7 +61,7 @@
       "brandNone": "— None —",
       "startFrom": "Start from",
       "startFromNothing": "Nothing (an empty branch)",
-      "slugHint": "Part of the storefront web address. Lowercase letters, numbers and hyphens.",
+      "slugHint": "Part of the branch’s long storefront address. Lowercase letters, numbers and hyphens. A short web address can be added later in Branch settings, under Branding.",
       "timezoneHint": "Opening hours, scheduling and daily reports use this zone. It starts on this device’s zone."
     },
     "copy": {

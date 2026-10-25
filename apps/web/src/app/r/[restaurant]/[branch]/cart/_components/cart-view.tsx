@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronLeft, ShoppingBag, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -10,6 +10,7 @@ import { formatCurrency } from '@favornoms/shared';
 import { Button, Card, EmptyState, IconButton, QuantityStepper } from '@favornoms/ui';
 import { cartLineTotal, useCart, useCartHydrated } from '@/store/cart';
 import { useAuth } from '@/components/auth/use-auth';
+import { useStorefrontBase } from '@/components/storefront-base';
 import { useCartReprice } from './use-cart-reprice';
 import { useLinesInMenuOrder } from './use-menu-order';
 
@@ -22,8 +23,9 @@ interface Props {
 export function CartView({ branchId, storefrontVersion }: Props) {
   const t = useTranslations();
   const router = useRouter();
-  const params = useParams<{ restaurant: string; branch: string }>();
-  const base = `/r/${params.restaurant}/${params.branch}`;
+  // The public base from the branch layout: the route params are the long form even on a short
+  // address.
+  const base = useStorefrontBase();
   const { user, loading: authLoading } = useAuth();
   // Login is required before checkout. Definitely-signed-out → sign-in with next
   // back to checkout; while the session is still resolving (or signed in) fall

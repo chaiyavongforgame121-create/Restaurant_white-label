@@ -13,7 +13,8 @@ import { takePendingAdd } from '@/lib/pending-cart';
  * find the item already there instead of an empty cart and a form to fill in again.
  *
  * Mounted once in the branch layout: sign-in redirects to `next`, which is wherever the
- * diner was, so the replay has to work on any page under /r/{restaurant}/{branch}.
+ * diner was, so the replay has to work on any page of the storefront, under its public base
+ * (/r/{web-address} or /r/{restaurant}/{branch}).
  */
 export function PendingCartReplay({ branchId }: { branchId: string }) {
   const { user, loading } = useAuth();

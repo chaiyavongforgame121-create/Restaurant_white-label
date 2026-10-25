@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { useStorefrontBase } from '../storefront-base';
 import { useAuth } from './use-auth';
 
 /**
@@ -18,13 +19,11 @@ export function useRequireAuth() {
   const router = useRouter();
   const pathname = usePathname();
 
-  // Sign-in lives at `${base}/sign-in`, where base is the /r/{restaurant}/{branch}
-  // prefix. Deriving it from the pathname lets any page under a branch gate an
-  // action without threading route params through every caller.
-  const base = React.useMemo(() => {
-    const m = pathname?.match(/^(\/r\/[^/]+\/[^/]+)/);
-    return m ? m[1] : '';
-  }, [pathname]);
+  // Sign-in lives at `${base}/sign-in`, where base is the storefront's public base
+  // (/r/{web-address} or /r/{restaurant}/{branch}), from the branch layout. Reading it there
+  // lets any page under a branch gate an action without threading it through every caller;
+  // the pathname cannot say where a short address ends.
+  const base = useStorefrontBase();
 
   /**
    * Run `action` when signed in; otherwise redirect to sign-in with `next`
