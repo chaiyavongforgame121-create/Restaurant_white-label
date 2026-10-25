@@ -26,7 +26,7 @@
         },
         "scheduleLater": {
           "q": "¿Puedo programar un pedido para más tarde?",
-          "a": "Sí, para entregas a domicilio. Elige “Entrega a domicilio”, desmarca “Lo antes posible” y selecciona el día y la hora: es cuando el repartidor recoge tu comida en el restaurante para llevártela, y la cocina la tendrá lista para entonces. Si dejas marcado “Lo antes posible”, tu pedido pasa a la cocina en cuanto lo haces. Los pedidos para recoger en tienda siempre se preparan en cuanto los haces."
+          "a": "Sí, para entregas a domicilio. Elige “Entrega a domicilio”, desmarca “Lo antes posible” si aparece y selecciona el día y la hora: es cuando el repartidor recoge tu comida en el restaurante para llevártela, y la cocina la tendrá lista para entonces. Si dejas marcado “Lo antes posible”, donde el restaurante lo ofrece, tu pedido pasa a la cocina en cuanto lo haces. Los pedidos para recoger en tienda siempre se preparan en cuanto los haces."
         },
         "customizeItem": {
           "q": "¿Puedo personalizar un plato (agregar ingredientes, sin cebolla, etc.)?",

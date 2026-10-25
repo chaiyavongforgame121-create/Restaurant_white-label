@@ -16,6 +16,11 @@
   "complete": {
     "title": "Đã giao xong! 🎉",
     "earningsAdded": "Thu nhập đã cộng",
+    "earningsAddedBatch": "Thu nhập đã cộng ({count} đơn)",
+    "runPay": "Tiền công chuyến này",
+    "tip": "Tiền tip",
+    "noTip": "Không có tip",
+    "tipShareOf": "(phần của bạn trong {amount})",
     "findNext": "Tìm đơn tiếp theo"
   },
   "map": {
@@ -38,6 +43,7 @@
   "deliveryNote": "Ghi chú giao hàng:",
   "earning": "Thu nhập",
   "earningBatch": "Thu nhập (2 đơn)",
+  "earningTip": "+ {amount} tiền tip",
   "pickupOrder1": "Đơn 1 · {orderNumber}",
   "pickupOrder2": "Đơn 2 · {orderNumber} — chụp riêng túi này",
   "arrival": {

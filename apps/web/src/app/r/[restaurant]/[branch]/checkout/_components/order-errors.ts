@@ -67,10 +67,11 @@ export const ORDER_ERRORS: Array<[string, string]> = [
   // There is no table field to send them back to any more — the order reached the server
   // without a table because the pin was gone by the time they pressed the button.
   ['table_required', 'errors.order.tableRequired'],
-  // place-order refuses a booked pickup from a customer (pickup is always now). It used to refuse
-  // an ASAP delivery too (delivery_must_be_scheduled); that rule is dropped with ASAP delivery's
-  // return (docs/ASAP-AND-SCHEDULING-2026-10-25.md §1), and its sentence stays only for a
-  // place-order still running the old rule while this storefront is already live. Both must come
+  // place-order refuses a booked pickup from a customer (pickup is always now). Since v11.9 it
+  // refuses an ASAP delivery again (delivery_must_be_scheduled), at a branch that has not ticked
+  // "Accept ASAP delivery orders" (docs/ASAP-AND-SCHEDULING-2026-10-25.md §1): the checkout hides
+  // the box there, so this is a checkout left open while the merchant unticked it. The submit
+  // handler then hides the box and points at the pickers; this is the sentence. Both must come
   // before invalid_channel: place-order puts that code in the same body as a `hint`, so the
   // specific sentence wins instead of the generic one.
   ['delivery_must_be_scheduled', 'errors.order.deliveryMustBeScheduled'],

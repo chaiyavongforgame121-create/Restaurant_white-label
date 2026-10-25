@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 import { Banknote, ChevronLeft, CreditCard, LocateFixed, Map as MapIcon, MapPin, QrCode, ShoppingBag, Tag } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import {
+  asapDeliveryEnabled,
   computeSalesTax,
   computeServiceFee,
   computeTipAmount,
@@ -174,6 +175,13 @@ interface Props {
    */
   deliveryOpenNow?: boolean;
   /**
+   * The branch takes ASAP deliveries at all ("Accept ASAP delivery orders", resolveScheduleDelivery's
+   * asapOffered). Off, the "As soon as possible" box is not rendered — the owner asked that it not
+   * appear, so it is hidden rather than disabled with a reason — and the pickers stand alone.
+   * Default false, so a missing prop never offers ASAP. Refreshed with the branch's settings below.
+   */
+  asapOffered?: boolean;
+  /**
    * This branch delivers at all (storefront_status.delivery_entitled, per branch: its
    * delivery switch, docs/PACKAGING-2026-10-24.md §3).
    *
@@ -233,6 +241,7 @@ export function CheckoutView({
   base,
   canDeliver = false,
   deliveryOpenNow = false,
+  asapOffered = false,
   deliveryOffered = true,
   canUseCard = false,
   cardReady = false,
@@ -413,6 +422,9 @@ export function CheckoutView({
   // an untick, which stays unticked however availability moves underneath. Nothing about timing
   // is persisted: a diner who comes back starts from ASAP again rather than from a stale booking.
   const [asapChoice, setAsapChoice] = React.useState<boolean | null>(null);
+  // "Accept ASAP delivery orders" at this branch: the server's fresh read, then the settings read
+  // below, then off once place-order answers delivery_must_be_scheduled.
+  const [asapOn, setAsapOn] = React.useState(asapOffered);
   // The chosen time, '' for "Choose a time". Holds a UTC ISO instant, not a datetime-local
   // string: the slots are generated in the BRANCH's zone, so the diner's own clock never enters
   // the calculation. Read it through bookedFor below, never directly, for anything sent.
@@ -562,13 +574,14 @@ export function CheckoutView({
     paymentMatrix.scheduled.cash || paymentMatrix.scheduled.card || paymentMatrix.scheduled.transfer;
   // What each way to order needs. canDeliver (from the server) is "ASAP or booked"; each half is
   // judged again here with the payment methods, which the server page does not read.
-  // - ASAP delivery: the branch open this minute, delivery sellable this minute (deliveryOpenNow:
-  //   delivering, inside delivery hours) and a payment method for orders placed now.
+  // - ASAP delivery: the branch takes ASAP deliveries at all (asapOn), the branch open this
+  //   minute, delivery sellable this minute (deliveryOpenNow: delivering, inside delivery hours)
+  //   and a payment method for orders placed now.
   // - A booked delivery: advance orders taken here plus a payment method for booked orders;
   //   whether any slot is left is known once the booking policy has loaded.
   // - Pickup: a payment method for orders placed now, and the branch open at this moment.
   const deliveryAsapAvailable =
-    canDeliver && deliveryOpenNow && openNow && !ordersPaused && asapPayable;
+    asapOn && canDeliver && deliveryOpenNow && openNow && !ordersPaused && asapPayable;
   const deliveryBookable = canDeliver && !!scheduling?.enabled && scheduledPayable;
   const deliverySlotsKnown = !scheduling?.enabled || bookingPolicy !== null;
   const deliveryHasSlots = scheduleDays.length > 0;
@@ -818,6 +831,7 @@ export function CheckoutView({
           setTipConfig(parseTipConfig(settings));
           setLegacyFlatFee(parseDeliverySettings(settings).legacyFlatFee);
           setMerchantPaymentMatrix(parsePaymentMatrix(settings, canUseCard));
+          setAsapOn(asapDeliveryEnabled(settings));
           setQrTransfer(
             (settings.qr_transfer as {
               image_url?: string;
@@ -1554,6 +1568,15 @@ export function CheckoutView({
           return;
         }
       }
+      // The merchant unticked "Accept ASAP delivery orders" while this page was open. Hide the box
+      // as the page would have from the start, drop the diner's tick, measure the time list from
+      // now and point at it; the sentence below asks for a time.
+      if (body?.error === 'delivery_must_be_scheduled') {
+        setAsapOn(false);
+        setAsapChoice(null);
+        setSlotClock(new Date());
+        scheduleSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
       // An ASAP delivery is judged at "now", so a refusal about "that time" is worded for now.
       const key = orderErrorKey(raw, { asap: asapTicked, bookable: timeChoosable });
       // A failure with no code we know is logged as it came and shown as the generic line —
@@ -1652,7 +1675,7 @@ export function CheckoutView({
                 methods, which only this page reads: say so, rather than leave a dead button. */}
             {channel === 'delivery' && canDeliver && !deliveryAsapAvailable && !deliveryBookable && (
               <p className="mt-2 text-xs text-muted-foreground">
-                {(deliveryOpenNow && openNow && !ordersPaused && !asapPayable) ||
+                {(asapOn && deliveryOpenNow && openNow && !ordersPaused && !asapPayable) ||
                 (!!scheduling?.enabled && !scheduledPayable)
                   ? pickupAvailable
                     ? t('checkout.orderType.deliveryNoPaymentPickupOpen')
@@ -1677,38 +1700,43 @@ export function CheckoutView({
                 checkbox until the Time is back on "Choose a time" — and one of them has to be set
                 (validated at submit). The pickers are left out entirely when nothing can be
                 booked but ASAP can be placed ("Accept scheduled orders" off, no slot left, no
-                payment method for bookings): ASAP is then the delivery, ticked and fixed. */}
+                payment method for bookings): ASAP is then the delivery, ticked and fixed. And the
+                checkbox and its reason are left out entirely at a branch that does not take ASAP
+                deliveries ("Accept ASAP delivery orders" off): the pickers stand alone, and each
+                of them brings its own top margin. */}
             {channel === 'delivery' && (deliveryAsapAvailable || deliveryBookable) && (
-              <div ref={scheduleSectionRef} className="mt-3">
-                <label
-                  className={`flex items-start gap-3 rounded-xl border px-4 py-3 ${
-                    asapTicked ? 'border-primary bg-primary/5' : 'border-border'
-                  } ${deliveryAsapAvailable && timeChoosable && !scheduledFor ? 'cursor-pointer' : ''}`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={asapTicked}
-                    disabled={!deliveryAsapAvailable || !timeChoosable || !!scheduledFor}
-                    onChange={(e) => {
-                      setAsapChoice(e.target.checked);
-                      // Ticking ASAP clears the time: the two never both stand.
-                      if (e.target.checked) setScheduledFor('');
-                      // Unticking turns the diner to the time list: measure it from now.
-                      else setSlotClock(new Date());
-                      clearFieldError('schedule');
-                    }}
-                    className="mt-0.5 h-5 w-5 shrink-0 accent-primary disabled:cursor-not-allowed"
-                  />
-                  <span className="min-w-0">
-                    <span className="block text-sm font-semibold">{t('checkout.schedule.asap')}</span>
-                    <span className="block text-xs text-muted-foreground">
-                      {t('checkout.schedule.asapHint')}
+              <div ref={scheduleSectionRef} className={asapOn ? 'mt-3' : undefined}>
+                {asapOn && (
+                  <label
+                    className={`flex items-start gap-3 rounded-xl border px-4 py-3 ${
+                      asapTicked ? 'border-primary bg-primary/5' : 'border-border'
+                    } ${deliveryAsapAvailable && timeChoosable && !scheduledFor ? 'cursor-pointer' : ''}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={asapTicked}
+                      disabled={!deliveryAsapAvailable || !timeChoosable || !!scheduledFor}
+                      onChange={(e) => {
+                        setAsapChoice(e.target.checked);
+                        // Ticking ASAP clears the time: the two never both stand.
+                        if (e.target.checked) setScheduledFor('');
+                        // Unticking turns the diner to the time list: measure it from now.
+                        else setSlotClock(new Date());
+                        clearFieldError('schedule');
+                      }}
+                      className="mt-0.5 h-5 w-5 shrink-0 accent-primary disabled:cursor-not-allowed"
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold">{t('checkout.schedule.asap')}</span>
+                      <span className="block text-xs text-muted-foreground">
+                        {t('checkout.schedule.asapHint')}
+                      </span>
                     </span>
-                  </span>
-                </label>
+                  </label>
+                )}
                 {/* A disabled, unticked ASAP with no reason reads as a broken box. Only reached
                     while a booking is possible, so the pickers below are the way on. */}
-                {!deliveryAsapAvailable && (
+                {asapOn && !deliveryAsapAvailable && (
                   <p className="mt-2 text-xs text-muted-foreground">
                     {!openNow
                       ? t('checkout.schedule.asapClosed')

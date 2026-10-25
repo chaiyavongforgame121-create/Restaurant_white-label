@@ -52,6 +52,9 @@ export default async function CheckoutPage({ params }: Props) {
         // With the branch open now and a payment method for "now" orders, that is ASAP delivery;
         // the orders_enforce_delivery_hours trigger refuses one outside delivery hours anyway.
         deliveryOpenNow={status.delivery}
+        // "Accept ASAP delivery orders", read fresh from the row: unticked, the "As soon as
+        // possible" box is not shown at all and every delivery is booked.
+        asapOffered={scheduleDelivery.asapOffered}
         ordersPaused={scheduleDelivery.paused}
         canUseCard={status.card_payment}
         // The branch's own Stripe account can take charges, so a card paid here lands there. Read

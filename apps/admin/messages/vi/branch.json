@@ -4,8 +4,6 @@
     "generic": "Đã xảy ra lỗi và chưa có gì được lưu. Hãy thử lại.",
     "managerRequired": "Chỉ chủ sở hữu, quản trị viên hoặc quản lý của chi nhánh này mới có thể đổi giờ mở cửa.",
     "settingsRequired": "Chỉ chủ sở hữu hoặc quản trị viên mới có thể thay đổi các cài đặt chi nhánh này.",
-    "ownerOnlyDomain": "Chỉ chủ nhà hàng mới có thể đổi tên miền riêng.",
-    "domainTaken": "Tên miền này đã được một chi nhánh khác sử dụng.",
     "noPermission": "Vai trò của bạn không được phép thực hiện thay đổi này.",
     "busyMinutesRange": "Chế độ bận chỉ có thể cộng thêm từ 0 đến {max} phút chuẩn bị."
   },
@@ -35,12 +33,6 @@
       "rate": "Thuế suất (%)",
       "zeroConfirmed": "0% là đúng cho chi nhánh này",
       "zeroConfirmedHint": "Ví dụ: giá của bạn đã bao gồm thuế. Khi đó bảng điều khiển sẽ không hỏi về thuế suất nữa."
-    },
-    "domain": {
-      "title": "Tên miền riêng",
-      "description": "Trỏ bản ghi DNS A/CNAME tới máy chủ của FavorNoms, rồi nhập hostname vào đây.",
-      "label": "Hostname (ví dụ order.myrestaurant.com)",
-      "invalid": "“{input}” không phải là hostname. Hãy nhập địa chỉ khách sẽ gõ, như order.myrestaurant.com — không phải tên nhà hàng."
     },
     "delivery": {
       "title": "Giao hàng tại chi nhánh này",

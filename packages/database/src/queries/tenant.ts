@@ -9,6 +9,15 @@ import {
 } from '@favornoms/shared';
 import type { Database } from '../types';
 import type { FavornomsClient } from '../client-type';
+import { parseStorefrontPathResolution, type StorefrontPathResolution } from '../storefront-path';
+
+export {
+  movedStorefrontPath,
+  parseStorefrontPathResolution,
+  storefrontPathSlugs,
+  type StorefrontPathResolution,
+  type StorefrontPathStatus,
+} from '../storefront-path';
 
 type RowRestaurant = Database['public']['Tables']['restaurants']['Row'];
 type RowBranch = Database['public']['Tables']['branches']['Row'];
@@ -35,6 +44,14 @@ export interface ResolvedTenant {
    * home-screen label included; see deriveStorefrontNames in apps/web.
    */
   brandName: string;
+  /**
+   * The branch's own App name from its Branding card (branches.settings.app_name) as stored, or
+   * null when it is not a string. Read off the RAW settings, like storefront_override:
+   * parseSettings() keeps only the keys Branch['settings'] names, and dropping this one is why a
+   * saved App name never reached the storefront (2026-10-23 to 10-26). apps/web trims and caps it
+   * (branchAppName) and, when it is not blank, it is the storefront's name on every surface.
+   */
+  appName: string | null;
   /** Storefront logo: the branch's own (branches.logo_url), else its brand's. */
   logoUrl: string | null;
   /**
@@ -117,7 +134,7 @@ export async function resolveTenantBySlug(
   const { data: branchRow, error: bErr } = await supabase
     .from('branches')
     .select(
-      'id, restaurant_id, slug, name, address, timezone, theme_override, settings, is_active, custom_domain, brand_id, geo_lat, geo_lng, created_at, updated_at, logo_url, favicon_url, icon_192_url, icon_512_url, icon_maskable_512_url, app_icon',
+      'id, restaurant_id, slug, name, address, timezone, theme_override, settings, is_active, brand_id, geo_lat, geo_lng, created_at, updated_at, logo_url, favicon_url, icon_192_url, icon_512_url, icon_maskable_512_url, app_icon',
     )
     .eq('restaurant_id', restaurantRow.id)
     .eq('slug', branchSlug)
@@ -214,11 +231,12 @@ export async function resolveTenantBySlug(
   // Effective storefront = branch override (branches.settings.storefront_override)
   // over the restaurant-level value, per key. Read off the RAW b.settings jsonb —
   // parseSettings() drops unknown keys, so it must not be sourced from branch.settings.
+  // The App name is read the same way, for the same reason.
+  const rawSettings = b.settings as Record<string, unknown> | null;
   const restaurantStorefront = parseStorefront(r.storefront);
-  const branchOverride = parseStorefrontOverride(
-    (b.settings as Record<string, unknown> | null)?.storefront_override,
-  );
+  const branchOverride = parseStorefrontOverride(rawSettings?.storefront_override);
   const storefront = mergeStorefrontOverride(restaurantStorefront, branchOverride);
+  const appName = typeof rawSettings?.app_name === 'string' ? rawSettings.app_name : null;
 
   return {
     restaurant,
@@ -226,9 +244,37 @@ export async function resolveTenantBySlug(
     theme,
     storefront,
     brandName,
+    appName,
     logoUrl: b.logo_url || brandRow?.logo_url || null,
     ...icons,
   };
+}
+
+/**
+ * Where a storefront address lives now: public.resolve_storefront_path (20261026110000), which
+ * anon may call. `live` when the pair is a storefront today, `redirect` with the current slugs
+ * when it is an address the storefront answered to before a rename (a live slug always wins over
+ * an old one), `none` otherwise. Null when the database could not answer — callers then behave
+ * as before (a 404), never redirect.
+ */
+export async function resolveStorefrontPath(
+  supabase: FavornomsClient,
+  first: string,
+  second: string,
+): Promise<StorefrontPathResolution | null> {
+  // Newer than the last types.ts regeneration — the same thin typed escape the storefront uses
+  // for storefront_version.
+  const rpcAny = supabase.rpc.bind(supabase) as unknown as (
+    fn: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: unknown }>;
+  try {
+    const { data, error } = await rpcAny('resolve_storefront_path', { p_first: first, p_second: second });
+    if (error) return null;
+    return parseStorefrontPathResolution(data);
+  } catch {
+    return null;
+  }
 }
 
 function parseSettings(raw: unknown): Branch['settings'] {

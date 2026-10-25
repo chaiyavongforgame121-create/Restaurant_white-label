@@ -14,6 +14,14 @@ import {
   type ActiveDeliveryUI,
   type EndedJobNotice,
 } from '@/components/delivery-provider';
+import { useDriverSession } from '@/components/driver-session';
+import {
+  completedRun,
+  tipShareOf,
+  type CompletedRun,
+  type DeliveryLegRow,
+  type LedgerLegRow,
+} from '@/lib/run-earnings';
 import { useDriver } from '@/store/driver';
 import {
   cancelDelivery,
@@ -46,6 +54,63 @@ function advanceErrorMessage(e: unknown, t: ActiveT): string {
   }
   if (raw.includes('forbidden')) return t('errors.forbidden');
   return t('errors.unknown', { reason: raw.slice(0, 120) });
+}
+
+/**
+ * What the run that just ended put in the rider's balance, for the "Delivery complete!" card.
+ * Called after progress('delivered') has returned, and accrue_driver_earnings writes the ledger
+ * row in that same transaction, so the credited figures are already there to read.
+ *
+ * Every read is best effort (lib/run-earnings falls back per leg: ledger, then the delivery row,
+ * then what the phone held): the card is a thank-you, never worth stranding the rider on a
+ * spinner. A batch covers every leg of it this rider delivered, including one dropped off before
+ * this screen was last mounted, which only the batch_id read can find.
+ */
+async function readCompletedRun(
+  snap: ActiveDeliveryUI,
+  earlier: readonly ActiveDeliveryUI[],
+  driverId: string,
+): Promise<CompletedRun> {
+  const supabase = getBrowserClient();
+  const snapshots = [...earlier, snap];
+  const known = [...new Set(snapshots.map((l) => l.id))];
+
+  const readDeliveries = async (): Promise<DeliveryLegRow[] | null> => {
+    try {
+      const base = supabase
+        .from('deliveries')
+        .select('id, driver_earnings, net_tip, tip_visible_total')
+        .eq('driver_id', driverId);
+      const { data, error } = await (snap.batchId
+        ? base.eq('batch_id', snap.batchId).eq('status', 'delivered')
+        : base.eq('id', snap.id));
+      return error ? null : data;
+    } catch {
+      return null; // the ledger and the snapshots still answer
+    }
+  };
+  const readLedger = async (ids: string[]): Promise<LedgerLegRow[] | null> => {
+    try {
+      const { data, error } = await supabase
+        .from('driver_earnings_ledger')
+        .select('delivery_id, base_pay, distance_pay, tip_net')
+        .eq('driver_id', driverId)
+        .in('delivery_id', ids);
+      return error ? null : data;
+    } catch {
+      return null; // the delivery rows and the snapshots still answer
+    }
+  };
+
+  // Both at once, so the card costs the rider one round trip as it always did: the legs this
+  // phone already holds are the whole run in every case but one, which the follow-up covers.
+  const [deliveries, knownLedger] = await Promise.all([readDeliveries(), readLedger(known)]);
+  const missed = (deliveries ?? []).map((r) => r.id).filter((id) => !known.includes(id));
+  const ledger = missed.length
+    ? [...(knownLedger ?? []), ...((await readLedger(missed)) ?? [])]
+    : knownLedger;
+
+  return completedRun({ legIds: [...known, ...missed], ledger, deliveries, snapshots });
 }
 
 type StageKey = 'heading_to_pickup' | 'at_pickup' | 'picked_up' | 'in_transit' | 'at_customer';
@@ -132,7 +197,11 @@ export function ActiveDeliveryView() {
   const gps = useDriver((s) => s.gps);
   const geoDenied = geoWatchDenied || gps === 'denied' || gps === 'insecure';
   const [route, setRoute] = React.useState<[number, number][] | null>(null);
-  const [completed, setCompleted] = React.useState<{ earnings: number; orderNumber: string } | null>(null);
+  const { driver } = useDriverSession();
+  const [completed, setCompleted] = React.useState<(CompletedRun & { orderNumber: string }) | null>(null);
+  // The legs of a batch already dropped off on this run, so the last one can say what the whole
+  // run paid. Kept per batch: a leftover from another run must never be added to this one.
+  const deliveredLegsRef = React.useRef<{ batchId: string; legs: ActiveDeliveryUI[] } | null>(null);
   const [advanceError, setAdvanceError] = React.useState<string | null>(null);
   // Which arrival step the rider has explicitly overridden the distance check for. Stored as
   // the stage rather than a boolean so it expires by itself: once the job moves on, the value
@@ -163,6 +232,8 @@ export function ActiveDeliveryView() {
     setMatePickupPhotoUrl(null);
     // A distance override belongs to one step of one job — never carry it into the next.
     setArrivalOverride(null);
+    // A new job means any "Delivery complete!" card still held belongs to a run that has ended.
+    setCompleted(null);
     // The soft stage belongs to the job too; the sync effect below then pulls it forward to
     // wherever the server says this one already is.
     setSoftStage('heading_to_pickup');
@@ -226,6 +297,7 @@ export function ActiveDeliveryView() {
   if (!active) {
     // Just finished a delivery → celebrate + show credited earnings + hand to the next run.
     if (completed) {
+      const shareOf = tipShareOf(completed);
       return (
         <div className="grid min-h-[70vh] place-items-center px-6">
           <motion.div
@@ -241,11 +313,42 @@ export function ActiveDeliveryView() {
             <p className="mt-1 text-sm text-muted-foreground">{completed.orderNumber}</p>
             <div className="mt-5 rounded-2xl bg-muted/50 px-5 py-4">
               <p className="text-xs uppercase tracking-wider text-muted-foreground">
-                {t('complete.earningsAdded')}
+                {completed.orders > 1
+                  ? t('complete.earningsAddedBatch', { count: String(completed.orders) })
+                  : t('complete.earningsAdded')}
               </p>
+              {/* The big number is everything that reached the balance, tip included: the same
+                  figure Home and Earnings now show. It used to be the pay alone, labelled as if
+                  it were the whole amount. */}
               <p className="font-display text-3xl font-bold text-primary">
-                {formatCurrency(completed.earnings)}
+                {formatCurrency(completed.total)}
               </p>
+              <dl className="mt-3 space-y-1.5 border-t border-border/60 pt-3 text-left text-sm">
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="text-muted-foreground">{t('complete.runPay')}</dt>
+                  <dd className="font-semibold tabular-nums">{formatCurrency(completed.runPay)}</dd>
+                </div>
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="text-muted-foreground">
+                    {t('complete.tip')}
+                    {/* Only the rider's own share is ever theirs to see. The full tip appears
+                        only when tips.mode let the offer show it too (tip_visible_total). */}
+                    {shareOf != null && (
+                      <span className="ml-1 text-xs">
+                        {t('complete.tipShareOf', { amount: formatCurrency(shareOf) })}
+                      </span>
+                    )}
+                  </dt>
+                  {/* A missing row would read as "the tip got lost", so no tip says so. */}
+                  <dd className="font-semibold tabular-nums">
+                    {completed.tip > 0 || shareOf != null ? (
+                      formatCurrency(completed.tip)
+                    ) : (
+                      <span className="font-normal text-muted-foreground">{t('complete.noTip')}</span>
+                    )}
+                  </dd>
+                </div>
+              </dl>
             </div>
             <Link href="/app/home" className="mt-6 block">
               <Button variant="gradient" size="xl" fullWidth onClick={() => setCompleted(null)}>
@@ -320,6 +423,7 @@ export function ActiveDeliveryView() {
   const matePendingPickup = !!mate && mate.status === 'assigned';
   const hasMatePickupPhoto = !!matePickupPhotoUrl || !!mate?.pickupPhotoUrl;
   const needsMatePickupPhoto = stage === 'at_pickup' && matePendingPickup && !hasMatePickupPhoto;
+  const jobTip = Math.max(0, active.netTip ?? 0) + Math.max(0, mate?.netTip ?? 0);
 
   const handleAdvance = async () => {
     if (advancing) return; // guard against double-fire
@@ -361,21 +465,26 @@ export function ActiveDeliveryView() {
         const snap = active;
         // Throws if the guarded RPC rejects — so we never show a false completion.
         await progress('delivered');
-        // Show the actually-credited earnings (incl. any peak bonus applied on the
-        // delivered transition), falling back to the offered amount.
-        let earnings = snap.driverEarnings;
-        try {
-          const supabase = getBrowserClient();
-          const { data } = await supabase
-            .from('deliveries')
-            .select('driver_earnings')
-            .eq('id', snap.id)
-            .maybeSingle();
-          if (data?.driver_earnings != null) earnings = Number(data.driver_earnings);
-        } catch {
-          /* keep the snapshot earnings */
+        const batchId = snap.batchId ?? snap.id;
+        const earlier =
+          deliveredLegsRef.current?.batchId === batchId ? deliveredLegsRef.current.legs : [];
+        if (snap.batchMate) {
+          // First stop of a batch: the run is not over. progress() hands the screen straight
+          // to the other leg, and the "Delivery complete!" card waits for the last drop-off.
+          // It used to flash here, then the last leg overwrote it with half the run's pay.
+          deliveredLegsRef.current = { batchId, legs: [...earlier, snap] };
+          return;
         }
-        setCompleted({ earnings, orderNumber: snap.orderNumber });
+        deliveredLegsRef.current = null;
+        const legs = [...earlier, snap];
+        const orderNumber = legs.map((l) => l.orderNumber).join(' · ');
+        // The phone's own figures first, so the card is there the moment the job leaves the
+        // screen: without it the read below shows the last run's card, or "No active delivery".
+        setCompleted({ ...completedRun({ legIds: legs.map((l) => l.id), snapshots: legs }), orderNumber });
+        // What was actually credited (pay incl. any peak bonus, plus the tip), read back from
+        // the ledger the delivered transition just wrote; see readCompletedRun.
+        const run = await readCompletedRun(snap, earlier, driver.id);
+        setCompleted({ ...run, orderNumber });
       } else if (meta.transition === 'picked_up') {
         // Collecting the bag and setting off are one act now — the separate "start delivery"
         // tap was a screen with nothing on it to decide. Batched jobs still mark the sibling
@@ -557,6 +666,13 @@ export function ActiveDeliveryView() {
                 </p>
                 <p className="font-display text-xl font-bold text-primary">
                   {formatCurrency(active.driverEarnings + (mate?.driverEarnings ?? 0))}
+                  {/* net_tip is the rider's own share (safe in any tips.mode), already on the
+                      offer card; leaving it off here made a tipped job look like pay alone. */}
+                  {jobTip > 0 && (
+                    <span className="ml-1.5 font-sans text-sm font-semibold text-muted-foreground">
+                      {t('earningTip', { amount: formatCurrency(jobTip) })}
+                    </span>
+                  )}
                 </p>
               </div>
               <div className="flex flex-wrap items-center justify-end gap-2">

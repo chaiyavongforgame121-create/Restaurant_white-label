@@ -33,7 +33,7 @@ export default async function PlatformPage() {
     supabase
       .from('branches')
       .select(
-        `id, restaurant_id, name, slug, is_active, settings, timezone, entitled_through, custom_domain,
+        `id, restaurant_id, name, slug, is_active, settings, timezone, entitled_through,
          branch_hours(day_of_week),
          branch_closures(starts_at, ends_at, reason)`,
       )
@@ -66,7 +66,6 @@ export default async function PlatformPage() {
     orders_paused: readOrdersPaused(b.settings),
     entitled_through: b.entitled_through,
     timezone: b.timezone,
-    custom_domain: b.custom_domain,
     has_hours: (b.branch_hours ?? []).length > 0,
     closure: firstClosure(b.branch_closures),
   }));

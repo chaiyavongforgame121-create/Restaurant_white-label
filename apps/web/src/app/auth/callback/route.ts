@@ -3,27 +3,27 @@
 //
 // This lives OUTSIDE /r/[restaurant]/[branch] on purpose: the provider redirect URI has to
 // be a single fixed path per host, and a tenant-scoped one would need one allowlist entry
-// per branch. `middleware.ts` exempts /auth/ from the custom-domain rewrite so this route
-// still runs on merchant domains.
+// per branch.
 import { NextResponse, type NextRequest } from 'next/server';
 import { getServerClient } from '@favornoms/database/server';
-import { resolveTenantBySlug } from '@favornoms/database/queries';
+import { movedStorefrontPath, resolveStorefrontPath, resolveTenantBySlug } from '@favornoms/database/queries';
 import { safeNext } from '@favornoms/shared';
 
 export const dynamic = 'force-dynamic';
 
-const TENANT_PATH = /^\/r\/([^/]+)\/([^/]+)(?:\/|$)/;
+// The query string is not part of a slug: `next` is often the menu itself with one
+// (/r/a/b?t=…), and reading "b?t=…" as the branch slug found no tenant to provision at.
+const TENANT_PATH = /^\/r\/([^/?#]+)\/([^/?#]+)(?:[/?#]|$)/;
 
 export async function GET(request: NextRequest) {
   const origin = request.nextUrl.origin;
   const code = request.nextUrl.searchParams.get('code');
-  // Shared guard — see @favornoms/shared. This value becomes a 302 Location header served
-  // from the merchant's own domain, so it must be proven same-origin, not merely
-  // "starts with a slash".
-  const next = safeNext(request.nextUrl.searchParams.get('next'), origin);
+  // Shared guard — see @favornoms/shared. This value becomes a 302 Location header, so it
+  // must be proven same-origin, not merely "starts with a slash".
+  let next = safeNext(request.nextUrl.searchParams.get('next'), origin);
 
-  // Bounce failures back to the sign-in page the diner came from. On a custom domain the
-  // `next` has no /r/ prefix, but /sign-in is rewritten to the branch page anyway.
+  // Bounce failures back to the sign-in page the diner came from. A sign-in started at a
+  // storefront's old address bounces to the old sign-in path, and the middleware 308s that on.
   const tenantMatch = next?.match(TENANT_PATH);
   const restaurantSlug = tenantMatch?.[1];
   const branchSlug = tenantMatch?.[2];
@@ -56,7 +56,17 @@ export async function GET(request: NextRequest) {
   // sign-in never provisioned anything here.
   if (restaurantSlug && branchSlug) {
     try {
-      const tenant = await resolveTenantBySlug(supabase, restaurantSlug, branchSlug);
+      let tenant = await resolveTenantBySlug(supabase, restaurantSlug, branchSlug);
+      // A sign-in started at an address the storefront has since moved from (a tab opened before
+      // a rename, an old link): provision at the branch those slugs name now, and send the diner
+      // straight to its current address rather than through one more redirect.
+      if (!tenant) {
+        const resolution = await resolveStorefrontPath(supabase, restaurantSlug, branchSlug);
+        if (resolution?.status === 'redirect' && resolution.restaurantSlug && resolution.branchSlug) {
+          tenant = await resolveTenantBySlug(supabase, resolution.restaurantSlug, resolution.branchSlug);
+          if (tenant && next) next = movedStorefrontPath(next, resolution) ?? next;
+        }
+      }
       if (tenant) {
         const { error: provisionError } = await supabase.rpc('provision_customer_for_branch', {
           p_branch_id: tenant.branch.id,

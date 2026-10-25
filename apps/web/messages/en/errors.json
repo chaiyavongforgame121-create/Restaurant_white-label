@@ -25,7 +25,7 @@
     "tableNotInBranch": "That table isn’t at this restaurant. Scan the code on your own table.",
     "signInRequired": "Please sign in again to order at your table.",
     "tableRequired": "Scan the code on your table to start your order.",
-    "deliveryMustBeScheduled": "This restaurant cannot take ASAP deliveries yet. Please choose a delivery time.",
+    "deliveryMustBeScheduled": "This restaurant does not take ASAP deliveries. Please choose a delivery time.",
     "pickupIsAsapOnly": "Pickup orders are prepared right away and cannot be booked for later. Choose Delivery to book a time.",
     "invalidChannel": "Please choose Pickup or Delivery and try again.",
     "staleClientRefreshRequired": "Rewards changed while you were ordering. Please refresh this page and try again.",

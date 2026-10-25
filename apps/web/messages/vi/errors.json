@@ -25,7 +25,7 @@
     "tableNotInBranch": "Bàn đó không thuộc nhà hàng này. Hãy quét mã trên bàn của bạn.",
     "signInRequired": "Vui lòng đăng nhập lại để gọi món tại bàn.",
     "tableRequired": "Hãy quét mã trên bàn để bắt đầu gọi món.",
-    "deliveryMustBeScheduled": "Nhà hàng chưa nhận giao hàng càng sớm càng tốt. Vui lòng chọn giờ giao hàng.",
+    "deliveryMustBeScheduled": "Nhà hàng không nhận giao hàng càng sớm càng tốt. Vui lòng chọn giờ giao hàng.",
     "pickupIsAsapOnly": "Đơn Tự đến lấy được chuẩn bị ngay và không thể hẹn giờ. Hãy chọn Giao hàng để đặt giờ.",
     "invalidChannel": "Vui lòng chọn Tự đến lấy hoặc Giao hàng rồi thử lại.",
     "staleClientRefreshRequired": "Phần thưởng đã thay đổi trong lúc bạn đặt hàng. Vui lòng tải lại trang và thử lại.",

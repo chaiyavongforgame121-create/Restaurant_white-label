@@ -5,7 +5,24 @@ the bulk of the file; every deploy had to carry it. The history is the valuable 
 so it lives here rather than being deleted.
 
 ```
-// place-order v11.8 — ASAP delivery is back; one kitchen-lead rule
+// place-order v11.9 — ASAP delivery is a per-branch switch
+//   v11.9 (2026-10-26): docs/ASAP-AND-SCHEDULING-2026-10-25.md §1. SQL half:
+//        20261026100000_asap_delivery_switch (patch_branch_settings takes only a JSON boolean or
+//        null for asap_delivery_enabled; default_branch_settings seeds false; copy_branch_setup
+//        copies it).
+//        - "Accept ASAP delivery orders" (branches.settings.asap_delivery_enabled) is on only when
+//          it is exactly true; a missing key is off, and existing branches were not backfilled.
+//          Off, a WEB delivery with no scheduled_for is refused with 409
+//          { error: 'delivery_must_be_scheduled', hint: 'invalid_channel' } — the code of the
+//          2026-09-16 refusal, which the storefront still maps to "please choose a delivery time".
+//          Counter and POS (staff-placed) are exempt. Booked deliveries, pickup, dine-in and QR are
+//          untouched, and a closed branch still answers branch_closed first.
+//        - Read with asapDeliveryEnabled() from a new ./asap-delivery.ts (pure, no imports),
+//          pinned to the shared copy by packages/shared/src/utils/asap-delivery.test.ts. A
+//          Management API / MCP deploy must pass asap-delivery.ts along with index.ts,
+//          kitchen-lead.ts, card.ts and _shared/entitlements.ts; the CLI uploads the tree.
+//        - Deploy it LAST, after the storefront that hides the box: the storefront before that
+//          ticks ASAP by default and would be refused at every branch that has not ticked it.
 //   v11.8 (2026-10-25): docs/ASAP-AND-SCHEDULING-2026-10-25.md. SQL half:
 //        20261025100000_scheduling_release (private.branch_kitchen_lead_min, the release job on it,
 //        patch_branch_settings refusing a bad lead or prep time, the release cron job).

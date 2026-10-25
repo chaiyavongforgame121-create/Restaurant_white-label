@@ -10,13 +10,13 @@
       "restaurant": "Este restaurante no tiene slug de URL, así que no hay una dirección pública a la que pueda apuntar un código QR. El slug es el nombre corto de tu enlace del menú, por ejemplo <code>/r/coastal-grill/brooklyn</code>.",
       "branch": "Esta sucursal no tiene slug de URL, así que no hay una dirección pública a la que pueda apuntar un código QR. El slug es el nombre corto de tu enlace del menú, por ejemplo <code>/r/coastal-grill/brooklyn</code>."
     },
-    "branchHelp": "Los slugs se crean durante el registro. Si el tuyo está vacío, configura un <strong>dominio propio</strong> en Configuración de sucursal (así esta sucursal también tendrá una dirección escaneable) o pide a soporte que complete el slug.",
+    "branchHelp": "Los slugs se crean durante el registro. Si el tuyo está vacío, <strong>pide a soporte</strong> que complete el slug: el código aparecerá aquí en cuanto la sucursal tenga una dirección.",
     "tableBody": {
       "both": "Este restaurante y esta sucursal no tienen slug de URL, así que no hay una dirección pública a la que pueda apuntar el código de una mesa. El slug es el nombre corto de tu enlace del menú, por ejemplo <code>/r/coastal-grill/brooklyn</code>.",
       "restaurant": "Este restaurante no tiene slug de URL, así que no hay una dirección pública a la que pueda apuntar el código de una mesa. El slug es el nombre corto de tu enlace del menú, por ejemplo <code>/r/coastal-grill/brooklyn</code>.",
       "branch": "Esta sucursal no tiene slug de URL, así que no hay una dirección pública a la que pueda apuntar el código de una mesa. El slug es el nombre corto de tu enlace del menú, por ejemplo <code>/r/coastal-grill/brooklyn</code>."
     },
-    "tableHelp": "Configura un <strong>dominio propio</strong> en Configuración de sucursal o pide a soporte que complete el slug. Tus mesas están a salvo de cualquier forma: los códigos aparecerán aquí en cuanto la sucursal tenga una dirección.",
+    "tableHelp": "<strong>Pide a soporte</strong> que complete el slug. Tus mesas están a salvo de cualquier forma: los códigos aparecerán aquí en cuanto la sucursal tenga una dirección.",
     "openBranchSettings": "Abrir Configuración de sucursal"
   },
   "branch": {

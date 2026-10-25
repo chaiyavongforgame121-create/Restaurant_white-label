@@ -8,6 +8,7 @@
   "closed": {
     "title": "Hiện đang đóng cửa.",
     "canSchedule": "Tự đến lấy và giao càng sớm càng tốt chỉ có trong giờ mở cửa — bạn vẫn có thể hẹn giờ giao hàng ngay bây giờ.",
+    "canScheduleNoAsap": "Tự đến lấy chỉ có trong giờ mở cửa — bạn vẫn có thể hẹn giờ giao hàng ngay bây giờ.",
     "notTaking": "Hiện chúng tôi chưa nhận đơn mới. Vui lòng quay lại trong giờ mở cửa."
   },
   "reviews": {

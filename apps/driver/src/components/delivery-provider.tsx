@@ -593,7 +593,16 @@ export function DeliveryProvider({ children }: { children: React.ReactNode }) {
         throw new Error(error.message ?? 'progress_failed');
       }
       if (next === 'delivered') {
-        setActive(null);
+        if (active.batchMate) {
+          // First stop of a batch: the run carries on with the other leg, which this phone
+          // already holds. Dropping to null here showed a "Delivery complete!" card (later "no
+          // active delivery") for half a run until the next read brought the second leg back.
+          // That read is started now so the leg's own server state replaces this copy.
+          setActive({ ...active.batchMate, batchMate: null });
+          void refreshFromServer();
+        } else {
+          setActive(null);
+        }
       } else {
         setActive({ ...active, status: next });
       }

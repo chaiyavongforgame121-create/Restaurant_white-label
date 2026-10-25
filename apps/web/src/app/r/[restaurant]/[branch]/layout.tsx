@@ -38,9 +38,10 @@ export default async function BranchLayout({ params, children }: Props) {
         <TablePinProvider branchId={tenant.branch.id}>
           <AppShell
             base={base}
-            // "<brand> - <branch>", the same name as the tab and the installed app, so a diner
-            // who has both branches open can tell which kitchen this header belongs to. Also the
-            // logo's alt text. The logo is the branch's own (brand's until the branch uploads one).
+            // The branch's App name when it has one, else "<brand> - <branch>": the same name as
+            // the tab and the installed app, so a diner who has both branches open can tell which
+            // kitchen this header belongs to. Also the logo's alt text. The logo is the branch's
+            // own (brand's until the branch uploads one).
             brandName={storefrontNames(tenant).full}
             logoUrl={tenant.logoUrl}
             iconUrl={tenant.icon192Url ?? tenant.faviconUrl}
@@ -118,12 +119,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       : {}),
     // A shared link is the storefront's front door, so it carries the same name as the tab
     // and the install dialog rather than the restaurants row the merchant may have renamed
-    // away from.
+    // away from. The site name too: it was the brand alone, so a branch with an App name of
+    // its own still went out on every share card under the brand's name.
     openGraph: {
       type: 'website',
       title: names.full,
       description,
-      siteName: names.brand,
+      siteName: names.full,
       ...(shareImage ? { images: [shareImage] } : {}),
     },
     twitter: {

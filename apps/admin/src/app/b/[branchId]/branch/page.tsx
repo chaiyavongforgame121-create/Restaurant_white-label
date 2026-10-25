@@ -41,7 +41,7 @@ export default async function BranchPage({ params }: Props) {
   const { data: branch } = await supabase
     .from('branches')
     .select(
-      'id, restaurant_id, brand_id, name, address, timezone, theme_override, settings, is_active, custom_domain, sales_tax_rate, geo_lat, geo_lng, logo_url, favicon_url, icon_192_url, icon_512_url, icon_maskable_512_url, app_icon',
+      'id, restaurant_id, brand_id, name, address, timezone, theme_override, settings, is_active, sales_tax_rate, geo_lat, geo_lng, logo_url, favicon_url, icon_192_url, icon_512_url, icon_maskable_512_url, app_icon',
     )
     .eq('id', branchId)
     .maybeSingle();

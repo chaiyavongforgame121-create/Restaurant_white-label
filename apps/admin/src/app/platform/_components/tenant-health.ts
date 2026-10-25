@@ -51,7 +51,6 @@ export interface BranchLite {
   /** Per-branch billing truth — the column the anon storefront actually reads. */
   entitled_through: string | null;
   timezone: string;
-  custom_domain: string | null;
   has_hours: boolean;
   /** Only closures active right now; the page query filters the window server-side. */
   closure: BranchClosureLite | null;
@@ -190,13 +189,11 @@ export const branchEntitled = (b: BranchLite, nowMs: number) =>
   b.entitled_through !== null && Date.parse(b.entitled_through) > nowMs;
 
 /**
- * Where a diner actually lands. A branch with a custom domain is served from
- * that host by the middleware and the /r/... path is not the URL any customer
- * ever sees, so linking there would show the operator a different page than the
- * one they are trying to check.
+ * Where a diner actually lands: /r/<restaurant>/<branch> on the storefront host. It used to be
+ * the branch's custom domain when it had one; custom domains were removed on 2026-10-26.
  */
 export const storefrontUrl = (siteBase: string, restaurantSlug: string, b: BranchLite) =>
-  b.custom_domain ? `https://${b.custom_domain}` : `${siteBase}/r/${restaurantSlug}/${b.slug}`;
+  `${siteBase}/r/${restaurantSlug}/${b.slug}`;
 
 // Lamps are read left-to-right and the first one is what the row's aria-label
 // leads with, so the worst news has to come first. Without this a tenant whose

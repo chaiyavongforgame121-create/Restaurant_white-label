@@ -1,13 +1,6 @@
 import { NextResponse } from 'next/server';
 import { manifestIcons, urlFingerprint } from '@/lib/app-identity';
-import {
-  DEFAULT_THEME_COLOR,
-  hexOr,
-  hostIsOwnDomainFor,
-  hostOf,
-  resolveTenantOptional,
-  storefrontNames,
-} from '@/lib/tenant';
+import { DEFAULT_THEME_COLOR, hexOr, resolveTenantOptional, storefrontNames } from '@/lib/tenant';
 
 interface Props {
   params: Promise<{ restaurant: string; branch: string }>;
@@ -30,23 +23,6 @@ interface Props {
 export async function GET(request: Request, { params }: Props) {
   const { restaurant, branch } = await params;
 
-  // Scope is host-dependent. On a merchant's own domain the middleware rewrites that host's
-  // "/" to this branch, so their advertised root IS the app and scoping to /r/... would push
-  // their homepage — and every link and QR code pointing at the bare domain — outside the
-  // installed window. Everywhere else the branch really does live under /r/{restaurant}/{branch}.
-  //
-  // Asking the database which of the two this is, rather than inferring it from a static list
-  // of apex hosts, is the fix for the bug above: the production storefront
-  // (restaurant-white-label-web.vercel.app) was never on that list, so the route believed it
-  // was on somebody's custom domain and published the platform root. A host is a merchant's
-  // own only when public.resolve_custom_domain — the same answer the middleware rewrites
-  // on — says so, so an unknown host degrades to the /r/ form instead of to the origin root.
-  const ownDomain = await hostIsOwnDomainFor(
-    hostOf(request.headers.get('host')),
-    restaurant,
-    branch,
-  );
-
   // The version-keyed, cookie-LESS read the layout and the metadata already share. The old
   // cookie-backed one made this response vary by visitor while it was being served to a shared
   // cache under Vary: Host alone, and it let the body move without the ETag moving with it —
@@ -54,34 +30,37 @@ export async function GET(request: Request, { params }: Props) {
   const tenant = await resolveTenantOptional(restaurant, branch);
   if (!tenant) return new NextResponse(null, { status: 404 });
 
-  const base = ownDomain ? '' : `/r/${restaurant}/${branch}`;
+  // Every storefront lives under /r/{restaurant}/{branch} on the platform's hosts: merchant custom
+  // domains are gone (2026-10-26), and with them the one case whose app was scoped to the origin
+  // root. Never "/" — that is the marketing page, the bug described above.
+  const base = `/r/${restaurant}/${branch}`;
   // Deliberately no trailing slash: Next 308-redirects /r/a/b/ to /r/a/b, which would cost a
   // redirect on every cold launch, and start_url has to sit inside scope by plain path-prefix
   // comparison, so the two must agree. The cost is that a sibling branch whose slug extends
   // this one (brooklyn / brooklyn-north) falls inside this scope — a containment quirk in the
   // window, not an identity one, because `id` below still keeps the two apps apart.
-  const scope = base || '/';
+  const scope = base;
   // Same source as the tab, the apple title, the install card and the admin Branding preview.
   const names = storefrontNames(tenant);
 
   const manifest = {
     // Identity is the branch, not the URL it currently sits at. `id` is resolved as a URL
     // against the origin and compared exactly, so this is an opaque per-tenant identity that
-    // survives a slug rename and the move between /r/... and a merchant's own domain; it never
-    // has to resolve to a real resource. Changing it MINTS A NEW APP — anyone already
-    // installed on the old shared "/" identity keeps that one for good, which is what the
-    // notice on the platform landing page exists to tell them.
+    // survives a slug rename (the old address 308s to the new one); it never has to resolve to a
+    // real resource. Changing it MINTS A NEW APP — anyone already installed on the old shared "/"
+    // identity keeps that one for good, which is what the notice on the platform landing page
+    // exists to tell them.
     id: `/?app=${tenant.branch.id}`,
-    // "<brand> - <branch>", in both. Chrome's install dialog and the desktop shortcut print
-    // `name`, and it used to be the brand alone, so a restaurant's two branches installed as two
-    // apps with one name. Android's launcher and iOS print `short_name` (the apple title agrees
-    // with it); the owner wants the full name there as well, and a launcher cutting it at about
-    // 12 characters is accepted.
+    // The branch's App name when it has one, else "<brand> - <branch>", in both. Chrome's install
+    // dialog and the desktop shortcut print `name`, and it used to be the brand alone, so a
+    // restaurant's two branches installed as two apps with one name. Android's launcher and iOS
+    // print `short_name` (the apple title agrees with it); the owner wants the full name there as
+    // well, and a launcher cutting it at about 12 characters is accepted.
     name: names.app,
     short_name: names.short,
     description: `Order from ${names.full}`,
-    // Where the home-screen icon lands. "/" is the marketing page on every host that is not
-    // this merchant's own — the single most visible half of the bug.
+    // Where the home-screen icon lands. "/" is the marketing page — the single most visible half
+    // of the bug.
     start_url: scope,
     scope,
     display: 'standalone',
@@ -112,7 +91,7 @@ export async function GET(request: Request, { params }: Props) {
   if (request.headers.get('if-none-match') === etag) {
     return new NextResponse(null, {
       status: 304,
-      headers: { ETag: etag, 'Cache-Control': MANIFEST_CACHE_CONTROL, Vary: 'Host' },
+      headers: { ETag: etag, 'Cache-Control': MANIFEST_CACHE_CONTROL },
     });
   }
 
@@ -121,10 +100,8 @@ export async function GET(request: Request, { params }: Props) {
       'Content-Type': 'application/manifest+json; charset=utf-8',
       'Cache-Control': MANIFEST_CACHE_CONTROL,
       ETag: etag,
-      // start_url and scope differ between a merchant's own domain and the platform, and the
-      // same path is reachable on both — without this a shared cache could serve one host's
-      // scope to the other. Nothing else in the body varies per request any more.
-      Vary: 'Host',
+      // No Vary: Host any more. start_url and scope used to differ between a merchant's own
+      // domain and the platform; with custom domains gone nothing in the body varies by request.
     },
   });
 }

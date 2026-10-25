@@ -10,13 +10,13 @@
       "restaurant": "Nhà hàng này chưa có slug URL, nên chưa có địa chỉ công khai để mã QR trỏ tới. Slug là tên ngắn trong liên kết thực đơn của bạn, ví dụ <code>/r/coastal-grill/brooklyn</code>.",
       "branch": "Chi nhánh này chưa có slug URL, nên chưa có địa chỉ công khai để mã QR trỏ tới. Slug là tên ngắn trong liên kết thực đơn của bạn, ví dụ <code>/r/coastal-grill/brooklyn</code>."
     },
-    "branchHelp": "Slug được tạo khi đăng ký. Nếu slug của bạn đang trống, hãy đặt <strong>tên miền riêng</strong> trong Cài đặt chi nhánh — cách này cũng cho chi nhánh một địa chỉ quét được — hoặc nhờ bộ phận hỗ trợ điền slug.",
+    "branchHelp": "Slug được tạo khi đăng ký. Nếu slug của bạn đang trống, hãy <strong>nhờ bộ phận hỗ trợ</strong> điền slug — mã sẽ hiện ở đây ngay khi chi nhánh có địa chỉ.",
     "tableBody": {
       "both": "Nhà hàng và chi nhánh này chưa có slug URL, nên chưa có địa chỉ công khai để mã của bàn trỏ tới. Slug là tên ngắn trong liên kết thực đơn của bạn, ví dụ <code>/r/coastal-grill/brooklyn</code>.",
       "restaurant": "Nhà hàng này chưa có slug URL, nên chưa có địa chỉ công khai để mã của bàn trỏ tới. Slug là tên ngắn trong liên kết thực đơn của bạn, ví dụ <code>/r/coastal-grill/brooklyn</code>.",
       "branch": "Chi nhánh này chưa có slug URL, nên chưa có địa chỉ công khai để mã của bàn trỏ tới. Slug là tên ngắn trong liên kết thực đơn của bạn, ví dụ <code>/r/coastal-grill/brooklyn</code>."
     },
-    "tableHelp": "Hãy đặt <strong>tên miền riêng</strong> trong Cài đặt chi nhánh, hoặc nhờ bộ phận hỗ trợ điền slug. Dữ liệu bàn của bạn vẫn an toàn — mã sẽ hiện ở đây ngay khi chi nhánh có địa chỉ.",
+    "tableHelp": "Hãy <strong>nhờ bộ phận hỗ trợ</strong> điền slug. Dữ liệu bàn của bạn vẫn an toàn — mã sẽ hiện ở đây ngay khi chi nhánh có địa chỉ.",
     "openBranchSettings": "Mở Cài đặt chi nhánh"
   },
   "branch": {

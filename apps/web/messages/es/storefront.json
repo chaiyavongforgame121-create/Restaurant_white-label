@@ -8,6 +8,7 @@
   "closed": {
     "title": "Cerrado por ahora.",
     "canSchedule": "Recoger en tienda y la entrega lo antes posible solo están disponibles en horario de atención, pero ya puedes programar una entrega para más tarde.",
+    "canScheduleNoAsap": "Recoger en tienda solo está disponible en horario de atención, pero ya puedes programar una entrega para más tarde.",
     "notTaking": "No estamos recibiendo pedidos en este momento. Vuelve durante el horario de atención."
   },
   "reviews": {

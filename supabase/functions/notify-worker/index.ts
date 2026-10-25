@@ -721,41 +721,6 @@ const RECIPIENT_TABLE: Record<string, string> = {
   staff: 'staff_members',
 };
 
-/** PostgREST hands an embedded to-one relation back as an object, or as an array. */
-type Embedded<T> = T | T[] | null | undefined;
-
-const embedOne = <T>(value: Embedded<T>): T | null =>
-  Array.isArray(value) ? (value[0] ?? null) : (value ?? null);
-
-const domainOf = (value: unknown): string =>
-  typeof value === 'string' ? value.trim().toLowerCase() : '';
-
-/** A customers row's branch, embedded with what says which host its storefront is on. */
-type BranchHost = Embedded<{
-  custom_domain: string | null;
-  restaurants?: Embedded<{ custom_domain: string | null }>;
-}>;
-
-/**
- * The PostgREST embed that reads a customers row's BranchHost. Named by its foreign key:
- * customers reaches branches twice (branch_id alone, and (branch_id, restaurant_id)), and an
- * unnamed embed is refused as ambiguous (PGRST201).
- */
-const BRANCH_HOST_EMBED =
-  'branches!customers_branch_id_fkey(custom_domain, restaurants(custom_domain))';
-
-/**
- * The host a branch's storefront is served on, the way resolve_custom_domain maps hosts: the
- * branch's own domain, else its restaurant's, else '' for the shared platform host every other
- * branch lives on. A push subscription belongs to one origin (the service worker that made it),
- * so this is what says which subscriptions a branch's updates may use.
- */
-function hostKey(embedded: BranchHost): string {
-  const branch = embedOne(embedded);
-  if (!branch) return '';
-  return domainOf(branch.custom_domain) || domainOf(embedOne(branch.restaurants)?.custom_domain);
-}
-
 /**
  * The devices a push goes to.
  *
@@ -769,12 +734,14 @@ function hostKey(embedded: BranchHost): string {
  * subscription per origin, recorded against the row of the branch they were on (see the
  * storefront's PushSubscriber). Matching on recipient_id alone reached a diner only for orders
  * filed under that one row, so an update about their order at a second branch went nowhere. A
- * customer notification therefore goes to every customer subscription of that login that was
- * made on the SAME HOST as the notified branch's storefront: the recorded row's branch tells the
- * origin. Branches on the platform host share one service worker and so one subscription; a
- * branch on its own domain has its own, and another restaurant's domain never gets this one's
- * updates in its app. Drivers and staff are unchanged: their recipient id is the one row they
- * register with.
+ * customer notification therefore goes to every customer subscription of that login: every
+ * storefront is on the platform's own hosts, where all branches share one service worker.
+ *
+ * It used to keep only the subscriptions made on the same host as the notified branch's
+ * storefront, read from each branch's custom domain. Custom domains are gone (2026-10-26) and no
+ * branch ever had one, so every host key was '' and the filter kept everything; it is removed so
+ * nothing here reads the custom_domain columns a later migration drops. Drivers and staff are
+ * unchanged: their recipient id is the one row they register with.
  */
 async function pushSubscriptionsFor(
   supabase: Db,
@@ -784,11 +751,11 @@ async function pushSubscriptionsFor(
   if (!table) return [];
   const { data: recipient, error: recipientErr } = await supabase
     .from(table)
-    .select(row.recipient_type === 'customer' ? `user_id, ${BRANCH_HOST_EMBED}` : 'user_id')
+    .select('user_id')
     .eq('id', row.recipient_id)
     .maybeSingle();
   if (recipientErr) throw new Error(`sub_lookup_${recipientErr.code ?? 'err'}`);
-  const owner = recipient as { user_id: string | null; branches?: BranchHost } | null;
+  const owner = recipient as { user_id: string | null } | null;
   // A guest row, or one since deleted: no login owns it, so no device may receive it.
   if (!owner?.user_id) return [];
 
@@ -803,32 +770,13 @@ async function pushSubscriptionsFor(
     return (direct ?? []) as PushSub[];
   }
 
-  const here = hostKey(owner.branches);
   const { data: owned, error: ownedErr } = await supabase
     .from('push_subscriptions')
-    .select('id, endpoint, p256dh, auth, recipient_id')
+    .select('id, endpoint, p256dh, auth')
     .eq('recipient_type', 'customer')
     .eq('user_id', owner.user_id);
   if (ownedErr) throw new Error(`sub_lookup_${ownedErr.code ?? 'err'}`);
-  const candidates = (owned ?? []) as (PushSub & { recipient_id: string })[];
-  if (candidates.length === 0) return [];
-
-  // The branch each subscription was made at, and so its host. Only the login's own rows count:
-  // a subscription recorded against someone else's row says nothing trustworthy about its origin.
-  const { data: rows, error: rowsErr } = await supabase
-    .from('customers')
-    .select(`id, ${BRANCH_HOST_EMBED}`)
-    .eq('user_id', owner.user_id)
-    .in('id', [...new Set(candidates.map((s) => s.recipient_id))]);
-  if (rowsErr) throw new Error(`sub_lookup_${rowsErr.code ?? 'err'}`);
-  const hostOf = new Map<string, string>();
-  for (const r of (rows ?? []) as { id: string; branches?: BranchHost }[]) {
-    hostOf.set(r.id, hostKey(r.branches));
-  }
-
-  return candidates
-    .filter((s) => hostOf.get(s.recipient_id) === here)
-    .map(({ id, endpoint, p256dh, auth }) => ({ id, endpoint, p256dh, auth }));
+  return (owned ?? []) as PushSub[];
 }
 
 async function sendPush(
@@ -1011,8 +959,11 @@ async function loadOrderRoute(
 
 /**
  * The branch's storefront name and icon, resolved the way the storefront resolves them.
- *  - Name: the brand the branch is linked to, else the restaurant's default brand (the one-brand-
- *    per-restaurant invariant makes that THE brand), else the restaurant's own name.
+ *  - Name: the branch's own App name (branches.settings.app_name) when it has one, as on every
+ *    storefront surface. Otherwise "<brand> - <branch>", the brand being the one the branch is
+ *    linked to, else the restaurant's default brand (the one-brand-per-restaurant invariant makes
+ *    that THE brand), else the restaurant's own name. Push titles and the email header and body
+ *    used to ignore the App name and say "<brand> - <branch>" under a storefront that did not.
  *  - Icon: the branch's own (192, else 512), else the linked brand's, else the default brand's.
  * Brands are only ever read within the branch's own restaurant. The database now refuses a
  * brand_id that points at another restaurant's brand, but a row linked before that rule would
@@ -1025,12 +976,13 @@ async function loadStorefrontIdentity(
   try {
     const { data } = await supabase
       .from('branches')
-      .select('name, slug, brand_id, icon_192_url, icon_512_url, restaurant_id, restaurants(name, slug)')
+      .select('name, slug, settings, brand_id, icon_192_url, icon_512_url, restaurant_id, restaurants(name, slug)')
       .eq('id', branchId)
       .maybeSingle();
     const b = data as {
       name?: string | null;
       slug?: string | null;
+      settings?: unknown;
       brand_id?: string | null;
       icon_192_url?: string | null;
       icon_512_url?: string | null;
@@ -1067,7 +1019,7 @@ async function loadStorefrontIdentity(
     }
     brandName ??= cleanName(restaurant?.name);
 
-    const name = storefrontDisplayName(brandName, cleanName(b.name));
+    const name = branchAppName(b.settings) ?? storefrontDisplayName(brandName, cleanName(b.name));
     if (!name) return null;
     return {
       name,
@@ -1086,6 +1038,16 @@ function appIcon(source: { icon_192_url?: string | null; icon_512_url?: string |
 
 function cleanName(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+/**
+ * branches.settings.app_name when it is a non-blank string, trimmed and cut to 60 characters —
+ * the storefront's rule (branchAppName in apps/web/src/lib/app-identity.ts), so a message names
+ * the storefront exactly as its header does.
+ */
+function branchAppName(settings: unknown): string | null {
+  const value = settings && typeof settings === 'object' ? (settings as Record<string, unknown>).app_name : null;
+  return typeof value === 'string' && value.trim() ? value.trim().slice(0, 60) : null;
 }
 
 /**

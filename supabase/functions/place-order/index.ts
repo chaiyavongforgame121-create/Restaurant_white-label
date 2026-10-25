@@ -2,7 +2,10 @@
 // Server-side recalculation never trusts client totals.
 //
 // Version history: see ./CHANGELOG.md (moved out of this file 2026-08-28).
-// Current: v11.8 — the storefront may place an ASAP delivery again (delivery_must_be_scheduled is
+// Current: v11.9 — ASAP delivery is a per-branch switch ("Accept ASAP delivery orders",
+// settings.asap_delivery_enabled, read by ./asap-delivery.ts): unticked or never set, a storefront
+// delivery with no booked time is refused with 409 delivery_must_be_scheduled. Staff are exempt.
+// v11.8 — the storefront may place an ASAP delivery again (delivery_must_be_scheduled is
 // gone; a booked pickup is still refused), and a booking is held by the one kitchen-lead rule the
 // release job also uses (./kitchen-lead.ts): a bad lead or prep time reads as the default, never NaN.
 // v11.7 — a storefront card order is paid into the branch's own Stripe account: it needs a
@@ -37,6 +40,9 @@ import {
 // "Send to kitchen (minutes before)": the same rule as private.branch_kitchen_lead_min() in SQL and
 // the shared kitchenLeadMin(), pinned from packages/shared/src/utils/kitchen-lead.test.ts.
 import { kitchenLeadMin } from './kitchen-lead.ts';
+// "Accept ASAP delivery orders": the same rule as the storefront's and the admin card's
+// asapDeliveryEnabled(), pinned from packages/shared/src/utils/asap-delivery.test.ts.
+import { asapDeliveryEnabled } from './asap-delivery.ts';
 
 interface PlaceOrderRequest {
   branch_id: string;
@@ -784,17 +790,26 @@ Deno.serve(async (req: Request) => {
 
   // Pickup is always for now: the storefront never books one, but a hand-made request (or a tab
   // from before 2026-09-16) can still send a booked pickup, so the rule lives here as well.
-  // Delivery is either ASAP or booked (docs/ASAP-AND-SCHEDULING-2026-10-25.md §1): the
-  // delivery_must_be_scheduled refusal is gone. An ASAP delivery is already judged for "now" by
-  // is_branch_open above, the 'asap' column of the payment matrix below and the delivery-hours
-  // trigger at insert, exactly as a pickup is. Staff are exempt, like the payment matrix and the
-  // booking window. Dine-in and QR table orders are untouched — the order type is the table's.
+  // Delivery is either ASAP or booked (docs/ASAP-AND-SCHEDULING-2026-10-25.md §1). An ASAP
+  // delivery is already judged for "now" by is_branch_open above, the 'asap' column of the payment
+  // matrix below and the delivery-hours trigger at insert, exactly as a pickup is. Staff are
+  // exempt, like the payment matrix and the booking window. Dine-in and QR table orders are
+  // untouched — the order type is the table's.
   //
   // `hint` carries a code the checkout has matched for a long time. The checkout finds its copy by
   // substring over the whole response body, so a tab opened before this code existed still reads
   // "choose delivery or pickup and try again" instead of this body printed as raw JSON.
   if (!staffPlaced && payload.channel === 'pickup' && scheduledFor) {
     return json(409, { error: 'pickup_is_asap_only', hint: 'invalid_channel' });
+  }
+  // v11.9: ASAP delivery is the branch's choice ("Accept ASAP delivery orders"). Unticked — or
+  // never set: only `true` is on — the storefront hides the "As soon as possible" box and books
+  // every delivery, so a web delivery with no booked time is a stale tab or a hand-made request.
+  // The code is the one used for the same refusal from 2026-09-16 until v11.8, which the storefront
+  // still maps to "please choose a delivery time" (order-errors.ts), so an open checkout says so.
+  // Counter and POS are exempt: staff ring up a delivery for now whatever the storefront offers.
+  if (!staffPlaced && payload.channel === 'delivery' && !scheduledFor && !asapDeliveryEnabled(settings)) {
+    return json(409, { error: 'delivery_must_be_scheduled', hint: 'invalid_channel' });
   }
 
   // Payment gating: settings.payment_methods = { asap: { cash, card }, scheduled: { cash, card } }.

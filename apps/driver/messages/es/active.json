@@ -16,6 +16,11 @@
   "complete": {
     "title": "¡Entrega completada! 🎉",
     "earningsAdded": "Ganancias sumadas",
+    "earningsAddedBatch": "Ganancias sumadas ({count} pedidos)",
+    "runPay": "Pago por la entrega",
+    "tip": "Propina",
+    "noTip": "Sin propina",
+    "tipShareOf": "(tu parte de {amount})",
     "findNext": "Buscar otro pedido"
   },
   "map": {
@@ -38,6 +43,7 @@
   "deliveryNote": "Nota de entrega:",
   "earning": "Ganancia",
   "earningBatch": "Ganancia (2 pedidos)",
+  "earningTip": "+ {amount} de propina",
   "pickupOrder1": "Pedido 1 · {orderNumber}",
   "pickupOrder2": "Pedido 2 · {orderNumber}: toma una foto aparte de esta bolsa",
   "arrival": {

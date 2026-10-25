@@ -11,6 +11,7 @@ import {
   fmtDate,
   renewalSelection,
   resolvePrimaryAction,
+  storefrontUrl,
   tenantHealth,
   type BranchLite,
   type Msg,
@@ -118,7 +119,6 @@ function branch(over: Partial<BranchLite> = {}): BranchLite {
     orders_paused: false,
     entitled_through: inDays(20),
     timezone: 'America/Chicago',
-    custom_domain: null,
     has_hours: true,
     closure: null,
     ...over,
@@ -433,6 +433,15 @@ describe('platform messages', () => {
       const plans = catalogue(locale).plans as Tree;
       expect(plans.base, locale).toContain('FavorNoms');
     }
+  });
+});
+
+describe('storefrontUrl', () => {
+  it('is always the /r/<restaurant>/<branch> address on the storefront host', () => {
+    // Custom domains were removed on 2026-10-26; the console links where every diner lands.
+    expect(storefrontUrl('https://app.favornoms.com', 'demo-favornoms', branch({ slug: 'brooklyn' }))).toBe(
+      'https://app.favornoms.com/r/demo-favornoms/brooklyn',
+    );
   });
 });
 

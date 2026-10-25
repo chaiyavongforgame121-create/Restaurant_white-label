@@ -5,6 +5,9 @@ import { ordersPaused, resolveScheduleDelivery } from './schedule-delivery';
 /** 2026-08-30 is a Sunday. 12:00 UTC = 07:00 in Chicago. */
 const SUNDAY_NOON_UTC = new Date('2026-08-30T12:00:00Z');
 
+/** "Accept ASAP delivery orders" ticked. Without it (a missing key) ASAP is off. */
+const ASAP = { asap_delivery_enabled: true };
+
 const status = (over: Partial<StorefrontStatus> = {}): StorefrontStatus => ({
   known: true,
   entitled: true,
@@ -59,6 +62,7 @@ describe('resolveScheduleDelivery', () => {
       openNow: true,
       paused: false,
       offered: true,
+      asapOffered: false,
     });
   });
 
@@ -76,19 +80,20 @@ describe('resolveScheduleDelivery', () => {
       openNow: true,
       paused: true,
       offered: true,
+      asapOffered: false,
     });
   });
 
   // docs/ASAP-AND-SCHEDULING-2026-10-25.md §1: delivery shows when EITHER is possible.
   describe('ASAP and booked delivery are judged separately', () => {
     it('offers ASAP delivery while open and inside delivery hours, with bookings too', async () => {
-      const r = await resolveScheduleDelivery(fakeClient({}), 'b', status({ delivery: true }), SUNDAY_NOON_UTC);
+      const r = await resolveScheduleDelivery(fakeClient(ASAP), 'b', status({ delivery: true }), SUNDAY_NOON_UTC);
       expect(r).toMatchObject({ canDeliver: true, canDeliverNow: true, canScheduleDelivery: true });
     });
 
     it('keeps delivery as ASAP when advance orders are switched off', async () => {
       const r = await resolveScheduleDelivery(
-        fakeClient({}),
+        fakeClient(ASAP),
         'b',
         status({ delivery: true, scheduling_enabled: false }),
         SUNDAY_NOON_UTC,
@@ -99,7 +104,7 @@ describe('resolveScheduleDelivery', () => {
     it('keeps delivery as ASAP when no slot is left to book', async () => {
       // Booking windows armed with none at all: nothing can be booked, all week.
       const r = await resolveScheduleDelivery(
-        fakeClient({}, { schedule_hours_enabled: true, schedule_windows: [], closures: [] }),
+        fakeClient(ASAP, { schedule_hours_enabled: true, schedule_windows: [], closures: [] }),
         'b',
         status({ delivery: true }),
         SUNDAY_NOON_UTC,
@@ -109,7 +114,7 @@ describe('resolveScheduleDelivery', () => {
 
     it('no ASAP while the branch is closed right now — a booking is still offered', async () => {
       const r = await resolveScheduleDelivery(
-        fakeClient({}, null, false),
+        fakeClient(ASAP, null, false),
         'b',
         status({ delivery: true }),
         SUNDAY_NOON_UTC,
@@ -119,7 +124,7 @@ describe('resolveScheduleDelivery', () => {
 
     it('no ASAP outside delivery hours (status.delivery false)', async () => {
       const r = await resolveScheduleDelivery(
-        fakeClient({}),
+        fakeClient(ASAP),
         'b',
         status({ delivery: false, scheduling_enabled: false }),
         SUNDAY_NOON_UTC,
@@ -129,7 +134,7 @@ describe('resolveScheduleDelivery', () => {
 
     it('reads a failed is_branch_open as open, as the rest of the storefront does', async () => {
       const r = await resolveScheduleDelivery(
-        fakeClient({}, null, null),
+        fakeClient(ASAP, null, null),
         'b',
         status({ delivery: true, scheduling_enabled: false }),
         SUNDAY_NOON_UTC,
@@ -139,12 +144,58 @@ describe('resolveScheduleDelivery', () => {
 
     it('offers no ASAP on a status that could not be read', async () => {
       const r = await resolveScheduleDelivery(
-        fakeClient({}),
+        fakeClient(ASAP),
         'b',
         status({ known: false, delivery: false, delivery_entitled: false, scheduling_enabled: false }),
         SUNDAY_NOON_UTC,
       );
       expect(r).toMatchObject({ canDeliver: false, canDeliverNow: false });
+    });
+
+    // "Accept ASAP delivery orders" (docs/ASAP-AND-SCHEDULING-2026-10-25.md §1): on only when true.
+    it('offers no ASAP where the switch is off — bookings stay', async () => {
+      const r = await resolveScheduleDelivery(fakeClient({}), 'b', status({ delivery: true }), SUNDAY_NOON_UTC);
+      expect(r).toMatchObject({
+        canDeliver: true,
+        canDeliverNow: false,
+        canScheduleDelivery: true,
+        asapOffered: false,
+        offered: true,
+      });
+    });
+
+    it('reads only true as on', async () => {
+      for (const v of [false, 'true', 1, 'on', null]) {
+        const r = await resolveScheduleDelivery(
+          fakeClient({ asap_delivery_enabled: v }),
+          'b',
+          status({ delivery: true }),
+          SUNDAY_NOON_UTC,
+        );
+        expect(r).toMatchObject({ asapOffered: false, canDeliverNow: false });
+      }
+      const on = await resolveScheduleDelivery(fakeClient(ASAP), 'b', status({ delivery: true }), SUNDAY_NOON_UTC);
+      expect(on).toMatchObject({ asapOffered: true, canDeliverNow: true });
+    });
+
+    it('both switches off: no delivery at all, said as a standing fact', async () => {
+      const r = await resolveScheduleDelivery(
+        fakeClient({ asap_delivery_enabled: false }),
+        'b',
+        status({ delivery: true, scheduling_enabled: false }),
+        SUNDAY_NOON_UTC,
+      );
+      expect(r).toMatchObject({ canDeliver: false, canDeliverNow: false, canScheduleDelivery: false, offered: false });
+    });
+
+    it('a settings row that could not be read: no ASAP, but not the standing sentence', async () => {
+      const r = await resolveScheduleDelivery(
+        fakeClient(null),
+        'b',
+        status({ delivery: true, scheduling_enabled: false }),
+        SUNDAY_NOON_UTC,
+      );
+      expect(r).toMatchObject({ canDeliver: false, asapOffered: false, offered: true });
     });
   });
 
@@ -183,12 +234,12 @@ describe('resolveScheduleDelivery', () => {
     expect(unreadable).toMatchObject({ canDeliver: false, paused: false, offered: true });
 
     for (const closed of [
-      // Booked ahead is switched off at this branch.
+      // Booked ahead is switched off at this branch, and ASAP (ticked) is outside its hours.
       status({ scheduling_enabled: false }),
       // Delivery hours are armed with no window, so no slot survives.
       status({ delivery_hours_on: true, delivery_windows: [] }),
     ]) {
-      const r = await resolveScheduleDelivery(fakeClient({}), 'b', closed, SUNDAY_NOON_UTC);
+      const r = await resolveScheduleDelivery(fakeClient(ASAP), 'b', closed, SUNDAY_NOON_UTC);
       expect(r.canDeliver).toBe(false);
       expect(r.offered).toBe(true);
     }

@@ -119,3 +119,4 @@ export * from './phone';
 export * from './zoned-time';
 export * from './install-platform';
 export * from './kitchen-lead';
+export * from './asap-delivery';

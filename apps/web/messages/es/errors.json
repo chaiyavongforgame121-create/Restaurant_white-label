@@ -25,7 +25,7 @@
     "tableNotInBranch": "Esa mesa no es de este restaurante. Escanea el código de tu propia mesa.",
     "signInRequired": "Vuelve a iniciar sesión para pedir desde tu mesa.",
     "tableRequired": "Escanea el código de tu mesa para empezar tu pedido.",
-    "deliveryMustBeScheduled": "Este restaurante aún no acepta entregas lo antes posible. Elige una hora de entrega.",
+    "deliveryMustBeScheduled": "Este restaurante no acepta entregas lo antes posible. Elige una hora de entrega.",
     "pickupIsAsapOnly": "Los pedidos para recoger en tienda se preparan de inmediato y no se pueden programar. Elige Entrega a domicilio para reservar una hora.",
     "invalidChannel": "Elige Recoger en tienda o Entrega a domicilio y vuelve a intentarlo.",
     "staleClientRefreshRequired": "Las recompensas cambiaron mientras hacías tu pedido. Actualiza la página e inténtalo de nuevo.",

@@ -8,6 +8,7 @@
   "closed": {
     "title": "Currently closed.",
     "canSchedule": "Pickup and ASAP delivery are available during business hours — you can still book a delivery for later.",
+    "canScheduleNoAsap": "Pickup is available during business hours — you can still book a delivery for later.",
     "notTaking": "We're not taking new orders right now. Please check back during business hours."
   },
   "reviews": {

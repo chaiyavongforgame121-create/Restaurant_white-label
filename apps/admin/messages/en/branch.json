@@ -4,8 +4,6 @@
     "generic": "Something went wrong and nothing was saved. Try again.",
     "managerRequired": "Only the owner, an admin or this branch's manager can change opening hours.",
     "settingsRequired": "Only the owner or an admin can change these branch settings.",
-    "ownerOnlyDomain": "Only the restaurant owner can change the custom domain.",
-    "domainTaken": "Another branch already uses that domain.",
     "noPermission": "Your role isn’t allowed to make this change.",
     "busyMinutesRange": "Busy mode can add 0 to {max} minutes of prep time."
   },
@@ -35,12 +33,6 @@
       "rate": "Tax rate (%)",
       "zeroConfirmed": "0% is correct for this branch",
       "zeroConfirmedHint": "For example, your prices already include tax. The dashboard then stops asking about the tax rate."
-    },
-    "domain": {
-      "title": "Custom domain",
-      "description": "Point your DNS A/CNAME to the FavorNoms hosting target, then enter the hostname here.",
-      "label": "Hostname (e.g. order.myrestaurant.com)",
-      "invalid": "“{input}” is not a hostname. Enter the address customers will type, like order.myrestaurant.com — not your restaurant’s name."
     },
     "delivery": {
       "title": "Delivery at this branch",

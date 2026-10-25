@@ -6,6 +6,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { CalendarClock, Clock, Plus, Save, Trash2 } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import {
+  asapDeliveryEnabled,
   DEFAULT_UI_LOCALE,
   describeRanges,
   effectiveBookableRanges,
@@ -41,6 +42,12 @@ import { useSettingsPatch } from './patch-settings';
 //
 // Fail-CLOSED once armed, the opposite of branch_hours: switch off and opening hours alone
 // decide, switch on and a day with no window is a day with no bookings.
+//
+// The card also owns asap_delivery_enabled ("Accept ASAP delivery orders", owner request
+// 2026-10-26): together with scheduling_enabled it decides the storefront's "When" block for a
+// delivery — the "As soon as possible" box, the day and time pickers, or both. Off unless it is
+// exactly true (asapDeliveryEnabled), so a branch that never saved it shows unticked, as the
+// storefront and place-order read it.
 
 interface Props {
   branchId: string;
@@ -99,7 +106,8 @@ interface UntypedClient {
 }
 
 /** Mirrors storefront_status's defaults exactly. If these two drift, the picker offers
- *  times the server then refuses. */
+ *  times the server then refuses. asap_delivery_enabled is not here: storefront_status does not
+ *  carry it, and a missing key is off (ASAP_DELIVERY_DEFAULT, read through asapDeliveryEnabled). */
 const DEFAULTS = {
   scheduling_enabled: true,
   schedule_min_lead_min: 15,
@@ -145,6 +153,8 @@ export function ScheduledOrdersCard({ branchId, settings }: Props) {
   const router = useRouter();
   // Sends only what changed since this card was rendered or last saved.
   const savePatch = useSettingsPatch(branchId, settings);
+  // "Accept ASAP delivery orders": unticked unless the branch saved exactly true.
+  const [asap, setAsap] = React.useState(() => asapDeliveryEnabled(settings));
   const [enabled, setEnabled] = React.useState<boolean>(
     settings?.scheduling_enabled === undefined
       ? DEFAULTS.scheduling_enabled
@@ -256,6 +266,7 @@ export function ScheduledOrdersCard({ branchId, settings }: Props) {
 
     // Only the keys that changed, merged on the server into the row as it is now.
     const { error: updateError } = await savePatch({
+      asap_delivery_enabled: asap,
       scheduling_enabled: enabled,
       schedule_hours_enabled: windowsEnabled,
       schedule_min_lead_min: Math.max(0, Math.min(24 * 60, intOr(minLead, DEFAULTS.schedule_min_lead_min))),
@@ -282,7 +293,21 @@ export function ScheduledOrdersCard({ branchId, settings }: Props) {
       </h2>
       <p className="text-sm text-muted-foreground">{t.rich('scheduling.description', { strong })}</p>
 
+      {/* ASAP first, then bookings: the order the storefront shows them in. */}
       <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-border p-3">
+        <input
+          type="checkbox"
+          checked={asap}
+          onChange={(e) => setAsap(e.target.checked)}
+          className="mt-1 h-4 w-4"
+        />
+        <span>
+          <span className="block text-sm font-semibold">{t('scheduling.asap')}</span>
+          <span className="block text-xs text-muted-foreground">{t('scheduling.asapHint')}</span>
+        </span>
+      </label>
+
+      <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-xl border border-border p-3">
         <input
           type="checkbox"
           checked={enabled}
@@ -294,6 +319,14 @@ export function ScheduledOrdersCard({ branchId, settings }: Props) {
           <span className="block text-xs text-muted-foreground">{t('scheduling.acceptHint')}</span>
         </span>
       </label>
+
+      {/* Both off is allowed — a branch may stop taking deliveries online — but it is never a
+          surprise: delivery leaves the storefront entirely, so say it before it is saved. */}
+      {!asap && !enabled && (
+        <p role="status" className="mt-3 rounded-xl bg-warning/10 px-4 py-3 text-sm">
+          {t('scheduling.noDelivery')}
+        </p>
+      )}
 
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <label className="block">

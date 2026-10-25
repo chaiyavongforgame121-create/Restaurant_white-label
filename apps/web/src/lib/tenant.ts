@@ -2,10 +2,12 @@ import { notFound, redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import { cache } from 'react';
 import { unstable_cache } from 'next/cache';
-import { PATHNAME_HEADER } from '@favornoms/database/middleware';
+import { PATHNAME_HEADER, SEARCH_HEADER } from '@favornoms/database/middleware';
 import { getAnonServerClient, getServerClient } from '@favornoms/database/server';
 import {
   getStorefrontStatus,
+  movedStorefrontPath,
+  resolveStorefrontPath,
   resolveTenantBySlug,
   type ResolvedTenant,
   type StorefrontStatus,
@@ -67,7 +69,9 @@ function tenantCache(restaurantSlug: string, branchSlug: string) {
     // v2: ResolvedTenant gained brandName and branch-owned icons, and stopped trusting a brand_id
     // that points at another restaurant's brand. An entry cached under the old key has neither
     // field, would name every branch after the brand, and may carry that foreign brand.
-    ['tenant-by-slug-v2', restaurantSlug, branchSlug],
+    // v3: ResolvedTenant gained appName (branches.settings.app_name). A v2 entry has none and would
+    // keep showing "<brand> - <branch>" over a saved App name until the TTL ran out.
+    ['tenant-by-slug-v3', restaurantSlug, branchSlug],
     {
       revalidate: TENANT_TTL_SECONDS,
       tags: ['tenant', tenantCacheTag(restaurantSlug, branchSlug)],
@@ -146,22 +150,21 @@ export const resolveTenantOptional = cache(
 );
 
 /**
- * Restaurant slugs a store has given up, mapped to the slug it answers to now, so links already
- * shared (a QR code, an order-tracking text) keep working. Followed only when the old slug no
- * longer answers, so a restaurant that takes one of these slugs later is never redirected away.
- * 2026-10-24: the showcase store Coastal Grill became Demo-FavorNoms.
+ * Where this request belongs when its slugs moved (public.resolve_storefront_path), or null.
+ *
+ * The middleware already sends a real 308 for an old address, before anything streams. This is
+ * the fallback for the minutes after a rename, while its per-instance cache still calls the old
+ * pair live: redirect() here runs after app/r/loading.tsx has started streaming, so it arrives as
+ * a meta refresh rather than a 3xx, but it still lands. The whole query string is kept (a table
+ * code's ?t=, a Stripe return's ?payment_intent=…); the hard-coded rename map this replaces
+ * (coastal-grill, now a row in storefront_path_aliases) kept the pathname only.
  */
-const RENAMED_RESTAURANT_SLUGS: Readonly<Record<string, string>> = {
-  'coastal-grill': 'demo-favornoms',
-};
-
-/** The same path under the restaurant's new slug; the branch's menu when the path is unknown. */
-async function renamedRestaurantPath(oldSlug: string, newSlug: string, branchSlug: string): Promise<string> {
-  const path = (await headers()).get(PATHNAME_HEADER) ?? '';
-  const oldPrefix = `/r/${oldSlug}/`;
-  return path.toLowerCase().startsWith(oldPrefix)
-    ? `/r/${newSlug}/${path.slice(oldPrefix.length)}`
-    : `/r/${newSlug}/${branchSlug}`;
+async function movedTenantPath(restaurantSlug: string, branchSlug: string): Promise<string | null> {
+  const resolution = await resolveStorefrontPath(getAnonServerClient(), restaurantSlug, branchSlug);
+  if (resolution?.status !== 'redirect') return null;
+  const h = await headers();
+  const path = h.get(PATHNAME_HEADER) || `/r/${restaurantSlug}/${branchSlug}`;
+  return movedStorefrontPath(`${path}${h.get(SEARCH_HEADER) ?? ''}`, resolution);
 }
 
 /** The same read, for a page or layout that wants the not-found page when there is no tenant. */
@@ -169,92 +172,13 @@ export const resolveTenant = cache(
   async (restaurantSlug: string, branchSlug: string): Promise<ResolvedTenant> => {
     const tenant = await resolveTenantOptional(restaurantSlug, branchSlug);
     if (!tenant) {
-      const renamed = RENAMED_RESTAURANT_SLUGS[restaurantSlug.toLowerCase()];
-      if (renamed) redirect(await renamedRestaurantPath(restaurantSlug.toLowerCase(), renamed, branchSlug));
+      const moved = await movedTenantPath(restaurantSlug, branchSlug);
+      if (moved) redirect(moved);
       notFound();
     }
     return tenant;
   },
 );
-
-/** A Host header with any port stripped and lower-cased — the form every lookup here wants. */
-export function hostOf(headerValue: string | null | undefined): string {
-  return ((headerValue ?? '').split(':')[0] ?? '').toLowerCase();
-}
-
-export interface HostTenant {
-  restaurant: string;
-  branch: string | null;
-}
-
-interface CustomDomainRow {
-  restaurant_slug: string;
-  branch_slug: string | null;
-}
-
-/**
- * Warm-instance cache for the custom-domain lookup, with the two TTLs the middleware already
- * uses. The miss TTL is the load-bearing one: the platform's own hosts never match, so
- * without negative caching every storefront request would re-ask.
- */
-const HOST_TENANT_HIT_TTL_MS = 10 * 60 * 1000;
-const HOST_TENANT_MISS_TTL_MS = 60_000;
-const hostTenantCache = new Map<string, { value: HostTenant | null; expires: number }>();
-
-/**
- * Which tenant, if any, a Host header really belongs to — the same
- * public.resolve_custom_domain() answer the middleware acts on before it rewrites that host's
- * "/" to a branch.
- *
- * Null for the platform's own hosts and for every host the database does not map to a live
- * branch: a Vercel preview URL, a production host nobody remembered to add to
- * NEXT_PUBLIC_APEX_HOSTS, a bare IP. Defaulting that way is the point of the function. The
- * manifest route used to infer the opposite — "absent from the static apex list" meant
- * "merchant's own domain" — and the production storefront host is absent from that list, so
- * every tenant published the platform root as its PWA id, start_url and scope. Three
- * restaurants and the marketing site claimed one installed app between them.
- */
-export async function hostTenant(host: string): Promise<HostTenant | null> {
-  if (!host) return null;
-
-  const now = Date.now();
-  const cached = hostTenantCache.get(host);
-  if (cached && cached.expires > now) return cached.value;
-
-  let value: HostTenant | null = null;
-  try {
-    const supabase = getAnonServerClient();
-    const { data, error } = await supabase.rpc('resolve_custom_domain', { p_domain: host });
-    if (!error) {
-      const first = (data as CustomDomainRow[] | null)?.[0];
-      if (first) value = { restaurant: first.restaurant_slug, branch: first.branch_slug };
-    }
-  } catch {
-    // An unreachable database cannot prove this host belongs to anybody, and an unproven host
-    // is the platform's. Serving a merchant domain the /r/-prefixed paths for a minute costs
-    // a longer URL; publishing the wrong PWA identity is permanent for whoever installs it.
-    value = null;
-  }
-
-  hostTenantCache.set(host, {
-    value,
-    expires: now + (value ? HOST_TENANT_HIT_TTL_MS : HOST_TENANT_MISS_TTL_MS),
-  });
-  return value;
-}
-
-/**
- * True when this host's advertised root IS this branch — i.e. the middleware rewrites "/" here
- * to /r/{restaurant}/{branch}. Only then may an installed app scope itself to the origin root.
- */
-export async function hostIsOwnDomainFor(
-  host: string,
-  restaurantSlug: string,
-  branchSlug: string,
-): Promise<boolean> {
-  const mapped = await hostTenant(host);
-  return !!mapped && mapped.restaurant === restaurantSlug && mapped.branch === branchSlug;
-}
 
 /**
  * What this storefront may show an anonymous visitor: `entitled` (the
@@ -300,12 +224,16 @@ export const DEFAULT_DARK_THEME_COLOR = '#1a0e08';
  *
  * The brand comes from `tenant.brandName` (the brands row), never from `tenant.theme.brandName`:
  * the per-branch Branding card once wrote a branch's name there and renamed the whole restaurant.
+ *
+ * The App name comes from `tenant.appName`, never from `tenant.branch.settings`: those are the
+ * parsed settings, which have no app_name, so every saved App name was silently dropped and the
+ * header kept saying "<brand> - <branch>". branchAppName applies the one trim-and-cap rule.
  */
 export function storefrontNames(tenant: ResolvedTenant): StorefrontNames {
   return deriveStorefrontNames({
     brandName: tenant.brandName,
     restaurantName: tenant.restaurant.name,
     branchName: tenant.branch.name,
-    appName: branchAppName(tenant.branch.settings),
+    appName: branchAppName({ app_name: tenant.appName }),
   });
 }

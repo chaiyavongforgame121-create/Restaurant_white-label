@@ -27,7 +27,7 @@ export default async function TableQrPage({ params }: Props) {
 
   const { data: branchRow } = await supabase
     .from('branches')
-    .select('id, name, slug, custom_domain, restaurant_id')
+    .select('id, name, slug, restaurant_id')
     .eq('id', branchId)
     .maybeSingle();
   if (!branchRow) notFound();
@@ -38,11 +38,7 @@ export default async function TableQrPage({ params }: Props) {
     .eq('id', branchRow.restaurant_id)
     .maybeSingle();
 
-  const { url, missingSlugs } = branchMenuLink(
-    branchRow.slug,
-    restaurant?.slug,
-    branchRow.custom_domain,
-  );
+  const { url, missingSlugs } = branchMenuLink(branchRow.slug, restaurant?.slug);
 
   const { data: tables } = await supabase
     .from('tables')

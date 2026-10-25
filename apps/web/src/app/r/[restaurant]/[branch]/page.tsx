@@ -204,6 +204,9 @@ export default async function MenuPage({ params, searchParams }: Props) {
         // Delivery is switched per branch: a branch that does not deliver says so, rather than
         // reading as "delivery is closed right now" (docs/PACKAGING-2026-10-24.md §3).
         deliveryOffered={scheduleDelivery.offered}
+        // "Accept ASAP delivery orders", read fresh from the row (not the cached tenant) so the
+        // closed banner never promises an ASAP delivery the branch has switched off.
+        asapOffered={scheduleDelivery.asapOffered}
         // The scan is being seated by <TableScanPin> above, which may be bouncing the diner
         // through sign-in. Until that lands there is no pin, and without this the gate would
         // open over somebody who is demonstrably sitting at a table.

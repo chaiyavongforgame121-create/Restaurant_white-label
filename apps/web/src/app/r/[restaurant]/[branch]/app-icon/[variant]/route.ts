@@ -23,8 +23,8 @@ interface Props {
  * icon per size — this route — and the fallback happens here: when the merchant's file cannot be
  * fetched, the answer is a redirect to the platform file, which Chrome follows like any other.
  *
- * No `.png` in the path on purpose: the middleware matcher skips image extensions, and on a
- * merchant's own domain `/app-icon/192` has to go through its rewrite to reach this handler.
+ * No `.png` in the path on purpose: the middleware matcher skips image extensions, and an icon
+ * requested at a storefront's old address has to go through its 308 to reach this handler.
  */
 export async function GET(request: Request, { params }: Props) {
   const { restaurant, branch, variant: rawVariant } = await params;

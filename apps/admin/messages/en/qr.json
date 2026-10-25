@@ -10,13 +10,13 @@
       "restaurant": "This restaurant has no URL slug, so there is no public address to point a QR code at. A slug is the short name in your menu link, e.g. <code>/r/coastal-grill/brooklyn</code>.",
       "branch": "This branch has no URL slug, so there is no public address to point a QR code at. A slug is the short name in your menu link, e.g. <code>/r/coastal-grill/brooklyn</code>."
     },
-    "branchHelp": "Slugs are created during onboarding. If yours is blank, set a <strong>custom domain</strong> in Branch settings instead — that also gives this branch a scannable address — or ask support to fill the slug in.",
+    "branchHelp": "Slugs are created during onboarding. If yours is blank, <strong>ask support</strong> to fill the slug in — the code appears here as soon as the branch has an address.",
     "tableBody": {
       "both": "This restaurant and this branch have no URL slug, so there is no public address for a table code to point at. A slug is the short name in your menu link, e.g. <code>/r/coastal-grill/brooklyn</code>.",
       "restaurant": "This restaurant has no URL slug, so there is no public address for a table code to point at. A slug is the short name in your menu link, e.g. <code>/r/coastal-grill/brooklyn</code>.",
       "branch": "This branch has no URL slug, so there is no public address for a table code to point at. A slug is the short name in your menu link, e.g. <code>/r/coastal-grill/brooklyn</code>."
     },
-    "tableHelp": "Set a <strong>custom domain</strong> in Branch settings, or ask support to fill the slug in. Your tables are safe either way — the codes appear here as soon as the branch has an address.",
+    "tableHelp": "<strong>Ask support</strong> to fill the slug in. Your tables are safe either way — the codes appear here as soon as the branch has an address.",
     "openBranchSettings": "Open Branch settings"
   },
   "branch": {

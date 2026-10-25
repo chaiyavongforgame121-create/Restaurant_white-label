@@ -4,8 +4,6 @@
     "generic": "Algo salió mal y no se guardó nada. Inténtalo de nuevo.",
     "managerRequired": "Solo el propietario, un administrador o el gerente de esta sucursal puede cambiar el horario de atención.",
     "settingsRequired": "Solo el propietario o un administrador puede cambiar esta configuración de la sucursal.",
-    "ownerOnlyDomain": "Solo el propietario del restaurante puede cambiar el dominio propio.",
-    "domainTaken": "Otra sucursal ya usa ese dominio.",
     "noPermission": "Tu rol no tiene permiso para hacer este cambio.",
     "busyMinutesRange": "El modo ocupado puede sumar de 0 a {max} minutos de preparación."
   },
@@ -35,12 +33,6 @@
       "rate": "Tasa de impuesto (%)",
       "zeroConfirmed": "El 0 % es correcto para esta sucursal",
       "zeroConfirmedHint": "Por ejemplo, tus precios ya incluyen impuestos. Así el panel deja de preguntar por la tasa."
-    },
-    "domain": {
-      "title": "Dominio propio",
-      "description": "Apunta tu registro DNS A/CNAME al destino de alojamiento de FavorNoms y luego ingresa aquí el nombre de host.",
-      "label": "Nombre de host (p. ej., order.myrestaurant.com)",
-      "invalid": "“{input}” no es un nombre de host. Ingresa la dirección que escribirán los clientes, como order.myrestaurant.com, no el nombre de tu restaurante."
     },
     "delivery": {
       "title": "Entrega a domicilio en esta sucursal",

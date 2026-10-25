@@ -275,6 +275,10 @@ interface MenuViewProps {
    *  Words only — the two flags above alone decide whether delivery is offered. Defaults true so a
    *  missing prop says "not right now" rather than declaring the branch delivery-free. */
   deliveryOffered?: boolean;
+  /** The branch takes ASAP deliveries at all ("Accept ASAP delivery orders", resolveScheduleDelivery).
+   *  Words only: the closed banner must not promise an ASAP delivery the branch never takes.
+   *  Defaults false, like canDeliverNow. */
+  asapOffered?: boolean;
   /** A `?t=` token resolved to a table here, so the order type is already settled. */
   seatingFromScan?: boolean;
   /** branches.timezone (storefront_status.timezone), for "Sold out until" times. When absent it
@@ -283,7 +287,7 @@ interface MenuViewProps {
   timeZone?: string;
 }
 
-export function MenuView({ branch, categories, items, isOpen = true, reviews, combos = [], happyHours = [], menuLayout = 'grid4', menuCardStyle = 'standard', heroUrl, heroTitle, heroSubtitle, canDeliverNow = false, canScheduleDelivery = false, deliveryOffered = true, seatingFromScan = false, timeZone }: MenuViewProps) {
+export function MenuView({ branch, categories, items, isOpen = true, reviews, combos = [], happyHours = [], menuLayout = 'grid4', menuCardStyle = 'standard', heroUrl, heroTitle, heroSubtitle, canDeliverNow = false, canScheduleDelivery = false, deliveryOffered = true, asapOffered = false, seatingFromScan = false, timeZone }: MenuViewProps) {
   const t = useTranslations();
   const canDeliver = canDeliverNow || canScheduleDelivery;
   const params = useParams<{ restaurant: string; branch: string }>();
@@ -445,9 +449,12 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
               {/* Pickup and ASAP delivery are prepared now, so they wait for opening hours — but a
                   delivery booked for a later time is something a closed restaurant can still take.
                   canScheduleDelivery is only true with a bookable slot and orders not paused, so
-                  this never promises a booking every slot would refuse. */}
+                  this never promises a booking every slot would refuse. A branch that does not take
+                  ASAP deliveries gets a sentence that does not mention them. */}
               {canScheduleDelivery
-                ? t('storefront.closed.canSchedule')
+                ? asapOffered
+                  ? t('storefront.closed.canSchedule')
+                  : t('storefront.closed.canScheduleNoAsap')
                 : t('storefront.closed.notTaking')}
             </div>
           </div>

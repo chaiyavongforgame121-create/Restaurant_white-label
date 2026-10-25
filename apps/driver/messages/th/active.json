@@ -16,6 +16,11 @@
   "complete": {
     "title": "ส่งสำเร็จแล้ว! 🎉",
     "earningsAdded": "รายได้ที่ได้รับ",
+    "earningsAddedBatch": "รายได้ที่ได้รับ ({count} ออร์เดอร์)",
+    "runPay": "ค่าวิ่งรอบนี้",
+    "tip": "ทิป",
+    "noTip": "ไม่มีทิป",
+    "tipShareOf": "(ส่วนของคุณจาก {amount})",
     "findNext": "หางานถัดไป"
   },
   "map": {
@@ -38,6 +43,7 @@
   "deliveryNote": "หมายเหตุการจัดส่ง:",
   "earning": "รายได้",
   "earningBatch": "รายได้ (2 ออร์เดอร์)",
+  "earningTip": "+ ทิป {amount}",
   "pickupOrder1": "ออร์เดอร์ 1 · {orderNumber}",
   "pickupOrder2": "ออร์เดอร์ 2 · {orderNumber} — ถ่ายรูปถุงนี้แยกต่างหาก",
   "arrival": {

@@ -26,7 +26,7 @@
         },
         "scheduleLater": {
           "q": "Tôi có thể hẹn giờ cho đơn hàng không?",
-          "a": "Được, với đơn giao hàng. Chọn “Giao hàng”, bỏ chọn “Càng sớm càng tốt” rồi chọn ngày và giờ — đó là lúc tài xế đến nhà hàng lấy món để giao cho bạn, và bếp sẽ chuẩn bị xong trước giờ đó. Nếu để chọn “Càng sớm càng tốt”, đơn sẽ được chuyển vào bếp ngay khi bạn đặt. Đơn Tự đến lấy luôn được chuẩn bị ngay khi bạn đặt."
+          "a": "Được, với đơn giao hàng. Chọn “Giao hàng”, bỏ chọn “Càng sớm càng tốt” nếu có, rồi chọn ngày và giờ — đó là lúc tài xế đến nhà hàng lấy món để giao cho bạn, và bếp sẽ chuẩn bị xong trước giờ đó. Nếu để chọn “Càng sớm càng tốt” (ở nhà hàng có lựa chọn này), đơn sẽ được chuyển vào bếp ngay khi bạn đặt. Đơn Tự đến lấy luôn được chuẩn bị ngay khi bạn đặt."
         },
         "customizeItem": {
           "q": "Tôi có thể tùy chỉnh món (thêm topping, không hành, v.v.) không?",

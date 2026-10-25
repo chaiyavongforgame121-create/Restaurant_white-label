@@ -1,4 +1,5 @@
 import type { StorefrontStatus } from '@favornoms/database/queries';
+import { asapDeliveryEnabled } from '@favornoms/shared';
 import { buildScheduleDays, type ClosurePeriod, type OpeningWindow } from './schedule-slots';
 
 /**
@@ -13,6 +14,10 @@ import { buildScheduleDays, type ClosurePeriod, type OpeningWindow } from './sch
  * all on advance orders made "Accept scheduled orders" switch delivery off entirely.
  *
  * ASAP (canDeliverNow) needs, as place-order and the orders triggers judge "now":
+ * - the branch to take ASAP deliveries at all ("Accept ASAP delivery orders",
+ *   settings.asap_delivery_enabled, on only when exactly true — asapDeliveryEnabled). Read here
+ *   from the row on every request, never from the tenant cached for 300 s: a merchant who unticks
+ *   it must not have diners sent to a box place-order now refuses;
  * - a branch that delivers and is inside its delivery hours (status.delivery);
  * - the branch open this minute (is_branch_open: active, not paused, no closure, opening hours).
  * Whether a payment method is switched on for "now" orders is the checkout's to add — it is in
@@ -54,8 +59,20 @@ export interface ScheduleDeliveryState {
    * A status that could not be read at all (`known: false`) reports `true` here: it is not
    * evidence of anything, and the temporary sentence is the safe one to be wrong about. It
    * never widens what is on sale — `canDeliver` is the only thing that does that.
+   *
+   * A branch that delivers but has unticked BOTH "Accept ASAP delivery orders" and "Accept
+   * scheduled orders" also reports `false`: that is the merchant's standing choice, not a
+   * closed hour. An unreadable settings row is not that choice, so it does not.
    */
   offered: boolean;
+  /**
+   * The branch takes ASAP deliveries at all ("Accept ASAP delivery orders",
+   * settings.asap_delivery_enabled). Off, the checkout does not show the "As soon as possible"
+   * box — hidden, not disabled with a reason — and every delivery is booked; place-order refuses
+   * an unbooked web delivery with delivery_must_be_scheduled. A settings row that could not be
+   * read counts as off: nothing is offered that cannot be proven.
+   */
+  asapOffered: boolean;
 }
 
 /** Read the way is_branch_open() reads it: `(settings->>'orders_paused')::boolean`. */
@@ -89,7 +106,9 @@ export async function resolveScheduleDelivery(
     client.rpc('branch_schedule_policy', { p_branch_id: branchId }),
     client.rpc('is_branch_open', { p_branch_id: branchId }),
   ]);
-  const paused = ordersPaused((branchRow?.settings ?? null) as Record<string, unknown> | null);
+  const settings = branchRow?.settings ?? null;
+  const paused = ordersPaused(settings as Record<string, unknown> | null);
+  const asapOffered = asapDeliveryEnabled(settings);
   const openNow = open !== false;
   // storefront_status is keyed by branch, so delivery_entitled is this branch's answer —
   // when there IS an answer. getStorefrontStatus returns STOREFRONT_UNKNOWN after two failed
@@ -103,10 +122,17 @@ export async function resolveScheduleDelivery(
   //
   // This only changes the WORDS: canDeliver is false either way, because STOREFRONT_UNKNOWN
   // also carries delivery:false and scheduling_enabled:false.
-  const offered = status.known === false || status.delivery_entitled === true;
+  //
+  // Both switches unticked ("Accept ASAP delivery orders" and "Accept scheduled orders") is the
+  // same standing fact as an unsold branch — no delivery is ever taken here online — so it gets
+  // the permanent sentence too. A settings row that could not be read (branchRow null) reads as
+  // ASAP off only to stay closed; it is not the merchant's choice, so it keeps the softer one.
+  // Words only again: with both off, canDeliver is false whatever `offered` says.
+  const takesDelivery = asapOffered || status.scheduling_enabled === true || branchRow == null;
+  const offered = status.known === false || (status.delivery_entitled === true && takesDelivery);
   // status.delivery already means "this branch delivers and is inside its delivery hours"; the
   // explicit checks keep a paused or unsold branch out even if that field were ever widened.
-  const canDeliverNow = !paused && offered && status.delivery === true && openNow;
+  const canDeliverNow = asapOffered && !paused && offered && status.delivery === true && openNow;
   const result = (canScheduleDelivery: boolean): ScheduleDeliveryState => ({
     canDeliver: canDeliverNow || canScheduleDelivery,
     canDeliverNow,
@@ -114,8 +140,10 @@ export async function resolveScheduleDelivery(
     openNow,
     paused,
     offered,
+    asapOffered,
   });
-  // Scheduling off ("Accept scheduled orders" unticked) takes away bookings only — ASAP stays.
+  // Scheduling off ("Accept scheduled orders" unticked) takes away bookings only — ASAP stays
+  // where it is ticked.
   if (paused || !offered || !status.scheduling_enabled) return result(false);
   // Same parsing as the checkout picker: a failed policy read means opening hours alone decide,
   // and `windows: null` (never armed) is not the same statement as an empty list.

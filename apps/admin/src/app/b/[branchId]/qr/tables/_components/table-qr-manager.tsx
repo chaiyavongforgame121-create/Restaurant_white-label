@@ -42,7 +42,7 @@ interface Props {
   branchId: string;
   branchName: string;
   restaurantName: string;
-  /** Null when the branch has neither a custom domain nor a slug pair. */
+  /** Null when the branch or its restaurant has no slug. */
   menuUrl: string | null;
   missingSlugs: string[];
   initialTables: BranchTable[];

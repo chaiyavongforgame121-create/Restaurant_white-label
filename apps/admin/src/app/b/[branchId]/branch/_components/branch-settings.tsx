@@ -33,7 +33,6 @@ interface Branch {
   theme_override: Record<string, unknown>;
   settings: Record<string, unknown>;
   is_active: boolean;
-  custom_domain: string | null;
   sales_tax_rate: number | null;
   geo_lat: number | null;
   geo_lng: number | null;
@@ -77,7 +76,6 @@ export function BranchSettings({
   const router = useRouter();
   const [name, setName] = React.useState(branch.name);
   const [isActive, setIsActive] = React.useState(branch.is_active);
-  const [customDomain, setCustomDomain] = React.useState(branch.custom_domain ?? '');
   const [salesTaxPercent, setSalesTaxPercent] = React.useState(
     branch.sales_tax_rate != null ? String(Number(branch.sales_tax_rate) * 100) : '',
   );
@@ -107,11 +105,6 @@ export function BranchSettings({
   const [seatLimit, setSeatLimit] = React.useState<{ used: number; seats: number } | null>(null);
 
   const save = async () => {
-    const domain = normaliseCustomDomain(customDomain);
-    if (domain.invalid != null) {
-      setError(t('settings.domain.invalid', { input: domain.invalid }));
-      return;
-    }
     setSaving(true);
     setError(null);
     setSeatLimit(null);
@@ -135,7 +128,6 @@ export function BranchSettings({
       .update({
         name,
         is_active: isActive,
-        custom_domain: domain.value,
         sales_tax_rate: parsedRate,
         // Colours the branch already had stay as they are through the spread; only a picker
         // the owner actually moved is written.
@@ -159,15 +151,11 @@ export function BranchSettings({
       console.error('Saving branch settings failed', updateError);
       if (billing) {
         setError(billingErrorMessage(billing, locale));
-      } else if (updateError.message.includes('branch_privileged_column_forbidden')) {
-        setError(t('errors.ownerOnlyDomain'));
       } else if (updateError.message.includes('branch_settings_required')) {
         // Name, address, tax, time zone, open/closed: owner and admin (20261016110000).
         setError(t('errors.settingsRequired'));
       } else if (updateError.message.includes('branch_manager_required')) {
         setError(t('errors.managerRequired'));
-      } else if (updateError.code === '23505' && /custom_domain/.test(updateError.message)) {
-        setError(t('errors.domainTaken'));
       } else if (updateError.code === '42501') {
         setError(t('errors.noPermission'));
       } else {
@@ -300,20 +288,9 @@ export function BranchSettings({
           )}
         </Card>
 
-        <Card className="p-5">
-          <h2 className="font-display text-lg font-semibold">{t('settings.domain.title')}</h2>
-          <p className="text-sm text-muted-foreground">{t('settings.domain.description')}</p>
-          <div className="mt-3">
-            <Field label={t('settings.domain.label')}>
-              <input
-                value={customDomain}
-                onChange={(e) => setCustomDomain(e.target.value)}
-                placeholder="order.example.com"
-                className="input"
-              />
-            </Field>
-          </div>
-        </Card>
+        {/* No Custom domain card: merchant custom domains were removed on 2026-10-26. Every
+            storefront is /r/<restaurant>/<branch> on the platform's own host; the columns stay
+            until a later migration drops them. */}
 
         <HoursEditor branchId={branch.id} timezone={branch.timezone} />
 
@@ -441,32 +418,6 @@ export function BranchSettings({
       `}</style>
     </div>
   );
-}
-
-/**
- * A custom domain is a HOSTNAME, and the field never checked that it was one — a live
- * branch had "hamburger" saved in it, which is the branch's name typed into the wrong box.
- * That row is what the storefront asks about every unrecognised Host header, and since the
- * per-branch manifest now decides a PWA's identity from the same answer, junk here stops
- * being cosmetic. Paste-tolerant: a merchant copying from their browser bar sends
- * "https://order.example.com/" and means order.example.com.
- *
- * `invalid` carries what the merchant typed when it is not a hostname; the caller words the
- * message in the interface language.
- */
-function normaliseCustomDomain(raw: string): { value: string | null; invalid: string | null } {
-  const trimmed = raw.trim();
-  if (!trimmed) return { value: null, invalid: null };
-  const host = trimmed
-    .toLowerCase()
-    .replace(/^[a-z][a-z0-9+.-]*:\/\//, '')
-    .replace(/\/.*$/, '')
-    .replace(/:\d+$/, '')
-    .replace(/\.$/, '');
-  if (!/^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/.test(host)) {
-    return { value: null, invalid: trimmed };
-  }
-  return { value: host, invalid: null };
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {

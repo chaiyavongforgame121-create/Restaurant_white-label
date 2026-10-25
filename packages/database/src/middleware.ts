@@ -7,6 +7,13 @@ import { getSupabaseEnv } from './env';
 export const PATHNAME_HEADER = 'x-favornoms-pathname';
 
 /**
+ * Request header carrying the current query string ('' or '?…') into server components. The
+ * storefront's moved-address fallback needs it: a redirect built from the pathname alone dropped
+ * a table code's ?t= and a Stripe return's ?payment_intent=…
+ */
+export const SEARCH_HEADER = 'x-favornoms-search';
+
+/**
  * Per @supabase/ssr Next.js middleware pattern.
  * Call this from each app's middleware.ts to refresh the session cookie on
  * every request.
@@ -17,9 +24,10 @@ export const PATHNAME_HEADER = 'x-favornoms-pathname';
  * cookie jar changes. Snapshotting the headers once up front would silently
  * cost a render at every token refresh.
  *
- * We also forward the pathname, which layouts otherwise cannot see. The admin
- * branch layout needs it to exempt /settings/plan from the suspension
- * redirect — without the exemption that redirect loops forever.
+ * We also forward the pathname and the query string, which layouts otherwise
+ * cannot see. The admin branch layout needs the pathname to exempt
+ * /settings/plan from the suspension redirect — without the exemption that
+ * redirect loops forever.
  */
 export async function updateSession(request: NextRequest) {
   const { url, publishableKey } = getSupabaseEnv();
@@ -27,6 +35,7 @@ export async function updateSession(request: NextRequest) {
   const buildHeaders = () => {
     const h = new Headers(request.headers);
     h.set(PATHNAME_HEADER, request.nextUrl.pathname);
+    h.set(SEARCH_HEADER, request.nextUrl.search);
     return h;
   };
 
