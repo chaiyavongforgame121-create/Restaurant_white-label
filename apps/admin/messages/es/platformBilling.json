@@ -283,9 +283,16 @@
     "newCode": "Nuevo código",
     "emptyTitle": "Aún no hay códigos",
     "emptyBody": "Crea uno cuando quieras rebajar lo que un restaurante paga para empezar.",
+    "loadFailedTitle": "No se pudieron leer los códigos",
+    "loadFailedBody": "No significa que no haya códigos: la lista no se cargó. Inténtalo de nuevo en un momento.",
+    "retry": "Reintentar",
     "givesPercent": "{value}% de descuento",
     "givesFixed": "{amount} de descuento",
     "appliesAll": "Todos los cargos únicos",
+    "charge": {
+      "firstSetup": "Configuración inicial",
+      "extraBranch": "Configuración de sucursal adicional"
+    },
     "state": {
       "live": "Activo",
       "scheduled": "Empieza más tarde",
@@ -302,7 +309,8 @@
     "usedUnlimited": "{count} (sin tope)",
     "usedOfMax": "{count} de {max}",
     "perRestaurantValue": "{count, plural, one {# vez} other {# veces}}",
-    "reservedNote": "Otros {amount} están reservados en solicitudes pendientes de aprobación.",
+    "reservedNote": "Otros {amount} están reservados en solicitudes que esperan aprobación o un pago con tarjeta.",
+    "unsoldNote": "Incluye un cargo que ya no se vende ({names}), así que nunca se descuenta de él. Edita el código para quitarlo.",
     "windowBetween": "{from} → {to}",
     "windowFrom": "Desde {from}, sin fecha de fin",
     "close": "Cerrar",
@@ -319,6 +327,8 @@
     "usesUnavailable": "No se pudieron leer los usos de este código.",
     "unknownRestaurant": "Restaurante eliminado",
     "reserved": "Reservado · pendiente de aprobación",
+    "reservedPayment": "Reservado · pendiente del pago con tarjeta",
+    "reservedOpen": "Reservado · solicitud aún abierta",
     "onRequest": "solicitud {id}",
     "form": {
       "newTitle": "Nuevo código",
@@ -336,6 +346,8 @@
       "appliesTo": "Se aplica a",
       "appliesToHint": "Elige los cargos únicos de los que se descuenta. Si no eliges ninguno, se aplica a todos.",
       "productChip": "{name} ({amount} una vez)",
+      "removeUnsold": "Quitar {name}: ya no se vende",
+      "unsoldHint": "Los cargos tachados ya no se venden, así que este código nunca se descuenta de ellos. Haz clic en uno para quitarlo.",
       "maxRedemptions": "Usos totales",
       "maxRedemptionsHint": "Déjalo en blanco para no poner tope.",
       "perRestaurant": "Usos por restaurante",
@@ -352,12 +364,14 @@
     "errors": {
       "codeRequired": "Dale un nombre al código.",
       "codeCharset": "Un código solo puede tener letras, números y guiones.",
+      "codeTooLong": "Un código puede tener como máximo 40 caracteres.",
       "codeDuplicate": "Ese código ya existe. Elige otro.",
       "valueRequired": "Indica cuánto descuenta el código.",
       "percentRange": "Un porcentaje no puede ser mayor que 100.",
       "maxRedemptions": "Los usos totales deben ser un número entero de 1 o más, o quedar en blanco.",
       "perRestaurantLimit": "Los usos por restaurante deben ser un número entero de 1 o más.",
       "datesBackwards": "La fecha de fin es anterior a la de inicio, así que el código nunca se podría usar.",
+      "productNotOneTime": "Este código incluye un cargo que ya no se vende como pago único, así que nunca podría descontarse de él. Quita el cargo tachado y vuelve a guardar.",
       "kindInvalid": "El servidor no acepta ese tipo de descuento.",
       "notFound": "Ese código ya no existe. Recarga la página."
     }

@@ -52,6 +52,9 @@
 // detached it while Stripe was still retrying) is refunded and that subscription cancelled (§10.2).
 // All are logged at error level, truthfully.
 //
+// A CHECKOUT THAT EXPIRED UNPAID LETS ITS REQUEST GO (discount audit D2): when nothing else can
+// still pay it, the request is cancelled and its discount code's use given back (checkoutExpired).
+//
 // Paid-through only moves when money arrives (D8): subscription events change status and cancel
 // flags (billing_sync_stripe_status never moves the date); invoice.paid and a settled purchase move
 // it. What each event means for a restaurant is decided in SQL (billing_* functions).
@@ -80,6 +83,7 @@ import {
   changeSettleArgs,
   checkoutSettleArgs,
   eventClaimState,
+  expiredCheckoutRequest,
   grantedLines,
   idOf,
   invoiceBalanceMovement,
@@ -93,6 +97,7 @@ import {
   isoFromUnix,
   itemsMatch,
   mapCard,
+  otherOpenCheckout,
   priceLookupKey,
   priceMatches,
   refundIdempotencyKey,
@@ -499,7 +504,15 @@ async function refundStaleCheckout(
   );
 }
 
-/** The request stays pending: the merchant can continue to payment or change it. Logged only. */
+/**
+ * A package checkout ran out unpaid (D2). Nothing was charged, so the request it was paying for is
+ * let go -- its charges voided, its discount code's use given back, the request cancelled --
+ * unless it can still be paid: Stripe holds another session for it (stripe-billing opens the new
+ * session before it expires the old one, and stores it only after), or the request has moved on to
+ * another session or to an invoice. billing_cancel_expired_checkout decides that last part under
+ * the request's row lock. When the open sessions cannot be read for certain, nothing is cancelled
+ * here: private.billing_release_stale_checkouts lets the request go once no session can be alive.
+ */
 async function checkoutExpired(
   admin: SupabaseClient,
   event: StripeEvent,
@@ -509,18 +522,56 @@ async function checkoutExpired(
   const session = await read<Json>(`/v1/checkout/sessions/${sessionId}`);
   const metadata = (session?.metadata ?? {}) as Json;
   if (!isUuid(metadata.billing_request_id)) return;
+  const restaurantId = isUuid(metadata.restaurant_id) ? metadata.restaurant_id : null;
   await logEvent(
     admin,
     'stripe.checkout_expired',
     'info',
     'a package checkout expired unpaid',
-    isUuid(metadata.restaurant_id) ? metadata.restaurant_id : null,
+    restaurantId,
     {
       event_id: event.id,
       session: sessionId,
       request_id: metadata.billing_request_id,
     },
   );
+
+  const expired = expiredCheckoutRequest(session);
+  if (!expired) return;
+  const open = await read<Json>('/v1/checkout/sessions', {
+    customer: expired.customerId,
+    status: 'open',
+    limit: 100,
+  });
+  const other = otherOpenCheckout(open, expired.requestId, sessionId);
+  if (other !== false) {
+    await logEvent(
+      admin,
+      'stripe.checkout_expired_kept',
+      'info',
+      other
+        ? 'another checkout can still pay the request; it stays pending'
+        : 'the open checkouts could not be read for certain; the request is left to the stale-checkout sweep',
+      restaurantId,
+      { session: sessionId, request_id: expired.requestId },
+    );
+    return;
+  }
+
+  const { data, error } = await admin.rpc('billing_cancel_expired_checkout', {
+    p_request_id: expired.requestId,
+    p_session_id: sessionId,
+  });
+  if (error) throw new Error(`cancel_expired_checkout: ${error.message}`);
+  const result = (data ?? {}) as Json;
+  // Not cancelled is an answer, not a failure (paid, replaced, moved on to another session or an
+  // invoice, or a manual request); a cancel is logged by billing_cancel_stripe_request itself.
+  if (result.cancelled !== true)
+    console.info(
+      'expired checkout left its request alone',
+      expired.requestId,
+      result.reason ?? null,
+    );
 }
 
 // ---------------------------------------------------------------------------------------------

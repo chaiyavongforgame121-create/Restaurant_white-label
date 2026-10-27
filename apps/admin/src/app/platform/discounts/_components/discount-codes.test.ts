@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { DiscountCode } from '@favornoms/database/queries';
+import type { BillingProduct } from '@favornoms/shared';
 import {
   EMPTY_DRAFT,
   codeState,
@@ -12,9 +13,12 @@ import {
   endsAtIso,
   normalizeCode,
   isReservedUse,
+  oneTimeChargeKey,
   remainingRedemptions,
+  reservationWait,
   splitRedemptions,
   startsAtIso,
+  unsoldProducts,
   validateDraft,
   writeErrorKey,
   type DraftCode,
@@ -49,6 +53,25 @@ function draft(over: Partial<DraftCode> = {}): DraftCode {
   return { ...EMPTY_DRAFT, code: 'WELCOME', value: '20', ...over };
 }
 
+function product(over: Partial<BillingProduct> & { code: string }): BillingProduct {
+  return {
+    name: over.code,
+    kind: 'addon',
+    monthly_price: 0,
+    one_time_price: 0,
+    included_seats: 0,
+    seats_per_unit: 1,
+    trial_days: 0,
+    is_quantity: false,
+    features: {},
+    stripe_price_id: null,
+    is_active: true,
+    sort_order: 0,
+    description: null,
+    ...over,
+  };
+}
+
 describe('normalizeCode', () => {
   it('upper-cases and trims, exactly as the SQL compares', () => {
     expect(normalizeCode('  summer-20 ')).toBe('SUMMER-20');
@@ -70,6 +93,19 @@ describe('validateDraft', () => {
     expect(validateDraft(draft({ code: '-LEADING' }), [])).toContain('codeCharset');
     expect(validateDraft(draft({ code: 'A' }), [])).not.toContain('codeCharset');
     expect(validateDraft(draft({ code: 'A-1' }), [])).not.toContain('codeCharset');
+  });
+
+  it('caps a code at 40 characters, the most a Stripe line names', () => {
+    const forty = 'GRAND-OPENING-2026-PARTNER-WELCOME-OFF50';
+    expect(forty).toHaveLength(40);
+    expect(validateDraft(draft({ code: forty }), [])).not.toContain('codeTooLong');
+    expect(validateDraft(draft({ code: `${forty}X` }), [])).toContain('codeTooLong');
+    // An existing code is never changed, so an older long one can still be edited.
+    expect(validateDraft(draft({ code: `${forty}X` }), [`${forty}X`], `${forty}X`)).toEqual([]);
+    // platform_create_discount_code's own refusal, for whatever reached it.
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(writeErrorKey('code_too_long')).toBe('discounts.errors.codeTooLong');
+    spy.mockRestore();
   });
 
   it('refuses a duplicate, whatever case it was typed in', () => {
@@ -187,11 +223,77 @@ describe('draftToInput', () => {
   });
 
   it('leaves the code out of an edit, which cannot rename it', () => {
-    const patch = draftToPatch(draft({ code: 'WELCOME' }));
+    const opened = draft({ code: 'WELCOME' });
+    const patch = draftToPatch({ ...opened, code: 'RENAMED', value: '25' }, opened);
     expect('code' in patch).toBe(false);
-    // Everything else still travels, nulls included.
-    expect('ends_at' in patch).toBe(true);
-    expect(patch.value).toBe(20);
+    expect(patch.value).toBe(25);
+  });
+});
+
+describe('draftToPatch', () => {
+  // An edit sends only what the operator changed: platform_update_discount_code leaves an absent
+  // key alone, so nothing the form did not touch can be overwritten.
+  const original = code({
+    starts_at: '2026-09-23T15:17:32.312Z',
+    ends_at: '2026-10-31T23:59:59.999Z',
+    max_redemptions: 10,
+    product_codes: ['base', 'extra_branch'],
+  });
+
+  it('sends nothing when nothing changed', () => {
+    expect(draftToPatch(draftFrom(original), draftFrom(original))).toEqual({});
+  });
+
+  it('keeps the start time: a save does not move it to midnight', () => {
+    const opened = draftFrom(original);
+    const patch = draftToPatch({ ...opened, description: 'Autumn promo' }, opened);
+    expect(patch).toEqual({ description: 'Autumn promo' });
+    expect('starts_at' in patch).toBe(false);
+  });
+
+  it('does not send the switch back unless the operator flipped it', () => {
+    // Operator A opened the form while the code was on; B switched it off meanwhile. A's save
+    // of a new end date must not switch it on again.
+    const opened = draftFrom(original);
+    const patch = draftToPatch({ ...opened, endsAt: '2026-11-30' }, opened);
+    expect('is_active' in patch).toBe(false);
+    expect(patch.ends_at).toBe('2026-11-30T23:59:59.999Z');
+    expect(draftToPatch({ ...opened, isActive: false }, opened)).toEqual({ is_active: false });
+  });
+
+  it('clears an end date with an explicit null', () => {
+    const opened = draftFrom(original);
+    const patch = draftToPatch({ ...opened, endsAt: '' }, opened);
+    expect(patch).toEqual({ ends_at: null });
+  });
+
+  it('moves the start only when another day is picked, and blank means now', () => {
+    const opened = draftFrom(original);
+    expect(draftToPatch({ ...opened, startsAt: '2026-10-01' }, opened)).toEqual({
+      starts_at: '2026-10-01T00:00:00.000Z',
+    });
+    const cleared = draftToPatch({ ...opened, startsAt: '' }, opened);
+    expect(Number.isFinite(Date.parse(cleared.starts_at as string))).toBe(true);
+  });
+
+  it('sends kind and value together, since one means nothing without the other', () => {
+    const opened = draftFrom(original);
+    expect(draftToPatch({ ...opened, kind: 'fixed' }, opened)).toEqual({ kind: 'fixed', value: 20 });
+    expect(draftToPatch({ ...opened, value: '30' }, opened)).toEqual({ kind: 'percent', value: 30 });
+  });
+
+  it('reads the product list as a set, and clears the cap with a null', () => {
+    const opened = draftFrom(original);
+    expect(draftToPatch({ ...opened, productCodes: ['extra_branch', 'base'] }, opened)).toEqual({});
+    expect(draftToPatch({ ...opened, productCodes: ['base'] }, opened)).toEqual({
+      product_codes: ['base'],
+    });
+    expect(draftToPatch({ ...opened, maxRedemptions: '' }, opened)).toEqual({
+      max_redemptions: null,
+    });
+    expect(draftToPatch({ ...opened, perRestaurantLimit: '2' }, opened)).toEqual({
+      per_restaurant_limit: 2,
+    });
   });
 
   it('round-trips an existing code through the form', () => {
@@ -311,5 +413,139 @@ describe('writeErrorKey', () => {
     expect(writeErrorKey('Failed to fetch')).toBe('errors.network');
     expect(writeErrorKey('unheard of')).toBe('errors.saveFailed');
     spy.mockRestore();
+  });
+
+  it('turns the server’s own validation codes into the form’s sentences', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(writeErrorKey('code_invalid_chars')).toBe('discounts.errors.codeCharset');
+    expect(writeErrorKey('product_not_one_time:delivery')).toBe('discounts.errors.productNotOneTime');
+    expect(writeErrorKey('ends_before_start')).toBe('discounts.errors.datesBackwards');
+    expect(writeErrorKey('per_restaurant_limit_invalid')).toBe('discounts.errors.perRestaurantLimit');
+    expect(
+      writeErrorKey(
+        'new row for relation "billing_discount_codes" violates check constraint "billing_discount_codes_percent_range"',
+      ),
+    ).toBe('discounts.errors.percentRange');
+    expect(
+      writeErrorKey(
+        'new row for relation "billing_discount_codes" violates check constraint "billing_discount_codes_value_check"',
+      ),
+    ).toBe('discounts.errors.valueRequired');
+    spy.mockRestore();
+  });
+
+  it('only ever answers with a key every language has', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const raws = [
+      undefined,
+      'duplicate key',
+      'kind_invalid',
+      'code_required',
+      'code_invalid_chars',
+      'product_not_one_time',
+      'ends_before_start',
+      'per_restaurant_limit_invalid',
+      'billing_discount_codes_percent_range',
+      'billing_discount_codes_value_check',
+      'billing_discount_codes_max_redemptions_check',
+      'code_not_found',
+      'forbidden',
+      'Failed to fetch',
+      'unheard of',
+    ];
+    for (const locale of ['en', 'es', 'th', 'vi']) {
+      const tree = JSON.parse(
+        fs.readFileSync(
+          path.resolve(__dirname, '../../../../../messages', locale, 'platformBilling.json'),
+          'utf8',
+        ),
+      ) as Record<string, unknown>;
+      for (const raw of raws) {
+        const key = writeErrorKey(raw);
+        const value = key.split('.').reduce<unknown>((o, k) => (o as Record<string, unknown>)?.[k], tree);
+        expect(typeof value, `${locale}.${key}`).toBe('string');
+      }
+    }
+    spy.mockRestore();
+  });
+});
+
+describe('unsoldProducts', () => {
+  const catalog = [
+    product({ code: 'base', kind: 'plan', one_time_price: 199 }),
+    product({ code: 'extra_branch', kind: 'addon', one_time_price: 89 }),
+    product({ code: 'delivery', kind: 'addon', one_time_price: 0, is_active: false }),
+    product({ code: 'old_setup', kind: 'addon', one_time_price: 50, is_active: false }),
+  ];
+
+  it('finds the products a code names that are not sold one-time any more', () => {
+    expect(unsoldProducts(['base', 'delivery'], catalog)).toEqual(['delivery']);
+    expect(unsoldProducts(['old_setup', 'gone'], catalog)).toEqual(['old_setup', 'gone']);
+  });
+
+  it('is empty for a code on today’s charges, or on every charge', () => {
+    expect(unsoldProducts(['base', 'extra_branch'], catalog)).toEqual([]);
+    expect(unsoldProducts([], catalog)).toEqual([]);
+  });
+
+  it('calls nothing unsold when the catalog could not be read', () => {
+    // listBillingProducts answers a failed read with []; the real catalog always holds the plan.
+    expect(unsoldProducts(['extra_branch'], [])).toEqual([]);
+  });
+});
+
+describe('oneTimeChargeKey', () => {
+  it('names the charge a code comes off, as the plan page does', () => {
+    expect(oneTimeChargeKey({ code: 'base', kind: 'plan', one_time_price: 199 })).toBe('firstSetup');
+    expect(oneTimeChargeKey({ code: 'extra_branch', kind: 'addon', one_time_price: 89 })).toBe(
+      'extraBranch',
+    );
+  });
+
+  it('keeps the catalog’s name for anything else', () => {
+    expect(oneTimeChargeKey({ code: 'trial', kind: 'plan', one_time_price: 0 })).toBeNull();
+    expect(oneTimeChargeKey({ code: 'delivery', kind: 'addon', one_time_price: 0 })).toBeNull();
+  });
+
+  it('has both names in every language', () => {
+    for (const locale of ['en', 'es', 'th', 'vi']) {
+      const tree = JSON.parse(
+        fs.readFileSync(
+          path.resolve(__dirname, '../../../../../messages', locale, 'platformBilling.json'),
+          'utf8',
+        ),
+      ) as { discounts: { charge: Record<string, string> } };
+      expect(tree.discounts.charge.firstSetup, locale).toBeTruthy();
+      expect(tree.discounts.charge.extraBranch, locale).toBeTruthy();
+    }
+  });
+});
+
+describe('reservationWait', () => {
+  const pending = new Set(['manual-1', 'card-1']);
+  const card = new Set(['card-1']);
+
+  it('says a card request waits for its payment, not for anyone’s approval', () => {
+    expect(reservationWait({ request_id: 'card-1' }, pending, card)).toBe('payment');
+    expect(reservationWait({ request_id: 'manual-1' }, pending, card)).toBe('approval');
+  });
+
+  it('does not guess for a request the page did not read', () => {
+    expect(reservationWait({ request_id: 'elsewhere' }, pending, card)).toBe('open');
+    expect(reservationWait({ request_id: null }, pending, card)).toBe('open');
+  });
+
+  it('has a badge for each in every language', () => {
+    for (const locale of ['en', 'es', 'th', 'vi']) {
+      const tree = JSON.parse(
+        fs.readFileSync(
+          path.resolve(__dirname, '../../../../../messages', locale, 'platformBilling.json'),
+          'utf8',
+        ),
+      ) as { discounts: Record<string, string> };
+      for (const key of ['reserved', 'reservedPayment', 'reservedOpen']) {
+        expect(tree.discounts[key], `${locale}.discounts.${key}`).toBeTruthy();
+      }
+    }
   });
 });

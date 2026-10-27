@@ -49,6 +49,15 @@ interface Props {
    * the URL. Defaults to nothing outstanding: a missing prop hides them, never invents access.
    */
   deliveryWindDown?: DeliveryWindDown;
+  /**
+   * The restaurant's subscription has ended (SubscriptionGate.locked: never for a platform admin).
+   * Every other screen sends this person to Plan & billing, so that is the one entry shown — for
+   * everyone with the back office, not only billing.manage: the owner renews there, and anyone
+   * else reads "ask the owner" on it. The logo and the branch switcher go there too, and the
+   * footer (platform console, language, theme, sign out) stays as it is. Listing the rest only
+   * led to screens that bounce straight back (D2).
+   */
+  locked?: boolean;
 }
 
 type NavItem = {
@@ -83,6 +92,7 @@ export function Sidebar({
   logoUrl = null,
   brandName = null,
   deliveryWindDown = NO_WIND_DOWN,
+  locked = false,
 }: Props) {
   const t = useTranslations('shell');
   const pathname = usePathname();
@@ -91,6 +101,9 @@ export function Sidebar({
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
   const [platformAdmin, setPlatformAdmin] = React.useState(false);
   const base = `/b/${branchId}`;
+  // Where the logo and the branch name lead: the dashboard, or the one screen a locked back office has.
+  const planHref = `${base}/settings/plan`;
+  const homeHref = locked ? planHref : `${base}/dashboard`;
 
   // The platform owner had no way back to /platform from a back office but typing it: the
   // only link was the impersonation banner, which is not shown on a restaurant they are
@@ -236,7 +249,9 @@ export function Sidebar({
       {branches.length > 1 ? (
         <select
           value={branchId}
-          onChange={(e) => router.push(`/b/${e.target.value}/dashboard`)}
+          // The other branch belongs to the same restaurant, so it is locked too: straight to its
+          // Plan & billing rather than via a dashboard that only redirects there.
+          onChange={(e) => router.push(`/b/${e.target.value}/${locked ? 'settings/plan' : 'dashboard'}`)}
           className="focus-ring -ml-1 max-w-[150px] truncate rounded-md bg-transparent py-0.5 font-display text-base font-semibold"
           aria-label={t('sidebar.switchBranch')}
         >
@@ -278,6 +293,8 @@ export function Sidebar({
           'fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-border/60 bg-card pb-safe transition-transform lg:translate-x-0 lg:sticky lg:top-0 lg:h-dynamic-screen',
           mobileOpen ? 'translate-x-0' : '-translate-x-full',
         )}
+        // Read by SidebarLockSync on Plan & billing; see there.
+        data-subscription-locked={locked ? 'true' : 'false'}
       >
         <div className="flex items-start justify-between gap-2 px-5 py-4">
           {/* The merchant's own logo, in the chrome they spend the day inside. It is
@@ -293,7 +310,7 @@ export function Sidebar({
           {logoUrl ? (
             <div className="min-w-0 flex-1">
               <Link
-                href={`${base}/dashboard`}
+                href={homeHref}
                 onClick={() => setMobileOpen(false)}
                 className="focus-ring block w-fit max-w-full rounded-xl"
               >
@@ -313,10 +330,10 @@ export function Sidebar({
           ) : (
             <div className="flex min-w-0 flex-1 items-center gap-2">
               <Link
-                href={`${base}/dashboard`}
+                href={homeHref}
                 onClick={() => setMobileOpen(false)}
                 className="focus-ring shrink-0"
-                aria-label={t('sidebar.branchDashboard', { branch: branchName })}
+                aria-label={locked ? t('nav.planBilling') : t('sidebar.branchDashboard', { branch: branchName })}
               >
                 <span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-warm text-white shadow-warm">
                   <ChefHat className="h-5 w-5" />
@@ -334,39 +351,48 @@ export function Sidebar({
           </button>
         </div>
 
-        <nav className="flex-1 space-y-2 overflow-y-auto px-3 pb-6">
-          <ul className="space-y-0.5">
-            {core.filter((i) => allowed(i) && permitted(i.capability)).map(renderItem)}
-          </ul>
+        {locked ? (
+          <nav className="flex-1 space-y-2 overflow-y-auto px-3 pb-6">
+            <ul className="space-y-0.5">
+              {renderItem({ href: planHref, label: t('nav.planBilling'), icon: CreditCard })}
+            </ul>
+            <p className="px-3 text-xs text-muted-foreground">{t('subscriptionLocked.sidebarNote')}</p>
+          </nav>
+        ) : (
+          <nav className="flex-1 space-y-2 overflow-y-auto px-3 pb-6">
+            <ul className="space-y-0.5">
+              {core.filter((i) => allowed(i) && permitted(i.capability)).map(renderItem)}
+            </ul>
 
-          <button
-            type="button"
-            onClick={() => setAdvancedOpen((o) => !o)}
-            className="focus-ring mt-2 flex w-full items-center justify-between rounded-xl px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:bg-muted"
-            aria-expanded={advancedOpen}
-          >
-            {t('sections.advanced')}
-            <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', advancedOpen && 'rotate-180')} />
-          </button>
+            <button
+              type="button"
+              onClick={() => setAdvancedOpen((o) => !o)}
+              className="focus-ring mt-2 flex w-full items-center justify-between rounded-xl px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:bg-muted"
+              aria-expanded={advancedOpen}
+            >
+              {t('sections.advanced')}
+              <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', advancedOpen && 'rotate-180')} />
+            </button>
 
-          {advancedOpen &&
-            advanced
-              .filter((section) => allowed(section))
-              .map((section) => {
-                const items = section.items.filter(
-                  (i) => allowed(i) && permitted(i.capability),
-                );
-                if (items.length === 0) return null;
-                return (
-                  <div key={section.id} className="pt-1">
-                    <p className="px-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
-                      {section.title}
-                    </p>
-                    <ul className="space-y-0.5">{items.map(renderItem)}</ul>
-                  </div>
-                );
-              })}
-        </nav>
+            {advancedOpen &&
+              advanced
+                .filter((section) => allowed(section))
+                .map((section) => {
+                  const items = section.items.filter(
+                    (i) => allowed(i) && permitted(i.capability),
+                  );
+                  if (items.length === 0) return null;
+                  return (
+                    <div key={section.id} className="pt-1">
+                      <p className="px-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
+                        {section.title}
+                      </p>
+                      <ul className="space-y-0.5">{items.map(renderItem)}</ul>
+                    </div>
+                  );
+                })}
+          </nav>
+        )}
         <div className="space-y-2 border-t border-border/60 px-3 py-3">
           {platformAdmin && (
             <ul>{renderItem({ href: '/platform', label: t('nav.platformConsole'), icon: ShieldCheck })}</ul>
@@ -378,4 +404,28 @@ export function Sidebar({
       </aside>
     </>
   );
+}
+
+/**
+ * Keeps the sidebar's locked mode in step with what Plan & billing was just rendered for.
+ *
+ * Next does not render the branch layout again on a click inside the same branch, so a merchant
+ * whose deadline passed while they were working is redirected here by the page they clicked with
+ * the full menu still around them, and one who has just renewed keeps the one-entry menu. When the
+ * sidebar on screen says otherwise than this page, one refresh renders the layout again with the
+ * answer this page got. One refresh per answer, not per mount: the same instance survives
+ * navigations within this page, so a lock that arrived mid-session and the renewal after it each
+ * get theirs, while a page that keeps disagreeing with the menu about one answer cannot loop.
+ */
+export function SidebarLockSync({ locked }: { locked: boolean }) {
+  const router = useRouter();
+  const refreshedFor = React.useRef<boolean | null>(null);
+  React.useEffect(() => {
+    if (refreshedFor.current === locked) return;
+    const shown = document.querySelector('[data-subscription-locked]')?.getAttribute('data-subscription-locked');
+    if (shown == null || (shown === 'true') === locked) return;
+    refreshedFor.current = locked;
+    router.refresh();
+  }, [locked, router]);
+  return null;
 }

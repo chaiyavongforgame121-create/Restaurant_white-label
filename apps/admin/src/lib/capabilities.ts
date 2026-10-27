@@ -1,6 +1,13 @@
 import 'server-only';
 import { redirect, notFound } from 'next/navigation';
 import { getServerClient } from '@favornoms/database/server';
+import {
+  branchHasOrdersInProgress,
+  getSubscriptionGate,
+  subscriptionRedirect,
+  type SubscriptionGate,
+  type WhileLocked,
+} from './subscription-gate';
 
 /**
  * Named capabilities, mirroring `public.role_capabilities` in the database.
@@ -60,18 +67,31 @@ export interface BranchAccess {
   staffId: string | null;
   role: string | null;
   can: (capability: Capability) => boolean;
+  /** The restaurant's subscription as this request read it. `locked` past this call means the
+   *  caller asked to handle it ('allow') or orders are still in progress ('ordersInProgress'). */
+  subscription: SubscriptionGate;
+}
+
+export interface BranchAccessOptions {
+  /** What this screen does while the subscription has ended; see WhileLocked. Left out, the
+   *  person is sent to Plan & billing or /suspended/<branch>. */
+  whileLocked?: WhileLocked;
 }
 
 /**
  * Resolve what the signed-in user may do at a branch.
  *
- * Redirects to /login when unauthenticated and 404s an unknown branch; otherwise always
- * returns, with an empty capability set when the user has no access. The caller decides
- * whether that is an <AccessDenied> or a narrower page.
+ * Redirects to /login when unauthenticated and 404s an unknown branch. When the restaurant's
+ * subscription has ended it also sends a member of staff away (subscriptionRedirect), unless the
+ * caller says otherwise: it is the one call every /b, /counter and /kitchen page and layout makes,
+ * so a click inside the app cannot get around the lock (D1). Otherwise it always returns, with an
+ * empty capability set when the user has no access. The caller decides whether that is an
+ * <AccessDenied> or a narrower page.
  */
 export async function getBranchAccess(
   branchId: string,
   nextPath: string,
+  options: BranchAccessOptions = {},
 ): Promise<BranchAccess> {
   const supabase = await getServerClient();
 
@@ -89,8 +109,9 @@ export async function getBranchAccess(
 
   // One RPC for the capability set, plus the membership row for its id and role
   // (needed for audit columns like driver_approvals.reviewed_by). Neither depends on
-  // the other, so they go together — this sits in front of every back-office page.
-  const [{ data: caps }, { data: memberships }] = await Promise.all([
+  // the other, so they go together — this sits in front of every back-office page. The
+  // subscription goes with them, read once per request however many callers ask.
+  const [{ data: caps }, { data: memberships }, subscription] = await Promise.all([
     supabase.rpc('my_capabilities', { p_branch_id: branchId }),
     // An owner row covers every branch of its restaurant, whichever branch it was created at —
     // the same rule my_capabilities applies. Without the owner arm the owner of a second branch
@@ -104,6 +125,7 @@ export async function getBranchAccess(
       .eq('restaurant_id', branch.restaurant_id)
       .eq('status', 'active')
       .or(`branch_id.eq.${branchId},branch_id.is.null,role.eq.owner`),
+    getSubscriptionGate(branchId),
   ]);
   const rows = memberships ?? [];
   // The row that best describes this person HERE: owner first, then this branch, then every-branch.
@@ -115,6 +137,21 @@ export async function getBranchAccess(
 
   const capabilities = new Set((caps ?? []) as Capability[]);
 
+  // Orders are asked about only when they decide something: a locked branch, someone who works
+  // there, and a screen that stays open while orders are in progress.
+  const ordersInProgress =
+    subscription.locked && capabilities.size > 0 && options.whileLocked === 'ordersInProgress'
+      ? await branchHasOrdersInProgress(branchId)
+      : false;
+  const away = subscriptionRedirect({
+    branchId,
+    locked: subscription.locked,
+    capabilities,
+    whileLocked: options.whileLocked,
+    ordersInProgress,
+  });
+  if (away) redirect(away);
+
   return {
     supabase,
     user: { id: userData.user.id, email: userData.user.email },
@@ -123,6 +160,7 @@ export async function getBranchAccess(
     staffId: membership?.id ?? null,
     role: membership?.role ?? null,
     can: (c: Capability) => capabilities.has(c),
+    subscription,
   };
 }
 

@@ -2,13 +2,15 @@ import { getTranslations } from 'next-intl/server';
 import { Clock, Lock } from 'lucide-react';
 import {
   getBillingOverview,
-  getEntitlementsForBranch,
   getPendingBillingRequest,
   listBillingProducts,
 } from '@favornoms/database/queries';
 import { isValidTimeZone, type BillingPaidState } from '@favornoms/shared';
 import { Card } from '@favornoms/ui';
 import { getBranchAccess } from '@/lib/capabilities';
+import { branchHasOrdersInProgress } from '@/lib/subscription-gate';
+import { SidebarLockSync } from '@/components/sidebar';
+import { CheckAgainButton, LockedAutoRefresh, StillOpenLinks } from '@/components/suspension-screen';
 import { readCheckoutReturn, readPortalReturn } from './_components/plan-billing';
 import { fallbackOverview, type PlanBranch } from './_components/plan-model';
 import { PlanView, type DecidedRequest } from './_components/plan-view';
@@ -16,7 +18,6 @@ import { PlanView, type DecidedRequest } from './_components/plan-view';
 interface Props {
   params: Promise<{ branchId: string }>;
   searchParams: Promise<{
-    suspended?: string;
     /** 'success' | 'cancelled': Stripe Checkout sending the merchant back. */
     checkout?: string;
     /** The Checkout Session, on the success URL only ({CHECKOUT_SESSION_ID}). */
@@ -79,20 +80,29 @@ function readDecision(raw: unknown): DecidedRequest | null {
   };
 }
 
-// This page is the escape hatch: the branch layout skips its suspension
-// redirect for exactly this path, so a lapsed merchant can always reach it.
+// This page is the escape hatch: while the subscription has ended it is the one screen the back
+// office opens (getBranchAccess sends every other page here, and the menu lists nothing else), so
+// it asks to handle the lock itself rather than be sent to itself.
 export default async function PlanPage({ params, searchParams }: Props) {
   const { branchId } = await params;
   const query = await searchParams;
-  const { supabase, branch, can } = await getBranchAccess(branchId, `/b/${branchId}/settings/plan`);
+  const { supabase, branch, can, subscription } = await getBranchAccess(
+    branchId,
+    `/b/${branchId}/settings/plan`,
+    { whileLocked: 'allow' },
+  );
+  // The menu around this page may have been rendered before the deadline passed, or before a
+  // renewal: a click inside the branch does not render the layout again.
+  const lockSync = <SidebarLockSync locked={subscription.locked} />;
 
   // Whoever holds billing.manage in public.role_capabilities — today the owner alone. It is
   // the same question request_package_change, validate_billing_discount and
   // get_billing_overview ask (private.user_can_manage_billing), and the one the sidebar asks
-  // before it shows this page. An admin used to be let through here as well, on the theory
-  // that the RPC accepted them; it no longer does, so the builder would only have produced a
-  // submit the server refuses. Everyone else still lands on this page whenever the store is
-  // suspended (the layout sends every user here) and reads PlanNotYours instead.
+  // before it shows this page (except while suspended, when it is the menu's only entry). An
+  // admin used to be let through here as well, on the theory that the RPC accepted them; it no
+  // longer does, so the builder would only have produced a submit the server refuses. Everyone
+  // else with the back office still lands on this page whenever the store is suspended and
+  // reads PlanNotYours instead.
   const canManageBilling = can('billing.manage');
 
   const { data: branchRow } = await supabase
@@ -105,9 +115,25 @@ export default async function PlanPage({ params, searchParams }: Props) {
       ? branchRow.timezone
       : 'America/New_York';
 
+  // The till, the dashboard and sign-in send everyone with the back office here while locked, the
+  // owner included, so while orders placed before the end are still being finished the screens
+  // that stay open for them are offered on this page too. In an owner-only restaurant the owner's
+  // account is the till and the kitchen tablet, and an installed app has no address bar to type
+  // /kitchen into.
+  const kitchen = can('kitchen.access');
+  const recent = can('counter.access');
+  const ordersOpen =
+    subscription.locked && (kitchen || recent) ? await branchHasOrdersInProgress(branchId) : false;
+  const stillOpen = ordersOpen ? { branchId, kitchen, recent } : null;
+
   if (!canManageBilling) {
-    const entitlements = await getEntitlementsForBranch(supabase, branchId);
-    return <PlanNotYours inactive={!entitlements.entitled} branchName={branch.name} />;
+    // A failed read is not "inactive" (D8): the card then says who manages the package instead.
+    return (
+      <>
+        <PlanNotYours inactive={subscription.ended} branchName={branch.name} stillOpen={stillOpen} />
+        {lockSync}
+      </>
+    );
   }
 
   // get_latest_billing_decision is not in the generated types yet — thin typed escape.
@@ -116,12 +142,12 @@ export default async function PlanPage({ params, searchParams }: Props) {
     args?: Record<string, unknown>,
   ) => Promise<{ data: unknown; error: { message: string } | null }>;
 
-  const [entitlements, overview, catalog, pendingRequest, decidedRes] = await Promise.all([
-    // Read on its own as well as inside the overview: this RPC predates get_billing_overview
-    // and answers even when that one cannot, and whether the store is suspended is what
-    // decides the whole page. Everything this page reads from it (seats, branches used, the
-    // deadline) is restaurant-wide in both payloads.
-    getEntitlementsForBranch(supabase, branchId),
+  // Read on its own as well as inside the overview (it came with the subscription gate, once per
+  // request): this RPC predates get_billing_overview and answers even when that one cannot, and
+  // whether the store is suspended is what decides the whole page. Everything this page reads from
+  // it (seats, branches used, the deadline) is restaurant-wide in both payloads.
+  const { entitlements } = subscription;
+  const [overview, catalog, pendingRequest, decidedRes] = await Promise.all([
     getBillingOverview(supabase, branch.restaurant_id),
     listBillingProducts(supabase),
     getPendingBillingRequest(supabase, branch.restaurant_id),
@@ -151,36 +177,56 @@ export default async function PlanPage({ params, searchParams }: Props) {
   }
 
   const latestDecision = decidedRes.error ? null : readDecision(decidedRes.data);
+  // Suspended only on a real answer, and the same answer the menu was locked by. A failed read
+  // used to put "Your account is not active" in front of an owner who may well be paid up; the
+  // layout says "couldn't check" instead (D8).
+  const suspended = subscription.known
+    ? subscription.ended
+    : overviewOk && !overview.entitlements.entitled;
 
   return (
-    <PlanView
-      branchId={branchId}
-      restaurantId={branch.restaurant_id}
-      entitlements={overviewOk ? overview.entitlements : entitlements}
-      catalog={catalog}
-      branches={branches}
-      paid={paid}
-      pendingRequest={pendingRequest}
-      latestDecision={latestDecision}
-      timezone={timezone}
-      suspended={!entitlements.entitled}
-      noTrial={query.no_trial === '1'}
-      renew={query.renew === '1'}
-      // How the restaurant pays. The denied overview carries MANUAL_RAIL (card billing off), so
-      // a failed read keeps today's manual page rather than guessing that a card is on file.
-      billing={overview.billing}
-      checkoutReturn={readCheckoutReturn(query.checkout, query.session_id)}
-      portalReturn={readPortalReturn(query.portal)}
-    />
+    <>
+      <PlanView
+        branchId={branchId}
+        restaurantId={branch.restaurant_id}
+        entitlements={overviewOk ? overview.entitlements : entitlements}
+        catalog={catalog}
+        branches={branches}
+        paid={paid}
+        pendingRequest={pendingRequest}
+        latestDecision={latestDecision}
+        timezone={timezone}
+        suspended={suspended}
+        noTrial={query.no_trial === '1'}
+        renew={query.renew === '1'}
+        // How the restaurant pays. The denied overview carries MANUAL_RAIL (card billing off), so
+        // a failed read keeps today's manual page rather than guessing that a card is on file.
+        billing={overview.billing}
+        checkoutReturn={readCheckoutReturn(query.checkout, query.session_id)}
+        portalReturn={readPortalReturn(query.portal)}
+        stillOpen={stillOpen}
+      />
+      {lockSync}
+    </>
   );
 }
 
 /**
  * What a manager, cashier or anyone else without billing rights sees. The suspension
- * redirect sends every role here, and an AccessDenied card with a Sign out button reads
+ * redirect sends every back-office role here, and an AccessDenied card with a Sign out button reads
  * as "your account is broken" to a cashier whose only real problem is an unpaid package.
+ * While inactive it can ask again: the owner renews elsewhere, and nothing tells this screen.
  */
-async function PlanNotYours({ inactive, branchName }: { inactive: boolean; branchName: string }) {
+async function PlanNotYours({
+  inactive,
+  branchName,
+  stillOpen,
+}: {
+  inactive: boolean;
+  branchName: string;
+  /** The screens still open for orders placed before the end, or null. */
+  stillOpen: { branchId: string; kitchen: boolean; recent: boolean } | null;
+}) {
   const t = await getTranslations('settings.plan');
   return (
     <div className="container max-w-2xl py-8">
@@ -202,8 +248,13 @@ async function PlanNotYours({ inactive, branchName }: { inactive: boolean; branc
               ? t('notYours.inactiveBody', { branch: branchName })
               : t('notYours.lockedBody', { branch: branchName })}
           </p>
+          {inactive && stillOpen && <StillOpenLinks {...stillOpen} className="mt-3" />}
+          {inactive && <CheckAgainButton size="sm" className="mt-3" />}
         </div>
       </Card>
+      {/* Nothing on this card can be typed into, so it asks again by itself: the owner's renewal
+          unlocks the menu, and a booking released onto the board brings up its link. */}
+      {inactive && <LockedAutoRefresh />}
     </div>
   );
 }

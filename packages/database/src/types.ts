@@ -262,7 +262,7 @@ export type Database = {
           id: string
           redeemed_at: string
           request_id: string | null
-          restaurant_id: string
+          restaurant_id: string | null
           status: string
         }
         Insert: {
@@ -271,7 +271,7 @@ export type Database = {
           id?: string
           redeemed_at?: string
           request_id?: string | null
-          restaurant_id: string
+          restaurant_id?: string | null
           status?: string
         }
         Update: {
@@ -280,7 +280,7 @@ export type Database = {
           id?: string
           redeemed_at?: string
           request_id?: string | null
-          restaurant_id?: string
+          restaurant_id?: string | null
           status?: string
         }
         Relationships: [
@@ -5306,6 +5306,10 @@ export type Database = {
         Returns: Json
       }
       billing_branch_context: { Args: { p_branch_id: string }; Returns: Json }
+      billing_cancel_expired_checkout: {
+        Args: { p_request_id: string; p_session_id: string }
+        Returns: Json
+      }
       billing_cancel_stripe_request: {
         Args: { p_reason: string; p_request_id: string }
         Returns: undefined
@@ -6139,6 +6143,8 @@ export type Database = {
           p_branch_seats?: number
           p_delivery_branch_ids?: string[]
           p_discount_code?: string
+          p_expected_monthly?: number
+          p_expected_one_time?: number
           p_note?: string
           p_plan_code: string
           p_restaurant_id: string

@@ -635,7 +635,11 @@ export interface DiscountCode {
 export interface DiscountRedemption {
   id: string;
   code_id: string;
-  restaurant_id: string;
+  /**
+   * Null once that restaurant was deleted: a use it was given stays on the code's ledger (and in
+   * redemption_count), with restaurant_name null too.
+   */
+  restaurant_id: string | null;
   restaurant_name: string | null;
   request_id: string | null;
   amount_off: number;
@@ -678,10 +682,14 @@ function normalizeDiscountCode(row: unknown): DiscountCode {
   };
 }
 
-/** Platform admin only — the RPC refuses anyone else, and the table has no merchant policy. */
-export async function listDiscountCodes(supabase: FavornomsClient): Promise<DiscountCode[]> {
+/**
+ * Platform admin only — the RPC refuses anyone else, and the table has no merchant policy.
+ * Null when the list could not be read (an error, a refusal, an answer that is not a list), so
+ * the console can say so instead of "No codes yet".
+ */
+export async function listDiscountCodes(supabase: FavornomsClient): Promise<DiscountCode[] | null> {
   const { data, error } = await supabase.rpc('platform_list_discount_codes');
-  if (error || !Array.isArray(data)) return [];
+  if (error || !Array.isArray(data)) return null;
   return (data as unknown[]).map(normalizeDiscountCode);
 }
 
@@ -711,20 +719,24 @@ export async function updateDiscountCode(
   return normalizeDiscountCode(data);
 }
 
+/**
+ * A code's uses, newest first. Null when they could not be read, which is not the same as none:
+ * "Given away $0" for a code that has given money away would be a lie, so the console shows "—".
+ */
 export async function listDiscountRedemptions(
   supabase: FavornomsClient,
   codeId: string,
-): Promise<DiscountRedemption[]> {
+): Promise<DiscountRedemption[] | null> {
   const { data, error } = await supabase.rpc('platform_list_discount_redemptions', {
     p_code_id: codeId,
   });
-  if (error || !Array.isArray(data)) return [];
+  if (error || !Array.isArray(data)) return null;
   return (data as unknown[]).map((row) => {
     const r = (row ?? {}) as Record<string, unknown>;
     return {
       id: String(r.id ?? ''),
       code_id: String(r.code_id ?? ''),
-      restaurant_id: String(r.restaurant_id ?? ''),
+      restaurant_id: str(r.restaurant_id),
       restaurant_name: str(r.restaurant_name),
       request_id: str(r.request_id),
       amount_off: num(r.amount_off),
@@ -837,6 +849,12 @@ function normalizeRequest(row: unknown): BillingRequest {
  * every other refusal, into something readable. The RPC itself RETURNS that refusal as
  * { ok: false, reason } rather than raising it — a raise would roll back the failed
  * attempt the guessing limit counts — and nothing is filed or replaced when it does.
+ *
+ * expectedOneTime / expectedMonthly are the totals the merchant confirmed on screen. When
+ * the server prices the selection differently (an operator edited the code, the catalog
+ * was repriced) it files nothing and this THROWS 'quote_changed:<one-time>:<monthly>' with
+ * the server's figures, which the plan page reads back (readQuoteChange) and asks about.
+ * Left out, nothing is compared.
  */
 export async function requestPackageChange(
   supabase: FavornomsClient,
@@ -845,6 +863,8 @@ export async function requestPackageChange(
     selection: PackageSelection;
     discountCode?: string | null;
     note?: string | null;
+    expectedOneTime?: number | null;
+    expectedMonthly?: number | null;
   },
 ): Promise<BillingRequest> {
   const { data, error } = await supabase.rpc('request_package_change', {
@@ -854,9 +874,16 @@ export async function requestPackageChange(
     p_delivery_branch_ids: NO_DELIVERY_BRANCHES,
     p_discount_code: args.discountCode?.trim() ? args.discountCode.trim() : null,
     p_note: args.note ?? null,
+    // Undefined keys are left out of the call, so a caller with no figures is not compared.
+    p_expected_one_time: args.expectedOneTime ?? undefined,
+    p_expected_monthly: args.expectedMonthly ?? undefined,
   });
   if (error) throw new Error(error.message);
   const d = (data ?? {}) as Record<string, unknown>;
+  if (d.ok === false && d.reason === 'quote_changed') {
+    // Not a refused code: no discount_invalid: prefix, which describeBillingError reads as one.
+    throw new Error(`quote_changed:${num(d.one_time_total)}:${num(d.monthly_total)}`);
+  }
   if (d.ok === false) {
     throw new Error(`discount_invalid:${typeof d.reason === 'string' && d.reason ? d.reason : 'invalid_code'}`);
   }

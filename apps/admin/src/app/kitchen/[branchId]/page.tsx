@@ -16,8 +16,11 @@ export default async function KitchenPage({ params, searchParams }: Props) {
   const { branchId } = await params;
   const { station } = await searchParams;
   // The layout already refused anyone without kitchen.access; this call is for the finer
-  // capabilities the board renders by (and 404s an unknown branch).
-  const { supabase, branch, can } = await getBranchAccess(branchId, `/kitchen/${branchId}`);
+  // capabilities the board renders by (and 404s an unknown branch), and for an ended subscription
+  // on a click that does not render the layout again: open while orders are still in progress.
+  const { supabase, branch, can } = await getBranchAccess(branchId, `/kitchen/${branchId}`, {
+    whileLocked: 'ordersInProgress',
+  });
   // staff_assign_driver and list_branch_riders both require delivery.manage, which the kitchen
   // role does not hold: offering the picker to a cook only ever ended in "can't assign riders".
   const canAssign = can('delivery.manage');

@@ -82,7 +82,8 @@
   "platformBanner": {
     "title": "Chế độ quản trị nền tảng",
     "body": "Bạn không phải nhân viên của {branch}. Mọi thay đổi bạn thực hiện ở đây đều được ghi lại theo tài khoản của bạn.",
-    "back": "Quay lại nền tảng"
+    "back": "Quay lại nền tảng",
+    "suspended": "Gói đăng ký của nhà hàng này đã hết hạn: nhân viên chỉ thấy Gói và thanh toán, và trang đặt hàng đang đóng."
   },
   "suspension": {
     "title": "Gói đăng ký đã ngừng hoạt động",
@@ -95,8 +96,23 @@
       "screen": "Màn hình này đã bị khóa tại chi nhánh này vì gói đăng ký đã hết hạn."
     },
     "nothingDeleted": "Không có dữ liệu nào bị xóa — chỉ cần chọn một gói là mọi thứ được khôi phục ngay.",
-    "kitchenStillWorks": "Các đơn hàng đã đặt vẫn có thể được nấu và hoàn tất trên màn hình bếp.",
+    "kitchenStillWorks": "Các đơn đã đặt vẫn có thể hoàn tất trên màn hình bếp.",
     "goToBilling": "Đến trang thanh toán"
+  },
+  "subscriptionLocked": {
+    "title": "Gói đăng ký đã hết hạn",
+    "sidebarNote": "Mọi mục khác tạm dừng cho đến khi gia hạn gói. Không có dữ liệu nào bị xóa.",
+    "checkAgain": "Kiểm tra lại",
+    "checking": "Đang kiểm tra…",
+    "askOwner": "Gói đăng ký của {branch} đã hết hạn nên màn hình này tạm dừng. Chỉ chủ nhà hàng mới gia hạn được, tại mục Gói và thanh toán trong trang quản trị. Không có dữ liệu nào bị xóa — mọi thứ trở lại ngay khi được gia hạn.",
+    "finishOrdersTitle": "Gói đăng ký đã hết hạn — hãy hoàn tất các đơn đã đặt.",
+    "finishOrdersBody": "Không thể nhận đơn mới. Màn hình này vẫn mở cho đến khi các đơn đang làm hoàn tất, sau đó cũng sẽ tạm dừng.",
+    "stillOpen": "Thanh toán bàn và duyệt biên lai chuyển khoản phải chờ đến khi gia hạn gói. Các đơn đặt trước khi hết hạn vẫn có thể chế biến và giao cho khách tại:"
+  },
+  "subscriptionUnknown": {
+    "title": "Không kiểm tra được gói đăng ký.",
+    "body": "Chưa có gì bị khóa; các tính năng phụ thuộc vào gói sẽ bị ẩn cho đến khi kiểm tra thành công.",
+    "retry": "Thử lại"
   },
   "upload": {
     "noCanvas": "Trình duyệt của bạn không xử lý được ảnh (không hỗ trợ canvas)."

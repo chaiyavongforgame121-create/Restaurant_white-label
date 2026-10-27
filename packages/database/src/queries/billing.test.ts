@@ -109,6 +109,49 @@ describe('the pricing writers send no delivery branches', () => {
     ]);
   });
 
+  it('requestPackageChange sends the confirmed totals, and throws the server\'s own on quote_changed', async () => {
+    const { client, calls } = rpcClient({
+      request_package_change: {
+        data: {
+          ok: false,
+          reason: 'quote_changed',
+          error: 'quote_changed',
+          one_time_total: '179.10',
+          monthly_total: 49,
+          expected_one_time: 99.5,
+          expected_monthly: 49,
+        },
+        error: null,
+      },
+    });
+    await expect(
+      requestPackageChange(client, {
+        restaurantId: 'restaurant-1',
+        selection: { planCode: 'base', branchSeats: 1 },
+        discountCode: 'TEST50',
+        expectedOneTime: 99.5,
+        expectedMonthly: 49,
+      }),
+    ).rejects.toThrow(/^quote_changed:179\.1:49$/);
+    expect(calls[0]?.args).toMatchObject({ p_expected_one_time: 99.5, p_expected_monthly: 49 });
+  });
+
+  it('requestPackageChange still answers a refused code as discount_invalid:<reason>', async () => {
+    const { client } = rpcClient({
+      request_package_change: {
+        data: { ok: false, reason: 'code_expired', error: 'discount_invalid:code_expired' },
+        error: null,
+      },
+    });
+    await expect(
+      requestPackageChange(client, {
+        restaurantId: 'restaurant-1',
+        selection: { planCode: 'base', branchSeats: 1 },
+        discountCode: 'OLD',
+      }),
+    ).rejects.toThrow('discount_invalid:code_expired');
+  });
+
   it('setRestaurantPackage sends p_delivery_branch_ids: []', async () => {
     const { client, calls } = rpcClient({ billing_set_package: { data: {}, error: null } });
     await setRestaurantPackage(client, 'restaurant-1', { planCode: 'base', branchSeats: 2 });

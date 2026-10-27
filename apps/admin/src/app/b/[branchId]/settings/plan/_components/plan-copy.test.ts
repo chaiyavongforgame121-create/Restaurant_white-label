@@ -13,10 +13,14 @@ import {
   cardStepErrorMessage,
   codeNeedsApplying,
   discountAfterTyping,
+  filedAsConfirmed,
   filedFacts,
   filedRequest,
   payOnceView,
   portalErrorMessage,
+  quotedFigures,
+  readQuoteChange,
+  refusedCodeReason,
   requestErrorMessage,
   showsFiledRequest,
   type FiledRequest,
@@ -254,6 +258,79 @@ describe('a refused request says why in the shared words', () => {
     expect(requestErrorMessage('unknown_plan:gold', t, 'en')).toBe('[errors.planUnavailable]');
     expect(requestErrorMessage(undefined, t, 'en')).toBe('[errors.sendFailed]');
     expect(requestErrorMessage('something odd', t, 'en')).toBe('[errors.sendFailed]');
+  });
+
+  it('never calls a price that moved a failed send', () => {
+    expect(requestErrorMessage('quote_changed', t, 'en')).toBe('[quoteChanged.notSent]');
+  });
+});
+
+describe('a code the server refused on submit is dropped from the page', () => {
+  it('reads the reason the code was refused with, and nothing else', () => {
+    expect(refusedCodeReason('discount_invalid:code_expired')).toBe('code_expired');
+    expect(refusedCodeReason('Error: discount_invalid:rate_limited')).toBe('rate_limited');
+    expect(refusedCodeReason('forbidden')).toBeNull();
+    expect(refusedCodeReason('quote_changed')).toBeNull();
+    expect(refusedCodeReason('stripe_billing_failed:internal_error')).toBeNull();
+  });
+});
+
+// --- the price the merchant confirmed ------------------------------------------
+
+describe('no request is paid for at figures the merchant did not see (D1)', () => {
+  it('compares what was filed with what was confirmed, to the cent', () => {
+    const filed = filedRequest({ ...ROW, one_time_total: 99.5, discount_code: 'TEST50', discount_amount: 99.5 })!;
+    expect(filedAsConfirmed({ oneTime: 99.5, monthly: 49 }, filed)).toBe(true);
+    // The operator cut TEST50 from 50% to 10% between the dialog and the click.
+    const repriced = filedRequest({ ...ROW, one_time_total: 179.1, discount_code: 'TEST50', discount_amount: 19.9 })!;
+    expect(filedAsConfirmed({ oneTime: 99.5, monthly: 49 }, repriced)).toBe(false);
+    // The monthly figure counts as well.
+    expect(filedAsConfirmed({ oneTime: 199, monthly: 49 }, filedRequest({ ...ROW, monthly_total: 98 })!)).toBe(false);
+  });
+
+  it('does not read floating-point noise as a new price', () => {
+    expect(filedAsConfirmed({ oneTime: 0.1 + 0.2, monthly: 49 }, { oneTimeTotal: 0.3, monthlyTotal: 49 })).toBe(
+      true,
+    );
+  });
+
+  it('recognises quote_changed however it arrives, and reads the new figures when they come with it', () => {
+    expect(readQuoteChange(new Error('quote_changed'))).toEqual({ oneTime: null, monthly: null });
+    expect(readQuoteChange(new Error('quote_changed:179.10:49'))).toEqual({ oneTime: 179.1, monthly: 49 });
+    const withFields = Object.assign(new Error('quote_changed'), { oneTimeTotal: 179.1, monthlyTotal: 49 });
+    expect(readQuoteChange(withFields)).toEqual({ oneTime: 179.1, monthly: 49 });
+    expect(
+      readQuoteChange({ ok: false, error: 'quote_changed', one_time_total: '179.10', monthly_total: '49.00' }),
+    ).toEqual({ oneTime: 179.1, monthly: 49 });
+  });
+
+  it('is not fooled by any other failure', () => {
+    expect(readQuoteChange(new Error('discount_invalid:code_expired'))).toBeNull();
+    expect(readQuoteChange(new Error('payment_in_progress'))).toBeNull();
+    expect(readQuoteChange(null)).toBeNull();
+    expect(readQuoteChange('forbidden')).toBeNull();
+  });
+
+  it('only quotes new figures when it has both of them', () => {
+    expect(quotedFigures({ oneTime: 179.1, monthly: 49 })).toEqual({ oneTime: 179.1, monthly: 49 });
+    expect(quotedFigures({ oneTime: 179.1, monthly: null })).toBeNull();
+    expect(quotedFigures({ oneTime: null, monthly: null })).toBeNull();
+  });
+
+  it('has the words for a price that moved, with both figures, in every language', () => {
+    for (const locale of LOCALES) {
+      const plan = (messages(locale, 'settings').plan as Record<string, unknown>).quoteChanged as Record<
+        string,
+        string
+      >;
+      for (const key of ['title', 'confirm', 'notSent']) {
+        expect(plan[key], `${locale}.quoteChanged.${key}`).toBeTruthy();
+      }
+      for (const key of ['body', 'filed']) {
+        expect(plan[key], `${locale}.quoteChanged.${key}`).toContain('{once}');
+        expect(plan[key], `${locale}.quoteChanged.${key}`).toContain('{monthly}');
+      }
+    }
   });
 });
 

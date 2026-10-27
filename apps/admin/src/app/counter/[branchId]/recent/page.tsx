@@ -11,7 +11,11 @@ export default async function RecentOrdersPage({ params }: Props) {
   // decides whether it may put paper in a printer. receipt.reprint is the right named for
   // this job and the matrix seeds it for `cashier` alone; this list is where a cashier
   // reprints without leaving the till.
-  const { supabase, branch, can } = await getBranchAccess(branchId, `/counter/${branchId}/recent`);
+  // Open while the subscription has ended for as long as orders placed before it are still being
+  // finished (owner decision 2026-10-27): they are looked up and reprinted here. Then it locks.
+  const { supabase, branch, can } = await getBranchAccess(branchId, `/counter/${branchId}/recent`, {
+    whileLocked: 'ordersInProgress',
+  });
   const { data: branchDetail } = await supabase
     .from('branches')
     .select('address, settings')

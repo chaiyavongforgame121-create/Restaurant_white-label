@@ -17,7 +17,7 @@
   "expiry": {
     "titleUnderDay": "Tu paquete está pagado hasta el {date}: queda menos de un día",
     "titleDays": "Tu paquete está pagado hasta el {date}: {days, plural, one {queda # día} other {quedan # días}}",
-    "body": "Después, la tienda en línea deja de recibir pedidos y el panel de administración se bloquea.",
+    "body": "Después, la tienda en línea deja de recibir pedidos y el panel de administración solo muestra Plan y facturación hasta que se renueve.",
     "renewHint": "La renovación es una solicitud que aprueba el equipo de FavorNoms, así que envíala antes de esa fecha.",
     "askOwner": "Pide al propietario del restaurante que lo renueve; la renovación es una solicitud que aprueba el equipo de FavorNoms.",
     "cta": "Renovar paquete"

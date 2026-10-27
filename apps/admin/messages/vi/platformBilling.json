@@ -283,9 +283,16 @@
     "newCode": "Mã mới",
     "emptyTitle": "Chưa có mã nào",
     "emptyBody": "Hãy tạo một mã khi bạn muốn bớt đi khoản nhà hàng phải trả lúc bắt đầu.",
+    "loadFailedTitle": "Không đọc được danh sách mã",
+    "loadFailedBody": "Điều này không có nghĩa là chưa có mã nào — danh sách chưa tải được. Hãy thử lại sau giây lát.",
+    "retry": "Thử lại",
     "givesPercent": "giảm {value}%",
     "givesFixed": "giảm {amount}",
     "appliesAll": "Mọi khoản trả một lần",
+    "charge": {
+      "firstSetup": "Phí thiết lập ban đầu",
+      "extraBranch": "Phí thiết lập chi nhánh thêm"
+    },
     "state": {
       "live": "Đang dùng được",
       "scheduled": "Bắt đầu sau",
@@ -302,7 +309,8 @@
     "usedUnlimited": "{count} (không giới hạn)",
     "usedOfMax": "{count} trên {max}",
     "perRestaurantValue": "{count, plural, other {# lần}}",
-    "reservedNote": "Thêm {amount} đang được giữ cho các yêu cầu chờ duyệt.",
+    "reservedNote": "Thêm {amount} đang được giữ cho các yêu cầu chờ duyệt hoặc chờ thanh toán bằng thẻ.",
+    "unsoldNote": "Mã này gồm một khoản không còn bán ({names}), nên không bao giờ được giảm vào khoản đó. Hãy sửa mã để bỏ khoản này.",
     "windowBetween": "{from} → {to}",
     "windowFrom": "Từ {from}, không có ngày kết thúc",
     "close": "Đóng",
@@ -319,6 +327,8 @@
     "usesUnavailable": "Không đọc được các lượt dùng của mã này.",
     "unknownRestaurant": "Nhà hàng đã xoá",
     "reserved": "Đã giữ · chờ duyệt",
+    "reservedPayment": "Đã giữ · chờ thanh toán bằng thẻ",
+    "reservedOpen": "Đã giữ · yêu cầu vẫn đang mở",
     "onRequest": "yêu cầu {id}",
     "form": {
       "newTitle": "Mã mới",
@@ -336,6 +346,8 @@
       "appliesTo": "Áp dụng cho",
       "appliesToHint": "Chọn những khoản trả một lần mà mã này giảm. Không chọn gì nghĩa là áp dụng cho tất cả.",
       "productChip": "{name} ({amount} một lần)",
+      "removeUnsold": "Bỏ {name}: khoản này không còn bán",
+      "unsoldHint": "Các khoản bị gạch ngang không còn bán, nên mã này không bao giờ giảm vào chúng. Nhấn vào một khoản để bỏ nó.",
       "maxRedemptions": "Tổng số lượt dùng",
       "maxRedemptionsHint": "Để trống nếu không giới hạn.",
       "perRestaurant": "Số lượt mỗi nhà hàng",
@@ -352,12 +364,14 @@
     "errors": {
       "codeRequired": "Hãy đặt tên cho mã.",
       "codeCharset": "Mã chỉ được chứa chữ cái, chữ số và dấu gạch ngang.",
+      "codeTooLong": "Mã dài tối đa 40 ký tự.",
       "codeDuplicate": "Mã này đã tồn tại. Hãy chọn mã khác.",
       "valueRequired": "Hãy đặt mức giảm của mã.",
       "percentRange": "Phần trăm không được lớn hơn 100.",
       "maxRedemptions": "Tổng số lượt dùng phải là số nguyên từ 1 trở lên, hoặc để trống.",
       "perRestaurantLimit": "Số lượt mỗi nhà hàng phải là số nguyên từ 1 trở lên.",
       "datesBackwards": "Ngày kết thúc trước ngày bắt đầu, nên mã sẽ không bao giờ dùng được.",
+      "productNotOneTime": "Mã này gồm một khoản không còn bán dưới dạng trả một lần, nên không bao giờ giảm được vào khoản đó. Hãy bỏ khoản bị gạch ngang rồi lưu lại.",
       "kindInvalid": "Máy chủ không chấp nhận loại giảm giá đó.",
       "notFound": "Mã này không còn nữa. Hãy tải lại trang."
     }

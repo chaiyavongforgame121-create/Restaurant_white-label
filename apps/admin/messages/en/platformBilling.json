@@ -283,9 +283,16 @@
     "newCode": "New code",
     "emptyTitle": "No codes yet",
     "emptyBody": "Create one when you want to take something off what a restaurant pays to start.",
+    "loadFailedTitle": "The codes could not be read",
+    "loadFailedBody": "This does not mean there are no codes — the list did not load. Try again in a moment.",
+    "retry": "Try again",
     "givesPercent": "{value}% off",
     "givesFixed": "{amount} off",
     "appliesAll": "All one-time charges",
+    "charge": {
+      "firstSetup": "First-time setup",
+      "extraBranch": "Additional branch setup"
+    },
     "state": {
       "live": "Live",
       "scheduled": "Starts later",
@@ -302,7 +309,8 @@
     "usedUnlimited": "{count} (no cap)",
     "usedOfMax": "{count} of {max}",
     "perRestaurantValue": "{count, plural, one {# time} other {# times}}",
-    "reservedNote": "{amount} more is held on requests waiting for approval.",
+    "reservedNote": "{amount} more is held on requests still waiting for approval or a card payment.",
+    "unsoldNote": "Names a charge that is no longer sold ({names}), so it never comes off it. Edit the code to remove it.",
     "windowBetween": "{from} → {to}",
     "windowFrom": "From {from}, no end date",
     "close": "Close",
@@ -319,6 +327,8 @@
     "usesUnavailable": "The redemptions for this code could not be read.",
     "unknownRestaurant": "Deleted restaurant",
     "reserved": "Reserved · waiting for approval",
+    "reservedPayment": "Reserved · waiting for card payment",
+    "reservedOpen": "Reserved · request still open",
     "onRequest": "request {id}",
     "form": {
       "newTitle": "New code",
@@ -336,6 +346,8 @@
       "appliesTo": "Applies to",
       "appliesToHint": "Pick the one-time charges it comes off. Nothing picked means every one of them.",
       "productChip": "{name} ({amount} once)",
+      "removeUnsold": "Remove {name}: it is no longer sold",
+      "unsoldHint": "Crossed-out charges are no longer sold, so this code never comes off them. Click one to remove it.",
       "maxRedemptions": "Total uses",
       "maxRedemptionsHint": "Leave blank for no cap.",
       "perRestaurant": "Uses per restaurant",
@@ -352,12 +364,14 @@
     "errors": {
       "codeRequired": "Give the code a name.",
       "codeCharset": "A code can only hold letters, digits and dashes.",
+      "codeTooLong": "A code can be at most 40 characters long.",
       "codeDuplicate": "That code already exists. Pick another one.",
       "valueRequired": "Set how much the code takes off.",
       "percentRange": "A percent cannot be more than 100.",
       "maxRedemptions": "Total uses must be a whole number of 1 or more, or blank.",
       "perRestaurantLimit": "Uses per restaurant must be a whole number of 1 or more.",
       "datesBackwards": "The end date is before the start date, so the code could never be used.",
+      "productNotOneTime": "This code names a charge that is not sold once any more, so it could never come off it. Remove the crossed-out charge and save again.",
       "kindInvalid": "The server does not accept that kind of discount.",
       "notFound": "That code no longer exists. Reload the page."
     }

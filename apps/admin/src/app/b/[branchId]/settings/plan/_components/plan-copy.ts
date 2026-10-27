@@ -196,6 +196,118 @@ export function discountAfterTyping<T extends { code: string }>(
   return applied.code === typed.trim().toUpperCase() ? applied : null;
 }
 
+/**
+ * The reason request_package_change refused the code with (`discount_invalid:<reason>`), or null
+ * when the failure was about something else.
+ *
+ * The code was priced when the merchant pressed Apply, and the server prices it again on
+ * submit: an operator may have switched it off, it may have run out or expired. The page then
+ * drops the applied discount — the green line and the discounted total must not outlive the
+ * code — and says why under the code box, where the code is.
+ */
+export function refusedCodeReason(raw: string): string | null {
+  const decoded = describeBillingError(raw);
+  return decoded?.kind === 'discount' ? decoded.reason : null;
+}
+
+// --- the price the merchant confirmed ----------------------------------------
+
+/**
+ * The two totals the merchant was shown — and confirmed — for the request about to be sent: what
+ * is paid once (net of the code) and the new monthly total.
+ *
+ * They are sent with the request. The server prices it again (the code as it is NOW, the catalog
+ * and the paid ledger as they are now) and refuses with `quote_changed` rather than file other
+ * figures; the page then shows the new ones and asks again. Without this a card on file could be
+ * charged an amount the merchant never saw: the dialog read $99.50, an operator cut the code from
+ * 50% to 10% in between, and the card was charged $179.10.
+ */
+export interface ConfirmedQuote {
+  oneTime: number;
+  monthly: number;
+}
+
+/** Money compared to the cent, the unit both the ledger and Stripe count in. */
+const cents = (n: number): number => Math.round((Number.isFinite(n) ? n : 0) * 100);
+
+/**
+ * Whether the request the server filed carries the figures the merchant confirmed. The page's
+ * own check, after the server's: a request filed at other figures is shown — never paid for —
+ * so the merchant confirms its real figures first.
+ */
+export function filedAsConfirmed(
+  confirmed: ConfirmedQuote,
+  filed: Pick<FiledRequest, 'oneTimeTotal' | 'monthlyTotal'>,
+): boolean {
+  return (
+    cents(confirmed.oneTime) === cents(filed.oneTimeTotal) &&
+    cents(confirmed.monthly) === cents(filed.monthlyTotal)
+  );
+}
+
+/**
+ * The price request_package_change worked out when it refused with `quote_changed`. A figure is
+ * null when the refusal did not carry it; the page then reads its prices again instead of
+ * quoting one it does not have.
+ */
+export interface QuoteChange {
+  oneTime: number | null;
+  monthly: number | null;
+}
+
+const QUOTE_CHANGED = /quote_changed/;
+
+/** A money figure, or null when there is none to read. */
+function figure(raw: unknown): number | null {
+  if (raw === null || raw === undefined || raw === '') return null;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+/**
+ * The `quote_changed` refusal, from whatever carried it: the thrown error (its message, or
+ * fields on it), or the refusal row itself. Null for every other failure.
+ */
+export function readQuoteChange(raw: unknown): QuoteChange | null {
+  const source =
+    raw !== null && typeof raw === 'object' ? (raw as Record<string, unknown>) : ({} as Record<string, unknown>);
+  const message =
+    raw instanceof Error
+      ? raw.message
+      : typeof raw === 'string'
+        ? raw
+        : [source.error, source.reason, source.message].filter((v) => typeof v === 'string').join(' ');
+  if (!QUOTE_CHANGED.test(message)) return null;
+  const nested = [source, source.quote, source.details].filter(
+    (v): v is Record<string, unknown> => v !== null && typeof v === 'object',
+  );
+  const pick = (...keys: string[]): number | null => {
+    for (const obj of nested) {
+      for (const key of keys) {
+        const n = figure(obj[key]);
+        if (n !== null) return n;
+      }
+    }
+    return null;
+  };
+  let oneTime = pick('oneTimeTotal', 'one_time_total', 'oneTime');
+  let monthly = pick('monthlyTotal', 'monthly_total', 'monthly');
+  // `quote_changed:<one-time>:<monthly>`, the shape a message alone can carry.
+  const inline = message.match(/quote_changed:(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)/);
+  if (inline) {
+    oneTime ??= figure(inline[1]);
+    monthly ??= figure(inline[2]);
+  }
+  return { oneTime, monthly };
+}
+
+/** The new figures, when the refusal carried both — the only case the page can quote them in. */
+export function quotedFigures(change: QuoteChange): ConfirmedQuote | null {
+  return change.oneTime !== null && change.monthly !== null
+    ? { oneTime: change.oneTime, monthly: change.monthly }
+    : null;
+}
+
 // --- a request the server refused --------------------------------------------
 
 /** The plan page's translator, narrowed to what this file needs from it. */
@@ -433,6 +545,8 @@ export function requestErrorMessage(
   // request_package_change refuses to replace a request whose card payment is waiting on
   // Stripe's invoice page (§9.3). The page shows that request with a Finish payment button.
   if (PAYMENT_IN_PROGRESS.test(raw)) return t('stripe.errors.paymentInProgress');
+  // The price moved between the page and the server: nothing was filed (see ConfirmedQuote).
+  if (QUOTE_CHANGED.test(raw)) return t('quoteChanged.notSent');
   return t('errors.sendFailed');
 }
 

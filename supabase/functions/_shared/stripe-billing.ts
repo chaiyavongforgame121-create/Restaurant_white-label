@@ -276,6 +276,13 @@ export interface ContextCharge {
   branch_id: string | null;
   /** billing_charges.net_amount in cents: after the platform's discount code, what is charged. */
   net_cents: number;
+  /**
+   * billing_charges.amount in cents: the list price the net amount was priced from. Only for the
+   * line's name (D12); the net amount when the context does not say.
+   */
+  list_cents: number;
+  /** The platform's code that took list_cents - net_cents off, for the line's name only. */
+  discount_code: string | null;
 }
 
 export interface ContextMonthlyLine {
@@ -329,6 +336,18 @@ function strOrNull(v: unknown): string | null {
   return typeof v === 'string' && v ? v : null;
 }
 
+/**
+ * A discount code as it may appear in a line's name on Stripe: upper-case letters, digits and
+ * dashes, at most 40 characters: the cap the console (DISCOUNT_CODE_MAX_LENGTH) and
+ * platform_create_discount_code (code_too_long) put on a new code. Anything else is left out of
+ * the name rather than shown to the merchant.
+ */
+function displayCode(v: unknown): string | null {
+  if (typeof v !== 'string') return null;
+  const code = v.trim().toUpperCase();
+  return /^[A-Z0-9][A-Z0-9-]{0,39}$/.test(code) ? code : null;
+}
+
 /** A Stripe id with the expected prefix that may go into a URL path, or null. */
 function stripeIdOrNull(v: unknown, prefix: string): string | null {
   return typeof v === 'string' && v.startsWith(prefix) && /^[A-Za-z0-9_]{3,255}$/.test(v)
@@ -364,7 +383,18 @@ export function parseCheckoutContext(
     const id = uuidOrNull(row.id);
     const net = cents(row.net_amount);
     if (!id || !isMonthlyCode(row.code) || !isCents(net)) return { ok: false, error: 'bad_charge' };
-    charges.push({ id, code: row.code, branch_id: uuidOrNull(row.branch_id), net_cents: net });
+    // The list price is only ever shown, never charged; one below the net amount is not a price
+    // anybody set, so the context is refused rather than shown to the merchant.
+    const list = row.amount === undefined || row.amount === null ? net : cents(row.amount);
+    if (!isCents(list) || list < net) return { ok: false, error: 'bad_charge' };
+    charges.push({
+      id,
+      code: row.code,
+      branch_id: uuidOrNull(row.branch_id),
+      net_cents: net,
+      list_cents: list,
+      discount_code: displayCode(row.discount_code),
+    });
   }
 
   const lines: ContextMonthlyLine[] = [];
@@ -429,30 +459,73 @@ export function oneTimeTotalCents(ctx: CheckoutContext): number {
 interface OneTimeGroup {
   code: MonthlyCode;
   unit_cents: number;
+  /** The list price per unit; unit_cents when nothing came off. */
+  list_cents: number;
+  discount_code: string | null;
   charge_ids: string[];
 }
 
 /**
  * Checkout and add_invoice_items each take at most 20 one-time lines, and a restaurant may add many
  * branches at once, so charges of the same product at the same net amount become one line with a
- * quantity. A $0 charge (a 100 % code) is not a line at all.
+ * quantity. A $0 charge (a 100 % code) is not a line at all. Charges that only share a net amount
+ * but not a list price or a code (never two lines of one request, which are priced from one
+ * catalog with one code) stay apart, so a line's name is true of every unit on it.
  */
 function oneTimeGroups(charges: ContextCharge[]): OneTimeGroup[] {
   const groups: OneTimeGroup[] = [];
   for (const code of MONTHLY_CODES) {
-    const byAmount = new Map<number, string[]>();
+    const byKey = new Map<string, OneTimeGroup>();
     for (const c of charges) {
       if (c.code !== code || c.net_cents <= 0) continue;
-      const ids = byAmount.get(c.net_cents) ?? [];
-      ids.push(c.id);
-      byAmount.set(c.net_cents, ids);
+      const key = `${c.net_cents}|${c.list_cents}|${c.discount_code ?? ''}`;
+      const group = byKey.get(key) ?? {
+        code,
+        unit_cents: c.net_cents,
+        list_cents: c.list_cents,
+        discount_code: c.discount_code,
+        charge_ids: [],
+      };
+      group.charge_ids.push(c.id);
+      byKey.set(key, group);
     }
-    for (const unit of [...byAmount.keys()].sort((a, b) => b - a)) {
-      groups.push({ code, unit_cents: unit, charge_ids: byAmount.get(unit) ?? [] });
-    }
+    groups.push(
+      ...[...byKey.values()].sort(
+        (a, b) =>
+          b.unit_cents - a.unit_cents ||
+          b.list_cents - a.list_cents ||
+          (a.discount_code ?? '').localeCompare(b.discount_code ?? ''),
+      ),
+    );
   }
   if (groups.length > 20) throw new BillingParamsError('too_many_one_time_lines');
   return groups;
+}
+
+/** US dollars as the plan page writes them: "$1,990.00". */
+function usd(centsValue: number): string {
+  const whole = Math.floor(centsValue / 100)
+    .toString()
+    .replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return `$${whole}.${String(centsValue % 100).padStart(2, '0')}`;
+}
+
+/**
+ * D12. What a discounted one-time line is called on Stripe's checkout page, invoice and receipt:
+ * the product, its list price and the code with what it took off, per unit, e.g. "FavorNoms Plan,
+ * first-time setup, list price $199.00 (code TEST50, −$99.50)". Null for a line charged at its
+ * list price, which keeps the product's own name.
+ */
+export function discountedLineName(
+  code: MonthlyCode,
+  unitCents: number,
+  listCents: number,
+  discountCode: string | null,
+): string | null {
+  if (!isCents(unitCents) || !isCents(listCents) || listCents <= unitCents) return null;
+  const product = PRODUCT_NAMES[setupProductId(code)] ?? setupProductId(code);
+  const off = `−${usd(listCents - unitCents)}`;
+  return `${product}, list price ${usd(listCents)} (${discountCode ? `code ${discountCode}, ${off}` : off})`;
 }
 
 export type PriceIds = Partial<Record<MonthlyCode, string>>;
@@ -531,7 +604,18 @@ export function checkoutSessionParams(
   if (i === 0) throw new BillingParamsError('no_monthly_line');
   for (const g of oneTimeGroups(ctx.charges)) {
     p[`line_items[${i}][price_data][currency]`] = CURRENCY;
-    p[`line_items[${i}][price_data][product]`] = setupProductId(g.code);
+    // D12. A Checkout line has no description of its own, so a discounted fee is sold as an
+    // inline product named for its list price and code (with the setup product's metadata);
+    // an undiscounted one stays on the setup product.
+    const name = discountedLineName(g.code, g.unit_cents, g.list_cents, g.discount_code);
+    if (name) {
+      p[`line_items[${i}][price_data][product_data][name]`] = name;
+      p[`line_items[${i}][price_data][product_data][metadata][product_code]`] = g.code;
+      p[`line_items[${i}][price_data][product_data][metadata][kind]`] = 'setup';
+      p[`line_items[${i}][price_data][product_data][metadata][purpose]`] = 'platform_billing';
+    } else {
+      p[`line_items[${i}][price_data][product]`] = setupProductId(g.code);
+    }
     p[`line_items[${i}][price_data][unit_amount]`] = String(g.unit_cents);
     p[`line_items[${i}][quantity]`] = String(g.charge_ids.length);
     i++;
@@ -548,6 +632,58 @@ export function sessionIsPaid(session: unknown): boolean {
     s.status === 'complete' &&
     (s.payment_status === 'paid' || s.payment_status === 'no_payment_required')
   );
+}
+
+// ---------------------------------------------------------------------------------------------
+// An abandoned Checkout (D2)
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * D2. The request an expired Checkout session was paying, when the session (re-read from Stripe)
+ * is one of ours that ran out unpaid: subscription mode, status expired, a request id and a
+ * customer. Null otherwise, and the request is then left alone.
+ */
+export function expiredCheckoutRequest(
+  session: unknown,
+): { requestId: string; restaurantId: string | null; customerId: string } | null {
+  if (!session || typeof session !== 'object') return null;
+  const s = session as Record<string, unknown>;
+  if (s.mode !== 'subscription' || s.status !== 'expired') return null;
+  const meta = (s.metadata ?? {}) as Record<string, unknown>;
+  const requestId = uuidOrNull(meta.billing_request_id);
+  const customerId = stripeIdOrNull(idOf(s.customer), 'cus_');
+  if (!requestId || !customerId) return null;
+  return { requestId, restaurantId: uuidOrNull(meta.restaurant_id), customerId };
+}
+
+/**
+ * D2. Whether the customer's open Checkout sessions (GET /v1/checkout/sessions?customer=…
+ * &status=open) hold another one for this request. stripe-billing opens the new session BEFORE it
+ * expires the old one and stores it only after, so the old one's expiry must not cancel the
+ * request the merchant is paying right now. Null when the answer cannot be trusted (not a list,
+ * or a page that may not be all of them): the request is then left for the stale-checkout sweep.
+ */
+export function otherOpenCheckout(
+  list: unknown,
+  requestId: string,
+  expiredSessionId: string,
+): boolean | null {
+  if (!list || typeof list !== 'object') return null;
+  const l = list as { data?: unknown; has_more?: unknown };
+  if (!Array.isArray(l.data)) return null;
+  const found = l.data.some((row) => {
+    const s = (row ?? {}) as Record<string, unknown>;
+    const meta = (s.metadata ?? {}) as Record<string, unknown>;
+    // Anything but expired counts: an open one can still be paid, a complete one was.
+    return (
+      typeof s.id === 'string' &&
+      s.id !== expiredSessionId &&
+      s.status !== 'expired' &&
+      meta.billing_request_id === requestId
+    );
+  });
+  if (found) return true;
+  return l.has_more === true ? null : false;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -734,7 +870,9 @@ export function targetItemParams(
  *
  *   - the full target (targetItemParams): every item with its target quantity, deleted at 0, a
  *     product the subscription lacks added at the catalog's recurring price;
- *   - the new one-time fees ride along as add_invoice_items at their NET amount;
+ *   - the new one-time fees ride along as add_invoice_items at their NET amount (add_invoice_items
+ *     takes neither a description nor product_data, so unlike Checkout and the fee invoice these
+ *     lines cannot name a discount code: they keep the setup product's name);
  *   - proration_behavior=always_invoice charges the difference NOW (and credits a removed branch,
  *     or a legacy delivery item, for its unused days);
  *   - payment_behavior=pending_if_incomplete applies the change only if that invoice is paid;
@@ -822,6 +960,9 @@ export function feeInvoiceItemParams(
       'metadata[billing_request_id]': ctx.request.id,
       'metadata[product_code]': g.code,
     };
+    // D12: the invoice line says what the fee was listed at and which code took what off.
+    const name = discountedLineName(g.code, g.unit_cents, g.list_cents, g.discount_code);
+    if (name) p.description = name;
     const only = g.charge_ids.length === 1 ? g.charge_ids[0] : undefined;
     if (only) p['metadata[billing_charge_id]'] = only;
     return p;

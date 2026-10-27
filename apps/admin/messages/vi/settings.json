@@ -117,6 +117,13 @@
       "notApplied": "Mã này chưa được áp dụng. Hãy nhấn Áp dụng để dùng mã, hoặc xóa ô này để gửi yêu cầu mà không dùng mã.",
       "onlyOnce": "Mã giảm giá chỉ trừ vào khoản trả một lần, không trừ vào hóa đơn hằng tháng."
     },
+    "quoteChanged": {
+      "title": "Giá đã thay đổi",
+      "body": "Từ lúc bạn mở trang này, giá đã thành {once} trả một lần và {monthly} mỗi tháng. Chưa có gì được gửi và chưa bị trừ tiền.",
+      "confirm": "Tiếp tục với giá mới",
+      "notSent": "Giá đã thay đổi từ lúc bạn mở trang này, nên chưa có gì được gửi và chưa bị trừ tiền. Các tổng bên dưới đã được cập nhật — hãy kiểm tra rồi nhấn nút lần nữa.",
+      "filed": "Yêu cầu của bạn đã được ghi nhận với {once} trả một lần và {monthly} mỗi tháng, khác với số trang này đã hiển thị, nên chưa bị trừ tiền. Hãy kiểm tra yêu cầu ở trên trước khi tiếp tục."
+    },
     "trial": {
       "active": "Đang dùng thử miễn phí",
       "endsToday": "Thời gian dùng thử miễn phí kết thúc hôm nay",
@@ -125,7 +132,7 @@
     },
     "suspended": {
       "title": "Tài khoản của bạn chưa hoạt động",
-      "body": "Trang đặt hàng đang ngừng và không nhận đơn mới. Không có dữ liệu nào bị xóa — chọn một gói bên dưới là mọi thứ trở lại ngay."
+      "body": "Trang đặt hàng đang ngừng, không nhận đơn mới và trang quản lý chỉ hiển thị trang này. Không có dữ liệu nào bị xóa — chọn một gói bên dưới là mọi thứ trở lại ngay."
     },
     "noTrial": {
       "title": "Nhà hàng này bắt đầu mà không có dùng thử miễn phí",

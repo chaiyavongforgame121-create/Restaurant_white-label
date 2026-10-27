@@ -8,6 +8,7 @@ import {
   listBillingRequests,
   listDiscountCodes,
   listDiscountRedemptions,
+  type DiscountCode,
   type DiscountRedemption,
 } from '@favornoms/database/queries';
 import { PlatformAccessDenied } from '../_components/platform-nav';
@@ -38,21 +39,28 @@ export default async function PlatformDiscountsPage() {
   // still pending is money promised, not money given away yet, and the card says which.
   // The server marks each row itself; the pending list is what answers for a read that does
   // not carry that mark (see isReservedUse()).
-  const [codes, catalog, pending] = await Promise.all([
+  const [codeRows, catalog, pending] = await Promise.all([
     listDiscountCodes(supabase),
     listBillingProducts(supabase, true),
     listBillingRequests(supabase, 'pending'),
   ]);
+  // Null when the list could not be read: the screen says so instead of "No codes yet".
+  const codes: DiscountCode[] | null = codeRows;
 
   // platform_list_discount_redemptions takes one code id, so the rows are fetched
   // per code — but only for codes that have actually been used. redemption_count
   // is the counter the redemption ledger itself maintains, so a code sitting at
   // zero cannot have rows to miss.
-  const used = codes.filter((c) => c.redemption_count > 0);
-  const lists = await Promise.all(used.map((c) => listDiscountRedemptions(supabase, c.id)));
-  const redemptions: Record<string, DiscountRedemption[]> = {};
+  //
+  // A failed read stays null. Turning it into [] made the card say "Given away $0" for a
+  // code that has given money away; null is what lets it say "—" instead.
+  const used = (codes ?? []).filter((c) => c.redemption_count > 0);
+  const lists: Array<DiscountRedemption[] | null> = await Promise.all(
+    used.map((c) => listDiscountRedemptions(supabase, c.id)),
+  );
+  const redemptions: Record<string, DiscountRedemption[] | null> = {};
   used.forEach((c, i) => {
-    redemptions[c.id] = lists[i] ?? [];
+    redemptions[c.id] = lists[i] ?? null;
   });
 
   return (
@@ -60,6 +68,9 @@ export default async function PlatformDiscountsPage() {
       codes={codes}
       redemptions={redemptions}
       pendingRequestIds={pending.map((r) => r.id)}
+      // A use held for a request the merchant is paying by card waits for that payment, not
+      // for anyone's approval.
+      cardRequestIds={pending.filter((r) => r.rail === 'stripe').map((r) => r.id)}
       catalog={catalog}
       nowMs={Date.now()}
     />

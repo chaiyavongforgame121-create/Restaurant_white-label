@@ -37,6 +37,21 @@ function landingPath(role: string, branchId: string): string {
 // silently changes which membership decides where a multi-role user lands.
 const ROLE_PRIORITY = ['owner', 'admin', 'manager', 'cashier', 'server', 'kitchen', 'staff', 'driver'];
 
+type ServerClient = Awaited<ReturnType<typeof getServerClient>>;
+
+/** The restaurant's first active branch: where a restaurant-wide membership lands. */
+async function firstActiveBranchId(supabase: ServerClient, restaurantId: string): Promise<string | null> {
+  const { data: branch } = await supabase
+    .from('branches')
+    .select('id')
+    .eq('restaurant_id', restaurantId)
+    .eq('is_active', true)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  return branch?.id ?? null;
+}
+
 export async function GET() {
   // A relative Location, resolved by the browser against the address it asked for. An absolute
   // one built from request.url named the host the server saw, which is not always the one in the
@@ -67,6 +82,19 @@ async function landing(): Promise<string> {
     // wizard that creates a restaurant of their own.
     const { data: pendingInvite } = await supabase.rpc('my_pending_staff_invite');
     if (pendingInvite) return `/invite/accept?staff_id=${pendingInvite}`;
+    // An owner known only through restaurants.owner_user_id has no staff row, yet my_capabilities
+    // gives them the owner set: they belong in their back office, not in the wizard that would
+    // make them a second restaurant (D10). The filter matters: restaurants_public_read shows every
+    // restaurant with a live branch to anyone.
+    const { data: owned } = await supabase
+      .from('restaurants')
+      .select('id')
+      .eq('owner_user_id', userData.user.id)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    const ownedBranchId = owned ? await firstActiveBranchId(supabase, owned.id) : null;
+    if (ownedBranchId) return landingPath('owner', ownedBranchId);
     return '/onboarding';
   }
 
@@ -77,15 +105,7 @@ async function landing(): Promise<string> {
 
   let branchId = chosen.branch_id as string | null;
   if (!branchId && chosen.restaurant_id) {
-    const { data: branch } = await supabase
-      .from('branches')
-      .select('id')
-      .eq('restaurant_id', chosen.restaurant_id)
-      .eq('is_active', true)
-      .order('created_at', { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    branchId = branch?.id ?? null;
+    branchId = await firstActiveBranchId(supabase, chosen.restaurant_id);
   }
 
   if (branchId) return landingPath(role, branchId);

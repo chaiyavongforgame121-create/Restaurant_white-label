@@ -80,15 +80,23 @@ import {
   cardStepErrorMessage,
   codeNeedsApplying,
   discountAfterTyping,
+  filedAsConfirmed,
   filedFacts,
   filedRequest,
   payOnceView,
   portalErrorMessage,
+  quotedFigures,
+  readQuoteChange,
+  refusedCodeReason,
   requestErrorMessage,
   showsFiledRequest,
+  type ConfirmedQuote,
   type FiledRequest,
   type PlanTranslator,
+  type QuoteChange,
 } from './plan-copy';
+// The lock screens' own button, so every "Check again" reads and behaves the same.
+import { CheckAgainButton, StillOpenLinks } from '@/components/suspension-screen';
 import {
   CHECKOUT_POLL_CAP_MS,
   CHECKOUT_POLL_MS,
@@ -181,6 +189,11 @@ interface Props {
   checkoutReturn: CheckoutReturn;
   /** `?portal=return`: back from Stripe's customer portal. */
   portalReturn: boolean;
+  /**
+   * While locked: the screens still open for orders placed before the end (the kitchen board,
+   * the till's Recent), for whoever may open them; null when none are.
+   */
+  stillOpen?: { branchId: string; kitchen: boolean; recent: boolean } | null;
 }
 
 /** What taking payment for a filed request led to, for the caller's busy state. */
@@ -217,6 +230,7 @@ export function PlanView({
   billing,
   checkoutReturn,
   portalReturn,
+  stillOpen = null,
 }: Props) {
   const t = useTranslations('settings.plan');
   const locale = usePlanLocale();
@@ -233,6 +247,9 @@ export function PlanView({
   );
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  // The price moved between this page and the server (quote_changed, or a request filed at other
+  // figures): said apart from the errors, because nothing failed and nothing was charged.
+  const [quoteNotice, setQuoteNotice] = React.useState<string | null>(null);
   const [code, setCode] = React.useState('');
   const [applied, setApplied] = React.useState<AppliedDiscount | null>(null);
   const [codeBusy, setCodeBusy] = React.useState(false);
@@ -588,6 +605,7 @@ export function PlanView({
     }
     setPaying(true);
     setError(null);
+    setQuoteNotice(null);
     setResult(null);
     const outcome = await payFor(id);
     if (outcome !== 'leaving') setPaying(false);
@@ -619,8 +637,10 @@ export function PlanView({
     setSel((s) => withSeats(s, n, minSeats));
   };
 
-  const applyCode = async () => {
-    const typed = code.trim();
+  const applyCode = () => priceCode(code.trim());
+
+  /** Ask the server to price `typed` against the selection on screen, and show its answer. */
+  const priceCode = async (typed: string) => {
     if (!typed) return;
     setCodeBusy(true);
     setCodeProblem(null);
@@ -722,23 +742,83 @@ export function PlanView({
       return;
     }
 
+    // The figures of the request being SENT go with it: the quote for this selection, with the
+    // code only if it is sent again. On every path but one that is what the page shows and the
+    // dialog above read out. The exception is "Send to the FavorNoms team instead" while a card
+    // request waits: the Pay-once box still shows THAT request (perhaps with a code the merchant
+    // did not apply again), and confirming its figures would be refused as quote_changed every time.
+    await fileAndPay({ oneTime: dueNow, monthly: totals.monthlyTotal });
+  };
+
+  /**
+   * The price moved between this page and the server (`quote_changed`): nothing was filed and
+   * nothing was charged. The page reads its prices again either way — the catalog, what is paid,
+   * and the code's own amount, so no line on it repeats the old figure. When the server said what
+   * the figures are now, the merchant is asked about THOSE, with what the card would be charged;
+   * yes sends the request again at them. Otherwise the page says what happened and the merchant
+   * presses the button again on the new totals.
+   */
+  const priceChanged = async (change: QuoteChange): Promise<ConfirmedQuote | null> => {
+    router.refresh();
+    if (applied) void priceCode(applied.code);
+    const next = quotedFigures(change);
+    if (next) {
+      const sentences = [
+        t('quoteChanged.body', { once: money(next.oneTime), monthly: money(next.monthly) }),
+      ];
+      if (byCard && onStripeRail) {
+        const c = cardCharge({
+          rail: billing.rail,
+          entitlements,
+          oneTimeNow: next.oneTime,
+          monthlyTotal: next.monthly,
+          nowMs,
+        });
+        sentences.push(...chargeSentences(c, next.monthly));
+      }
+      const ok = await confirm({
+        title: t('quoteChanged.title'),
+        body: sentences.join(' '),
+        confirmLabel: t('quoteChanged.confirm'),
+      });
+      if (ok) return next;
+    }
+    setQuoteNotice(t('quoteChanged.notSent'));
+    return null;
+  };
+
+  /**
+   * File the request at the figures the merchant confirmed and, with card billing, pay for THAT
+   * request. The server refuses with `quote_changed` rather than file other figures; and should a
+   * request come back filed at other figures all the same, it is shown and not paid for — its
+   * Continue to payment asks again in its own figures. No card is charged an amount the merchant
+   * did not see.
+   */
+  const fileAndPay = async (expected: ConfirmedQuote): Promise<void> => {
     setBusy(true);
     setError(null);
+    setQuoteNotice(null);
     setResult(null);
     setStartFailedFor(null);
     setUnconfirmedFor(null);
     // Checkout and Stripe's invoice page are followed in this tab; the button stays busy until
     // the browser has left, so it cannot be pressed twice on the way out.
     let leaving = false;
+    // Set when the merchant confirmed new figures after a quote_changed: sent again at those.
+    let confirmedAgain: ConfirmedQuote | null = null;
     try {
       const supabase = getBrowserClient();
-      const sentCode = submittableCode(sel, applied);
+      // An inline literal, so a key requestPackageChange does not take is a type error rather
+      // than a figure silently left out of the call.
       const row = await requestPackageChange(supabase, {
         restaurantId,
         selection: sel,
         // Only a code the server already accepted for this exact selection is sent. It
         // re-prices it anyway and refuses a stale one, which is decoded below.
-        discountCode: sentCode,
+        discountCode: submittableCode(sel, applied),
+        // What the merchant confirmed: the server files nothing else (quote_changed).
+        expectedOneTime: expected.oneTime,
+        expectedMonthly: expected.monthly,
       });
       // The row the server wrote, so the Pay-once box and the banner repeat ITS figures.
       //
@@ -753,6 +833,20 @@ export function PlanView({
         throw new Error(typeof refusal === 'string' && refusal ? refusal : 'request_not_filed');
       }
       setQueued(sent);
+      if (!filedAsConfirmed(expected, sent)) {
+        // Filed, but not at the figures the merchant confirmed (a server that did not compare
+        // them). It is shown in its own figures and NOT paid for: with card billing it waits on
+        // Continue to payment, which asks first in those figures.
+        setQuoteNotice(
+          t('quoteChanged.filed', {
+            once: money(sent.oneTimeTotal),
+            monthly: money(sent.monthlyTotal),
+          }),
+        );
+        if (byCard) setStartFailedFor(sent.id);
+        router.refresh();
+        return;
+      }
       if (!byCard) {
         router.refresh();
         return;
@@ -761,15 +855,29 @@ export function PlanView({
       // leaves it on the page with Continue to payment (payFor says why).
       leaving = (await payFor(sent.id)) === 'leaving';
     } catch (e) {
-      console.error('Sending the package request failed', e);
-      const raw = e instanceof Error ? e.message : '';
-      setError(raw ? requestErrorMessage(raw, t as PlanTranslator, locale) : t('errors.generic'));
-      // The waiting request is held on Stripe's invoice page (§9.3). A page drawn before that
-      // does not have the page's link yet; reading it again brings the Finish payment banner.
-      if (raw.includes('payment_in_progress')) router.refresh();
+      const change = readQuoteChange(e);
+      if (change) {
+        confirmedAgain = await priceChanged(change);
+      } else {
+        console.error('Sending the package request failed', e);
+        const raw = e instanceof Error ? e.message : '';
+        const refused = raw ? refusedCodeReason(raw) : null;
+        if (refused !== null) {
+          // The code no longer applies (switched off, expired, used up, or the guessing limit):
+          // the discount the page showed goes with it, and the reason is said under the code box.
+          setApplied(null);
+          setCodeProblem(discountReasonMessage(refused, locale));
+        } else {
+          setError(raw ? requestErrorMessage(raw, t as PlanTranslator, locale) : t('errors.generic'));
+        }
+        // The waiting request is held on Stripe's invoice page (§9.3). A page drawn before that
+        // does not have the page's link yet; reading it again brings the Finish payment banner.
+        if (raw.includes('payment_in_progress')) router.refresh();
+      }
     } finally {
       if (!leaving) setBusy(false);
     }
+    if (confirmedAgain) await fileAndPay(confirmedAgain);
   };
 
   const dirty = isDirty(sel, entitlements);
@@ -899,6 +1007,7 @@ export function PlanView({
 
       {suspended && noTrial && <NoTrialBanner byCard={byCard} />}
       {suspended && !noTrial && <SuspendedBanner />}
+      {suspended && stillOpen && <StillOpenLinks {...stillOpen} className="mb-4" />}
       {!suspended && onTrial && <TrialBanner days={trialDays} byCard={byCard} />}
       {!suspended && !onTrial && renewing && (
         <RenewBanner
@@ -936,6 +1045,16 @@ export function PlanView({
       {error && (
         <div className="mb-4 rounded-xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {error}
+        </div>
+      )}
+
+      {quoteNotice && (
+        <div role="status" className="mb-4 flex items-start gap-3 rounded-xl bg-warning/15 px-4 py-3 text-sm">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+          <div className="min-w-0">
+            <p className="font-semibold">{t('quoteChanged.title')}</p>
+            <p className="text-muted-foreground">{quoteNotice}</p>
+          </div>
         </div>
       )}
 
@@ -1376,6 +1495,11 @@ function TrialBanner({ days, byCard }: { days: number | null; byCard: boolean })
   );
 }
 
+/**
+ * The store is not active. "Check again" is here because a package the FavorNoms team approves
+ * by hand never reaches a page that is already open: reading it again is what brings the store —
+ * and the back office around this page — back.
+ */
 function SuspendedBanner() {
   const t = useTranslations('settings.plan.suspended');
   return (
@@ -1384,6 +1508,7 @@ function SuspendedBanner() {
       <div>
         <p className="font-semibold">{t('title')}</p>
         <p className="opacity-90">{t('body')}</p>
+        <CheckAgainButton size="sm" className="mt-2" />
       </div>
     </div>
   );
@@ -1420,6 +1545,8 @@ function NoTrialBanner({ byCard }: { byCard: boolean }) {
       <div>
         <p className="font-semibold">{t('title')}</p>
         <p className="text-muted-foreground">{byCard ? stripe('noTrialBody') : t('body')}</p>
+        {/* Not active either: the same way to see an approval that just happened. */}
+        <CheckAgainButton size="sm" className="mt-2" />
       </div>
     </div>
   );

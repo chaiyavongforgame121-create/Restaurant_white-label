@@ -22,7 +22,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
-import { Plus, Save, Ticket } from 'lucide-react';
+import { AlertTriangle, Plus, RotateCcw, Save, Ticket, X } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
 import {
   createDiscountCode,
@@ -41,6 +41,7 @@ import { Badge, Button, Card, EmptyState, useConfirm } from '@favornoms/ui';
 import { PlatformNav } from '../../_components/platform-nav';
 import { formatMoney } from '../../_components/platform-billing';
 import {
+  DISCOUNT_CODE_MAX_LENGTH,
   EMPTY_DRAFT,
   codeState,
   draftFrom,
@@ -48,8 +49,11 @@ import {
   draftToPatch,
   normalizeCode,
   isReservedUse,
+  oneTimeChargeKey,
   remainingRedemptions,
+  reservationWait,
   splitRedemptions,
+  unsoldProducts,
   validateDraft,
   writeErrorKey,
   type CodeState,
@@ -70,6 +74,13 @@ const STATE_VARIANT: Record<CodeState, 'success' | 'warning' | 'muted'> = {
   inactive: 'muted',
 };
 
+/** The badge on a reserved use, by what it waits for (reservationWait). */
+const RESERVED_BADGE = {
+  payment: 'discounts.reservedPayment',
+  approval: 'discounts.reserved',
+  open: 'discounts.reservedOpen',
+} as const;
+
 // Same day on server and browser: Vercel runs in UTC and the operator's browser
 // does not, and the date inputs on this screen are read as UTC too.
 const fmtDate = (v: string | null | undefined, locale: UiLocale) =>
@@ -87,18 +98,39 @@ function useUiLocale(): UiLocale {
   return isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE;
 }
 
+type ConsoleT = ReturnType<typeof useTranslations>;
+
+/**
+ * A product a code can name, as the console says it: the one-time CHARGE it comes off ("First-time
+ * setup", "Additional branch setup", in the reader's language), the catalog's own name for
+ * anything else, and the bare code for a product the catalog no longer has.
+ */
+function chargeName(t: ConsoleT, catalog: BillingProduct[], code: string): string {
+  const product = catalog.find((p) => p.code === code);
+  if (!product) return code;
+  const key = oneTimeChargeKey(product);
+  return key ? t(`discounts.charge.${key}`) : product.name;
+}
+
 export function DiscountsManager({
   codes,
   redemptions,
   pendingRequestIds,
+  cardRequestIds,
   catalog,
   nowMs,
 }: {
-  codes: DiscountCode[];
-  /** Keyed by code id. A code with no uses is absent, not empty. */
-  redemptions: Record<string, DiscountRedemption[]>;
-  /** Requests still waiting for approval: a use tied to one is reserved, not yet given. */
+  /** Null when the list could not be read — not the same thing as no codes. */
+  codes: DiscountCode[] | null;
+  /**
+   * Keyed by code id. A code with no uses is absent; a code whose uses could not be read is
+   * null, so its card says "—" rather than "$0" given away.
+   */
+  redemptions: Record<string, DiscountRedemption[] | null>;
+  /** Requests still waiting: a use tied to one is reserved, not yet given. */
   pendingRequestIds: string[];
+  /** The pending requests the merchant is paying by card: they wait for a payment, not approval. */
+  cardRequestIds: string[];
   /** The whole catalog, withdrawn products included, so an old code's product
    *  list can still be named. Prices come from here and nowhere else. */
   catalog: BillingProduct[];
@@ -113,8 +145,9 @@ export function DiscountsManager({
   // Only products with a one-time price can be discounted at all, and only the
   // active ones are worth offering on a new code.
   const oneTimeProducts = catalog.filter((p) => p.one_time_price > 0 && p.is_active);
-  const taken = codes.map((c) => c.code);
+  const taken = (codes ?? []).map((c) => c.code);
   const pendingIds = React.useMemo(() => new Set(pendingRequestIds), [pendingRequestIds]);
+  const cardIds = React.useMemo(() => new Set(cardRequestIds), [cardRequestIds]);
 
   return (
     <div className="container max-w-5xl py-8">
@@ -150,6 +183,7 @@ export function DiscountsManager({
               draft={EMPTY_DRAFT}
               isNew
               taken={taken}
+              catalog={catalog}
               oneTimeProducts={oneTimeProducts}
               onCancel={() => setCreating(false)}
               onError={setError}
@@ -161,7 +195,26 @@ export function DiscountsManager({
           </Card>
         )}
 
-        {codes.length === 0 && !creating ? (
+        {codes === null ? (
+          // The read failed. "No codes yet" here would tell the operator that every code they
+          // ever handed out is gone.
+          <Card className="flex flex-wrap items-start gap-3 p-5">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" aria-hidden />
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold">{t('discounts.loadFailedTitle')}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{t('discounts.loadFailedBody')}</p>
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-3"
+                leftIcon={<RotateCcw className="h-4 w-4" />}
+                onClick={() => router.refresh()}
+              >
+                {t('discounts.retry')}
+              </Button>
+            </div>
+          </Card>
+        ) : codes.length === 0 && !creating ? (
           <EmptyState
             icon={<Ticket className="h-7 w-7" aria-hidden />}
             title={t('discounts.emptyTitle')}
@@ -175,6 +228,7 @@ export function DiscountsManager({
               code={code}
               redemptions={redemptions[code.id] ?? null}
               pendingIds={pendingIds}
+              cardIds={cardIds}
               taken={taken}
               catalog={catalog}
               oneTimeProducts={oneTimeProducts}
@@ -192,6 +246,7 @@ function CodeCard({
   code,
   redemptions,
   pendingIds,
+  cardIds,
   taken,
   catalog,
   oneTimeProducts,
@@ -199,9 +254,13 @@ function CodeCard({
   onError,
 }: {
   code: DiscountCode;
-  /** null means this code has never been used, so nothing was read for it. */
+  /**
+   * null when nothing was read for this code: it has never been used, or the read failed. Its
+   * redemption_count tells the two apart.
+   */
   redemptions: DiscountRedemption[] | null;
   pendingIds: ReadonlySet<string>;
+  cardIds: ReadonlySet<string>;
   taken: string[];
   catalog: BillingProduct[];
   oneTimeProducts: BillingProduct[];
@@ -238,9 +297,9 @@ function CodeCard({
   const appliesTo =
     code.product_codes.length === 0
       ? t('discounts.appliesAll')
-      : code.product_codes
-          .map((c) => catalog.find((p) => p.code === c)?.name ?? c)
-          .join(', ');
+      : code.product_codes.map((c) => chargeName(t, catalog, c)).join(', ');
+  // Products the code names that are not sold one-time any more: it can never come off them.
+  const unsold = unsoldProducts(code.product_codes, catalog);
 
   const starts = fmtDate(code.starts_at, locale);
   const ends = fmtDate(code.ends_at, locale);
@@ -312,6 +371,16 @@ function CodeCard({
           {t('discounts.reservedNote', { amount: money(reservedAmount) })}
         </p>
       )}
+      {unsold.length > 0 && (
+        <p className="mt-2 flex items-start gap-1.5 text-xs text-warning">
+          <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
+          <span>
+            {t('discounts.unsoldNote', {
+              names: unsold.map((c) => chargeName(t, catalog, c)).join(', '),
+            })}
+          </span>
+        </p>
+      )}
       <p className="mt-2 text-xs text-muted-foreground">{windowText}</p>
 
       <div className="mt-3 flex flex-wrap gap-4">
@@ -343,7 +412,9 @@ function CodeCard({
         </button>
       </div>
 
-      {showUses && <Redemptions rows={redemptions} pendingIds={pendingIds} locale={locale} />}
+      {showUses && (
+        <Redemptions rows={redemptions} pendingIds={pendingIds} cardIds={cardIds} locale={locale} />
+      )}
 
       {editing && (
         <div className="mt-4 border-t border-border pt-4">
@@ -351,6 +422,7 @@ function CodeCard({
             draft={draftFrom(code)}
             codeId={code.id}
             taken={taken}
+            catalog={catalog}
             oneTimeProducts={oneTimeProducts}
             onCancel={() => setEditing(false)}
             onError={onError}
@@ -369,10 +441,12 @@ function CodeCard({
 function Redemptions({
   rows,
   pendingIds,
+  cardIds,
   locale,
 }: {
   rows: DiscountRedemption[] | null;
   pendingIds: ReadonlySet<string>;
+  cardIds: ReadonlySet<string>;
   locale: UiLocale;
 }) {
   const t = useTranslations('platformBilling');
@@ -403,9 +477,12 @@ function Redemptions({
               </p>
             </div>
             {isReservedUse(r, pendingIds) ? (
-              // Held for a request that is still waiting: given back if it is rejected.
+              // Held for a request that is still waiting: given back if it is rejected, or if
+              // the card payment it waits for is cancelled.
               <span className="flex items-center gap-2">
-                <Badge variant="warning">{t('discounts.reserved')}</Badge>
+                <Badge variant="warning">
+                  {t(RESERVED_BADGE[reservationWait(r, pendingIds, cardIds)])}
+                </Badge>
                 <span className="tabular-nums text-muted-foreground">
                   −{formatMoney(r.amount_off)}
                 </span>
@@ -425,6 +502,7 @@ function CodeEditor({
   codeId,
   isNew,
   taken,
+  catalog,
   oneTimeProducts,
   onSaved,
   onError,
@@ -435,16 +513,23 @@ function CodeEditor({
   codeId?: string;
   isNew?: boolean;
   taken: string[];
+  /** The whole catalog, to name a product the code still lists but that is no longer sold. */
+  catalog: BillingProduct[];
   oneTimeProducts: BillingProduct[];
   onSaved: () => void;
   onError: (m: string | null) => void;
   onCancel: () => void;
 }) {
   const t = useTranslations('platformBilling');
+  // The form as it opened: an edit sends only what differs from it (draftToPatch).
+  const [opened] = React.useState<DraftCode>(initial);
   const [d, setD] = React.useState<DraftCode>(initial);
   const [problems, setProblems] = React.useState<DraftError[]>([]);
   const [saving, setSaving] = React.useState(false);
   const set = (patch: Partial<DraftCode>) => setD((v) => ({ ...v, ...patch }));
+  // Products this code names that the chips below do not offer (withdrawn, or no longer sold
+  // one-time). They are shown struck through, so the operator can see them and take them off.
+  const unsold = unsoldProducts(d.productCodes, catalog);
 
   const toggleProduct = (code: string) =>
     setD((v) => ({
@@ -465,7 +550,11 @@ function CodeEditor({
       if (isNew) {
         await createDiscountCode(getBrowserClient(), draftToInput(d));
       } else if (codeId) {
-        await updateDiscountCode(getBrowserClient(), codeId, draftToPatch(d));
+        const patch = draftToPatch(d, opened);
+        // Nothing changed: nothing to send, and nothing for a colleague's edit to lose.
+        if (Object.keys(patch).length > 0) {
+          await updateDiscountCode(getBrowserClient(), codeId, patch);
+        }
       }
       onSaved();
     } catch (e) {
@@ -497,6 +586,7 @@ function CodeEditor({
           <input
             type="text"
             value={d.code}
+            maxLength={DISCOUNT_CODE_MAX_LENGTH}
             disabled={!isNew}
             // Upper-cased as it is typed, because that is what is stored and
             // compared — seeing it change later reads as the form editing itself.
@@ -586,13 +676,31 @@ function CodeEditor({
                 }`}
               >
                 {t('discounts.form.productChip', {
-                  name: p.name,
+                  name: chargeName(t, catalog, p.code),
                   amount: money(p.one_time_price),
                 })}
               </button>
             );
           })}
+          {unsold.map((c) => {
+            const name = chargeName(t, catalog, c);
+            return (
+              <button
+                key={c}
+                type="button"
+                aria-label={t('discounts.form.removeUnsold', { name })}
+                onClick={() => toggleProduct(c)}
+                className="focus-ring inline-flex items-center gap-1 rounded-full border border-warning/60 bg-warning/10 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-warning/20"
+              >
+                <span className="line-through">{name}</span>
+                <X className="h-3 w-3" aria-hidden />
+              </button>
+            );
+          })}
         </div>
+        {unsold.length > 0 && (
+          <p className="mt-2 text-[11px] text-warning">{t('discounts.form.unsoldHint')}</p>
+        )}
       </fieldset>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

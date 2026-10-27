@@ -17,7 +17,7 @@
   "expiry": {
     "titleUnderDay": "Gói của bạn đã thanh toán đến {date} — còn chưa đến một ngày",
     "titleDays": "Gói của bạn đã thanh toán đến {date} — {days, plural, other {còn # ngày}}",
-    "body": "Sau thời điểm đó, cửa hàng trực tuyến ngừng nhận đơn và trang quản trị bị khóa.",
+    "body": "Sau thời điểm đó, cửa hàng trực tuyến ngừng nhận đơn và trang quản trị chỉ hiển thị Gói và thanh toán cho đến khi được gia hạn.",
     "renewHint": "Gia hạn là yêu cầu do đội ngũ FavorNoms duyệt, vì vậy hãy gửi trước ngày này.",
     "askOwner": "Hãy nhờ chủ nhà hàng gia hạn; gia hạn là yêu cầu do đội ngũ FavorNoms duyệt.",
     "cta": "Gia hạn gói"

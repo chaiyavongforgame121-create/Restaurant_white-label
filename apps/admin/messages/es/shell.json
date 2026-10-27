@@ -82,7 +82,8 @@
   "platformBanner": {
     "title": "Vista de administrador de la plataforma",
     "body": "No formas parte del personal de {branch}. Cada cambio que hagas aquí queda registrado a nombre de tu cuenta.",
-    "back": "Volver a la plataforma"
+    "back": "Volver a la plataforma",
+    "suspended": "La suscripción de este restaurante ha terminado: su personal solo ve Plan y facturación y su tienda en línea está cerrada."
   },
   "suspension": {
     "title": "Suscripción inactiva",
@@ -95,8 +96,23 @@
       "screen": "Esta pantalla está bloqueada en esta sucursal porque la suscripción venció."
     },
     "nothingDeleted": "No se eliminó ningún dato: al elegir un paquete, todo se restablece de inmediato.",
-    "kitchenStillWorks": "Los pedidos ya realizados se pueden seguir preparando y completando desde la pantalla de cocina.",
+    "kitchenStillWorks": "Los pedidos ya realizados aún pueden terminarse en la pantalla de cocina.",
     "goToBilling": "Ir a facturación"
+  },
+  "subscriptionLocked": {
+    "title": "La suscripción ha terminado",
+    "sidebarNote": "Todo lo demás queda en pausa hasta que se renueve el plan. No se borró nada.",
+    "checkAgain": "Comprobar de nuevo",
+    "checking": "Comprobando…",
+    "askOwner": "La suscripción de {branch} ha terminado, así que esta pantalla está en pausa. Solo el propietario del restaurante puede renovarla, desde Plan y facturación en el panel de administración. No se borró nada: todo vuelve en cuanto se renueve.",
+    "finishOrdersTitle": "La suscripción ha terminado: termina los pedidos ya realizados.",
+    "finishOrdersBody": "Ya no pueden entrar pedidos nuevos. Esta pantalla sigue abierta hasta que se terminen los pedidos en curso y después también queda en pausa.",
+    "stillOpen": "Las cuentas de mesa y los comprobantes de transferencia esperan a que se renueve el plan. Los pedidos realizados antes de que terminara aún pueden prepararse y entregarse en:"
+  },
+  "subscriptionUnknown": {
+    "title": "No se pudo comprobar la suscripción.",
+    "body": "No se bloqueó nada; las funciones que dependen del plan siguen ocultas hasta que la comprobación funcione.",
+    "retry": "Reintentar"
   },
   "upload": {
     "noCanvas": "Tu navegador no pudo procesar la imagen (no admite canvas)."

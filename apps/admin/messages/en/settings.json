@@ -117,6 +117,13 @@
       "notApplied": "This code has not been applied. Press Apply to use it, or clear the box to send the request without it.",
       "onlyOnce": "A code comes off what you pay once, never off the monthly bill."
     },
+    "quoteChanged": {
+      "title": "The price has changed",
+      "body": "Since you opened this page the price became {once} once and {monthly} a month. Nothing was sent and nothing was charged.",
+      "confirm": "Continue at the new price",
+      "notSent": "The price changed since you opened this page, so nothing was sent and nothing was charged. The totals below are up to date now — check them and press the button again.",
+      "filed": "Your request was filed at {once} once and {monthly} a month, which is not what this page showed, so nothing was charged. Check it above before you go on."
+    },
     "trial": {
       "active": "Free trial active",
       "endsToday": "Your free trial ends today",
@@ -125,7 +132,7 @@
     },
     "suspended": {
       "title": "Your account is not active",
-      "body": "Your storefront is offline and new orders are blocked. Nothing has been deleted — choose a package below and everything comes straight back."
+      "body": "Your storefront is offline, new orders are blocked and the back office shows only this page. Nothing has been deleted — choose a package below and everything comes straight back."
     },
     "noTrial": {
       "title": "This restaurant starts without a free trial",

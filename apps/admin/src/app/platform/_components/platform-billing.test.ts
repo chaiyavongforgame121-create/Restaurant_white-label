@@ -83,6 +83,12 @@ describe('formatMoney', () => {
     expect(formatMoney(39.6)).toBe('$39.60');
   });
 
+  it('groups thousands exactly as the merchant’s plan page does', () => {
+    expect(formatMoney(1990)).toBe('$1,990');
+    expect(formatMoney(1234.5)).toBe('$1,234.50');
+    expect(formatMoney(999)).toBe('$999');
+  });
+
   it('never renders NaN at an operator', () => {
     expect(formatMoney(Number.NaN)).toBe('$0');
   });

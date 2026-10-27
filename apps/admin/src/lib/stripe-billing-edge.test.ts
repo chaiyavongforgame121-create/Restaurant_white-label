@@ -255,9 +255,24 @@ describe('the request context', () => {
   it('parses what billing_checkout_context answers', () => {
     const ctx = ctxOf();
     expect(ctx.request.id).toBe(REQ);
+    // A context without the list price (an older billing_checkout_context) reads as undiscounted.
     expect(ctx.charges).toEqual([
-      { id: CH_BASE, code: 'base', branch_id: null, net_cents: 19900 },
-      { id: CH_B2, code: 'extra_branch', branch_id: BRANCH_2, net_cents: 8900 },
+      {
+        id: CH_BASE,
+        code: 'base',
+        branch_id: null,
+        net_cents: 19900,
+        list_cents: 19900,
+        discount_code: null,
+      },
+      {
+        id: CH_B2,
+        code: 'extra_branch',
+        branch_id: BRANCH_2,
+        net_cents: 8900,
+        list_cents: 8900,
+        discount_code: null,
+      },
     ]);
     expect(ctx.monthly_lines).toEqual([
       { code: 'base', quantity: 1, unit_amount_cents: 4900 },
@@ -458,6 +473,258 @@ describe('first purchase: the Checkout session', () => {
     expect(billing.portalReturnUrl('https://admin.favornoms.com', 'b 1')).toBe(
       'https://admin.favornoms.com/b/b%201/settings/plan?portal=return',
     );
+  });
+});
+
+describe('a discount code on Stripe (D12)', () => {
+  /** TEST50 on the setup and one extra branch, as billing_checkout_context now answers it. */
+  const discounted = () =>
+    ctxOf({
+      charges: [
+        {
+          id: CH_BASE,
+          code: 'base',
+          branch_id: null,
+          net_amount: '99.50',
+          amount: '199.00',
+          discount_code: 'TEST50',
+          discount_amount: '99.50',
+        },
+        {
+          id: CH_B2,
+          code: 'extra_branch',
+          branch_id: BRANCH_2,
+          net_amount: '44.50',
+          amount: 89,
+          discount_code: 'test50 ',
+          discount_amount: 44.5,
+        },
+      ],
+    });
+
+  it("reads each charge's list price and code; refuses a list price below the net amount", () => {
+    expect(discounted().charges).toEqual([
+      {
+        id: CH_BASE,
+        code: 'base',
+        branch_id: null,
+        net_cents: 9950,
+        list_cents: 19900,
+        discount_code: 'TEST50',
+      },
+      {
+        id: CH_B2,
+        code: 'extra_branch',
+        branch_id: BRANCH_2,
+        net_cents: 4450,
+        list_cents: 8900,
+        discount_code: 'TEST50',
+      },
+    ]);
+    const parsed = (charge: Record<string, unknown>) =>
+      billing.parseCheckoutContext(
+        rawContext({ charges: [{ id: CH_BASE, code: 'base', ...charge }] }),
+      );
+    expect(parsed({ net_amount: '199.00', amount: '99.50' })).toEqual({
+      ok: false,
+      error: 'bad_charge',
+    });
+    expect(parsed({ net_amount: '99.50', amount: 'list' })).toEqual({
+      ok: false,
+      error: 'bad_charge',
+    });
+    // A code that could not have come from the console is left out of the name, never shown.
+    const odd = parsed({ net_amount: '99.50', amount: '199.00', discount_code: 'half off <b>' });
+    expect(odd.ok && odd.ctx.charges[0]?.discount_code).toBeNull();
+  });
+
+  it('names a discounted line by its list price and code, per unit', () => {
+    expect(billing.discountedLineName('base', 9950, 19900, 'TEST50')).toBe(
+      'FavorNoms Plan, first-time setup, list price $199.00 (code TEST50, −$99.50)',
+    );
+    expect(billing.discountedLineName('extra_branch', 5934, 8900, 'P33')).toBe(
+      'Additional branch setup, list price $89.00 (code P33, −$29.66)',
+    );
+    expect(billing.discountedLineName('base', 99500, 199000, null)).toBe(
+      'FavorNoms Plan, first-time setup, list price $1,990.00 (−$995.00)',
+    );
+    // Charged at its list price: the product keeps its own name.
+    expect(billing.discountedLineName('base', 19900, 19900, 'TEST50')).toBeNull();
+    expect(billing.discountedLineName('base', 19900, 19900, null)).toBeNull();
+  });
+
+  it('sells a discounted Checkout line under that name, at the net amount; an undiscounted one stays on the setup product', () => {
+    const ctx = discounted();
+    ctx.charges.push({
+      id: CH_B3,
+      code: 'extra_branch',
+      branch_id: BRANCH_3,
+      net_cents: 8900,
+      list_cents: 8900,
+      discount_code: null,
+    });
+    const params = billing.checkoutSessionParams(ctx, 'cus_1', PRICES, URLS, null);
+    const lines = Object.fromEntries(
+      Object.entries(params).filter(([k]) => /^line_items\[[2-9]\]/.test(k)),
+    );
+    expect(lines).toEqual({
+      'line_items[2][price_data][currency]': 'usd',
+      'line_items[2][price_data][product_data][name]':
+        'FavorNoms Plan, first-time setup, list price $199.00 (code TEST50, −$99.50)',
+      'line_items[2][price_data][product_data][metadata][product_code]': 'base',
+      'line_items[2][price_data][product_data][metadata][kind]': 'setup',
+      'line_items[2][price_data][product_data][metadata][purpose]': 'platform_billing',
+      'line_items[2][price_data][unit_amount]': '9950',
+      'line_items[2][quantity]': '1',
+      'line_items[3][price_data][currency]': 'usd',
+      'line_items[3][price_data][product]': 'favornoms_extra_branch_setup',
+      'line_items[3][price_data][unit_amount]': '8900',
+      'line_items[3][quantity]': '1',
+      'line_items[4][price_data][currency]': 'usd',
+      'line_items[4][price_data][product_data][name]':
+        'Additional branch setup, list price $89.00 (code TEST50, −$44.50)',
+      'line_items[4][price_data][product_data][metadata][product_code]': 'extra_branch',
+      'line_items[4][price_data][product_data][metadata][kind]': 'setup',
+      'line_items[4][price_data][product_data][metadata][purpose]': 'platform_billing',
+      'line_items[4][price_data][unit_amount]': '4450',
+      'line_items[4][quantity]': '1',
+    });
+    // Still nothing Stripe would read as its own discount.
+    expect(Object.keys(params).some((k) => k.includes('promotion') || k.includes('discount'))).toBe(
+      false,
+    );
+  });
+
+  it('keeps fees with the same net amount but another list price or code on lines of their own', () => {
+    const ctx = ctxOf({
+      charges: [
+        { id: CH_B2, code: 'extra_branch', net_amount: '59.34', amount: 89, discount_code: 'P33' },
+        { id: CH_B3, code: 'extra_branch', net_amount: '59.33', amount: 89, discount_code: 'P33' },
+        {
+          id: '33333333-3333-4333-8333-333333333334',
+          code: 'extra_branch',
+          net_amount: '59.34',
+          amount: '59.34',
+        },
+      ],
+    });
+    const params = billing.checkoutSessionParams(ctx, 'cus_1', PRICES, URLS, null);
+    expect(params['line_items[2][price_data][product_data][name]']).toBe(
+      'Additional branch setup, list price $89.00 (code P33, −$29.66)',
+    );
+    expect(params['line_items[2][price_data][unit_amount]']).toBe('5934');
+    expect(params['line_items[2][quantity]']).toBe('1');
+    expect(params['line_items[3][price_data][product]']).toBe('favornoms_extra_branch_setup');
+    expect(params['line_items[3][price_data][unit_amount]']).toBe('5934');
+    expect(params['line_items[3][quantity]']).toBe('1');
+    expect(params['line_items[4][price_data][product_data][name]']).toBe(
+      'Additional branch setup, list price $89.00 (code P33, −$29.67)',
+    );
+    expect(params['line_items[4][price_data][unit_amount]']).toBe('5933');
+    expect(params['line_items[5][quantity]']).toBeUndefined();
+  });
+
+  it('describes a discounted fee on the fee invoice; a change update cannot, and is sent as before', () => {
+    const ctx = discounted();
+    const items = billing.feeInvoiceItemParams(ctx, 'cus_1', 'in_fee');
+    expect(items.map((i) => i.description)).toEqual([
+      'FavorNoms Plan, first-time setup, list price $199.00 (code TEST50, −$99.50)',
+      'Additional branch setup, list price $89.00 (code TEST50, −$44.50)',
+    ]);
+    expect(items[0]?.['price_data[product]']).toBe('favornoms_base_setup');
+    expect(items[0]?.['price_data[unit_amount]']).toBe('9950');
+    expect(
+      billing.feeInvoiceItemParams(ctxOf(), 'cus_1', 'in_fee')[0]?.description,
+    ).toBeUndefined();
+
+    const update = billing.subscriptionUpdateParams(
+      { ...ctx, stripe_managed: true },
+      { base: { id: 'si_base', quantity: 1 } },
+      PRICES,
+    );
+    expect(update['add_invoice_items[0][price_data][product]']).toBe('favornoms_base_setup');
+    expect(update['add_invoice_items[0][price_data][unit_amount]']).toBe('9950');
+    expect(
+      Object.keys(update).some((k) => k.includes('description') || k.includes('product_data')),
+    ).toBe(false);
+  });
+});
+
+describe('a Checkout that expired unpaid (D2)', () => {
+  const expired = (over: Record<string, unknown> = {}) => ({
+    id: 'cs_old',
+    object: 'checkout.session',
+    mode: 'subscription',
+    status: 'expired',
+    customer: 'cus_1',
+    metadata: { billing_request_id: REQ, restaurant_id: RID },
+    ...over,
+  });
+
+  it('names the request of one of ours that ran out unpaid, and nothing else', () => {
+    expect(billing.expiredCheckoutRequest(expired())).toEqual({
+      requestId: REQ,
+      restaurantId: RID,
+      customerId: 'cus_1',
+    });
+    expect(
+      billing.expiredCheckoutRequest(
+        expired({ customer: { id: 'cus_2' }, metadata: { billing_request_id: REQ } }),
+      ),
+    ).toEqual({
+      requestId: REQ,
+      restaurantId: null,
+      customerId: 'cus_2',
+    });
+    expect(billing.expiredCheckoutRequest(expired({ status: 'open' }))).toBeNull();
+    expect(billing.expiredCheckoutRequest(expired({ status: 'complete' }))).toBeNull();
+    expect(billing.expiredCheckoutRequest(expired({ mode: 'payment' }))).toBeNull();
+    expect(billing.expiredCheckoutRequest(expired({ metadata: {} }))).toBeNull();
+    expect(billing.expiredCheckoutRequest(expired({ customer: null }))).toBeNull();
+    expect(billing.expiredCheckoutRequest(expired({ customer: 'cus_1/../x' }))).toBeNull();
+    expect(billing.expiredCheckoutRequest(null)).toBeNull();
+  });
+
+  it('keeps the request while Stripe holds another session for it, and says when it cannot tell', () => {
+    const other = (over: Record<string, unknown> = {}) => ({
+      id: 'cs_new',
+      status: 'open',
+      metadata: { billing_request_id: REQ },
+      ...over,
+    });
+    // stripe-billing opened the new session before it expired the old one.
+    expect(billing.otherOpenCheckout({ data: [other()], has_more: false }, REQ, 'cs_old')).toBe(
+      true,
+    );
+    // Paid already: the request is being settled, not abandoned.
+    expect(
+      billing.otherOpenCheckout({ data: [other({ status: 'complete' })] }, REQ, 'cs_old'),
+    ).toBe(true);
+    expect(
+      billing.otherOpenCheckout(
+        {
+          data: [
+            other({ id: 'cs_old' }),
+            other({ status: 'expired' }),
+            other({ metadata: { billing_request_id: '99999999-9999-4999-8999-999999999999' } }),
+            other({ metadata: null }),
+          ],
+          has_more: false,
+        },
+        REQ,
+        'cs_old',
+      ),
+    ).toBe(false);
+    expect(billing.otherOpenCheckout({ data: [] }, REQ, 'cs_old')).toBe(false);
+    // A page that may not be all of them, or no list: not certain, so nothing is cancelled.
+    expect(
+      billing.otherOpenCheckout({ data: [other({ id: 'cs_old' })], has_more: true }, REQ, 'cs_old'),
+    ).toBeNull();
+    expect(billing.otherOpenCheckout({ data: [other()], has_more: true }, REQ, 'cs_old')).toBe(
+      true,
+    );
+    expect(billing.otherOpenCheckout(null, REQ, 'cs_old')).toBeNull();
+    expect(billing.otherOpenCheckout({ error: 'x' }, REQ, 'cs_old')).toBeNull();
   });
 });
 

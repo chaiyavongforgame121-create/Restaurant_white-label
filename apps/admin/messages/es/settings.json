@@ -117,6 +117,13 @@
       "notApplied": "Este código no se ha aplicado. Pulsa Aplicar para usarlo, o borra el campo para enviar la solicitud sin él.",
       "onlyOnce": "Un código se descuenta del pago único, nunca de la factura mensual."
     },
+    "quoteChanged": {
+      "title": "El precio ha cambiado",
+      "body": "Desde que abriste esta página, el precio pasó a {once} una vez y {monthly} al mes. No se envió nada ni se cobró nada.",
+      "confirm": "Continuar con el nuevo precio",
+      "notSent": "El precio cambió desde que abriste esta página, así que no se envió nada ni se cobró nada. Los totales de abajo ya están actualizados: revísalos y vuelve a pulsar el botón.",
+      "filed": "Tu solicitud se registró por {once} una vez y {monthly} al mes, que no es lo que mostraba esta página, así que no se cobró nada. Revísala arriba antes de seguir."
+    },
     "trial": {
       "active": "Prueba gratuita activa",
       "endsToday": "Tu prueba gratuita termina hoy",
@@ -125,7 +132,7 @@
     },
     "suspended": {
       "title": "Tu cuenta no está activa",
-      "body": "Tu tienda en línea está desconectada y no se aceptan pedidos nuevos. No se borró nada: elige un paquete abajo y todo vuelve de inmediato."
+      "body": "Tu tienda en línea está desconectada, no se aceptan pedidos nuevos y el panel de gestión solo muestra esta página. No se borró nada: elige un paquete abajo y todo vuelve de inmediato."
     },
     "noTrial": {
       "title": "Este restaurante empieza sin prueba gratuita",

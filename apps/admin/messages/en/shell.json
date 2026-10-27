@@ -82,7 +82,8 @@
   "platformBanner": {
     "title": "Platform admin view",
     "body": "You are not staff of {branch}. Every change you make here is recorded against your account.",
-    "back": "Back to platform"
+    "back": "Back to platform",
+    "suspended": "This restaurant’s subscription has ended: its staff see only Plan & billing and its storefront is closed."
   },
   "suspension": {
     "title": "Subscription inactive",
@@ -95,8 +96,23 @@
       "screen": "This screen is locked for this branch because the subscription has lapsed."
     },
     "nothingDeleted": "No data has been deleted — choosing a package restores everything immediately.",
-    "kitchenStillWorks": "Orders already placed can still be cooked and completed from the kitchen display.",
+    "kitchenStillWorks": "Orders already placed can still be finished on the kitchen display until they are done.",
     "goToBilling": "Go to billing"
+  },
+  "subscriptionLocked": {
+    "title": "Subscription ended",
+    "sidebarNote": "Everything else is paused until the plan is renewed. Nothing has been deleted.",
+    "checkAgain": "Check again",
+    "checking": "Checking…",
+    "askOwner": "The subscription for {branch} has ended, so this screen is paused. Only the restaurant owner can renew it, from Plan & billing in the back office. Nothing has been deleted — everything comes back as soon as it is renewed.",
+    "finishOrdersTitle": "Subscription ended — finish the orders already placed.",
+    "finishOrdersBody": "No new orders can come in. This screen stays open until the orders in progress are done, then it pauses too.",
+    "stillOpen": "Table bills and transfer slips wait until the plan is renewed. Orders placed before it ended can still be cooked and handed over:"
+  },
+  "subscriptionUnknown": {
+    "title": "Couldn’t check the subscription.",
+    "body": "Nothing has been locked; features that depend on the plan stay hidden until the check goes through.",
+    "retry": "Try again"
   },
   "upload": {
     "noCanvas": "Your browser could not process the image (no canvas support)."

@@ -1,18 +1,16 @@
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
-import {
-  getEntitlementsForBranch,
-  getMyStaffAccessRows,
-  isPlatformAdmin,
-} from '@favornoms/database/queries';
+import { getMyStaffAccessRows } from '@favornoms/database/queries';
 import { hasFeature, type TenantTheme } from '@favornoms/shared';
 import { getBranchAccess, type BranchAccess } from '@/lib/capabilities';
-import { resolveDeliveryWindDown } from '@/lib/delivery-gate';
+import { NO_WIND_DOWN, resolveDeliveryWindDown } from '@/lib/delivery-gate';
+import { branchLayoutRedirect } from '@/lib/subscription-gate';
 import { PATHNAME_HEADER } from '@favornoms/database/middleware';
 import { Sidebar } from '@/components/sidebar';
 import { AccessDenied } from '@/components/access-denied';
 import { PlatformAdminBanner } from '@/components/platform-admin-banner';
+import { SubscriptionUnknownBanner } from '@/components/suspension-screen';
 import { StaffAccessWatcher } from '@/components/staff-access-watcher';
 
 /** staff_role values with a translated name under shell.branchAccess.roles. */
@@ -125,20 +123,28 @@ export default async function BranchLayout({ params, children }: Props) {
   // Signed out, the login page sends the user back to the page they asked for, not always the
   // dashboard. Only a path inside this branch is passed on.
   const pathname = (await headers()).get(PATHNAME_HEADER) ?? '';
-  const { supabase, user, branch, capabilities, can, role } = await getBranchAccess(
+  const { supabase, user, branch, capabilities, can, role, subscription } = await getBranchAccess(
     branchId,
     pathname.startsWith(`/b/${branchId}/`) ? pathname : `/b/${branchId}/dashboard`,
+    // This layout sits over Plan & billing itself, so it decides about an ended subscription here.
+    { whileLocked: 'allow' },
   );
+
+  // Suspension, decided from the address on a full load (branchLayoutRedirect): the back office
+  // goes to Plan & billing, which is never redirected (that would loop), and someone without it
+  // (a server, a cook) to /suspended/<branch> rather than "No admin access", whose "Back to my
+  // screen" led to the locked till again (D5). A click inside the branch does not run this layout
+  // again; each page's own getBranchAccess call sends it to the same place (D1).
+  const away = branchLayoutRedirect({ branchId, pathname, locked: subscription.locked, capabilities });
+  if (away) redirect(away);
 
   // A platform superadmin opens branches from /platform to support merchants. They are
   // staff of nobody, so they hold no capabilities via staff_members -- my_capabilities()
-  // grants them the owner set separately, and this flag drives the impersonation banner.
-  // The viewer's own staff rows go alongside: they are what this render was decided from, and
+  // grants them the owner set separately, and the flag (read with the subscription) drives the
+  // impersonation banner. The viewer's own staff rows are what this render was decided from, and
   // StaffAccessWatcher reloads the page when the restaurant changes them.
-  const [platformAdmin, myRows] = await Promise.all([
-    isPlatformAdmin(supabase),
-    getMyStaffAccessRows(supabase, user.id, branch.restaurant_id),
-  ]);
+  const { platformAdmin, entitlements } = subscription;
+  const myRows = await getMyStaffAccessRows(supabase, user.id, branch.restaurant_id);
   const watcher = (
     <StaffAccessWatcher userId={user.id} restaurantId={branch.restaurant_id} initialRows={myRows} />
   );
@@ -162,17 +168,16 @@ export default async function BranchLayout({ params, children }: Props) {
     );
   }
 
-  // Sibling branches (for the switcher) + entitlements (for nav gating and the
-  // suspension gate). getEntitlementsForBranch returns DENIED on any error, so
-  // a failed read locks the back office rather than opening it.
-  const [{ data: allBranches }, entitlements, mark] = await Promise.all([
+  // Sibling branches (for the switcher). The entitlements for nav gating came with the
+  // subscription; a failed read of them (subscription.known false) fails the gated entries
+  // closed but locks nothing, and says so (D8).
+  const [{ data: allBranches }, mark] = await Promise.all([
     supabase
       .from('branches')
       .select('id, name')
       .eq('restaurant_id', branch.restaurant_id)
       .eq('is_active', true)
       .order('name'),
-    getEntitlementsForBranch(supabase, branchId),
     // The merchant's own logo, for the chrome they spend the day inside. It is uploaded
     // two screens away on /b/[branchId]/branch and until now was only ever shown to
     // customers. It joins the existing Promise.all rather than awaiting on its own,
@@ -194,24 +199,17 @@ export default async function BranchLayout({ params, children }: Props) {
   // the instant the switch moved and the merchant had no way in but the URL. Each flag is the
   // exact rule its page locks on (resolveDeliveryWindDown), so an entry is shown precisely
   // while its screen is open. Asked only when delivery is off, so the common path pays nothing.
-  const deliveryWindDown = await resolveDeliveryWindDown(
-    supabase,
-    branchId,
-    hasFeature(entitlements, 'delivery'),
-  );
-
-  // Suspension: lock the back office, but never the billing page itself — that
-  // is where the merchant fixes it. Redirecting to a page that redirects would
-  // be an infinite loop, so the exemption is load-bearing, not a nicety.
-  const planPath = `/b/${branchId}/settings/plan`;
-  if (!platformAdmin && !entitlements.entitled && !pathname.startsWith(planPath)) {
-    redirect(`${planPath}?suspended=1`);
-  }
+  // Not at all while locked: the menu then has Plan & billing alone.
+  const deliveryWindDown = subscription.locked
+    ? NO_WIND_DOWN
+    : await resolveDeliveryWindDown(supabase, branchId, hasFeature(entitlements, 'delivery'));
 
   // Membership, not the claim, decides whether this is impersonation: a platform
   // admin who is also an owner here is just an owner, and banner-ing their own
-  // restaurant would train them to ignore it on the tenants that matter.
+  // restaurant would train them to ignore it on the tenants that matter. An ended subscription is
+  // the exception: they keep the whole back office, so the banner is the only place it shows (D7).
   const impersonating = platformAdmin && role === null;
+  const platformSuspended = platformAdmin && subscription.ended;
 
   // Nav gating is now capability-driven rather than a single owner/not-owner flag, so
   // Admin and Manager can differ from each other instead of collapsing into "not owner".
@@ -228,9 +226,17 @@ export default async function BranchLayout({ params, children }: Props) {
         capabilities={caps}
         logoUrl={mark.logoUrl}
         brandName={mark.brandName}
+        locked={subscription.locked}
       />
       <main className="min-w-0 flex-1 lg:ml-0">
-        {impersonating && <PlatformAdminBanner branchName={branch.name} />}
+        {(impersonating || platformSuspended) && (
+          <PlatformAdminBanner
+            branchName={branch.name}
+            impersonating={impersonating}
+            suspended={platformSuspended}
+          />
+        )}
+        {!subscription.known && <SubscriptionUnknownBanner className="pl-16 lg:pl-5" />}
         {children}
       </main>
       {watcher}

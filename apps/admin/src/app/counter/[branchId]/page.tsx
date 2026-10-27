@@ -1,7 +1,6 @@
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import {
-  getEntitlementsForBranch,
   listActiveCombos,
   listCategories,
   listMenuItems,
@@ -24,7 +23,10 @@ export default async function CounterPage({ params }: Props) {
   const { branchId } = await params;
   // The layout has already refused anyone without counter.access here; this is for the hint
   // that only someone who can fix the branch's settings should see, and for the Dashboard button.
-  const { supabase, can } = await getBranchAccess(branchId, `/counter/${branchId}`);
+  // It also sends everyone who works here on when the subscription has ended (the till takes new
+  // orders, which the database would refuse), and brings the entitlements it read for that.
+  const { supabase, can, subscription } = await getBranchAccess(branchId, `/counter/${branchId}`);
+  const { entitlements } = subscription;
   const tr = await getTranslations('counter');
   // sales_tax_rate and settings ride along because the till has to price the cart the way
   // place-order will. Without them the Charge button quoted the food alone while the server
@@ -39,10 +41,9 @@ export default async function CounterPage({ params }: Props) {
   if (!branch) notFound();
   const settings = (branch.settings ?? {}) as Record<string, unknown>;
   const nowIso = new Date().toISOString();
-  const [categories, unsortedItems, entitlements, floor, combos, effective, soldOut] = await Promise.all([
+  const [categories, unsortedItems, floor, combos, effective, soldOut] = await Promise.all([
     listCategories(supabase, branchId),
     listMenuItems(supabase, branchId),
-    getEntitlementsForBranch(supabase, branchId),
     // The till used to take the table as free text, so a typo rang a dine-in order up
     // against no table at all. Picking a real row is also what lets place-order attach the
     // order to the sitting the diners' phones are already adding to.
@@ -80,11 +81,20 @@ export default async function CounterPage({ params }: Props) {
       seated: seatedTableIds.has(t.id),
     }));
   // Gate the till at the page, not the layout: /counter/[branchId]/recent must
-  // stay reachable while suspended so staff can look up and reprint an order
-  // that was already taken. Without the gate a cashier would ring a whole sale
-  // and only hit the BEFORE INSERT trigger at "Charge", in front of a customer.
-  if (!entitlements.entitled) {
-    return <SuspensionScreen branchId={branchId} branchName={branch.name} surface="counter" />;
+  // stay reachable while orders already taken are still being finished. Without the gate a
+  // cashier would ring a whole sale and only hit the BEFORE INSERT trigger at "Charge", in front
+  // of a customer. Everyone who works here has been sent on by getBranchAccess already; this card
+  // is for a platform admin, who keeps access but cannot sell either. A failed read (not ended)
+  // leaves the till open with the layout's "couldn't check" line (D8): the database still decides.
+  if (subscription.ended) {
+    return (
+      <SuspensionScreen
+        branchId={branchId}
+        branchName={branch.name}
+        surface="counter"
+        canOpenBilling={can('backoffice.access')}
+      />
+    );
   }
 
   // THIS branch's payment QR, from Branch settings -> Payment methods. Never another branch's:

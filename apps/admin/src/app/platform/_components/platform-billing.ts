@@ -25,11 +25,16 @@ import {
  * made them. Every catalog price is a whole number, so rounding to the dollar
  * looked tidy right up until a 20% code turned $198 into $158.40 and the card
  * said $158 next to a database that says otherwise.
+ *
+ * Thousands are grouped the way the merchant's plan page groups them ("$1,990"), in US format in
+ * every interface language, so the console and the merchant read the same figure the same way.
  */
 export function formatMoney(amount: number): string {
   const v = Number(amount ?? 0);
   if (!Number.isFinite(v)) return '$0';
-  return Number.isInteger(v) ? `$${v.toFixed(0)}` : `$${v.toFixed(2)}`;
+  return Number.isInteger(v)
+    ? `$${v.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
+    : `$${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 /** A branch as the platform console lists it: enough to name it and to say if it is hidden. */
