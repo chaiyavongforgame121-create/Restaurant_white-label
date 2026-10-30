@@ -12,6 +12,7 @@ import { formatCurrency, intlLocaleFor } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
 import { Badge, Button, Card, RiderIcon, useUiLocale } from '@favornoms/ui';
 import { useCart } from '@/store/cart';
+import { planReorder, reorderIds } from './reorder-lines';
 
 interface OrderRow {
   id: string;
@@ -97,91 +98,51 @@ export function OrdersList({ orders, base, branchId }: Props) {
     setReorderingId(order.id);
     try {
       const supabase = getBrowserClient();
-      const itemLines = order.order_items.filter((l) => l.menu_item_id);
-      const comboLines = order.order_items.filter((l) => !l.menu_item_id && l.combo_id);
-      const menuIds = [...new Set(itemLines.map((l) => l.menu_item_id as string))];
-      const comboIds = [...new Set(comboLines.map((l) => l.combo_id as string))];
-      const optionIds = [...new Set(itemLines.flatMap((l) => (l.modifiers ?? []).map((m) => m.option_id)))];
+      const { menuIds, comboIds, optionIds, optionMenuIds } = reorderIds(order.order_items);
 
       // Live rows only — current prices, current availability. Anything that no
       // longer exists (or is 86'd) gets dropped and reported, never silently.
-      const [{ data: items }, { data: combos }, { data: options }] = await Promise.all([
+      const [itemsRes, combosRes, optionsRes, links] = await Promise.all([
         menuIds.length
           ? supabase.from('menu_items').select('id, branch_id, category_id, name, price, image_url, is_active').in('id', menuIds).eq('branch_id', branchId)
-          : Promise.resolve({ data: [] as never[] }),
+          : Promise.resolve({ data: [] as never[], error: null }),
         comboIds.length
           ? supabase.from('combo_sets').select('id, branch_id, name, image_url, total_price, is_active, combo_items(quantity, menu_items(name))').in('id', comboIds).eq('branch_id', branchId)
-          : Promise.resolve({ data: [] as never[] }),
+          : Promise.resolve({ data: [] as never[], error: null }),
         optionIds.length
           ? supabase.from('modifier_options').select('id, group_id, name, price_delta, is_active, modifier_groups(name)').in('id', optionIds)
-          : Promise.resolve({ data: [] as never[] }),
+          : Promise.resolve({ data: [] as never[], error: null }),
+        // The groups those dishes show now, each with its source, rules and options. A dish offers
+        // an option only through a group linked to it, and a dish given its own copy of a library
+        // group since this order offers the same choices there under new ids (reorder-lines.ts).
+        optionMenuIds.length
+          ? supabase.from('menu_item_modifiers').select('menu_item_id, modifier_group_id, modifier_groups(name, source_group_id, is_required, min_select, modifier_options(id, name, price_delta, is_active))').in('menu_item_id', optionMenuIds)
+          : Promise.resolve({ data: [] as never[], error: null }),
       ]);
-
-      const liveById = new Map((items ?? []).map((it) => [it.id, it]));
-      const liveComboById = new Map((combos ?? []).map((c) => [c.id, c]));
-      const liveOptById = new Map((options ?? []).map((o) => [o.id, o]));
-
-      let dropped = 0;
-      type PendingAdd = () => void;
-      const adds: PendingAdd[] = [];
-
-      for (const line of order.order_items) {
-        if (line.menu_item_id) {
-          const m = liveById.get(line.menu_item_id);
-          if (!m || !m.is_active) { dropped += 1; continue; }
-          const mods = (line.modifiers ?? []).flatMap((sel) => {
-            const live = liveOptById.get(sel.option_id);
-            if (!live || !live.is_active) { dropped += 1; return []; }
-            const grp = Array.isArray(live.modifier_groups) ? live.modifier_groups[0] : live.modifier_groups;
-            return [{
-              group_id: live.group_id,
-              group_name: (grp as { name?: string } | null)?.name ?? 'Options',
-              option_id: live.id,
-              option_name: live.name,
-              price_delta: Number(live.price_delta),
-            }];
-          });
-          adds.push(() => cartAdd(
-            {
-              id: m.id,
-              branchId: m.branch_id,
-              categoryId: m.category_id ?? '',
-              name: m.name,
-              price: Number(m.price),
-              imageUrl: m.image_url ?? null,
-            } as never,
-            line.quantity,
-            line.notes ?? undefined,
-            mods.length > 0 ? mods : undefined,
-          ));
-        } else if (line.combo_id) {
-          const c = liveComboById.get(line.combo_id);
-          if (!c || !c.is_active) { dropped += 1; continue; }
-          const contents = ((c.combo_items ?? []) as Array<{ quantity: number; menu_items: { name: string } | Array<{ name: string }> | null }>)
-            .map((ci) => {
-              const mi = Array.isArray(ci.menu_items) ? ci.menu_items[0] : ci.menu_items;
-              return { item_name: mi?.name ?? '', quantity: ci.quantity };
-            });
-          adds.push(() => cartAddCombo(
-            {
-              comboId: c.id,
-              name: c.name,
-              imageUrl: c.image_url ?? null,
-              totalPrice: Number(c.total_price),
-              branchId: c.branch_id,
-              contents,
-            },
-            line.quantity,
-          ));
-        }
+      // A failed read tells us nothing, and nothing is what it should change: the cart stays as it
+      // is. Taken for "gone", it emptied the cart and refilled it with dishes stripped of the
+      // options the diner chose, under a "no longer available" that was not true.
+      if (itemsRes.error || combosRes.error || optionsRes.error || links.error) {
+        alert(t('list.reorderFailed'));
+        return; // still inside try: finally clears reorderingId
       }
+
+      const { adds, dropped } = planReorder(order.order_items, {
+        dishes: itemsRes.data ?? [],
+        combos: combosRes.data ?? [],
+        options: optionsRes.data ?? [],
+        dishGroups: links.data ?? [],
+      });
 
       if (adds.length === 0) {
         alert(t('list.reorderNoneAvailable'));
         return;
       }
       cartClear();
-      for (const apply of adds) apply();
+      for (const add of adds) {
+        if (add.kind === 'item') cartAdd(add.dish as never, add.quantity, add.notes, add.modifiers);
+        else cartAddCombo(add.combo, add.quantity);
+      }
       if (dropped > 0) {
         alert(t('list.reorderSomeDropped'));
       }

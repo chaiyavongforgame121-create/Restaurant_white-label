@@ -21,6 +21,9 @@
     "pickUpTo": "pick up to {max}",
     "optionCount": "{count, plural, one {# option} other {# options}}",
     "linkedCount": "linked to {count, plural, one {# item} other {# items}}",
+    "customizedCount": "{count} customized",
+    "customizedNote": "{count, plural, one {{names} has its own version of this group, customized in the dish’s editor. Changes made here don’t reach it.} other {{names} have their own versions of this group, customized in each dish’s editor. Changes made here don’t reach them.}}",
+    "customizedNoteMore": "{names} and {more, plural, one {# other dish} other {# other dishes}} have their own versions of this group, customized in each dish’s editor. Changes made here don’t reach them.",
     "delete": "Delete",
     "options": "Options",
     "default": "Default",
@@ -42,6 +45,7 @@
     "deleteGroupConfirm": {
       "title": "Delete this modifier group?",
       "body": "Its options go with it, and every menu item linked to the group loses those choices.",
+      "bodyWithCopies": "Its options go with it, and every menu item linked to the group loses those choices. {count, plural, one {The dish that has its own customized version keeps it.} other {The # dishes that have their own customized versions keep them.}}",
       "confirm": "Delete"
     },
     "optionPrompt": {
@@ -77,6 +81,8 @@
       "edit": "Edit links",
       "linked": "linked",
       "noItems": "No active menu items in this branch.",
+      "customized": "Customized",
+      "customizedHint": "Dishes marked Customized have their own version of this group, so they can’t be linked here. To put one back on this group, open the dish and choose “Use the library version”.",
       "save": "Save links"
     }
   },

@@ -21,6 +21,9 @@
     "pickUpTo": "chọn tối đa {max}",
     "optionCount": "{count, plural, other {# tùy chọn}}",
     "linkedCount": "liên kết với {count, plural, other {# món}}",
+    "customizedCount": "{count} món tùy chỉnh riêng",
+    "customizedNote": "{names} đang dùng phiên bản riêng của nhóm này, đã được tùy chỉnh trong trình sửa món. Thay đổi ở đây sẽ không áp dụng cho {count, plural, =1 {món đó} other {các món đó}}.",
+    "customizedNoteMore": "{names} và {more} món khác đang dùng phiên bản riêng của nhóm này, đã được tùy chỉnh trong trình sửa món. Thay đổi ở đây sẽ không áp dụng cho các món đó.",
     "delete": "Xóa",
     "options": "Tùy chọn",
     "default": "Mặc định",
@@ -42,6 +45,7 @@
     "deleteGroupConfirm": {
       "title": "Xóa nhóm tùy chọn này?",
       "body": "Các tùy chọn trong nhóm cũng bị xóa, và mọi món đang liên kết với nhóm sẽ mất các lựa chọn đó.",
+      "bodyWithCopies": "Các tùy chọn trong nhóm cũng bị xóa, và mọi món đang liên kết với nhóm sẽ mất các lựa chọn đó. {count} món có phiên bản tùy chỉnh riêng của nhóm vẫn giữ phiên bản đó.",
       "confirm": "Xóa"
     },
     "optionPrompt": {
@@ -77,6 +81,8 @@
       "edit": "Sửa liên kết",
       "linked": "đã liên kết",
       "noItems": "Chi nhánh này chưa có món nào đang bán.",
+      "customized": "Tùy chỉnh riêng",
+      "customizedHint": "Các món có nhãn Tùy chỉnh riêng đang dùng phiên bản riêng của nhóm này nên không thể liên kết ở đây. Để một món dùng lại nhóm này, hãy mở món đó và chọn “Dùng phiên bản trong thư viện”.",
       "save": "Lưu liên kết"
     }
   },

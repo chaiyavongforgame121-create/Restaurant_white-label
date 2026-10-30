@@ -193,7 +193,8 @@ export function placeOrderBody(msg: string): Record<string, unknown> | null {
 
 /**
  * The item, combo or option a place-order refusal names, when it names one:
- * 400 {"error":"modifier_inactive"|"modifier_branch_mismatch","option_id"},
+ * 400 {"error":"modifier_inactive"|"modifier_branch_mismatch","option_id"} (with "item_id" and
+ * "reason":"not_on_item" when the option is refused on that one dish only),
  * {"error":"item_not_in_branch"|"item_inactive","item_id"},
  * {"error":"combo_not_in_branch"|"combo_inactive","combo_id"} and
  * 409 {"error":"combo_item_unavailable"|"combo_empty","combo_id"} (a set with a dish that is gone,
@@ -210,10 +211,15 @@ export function refusedCartPart(msg: string): CartPart | null {
   let id: string | null;
   switch (body.error) {
     case 'modifier_inactive':
-    case 'modifier_branch_mismatch':
+    case 'modifier_branch_mismatch': {
       kind = 'option';
       id = idOf(body.option_id);
+      // An option refused on one dish only (its group is not shown on that dish): the same option
+      // can still be on offer on the cart's other dishes, so only that dish's lines go.
+      const itemId = body.reason === 'not_on_item' ? idOf(body.item_id) : null;
+      if (id && itemId) return { kind, id, itemId };
       break;
+    }
     case 'item_not_in_branch':
     case 'item_inactive':
       kind = 'item';

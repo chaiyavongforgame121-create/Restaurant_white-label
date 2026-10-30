@@ -104,6 +104,7 @@
     "title": "Tùy chọn",
     "subtitle": "Kích cỡ, món thêm, cách chế biến để khách chọn",
     "addGroup": "Thêm nhóm",
+    "addFromLibrary": "Thêm từ Nhóm tùy chọn",
     "loading": "Đang tải tùy chọn…",
     "emptyTitle": "Thêm nhóm tùy chọn",
     "emptyExample": "vd: <strong>Kích cỡ</strong> (chọn 1) hoặc <strong>Món thêm</strong> (chọn nhiều)",
@@ -133,6 +134,28 @@
       "unnamedOptionUp": "Chuyển tùy chọn này lên",
       "unnamedOptionDown": "Chuyển tùy chọn này xuống"
     },
+    "library": {
+      "title": "Chọn từ Nhóm tùy chọn",
+      "hint": "Nhóm sẽ hiện ở món này đúng như trong Nhóm tùy chọn. Những gì bạn sửa trong nhóm ở đây chỉ được lưu cho món này.",
+      "loading": "Đang tải Nhóm tùy chọn…",
+      "empty": "Nhóm tùy chọn chưa có nhóm nào. Dùng Thêm nhóm để tạo một nhóm cho món này.",
+      "allAdded": "Mọi nhóm trong Nhóm tùy chọn đều đã có ở món này.",
+      "add": "Thêm",
+      "addNamed": "Thêm “{name}” vào món này",
+      "unnamed": "Nhóm chưa đặt tên",
+      "optionCount": "{count, plural, other {# tùy chọn}}",
+      "pickUpTo": "Chọn tối đa {max}",
+      "close": "Đóng",
+      "gone": "Nhóm này không còn trong Nhóm tùy chọn. Danh sách đã được tải lại.",
+      "goneNamed": "“{group}” không còn trong Nhóm tùy chọn nên không có ở món này."
+    },
+    "source": {
+      "library": "Từ Nhóm tùy chọn",
+      "libraryHint": "Thay đổi ở đây chỉ áp dụng cho món này.",
+      "customized": "Tùy chỉnh riêng cho món này",
+      "useLibrary": "Dùng phiên bản trong thư viện",
+      "dishOnly": "Chỉ món này"
+    },
     "groupSaveFailed": "Không lưu được nhóm tùy chọn.",
     "groupCreateFailed": "Không tạo được nhóm.",
     "validation": {
@@ -141,9 +164,22 @@
       "blankOptions": "Đặt tên cho mọi tùy chọn trong “{group}”, hoặc gỡ các tùy chọn trống."
     },
     "removeConfirm": {
-      "title": "Gỡ nhóm tùy chọn này?",
-      "body": "Nhóm sẽ không hiện ở món này nữa, và bị xóa hẳn nếu không món nào khác dùng.",
-      "confirm": "Gỡ"
+      "libraryTitle": "Gỡ nhóm này khỏi món?",
+      "libraryBody": "Nhóm sẽ không hiện ở món này nữa. Nhóm vẫn còn trong Nhóm tùy chọn và ở các món khác đang dùng.",
+      "ownTitle": "Xóa nhóm tùy chọn này?",
+      "ownBody": "Nhóm này chỉ thuộc về món này nên sẽ bị xóa. Nhóm tùy chọn không bị ảnh hưởng.",
+      "remove": "Gỡ",
+      "delete": "Xóa"
+    },
+    "resetConfirm": {
+      "title": "Dùng phiên bản trong thư viện?",
+      "body": "Các thay đổi của nhóm này cho món này sẽ bị xóa, và món sẽ hiện nhóm đúng như trong Nhóm tùy chọn.",
+      "confirm": "Dùng phiên bản trong thư viện"
+    },
+    "copyFailed": "Thay đổi của bạn chưa được lưu. {reason}",
+    "copyErrors": {
+      "listChanged": "Nhóm này vừa được sửa ở nơi khác. Danh sách đã được tải lại, hãy thử lại.",
+      "sourceMissing": "Nhóm gốc không còn trong Nhóm tùy chọn nên món này giữ phiên bản riêng."
     }
   },
   "reorder": {

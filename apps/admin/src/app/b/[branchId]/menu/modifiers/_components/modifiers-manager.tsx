@@ -3,12 +3,13 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { ChevronDown, ChevronUp, Link2, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Info, Link2, Plus, Trash2 } from 'lucide-react';
 import { formatCurrency } from '@favornoms/shared';
 import { getBrowserClient } from '@favornoms/database/client';
 import { compareByPosition } from '@favornoms/database/queries';
-import { Badge, Button, Card, useConfirm, usePrompt } from '@favornoms/ui';
+import { Badge, Button, Card, cn, useConfirm, usePrompt } from '@favornoms/ui';
 import { MoveButtons, moveEntry, nextPosition, restoreOrder } from '../../_components/item-modifier-editor';
+import { groupUsage, linkChanges, namePreview, stillLinkable, type GroupLink } from './modifier-usage';
 
 interface Option {
   id: string;
@@ -36,7 +37,8 @@ interface Group {
 interface MenuItem {
   id: string;
   name: string;
-  menu_item_modifiers: Array<{ modifier_group_id: string }>;
+  /** Each group on the dish, with the library group it was copied from when it is the dish's own copy. */
+  menu_item_modifiers: GroupLink[];
 }
 
 interface Props {
@@ -121,6 +123,8 @@ export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) 
            modifier_options(id, name, price_delta, is_default, is_active, display_order, created_at)`,
         )
         .eq('branch_id', branchId)
+        // The library only, as the page loads it: dishes' own groups are edited in the dish.
+        .is('owner_menu_item_id', null)
         .order('display_order');
       // A later read answers instead.
       if (read !== readSeq.current) return;
@@ -192,11 +196,15 @@ export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) 
     setGroups((curr) => curr.map((g) => (g.id === id ? { ...g, ...patch } : g)));
   };
 
-  const deleteGroup = async (id: string) => {
+  /** `copies`: the dishes carrying their own copy of the group, which keep it (its source_group_id goes null). */
+  const deleteGroup = async (id: string, copies: number) => {
     if (
       !(await confirm({
         title: t('modifiers.deleteGroupConfirm.title'),
-        body: t('modifiers.deleteGroupConfirm.body'),
+        body:
+          copies > 0
+            ? t('modifiers.deleteGroupConfirm.bodyWithCopies', { count: copies })
+            : t('modifiers.deleteGroupConfirm.body'),
         confirmLabel: t('modifiers.deleteGroupConfirm.confirm'),
         destructive: true,
       }))
@@ -333,14 +341,8 @@ export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) 
 
   const linkToItems = async (groupId: string, itemIds: Set<string>) => {
     const supabase = getBrowserClient();
-    // Remove existing links not in the new set
-    const currentLinks = menuItems.filter((m) =>
-      m.menu_item_modifiers.some((l) => l.modifier_group_id === groupId),
-    );
-    const toRemove = currentLinks.filter((m) => !itemIds.has(m.id)).map((m) => m.id);
-    const toAdd = Array.from(itemIds).filter(
-      (id) => !currentLinks.some((m) => m.id === id),
-    );
+    // Dishes carrying their own copy of the group are neither linked nor unlinked (linkChanges).
+    const { toAdd, toRemove } = linkChanges(menuItems, groupId, itemIds);
 
     if (toRemove.length > 0) {
       const { error: delErr } = await supabase
@@ -353,22 +355,27 @@ export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) 
     if (toAdd.length > 0) {
       // A link's position orders the groups of that one item, so the group goes after the groups
       // each item already has. Read by branch rather than by item id: a long id list can outgrow the URL.
+      // The same read skips a dish that got the group, or its own copy of it, since the page loaded.
       const { data: items, error: posErr } = await supabase
         .from('menu_items')
-        .select('id, menu_item_modifiers(display_order)')
+        .select('id, menu_item_modifiers(display_order, modifier_group_id, modifier_groups(source_group_id))')
         .eq('branch_id', branchId);
       if (posErr) {
         setError(dbError('read item option positions', posErr));
       } else {
-        const nextByItem = new Map((items ?? []).map((m) => [m.id, nextPosition(m.menu_item_modifiers ?? [])]));
-        const { error: insErr } = await supabase.from('menu_item_modifiers').insert(
-          toAdd.map((mid) => ({
-            menu_item_id: mid,
-            modifier_group_id: groupId,
-            display_order: nextByItem.get(mid) ?? 0,
-          })),
-        );
-        if (insErr) setError(dbError('link items', insErr));
+        const rows = items ?? [];
+        const nextByItem = new Map(rows.map((m) => [m.id, nextPosition(m.menu_item_modifiers ?? [])]));
+        const adding = stillLinkable(rows, groupId, toAdd);
+        if (adding.length > 0) {
+          const { error: insErr } = await supabase.from('menu_item_modifiers').insert(
+            adding.map((mid) => ({
+              menu_item_id: mid,
+              modifier_group_id: groupId,
+              display_order: nextByItem.get(mid) ?? 0,
+            })),
+          );
+          if (insErr) setError(dbError('link items', insErr));
+        }
       }
     }
     router.refresh();
@@ -400,9 +407,8 @@ export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) 
       ) : (
         <ul className="space-y-3 px-2 lg:px-0">
           {groups.map((g) => {
-            const linked = menuItems.filter((m) =>
-              m.menu_item_modifiers.some((l) => l.modifier_group_id === g.id),
-            );
+            // `customized`: dishes showing their own copy of the group, which edits here don't reach.
+            const { linked, customized } = groupUsage(menuItems, g.id);
             return (
               <li key={g.id}>
                 <Card className="p-4">
@@ -429,6 +435,12 @@ export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) 
                           {t('modifiers.optionCount', { count: g.modifier_options.length })}
                           {' · '}
                           {t('modifiers.linkedCount', { count: linked.length })}
+                          {customized.length > 0 && (
+                            <>
+                              {' · '}
+                              {t('modifiers.customizedCount', { count: customized.length })}
+                            </>
+                          )}
                         </p>
                       </div>
                     </button>
@@ -436,7 +448,7 @@ export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) 
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => deleteGroup(g.id)}
+                        onClick={() => deleteGroup(g.id, customized.length)}
                         leftIcon={<Trash2 className="h-4 w-4" />}
                       >
                         {t('modifiers.delete')}
@@ -446,6 +458,7 @@ export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) 
 
                   {expandedId === g.id && (
                     <div className="mt-4 space-y-4 border-t border-border/60 pt-4">
+                      {customized.length > 0 && <CustomizedNote items={customized} />}
                       <GroupSettings group={g} onChange={(patch) => updateGroup(g.id, patch)} />
 
                       <div>
@@ -533,6 +546,7 @@ export function ModifiersManager({ branchId, initialGroups, menuItems }: Props) 
                         groupId={g.id}
                         menuItems={menuItems}
                         linked={linked}
+                        customized={customized}
                         onSave={(itemIds) => linkToItems(g.id, itemIds)}
                       />
                     </div>
@@ -608,20 +622,43 @@ function GroupSettings({
   );
 }
 
+/**
+ * Which dishes carry their own copy of the group. They were changed in the dish's editor, which
+ * copies the group onto that one dish, so an edit made here no longer reaches them.
+ */
+function CustomizedNote({ items }: { items: MenuItem[] }) {
+  const t = useTranslations('menuExtras.modifiers');
+  // Item names are the merchant's own words, so they go into the sentence untouched.
+  const { names, more } = namePreview(items);
+  return (
+    <p className="flex items-start gap-2 rounded-xl bg-info/10 px-3 py-2 text-sm text-foreground">
+      <Info className="mt-0.5 h-4 w-4 shrink-0 text-info" />
+      <span>
+        {more > 0 ? t('customizedNoteMore', { names, more }) : t('customizedNote', { names, count: items.length })}
+      </span>
+    </p>
+  );
+}
+
 function LinkPicker({
   groupId,
   menuItems,
   linked,
+  customized,
   onSave,
 }: {
   groupId: string;
   menuItems: MenuItem[];
   linked: MenuItem[];
+  /** Dishes carrying their own copy of the group: shown, but their box can't be ticked. */
+  customized: MenuItem[];
   onSave: (itemIds: Set<string>) => void;
 }) {
   const t = useTranslations('menuExtras.modifiers.links');
   const [open, setOpen] = React.useState(false);
   const [selected, setSelected] = React.useState<Set<string>>(() => new Set(linked.map((m) => m.id)));
+  const customizedIds = new Set(customized.map((m) => m.id));
+  const hintId = React.useId();
 
   // `linked` is a new array on every render of the page (a move, an edit, a read coming back), so
   // the ticks are reset only when the linked items themselves change -- not while the merchant is
@@ -635,7 +672,7 @@ function LinkPicker({
   }, [linkedKey]);
 
   // Item names are the merchant's own words, so they go into the sentence untouched.
-  const names = linked.slice(0, 3).map((m) => m.name).join(', ');
+  const { names, more } = namePreview(linked);
 
   return (
     <div className="rounded-xl border border-border bg-muted/30 p-3">
@@ -643,8 +680,8 @@ function LinkPicker({
         <p className="text-sm font-medium">
           {linked.length === 0
             ? t.rich('none', { muted: (chunks) => <span className="text-muted-foreground">{chunks}</span> })
-            : linked.length > 3
-              ? t('linkedToMore', { names, count: linked.length - 3 })
+            : more > 0
+              ? t('linkedToMore', { names, count: more })
               : t('linkedTo', { names })}
         </p>
         <Button
@@ -663,28 +700,52 @@ function LinkPicker({
       {open && (
         <div className="mt-3 space-y-2">
           <div className="max-h-56 overflow-y-auto rounded-lg border border-border bg-card p-2">
-            {menuItems.map((m) => (
-              <label key={m.id} className="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-muted">
-                <input
-                  type="checkbox"
-                  checked={selected.has(m.id)}
-                  onChange={(e) => {
-                    setSelected((curr) => {
-                      const next = new Set(curr);
-                      if (e.target.checked) next.add(m.id);
-                      else next.delete(m.id);
-                      return next;
-                    });
-                  }}
-                />
-                {m.name}
-                {selected.has(m.id) && <Badge variant="success" className="ml-auto">{t('linked')}</Badge>}
-              </label>
-            ))}
+            {menuItems.map((m) => {
+              // Ticking a dish that carries its own copy would put the library group and the copy
+              // on one dish; Save links leaves it alone either way.
+              const isCustomized = customizedIds.has(m.id);
+              return (
+                <label
+                  key={m.id}
+                  className={cn(
+                    'flex items-center gap-2 rounded px-2 py-1 text-sm',
+                    isCustomized ? 'cursor-not-allowed text-muted-foreground' : 'hover:bg-muted',
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selected.has(m.id)}
+                    disabled={isCustomized}
+                    aria-describedby={isCustomized ? hintId : undefined}
+                    onChange={(e) => {
+                      setSelected((curr) => {
+                        const next = new Set(curr);
+                        if (e.target.checked) next.add(m.id);
+                        else next.delete(m.id);
+                        return next;
+                      });
+                    }}
+                  />
+                  {m.name}
+                  {isCustomized ? (
+                    <Badge variant="info" className="ml-auto">
+                      {t('customized')}
+                    </Badge>
+                  ) : (
+                    selected.has(m.id) && <Badge variant="success" className="ml-auto">{t('linked')}</Badge>
+                  )}
+                </label>
+              );
+            })}
             {menuItems.length === 0 && (
               <p className="px-2 py-3 text-xs text-muted-foreground">{t('noItems')}</p>
             )}
           </div>
+          {customized.length > 0 && (
+            <p id={hintId} className="text-xs text-muted-foreground">
+              {t('customizedHint')}
+            </p>
+          )}
           <Button
             variant="gradient"
             size="sm"

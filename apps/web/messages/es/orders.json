@@ -13,7 +13,8 @@
     "summary": "{count, plural, one {# producto} other {# productos}} · {total}",
     "reorder": "Volver a pedir",
     "reorderNoneAvailable": "Ninguno de estos productos está disponible ahora.",
-    "reorderSomeDropped": "Algunos productos u opciones de ese pedido ya no están disponibles y se omitieron. Revisa tu carrito."
+    "reorderSomeDropped": "Algunos productos u opciones de ese pedido ya no están disponibles y se omitieron. Revisa tu carrito.",
+    "reorderFailed": "No pudimos comparar ese pedido con el menú en este momento. Tu carrito no se modificó. Vuelve a intentarlo."
   },
   "channel": {
     "dine_in": "Comer en el local",

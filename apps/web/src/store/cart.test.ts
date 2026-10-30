@@ -537,13 +537,147 @@ describe('reprice', () => {
     expect(store.getState().subtotal()).toBe(166.99);
   });
 
+  it('removes a line whose option its dish no longer shows, and keeps that option on another dish', () => {
+    // The owner's Spicy Level: the curry was given its own copy without Thai Hot. The library's
+    // Thai Hot is off the curry now, while Pad Krapow, still showing the library group, offers it.
+    const store = cart.getCartStore(B1);
+    store.getState().add(item(B1, 'curry'), 1, undefined, [mod('thai-hot')]);
+    store.getState().add(item(B1, 'curry'), 2, undefined, [mod('copy-mild')]);
+    store.getState().add(item(B1, 'pad-krapow'), 1, undefined, [mod('thai-hot')]);
+    store.getState().add(item(B1, 'curry'), 1);
+    store.getState().addCombo(combo(B1, 'curry'));
+
+    const result = store.getState().reprice(
+      new Map(),
+      new Set(),
+      new Map(),
+      new Map([['curry', new Set(['thai-hot'])]]),
+    );
+    expect(result).toEqual({ changed: 0, removed: 1 });
+    expect(store.getState().lines.map((l) => [l.menuItemId, l.quantity, (l.modifiers ?? []).map((m) => m.option_id)])).toEqual([
+      ['curry', 2, ['copy-mild']],
+      ['pad-krapow', 1, ['thai-hot']],
+      ['curry', 1, []],
+      ['curry', 1, []],
+    ]);
+  });
+
+  it('counts a line once when its option is both switched off and off its dish, and still re-prices the rest', () => {
+    const store = cart.getCartStore(B1);
+    store.getState().add(item(B1, 'curry'), 1, undefined, [mod('thai-hot'), mod('egg')]);
+    store.getState().add(item(B1, 'tom-yum', 12));
+    const result = store.getState().reprice(
+      new Map([['tom-yum', { price: 13, available: true }]]),
+      new Set(['egg']),
+      new Map(),
+      new Map([['curry', new Set(['thai-hot'])]]),
+    );
+    expect(result).toEqual({ changed: 1, removed: 1 });
+    expect(store.getState().lines.map((l) => [l.menuItemId, l.unitPrice])).toEqual([['tom-yum', 13]]);
+  });
+
   it('leaves the cart alone with no unavailable options and nothing to re-price', () => {
     const store = cart.getCartStore(B1);
     store.getState().add(item(B1, 'item-1'), 1, undefined, [mod('opt-ok')]);
     const before = store.getState().lines;
     expect(store.getState().reprice(new Map(), new Set())).toEqual({ changed: 0, removed: 0 });
     expect(store.getState().reprice(new Map())).toEqual({ changed: 0, removed: 0 });
+    expect(store.getState().reprice(new Map(), new Set(), new Map(), new Map())).toEqual({ changed: 0, removed: 0 });
+    expect(
+      store.getState().reprice(new Map(), new Set(), new Map(), new Map([['item-1', new Set(['opt-other'])]])),
+    ).toEqual({ changed: 0, removed: 0 });
     expect(store.getState().lines).toBe(before);
+  });
+});
+
+describe('options off their dish', () => {
+  const line = (menuItemId: string, optionIds: string[], comboId?: string) =>
+    ({
+      id: `${menuItemId}-${optionIds.join('+')}`,
+      branchId: B1,
+      menuItemId,
+      name: menuItemId,
+      unitPrice: 10,
+      quantity: 1,
+      imageUrl: null,
+      modifiers: optionIds.map((id) => mod(id)),
+      comboId,
+    }) satisfies CartModule.CartLine;
+
+  it('reads which groups each dish shows, and an asked-about dish with no row as showing none', () => {
+    const shown = cart.groupsOnDishes(
+      ['curry', 'pad-krapow', 'plain-rice'],
+      [
+        { menu_item_id: 'curry', modifier_group_id: 'spicy-copy' },
+        { menu_item_id: 'curry', modifier_group_id: 'protein' },
+        { menu_item_id: 'pad-krapow', modifier_group_id: 'spicy' },
+        // A row for a dish that was not asked about decides nothing.
+        { menu_item_id: 'elsewhere', modifier_group_id: 'spicy' },
+      ],
+    );
+    expect([...shown.keys()]).toEqual(['curry', 'pad-krapow', 'plain-rice']);
+    expect([...(shown.get('curry') ?? [])]).toEqual(['spicy-copy', 'protein']);
+    expect([...(shown.get('pad-krapow') ?? [])]).toEqual(['spicy']);
+    expect(shown.get('plain-rice')?.size).toBe(0);
+    expect(shown.has('elsewhere')).toBe(false);
+  });
+
+  it("finds the library's options on a dish that carries its own copy, and nowhere else", () => {
+    const groupOf = new Map([
+      ['thai-hot', 'spicy'],
+      ['mild', 'spicy'],
+      ['copy-mild', 'spicy-copy'],
+      ['chicken', 'protein'],
+    ]);
+    const shown = cart.groupsOnDishes(
+      ['curry', 'pad-krapow'],
+      [
+        { menu_item_id: 'curry', modifier_group_id: 'spicy-copy' },
+        { menu_item_id: 'curry', modifier_group_id: 'protein' },
+        { menu_item_id: 'pad-krapow', modifier_group_id: 'spicy' },
+      ],
+    );
+    const off = cart.optionsOffTheirDish(
+      [
+        line('curry', ['thai-hot', 'chicken']),
+        line('curry', ['mild']),
+        line('curry', ['copy-mild', 'chicken']),
+        line('pad-krapow', ['thai-hot', 'mild']),
+        // Protein is not on Pad Krapow.
+        line('pad-krapow', ['chicken']),
+      ],
+      groupOf,
+      shown,
+    );
+    expect([...off.keys()]).toEqual(['curry', 'pad-krapow']);
+    expect([...(off.get('curry') ?? [])]).toEqual(['thai-hot', 'mild']);
+    expect([...(off.get('pad-krapow') ?? [])]).toEqual(['chicken']);
+  });
+
+  it('takes every option off a dish that shows no group at all', () => {
+    const off = cart.optionsOffTheirDish(
+      [line('plain-rice', ['mild'])],
+      new Map([['mild', 'spicy']]),
+      cart.groupsOnDishes(['plain-rice'], []),
+    );
+    expect([...(off.get('plain-rice') ?? [])]).toEqual(['mild']);
+  });
+
+  it('decides nothing about an option or a dish that was not read, or about a combo line', () => {
+    const shown = cart.groupsOnDishes(['curry'], [{ menu_item_id: 'curry', modifier_group_id: 'spicy-copy' }]);
+    const off = cart.optionsOffTheirDish(
+      [
+        // Not in groupOf: switched off, deleted or not read. reprice's unavailable options say which.
+        line('curry', ['unknown-option']),
+        // Not asked about: a failed or partial read.
+        line('pad-krapow', ['thai-hot']),
+        // A combo line sends no options, whatever it carries.
+        line('curry', ['thai-hot'], 'combo-1'),
+      ],
+      new Map([['thai-hot', 'spicy']]),
+      shown,
+    );
+    expect(off.size).toBe(0);
   });
 });
 
@@ -598,6 +732,13 @@ describe('linesUsing', () => {
     const found = cart.linesUsing(lines(), { kind: 'option', id: 'opt-a' });
     expect(found.map((l) => l.menuItemId)).toEqual(['item-1', 'item-2']);
     expect(cart.linesUsing(lines(), { kind: 'option', id: 'opt-missing' })).toEqual([]);
+  });
+
+  it('finds only that dish’s lines for an option that is off one dish', () => {
+    // place-order's not_on_item names the dish: the same option on another dish is still on offer.
+    const found = cart.linesUsing(lines(), { kind: 'option', id: 'opt-a', itemId: 'item-2' });
+    expect(found.map((l) => l.menuItemId)).toEqual(['item-2']);
+    expect(cart.linesUsing(lines(), { kind: 'option', id: 'opt-b', itemId: 'item-1' })).toEqual([]);
   });
 });
 

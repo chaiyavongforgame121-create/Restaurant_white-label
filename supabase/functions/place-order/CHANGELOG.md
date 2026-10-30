@@ -5,6 +5,47 @@ the bulk of the file; every deploy had to carry it. The history is the valuable 
 so it lives here rather than being deleted.
 
 ```
+// place-order v11.10 — an option is ordered only on a dish that shows its group
+//   v11.10 (2026-10-30): the owner asked that deleting an option of a shared option group inside one
+//        dish's editor change that dish only, never the group on the Modifier groups page. SQL half:
+//        20261030100000_item_modifier_copies (modifier_groups.owner_menu_item_id and
+//        source_group_id; customize_item_modifier_group gives a dish its own copy of a library
+//        group the first time it is changed there, and moves the dish's link to the copy).
+//        - The options of a line are checked against the groups linked to THAT line's dish
+//          (menu_item_modifiers, read with the service role for the order's dishes that carry
+//          options, alongside the modifier_options read). An option of a group the dish does not
+//          show is refused with 400 { error: 'modifier_inactive', option_id, item_id,
+//          reason: 'not_on_item' }. The options used to be checked for branch and is_active only,
+//          so any option of the branch rode on any dish: after a copy, a cart built before it would
+//          still order the library's "Thai Hot" on the dish whose own Spicy Level dropped it (the
+//          library option still exists and is active), and a group unlinked from a dish after the
+//          cart was built was still charged on it.
+//        - The code is the one the clients already explain: the storefront checkout takes out the
+//          cart lines carrying option_id and says an item or an option is no longer offered; the
+//          till shows its modifierInactive sentence, re-reads its menu and names the dish from
+//          item_id. `reason` tells it apart from a switched-off option. `item_id` names the dish
+//          because the same option may still be on offer on the order's other dishes (the library
+//          group on dish B while dish A carries its own copy): only that dish's lines are wrong.
+//        - Reached only by a race now: the storefront cart takes out a line whose option is not on
+//          its dish when the cart is opened (use-cart-reprice.ts, reprice in
+//          apps/web/src/store/cart.ts), as it does a switched-off option, and Order again leaves
+//          such an option out and counts it.
+//        - It runs after the existing modifier checks, in their order (modifier_lookup_failed,
+//          modifier_branch_mismatch, modifier_inactive for a switched-off or deleted option). A
+//          failed menu_item_modifiers read is a 500 { error: 'modifier_lookup_failed', detail },
+//          as a failed option read is.
+//        - The rule is optionNotOnItem() in a new ./item-options.ts (pure, no imports), pinned by
+//          apps/web/src/lib/item-options-edge.test.ts together with the storefront cart's own
+//          reading of it (optionsOffTheirDish in apps/web/src/store/cart.ts). A Management API /
+//          MCP deploy must pass item-options.ts along with index.ts, asap-delivery.ts,
+//          kitchen-lead.ts, card.ts and _shared/entitlements.ts; the CLI uploads the tree.
+//        - Needs nothing new in SQL (menu_item_modifiers is as it was). It may go out before the
+//          migration, and it must be live before the admin that calls
+//          customize_item_modifier_group. The place-order before it checks an option's branch and
+//          is_active only, so once a dish has a copy, a line built before the copy (a checkout left
+//          open, a till sale already rung up) still orders the library's option on that dish at the
+//          library's price. Before the migration no dish has a copy, and only an option of a group
+//          since unlinked from its dish is refused.
 // place-order v11.9 — ASAP delivery is a per-branch switch
 //   v11.9 (2026-10-26): docs/ASAP-AND-SCHEDULING-2026-10-25.md §1. SQL half:
 //        20261026100000_asap_delivery_switch (patch_branch_settings takes only a JSON boolean or

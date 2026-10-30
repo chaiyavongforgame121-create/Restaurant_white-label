@@ -13,7 +13,8 @@
     "summary": "{count, plural, one {# item} other {# items}} · {total}",
     "reorder": "Reorder",
     "reorderNoneAvailable": "None of these items are available right now.",
-    "reorderSomeDropped": "Some items or options from that order are no longer available and were left out — please review your cart."
+    "reorderSomeDropped": "Some items or options from that order are no longer available and were left out — please review your cart.",
+    "reorderFailed": "Couldn’t check that order against the menu right now. Your cart wasn’t changed. Please try again."
   },
   "channel": {
     "dine_in": "Dine-in",

@@ -2,7 +2,11 @@
 // Server-side recalculation never trusts client totals.
 //
 // Version history: see ./CHANGELOG.md (moved out of this file 2026-08-28).
-// Current: v11.9 — ASAP delivery is a per-branch switch ("Accept ASAP delivery orders",
+// Current: v11.10 — an option is ordered only on a dish that shows its group (./item-options.ts):
+// sent on any other dish it is refused with 400 modifier_inactive, reason not_on_item, naming the
+// dish. A dish can carry its own copy of a library option group now, and a cart built before the
+// copy still sends the library's option.
+// v11.9 — ASAP delivery is a per-branch switch ("Accept ASAP delivery orders",
 // settings.asap_delivery_enabled, read by ./asap-delivery.ts): unticked or never set, a storefront
 // delivery with no booked time is refused with 409 delivery_must_be_scheduled. Staff are exempt.
 // v11.8 — the storefront may place an ASAP delivery again (delivery_must_be_scheduled is
@@ -43,6 +47,9 @@ import { kitchenLeadMin } from './kitchen-lead.ts';
 // "Accept ASAP delivery orders": the same rule as the storefront's and the admin card's
 // asapDeliveryEnabled(), pinned from packages/shared/src/utils/asap-delivery.test.ts.
 import { asapDeliveryEnabled } from './asap-delivery.ts';
+// An option rides only on a dish that shows its group, pinned (and pinned to the storefront cart's
+// own reading) from apps/web/src/lib/item-options-edge.test.ts.
+import { optionNotOnItem } from './item-options.ts';
 
 interface PlaceOrderRequest {
   branch_id: string;
@@ -679,11 +686,22 @@ Deno.serve(async (req: Request) => {
   // deno-lint-ignore no-explicit-any
   const modMap = new Map<string, { id: string; group_id: string; name: string; price_delta: number; is_active: boolean }>();
   if (allModIds.length > 0) {
-    const { data: opts, error: optErr } = await admin
-      .from('modifier_options')
-      .select('id, group_id, name, price_delta, is_active, modifier_groups!inner(branch_id)')
-      // deno-lint-ignore no-explicit-any
-      .in('id', allModIds as any);
+    // The dishes those lines are for, and the groups each one shows now (menu_item_modifiers), read
+    // alongside the options for the last check below.
+    const optionItemIds = Array.from(new Set(
+      payload.items.filter((l) => (l.modifier_option_ids ?? []).length > 0).map((l) => l.menu_item_id),
+    ));
+    const [{ data: opts, error: optErr }, { data: links, error: linkErr }] = await Promise.all([
+      admin
+        .from('modifier_options')
+        .select('id, group_id, name, price_delta, is_active, modifier_groups!inner(branch_id)')
+        // deno-lint-ignore no-explicit-any
+        .in('id', allModIds as any),
+      admin
+        .from('menu_item_modifiers')
+        .select('menu_item_id, modifier_group_id')
+        .in('menu_item_id', optionItemIds),
+    ]);
     if (optErr) return json(500, { error: 'modifier_lookup_failed', detail: optErr.message });
     // deno-lint-ignore no-explicit-any
     for (const o of (opts ?? []) as any[]) {
@@ -700,6 +718,17 @@ Deno.serve(async (req: Request) => {
     // way an inactive option is refused.
     for (const id of allModIds) {
       if (!modMap.has(id)) return json(400, { error: 'modifier_inactive', option_id: id });
+    }
+    // v11.10: an option is ordered only on a dish that shows its group (./item-options.ts). The
+    // checks above take any option of this branch on any dish, and since a dish can carry its own
+    // copy of a library group, a cart built before the copy still sends the library's option the
+    // merchant took off that one dish. Refused with the code the clients already explain; `reason`
+    // tells it apart from a switched-off option, and `item_id` names the dish, because the same
+    // option may still be on offer on the order's other dishes.
+    if (linkErr) return json(500, { error: 'modifier_lookup_failed', detail: linkErr.message });
+    const offItem = optionNotOnItem(payload.items, modMap, links ?? []);
+    if (offItem) {
+      return json(400, { error: 'modifier_inactive', option_id: offItem.option_id, item_id: offItem.item_id, reason: 'not_on_item' });
     }
   }
 

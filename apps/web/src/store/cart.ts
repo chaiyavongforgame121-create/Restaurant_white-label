@@ -66,13 +66,20 @@ export interface CurrentPrice {
 export interface CartPart {
   kind: 'item' | 'combo' | 'option';
   id: string;
+  /**
+   * An option that is off one dish only: the dish. place-order names it (`item_id`) when it refuses
+   * an option sent on a dish that does not show its group (modifier_inactive, reason not_on_item).
+   * The same option can still be on offer on the cart's other dishes — the library group on one,
+   * while another carries its own copy without it — and their lines are fine.
+   */
+  itemId?: string;
 }
 
 /**
  * The lines that use `part`, and so cannot be ordered while it is gone: an item's own lines (never
  * a combo line, which carries its combo id in the same `menuItemId` slot), a combo's lines, or
- * every item line with that option chosen. Combo lines send no options to place-order, so an
- * option can only sink an item line.
+ * every item line with that option chosen (only that dish's when the part names one). Combo lines
+ * send no options to place-order, so an option can only sink an item line.
  */
 export function linesUsing(lines: readonly CartLine[], part: CartPart): CartLine[] {
   switch (part.kind) {
@@ -81,8 +88,75 @@ export function linesUsing(lines: readonly CartLine[], part: CartPart): CartLine
     case 'combo':
       return lines.filter((l) => l.comboId === part.id);
     case 'option':
-      return lines.filter((l) => !l.comboId && (l.modifiers ?? []).some((m) => m.option_id === part.id));
+      return lines.filter(
+        (l) =>
+          !l.comboId &&
+          (part.itemId === undefined || l.menuItemId === part.itemId) &&
+          (l.modifiers ?? []).some((m) => m.option_id === part.id),
+      );
   }
+}
+
+/** One menu_item_modifiers row: the dish shows that option group. */
+export interface DishGroupLink {
+  menu_item_id: string;
+  modifier_group_id: string;
+}
+
+/**
+ * The option groups each dish shows now, by dish id, from its menu_item_modifiers rows. Every id in
+ * `dishIds` gets an entry, an empty one when no row came back: those dishes were asked about, so no
+ * row means they show no group at all. A dish that was not asked about has no entry, and nothing
+ * is decided about it.
+ */
+export function groupsOnDishes(
+  dishIds: Iterable<string>,
+  links: readonly DishGroupLink[],
+): Map<string, Set<string>> {
+  const shown = new Map<string, Set<string>>();
+  for (const id of dishIds) shown.set(id, new Set());
+  for (const link of links) shown.get(link.menu_item_id)?.add(link.modifier_group_id);
+  return shown;
+}
+
+/**
+ * By dish id, the options chosen on the cart's dish lines that their dish no longer shows: options
+ * still on offer, but in a group no longer linked to that dish. place-order refuses the whole order
+ * for one (modifier_inactive, reason not_on_item: optionNotOnItem in
+ * supabase/functions/place-order/item-options.ts, pinned to this by
+ * src/lib/item-options-edge.test.ts), so reprice takes those lines out.
+ *
+ * It happens when a dish is given its own copy of a library group (the first change made to the
+ * group in that dish's editor makes one): the library's options are then off that one dish, while
+ * the library group, and every other dish showing it, still offer them. Or when a group is
+ * unlinked from a dish after the line was added.
+ *
+ * `groupOf` is each option's group as read now, `shownOn` is groupsOnDishes. An option or a dish
+ * that neither covers was not read, and is left alone: a failed or partial read changes nothing.
+ */
+export function optionsOffTheirDish(
+  lines: readonly CartLine[],
+  groupOf: ReadonlyMap<string, string>,
+  shownOn: ReadonlyMap<string, ReadonlySet<string>>,
+): Map<string, Set<string>> {
+  const off = new Map<string, Set<string>>();
+  for (const line of lines) {
+    // A combo line sends place-order no options.
+    if (line.comboId) continue;
+    const shown = shownOn.get(line.menuItemId);
+    if (!shown) continue;
+    for (const m of line.modifiers ?? []) {
+      const group = groupOf.get(m.option_id);
+      if (group === undefined || shown.has(group)) continue;
+      let options = off.get(line.menuItemId);
+      if (!options) {
+        options = new Set();
+        off.set(line.menuItemId, options);
+      }
+      options.add(m.option_id);
+    }
+  }
+  return off;
 }
 
 /** What one cart line costs: place-order's own lineTotal (money.ts), options included. */
@@ -231,11 +305,17 @@ export interface CartState {
    * line stores the delta it was added with, and place-order charges the current one, so a raised
    * fried egg left the cart quoting less than the charge. A line whose unit or any option moved
    * counts once in `changed`; options absent from the map are left as they are.
+   *
+   * `optionsOffDish` is, by dish id, options still on offer that the dish no longer shows
+   * (optionsOffTheirDish): a dish given its own copy of a library group no longer offers the
+   * library's options. Every line of that dish carrying one is removed and counted in `removed`,
+   * exactly as for an unavailable option; the same option on another dish's line stays.
    */
   reprice: (
     current: Map<string, CurrentPrice>,
     unavailableOptionIds?: ReadonlySet<string>,
     optionPrices?: ReadonlyMap<string, number>,
+    optionsOffDish?: ReadonlyMap<string, ReadonlySet<string>>,
   ) => { changed: number; removed: number };
   subtotal: () => number;
   itemCount: () => number;
@@ -587,14 +667,16 @@ export function createCartStore(branchId: string) {
                   ),
           }),
         clear: () => set({ lines: [], notes: '' }),
-        reprice: (current, unavailableOptionIds, optionPrices) => {
+        reprice: (current, unavailableOptionIds, optionPrices, optionsOffDish) => {
           let changed = 0;
           let removed = 0;
           const lines = get().lines.flatMap((l) => {
+            // Options this line's dish no longer shows. A combo line sends place-order no options.
+            const offDish = l.comboId ? undefined : optionsOffDish?.get(l.menuItemId);
             if (
-              unavailableOptionIds &&
-              unavailableOptionIds.size > 0 &&
-              (l.modifiers ?? []).some((m) => unavailableOptionIds.has(m.option_id))
+              (l.modifiers ?? []).some(
+                (m) => !!unavailableOptionIds?.has(m.option_id) || !!offDish?.has(m.option_id),
+              )
             ) {
               removed += 1;
               return [];

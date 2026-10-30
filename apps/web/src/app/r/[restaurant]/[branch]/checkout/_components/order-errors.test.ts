@@ -167,6 +167,19 @@ describe('refusedCartPart', () => {
     });
   });
 
+  it('names the dish of an option refused on that dish only (not_on_item)', () => {
+    expect(
+      refusedCartPart(
+        refusal(400, { error: 'modifier_inactive', option_id: 'o1', item_id: 'i1', reason: 'not_on_item' }),
+      ),
+    ).toEqual({ kind: 'option', id: 'o1', itemId: 'i1' });
+    // Without the reason the option is off everywhere, whatever else the body carries.
+    expect(refusedCartPart(refusal(400, { error: 'modifier_inactive', option_id: 'o1', item_id: 'i1' }))).toEqual({
+      kind: 'option',
+      id: 'o1',
+    });
+  });
+
   it('takes nothing out for a shortage the diner can fix, or a refusal without an id', () => {
     expect(refusedCartPart(refusal(409, { error: 'insufficient_stock', item_id: 'i1', available: 1 }))).toBeNull();
     expect(refusedCartPart(refusal(409, { error: 'combo_empty' }))).toBeNull();

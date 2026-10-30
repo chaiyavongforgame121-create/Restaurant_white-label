@@ -3072,7 +3072,9 @@ export type Database = {
           min_select: number
           name: string
           name_translations: Json
+          owner_menu_item_id: string | null
           selection_type: string
+          source_group_id: string | null
         }
         Insert: {
           branch_id: string
@@ -3084,7 +3086,9 @@ export type Database = {
           min_select?: number
           name: string
           name_translations?: Json
+          owner_menu_item_id?: string | null
           selection_type: string
+          source_group_id?: string | null
         }
         Update: {
           branch_id?: string
@@ -3096,7 +3100,9 @@ export type Database = {
           min_select?: number
           name?: string
           name_translations?: Json
+          owner_menu_item_id?: string | null
           selection_type?: string
+          source_group_id?: string | null
         }
         Relationships: [
           {
@@ -3104,6 +3110,20 @@ export type Database = {
             columns: ["branch_id"]
             isOneToOne: false
             referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "modifier_groups_owner_menu_item_id_fkey"
+            columns: ["owner_menu_item_id"]
+            isOneToOne: false
+            referencedRelation: "menu_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "modifier_groups_source_group_id_fkey"
+            columns: ["source_group_id"]
+            isOneToOne: false
+            referencedRelation: "modifier_groups"
             referencedColumns: ["id"]
           },
         ]
@@ -5497,6 +5517,10 @@ export type Database = {
         Returns: Json
       }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
+      customize_item_modifier_group: {
+        Args: { p_group_id: string; p_menu_item_id: string }
+        Returns: Json
+      }
       decide_billing_request: {
         Args: { p_approve: boolean; p_id: string; p_note?: string }
         Returns: Json
@@ -6171,6 +6195,10 @@ export type Database = {
       reset_driver_reject_streak: {
         Args: { p_driver_id: string }
         Returns: undefined
+      }
+      reset_item_modifier_group: {
+        Args: { p_group_id: string; p_menu_item_id: string }
+        Returns: Json
       }
       resolve_custom_domain: {
         Args: { p_domain: string }

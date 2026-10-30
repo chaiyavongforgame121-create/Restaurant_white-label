@@ -26,10 +26,14 @@ export default async function ModifiersPage({ params }: Props) {
          modifier_options(id, name, price_delta, is_default, is_active, display_order, created_at)`,
       )
       .eq('branch_id', branchId)
+      // The library only. A dish's own copy of a group, or a group made in its editor, belongs to
+      // that dish and is edited there.
+      .is('owner_menu_item_id', null)
       .order('display_order'),
     supabase
       .from('menu_items')
-      .select('id, name, menu_item_modifiers(modifier_group_id)')
+      // A linked group's source_group_id marks the dish's own copy of a library group, and says which.
+      .select('id, name, menu_item_modifiers(modifier_group_id, modifier_groups(source_group_id))')
       .eq('branch_id', branchId)
       .eq('is_active', true)
       .order('name'),

@@ -21,6 +21,9 @@
     "pickUpTo": "elegir hasta {max}",
     "optionCount": "{count, plural, one {# opción} other {# opciones}}",
     "linkedCount": "vinculado a {count, plural, one {# artículo} other {# artículos}}",
+    "customizedCount": "{count, plural, one {# personalizado} other {# personalizados}}",
+    "customizedNote": "{count, plural, one {{names} tiene su propia versión de este grupo, personalizada en el editor del plato. Los cambios que hagas aquí no le llegan.} other {{names} tienen su propia versión de este grupo, personalizada en el editor de cada plato. Los cambios que hagas aquí no les llegan.}}",
+    "customizedNoteMore": "{names} y {more, plural, one {# plato más} other {# platos más}} tienen su propia versión de este grupo, personalizada en el editor de cada plato. Los cambios que hagas aquí no les llegan.",
     "delete": "Eliminar",
     "options": "Opciones",
     "default": "Predeterminada",
@@ -42,6 +45,7 @@
     "deleteGroupConfirm": {
       "title": "¿Eliminar este grupo de opciones?",
       "body": "También se eliminan sus opciones, y todos los artículos vinculados al grupo dejan de ofrecerlas.",
+      "bodyWithCopies": "También se eliminan sus opciones, y todos los artículos vinculados al grupo dejan de ofrecerlas. {count, plural, one {El plato que tiene su propia versión personalizada la conserva.} other {Los # platos que tienen su propia versión personalizada la conservan.}}",
       "confirm": "Eliminar"
     },
     "optionPrompt": {
@@ -77,6 +81,8 @@
       "edit": "Editar vínculos",
       "linked": "vinculado",
       "noItems": "No hay artículos activos en el menú de esta sucursal.",
+      "customized": "Personalizado",
+      "customizedHint": "Los platos marcados como Personalizado tienen su propia versión de este grupo, así que no se pueden vincular aquí. Para que uno vuelva a usar este grupo, abre el plato y elige “Usar la versión de la biblioteca”.",
       "save": "Guardar vínculos"
     }
   },

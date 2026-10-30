@@ -104,6 +104,7 @@
     "title": "Options",
     "subtitle": "Size, add-ons, prep choices customers pick",
     "addGroup": "Add group",
+    "addFromLibrary": "Add from Modifier groups",
     "loading": "Loading options…",
     "emptyTitle": "Add an option group",
     "emptyExample": "e.g. <strong>Size</strong> (pick 1) or <strong>Add-ons</strong> (pick many)",
@@ -133,6 +134,28 @@
       "unnamedOptionUp": "Move this option up",
       "unnamedOptionDown": "Move this option down"
     },
+    "library": {
+      "title": "Choose from Modifier groups",
+      "hint": "A group shows on this dish as it is in Modifier groups. Anything you change in it here is saved for this dish only.",
+      "loading": "Loading Modifier groups…",
+      "empty": "Modifier groups has no groups yet. Use Add group to make one for this dish.",
+      "allAdded": "Every group in Modifier groups is already on this dish.",
+      "add": "Add",
+      "addNamed": "Add “{name}” to this dish",
+      "unnamed": "Unnamed group",
+      "optionCount": "{count, plural, one {# option} other {# options}}",
+      "pickUpTo": "Pick up to {max}",
+      "close": "Close",
+      "gone": "That group is no longer in Modifier groups. The list has been reloaded.",
+      "goneNamed": "“{group}” is no longer in Modifier groups, so it isn’t on this dish."
+    },
+    "source": {
+      "library": "From Modifier groups",
+      "libraryHint": "Changes here apply to this dish only.",
+      "customized": "Customized for this dish",
+      "useLibrary": "Use the library version",
+      "dishOnly": "This dish only"
+    },
     "groupSaveFailed": "Could not save option group.",
     "groupCreateFailed": "Could not create group.",
     "validation": {
@@ -141,9 +164,22 @@
       "blankOptions": "Name every option in “{group}”, or remove the blank ones."
     },
     "removeConfirm": {
-      "title": "Remove this option group?",
-      "body": "It stops showing on this item, and is deleted entirely if no other item uses it.",
-      "confirm": "Remove"
+      "libraryTitle": "Remove this group from the dish?",
+      "libraryBody": "It stops showing on this dish. It stays in Modifier groups and on the other dishes that use it.",
+      "ownTitle": "Delete this option group?",
+      "ownBody": "It belongs to this dish only, so it is deleted. Modifier groups is not affected.",
+      "remove": "Remove",
+      "delete": "Delete"
+    },
+    "resetConfirm": {
+      "title": "Use the library version?",
+      "body": "The changes made to this group for this dish are deleted, and the dish shows the group as it is in Modifier groups.",
+      "confirm": "Use the library version"
+    },
+    "copyFailed": "Your change wasn’t saved. {reason}",
+    "copyErrors": {
+      "listChanged": "This group was changed somewhere else meanwhile. The list has been reloaded, so try again.",
+      "sourceMissing": "The original group is no longer in Modifier groups, so this dish keeps its own version."
     }
   },
   "reorder": {

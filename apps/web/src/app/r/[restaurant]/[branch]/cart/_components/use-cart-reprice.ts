@@ -2,7 +2,13 @@
 
 import * as React from 'react';
 import { getBrowserClient } from '@favornoms/database/client';
-import { useCart, useCartStoreApi, type CurrentPrice } from '@/store/cart';
+import {
+  groupsOnDishes,
+  optionsOffTheirDish,
+  useCart,
+  useCartStoreApi,
+  type CurrentPrice,
+} from '@/store/cart';
 
 /** Do not re-ask more often than this when a view is flicked in and out of the foreground. */
 const RECHECK_MIN_GAP_MS = 30_000;
@@ -77,10 +83,16 @@ export function useCartReprice(branchId: string, storefrontVersion: number): Car
         current.flatMap((l) => (l.comboId ? [] : (l.modifiers ?? []).map((m) => m.option_id))),
       ),
     ];
+    // The dishes those options were chosen on.
+    const optionItemIds = [
+      ...new Set(
+        current.flatMap((l) => (!l.comboId && (l.modifiers ?? []).length > 0 ? [l.menuItemId] : [])),
+      ),
+    ];
 
     void (async () => {
       const supabase = getBrowserClient();
-      const [itemRows, comboRows, effectiveRows, optionRows] = await Promise.all([
+      const [itemRows, comboRows, effectiveRows, optionRows, linkRows] = await Promise.all([
         itemIds.length
           ? supabase
               .from('menu_items')
@@ -105,12 +117,30 @@ export function useCartReprice(branchId: string, storefrontVersion: number): Car
         optionIds.length
           ? supabase
               .from('modifier_options')
-              .select('id, is_active, price_delta, modifier_groups!inner(branch_id)')
+              .select('id, group_id, is_active, price_delta, modifier_groups!inner(branch_id)')
               .in('id', optionIds)
+          : null,
+        // The groups those dishes show now. A dish offers an option only through a group linked to
+        // it, and place-order refuses an option sent on any other dish (modifier_inactive, reason
+        // not_on_item): a dish given its own copy of a library group no longer offers the library's
+        // options, though the library group, and every other dish showing it, still do.
+        optionItemIds.length
+          ? supabase
+              .from('menu_item_modifiers')
+              .select('menu_item_id, modifier_group_id')
+              .in('menu_item_id', optionItemIds)
           : null,
       ]);
       // A failed read tells us nothing, and nothing is exactly what it should change.
-      if (cancelled || itemRows?.error || comboRows?.error || optionRows?.error) return;
+      if (
+        cancelled ||
+        itemRows?.error ||
+        comboRows?.error ||
+        optionRows?.error ||
+        linkRows?.error
+      ) {
+        return;
+      }
 
       const discounted = new Map<string, number>();
       for (const row of effectiveRows?.data ?? []) {
@@ -144,21 +174,30 @@ export function useCartReprice(branchId: string, storefrontVersion: number): Car
         else live.set(row.id, { price: Number(row.total_price), available: row.is_available === true });
       }
 
-      // The same three tests place-order applies, so the cart takes out exactly what the server
-      // would refuse: no row (deleted), switched off, or a group at another branch.
+      // The same tests place-order applies, so the cart takes out exactly what the server would
+      // refuse: no row (deleted), switched off, or a group at another branch; then an option on
+      // offer whose group the line's dish does not show.
       const unavailableOptions = new Set(optionIds);
       // What each option still on offer adds today: place-order charges the current delta, not the
       // one the line was added with, so a fried egg that went up must move the cart's quote too.
       const optionPrices = new Map<string, number>();
+      // The group each option on offer is in now, for the dish test.
+      const optionGroups = new Map<string, string>();
       for (const row of optionRows?.data ?? []) {
         const group = Array.isArray(row.modifier_groups) ? row.modifier_groups[0] : row.modifier_groups;
         if (row.is_active && group?.branch_id === branchId) {
           unavailableOptions.delete(row.id);
           optionPrices.set(row.id, Number(row.price_delta));
+          optionGroups.set(row.id, row.group_id);
         }
       }
+      const offDish = optionsOffTheirDish(
+        current,
+        optionGroups,
+        groupsOnDishes(optionItemIds, linkRows?.data ?? []),
+      );
 
-      const { changed, removed } = reprice(live, unavailableOptions, optionPrices);
+      const { changed, removed } = reprice(live, unavailableOptions, optionPrices, offDish);
       if (cancelled) return;
       // The words are the cart view's: a hook has no business picking a language.
       setNotice(removed > 0 || changed > 0 ? { removed, changed } : null);

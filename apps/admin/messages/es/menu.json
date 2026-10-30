@@ -104,6 +104,7 @@
     "title": "Opciones",
     "subtitle": "Tamaño, extras y preparación que eligen los clientes",
     "addGroup": "Agregar grupo",
+    "addFromLibrary": "Agregar de Grupos de opciones",
     "loading": "Cargando opciones…",
     "emptyTitle": "Agregar un grupo de opciones",
     "emptyExample": "p. ej., <strong>Tamaño</strong> (elige 1) o <strong>Extras</strong> (elige varios)",
@@ -133,6 +134,28 @@
       "unnamedOptionUp": "Subir esta opción",
       "unnamedOptionDown": "Bajar esta opción"
     },
+    "library": {
+      "title": "Elegir de Grupos de opciones",
+      "hint": "El grupo se muestra en este plato tal como está en Grupos de opciones. Lo que cambies en él aquí se guarda solo para este plato.",
+      "loading": "Cargando Grupos de opciones…",
+      "empty": "Grupos de opciones todavía no tiene grupos. Usa Agregar grupo para crear uno para este plato.",
+      "allAdded": "Todos los grupos de Grupos de opciones ya están en este plato.",
+      "add": "Agregar",
+      "addNamed": "Agregar “{name}” a este plato",
+      "unnamed": "Grupo sin nombre",
+      "optionCount": "{count, plural, one {# opción} other {# opciones}}",
+      "pickUpTo": "Elige hasta {max}",
+      "close": "Cerrar",
+      "gone": "Ese grupo ya no está en Grupos de opciones. La lista se volvió a cargar.",
+      "goneNamed": "“{group}” ya no está en Grupos de opciones, así que no quedó en este plato."
+    },
+    "source": {
+      "library": "De Grupos de opciones",
+      "libraryHint": "Los cambios aquí se aplican solo a este plato.",
+      "customized": "Personalizado para este plato",
+      "useLibrary": "Usar la versión de la biblioteca",
+      "dishOnly": "Solo este plato"
+    },
     "groupSaveFailed": "No se pudo guardar el grupo de opciones.",
     "groupCreateFailed": "No se pudo crear el grupo.",
     "validation": {
@@ -141,9 +164,22 @@
       "blankOptions": "Ponle nombre a cada opción de “{group}” o quita las que están en blanco."
     },
     "removeConfirm": {
-      "title": "¿Quitar este grupo de opciones?",
-      "body": "Dejará de mostrarse en este producto y se eliminará por completo si ningún otro producto lo usa.",
-      "confirm": "Quitar"
+      "libraryTitle": "¿Quitar este grupo del plato?",
+      "libraryBody": "Dejará de mostrarse en este plato. Sigue en Grupos de opciones y en los demás platos que lo usan.",
+      "ownTitle": "¿Eliminar este grupo de opciones?",
+      "ownBody": "Pertenece solo a este plato, así que se elimina. Grupos de opciones no cambia.",
+      "remove": "Quitar",
+      "delete": "Eliminar"
+    },
+    "resetConfirm": {
+      "title": "¿Usar la versión de la biblioteca?",
+      "body": "Se eliminan los cambios hechos a este grupo para este plato, y el plato muestra el grupo tal como está en Grupos de opciones.",
+      "confirm": "Usar la versión de la biblioteca"
+    },
+    "copyFailed": "Tu cambio no se guardó. {reason}",
+    "copyErrors": {
+      "listChanged": "Este grupo se cambió en otro lugar mientras tanto. La lista se volvió a cargar; inténtalo de nuevo.",
+      "sourceMissing": "El grupo original ya no está en Grupos de opciones, así que este plato conserva su propia versión."
     }
   },
   "reorder": {

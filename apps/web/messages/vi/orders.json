@@ -13,7 +13,8 @@
     "summary": "{count, plural, other {# món}} · {total}",
     "reorder": "Đặt lại",
     "reorderNoneAvailable": "Hiện không còn món nào trong đơn này.",
-    "reorderSomeDropped": "Một số món hoặc tùy chọn trong đơn đó không còn nên đã được bỏ ra — vui lòng kiểm tra lại giỏ hàng."
+    "reorderSomeDropped": "Một số món hoặc tùy chọn trong đơn đó không còn nên đã được bỏ ra — vui lòng kiểm tra lại giỏ hàng.",
+    "reorderFailed": "Hiện chưa thể đối chiếu đơn đó với thực đơn. Giỏ hàng của bạn vẫn giữ nguyên. Vui lòng thử lại."
   },
   "channel": {
     "dine_in": "Ăn tại quán",
