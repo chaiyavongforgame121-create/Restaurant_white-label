@@ -1,9 +1,11 @@
+import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { getMyStaffAccessRows } from '@favornoms/database/queries';
 import { hasFeature, type TenantTheme } from '@favornoms/shared';
 import { getBranchAccess, type BranchAccess } from '@/lib/capabilities';
+import { getBranchIconMetadata } from '@/lib/branch-app-icon';
 import { NO_WIND_DOWN, resolveDeliveryWindDown } from '@/lib/delivery-gate';
 import { branchLayoutRedirect } from '@/lib/subscription-gate';
 import { PATHNAME_HEADER } from '@favornoms/database/middleware';
@@ -19,6 +21,16 @@ const STAFF_ROLES: readonly string[] = ['owner', 'admin', 'manager', 'cashier', 
 interface Props {
   params: Promise<{ branchId: string }>;
   children: React.ReactNode;
+}
+
+/**
+ * The tab wears the branch's own App icon (else its brand's, else the FavorNoms icons it
+ * inherits), the set it uploads in Branch settings -> Branding and its storefront already shows.
+ * Only `icons`: the manifest, the title and the app name stay the back office's.
+ */
+export async function generateMetadata({ params }: Pick<Props, 'params'>): Promise<Metadata> {
+  const { branchId } = await params;
+  return getBranchIconMetadata(branchId);
 }
 
 /**

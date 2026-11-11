@@ -44,7 +44,9 @@ dish out rather than re-add it without a required choice).
 
 - `copy_branch_setup` copies library groups first, then the dishes' own groups pointing at the target's
   dishes and library groups.
-- `duplicate_menu_item` copies no option groups (unchanged; it never did).
+- `duplicate_menu_item` (the menu card's Duplicate) gives the copy the same option groups in the same
+  order since 20261111100000: the library groups the source shows are shown on the copy too, and the
+  source's own groups are copied, with their options, as the new dish's own.
 - Migration `20261030100000_item_modifier_copies.sql`, rolled-back checks
   `supabase/tests/item_modifier_copies.sql`. Deploy order: place-order v11.10, then the migration, then the
   admin and storefront together.

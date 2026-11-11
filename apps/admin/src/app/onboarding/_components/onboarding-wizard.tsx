@@ -10,6 +10,22 @@ import { hasMapboxToken, type ResolvedAddress } from '@favornoms/maps';
 import { getBrowserClient } from '@favornoms/database/client';
 import { DEFAULT_UI_LOCALE, describeBillingError, isUiLocale, isValidTimeZone } from '@favornoms/shared';
 import { Button, Card, buttonVariants } from '@favornoms/ui';
+import {
+  RESTAURANT_NAME_MAX_LENGTH,
+  canContinue,
+  launchPreflight,
+  launchProblem,
+  launchProblemKey,
+  launchProblemStep,
+  normalizeSlug,
+  slugFieldInput,
+  slugFieldValue,
+  slugHint,
+  slugToSend,
+  type LaunchProblem,
+  type SlugField,
+  type SlugOwner,
+} from './onboarding-model';
 
 // Loaded only when the owner opens it: the map is the heaviest thing on this screen by far.
 const LocationPicker = dynamic(() => import('@favornoms/maps').then((m) => m.LocationPicker), {
@@ -53,15 +69,11 @@ const ZONE_CENTERS: Record<string, { lat: number; lng: number }> = {
   'America/Mexico_City': { lat: 19.4326, lng: -99.1332 },
 };
 
-const slugify = (s: string) =>
-  s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 64);
-
-// A slug is the tenant's public web address, so an empty one is not a cosmetic slip: it
-// reaches create_restaurant_with_branch and comes back as a raw Postgres message under the
-// Launch button. slugify() already forces the shape as you type, but it happily reduces a
-// name made only of punctuation (or a cleared field) to '', which is what has to be caught.
-// The hint shown for it is `onboarding.fields.slugHint`.
-const isUsableSlug = (s: string) => s.length > 0;
+// A slug is the tenant's public web address. What each slug field holds, the line under it,
+// whether Continue and Launch may go on, and which RPC refusals name a field all live in
+// onboarding-model.ts, on the database's own rule (restaurants_slug_check / branches_slug_check:
+// 2 to 64 lower-case letters, digits and single hyphens). The old rule here was "not empty", so a
+// slug frozen at one letter went to the RPC and came back 23514; see the top of that file.
 
 /** What create_restaurant_with_branch uses when no zone is sent. */
 const DEFAULT_TIME_ZONE = 'America/New_York';
@@ -102,10 +114,13 @@ export function OnboardingWizard({
   const [continuedPastNotice, setContinuedPastNotice] = React.useState(false);
   const [step, setStep] = React.useState<0 | 1 | 2>(0);
   const [restaurantName, setRestaurantName] = React.useState('');
-  const [restaurantSlug, setRestaurantSlug] = React.useState('');
+  // What the merchant typed into a slug field, or null while it follows its name: the field then
+  // shows the name's slug on every keystroke. Copying the name only while the slug was empty froze
+  // it at the first Latin letter of a name typed letter by letter.
+  const [restaurantSlugTyped, setRestaurantSlugTyped] = React.useState<string | null>(null);
   // Sent to create_restaurant_with_branch as the branch's name, so it stays as it has always been.
   const [branchName, setBranchName] = React.useState('Main');
-  const [branchSlug, setBranchSlug] = React.useState('main');
+  const [branchSlugTyped, setBranchSlugTyped] = React.useState<string | null>(null);
   const [branchAddress, setBranchAddress] = React.useState('');
   // The map pin. Delivery fees, rider dispatch and batching all measure from it, and a branch
   // created without one starts life with delivery unable to dispatch.
@@ -121,10 +136,29 @@ export function OnboardingWizard({
   const [accentColor, setAccentColor] = React.useState('#F7B538');
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  // The slug field `error` is about, so fixing that field takes the stale sentence away.
+  const [errorField, setErrorField] = React.useState<SlugOwner | null>(null);
 
-  React.useEffect(() => {
-    if (restaurantName && !restaurantSlug) setRestaurantSlug(slugify(restaurantName));
-  }, [restaurantName, restaurantSlug]);
+  const restaurantSlugField: SlugField = { name: restaurantName, typed: restaurantSlugTyped };
+  const branchSlugField: SlugField = { name: branchName, typed: branchSlugTyped };
+
+  const clearErrorFor = (field: SlugOwner) => {
+    if (errorField !== field) return;
+    setError(null);
+    setErrorField(null);
+  };
+
+  /** A failure the merchant can fix: its own sentence, on the step with the field. */
+  const showProblem = (problem: LaunchProblem) => {
+    setStep(launchProblemStep(problem));
+    setError(t(launchProblemKey(problem)));
+    setErrorField(problem.field);
+  };
+
+  const slugHintText = (field: SlugField) => {
+    const hint = slugHint(field);
+    return hint === 'latinOnly' ? t('fields.slugLatinOnly') : hint === 'rule' ? t('fields.slugRule') : null;
+  };
 
   // The wizard never sent a zone, so every store opened on America/New_York: a Chicago
   // store closed an hour early and a Bangkok store's "today" report started at noon. The
@@ -155,16 +189,17 @@ export function OnboardingWizard({
   }, [deviceZone, t]);
 
   const create = async () => {
-    // Step 2 has no slug fields of its own, so a slug can only be empty here if someone
-    // stepped back and cleared one. Cheap to re-check, and it keeps the RPC from being the
-    // thing that discovers it.
-    if (!isUsableSlug(restaurantSlug) || !isUsableSlug(branchSlug)) {
-      setStep(isUsableSlug(restaurantSlug) ? 1 : 0);
-      setError(t('errors.slugMissing'));
+    // Step 2 has no slug fields of its own, and Continue holds each step back on the same rule,
+    // so a slug can only be unusable here if someone stepped back and changed one. Cheap to
+    // re-check, and it keeps the RPC from being the thing that discovers it.
+    const before = launchPreflight(restaurantSlugField, branchSlugField);
+    if (before) {
+      showProblem(before);
       return;
     }
     setBusy(true);
     setError(null);
+    setErrorField(null);
     const supabase = getBrowserClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -172,48 +207,45 @@ export function OnboardingWizard({
       router.push('/login?next=/onboarding');
       return;
     }
+    const name = restaurantName.trim();
     const { data, error: rpcErr } = await supabase.rpc('create_restaurant_with_branch', {
-      p_restaurant_name: restaurantName,
-      p_restaurant_slug: restaurantSlug,
-      p_branch_name: branchName,
-      p_branch_slug: branchSlug,
+      p_restaurant_name: name,
+      p_restaurant_slug: slugToSend(restaurantSlugField),
+      p_branch_name: branchName.trim(),
+      p_branch_slug: slugToSend(branchSlugField),
       p_branch_address: branchAddress || null,
       p_timezone: isValidTimeZone(timezone) ? timezone : DEFAULT_TIME_ZONE,
-      p_theme: { primaryColor, accentColor, brandName: restaurantName },
+      p_theme: { primaryColor, accentColor, brandName: name },
       p_lat: branchGeo?.lat ?? null,
       p_lng: branchGeo?.lng ?? null,
     });
     setBusy(false);
     if (rpcErr) {
+      // The raw text stays for the console whatever the screen says.
+      console.error('[onboarding] create_restaurant_with_branch failed:', rpcErr.code, rpcErr.message);
       // create_restaurant_with_branch does not refuse a further restaurant on billing
       // grounds — it creates it without a package (trial_granted false, handled below).
       // These arms stay so a billing refusal, should it ever come, reads as a sentence.
       const billing = describeBillingError(rpcErr);
-      // A taken slug is the one failure a new owner can actually fix, and it is likelier
-      // than any of the above: two restaurants called Thai Garden slugify identically. Left
-      // as rpcErr.message it read 'duplicate key value violates unique constraint
-      // "restaurants_slug_key"' on the very first screen of the product.
-      const takenField = rpcErr.code === '23505'
-        ? /branch/i.test(`${rpcErr.message} ${rpcErr.details ?? ''}`)
-          ? 'branch'
-          : 'restaurant'
-        : null;
-      if (!billing && !takenField) {
-        // Anything else is database text a new owner cannot act on; keep it for the console.
-        console.error('[onboarding] create_restaurant_with_branch failed:', rpcErr.message);
+      if (billing?.kind === 'seats') {
+        setError(t('errors.seatsFull', { limit: billing.limit }));
+        return;
       }
-      setError(
-        billing?.kind === 'seats'
-          ? t('errors.seatsFull', { limit: billing.limit })
-          : billing?.kind === 'inactive'
-            ? t('errors.subscriptionInactive')
-            : takenField === 'branch'
-              ? t('errors.branchSlugTaken')
-              : takenField === 'restaurant'
-                ? t('errors.restaurantSlugTaken')
-                : t('errors.generic'),
-      );
-      if (takenField) setStep(takenField === 'branch' ? 1 : 0);
+      if (billing?.kind === 'inactive') {
+        setError(t('errors.subscriptionInactive'));
+        return;
+      }
+      // A slug the database refuses (its shape, or taken) is the failure a new owner can fix,
+      // and the likeliest: two restaurants called Thai Garden make the same slug. Left as
+      // rpcErr.message it read 'duplicate key value violates unique constraint
+      // "restaurants_slug_key"' on the very first screen of the product.
+      const problem = launchProblem(rpcErr);
+      if (problem) {
+        showProblem(problem);
+        return;
+      }
+      // Anything else is database text a new owner cannot act on.
+      setError(t('errors.generic'));
       return;
     }
     // The RPC answering without a branch_id used to fall off the end of this function:
@@ -314,13 +346,42 @@ export function OnboardingWizard({
         {step === 0 && (
           <div className="space-y-3">
             <Field label={t('fields.restaurantName')}>
-              <input value={restaurantName} onChange={(e) => setRestaurantName(e.target.value)} className="input" placeholder={t('fields.restaurantNamePlaceholder')} autoFocus />
+              <input
+                value={restaurantName}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setRestaurantName(next);
+                  // Only a change to the address that would be sent makes a refusal of it stale:
+                  // "Thai Garden." still sends thai-garden, which was just turned down.
+                  if (
+                    restaurantSlugTyped === null &&
+                    slugFieldValue({ name: next, typed: null }) !== slugFieldValue(restaurantSlugField)
+                  ) {
+                    clearErrorFor('restaurant');
+                  }
+                }}
+                maxLength={RESTAURANT_NAME_MAX_LENGTH}
+                className="input"
+                placeholder={t('fields.restaurantNamePlaceholder')}
+                autoFocus
+              />
             </Field>
-            <Field
-              label={t('fields.restaurantSlug')}
-              hint={restaurantName && !isUsableSlug(restaurantSlug) ? t('fields.slugHint') : null}
-            >
-              <input value={restaurantSlug} onChange={(e) => setRestaurantSlug(slugify(e.target.value))} className="input font-mono" placeholder="somtam-zab" />
+            <Field label={t('fields.restaurantSlug')} hint={slugHintText(restaurantSlugField)}>
+              {/* Shaped as typed, but a hyphen at the end stays so one can go between two words;
+                  leaving the field drops it, and what is checked and sent never has it. */}
+              <input
+                value={slugFieldValue(restaurantSlugField)}
+                onChange={(e) => {
+                  setRestaurantSlugTyped(slugFieldInput(e.target.value));
+                  clearErrorFor('restaurant');
+                }}
+                onBlur={() => setRestaurantSlugTyped((s) => (s === null ? s : normalizeSlug(s)))}
+                className="input font-mono"
+                placeholder="somtam-zab"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+              />
             </Field>
           </div>
         )}
@@ -328,13 +389,36 @@ export function OnboardingWizard({
         {step === 1 && (
           <div className="space-y-3">
             <Field label={t('fields.branchName')}>
-              <input value={branchName} onChange={(e) => setBranchName(e.target.value)} className="input" placeholder={t('fields.branchNamePlaceholder')} />
+              <input
+                value={branchName}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setBranchName(next);
+                  if (
+                    branchSlugTyped === null &&
+                    slugFieldValue({ name: next, typed: null }) !== slugFieldValue(branchSlugField)
+                  ) {
+                    clearErrorFor('branch');
+                  }
+                }}
+                className="input"
+                placeholder={t('fields.branchNamePlaceholder')}
+              />
             </Field>
-            <Field
-              label={t('fields.branchSlug')}
-              hint={branchName && !isUsableSlug(branchSlug) ? t('fields.slugHint') : null}
-            >
-              <input value={branchSlug} onChange={(e) => setBranchSlug(slugify(e.target.value))} className="input font-mono" placeholder="sukhumvit" />
+            <Field label={t('fields.branchSlug')} hint={slugHintText(branchSlugField)}>
+              <input
+                value={slugFieldValue(branchSlugField)}
+                onChange={(e) => {
+                  setBranchSlugTyped(slugFieldInput(e.target.value));
+                  clearErrorFor('branch');
+                }}
+                onBlur={() => setBranchSlugTyped((s) => (s === null ? s : normalizeSlug(s)))}
+                className="input font-mono"
+                placeholder="sukhumvit"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+              />
             </Field>
             <div>
               <Field label={t('fields.address')}>
@@ -400,11 +484,7 @@ export function OnboardingWizard({
             <Button
               variant="gradient"
               onClick={() => setStep((s) => (s + 1) as 0 | 1 | 2)}
-              disabled={
-                step === 0
-                  ? !restaurantName || !isUsableSlug(restaurantSlug)
-                  : !branchName || !isUsableSlug(branchSlug)
-              }
+              disabled={step === 0 ? !canContinue(restaurantSlugField) : !canContinue(branchSlugField)}
               rightIcon={<ChevronRight className="h-4 w-4" />}
             >
               {t('wizard.continue')}

@@ -26,7 +26,7 @@
   "notices": {
     "savedTracking": "Saved “{name}” — tracking stock, {count} left.",
     "savedUntracked": "Saved “{name}” — stock tracking is off, so the storefront will not mark it sold out.",
-    "copied": "Copied. The copy is hidden from customers, has no option groups and does not track stock yet — set them up in Edit, then switch on “Show on customer menu”.",
+    "copied": "Copied with its option groups. The copy is hidden from customers and does not track stock yet — check it in Edit, then switch on “Show on customer menu”.",
     "nowVisible": "“{name}” is now on the customer menu.",
     "nowHidden": "“{name}” is hidden from customers.",
     "visibilityUnchanged": "Nothing was changed. This dish may have been deleted, or your role may not be allowed to edit the menu at this branch.",
@@ -70,7 +70,7 @@
     "currentStock": "Current stock",
     "lowStockAt": "Low-stock alert at",
     "showOnMenu": "Show on customer menu",
-    "showOnMenuHint": "Off takes the dish off the customer menu without deleting it (combos that include it still sell it). Copies start hidden, without option groups, so you can finish them first.",
+    "showOnMenuHint": "Off takes the dish off the customer menu without deleting it (combos that include it still sell it). Copies start hidden, so you can finish them first.",
     "recommended": "Chef’s recommendation",
     "isNew": "New",
     "save": "Save",

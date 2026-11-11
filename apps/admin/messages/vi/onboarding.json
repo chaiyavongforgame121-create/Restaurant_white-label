@@ -30,7 +30,8 @@
     "restaurantName": "Tên nhà hàng",
     "restaurantNamePlaceholder": "Phở Hà Nội",
     "restaurantSlug": "Đường dẫn URL (thành /r/ten-quan/…)",
-    "slugHint": "Chỉ dùng chữ cái không dấu và số — đây sẽ là một phần địa chỉ web của bạn.",
+    "slugRule": "Dùng 2 đến 64 chữ cái thường không dấu (a–z), chữ số và dấu gạch ngang giữa các từ, ví dụ pho-ha-noi. Đây sẽ là một phần địa chỉ web của bạn.",
+    "slugLatinOnly": "Địa chỉ web chỉ dùng chữ cái Latinh nên không tạo được từ tên này. Hãy nhập địa chỉ ở đây bằng chữ cái không dấu (a–z) và chữ số, ví dụ lamoon.",
     "branchName": "Tên chi nhánh",
     "branchNamePlaceholder": "Chi nhánh Quận 1",
     "branchSlug": "Đường dẫn URL của chi nhánh",
@@ -56,11 +57,12 @@
     "thisDevice": "{zone} (thiết bị này)"
   },
   "errors": {
-    "slugMissing": "Hãy đặt địa chỉ web cho nhà hàng và chi nhánh trước khi khai trương.",
+    "restaurantSlugInvalid": "Không dùng được địa chỉ web này cho nhà hàng. Hãy dùng 2 đến 64 chữ cái thường không dấu (a–z), chữ số và dấu gạch ngang giữa các từ, ví dụ pho-ha-noi.",
+    "branchSlugInvalid": "Không dùng được địa chỉ web này cho chi nhánh. Hãy dùng 2 đến 64 chữ cái thường không dấu (a–z), chữ số và dấu gạch ngang giữa các từ, ví dụ quan-1.",
     "seatsFull": "{limit, plural, other {Bạn đã dùng hết # suất chi nhánh.}} Hãy thêm suất ở trang Gói và thanh toán trước.",
     "subscriptionInactive": "Gói đăng ký của bạn chưa hoạt động. Hãy chọn một gói trước khi thêm nhà hàng khác.",
-    "restaurantSlugTaken": "Địa chỉ web của nhà hàng này đã có người dùng. Hãy quay lại và chọn địa chỉ khác.",
-    "branchSlugTaken": "Địa chỉ web của chi nhánh này đã có người dùng. Hãy quay lại và chọn địa chỉ khác.",
+    "restaurantSlugTaken": "Địa chỉ web của nhà hàng này đã có người dùng. Hãy chọn địa chỉ khác.",
+    "branchSlugTaken": "Địa chỉ web của chi nhánh này đã có người dùng. Hãy chọn địa chỉ khác.",
     "notOpened": "Nhà hàng của bạn có thể đã được tạo, nhưng chúng tôi không mở được. Hãy đăng nhập lại để kiểm tra trước khi thử lần nữa.",
     "generic": "Không thể tạo nhà hàng. Vui lòng thử lại."
   }

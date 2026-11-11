@@ -26,7 +26,7 @@
   "notices": {
     "savedTracking": "Đã lưu “{name}” — đang theo dõi tồn kho, còn {count}.",
     "savedUntracked": "Đã lưu “{name}” — đã tắt theo dõi tồn kho, nên trang đặt món sẽ không báo hết hàng.",
-    "copied": "Đã nhân bản. Bản sao đang ẩn với khách, chưa có nhóm tùy chọn và chưa theo dõi tồn kho — hãy thiết lập trong phần Sửa, rồi bật “Hiện trên thực đơn của khách”.",
+    "copied": "Đã nhân bản cùng các nhóm tùy chọn. Bản sao đang ẩn với khách và chưa theo dõi tồn kho — hãy kiểm tra trong phần Sửa, rồi bật “Hiện trên thực đơn của khách”.",
     "nowVisible": "“{name}” đã hiện trên thực đơn của khách.",
     "nowHidden": "Đã ẩn “{name}” với khách.",
     "visibilityUnchanged": "Chưa có gì thay đổi. Món này có thể đã bị xóa, hoặc vai trò của bạn không được sửa thực đơn ở chi nhánh này.",
@@ -70,7 +70,7 @@
     "currentStock": "Tồn kho hiện tại",
     "lowStockAt": "Cảnh báo sắp hết khi còn",
     "showOnMenu": "Hiện trên thực đơn của khách",
-    "showOnMenuHint": "Tắt để gỡ món khỏi thực đơn của khách mà không xóa (combo có món này vẫn bán). Bản sao ban đầu sẽ ẩn và không có nhóm tùy chọn, để bạn hoàn thiện trước.",
+    "showOnMenuHint": "Tắt để gỡ món khỏi thực đơn của khách mà không xóa (combo có món này vẫn bán). Bản sao ban đầu sẽ ẩn, để bạn hoàn thiện trước.",
     "recommended": "Đầu bếp đề xuất",
     "isNew": "Mới",
     "save": "Lưu",

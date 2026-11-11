@@ -26,7 +26,7 @@
   "notices": {
     "savedTracking": "Se guardó “{name}”: con control de inventario, {count, plural, one {queda #} other {quedan #}}.",
     "savedUntracked": "Se guardó “{name}”: sin control de inventario, así que la tienda en línea no lo marcará como agotado.",
-    "copied": "Copiado. La copia está oculta para los clientes y todavía no tiene grupos de opciones ni control de inventario: configúralos en Editar y luego activa “Mostrar en el menú para clientes”.",
+    "copied": "Copiado con sus grupos de opciones. La copia está oculta para los clientes y todavía no tiene control de inventario: revísala en Editar y luego activa “Mostrar en el menú para clientes”.",
     "nowVisible": "“{name}” ya está en el menú para clientes.",
     "nowHidden": "“{name}” está oculto para los clientes.",
     "visibilityUnchanged": "No se cambió nada. Es posible que este producto se haya eliminado o que tu rol no pueda editar el menú en esta sucursal.",
@@ -70,7 +70,7 @@
     "currentStock": "Inventario actual",
     "lowStockAt": "Alerta de inventario bajo en",
     "showOnMenu": "Mostrar en el menú para clientes",
-    "showOnMenuHint": "Si lo desactivas, el producto sale del menú para clientes sin eliminarse (los combos que lo incluyen lo siguen vendiendo). Las copias empiezan ocultas y sin grupos de opciones, para que puedas terminarlas primero.",
+    "showOnMenuHint": "Si lo desactivas, el producto sale del menú para clientes sin eliminarse (los combos que lo incluyen lo siguen vendiendo). Las copias empiezan ocultas, para que puedas terminarlas primero.",
     "recommended": "Recomendación del chef",
     "isNew": "Nuevo",
     "save": "Guardar",

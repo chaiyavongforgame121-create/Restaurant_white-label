@@ -1,6 +1,8 @@
+import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 import { getMyStaffAccessRows } from '@favornoms/database/queries';
 import { getBranchAccess } from '@/lib/capabilities';
+import { getBranchIconMetadata } from '@/lib/branch-app-icon';
 import { AccessDenied } from '@/components/access-denied';
 import { StaffAccessWatcher } from '@/components/staff-access-watcher';
 import { SubscriptionEndedBanner, SubscriptionUnknownBanner } from '@/components/suspension-screen';
@@ -8,6 +10,12 @@ import { SubscriptionEndedBanner, SubscriptionUnknownBanner } from '@/components
 interface Props {
   params: Promise<{ branchId: string }>;
   children: React.ReactNode;
+}
+
+/** The branch's own App icon in the tab, as in the back office (see the /b layout). */
+export async function generateMetadata({ params }: Pick<Props, 'params'>): Promise<Metadata> {
+  const { branchId } = await params;
+  return getBranchIconMetadata(branchId);
 }
 
 export default async function KitchenLayout({ params, children }: Props) {

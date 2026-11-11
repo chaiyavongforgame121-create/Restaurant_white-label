@@ -30,7 +30,8 @@
     "restaurantName": "Restaurant name",
     "restaurantNamePlaceholder": "Coastal Grill",
     "restaurantSlug": "URL slug (becomes /r/your-slug/…)",
-    "slugHint": "Letters and numbers only — this becomes part of your web address.",
+    "slugRule": "Use 2 to 64 lowercase letters (a–z), digits and hyphens between words, for example lamoon-thai. This becomes part of your web address.",
+    "slugLatinOnly": "Web addresses use Latin letters only, so we can’t make one from this name. Type one here in English letters (a–z) and digits, for example lamoon.",
     "branchName": "Branch name",
     "branchNamePlaceholder": "Sukhumvit branch",
     "branchSlug": "Branch URL slug",
@@ -56,11 +57,12 @@
     "thisDevice": "{zone} (this device)"
   },
   "errors": {
-    "slugMissing": "Give your restaurant and branch a web address before launching.",
+    "restaurantSlugInvalid": "Your restaurant’s web address can’t be used as it is. Use 2 to 64 lowercase letters (a–z), digits and hyphens between words, for example lamoon-thai.",
+    "branchSlugInvalid": "Your branch’s web address can’t be used as it is. Use 2 to 64 lowercase letters (a–z), digits and hyphens between words, for example sukhumvit.",
     "seatsFull": "{limit, plural, one {You are using your only branch seat.} other {You are using all # of your branch seats.}} Add a seat on the Plan page first.",
     "subscriptionInactive": "Your subscription is not active. Choose a package before adding another restaurant.",
-    "restaurantSlugTaken": "That restaurant web address is already taken. Go back and pick another one.",
-    "branchSlugTaken": "That branch web address is already taken. Go back and pick another one.",
+    "restaurantSlugTaken": "That restaurant web address is already taken. Pick another one.",
+    "branchSlugTaken": "That branch web address is already taken. Pick another one.",
     "notOpened": "Your restaurant may have been created, but we could not open it. Sign in again to check before trying a second time.",
     "generic": "We couldn’t create your restaurant. Please try again."
   }

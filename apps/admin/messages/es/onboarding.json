@@ -30,7 +30,8 @@
     "restaurantName": "Nombre del restaurante",
     "restaurantNamePlaceholder": "La Parrilla del Puerto",
     "restaurantSlug": "Slug de la URL (queda /r/tu-slug/…)",
-    "slugHint": "Solo letras sin acentos y números: formará parte de tu dirección web.",
+    "slugRule": "Usa de 2 a 64 letras minúsculas sin acentos (a–z), números y guiones entre palabras, por ejemplo la-parrilla. Formará parte de tu dirección web.",
+    "slugLatinOnly": "Las direcciones web solo admiten letras latinas, así que no podemos crear una con este nombre. Escribe una aquí con letras sin acentos (a–z) y números, por ejemplo lamoon.",
     "branchName": "Nombre de la sucursal",
     "branchNamePlaceholder": "Sucursal Centro",
     "branchSlug": "Slug de la URL de la sucursal",
@@ -56,11 +57,12 @@
     "thisDevice": "{zone} (este dispositivo)"
   },
   "errors": {
-    "slugMissing": "Asigna una dirección web a tu restaurante y a tu sucursal antes de lanzarlo.",
+    "restaurantSlugInvalid": "La dirección web de tu restaurante no se puede usar así. Usa de 2 a 64 letras minúsculas sin acentos (a–z), números y guiones entre palabras, por ejemplo la-parrilla.",
+    "branchSlugInvalid": "La dirección web de tu sucursal no se puede usar así. Usa de 2 a 64 letras minúsculas sin acentos (a–z), números y guiones entre palabras, por ejemplo centro.",
     "seatsFull": "{limit, plural, one {Ya usas tu único cupo de sucursal.} other {Ya usas los # cupos de sucursal.}} Primero agrega un cupo en la página Plan y facturación.",
     "subscriptionInactive": "Tu suscripción no está activa. Elige un paquete antes de agregar otro restaurante.",
-    "restaurantSlugTaken": "Esa dirección web de restaurante ya está en uso. Vuelve atrás y elige otra.",
-    "branchSlugTaken": "Esa dirección web de sucursal ya está en uso. Vuelve atrás y elige otra.",
+    "restaurantSlugTaken": "Esa dirección web de restaurante ya está en uso. Elige otra.",
+    "branchSlugTaken": "Esa dirección web de sucursal ya está en uso. Elige otra.",
     "notOpened": "Es posible que tu restaurante se haya creado, pero no pudimos abrirlo. Vuelve a iniciar sesión para comprobarlo antes de intentarlo otra vez.",
     "generic": "No pudimos crear tu restaurante. Inténtalo de nuevo."
   }
