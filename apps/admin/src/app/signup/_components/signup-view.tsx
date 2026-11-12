@@ -21,6 +21,13 @@
 // already verified the address, so the owner lands on /onboarding with no email at all, and
 // /onboarding starts the trial exactly as it does for a password account.
 //
+// An address that already has an account is not an edge case here: every app shares one
+// Supabase project, so a former staff member or a storefront diner arrives with a login of
+// their own, and signUp cannot make a second one. Sending them off to sign in stranded them
+// on the page meant to start their trial, so signup tries the password they typed: if it is
+// theirs they continue to /onboarding like anyone else, and if not, the form offers Google or
+// an emailed link to set a new password (existing-account.ts).
+//
 // /login deliberately passes `shouldCreateUser: false` so that a typo in an email address
 // cannot mint an empty account and silently swallow the sign-in. This route is the
 // deliberate way in. create_restaurant_with_branch starts the trial from /onboarding.
@@ -36,6 +43,12 @@ import { getBrowserClient } from '@favornoms/database/client';
 import { AuthDivider, ContinueWithGoogle } from '@/components/auth/continue-with-google';
 import { LocaleSwitcher } from '@/components/locale-switcher';
 import { authErrorKey } from '../../auth/_lib/auth-error';
+import {
+  existingAccountOutcome,
+  mailRetryAfter,
+  passwordLinkRefusalKey,
+  signUpFoundAccount,
+} from './existing-account';
 
 /** `auth.signup.trial.*` keys. */
 const TRIAL_BULLETS = ['everyFeature', 'oneBranch', 'noCard'] as const;
@@ -46,6 +59,17 @@ const MIN_LENGTH = 8;
 
 /** GoTrue's own floor between two sends to the same address. */
 const RESEND_COOLDOWN_SECONDS = 60;
+
+/** Seconds left on a mail button, ticking down once a second. */
+function useCountdown(): [number, React.Dispatch<React.SetStateAction<number>>] {
+  const [left, setLeft] = React.useState(0);
+  React.useEffect(() => {
+    if (left <= 0) return;
+    const id = window.setTimeout(() => setLeft((s) => Math.max(0, s - 1)), 1000);
+    return () => window.clearTimeout(id);
+  }, [left]);
+  return [left, setLeft];
+}
 
 export function SignupView() {
   const router = useRouter();
@@ -58,24 +82,54 @@ export function SignupView() {
   const [resending, setResending] = React.useState(false);
   const [resendNotice, setResendNotice] = React.useState<string | null>(null);
   const [resendError, setResendError] = React.useState<string | null>(null);
-  const [cooldown, setCooldown] = React.useState(0);
+  const [cooldown, setCooldown] = useCountdown();
+  // The address already has an account and the password typed is not its password.
+  const [otherPassword, setOtherPassword] = React.useState(false);
+  // The address that was tried, as typed when the form went: the panel names it and the link goes
+  // to it, even if the field was edited while the sign-in was on its way.
+  const [triedEmail, setTriedEmail] = React.useState('');
+  const [sendingLink, setSendingLink] = React.useState(false);
+  // A link went to this address; like linkCooldown it belongs to the address, so only a new
+  // address clears it, not a password change or another submit.
+  const [linkSent, setLinkSent] = React.useState(false);
+  const [linkError, setLinkError] = React.useState<string | null>(null);
+  const [linkCooldown, setLinkCooldown] = useCountdown();
+
+  // Both a successful submit and the SIGNED_IN listener below land here, and auth-js runs the
+  // listener before signUp / signInWithPassword resolve, so whichever comes second is dropped
+  // rather than queueing a second navigation.
+  const leaving = React.useRef(false);
+  const continueToOnboarding = React.useCallback(() => {
+    if (leaving.current) return;
+    leaving.current = true;
+    router.replace('/onboarding');
+    router.refresh();
+  }, [router]);
 
   const confirmRedirect = () =>
     typeof window !== 'undefined'
       ? `${window.location.origin}/auth/callback?next=${encodeURIComponent('/onboarding')}`
       : undefined;
 
+  // Advice about the address and password just tried; stale the moment either field changes.
+  const clearAdvice = () => {
+    setError(null);
+    setOtherPassword(false);
+    setLinkError(null);
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
+    clearAdvice();
     if (password.length < MIN_LENGTH) {
       setError(t('signup.errors.passwordTooShort', { min: MIN_LENGTH }));
       return;
     }
     setSubmitting(true);
     const supabase = getBrowserClient();
+    const address = email.trim();
     const { data, error: signUpError } = await supabase.auth.signUp({
-      email: email.trim(),
+      email: address,
       password,
       options: {
         // Only used when the project requires email confirmation. Through /auth/callback,
@@ -83,26 +137,40 @@ export function SignupView() {
         emailRedirectTo: confirmRedirect(),
       },
     });
-    setSubmitting(false);
+    // The address already has an account: GoTrue answers with a fake, identity-less user (or,
+    // with confirmation off, user_already_exists), and no confirmation mail is ever sent to it.
+    // Reading that as success left them waiting for a mail; reading it as "go and sign in" left
+    // a former staff member or storefront diner with no way to start the trial they came for.
+    // If the password they typed is theirs, signing in with it is all it takes.
+    if (signUpFoundAccount({ user: data.user, error: signUpError })) {
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email: address, password });
+      if (!signInError) {
+        // The spinner stays up until /onboarding replaces this page.
+        continueToOnboarding();
+        return;
+      }
+      setSubmitting(false);
+      if (existingAccountOutcome(signInError) === 'other_password') {
+        setTriedEmail(address);
+        setOtherPassword(true);
+        return;
+      }
+      // Not confirmed yet, rate limited, or the server failed: the shared wording covers each.
+      console.error('[signup] signing in to the existing account failed:', signInError.message);
+      setError(t(authErrorKey(signInError)));
+      return;
+    }
     if (signUpError) {
+      setSubmitting(false);
       console.error('[signup] signUp failed:', signUpError.message);
       setError(t(authErrorKey(signUpError)));
       return;
     }
     if (data.session) {
-      router.replace('/onboarding');
-      router.refresh();
+      continueToOnboarding();
       return;
     }
-    // GoTrue deliberately answers an address that already has an account with a fake user
-    // carrying no identities, so signup cannot be used to probe who is registered. Left
-    // unread it looked like success, and an owner who had simply forgotten they had signed
-    // up before sat waiting for a confirmation mail that is never sent to a confirmed
-    // address. Sending them to sign in is the only move that actually gets them in.
-    if (data.user && (data.user.identities?.length ?? 0) === 0) {
-      setError(t('errors.accountExists'));
-      return;
-    }
+    setSubmitting(false);
     setResendNotice(null);
     setResendError(null);
     setCooldown(RESEND_COOLDOWN_SECONDS);
@@ -129,13 +197,9 @@ export function SignupView() {
     // arrived, and it is invisible on the signup call itself — GoTrue accepts the signup
     // whether or not the mail goes out. Here it is a real error, so say so plainly rather
     // than letting a second silent no-op look like a second successful send.
-    const tooSoon =
-      resendErr.status === 429 ||
-      resendErr.code === 'over_email_send_rate_limit' ||
-      /security purposes|rate limit/i.test(resendErr.message);
-    if (tooSoon) {
-      const wait = Number(/(\d+)\s*second/i.exec(resendErr.message)?.[1] ?? RESEND_COOLDOWN_SECONDS);
-      setCooldown(Number.isFinite(wait) && wait > 0 ? wait : RESEND_COOLDOWN_SECONDS);
+    const wait = mailRetryAfter(resendErr, RESEND_COOLDOWN_SECONDS);
+    if (wait !== null) {
+      setCooldown(wait);
       setResendError(t('signup.errors.mailLimit'));
       return;
     }
@@ -143,28 +207,47 @@ export function SignupView() {
     setResendError(t(authErrorKey(resendErr)));
   };
 
-  React.useEffect(() => {
-    if (cooldown <= 0) return;
-    const id = window.setTimeout(() => setCooldown((s) => Math.max(0, s - 1)), 1000);
-    return () => window.clearTimeout(id);
-  }, [cooldown]);
+  // For an existing account whose password they do not know, or that never had one.
+  const sendPasswordLink = async () => {
+    setSendingLink(true);
+    setLinkError(null);
+    const { error: linkErr } = await getBrowserClient().auth.resetPasswordForEmail(triedEmail, {
+      // The same redirect as /forgot-password: the link opens /auth/update-password, which goes on
+      // to '/' once the password is saved, and '/' sends an account with no restaurant, staff
+      // place or invitation to /onboarding.
+      redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent('/auth/update-password')}`,
+    });
+    setSendingLink(false);
+    if (!linkErr) {
+      setLinkSent(true);
+      setLinkCooldown(RESEND_COOLDOWN_SECONDS);
+      return;
+    }
+    const wait = mailRetryAfter(linkErr, RESEND_COOLDOWN_SECONDS);
+    if (wait !== null) {
+      setLinkCooldown(wait);
+      setLinkError(t(passwordLinkRefusalKey(linkSent)));
+      return;
+    }
+    console.error('[signup] resetPasswordForEmail failed:', linkErr.message);
+    setLinkError(t(authErrorKey(linkErr)));
+  };
 
   React.useEffect(() => {
     const supabase = getBrowserClient();
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_IN') {
-        router.replace('/onboarding');
-        router.refresh();
-      }
+      if (event === 'SIGNED_IN') continueToOnboarding();
     });
     return () => sub.subscription.unsubscribe();
-  }, [router]);
+  }, [continueToOnboarding]);
 
   const signInLink = (c: React.ReactNode) => (
     <Link href="/login" className="font-semibold text-primary hover:underline">
       {c}
     </Link>
   );
+
+  const strong = (c: React.ReactNode) => <strong>{c}</strong>;
 
   return (
     <div className="relative grid min-h-dynamic-screen place-items-center bg-background px-4 pb-10 pt-16">
@@ -188,7 +271,7 @@ export function SignupView() {
               <ShieldCheck className="mx-auto h-10 w-10 text-success" />
               <p className="mt-3 font-display text-lg font-semibold">{t('signup.confirmTitle')}</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                {t.rich('signup.confirmBody', { email, strong: (c) => <strong>{c}</strong> })}
+                {t.rich('signup.confirmBody', { email, strong })}
               </p>
 
               {resendNotice && (
@@ -223,7 +306,7 @@ export function SignupView() {
                   email as confirmed. login_hint pre-selects that account in Google's chooser. */}
               <AuthDivider />
               <p className="text-sm text-muted-foreground">
-                {t.rich('signup.googleInstead', { email, strong: (c) => <strong>{c}</strong> })}
+                {t.rich('signup.googleInstead', { email, strong })}
               </p>
               <ContinueWithGoogle next="/onboarding" loginHint={email.trim()} className="mt-3" />
 
@@ -265,7 +348,13 @@ export function SignupView() {
                     <input
                       type="email"
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      onChange={(e) => {
+                        setEmail(e.target.value);
+                        clearAdvice();
+                        // GoTrue's wait between two mails is per address; a new one starts clear.
+                        setLinkSent(false);
+                        setLinkCooldown(0);
+                      }}
                       required
                       autoComplete="email"
                       placeholder="owner@example.com"
@@ -280,7 +369,10 @@ export function SignupView() {
                     <input
                       type="password"
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      onChange={(e) => {
+                        setPassword(e.target.value);
+                        clearAdvice();
+                      }}
                       required
                       minLength={MIN_LENGTH}
                       autoComplete="new-password"
@@ -291,6 +383,44 @@ export function SignupView() {
                     {t('fields.minLength', { min: MIN_LENGTH })}
                   </span>
                 </label>
+                {otherPassword && (
+                  <div className="space-y-3 rounded-xl bg-warning/10 p-3 text-sm">
+                    <p role="alert">
+                      {t.rich('signup.existingAccount.body', { email: triedEmail, strong })}
+                    </p>
+                    {/* Google needs no button of its own here: it is the first thing on the card. */}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      fullWidth
+                      onClick={sendPasswordLink}
+                      loading={sendingLink}
+                      disabled={linkCooldown > 0}
+                      leftIcon={<Mail className="h-4 w-4 shrink-0" />}
+                      // The label runs long in Spanish and Vietnamese; let it wrap, not clip.
+                      className="h-auto whitespace-normal py-2.5 text-center"
+                    >
+                      {/* A disabled button always says how long; "again" only once a link went out. */}
+                      {linkCooldown > 0
+                        ? linkSent
+                          ? t('signup.resendIn', { seconds: linkCooldown })
+                          : t('signup.existingAccount.sendLinkIn', { seconds: linkCooldown })
+                        : linkSent
+                          ? t('signup.resend')
+                          : t('signup.existingAccount.sendLink')}
+                    </Button>
+                    {linkSent && (
+                      <p role="status" className="text-success">
+                        {t.rich('signup.existingAccount.linkSent', { email: triedEmail, strong })}
+                      </p>
+                    )}
+                    {linkError && (
+                      <p role="alert" className="text-danger">
+                        {linkError}
+                      </p>
+                    )}
+                  </div>
+                )}
                 {error && (
                   <p role="alert" className="text-sm text-danger">
                     {error}

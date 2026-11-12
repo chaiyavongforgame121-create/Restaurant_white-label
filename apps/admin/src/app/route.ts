@@ -39,6 +39,23 @@ const ROLE_PRIORITY = ['owner', 'admin', 'manager', 'cashier', 'server', 'kitche
 
 type ServerClient = Awaited<ReturnType<typeof getServerClient>>;
 
+/** The restaurant's first branch, preferring an active one: where an owner known only through
+ *  restaurants.owner_user_id lands. With every branch closed (a platform suspension closes them
+ *  all) it is still their restaurant, and the branch's own gates show them why; sending them to
+ *  /onboarding instead offered a second restaurant, whose "Go to dashboard" came straight back. */
+async function ownedLandingBranchId(supabase: ServerClient, restaurantId: string): Promise<string | null> {
+  const active = await firstActiveBranchId(supabase, restaurantId);
+  if (active) return active;
+  const { data: branch } = await supabase
+    .from('branches')
+    .select('id')
+    .eq('restaurant_id', restaurantId)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  return branch?.id ?? null;
+}
+
 /** The restaurant's first active branch: where a restaurant-wide membership lands. */
 async function firstActiveBranchId(supabase: ServerClient, restaurantId: string): Promise<string | null> {
   const { data: branch } = await supabase
@@ -93,7 +110,7 @@ async function landing(): Promise<string> {
       .order('created_at', { ascending: true })
       .limit(1)
       .maybeSingle();
-    const ownedBranchId = owned ? await firstActiveBranchId(supabase, owned.id) : null;
+    const ownedBranchId = owned ? await ownedLandingBranchId(supabase, owned.id) : null;
     if (ownedBranchId) return landingPath('owner', ownedBranchId);
     return '/onboarding';
   }

@@ -51,8 +51,9 @@ interface Props {
  *
  * Realtime only delivers what RLS lets this person read (staff_self_read: their own rows, in any
  * status), and only INSERTs and UPDATEs are asked for. A DELETE skips RLS and carries only the
- * id, so listening for them would mean taking every staff delete on the platform; the app never
- * deletes a claimed row anyway. Realtime can also miss events (a sleeping tablet, a dropped
+ * id, so listening for them would mean taking every staff delete on the platform; the app deletes
+ * a claimed row only once it has been removed (delete_removed_staff_member), when it grants
+ * nothing any more, and the re-read below catches that. Realtime can also miss events (a sleeping tablet, a dropped
  * socket), so every (re)connect, tab wake and network return re-reads the rows and compares
  * them with what the page was rendered with, which also catches a row that was deleted.
  *

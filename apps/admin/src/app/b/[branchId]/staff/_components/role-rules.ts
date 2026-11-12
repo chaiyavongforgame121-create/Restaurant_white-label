@@ -1,7 +1,8 @@
 /**
- * Who may give which role, as the Staff page offers it. set_staff_role is the boundary; this
- * only keeps the page from offering a choice that would end in an error, so each rule here is
- * one of the function's, in the same order.
+ * Who may give which role, change whose access and delete whose removed row, as the Staff page
+ * offers it. set_staff_role, set_staff_status and delete_removed_staff_member are the boundary;
+ * this only keeps the page from offering a choice that would end in an error, so each rule here
+ * is one of the functions' (canChangeAccess says where it is stricter).
  */
 
 /** What set_staff_role can give, in descending order of access. Never `owner` (created by
@@ -96,6 +97,52 @@ export function assignableRoles(
   // ...or makes one: an admin never raises anyone to their own level. The page keeps showing a
   // role that is no longer offered (staff, driver) as the member's current one.
   return viewer.isOwner ? [...OFFERED_ROLES] : OFFERED_ROLES.filter((r) => r !== 'admin');
+}
+
+/**
+ * Whether the page offers this viewer Suspend, Reactivate and Remove on this member, or Delete
+ * once the member is removed. set_staff_status and delete_removed_staff_member share one rule
+ * (staff.manage where the row works; owner and admin rows owner-only), so this hides what they
+ * would refuse. Owner rows and the viewer's own row stay locked for everyone, the owner too:
+ * set_staff_status refuses your own row, and an owner's access is not managed from this list.
+ * `viewer.isOwner` is the page's viewerIsOwner, so a platform admin working as support is not
+ * offered admin rows here.
+ */
+export function canChangeAccess(member: RoleChangeTarget, viewer: RoleChangeViewer): boolean {
+  if (member.role === 'owner') return false;
+  if (member.role === 'admin' && !viewer.isOwner) return false;
+  // A row with no branch works everywhere, so it needs authority everywhere.
+  if (member.branch_id === null && !viewer.restaurantWide) return false;
+  if (member.user_id !== null && member.user_id === viewer.userId) return false;
+  return true;
+}
+
+export type DeleteRemovedError =
+  | 'hasHistory'
+  | 'notRemoved'
+  | 'notFound'
+  | 'notAuthorized'
+  | 'signedOut'
+  | 'generic';
+
+/**
+ * What a failed deleteRemovedStaffMember means for the page. delete_removed_staff_member raises
+ * plain codes; anything else is raw database text, which belongs in the console.
+ */
+export function deleteRemovedErrorKey(message: string): DeleteRemovedError {
+  if (message.includes('staff_has_history')) return 'hasHistory';
+  if (message.includes('staff_not_removed')) return 'notRemoved';
+  if (message.includes('staff_not_found')) return 'notFound';
+  if (message.includes('not_authorized')) return 'notAuthorized';
+  // No session reaches the function as anon, which may not execute it at all.
+  if (
+    message.includes('sign_in_required') ||
+    message.includes('JWT expired') ||
+    message.includes('permission denied for function')
+  ) {
+    return 'signedOut';
+  }
+  return 'generic';
 }
 
 export type RoleChangeError =

@@ -26,7 +26,7 @@
     "pending": "Đang chờ",
     "active": "Đang hoạt động",
     "suspended": "Tạm ngưng",
-    "removed": "Đã xóa"
+    "removed": "Đã gỡ"
   },
   "roles": {
     "admin": {
@@ -90,6 +90,7 @@
       "keep": "Giữ lời mời"
     },
     "cancelled": "Đã hủy lời mời của {email}.",
+    "cancelledKept": "Đã hủy lời mời của {email}. Người này vẫn ở trong danh sách với trạng thái đã gỡ, vì có đơn hàng, thanh toán hoặc ca làm được ghi lại dưới tên họ.",
     "alreadyCancelled": "Lời mời của {email} đã được hủy trước đó.",
     "alreadyJoined": "{email} đã tham gia nhóm nên không còn lời mời để hủy.",
     "errors": {
@@ -155,30 +156,42 @@
   "statusActions": {
     "suspend": "Tạm ngưng",
     "reactivate": "Kích hoạt lại",
-    "remove": "Xóa",
+    "remove": "Gỡ",
+    "delete": "Xóa hẳn",
     "keep": "Giữ quyền truy cập",
     "suspendFor": "Tạm ngưng {email}",
     "reactivateFor": "Kích hoạt lại {email}",
-    "removeFor": "Xóa {email}",
+    "removeFor": "Gỡ {email}",
+    "deleteFor": "Xóa hẳn {email}",
     "suspendDialog": {
       "title": "Tạm ngưng {email}?",
       "body": "Người này không thể dùng quyền này để vào trang quản trị, quầy thu ngân hay bếp cho đến khi bạn kích hoạt lại. Lịch sử vẫn được giữ."
     },
     "removeDialog": {
-      "title": "Xóa {email}?",
+      "title": "Gỡ {email}?",
       "body": "Người này mất quyền truy cập ở đây vĩnh viễn. Để họ quay lại sau, hãy mời lại."
     },
-    "removedHint": "Đã xóa. Hãy mời lại để cấp lại quyền truy cập.",
+    "deleteDialog": {
+      "title": "Xóa hẳn {email} khỏi danh sách?",
+      "body": "Người này sẽ bị xóa khỏi danh sách này vĩnh viễn. Tài khoản đăng nhập của họ không bị xóa, và bạn có thể mời lại họ sau.",
+      "keep": "Giữ trong danh sách"
+    },
+    "removedHint": "Đã gỡ. Hãy mời lại để cấp lại quyền truy cập.",
+    "alreadyDeleted": "{email} đã được xóa khỏi danh sách trước đó.",
+    "noLongerRemoved": "{email} không còn ở trạng thái đã gỡ (có thể đã được mời lại), nên chưa bị xóa hẳn khỏi danh sách.",
     "done": {
       "suspended": "Đã tạm ngưng {email}.",
       "reactivated": "{email} đã hoạt động trở lại.",
-      "removed": "Đã xóa {email}."
+      "removed": "Đã gỡ {email}.",
+      "deleted": "Đã xóa hẳn {email} khỏi danh sách."
     },
     "errors": {
       "lastOwner": "Nhà hàng phải giữ ít nhất một chủ sở hữu.",
       "self": "Bạn không thể tự thay đổi quyền của mình. Hãy nhờ chủ nhà hàng.",
       "notAuthorized": "Vai trò của bạn không thể thay đổi quyền của người này.",
-      "generic": "Không thể thay đổi quyền truy cập. Hãy thử lại."
+      "generic": "Không thể thay đổi quyền truy cập. Hãy thử lại.",
+      "hasHistory": "Người này có đơn hàng, thanh toán hoặc ca làm được ghi lại, nên vẫn ở trong danh sách để lưu lịch sử. Bạn vẫn có thể mời lại họ.",
+      "deleteFailed": "Không thể xóa khỏi danh sách. Hãy thử lại."
     }
   },
   "roleChange": {
@@ -205,7 +218,7 @@
       "ownerLocked": "Không thể đổi vai trò của chủ sở hữu.",
       "notAssignable": "Không thể cấp vai trò đó ở đây.",
       "adminRequiresOwner": "Chỉ chủ nhà hàng mới có thể bổ nhiệm quản trị viên hoặc đổi vai trò của quản trị viên.",
-      "removed": "Người này đã bị xóa. Hãy mời lại để cấp vai trò.",
+      "removed": "Người này đã bị gỡ. Hãy mời lại để cấp vai trò.",
       "notFound": "Thành viên này không còn tồn tại. Hãy tải lại trang.",
       "generic": "Không thể đổi vai trò. Hãy thử lại."
     }

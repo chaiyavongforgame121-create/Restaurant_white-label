@@ -4,6 +4,8 @@ import {
   CHANGEABLE_ROLES,
   OFFERED_ROLES,
   assignableRoles,
+  canChangeAccess,
+  deleteRemovedErrorKey,
   invitableRoles,
   roleChangeErrorKey,
   roleChangeViewer,
@@ -178,5 +180,67 @@ describe('roleChangeErrorKey', () => {
   ];
   it.each(cases)('%s -> %s', (message, key) => {
     expect(roleChangeErrorKey(message)).toBe(key);
+  });
+});
+
+describe('canChangeAccess', () => {
+  it('lets the owner change or delete a cashier, an admin and someone who works at every branch', () => {
+    expect(canChangeAccess(row(), owner)).toBe(true);
+    expect(canChangeAccess(row({ role: 'admin', user_id: 'khun' }), owner)).toBe(true);
+    expect(canChangeAccess(row({ branch_id: null, user_id: 'allbranches' }), owner)).toBe(true);
+  });
+
+  it('lets a branch admin change or delete a member of their branch, never an admin', () => {
+    expect(canChangeAccess(row(), branchAdmin)).toBe(true);
+    expect(canChangeAccess(row({ role: 'admin', user_id: 'khun' }), branchAdmin)).toBe(false);
+    expect(canChangeAccess(row({ role: 'admin', user_id: 'khun' }), everyBranchAdmin)).toBe(false);
+  });
+
+  it('needs restaurant-wide authority for someone who works at every branch', () => {
+    const everywhere = row({ branch_id: null, user_id: 'allbranches' });
+    expect(canChangeAccess(everywhere, branchAdmin)).toBe(false);
+    expect(canChangeAccess(everywhere, everyBranchAdmin)).toBe(true);
+  });
+
+  it('keeps owner rows and your own row locked for everyone, the owner too', () => {
+    for (const viewer of [owner, branchAdmin, everyBranchAdmin]) {
+      expect(canChangeAccess(row({ role: 'owner', user_id: 'other-owner' }), viewer)).toBe(false);
+      expect(canChangeAccess(row({ user_id: viewer.userId, branch_id: null }), viewer)).toBe(false);
+    }
+    expect(canChangeAccess(row({ user_id: 'bb' }), branchAdmin)).toBe(false);
+  });
+
+  it('decides a removed row exactly as an active one, so Delete shows where Remove did', () => {
+    const viewers = [owner, branchAdmin, everyBranchAdmin];
+    const members = [
+      row(),
+      row({ role: 'admin', user_id: 'khun' }),
+      row({ branch_id: null, user_id: 'allbranches' }),
+      row({ role: 'owner', user_id: 'other-owner' }),
+      row({ user_id: 'bb' }),
+    ];
+    for (const viewer of viewers) {
+      for (const member of members) {
+        expect(canChangeAccess({ ...member, status: 'removed' }, viewer)).toBe(
+          canChangeAccess(member, viewer),
+        );
+      }
+    }
+  });
+});
+
+describe('deleteRemovedErrorKey', () => {
+  const cases: Array<[string, ReturnType<typeof deleteRemovedErrorKey>]> = [
+    ['delete_staff_failed:staff_has_history', 'hasHistory'],
+    ['delete_staff_failed:staff_not_removed', 'notRemoved'],
+    ['delete_staff_failed:staff_not_found', 'notFound'],
+    ['delete_staff_failed:not_authorized', 'notAuthorized'],
+    ['delete_staff_failed:sign_in_required', 'signedOut'],
+    ['delete_staff_failed:permission denied for function delete_removed_staff_member', 'signedOut'],
+    ['delete_staff_failed:JWT expired', 'signedOut'],
+    ['delete_staff_failed:Failed to fetch', 'generic'],
+  ];
+  it.each(cases)('%s -> %s', (message, key) => {
+    expect(deleteRemovedErrorKey(message)).toBe(key);
   });
 });

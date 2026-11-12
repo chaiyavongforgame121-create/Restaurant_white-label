@@ -90,6 +90,7 @@
       "keep": "Keep invitation"
     },
     "cancelled": "The invitation for {email} was cancelled.",
+    "cancelledKept": "The invitation for {email} was cancelled. They stay on the list as removed, because orders, payments or shifts are on record under their name.",
     "alreadyCancelled": "The invitation for {email} had already been cancelled.",
     "alreadyJoined": "{email} has already joined the team, so there is no invitation to cancel.",
     "errors": {
@@ -156,10 +157,12 @@
     "suspend": "Suspend",
     "reactivate": "Reactivate",
     "remove": "Remove",
+    "delete": "Delete",
     "keep": "Keep access",
     "suspendFor": "Suspend {email}",
     "reactivateFor": "Reactivate {email}",
     "removeFor": "Remove {email}",
+    "deleteFor": "Delete {email}",
     "suspendDialog": {
       "title": "Suspend {email}?",
       "body": "They cannot open the back office, counter or kitchen with this access until you reactivate them. Their history stays."
@@ -168,17 +171,27 @@
       "title": "Remove {email}?",
       "body": "They lose access here for good. To bring them back later, invite them again."
     },
+    "deleteDialog": {
+      "title": "Delete {email} from the list?",
+      "body": "This takes them off this list for good. Their sign-in account is not deleted, and you can invite them again later.",
+      "keep": "Keep on the list"
+    },
     "removedHint": "Removed. Invite them again to give access back.",
+    "alreadyDeleted": "{email} had already been deleted from the list.",
+    "noLongerRemoved": "{email} is no longer removed (they may have been invited again), so nothing was deleted.",
     "done": {
       "suspended": "{email} is suspended.",
       "reactivated": "{email} is active again.",
-      "removed": "{email} was removed."
+      "removed": "{email} was removed.",
+      "deleted": "{email} was deleted from the list."
     },
     "errors": {
       "lastOwner": "A restaurant must keep at least one owner.",
       "self": "You cannot change your own access. Ask the owner.",
       "notAuthorized": "Your role cannot change this person’s access.",
-      "generic": "Their access could not be changed. Try again."
+      "generic": "Their access could not be changed. Try again.",
+      "hasHistory": "This person has orders, payments or shifts on record, so they stay on the list as history. You can still invite them again.",
+      "deleteFailed": "They could not be deleted from the list. Try again."
     }
   },
   "roleChange": {

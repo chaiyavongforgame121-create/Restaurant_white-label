@@ -17,6 +17,7 @@ import {
   PlayCircle,
   Plus,
   Share2,
+  Trash2,
   UserMinus,
   UserPlus,
   X,
@@ -26,6 +27,7 @@ import { Badge, Button, Card, EmptyState, useConfirm } from '@favornoms/ui';
 import { getBrowserClient } from '@favornoms/database/client';
 import {
   cancelStaffInvite,
+  deleteRemovedStaffMember,
   inviteStaff,
   isStaffAlreadyActiveError,
   isStaffAlreadySuspendedError,
@@ -37,6 +39,8 @@ import {
 } from '@favornoms/database/queries';
 import {
   assignableRoles,
+  canChangeAccess,
+  deleteRemovedErrorKey,
   invitableRoles,
   roleChangeErrorKey,
   roleChangeViewer,
@@ -53,6 +57,12 @@ interface StaffListItem {
   created_at: string;
   accepted_at: string | null;
   user_id: string | null;
+}
+
+/** What a settled invitation or delete did to its row: gone from the list, or kept as removed. */
+interface RowChange {
+  removedId?: string;
+  keptId?: string;
 }
 
 interface BranchOption {
@@ -143,22 +153,29 @@ export function StaffView({
   }
   const [modalOpen, setModalOpen] = React.useState(false);
   // Said at page level, not on the row: the outcomes worth announcing (cancelled, already
-  // joined) remove the row or turn it active, which would take a row-level message with it.
+  // joined, deleted) remove the row or change its state, which would take a row-level message
+  // with it.
   const [notice, setNotice] = React.useState<string | null>(null);
   const noticeRef = React.useRef<HTMLParagraphElement>(null);
-  // Bumped once per settled invitation. Focus moves in an effect rather than in settleInvite so
-  // it lands after the row is gone and the notice already holds the new sentence to read out.
+  // Bumped once per settled invitation or deleted row. Focus moves in an effect rather than in
+  // settleInvite so it lands after the row is gone and the notice already holds the new sentence
+  // to read out.
   const [settledCount, setSettledCount] = React.useState(0);
   React.useEffect(() => {
     if (settledCount > 0) noticeRef.current?.focus();
   }, [settledCount]);
 
-  const settleInvite = (message: string, removedId?: string) => {
+  const settleInvite = (message: string, change?: RowChange) => {
     setNotice(message);
-    if (removedId) setStaff((prev) => prev.filter((m) => m.id !== removedId));
-    // The Cancel button that had focus is removed with its row (or with the pending actions once
-    // the refresh shows the member active), which drops keyboard and screen reader users back at
-    // the top of the document. The notice stays put and says what happened.
+    if (change?.removedId) setStaff((prev) => prev.filter((m) => m.id !== change.removedId));
+    // Cancel kept the row as removed (history on record): shown so at once, so its Pending buttons
+    // are not pressed again before the refresh lands.
+    if (change?.keptId) {
+      setStaff((prev) => prev.map((m) => (m.id === change.keptId ? { ...m, status: 'removed' } : m)));
+    }
+    // The Cancel or Delete button that had focus is removed with its row (or with the row's
+    // actions once the refresh shows the member in another state), which drops keyboard and screen
+    // reader users back at the top of the document. The notice stays put and says what happened.
     setSettledCount((n) => n + 1);
     router.refresh();
   };
@@ -208,6 +225,13 @@ export function StaffView({
     platformAdmin: viewerIsPlatformAdmin,
     userId: viewerUserId,
   });
+  // Suspend, Remove and Delete go by the page's own viewerIsOwner, as they always have, so a
+  // platform admin working as support is not offered admin rows there.
+  const accessViewer: RoleChangeViewer = {
+    isOwner: viewerIsOwner,
+    restaurantWide: viewerRestaurantWide,
+    userId: viewerUserId,
+  };
 
   const renderMember = (s: StaffListItem, readOnly: boolean) => (
     <li key={s.id}>
@@ -276,12 +300,17 @@ export function StaffView({
             onSettled={settleInvite}
           />
         )}
-        {!readOnly && s.status !== 'pending' && (
+        {!readOnly && s.status === 'removed' && (
+          <RemovedMemberActions
+            member={s}
+            canDelete={canChangeAccess(s, accessViewer)}
+            onSettled={settleInvite}
+          />
+        )}
+        {!readOnly && s.status !== 'pending' && s.status !== 'removed' && (
           <StatusActions
             member={s}
-            viewerIsOwner={viewerIsOwner}
-            viewerRestaurantWide={viewerRestaurantWide}
-            viewerUserId={viewerUserId}
+            canChange={canChangeAccess(s, accessViewer)}
             onChanged={(next) => statusChanged(s, next)}
           />
         )}
@@ -631,7 +660,7 @@ function PendingInviteActions({
   /** Owner or admin of every branch: the only people who may withdraw an invitation to every branch. */
   viewerRestaurantWide: boolean;
   /** The invitation is gone or already used: say so, drop the row when gone, refresh. */
-  onSettled: (message: string, removedId?: string) => void;
+  onSettled: (message: string, change?: RowChange) => void;
 }) {
   const t = useTranslations('staff');
   const confirm = useConfirm();
@@ -668,14 +697,23 @@ function PendingInviteActions({
     if (!ok) return;
     setCancelling(true);
     try {
-      await cancelStaffInvite(getBrowserClient(), member.id);
-      onSettled(t('pendingInvite.cancelled', { email }), member.id);
+      const { kept } = await cancelStaffInvite(getBrowserClient(), member.id);
+      if (kept) {
+        // A removed member invited again, with work on record: the row went back to removed rather
+        // than taking that history with it, and the refresh shows it so.
+        onSettled(t('pendingInvite.cancelledKept', { email }), { keptId: member.id });
+      } else {
+        onSettled(t('pendingInvite.cancelled', { email }), { removedId: member.id });
+      }
     } catch (err) {
       // cancel_staff_invite raises plain codes; anything else is raw database text for the console.
       const message = (err as Error).message;
       if (message.includes('invite_not_found')) {
         // Cancelled from another tab, or by another admin: what the owner wanted has happened.
-        onSettled(t('pendingInvite.alreadyCancelled', { email }), member.id);
+        onSettled(t('pendingInvite.alreadyCancelled', { email }), { removedId: member.id });
+      } else if (message.includes('invite_already_cancelled')) {
+        // Withdrawn already and kept as removed for its history (another tab, another admin).
+        onSettled(t('pendingInvite.alreadyCancelled', { email }), { keptId: member.id });
       } else if (message.includes('invite_not_pending')) {
         // They opened the link in the meantime; the refresh shows them as active.
         onSettled(t('pendingInvite.alreadyJoined', { email }));
@@ -754,22 +792,19 @@ function PendingInviteActions({
 /**
  * Suspend, reactivate or remove a team member. There was no way to take access away from the
  * back office at all. set_staff_status decides who may (staff.manage where the row works); the
- * buttons only hide what it would refuse: the owner row, an admin row for a non-owner, a row for
- * every branch unless the viewer's own authority is restaurant-wide, and your own row. Suspended
- * keeps the row and can be undone; removed is final, and the person is invited again to come back.
+ * buttons only hide what it would refuse (canChangeAccess): the owner row, an admin row for a
+ * non-owner, a row for every branch unless the viewer's own authority is restaurant-wide, and your
+ * own row. Suspended keeps the row and can be undone; removed is final, and the person is invited
+ * again to come back. A removed row gets RemovedMemberActions instead.
  */
 function StatusActions({
   member,
-  viewerIsOwner,
-  viewerRestaurantWide,
-  viewerUserId,
+  canChange,
   onChanged,
 }: {
   member: StaffListItem;
-  viewerIsOwner: boolean;
-  /** Owner or admin of every branch: the only people set_staff_status lets change a row with no branch. */
-  viewerRestaurantWide: boolean;
-  viewerUserId: string;
+  /** canChangeAccess for this viewer and row. */
+  canChange: boolean;
   onChanged: (next: StaffListItem['status']) => void;
 }) {
   const t = useTranslations('staff');
@@ -778,15 +813,7 @@ function StatusActions({
   const [error, setError] = React.useState<string | null>(null);
   const email = member.invited_email ?? t('unnamed');
 
-  if (member.status === 'removed') {
-    return <p className="w-full text-xs text-muted-foreground">{t('statusActions.removedHint')}</p>;
-  }
-  const locked =
-    member.role === 'owner' ||
-    (member.role === 'admin' && !viewerIsOwner) ||
-    (member.branch_id === null && !viewerRestaurantWide) ||
-    (member.user_id !== null && member.user_id === viewerUserId);
-  if (locked) return null;
+  if (!canChange) return null;
 
   const run = async (next: 'active' | 'suspended' | 'removed') => {
     setError(null);
@@ -869,6 +896,99 @@ function StatusActions({
           onClick={() => void run('removed')}
         >
           {t('statusActions.remove')}
+        </Button>
+      </div>
+      {error && (
+        <p role="alert" className="mt-2 text-xs text-danger">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * A removed member: how to give access back, and Delete, which takes the row off the list for
+ * good (the owner asked for it on 2026-11-12: removed people stayed listed forever). Offered where
+ * Remove was (canChangeAccess); delete_removed_staff_member decides who may, as
+ * cancel_staff_invite does, and keeps a row that orders, payments, shifts or table sittings point
+ * at, which stays as their history. The person's sign-in account is untouched, and inviting the
+ * address again afterwards makes a new invitation.
+ */
+function RemovedMemberActions({
+  member,
+  canDelete,
+  onSettled,
+}: {
+  member: StaffListItem;
+  canDelete: boolean;
+  /** The row is gone (or no longer removed): say so, drop it when gone, refresh. */
+  onSettled: (message: string, change?: RowChange) => void;
+}) {
+  const t = useTranslations('staff');
+  const confirm = useConfirm();
+  const [deleting, setDeleting] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const email = member.invited_email ?? t('unnamed');
+
+  if (!canDelete) {
+    return <p className="w-full text-xs text-muted-foreground">{t('statusActions.removedHint')}</p>;
+  }
+
+  const deleteRow = async () => {
+    setError(null);
+    const ok = await confirm({
+      title: t('statusActions.deleteDialog.title', { email }),
+      body: t('statusActions.deleteDialog.body'),
+      confirmLabel: t('statusActions.delete'),
+      cancelLabel: t('statusActions.deleteDialog.keep'),
+      destructive: true,
+    });
+    if (!ok) return;
+    setDeleting(true);
+    try {
+      await deleteRemovedStaffMember(getBrowserClient(), member.id);
+      onSettled(t('statusActions.done.deleted', { email }), { removedId: member.id });
+    } catch (err) {
+      const message = (err as Error).message;
+      const key = deleteRemovedErrorKey(message);
+      if (key === 'notFound') {
+        // Deleted from another tab, or by another admin: what the owner wanted has happened.
+        onSettled(t('statusActions.alreadyDeleted', { email }), { removedId: member.id });
+      } else if (key === 'notRemoved') {
+        // Invited again in the meantime; the refresh shows the open invitation instead.
+        onSettled(t('statusActions.noLongerRemoved', { email }));
+      } else if (key === 'hasHistory') {
+        setError(t('statusActions.errors.hasHistory'));
+      } else if (key === 'notAuthorized') {
+        setError(t('statusActions.errors.notAuthorized'));
+      } else if (key === 'signedOut') {
+        setError(t('errors.signedOut'));
+      } else {
+        console.error('delete_removed_staff_member failed', message);
+        setError(t('statusActions.errors.deleteFailed'));
+      }
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div className="w-full border-t border-border/60 pt-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <p className="text-xs text-muted-foreground">{t('statusActions.removedHint')}</p>
+        {/* Named for the person, as every row's buttons are: a list of buttons would otherwise read
+            "Delete" over and over. */}
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          aria-label={t('statusActions.deleteFor', { email })}
+          leftIcon={<Trash2 className="h-4 w-4" />}
+          loading={deleting}
+          onClick={() => void deleteRow()}
+        >
+          {t('statusActions.delete')}
         </Button>
       </div>
       {error && (

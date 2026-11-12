@@ -255,6 +255,13 @@ export function AcceptInviteView({ staffId }: { staffId?: string }) {
         setState({ kind: 'used', invite });
         return;
       }
+      // Withdrawn but kept for its work history (cancel_staff_invite), or the access it gave was
+      // removed since: either way there is nothing left to join, and "already used" would send them
+      // off to sign in to an account with no place here.
+      if (invite.status === 'removed') {
+        setState({ kind: 'not_found' });
+        return;
+      }
       if (invite.status !== 'pending' || !invite.invitedEmail) {
         setState({ kind: 'used', invite });
         return;

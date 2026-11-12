@@ -26,7 +26,7 @@
     "pending": "Pendiente",
     "active": "Activo",
     "suspended": "Suspendido",
-    "removed": "Eliminado"
+    "removed": "Quitado"
   },
   "roles": {
     "admin": {
@@ -90,6 +90,7 @@
       "keep": "Conservar invitación"
     },
     "cancelled": "Se canceló la invitación de {email}.",
+    "cancelledKept": "Se canceló la invitación de {email}. Se queda en la lista como quitado, porque tiene pedidos, pagos o turnos registrados a su nombre.",
     "alreadyCancelled": "La invitación de {email} ya estaba cancelada.",
     "alreadyJoined": "{email} ya se unió al equipo, así que no hay ninguna invitación que cancelar.",
     "errors": {
@@ -156,10 +157,12 @@
     "suspend": "Suspender",
     "reactivate": "Reactivar",
     "remove": "Quitar",
+    "delete": "Eliminar",
     "keep": "Mantener acceso",
     "suspendFor": "Suspender a {email}",
     "reactivateFor": "Reactivar a {email}",
     "removeFor": "Quitar a {email}",
+    "deleteFor": "Eliminar a {email}",
     "suspendDialog": {
       "title": "¿Suspender a {email}?",
       "body": "No podrá entrar a la administración, la caja ni la cocina con este acceso hasta que lo reactives. Su historial se conserva."
@@ -168,17 +171,27 @@
       "title": "¿Quitar a {email}?",
       "body": "Pierde el acceso aquí de forma definitiva. Para que vuelva más adelante, invítalo otra vez."
     },
+    "deleteDialog": {
+      "title": "¿Eliminar a {email} de la lista?",
+      "body": "Desaparece de esta lista de forma definitiva. Su cuenta para iniciar sesión no se elimina y puedes invitarlo otra vez más adelante.",
+      "keep": "Mantener en la lista"
+    },
     "removedHint": "Quitado. Invítalo otra vez para devolverle el acceso.",
+    "alreadyDeleted": "{email} ya se había eliminado de la lista.",
+    "noLongerRemoved": "{email} ya no figura como quitado (quizá lo invitaron otra vez), así que no se eliminó nada.",
     "done": {
       "suspended": "{email} está suspendido.",
       "reactivated": "{email} vuelve a estar activo.",
-      "removed": "{email} fue quitado."
+      "removed": "{email} fue quitado.",
+      "deleted": "{email} fue eliminado de la lista."
     },
     "errors": {
       "lastOwner": "Un restaurante debe conservar al menos un dueño.",
       "self": "No puedes cambiar tu propio acceso. Pídeselo al dueño.",
       "notAuthorized": "Tu rol no puede cambiar el acceso de esta persona.",
-      "generic": "No se pudo cambiar su acceso. Inténtalo de nuevo."
+      "generic": "No se pudo cambiar su acceso. Inténtalo de nuevo.",
+      "hasHistory": "Esta persona tiene pedidos, pagos o turnos registrados, así que se queda en la lista como historial. Aun así puedes invitarla otra vez.",
+      "deleteFailed": "No se pudo eliminar de la lista. Inténtalo de nuevo."
     }
   },
   "roleChange": {

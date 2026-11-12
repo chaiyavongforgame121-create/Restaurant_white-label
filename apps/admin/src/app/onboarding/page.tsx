@@ -14,11 +14,24 @@ export default async function OnboardingPage() {
   // the way to /login.
   if (!userData.user) redirect('/login?next=/onboarding');
 
-  const { data: memberships } = await supabase
-    .from('staff_members')
-    .select('branch_id, restaurant_id, role')
-    .eq('user_id', userData.user.id)
-    .eq('status', 'active');
+  // An owner known only through restaurants.owner_user_id has no staff row, yet it is their
+  // restaurant: create_restaurant_with_branch gives such an account no second trial, and /signup
+  // now signs an existing account straight in and lands here. The owner_user_id filter matters,
+  // since restaurants_public_read shows every restaurant with a live branch to anyone.
+  const [{ data: memberships }, { data: owned }] = await Promise.all([
+    supabase
+      .from('staff_members')
+      .select('branch_id, restaurant_id, role')
+      .eq('user_id', userData.user.id)
+      .eq('status', 'active'),
+    supabase
+      .from('restaurants')
+      .select('id, name')
+      .eq('owner_user_id', userData.user.id)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle(),
+  ]);
 
   const chosen = [...(memberships ?? [])].sort(
     (a, b) => ROLE_PRIORITY.indexOf(a.role) - ROLE_PRIORITY.indexOf(b.role),
@@ -33,6 +46,28 @@ export default async function OnboardingPage() {
     // outrank the invited role at every sign-in).
     const { data: pendingInvite } = await supabase.rpc('my_pending_staff_invite');
     if (pendingInvite) redirect(`/invite/accept?staff_id=${pendingInvite}`);
+    // Their own restaurant, with no staff row: the notice, as for any owner, instead of a bare
+    // wizard that built a second restaurant with no trial.
+    if (owned) {
+      // Its first branch, an active one if any, as the root page lands them (a suspended
+      // restaurant has none active, and its branch gates say why).
+      const { data: ownedBranches } = await supabase
+        .from('branches')
+        .select('id, is_active')
+        .eq('restaurant_id', owned.id)
+        .order('created_at', { ascending: true });
+      const ownedBranch = (ownedBranches ?? []).find((b) => b.is_active) ?? ownedBranches?.[0] ?? null;
+      return (
+        <OnboardingWizard
+          existing={{
+            restaurantName: owned.name ?? null,
+            ownsRestaurant: true,
+            canAddBranch: true,
+            addBranchHref: ownedBranch ? `/b/${ownedBranch.id}/brands` : null,
+          }}
+        />
+      );
+    }
     // Passed from here rather than read in the browser, so the notice is in the server HTML and
     // hydrates without a flash or a mismatch.
     return <OnboardingWizard existing={null} signedInEmail={userData.user.email ?? null} />;
@@ -63,7 +98,8 @@ export default async function OnboardingPage() {
 
   const existing: ExistingMembership = {
     restaurantName: restaurantRes?.data?.name ?? null,
-    ownsRestaurant: (memberships ?? []).some((m) => m.role === 'owner'),
+    // Owning a restaurant through owner_user_id alone counts too: no trial either way.
+    ownsRestaurant: !!owned || (memberships ?? []).some((m) => m.role === 'owner'),
     canAddBranch,
     addBranchHref: canAddBranch && branchId ? `/b/${branchId}/brands` : null,
   };

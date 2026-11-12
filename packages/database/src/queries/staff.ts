@@ -74,12 +74,46 @@ export function staffInviteUrl(origin: string, staffId: string): string {
 }
 
 /**
- * Deletes a pending, unclaimed invitation. Owner or admin of the restaurant only, and only the
- * owner may cancel an admin invitation. Throws `cancel_invite_failed:<reason>`.
+ * Withdraws a pending, unclaimed invitation. Owner or admin of the restaurant only, and only the
+ * owner may cancel an admin invitation. The row is deleted, unless it is a removed member invited
+ * again whose orders, payments, shifts or table sittings point at it: then it goes back to removed
+ * and `kept` is true, so the list shows it as removed instead of dropping it.
+ * Throws `cancel_invite_failed:<reason>`.
  */
-export async function cancelStaffInvite(supabase: FavornomsClient, staffId: string): Promise<void> {
-  const { error } = await supabase.rpc('cancel_staff_invite', { p_staff_id: staffId });
+export async function cancelStaffInvite(
+  supabase: FavornomsClient,
+  staffId: string,
+): Promise<{ kept: boolean }> {
+  const { data, error } = await supabase.rpc('cancel_staff_invite', { p_staff_id: staffId });
   if (error) throw new Error(`cancel_invite_failed:${error.message}`);
+  const d = (data ?? {}) as Record<string, unknown>;
+  return { kept: d.kept === true };
+}
+
+/**
+ * Deletes a removed team member's row through delete_removed_staff_member, which decides who may
+ * exactly as cancel_staff_invite does (staff.manage where the row works; only the owner deletes
+ * an owner or admin row), refuses any row that is not removed (staff_not_removed) and any row an
+ * order, payment, shift or table sitting points at (staff_has_history: see
+ * isStaffHasHistoryError), and writes the audit row. Inviting the address again afterwards makes
+ * a new invitation. Throws `delete_staff_failed:<reason>`.
+ */
+export async function deleteRemovedStaffMember(
+  supabase: FavornomsClient,
+  staffId: string,
+): Promise<void> {
+  const { error } = await supabase.rpc('delete_removed_staff_member', { p_staff_id: staffId });
+  if (error) throw new Error(`delete_staff_failed:${error.message}`);
+}
+
+/** True when deleteRemovedStaffMember was refused because work history points at the row: the
+ *  person stays on the list as history, and can still be invited again. */
+export function isStaffHasHistoryError(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    err.message.startsWith('delete_staff_failed:') &&
+    err.message.includes('staff_has_history')
+  );
 }
 
 /**

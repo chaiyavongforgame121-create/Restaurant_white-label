@@ -5538,6 +5538,7 @@ export type Database = {
         Returns: Json
       }
       delete_my_account: { Args: never; Returns: Json }
+      delete_removed_staff_member: { Args: { p_staff_id: string }; Returns: Json }
       delivery_thread_history: {
         Args: { p_delivery_id: string }
         Returns: {
