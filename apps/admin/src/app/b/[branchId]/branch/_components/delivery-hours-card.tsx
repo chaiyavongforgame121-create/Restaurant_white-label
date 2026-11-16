@@ -15,7 +15,7 @@ import {
   type WeekdayWindow,
 } from '@favornoms/shared';
 import { Button, Card, RiderIcon } from '@favornoms/ui';
-import { deliveryOutsideOpening } from './delivery-hours-model';
+import { deliveryNotBookable, deliveryOutsideOpening } from './delivery-hours-model';
 import { useSettingsPatch } from './patch-settings';
 
 /**
@@ -69,6 +69,7 @@ export function DeliveryHoursCard({
   branchId,
   settings,
   openingHours,
+  scheduleWindows,
 }: {
   branchId: string;
   settings: Record<string, unknown>;
@@ -78,6 +79,12 @@ export function DeliveryHoursCard({
    * Null when the read failed: the note is then left out rather than guessed.
    */
   openingHours: WeekdayWindow[] | null;
+  /**
+   * The Scheduled orders card's saved booking windows, read by the page; null when unread. While
+   * "Limit the times customers can book" is on, a delivery can be booked only where they and these
+   * delivery windows overlap, so each day says which of its delivery hours they leave out.
+   */
+  scheduleWindows: WeekdayWindow[] | null;
 }) {
   const t = useTranslations('branchOps');
   const rawLocale = useLocale();
@@ -94,6 +101,11 @@ export function DeliveryHoursCard({
     (settings?.delivery_mode as 'platform' | 'self') === 'self' ? 'self' : 'platform',
   );
   const [week, setWeek] = React.useState<WeekHours>({});
+  // The booking windows narrow bookings only while bookings are taken and the windows are on, read
+  // as the Scheduled orders card reads them (scheduling_enabled is on unless saved false).
+  const bookingWindowsLimit =
+    (settings?.scheduling_enabled === undefined || settings?.scheduling_enabled === true) &&
+    settings?.schedule_hours_enabled === true;
   const [loaded, setLoaded] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [savedAt, setSavedAt] = React.useState<number | null>(null);
@@ -172,6 +184,8 @@ export function DeliveryHoursCard({
     if (upErr) {
       console.error('Saving delivery mode failed', upErr);
       setError(t(saveErrorKey(upErr)));
+      // The windows above were saved; the Scheduled orders card previews from them.
+      router.refresh();
       return;
     }
     setSavedAt(Date.now());
@@ -290,14 +304,22 @@ export function DeliveryHoursCard({
                           </button>
                         </div>
                       ))}
-                      {/* Information, never a block on saving: delivering before opening or
-                          after closing is exactly what this switch is for. */}
-                      <OutsideOpeningNote
-                        ranges={openingHours ? deliveryOutsideOpening(openingHours, windows, day) : []}
-                        locale={locale}
-                      />
                     </div>
                   )}
+                  {/* After the day's own windows, not inside them: a day with none of its own
+                      still delivers the morning tail of the previous evening's window. */}
+                  {/* Information, never a block on saving: delivering before opening or after
+                      closing is exactly what this switch is for. */}
+                  <OutsideOpeningNote
+                    ranges={openingHours ? deliveryOutsideOpening(openingHours, windows, day) : []}
+                    locale={locale}
+                  />
+                  {/* Read live from the settings prop (the Scheduled orders card refreshes the page
+                      when it saves) against the windows being edited here. */}
+                  <NotBookableNote
+                    ranges={bookingWindowsLimit && scheduleWindows ? deliveryNotBookable(windows, scheduleWindows, day) : []}
+                    locale={locale}
+                  />
                 </div>
               ))}
             </div>
@@ -324,11 +346,26 @@ export function DeliveryHoursCard({
   );
 }
 
+/** Delivery hours the booking windows leave out: customers cannot book them. A warning, not a
+ *  block: the merchant may mean it, but usually the two cards just fell out of step. */
+function NotBookableNote({ ranges, locale }: { ranges: MinuteRange[]; locale: UiLocale }) {
+  const t = useTranslations('branchOps');
+  if (ranges.length === 0) return null;
+  return (
+    <p role="status" className="mt-2 rounded-xl bg-warning/10 px-3 py-2 text-xs">
+      {t.rich('deliveryHours.notBookable', {
+        ranges: describeRanges(ranges, undefined, locale),
+        strong: (chunks) => <strong>{chunks}</strong>,
+      })}
+    </p>
+  );
+}
+
 function OutsideOpeningNote({ ranges, locale }: { ranges: MinuteRange[]; locale: UiLocale }) {
   const t = useTranslations('branchOps');
   if (ranges.length === 0) return null;
   return (
-    <p className="text-xs text-muted-foreground">
+    <p className="mt-2 text-xs text-muted-foreground">
       {t('deliveryHours.outsideOpening', { ranges: describeRanges(ranges, undefined, locale) })}
     </p>
   );

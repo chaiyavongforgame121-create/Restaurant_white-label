@@ -155,6 +155,7 @@
     "limitHint": "Tắt: khách có thể đặt giao hàng vào bất kỳ lúc nào chi nhánh mở cửa, giao càng sớm càng tốt hoặc hẹn giờ. Bật: chỉ trong các khung giờ bên dưới, cho cả hai cách. Các khung giờ này là giờ giao hàng của bạn và có thể bắt đầu trước giờ mở cửa hoặc kết thúc sau giờ đóng cửa: quán mở cửa 09:00–17:30 vẫn có thể giao 08:00–09:00 và 18:00–19:00. Đơn tự đến lấy vẫn theo giờ mở cửa, và ngày nghỉ hoặc tạm dừng nhận đơn vẫn dừng giao hàng. Muốn khách hẹn giờ thì cũng cần bật <strong>Đơn hẹn giờ</strong>.",
     "noDelivery": "Không giao hàng ngày này",
     "outsideOpening": "Ngoài giờ mở cửa: {ranges}. Khách đặt giao hàng được vào giờ này, nhưng không đặt tự đến lấy được.",
+    "notBookable": "Khách không thể đặt <strong>{ranges}</strong>: các giờ giao này nằm ngoài khung giờ đặt trong <strong>Đơn hẹn giờ</strong> (“Giới hạn giờ khách có thể đặt”). Hãy lưu ở đây trước, rồi chỉnh các khung đó cho khớp, bấm “Giống giờ giao hàng” ở đó, hoặc tắt chúng.",
     "armedButEmpty": "Giờ giao hàng đang bật nhưng chưa có khung giờ nào — khách hoàn toàn không thể đặt đơn giao hàng. Hãy thêm khung giờ hoặc tắt tùy chọn này.",
     "save": "Lưu cài đặt giao hàng"
   },
@@ -187,6 +188,7 @@
     "closedDuringWindows": "không có — chi nhánh đóng cửa trong các giờ này",
     "noDeliveryDuringWindows": "không có — chi nhánh không giao hàng trong các giờ này (xem Giới hạn giờ giao hàng ở dưới)",
     "outsideOpeningFix": "Các giờ này nằm ngoài giờ mở cửa. Muốn giao hàng vào các giờ này, hãy bật <strong>Giới hạn giờ giao hàng</strong> ở phía dưới trang này rồi thêm các giờ này ở đó. Khi đã bật, chỉ giao hàng trong các khung giờ bạn đặt ở đó, nên hãy thêm cả giờ giao hàng ban ngày nếu bạn vẫn giao vào lúc đó. Đơn tự đến lấy vẫn theo giờ mở cửa.",
+    "deliveryNotBookable": "Không đặt được: <strong>{ranges}</strong> trong giờ giao hàng đã lưu nằm ngoài khung giờ đặt của ngày này. Thêm vào đây, bấm “Giống giờ giao hàng”, hoặc tắt tùy chọn này để chỉ giờ giao hàng quyết định.",
     "armedButEmpty": "Khung giờ đặt trước đang bật nhưng chưa có khung nào — khách hoàn toàn không thể hẹn giờ đơn. Hãy thêm khung giờ hoặc tắt tùy chọn này.",
     "save": "Lưu cài đặt hẹn giờ"
   },

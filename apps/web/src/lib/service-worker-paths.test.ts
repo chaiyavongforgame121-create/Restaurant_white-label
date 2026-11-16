@@ -56,6 +56,7 @@ describe('sw.js: the storefront a path belongs to', () => {
     expect(root('/r/hamburger/orders/A-12/receipt')).toBe('/r/hamburger');
     expect(root('/r/hamburger/manifest.webmanifest')).toBe('/r/hamburger');
     expect(root('/r/hamburger/app-icon/192')).toBe('/r/hamburger');
+    expect(root('/r/hamburger/app-icon/favicon-32')).toBe('/r/hamburger');
   });
 
   it('is the restaurant and branch for the long form', () => {

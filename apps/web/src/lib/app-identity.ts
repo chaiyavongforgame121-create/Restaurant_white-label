@@ -98,6 +98,22 @@ export function tenantIconUrl(icons: TenantIconUrls, variant: AppIconVariant): s
   }
 }
 
+/**
+ * The browser-tab icon the icon route renders: a 32x32 PNG made from the merchant's 192.
+ *
+ * Not an AppIconVariant and never in APP_ICON_VARIANTS: the manifest lists installed-app icons,
+ * and a 32px entry there would only give Chrome a worse bitmap to pick for a launcher.
+ */
+export const TAB_ICON_VARIANT = 'favicon-32';
+export type TabIconVariant = typeof TAB_ICON_VARIANT;
+
+/** A legacy free-form favicon (uploaded before the normaliser), passed through the icon route
+ *  as it is so the tab still links our own origin. Never in the manifest either. */
+export const LEGACY_TAB_ICON_VARIANT = 'favicon';
+
+/** What a storefront with no merchant tab icon shows in the tab: the platform's own 32px cut. */
+export const PLATFORM_TAB_ICON_PATH = '/favicon-32.png';
+
 /** The platform's own icons in apps/web/public — what a storefront with no upload installs as. */
 export const PLATFORM_ICON_PATHS: Record<AppIconVariant, string> = {
   '192': '/icon-192.png',
@@ -175,6 +191,45 @@ export function manifestIcons(base: string, icons: TenantIconUrls): ManifestIcon
     });
   }
   return list;
+}
+
+export interface TabIcon {
+  url: string;
+  sizes?: string;
+  type?: string;
+}
+
+/**
+ * The <link rel="icon"> list for a storefront's metadata: same-origin, a 32x32 first.
+ *
+ * The tab icons used to be the upload URLs themselves, a 192 and a 512 on the Supabase host, and
+ * Chrome on Android showed the generic globe in the tab instead (2026-11-16) while every page
+ * whose icons were same-origin 32/16 PNGs showed its own. So the tab gets what those pages have:
+ * a 32x32 the icon route renders from the 192, then the 192 itself proxied through the same
+ * route, both under `base` (the manifest's base, so the short address reaches them too) and both
+ * keyed on the 192's fingerprint, so a new upload is a new href. The 512 is left out: no tab
+ * needs it, and the manifest already offers it to the launcher.
+ *
+ * A legacy free-form favicon (uploaded before the normaliser) goes through the same route as it
+ * is (LEGACY_TAB_ICON_VARIANT), keyed on its own fingerprint, with no `sizes`, because claiming
+ * dimensions a file may not have is worse than claiming none. Nothing at all means the caller
+ * omits `icons` and the platform's own are inherited.
+ */
+export function tabIcons(
+  base: string,
+  icons: { icon192Url: string | null; faviconUrl: string | null },
+): TabIcon[] {
+  if (icons.icon192Url) {
+    const v = urlFingerprint(icons.icon192Url);
+    return [
+      { url: `${base}/app-icon/${TAB_ICON_VARIANT}?v=${v}`, sizes: '32x32', type: 'image/png' },
+      { url: `${base}/app-icon/192?v=${v}`, sizes: '192x192', type: 'image/png' },
+    ];
+  }
+  if (icons.faviconUrl) {
+    return [{ url: `${base}/app-icon/${LEGACY_TAB_ICON_VARIANT}?v=${urlFingerprint(icons.faviconUrl)}` }];
+  }
+  return [];
 }
 
 /**

@@ -49,9 +49,28 @@ export function deliveryOutsideOpening(
  */
 export type BookingEmptyReason = 'noWindows' | 'outsideOpening' | 'outsideDelivery';
 
+/**
+ * Delivery hours on `dow` that a diner cannot book because the booking windows ("Limit the times
+ * customers can book") leave them out. The two lists are edited on two cards, and a booking needs
+ * both: Thai Burrito moved its morning delivery to 07:00-08:00 while its booking windows still said
+ * 08:00-09:00, and the checkout offered only the evening (the owner's report, 2026-11-16). Only
+ * meaningful while delivery hours are on: with them off, narrowing opening hours to a few booking
+ * windows is what the booking windows are for.
+ */
+export function deliveryNotBookable(
+  delivery: WeekdayWindow[],
+  bookable: WeekdayWindow[],
+  dow: number,
+): MinuteRange[] {
+  return subtractRanges(deliveryRangesForDay([], delivery, dow), bookableRangesForDay(bookable, dow));
+}
+
 export interface BookingPreview {
   ranges: MinuteRange[];
   empty: BookingEmptyReason | null;
+  /** Delivery hours this day's booking windows leave out (deliveryNotBookable); empty while
+   *  delivery hours are off. */
+  notBookable: MinuteRange[];
 }
 
 /**
@@ -70,8 +89,9 @@ export function bookingPreview(
   deliveryWindows: WeekdayWindow[] | null,
 ): BookingPreview | null {
   if (deliveryHoursOn ? !deliveryWindows : !opening) return null;
-  if (bookableRangesForDay(bookable, dow).length === 0) return { ranges: [], empty: 'noWindows' };
+  const notBookable = deliveryHoursOn && deliveryWindows ? deliveryNotBookable(deliveryWindows, bookable, dow) : [];
+  if (bookableRangesForDay(bookable, dow).length === 0) return { ranges: [], empty: 'noWindows', notBookable };
   const ranges = effectiveBookableRanges(opening ?? [], bookable, dow, deliveryHoursOn ? deliveryWindows : null);
-  if (ranges.length > 0) return { ranges, empty: null };
-  return { ranges, empty: deliveryHoursOn ? 'outsideDelivery' : 'outsideOpening' };
+  if (ranges.length > 0) return { ranges, empty: null, notBookable };
+  return { ranges, empty: deliveryHoursOn ? 'outsideDelivery' : 'outsideOpening', notBookable };
 }

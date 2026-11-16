@@ -115,31 +115,71 @@ export function isOwnBrandingFile(src: string | null | undefined, supabaseUrl: s
 }
 
 /**
- * The `icons` metadata for a set, as the storefront's branch layout writes it
- * (apps/web/src/app/r/[restaurant]/[branch]/layout.tsx), or {} to inherit the root layout's
- * FavorNoms icons. Nothing else: the admin manifest, title and app name stay FavorNoms Merchant.
- *
- * Sizes are declared only for the normalised 192/512 PNGs the uploader produced; a legacy
- * free-form favicon gets none, because claiming dimensions a file does not have is worse than
- * claiming none, and is listed only when there is no 192. The iPhone icon prefers the opaque
- * appleUrl (iOS paints transparency black, and the 192 may be transparent), else the 192, else
- * the favicon. A set with neither a 192 nor a favicon is no tab icon, as on the storefront.
+ * FNV-1a, 32-bit, as hex: exactly the storefront's urlFingerprint (apps/web/src/lib/app-identity.ts).
+ * Not a security measure, a cache key: every upload gets a new storage path, so the `?v=` of a tab
+ * icon link changes when the merchant uploads a new icon and at no other time.
  */
-export function branchIconsMetadata(icons: BranchAppIcons | null, supabaseUrl: string | undefined): Metadata {
-  if (!icons) return {};
+export function urlFingerprint(url: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < url.length; i++) {
+    h ^= url.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16).padStart(8, '0');
+}
+
+/**
+ * The file a branch's tab icon is made from, which the metadata and the /api/branch-icon route
+ * must agree on: the own 192 (`sized`, a real 192x192 PNG), else the own legacy favicon (no known
+ * size), else none. A 512 alone is no tab icon, as on the storefront.
+ */
+export function branchTabIconSource(
+  icons: BranchAppIcons | null,
+  supabaseUrl: string | undefined,
+): { url: string; sized: boolean } | null {
+  if (!icons) return null;
+  if (isOwnBrandingFile(icons.icon192Url, supabaseUrl)) return { url: icons.icon192Url, sized: true };
+  if (isOwnBrandingFile(icons.faviconUrl, supabaseUrl)) return { url: icons.faviconUrl, sized: false };
+  return null;
+}
+
+/** The variants /api/branch-icon/<branchId>/<variant> serves. */
+export const BRANCH_ICON_VARIANTS = ['favicon-32', '192'] as const;
+export type BranchIconVariant = (typeof BRANCH_ICON_VARIANTS)[number];
+
+/**
+ * The `icons` metadata for a set, or {} to inherit the root layout's FavorNoms icons. Nothing
+ * else: the admin manifest, title and app name stay FavorNoms Merchant.
+ *
+ * Every tab icon link is same-origin, through /api/branch-icon. Chrome on an Android tablet showed
+ * the generic globe for the merchant's cross-origin 192/512 PNGs on the Supabase host (2026-11-16)
+ * while same-origin 32/16 PNGs showed, so the tab is offered a 32x32 rendered from the source
+ * first, then the source itself. Sizes are claimed only for the real 192; a legacy free-form
+ * favicon is one link with no sizes, because claiming dimensions a file does not have is worse
+ * than claiming none. `?v=` is the source's fingerprint, which lets the route pin the bytes.
+ *
+ * The iPhone icon stays the cross-origin file, as before: the opaque appleUrl (iOS paints
+ * transparency black, and the 192 may be transparent), else the 192, else the favicon.
+ */
+export function branchIconsMetadata(
+  branchId: string,
+  icons: BranchAppIcons | null,
+  supabaseUrl: string | undefined,
+): Metadata {
+  const source = branchTabIconSource(icons, supabaseUrl);
+  if (!icons || !source) return {};
+  const route = `/api/branch-icon/${encodeURIComponent(branchId)}`;
+  const v = urlFingerprint(source.url);
   const own = (url: string | null) => (isOwnBrandingFile(url, supabaseUrl) ? url : null);
-  const icon192 = own(icons.icon192Url);
-  const icon512 = own(icons.icon512Url);
-  const favicon = own(icons.faviconUrl);
-  if (!icon192 && !favicon) return {};
   return {
     icons: {
-      icon: [
-        ...(icon192 ? [{ url: icon192, sizes: '192x192', type: 'image/png' }] : []),
-        ...(icon512 ? [{ url: icon512, sizes: '512x512', type: 'image/png' }] : []),
-        ...(!icon192 && favicon ? [{ url: favicon }] : []),
-      ],
-      apple: own(icons.appleIconUrl) ?? icon192 ?? favicon ?? undefined,
+      icon: source.sized
+        ? [
+            { url: `${route}/favicon-32?v=${v}`, sizes: '32x32', type: 'image/png' },
+            { url: `${route}/192?v=${v}`, sizes: '192x192', type: 'image/png' },
+          ]
+        : [{ url: `${route}/192?v=${v}`, type: 'image/png' }],
+      apple: own(icons.appleIconUrl) ?? own(icons.icon192Url) ?? own(icons.faviconUrl) ?? undefined,
     },
   };
 }
@@ -154,5 +194,9 @@ export const getBranchIconMetadata = cache(async (branchId: string): Promise<Met
   // Outside readBranchAppIcons' try: cookies() is how Next learns this render is per-user, and
   // that must not be swallowed.
   const supabase = await getServerClient();
-  return branchIconsMetadata(await readBranchAppIcons(supabase, branchId), process.env.NEXT_PUBLIC_SUPABASE_URL);
+  return branchIconsMetadata(
+    branchId,
+    await readBranchAppIcons(supabase, branchId),
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+  );
 });

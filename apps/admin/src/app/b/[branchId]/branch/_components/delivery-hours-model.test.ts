@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { WeekdayWindow } from '@favornoms/shared';
-import { bookingPreview, deliveryOutsideOpening, subtractRanges } from './delivery-hours-model';
+import { bookingPreview, deliveryNotBookable, deliveryOutsideOpening, subtractRanges } from './delivery-hours-model';
 
 const everyDay = (opens_at: string, closes_at: string): WeekdayWindow[] =>
   Array.from({ length: 7 }, (_, day_of_week) => ({ day_of_week, opens_at, closes_at }));
@@ -57,6 +57,7 @@ describe('bookingPreview', () => {
         [1080, 1140],
       ],
       empty: null,
+      notBookable: [],
     });
   });
 
@@ -64,6 +65,7 @@ describe('bookingPreview', () => {
     expect(bookingPreview(opening, bookingWindows, MONDAY, false, deliveryWindows)).toEqual({
       ranges: [],
       empty: 'outsideOpening',
+      notBookable: [],
     });
   });
 
@@ -71,6 +73,7 @@ describe('bookingPreview', () => {
     expect(bookingPreview(opening, everyDay('10:00', '12:00'), MONDAY, false, deliveryWindows)).toEqual({
       ranges: [[600, 720]],
       empty: null,
+      notBookable: [],
     });
   });
 
@@ -78,6 +81,10 @@ describe('bookingPreview', () => {
     expect(bookingPreview(opening, everyDay('10:00', '12:00'), MONDAY, true, deliveryWindows)).toEqual({
       ranges: [],
       empty: 'outsideDelivery',
+      notBookable: [
+        [480, 540],
+        [1080, 1140],
+      ],
     });
   });
 
@@ -85,6 +92,10 @@ describe('bookingPreview', () => {
     expect(bookingPreview(opening, everyDay('18:30', '22:00'), MONDAY, true, deliveryWindows)).toEqual({
       ranges: [[1110, 1140]],
       empty: null,
+      notBookable: [
+        [480, 540],
+        [1080, 1110],
+      ],
     });
   });
 
@@ -104,6 +115,7 @@ describe('bookingPreview', () => {
         [1080, 1140],
       ],
       empty: null,
+      notBookable: [],
     });
   });
 
@@ -115,6 +127,7 @@ describe('bookingPreview', () => {
         [1080, 1140],
       ],
       empty: null,
+      notBookable: [],
     });
   });
 
@@ -122,6 +135,7 @@ describe('bookingPreview', () => {
     expect(bookingPreview(opening, bookingWindows, MONDAY, true, [])).toEqual({
       ranges: [],
       empty: 'outsideDelivery',
+      notBookable: [],
     });
   });
 
@@ -130,11 +144,55 @@ describe('bookingPreview', () => {
     expect(bookingPreview(opening, sundayOnly, MONDAY, true, deliveryWindows)).toEqual({
       ranges: [],
       empty: 'noWindows',
+      notBookable: [
+        [480, 540],
+        [1080, 1140],
+      ],
     });
   });
 
   it('counts the tail of the previous evening as a window of this day', () => {
     const lateSunday: WeekdayWindow[] = [{ day_of_week: 0, opens_at: '22:00', closes_at: '02:00' }];
-    expect(bookingPreview([], lateSunday, MONDAY, false, null)).toEqual({ ranges: [[0, 120]], empty: null });
+    expect(bookingPreview([], lateSunday, MONDAY, false, null)).toEqual({
+      ranges: [[0, 120]],
+      empty: null,
+      notBookable: [],
+    });
+  });
+
+  it('names the delivery hours the booking windows leave out (Thai Burrito, 2026-11-16)', () => {
+    // Delivery moved to 07:00-08:00 and 18:00-19:00; booking windows still 08:00-09:00 and
+    // 18:00-19:00. The checkout offered only the evening.
+    const moved = [...everyDay('07:00', '08:00'), ...everyDay('18:00', '19:00')];
+    expect(bookingPreview(opening, bookingWindows, MONDAY, true, moved)).toEqual({
+      ranges: [[1080, 1140]],
+      empty: null,
+      notBookable: [[420, 480]],
+    });
+  });
+});
+
+describe('deliveryNotBookable', () => {
+  const moved = [...everyDay('07:00', '08:00'), ...everyDay('18:00', '19:00')];
+
+  it('is the delivery hours outside the booking windows', () => {
+    expect(deliveryNotBookable(moved, bookingWindows, MONDAY)).toEqual([[420, 480]]);
+    expect(deliveryNotBookable(moved, moved, MONDAY)).toEqual([]);
+  });
+
+  it('is the whole delivery day when the day has no booking window', () => {
+    expect(deliveryNotBookable(moved, [], MONDAY)).toEqual([
+      [420, 480],
+      [1080, 1140],
+    ]);
+  });
+
+  it('ignores booking windows on days without delivery', () => {
+    expect(deliveryNotBookable(moved.filter((w) => w.day_of_week !== MONDAY), bookingWindows, MONDAY)).toEqual([]);
+  });
+
+  it('follows an overnight delivery window into the next morning', () => {
+    const late: WeekdayWindow[] = [{ day_of_week: 0, opens_at: '22:00', closes_at: '02:00' }];
+    expect(deliveryNotBookable(late, everyDay('00:00', '01:00'), MONDAY)).toEqual([[60, 120]]);
   });
 });

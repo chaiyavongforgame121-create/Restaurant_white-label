@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { branchAppName, appleTouchIconUrl, deriveStorefrontNames, isTrustedIconSource, manifestIcons, parseAppIconVariant, urlFingerprint } from './app-identity';
+import {
+  APP_ICON_VARIANTS,
+  TAB_ICON_VARIANT,
+  branchAppName,
+  appleTouchIconUrl,
+  deriveStorefrontNames,
+  isTrustedIconSource,
+  manifestIcons,
+  parseAppIconVariant,
+  tabIcons,
+  urlFingerprint,
+} from './app-identity';
 
 const SUPABASE = 'https://abc.supabase.co';
 const upload = (name: string) => `${SUPABASE}/storage/v1/object/public/branding/r1/${name}.png`;
@@ -162,6 +173,58 @@ describe('parseAppIconVariant', () => {
     expect(parseAppIconVariant('maskable-512')).toBe('maskable-512');
     expect(parseAppIconVariant('1024')).toBeNull();
     expect(parseAppIconVariant('../192')).toBeNull();
+  });
+
+  it('does not treat the tab icon as an installed-app icon', () => {
+    expect(parseAppIconVariant(TAB_ICON_VARIANT)).toBeNull();
+    expect(APP_ICON_VARIANTS as readonly string[]).not.toContain(TAB_ICON_VARIANT);
+  });
+});
+
+describe('tabIcons', () => {
+  const icon192 = upload('icon-192-aaa');
+
+  it('is a same-origin 32x32 first, then the 192 through the icon route, both keyed on the 192', () => {
+    const v = urlFingerprint(icon192);
+    expect(tabIcons(BASE, { icon192Url: icon192, faviconUrl: upload('favicon-old') })).toEqual([
+      { url: `${BASE}/app-icon/favicon-32?v=${v}`, sizes: '32x32', type: 'image/png' },
+      { url: `${BASE}/app-icon/192?v=${v}`, sizes: '192x192', type: 'image/png' },
+    ]);
+  });
+
+  it('never links the storage host when there is a 192', () => {
+    for (const icon of tabIcons(BASE, { icon192Url: icon192, faviconUrl: null })) {
+      expect(icon.url.startsWith(`${BASE}/app-icon/`)).toBe(true);
+      expect(icon.url).not.toContain('supabase');
+    }
+  });
+
+  it('works at a short storefront address', () => {
+    const icons = tabIcons('/r/thai-burrito', { icon192Url: icon192, faviconUrl: null });
+    expect(icons.map((i) => i.url.split('?')[0])).toEqual([
+      '/r/thai-burrito/app-icon/favicon-32',
+      '/r/thai-burrito/app-icon/192',
+    ]);
+  });
+
+  it('uses the same 192 href as the manifest, so a new upload moves both', () => {
+    const set = { ...FULL_SET, faviconUrl: null };
+    expect(tabIcons(BASE, set)[1]!.url).toBe(manifestIcons(BASE, set)[0]!.src);
+    const replaced = tabIcons(BASE, { icon192Url: upload('icon-192-bbb'), faviconUrl: null });
+    const before = tabIcons(BASE, { icon192Url: icon192, faviconUrl: null });
+    expect(replaced[0]!.url).not.toBe(before[0]!.url);
+    expect(replaced[1]!.url).not.toBe(before[1]!.url);
+  });
+
+  it('sends a legacy free-form favicon through the same-origin route, with no sizes', () => {
+    const legacy = upload('favicon-old');
+    expect(tabIcons(BASE, { icon192Url: null, faviconUrl: legacy })).toEqual([
+      { url: `${BASE}/app-icon/favicon?v=${urlFingerprint(legacy)}` },
+    ]);
+  });
+
+  it('is empty when there is nothing, so the platform icons are inherited', () => {
+    expect(tabIcons(BASE, { icon192Url: null, faviconUrl: null })).toEqual([]);
   });
 });
 

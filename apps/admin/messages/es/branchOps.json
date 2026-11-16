@@ -155,6 +155,7 @@
     "limitHint": "Desactivado: los clientes pueden pedir entregas a domicilio a cualquier hora en que la sucursal esté abierta, lo antes posible o programadas para una hora. Activado: solo dentro de las franjas de abajo, en ambos casos. Estas franjas son tu horario de entrega y pueden empezar antes de abrir o terminar después de cerrar: un local abierto de 9:00 a. m. a 5:30 p. m. puede entregar de 8:00 a 9:00 a. m. y de 6:00 a 7:00 p. m. Los pedidos para recoger siguen el horario de atención, y los cierres y la pausa de pedidos siguen deteniendo las entregas. Para programar una hora también necesitas <strong>Pedidos programados</strong> activado.",
     "noDelivery": "Sin entregas este día",
     "outsideOpening": "Fuera del horario de atención: {ranges}. Los clientes pueden pedir entrega a domicilio en ese horario, pero no para recoger.",
+    "notBookable": "Los clientes no pueden reservar <strong>{ranges}</strong>: estas horas de entrega quedan fuera de las franjas de reserva en <strong>Pedidos programados</strong> (“Limitar las horas en que los clientes pueden reservar”). Guarda aquí primero y luego ajusta esas franjas, pulsa allí “Igual que el horario de entrega” o desactívalas.",
     "armedButEmpty": "El horario de entrega está activado, pero no hay franjas: los clientes no pueden hacer ningún pedido a domicilio. Agrega una franja o desactiva esta opción.",
     "save": "Guardar configuración de entrega"
   },
@@ -187,6 +188,7 @@
     "closedDuringWindows": "nada, la sucursal está cerrada en ese horario",
     "noDeliveryDuringWindows": "nada, la sucursal no hace entregas en ese horario (revisa Limitar las entregas a un horario, más abajo)",
     "outsideOpeningFix": "Estas horas están fuera del horario de atención. Para hacer entregas en ese horario, activa <strong>Limitar las entregas a un horario</strong> más abajo en esta página y agrega ahí estas mismas horas. Una vez activado, las entregas solo se hacen en las franjas que configures ahí, así que agrega también tus horas de entrega durante el día si sigues entregando en ese horario. Los pedidos para recoger siguen el horario de atención.",
+    "deliveryNotBookable": "No se puede reservar: <strong>{ranges}</strong> de tu horario de entrega guardado queda fuera de las franjas de reserva de este día. Agrégalo aquí, pulsa “Igual que el horario de entrega” o desactiva esta opción para que decida solo el horario de entrega.",
     "armedButEmpty": "Las franjas de reserva están activadas, pero no hay ninguna: los clientes no pueden programar ningún pedido. Agrega una franja o desactiva esta opción.",
     "save": "Guardar programación"
   },

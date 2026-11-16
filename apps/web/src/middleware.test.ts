@@ -84,6 +84,10 @@ describe('a web address', () => {
     expect((await run('/r/hamburger/app-icon/192?v=1')).headers.get('x-middleware-rewrite')).toBe(
       `${ORIGIN}/r/demo-favornoms/brooklyn/app-icon/192?v=1`,
     );
+    // The tab icon rides the same route, so a short address must reach it too.
+    expect((await run('/r/hamburger/app-icon/favicon-32?v=1')).headers.get('x-middleware-rewrite')).toBe(
+      `${ORIGIN}/r/demo-favornoms/brooklyn/app-icon/favicon-32?v=1`,
+    );
   });
 
   it('is asked about once, whatever page follows it', async () => {

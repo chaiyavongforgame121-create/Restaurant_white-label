@@ -51,6 +51,7 @@ export function BranchSettings({
   delivery,
   deliveryWindows,
   openingHours,
+  scheduleWindows,
   canUseCard,
   canEditSettings,
   cardPayments,
@@ -71,6 +72,9 @@ export function BranchSettings({
    *  read. Read by the page so a save in the Opening hours card (router.refresh) reaches the
    *  Scheduled orders and Delivery cards' previews. */
   openingHours: WeekdayWindow[] | null;
+  /** The Scheduled orders card's saved booking windows (branch_schedule_hours), null when they
+   *  could not be read; the Delivery card says which delivery hours they leave unbookable. */
+  scheduleWindows: WeekdayWindow[] | null;
   canUseCard: boolean;
   /** branch.settings (owner and admin): what patch_branch_settings requires for the cards below. */
   canEditSettings: boolean;
@@ -345,7 +349,12 @@ export function BranchSettings({
           />
           <DeliverySettingsCard branchId={branch.id} settings={branch.settings} />
           {/* Grouped with the other delivery settings: hours and who delivers. */}
-          <DeliveryHoursCard branchId={branch.id} settings={branch.settings} openingHours={openingHours} />
+          <DeliveryHoursCard
+            branchId={branch.id}
+            settings={branch.settings}
+            openingHours={openingHours}
+            scheduleWindows={scheduleWindows}
+          />
 
           {/* Where the branch's card money is paid, directly above the methods it enables: the
               card method reaches diners only once this account can take charges. */}

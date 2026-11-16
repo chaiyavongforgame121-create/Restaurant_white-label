@@ -75,6 +75,7 @@ export default async function BranchPage({ params }: Props) {
     restaurantPaymentAccounts,
     deliveryHoursRows,
     openingHoursRows,
+    scheduleHoursRows,
   ] = await Promise.all([
     supabase.from('restaurants').select('name, storefront').eq('id', branch.restaurant_id).maybeSingle(),
     getEntitlementsForBranch(supabase, branchId),
@@ -107,6 +108,15 @@ export default async function BranchPage({ params }: Props) {
       .from('branch_hours')
       .select('day_of_week, opens_at, closes_at')
       .eq('branch_id', branchId),
+    // The booking windows, for the Delivery card's "cannot be booked" note: a booking needs both
+    // the delivery hours and these, and they are edited on two cards (the owner's report of
+    // 2026-11-16: delivery moved to 07:00 while the booking windows still started at 08:00, and
+    // the morning vanished from the checkout). The Scheduled orders card refreshes the page after
+    // it saves, so the note follows.
+    supabase
+      .from('branch_schedule_hours')
+      .select('day_of_week, opens_at, closes_at')
+      .eq('branch_id', branchId),
   ]);
   // A failed read is null, not an empty week: empty means "on with no windows, no delivery", and
   // the card would preview that as fact.
@@ -129,6 +139,17 @@ export default async function BranchPage({ params }: Props) {
   const openingHours: WeekdayWindow[] | null = openingHoursRows.error
     ? null
     : (openingHoursRows.data ?? []).map((row) => ({
+        day_of_week: row.day_of_week,
+        opens_at: String(row.opens_at).slice(0, 5),
+        closes_at: String(row.closes_at).slice(0, 5),
+      }));
+  // Null when unread: the Delivery card then leaves its note out rather than guess.
+  if (scheduleHoursRows.error) {
+    console.error('Branch settings: could not read the booking windows:', scheduleHoursRows.error);
+  }
+  const scheduleWindows: WeekdayWindow[] | null = scheduleHoursRows.error
+    ? null
+    : (scheduleHoursRows.data ?? []).map((row) => ({
         day_of_week: row.day_of_week,
         opens_at: String(row.opens_at).slice(0, 5),
         closes_at: String(row.closes_at).slice(0, 5),
@@ -170,6 +191,7 @@ export default async function BranchPage({ params }: Props) {
       }}
       deliveryWindows={deliveryWindows}
       openingHours={openingHours}
+      scheduleWindows={scheduleWindows}
       canUseCard={hasFeature(entitlements, 'card_payment')}
       // Always true past the gate above; kept as a prop so the cards still lock themselves if this
       // page is ever opened wider again.

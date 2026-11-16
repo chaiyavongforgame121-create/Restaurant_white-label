@@ -155,6 +155,7 @@
     "limitHint": "Off: customers can order delivery any time the branch is open, as soon as possible or booked for a time. On: delivery runs only inside the windows below, both ways. These windows are your delivery hours and may start before opening or end after closing: a shop open 9:00 AM–5:30 PM can deliver 8:00–9:00 AM and 6:00–7:00 PM. Pickup still follows Opening hours, and closures and paused orders still stop delivery. Booking a time also needs <strong>Scheduled orders</strong> switched on.",
     "noDelivery": "No delivery this day",
     "outsideOpening": "Outside opening hours: {ranges}. Customers can order delivery then, but not pickup.",
+    "notBookable": "Customers can’t book <strong>{ranges}</strong>: these delivery hours are outside the booking windows under <strong>Scheduled orders</strong> (“Limit the times customers can book”). Save here first, then change those windows to match, press “Same as delivery hours” there, or switch them off.",
     "armedButEmpty": "Delivery hours are switched on but no windows are set — customers cannot place a delivery order at all. Add a window, or switch this off.",
     "save": "Save delivery settings"
   },
@@ -187,6 +188,7 @@
     "closedDuringWindows": "nothing — the branch is closed during these hours",
     "noDeliveryDuringWindows": "nothing — the branch does not deliver during these hours (see Limit delivery to set hours below)",
     "outsideOpeningFix": "These times are outside opening hours. To take deliveries then, switch on <strong>Limit delivery to set hours</strong> further down this page and add these times there. Delivery then runs only in the windows you set there, so add your daytime delivery hours too if you still deliver then. Pickup keeps following opening hours.",
+    "deliveryNotBookable": "Not bookable: <strong>{ranges}</strong> of your saved delivery hours fall outside the booking windows for this day. Add them here, press “Same as delivery hours”, or switch this off so delivery hours alone decide.",
     "armedButEmpty": "Booking windows are switched on but none are set — customers cannot schedule an order at all. Add a window, or switch this off.",
     "save": "Save scheduling"
   },

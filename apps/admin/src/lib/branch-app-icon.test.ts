@@ -2,11 +2,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getServerClient } from '@favornoms/database/server';
+import { GET as getBranchIcon } from '@/app/api/branch-icon/[branchId]/[variant]/route';
 import {
   branchIconsMetadata,
+  branchTabIconSource,
   getBranchIconMetadata,
   isOwnBrandingFile,
   readBranchAppIcons,
+  urlFingerprint,
   type BranchAppIcons,
 } from './branch-app-icon';
 
@@ -27,7 +30,10 @@ const file = (name: string) => `${SB}/storage/v1/object/public/branding/r1/${nam
 
 const R1 = 'r1';
 const R2 = 'r2';
-const BRANCH = 'b1';
+// A UUID: the icon route answers nothing else.
+const BRANCH = '6f1c2b0e-3d4a-4e5f-8a9b-0c1d2e3f4a5b';
+const route = (variant: string, v?: string) =>
+  `/api/branch-icon/${BRANCH}/${variant}${v === undefined ? '' : `?v=${v}`}`;
 
 /**
  * A stand-in for the signed-in client: eq filters, order and limit over in-memory rows, the
@@ -213,7 +219,7 @@ describe('readBranchAppIcons: which set the tab wears', () => {
   });
 });
 
-describe('branchIconsMetadata: the icons metadata, as the storefront writes it', () => {
+describe('branchIconsMetadata: same-origin tab icon links', () => {
   const set = (over: Partial<BranchAppIcons> = {}): BranchAppIcons => ({
     faviconUrl: file('favicon'),
     icon192Url: file('icon-192'),
@@ -221,37 +227,61 @@ describe('branchIconsMetadata: the icons metadata, as the storefront writes it',
     appleIconUrl: file('icon-apple-180'),
     ...over,
   });
+  const iconList = (icons: BranchAppIcons) =>
+    (branchIconsMetadata(BRANCH, icons, SB).icons as { icon: Array<{ url: string }> }).icon;
 
-  it('declares sizes only for the normalised PNGs and lists the legacy favicon only without a 192', () => {
-    expect(branchIconsMetadata(set(), SB)).toEqual({
+  it('offers the tab a same-origin 32x32 first, then the 192, both keyed to the 192 they come from', () => {
+    const v = urlFingerprint(file('icon-192'));
+    expect(branchIconsMetadata(BRANCH, set(), SB)).toEqual({
       icons: {
         icon: [
-          { url: file('icon-192'), sizes: '192x192', type: 'image/png' },
-          { url: file('icon-512'), sizes: '512x512', type: 'image/png' },
+          { url: route('favicon-32', v), sizes: '32x32', type: 'image/png' },
+          { url: route('192', v), sizes: '192x192', type: 'image/png' },
         ],
         apple: file('icon-apple-180'),
       },
     });
-    expect(branchIconsMetadata(set({ icon192Url: null, icon512Url: null, appleIconUrl: null }), SB)).toEqual({
-      icons: { icon: [{ url: file('favicon') }], apple: file('favicon') },
+  });
+
+  it('never links the tab to the storage host: the cross-origin PNGs are what Chrome showed as a globe', () => {
+    for (const icons of [set(), set({ icon192Url: null }), set({ icon512Url: null })]) {
+      const list = iconList(icons);
+      expect(list.length).toBeGreaterThan(0);
+      for (const { url } of list) expect(url.startsWith(`/api/branch-icon/${BRANCH}/`)).toBe(true);
+    }
+  });
+
+  it('serves a legacy favicon as one link with no sizes: it has no known size to claim', () => {
+    expect(branchIconsMetadata(BRANCH, set({ icon192Url: null, icon512Url: null, appleIconUrl: null }), SB)).toEqual({
+      icons: {
+        icon: [{ url: route('192', urlFingerprint(file('favicon'))), type: 'image/png' }],
+        apple: file('favicon'),
+      },
     });
   });
 
-  it('gives iPhones the opaque apple icon, else the 192, else the favicon', () => {
+  it('changes the ?v= exactly when the source file changes', () => {
+    const v = (icons: BranchAppIcons) =>
+      new URL(iconList(icons)[0]!.url, 'https://admin.test').searchParams.get('v');
+    expect(v(set())).toBe(v(set({ icon512Url: null, faviconUrl: null, appleIconUrl: null })));
+    expect(v(set({ icon192Url: file('icon-192-new-upload') }))).not.toBe(v(set()));
+  });
+
+  it("keeps the iPhone icon on the merchant's own file: the opaque apple icon, else the 192, else the favicon", () => {
     const apple = (icons: BranchAppIcons) =>
-      (branchIconsMetadata(icons, SB).icons as { apple?: unknown } | undefined)?.apple;
+      (branchIconsMetadata(BRANCH, icons, SB).icons as { apple?: unknown } | undefined)?.apple;
     expect(apple(set())).toBe(file('icon-apple-180'));
     expect(apple(set({ appleIconUrl: null }))).toBe(file('icon-192'));
     expect(apple(set({ appleIconUrl: null, icon192Url: null }))).toBe(file('favicon'));
   });
 
   it('returns nothing to override when there is no tab icon, so the FavorNoms icons stay', () => {
-    expect(branchIconsMetadata(null, SB)).toEqual({});
+    expect(branchIconsMetadata(BRANCH, null, SB)).toEqual({});
     expect(
-      branchIconsMetadata({ faviconUrl: null, icon192Url: null, icon512Url: null, appleIconUrl: null }, SB),
+      branchIconsMetadata(BRANCH, { faviconUrl: null, icon192Url: null, icon512Url: null, appleIconUrl: null }, SB),
     ).toEqual({});
     // A 512 alone is no tab icon on the storefront either.
-    expect(branchIconsMetadata(set({ faviconUrl: null, icon192Url: null }), SB)).toEqual({});
+    expect(branchIconsMetadata(BRANCH, set({ faviconUrl: null, icon192Url: null }), SB)).toEqual({});
   });
 
   it("uses only files in this project's branding bucket", () => {
@@ -264,19 +294,36 @@ describe('branchIconsMetadata: the icons metadata, as the storefront writes it',
     }
     expect(isOwnBrandingFile(file('icon-192'), undefined)).toBe(false);
 
-    expect(branchIconsMetadata(set({ appleIconUrl: elsewhere }), SB)).toEqual({
+    const v = urlFingerprint(file('icon-192'));
+    expect(branchIconsMetadata(BRANCH, set({ appleIconUrl: elsewhere }), SB)).toEqual({
       icons: {
         icon: [
-          { url: file('icon-192'), sizes: '192x192', type: 'image/png' },
-          { url: file('icon-512'), sizes: '512x512', type: 'image/png' },
+          { url: route('favicon-32', v), sizes: '32x32', type: 'image/png' },
+          { url: route('192', v), sizes: '192x192', type: 'image/png' },
         ],
         apple: file('icon-192'),
       },
     });
+    // A foreign 192 falls through to the own favicon, never to the foreign file.
+    expect(branchTabIconSource(set({ icon192Url: otherProject }), SB)).toEqual({ url: file('favicon'), sized: false });
     expect(
-      branchIconsMetadata({ faviconUrl: elsewhere, icon192Url: otherProject, icon512Url: otherBucket, appleIconUrl: null }, SB),
+      branchIconsMetadata(
+        BRANCH,
+        { faviconUrl: elsewhere, icon192Url: otherProject, icon512Url: otherBucket, appleIconUrl: null },
+        SB,
+      ),
     ).toEqual({});
-    expect(branchIconsMetadata(set(), undefined)).toEqual({});
+    expect(branchIconsMetadata(BRANCH, set(), undefined)).toEqual({});
+  });
+});
+
+describe('urlFingerprint', () => {
+  it("is FNV-1a 32-bit hex, the storefront's urlFingerprint (apps/web/src/lib/app-identity.ts)", () => {
+    // The published FNV-1a 32-bit test vectors.
+    expect(urlFingerprint('')).toBe('811c9dc5');
+    expect(urlFingerprint('a')).toBe('e40c292c');
+    expect(urlFingerprint('foobar')).toBe('bf9cf968');
+    expect(urlFingerprint(file('icon-192'))).toMatch(/^[0-9a-f]{8}$/);
   });
 });
 
@@ -289,11 +336,12 @@ describe('getBranchIconMetadata', () => {
     vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', SB);
     const { client } = fakeClient({ branches: [branchRow(OWN_SET)], brands: [] });
     vi.mocked(getServerClient).mockResolvedValue(client as never);
+    const v = urlFingerprint(file('icon-192-b1'));
     expect(await getBranchIconMetadata(BRANCH)).toEqual({
       icons: {
         icon: [
-          { url: file('icon-192-b1'), sizes: '192x192', type: 'image/png' },
-          { url: file('icon-512-b1'), sizes: '512x512', type: 'image/png' },
+          { url: route('favicon-32', v), sizes: '32x32', type: 'image/png' },
+          { url: route('192', v), sizes: '192x192', type: 'image/png' },
         ],
         apple: file('icon-apple-180-b1'),
       },
@@ -305,6 +353,142 @@ describe('getBranchIconMetadata', () => {
     const { client } = fakeClient({ branches: [branchRow(OWN_SET)] }, { errors: ['branches'] });
     vi.mocked(getServerClient).mockResolvedValue(client as never);
     expect(await getBranchIconMetadata('b-error')).toEqual({});
+  });
+});
+
+describe('GET /api/branch-icon/<branchId>/<variant>', () => {
+  const ADMIN = 'https://admin.favornoms.test';
+  // The admin's own 192x192 FavorNoms PNG stands in for a merchant's upload.
+  const PNG_192 = fs.readFileSync(path.resolve(__dirname, '../../public/icon-192.png'));
+  type Upstream = (url: string) => Response | Promise<Response>;
+  const pngUpstream: Upstream = () => new Response(PNG_192, { headers: { 'content-type': 'image/png' } });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  /** Signs in a reader of `tables` and answers the storage fetch with `upstream`. */
+  function serve(tables: Record<string, Row[]>, upstream: Upstream = pngUpstream) {
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', SB);
+    const fake = fakeClient(tables);
+    vi.mocked(getServerClient).mockResolvedValue(fake.client as never);
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => upstream(String(input)));
+    vi.stubGlobal('fetch', fetchMock);
+    return { fetchMock, reads: fake.reads };
+  }
+
+  const get = (variant: string, opts: { v?: string; branchId?: string } = {}) => {
+    const branchId = opts.branchId ?? BRANCH;
+    const qs = opts.v === undefined ? '' : `?v=${opts.v}`;
+    return getBranchIcon(new Request(`${ADMIN}/api/branch-icon/${branchId}/${variant}${qs}`), {
+      params: Promise.resolve({ branchId, variant }),
+    });
+  };
+
+  const pngSize = async (res: Response) => {
+    const bytes = Buffer.from(await res.arrayBuffer());
+    expect(bytes.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
+    return [bytes.readUInt32BE(16), bytes.readUInt32BE(20)];
+  };
+
+  it("proxies the merchant's 192 same-origin, read with the signed-in user's RLS and fetched uncached", async () => {
+    const { fetchMock, reads } = serve({ branches: [branchRow(OWN_SET)], brands: [] });
+    const res = await get('192', { v: urlFingerprint(file('icon-192-b1')) });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('image/png');
+    expect(res.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(Buffer.from(await res.arrayBuffer()).equals(PNG_192)).toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith(file('icon-192-b1'), { cache: 'no-store' });
+    expect(reads[0]).toEqual({ table: 'branches', filters: [['id', BRANCH]] });
+  });
+
+  it('renders the favicon-32 as a real 32x32 PNG from the 192', async () => {
+    serve({ branches: [branchRow(OWN_SET)], brands: [] });
+    const res = await get('favicon-32', { v: urlFingerprint(file('icon-192-b1')) });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('image/png');
+    expect(await pngSize(res)).toEqual([32, 32]);
+  });
+
+  it('pins the bytes only for the fingerprint of the current file, and never in a shared cache', async () => {
+    const tables = { branches: [branchRow(OWN_SET)], brands: [] };
+    const current = urlFingerprint(file('icon-192-b1'));
+    for (const variant of ['192', 'favicon-32']) {
+      serve(tables);
+      expect((await get(variant, { v: current })).headers.get('cache-control')).toBe(
+        'private, max-age=31536000, immutable',
+      );
+      serve(tables);
+      expect((await get(variant, { v: 'deadbeef' })).headers.get('cache-control')).toBe('private, no-cache');
+      serve(tables);
+      expect((await get(variant)).headers.get('cache-control')).toBe('private, no-cache');
+    }
+  });
+
+  it('serves a set with no 192 from its own legacy favicon', async () => {
+    const { fetchMock } = serve({
+      branches: [branchRow()],
+      brands: [brandRow({ favicon_url: file('favicon-brand') })],
+    });
+    const res = await get('192', { v: urlFingerprint(file('favicon-brand')) });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe('private, max-age=31536000, immutable');
+    expect(fetchMock).toHaveBeenCalledWith(file('favicon-brand'), { cache: 'no-store' });
+  });
+
+  it.each([
+    ['an unknown variant', '512', BRANCH],
+    ['a path-like variant', '..', BRANCH],
+    ['a branch id that is not a UUID', '192', 'b1'],
+  ])('answers 404 to %s without reading anything', async (_label, variant, branchId) => {
+    const { fetchMock, reads } = serve({ branches: [branchRow(OWN_SET)], brands: [] });
+    expect((await get(variant, { branchId })).status).toBe(404);
+    expect(reads).toEqual([]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  const fallbacks: Array<[string, Record<string, Row[]>, Upstream?]> = [
+    ['there is no set (or RLS hides the branch)', { branches: [], brands: [] }],
+    [
+      'the file is outside the branding bucket',
+      { branches: [branchRow({ icon_192_url: 'https://tracker.example/pixel.png' })], brands: [] },
+    ],
+    [
+      'the fetch fails',
+      { branches: [branchRow(OWN_SET)], brands: [] },
+      () => Promise.reject(new TypeError('fetch failed')),
+    ],
+    ['storage answers 404', { branches: [branchRow(OWN_SET)], brands: [] }, () => new Response('nope', { status: 404 })],
+    [
+      'the file is not a PNG',
+      { branches: [branchRow(OWN_SET)], brands: [] },
+      () => new Response('<svg/>', { headers: { 'content-type': 'image/svg+xml' } }),
+    ],
+  ];
+
+  it.each(fallbacks)("redirects to the admin's own FavorNoms icon when %s", async (_label, tables, upstream) => {
+    for (const [variant, own] of [
+      ['favicon-32', '/favicon-32.png'],
+      ['192', '/icon-192.png'],
+    ] as const) {
+      const { fetchMock } = serve(tables, upstream);
+      const res = await get(variant, { v: urlFingerprint(file('icon-192-b1')) });
+      expect(res.status).toBe(307);
+      expect(res.headers.get('location')).toBe(`${ADMIN}${own}`);
+      expect(res.headers.get('cache-control')).toBe('private, no-cache');
+      // Nothing outside the branding bucket is ever fetched.
+      for (const [url] of fetchMock.mock.calls) expect(isOwnBrandingFile(String(url), SB)).toBe(true);
+    }
+  });
+
+  it('redirects the favicon-32 when the PNG cannot be rendered, instead of a broken 200', async () => {
+    serve({ branches: [branchRow(OWN_SET)], brands: [] }, () =>
+      new Response(Buffer.from('not really a png'), { headers: { 'content-type': 'image/png' } }),
+    );
+    const res = await get('favicon-32');
+    expect(res.status).toBe(307);
+    expect(res.headers.get('location')).toBe(`${ADMIN}/favicon-32.png`);
   });
 });
 

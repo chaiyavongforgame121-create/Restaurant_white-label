@@ -13,6 +13,7 @@ import {
   isUiLocale,
   kitchenLeadMin,
   parseDeliverySettings,
+  type MinuteRange,
   type UiLocale,
   type WeekdayWindow,
 } from '@favornoms/shared';
@@ -301,6 +302,8 @@ export function ScheduledOrdersCard({ branchId, settings, deliveryWindows, openi
     if (updateError) {
       console.error('Saving scheduling settings failed', updateError);
       setError(t(saveErrorKey(updateError)));
+      // The booking windows may have been saved above; the Delivery card warns from them.
+      if (loaded) router.refresh();
       return;
     }
     setSavedAt(Date.now());
@@ -516,9 +519,19 @@ export function ScheduledOrdersCard({ branchId, settings, deliveryWindows, openi
                         </div>
                       </div>
                       {(week[day]?.length ?? 0) === 0 ? (
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {t('scheduling.noBookings')}
-                        </p>
+                        <>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {t('scheduling.noBookings')}
+                          </p>
+                          {/* The Delivery card warns about this day too; say it here as well. */}
+                          <NotBookableLine
+                            ranges={
+                              bookingPreview(openingHours, draftWindows, day, deliveryHoursOn, deliveryWindows)
+                                ?.notBookable ?? []
+                            }
+                            locale={locale}
+                          />
+                        </>
                       ) : (
                         <div className="mt-2 space-y-2">
                           {(week[day] ?? []).map((win, idx) => (
@@ -618,6 +631,22 @@ function CustomersSee({ preview, locale }: { preview: BookingPreview | null; loc
           {t.rich('scheduling.outsideOpeningFix', { strong: (chunks) => <strong>{chunks}</strong> })}
         </p>
       )}
+      <NotBookableLine ranges={preview.notBookable} locale={locale} />
     </>
+  );
+}
+
+/** Delivery hours these booking windows leave out (the owner's report of 2026-11-16: delivery
+ *  moved to 07:00-08:00 while the day still booked from 08:00, and only the evening was offered). */
+function NotBookableLine({ ranges, locale }: { ranges: MinuteRange[]; locale: UiLocale }) {
+  const t = useTranslations('branchOps');
+  if (ranges.length === 0) return null;
+  return (
+    <p role="status" className="mt-2 rounded-xl bg-warning/10 px-3 py-2 text-xs">
+      {t.rich('scheduling.deliveryNotBookable', {
+        ranges: describeRanges(ranges, undefined, locale),
+        strong: (chunks) => <strong>{chunks}</strong>,
+      })}
+    </p>
   );
 }

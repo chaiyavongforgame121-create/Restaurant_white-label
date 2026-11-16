@@ -12,7 +12,7 @@ import {
   resolveTenant,
   storefrontNames,
 } from '@/lib/tenant';
-import { appleTouchIconUrl } from '@/lib/app-identity';
+import { appleTouchIconUrl, tabIcons } from '@/lib/app-identity';
 import { StorefrontAddressProvider } from '@/components/storefront-base';
 import { storefrontBase } from '@favornoms/database/storefront-path';
 import { TablePinProvider } from './_components/table-pin';
@@ -99,26 +99,19 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     // even though a launcher may truncate it.
     appleWebApp: { capable: true, statusBarStyle: 'default', title: names.short },
     // Every icon below is this branch's (tenant resolves the whole set from the branch once it
-    // has one, from the brand before). The hrefs are the upload URLs themselves, and every
-    // upload gets a new storage path, so a branch's new icon is a new href without a `?v`.
-    // Sizes are declared only for the normalised icons the admin uploader produced —
-    // those really are 192x192/512x512 PNGs. A legacy free-form favicon (uploaded
-    // before normalisation existed) still gets no `sizes`, because claiming dimensions
-    // a file does not have is worse than claiming none.
+    // has one, from the brand before). The tab icons are same-origin: a 32x32 the icon route
+    // renders from the normalised 192, then the 192 through the same route, at the manifest's
+    // base and keyed on the 192's fingerprint, so a new upload is a new href (tabIcons()).
+    // Chrome on Android showed the globe in the tab while these were the cross-origin upload
+    // URLs at 192/512 only. A legacy free-form favicon (uploaded before normalisation
+    // existed) is still its own URL with no `sizes`, because claiming dimensions a file does
+    // not have is worse than claiming none.
     // `apple` prefers the 192: iOS renders alpha as black, and the normalised variants
     // are flattened onto an opaque ground while a raw upload may not be.
     ...(tenant.icon192Url || tenant.faviconUrl
       ? {
           icons: {
-            icon: [
-              ...(tenant.icon192Url
-                ? [{ url: tenant.icon192Url, sizes: '192x192', type: 'image/png' }]
-                : []),
-              ...(tenant.icon512Url
-                ? [{ url: tenant.icon512Url, sizes: '512x512', type: 'image/png' }]
-                : []),
-              ...(!tenant.icon192Url && tenant.faviconUrl ? [{ url: tenant.faviconUrl }] : []),
-            ],
+            icon: tabIcons(storefrontBase(tenant), tenant),
             // iOS paints transparency black, so it gets the merchant's opaque iPhone icon when
             // there is one — the 192 may be transparent ("only the image, like a PNG").
             apple:
