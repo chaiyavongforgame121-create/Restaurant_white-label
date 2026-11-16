@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { refreshTabIcon } from '@favornoms/ui';
+import { keepTabIcon, refreshTabIcon } from '@favornoms/ui';
 
 function addIcon(attrs: Record<string, string>): HTMLLinkElement {
   const link = document.createElement('link');
@@ -62,5 +62,54 @@ describe('refreshTabIcon', () => {
     addIcon({ rel: 'icon', href: '/two-32', sizes: '32x32' });
     expect(refreshTabIcon(document)).toBe('/two-32');
     expect(document.head.querySelector('link[data-tab-icon-refresh]')!.getAttribute('href')).toBe('/two-32');
+  });
+});
+
+const tick = () => new Promise((resolve) => setTimeout(resolve, 5));
+const refreshCopy = () => document.head.querySelector('link[data-tab-icon-refresh]')?.getAttribute('href') ?? null;
+
+describe('keepTabIcon', () => {
+  it('adds the copy once started', async () => {
+    addIcon({ rel: 'icon', href: '/a-32', sizes: '32x32' });
+    const keeper = keepTabIcon(document);
+    await tick();
+    expect(refreshCopy()).toMatch(/^\/a-32#/);
+    keeper.stop();
+  });
+
+  it('adds it again when the page icons arrive after the navigation, however late', async () => {
+    const own = addIcon({ rel: 'icon', href: '/a-32', sizes: '32x32' });
+    const keeper = keepTabIcon(document);
+    await tick();
+    // A navigation: the framework takes its links out, the tick runs with none (no copy)...
+    own.remove();
+    keeper.refresh();
+    await tick();
+    expect(refreshCopy()).toBeNull();
+    // ...and the new page's metadata lands later.
+    addIcon({ rel: 'icon', href: '/b-32', sizes: '32x32' });
+    await tick();
+    expect(refreshCopy()).toMatch(/^\/b-32#/);
+    keeper.stop();
+  });
+
+  it('ignores its own copy, so it never feeds itself', async () => {
+    addIcon({ rel: 'icon', href: '/a-32', sizes: '32x32' });
+    const keeper = keepTabIcon(document);
+    await tick();
+    const first = document.head.querySelector('link[data-tab-icon-refresh]');
+    await tick();
+    await tick();
+    expect(document.head.querySelector('link[data-tab-icon-refresh]')).toBe(first);
+    keeper.stop();
+  });
+
+  it('stops watching once stopped', async () => {
+    const keeper = keepTabIcon(document);
+    await tick();
+    keeper.stop();
+    addIcon({ rel: 'icon', href: '/late-32', sizes: '32x32' });
+    await tick();
+    expect(refreshCopy()).toBeNull();
   });
 });
