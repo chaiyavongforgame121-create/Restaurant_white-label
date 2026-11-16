@@ -52,6 +52,9 @@
     "cardNotConfigured": "Nhà hàng này hiện chưa thể nhận thanh toán thẻ trực tuyến. Vui lòng chọn cách thanh toán khác.",
     "cardAmountTooSmall": "Thanh toán bằng thẻ phải từ $0.50 trở lên. Vui lòng chọn cách thanh toán khác cho đơn này.",
     "cardSetupFailed": "Chúng tôi không thể thiết lập thanh toán thẻ, nên đơn hàng chưa được đặt và bạn không bị trừ tiền. Vui lòng thử lại.",
-    "deliveryNotAvailableNowNoBooking": "Nhà hàng tạm ngừng giao hàng. Vui lòng chọn Tự đến lấy hoặc thử lại sau."
+    "deliveryNotAvailableNowNoBooking": "Nhà hàng tạm ngừng giao hàng. Vui lòng chọn Tự đến lấy hoặc thử lại sau.",
+    "deliveryNotAvailableAtThatTimeNoPickup": "Nhà hàng không giao hàng vào giờ đó. Vui lòng chọn giờ giao khác.",
+    "deliveryNotAvailableNowNoPickup": "Nhà hàng hiện chưa giao hàng. Vui lòng chọn giờ giao hàng.",
+    "deliveryNotAvailableNowNoBookingNoPickup": "Nhà hàng hiện không giao hàng. Vui lòng thử lại trong giờ giao hàng của nhà hàng."
   }
 }

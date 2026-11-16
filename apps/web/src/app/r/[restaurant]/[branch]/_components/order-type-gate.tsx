@@ -36,6 +36,15 @@ interface Props {
    */
   deliveryOffered?: boolean;
   /**
+   * The branch is open for pickup right now (is_branch_open, resolveScheduleDelivery's openNow).
+   * Delivery keeps its own hours, which may lie outside opening hours, so a diner can arrive while
+   * pickup is closed and delivery is not. False puts Delivery first, when it can be ordered, and
+   * the Pickup tile says when it can be had. Pickup stays on offer either way: a cart can be built
+   * for later, and checkout is where a closed pickup is refused. Defaults true, so a missing prop
+   * keeps the usual order and words.
+   */
+  pickupOpenNow?: boolean;
+  /**
    * A table token in the URL resolved to a table at THIS branch, so a scan is being
    * seated right now.
    *
@@ -69,6 +78,7 @@ export function OrderTypeGate({
   canDeliverNow = false,
   canScheduleDelivery = false,
   deliveryOffered = true,
+  pickupOpenNow = true,
   seatingFromScan = false,
 }: Props) {
   const t = useTranslations();
@@ -158,32 +168,36 @@ export function OrderTypeGate({
     };
   }, [open]);
 
-  // Pickup first, then Delivery — the order checkout offers them in. The hint promises only what
-  // checkout will offer: ASAP, a booked time, or both.
+  // Pickup first, then Delivery — the order checkout offers them in — unless pickup is closed right
+  // now: then the way to order that is open comes first (and takes the focus), and Pickup says it
+  // waits for opening hours rather than "while it's open" over a closed shop. The delivery hint
+  // promises only what checkout will offer: ASAP, a booked time, or both.
   const deliveryHint =
     canDeliverNow && canScheduleDelivery
       ? t('orderType.deliveryHint')
       : canDeliverNow
         ? t('orderType.deliveryHintAsap')
         : t('orderType.deliveryHintScheduled');
-  const options: Array<{ value: OrderChannel; label: string; hint: string; icon: React.ReactNode }> = [
-    {
-      value: 'pickup',
-      label: t('channel.pickup'),
-      hint: t('orderType.pickupHint'),
-      icon: <ShoppingBag className="h-6 w-6" />,
-    },
-    ...(canDeliver
-      ? [
-          {
-            value: 'delivery' as const,
-            label: t('channel.delivery'),
-            hint: deliveryHint,
-            icon: <RiderIcon className="h-6 w-6" />,
-          },
-        ]
-      : []),
-  ];
+  type Option = { value: OrderChannel; label: string; hint: string; icon: React.ReactNode };
+  const pickupOption: Option = {
+    value: 'pickup',
+    label: t('channel.pickup'),
+    hint: pickupOpenNow ? t('orderType.pickupHint') : t('orderType.pickupHintClosed'),
+    icon: <ShoppingBag className="h-6 w-6" />,
+  };
+  const deliveryOption: Option | null = canDeliver
+    ? {
+        value: 'delivery',
+        label: t('channel.delivery'),
+        hint: deliveryHint,
+        icon: <RiderIcon className="h-6 w-6" />,
+      }
+    : null;
+  const options: Option[] = deliveryOption
+    ? pickupOpenNow
+      ? [pickupOption, deliveryOption]
+      : [deliveryOption, pickupOption]
+    : [pickupOption];
 
   return (
     <AnimatePresence>

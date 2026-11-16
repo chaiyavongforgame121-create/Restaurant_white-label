@@ -761,8 +761,8 @@ function PosInner({
   // Delivery: the pinned address's own fee from quote_delivery, or place-order's flat one.
   const isDelivery = channel === 'delivery';
   const deliveryQuote = useDeliveryQuote(branchId, delivery.pin, isDelivery);
-  // Delivery hours: the orders insert trigger refuses a delivery outside them, and for a QR sale
-  // that refusal would come after the customer has paid.
+  // Can the branch take a delivery now (is_branch_open_for, as place-order asks): a refusal at
+  // Charge would come, for a QR sale, after the customer has paid.
   const deliveryHours = useDeliveryHours(branchId, isDelivery);
   const deliveryFee = !isDelivery
     ? 0

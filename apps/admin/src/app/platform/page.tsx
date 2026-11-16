@@ -55,7 +55,7 @@ export default async function PlatformPage() {
   const subs = new Map((subsRes.data ?? []).map((s) => [s.restaurant_id, s]));
 
   // Narrow the jsonb and the hours array server-side: shipping every branch's
-  // full settings blob and weekly schedule to the browser for two booleans would
+  // full settings blob and weekly schedule to the browser for three booleans would
   // be a large, pointless payload.
   const branches: BranchLite[] = (branchesRes.data ?? []).map((b) => ({
     id: b.id,
@@ -69,6 +69,7 @@ export default async function PlatformPage() {
     entitled_through: b.entitled_through,
     timezone: b.timezone,
     has_hours: (b.branch_hours ?? []).length > 0,
+    delivery_hours_on: readDeliveryHoursOn(b.settings),
     closure: firstClosure(b.branch_closures),
   }));
 
@@ -138,6 +139,14 @@ export default async function PlatformPage() {
 function readOrdersPaused(settings: unknown): boolean {
   if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return false;
   return (settings as Record<string, unknown>).orders_paused === true;
+}
+
+// "Limit delivery to set hours", read as is_branch_open_for reads it
+// ((settings->>'delivery_hours_enabled')::boolean): a JSON true or the string "true".
+function readDeliveryHoursOn(settings: unknown): boolean {
+  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return false;
+  const value = (settings as Record<string, unknown>).delivery_hours_enabled;
+  return value === true || value === 'true';
 }
 
 function firstClosure(rows: BranchClosureLite[] | null): BranchClosureLite | null {

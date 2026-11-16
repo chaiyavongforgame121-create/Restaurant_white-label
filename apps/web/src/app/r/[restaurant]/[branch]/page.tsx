@@ -160,8 +160,9 @@ export default async function MenuPage({ params, searchParams }: Props) {
     .filter((hh) => hh.appliesToAll || hh.items.length > 0);
 
   const scheduleDelivery = await resolveScheduleDelivery(supabase, tenant.branch.id, status);
-  // is_branch_open, read once by resolveScheduleDelivery (ASAP delivery needs it too). A failed
-  // read counts as open there, as it did when this page asked itself.
+  // is_branch_open, read once by resolveScheduleDelivery: open for PICKUP. Delivery keeps its own
+  // hours (canDeliverNow), so a branch closed here may still be delivering. A failed read counts
+  // as open there, as it did when this page asked itself.
   const isOpen = scheduleDelivery.openNow;
   const reviews = (reviewsCheck.data ?? null) as {
     summary: { rating: number | null; count: number };
@@ -207,6 +208,9 @@ export default async function MenuPage({ params, searchParams }: Props) {
         // "Accept ASAP delivery orders", read fresh from the row (not the cached tenant) so the
         // closed banner never promises an ASAP delivery the branch has switched off.
         asapOffered={scheduleDelivery.asapOffered}
+        // With delivery hours on, ASAP delivery keeps them rather than business hours, and the
+        // closed banner says so.
+        deliveryHoursOn={status.delivery_hours_on}
         // The scan is being seated by <TableScanPin> above, which may be bouncing the diner
         // through sign-in. Until that lands there is no pin, and without this the gate would
         // open over somebody who is demonstrably sitting at a table.

@@ -18,6 +18,9 @@ The 2026-09-16 redesign made storefront delivery schedule-only ("Schedule Delive
     (`storefront_status.delivery`: entitled, the branch's delivery switch on, inside delivery hours) and a payment method
     is accepted for "now" orders. When it is not available the checkbox is disabled with the reason and a time is
     required.
+  - **2026-11-16:** with "Limit delivery to set hours" on, a delivery (ASAP or booked) is judged by the delivery
+    windows alone, not by opening hours, so it may run before opening or after closing; pickup still follows opening
+    hours. See [DELIVERY-HOURS-OUTSIDE-OPENING-2026-11-16.md](DELIVERY-HOURS-OUTSIDE-OPENING-2026-11-16.md).
   - Scheduling off ("Accept scheduled orders" unticked) now hides only the Day/Time pickers: delivery stays as ASAP
     where ASAP is ticked. Delivery disappears only when neither ASAP nor a booking is possible.
 - **Per-branch switch, 2026-10-26 (owner request).** "Accept ASAP delivery orders" sits above "Accept scheduled orders"

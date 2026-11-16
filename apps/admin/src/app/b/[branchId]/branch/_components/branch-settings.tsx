@@ -6,7 +6,13 @@ import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { Lock, Save } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
-import { DEFAULT_UI_LOCALE, billingErrorMessage, describeBillingError, isUiLocale } from '@favornoms/shared';
+import {
+  DEFAULT_UI_LOCALE,
+  billingErrorMessage,
+  describeBillingError,
+  isUiLocale,
+  type WeekdayWindow,
+} from '@favornoms/shared';
 import { Badge, Button, Card } from '@favornoms/ui';
 import { ClosuresManager } from './closures-manager';
 import { DeliverySettingsCard } from './delivery-settings-card';
@@ -43,6 +49,8 @@ export function BranchSettings({
   restaurantStorefront,
   branding,
   delivery,
+  deliveryWindows,
+  openingHours,
   canUseCard,
   canEditSettings,
   cardPayments,
@@ -57,6 +65,12 @@ export function BranchSettings({
    * deliver whatever the switch says (docs/PACKAGING-2026-10-24.md §3).
    */
   delivery: { switchOn: boolean | null; restaurantOff: boolean };
+  /** The Delivery card's saved windows (branch_delivery_hours), null when they could not be read. */
+  deliveryWindows: WeekdayWindow[] | null;
+  /** Opening hours as saved (branch_hours; empty is always open), null when they could not be
+   *  read. Read by the page so a save in the Opening hours card (router.refresh) reaches the
+   *  Scheduled orders and Delivery cards' previews. */
+  openingHours: WeekdayWindow[] | null;
   canUseCard: boolean;
   /** branch.settings (owner and admin): what patch_branch_settings requires for the cards below. */
   canEditSettings: boolean;
@@ -307,9 +321,15 @@ export function BranchSettings({
             </p>
           )}
 
-          {/* Sits directly after Opening hours on purpose: the picker's available times
-              ARE those hours, so the two are read together. */}
-          <ScheduledOrdersCard branchId={branch.id} settings={branch.settings} />
+          {/* Sits directly after Opening hours on purpose: the picker's available times start
+              from those hours, so the two are read together. With "Limit delivery to set hours"
+              on they start from the Delivery card's windows instead, hence those windows too. */}
+          <ScheduledOrdersCard
+            branchId={branch.id}
+            settings={branch.settings}
+            deliveryWindows={deliveryWindows}
+            openingHours={openingHours}
+          />
 
           {/* Delivery is in the plan at every branch, so its settings are always here: a
               merchant can set fees, radius and hours before switching delivery on, and they
@@ -325,7 +345,7 @@ export function BranchSettings({
           />
           <DeliverySettingsCard branchId={branch.id} settings={branch.settings} />
           {/* Grouped with the other delivery settings: hours and who delivers. */}
-          <DeliveryHoursCard branchId={branch.id} settings={branch.settings} />
+          <DeliveryHoursCard branchId={branch.id} settings={branch.settings} openingHours={openingHours} />
 
           {/* Where the branch's card money is paid, directly above the methods it enables: the
               card method reaches diners only once this account can take charges. */}

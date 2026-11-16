@@ -9,7 +9,12 @@
     "title": "Cerrado por ahora.",
     "canSchedule": "Recoger en tienda y la entrega lo antes posible solo están disponibles en horario de atención, pero ya puedes programar una entrega para más tarde.",
     "canScheduleNoAsap": "Recoger en tienda solo está disponible en horario de atención, pero ya puedes programar una entrega para más tarde.",
-    "notTaking": "No estamos recibiendo pedidos en este momento. Vuelve durante el horario de atención."
+    "notTaking": "No estamos recibiendo pedidos en este momento. Vuelve durante el horario de atención.",
+    "notTakingDeliveryHours": "Recoger en tienda está disponible en horario de atención y la entrega a domicilio, en el horario de entregas. Vuelve en esos horarios.",
+    "pickupTitle": "Recoger en tienda no está disponible por ahora.",
+    "deliveryOpen": "La entrega a domicilio está abierta: ya puedes pedir a domicilio.",
+    "deliveryOpenCanSchedule": "La entrega a domicilio está abierta: pide ahora o programa una entrega para más tarde.",
+    "canScheduleDeliveryHours": "Recoger en tienda solo está disponible en horario de atención y la entrega lo antes posible, en el horario de entregas, pero ya puedes programar una entrega para más tarde."
   },
   "reviews": {
     "count": "{count, plural, one {# reseña de clientes} other {# reseñas de clientes}}"

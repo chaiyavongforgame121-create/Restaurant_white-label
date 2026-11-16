@@ -90,22 +90,27 @@ export function useDeliveryQuote(branchId: string, pin: CounterDelivery['pin'], 
   return state;
 }
 
-/** Delivery hours are checked on the minute; the trigger that enforces them uses the same test. */
+/** Checked on the minute; place-order asks the same is_branch_open_for before it inserts. */
 const HOURS_POLL_MS = 60_000;
 
 /**
- * Whether the branch delivers right now, from the is_delivery_available the orders insert trigger
- * runs. A delivery outside the hours was only refused at Charge -- and for a QR sale, after the
- * customer had already transferred. A failed check says nothing ('unknown'): place-order still
- * has the last word, and a flaky call must not stop the till.
+ * Whether the branch takes a delivery right now, from is_branch_open_for(branch, 'delivery') --
+ * the same judge place-order asks before it inserts (v11.11): while "Limit delivery to set hours"
+ * is on, the delivery windows alone (they may lie before opening or after closing); while it is
+ * off, opening hours, as for pickup; and a pause or a closure stops it either way. It used to ask
+ * is_delivery_available, which knows only the delivery windows, so with delivery hours off a
+ * delivery after closing, or at a paused or closed branch, opened Charge and was refused there --
+ * and for a QR sale, after the customer had already transferred. A failed check says nothing
+ * ('unknown'): place-order still has the last word, and a flaky call must not stop the till.
  */
 export function useDeliveryHours(branchId: string, active: boolean) {
   const [status, setStatus] = React.useState<'unknown' | 'open' | 'closed'>('unknown');
 
   const recheck = React.useCallback(async () => {
     try {
-      const { data, error } = await getBrowserClient().rpc('is_delivery_available', {
+      const { data, error } = await getBrowserClient().rpc('is_branch_open_for', {
         p_branch_id: branchId,
+        p_channel: 'delivery',
       });
       setStatus(error || typeof data !== 'boolean' ? 'unknown' : data ? 'open' : 'closed');
     } catch {

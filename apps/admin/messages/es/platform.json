@@ -157,7 +157,8 @@
         "closure": "Cerrada temporalmente: el menú se ve, pero enviar un pedido devuelve 409",
         "live": "Atendiendo a clientes",
         "unknown": "Falló la verificación del horario; todo lo demás de esta sucursal está bien",
-        "outsideHours": "Fuera del horario de atención: el menú se ve, pero enviar un pedido devuelve 409"
+        "outsideHours": "Fuera del horario de atención: el menú se ve, pero enviar un pedido devuelve 409",
+        "deliveryOnly": "Solo entregas a domicilio (fuera del horario de atención): los pedidos a domicilio se aceptan, enviar uno para recoger devuelve 409"
       },
       "why": {
         "suspended": "Suspendida por la plataforma: resolveTenantBySlug filtra por is_active, así que la URL da 404.",
@@ -169,7 +170,10 @@
         "noHours": "No hay horario de atención configurado, así que la sucursal siempre está abierta.",
         "unknown": "No se pudo consultar is_branch_open(). La facturación, el acceso y la pausa de cocina están en orden.",
         "open": "Dentro del horario de atención y recibiendo pedidos.",
-        "outsideHours": "Fuera del horario de atención ({timezone})."
+        "outsideHours": "Fuera del horario de atención ({timezone}).",
+        "deliveryOnly": "Solo entregas a domicilio (fuera del horario de atención, {timezone}): dentro de su horario de entregas, que es propio y puede quedar fuera del horario de apertura.",
+        "outsideAllHours": "Fuera del horario de atención y fuera de su horario de entregas ({timezone}).",
+        "deliveryUnknown": "Fuera del horario de atención, y no se pudo consultar is_branch_open_for() para su horario de entregas."
       }
     }
   },

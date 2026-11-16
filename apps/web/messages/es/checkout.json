@@ -91,6 +91,8 @@
     "paused": "Este restaurante no está recibiendo pedidos en este momento. Vuelve pronto.",
     "pickupClosedCanSchedule": "Este restaurante está cerrado en este momento, así que no puedes recoger en tienda, pero aún puedes programar una entrega.",
     "pickupClosed": "Este restaurante está cerrado en este momento, así que no puedes recoger en tienda. Haz tu pedido en su horario de atención.",
+    "pickupClosedDeliveryOpen": "Recoger en tienda solo está disponible en horario de atención, pero la entrega a domicilio está abierta ahora: puedes pedir a domicilio.",
+    "pickupOutsideHours": "Recoger en tienda solo está disponible en horario de atención.",
     "pickupNoPaymentCanSchedule": "Con los métodos de pago actuales de este restaurante no puedes recoger en tienda, pero aún puedes programar una entrega.",
     "pickupNoPayment": "Con los métodos de pago actuales de este restaurante no puedes recoger en tienda.",
     "pickupReady": "Se prepara en cuanto se confirma tu pedido.",

@@ -6,10 +6,11 @@
 //
 // It lives here because two apps need that arithmetic before the database gets a say. The
 // storefront builds the diner's slot list from these rows, and the merchant editor has to
-// show which times a window will actually produce once opening hours have narrowed it.
-// Both must agree with is_branch_open() and is_schedule_window_open() to the minute, or the
-// picker offers a slot the server then refuses — the exact failure the slot picker replaced
-// a free-form clock to remove.
+// show which times a window will actually produce once the branch's delivery hours (opening
+// hours, or its delivery windows on their own while "Limit delivery to set hours" is on) have
+// narrowed it. Both must agree with is_branch_open_for(branch, 'delivery', at) and
+// is_schedule_window_open() to the minute, or the picker offers a slot the server then refuses —
+// the exact failure the slot picker replaced a free-form clock to remove.
 //
 // Nothing here knows about timezones, deliberately. These are minute-of-day ranges against
 // a weekday the CALLER already resolved in the BRANCH's zone. Resolving it here from the
@@ -106,21 +107,40 @@ export function mergeRanges(ranges: MinuteRange[]): MinuteRange[] {
   return out;
 }
 
-/** What a diner can actually book on `dow`: the bookable windows NARROWED by opening hours,
- *  never widened by them. A merchant who books 17:00-22:00 on a day the kitchen shuts at
- *  21:00 gets 17:00-21:00 — the closed hour is not offered, because is_branch_open() would
- *  refuse it at submit anyway.
+/** When a branch delivers on `dow`, as public.is_branch_open_for(branch, 'delivery', at) judges
+ *  it (before closures and a pause, which the caller applies). With "Limit delivery to set hours"
+ *  switched on, `delivery` is that week's delivery windows and they decide ON THEIR OWN: a shop
+ *  open 09:00-17:30 that delivers 08:00-09:00 and 18:00-19:00 delivers then, and not at noon
+ *  (the owner's report of 2026-11-16: narrowing them by opening hours left nothing to order).
+ *  An empty array is armed with no windows: no delivery that day. Switched off (null or
+ *  undefined), delivery follows opening hours, with branch_hours' "no rows = always open". */
+export function deliveryRangesForDay(
+  opening: WeekdayWindow[],
+  delivery: WeekdayWindow[] | null | undefined,
+  dow: number,
+): MinuteRange[] {
+  if (!delivery) return openRangesForDay(opening, dow);
+  return rangesForDay(delivery, dow);
+}
+
+/** What a diner can actually book for delivery on `dow`: the bookable windows NARROWED by the
+ *  branch's delivery hours (deliveryRangesForDay: its delivery windows when those are switched
+ *  on, else its opening hours), never widened by them. A merchant who books 17:00-22:00 on a day
+ *  the kitchen shuts at 21:00 gets 17:00-21:00 — the closed hour is not offered, because the
+ *  server would refuse it at submit anyway.
  *
- *  `bookable` null/undefined is a branch that never armed the feature, so opening hours
- *  alone decide. An EMPTY ARRAY is a different answer: armed with no windows all week. */
+ *  `bookable` null/undefined is a branch that never armed booking windows, so delivery hours
+ *  alone decide. An EMPTY ARRAY is a different answer: armed with no windows all week.
+ *  `delivery` is as deliveryRangesForDay takes it: null/undefined while delivery hours are off. */
 export function effectiveBookableRanges(
   opening: WeekdayWindow[],
   bookable: WeekdayWindow[] | null | undefined,
   dow: number,
+  delivery?: WeekdayWindow[] | null,
 ): MinuteRange[] {
-  const open = openRangesForDay(opening, dow);
-  if (!bookable) return mergeRanges(open);
-  return mergeRanges(intersectRanges(open, bookableRangesForDay(bookable, dow)));
+  const base = deliveryRangesForDay(opening, delivery, dow);
+  if (!bookable) return mergeRanges(base);
+  return mergeRanges(intersectRanges(base, bookableRangesForDay(bookable, dow)));
 }
 
 function to12Hour(minutes: number, am: string, pm: string): string {

@@ -32,6 +32,9 @@ export default async function CartPage({ params }: Props) {
         // Delivery is switched per branch, so "not offered here" and "not available right now"
         // are different sentences on the gate.
         deliveryOffered={scheduleDelivery.offered}
+        // is_branch_open, read once by resolveScheduleDelivery: closed for pickup puts Delivery
+        // first and says when Pickup can be had.
+        pickupOpenNow={scheduleDelivery.openNow}
       />
       <TablePinNotice />
       <CartView branchId={tenant.branch.id} storefrontVersion={version.version} />

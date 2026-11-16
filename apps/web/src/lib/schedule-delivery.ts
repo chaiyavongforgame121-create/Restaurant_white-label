@@ -13,23 +13,31 @@ import { buildScheduleDays, type ClosurePeriod, type OpeningWindow } from './sch
  * booking ahead (Brooklyn, with one Sunday window, showed no delivery six days a week); gating it
  * all on advance orders made "Accept scheduled orders" switch delivery off entirely.
  *
+ * Delivery keeps its own hours (owner's report, 2026-11-16). With "Limit delivery to set hours"
+ * on, the delivery windows decide on their own and may lie before opening or after closing: a
+ * shop open 09:00-17:30 that delivers 08:00-09:00 and 18:00-19:00 takes deliveries then, and
+ * not at noon. Off, delivery follows opening hours exactly as pickup does. The server judges both
+ * with public.is_branch_open_for(branch, 'delivery', at); pickup stays on is_branch_open().
+ *
  * ASAP (canDeliverNow) needs, as place-order and the orders triggers judge "now":
  * - the branch to take ASAP deliveries at all ("Accept ASAP delivery orders",
  *   settings.asap_delivery_enabled, on only when exactly true — asapDeliveryEnabled). Read here
  *   from the row on every request, never from the tenant cached for 300 s: a merchant who unticks
  *   it must not have diners sent to a box place-order now refuses;
- * - a branch that delivers and is inside its delivery hours (status.delivery);
- * - the branch open this minute (is_branch_open: active, not paused, no closure, opening hours).
+ * - delivery open this minute (status.delivery_open_now: the branch delivers, is active, not
+ *   paused, no closure, and inside delivery's own hours as above). Not is_branch_open(): a branch
+ *   closed for pickup may be delivering. A database that predates the key falls back to the old
+ *   reading, status.delivery (delivers, inside its delivery windows) AND is_branch_open().
  * Whether a payment method is switched on for "now" orders is the checkout's to add — it is in
  * the branch's settings, which only the checkout reads.
  *
  * A booking (canScheduleDelivery) needs, because each one otherwise sends the diner through the
  * whole checkout to a refusal:
  * - a branch that delivers at all and takes advance orders;
- * - orders not paused — is_branch_open() refuses every time while paused, booked times included,
- *   so "you can still schedule a delivery" would be a promise every slot breaks;
+ * - orders not paused — the server refuses every time while paused, booked times included, so
+ *   "you can still schedule a delivery" would be a promise every slot breaks;
  * - at least one bookable slot, from the same builder and the same inputs the checkout picker
- *   uses (opening hours, booking windows, closures, delivery hours, lead time, horizon). Delivery
+ *   uses (delivery's own hours as above, booking windows, closures, lead time, horizon). Delivery
  *   hours switched on with no windows, or windows that never overlap the booking windows, leave
  *   nothing to book.
  */
@@ -41,10 +49,18 @@ export interface ScheduleDeliveryState {
   /** A delivery can be booked for a later slot. */
   canScheduleDelivery: boolean;
   /**
-   * is_branch_open() right now. A failed read counts as open, like every other caller of it on the
-   * storefront: it must not block ordering, and place-order still refuses at a closed branch.
+   * is_branch_open() right now: open for pickup. A failed read counts as open, like every other
+   * caller of it on the storefront: it must not block ordering, and place-order still refuses at a
+   * closed branch. It is NOT whether delivery is open (deliveryOpenNow): with delivery hours on, a
+   * branch closed here may be delivering, and one open here may not be.
    */
   openNow: boolean;
+  /**
+   * Delivery is open this minute as far as hours go (status.delivery_open_now, or its fallback
+   * on an older database): the half of canDeliverNow that is not "Accept ASAP delivery orders".
+   * The checkout re-judges ASAP from it with the payment methods only it reads.
+   */
+  deliveryOpenNow: boolean;
   /** The kitchen paused orders (branches.settings.orders_paused). Nothing can be ordered. */
   paused: boolean;
   /**
@@ -121,7 +137,7 @@ export async function resolveScheduleDelivery(
   // `deliveryOffered = true` defaults were already written to do.
   //
   // This only changes the WORDS: canDeliver is false either way, because STOREFRONT_UNKNOWN
-  // also carries delivery:false and scheduling_enabled:false.
+  // also carries delivery:false, delivery_open_now:false and scheduling_enabled:false.
   //
   // Both switches unticked ("Accept ASAP delivery orders" and "Accept scheduled orders") is the
   // same standing fact as an unsold branch — no delivery is ever taken here online — so it gets
@@ -130,14 +146,22 @@ export async function resolveScheduleDelivery(
   // Words only again: with both off, canDeliver is false whatever `offered` says.
   const takesDelivery = asapOffered || status.scheduling_enabled === true || branchRow == null;
   const offered = status.known === false || (status.delivery_entitled === true && takesDelivery);
-  // status.delivery already means "this branch delivers and is inside its delivery hours"; the
-  // explicit checks keep a paused or unsold branch out even if that field were ever widened.
-  const canDeliverNow = asapOffered && !paused && offered && status.delivery === true && openNow;
+  // delivery_open_now is the server's own judge of delivery "now" (is_branch_open_for), which is
+  // the only reading that lets delivery hours outside opening hours sell. Without the key, the old
+  // reading: inside the delivery windows AND open for pickup, which is the same answer for every
+  // branch with delivery hours off. The explicit checks keep a paused or unsold branch out even if
+  // either field were ever widened.
+  const deliveryOpenNow =
+    typeof status.delivery_open_now === 'boolean'
+      ? status.delivery_open_now
+      : status.delivery === true && openNow;
+  const canDeliverNow = asapOffered && !paused && offered && deliveryOpenNow;
   const result = (canScheduleDelivery: boolean): ScheduleDeliveryState => ({
     canDeliver: canDeliverNow || canScheduleDelivery,
     canDeliverNow,
     canScheduleDelivery,
     openNow,
+    deliveryOpenNow,
     paused,
     offered,
     asapOffered,
@@ -145,8 +169,9 @@ export async function resolveScheduleDelivery(
   // Scheduling off ("Accept scheduled orders" unticked) takes away bookings only — ASAP stays
   // where it is ticked.
   if (paused || !offered || !status.scheduling_enabled) return result(false);
-  // Same parsing as the checkout picker: a failed policy read means opening hours alone decide,
-  // and `windows: null` (never armed) is not the same statement as an empty list.
+  // Same parsing as the checkout picker: a failed policy read means delivery's own hours alone
+  // decide, and `windows: null` (never armed) is not the same statement as an empty list.
+  // deliveryWindows only while delivery hours are on: null is "follow opening hours".
   const d = (policy ?? {}) as Record<string, unknown>;
   const days = buildScheduleDays({
     timezone: status.timezone,

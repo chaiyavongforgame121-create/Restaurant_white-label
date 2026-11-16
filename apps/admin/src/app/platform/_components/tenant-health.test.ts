@@ -9,6 +9,8 @@ import {
   conversionSelection,
   deadlineFact,
   fmtDate,
+  needsDeliveryProbe,
+  needsOpenProbe,
   renewalSelection,
   resolvePrimaryAction,
   storefrontUrl,
@@ -121,6 +123,7 @@ function branch(over: Partial<BranchLite> = {}): BranchLite {
     entitled_through: inDays(20),
     timezone: 'America/Chicago',
     has_hours: true,
+    delivery_hours_on: false,
     closure: null,
     ...over,
   };
@@ -340,6 +343,77 @@ describe('branchVerdict', () => {
     expect(branchVerdict(branch(), NOW, 'unknown')?.label.key).toBe('health.verdict.label.unknown');
     expect(branchVerdict(branch(), NOW, null)).toBeNull();
   });
+
+  it('calls a branch outside business hours closed when delivery follows opening hours', () => {
+    const v = branchVerdict(branch(), NOW, false);
+    expect(v?.key).toBe('closed');
+    expect(v?.hint.key).toBe('health.verdict.hint.outsideHours');
+    expect(v?.why).toEqual({ key: 'health.verdict.why.outsideHours', values: { timezone: 'America/Chicago' } });
+  });
+
+  // Thai Burrito: open 09:00-17:30, delivers 08:00-09:00 and 18:00-19:00. At 18:30 it is
+  // outside business hours and taking deliveries; "order submit returns 409" would be false.
+  describe('a branch whose delivery runs on its own hours', () => {
+    const ownHours = branch({ delivery_hours_on: true });
+
+    it('is live, delivery only, when outside business hours but inside its delivery hours', () => {
+      const v = branchVerdict(ownHours, NOW, false, true);
+      expect(v).toMatchObject({ key: 'live', variant: 'success', icon: 'check' });
+      expect(v?.label.key).toBe('health.verdict.label.live');
+      expect(v?.hint.key).toBe('health.verdict.hint.deliveryOnly');
+      expect(v?.why).toEqual({ key: 'health.verdict.why.deliveryOnly', values: { timezone: 'America/Chicago' } });
+    });
+
+    it('is closed, naming both hours, when its delivery hours are shut too', () => {
+      const v = branchVerdict(ownHours, NOW, false, false);
+      expect(v?.key).toBe('closed');
+      expect(v?.hint.key).toBe('health.verdict.hint.outsideHours');
+      expect(v?.why.key).toBe('health.verdict.why.outsideAllHours');
+    });
+
+    it('waits for the delivery probe instead of calling it closed', () => {
+      expect(branchVerdict(ownHours, NOW, false, null)).toBeNull();
+    });
+
+    it('reports a failed delivery probe as unknown, not closed', () => {
+      const v = branchVerdict(ownHours, NOW, false, 'unknown');
+      expect(v?.key).toBe('unknown');
+      expect(v?.why.key).toBe('health.verdict.why.deliveryUnknown');
+    });
+
+    it('is plainly live inside business hours, whatever its delivery hours say', () => {
+      for (const delivery of [true, false, 'unknown', null] as const) {
+        expect(branchVerdict(ownHours, NOW, true, delivery)?.why.key).toBe('health.verdict.why.open');
+      }
+    });
+
+    it('lets a pause or a closure win over its delivery hours', () => {
+      expect(branchVerdict(branch({ delivery_hours_on: true, orders_paused: true }), NOW, null, true)?.key).toBe(
+        'paused',
+      );
+      const closure = { starts_at: inDays(-1), ends_at: inDays(1), reason: null };
+      expect(branchVerdict(branch({ delivery_hours_on: true, closure }), NOW, null, true)?.key).toBe('closed');
+    });
+  });
+});
+
+describe('needsDeliveryProbe', () => {
+  it('asks only a branch with its own delivery hours, at a restaurant with delivery, that the open probe asks', () => {
+    const ownHours = branch({ delivery_hours_on: true });
+    expect(needsDeliveryProbe(ownHours, NOW, true)).toBe(true);
+    expect(needsDeliveryProbe(ownHours, NOW, false)).toBe(false);
+    expect(needsDeliveryProbe(branch(), NOW, true)).toBe(false);
+    for (const b of [
+      branch({ delivery_hours_on: true, is_active: false }),
+      branch({ delivery_hours_on: true, orders_paused: true }),
+      branch({ delivery_hours_on: true, entitled_through: inDays(-1) }),
+      branch({ delivery_hours_on: true, has_hours: false }),
+      branch({ delivery_hours_on: true, closure: { starts_at: inDays(-1), ends_at: inDays(1), reason: null } }),
+    ]) {
+      expect(needsOpenProbe(b, NOW)).toBe(false);
+      expect(needsDeliveryProbe(b, NOW, true)).toBe(false);
+    }
+  });
 });
 
 describe('platform messages', () => {
@@ -355,12 +429,15 @@ describe('platform messages', () => {
     if (c) produced.push(c.label);
     for (const b of bs) {
       for (const open of [true, false, 'unknown', null] as const) {
-        const v = branchVerdict(b, NOW, open);
-        if (v) produced.push(v.label, v.hint, v.why);
+        for (const delivery of [true, false, 'unknown', null] as const) {
+          const v = branchVerdict(b, NOW, open, delivery);
+          if (v) produced.push(v.label, v.hint, v.why);
+        }
       }
     }
   };
   collect(row(), [branch(), branch({ id: 'b2', has_hours: false })]);
+  collect(row(), [branch({ delivery_hours_on: true })]);
   collect(row({ ent: ent({ status: 'trialing', planCode: 'trial', entitledThrough: inDays(2) }) }), [branch()]);
   collect(row({ ent: ent({ status: 'trialing', planCode: 'trial', entitledThrough: inDays(0.2) }) }), [branch()]);
   collect(row({ ent: ent({ status: 'past_due', entitledThrough: inDays(4) }) }), [branch({ orders_paused: true })]);

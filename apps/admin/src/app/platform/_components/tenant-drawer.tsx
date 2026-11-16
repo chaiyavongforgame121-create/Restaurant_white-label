@@ -4,7 +4,8 @@
 //
 // This is the only place that claims "what a diner sees right now": the verdict
 // needs hours, closures and the kitchen pause as well as the two platform
-// switches, and the hours half costs an is_branch_open() probe. The index cannot
+// switches, and the hours half costs an is_branch_open() probe (plus an
+// is_branch_open_for(…, 'delivery') one where delivery has its own hours). The index cannot
 // afford that per row, so it names its column after the two switches it can
 // prove and the drawer answers the rest on demand.
 
@@ -40,6 +41,7 @@ import {
   branchVerdict,
   deadlineFact,
   money,
+  needsDeliveryProbe,
   needsOpenProbe,
   storefrontUrl,
   type BranchLite,
@@ -90,7 +92,9 @@ export function TenantDrawer({
 }) {
   const p = usePlatformText();
   const { t, text } = p;
-  const openNow = useOpenProbe(open ? row.id : null, branches, nowMs);
+  // Delivery reaches diners only when the restaurant has it (storefront_status's delivery_open_now).
+  const hasDelivery = hasFeature(row.ent, 'delivery');
+  const { openNow, deliveryNow } = useOpenProbe(open ? row.id : null, branches, nowMs, hasDelivery);
   const actionRef = React.useRef<HTMLButtonElement>(null);
   const firstLinkRef = React.useRef<HTMLAnchorElement>(null);
   const anyActive = branches.some((b) => b.is_active);
@@ -142,7 +146,12 @@ export function TenantDrawer({
               <BranchBlock
                 key={b.id}
                 branch={b}
-                verdict={branchVerdict(b, nowMs, openNow[b.id] ?? null)}
+                verdict={branchVerdict(
+                  b,
+                  nowMs,
+                  openNow[b.id] ?? null,
+                  needsDeliveryProbe(b, nowMs, hasDelivery) ? (deliveryNow[b.id] ?? null) : false,
+                )}
                 storefront={storefrontUrl(siteBase, row.slug, b)}
                 linkRef={i === 0 ? firstLinkRef : undefined}
                 p={p}
@@ -538,23 +547,34 @@ function billingState(row: TenantRow, health: TenantHealth, p: PlatformText): st
  * windows in the branch's own timezone, so the answer comes from the database
  * rather than a TypeScript re-implementation. Only branches whose verdict is
  * genuinely undecided are asked — with no hours configured, none are.
+ *
+ * A branch whose delivery runs on its own hours is also asked
+ * is_branch_open_for(…, 'delivery') (needsDeliveryProbe), the judge place-order
+ * uses: outside business hours it may still be taking deliveries.
  */
-function useOpenProbe(tenantId: string | null, branches: BranchLite[], nowMs: number) {
+function useOpenProbe(
+  tenantId: string | null,
+  branches: BranchLite[],
+  nowMs: number,
+  hasDelivery: boolean,
+) {
   const [openNow, setOpenNow] = React.useState<Record<string, OpenNow>>({});
+  const [deliveryNow, setDeliveryNow] = React.useState<Record<string, OpenNow>>({});
 
   // Keyed on the qualifying set, not just the tenant: Restore/Extend inside the
   // drawer flips is_active / entitled_through and makes previously-skipped
   // branches probe-worthy without remounting, so a tenant-only dep left the
   // operator staring at "Checking business hours…" on the branches they had
-  // just repaired — the one panel that tells them it worked.
+  // just repaired — the one panel that tells them it worked. A branch that now
+  // needs its delivery asked too (delivery switched on) changes the key as well.
   const probeKey = React.useMemo(
     () =>
       branches
         .filter((b) => needsOpenProbe(b, nowMs))
-        .map((b) => b.id)
+        .map((b) => (needsDeliveryProbe(b, nowMs, hasDelivery) ? `${b.id}:delivery` : b.id))
         .sort()
         .join('|'),
-    [branches, nowMs],
+    [branches, nowMs, hasDelivery],
   );
 
   React.useEffect(() => {
@@ -563,27 +583,49 @@ function useOpenProbe(tenantId: string | null, branches: BranchLite[], nowMs: nu
     if (targets.length === 0) return;
     let cancelled = false;
     const client = getBrowserClient();
+    // One RPC's answer: an error or a rejection is 'unknown', never "closed".
+    const answer = async (call: PromiseLike<{ data: unknown; error: unknown }>): Promise<OpenNow> => {
+      try {
+        const { data, error } = await call;
+        return error ? 'unknown' : data === true;
+      } catch {
+        return 'unknown';
+      }
+    };
     // allSettled, not all: one branch whose RPC rejects used to strand the whole
     // batch on a permanent skeleton. And a `data` of null with an error set is
     // NOT "closed" — `data === true` alone reported every failure as a closed
     // restaurant. Failures now resolve to 'unknown' and say so.
     void Promise.allSettled(
       targets.map(async (b) => {
-        const { data, error } = await client.rpc('is_branch_open', { p_branch_id: b.id });
-        return [b.id, error ? 'unknown' : data === true] as const;
+        const [open, delivery] = await Promise.all([
+          answer(client.rpc('is_branch_open', { p_branch_id: b.id })),
+          needsDeliveryProbe(b, nowMs, hasDelivery)
+            ? answer(client.rpc('is_branch_open_for', { p_branch_id: b.id, p_channel: 'delivery' }))
+            : Promise.resolve(null),
+        ]);
+        return { id: b.id, open, delivery };
       }),
     ).then((results) => {
       if (cancelled) return;
+      const answers = results.map((r, i) =>
+        r.status === 'fulfilled'
+          ? r.value
+          : { id: targets[i]!.id, open: 'unknown' as const, delivery: 'unknown' as const },
+      );
       // Merge, not replace: a later probe covers only the branches that newly
       // qualified, so overwriting would blank the answers already on screen.
       setOpenNow((prev) => ({
         ...prev,
-        ...Object.fromEntries(
-          results.map((r, i) =>
-            r.status === 'fulfilled' ? r.value : ([targets[i]!.id, 'unknown'] as const),
-          ),
-        ),
+        ...Object.fromEntries(answers.map((a) => [a.id, a.open])),
       }));
+      const delivered = answers.filter((a) => a.delivery !== null);
+      if (delivered.length > 0) {
+        setDeliveryNow((prev) => ({
+          ...prev,
+          ...Object.fromEntries(delivered.map((a) => [a.id, a.delivery])),
+        }));
+      }
     });
     return () => {
       cancelled = true;
@@ -591,5 +633,5 @@ function useOpenProbe(tenantId: string | null, branches: BranchLite[], nowMs: nu
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId, probeKey]);
 
-  return openNow;
+  return { openNow, deliveryNow };
 }

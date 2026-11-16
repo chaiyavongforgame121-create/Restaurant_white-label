@@ -52,6 +52,9 @@
     "cardNotConfigured": "This restaurant can’t take card payments online right now. Please choose another way to pay.",
     "cardAmountTooSmall": "Card payments need to be at least $0.50. Please choose another way to pay for this order.",
     "cardSetupFailed": "We couldn’t set up the card payment, so the order was not placed and nothing was charged. Please try again.",
-    "deliveryNotAvailableNowNoBooking": "The restaurant has stopped delivering for now. Please choose Pickup, or try again later."
+    "deliveryNotAvailableNowNoBooking": "The restaurant has stopped delivering for now. Please choose Pickup, or try again later.",
+    "deliveryNotAvailableAtThatTimeNoPickup": "The restaurant does not deliver at that time. Please pick another delivery time.",
+    "deliveryNotAvailableNowNoPickup": "The restaurant is not delivering right now. Please choose a delivery time.",
+    "deliveryNotAvailableNowNoBookingNoPickup": "The restaurant is not delivering right now. Please try again during its delivery hours."
   }
 }

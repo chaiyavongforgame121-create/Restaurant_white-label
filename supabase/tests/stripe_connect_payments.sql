@@ -128,7 +128,7 @@ begin
       where gateway = 'stripe' and gateway_charge_id is null and created_at < timestamptz '2026-09-25 00:00:00+00'));
 
   -- 1. storefront_status keeps its keys and gains card_ready ---------------------------------
-  perform pg_temp.expect('storefront_status: 15 keys with card_ready', 'card_payment,card_ready,delivery,delivery_available,delivery_entitled,delivery_hours_on,delivery_mode,delivery_windows,entitled,opening_hours,schedule_max_days,schedule_min_lead_min,schedule_slot_minutes,scheduling_enabled,timezone',
+  perform pg_temp.expect('storefront_status: 16 keys with card_ready (delivery_open_now since 20261116100000)', 'card_payment,card_ready,delivery,delivery_available,delivery_entitled,delivery_hours_on,delivery_mode,delivery_open_now,delivery_windows,entitled,opening_hours,schedule_max_days,schedule_min_lead_min,schedule_slot_minutes,scheduling_enabled,timezone',
     (select string_agg(k, ',' order by k) from jsonb_object_keys(public.storefront_status(c_branch)) k));
   perform pg_temp.expect('card_ready false without an account', 'false', (public.storefront_status(c_branch) ->> 'card_ready'));
   perform pg_temp.expect('card_ready false for an unknown branch', 'false',
@@ -139,7 +139,7 @@ begin
   values (c_branch, 'acct_TESTHAMBURGER', true, true, true);
   perform pg_temp.expect('card_ready true once charges are enabled', 'true', (public.storefront_status(c_branch) ->> 'card_ready'));
   perform pg_temp.expect('card_ready stays per branch', 'false', (public.storefront_status(c_thai) ->> 'card_ready'));
-  perform pg_temp.expect('anon reads storefront_status', 'ok 15',
+  perform pg_temp.expect('anon reads storefront_status', 'ok 16',
     pg_temp.try_as(null, array[format('select count(*)::text from jsonb_object_keys(public.storefront_status(%L))', c_branch)]));
 
   -- 2. who reads and writes branch_payment_accounts ------------------------------------------

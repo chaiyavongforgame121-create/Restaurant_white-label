@@ -7,7 +7,7 @@ import {
   getEntitlementsForBranch,
   listRestaurantPaymentAccounts,
 } from '@favornoms/database/queries';
-import { hasFeature } from '@favornoms/shared';
+import { hasFeature, type WeekdayWindow } from '@favornoms/shared';
 import { getBranchAccess } from '@/lib/capabilities';
 import { deliveryOffReason } from '@/lib/delivery-gate-model';
 import { PageAccessDenied } from '@/components/page-access-denied';
@@ -73,6 +73,8 @@ export default async function BranchPage({ params }: Props) {
     t,
     paymentAccount,
     restaurantPaymentAccounts,
+    deliveryHoursRows,
+    openingHoursRows,
   ] = await Promise.all([
     supabase.from('restaurants').select('name, storefront').eq('id', branch.restaurant_id).maybeSingle(),
     getEntitlementsForBranch(supabase, branchId),
@@ -89,7 +91,48 @@ export default async function BranchPage({ params }: Props) {
     // who gets this far holds.
     getBranchPaymentAccount(supabase, branchId),
     listRestaurantPaymentAccounts(supabase, branch.restaurant_id),
+    // The Delivery card's saved windows. With "Limit delivery to set hours" on they, not opening
+    // hours, are when this branch delivers, so the Scheduled orders card previews bookings from
+    // them. Read here, not in that card, so the router.refresh() after the Delivery card saves
+    // hands down the new windows together with the new switch in branch.settings.
+    supabase
+      .from('branch_delivery_hours')
+      .select('day_of_week, opens_at, closes_at')
+      .eq('branch_id', branchId),
+    // Opening hours, for the same two cards' previews: the Scheduled orders card's "Customers will
+    // see" (opening hours decide while delivery hours are off) and the Delivery card's "outside
+    // opening hours" note. Read here for the same reason: the Opening hours card refreshes the page
+    // after it saves, and both previews follow the hours just saved instead of those at page load.
+    supabase
+      .from('branch_hours')
+      .select('day_of_week, opens_at, closes_at')
+      .eq('branch_id', branchId),
   ]);
+  // A failed read is null, not an empty week: empty means "on with no windows, no delivery", and
+  // the card would preview that as fact.
+  if (deliveryHoursRows.error) {
+    console.error('Branch settings: could not read the delivery hours:', deliveryHoursRows.error);
+  }
+  const deliveryWindows: WeekdayWindow[] | null = deliveryHoursRows.error
+    ? null
+    : (deliveryHoursRows.data ?? []).map((row) => ({
+        day_of_week: row.day_of_week,
+        // Postgres `time` arrives as 'HH:MM:SS'; the hours helpers read 'HH:MM'.
+        opens_at: String(row.opens_at).slice(0, 5),
+        closes_at: String(row.closes_at).slice(0, 5),
+      }));
+  // Null, not empty, when the read fails: no rows means "always open", and the previews would
+  // show that as fact.
+  if (openingHoursRows.error) {
+    console.error('Branch settings: could not read the opening hours:', openingHoursRows.error);
+  }
+  const openingHours: WeekdayWindow[] | null = openingHoursRows.error
+    ? null
+    : (openingHoursRows.data ?? []).map((row) => ({
+        day_of_week: row.day_of_week,
+        opens_at: String(row.opens_at).slice(0, 5),
+        closes_at: String(row.closes_at).slice(0, 5),
+      }));
   // The branch payload's delivery answer already includes this switch; what it cannot say
   // alone is whether the restaurant has delivery at all. deliveryOffReason is the rule every
   // locked delivery screen uses, so this card's note and those screens agree.
@@ -125,6 +168,8 @@ export default async function BranchPage({ params }: Props) {
         restaurantOff:
           deliveryReason === 'notAvailable' && (!entitlements.entitled || deliverySwitch === true),
       }}
+      deliveryWindows={deliveryWindows}
+      openingHours={openingHours}
       canUseCard={hasFeature(entitlements, 'card_payment')}
       // Always true past the gate above; kept as a prop so the cards still lock themselves if this
       // page is ever opened wider again.

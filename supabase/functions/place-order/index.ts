@@ -2,7 +2,11 @@
 // Server-side recalculation never trusts client totals.
 //
 // Version history: see ./CHANGELOG.md (moved out of this file 2026-08-28).
-// Current: v11.10 — an option is ordered only on a dish that shows its group (./item-options.ts):
+// Current: v11.11 — the open check is asked per channel (public.is_branch_open_for): a delivery at a
+// branch with "Limit delivery to set hours" on is judged by its delivery windows alone, which may lie
+// before opening or after closing; everything else by opening hours. Refused for those delivery hours
+// only, it answers delivery_not_available_at_that_time instead of branch_closed (./closed-refusal.ts).
+// v11.10 — an option is ordered only on a dish that shows its group (./item-options.ts):
 // sent on any other dish it is refused with 400 modifier_inactive, reason not_on_item, naming the
 // dish. A dish can carry its own copy of a library option group now, and a cart built before the
 // copy still sends the library's option.
@@ -50,6 +54,8 @@ import { asapDeliveryEnabled } from './asap-delivery.ts';
 // An option rides only on a dish that shows its group, pinned (and pinned to the storefront cart's
 // own reading) from apps/web/src/lib/item-options-edge.test.ts.
 import { optionNotOnItem } from './item-options.ts';
+// Which code a refusal of the open check gets, pinned from ./closed-refusal.test.ts.
+import { closedRefusalCode } from './closed-refusal.ts';
 
 interface PlaceOrderRequest {
   branch_id: string;
@@ -340,18 +346,46 @@ Deno.serve(async (req: Request) => {
     scheduledFor = new Date(t).toISOString();
   }
 
-  // A scheduled order is checked against its own pickup time. Without p_at, an
-  // order for tomorrow lunch placed after closing was rejected as `branch_closed`,
-  // and one placed during today's lunch for a day the branch is shut sailed through.
-  const { data: openCheck } = await admin.rpc('is_branch_open', {
-    p_branch_id: payload.branch_id,
-    ...(scheduledFor ? { p_at: scheduledFor } : {}),
-  });
+  // A scheduled order is checked against its own time. Without p_at, an order for
+  // tomorrow lunch placed after closing was rejected as `branch_closed`, and one placed
+  // during today's lunch for a day the branch is shut sailed through.
+  //
+  // Asked per channel (v11.11). A delivery at a branch with "Limit delivery to set hours" on
+  // is judged by its delivery windows alone, not narrowed by opening hours: Thai Burrito is
+  // open 09:00-17:30 and delivers 08:00-09:00 and 18:00-19:00, and narrowing left nothing to
+  // order. Everything else is judged by opening hours, as is_branch_open did. An RPC error
+  // or a null answer is not a refusal; the BEFORE INSERT triggers still enforce.
+  //
+  // The branch row is read alongside it, because the code of a refusal depends on its
+  // settings, with only the closures covering the order's time embedded (inclusive at both
+  // ends, as is_branch_open reads them). For ASAP that time is this clock's now, a few ms off
+  // the database's: it only picks the wording.
+  const openAt = scheduledFor ?? new Date().toISOString();
+  const [{ data: openCheck }, { data: branch, error: bErr }] = await Promise.all([
+    admin.rpc('is_branch_open_for', {
+      p_branch_id: payload.branch_id,
+      p_channel: payload.channel,
+      ...(scheduledFor ? { p_at: scheduledFor } : {}),
+    }),
+    admin.from('branches')
+      .select('id, restaurant_id, is_active, settings, sales_tax_rate, geo_lat, geo_lng, branch_closures(id)')
+      .eq('id', payload.branch_id)
+      .lte('branch_closures.starts_at', openAt)
+      .gte('branch_closures.ends_at', openAt)
+      .single(),
+  ]);
   if (openCheck === false) {
-    return json(409, { error: scheduledFor ? 'branch_closed_at_scheduled_time' : 'branch_closed' });
+    const closures = (branch as { branch_closures?: unknown } | null)?.branch_closures;
+    return json(409, {
+      error: closedRefusalCode({
+        channel: payload.channel,
+        scheduled: scheduledFor != null,
+        branch: bErr ? null : branch,
+        closureCovers: Array.isArray(closures) && closures.length > 0,
+      }),
+    });
   }
 
-  const { data: branch, error: bErr } = await admin.from('branches').select('id, restaurant_id, is_active, settings, sales_tax_rate, geo_lat, geo_lng').eq('id', payload.branch_id).single();
   if (bErr || !branch || !branch.is_active) return json(404, { error: 'branch_not_found_or_inactive' });
 
   // Who is calling, resolved HERE rather than down in the pricing block, because the
@@ -753,7 +787,8 @@ Deno.serve(async (req: Request) => {
     // the picker: the set of times a diner can choose stays a subset of what is accepted.
     if (t > now + (maxDays + 1) * 24 * 60 * 60_000) return json(400, { error: 'scheduled_too_far' });
 
-    // The per-weekday BOOKABLE window, on top of is_branch_open() further up. A shop open
+    // The per-weekday BOOKABLE window, on top of the open check further up
+    // (is_branch_open_for: opening hours, or a delivery's own hours while those are on). A shop open
     // all day may still only take pre-orders 17:00-22:00 Monday to Saturday and 10:00-14:00
     // on Sunday, which no amount of opening-hours data can express.
     //
@@ -765,7 +800,7 @@ Deno.serve(async (req: Request) => {
     //
     // Staff surfaces are exempt on purpose: the window is a self-service policy for diners,
     // and a manager taking a phone booking at the till IS the override. They are NOT exempt
-    // from opening hours above. tg_enforce_scheduled_time exempts exactly the same sources;
+    // from the open check above. tg_enforce_scheduled_time exempts exactly the same sources;
     // if the two ever diverge, a counter booking clears this check and dies in the trigger
     // as a bare 500.
     if (source === 'web') {
@@ -820,8 +855,9 @@ Deno.serve(async (req: Request) => {
   // Pickup is always for now: the storefront never books one, but a hand-made request (or a tab
   // from before 2026-09-16) can still send a booked pickup, so the rule lives here as well.
   // Delivery is either ASAP or booked (docs/ASAP-AND-SCHEDULING-2026-10-25.md §1). An ASAP
-  // delivery is already judged for "now" by is_branch_open above, the 'asap' column of the payment
-  // matrix below and the delivery-hours trigger at insert, exactly as a pickup is. Staff are
+  // delivery is already judged for "now" by is_branch_open_for above (its delivery hours while
+  // "Limit delivery to set hours" is on, else opening hours as a pickup is), the 'asap' column of
+  // the payment matrix below and the delivery-hours trigger at insert. Staff are
   // exempt, like the payment matrix and the booking window. Dine-in and QR table orders are
   // untouched — the order type is the table's.
   //

@@ -5,6 +5,54 @@ the bulk of the file; every deploy had to carry it. The history is the valuable 
 so it lives here rather than being deleted.
 
 ```
+// place-order v11.11 — a delivery with its own hours is judged by them, not by opening hours
+//   v11.11 (2026-11-16): the owner's report from Thai Burrito (America/Chicago), open 09:00-17:30
+//        every day, which wants customers to order DELIVERY only 08:00-09:00 and 18:00-19:00. With
+//        "Limit the times customers can book" or "Limit delivery to set hours" switched on, nothing
+//        could be ordered: every check started from opening hours (is_branch_open) and only narrowed
+//        from there, so windows outside opening hours left nothing. SQL half:
+//        20261116100000 (public.is_branch_open_for(p_branch_id, p_channel, p_at default now())).
+//        - The open check calls public.is_branch_open_for with p_channel = the order's channel and
+//          the same p_at as before (scheduled_for, or none for "now"), instead of is_branch_open.
+//          A delivery at a branch with "Limit delivery to set hours" on
+//          (settings.delivery_hours_enabled) is allowed when the branch is active, not paused, no
+//          closure covers the time and the time is inside a branch_delivery_hours window; opening
+//          hours do not apply to it. Pickup, dine-in, QR and a delivery with the switch off are
+//          judged by opening hours, as before. Booked deliveries still also pass the booking
+//          windows (web only), the lead time and the horizon; ASAP deliveries still need "Accept
+//          ASAP delivery orders". An RPC error or a null answer is still not a refusal (the BEFORE
+//          INSERT triggers enforce), and staff are no more exempt from it than before.
+//        - A refusal of a DELIVERY at a branch whose delivery hours are on and which is otherwise
+//          taking orders (active, not paused, no closure at that time) answers 409
+//          { error: 'delivery_not_available_at_that_time' }, the code tg_enforce_delivery_hours
+//          already raises and both clients already explain (the checkout's
+//          deliveryNotAvailableAtThatTime, or deliveryNotAvailableNow for ASAP; the till's
+//          deliveryNotAvailableNow). "Closed" would send the diner to opening hours that are not
+//          the delivery's. Every other refusal keeps 409 branch_closed /
+//          branch_closed_at_scheduled_time; a paused or closed branch is closed for every channel.
+//        - The rule is closedRefusalCode() in a new ./closed-refusal.ts (pure, no imports), pinned
+//          by ./closed-refusal.test.ts (`deno test`, the first test in this folder). A Management
+//          API / MCP deploy must pass closed-refusal.ts along with index.ts, item-options.ts,
+//          asap-delivery.ts, kitchen-lead.ts, card.ts and _shared/entitlements.ts; the CLI uploads
+//          the tree.
+//        - The branch row is now read in parallel with the open check instead of after it, with
+//          the branch_closures rows covering the order's time embedded (branch_closures(id),
+//          starts_at <= t <= ends_at), because the refusal's code needs its settings and closures.
+//          Same number of queries, one round trip less. The order of answers is unchanged: a
+//          refusal of the open check still comes before 404 branch_not_found_or_inactive.
+//        - DEPLOY ORDER: the migration 20261116100000 FIRST, then this function. Before the
+//          migration is_branch_open_for does not exist, the RPC errors, and an error is not a
+//          refusal, so an ASAP order at a closed branch would be refused by nothing (the BEFORE
+//          INSERT triggers judge only a booked order's time, tg_enforce_scheduled_time, and
+//          delivery hours, tg_enforce_delivery_hours). The function before this one keeps working
+//          after the migration (is_branch_open is still there): it just still refuses Thai
+//          Burrito's out-of-hours deliveries as branch_closed.
+//        - A booked out-of-hours delivery also needs tg_enforce_scheduled_time to ask
+//          is_branch_open_for(new.branch_id, new.channel, new.scheduled_for): with
+//          is_branch_open(new.branch_id, new.scheduled_for) there (20260908101000), it passes the
+//          check here and is refused at insert as 409 branch_closed_at_scheduled_time.
+//        - No live branch has delivery_hours_enabled true today, so no existing branch changes
+//          behaviour until a merchant switches it on.
 // place-order v11.10 — an option is ordered only on a dish that shows its group
 //   v11.10 (2026-10-30): the owner asked that deleting an option of a shared option group inside one
 //        dish's editor change that dish only, never the group on the Modifier groups page. SQL half:

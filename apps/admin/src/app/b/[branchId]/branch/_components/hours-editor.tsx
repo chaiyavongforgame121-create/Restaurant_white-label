@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { Clock, Globe, Plus, Save, Trash2 } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
@@ -9,6 +10,9 @@ import { Button, Card } from '@favornoms/ui';
 
 // Weekly opening hours (branch_hours). No rows = always open (back-compat).
 // A window whose close time is ≤ its open time crosses midnight (e.g. 22:00–02:00).
+// They decide pickup, dine-in and delivery, except delivery at a branch whose Delivery card
+// limits it to set hours: those windows then decide delivery alone, before opening or after
+// closing included (public.is_branch_open_for, 2026-11-16).
 
 interface Window {
   opens_at: string; // 'HH:MM'
@@ -54,6 +58,7 @@ export function HoursEditor({ branchId, timezone }: { branchId: string; timezone
   const rawLocale = useLocale();
   const intlLocale = intlLocaleFor(isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE);
   const days = React.useMemo(() => weekdayNames(intlLocale), [intlLocale]);
+  const router = useRouter();
   const [week, setWeek] = React.useState<WeekHours>({});
   const [loaded, setLoaded] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
@@ -143,6 +148,9 @@ export function HoursEditor({ branchId, timezone }: { branchId: string; timezone
       return;
     }
     setSavedAt(Date.now());
+    // The page reads branch_hours for the Scheduled orders and Delivery cards' previews ("Customers
+    // will see", "outside opening hours"); without this they kept the hours from page load.
+    router.refresh();
   };
 
   const totalWindows = Object.values(week).reduce((n, wins) => n + (wins?.length ?? 0), 0);

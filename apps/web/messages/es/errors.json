@@ -52,6 +52,9 @@
     "cardNotConfigured": "Este restaurante no puede aceptar pagos con tarjeta en línea en este momento. Elige otra forma de pago.",
     "cardAmountTooSmall": "Los pagos con tarjeta deben ser de al menos $0.50. Elige otra forma de pago para este pedido.",
     "cardSetupFailed": "No pudimos preparar el pago con tarjeta, así que el pedido no se realizó y no se cobró nada. Inténtalo de nuevo.",
-    "deliveryNotAvailableNowNoBooking": "El restaurante ha dejado de hacer entregas por ahora. Elige Recoger o inténtalo más tarde."
+    "deliveryNotAvailableNowNoBooking": "El restaurante ha dejado de hacer entregas por ahora. Elige Recoger o inténtalo más tarde.",
+    "deliveryNotAvailableAtThatTimeNoPickup": "El restaurante no hace entregas a esa hora. Elige otra hora de entrega.",
+    "deliveryNotAvailableNowNoPickup": "El restaurante no está haciendo entregas en este momento. Elige una hora de entrega.",
+    "deliveryNotAvailableNowNoBookingNoPickup": "El restaurante no está haciendo entregas en este momento. Vuelve a intentarlo durante su horario de entregas."
   }
 }

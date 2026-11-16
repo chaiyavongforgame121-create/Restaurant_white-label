@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   bookableRangesForDay,
+  deliveryRangesForDay,
   describeRanges,
   effectiveBookableRanges,
   intersectRanges,
@@ -133,6 +134,47 @@ describe('effectiveBookableRanges', () => {
     ];
     expect(effectiveBookableRanges(alwaysOpen, windows, SUN)).toEqual([[600, 840]]);
     expect(effectiveBookableRanges(alwaysOpen, windows, MON)).toEqual([[1020, 1320]]);
+  });
+});
+
+describe('deliveryRangesForDay', () => {
+  // Thai Burrito (2026-11-16): open 09:00-17:30, delivering 08:00-09:00 and 18:00-19:00.
+  const opening: WeekdayWindow[] = [{ day_of_week: MON, opens_at: '09:00', closes_at: '17:30' }];
+  const delivery: WeekdayWindow[] = [
+    { day_of_week: MON, opens_at: '08:00', closes_at: '09:00' },
+    { day_of_week: MON, opens_at: '18:00', closes_at: '19:00' },
+  ];
+
+  it('follows opening hours while delivery hours are switched off', () => {
+    expect(deliveryRangesForDay(opening, null, MON)).toEqual([[540, 1050]]);
+    expect(deliveryRangesForDay(opening, undefined, MON)).toEqual([[540, 1050]]);
+    expect(deliveryRangesForDay([], null, MON)).toEqual([[0, 1440]]);
+  });
+
+  it('takes the delivery windows on their own when switched on, outside opening hours too', () => {
+    expect(deliveryRangesForDay(opening, delivery, MON)).toEqual([[480, 540], [1080, 1140]]);
+    // Not widened back to "always" by a branch with no opening hours, nor narrowed by them.
+    expect(deliveryRangesForDay([], delivery, MON)).toEqual([[480, 540], [1080, 1140]]);
+  });
+
+  it('delivers nothing on a day the switched-on week leaves empty', () => {
+    expect(deliveryRangesForDay(opening, delivery, SUN)).toEqual([]);
+    expect(deliveryRangesForDay(opening, [], MON)).toEqual([]);
+  });
+
+  it('spills an overnight delivery window into the next morning', () => {
+    const late: WeekdayWindow[] = [{ day_of_week: SAT, opens_at: '22:00', closes_at: '02:00' }];
+    expect(deliveryRangesForDay(opening, late, SAT)).toEqual([[1320, 1440]]);
+    expect(deliveryRangesForDay(opening, late, SUN)).toEqual([[0, 120]]);
+  });
+
+  it('lets booking windows outside opening hours book delivery once delivery hours cover them', () => {
+    expect(effectiveBookableRanges(opening, delivery, MON)).toEqual([]);
+    expect(effectiveBookableRanges(opening, delivery, MON, delivery)).toEqual([[480, 540], [1080, 1140]]);
+    expect(effectiveBookableRanges(opening, null, MON, delivery)).toEqual([[480, 540], [1080, 1140]]);
+    expect(
+      effectiveBookableRanges(opening, [{ day_of_week: MON, opens_at: '08:30', closes_at: '18:30' }], MON, delivery),
+    ).toEqual([[510, 540], [1080, 1110]]);
   });
 });
 

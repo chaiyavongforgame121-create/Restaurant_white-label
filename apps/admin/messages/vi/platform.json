@@ -157,7 +157,8 @@
         "closure": "Tạm đóng cửa — thực đơn vẫn hiển thị, gửi đơn trả về 409",
         "live": "Đang phục vụ khách",
         "unknown": "Không kiểm tra được giờ mở cửa — mọi thứ khác của chi nhánh này đều ổn",
-        "outsideHours": "Ngoài giờ mở cửa — thực đơn vẫn hiển thị, gửi đơn trả về 409"
+        "outsideHours": "Ngoài giờ mở cửa — thực đơn vẫn hiển thị, gửi đơn trả về 409",
+        "deliveryOnly": "Chỉ giao hàng (ngoài giờ mở cửa) — đơn giao hàng vẫn được nhận, gửi đơn tự đến lấy trả về 409"
       },
       "why": {
         "suspended": "Bị nền tảng tạm ngưng — resolveTenantBySlug lọc theo is_active nên URL trả về 404.",
@@ -169,7 +170,10 @@
         "noHours": "Chưa cài đặt giờ mở cửa nên chi nhánh luôn mở.",
         "unknown": "Không gọi được is_branch_open(). Thanh toán, truy cập và tạm dừng của bếp đều ổn.",
         "open": "Trong giờ mở cửa và đang nhận đơn.",
-        "outsideHours": "Ngoài giờ mở cửa ({timezone})."
+        "outsideHours": "Ngoài giờ mở cửa ({timezone}).",
+        "deliveryOnly": "Chỉ giao hàng (ngoài giờ mở cửa, {timezone}): đang trong giờ giao hàng, là giờ riêng của giao hàng và có thể nằm ngoài giờ mở cửa.",
+        "outsideAllHours": "Ngoài giờ mở cửa và ngoài giờ giao hàng ({timezone}).",
+        "deliveryUnknown": "Ngoài giờ mở cửa, và không gọi được is_branch_open_for() để kiểm tra giờ giao hàng."
       }
     }
   },

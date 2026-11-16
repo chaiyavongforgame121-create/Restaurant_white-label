@@ -55,6 +55,12 @@ export interface BranchLite {
   entitled_through: string | null;
   timezone: string;
   has_hours: boolean;
+  /**
+   * "Limit delivery to set hours" (settings.delivery_hours_enabled): delivery then runs on its
+   * own windows, which may lie before opening or after closing, so a branch outside its business
+   * hours can still be taking deliveries (public.is_branch_open_for).
+   */
+  delivery_hours_on: boolean;
   /** Only closures active right now; the page query filters the window server-side. */
   closure: BranchClosureLite | null;
 }
@@ -616,7 +622,7 @@ export function renewalSelection(row: TenantRow, branchesUsed: number): PackageS
 
 export type BranchVerdictKey = 'suspended' | 'unpaid' | 'paused' | 'closed' | 'live' | 'unknown';
 
-/** The is_branch_open() answer: true/false, `'unknown'` if the probe failed, null while in flight. */
+/** An is_branch_open() / is_branch_open_for() answer: true/false, `'unknown'` if the probe failed, null while in flight. */
 export type OpenNow = boolean | 'unknown' | null;
 
 export interface BranchVerdict {
@@ -636,11 +642,19 @@ export interface BranchVerdict {
  * in flight, `'unknown'` if it failed. The verdict is only null while a probe is
  * genuinely still running — every decided case returns a value without waiting,
  * and a failed probe says so rather than spinning forever.
+ *
+ * `deliveryNow` is public.is_branch_open_for(branch, 'delivery'), asked only where
+ * needsDeliveryProbe() says so: a branch whose delivery runs on its own hours, at a
+ * restaurant that has delivery. Everywhere else delivery follows opening hours (or is
+ * not offered), so it is `false`, the default. It matters only outside business hours:
+ * a branch that delivers 18:00-19:00 after closing at 17:30 is live for delivery then,
+ * not closed.
  */
 export function branchVerdict(
   b: BranchLite,
   nowMs: number,
   openNow: OpenNow,
+  deliveryNow: OpenNow = false,
 ): BranchVerdict | null {
   if (!b.is_active) {
     return {
@@ -714,23 +728,52 @@ export function branchVerdict(
       why: msg('health.verdict.why.unknown'),
     };
   }
-  return openNow
-    ? {
-        key: 'live',
-        label: msg('health.verdict.label.live'),
-        variant: 'success',
-        icon: 'check',
-        hint: msg('health.verdict.hint.live'),
-        why: msg('health.verdict.why.open'),
-      }
-    : {
-        key: 'closed',
-        label: msg('health.verdict.label.closed'),
-        variant: 'warning',
-        icon: 'clock',
-        hint: msg('health.verdict.hint.outsideHours'),
-        why: msg('health.verdict.why.outsideHours', { timezone: b.timezone }),
-      };
+  if (openNow) {
+    return {
+      key: 'live',
+      label: msg('health.verdict.label.live'),
+      variant: 'success',
+      icon: 'check',
+      hint: msg('health.verdict.hint.live'),
+      why: msg('health.verdict.why.open'),
+    };
+  }
+  // Outside business hours. A branch whose delivery runs on its own hours may still be
+  // delivering: "Outside business hours — order submit returns 409" would be false for
+  // every delivery order it is taking.
+  if (deliveryNow === null) return null;
+  if (deliveryNow === 'unknown') {
+    return {
+      key: 'unknown',
+      label: msg('health.verdict.label.unknown'),
+      variant: 'muted',
+      icon: 'clock',
+      hint: msg('health.verdict.hint.unknown'),
+      why: msg('health.verdict.why.deliveryUnknown'),
+    };
+  }
+  if (deliveryNow) {
+    return {
+      key: 'live',
+      label: msg('health.verdict.label.live'),
+      variant: 'success',
+      icon: 'check',
+      hint: msg('health.verdict.hint.deliveryOnly'),
+      why: msg('health.verdict.why.deliveryOnly', { timezone: b.timezone }),
+    };
+  }
+  return {
+    key: 'closed',
+    label: msg('health.verdict.label.closed'),
+    variant: 'warning',
+    icon: 'clock',
+    hint: msg('health.verdict.hint.outsideHours'),
+    // Asked, and its delivery hours are shut too: say both, so nobody goes looking for a
+    // delivery window that would have let orders in.
+    why: b.delivery_hours_on
+      ? msg('health.verdict.why.outsideAllHours', { timezone: b.timezone })
+      : msg('health.verdict.why.outsideHours', { timezone: b.timezone }),
+  };
 }
 
 /**
@@ -740,3 +783,12 @@ export function branchVerdict(
  */
 export const needsOpenProbe = (b: BranchLite, nowMs: number) =>
   b.is_active && branchEntitled(b, nowMs) && !b.orders_paused && !b.closure && b.has_hours;
+
+/**
+ * Also ask is_branch_open_for(branch, 'delivery'): only where delivery has its own hours
+ * ("Limit delivery to set hours") at a restaurant that has delivery (hasFeature, as the
+ * storefront's delivery_open_now requires). Anywhere else delivery is open exactly when the
+ * branch is, or not offered at all, so is_branch_open() already answers for it.
+ */
+export const needsDeliveryProbe = (b: BranchLite, nowMs: number, hasDelivery: boolean) =>
+  hasDelivery && b.delivery_hours_on && needsOpenProbe(b, nowMs);

@@ -9,7 +9,12 @@
     "title": "Hiện đang đóng cửa.",
     "canSchedule": "Tự đến lấy và giao càng sớm càng tốt chỉ có trong giờ mở cửa — bạn vẫn có thể hẹn giờ giao hàng ngay bây giờ.",
     "canScheduleNoAsap": "Tự đến lấy chỉ có trong giờ mở cửa — bạn vẫn có thể hẹn giờ giao hàng ngay bây giờ.",
-    "notTaking": "Hiện chúng tôi chưa nhận đơn mới. Vui lòng quay lại trong giờ mở cửa."
+    "notTaking": "Hiện chúng tôi chưa nhận đơn mới. Vui lòng quay lại trong giờ mở cửa.",
+    "notTakingDeliveryHours": "Tự đến lấy có trong giờ mở cửa, còn giao hàng có trong giờ giao hàng. Vui lòng quay lại vào những giờ đó.",
+    "pickupTitle": "Hiện chưa thể Tự đến lấy.",
+    "deliveryOpen": "Nhà hàng đang nhận giao hàng — bạn có thể đặt giao hàng ngay.",
+    "deliveryOpenCanSchedule": "Nhà hàng đang nhận giao hàng — đặt giao ngay hoặc hẹn giờ giao sau.",
+    "canScheduleDeliveryHours": "Tự đến lấy chỉ có trong giờ mở cửa, còn giao càng sớm càng tốt chỉ có trong giờ giao hàng — bạn vẫn có thể hẹn giờ giao hàng ngay bây giờ."
   },
   "reviews": {
     "count": "{count, plural, other {# đánh giá của khách hàng}}"

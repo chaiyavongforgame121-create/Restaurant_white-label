@@ -1,4 +1,4 @@
-// Turns a branch's opening hours into the concrete list of times a diner may pick.
+// Turns a branch's delivery hours into the concrete list of times a diner may book a delivery for.
 //
 // The checkout scheduler was <input type="datetime-local" min={now+15m} max={now+14d}> — a
 // free-form clock that knew nothing about the restaurant. A diner could choose 3am on a day
@@ -8,23 +8,20 @@
 // Everything here is computed in the BRANCH's timezone. That is the whole difficulty: a
 // diner in California ordering from a Texas branch must be offered the windows the kitchen
 // keeps, not the ones their phone thinks are happening. Slot labels are branch-local wall
-// time; the value handed to place-order is a UTC instant, which is what the server compares
-// against is_branch_open().
+// time; the value handed to place-order is a UTC instant, which is what the server judges
+// with is_branch_open_for(branch, 'delivery', scheduled_for).
 //
-// Opening hours are only half the question. A shop can be open all day and still take
-// pre-orders in a narrower band — the owner's case is bookings from 17:00 Monday to
-// Saturday but 10:00-14:00 on Sunday — which branch_hours cannot express. Those windows
-// live in branch_schedule_hours and arrive here as `scheduleWindows`; they NARROW opening
-// hours and never extend them, because is_branch_open() still has the final say at submit.
+// Only deliveries are booked, so the starting hours are delivery's own (deliveryRangesForDay):
+// the delivery windows while "Limit delivery to set hours" is on — on their own, before opening
+// or after closing too (the owner's report of 2026-11-16: open 09:00-17:30, delivering 08:00-09:00
+// and 18:00-19:00) — else opening hours. A shop can also take pre-orders in a narrower band — the
+// owner's case is bookings from 17:00 Monday to Saturday but 10:00-14:00 on Sunday — which those
+// hours cannot express. Those windows live in branch_schedule_hours and arrive here as
+// `scheduleWindows`; they NARROW delivery's hours and never extend them, because the server
+// judges a booked delivery by both at submit.
 
 import { intlLocaleFor, isUiLocale, wallTimeToUtc, type UiLocale } from '@favornoms/shared';
-import {
-  bookableRangesForDay,
-  intersectRanges,
-  openRangesForDay,
-  type MinuteRange,
-  type WeekdayWindow,
-} from '@favornoms/shared';
+import { effectiveBookableRanges, type WeekdayWindow } from '@favornoms/shared';
 
 /** The branch_hours row shape, under the name the storefront has always used for it. The
  *  model itself now lives in @favornoms/shared, where the merchant editor reads it too —
@@ -55,22 +52,24 @@ export interface BuildScheduleInput {
   timezone: string;
   /** EMPTY means no hours configured, which is_branch_open() treats as always open —
    *  not as closed all week. Flattening those two would silently kill scheduling for
-   *  every branch that never filled in Opening hours. */
+   *  every branch that never filled in Opening hours. Ignored while deliveryWindows is set. */
   openingHours: OpeningWindow[];
-  /** Per-weekday windows a diner may BOOK inside, narrowing openingHours.
-   *  null/undefined = the merchant never armed the feature, so opening hours alone decide.
+  /** Per-weekday windows a diner may BOOK inside, narrowing delivery's hours.
+   *  null/undefined = the merchant never armed the feature, so delivery's hours alone decide.
    *  An EMPTY ARRAY is a different statement: armed with no windows, so nothing is bookable
    *  all week. Flattening those two would apply branch_hours' "no rows = always open" rule
    *  to a table whose whole purpose is the opposite. */
   scheduleWindows?: OpeningWindow[] | null;
-  /** Delivery hours (branch_delivery_hours), narrowing again for a delivery booking. The same
-   *  null/empty distinction as scheduleWindows: null = the merchant never restricted delivery
-   *  hours, an EMPTY ARRAY = restricted with no windows, so nothing is deliverable. The rows
-   *  follow is_delivery_available()'s overnight rules — the same three clauses as
+  /** Delivery hours (branch_delivery_hours), passed ONLY while "Limit delivery to set hours" is
+   *  on: then they REPLACE opening hours as the hours a delivery can be booked in, outside
+   *  opening hours too. null/undefined = switched off, so opening hours decide; an EMPTY ARRAY =
+   *  switched on with no windows, so nothing is deliverable. The rows follow
+   *  is_delivery_available()'s overnight rules — the same three clauses as
    *  is_schedule_window_open() — so the same range builder reads both. */
   deliveryWindows?: OpeningWindow[] | null;
   /** Slots falling inside one of these are dropped, matching is_branch_open()'s
-   *  `p_at between starts_at and ends_at` — inclusive at both ends. */
+   *  `p_at between starts_at and ends_at` — inclusive at both ends. A delivery on its own hours
+   *  is held to closures all the same. */
   closures?: ClosurePeriod[];
   minLeadMinutes: number;
   maxDays: number;
@@ -175,18 +174,11 @@ export function buildScheduleDays(input: BuildScheduleInput): ScheduleDay[] {
       wallTimeToUtc(today.y, today.m, today.d + offset, 12, 0, timezone),
     );
     const parts = branchDateParts(probe, timezone);
-    let ranges: MinuteRange[] = openRangesForDay(openingHours, parts.dow);
-    // Both gates, in this order. A bookable window can only NARROW opening hours, never
-    // extend them: a merchant who takes bookings 17:00-22:00 on a day the kitchen shuts at
-    // 21:00 gets 17:00-21:00, not an hour is_branch_open() would refuse at submit.
-    if (scheduleWindows) {
-      ranges = intersectRanges(ranges, bookableRangesForDay(scheduleWindows, parts.dow));
-    }
-    // Delivery hours last. orders_enforce_delivery_hours judges a booked delivery at its
-    // scheduled_for, so a slot outside them is one the database refuses at submit.
-    if (deliveryWindows) {
-      ranges = intersectRanges(ranges, bookableRangesForDay(deliveryWindows, parts.dow));
-    }
+    // The shared reading the merchant editor shows too: delivery's own hours for the day
+    // (delivery windows while switched on, else opening hours), narrowed by the booking windows,
+    // never widened by them. A merchant who takes bookings 17:00-22:00 on a day delivery stops
+    // at 21:00 gets 17:00-21:00, not an hour the server would refuse at submit.
+    const ranges = effectiveBookableRanges(openingHours, scheduleWindows, parts.dow, deliveryWindows);
     if (ranges.length === 0) continue;
 
     const slots: ScheduleSlot[] = [];
@@ -198,8 +190,8 @@ export function buildScheduleDays(input: BuildScheduleInput): ScheduleDay[] {
       for (let mins = start; mins < to; mins += step) {
         const ms = wallTimeToUtc(parts.y, parts.m, parts.d, Math.floor(mins / 60), mins % 60, timezone);
         if (ms < earliest) continue;
-        // is_branch_open() rejects any instant inside a branch_closures row, so offering
-        // one sends the diner through the whole form to a 409 on a public holiday.
+        // The server rejects any instant inside a branch_closures row, delivery hours or not,
+        // so offering one sends the diner through the whole form to a 409 on a public holiday.
         if (insideClosure(ms)) continue;
         if (seen.has(ms)) continue; // overlapping windows must not double up
         seen.add(ms);

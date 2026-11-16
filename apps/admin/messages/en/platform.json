@@ -157,7 +157,8 @@
         "closure": "Temporarily closed — the menu renders, order submit returns 409",
         "live": "Serving diners",
         "unknown": "The business-hours check failed — everything else about this branch is fine",
-        "outsideHours": "Outside business hours — the menu renders, order submit returns 409"
+        "outsideHours": "Outside business hours — the menu renders, order submit returns 409",
+        "deliveryOnly": "Delivery only (outside business hours) — delivery orders go through, pickup submit returns 409"
       },
       "why": {
         "suspended": "Platform-suspended — resolveTenantBySlug filters is_active, so the URL 404s.",
@@ -169,7 +170,10 @@
         "noHours": "No business hours configured, so the branch is always open.",
         "unknown": "Could not reach is_branch_open(). Billing, access and the kitchen pause are all clear.",
         "open": "Inside business hours and taking orders.",
-        "outsideHours": "Outside business hours ({timezone})."
+        "outsideHours": "Outside business hours ({timezone}).",
+        "deliveryOnly": "Delivery only (outside business hours, {timezone}): inside its delivery hours, which are delivery's own and may lie outside opening hours.",
+        "outsideAllHours": "Outside business hours and outside its delivery hours ({timezone}).",
+        "deliveryUnknown": "Outside business hours, and could not reach is_branch_open_for() for its delivery hours."
       }
     }
   },

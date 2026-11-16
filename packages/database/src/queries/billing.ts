@@ -101,10 +101,12 @@ export interface StorefrontStatus {
    */
   known: boolean;
   entitled: boolean;
-  /** Delivery is sellable RIGHT NOW: the branch delivers (paid up, and its merchant has not
-   *  switched delivery off there) AND it is inside its delivery window. The storefront's
-   *  order-type picker no longer gates on this — every customer delivery is booked ahead, so it
-   *  uses canScheduleDelivery (delivery_entitled and scheduling_enabled) instead. */
+  /** The branch delivers (paid up, and its merchant has not switched delivery off there) AND it
+   *  is inside its delivery windows at this minute — opening hours, a pause and closures aside
+   *  (public.is_delivery_available; true at every minute while delivery hours are off). NOT
+   *  "delivery can be sold now": that is `delivery_open_now`. Kept for storefronts deployed before
+   *  20261116100000, which read it as that, beside is_branch_open(); current readers fall back to
+   *  it the same way only when `delivery_open_now` is absent. */
   delivery: boolean;
   /** The branch delivers, regardless of the clock. Kept separate so the storefront can say
    *  "delivery opens at 5pm" instead of hiding delivery as if the branch never offered it —
@@ -114,6 +116,13 @@ export interface StorefrontStatus {
   delivery_available: boolean;
   /** Whether the merchant restricted delivery to set windows at all. */
   delivery_hours_on: boolean;
+  /** An ASAP delivery is possible this minute as far as hours go: the branch delivers and
+   *  public.is_branch_open_for(branch, 'delivery', now()) — active, not paused, no closure, and
+   *  inside its delivery windows while delivery hours are on (which may lie outside opening
+   *  hours), else inside opening hours. Unlike `delivery` it needs no is_branch_open() beside it.
+   *  Absent (undefined) from a database that predates the key; readers then fall back to
+   *  `delivery` AND is_branch_open(). Says nothing about "Accept ASAP delivery orders". */
+  delivery_open_now?: boolean;
   /** 'platform' = dispatched to a rider; 'self' = the restaurant's own staff deliver,
    *  which means no live tracking map. */
   delivery_mode: 'platform' | 'self';
@@ -148,6 +157,7 @@ const STOREFRONT_DENIED: StorefrontStatus = Object.freeze({
   delivery_entitled: false,
   delivery_available: false,
   delivery_hours_on: false,
+  delivery_open_now: false,
   delivery_mode: 'platform',
   delivery_windows: [],
   card_payment: false,
@@ -189,6 +199,7 @@ const STOREFRONT_UNKNOWN: StorefrontStatus = Object.freeze({
   delivery_entitled: false,
   delivery_available: false,
   delivery_hours_on: false,
+  delivery_open_now: false,
   delivery_mode: 'platform',
   delivery_windows: [],
   card_payment: false,
@@ -236,6 +247,11 @@ export async function getStorefrontStatus(
             : d.delivery_entitled === true,
           delivery_available: d.delivery_available === undefined ? true : d.delivery_available === true,
           delivery_hours_on: d.delivery_hours_on === true,
+          // Left undefined, not false, when the key is missing: false would read as "not
+          // delivering now" and switch ASAP delivery off on every branch of an older database.
+          ...(d.delivery_open_now === undefined
+            ? {}
+            : { delivery_open_now: d.delivery_open_now === true }),
           delivery_mode: d.delivery_mode === 'self' ? 'self' : 'platform',
           delivery_windows: Array.isArray(d.delivery_windows)
             ? (d.delivery_windows as StorefrontStatus['delivery_windows'])

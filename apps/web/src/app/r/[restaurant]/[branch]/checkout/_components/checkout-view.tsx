@@ -169,11 +169,20 @@ interface Props {
    */
   canDeliver?: boolean;
   /**
-   * storefront_status.delivery: the branch delivers and is inside its delivery hours this minute.
-   * With the branch open now and a payment method for "now" orders it makes an ASAP delivery
-   * possible. Default false, so a missing prop never offers ASAP; a booking does not need it.
+   * Delivery is open this minute on its own hours (resolveScheduleDelivery's deliveryOpenNow:
+   * storefront_status.delivery_open_now). With a payment method for "now" orders it makes an ASAP
+   * delivery possible — whether or not the branch is open for pickup (branchOpenNow), because
+   * delivery hours may lie outside opening hours. Default false, so a missing prop never offers
+   * ASAP; a booking does not need it.
    */
   deliveryOpenNow?: boolean;
+  /**
+   * "Limit delivery to set hours" is on (storefront_status.delivery_hours_on). Off, delivery
+   * follows opening hours, so a branch that opens while the diner waits here opens delivery too;
+   * on, delivery keeps the windows' own clock, which this page asks again every minute
+   * (is_branch_open_for 'delivery'), starting from the server's deliveryOpenNow.
+   */
+  deliveryHoursOn?: boolean;
   /**
    * The branch takes ASAP deliveries at all ("Accept ASAP delivery orders", resolveScheduleDelivery's
    * asapOffered). Off, the "As soon as possible" box is not rendered — the owner asked that it not
@@ -210,8 +219,8 @@ interface Props {
    *
    * The picker used to be a bare datetime-local with hardcoded now+15m / now+14d bounds,
    * so a diner could choose a time the branch is shut, fill in the whole form, and only
-   * discover it at submit. These are the same hours is_branch_open() enforces, so the
-   * offered slots and the server's answer cannot disagree.
+   * discover it at submit. These are the same hours the server judges a booked delivery by
+   * (is_branch_open_for 'delivery'), so the offered slots and its answer cannot disagree.
    */
   scheduling?: {
     enabled: boolean;
@@ -221,15 +230,15 @@ interface Props {
     maxDays: number;
     slotMinutes: number;
     /** Delivery hours when the merchant restricted them, null when not. A booked delivery is
-     *  judged against them at its time, so its slots must also sit inside these or the
-     *  orders_enforce_delivery_hours trigger refuses the order at submit. */
+     *  judged on them at its time, in place of opening hours (buildScheduleDays), so the slots
+     *  are drawn from these — outside opening hours too — or the server refuses at submit. */
     deliveryWindows?: OpeningWindow[] | null;
   };
   /**
-   * is_branch_open() when the page was rendered. Pickup and an ASAP delivery are prepared now, so
-   * a closed branch cannot take either: checkout says so up front instead of letting the diner
-   * fill in the whole form for a 409. Defaults true — place-order still refuses, and a missing
-   * prop must never block ordering.
+   * is_branch_open() when the page was rendered: open for pickup. Pickup is prepared now, so a
+   * closed branch cannot take it: checkout says so up front instead of letting the diner fill in
+   * the whole form for a 409. An ASAP delivery is judged by deliveryOpenNow instead. Defaults
+   * true — place-order still refuses, and a missing prop must never block ordering.
    */
   branchOpenNow?: boolean;
   /** The kitchen paused orders. Nothing can be ordered, now or booked (resolveScheduleDelivery). */
@@ -241,6 +250,7 @@ export function CheckoutView({
   base,
   canDeliver = false,
   deliveryOpenNow = false,
+  deliveryHoursOn = false,
   asapOffered = false,
   deliveryOffered = true,
   canUseCard = false,
@@ -270,21 +280,43 @@ export function CheckoutView({
   // covers checkout until they do, so the null window is never interactive.
   const channel = useCart((s) => s.channel);
   const setChannel = useCart((s) => s.setChannel);
-  // Open right now, for Pickup and ASAP delivery. The page reads it once on the server, so a branch
-  // that opens while the diner is on this page would keep both unavailable until a reload; while
-  // closed it is asked again every minute. Not while paused — no amount of waiting on the clock
-  // changes that.
+  // Open right now for Pickup, and delivering right now for an ASAP delivery. The page reads both
+  // once on the server, so a branch that opens while the diner is on this page would keep them
+  // unavailable until a reload; while closed it is asked again every minute. Not while paused — no
+  // amount of waiting on the clock changes that. Delivery opens with the branch only while it
+  // follows opening hours (delivery hours off).
   const [openNow, setOpenNow] = React.useState(branchOpenNow);
+  const [deliveryNow, setDeliveryNow] = React.useState(deliveryOpenNow);
   React.useEffect(() => {
     if (openNow || ordersPaused) return;
     const supabase = getBrowserClient();
     const timer = setInterval(() => {
       void supabase.rpc('is_branch_open', { p_branch_id: branchId }).then(({ data }) => {
-        if (data === true) setOpenNow(true);
+        if (data !== true) return;
+        setOpenNow(true);
+        if (!deliveryHoursOn) setDeliveryNow(true);
       });
     }, 60_000);
     return () => clearInterval(timer);
-  }, [openNow, ordersPaused, branchId]);
+  }, [openNow, ordersPaused, branchId, deliveryHoursOn]);
+  // With delivery hours on, delivery keeps its own clock, which neither follows opening hours nor
+  // stays where the server left it at render: a delivery window can open while the diner fills in
+  // the form, or close under them. So it is asked every minute, whatever pickup is doing, from the
+  // same judge place-order uses (is_branch_open_for 'delivery'), and its answer stands both ways:
+  // true frees the ASAP box, false hands the order to the time pickers before a 409 does. A failed
+  // read (data null) leaves the last answer as it was.
+  React.useEffect(() => {
+    if (!deliveryHoursOn || ordersPaused) return;
+    const supabase = getBrowserClient();
+    const timer = setInterval(() => {
+      void supabase
+        .rpc('is_branch_open_for', { p_branch_id: branchId, p_channel: 'delivery' })
+        .then(({ data }) => {
+          if (typeof data === 'boolean') setDeliveryNow(data);
+        });
+    }, 60_000);
+    return () => clearInterval(timer);
+  }, [deliveryHoursOn, ordersPaused, branchId]);
   // Only ever set for THIS branch — the provider drops a pin scanned anywhere else.
   const { table: pinnedTable, bill: tableBill } = useTablePin();
 
@@ -434,10 +466,10 @@ export function CheckoutView({
   // chooses Delivery or unticks ASAP, and again if the chosen slot has gone stale by submit —
   // never on a timer, so the list cannot shift under the diner while they fill in the form.
   const [slotClock, setSlotClock] = React.useState(() => new Date());
-  // Opening hours are only half of what decides a bookable time. The merchant can also
+  // Delivery's hours are only half of what decides a bookable time. The merchant can also
   // narrow bookings per weekday (branch_schedule_hours) and close the shop for a holiday
-  // (branch_closures); is_branch_open() and is_schedule_window_open() both refuse a slot
-  // outside those, so offering one means a diner fills in the whole form for a 409.
+  // (branch_closures); the server and is_schedule_window_open() both refuse a slot outside
+  // those, so offering one means a diner fills in the whole form for a 409.
   //
   // Read here rather than through the `scheduling` prop: that comes from storefront_status,
   // which is fetched on the server page, and this policy is one anon RPC the picker can ask
@@ -574,14 +606,14 @@ export function CheckoutView({
     paymentMatrix.scheduled.cash || paymentMatrix.scheduled.card || paymentMatrix.scheduled.transfer;
   // What each way to order needs. canDeliver (from the server) is "ASAP or booked"; each half is
   // judged again here with the payment methods, which the server page does not read.
-  // - ASAP delivery: the branch takes ASAP deliveries at all (asapOn), the branch open this
-  //   minute, delivery sellable this minute (deliveryOpenNow: delivering, inside delivery hours)
+  // - ASAP delivery: the branch takes ASAP deliveries at all (asapOn), delivery open this minute
+  //   on its own hours (deliveryNow — not openNow: a branch closed for pickup may be delivering)
   //   and a payment method for orders placed now.
   // - A booked delivery: advance orders taken here plus a payment method for booked orders;
   //   whether any slot is left is known once the booking policy has loaded.
   // - Pickup: a payment method for orders placed now, and the branch open at this moment.
   const deliveryAsapAvailable =
-    asapOn && canDeliver && deliveryOpenNow && openNow && !ordersPaused && asapPayable;
+    asapOn && canDeliver && deliveryNow && !ordersPaused && asapPayable;
   const deliveryBookable = canDeliver && !!scheduling?.enabled && scheduledPayable;
   const deliverySlotsKnown = !scheduling?.enabled || bookingPolicy !== null;
   const deliveryHasSlots = scheduleDays.length > 0;
@@ -1343,9 +1375,11 @@ export function CheckoutView({
       setError(
         ordersPaused
           ? t('checkout.orderType.paused')
-          : deliveryOfferable
-            ? t('checkout.errors.pickupClosedScheduleInstead')
-            : t('checkout.orderType.pickupClosed'),
+          : deliveryAsapAvailable
+            ? t('checkout.orderType.pickupClosedDeliveryOpen')
+            : deliveryOfferable
+              ? t('checkout.errors.pickupClosedScheduleInstead')
+              : t('checkout.orderType.pickupClosed'),
       );
       return;
     }
@@ -1577,8 +1611,19 @@ export function CheckoutView({
         setSlotClock(new Date());
         scheduleSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
-      // An ASAP delivery is judged at "now", so a refusal about "that time" is worded for now.
-      const key = orderErrorKey(raw, { asap: asapTicked, bookable: timeChoosable });
+      // An ASAP delivery refused on delivery's own hours (place-order sends this code only with
+      // delivery hours on): delivery closed between the last check and this button. Take the
+      // server's word for "now" — the ASAP box disables, as it would have on the next minute's
+      // check — measure the time list from now and point at it, so the pickers take over. The
+      // delivery-hours check above turns ASAP back on once delivery opens again.
+      if (body?.error === 'delivery_not_available_at_that_time' && asapTicked) {
+        setDeliveryNow(false);
+        setSlotClock(new Date());
+        scheduleSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      // An ASAP delivery is judged at "now", so a refusal about "that time" is worded for now; and
+      // where pickup cannot be ordered either, it does not send the diner to Pickup.
+      const key = orderErrorKey(raw, { asap: asapTicked, bookable: timeChoosable, pickup: pickupAvailable });
       // A failure with no code we know is logged as it came and shown as the generic line —
       // a raw status and JSON body is no use to a diner.
       if (!key) console.error('place_order_failed', raw);
@@ -1637,13 +1682,17 @@ export function CheckoutView({
                 </button>
               )}
             </div>
+            {/* Closed for pickup is not closed for delivery: delivery may keep its own hours, so
+                the line points at the delivery that can be ordered now, or booked. */}
             {channel === 'pickup' && !openNow && (
               <p className="mt-2 text-xs text-muted-foreground">
                 {ordersPaused
                   ? t('checkout.orderType.paused')
-                  : deliveryOfferable
-                    ? t('checkout.orderType.pickupClosedCanSchedule')
-                    : t('checkout.orderType.pickupClosed')}
+                  : deliveryAsapAvailable
+                    ? t('checkout.orderType.pickupClosedDeliveryOpen')
+                    : deliveryOfferable
+                      ? t('checkout.orderType.pickupClosedCanSchedule')
+                      : t('checkout.orderType.pickupClosed')}
               </p>
             )}
             {channel === 'pickup' && openNow && !asapPayable && (
@@ -1675,7 +1724,7 @@ export function CheckoutView({
                 methods, which only this page reads: say so, rather than leave a dead button. */}
             {channel === 'delivery' && canDeliver && !deliveryAsapAvailable && !deliveryBookable && (
               <p className="mt-2 text-xs text-muted-foreground">
-                {(asapOn && deliveryOpenNow && openNow && !ordersPaused && !asapPayable) ||
+                {(asapOn && deliveryNow && !ordersPaused && !asapPayable) ||
                 (!!scheduling?.enabled && !scheduledPayable)
                   ? pickupAvailable
                     ? t('checkout.orderType.deliveryNoPaymentPickupOpen')
@@ -1685,14 +1734,17 @@ export function CheckoutView({
                     : t('checkout.orderType.deliveryUnavailable')}
               </p>
             )}
-            {/* A greyed-out Pickup with no reason reads as a broken button. */}
+            {/* A greyed-out Pickup with no reason reads as a broken button. While a delivery can
+                be ordered here, "the restaurant is closed" would contradict the form below it. */}
             {channel === 'delivery' && !pickupAvailable && (
               <p className="mt-2 text-xs text-muted-foreground">
                 {openNow
                   ? t('checkout.orderType.pickupNoPayment')
                   : ordersPaused
                     ? t('checkout.orderType.pickupPaused')
-                    : t('checkout.orderType.pickupClosedNow')}
+                    : deliveryAsapAvailable || deliveryOfferable
+                      ? t('checkout.orderType.pickupOutsideHours')
+                      : t('checkout.orderType.pickupClosedNow')}
               </p>
             )}
             {/* When: the ASAP checkbox, then the Day / Time pickers. The two exclude each other —
@@ -1735,19 +1787,21 @@ export function CheckoutView({
                   </label>
                 )}
                 {/* A disabled, unticked ASAP with no reason reads as a broken box. Only reached
-                    while a booking is possible, so the pickers below are the way on. */}
+                    while a booking is possible, so the pickers below are the way on. Delivery
+                    on its own hours is "not delivering at the moment", not "closed". */}
                 {asapOn && !deliveryAsapAvailable && (
                   <p className="mt-2 text-xs text-muted-foreground">
-                    {!openNow
-                      ? t('checkout.schedule.asapClosed')
-                      : !deliveryOpenNow
+                    {!deliveryNow
+                      ? deliveryHoursOn
                         ? t('checkout.schedule.asapNotDeliveringNow')
-                        : t('checkout.schedule.asapNoPayment')}
+                        : t('checkout.schedule.asapClosed')
+                      : t('checkout.schedule.asapNoPayment')}
                   </p>
                 )}
-                {/* Day and time, drawn from the branch's opening hours, booking windows, closures
-                    and delivery hours. The old free-form datetime-local let a diner pick a moment
-                    the branch is shut and only told them after they had filled in the entire form. */}
+                {/* Day and time, drawn from delivery's own hours (its delivery windows while
+                    switched on, else opening hours), booking windows and closures. The old
+                    free-form datetime-local let a diner pick a moment the branch is shut and only
+                    told them after they had filled in the entire form. */}
                 {deliveryBookable && !bookingPolicy ? (
                   <p role="status" className="mt-3 rounded-xl bg-muted px-4 py-3 text-sm text-muted-foreground">
                     {t('checkout.schedule.loading')}

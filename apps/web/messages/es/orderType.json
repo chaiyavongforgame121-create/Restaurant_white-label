@@ -6,6 +6,7 @@
   "deliveryHintAsap": "Te lo llevamos a tu dirección lo antes posible",
   "deliveryHintScheduled": "Elige día y hora, y te lo llevamos a tu dirección",
   "pickupHint": "Recógelo en el restaurante mientras esté abierto",
+  "pickupHintClosed": "Cerrado por ahora — puedes recoger en tienda en horario de atención",
   "changeLater": "Puedes cambiarlo cuando quieras desde el menú.",
   "deliveryNotOffered": "Esta sucursal no ofrece entrega a domicilio.",
   "deliveryClosedNow": "La entrega a domicilio no está disponible en este momento."

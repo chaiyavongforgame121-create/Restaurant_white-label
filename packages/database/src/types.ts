@@ -5773,6 +5773,10 @@ export type Database = {
         Args: { p_at?: string; p_branch_id: string }
         Returns: boolean
       }
+      is_branch_open_for: {
+        Args: { p_at?: string; p_branch_id: string; p_channel: string }
+        Returns: boolean
+      }
       is_delivery_available: {
         Args: { p_at?: string; p_branch_id: string }
         Returns: boolean

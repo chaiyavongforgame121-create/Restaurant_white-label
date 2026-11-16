@@ -280,6 +280,9 @@ interface MenuViewProps {
    *  Words only: the closed banner must not promise an ASAP delivery the branch never takes.
    *  Defaults false, like canDeliverNow. */
   asapOffered?: boolean;
+  /** "Limit delivery to set hours" is on, so ASAP delivery keeps the delivery windows rather than
+   *  business hours. Words only, for the closed banner. Defaults false: business hours, as before. */
+  deliveryHoursOn?: boolean;
   /** A `?t=` token resolved to a table here, so the order type is already settled. */
   seatingFromScan?: boolean;
   /** branches.timezone (storefront_status.timezone), for "Sold out until" times. When absent it
@@ -288,7 +291,7 @@ interface MenuViewProps {
   timeZone?: string;
 }
 
-export function MenuView({ branch, categories, items, isOpen = true, reviews, combos = [], happyHours = [], menuLayout = 'grid4', menuCardStyle = 'standard', heroUrl, heroTitle, heroSubtitle, canDeliverNow = false, canScheduleDelivery = false, deliveryOffered = true, asapOffered = false, seatingFromScan = false, timeZone }: MenuViewProps) {
+export function MenuView({ branch, categories, items, isOpen = true, reviews, combos = [], happyHours = [], menuLayout = 'grid4', menuCardStyle = 'standard', heroUrl, heroTitle, heroSubtitle, canDeliverNow = false, canScheduleDelivery = false, deliveryOffered = true, asapOffered = false, deliveryHoursOn = false, seatingFromScan = false, timeZone }: MenuViewProps) {
   const t = useTranslations();
   const canDeliver = canDeliverNow || canScheduleDelivery;
   // The long form's slugs, which storefront_version takes, from the branch layout.
@@ -426,6 +429,8 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
           canDeliverNow={canDeliverNow}
           canScheduleDelivery={canScheduleDelivery}
           deliveryOffered={deliveryOffered}
+          // Closed for pickup puts Delivery first and says when Pickup can be had.
+          pickupOpenNow={isOpen}
           seatingFromScan={seatingFromScan}
         />
 
@@ -447,17 +452,38 @@ export function MenuView({ branch, categories, items, isOpen = true, reviews, co
         {!isOpen && (
           <div className="container mt-4">
             <div className="rounded-2xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning">
-              <strong>{t('storefront.closed.title')}</strong>{' '}
-              {/* Pickup and ASAP delivery are prepared now, so they wait for opening hours — but a
-                  delivery booked for a later time is something a closed restaurant can still take.
-                  canScheduleDelivery is only true with a bookable slot and orders not paused, so
-                  this never promises a booking every slot would refuse. A branch that does not take
-                  ASAP deliveries gets a sentence that does not mention them. */}
-              {canScheduleDelivery
-                ? asapOffered
-                  ? t('storefront.closed.canSchedule')
-                  : t('storefront.closed.canScheduleNoAsap')
-                : t('storefront.closed.notTaking')}
+              {/* Closed means closed for PICKUP. Delivery keeps its own hours, which may lie outside
+                  business hours, so a branch delivering right now says that first instead of
+                  "Currently closed" over a delivery the diner can order. */}
+              {canDeliverNow ? (
+                <>
+                  <strong>{t('storefront.closed.pickupTitle')}</strong>{' '}
+                  {canScheduleDelivery
+                    ? t('storefront.closed.deliveryOpenCanSchedule')
+                    : t('storefront.closed.deliveryOpen')}
+                </>
+              ) : (
+                <>
+                  <strong>{t('storefront.closed.title')}</strong>{' '}
+                  {/* Pickup and ASAP delivery are prepared now, so they wait for their hours — but a
+                      delivery booked for a later time is something a closed restaurant can still
+                      take. canScheduleDelivery is only true with a bookable slot and orders not
+                      paused, so this never promises a booking every slot would refuse. A branch that
+                      does not take ASAP deliveries gets a sentence that does not mention them, and
+                      one with delivery hours says ASAP keeps those, not business hours — with
+                      nothing to book too, since "check back during business hours" would send a
+                      diner who wants a delivery back at the wrong time. */}
+                  {canScheduleDelivery
+                    ? asapOffered
+                      ? deliveryHoursOn
+                        ? t('storefront.closed.canScheduleDeliveryHours')
+                        : t('storefront.closed.canSchedule')
+                      : t('storefront.closed.canScheduleNoAsap')
+                    : deliveryHoursOn && asapOffered && deliveryOffered
+                      ? t('storefront.closed.notTakingDeliveryHours')
+                      : t('storefront.closed.notTaking')}
+                </>
+              )}
             </div>
           </div>
         )}

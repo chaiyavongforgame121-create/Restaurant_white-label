@@ -341,6 +341,19 @@ describe('buildScheduleDays — delivery hours', () => {
     expect(days[0]!.slots.map((s) => s.label)).toEqual(['12:00 PM', '5:00 PM']);
   });
 
+  it('books delivery hours that run past closing time, which the server now accepts', () => {
+    // Open 09:00-18:00; delivering 16:00-20:00 offers 4 PM … 7 PM, the last two after closing.
+    const days = buildScheduleDays({
+      ...base,
+      timezone: 'America/Chicago',
+      openingHours: sundayNineToSix,
+      deliveryWindows: [{ day_of_week: 0, opens_at: '16:00', closes_at: '20:00' }],
+      now: SUNDAY_NOON_UTC,
+      maxDays: 0,
+    });
+    expect(days[0]!.slots.map((s) => s.label)).toEqual(['4:00 PM', '5:00 PM', '6:00 PM', '7:00 PM']);
+  });
+
   it('follows an overnight delivery window into the next morning, like is_delivery_available', () => {
     // Sunday 22:00 -> Monday 02:00; opening hours unrestricted.
     const days = buildScheduleDays({
@@ -354,6 +367,92 @@ describe('buildScheduleDays — delivery hours', () => {
     expect(days.map((d) => d.slots.map((s) => s.label))).toEqual([
       ['10:00 PM', '11:00 PM'],
       ['12:00 AM', '1:00 AM'],
+    ]);
+  });
+});
+
+// The owner's report of 2026-11-16, from Thai Burrito (America/Chicago): open 09:00-17:30 every
+// day, delivering only 08:00-09:00 and 18:00-19:00. Every reading used to start from opening hours
+// and narrow, so windows outside them left nothing to book. Delivery hours now stand on their own.
+describe('buildScheduleDays — Thai Burrito, delivery outside opening hours', () => {
+  const EVERY_DAY = [0, 1, 2, 3, 4, 5, 6];
+  const opening: OpeningWindow[] = EVERY_DAY.map((d) => ({
+    day_of_week: d,
+    opens_at: '09:00',
+    closes_at: '17:30',
+  }));
+  const delivery: OpeningWindow[] = EVERY_DAY.flatMap((d) => [
+    { day_of_week: d, opens_at: '08:00', closes_at: '09:00' },
+    { day_of_week: d, opens_at: '18:00', closes_at: '19:00' },
+  ]);
+  /** Monday 2026-11-16, 06:00 in Chicago (CST, UTC-6): before either window opens. */
+  const MONDAY_6AM_CHICAGO = new Date('2026-11-16T12:00:00Z');
+  const week = {
+    timezone: 'America/Chicago',
+    openingHours: opening,
+    minLeadMinutes: 0,
+    maxDays: 6,
+    slotMinutes: 30,
+    now: MONDAY_6AM_CHICAGO,
+  };
+  const DELIVERY_SLOTS = ['8:00 AM', '8:30 AM', '6:00 PM', '6:30 PM'];
+
+  it('with delivery hours on, offers 08:00-09:00 and 18:00-19:00 every day of the week, and nothing else', () => {
+    const days = buildScheduleDays({ ...week, deliveryWindows: delivery });
+    expect(days.map((d) => d.date)).toEqual([
+      '2026-11-16',
+      '2026-11-17',
+      '2026-11-18',
+      '2026-11-19',
+      '2026-11-20',
+      '2026-11-21',
+      '2026-11-22',
+    ]);
+    for (const day of days) expect(day.slots.map((s) => s.label)).toEqual(DELIVERY_SLOTS);
+    // The instants place-order is sent: 08:00 CST is 14:00 UTC, and 18:00 CST is midnight UTC
+    // the next day — which must still be filed under Monday, the branch's day.
+    expect(days[0]!.slots.map((s) => s.iso)).toEqual([
+      '2026-11-16T14:00:00.000Z',
+      '2026-11-16T14:30:00.000Z',
+      '2026-11-17T00:00:00.000Z',
+      '2026-11-17T00:30:00.000Z',
+    ]);
+  });
+
+  it('with delivery hours off, offers opening hours only — none of the delivery windows', () => {
+    const days = buildScheduleDays({ ...week, deliveryWindows: null });
+    expect(days).toHaveLength(7);
+    for (const day of days) {
+      const labels = day.slots.map((s) => s.label);
+      expect(labels[0]).toBe('9:00 AM');
+      expect(labels.at(-1)).toBe('5:00 PM');
+      expect(labels).toHaveLength(17); // 09:00 … 17:00, every 30 minutes
+      for (const slot of DELIVERY_SLOTS) expect(labels).not.toContain(slot);
+    }
+  });
+
+  it('booking windows on the delivery hours book them only while delivery hours are on', () => {
+    // What the merchant tried first: "Limit the times customers can book" set to the delivery
+    // windows. Narrowing opening hours, they left nothing; narrowing delivery's own hours, they fit.
+    const on = buildScheduleDays({ ...week, scheduleWindows: delivery, deliveryWindows: delivery });
+    expect(on).toHaveLength(7);
+    for (const day of on) expect(day.slots.map((s) => s.label)).toEqual(DELIVERY_SLOTS);
+    expect(buildScheduleDays({ ...week, scheduleWindows: delivery, deliveryWindows: null })).toEqual([]);
+  });
+
+  it('still drops a closure and honours the lead time inside delivery hours', () => {
+    const days = buildScheduleDays({
+      ...week,
+      deliveryWindows: delivery,
+      // From 06:00, a 3-hour lead starts at 09:00: Monday's evening window only.
+      minLeadMinutes: 180,
+      // Tuesday 18:00-18:30 Chicago (inclusive at both ends, as the server reads it).
+      closures: [{ starts_at: '2026-11-18T00:00:00Z', ends_at: '2026-11-18T00:30:00Z' }],
+      maxDays: 1,
+    });
+    expect(days.map((d) => d.slots.map((s) => s.label))).toEqual([
+      ['6:00 PM', '6:30 PM'],
+      ['8:00 AM', '8:30 AM'],
     ]);
   });
 });

@@ -9,14 +9,15 @@ import {
   asapDeliveryEnabled,
   DEFAULT_UI_LOCALE,
   describeRanges,
-  effectiveBookableRanges,
   intlLocaleFor,
   isUiLocale,
   kitchenLeadMin,
   parseDeliverySettings,
+  type UiLocale,
   type WeekdayWindow,
 } from '@favornoms/shared';
 import { Button, Card } from '@favornoms/ui';
+import { bookingPreview, type BookingPreview } from './delivery-hours-model';
 import { useSettingsPatch } from './patch-settings';
 
 // Scheduling policy for this branch. Merges its own keys into branches.settings and never
@@ -37,10 +38,13 @@ import { useSettingsPatch } from './patch-settings';
 // Opening hours and nothing else, so a shop open every day that wanted pre-orders from
 // 17:00 Monday to Saturday but only 10:00-14:00 on Sunday had no way to say so. That is
 // what schedule_hours_enabled and the branch_schedule_hours grid below are for. They only
-// ever NARROW opening hours — is_branch_open() still refuses anything outside them — so the
-// picker and the server cannot disagree.
+// ever NARROW the branch's delivery hours — is_branch_open_for(branch, 'delivery', at) still
+// refuses anything outside them — so the picker and the server cannot disagree. Those delivery
+// hours are the opening hours, or, with the Delivery card's "Limit delivery to set hours" on,
+// that card's windows on their own, which may lie before opening or after closing (owner
+// report 2026-11-16: a shop open 09:00-17:30 delivering 08:00-09:00 and 18:00-19:00).
 //
-// Fail-CLOSED once armed, the opposite of branch_hours: switch off and opening hours alone
+// Fail-CLOSED once armed, the opposite of branch_hours: switch off and the delivery hours alone
 // decide, switch on and a day with no window is a day with no bookings.
 //
 // The card also owns asap_delivery_enabled ("Accept ASAP delivery orders", owner request
@@ -52,6 +56,13 @@ import { useSettingsPatch } from './patch-settings';
 interface Props {
   branchId: string;
   settings: Record<string, unknown>;
+  /** The Delivery card's SAVED windows (branch_delivery_hours), null when they could not be read.
+   *  Its saved switch is settings.delivery_hours_enabled. */
+  deliveryWindows: WeekdayWindow[] | null;
+  /** Opening hours as saved (branch_hours; empty is always open), null when they could not be
+   *  read. Read by the page, so the Opening hours card's save (router.refresh) reaches the
+   *  preview here; this card used to read them once on mount and kept the old hours. */
+  openingHours: WeekdayWindow[] | null;
 }
 
 const INPUT_CLS =
@@ -145,7 +156,7 @@ function flatten(week: WeekHours): WeekdayWindow[] {
   );
 }
 
-export function ScheduledOrdersCard({ branchId, settings }: Props) {
+export function ScheduledOrdersCard({ branchId, settings, deliveryWindows, openingHours }: Props) {
   const t = useTranslations('branchOps');
   const rawLocale = useLocale();
   const locale = isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE;
@@ -177,10 +188,13 @@ export function ScheduledOrdersCard({ branchId, settings }: Props) {
     settings?.schedule_hours_enabled === true,
   );
   const [week, setWeek] = React.useState<WeekHours>({});
-  // The branch's own opening hours, read only so the merchant can see what their booking
-  // window actually resolves to. 17:00-22:00 on a day the kitchen shuts at 21:00 is an
-  // honest mistake worth showing before they save it, not after a diner complains.
-  const [openingHours, setOpeningHours] = React.useState<WeekdayWindow[]>([]);
+  // The branch's own opening hours (openingHours, a prop) are read only so the merchant can see
+  // what their booking window actually resolves to. 17:00-22:00 on a day the kitchen shuts at
+  // 21:00 is an honest mistake worth showing before they save it, not after a diner complains.
+  // Read from the props on every render, not copied into state: the Delivery and Opening hours
+  // cards' saves refresh the page, and the preview must follow the switch, windows and opening
+  // hours the server reads.
+  const deliveryHoursOn = settings?.delivery_hours_enabled === true;
   const [loaded, setLoaded] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [savedAt, setSavedAt] = React.useState<number | null>(null);
@@ -190,13 +204,12 @@ export function ScheduledOrdersCard({ branchId, settings }: Props) {
     let cancelled = false;
     void (async () => {
       const db = getBrowserClient() as unknown as UntypedClient;
-      const [scheduleRows, openingRows] = await Promise.all([
-        db.from('branch_schedule_hours').select('day_of_week, opens_at, closes_at').eq('branch_id', branchId),
-        db.from('branch_hours').select('day_of_week, opens_at, closes_at').eq('branch_id', branchId),
-      ]);
+      const scheduleRows = await db
+        .from('branch_schedule_hours')
+        .select('day_of_week, opens_at, closes_at')
+        .eq('branch_id', branchId);
       if (cancelled) return;
       setWeek(toWeek(scheduleRows.data));
-      setOpeningHours(flatten(toWeek(openingRows.data)));
       setLoaded(true);
     })();
     return () => {
@@ -225,11 +238,21 @@ export function ScheduledOrdersCard({ branchId, settings }: Props) {
     });
   };
   // One click to a sane starting point, and the shortest route to the common layout:
-  // copy the opening hours in, then trim the one day that differs.
-  const sameAsOpeningHours = () => {
+  // copy the delivery hours in, then trim the one day that differs. Those are the opening
+  // hours, or the Delivery card's windows while delivery is limited to them: copying opening
+  // hours then would book 09:00-17:30 against 08:00-09:00 deliveries and offer nothing.
+  const copyFromDelivery = deliveryHoursOn && deliveryWindows !== null;
+  // Nothing to copy when the hours it would copy could not be read: copying "nothing" would
+  // clear the grid.
+  const copySource = copyFromDelivery ? deliveryWindows : openingHours;
+  const sameAsDeliveryHours = () => {
+    if (!copySource) return;
     const w: WeekHours = {};
-    for (const h of openingHours) {
+    for (const h of copySource) {
       (w[h.day_of_week] ??= []).push({ opens_at: h.opens_at, closes_at: h.closes_at });
+    }
+    for (const day of Object.keys(w)) {
+      w[Number(day)]?.sort((a, b) => a.opens_at.localeCompare(b.opens_at));
     }
     setWeek(w);
   };
@@ -458,15 +481,17 @@ export function ScheduledOrdersCard({ branchId, settings }: Props) {
                 <p className="mt-4 text-sm text-muted-foreground">{t('common.loading')}</p>
               ) : (
                 <div className="mt-4 space-y-3">
-                  <div className="flex justify-end">
-                    <button
-                      type="button"
-                      onClick={sameAsOpeningHours}
-                      className="focus-ring text-xs font-medium text-primary underline"
-                    >
-                      {t('scheduling.sameAsOpening')}
-                    </button>
-                  </div>
+                  {copySource && (
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={sameAsDeliveryHours}
+                        className="focus-ring text-xs font-medium text-primary underline"
+                      >
+                        {t(copyFromDelivery ? 'scheduling.sameAsDelivery' : 'scheduling.sameAsOpening')}
+                      </button>
+                    </div>
+                  )}
                   {days.map((name, day) => (
                     <div key={day} className="rounded-xl border border-border p-3">
                       <div className="flex items-center justify-between">
@@ -524,17 +549,21 @@ export function ScheduledOrdersCard({ branchId, settings }: Props) {
                               </button>
                             </div>
                           ))}
-                          {/* The answer to "why can nobody book at 10pm?": the branch is
-                              shut then, and a booking window cannot open a closed kitchen. */}
-                          <p className="text-xs text-muted-foreground">
-                            {t('scheduling.customersSee', {
-                              ranges: describeRanges(
-                                effectiveBookableRanges(openingHours, draftWindows, day),
-                                t('scheduling.closedDuringWindows'),
-                                locale,
-                              ),
-                            })}
-                          </p>
+                          {/* The answer to "why can nobody book at 10pm?": the branch does
+                              not deliver then, and a booking window cannot open delivery hours
+                              that are closed. Left out when the hours that decide (the Delivery
+                              card's windows, or opening hours) could not be read, rather than
+                              guessed. */}
+                          <CustomersSee
+                            preview={bookingPreview(
+                              openingHours,
+                              draftWindows,
+                              day,
+                              deliveryHoursOn,
+                              deliveryWindows,
+                            )}
+                            locale={locale}
+                          />
                         </div>
                       )}
                     </div>
@@ -563,5 +592,32 @@ export function ScheduledOrdersCard({ branchId, settings }: Props) {
         {savedAt && !saving && <span className="text-sm text-success">{t('common.saved')}</span>}
       </div>
     </Card>
+  );
+}
+
+/** One day's "Customers will see" line, and the way out when it says nothing. */
+function CustomersSee({ preview, locale }: { preview: BookingPreview | null; locale: UiLocale }) {
+  const t = useTranslations('branchOps');
+  if (!preview) return null;
+  const emptyLabel =
+    preview.empty === 'outsideDelivery'
+      ? t('scheduling.noDeliveryDuringWindows')
+      : preview.empty === 'noWindows'
+        ? t('scheduling.noBookings')
+        : t('scheduling.closedDuringWindows');
+  return (
+    <>
+      <p className="text-xs text-muted-foreground">
+        {t('scheduling.customersSee', { ranges: describeRanges(preview.ranges, emptyLabel, locale) })}
+      </p>
+      {/* The owner's report of 2026-11-16: windows outside opening hours were saved here and
+          nothing could be ordered. Delivery can run outside opening hours, but only through the
+          Delivery card's own windows, so say where. */}
+      {preview.empty === 'outsideOpening' && (
+        <p role="status" className="rounded-xl bg-primary/5 px-3 py-2 text-xs">
+          {t.rich('scheduling.outsideOpeningFix', { strong: (chunks) => <strong>{chunks}</strong> })}
+        </p>
+      )}
+    </>
   );
 }

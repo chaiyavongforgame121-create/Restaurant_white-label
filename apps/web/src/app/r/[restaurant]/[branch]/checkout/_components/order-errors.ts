@@ -144,19 +144,35 @@ export const ASAP_NO_BOOKING_ORDER_ERRORS: Record<string, string> = {
 };
 
 /**
+ * The delivery-hours sentences, each as chosen above, for a checkout where Pickup cannot be
+ * ordered either (closed for pickup, or no payment method for orders placed now): "or choose
+ * Pickup" would send the diner to a button that is greyed out. Delivery hours may lie outside
+ * opening hours, so a branch refusing a delivery is often closed for pickup too.
+ */
+export const NO_PICKUP_ORDER_ERRORS: Record<string, string> = {
+  'errors.order.deliveryNotAvailableAtThatTime': 'errors.order.deliveryNotAvailableAtThatTimeNoPickup',
+  'errors.order.deliveryNotAvailableNow': 'errors.order.deliveryNotAvailableNowNoPickup',
+  'errors.order.deliveryNotAvailableNowNoBooking': 'errors.order.deliveryNotAvailableNowNoBookingNoPickup',
+};
+
+/**
  * The message key for a place-order failure, or null when it carries no code we know.
  * `asap`: the order was an ASAP delivery (no scheduled_for), which picks the "right now" wording
  * where the two differ (ASAP_ORDER_ERRORS). `bookable`: a delivery time could be chosen instead;
- * false picks the wording that does not offer one (ASAP_NO_BOOKING_ORDER_ERRORS).
+ * false picks the wording that does not offer one (ASAP_NO_BOOKING_ORDER_ERRORS). `pickup`: Pickup
+ * can be ordered instead; false picks the wording that does not offer it (NO_PICKUP_ORDER_ERRORS).
+ * Each flag changes nothing when it is left out.
  */
 export function orderErrorKey(
   msg: string,
-  context: { asap?: boolean; bookable?: boolean } = {},
+  context: { asap?: boolean; bookable?: boolean; pickup?: boolean } = {},
 ): string | null {
   const key = orderErrorKeyFor(msg);
-  if (!key || !context.asap) return key;
-  const table = context.bookable === false ? ASAP_NO_BOOKING_ORDER_ERRORS : ASAP_ORDER_ERRORS;
-  return table[key] ?? key;
+  if (!key) return null;
+  const timed = context.asap
+    ? ((context.bookable === false ? ASAP_NO_BOOKING_ORDER_ERRORS : ASAP_ORDER_ERRORS)[key] ?? key)
+    : key;
+  return context.pickup === false ? (NO_PICKUP_ORDER_ERRORS[timed] ?? timed) : timed;
 }
 
 function orderErrorKeyFor(msg: string): string | null {

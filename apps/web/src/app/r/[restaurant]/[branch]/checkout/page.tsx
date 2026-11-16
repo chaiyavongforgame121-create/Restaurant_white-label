@@ -22,8 +22,9 @@ export default async function CheckoutPage({ params }: Props) {
   // carry it. Read it here: the summary must show the tax place-order will charge
   // from the first paint, not discover it a round-trip later.
   const supabase = await getServerClient();
-  // resolveScheduleDelivery also reads is_branch_open (scheduleDelivery.openNow): Pickup and an
-  // ASAP delivery are prepared immediately, so a closed branch cannot take either.
+  // resolveScheduleDelivery also reads is_branch_open (scheduleDelivery.openNow): Pickup is
+  // prepared immediately, so a closed branch cannot take it. An ASAP delivery keeps delivery's own
+  // hours instead (scheduleDelivery.deliveryOpenNow), which may lie outside opening hours.
   const [{ data: taxRow }, scheduleDelivery] = await Promise.all([
     supabase.from('branches').select('sales_tax_rate').eq('id', tenant.branch.id).maybeSingle(),
     resolveScheduleDelivery(supabase, tenant.branch.id, status),
@@ -40,6 +41,8 @@ export default async function CheckoutPage({ params }: Props) {
         // Delivery is switched per branch, so "not offered here" and "not available right now"
         // are different sentences on the gate.
         deliveryOffered={scheduleDelivery.offered}
+        // Closed for pickup puts Delivery first and says when Pickup can be had, as on the menu.
+        pickupOpenNow={scheduleDelivery.openNow}
       />
       <CheckoutView
         branchId={tenant.branch.id}
@@ -47,12 +50,15 @@ export default async function CheckoutPage({ params }: Props) {
         canDeliver={scheduleDelivery.canDeliver}
         deliveryOffered={scheduleDelivery.offered}
         // Only an explicit false: a failed read must not block ordering, and place-order still
-        // refuses a pickup or an ASAP delivery at a closed branch.
+        // refuses a pickup at a closed branch.
         branchOpenNow={scheduleDelivery.openNow}
-        // Delivery is sellable this minute: the branch delivers and is inside its delivery hours.
-        // With the branch open now and a payment method for "now" orders, that is ASAP delivery;
-        // the orders_enforce_delivery_hours trigger refuses one outside delivery hours anyway.
-        deliveryOpenNow={status.delivery}
+        // Delivery is open this minute on its own hours (storefront_status.delivery_open_now,
+        // is_branch_open_for 'delivery'): with a payment method for "now" orders, that is ASAP
+        // delivery — at a branch closed for pickup too. place-order judges it the same way.
+        deliveryOpenNow={scheduleDelivery.deliveryOpenNow}
+        // Off, delivery follows opening hours, so it opens when the branch does while the diner
+        // waits on this page; on, the delivery windows are their own clock.
+        deliveryHoursOn={status.delivery_hours_on}
         // "Accept ASAP delivery orders", read fresh from the row: unticked, the "As soon as
         // possible" box is not shown at all and every delivery is booked.
         asapOffered={scheduleDelivery.asapOffered}
@@ -79,8 +85,8 @@ export default async function CheckoutPage({ params }: Props) {
           minLeadMinutes: status.schedule_min_lead_min,
           maxDays: status.schedule_max_days,
           slotMinutes: status.schedule_slot_minutes,
-          // A booked delivery is checked against delivery hours at its time, so its slots must sit
-          // inside them too.
+          // A booked delivery is judged on delivery's own hours at its time: the delivery windows
+          // while they are switched on (replacing opening hours), else opening hours.
           deliveryWindows: status.delivery_hours_on ? status.delivery_windows : null,
         }}
       />

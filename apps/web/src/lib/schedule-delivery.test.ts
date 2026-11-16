@@ -60,6 +60,7 @@ describe('resolveScheduleDelivery', () => {
       canDeliverNow: false,
       canScheduleDelivery: true,
       openNow: true,
+      deliveryOpenNow: false,
       paused: false,
       offered: true,
       asapOffered: false,
@@ -78,6 +79,8 @@ describe('resolveScheduleDelivery', () => {
       canDeliverNow: false,
       canScheduleDelivery: false,
       openNow: true,
+      // As far as hours go; the pause is what keeps ASAP shut.
+      deliveryOpenNow: true,
       paused: true,
       offered: true,
       asapOffered: false,
@@ -196,6 +199,108 @@ describe('resolveScheduleDelivery', () => {
         SUNDAY_NOON_UTC,
       );
       expect(r).toMatchObject({ canDeliver: false, asapOffered: false, offered: true });
+    });
+  });
+
+  // Delivery keeps its own hours (owner's report, 2026-11-16): storefront_status.delivery_open_now
+  // is is_branch_open_for(branch, 'delivery', now()), and it decides ASAP on its own.
+  describe('delivery open now, on its own hours', () => {
+    it('sells ASAP delivery while closed for pickup, when delivery is open now', async () => {
+      const r = await resolveScheduleDelivery(
+        fakeClient(ASAP, null, false),
+        'b',
+        status({ delivery: true, delivery_open_now: true, scheduling_enabled: false }),
+        SUNDAY_NOON_UTC,
+      );
+      expect(r).toMatchObject({
+        canDeliver: true,
+        canDeliverNow: true,
+        openNow: false,
+        deliveryOpenNow: true,
+      });
+    });
+
+    it('trusts delivery_open_now false over an open branch inside its delivery windows', async () => {
+      const r = await resolveScheduleDelivery(
+        fakeClient(ASAP),
+        'b',
+        status({ delivery: true, delivery_open_now: false, scheduling_enabled: false }),
+        SUNDAY_NOON_UTC,
+      );
+      expect(r).toMatchObject({ canDeliver: false, canDeliverNow: false, openNow: true, deliveryOpenNow: false });
+    });
+
+    it('without the key (an older database), needs delivery hours AND opening hours, as before', async () => {
+      const closed = await resolveScheduleDelivery(
+        fakeClient(ASAP, null, false),
+        'b',
+        status({ delivery: true, scheduling_enabled: false }),
+        SUNDAY_NOON_UTC,
+      );
+      expect(closed).toMatchObject({ canDeliverNow: false, deliveryOpenNow: false });
+      const open = await resolveScheduleDelivery(
+        fakeClient(ASAP),
+        'b',
+        status({ delivery: true, scheduling_enabled: false }),
+        SUNDAY_NOON_UTC,
+      );
+      expect(open).toMatchObject({ canDeliverNow: true, deliveryOpenNow: true });
+    });
+
+    it('never sells ASAP while paused or without the ASAP switch, whatever the key says', async () => {
+      const open = status({ delivery: true, delivery_open_now: true, scheduling_enabled: false });
+      expect(
+        (await resolveScheduleDelivery(fakeClient({ ...ASAP, orders_paused: true }), 'b', open, SUNDAY_NOON_UTC))
+          .canDeliverNow,
+      ).toBe(false);
+      expect((await resolveScheduleDelivery(fakeClient({}), 'b', open, SUNDAY_NOON_UTC)).canDeliverNow).toBe(false);
+    });
+  });
+
+  // Thai Burrito (America/Chicago): open 09:00-17:30 every day, delivering 08:00-09:00 and
+  // 18:00-19:00. Monday 2026-11-16 at noon is open for pickup and outside both delivery windows.
+  describe('Thai Burrito, delivery outside opening hours', () => {
+    const EVERY_DAY = [0, 1, 2, 3, 4, 5, 6];
+    const deliveryWindows = EVERY_DAY.flatMap((d) => [
+      { day_of_week: d, opens_at: '08:00', closes_at: '09:00' },
+      { day_of_week: d, opens_at: '18:00', closes_at: '19:00' },
+    ]);
+    const thaiBurrito = (over: Partial<StorefrontStatus> = {}) =>
+      status({
+        opening_hours: EVERY_DAY.map((d) => ({ day_of_week: d, opens_at: '09:00', closes_at: '17:30' })),
+        delivery_windows: deliveryWindows,
+        schedule_slot_minutes: 30,
+        ...over,
+      });
+    const MONDAY_NOON_CHICAGO = new Date('2026-11-16T18:00:00Z');
+    const bookingOnDeliveryHours = { schedule_hours_enabled: true, schedule_windows: deliveryWindows, closures: [] };
+
+    it('with delivery hours on, books this evening while ASAP waits for the window', async () => {
+      const r = await resolveScheduleDelivery(
+        fakeClient(ASAP),
+        'b',
+        thaiBurrito({ delivery_hours_on: true, delivery: false, delivery_open_now: false }),
+        MONDAY_NOON_CHICAGO,
+      );
+      expect(r).toMatchObject({ canDeliver: true, canDeliverNow: false, canScheduleDelivery: true, openNow: true });
+    });
+
+    it('booking windows on the delivery hours book only while delivery hours are on', async () => {
+      const off = await resolveScheduleDelivery(
+        fakeClient({}, bookingOnDeliveryHours),
+        'b',
+        thaiBurrito({ delivery_hours_on: false, delivery: true, delivery_open_now: true }),
+        MONDAY_NOON_CHICAGO,
+      );
+      // What the merchant saw: nothing left to book. Unchanged while the switch is off.
+      expect(off).toMatchObject({ canScheduleDelivery: false, canDeliver: false });
+      const on = await resolveScheduleDelivery(
+        fakeClient({}, bookingOnDeliveryHours),
+        'b',
+        thaiBurrito({ delivery_hours_on: true, delivery: false, delivery_open_now: false }),
+        MONDAY_NOON_CHICAGO,
+      );
+      expect(on).toMatchObject({ canScheduleDelivery: true, canDeliver: true });
     });
   });
 

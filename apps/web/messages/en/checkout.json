@@ -91,6 +91,8 @@
     "paused": "This restaurant is not taking orders right now. Please check back soon.",
     "pickupClosedCanSchedule": "This restaurant is closed right now, so pickup is not available — you can still schedule a delivery.",
     "pickupClosed": "This restaurant is closed right now, so pickup is not available. Please order during opening hours.",
+    "pickupClosedDeliveryOpen": "Pickup is only available during opening hours — delivery is open now, so you can order a delivery instead.",
+    "pickupOutsideHours": "Pickup is only available during opening hours.",
     "pickupNoPaymentCanSchedule": "Pickup is not available with this restaurant’s current payment options — you can still schedule a delivery.",
     "pickupNoPayment": "Pickup is not available with this restaurant’s current payment options.",
     "pickupReady": "Prepared right away once your order is confirmed.",

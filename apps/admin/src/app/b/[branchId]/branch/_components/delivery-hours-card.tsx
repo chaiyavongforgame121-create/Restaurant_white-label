@@ -5,16 +5,29 @@ import { useRouter } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { Clock, Plus, Save, Trash2 } from 'lucide-react';
 import { getBrowserClient } from '@favornoms/database/client';
-import { DEFAULT_UI_LOCALE, intlLocaleFor, isUiLocale } from '@favornoms/shared';
+import {
+  DEFAULT_UI_LOCALE,
+  describeRanges,
+  intlLocaleFor,
+  isUiLocale,
+  type MinuteRange,
+  type UiLocale,
+  type WeekdayWindow,
+} from '@favornoms/shared';
 import { Button, Card, RiderIcon } from '@favornoms/ui';
+import { deliveryOutsideOpening } from './delivery-hours-model';
 import { useSettingsPatch } from './patch-settings';
 
 /**
  * Delivery hours and who does the delivering.
  *
  * Separate from opening hours on purpose: a kitchen open 09:00–22:00 may only want to
- * run its own deliveries over lunch and dinner. Opening hours still gate the whole
- * shop; these narrow delivery on top.
+ * run its own deliveries over lunch and dinner, and a shop open 09:00–17:30 may want to
+ * deliver only 08:00–09:00 and 18:00–19:00 (owner report, 2026-11-16). Switched on, these
+ * windows ARE the delivery hours (public.is_branch_open_for(branch, 'delivery', at)):
+ * opening hours no longer gate delivery, so a window may lie before opening or after
+ * closing. Pickup and dine-in still follow opening hours, and a closure or a pause still
+ * stops delivery. Switched off, delivery follows opening hours like pickup.
  *
  * Fail-CLOSED, unlike branch_hours where "no rows" means always open. Delivery hours
  * do nothing until switched on, and once on, a day with no window is a day with no
@@ -55,13 +68,21 @@ const INPUT_CLS =
 export function DeliveryHoursCard({
   branchId,
   settings,
+  openingHours,
 }: {
   branchId: string;
   settings: Record<string, unknown>;
+  /**
+   * Opening hours as saved, read by the page (so a save in the Opening hours card, which refreshes
+   * the page, reaches this card) and used only to say which delivery windows fall outside them.
+   * Null when the read failed: the note is then left out rather than guessed.
+   */
+  openingHours: WeekdayWindow[] | null;
 }) {
   const t = useTranslations('branchOps');
   const rawLocale = useLocale();
-  const intlLocale = intlLocaleFor(isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE);
+  const locale = isUiLocale(rawLocale) ? rawLocale : DEFAULT_UI_LOCALE;
+  const intlLocale = intlLocaleFor(locale);
   const days = React.useMemo(() => weekdayNames(intlLocale), [intlLocale]);
   const router = useRouter();
   // Sends only what changed since this card was rendered or last saved.
@@ -120,17 +141,16 @@ export function DeliveryHoursCard({
 
   const totalWindows = Object.values(week).reduce((n, wins) => n + (wins?.length ?? 0), 0);
   const armedButEmpty = enabled && loaded && totalWindows === 0;
+  const windows: WeekdayWindow[] = Object.entries(week).flatMap(([day, wins]) =>
+    (wins ?? [])
+      .filter((w) => w.opens_at && w.closes_at)
+      .map((w) => ({ day_of_week: Number(day), opens_at: w.opens_at, closes_at: w.closes_at })),
+  );
 
   const save = async () => {
     setSaving(true);
     setError(null);
     const supabase = getBrowserClient();
-
-    const windows = Object.entries(week).flatMap(([day, wins]) =>
-      (wins ?? [])
-        .filter((w) => w.opens_at && w.closes_at)
-        .map((w) => ({ day_of_week: Number(day), opens_at: w.opens_at, closes_at: w.closes_at })),
-    );
 
     // Windows first: if the settings write lands and this one fails, the branch is armed
     // with no windows, which is "delivery closed all week".
@@ -270,6 +290,12 @@ export function DeliveryHoursCard({
                           </button>
                         </div>
                       ))}
+                      {/* Information, never a block on saving: delivering before opening or
+                          after closing is exactly what this switch is for. */}
+                      <OutsideOpeningNote
+                        ranges={openingHours ? deliveryOutsideOpening(openingHours, windows, day) : []}
+                        locale={locale}
+                      />
                     </div>
                   )}
                 </div>
@@ -295,5 +321,15 @@ export function DeliveryHoursCard({
         {savedAt && !saving && <span className="text-sm text-success">{t('common.saved')}</span>}
       </div>
     </Card>
+  );
+}
+
+function OutsideOpeningNote({ ranges, locale }: { ranges: MinuteRange[]; locale: UiLocale }) {
+  const t = useTranslations('branchOps');
+  if (ranges.length === 0) return null;
+  return (
+    <p className="text-xs text-muted-foreground">
+      {t('deliveryHours.outsideOpening', { ranges: describeRanges(ranges, undefined, locale) })}
+    </p>
   );
 }

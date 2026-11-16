@@ -9,7 +9,12 @@
     "title": "Currently closed.",
     "canSchedule": "Pickup and ASAP delivery are available during business hours — you can still book a delivery for later.",
     "canScheduleNoAsap": "Pickup is available during business hours — you can still book a delivery for later.",
-    "notTaking": "We're not taking new orders right now. Please check back during business hours."
+    "notTaking": "We're not taking new orders right now. Please check back during business hours.",
+    "notTakingDeliveryHours": "Pickup is available during business hours and delivery during delivery hours. Please check back then.",
+    "pickupTitle": "Pickup is closed right now.",
+    "deliveryOpen": "Delivery is open — you can order a delivery now.",
+    "deliveryOpenCanSchedule": "Delivery is open — order a delivery now, or book one for later.",
+    "canScheduleDeliveryHours": "Pickup is available during business hours and ASAP delivery during delivery hours — you can still book a delivery for later."
   },
   "reviews": {
     "count": "{count, plural, one {# customer review} other {# customer reviews}}"

@@ -91,6 +91,8 @@
     "paused": "Nhà hàng tạm thời không nhận đơn. Vui lòng quay lại sau.",
     "pickupClosedCanSchedule": "Nhà hàng hiện đã đóng cửa nên không thể Tự đến lấy — bạn vẫn có thể hẹn giờ giao hàng.",
     "pickupClosed": "Nhà hàng hiện đã đóng cửa nên không thể Tự đến lấy. Vui lòng đặt hàng trong giờ mở cửa.",
+    "pickupClosedDeliveryOpen": "Tự đến lấy chỉ có trong giờ mở cửa — nhà hàng đang nhận giao hàng, bạn có thể đặt giao hàng thay thế.",
+    "pickupOutsideHours": "Tự đến lấy chỉ có trong giờ mở cửa.",
     "pickupNoPaymentCanSchedule": "Không thể Tự đến lấy với các phương thức thanh toán hiện tại của nhà hàng — bạn vẫn có thể hẹn giờ giao hàng.",
     "pickupNoPayment": "Không thể Tự đến lấy với các phương thức thanh toán hiện tại của nhà hàng.",
     "pickupReady": "Được chuẩn bị ngay khi đơn hàng được xác nhận.",

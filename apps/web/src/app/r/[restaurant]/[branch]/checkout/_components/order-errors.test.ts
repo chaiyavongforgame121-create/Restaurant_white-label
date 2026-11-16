@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ASAP_NO_BOOKING_ORDER_ERRORS,
   ASAP_ORDER_ERRORS,
+  NO_PICKUP_ORDER_ERRORS,
   ORDER_ERRORS,
   orderErrorKey,
   placeOrderBody,
@@ -106,11 +107,68 @@ describe('orderErrorKey', () => {
     expect(orderErrorKey('TypeError: Failed to fetch', { asap: true })).toBeNull();
   });
 
+  // Delivery hours may lie outside opening hours, so the branch refusing a delivery is often closed
+  // for pickup as well: "or choose Pickup" would point at a greyed-out button.
+  it('leaves Pickup out of the delivery-hours refusal when Pickup cannot be ordered', () => {
+    const body = refusal(409, { error: 'delivery_not_available_at_that_time' });
+    expect(orderErrorKey(body, { pickup: false })).toBe('errors.order.deliveryNotAvailableAtThatTimeNoPickup');
+    expect(orderErrorKey(body, { asap: false, bookable: true, pickup: false })).toBe(
+      'errors.order.deliveryNotAvailableAtThatTimeNoPickup',
+    );
+    expect(orderErrorKey(body, { asap: false, bookable: false, pickup: false })).toBe(
+      'errors.order.deliveryNotAvailableAtThatTimeNoPickup',
+    );
+    expect(orderErrorKey(body, { asap: true, pickup: false })).toBe('errors.order.deliveryNotAvailableNowNoPickup');
+    expect(orderErrorKey(body, { asap: true, bookable: true, pickup: false })).toBe(
+      'errors.order.deliveryNotAvailableNowNoPickup',
+    );
+    expect(orderErrorKey(body, { asap: true, bookable: false, pickup: false })).toBe(
+      'errors.order.deliveryNotAvailableNowNoBookingNoPickup',
+    );
+    // Pickup open, or not said: the sentences that offer it, exactly as before.
+    expect(orderErrorKey(body, { pickup: true })).toBe('errors.order.deliveryNotAvailableAtThatTime');
+    expect(orderErrorKey(body, { asap: true, pickup: true })).toBe('errors.order.deliveryNotAvailableNow');
+    expect(orderErrorKey(body, { asap: true, bookable: false, pickup: true })).toBe(
+      'errors.order.deliveryNotAvailableNowNoBooking',
+    );
+    expect(orderErrorKey(body, { asap: true, bookable: false })).toBe('errors.order.deliveryNotAvailableNowNoBooking');
+    // Every other code reads the same whatever pickup is doing.
+    expect(orderErrorKey(refusal(409, { error: 'branch_closed' }), { asap: true, pickup: false })).toBe(
+      'errors.order.branchClosed',
+    );
+    expect(
+      orderErrorKey(refusal(400, { error: 'delivery_must_be_scheduled', hint: 'invalid_channel' }), {
+        asap: true,
+        pickup: false,
+      }),
+    ).toBe('errors.order.deliveryMustBeScheduled');
+    expect(orderErrorKey('TypeError: Failed to fetch', { pickup: false })).toBeNull();
+  });
+
+  it('words the no-pickup sentences without Pickup in any language', () => {
+    // The word each language's sentences name Pickup by ("elige Recoger", "เลือกรับที่ร้าน", ...).
+    const pickupWord: Record<string, string> = { en: 'pickup', es: 'recoger', th: 'ที่ร้าน', vi: 'lấy' };
+    for (const locale of ['en', 'es', 'th', 'vi']) {
+      const dir = path.resolve(__dirname, '../../../../../../../messages', locale);
+      const errors = JSON.parse(fs.readFileSync(path.join(dir, 'errors.json'), 'utf8')).order as Record<string, string>;
+      const word = pickupWord[locale]!;
+      for (const [from, to] of Object.entries(NO_PICKUP_ORDER_ERRORS)) {
+        const offered = (errors[from.replace('errors.order.', '')] ?? '').toLowerCase();
+        const withheld = (errors[to.replace('errors.order.', '')] ?? '').toLowerCase();
+        expect(withheld.length > 0, `${locale}: ${to}`).toBe(true);
+        // The sentence it replaces does offer Pickup, which is why it is replaced.
+        expect(offered.includes(word), `${locale}: ${from}`).toBe(true);
+        expect(withheld.includes(word), `${locale}: ${to}`).toBe(false);
+      }
+    }
+  });
+
   it('has every sentence it can pick in all four languages', () => {
     const keys: Array<[string, string]> = [
       ...ORDER_ERRORS,
       ...Object.entries(ASAP_ORDER_ERRORS).map(([from, to]): [string, string] => [`asap:${from}`, to]),
       ...Object.entries(ASAP_NO_BOOKING_ORDER_ERRORS).map(([from, to]): [string, string] => [`asap-no-booking:${from}`, to]),
+      ...Object.entries(NO_PICKUP_ORDER_ERRORS).map(([from, to]): [string, string] => [`no-pickup:${from}`, to]),
     ];
     for (const locale of ['en', 'es', 'th', 'vi']) {
       const dir = path.resolve(__dirname, '../../../../../../../messages', locale);
