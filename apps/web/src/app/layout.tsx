@@ -7,6 +7,7 @@ import { DEFAULT_UI_LOCALE, isUiLocale } from '@favornoms/shared';
 import { ServiceWorkerRegistrar } from '@/components/service-worker';
 import { CookieBanner } from '@/components/cookie-banner';
 import { InstallPrompt } from '@/components/install-prompt';
+import { TabIconRefresh } from '@/components/tab-icon-refresh';
 import './globals.css';
 
 // Vietnamese needs the extended subsets; Thai has no glyphs in Inter or Playfair at all, so it
@@ -132,6 +133,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <ThemeProvider theme={{}}>
               <ConnectionBanner />
               <ServiceWorkerRegistrar />
+              {/* Chrome on Android dropped the tab icon on every in-app navigation. */}
+              <TabIconRefresh />
               {children}
               <CookieBanner />
               <InstallPrompt />
