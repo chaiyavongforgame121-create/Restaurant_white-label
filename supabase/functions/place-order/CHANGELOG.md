@@ -5,6 +5,35 @@ the bulk of the file; every deploy had to carry it. The history is the valuable 
 so it lives here rather than being deleted.
 
 ```
+// place-order v11.12 — a booking reaches the kitchen at its Prep time (plus busy mode)
+//   v11.12 (2026-11-16): the owner's decision: "Prep time" (branches.settings.prep_time_min, the
+//        Delivery card's "Prep time (min)") is also when a booked order
+//        reaches the kitchen, and a new prep time moves both. It was a separate figure,
+//        schedule_lead_time_min ("Send to kitchen (minutes before)" on the Scheduled orders card),
+//        so the diner could be told 30 minutes of cooking while the kitchen got the booking 5
+//        minutes ahead. SQL half: 20261116200000_kitchen_lead_is_prep_time
+//        (private.branch_kitchen_lead_min, which the release job reads).
+//        - kitchenLeadMin() in ./kitchen-lead.ts, which decides "held" at insert, is now prep + busy,
+//          at most 10080 (a week): prep = prep_time_min if it is a whole number 0-10080, else 15;
+//          busy = busy_extra_prep_min if it is a whole number 0-10080, else 0.
+//          schedule_lead_time_min is not read. Busy counts because the diner's ETA is prep + busy
+//          (quote_delivery): while the kitchen is in busy mode a booking must reach it that much
+//          earlier, and the release job, reading the settings each minute, lets held bookings out
+//          that much earlier on its own. The shared copy (packages/shared/src/utils/kitchen-lead.ts)
+//          and the SQL function follow the same rule.
+//        - One case table for the three readers: ./kitchen-lead.cases.ts (test data, not imported by
+//          index.ts), run by the new ./kitchen-lead.test.ts (`deno test`, no permissions), by
+//          packages/shared/src/utils/kitchen-lead.test.ts against both copies, and by
+//          supabase/tests/kitchen_lead_is_prep_time.sql against the SQL function, whose rows the
+//          shared test checks against the table. Nothing else in the function changes; a
+//          Management API / MCP deploy still passes kitchen-lead.ts with index.ts (the other
+//          files as in v11.11).
+//        - DEPLOY ORDER: the migration 20261116200000 and this function together. place-order holds
+//          by its copy and the job releases by its own; while only one is out, a booking reaches the
+//          kitchen early or late by the old lead (the saved figure, else the prep time) minus the new
+//          one, and is never lost: one that is not held is on the board at once, a held one is let
+//          out at the first minute run after its kitchen time. Read live on 2026-11-16: no order is
+//          held.
 // place-order v11.11 — a delivery with its own hours is judged by them, not by opening hours
 //   v11.11 (2026-11-16): the owner's report from Thai Burrito (America/Chicago), open 09:00-17:30
 //        every day, which wants customers to order DELIVERY only 08:00-09:00 and 18:00-19:00. With

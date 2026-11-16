@@ -12,7 +12,6 @@ import {
   intlLocaleFor,
   isUiLocale,
   kitchenLeadMin,
-  parseDeliverySettings,
   type MinuteRange,
   type UiLocale,
   type WeekdayWindow,
@@ -31,9 +30,13 @@ import { useSettingsPatch } from './patch-settings';
 //                           now+15m, place-order rejected under now+10m. A diner picking a
 //                           12-minute-out slot passed the picker and failed the submit.
 //   schedule_max_days       hardcoded 14 in both places.
-//   schedule_lead_time_min  did not exist. The kitchen release offset was prep_time_min,
-//                           which is ALSO the number shown in customer ETAs, so tuning one
-//                           silently moved the other.
+//
+// When a booking reaches the kitchen is NOT set here. It had its own key for a while
+// (schedule_lead_time_min, "Send to kitchen (minutes before)"), until the owner decided on
+// 2026-11-16 that the prep time is that moment too: one number the kitchen actually needs, so
+// updating it moves customer ETAs and the kitchen's notice together. The lead is the Delivery
+// card's prep time plus the kitchen's Busy extra (kitchenLeadMin); this card only shows it. The
+// old key stays in older rows and nothing reads it.
 //
 // The window a diner may pick inside used to be unreachable too: it was the branch's
 // Opening hours and nothing else, so a shop open every day that wanted pre-orders from
@@ -181,10 +184,6 @@ export function ScheduledOrdersCard({ branchId, settings, deliveryWindows, openi
   const [slot, setSlot] = React.useState(() =>
     String(intOr(settings?.schedule_slot_minutes, DEFAULTS.schedule_slot_minutes)),
   );
-  // The value in force, read by the one rule the release job, place-order and the kitchen board
-  // all use (kitchenLeadMin): a key the branch never set, or one no reader accepts, shows what
-  // the kitchen actually gets instead of a guess.
-  const [kitchenLead, setKitchenLead] = React.useState(() => String(kitchenLeadMin(settings)));
   const [windowsEnabled, setWindowsEnabled] = React.useState(
     settings?.schedule_hours_enabled === true,
   );
@@ -260,10 +259,13 @@ export function ScheduledOrdersCard({ branchId, settings, deliveryWindows, openi
 
   const draftWindows = flatten(week);
   const armedButEmpty = windowsEnabled && loaded && draftWindows.length === 0;
-  // The lead as it would be saved (a blank field is 0), against the prep time the Delivery card
-  // sets and every customer ETA is quoted from.
-  const leadMinutes = intOr(kitchenLead, 15);
-  const prepMinutes = parseDeliverySettings(settings).prepTimeMin;
+  // When a booking reaches the kitchen, from the saved settings (the Delivery card's save
+  // refreshes them) by the one rule the release job, place-order and the kitchen board all read
+  // (kitchenLeadMin), so this says what the server does. The prep part alone is the same rule
+  // with no Busy extra; the rest is the Busy extra in force now.
+  const leadMinutes = kitchenLeadMin(settings);
+  const busyMinutes = leadMinutes - kitchenLeadMin({ prep_time_min: settings?.prep_time_min });
+  const minLeadMinutes = intOr(minLead, DEFAULTS.schedule_min_lead_min);
 
   const save = async () => {
     setSaving(true);
@@ -296,7 +298,6 @@ export function ScheduledOrdersCard({ branchId, settings, deliveryWindows, openi
       schedule_min_lead_min: Math.max(0, Math.min(24 * 60, intOr(minLead, DEFAULTS.schedule_min_lead_min))),
       schedule_max_days: Math.max(0, Math.min(365, intOr(maxDays, DEFAULTS.schedule_max_days))),
       schedule_slot_minutes: Math.max(5, Math.min(60, intOr(slot, DEFAULTS.schedule_slot_minutes))),
-      schedule_lead_time_min: Math.max(0, Math.min(7 * 24 * 60, intOr(kitchenLead, 15))),
     });
     setSaving(false);
     if (updateError) {
@@ -400,56 +401,26 @@ export function ScheduledOrdersCard({ branchId, settings, deliveryWindows, openi
           </select>
           <span className="mt-1 block text-xs text-muted-foreground">{t('scheduling.slotHint')}</span>
         </label>
-
-        <label className="block">
-          <span className="mb-1.5 block text-sm font-medium">{t('scheduling.kitchenLead')}</span>
-          <input
-            type="number"
-            min={0}
-            max={7 * 24 * 60}
-            step="5"
-            inputMode="numeric"
-            value={kitchenLead}
-            onChange={(e) => setKitchenLead(e.target.value)}
-            className={INPUT_CLS}
-          />
-          {/* The distinction this field exists to make. Before it, both numbers were
-              prep_time_min, so a caterer who needed a day of lead time had to quote a
-              one-day ETA to every walk-up customer to get it. */}
-          <span className="mt-1 block text-xs text-muted-foreground">
-            {t.rich('scheduling.kitchenLeadHint', { strong })}
-          </span>
-        </label>
       </div>
 
-      {/* The two lead times are separate keys and nothing links them, so a merchant can ask
-          for a day's notice in the kitchen and still let a diner book fifteen minutes out.
-          Nothing breaks — the booking simply is not held — but it is never what they meant,
-          and there was no way to notice it before placing the order. */}
-      {enabled && intOr(kitchenLead, 15) > intOr(minLead, DEFAULTS.schedule_min_lead_min) && (
+      {/* Read-only: the lead is the Delivery card's prep time (plus Busy), so it is changed
+          there. Shown here because this is where a merchant looks for when bookings reach the
+          kitchen. */}
+      <p className="mt-4 rounded-xl bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
+        {busyMinutes > 0
+          ? t.rich('scheduling.kitchenReachBusy', { minutes: leadMinutes, busyMinutes, strong })
+          : t.rich('scheduling.kitchenReach', { minutes: leadMinutes, strong })}
+      </p>
+
+      {/* Earliest booking and the kitchen lead are separate settings and nothing links them, so
+          a diner can book closer than the kitchen needs. Nothing breaks — the booking simply is
+          not held — but it is never what the merchant meant, and there was no way to notice it
+          before placing the order. */}
+      {enabled && leadMinutes > minLeadMinutes && (
         <p role="status" className="mt-3 rounded-xl bg-warning/10 px-4 py-3 text-sm">
           {t.rich('scheduling.leadGap', {
-            bookMinutes: intOr(minLead, DEFAULTS.schedule_min_lead_min),
-            kitchenMinutes: intOr(kitchenLead, 15),
-            strong,
-          })}
-        </p>
-      )}
-
-      {/* The booked time is when the driver comes for the food (docs/ASAP-AND-SCHEDULING-2026-10-25.md
-          §2), so the kitchen needs at least its prep time before it. Both mistakes used to save
-          without a word: 0 lets the board see a booking only as the driver walks in, and a lead
-          under the prep time sends the food out unfinished. */}
-      {enabled && leadMinutes === 0 && (
-        <p role="status" className="mt-3 rounded-xl bg-warning/10 px-4 py-3 text-sm">
-          {t('scheduling.leadZero')}
-        </p>
-      )}
-      {enabled && leadMinutes > 0 && leadMinutes < prepMinutes && (
-        <p role="status" className="mt-3 rounded-xl bg-warning/10 px-4 py-3 text-sm">
-          {t.rich('scheduling.leadBelowPrep', {
+            bookMinutes: minLeadMinutes,
             kitchenMinutes: leadMinutes,
-            prepMinutes,
             strong,
           })}
         </p>

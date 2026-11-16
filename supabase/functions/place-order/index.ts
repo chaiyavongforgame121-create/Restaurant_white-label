@@ -2,7 +2,10 @@
 // Server-side recalculation never trusts client totals.
 //
 // Version history: see ./CHANGELOG.md (moved out of this file 2026-08-28).
-// Current: v11.11 — the open check is asked per channel (public.is_branch_open_for): a delivery at a
+// Current: v11.12 — a booking is held until its branch's Prep time plus busy mode before its booked
+// time (./kitchen-lead.ts), the figure the diner's ETA is built from; "Send to kitchen (minutes
+// before)" (schedule_lead_time_min) is no longer read. The release job reads the same rule.
+// v11.11 — the open check is asked per channel (public.is_branch_open_for): a delivery at a
 // branch with "Limit delivery to set hours" on is judged by its delivery windows alone, which may lie
 // before opening or after closing; everything else by opening hours. Refused for those delivery hours
 // only, it answers delivery_not_available_at_that_time instead of branch_closed (./closed-refusal.ts).
@@ -45,8 +48,9 @@ import {
   readyStripeAccount,
   serviceFeePercentOf,
 } from './card.ts';
-// "Send to kitchen (minutes before)": the same rule as private.branch_kitchen_lead_min() in SQL and
-// the shared kitchenLeadMin(), pinned from packages/shared/src/utils/kitchen-lead.test.ts.
+// When a booking reaches the kitchen (Prep time plus busy mode): the same rule as
+// private.branch_kitchen_lead_min() in SQL and the shared kitchenLeadMin(), pinned by
+// ./kitchen-lead.test.ts and from packages/shared/src/utils/kitchen-lead.test.ts.
 import { kitchenLeadMin } from './kitchen-lead.ts';
 // "Accept ASAP delivery orders": the same rule as the storefront's and the admin card's
 // asapDeliveryEnabled(), pinned from packages/shared/src/utils/asap-delivery.test.ts.
@@ -1220,17 +1224,17 @@ Deno.serve(async (req: Request) => {
   }
 
   // Hold far-future scheduled orders out of the kitchen. Released by the pg_cron job
-  // private.release_scheduled_orders() at scheduled_for − schedule_lead_time_min.
+  // private.release_scheduled_orders() at scheduled_for − the kitchen lead.
   //
   // Both sides must read the SAME number or the hold and the release disagree. They did:
   // this used prep_time_min + 15 while the job used prep_time_min, so for 15 minutes an
   // order could be held with nothing scheduled to let it out until the next cron tick.
-  // schedule_lead_time_min also separates "when the kitchen sees it" from prep_time_min,
-  // which is the figure quoted to the diner as an ETA — they were the same key.
-  // kitchenLeadMin() is the job's own rule (private.branch_kitchen_lead_min): a lead that is not
-  // a whole number 0-10080 falls back to the prep time, then 15. Number() took 7.5 as it came and
-  // read "abc" as NaN, and NaN made every booking "not held", straight to the kitchen however far
-  // ahead.
+  // kitchenLeadMin() is the job's own rule (private.branch_kitchen_lead_min): since v11.12 the
+  // lead is the Prep time plus busy mode (prep_time_min, else 15, plus busy_extra_prep_min, else 0,
+  // at most a week), the same figures the diner's ETA is quoted from, so the kitchen gets a
+  // booking as long before its time as it says it needs. A value that is not a whole number
+  // 0-10080 is skipped: Number() took 7.5 as it came and read "abc" as NaN, and NaN made every
+  // booking "not held", straight to the kitchen however far ahead.
   const leadTimeMin = kitchenLeadMin(settings);
   const held = scheduledFor != null &&
     new Date(scheduledFor).getTime() - Date.now() > leadTimeMin * 60_000;

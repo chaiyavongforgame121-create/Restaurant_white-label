@@ -182,7 +182,7 @@
   "ops": {
     "busy": "Busy",
     "busyMinutes": "Busy +{minutes}m",
-    "busyHint": "Adds prep time to every customer ETA",
+    "busyHint": "Adds prep time to every customer ETA, and sends booked orders to the kitchen that much sooner",
     "off": "Off",
     "plusMinutes": "+{minutes}m",
     "pause": "Pause",

@@ -79,7 +79,7 @@
       },
       "prepTime": {
         "label": "Tiempo de preparación (min)",
-        "hint": "Tiempo base de cocina que se usa en los tiempos estimados para el cliente"
+        "hint": "Tiempo de cocina que se usa en los tiempos estimados de entrega para el cliente, y cuántos minutos antes de su hora llegan las reservas a la cocina"
       },
       "searchRadius": {
         "label": "Radio de búsqueda de repartidores (mi)",
@@ -117,7 +117,7 @@
     },
     "busy": {
       "label": "Modo ocupado: tiempo extra de preparación (min)",
-      "hint": "Se suma a cada tiempo estimado para el cliente mientras la cocina está saturada. 0 = desactivado."
+      "hint": "Se suma a cada tiempo estimado para el cliente, y adelanta en la misma medida la llegada de las reservas a la cocina, mientras la cocina está saturada. 0 = desactivado."
     },
     "surge": {
       "title": "Recargo por distancia",
@@ -174,11 +174,9 @@
     "slot": "Intervalo de horarios",
     "slotOption": "{minutes, plural, one {Cada minuto} other {Cada # minutos}}",
     "slotHint": "Redondea las horas ofrecidas. Intervalos más grandes dan menos opciones y más ordenadas.",
-    "kitchenLead": "Enviar a cocina (minutos antes)",
-    "kitchenLeadHint": "Cuántos minutos antes de su hora llega una reserva a la pantalla de cocina, con un aviso sonoro. Una reserva para las 11:30 con 5 aquí llega a la cocina a las 11:25. Los pedidos para ahora pasan a cocina de inmediato. <strong>No</strong> es el tiempo de preparación de los tiempos estimados para el cliente; ese se configura en la tarjeta Entrega a domicilio.",
-    "leadGap": "Los clientes pueden reservar con {bookMinutes, plural, one {# minuto} other {# minutos}} de anticipación, pero pediste {kitchenMinutes, plural, one {# minuto} other {# minutos}} de aviso para la cocina. Lo que se reserve dentro de esa diferencia llega a la cocina de inmediato, con menos aviso del que querías. Si te importa, sube <strong>Reserva más próxima</strong> para igualarlo.",
-    "leadBelowPrep": "Las reservas llegan a la cocina {kitchenMinutes, plural, one {# minuto} other {# minutos}} antes de su hora, pero tu tiempo de preparación es de {prepMinutes, plural, one {# minuto} other {# minutos}}: puede que la comida no esté lista cuando llegue el repartidor. Pon <strong>Enviar a cocina</strong> en al menos tu tiempo de preparación.",
-    "leadZero": "Con 0, una reserva llega a la cocina justo a su hora, cuando el repartidor viene a recogerla, así que se empieza a cocinar cuando la comida ya debería estar lista. Indica los minutos que necesita tu cocina.",
+    "kitchenReach": "Las reservas llegan a la cocina, con un aviso sonoro, {minutes, plural, one {# minuto} other {# minutos}} antes de su hora: el <strong>Tiempo de preparación</strong> de la tarjeta Entrega a domicilio, más abajo, más los minutos extra del modo ocupado mientras la cocina lo tenga activado. Cámbialo allí. Los pedidos para ahora pasan a cocina de inmediato.",
+    "kitchenReachBusy": "Ahora mismo las reservas llegan a la cocina, con un aviso sonoro, {minutes, plural, one {# minuto} other {# minutos}} antes de su hora: el <strong>Tiempo de preparación</strong> de la tarjeta Entrega a domicilio, más abajo, más {busyMinutes, plural, one {# minuto} other {# minutos}} porque la cocina tiene activado el modo ocupado. Cámbialos allí. Los pedidos para ahora pasan a cocina de inmediato.",
+    "leadGap": "Los clientes pueden reservar con {bookMinutes, plural, one {# minuto} other {# minutos}} de anticipación, pero las reservas llegan a la cocina {kitchenMinutes, plural, one {# minuto} other {# minutos}} antes de su hora. Lo que se reserve dentro de esa diferencia llega a la cocina de inmediato, con menos tiempo que ese para prepararlo. Si te importa, sube <strong>Reserva más próxima</strong> para igualarlo.",
     "limit": "Limitar las horas en que los clientes pueden reservar",
     "limitHint": "Desactivado: los clientes pueden reservar a cualquier hora en que la sucursal haga entregas: su horario de atención o, si limitas las entregas a un horario, esas franjas de entrega. Activado: solo dentro de las franjas de abajo, donde coincidan con ese horario. Puedes definir una distinta por día, por ejemplo, reservas desde las 5 p. m. toda la semana y solo de 10 a. m. a 2 p. m. el domingo.",
     "sameAsOpening": "Igual que el horario de atención",

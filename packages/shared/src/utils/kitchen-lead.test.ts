@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { KITCHEN_LEAD_CASES } from '../../../../supabase/functions/place-order/kitchen-lead.cases';
 import * as edge from '../../../../supabase/functions/place-order/kitchen-lead';
 import {
   KITCHEN_LEAD_DEFAULT_MIN,
@@ -10,7 +11,8 @@ import {
 } from './kitchen-lead';
 
 // Values that are not a whole number of minutes from 0 to a week. Each must be skipped, never
-// coerced: "15" and 7.5 are what Number() and a raw ::int cast each read their own way.
+// coerced: "15" and 7.5 are what Number() and a raw ::int cast each read their own way. NaN,
+// Infinity and undefined cannot come out of JSON but can be passed from code.
 const BAD: Array<[string, unknown]> = [
   ['a fraction', 7.5],
   ['a negative', -1],
@@ -21,56 +23,57 @@ const BAD: Array<[string, unknown]> = [
   ['an empty string', ''],
   ['a boolean', true],
   ['null', null],
+  ['undefined', undefined],
   ['NaN', Number.NaN],
   ['Infinity', Number.POSITIVE_INFINITY],
   ['an array', [5]],
   ['an object', { minutes: 5 }],
 ];
 
+// The table all three readers run (supabase/functions/place-order/kitchen-lead.cases.ts).
+const TABLE = KITCHEN_LEAD_CASES.map(([label, settings, lead]): [string, string, number] => [label, settings, lead]);
+
 describe('kitchenLeadMin', () => {
-  it('reads schedule_lead_time_min when it is a whole number of minutes', () => {
-    expect(kitchenLeadMin({ schedule_lead_time_min: 5, prep_time_min: 20 })).toBe(5);
-    expect(kitchenLeadMin({ schedule_lead_time_min: 10080 })).toBe(10080);
+  // toBe is Object.is, so a -0 does not pass for the 0 the SQL resolver returns.
+  it.each(TABLE)('%s: %s -> %i', (_label, settings, lead) => {
+    expect(kitchenLeadMin(JSON.parse(settings))).toBe(lead);
   });
 
-  it('takes a saved 0 as an answer ("at the booked time"), not a gap', () => {
-    expect(kitchenLeadMin({ schedule_lead_time_min: 0, prep_time_min: 20 })).toBe(0);
-    expect(kitchenLeadMin({ prep_time_min: 0 })).toBe(0);
-  });
-
-  it('falls back to prep_time_min, then 15', () => {
-    expect(kitchenLeadMin({ prep_time_min: 20 })).toBe(20);
-    expect(kitchenLeadMin({ schedule_lead_time_min: null, prep_time_min: 20 })).toBe(20);
-    expect(kitchenLeadMin({})).toBe(15);
+  it('is the prep time plus busy mode, at most a week', () => {
+    expect(kitchenLeadMin({ prep_time_min: 20, busy_extra_prep_min: 10 })).toBe(30);
+    expect(kitchenLeadMin({ prep_time_min: KITCHEN_MINUTES_MAX, busy_extra_prep_min: 10 })).toBe(KITCHEN_MINUTES_MAX);
+    expect(kitchenLeadMin({})).toBe(KITCHEN_LEAD_DEFAULT_MIN);
     expect(KITCHEN_LEAD_DEFAULT_MIN).toBe(15);
   });
 
-  it.each(BAD)('skips a lead that is %s for a valid prep time', (_label, value) => {
-    expect(kitchenLeadMin({ schedule_lead_time_min: value, prep_time_min: 20 })).toBe(20);
+  it('never reads schedule_lead_time_min', () => {
+    for (const lead of [0, 5, 60, 10080, '5', null]) {
+      expect(kitchenLeadMin({ schedule_lead_time_min: lead, prep_time_min: 20 })).toBe(20);
+      expect(kitchenLeadMin({ schedule_lead_time_min: lead })).toBe(15);
+    }
   });
 
-  it.each(BAD)('skips both when both are %s: the default', (_label, value) => {
-    expect(kitchenLeadMin({ schedule_lead_time_min: value, prep_time_min: value })).toBe(15);
+  it.each(BAD)('skips a prep time that is %s for the default', (_label, value) => {
+    expect(kitchenLeadMin({ prep_time_min: value })).toBe(15);
+    expect(kitchenLeadMin({ prep_time_min: value, busy_extra_prep_min: 10 })).toBe(25);
+  });
+
+  it.each(BAD)('counts a busy extra that is %s as none', (_label, value) => {
+    expect(kitchenLeadMin({ prep_time_min: 20, busy_extra_prep_min: value })).toBe(20);
   });
 
   it('answers 15 for settings that are not an object', () => {
-    for (const settings of [null, undefined, 'x', 42, [], [{ schedule_lead_time_min: 5 }]]) {
+    for (const settings of [null, undefined, 'x', 42, true, [], [{ prep_time_min: 5 }]]) {
       expect(kitchenLeadMin(settings)).toBe(15);
     }
   });
 
-  it('turns -0 into 0, as the SQL resolver does', () => {
-    expect(Object.is(kitchenLeadMin(JSON.parse('{"schedule_lead_time_min": -0}')), 0)).toBe(true);
-  });
-
-  it('reads 15.0 from JSON as 15 (a whole number)', () => {
-    expect(kitchenLeadMin(JSON.parse('{"schedule_lead_time_min": 15.0}'))).toBe(15);
-  });
-
-  it("the owner's example: an 11:30 booking with 5 reaches the kitchen at 11:25", () => {
-    const booked = Date.parse('2026-10-25T11:30:00Z');
-    const kitchenAt = booked - kitchenLeadMin({ schedule_lead_time_min: 5, prep_time_min: 15 }) * 60_000;
-    expect(new Date(kitchenAt).toISOString()).toBe('2026-10-25T11:25:00.000Z');
+  it("the owner's rule: an 11:30 booking at prep 20 reaches the kitchen at 11:10, in busy mode (10) at 11:00", () => {
+    const booked = Date.parse('2026-11-16T11:30:00Z');
+    const at = (settings: unknown) => new Date(booked - kitchenLeadMin(settings) * 60_000).toISOString();
+    expect(at({ prep_time_min: 20 })).toBe('2026-11-16T11:10:00.000Z');
+    expect(at({ prep_time_min: 20, busy_extra_prep_min: 10 })).toBe('2026-11-16T11:00:00.000Z');
+    expect(at({ prep_time_min: 20, schedule_lead_time_min: 5 })).toBe('2026-11-16T11:10:00.000Z');
   });
 });
 
@@ -92,17 +95,13 @@ describe('place-order: its copy of the rule', () => {
   const cases: unknown[] = [
     null,
     undefined,
-    {},
     'x',
     [],
-    { schedule_lead_time_min: 5, prep_time_min: 20 },
-    { schedule_lead_time_min: 0, prep_time_min: 20 },
-    { schedule_lead_time_min: 10080 },
-    { prep_time_min: 20 },
-    { prep_time_min: 0 },
-    JSON.parse('{"schedule_lead_time_min": -0}'),
+    ...KITCHEN_LEAD_CASES.map(([, settings]) => JSON.parse(settings) as unknown),
+    ...BAD.map(([, v]) => ({ prep_time_min: v })),
+    ...BAD.map(([, v]) => ({ prep_time_min: 20, busy_extra_prep_min: v })),
+    ...BAD.map(([, v]) => ({ prep_time_min: v, busy_extra_prep_min: v })),
     ...BAD.map(([, v]) => ({ schedule_lead_time_min: v, prep_time_min: 20 })),
-    ...BAD.map(([, v]) => ({ schedule_lead_time_min: v, prep_time_min: v })),
   ];
 
   it('has the same default and ceiling', () => {
@@ -111,31 +110,56 @@ describe('place-order: its copy of the rule', () => {
   });
 
   it.each(cases.map((c) => [JSON.stringify(c) ?? String(c), c]))('answers %s the same', (_label, settings) => {
-    expect(Object.is(edge.kitchenLeadMin(settings), kitchenLeadMin(settings))).toBe(true);
+    expect(edge.kitchenLeadMin(settings)).toBe(kitchenLeadMin(settings));
   });
 });
 
-// The release job's half: the newest migration that defines private.branch_kitchen_lead_min must
-// read the same two keys in the same order, with the same ceiling and default.
+// The release job's half. supabase/tests/kitchen_lead_is_prep_time.sql runs the table against
+// private.branch_kitchen_lead_min on a local stack; this keeps its rows the table's rows, so a row
+// added to one and not the other fails here rather than going untested in SQL.
+describe('SQL test: the same table, row for row', () => {
+  const file = fileURLToPath(new URL('../../../../supabase/tests/kitchen_lead_is_prep_time.sql', import.meta.url));
+  const sql = readFileSync(file, 'utf8');
+  // perform pg_temp.lead_case('<label>', '<settings>', <lead>);  ('' is a quote inside a literal)
+  const rows = [...sql.matchAll(/pg_temp\.lead_case\('((?:[^']|'')*)', '((?:[^']|'')*)', (\d+)\);/g)].map(
+    (m): [string, string, number] => [m[1]!.replace(/''/g, "'"), m[2]!.replace(/''/g, "'"), Number(m[3])],
+  );
+
+  it('carries every row of the table, in order, and no other', () => {
+    expect(rows).toEqual(TABLE);
+  });
+});
+
+// The newest migration that defines private.branch_kitchen_lead_min must read the same two keys,
+// in the same order, with the same defaults and ceiling, and not the old lead.
 describe('SQL: private.branch_kitchen_lead_min', () => {
+  const marker = 'create or replace function private.branch_kitchen_lead_min(';
   const dir = fileURLToPath(new URL('../../../../supabase/migrations/', import.meta.url));
   const defining = readdirSync(dir)
     .filter((f) => f.endsWith('.sql'))
-    .filter((f) => readFileSync(dir + f, 'utf8').includes('function private.branch_kitchen_lead_min('))
+    .filter((f) => readFileSync(dir + f, 'utf8').includes(marker))
     .sort();
   const sql = defining.length ? readFileSync(dir + defining[defining.length - 1]!, 'utf8') : '';
-  const body = sql.slice(sql.indexOf('function private.branch_kitchen_lead_min('));
+  const from = sql.indexOf('$function$', sql.indexOf(marker));
+  const body = from < 0 ? '' : sql.slice(from, sql.indexOf('$function$', from + 1));
 
   it('finds a migration that defines it', () => {
     expect(defining.length).toBeGreaterThan(0);
+    expect(body.length).toBeGreaterThan(0);
   });
 
-  it('reads schedule_lead_time_min, then prep_time_min, up to 10080, else 15', () => {
-    const lead = body.indexOf("'schedule_lead_time_min'");
+  it('reads prep_time_min (default 15), then busy_extra_prep_min (default 0), capped at 10080', () => {
     const prep = body.indexOf("'prep_time_min'");
-    expect(lead).toBeGreaterThan(-1);
-    expect(prep).toBeGreaterThan(lead);
-    expect(body).toContain(String(KITCHEN_MINUTES_MAX));
-    expect(body).toContain(`return ${KITCHEN_LEAD_DEFAULT_MIN};`);
+    const busy = body.indexOf("'busy_extra_prep_min'");
+    expect(prep).toBeGreaterThan(-1);
+    expect(busy).toBeGreaterThan(prep);
+    expect(body).toContain(`v_prep    integer := ${KITCHEN_LEAD_DEFAULT_MIN};`);
+    expect(body).toContain('v_busy    integer := 0;');
+    expect(body).toContain(`<= ${KITCHEN_MINUTES_MAX}`);
+    expect(body).toContain(`return least(v_prep + v_busy, ${KITCHEN_MINUTES_MAX});`);
+  });
+
+  it('no longer reads schedule_lead_time_min', () => {
+    expect(body).not.toContain('schedule_lead_time_min');
   });
 });

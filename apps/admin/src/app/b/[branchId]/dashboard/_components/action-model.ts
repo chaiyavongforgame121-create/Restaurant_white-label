@@ -55,8 +55,10 @@ export const BOOKING_ROWS_SHOWN = 10;
 /**
  * How long before its booked time a scheduled order is let into the kitchen, by the one shared
  * rule (kitchenLeadMin) that release_scheduled_orders (private.branch_kitchen_lead_min),
- * place-order and the kitchen board all follow: the explicit lead time, else the prep time, else
- * fifteen minutes. A saved 0 ("let it in at the booked time") is an answer, not a gap. This once
+ * place-order and the kitchen board all follow: the prep time (else fifteen minutes) plus the
+ * Busy extra while the kitchen has Busy on. Pass the whole settings object, Busy included: without
+ * it, every booking names a later release than the database makes while Busy is on. A saved 0
+ * prep time with Busy off ("let it in at the booked time") is an answer, not a gap. This once
  * used `||`, which read 0 as missing: every booking then said it would go to the kitchen fifteen
  * minutes before the database actually let it out, and was called stuck for those fifteen minutes.
  */

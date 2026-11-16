@@ -182,7 +182,7 @@
   "ops": {
     "busy": "Ocupado",
     "busyMinutes": "Ocupado +{minutes} min",
-    "busyHint": "Suma tiempo de preparación al tiempo estimado de cada cliente",
+    "busyHint": "Suma tiempo de preparación al tiempo estimado de cada cliente y adelanta en la misma medida el envío de las reservas a cocina",
     "off": "Apagado",
     "plusMinutes": "+{minutes} min",
     "pause": "Pausar",

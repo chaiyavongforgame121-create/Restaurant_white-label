@@ -79,7 +79,7 @@
       },
       "prepTime": {
         "label": "Thời gian chuẩn bị (phút)",
-        "hint": "Thời gian bếp cơ bản dùng để tính thời gian dự kiến cho khách"
+        "hint": "Thời gian bếp dùng để tính thời gian giao hàng dự kiến cho khách, và cũng là số phút trước giờ hẹn mà đơn hẹn giờ vào bếp"
       },
       "searchRadius": {
         "label": "Bán kính tìm tài xế (mi)",
@@ -117,7 +117,7 @@
     },
     "busy": {
       "label": "Chế độ bận — thêm thời gian chuẩn bị (phút)",
-      "hint": "Được cộng vào mọi thời gian dự kiến của khách khi bếp quá tải. 0 = tắt."
+      "hint": "Được cộng vào mọi thời gian dự kiến của khách, và đưa đơn hẹn giờ vào bếp sớm hơn bấy nhiêu, khi bếp quá tải. 0 = tắt."
     },
     "surge": {
       "title": "Phụ phí đường xa",
@@ -174,11 +174,9 @@
     "slot": "Khoảng cách khung giờ",
     "slotOption": "{minutes, plural, other {Mỗi # phút}}",
     "slotHint": "Làm tròn các giờ đưa ra. Khung càng lớn thì lựa chọn càng ít và gọn.",
-    "kitchenLead": "Gửi xuống bếp (trước bao nhiêu phút)",
-    "kitchenLeadHint": "Đơn hẹn giờ hiện trên màn hình bếp, kèm âm báo, trước giờ hẹn bao nhiêu phút. Ví dụ: đơn hẹn 11:30 và đặt 5 ở đây sẽ vào bếp lúc 11:25. Đơn đặt ngay vào bếp lập tức. Đây <strong>không phải</strong> thời gian chuẩn bị hiển thị cho khách — mục đó nằm ở thẻ Giao hàng.",
-    "leadGap": "Khách có thể đặt trước {bookMinutes, plural, other {# phút}}, nhưng bạn muốn bếp được báo trước {kitchenMinutes, plural, other {# phút}}. Đơn đặt trong khoảng chênh lệch đó sẽ vào bếp ngay, với thời gian báo trước ít hơn mong muốn. Nếu điều này quan trọng, hãy tăng <strong>Đặt sớm nhất</strong> cho khớp.",
-    "leadBelowPrep": "Đơn hẹn giờ vào bếp trước giờ hẹn {kitchenMinutes, plural, other {# phút}}, nhưng thời gian chuẩn bị của bạn là {prepMinutes, plural, other {# phút}}: món có thể chưa xong khi tài xế đến. Hãy đặt <strong>Gửi xuống bếp</strong> ít nhất bằng thời gian chuẩn bị.",
-    "leadZero": "Với 0, đơn hẹn giờ chỉ vào bếp đúng giờ hẹn, lúc tài xế đến lấy, nên bếp bắt đầu nấu khi món lẽ ra đã phải xong. Hãy nhập số phút bếp của bạn cần.",
+    "kitchenReach": "Đơn hẹn giờ hiện trên màn hình bếp, kèm âm báo, trước giờ hẹn {minutes, plural, other {# phút}}: đó là <strong>Thời gian chuẩn bị</strong> ở thẻ Giao hàng bên dưới, cộng thêm thời gian của chế độ bận khi bếp đang bật chế độ này. Hãy thay đổi ở đó. Đơn đặt ngay vào bếp lập tức.",
+    "kitchenReachBusy": "Hiện tại đơn hẹn giờ hiện trên màn hình bếp, kèm âm báo, trước giờ hẹn {minutes, plural, other {# phút}}: <strong>Thời gian chuẩn bị</strong> ở thẻ Giao hàng bên dưới, cộng thêm {busyMinutes, plural, other {# phút}} vì bếp đang bật chế độ bận. Hãy thay đổi ở đó. Đơn đặt ngay vào bếp lập tức.",
+    "leadGap": "Khách có thể đặt trước {bookMinutes, plural, other {# phút}}, nhưng đơn hẹn giờ vào bếp trước giờ hẹn {kitchenMinutes, plural, other {# phút}}. Đơn đặt trong khoảng chênh lệch đó sẽ vào bếp ngay, với ít thời gian chuẩn bị hơn mức đó. Nếu điều này quan trọng, hãy tăng <strong>Đặt sớm nhất</strong> cho khớp.",
     "limit": "Giới hạn giờ khách có thể đặt",
     "limitHint": "Tắt: khách có thể đặt vào bất kỳ lúc nào chi nhánh giao hàng: giờ mở cửa, hoặc các khung giờ giao hàng khi bạn giới hạn giờ giao hàng. Bật: chỉ trong các khung giờ bên dưới, ở phần trùng với giờ giao hàng đó — mỗi ngày có thể đặt khung riêng, ví dụ nhận đặt từ 17:00 cả tuần và chỉ 10:00–14:00 vào Chủ nhật.",
     "sameAsOpening": "Giống giờ mở cửa",

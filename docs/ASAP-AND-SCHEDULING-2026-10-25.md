@@ -68,6 +68,16 @@ update and chimes. What changes:
 - **One resolver**: lead = `schedule_lead_time_min` if it is a whole number 0–10080, else `prep_time_min` if valid,
   else 15 — the same rule in SQL (`private.branch_kitchen_lead_min(settings jsonb)`), in place-order and in one shared
   TS helper used by the kitchen board, the counter, the dashboard and the settings card.
+  - **2026-11-16 (owner's decision):** the lead is the branch's **Prep time** (`prep_time_min`, the Delivery card's
+    "Prep time (min)") **plus busy mode** (`busy_extra_prep_min`), at most 10080. Each part
+    counts only as a whole number 0–10080, else 15 for the prep time and 0 for busy. `schedule_lead_time_min` ("Send to
+    kitchen (minutes before)") is no longer read anywhere; the key stays in settings and `patch_branch_settings` still
+    validates it for older clients. One figure, so a new prep time moves the diner's ETA and the kitchen time together;
+    busy is in it because the ETA is prep + busy, and while busy mode is on the release job lets held bookings out that
+    much earlier on its own. A booking for 11:30 at a prep time of 20 reaches the kitchen at 11:10 (11:00 with 10
+    minutes of busy). The three readers run one case table (`supabase/functions/place-order/kitchen-lead.cases.ts`,
+    mirrored in `supabase/tests/kitchen_lead_is_prep_time.sql`). Deploy `20261116200000_kitchen_lead_is_prep_time` and
+    place-order v11.12 together: in between, a booking reaches the kitchen early or late by the difference, never lost.
 - **A bad value can no longer stop every release**: the release function uses the safe resolver (no raw `::int` casts),
   `patch_branch_settings` refuses a lead or prep time that is not a whole number 0–10080, and place-order reads a bad
   value as the default instead of NaN.

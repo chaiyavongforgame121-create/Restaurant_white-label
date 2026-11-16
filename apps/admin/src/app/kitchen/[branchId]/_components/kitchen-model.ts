@@ -107,9 +107,10 @@ export interface SoldOutItem {
 /* ── branch settings the board reads ───────────────────────────────────── */
 
 /** The branches.settings keys the board uses: pause and busy (OpsToggles writes them through
- *  patch_branch_settings), and the two a scheduled ticket's clock starts from. The board used to
- *  read the whole settings object, the payment QR set-up included, to paint two buttons. */
-export const OPS_SETTING_KEYS = ['orders_paused', 'busy_extra_prep_min', 'prep_time_min', 'schedule_lead_time_min'] as const;
+ *  patch_branch_settings), and the prep time, which with busy is the kitchen lead a scheduled
+ *  ticket's clock starts from (kitchenLeadMin). The board used to read the whole settings object,
+ *  the payment QR set-up included, to paint two buttons. */
+export const OPS_SETTING_KEYS = ['orders_paused', 'busy_extra_prep_min', 'prep_time_min'] as const;
 
 /** A PostgREST select of just those keys, each under its own name. `->` keeps the JSON type, so
  *  a boolean stays a boolean and a number a number. */
@@ -370,21 +371,36 @@ export function readyStartedMs(order: Pick<Order, 'status_history' | 'created_at
   return new Date(order.created_at).getTime();
 }
 
+/** The kitchen lead a ticket's clock is read with: one figure for every ticket, or one per ticket
+ *  (the board keeps, for each booked ticket, the lead in force when it first drew it, so a Busy tap
+ *  later does not move a clock that is already running). */
+export type TicketLead = number | ((order: Pick<Order, 'id'>) => number);
+
+function leadOf(lead: TicketLead, order: Pick<Order, 'id'>): number {
+  return typeof lead === 'function' ? lead(order) : lead;
+}
+
 /** When a ticket became the kitchen's work.
  *
  *  For a scheduled order that is the moment private.release_scheduled_orders() let it out —
- *  scheduled_for − schedule_lead_time_min — not the moment the diner typed it in. A pickup
+ *  scheduled_for − the branch's kitchen lead (kitchenLeadMin: prep time plus any Busy extra) —
+ *  not the moment the diner typed it in. The board passes each booked ticket the lead it first
+ *  drew it with (TicketLead): read with the lead in force now, a Busy +20 tap made every booked
+ *  ticket on the board 20 minutes older at once, chiming late and pulsing red. A pickup
  *  booked at 09:00 for 13:00 reached the board at 12:40 already showing 3h 40m, wearing the
  *  urgent red skin with a pulsing critical ring, and dragged its stations into "drowning",
  *  which made every genuinely late ticket beside it unreadable. */
-export function workStartedMs(order: Pick<Order, 'created_at' | 'scheduled_for'>, leadMs: number): number {
+export function workStartedMs(
+  order: Pick<Order, 'id' | 'created_at' | 'scheduled_for'>,
+  leadMs: TicketLead,
+): number {
   const created = new Date(order.created_at).getTime();
   if (!order.scheduled_for) return created;
   const due = new Date(order.scheduled_for).getTime();
   if (!Number.isFinite(due)) return created;
   // Clamped to created_at: a slot booked for sooner than the lead time is released
   // immediately, and such a ticket has been work since it was placed.
-  return Math.max(created, due - leadMs);
+  return Math.max(created, due - leadOf(leadMs, order));
 }
 
 /** Whole minutes until a held booking reaches the board: private.release_scheduled_orders() lets
@@ -811,7 +827,7 @@ export const CONFIRMED_REMINDER_WINDOW_MS = 2 * 60_000;
 export function reminderDue(
   board: Order[],
   now: number,
-  leadMs: number,
+  leadMs: TicketLead,
   heard: ReadonlySet<string> = new Set(),
 ): boolean {
   return board.some((o) => {
@@ -833,7 +849,7 @@ export function heardOnTap(board: Order[]): string[] {
 
 /** Tickets in New or Cooking whose clock is in the late / critical tier. Ready tickets are the
  *  pass's business, not the cooks', and are left out. */
-export function lateTicketIds(board: Order[], now: number, leadMs: number): string[] {
+export function lateTicketIds(board: Order[], now: number, leadMs: TicketLead): string[] {
   return board
     .filter((o) => {
       const lane = laneOf(o.status);

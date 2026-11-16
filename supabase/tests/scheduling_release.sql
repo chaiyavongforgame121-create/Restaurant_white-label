@@ -1,12 +1,15 @@
--- "Send to kitchen (minutes before)" really works (20261025100000_scheduling_release,
+-- a booking really reaches the kitchen at its kitchen lead (20261025100000_scheduling_release,
 -- docs/ASAP-AND-SCHEDULING-2026-10-25.md §3). A rolled-back script, not a migration. Pins: the one
--- resolver private.branch_kitchen_lead_min (the lead, else the prep time, else 15; only whole
--- numbers 0-10080; it never raises), the release timing (a booking for 11:30 with a lead of 5 is
--- let out at 11:25 and not a second before), a branch with bad values no longer stopping every
--- other branch's releases, held orders that are cancelled, completed, refunded or out for delivery
--- staying held, patch_branch_settings refusing a lead or prep time that is not a whole number
--- 0-10080 (after its permission checks, everything else as before), and the release cron job
--- present exactly once. Section 0 checks what the migration left behind.
+-- resolver private.branch_kitchen_lead_min (since 20261116200000_kitchen_lead_is_prep_time the prep
+-- time plus busy mode, schedule_lead_time_min no longer read; only whole numbers 0-10080; it never
+-- raises; its full case table is kitchen_lead_is_prep_time.sql), the release timing (a booking for
+-- 11:30 at a prep time of 5 is let out at 11:25 and not a second before; in busy mode, that much
+-- earlier), a branch with bad values no longer stopping every other branch's releases, held orders
+-- that are cancelled, completed, refunded or out for delivery staying held, patch_branch_settings
+-- refusing a lead or prep time that is not a whole number 0-10080 (after its permission checks,
+-- everything else as before; it still checks the unread lead, for older clients), and the release
+-- cron job present exactly once. Section 0 checks what the migration left behind. It expects both
+-- migrations applied.
 --
 -- Run it on a LOCAL stack, never on live (rolled-back suites still bloat live indexes and WAL):
 --   supabase db reset   (or apply the migrations), then
@@ -29,10 +32,11 @@
 --   owner    restaurants.owner_user_id of the test restaurant (branch.settings everywhere)
 --   kitchen  kitchen at branch b5 (kitchen.access, no branch.settings)
 --
--- Branches:
---   b5    schedule_lead_time_min 5, prep_time_min 15   -> lead 5 (the owner's example)
---   bad   schedule_lead_time_min 7.5, prep_time_min "abc" -> lead 15 (both bad: the default)
---   bad2  schedule_lead_time_min "abc", prep_time_min 20 -> lead 20 (bad lead: the prep time)
+-- Branches (each also stores a schedule_lead_time_min, as live branches do, which nothing reads):
+--   b5    prep_time_min 5, busy 0, lead 30              -> 5 (the owner's example)
+--   bad   prep_time_min "abc", busy "abc", lead 7.5     -> 15 (bad prep time: the default; no busy)
+--   bad2  prep_time_min 20, busy 0, lead "abc"          -> 20 (the prep time)
+--   busy  prep_time_min 5, busy 10, lead 5              -> 15 (busy mode: 10 minutes earlier than b5)
 --
 -- Each section after the fixtures runs in its own block: one that breaks reports a FAIL row and
 -- the others still run. The result is one row per check with PASS/FAIL, then a summary row.
@@ -179,13 +183,13 @@ declare
   v_owner   uuid := pg_temp.new_user('owner');
   v_kitchen uuid := pg_temp.new_user('kitchen');
   v_sfx     text := left(replace(gen_random_uuid()::text, '-', ''), 10);
-  v_r uuid; v_b5 uuid; v_bad uuid; v_bad2 uuid;
-  -- b5 (lead 5): the owner's 11:30 booking, "now" being 11:25.
+  v_r uuid; v_b5 uuid; v_bad uuid; v_bad2 uuid; v_busy uuid;
+  -- b5 (prep time 5): the owner's 11:30 booking, "now" being 11:25.
   v_due uuid; v_early uuid; v_1124 uuid; v_missed uuid;
   v_confirmed uuid; v_preparing uuid; v_ready uuid;
   v_cancelled uuid; v_completed uuid; v_refunded uuid; v_out uuid;
-  -- bad (lead 15) and bad2 (lead 20).
-  v_bad_due uuid; v_bad_early uuid; v_bad2_due uuid; v_bad2_early uuid;
+  -- bad (lead 15), bad2 (lead 20) and busy (prep 5 plus busy 10: lead 15).
+  v_bad_due uuid; v_bad_early uuid; v_bad2_due uuid; v_bad2_early uuid; v_busy_due uuid; v_busy_early uuid;
   c_patch constant text := 'select public.patch_branch_settings(%L, %L::jsonb) ->> %L';
   c_lead_hint constant text := 'schedule_lead_time_min must be a whole number of minutes from 0 to 10080.';
 begin
@@ -227,72 +231,57 @@ begin
       where command ilike '%release_scheduled_orders%' and jobname is distinct from 'release-scheduled-orders'));
 
   -- 1. The resolver (§3) --------------------------------------------------------------------------
+  -- Its full case table is kitchen_lead_is_prep_time.sql (20261116200000), row for row the one both
+  -- TypeScript copies run. What stays here is what this file's release checks lean on.
   begin
-    perform pg_temp.expect('resolver: the lead when it is a whole number 0-10080; 0 is an answer, not a gap',
-      '5,0,10080,15',
-      pg_temp.leads(array['{"schedule_lead_time_min": 5, "prep_time_min": 20}',
-                          '{"schedule_lead_time_min": 0, "prep_time_min": 20}',
-                          '{"schedule_lead_time_min": 10080}',
-                          '{"schedule_lead_time_min": 15.0}']::jsonb[]));
-    perform pg_temp.expect('resolver: else the prep time (0 included), else 15',
-      '20,20,0,15,15',
-      pg_temp.leads(array['{"prep_time_min": 20}',
-                          '{"schedule_lead_time_min": null, "prep_time_min": 20}',
+    perform pg_temp.expect('resolver: the prep time plus busy mode; 0 is an answer, not a gap; a saved lead is not read',
+      '5,15,0,20,15',
+      pg_temp.leads(array['{"prep_time_min": 5, "busy_extra_prep_min": 0}',
+                          '{"prep_time_min": 5, "busy_extra_prep_min": 10}',
                           '{"prep_time_min": 0}',
+                          '{"schedule_lead_time_min": 5, "prep_time_min": 20}',
+                          '{"schedule_lead_time_min": 5}']::jsonb[]));
+    perform pg_temp.expect('resolver: a bad prep time is the default, a bad busy extra is none; not an object is the default',
+      '15,20,15,15,15',
+      pg_temp.leads(array['{"prep_time_min": "abc", "busy_extra_prep_min": "abc"}',
+                          '{"prep_time_min": 20, "busy_extra_prep_min": 7.5}',
                           '{}',
+                          '[{"prep_time_min": 5}]',
                           null]::jsonb[]));
-    perform pg_temp.expect('resolver: a lead that is a fraction, negative, over a week, text, a boolean, an array or an object is skipped for the prep time',
-      '20,20,20,20,20,20,20,20,20',
-      pg_temp.leads(array['{"schedule_lead_time_min": 7.5, "prep_time_min": 20}',
-                          '{"schedule_lead_time_min": -1, "prep_time_min": 20}',
-                          '{"schedule_lead_time_min": 10081, "prep_time_min": 20}',
-                          '{"schedule_lead_time_min": "15", "prep_time_min": 20}',
-                          '{"schedule_lead_time_min": "15 ", "prep_time_min": 20}',
-                          '{"schedule_lead_time_min": "abc", "prep_time_min": 20}',
-                          '{"schedule_lead_time_min": true, "prep_time_min": 20}',
-                          '{"schedule_lead_time_min": [5], "prep_time_min": 20}',
-                          '{"schedule_lead_time_min": {"m": 5}, "prep_time_min": 20}']::jsonb[]));
-    perform pg_temp.expect('resolver: both bad is the default',
-      '15,15,15,15',
-      pg_temp.leads(array['{"schedule_lead_time_min": 7.5, "prep_time_min": "abc"}',
-                          '{"schedule_lead_time_min": "abc", "prep_time_min": 15.5}',
-                          '{"schedule_lead_time_min": -5, "prep_time_min": 99999}',
-                          '{"schedule_lead_time_min": "", "prep_time_min": false}']::jsonb[]));
-    perform pg_temp.expect('resolver: settings that are not an object are the default; -0 is 0',
-      '15,15,15,0',
-      pg_temp.leads(array['[{"schedule_lead_time_min": 5}]', '5', '"x"',
-                          '{"schedule_lead_time_min": -0}']::jsonb[]));
     -- A constant argument, so nothing defers the casts to run time: it must still not raise.
     perform pg_temp.expect('resolver: never raises, even for a constant it cannot cast', '15',
-      (select private.branch_kitchen_lead_min('{"schedule_lead_time_min": "abc", "prep_time_min": "abc"}')::text));
+      (select private.branch_kitchen_lead_min('{"prep_time_min": "abc", "busy_extra_prep_min": "abc"}')::text));
   exception when others then
     perform pg_temp.expect('section 1 ran', 'ok', 'ERR ' || sqlerrm);
   end;
 
-  -- Fixture: one restaurant on its trial, three branches with the leads above, a kitchen user at b5.
+  -- Fixture: one restaurant on its trial, four branches with the settings above, a kitchen user at b5.
   insert into public.restaurants (owner_user_id, slug, name)
   values (v_owner, 'zz-sr-' || v_sfx, 'ZZ Scheduling Release') returning id into v_r;
   perform private.billing_apply_selection(v_r, 'trial', '{}'::uuid[], 4, 'trialing', null, null, null);
   insert into public.branches (restaurant_id, slug, name) values (v_r, 'b5', 'Lead Five') returning id into v_b5;
   insert into public.branches (restaurant_id, slug, name) values (v_r, 'bad', 'Bad Values') returning id into v_bad;
   insert into public.branches (restaurant_id, slug, name) values (v_r, 'bad2', 'Bad Lead') returning id into v_bad2;
+  insert into public.branches (restaurant_id, slug, name) values (v_r, 'busy', 'Busy Kitchen') returning id into v_busy;
   -- Written as the service role (no JWT), as any value already stored could be.
-  update public.branches set settings = settings || '{"schedule_lead_time_min": 5, "prep_time_min": 15}'::jsonb
+  update public.branches set settings = settings || '{"schedule_lead_time_min": 30, "prep_time_min": 5, "busy_extra_prep_min": 0}'::jsonb
    where id = v_b5;
-  update public.branches set settings = settings || '{"schedule_lead_time_min": 7.5, "prep_time_min": "abc"}'::jsonb
+  update public.branches set settings = settings || '{"schedule_lead_time_min": 7.5, "prep_time_min": "abc", "busy_extra_prep_min": "abc"}'::jsonb
    where id = v_bad;
-  update public.branches set settings = settings || '{"schedule_lead_time_min": "abc", "prep_time_min": 20}'::jsonb
+  update public.branches set settings = settings || '{"schedule_lead_time_min": "abc", "prep_time_min": 20, "busy_extra_prep_min": 0}'::jsonb
    where id = v_bad2;
+  update public.branches set settings = settings || '{"schedule_lead_time_min": 5, "prep_time_min": 5, "busy_extra_prep_min": 10}'::jsonb
+   where id = v_busy;
   insert into public.staff_members (user_id, restaurant_id, branch_id, role, status)
   values (v_kitchen, v_r, v_b5, 'kitchen', 'active');
 
-  perform pg_temp.expect('fixture: the three branches resolve to 5, 15 and 20', '5,15,20',
-    (select string_agg(private.branch_kitchen_lead_min(b.settings)::text, ',' order by array_position(array[v_b5, v_bad, v_bad2], b.id))
-       from public.branches b where b.id in (v_b5, v_bad, v_bad2)));
+  perform pg_temp.expect('fixture: the four branches resolve to 5, 15, 20 and 15', '5,15,20,15',
+    (select string_agg(private.branch_kitchen_lead_min(b.settings)::text, ',' order by array_position(array[v_b5, v_bad, v_bad2, v_busy], b.id))
+       from public.branches b where b.id in (v_b5, v_bad, v_bad2, v_busy)));
 
   -- 2. Release timing, bad values, status filter (§3) ---------------------------------------------
   begin
-    -- b5, lead 5. "Now" is 11:25: the 11:30 booking's kitchen time is exactly now.
+    -- b5, prep time 5. "Now" is 11:25: the 11:30 booking's kitchen time is exactly now.
     v_due    := pg_temp.held_order(v_b5, 'DUE', now() + interval '5 minutes');
     v_early  := pg_temp.held_order(v_b5, 'EARLY', now() + interval '5 minutes 1 second');
     v_1124   := pg_temp.held_order(v_b5, '1124', now() + interval '6 minutes');
@@ -309,16 +298,19 @@ begin
     v_bad_early  := pg_temp.held_order(v_bad, 'BAD-EARLY', now() + interval '16 minutes');
     v_bad2_due   := pg_temp.held_order(v_bad2, 'BAD2-DUE', now() + interval '20 minutes');
     v_bad2_early := pg_temp.held_order(v_bad2, 'BAD2-EARLY', now() + interval '21 minutes');
+    -- busy: b5's prep time, let out 10 minutes earlier while busy mode is on.
+    v_busy_due   := pg_temp.held_order(v_busy, 'BUSY-DUE', now() + interval '15 minutes');
+    v_busy_early := pg_temp.held_order(v_busy, 'BUSY-EARLY', now() + interval '16 minutes');
 
-    perform pg_temp.expect('fixture: every test order starts held', 'held,held,held,held,held,held,held,held,held,held,held,held,held,held,held',
+    perform pg_temp.expect('fixture: every test order starts held', 'held,held,held,held,held,held,held,held,held,held,held,held,held,held,held,held,held',
       pg_temp.held_state(array[v_due, v_early, v_1124, v_missed, v_confirmed, v_preparing, v_ready,
                                v_cancelled, v_completed, v_refunded, v_out,
-                               v_bad_due, v_bad_early, v_bad2_due, v_bad2_early]));
+                               v_bad_due, v_bad_early, v_bad2_due, v_bad2_early, v_busy_due, v_busy_early]));
 
     -- The old job raised here (invalid input syntax for type integer: "7.5") and released nothing.
     perform private.release_scheduled_orders();
 
-    perform pg_temp.expect('timing: the 11:30 booking with lead 5 is out at 11:25', 'out',
+    perform pg_temp.expect('timing: the 11:30 booking at a prep time of 5 is out at 11:25 (its saved lead of 30 is not read)', 'out',
       pg_temp.held_state(array[v_due]));
     perform pg_temp.expect('timing: not a second before (11:24:59), nor at 11:24', 'held,held',
       pg_temp.held_state(array[v_early, v_1124]));
@@ -331,11 +323,13 @@ begin
     perform pg_temp.expect('bad values: the run did not fail, and b5 was released beside them (above); bad reads 15, bad2 reads 20',
       'out,held,out,held',
       pg_temp.held_state(array[v_bad_due, v_bad_early, v_bad2_due, v_bad2_early]));
+    perform pg_temp.expect('busy mode: prep 5 plus busy 10 lets a booking out 15 minutes ahead, not 16', 'out,held',
+      pg_temp.held_state(array[v_busy_due, v_busy_early]));
     perform pg_temp.expect('outbox: one order_released row for each order let out, none for the rest',
-      '1,0,0,1,1,1,1,0,0,0,0,1,0,1,0',
+      '1,0,0,1,1,1,1,0,0,0,0,1,0,1,0,1,0',
       pg_temp.released_rows(array[v_due, v_early, v_1124, v_missed, v_confirmed, v_preparing, v_ready,
                                   v_cancelled, v_completed, v_refunded, v_out,
-                                  v_bad_due, v_bad_early, v_bad2_due, v_bad2_early]));
+                                  v_bad_due, v_bad_early, v_bad2_due, v_bad2_early, v_busy_due, v_busy_early]));
     perform pg_temp.expect('outbox: the row is for the branch''s staff, in_app, with the order''s number and booked time',
       'staff in_app true true',
       (select n.recipient_type || ' ' || n.channel || ' ' || (n.recipient_id = v_b5)::text || ' '
@@ -350,9 +344,9 @@ begin
 
     -- A second run lets out nothing more and queues no second row.
     perform private.release_scheduled_orders();
-    perform pg_temp.expect('release: a second run changes nothing', 'held,held,held,held,held,held,held|1,1,1',
-      pg_temp.held_state(array[v_early, v_1124, v_cancelled, v_completed, v_refunded, v_out, v_bad_early])
-        || '|' || pg_temp.released_rows(array[v_due, v_missed, v_bad_due]));
+    perform pg_temp.expect('release: a second run changes nothing', 'held,held,held,held,held,held,held,held|1,1,1,1',
+      pg_temp.held_state(array[v_early, v_1124, v_cancelled, v_completed, v_refunded, v_out, v_bad_early, v_busy_early])
+        || '|' || pg_temp.released_rows(array[v_due, v_missed, v_bad_due, v_busy_due]));
   exception when others then
     perform pg_temp.expect('section 2 ran', 'ok', 'ERR ' || sqlerrm);
   end;
@@ -377,7 +371,7 @@ begin
     perform pg_temp.expect('patch: and names the prep time for the prep time',
       'prep_time_min must be a whole number of minutes from 0 to 10080.',
       pg_temp.patch_hint(v_owner, v_b5, '{"prep_time_min": -3}'));
-    perform pg_temp.expect('patch: a null lead removes the key (the prep time then answers)', 'ok false',
+    perform pg_temp.expect('patch: a null lead removes the key', 'ok false',
       pg_temp.try_as(v_owner, array[format('select (public.patch_branch_settings(%L, ''{"schedule_lead_time_min": null}''::jsonb) ? ''schedule_lead_time_min'')::text', v_b5)]));
     perform pg_temp.expect('patch: a prep time of 20 and of 0 is saved', 'ok 20|ok 0',
       pg_temp.try_as(v_owner, array[format(c_patch, v_b5, '{"prep_time_min": 20}', 'prep_time_min')])

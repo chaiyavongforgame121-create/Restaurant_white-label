@@ -117,7 +117,8 @@ describe('what is on the board', () => {
 });
 
 describe('scheduled bookings: release and due time', () => {
-  // The owner's example: booked for 11:30 with "Send to kitchen" at 5 reaches the kitchen at 11:25.
+  // The owner's example: booked for 11:30 with a 5-minute kitchen lead (the prep time, plus Busy
+  // when it is on) reaches the kitchen at 11:25.
   const booked = '2026-10-25T11:30:00.000Z';
   const at = (hhmmss: string) => Date.parse(`2026-10-25T${hhmmss}Z`);
   const lead5 = 5 * 60_000;
@@ -138,6 +139,18 @@ describe('scheduled bookings: release and due time', () => {
   it('starts a released booking’s clock at its release, never before it was placed', () => {
     expect(workStartedMs(order({ created_at: '2026-10-25T09:00:00.000Z', scheduled_for: booked }), lead5)).toBe(at('11:25:00'));
     expect(workStartedMs(order({ created_at: '2026-10-25T11:28:00.000Z', scheduled_for: booked }), lead5)).toBe(at('11:28:00'));
+  });
+
+  it('reads each ticket with its own lead when given one per ticket, so a Busy tap ages none', () => {
+    // Released at 11:25 under a 5-minute lead; Busy +20 is tapped afterwards (lead now 25).
+    const released = order({ id: 'o-released', created_at: '2026-10-25T09:00:00.000Z', scheduled_for: booked });
+    const lead25 = 25 * 60_000;
+    const perTicket = (o: { id: string }) => (o.id === 'o-released' ? lead5 : lead25);
+    expect(workStartedMs(released, perTicket)).toBe(at('11:25:00'));
+    // Read with the lead in force now, it would have started 20 minutes earlier and gone late.
+    expect(workStartedMs(released, lead25)).toBe(at('11:05:00'));
+    expect(lateTicketIds([{ ...released, status: 'confirmed' }], at('11:27:00'), perTicket)).toEqual([]);
+    expect(lateTicketIds([{ ...released, status: 'confirmed' }], at('11:27:00'), lead25)).toEqual(['o-released']);
   });
 
   it('writes the due time on the branch’s clock, with the weekday only when it is not today there', () => {

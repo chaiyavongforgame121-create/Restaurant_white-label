@@ -356,25 +356,41 @@ describe('readDeliveries', () => {
 
 describe('leadTimeMs', () => {
   const min = 60_000;
+  // The owner's decision of 2026-11-16: the prep time is when a booking reaches the kitchen, plus
+  // the Busy extra while it is on, as in every customer ETA.
   it('reads the keys the way release_scheduled_orders and place-order do (kitchenLeadMin)', () => {
-    expect(leadTimeMs({ schedule_lead_time_min: 30, prep_time_min: 15 })).toBe(30 * min);
     expect(leadTimeMs({ prep_time_min: 20 })).toBe(20 * min);
+    expect(leadTimeMs({ prep_time_min: 20, busy_extra_prep_min: 10 })).toBe(30 * min);
+    expect(leadTimeMs({ busy_extra_prep_min: 10 })).toBe(25 * min);
     // JSON null is coalesce's null: missing, not zero.
-    expect(leadTimeMs({ schedule_lead_time_min: null, prep_time_min: 25 })).toBe(25 * min);
+    expect(leadTimeMs({ prep_time_min: 25, busy_extra_prep_min: null })).toBe(25 * min);
+    expect(leadTimeMs({ prep_time_min: null })).toBe(15 * min);
     expect(leadTimeMs({})).toBe(15 * min);
   });
 
-  it('takes a saved 0 at its word instead of falling through to the prep time', () => {
-    expect(leadTimeMs({ schedule_lead_time_min: 0, prep_time_min: 15 })).toBe(0);
+  it('no longer reads the old "Send to kitchen" key', () => {
+    expect(leadTimeMs({ schedule_lead_time_min: 30, prep_time_min: 15 })).toBe(15 * min);
+    expect(leadTimeMs({ schedule_lead_time_min: 0, prep_time_min: 15 })).toBe(15 * min);
+  });
+
+  it('takes a saved 0 prep time at its word instead of falling through to fifteen', () => {
+    expect(leadTimeMs({ prep_time_min: 0 })).toBe(0);
+    expect(leadTimeMs({ prep_time_min: 0, busy_extra_prep_min: 10 })).toBe(10 * min);
   });
 
   // Only a whole number of minutes counts, the rule the release job and place-order follow too: a
   // string or a fraction is skipped everywhere instead of each reader coercing it its own way.
-  it('skips anything that is not a whole number of minutes, to the prep time, then fifteen', () => {
-    expect(leadTimeMs({ schedule_lead_time_min: '40' })).toBe(15 * min);
-    expect(leadTimeMs({ schedule_lead_time_min: 'soon' })).toBe(15 * min);
-    expect(leadTimeMs({ schedule_lead_time_min: -5 })).toBe(15 * min);
-    expect(leadTimeMs({ schedule_lead_time_min: 7.5, prep_time_min: 20 })).toBe(20 * min);
+  it('skips anything that is not a whole number of minutes: prep to fifteen, Busy to none', () => {
+    expect(leadTimeMs({ prep_time_min: '40' })).toBe(15 * min);
+    expect(leadTimeMs({ prep_time_min: 'soon' })).toBe(15 * min);
+    expect(leadTimeMs({ prep_time_min: -5 })).toBe(15 * min);
+    expect(leadTimeMs({ prep_time_min: 7.5 })).toBe(15 * min);
+    expect(leadTimeMs({ prep_time_min: 20, busy_extra_prep_min: '10' })).toBe(20 * min);
+    expect(leadTimeMs({ prep_time_min: 20, busy_extra_prep_min: 7.5 })).toBe(20 * min);
+  });
+
+  it('stops at a week', () => {
+    expect(leadTimeMs({ prep_time_min: 7 * 24 * 60, busy_extra_prep_min: 30 })).toBe(7 * 24 * 60 * min);
   });
 });
 
@@ -681,7 +697,7 @@ describe('readScheduledDeliveries', () => {
   });
 
   it('with a lead time of 0, lets a booking out at its time and does not call it stuck before', () => {
-    const lead = leadTimeMs({ schedule_lead_time_min: 0, prep_time_min: 15 });
+    const lead = leadTimeMs({ prep_time_min: 0 });
     const reading = readScheduledDeliveries(
       [delivered({ scheduled_for: inMin(10) })],
       NOW,

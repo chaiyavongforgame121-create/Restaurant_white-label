@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { kitchenLeadMin } from '@favornoms/shared';
 import {
   AVAILABILITY_FILTERS,
   AVAILABILITY_SELECT,
@@ -30,34 +31,53 @@ function dish(partial: Partial<AvailabilityItem> & { id: string }): Availability
 }
 
 describe('the settings the board reads', () => {
-  it('selects only the four keys it uses, never the whole settings object', () => {
+  const full = {
+    orders_paused: true,
+    busy_extra_prep_min: 20,
+    prep_time_min: 25,
+    // "Send to kitchen (minutes before)" until 2026-11-16: still in older rows, read by nothing.
+    schedule_lead_time_min: 30,
+    payment_qr: { promptpay_id: '0812345678' },
+    delivery_fee: 3.5,
+  };
+
+  it('selects only the three keys it uses, never the whole settings object', () => {
     expect(OPS_SETTINGS_SELECT).toBe(
       'orders_paused:settings->orders_paused, busy_extra_prep_min:settings->busy_extra_prep_min, ' +
-        'prep_time_min:settings->prep_time_min, schedule_lead_time_min:settings->schedule_lead_time_min',
+        'prep_time_min:settings->prep_time_min',
     );
     expect(OPS_SETTINGS_SELECT).not.toMatch(/(^|[ ,])settings(,|$)/);
   });
 
   it('keeps those keys out of the full object patch_branch_settings answers with', () => {
-    const full = {
-      orders_paused: true,
-      busy_extra_prep_min: 20,
-      prep_time_min: 25,
-      schedule_lead_time_min: 30,
-      payment_qr: { promptpay_id: '0812345678' },
-      delivery_fee: 3.5,
-    };
     expect(pickOpsSettings(full)).toEqual({
       orders_paused: true,
       busy_extra_prep_min: 20,
       prep_time_min: 25,
-      schedule_lead_time_min: 30,
     });
+  });
+
+  // The lead is prep time plus Busy (kitchenLeadMin). A subset without Busy timed every scheduled
+  // ticket by the prep time alone while the release job let bookings out Busy minutes earlier.
+  it('keeps every key the kitchen lead is read from, so the board times a booking as the release job does', () => {
+    expect(kitchenLeadMin(pickOpsSettings(full))).toBe(kitchenLeadMin(full));
+    expect(kitchenLeadMin(pickOpsSettings(full))).toBe(45);
+    expect(kitchenLeadMin(pickOpsSettings({ ...full, busy_extra_prep_min: 0 }))).toBe(25);
+  });
+
+  it('reads the same lead keys on the page’s first paint', () => {
+    // page.tsx hands the view its first lead before OpsToggles reads; it once left Busy out.
+    const page = readFileSync(path.resolve(__dirname, '../page.tsx'), 'utf8');
+    for (const key of ['prep_time_min', 'busy_extra_prep_min']) {
+      expect(OPS_SETTING_KEYS).toContain(key);
+      expect(page).toContain(`${key}:settings->${key}`);
+    }
+    expect(page).not.toContain('schedule_lead_time_min');
   });
 
   it('leaves out keys the branch never set, so the board uses its defaults', () => {
     // A row read with OPS_SETTINGS_SELECT answers null for a missing key.
-    expect(pickOpsSettings({ orders_paused: false, busy_extra_prep_min: null, prep_time_min: null, schedule_lead_time_min: null }))
+    expect(pickOpsSettings({ orders_paused: false, busy_extra_prep_min: null, prep_time_min: null }))
       .toEqual({ orders_paused: false });
     expect(pickOpsSettings(null)).toEqual({});
     expect(pickOpsSettings([1, 2])).toEqual({});

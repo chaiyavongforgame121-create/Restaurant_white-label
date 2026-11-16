@@ -464,7 +464,8 @@ export function KitchenView({
      branch is paused. Both come from the settings OpsToggles already reads (and re-reads every
      minute and on focus), because the same keys decide when release_scheduled_orders() fires —
      and a ticket's clock has to start when the cook was meant to start it. Read by the one shared
-     rule (kitchenLeadMin) the release job and place-order follow. It starts from the server's read
+     rule (kitchenLeadMin: prep time plus Busy extra) the release job and place-order follow, so a
+     Busy tap here moves the lead at once. It starts from the server's read
      of the branch: it used to start at 15 until OpsToggles' first read landed, so a board opened
      at a branch with another lead counted its first seconds against the wrong release time. */
   const [leadMin, setLeadMin] = React.useState(initialLeadMin);
@@ -1160,8 +1161,23 @@ export function KitchenView({
   const scheduled = orders.filter((o) => o.held);
   const visibleRef = React.useRef(visible);
   visibleRef.current = visible;
-  const leadMsRef = React.useRef(leadMs);
-  leadMsRef.current = leadMs;
+  // Each booked ticket's clock keeps the lead in force when the board first drew it: the release
+  // job let it out under that lead, and a Busy tap afterwards must not age (or rejuvenate) a ticket
+  // already being cooked. A ticket not seen yet is read with the current lead. Forgotten once the
+  // ticket leaves the board, so the map stays the size of the board.
+  const leadSeenRef = React.useRef(new Map<string, number>());
+  {
+    const seen = leadSeenRef.current;
+    const onBoardIds = new Set(onBoard.map((o) => o.id));
+    for (const id of seen.keys()) if (!onBoardIds.has(id)) seen.delete(id);
+    for (const o of onBoard) if (o.scheduled_for && !seen.has(o.id)) seen.set(o.id, leadMs);
+  }
+  const ticketLead = React.useCallback(
+    (o: { id: string }) => leadSeenRef.current.get(o.id) ?? leadMs,
+    [leadMs],
+  );
+  const leadMsRef = React.useRef<typeof ticketLead>(ticketLead);
+  leadMsRef.current = ticketLead;
 
   /* New-order chime — gated to the active station.
      Keyed on the tickets actually ON the board, not on orders.length: a
@@ -1225,7 +1241,7 @@ export function KitchenView({
      Tickets already late when the board loads (or when the station filter reveals them) are
      only noted. */
   React.useEffect(() => {
-    const ids = lateTicketIds(visible, now, leadMs);
+    const ids = lateTicketIds(visible, now, ticketLead);
     const seen = lateSeenRef.current;
     if (seen === null || lateStationRef.current !== station) {
       lateSeenRef.current = new Set([...(seen ?? []), ...ids]);
@@ -1237,7 +1253,7 @@ export function KitchenView({
     if (fresh.length > 0 && soundOnRef.current) chime('late');
     // `visible` is rebuilt every render; its ids and the clock are what this rule reads.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [now, visibleKey, station, leadMs, chime]);
+  }, [now, visibleKey, station, ticketLead, chime]);
 
   const byLane: Record<string, Order[]> = {
     new: visible.filter((o) => laneOf(o.status) === 'new'),
@@ -1275,7 +1291,7 @@ export function KitchenView({
   const pills = stationPills(stations, dishStations, onBoard, station);
   const stationStat = stationStats(onBoard, pills, (o) => {
     const lane = laneOf(o.status);
-    const from = lane === 'ready' ? readyStartedMs(o, readyAtRef.current[o.id]) : workStartedMs(o, leadMs);
+    const from = lane === 'ready' ? readyStartedMs(o, readyAtRef.current[o.id]) : workStartedMs(o, ticketLead);
     const tier = agingTierKey(safeElapsedSec(from, now), lane);
     return tier === 'late' || tier === 'crit';
   });
@@ -1537,7 +1553,7 @@ export function KitchenView({
                     now={now}
                     station={station}
                     readyAt={readyStartedMs(order, readyAtRef.current[order.id])}
-                    workStartedAt={workStartedMs(order, leadMs)}
+                    workStartedAt={workStartedMs(order, ticketLead)}
                     due={fmtDue(order.scheduled_for)}
                     onAdvance={() => advance(order)}
                     onReject={() => reject(order)}

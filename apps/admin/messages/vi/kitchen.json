@@ -182,7 +182,7 @@
   "ops": {
     "busy": "Đông khách",
     "busyMinutes": "Đông +{minutes} ph",
-    "busyHint": "Cộng thêm thời gian chuẩn bị vào thời gian dự kiến của mọi khách",
+    "busyHint": "Cộng thêm thời gian chuẩn bị vào thời gian dự kiến của mọi khách và đưa đơn hẹn giờ vào bếp sớm hơn bấy nhiêu",
     "off": "Tắt",
     "plusMinutes": "+{minutes} ph",
     "pause": "Tạm dừng",

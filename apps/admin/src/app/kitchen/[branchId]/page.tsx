@@ -30,12 +30,13 @@ export default async function KitchenPage({ params, searchParams }: Props) {
   const dashboardHref = can('backoffice.access') && can('dashboard.view') ? `/b/${branchId}/dashboard` : null;
 
   const [{ data: branchRow }, { data: orders, error: ordersError }, { data: menu }, { data: soldOut }, riders, menuRead, stationsRead] = await Promise.all([
-    // The two lead keys ride along so the board times its scheduled tickets by this branch's
-    // lead from the first paint, not a default until OpsToggles' first read. Only those keys,
-    // as OpsToggles reads them: the rest of settings is no business of the kitchen screen.
+    // The keys the kitchen lead is read from (kitchenLeadMin: prep time plus Busy extra) ride
+    // along so the board times its scheduled tickets by this branch's lead from the first paint,
+    // not a default until OpsToggles' first read. Only those keys, as OpsToggles reads them: the
+    // rest of settings is no business of the kitchen screen.
     supabase
       .from('branches')
-      .select('timezone, prep_time_min:settings->prep_time_min, schedule_lead_time_min:settings->schedule_lead_time_min')
+      .select('timezone, prep_time_min:settings->prep_time_min, busy_extra_prep_min:settings->busy_extra_prep_min')
       .eq('id', branchId)
       .maybeSingle(),
     supabase
