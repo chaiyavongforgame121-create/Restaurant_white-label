@@ -5,7 +5,8 @@ import { getTranslations } from 'next-intl/server';
 import { getMyStaffAccessRows } from '@favornoms/database/queries';
 import { hasFeature, type TenantTheme } from '@favornoms/shared';
 import { getBranchAccess, type BranchAccess } from '@/lib/capabilities';
-import { getBranchIconMetadata } from '@/lib/branch-app-icon';
+import { branchTabIconsMetadata } from '@/lib/branch-app-icon';
+import { BranchTabIcons } from '@/components/branch-tab-icons';
 import { NO_WIND_DOWN, resolveDeliveryWindDown } from '@/lib/delivery-gate';
 import { branchLayoutRedirect } from '@/lib/subscription-gate';
 import { PATHNAME_HEADER } from '@favornoms/database/middleware';
@@ -30,7 +31,7 @@ interface Props {
  */
 export async function generateMetadata({ params }: Pick<Props, 'params'>): Promise<Metadata> {
   const { branchId } = await params;
-  return getBranchIconMetadata(branchId);
+  return branchTabIconsMetadata(branchId);
 }
 
 /**
@@ -176,6 +177,7 @@ export default async function BranchLayout({ params, children }: Props) {
       <>
         <AccessDenied title={t('title')} reason={reason} />
         {watcher}
+        <BranchTabIcons branchId={branchId} />
       </>
     );
   }
@@ -252,6 +254,7 @@ export default async function BranchLayout({ params, children }: Props) {
         {children}
       </main>
       {watcher}
+      <BranchTabIcons branchId={branchId} />
     </div>
   );
 }

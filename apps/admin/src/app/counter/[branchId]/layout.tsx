@@ -2,7 +2,8 @@ import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 import { getMyStaffAccessRows } from '@favornoms/database/queries';
 import { getBranchAccess } from '@/lib/capabilities';
-import { getBranchIconMetadata } from '@/lib/branch-app-icon';
+import { branchTabIconsMetadata } from '@/lib/branch-app-icon';
+import { BranchTabIcons } from '@/components/branch-tab-icons';
 import { AccessDenied } from '@/components/access-denied';
 import { StaffAccessWatcher } from '@/components/staff-access-watcher';
 import { SubscriptionEndedBanner, SubscriptionUnknownBanner } from '@/components/suspension-screen';
@@ -15,7 +16,7 @@ interface Props {
 /** The branch's own App icon in the tab, as in the back office (see the /b layout). */
 export async function generateMetadata({ params }: Pick<Props, 'params'>): Promise<Metadata> {
   const { branchId } = await params;
-  return getBranchIconMetadata(branchId);
+  return branchTabIconsMetadata(branchId);
 }
 
 export default async function CounterLayout({ params, children }: Props) {
@@ -52,6 +53,7 @@ export default async function CounterLayout({ params, children }: Props) {
           reason={t('access.reason', { branch: branch.name })}
         />
         {watcher}
+        <BranchTabIcons branchId={branchId} />
       </>
     );
   }
@@ -62,6 +64,7 @@ export default async function CounterLayout({ params, children }: Props) {
       {!subscription.known && <SubscriptionUnknownBanner />}
       {children}
       {watcher}
+      <BranchTabIcons branchId={branchId} />
     </>
   );
 }

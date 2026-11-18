@@ -496,13 +496,15 @@ describe('the layouts that wear it', () => {
   const read = (rel: string) => fs.readFileSync(path.resolve(__dirname, '..', rel), 'utf8');
 
   it.each(['app/b/[branchId]/layout.tsx', 'app/counter/[branchId]/layout.tsx', 'app/kitchen/[branchId]/layout.tsx'])(
-    '%s returns the branch icon metadata and nothing else',
+    '%s clears the inherited icons in metadata and renders its own on every screen',
     (rel) => {
       const src = read(rel);
       const fn = /export async function generateMetadata\([^)]*\)[^{]*\{([\s\S]*?)\r?\n\}/.exec(src);
       expect(fn, `${rel} has no generateMetadata`).not.toBeNull();
-      expect(fn?.[1]).toMatch(/return getBranchIconMetadata\(branchId\);/);
+      expect(fn?.[1]).toMatch(/return branchTabIconsMetadata\(branchId\);/);
       expect(fn?.[1]).not.toMatch(/manifest|title|applicationName/);
+      // Beside the access watcher, which every screen of the layout renders (denied included).
+      expect(src.match(/<BranchTabIcons branchId=\{branchId\} \/>/g)?.length).toBe(src.match(/\{watcher\}/g)?.length);
     },
   );
 

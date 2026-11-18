@@ -4,7 +4,6 @@ import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages, getTranslations } from 'next-intl/server';
 import { DialogProvider, ThemeProvider, UiLocaleProvider } from '@favornoms/ui';
 import { DEFAULT_UI_LOCALE, isUiLocale } from '@favornoms/shared';
-import { TabIconRefresh } from '@/components/tab-icon-refresh';
 import './globals.css';
 
 // Vietnamese needs Inter's extended subset; Thai has no glyphs in Inter, so it gets its own family,
@@ -62,8 +61,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               {/* Mounted at the root so every back-office screen can ask a question without
                   reaching for window.confirm, which the browser is free to refuse. */}
               <DialogProvider>{children}</DialogProvider>
-              {/* Chrome on Android dropped the tab icon on every in-app navigation. */}
-              <TabIconRefresh />
             </ThemeProvider>
           </UiLocaleProvider>
         </NextIntlClientProvider>

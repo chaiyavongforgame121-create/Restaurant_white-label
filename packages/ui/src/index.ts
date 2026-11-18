@@ -2,7 +2,6 @@ export * from './lib/cn';
 export * from './lib/push';
 export * from './lib/sound';
 export * from './lib/clipboard';
-export * from './lib/tab-icon';
 export * from './components/button';
 export * from './components/card';
 export * from './components/badge';

@@ -29,11 +29,27 @@ export default async function BranchLayout({ params, children }: Props) {
   // else the long form. Never the route params, which stay the long form on the short address the
   // middleware rewrote (docs/SHORT-STOREFRONT-URLS-2026-10-26.md §3).
   const base = storefrontBase(tenant);
+  const tabIconLinks = tabIcons(base, tenant);
+  const appleIcon = tabIconLinks.length
+    ? appleTouchIconUrl(tenant.appleIconUrl, tenant.icon192Url ?? tenant.faviconUrl, process.env.NEXT_PUBLIC_SUPABASE_URL)
+    : null;
 
   // Per implementation.md §10.2 — merge restaurant.brand + branch.override
   // ThemeProvider applies as CSS variables on a wrapping div.
   return (
     <ThemeProvider theme={tenant.theme}>
+      {/* The tab icons, rendered by this layout rather than by generateMetadata (the owner's video
+          of 2026-11-18: on Chrome for Android the icon turned into the globe as soon as the diner
+          moved from the menu to another page, and stayed so). Next re-renders metadata on every
+          in-app navigation, taking the <link rel="icon"> elements out of <head> and putting new
+          ones in; this layout stays mounted across the storefront's pages, so React hoists these
+          into <head> once and never touches them again, which is what a page whose icon never
+          changes looks like to the browser. generateMetadata sets icons to null so the root
+          layout's FavorNoms icons are not added beside them. */}
+      {tabIconLinks.map((icon) => (
+        <link key={icon.url} rel="icon" href={icon.url} sizes={icon.sizes} type={icon.type} />
+      ))}
+      {appleIcon ? <link rel="apple-touch-icon" href={appleIcon} /> : null}
       {/* Every client component's links start from this base, not from useParams(). */}
       <StorefrontAddressProvider
         base={base}
@@ -98,31 +114,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     // `short_name`: the full "<brand> - <branch>", which the owner wants on the home screen too
     // even though a launcher may truncate it.
     appleWebApp: { capable: true, statusBarStyle: 'default', title: names.short },
-    // Every icon below is this branch's (tenant resolves the whole set from the branch once it
-    // has one, from the brand before). The tab icons are same-origin: a 32x32 the icon route
-    // renders from the normalised 192, then the 192 through the same route, at the manifest's
-    // base and keyed on the 192's fingerprint, so a new upload is a new href (tabIcons()).
-    // Chrome on Android showed the globe in the tab while these were the cross-origin upload
-    // URLs at 192/512 only. A legacy free-form favicon (uploaded before normalisation
-    // existed) is still its own URL with no `sizes`, because claiming dimensions a file does
-    // not have is worse than claiming none.
-    // `apple` prefers the 192: iOS renders alpha as black, and the normalised variants
-    // are flattened onto an opaque ground while a raw upload may not be.
-    ...(tenant.icon192Url || tenant.faviconUrl
-      ? {
-          icons: {
-            icon: tabIcons(storefrontBase(tenant), tenant),
-            // iOS paints transparency black, so it gets the merchant's opaque iPhone icon when
-            // there is one — the 192 may be transparent ("only the image, like a PNG").
-            apple:
-              appleTouchIconUrl(
-                tenant.appleIconUrl,
-                tenant.icon192Url ?? tenant.faviconUrl,
-                process.env.NEXT_PUBLIC_SUPABASE_URL,
-              ) ?? undefined,
-          },
-        }
-      : {}),
+    // This branch's icons (tenant resolves the whole set from the branch once it has one, from
+    // the brand before) are rendered by the layout itself, where they survive in-app navigation:
+    // same-origin, a 32x32 the icon route renders from the normalised 192, then the 192 through
+    // the same route, keyed on the 192's fingerprint (tabIcons()), and the iPhone icon
+    // (appleTouchIconUrl: the opaque appleUrl, else the 192, since iOS paints alpha black). Here
+    // they are null, so the root layout's FavorNoms icons are not inherited beside them. A
+    // storefront with no icon of its own omits the key and keeps the platform's.
+    ...(tenant.icon192Url || tenant.faviconUrl ? { icons: null } : {}),
     // A shared link is the storefront's front door, so it carries the same name as the tab
     // and the install dialog rather than the restaurants row the merchant may have renamed
     // away from. The site name too: it was the brand alone, so a branch with an App name of

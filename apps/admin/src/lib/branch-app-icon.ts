@@ -185,8 +185,20 @@ export function branchIconsMetadata(
 }
 
 /**
- * What the /b, /counter and /kitchen layouts return from generateMetadata: the branch's own tab
- * icon, else its brand's, else {} (the FavorNoms icons). Read once per request however many
+ * What the /b, /counter and /kitchen layouts return from generateMetadata: `icons: null` when the
+ * branch (or its brand) has a tab icon, so the root layout's FavorNoms icons are not inherited,
+ * else {} to keep them. The branch's own links are rendered by the layout itself (BranchTabIcons),
+ * where they survive in-app navigation: Next re-renders metadata on every navigation, taking the
+ * <link rel="icon"> elements out of <head> and putting new ones in, and Chrome on Android left the
+ * tab on the globe after that (the owner's video, 2026-11-18).
+ */
+export async function branchTabIconsMetadata(branchId: string): Promise<Metadata> {
+  return (await getBranchIconMetadata(branchId)).icons ? { icons: null } : {};
+}
+
+/**
+ * The branch's tab icon set as metadata, or {} for none: the links BranchTabIcons renders.
+ * The branch's own tab icon, else its brand's, else {} (the FavorNoms icons). Read once per request however many
  * segments ask. Not cached beyond the request: the Branding card calls router.refresh() after a
  * save, and the new icon has to be in the tab on that render.
  */
