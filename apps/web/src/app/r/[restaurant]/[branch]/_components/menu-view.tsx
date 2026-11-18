@@ -596,7 +596,9 @@ function Hero({
       <div className="absolute inset-0 -z-10 bg-gradient-sunset opacity-90" />
       <div className="absolute inset-0 -z-10 bg-noise opacity-50" />
       <div className="container relative pt-6 pb-8 lg:pt-12 lg:pb-16">
-        <div className="grid items-center gap-8 lg:grid-cols-2">
+        {/* gap-6 below md, a touch more than the badge's mt-5 above it; the 2rem from md on is
+            also what the image `sizes` below subtracts at lg. */}
+        <div className="grid items-center gap-6 md:gap-8 lg:grid-cols-2">
           <div>
             {/* No logo here. The sticky header above carries it on every page, so repeating it
                 a few pixels lower printed the same image twice in one screenful. The header is
@@ -615,18 +617,25 @@ function Hero({
               </div>
             ) : null}
           </div>
-          <div
-            className="relative mx-auto aspect-square w-full max-w-md overflow-hidden rounded-3xl shadow-warm"
-          >
+          {/* The whole width of its column at every size (owner, 2026-11-18): the old 448px square
+              left wide empty margins on a tablet. Square on a phone, as tall as it was; 16:10 on a
+              tablet, about the old height but the full width, so the menu is not pushed a screen
+              down; 4:3 in the desktop column. */}
+          <div className="relative aspect-square w-full overflow-hidden rounded-3xl shadow-warm sm:aspect-[16/10] lg:aspect-[4/3]">
             <Image
-              src={heroUrl || 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?auto=format&fit=crop&w=900&h=900&q=80'}
+              src={heroUrl || 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?auto=format&fit=crop&w=1600&h=1200&q=80'}
               alt={title}
               fill
               priority
-              sizes="(max-width: 1024px) 100vw, 50vw"
+              // The column's real width, from the preset's container (max-width = breakpoint,
+              // padding 1rem / 1.5rem / 2rem): the content box below lg, half of it less gap-8 from
+              // lg. A plain 50vw kept growing past the container's 1536px cap.
+              sizes="(min-width: 1536px) 720px, (min-width: 1280px) 592px, (min-width: 1024px) 464px, (min-width: 768px) 720px, (min-width: 640px) 592px, calc(100vw - 2rem)"
               className="object-cover"
             />
-            <div className="absolute inset-x-4 bottom-4 rounded-2xl border border-white/30 bg-white/85 px-4 py-3 text-foreground shadow-soft backdrop-blur-md dark:border-white/10 dark:bg-card/80">
+            {/* A full-width caption on a phone; once the photo is wide, a card that hugs its text
+                rather than a band across the whole picture. Logical start/end keep it RTL-safe. */}
+            <div className="absolute bottom-4 start-4 end-4 rounded-2xl border border-white/30 bg-white/85 px-4 py-3 text-foreground shadow-soft backdrop-blur-md dark:border-white/10 dark:bg-card/80 sm:end-auto sm:max-w-sm">
               <p className="text-xs font-medium text-muted-foreground">{t('hero.nowServing')}</p>
               <p className="font-display text-lg font-semibold">{title}</p>
             </div>
